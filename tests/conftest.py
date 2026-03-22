@@ -10,26 +10,14 @@ PHASE1_BASELINE_TEST_FILES = {
     "test_runtime_examples.py",
 }
 
-LEGACY_TEST_FILES = {
-    "test_agent.py",
-    "test_agent_state.py",
-    "test_agentgraph.py",
-    "test_concurrency.py",
-    "test_error_handling.py",
-    "test_llm_integration.py",
-    "test_memory_system.py",
-    "test_node_registry.py",
-    "test_router.py",
-    "test_topology.py",
-    "test_workflow_execution.py",
-}
+LEGACY_DIR_NAME = "legacy"
 
 
 def pytest_ignore_collect(collection_path, config: pytest.Config) -> bool:
     if config.getoption("--run-legacy"):
         return False
     path = Path(str(collection_path))
-    return path.name in LEGACY_TEST_FILES
+    return LEGACY_DIR_NAME in path.parts
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -41,8 +29,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         reason="legacy test baseline; excluded from Phase 1 contract baseline unless --run-legacy is set"
     )
     for item in items:
-        path = Path(str(item.fspath)).name
-        if path in LEGACY_TEST_FILES:
+        path = Path(str(item.fspath))
+        if LEGACY_DIR_NAME in path.parts:
             item.add_marker("legacy")
             item.add_marker(skip_legacy)
 

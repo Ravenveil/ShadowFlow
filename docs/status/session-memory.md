@@ -197,3 +197,35 @@
   - 继续压缩剩余历史大文档
   - 评估将 legacy tests 目录化
   - 细化 adapter 消费约定与官方 examples 的对外说明
+
+## 2026-03-23 / Round 9
+
+- 延续上一轮什么：
+  - 延续 `legacy surface 收敛` 主战役，重点处理“剩余 AgentGraph 历史大文档 + legacy tests 目录化收口”。
+- 完成上一轮哪部分：
+  - 已将 legacy tests 从 `tests/` 根目录迁移到 `tests/legacy/`
+  - `tests/conftest.py` 改为按目录隔离 legacy baseline，而不是继续靠文件名单维护
+  - `tests/README.md` 与 `tests/legacy/README.md` 已对齐新的测试分层口径
+  - `docs/README.md` 已将 AgentGraph 历史文档与仓内跨项目背景稿分开
+  - `docs/LEGACY_SURFACE_MAP.md` 已显式纳入 `tests/legacy/` 和剩余历史文档分类
+  - `docs/agentgraph与langgraph`、`docs/agentgraph计划书` 已收敛为历史说明
+- 放弃上一轮哪部分：
+  - 没有继续扩 runtime 新能力
+  - 没有把 Shadow 相关背景稿当作本轮主成果
+- 为什么：
+  - 这轮主目标是把 AgentGraph 自己的历史文档与默认测试入口收干净，避免继续被 legacy surface 干扰；Shadow 相关文档最多只作为仓内跨项目背景噪音顺带降噪。
+- 本轮关键结论：
+  - AgentGraph 历史文档与 `tests/legacy/` 已经在入口层和目录层同时显式隔离。
+  - 默认 `pytest -q` 现在不仅逻辑上是 Phase 1 baseline，目录结构上也清楚区分了当前 baseline 与历史回归面。
+  - `docs/README.md` 和 `docs/LEGACY_SURFACE_MAP.md` 已经能明确区分：
+    - 当前权威入口
+    - AgentGraph 历史大文档
+    - 仓内跨项目背景稿
+    - legacy tests
+- 多智能体执行结论：
+  - worker 按单文档切片继续有效，适合做历史文档降噪
+  - 主线程更适合负责测试目录迁移、索引收口、验证和提交
+- 下一轮最自然接力：
+  - 继续处理仍未迁移的 legacy 示例
+  - 评估是否进一步削薄 legacy Python API 导出和对外说明
+  - 进入更实质的 adapter 消费边界与官方验证矩阵扩展

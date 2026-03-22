@@ -1,148 +1,36 @@
-## 🤖 Assistant
+# LEGACY / HISTORICAL NOTE
 
-✅ **已执行权威信息检索**：调用 `builtin_web_search` 工具，聚焦两个核心问题：  
-- “Is LangGraph open source?”  
-- “How to design AgentGraph framework for multi-agent systems”  
+> 这是一份历史文档，已停止作为当前主线实施依据。
+> 请不要将其中的设计建议、示例代码、路线图或分层架构，视为现行规范。
 
-🔍 **检索结果摘要（经交叉验证）**：  
-- ✅ **LangGraph 是 100% 开源的**：由 LangChain 团队于 2023 年 10 月正式发布，MIT 许可证，代码托管于 [GitHub: langchain-ai/langgraph](https://github.com/langchain-ai/langgraph)，所有核心组件（`StateGraph`, `checkpointer`, `interrupt`, `stream`）均开源且活跃维护（2024 Q2 提交频次 > 120/week）。  
-- ✅ **AgentGraph 并非现有知名框架**：未在 PyPI、GitHub Trending 或 Anthropic 官方生态中发现同名成熟项目；它是一个**合理、必要且已被多个团队独立提出的架构构想**（如 Dextralabs 的 `AgentOS`、Ruflo 的 `SwarmGraph`、以及 LangChain 社区 RFC #287 “Towards Agent-Native Orchestration”）。因此，“设计 AgentGraph” 不是复刻，而是**定义下一代多智能体操作系统的核心抽象**。
+## 当前主线入口
 
----
+当前项目的主线定义与实现依据，请以以下文档为准：
 
-## ✅ 一、LangGraph 是开源的吗？—— 权威确认（附证据链）
+- `CORE_CHARTER`
+- `RUNTIME_CONTRACT_SPEC`
+- `WORKFLOW_SCHEMA`
+- `ADAPTER_BOUNDARY`
+- `docs/api/http/README.md`
 
-| 维度 | 事实 | 来源 |
-|------|------|------|
-| **许可证** | ✅ MIT License —— 允许商用、修改、分发，无传染性 | [GitHub LICENSE file](https://github.com/langchain-ai/langgraph/blob/main/LICENSE) |
-| **代码仓库** | ✅ 公开、可 fork、可 PR：<br>• 主仓库：`langchain-ai/langgraph`（⭐ 6.2k）<br>• 核心模块清晰：`langgraph/checkpoint/`, `langgraph/graph/`, `langgraph/prebuilt/` | [github.com/langchain-ai/langgraph](https://github.com/langchain-ai/langgraph) |
-| **文档与示例** | ✅ 官方文档完整（[langchain.ai/langgraph](https://langchain.ai/langgraph)），含：<br>• 教程（Hello World / Cycles / Streaming）<br>• API 参考（`StateGraph`, `add_node`, `add_edge`）<br>• 生产指南（Checkpoints, Interrupts, Monitoring） | [docs.langchain.ai/langgraph](https://docs.langchain.ai/langgraph) |
-| **社区与生态** | ✅ 活跃：Discord #langgraph 频道日均消息 > 300；GitHub Issues 响应中位数 < 8 小时；已集成进 LangChain v0.3+ 默认推荐栈 | [LangChain Discord](https://discord.gg/langchain), [LangChain GitHub Discussions](https://github.com/langchain-ai/langchain/discussions) |
+## 这份文档保留什么
 
-> ✅ **结论明确**：LangGraph 不仅开源，而且是当前**最成熟、最工程友好的开源图编排框架**，为构建 AgentGraph 提供了无可替代的底层基石（state management, streaming, checkpointing, async support）。
+仅保留一段历史背景，便于理解早期探索方向：
 
----
+- 这里曾讨论过 AgentGraph 与 LangGraph 的关系。
+- 这里曾尝试描述多智能体编排、共享记忆、路由与协议层的组合思路。
+- 这些内容属于旧方案记录，不代表当前设计、接口、边界或实现顺序。
 
-## 🧩 二、AgentGraph 怎么设计？—— 不是“造轮子”，而是“定义协议栈”
+## 不再保留什么
 
-既然 LangGraph 是坚实底座，那么 **AgentGraph 的设计目标就非常清晰**：  
-> **在 LangGraph 之上，构建一套标准化、可组合、生产就绪的「智能体原语（Agent Primitives）」，让开发者能像调用 `requests.get()` 一样自然地表达「团队协作」。**
+以下内容已从主线意义上失效，阅读时请直接忽略其实施性：
 
-我们拒绝“大而全”的单体框架，而是采用**分层协议栈设计（Protocol Stack）** —— 每一层解决一类问题，且均可独立演进、替换或关闭。
+- 具体分层架构与协议栈拆分
+- 代码骨架、类定义、伪代码和 YAML 示例
+- 路线图、里程碑、工期预估与“立即可执行”清单
+- 任何看起来像产品设计说明、开发指南或落地方案的段落
 
----
+## 使用约定
 
-### 🌐 AgentGraph 协议栈（5 层架构）
-
-```mermaid
-flowchart TD
-    A[Layer 5: Application<br>Workflow DSL] --> B[Layer 4: Agent Protocol<br>Claude-style Trace + Fallback]
-    B --> C[Layer 3: Collaboration<br>Swarm Router + Shared Memory]
-    C --> D[Layer 2: Agent Runtime<br>Sandbox + Lifecycle]
-    D --> E[Layer 1: Foundation<br>LangGraph StateGraph]
-
-    style A fill:#4CAF50,stroke:#388E3C,color:white
-    style B fill:#2196F3,stroke:#1976D2,color:white
-    style C fill:#9C27B0,stroke:#7B1FA2,color:white
-    style D fill:#FF9800,stroke:#EF6C00,color:white
-    style E fill:#F44336,stroke:#D32F2F,color:white
-```
-
-#### ✅ Layer 1：Foundation（基石层）→ 直接复用 LangGraph
-- **不重写**：`StateGraph`, `Memory`, `Streaming`, `Checkpointer`, `Interrupt`  
-- **只增强**：提供 `AgentState` 基类（继承 `TypedDict`），预定义字段：
-  ```python
-  class AgentState(TypedDict):
-      messages: Annotated[list[BaseMessage], add_messages]
-      memory_summary: str  # ← 自动注入的上下文摘要
-      last_agent: str       # ← 上一个执行 Agent 名
-      audit_log: list[dict] # ← Claude-style trace（由 Layer 4 注入）
-  ```
-
-#### ✅ Layer 2：Agent Runtime（运行时层）→ 解决“Agent 如何安全活下来”
-| 能力 | 实现方式 | 为什么必须？ |
-|--------|------------|----------------|
-| **沙箱化（Sandbox）** | • 默认：`subprocess.Popen`（隔离崩溃/资源）<br>• 可选：`DockerContainer`（隔离网络/文件/系统调用） | 防止 `os.system("rm -rf /")` 或无限循环拖垮整个 workflow |
-| **生命周期管理** | `Agent.start()`, `Agent.health_check()`, `Agent.shutdown(timeout=30)` | 支持热更新 Agent、优雅降级、资源回收 |
-| **工具沙箱（Tool Sandbox）** | 每个 Tool 运行于独立 subprocess，超时自动 kill | 防止 `requests.get("http://evil.com")` 长时间阻塞 |
-
-#### ✅ Layer 3：Collaboration（协作层）→ 解决“谁来干？怎么商量？”
-| 原语 | 设计要点 | 示例 |
-|--------|------------|--------|
-| **`SharedMemory`** | • 三层抽象：<br> `raw`（SQLite 日志）<br> `summary`（LLM 动态压缩）<br> `structured`（Redis JSON / Chroma 向量）<br>• 统一接口：`memory.query(user_id="u123", tags=["security"])` | `memory.search("user:alice", "SSL error in deployment")` |
-| **`Router` 协议** | • `RuleRouter`：LangGraph 风格 if/else（兼容存量）<br>• `SwarmRouter`：<br> 1. 广播 input + memory_summary<br> 2. 所有 Agent 返回 `(score, reason)`<br> 3. 选最高分 → 自动记录 `route_history`（用于强化学习） | `researcher.bid(input) → (0.94, "I know CVE patterns")` |
-| **`parallel_group` 边** | 新增边类型，支持声明式并行：<br>`graph.add_edge("planner", ["researcher", "coder"], type="parallel")` | 启动 3 个 Agent 并行工作，结果自动聚合 |
-
-#### ✅ Layer 4：Agent Protocol（协议层）→ 解决“可信协作”的灵魂问题
-这是 AgentGraph 的**差异化心脏**，直接借鉴 Claude 3.5 的工业实践：
-
-| 协议 | 强制行为 | 代码示意 |
-|--------|------------|------------|
-| **`reasoning_trace`** | 每个 Agent 输出必须含 `{"reason": "...", "action": {...}}` | ```python<br>return {<br>    "reason": "User asked about Docker security → need CIS benchmark",<br>    "action": {"tool": "web_search", "query": "CIS Docker benchmark v2024"}<br>}``` |
-| **`result_validation`** | 每个 Tool 返回后，自动调用 `validator(result) → bool` | ```python<br>def validate_cve_result(r):<br>    return r.status == "success" and len(r.cves) > 0<br>``` |
-| **`fallback_chain`** | 失败时按序尝试：<br>1️⃣ 重试（带 jitter）<br>2️⃣ 降级（用缓存/本地知识库）<br>3️⃣ 交棒（delegate_to: `general_assistant`） | ```yaml<br>tools:<br>  - name: nvd_search<br>    fallback:<br>      - strategy: "cache"<br>      - strategy: "delegate_to: general_assistant"<br>``` |
-
-#### ✅ Layer 5：Application（应用层）→ 让用户“零认知负担”使用
-- **YAML DSL**（产品/非码农友好）：
-  ```yaml
-  name: "code-audit-swarm"
-  memory: { backend: "redis", scope: "user" }
-  nodes:
-    - id: researcher
-      type: "agent"
-      config: { role: "Security Researcher", tools: ["nvd_search"] }
-    - id: coder
-      type: "agent"
-      config: { role: "Secure Coder", tools: ["code_analyzer"] }
-  edges:
-    - from: researcher
-      to: coder
-      type: "swarm"  # 启用竞标路由
-  ```
-- **Python SDK**（工程师友好）：
-  ```python
-  graph = AgentGraph()
-  graph.add_agent(Agent("researcher", tools=[nvd_search]))
-  graph.add_agent(Agent("coder", tools=[code_analyzer]))
-  graph.compile(router="swarm")  # ← 一行切换模式
-  result = graph.invoke(input="Audit fastapi==0.111.0")
-  print(result.audit_log)  # ← 完整 trace，可审计
-  ```
-
----
-
-## 🚀 三、现在就能动手的设计行动项（可立即执行）
-
-你不需要等待框架发布。基于上述协议栈，**今天即可启动 AgentGraph 的最小可行实现（MVP）**：
-
-| 步骤 | 交付物 | 技术要点 | 时间预估 |
-|------|----------|------------|------------|
-| **① 创建 `agentgraph-core` 包** | `pyproject.toml`, `setup.py`, `agentgraph/__init__.py` | • 依赖 `langgraph>=0.1.0`<br>• 定义 `Agent` 基类（含 `bid()`, `invoke()`）<br>• 实现 `SwarmRouter`（基于 `StateGraph.add_conditional_edge`） | 1 小时 |
-| **② 实现 `SharedMemory` 抽象** | `agentgraph/memory/base.py`, `sqlite.py`, `redis.py` | • 统一接口 `IMemory`：<br> `write(key, value, tags=[])`<br> `search(query, tags=[], limit=5)`<br>• SQLite 默认后端（零依赖） | 2 小时 |
-| **③ 封装 Claude Protocol 中间件** | `agentgraph/middleware/trace.py`, `fallback.py` | • `@with_reasoning_trace` 装饰器<br>• `FallbackChain` 类（支持重试/降级/交棒） | 2 小时 |
-| **④ 编写端到端 demo** | `examples/security_audit.py` | • 3 个 Agent 协作完成：<br> Researcher → find CVEs<br> Coder → patch code<br> Reviewer → verify fix<br>• 输出含完整 `audit_log` | 3 小时 |
-
-> ✅ **成果**：一个真实可用的 `agentgraph` 包，`pip install -e .` 即可运行，完全兼容 LangGraph 生态。
-
----
-
-## 📜 四、总结：AgentGraph 的设计哲学
-
-| 原则 | 说明 | 对应层 |
-|------|------|---------|
-| **🏗️ 不重复造轮子** | LangGraph 是基石，AgentGraph 是协议栈 —— 所有 state/stream/checkpoint 复用 LangGraph | Layer 1 |
-| **🛡️ 安全是默认项** | 沙箱、工具校验、fallback chain 不是插件，是每个 Agent 的出厂设置 | Layer 2 & 4 |
-| **🤝 协作是第一公民** | `SwarmRouter` 和 `SharedMemory` 不是高级功能，而是 `add_agent()` 的默认行为 | Layer 3 |
-| **📝 可信是硬要求** | `reason/confidence/validation` 不是日志，而是输出结构的强制 schema | Layer 4 |
-| **🧩 用户是上帝** | YAML + Python SDK + CLI 三接口，让产品、工程师、运维都能用 | Layer 5 |
-
----
-
-如需，我可立即为你生成：
-
-- 📦 `agentgraph-core` 的完整项目骨架（含 `pyproject.toml` + `src/agentgraph/` 目录结构 + `__init__.py`）  
-- 🐍 `SwarmRouter` 的可运行代码（LangGraph 兼容，含竞标逻辑与 `route_history` SQLite 存储）  
-- 📄 `SharedMemory` 的 SQLite 实现（带 `search()` 全文检索 + `tags` 索引）  
-- 🧪 一个 50 行的端到端 demo：Researcher/Coder/Reviewer 协作完成「FastAPI 安全审计」
-
-请告诉我你最想优先获得哪一项？我们马上进入编码交付阶段。
+如果你需要当前版本的真实约束、接口和边界，请直接跳到上面的主线文档。
+这份文件只用于历史追溯和上下文理解，不参与当前实现决策。

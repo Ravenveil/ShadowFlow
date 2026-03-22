@@ -6,7 +6,7 @@
   - `test_runtime_contract.py`
   - `test_runtime_examples.py`
 - legacy baseline
-  - 其余历史测试文件
+  - `legacy/` 目录下的历史测试文件
 
 ## 默认执行规则
 
@@ -26,6 +26,14 @@
 ```bash
 pytest -q --run-legacy
 ```
+
+当前 legacy tests 目录为：
+
+```text
+tests/legacy/
+```
+
+这样做的目的，是让“当前 contract baseline”和“历史 API / 实现回归”在目录结构上也显式分层，而不是继续依赖文件名单维护。
 
 ## 为什么要分层
 

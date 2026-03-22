@@ -57,6 +57,14 @@ AgentGraph 文档入口页。
 - [agentgraph与langgraph](agentgraph与langgraph)
 - [agentgraph计划书](agentgraph计划书)
 
+如果你还需要追溯仓内保留的跨项目背景稿，再补看：
+
+- [shadow_integration_strategy](shadow_integration_strategy.md)
+- [SHADOW_CLAW_DESIGN](SHADOW_CLAW_DESIGN.md)
+- [shadow_system_master_strategy](shadow_system_master_strategy.md)
+- [shadow_system_unified_strategy](shadow_system_unified_strategy.md)
+- [unified_strategy](unified_strategy.md)
+
 注意：
 
 - 这些文档主要用于理解历史背景、设计来源和早期叙事
@@ -69,6 +77,13 @@ AgentGraph 文档入口页。
 - [你的第一个工作流](tutorials/getting-started/your-first-workflow.md)
 - [Legacy Surface Map](LEGACY_SURFACE_MAP.md)
 - [自定义节点开发](tutorials/advanced/custom-node-development.md)
+
+### 如果你要判断测试口径
+
+先读：
+
+- [tests/README.md](../tests/README.md)
+- [Legacy Surface Map](LEGACY_SURFACE_MAP.md)
 
 ---
 
@@ -107,20 +122,15 @@ AgentGraph 文档入口页。
 
 ### E. 集成与外部关系
 
-- [AgentGraph 集成方案](AGENTGRAPH_INTEGRATION.md)
-- [CLI-Anything 与 AgentGraph / Shadow 的关系理解](CLI_ANYTHING_RELATION.md)
-- [shadow_integration_strategy](shadow_integration_strategy.md)
-- [SHADOW_CLAW_DESIGN](SHADOW_CLAW_DESIGN.md)
-- [shadow_system_master_strategy](shadow_system_master_strategy.md)
-- [shadow_system_unified_strategy](shadow_system_unified_strategy.md)
-- [unified_strategy](unified_strategy.md)
+- [HTTP API README](api/http/README.md)
+- [Adapter Boundary](ADAPTER_BOUNDARY.md)
 
 ### F. API 与教程
 
-- [HTTP API README](api/http/README.md)
 - [Legacy Surface Map](LEGACY_SURFACE_MAP.md)
 - [你的第一个工作流](tutorials/getting-started/your-first-workflow.md)
 - [自定义节点开发](tutorials/advanced/custom-node-development.md)
+- [tests/README.md](../tests/README.md)
 
 ### G. Legacy API 与历史教程
 
@@ -129,13 +139,21 @@ AgentGraph 文档入口页。
 - [Python API: Memory (Legacy)](api/python/Memory.md)
 - [创建协作式多智能体 (Legacy)](tutorials/multi-agent/creating-cooperative-agents.md)
 
-### H. 历史大文档与概念叙事
+### H. AgentGraph 历史大文档
 
 - [Phase 0 完成报告](PHASE0_SUMMARY.md)
 - [AgentGraph 集成方案](AGENTGRAPH_INTEGRATION.md)
 - [CLI-Anything 与 AgentGraph / Shadow 的关系理解](CLI_ANYTHING_RELATION.md)
 - [agentgraph与langgraph](agentgraph与langgraph)
 - [agentgraph计划书](agentgraph计划书)
+
+### I. 仓内跨项目背景稿
+
+- [shadow_integration_strategy](shadow_integration_strategy.md)
+- [SHADOW_CLAW_DESIGN](SHADOW_CLAW_DESIGN.md)
+- [shadow_system_master_strategy](shadow_system_master_strategy.md)
+- [shadow_system_unified_strategy](shadow_system_unified_strategy.md)
+- [unified_strategy](unified_strategy.md)
 
 ---
 
@@ -184,6 +202,7 @@ AgentGraph 文档入口页。
 - [HTTP API README](api/http/README.md)
 - [Phase 1 主战役草稿](plans/agentgraph-phase1-campaign-draft.md)
 - [Legacy Surface Map](LEGACY_SURFACE_MAP.md)
+- [tests/README.md](../tests/README.md)
 
 ---
 
