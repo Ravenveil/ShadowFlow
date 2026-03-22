@@ -9,6 +9,8 @@ from dataclasses import asdict
 
 from agentgraph.core.agent import Agent, AgentConfig, AgentResult
 
+pytestmark = pytest.mark.legacy
+
 
 class TestAgentCreation:
     """测试 Agent 创建"""

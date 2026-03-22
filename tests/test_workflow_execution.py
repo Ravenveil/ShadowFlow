@@ -5,6 +5,8 @@ from agentgraph.core.graph import AgentGraph
 from agentgraph.core.agent import Agent
 from agentgraph.memory.sqlite import SQLiteMemory
 
+pytestmark = pytest.mark.legacy
+
 
 @pytest.mark.asyncio
 async def test_workflow_creation():

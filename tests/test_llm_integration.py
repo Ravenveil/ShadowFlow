@@ -3,6 +3,8 @@ import asyncio
 from unittest.mock import Mock, patch
 from agentgraph.llm.base import LLMProvider, LLMConfig, LLMResponse, ProviderType
 
+pytestmark = pytest.mark.legacy
+
 
 class MockLLM(LLMProvider):
     """Mock LLM Provider for testing"""

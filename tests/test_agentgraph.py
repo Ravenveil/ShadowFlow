@@ -3,6 +3,8 @@ import asyncio
 from agentgraph import AgentGraph, Agent, AgentConfig, SQLiteMemory
 from agentgraph.memory.layers import LayeredMemory
 
+pytestmark = pytest.mark.legacy
+
 @pytest.mark.asyncio
 async def test_agent_creation():
     config = AgentConfig(

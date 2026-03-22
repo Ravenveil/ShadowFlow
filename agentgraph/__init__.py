@@ -1,12 +1,15 @@
 """
-AgentGraph - A lightweight multi-agent orchestration framework with swarm intelligence.
+AgentGraph top-level package.
 
-This package provides:
-- Agent definition and execution
-- Graph-based workflow orchestration
-- Shared memory system (SQLite/Redis)
-- Swarm routing with bidding mechanism
-- Claude-style reasoning protocol
+Phase 1 canonical public surface is runtime-contract first:
+- WorkflowDefinition
+- RuntimeRequest
+- ResumeRequest
+- RuntimeService
+- RunResult
+
+Legacy graph / memory / router abstractions may still exist for compatibility,
+but they are not the authoritative public entrypoint for the current runtime campaign.
 """
 
 __version__ = "0.1.0"
@@ -14,7 +17,7 @@ __author__ = "AgentGraph Team"
 __license__ = "MIT"
 
 from agentgraph.core.agent import Agent, AgentConfig
-from agentgraph.runtime import RuntimeRequest, RuntimeService, WorkflowDefinition
+from agentgraph.runtime import ResumeRequest, RunResult, RuntimeRequest, RuntimeService, WorkflowDefinition
 
 try:
     from agentgraph.core.graph import AgentGraph
@@ -42,14 +45,16 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
     RedisMemory = None
 
 __all__ = [
+    "WorkflowDefinition",
+    "RuntimeRequest",
+    "ResumeRequest",
+    "RuntimeService",
+    "RunResult",
     "Agent",
     "AgentConfig",
     "AgentGraph",
     "RuleRouter",
     "Memory",
-    "WorkflowDefinition",
-    "RuntimeRequest",
-    "RuntimeService",
     "SQLiteMemory",
     "RedisMemory",
 ]

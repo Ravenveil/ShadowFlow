@@ -1,5 +1,7 @@
 # LEGACY EXAMPLE
 # This file uses a pre-contract workflow shape and is not a Phase 1 canonical example.
+# Do not use this file for Quick Start or new workflow authoring.
+# Canonical examples live under examples/runtime-contract/*.yaml.
 name: "simple-assistant"
 memory:
   backend: "sqlite"

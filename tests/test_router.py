@@ -10,6 +10,8 @@ from unittest.mock import Mock, patch
 from agentgraph.core.router import Router, RuleRouter, SwarmRouter, RouteHistory, RoutingFeedback
 from agentgraph.core.agent import Agent, AgentConfig
 
+pytestmark = pytest.mark.legacy
+
 
 class TestRuleRouter:
     """测试 RuleRouter"""

@@ -1,4 +1,4 @@
-# Creating Cooperative Agents
+# Creating Cooperative Agents (Legacy)
 
 > Legacy Tutorial Notice
 >
@@ -13,6 +13,9 @@
 > - `docs/tutorials/getting-started/your-first-workflow.md`
 
 This tutorial teaches you how to create multiple agents that work together to accomplish complex tasks.
+
+> 以下正文中的 YAML / workflow 片段属于 legacy shape。
+> 它们不应直接作为当前 Phase 1 canonical workflow 示例复制使用。
 
 ## Overview
 
@@ -38,6 +41,14 @@ Agents cooperate by:
 ## Step 2: Content Creation Pipeline
 
 Let's build a content creation pipeline with three specialized agents.
+
+> Legacy Example Reminder
+>
+> 本节开始的示例仍使用历史字段与旧控制流形态。
+> 如果你要查看当前主线的多 agent / 并行样例，请改看：
+>
+> - `examples/runtime-contract/research-review-loop.yaml`
+> - `examples/runtime-contract/parallel-synthesis.yaml`
 
 ### Create the Workflow
 

@@ -11,6 +11,8 @@ from agentgraph.core.topology import (
     create_topology_from_dict
 )
 
+pytestmark = pytest.mark.legacy
+
 
 class TestHierarchicalTopology:
     """测试层级拓扑"""

@@ -4,6 +4,8 @@ from agentgraph.memory.base import BaseMemory
 from agentgraph.memory.sqlite import SQLiteMemory
 from agentgraph.memory.session import SessionMemory
 
+pytestmark = pytest.mark.legacy
+
 class TestMemory(BaseMemory):
     def __init__(self):
         self.data = []

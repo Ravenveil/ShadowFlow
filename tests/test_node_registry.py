@@ -2,6 +2,8 @@ import pytest
 from agentgraph.core.registry import NodeRegistry
 from agentgraph.core.node import BaseNode, NodeConfig
 
+pytestmark = pytest.mark.legacy
+
 
 def test_node_registry_initialization():
     """测试节点注册表初始化"""

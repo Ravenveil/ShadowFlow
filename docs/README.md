@@ -63,7 +63,6 @@ AgentGraph 文档入口页。
 
 - [你的第一个工作流](tutorials/getting-started/your-first-workflow.md)
 - [Legacy Surface Map](LEGACY_SURFACE_MAP.md)
-- [创建协作式多智能体](tutorials/multi-agent/creating-cooperative-agents.md)
 - [自定义节点开发](tutorials/advanced/custom-node-development.md)
 
 ---
@@ -113,14 +112,17 @@ AgentGraph 文档入口页。
 
 ### F. API 与教程
 
-- [Python API: AgentGraph](api/python/AgentGraph.md)
-- [Python API: Agent](api/python/Agent.md)
-- [Python API: Memory](api/python/Memory.md)
 - [HTTP API README](api/http/README.md)
 - [Legacy Surface Map](LEGACY_SURFACE_MAP.md)
 - [你的第一个工作流](tutorials/getting-started/your-first-workflow.md)
-- [创建协作式多智能体](tutorials/multi-agent/creating-cooperative-agents.md)
 - [自定义节点开发](tutorials/advanced/custom-node-development.md)
+
+### G. Legacy API 与历史教程
+
+- [Python API: AgentGraph (Legacy)](api/python/AgentGraph.md)
+- [Python API: Agent (Legacy)](api/python/Agent.md)
+- [Python API: Memory (Legacy)](api/python/Memory.md)
+- [创建协作式多智能体 (Legacy)](tutorials/multi-agent/creating-cooperative-agents.md)
 
 ---
 
@@ -138,17 +140,18 @@ AgentGraph 文档入口页。
 
 1. [Runtime Contract Spec](RUNTIME_CONTRACT_SPEC.md)
 2. [Workflow Schema](WORKFLOW_SCHEMA.md)
-3. [Architecture](ARCHITECTURE.md)
-4. [PHASE1_IMPLEMENTATION](PHASE1_IMPLEMENTATION.md)
-5. [Node Implementation Details](Node-Implementation-Details.md)
-6. [HTTP API README](api/http/README.md)
+3. [Adapter Boundary](ADAPTER_BOUNDARY.md)
+4. [HTTP API README](api/http/README.md)
+5. [Architecture](ARCHITECTURE.md)
+6. [PHASE1_IMPLEMENTATION](PHASE1_IMPLEMENTATION.md)
 
 ### 路径 3：给后续集成者
 
 1. [Core Charter](CORE_CHARTER.md)
 2. [Runtime Contract Spec](RUNTIME_CONTRACT_SPEC.md)
-3. [AgentGraph 集成方案](AGENTGRAPH_INTEGRATION.md)
-4. [shadow_integration_strategy](shadow_integration_strategy.md)
+3. [Workflow Schema](WORKFLOW_SCHEMA.md)
+4. [Adapter Boundary](ADAPTER_BOUNDARY.md)
+5. [HTTP API README](api/http/README.md)
 
 ---
 

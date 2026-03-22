@@ -4,6 +4,8 @@ from agentgraph.core.state import AgentState, AgentContext, AgentStatus
 from agentgraph.core.agent import Agent
 from agentgraph.core.graph import AgentGraph
 
+pytestmark = pytest.mark.legacy
+
 @pytest.mark.asyncio
 async def test_agent_state_initialization():
     """测试 Agent 状态初始化"""

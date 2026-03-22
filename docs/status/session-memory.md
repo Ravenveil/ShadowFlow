@@ -144,3 +144,31 @@
 - 下一轮最自然接力：
   - 收口 legacy 示例和 legacy 测试，把主线 contract 能力映射到更少、更清晰的官方 surface
   - 继续细化 adapter boundary，例如宿主如何消费 barrier 输出与 checkpoint 恢复点
+
+## 2026-03-22 / Round 7
+
+- 延续上一轮什么：
+  - 延续独立仓库、runtime contract、基础 parallel/barrier、checkpoint 恢复和官方样例已经成形的主线。
+- 完成上一轮哪部分：
+  - 把下一轮建议中的 `legacy surface 收敛` 真正推进到了默认入口层：
+    - `agentgraph/__init__.py` 改成 runtime-contract first 叙事，并把 runtime 对象前置
+    - `docs/api/python/AgentGraph.md` / `Agent.md` / `Memory.md` 已降级为 legacy 说明页
+    - `docs/README.md` 已把 Python API 历史页与旧教程移出主线分组
+    - `docs/WHAT_IS_AGENTGRAPH.md` 的 Python 使用示例已切到 runtime 入口
+    - `tests/conftest.py` 已显式维护 `LEGACY_TEST_FILES`
+    - 新增 `tests/README.md`，解释 Phase 1 baseline 与 legacy baseline 的分层
+    - 多个 legacy tests 文件头已补 `pytest.mark.legacy`
+    - 高风险旧教程和旧示例继续增强 canonical 跳转提示
+- 放弃上一轮哪部分：
+  - 没有迁移 legacy 测试目录结构
+  - 没有把 `agentgraph.core` / `agentgraph.memory` 彻底改成内部模块
+  - 没有继续压缩 `docs/AGENTGRAPH_INTEGRATION.md` 的正文体量
+- 为什么：
+  - 这轮的目标是先收掉“默认入口会继续误导用户”的表面，而不是一口气清完整个历史资产。
+- 本轮关键结论：
+  - AgentGraph 现在的默认阅读路径、默认 Python 包叙事、默认测试分层，已经更一致地指向 runtime contract 主线。
+  - 旧 `AgentGraph/Memory` API 文档仍保留，但已不再以“权威 API reference”语气对外发声。
+  - legacy 测试不再只是隐式被跳过，而是有显式文档与 marker 语义。
+- 下一轮最自然接力：
+  - 继续压缩 `docs/AGENTGRAPH_INTEGRATION.md`、`PHASE0_SUMMARY.md` 等高噪音历史入口
+  - 评估是否将 `tests/legacy/` 目录化，进一步减少文件名单维护成本

@@ -70,4 +70,5 @@ select = ["E", "F", "I", "N", "W"]
 testpaths = ["tests"]
 markers = [
     "asyncio: marks async-style tests in the legacy suite",
+    "legacy: marks tests that exercise historical AgentGraph APIs outside the Phase 1 contract baseline",
 ]

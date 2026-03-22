@@ -81,7 +81,7 @@ AgentGraph 当前不应该被定义为：
 开发者在 Python 中直接调用：
 
 ```python
-from agentgraph import AgentGraph
+from agentgraph import WorkflowDefinition, RuntimeRequest, RuntimeService
 ```
 
 适合：

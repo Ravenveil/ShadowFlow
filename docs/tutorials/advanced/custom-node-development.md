@@ -12,9 +12,15 @@ Custom nodes allow you to:
 
 ## Prerequisites
 
-- Completed [Creating Cooperative Agents](../multi-agent/creating-cooperative-agents.md)
+- Completed [Your First Workflow](../getting-started/your-first-workflow.md)
+- Read [Workflow Schema](../../WORKFLOW_SCHEMA.md)
 - Basic knowledge of Python
 - Understanding of YAML configuration
+
+> Legacy Tutorial Note
+>
+> 旧的 [Creating Cooperative Agents](../multi-agent/creating-cooperative-agents.md) 教程主要反映历史 workflow 结构。
+> 如果你当前要基于 Phase 1 主线扩展自定义节点，应优先以 canonical workflow schema 为准。
 
 ## Step 1: Understanding Node Types
 

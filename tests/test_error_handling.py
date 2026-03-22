@@ -7,6 +7,8 @@ from agentgraph.core.errors import (
 )
 from agentgraph.core.state import AgentState, AgentStatus
 
+pytestmark = pytest.mark.legacy
+
 def test_agent_graph_error():
     """测试 AgentGraph 错误"""
     error = AgentGraphError("Test error")

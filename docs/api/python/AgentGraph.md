@@ -1,209 +1,54 @@
-# AgentGraph API Reference
+# Python API: AgentGraph (Legacy)
 
-## AgentGraph Class
+> Legacy API Notice
+>
+> 本页描述的是 AgentGraph 早期 `AgentGraph` Python Graph API。
+> 它**不是**当前 Phase 1 的权威 public API，也不应作为新的集成入口。
+>
+> 如果你要按当前主线使用 AgentGraph，请优先阅读：
+>
+> - [Runtime Contract Spec](../../RUNTIME_CONTRACT_SPEC.md)
+> - [Workflow Schema](../../WORKFLOW_SCHEMA.md)
+> - [HTTP API README](../http/README.md)
 
-The `AgentGraph` class is the main orchestration engine for managing multi-agent workflows.
+## 当前主线入口
 
-### Constructor
-
-```python
-from agentgraph import AgentGraph, SQLiteMemory, RedisMemory
-
-class AgentGraph:
-    def __init__(self, memory: Optional[MemoryBackend] = None, config: Optional[GraphConfig] = None)
-```
-
-#### Parameters
-
-- **memory** (MemoryBackend, optional): Memory backend for state persistence. Defaults to `SQLiteMemory()`.
-- **config** (GraphConfig, optional): Configuration for the graph execution.
-
-#### Example
+当前 Phase 1 推荐的 Python 使用方式是 runtime-contract first：
 
 ```python
-# With SQLite memory
-memory = SQLiteMemory()
-graph = AgentGraph(memory=memory)
+from agentgraph import WorkflowDefinition, RuntimeRequest, RuntimeService
 
-# With Redis memory
-memory = RedisMemory(host="localhost", port=6379)
-graph = AgentGraph(memory=memory)
-
-# With custom config
-config = GraphConfig(max_concurrent_agents=5, timeout=300)
-graph = AgentGraph(memory=memory, config=config)
-```
-
-### Methods
-
-#### `add_agent(agent: Agent)`
-
-Adds an agent to the graph.
-
-```python
-from agentgraph import Agent, AgentConfig
-
-config = AgentConfig(
-    name="researcher",
-    role="Security Researcher",
-    prompt="Find security vulnerabilities."
-)
-agent = Agent(config, "researcher")
-graph.add_agent(agent)
-```
-
-**Parameters:**
-- **agent** (Agent): The agent to add to the graph
-
-#### `remove_agent(agent_id: str)`
-
-Removes an agent from the graph.
-
-```python
-graph.remove_agent("researcher")
-```
-
-**Parameters:**
-- **agent_id** (str): The ID of the agent to remove
-
-#### `invoke(input: str, user_id: str, workflow_id: str = "default")`
-
-Executes a workflow with the given input.
-
-```python
-result = await graph.invoke(
-    input="Analyze the security of this code",
-    user_id="user@example.com",
-    workflow_id="security-audit"
+workflow = WorkflowDefinition.model_validate(payload)
+service = RuntimeService()
+result = await service.run(
+    RuntimeRequest(
+        workflow=workflow,
+        input={"goal": "Analyze docs gaps"},
+        metadata={"source_system": "python"},
+    )
 )
 ```
 
-**Parameters:**
-- **input** (str): The input for the workflow
-- **user_id** (str): Identifier for the user initiating the request
-- **workflow_id** (str, optional): Identifier for the workflow. Defaults to "default"
+## 为什么这页被降级为 legacy
 
-**Returns:** `AsyncIterator[WorkflowResult]`
+历史 `AgentGraph` API 主要围绕以下对象展开：
 
-#### `get_workflow_state(workflow_id: str, user_id: str)`
+- `AgentGraph`
+- `add_agent(...)`
+- `invoke(input, user_id, workflow_id)`
+- `get_workflow_state(...)`
+- `cancel_workflow(...)`
+- `SQLiteMemory` / `RedisMemory`
 
-Gets the current state of a workflow.
+这些接口反映的是旧 graph/memory-centric 编排模型，而不是当前已经收敛的：
 
-```python
-state = graph.get_workflow_state("security-audit", "user@example.com")
-```
+- `WorkflowDefinition`
+- `RuntimeRequest`
+- `RunResult`
+- `CheckpointRef`
 
-**Parameters:**
-- **workflow_id** (str): The workflow identifier
-- **user_id** (str): The user identifier
+## 当前结论
 
-**Returns:** `WorkflowState`
-
-#### `cancel_workflow(workflow_id: str, user_id: str)`
-
-Cancels a running workflow.
-
-```python
-await graph.cancel_workflow("security-audit", "user@example.com")
-```
-
-**Parameters:**
-- **workflow_id** (str): The workflow identifier
-- **user_id** (str): The user identifier
-
-#### `get_agent_status(agent_id: str)`
-
-Gets the status of an agent.
-
-```python
-status = graph.get_agent_status("researcher")
-```
-
-**Parameters:**
-- **agent_id** (str): The agent identifier
-
-**Returns:** `AgentStatus`
-
-#### `register_tool(tool_name: str, tool_func: Callable)`
-
-Registers a custom tool for use by agents.
-
-```python
-def search_web(query: str) -> str:
-    # Implementation
-    pass
-
-graph.register_tool("web-search", search_web)
-```
-
-**Parameters:**
-- **tool_name** (str): Name of the tool
-- **tool_func** (Callable): Function implementing the tool
-
-#### `get_metrics()`
-
-Gets performance metrics for the graph.
-
-```python
-metrics = graph.get_metrics()
-```
-
-**Returns:** `GraphMetrics`
-
-### Example Usage
-
-```python
-from agentgraph import AgentGraph, Agent, AgentConfig, SQLiteMemory
-
-# Initialize
-memory = SQLiteMemory()
-graph = AgentGraph(memory=memory)
-
-# Add agents
-researcher = Agent(AgentConfig(
-    name="researcher",
-    role="Research Assistant",
-    prompt="Research the given topic and provide insights"
-), "researcher")
-
-analyst = Agent(AgentConfig(
-    name="analyst",
-    role="Data Analyst",
-    prompt="Analyze the research findings and create a report"
-), "analyst")
-
-graph.add_agent(researcher)
-graph.add_agent(analyst)
-
-# Execute workflow
-async for result in graph.invoke(
-    input="Research AI trends in 2024",
-    user_id="user123"
-):
-    print(f"Progress: {result.progress}%")
-    print(f"Current step: {result.current_agent}")
-    if result.output:
-        print(f"Output: {result.output}")
-
-# Get workflow state
-state = graph.get_workflow_state("default", "user123")
-print(f"Workflow status: {state.status}")
-print(f"Started at: {state.started_at}")
-print(f"Completed at: {state.completed_at}")
-```
-
-### Error Handling
-
-```python
-try:
-    async for result in graph.invoke(input, user_id):
-        # Process results
-        pass
-except AgentGraphError as e:
-    print(f"Graph error: {e.message}")
-    print(f"Error code: {e.code}")
-except MemoryError as e:
-    print(f"Memory error: {e}")
-except TimeoutError as e:
-    print(f"Workflow timeout: {e}")
-```
+- `AgentGraph` 类仍可视为历史兼容 surface
+- 但它不是当前 Phase 1 runtime contract 的权威入口
+- 新的示例、教程、宿主集成和自动化执行，应统一围绕 runtime contract 展开

@@ -1,5 +1,8 @@
 # LEGACY EXAMPLE
 # This file predates the Phase 1 canonical WorkflowDefinition contract.
+# Legacy multi-agent example. For canonical multi-agent / parallel patterns, use:
+# - examples/runtime-contract/research-review-loop.yaml
+# - examples/runtime-contract/parallel-synthesis.yaml
 name: "multi-agent-content-creation"
 description: "Multi-agent content creation pipeline with research, writing, and review"
 memory:
