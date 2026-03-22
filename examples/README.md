@@ -13,9 +13,10 @@
 ## Phase 1 官方示例
 
 - [docs-gap-review.yaml](runtime-contract/docs-gap-review.yaml)
+- [parallel-synthesis.yaml](runtime-contract/parallel-synthesis.yaml)
 - [research-review-loop.yaml](runtime-contract/research-review-loop.yaml)
 
-这两份示例是当前阶段判断 AgentGraph 是否具备“独立、稳定、可集成编排层雏形”的权威样例。
+这三份示例是当前阶段判断 AgentGraph 是否具备“独立、稳定、可集成编排层雏形”的权威样例。
 
 ## 快速运行
 
@@ -68,13 +69,13 @@ metadata: {}
 
 - 单节点和多节点串行执行
 - 条件边
+- 基础 parallel fan-out + barrier join
 - final edge / `END`
 - step / artifact / checkpoint 结构化输出
 - CLI / HTTP API 共用同一 contract
 
 ## 当前未支持
 
-- 并行 / barrier
 - 真正循环恢复
 - streaming
 - workflow registry 引用

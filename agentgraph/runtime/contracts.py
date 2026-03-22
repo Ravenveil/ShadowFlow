@@ -45,6 +45,9 @@ class WorkflowDefinition(BaseModel):
     @model_validator(mode="after")
     def validate_graph(self) -> "WorkflowDefinition":
         node_ids = {node.id for node in self.nodes}
+        nodes_by_id = {node.id: node for node in self.nodes}
+        outgoing_edges: Dict[str, List[EdgeDefinition]] = {}
+        incoming_edges: Dict[str, List[EdgeDefinition]] = {}
         if not self.nodes:
             raise ValueError("workflow must define at least one node")
         if self.entrypoint not in node_ids:
@@ -55,6 +58,52 @@ class WorkflowDefinition(BaseModel):
                 raise ValueError(f"edge.from references unknown node: {edge.from_id}")
             if edge.to_id not in node_ids and edge.to_id != "END":
                 raise ValueError(f"edge.to references unknown node: {edge.to_id}")
+            outgoing_edges.setdefault(edge.from_id, []).append(edge)
+            incoming_edges.setdefault(edge.to_id, []).append(edge)
+
+        for node in self.nodes:
+            if node.type != "control.parallel":
+                continue
+
+            branches = node.config.get("branches", [])
+            barrier_id = node.config.get("barrier")
+            if not isinstance(branches, list) or not branches:
+                raise ValueError(f"parallel node {node.id} must define a non-empty config.branches list")
+            if len(branches) != len(set(branches)):
+                raise ValueError(f"parallel node {node.id} branches must be unique")
+            if not isinstance(barrier_id, str) or barrier_id not in node_ids:
+                raise ValueError(f"parallel node {node.id} must define config.barrier referencing an existing node")
+
+            barrier_node = nodes_by_id[barrier_id]
+            if barrier_node.type != "control.barrier":
+                raise ValueError(f"parallel node {node.id} barrier must reference a control.barrier node")
+            if outgoing_edges.get(node.id):
+                raise ValueError(f"parallel node {node.id} must not define outgoing edges; barrier continues the flow")
+
+            for branch_id in branches:
+                if branch_id not in node_ids:
+                    raise ValueError(f"parallel node {node.id} branch references unknown node: {branch_id}")
+                if branch_id == node.id or branch_id == barrier_id:
+                    raise ValueError(f"parallel node {node.id} branch cannot reference itself or its barrier")
+                if outgoing_edges.get(branch_id):
+                    raise ValueError(
+                        f"parallel branch node {branch_id} must not define outgoing edges in Phase 1 fan-out mode"
+                    )
+
+        for node in self.nodes:
+            if node.type != "control.barrier":
+                continue
+
+            source_parallel = node.config.get("source_parallel")
+            if source_parallel is not None:
+                if source_parallel not in node_ids:
+                    raise ValueError(f"barrier node {node.id} source_parallel references unknown node: {source_parallel}")
+                if nodes_by_id[source_parallel].type != "control.parallel":
+                    raise ValueError(f"barrier node {node.id} source_parallel must reference a control.parallel node")
+            if incoming_edges.get(node.id):
+                raise ValueError(
+                    f"barrier node {node.id} must not define incoming edges in Phase 1 fan-out mode"
+                )
         return self
 
 

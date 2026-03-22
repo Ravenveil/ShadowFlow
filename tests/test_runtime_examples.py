@@ -9,6 +9,7 @@ from agentgraph.runtime import RuntimeRequest, RuntimeService, WorkflowDefinitio
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = [
     ROOT / "examples" / "runtime-contract" / "docs-gap-review.yaml",
+    ROOT / "examples" / "runtime-contract" / "parallel-synthesis.yaml",
     ROOT / "examples" / "runtime-contract" / "research-review-loop.yaml",
 ]
 

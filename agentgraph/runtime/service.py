@@ -31,8 +31,14 @@ class RuntimeService:
         warnings: List[str] = []
         outgoing_nodes = {edge.from_id for edge in workflow.edges}
         final_edges = [edge for edge in workflow.edges if edge.type == "final" or edge.to_id == "END"]
+        nodes_by_id = {node.id: node for node in workflow.nodes}
+        entrypoint_node = nodes_by_id.get(workflow.entrypoint)
 
-        if workflow.entrypoint not in outgoing_nodes and len(workflow.nodes) > 1:
+        if (
+            workflow.entrypoint not in outgoing_nodes
+            and len(workflow.nodes) > 1
+            and (entrypoint_node is None or entrypoint_node.type != "control.parallel")
+        ):
             warnings.append("entrypoint has no outgoing edges; workflow may stop after first node")
         if not final_edges:
             warnings.append("workflow has no explicit final edge; execution stops when no edge matches")
@@ -130,12 +136,18 @@ class RuntimeService:
             "root_input": request.input.copy(),
             "visited_nodes": [],
             "step_outputs": {},
+            "parallel": {},
+            "active_parallel": None,
         }
         if restored_state:
             state.update(restored_state.get("shared_state", {}))
             state["step_outputs"] = restored_state.get("step_outputs", {})
             if "root_input" not in state:
                 state["root_input"] = request.input.copy()
+            if "parallel" not in state:
+                state["parallel"] = {}
+            if "active_parallel" not in state:
+                state["active_parallel"] = None
             if resumed_from is not None:
                 state["visited_nodes"] = list(resumed_from.state.visited_nodes)
 
@@ -198,9 +210,11 @@ class RuntimeService:
             artifacts.extend(step_artifacts)
             trace.extend(step_trace)
 
+            self._apply_runtime_transitions(node, step_output, state)
             state["step_outputs"][current_node_id] = step_output
             state.update(step_output.get("state", {}))
             current_output = {**state["root_input"], **step_output}
+            self._finalize_runtime_transitions(node, state)
 
             checkpoint = CheckpointRef(
                 checkpoint_id=f"ckpt-{uuid4().hex[:10]}",
@@ -220,7 +234,7 @@ class RuntimeService:
             )
             checkpoints.append(checkpoint)
 
-            next_node_id = self._resolve_next_node(request.workflow, current_node_id, step_output, state)
+            next_node_id = self._resolve_next_node(request.workflow, node, step_output, state)
             checkpoint.state.next_node_id = next_node_id
             trace.append(
                 {
@@ -277,6 +291,42 @@ class RuntimeService:
             "state": {},
         }
 
+        if node.type == "control.parallel":
+            branches = [branch for branch in node.config.get("branches", []) if isinstance(branch, str)]
+            barrier = node.config.get("barrier")
+            output["message"] = node.config.get(
+                "message_template",
+                f"[{role}] scheduled {len(branches)} parallel branches.",
+            )
+            output["branch_count"] = len(branches)
+            output["branches"] = branches
+            output["barrier"] = barrier
+            return output
+
+        if node.type == "control.barrier":
+            source_parallel = node.config.get("source_parallel") or state.get("active_parallel")
+            parallel_state = state.get("parallel", {}).get(source_parallel, {})
+            branch_outputs = parallel_state.get("branch_outputs", {})
+            completed = list(branch_outputs.keys())
+            output["message"] = node.config.get(
+                "message_template",
+                f"[{role}] joined {len(completed)} parallel branches.",
+            )
+            output["parallel_group"] = source_parallel
+            output["branch_count"] = len(completed)
+            output["branch_outputs"] = branch_outputs
+            output["branches_completed"] = completed
+            output["state"].update(
+                {
+                    "last_parallel_group": source_parallel,
+                    "last_parallel_branch_count": len(completed),
+                    "last_parallel_results": {source_parallel: branch_outputs} if source_parallel else {},
+                }
+            )
+            if "artifact" in node.config:
+                output["artifact"] = node.config["artifact"]
+            return output
+
         if prompt:
             output["prompt"] = prompt
         if "set_state" in node.config:
@@ -326,15 +376,72 @@ class RuntimeService:
     def _resolve_next_node(
         self,
         workflow: WorkflowDefinition,
-        current_node_id: str,
+        node: NodeDefinition,
         step_output: Dict[str, Any],
         state: Dict[str, Any],
     ) -> Optional[str]:
+        current_node_id = node.id
+        if node.type == "control.parallel":
+            parallel_state = state.get("parallel", {}).get(node.id, {})
+            remaining = parallel_state.get("remaining_branches", [])
+            if remaining:
+                return remaining[0]
+            return parallel_state.get("barrier")
+
+        active_parallel_id = state.get("active_parallel")
+        if active_parallel_id:
+            parallel_state = state.get("parallel", {}).get(active_parallel_id, {})
+            branches = set(parallel_state.get("branches", []))
+            if current_node_id in branches:
+                remaining = parallel_state.get("remaining_branches", [])
+                if remaining:
+                    return remaining[0]
+                return parallel_state.get("barrier")
+
         candidates = [edge for edge in workflow.edges if edge.from_id == current_node_id]
         for edge in candidates:
             if self._match_condition(edge.condition, step_output, state):
                 return None if edge.to_id == "END" else edge.to_id
         return None
+
+    def _apply_runtime_transitions(
+        self,
+        node: NodeDefinition,
+        step_output: Dict[str, Any],
+        state: Dict[str, Any],
+    ) -> None:
+        if node.type == "control.parallel":
+            branches = list(step_output.get("branches", []))
+            state["parallel"][node.id] = {
+                "branches": branches,
+                "remaining_branches": branches.copy(),
+                "branch_outputs": {},
+                "barrier": step_output.get("barrier"),
+            }
+            state["active_parallel"] = node.id
+            return
+
+        active_parallel_id = state.get("active_parallel")
+        if not active_parallel_id:
+            return
+
+        parallel_state = state.get("parallel", {}).get(active_parallel_id)
+        if not parallel_state:
+            return
+
+        if node.id in parallel_state.get("branches", []):
+            parallel_state.setdefault("branch_outputs", {})[node.id] = step_output
+            parallel_state["remaining_branches"] = [
+                branch_id for branch_id in parallel_state.get("remaining_branches", []) if branch_id != node.id
+            ]
+
+    def _finalize_runtime_transitions(self, node: NodeDefinition, state: Dict[str, Any]) -> None:
+        if node.type != "control.barrier":
+            return
+
+        source_parallel = node.config.get("source_parallel") or state.get("active_parallel")
+        if source_parallel:
+            state["active_parallel"] = None
 
     def _match_condition(
         self,

@@ -70,7 +70,13 @@
 - streaming adapter 协议
 - 多租户 checkpoint store 标准
 - 远程 worker adapter
-- 并行执行 adapter 语义
+- 真正并发调度语义
+
+当前已支持的最小并行边界是：
+
+- `control.parallel` fan-out
+- `control.barrier` join
+- barrier 输出中的 `branch_outputs`
 
 ## 7. 当前结论
 

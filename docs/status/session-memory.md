@@ -119,3 +119,28 @@
 - 下一轮最自然接力：
   - 在新的独立仓库主线上继续推进 legacy 迁移与 adapter boundary 收口
   - 如需对外协作，可继续补远程仓库与 release 基线
+
+## 2026-03-22 / Round 6
+
+- 延续上一轮什么：
+  - 延续独立仓库、`main` 主线、checkpoint 恢复和 contract-only 测试基线已经稳定的成果。
+- 完成上一轮哪部分：
+  - 把 Phase 1 成立标准里原本缺失的“基础并行 / barrier”真正落到 contract、runtime、样例和测试：
+    - `WorkflowDefinition` 现在校验 `control.parallel` / `control.barrier` 的最小 fan-out 约束
+    - `RuntimeService` 现在支持 `single-hop fan-out + barrier join`
+    - 新增官方样例 `examples/runtime-contract/parallel-synthesis.yaml`
+    - `README.md` / `examples/README.md` / `WORKFLOW_SCHEMA.md` / `RUNTIME_CONTRACT_SPEC.md` / `ADAPTER_BOUNDARY.md` 已同步更新
+    - 新增并行执行与并行恢复测试
+- 放弃上一轮哪部分：
+  - 没有实现真正并发调度
+  - 没有实现多层嵌套 fan-out
+  - 没有开始 adapter 远程 worker / streaming
+- 为什么：
+  - 当前主线需要的是“可被验证、可被宿主理解、可被 checkpoint 恢复”的最小并行能力，而不是一次性做大而全的并发框架。
+- 本轮关键结论：
+  - AgentGraph 现在已经从“串行 + 条件分支 + checkpoint 恢复”推进到“串行 + 条件分支 + 基础 fan-out/barrier + checkpoint 恢复”。
+  - 新并行能力仍保持 contract-first，不依赖真实线程池、远程 worker 或特定 memory backend。
+  - 并行样例、CLI validate、pytest 和 runtime smoke 全部通过。
+- 下一轮最自然接力：
+  - 收口 legacy 示例和 legacy 测试，把主线 contract 能力映射到更少、更清晰的官方 surface
+  - 继续细化 adapter boundary，例如宿主如何消费 barrier 输出与 checkpoint 恢复点

@@ -74,13 +74,60 @@ metadata: {}
 - `config.copy_input`: 从 step input 复制字段到输出
 - `config.context_echo`: 从 request context 回显字段
 - `config.artifact`: 为该 step 生成 artifact
+- `type: control.parallel`: Phase 1 基础 fan-out 控制节点
+- `type: control.barrier`: Phase 1 基础 join 控制节点
 
-### 3.3 当前暂不承诺
+### 3.3 Phase 1 基础并行节点
 
-- 并行节点
-- barrier 节点
+当前支持一种受限但可验证的并行形态：`single-hop fan-out + barrier join`。
+
+`control.parallel` 结构：
+
+```yaml
+- id: "fanout"
+  kind: "node"
+  type: "control.parallel"
+  config:
+    role: "dispatcher"
+    branches: ["research_a", "research_b"]
+    barrier: "merge"
+```
+
+约束：
+
+- `config.branches` 必须是非空节点 ID 列表
+- `config.barrier` 必须引用一个 `control.barrier` 节点
+- `control.parallel` 当前不允许定义 outgoing edges
+- fan-out 分支节点当前必须是“单跳 branch 节点”，不允许再定义 outgoing edges
+
+`control.barrier` 结构：
+
+```yaml
+- id: "merge"
+  kind: "node"
+  type: "control.barrier"
+  config:
+    role: "merger"
+    source_parallel: "fanout"
+```
+
+约束：
+
+- `control.barrier` 当前不允许定义 incoming edges
+- barrier 完成 join 后，再按它自己的 outgoing edges 继续后续流程
+- barrier 输出会包含：
+  - `parallel_group`
+  - `branch_count`
+  - `branch_outputs`
+  - `branches_completed`
+
+### 3.4 当前暂不承诺
+
 - 真正外部工具执行
 - 节点级远程 worker 分发
+- 多层嵌套 fan-out
+- 分支内再分支
+- 真正并发调度或远程 worker 分发
 
 ---
 
@@ -158,6 +205,7 @@ CLI 和 HTTP API 都消费 `RuntimeRequest`，而 `workflow` 字段就是这份 
 - 单节点 workflow
 - 顺序执行
 - 条件分支
+- 基础并行 fan-out + barrier join
 - 显式 final edge
 - step trace / checkpoint / artifact 结构化输出
 - CLI / HTTP API 共用同一 contract
@@ -165,7 +213,6 @@ CLI 和 HTTP API 都消费 `RuntimeRequest`，而 `workflow` 字段就是这份 
 ### 未支持
 
 - 真正循环恢复
-- 并行 / barrier
 - streaming
 - workflow 引用注册表
 - 可插拔 memory adapter 接入到新 runtime contract

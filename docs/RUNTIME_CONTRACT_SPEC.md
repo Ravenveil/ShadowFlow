@@ -117,6 +117,7 @@
 
 - 顺序执行节点
 - 条件判断节点
+- 基础并行 fan-out + barrier join 节点
 - 有限循环/重试节点
 - Phase 1 ideal 中可加入并行/barrier 节点
 

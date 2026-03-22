@@ -27,6 +27,7 @@ AgentGraph 当前阶段的正式定位是：
 - Unified CLI and HTTP runtime entrypoints
 - Structured `run -> steps -> final_output -> trace -> artifacts -> checkpoints`
 - Canonical YAML / JSON workflow definition
+- Basic parallel fan-out + barrier join
 - Phase 1 examples aligned with runtime contract
 
 ## Installation
@@ -104,6 +105,7 @@ agentgraph serve --port 8000
 ## Official Phase 1 Examples
 
 - [docs-gap-review](examples/runtime-contract/docs-gap-review.yaml)
+- [parallel-synthesis](examples/runtime-contract/parallel-synthesis.yaml)
 - [research-review-loop](examples/runtime-contract/research-review-loop.yaml)
 
 运行示例：
@@ -121,6 +123,7 @@ agentgraph run -w examples/runtime-contract/docs-gap-review.yaml -i "{\"goal\":\
 - canonical workflow schema
 - unified CLI / HTTP entrypoints
 - step / artifact / checkpoint result model
+- basic parallel / barrier control flow
 - 至少两个可重复执行的端到端样例
 
 ## Current Non-Goals
@@ -139,7 +142,8 @@ agentgraph run -w examples/runtime-contract/docs-gap-review.yaml -i "{\"goal\":\
 - [x] Unified runtime contract skeleton
 - [x] CLI / HTTP shared entrypoint
 - [x] Contract-aligned workflow schema document
-- [x] Two contract-aligned official examples
+- [x] Parallel fan-out + barrier baseline
+- [x] Three contract-aligned official examples
 - [ ] Example migration cleanup
 - [ ] Checkpoint recovery refinement
 - [ ] Legacy interface/test baseline cleanup

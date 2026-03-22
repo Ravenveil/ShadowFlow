@@ -45,6 +45,69 @@ WORKFLOW_PAYLOAD = {
     ],
 }
 
+PARALLEL_WORKFLOW_PAYLOAD = {
+    "workflow_id": "parallel-synthesis",
+    "version": "0.1",
+    "name": "Parallel Synthesis",
+    "entrypoint": "fanout",
+    "nodes": [
+        {
+            "id": "fanout",
+            "kind": "node",
+            "type": "control.parallel",
+            "config": {
+                "role": "dispatcher",
+                "message_template": "[dispatcher] scheduled research branches.",
+                "branches": ["research_a", "research_b"],
+                "barrier": "merge",
+            },
+        },
+        {
+            "id": "research_a",
+            "kind": "agent",
+            "type": "research.collect",
+            "config": {
+                "role": "researcher-a",
+                "message_template": "[researcher-a] collected product signals.",
+                "emit": {"topic": "product", "confidence": 7},
+            },
+        },
+        {
+            "id": "research_b",
+            "kind": "agent",
+            "type": "research.collect",
+            "config": {
+                "role": "researcher-b",
+                "message_template": "[researcher-b] collected engineering signals.",
+                "emit": {"topic": "engineering", "confidence": 8},
+            },
+        },
+        {
+            "id": "merge",
+            "kind": "node",
+            "type": "control.barrier",
+            "config": {
+                "role": "synthesizer",
+                "source_parallel": "fanout",
+                "message_template": "[synthesizer] joined branch outputs and prepared synthesis context.",
+            },
+        },
+        {
+            "id": "writer",
+            "kind": "agent",
+            "type": "review.summarize",
+            "config": {
+                "role": "writer",
+                "message_template": "[writer] produced the synthesis summary.",
+            },
+        },
+    ],
+    "edges": [
+        {"from": "merge", "to": "writer", "type": "conditional", "condition": "result.branch_count >= 2"},
+        {"from": "writer", "to": "END", "type": "final"},
+    ],
+}
+
 
 def test_runtime_service_returns_contract_shape():
     service = RuntimeService()
@@ -134,3 +197,44 @@ def test_runtime_service_can_resume_from_checkpoint():
     assert resumed.run.metadata["resumed_from_checkpoint_id"] == checkpoint_id
     assert resumed.steps[0].node_id == "reviewer"
     assert resumed.final_output["message"] == "[reviewer] created notes"
+
+
+def test_runtime_service_supports_parallel_barrier():
+    service = RuntimeService()
+    request = RuntimeRequest(
+        workflow=WorkflowDefinition.model_validate(PARALLEL_WORKFLOW_PAYLOAD),
+        input={"goal": "Synthesize two research branches"},
+        metadata={"source_system": "pytest"},
+    )
+
+    result = asyncio.run(service.run(request))
+
+    assert result.run.status == "succeeded"
+    assert [step.node_id for step in result.steps] == ["fanout", "research_a", "research_b", "merge", "writer"]
+    assert result.steps[3].output["branch_count"] == 2
+    assert sorted(result.steps[3].output["branch_outputs"].keys()) == ["research_a", "research_b"]
+    assert result.final_output["message"] == "[writer] produced the synthesis summary."
+
+
+def test_parallel_workflow_can_resume_after_first_branch():
+    service = RuntimeService()
+    request = RuntimeRequest(
+        workflow=WorkflowDefinition.model_validate(PARALLEL_WORKFLOW_PAYLOAD),
+        input={"goal": "Resume parallel synthesis"},
+        metadata={"source_system": "pytest"},
+    )
+
+    result = asyncio.run(service.run(request))
+    branch_checkpoint = next(checkpoint for checkpoint in result.checkpoints if checkpoint.state.current_node_id == "research_a")
+
+    resumed = asyncio.run(
+        service.resume(
+            result.run.run_id,
+            ResumeRequest(checkpoint_id=branch_checkpoint.checkpoint_id, metadata={"source_system": "resume-test"}),
+        )
+    )
+
+    assert resumed.run.status == "succeeded"
+    assert resumed.run.metadata["resumed_from_checkpoint_id"] == branch_checkpoint.checkpoint_id
+    assert [step.node_id for step in resumed.steps] == ["research_b", "merge", "writer"]
+    assert resumed.steps[1].output["branch_count"] == 2
