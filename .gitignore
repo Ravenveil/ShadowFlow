@@ -21,3 +21,6 @@ env/
 
 *.log
 nul.okm
+simple_data_pipeline_workflow.json
+simple_test.py
+test_planner.py
