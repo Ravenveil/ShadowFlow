@@ -1,0 +1,402 @@
+from __future__ import annotations
+
+import json
+import re
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
+from agentgraph.runtime.contracts import (
+    ArtifactRef,
+    CheckpointRef,
+    CheckpointState,
+    NodeDefinition,
+    ResumeRequest,
+    RunRecord,
+    RunResult,
+    RuntimeRequest,
+    StepRecord,
+    WorkflowDefinition,
+    WorkflowValidationResult,
+    utc_now,
+)
+
+
+class RuntimeService:
+    def __init__(self) -> None:
+        self._runs: Dict[str, RunResult] = {}
+        self._requests_by_run_id: Dict[str, RuntimeRequest] = {}
+        self._checkpoints: Dict[str, CheckpointRef] = {}
+
+    def validate_workflow(self, workflow: WorkflowDefinition) -> WorkflowValidationResult:
+        warnings: List[str] = []
+        outgoing_nodes = {edge.from_id for edge in workflow.edges}
+        final_edges = [edge for edge in workflow.edges if edge.type == "final" or edge.to_id == "END"]
+
+        if workflow.entrypoint not in outgoing_nodes and len(workflow.nodes) > 1:
+            warnings.append("entrypoint has no outgoing edges; workflow may stop after first node")
+        if not final_edges:
+            warnings.append("workflow has no explicit final edge; execution stops when no edge matches")
+
+        return WorkflowValidationResult(
+            valid=True,
+            workflow_id=workflow.workflow_id,
+            warnings=warnings,
+        )
+
+    async def run(self, request: RuntimeRequest) -> RunResult:
+        self.validate_workflow(request.workflow)
+        result = await self._execute(
+            request=request,
+            start_node_id=request.workflow.entrypoint,
+            resumed_from=None,
+            restored_state=None,
+            initial_output=request.input.copy(),
+        )
+        self._requests_by_run_id[result.run.run_id] = request
+        return result
+
+    async def resume(self, run_id: str, resume_request: ResumeRequest) -> RunResult:
+        original_request = self._requests_by_run_id.get(run_id)
+        if original_request is None:
+            raise ValueError(f"run not found for resume: {run_id}")
+
+        checkpoint = self._checkpoints.get(resume_request.checkpoint_id)
+        if checkpoint is None:
+            raise ValueError(f"checkpoint not found: {resume_request.checkpoint_id}")
+        if checkpoint.run_id != run_id:
+            raise ValueError("checkpoint does not belong to run")
+
+        next_node_id = checkpoint.state.next_node_id
+        if next_node_id is None:
+            raise ValueError("checkpoint has no resumable next node")
+
+        resumed_request = RuntimeRequest.model_validate(
+            {
+                **original_request.model_dump(),
+                "request_id": f"req-{uuid4().hex[:12]}",
+                "metadata": {
+                    **original_request.metadata,
+                    **resume_request.metadata,
+                    "resume_from_run_id": run_id,
+                    "resume_from_checkpoint_id": checkpoint.checkpoint_id,
+                },
+            }
+        )
+
+        result = await self._execute(
+            request=resumed_request,
+            start_node_id=next_node_id,
+            resumed_from=checkpoint,
+            restored_state=checkpoint.state.state,
+            initial_output=checkpoint.state.last_output or original_request.input.copy(),
+        )
+        self._requests_by_run_id[result.run.run_id] = resumed_request
+        return result
+
+    def get_checkpoint(self, checkpoint_id: str) -> Optional[CheckpointRef]:
+        return self._checkpoints.get(checkpoint_id)
+
+    async def _execute(
+        self,
+        request: RuntimeRequest,
+        start_node_id: str,
+        resumed_from: Optional[CheckpointRef],
+        restored_state: Optional[Dict[str, Any]],
+        initial_output: Dict[str, Any],
+    ) -> RunResult:
+        run_id = f"run-{uuid4().hex[:12]}"
+        metadata = {
+            "execution_mode": request.execution_mode,
+            "memory_scope": request.memory_scope,
+            **request.metadata,
+        }
+        if resumed_from is not None:
+            metadata["resumed_from_checkpoint_id"] = resumed_from.checkpoint_id
+            metadata["resumed_from_run_id"] = resumed_from.run_id
+        run = RunRecord(
+            run_id=run_id,
+            request_id=request.request_id,
+            workflow_id=request.workflow.workflow_id,
+            status="running",
+            started_at=utc_now(),
+            entrypoint=start_node_id,
+            metadata=metadata,
+        )
+
+        state: Dict[str, Any] = {
+            "input": request.input,
+            "context": request.context,
+            "workflow_id": request.workflow.workflow_id,
+            "root_input": request.input.copy(),
+            "visited_nodes": [],
+            "step_outputs": {},
+        }
+        if restored_state:
+            state.update(restored_state.get("shared_state", {}))
+            state["step_outputs"] = restored_state.get("step_outputs", {})
+            if "root_input" not in state:
+                state["root_input"] = request.input.copy()
+            if resumed_from is not None:
+                state["visited_nodes"] = list(resumed_from.state.visited_nodes)
+
+        steps: List[StepRecord] = []
+        artifacts: List[ArtifactRef] = []
+        checkpoints: List[CheckpointRef] = []
+        trace: List[Dict[str, Any]] = []
+        errors: List[Dict[str, Any]] = []
+
+        nodes_by_id = {node.id: node for node in request.workflow.nodes}
+        current_node_id: Optional[str] = start_node_id
+        max_steps = max(len(request.workflow.nodes) * 3, 1)
+        current_output: Dict[str, Any] = initial_output.copy()
+
+        for index in range(1, max_steps + 1):
+            if current_node_id is None or current_node_id == "END":
+                break
+
+            node = nodes_by_id[current_node_id]
+            step_started_at = utc_now()
+            run.current_step_id = f"step-{index:03d}"
+            state["visited_nodes"].append(current_node_id)
+
+            step_trace = [
+                {
+                    "event": "reasoning",
+                    "node_id": current_node_id,
+                    "message": f"Executing node {current_node_id} ({node.type})",
+                    "timestamp": step_started_at.isoformat(),
+                }
+            ]
+            step_output = self._execute_node(node, current_output, state, request.context)
+            step_artifacts = self._build_artifacts(run_id, index, current_node_id, step_output)
+            step_trace.extend(
+                {
+                    "event": "tool_result",
+                    "node_id": current_node_id,
+                    "message": f"{key}={value!r}",
+                    "timestamp": utc_now().isoformat(),
+                }
+                for key, value in step_output.items()
+                if key not in {"message", "state"}
+            )
+
+            step = StepRecord(
+                step_id=f"step-{index:03d}",
+                run_id=run_id,
+                node_id=current_node_id,
+                status="succeeded",
+                index=index,
+                input=current_output,
+                output=step_output,
+                trace=step_trace,
+                artifacts=step_artifacts,
+                started_at=step_started_at,
+                ended_at=utc_now(),
+                metadata={"node_kind": node.kind, "node_type": node.type},
+            )
+            steps.append(step)
+            artifacts.extend(step_artifacts)
+            trace.extend(step_trace)
+
+            state["step_outputs"][current_node_id] = step_output
+            state.update(step_output.get("state", {}))
+            current_output = {**state["root_input"], **step_output}
+
+            checkpoint = CheckpointRef(
+                checkpoint_id=f"ckpt-{uuid4().hex[:10]}",
+                run_id=run_id,
+                step_id=step.step_id,
+                state_ref=f"checkpoint://{run_id}/{step.step_id}",
+                state=CheckpointState(
+                    current_node_id=current_node_id,
+                    next_node_id=None,
+                    visited_nodes=list(state["visited_nodes"]),
+                    last_output=current_output,
+                    state={
+                        "step_outputs": state["step_outputs"],
+                        "shared_state": {k: v for k, v in state.items() if k not in {"visited_nodes", "step_outputs"}},
+                    },
+                ),
+            )
+            checkpoints.append(checkpoint)
+
+            next_node_id = self._resolve_next_node(request.workflow, current_node_id, step_output, state)
+            checkpoint.state.next_node_id = next_node_id
+            trace.append(
+                {
+                    "event": "route_decision",
+                    "node_id": current_node_id,
+                    "message": f"next={next_node_id or 'END'}",
+                    "timestamp": utc_now().isoformat(),
+                }
+            )
+            current_node_id = next_node_id
+            self._checkpoints[checkpoint.checkpoint_id] = checkpoint
+
+        else:
+            errors.append({"message": "workflow exceeded max_steps guard", "code": "max_steps_exceeded"})
+
+        run.status = "failed" if errors else "succeeded"
+        run.ended_at = utc_now()
+        run.current_step_id = steps[-1].step_id if steps else None
+
+        result = RunResult(
+            run=run,
+            steps=steps,
+            final_output=current_output,
+            trace=trace,
+            artifacts=artifacts,
+            checkpoints=checkpoints,
+            errors=errors,
+        )
+        self._runs[run_id] = result
+        return result
+
+    def get_run(self, run_id: str) -> Optional[RunResult]:
+        return self._runs.get(run_id)
+
+    def _execute_node(
+        self,
+        node: NodeDefinition,
+        step_input: Dict[str, Any],
+        state: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        role = node.config.get("role", node.type)
+        prompt = node.config.get("prompt", "")
+        message = node.config.get(
+            "message_template",
+            f"[{role}] handled workflow step for '{step_input.get('goal') or step_input.get('message') or node.id}'.",
+        )
+
+        output: Dict[str, Any] = {
+            "message": message,
+            "node_id": node.id,
+            "node_type": node.type,
+            "handled_by": role,
+            "state": {},
+        }
+
+        if prompt:
+            output["prompt"] = prompt
+        if "set_state" in node.config:
+            output["state"].update(node.config["set_state"])
+        if "emit" in node.config and isinstance(node.config["emit"], dict):
+            output.update(node.config["emit"])
+        if "copy_input" in node.config:
+            keys = node.config["copy_input"]
+            if isinstance(keys, list):
+                output["copied_input"] = {key: step_input.get(key) for key in keys}
+        if "artifact" in node.config:
+            output["artifact"] = node.config["artifact"]
+        if "decision" in node.config:
+            output["decision"] = node.config["decision"]
+        if "context_echo" in node.config:
+            output["context"] = {key: context.get(key) for key in node.config["context_echo"]}
+
+        return output
+
+    def _build_artifacts(
+        self,
+        run_id: str,
+        index: int,
+        node_id: str,
+        step_output: Dict[str, Any],
+    ) -> List[ArtifactRef]:
+        artifact_payload = step_output.get("artifact")
+        if not artifact_payload:
+            return []
+
+        if isinstance(artifact_payload, dict):
+            payload = artifact_payload
+        else:
+            payload = {"content": artifact_payload}
+
+        return [
+            ArtifactRef(
+                artifact_id=f"artifact-{uuid4().hex[:10]}",
+                kind=payload.get("kind", "json"),
+                name=payload.get("name", f"{node_id}-artifact-{index}.json"),
+                uri=payload.get("uri", f"memory://{run_id}/{node_id}/{index}"),
+                producer_step_id=f"step-{index:03d}",
+                metadata={"content": payload.get("content")},
+            )
+        ]
+
+    def _resolve_next_node(
+        self,
+        workflow: WorkflowDefinition,
+        current_node_id: str,
+        step_output: Dict[str, Any],
+        state: Dict[str, Any],
+    ) -> Optional[str]:
+        candidates = [edge for edge in workflow.edges if edge.from_id == current_node_id]
+        for edge in candidates:
+            if self._match_condition(edge.condition, step_output, state):
+                return None if edge.to_id == "END" else edge.to_id
+        return None
+
+    def _match_condition(
+        self,
+        condition: Optional[str],
+        step_output: Dict[str, Any],
+        state: Dict[str, Any],
+    ) -> bool:
+        if not condition:
+            return True
+
+        normalized = condition.strip()
+        if "&&" in normalized or " and " in normalized:
+            parts = re.split(r"\s*&&\s*|\s+and\s+", normalized)
+            return all(self._match_condition(part, step_output, state) for part in parts)
+
+        if "." in normalized:
+            root, expr = normalized.split(".", 1)
+            root = root.strip()
+            target = step_output if root == "result" else state if root == "state" else None
+            if target is None:
+                return False
+            return self._eval_expr(expr.strip(), target)
+
+        return self._eval_expr(normalized, step_output)
+
+    def _eval_expr(self, expr: str, source: Dict[str, Any]) -> bool:
+        pattern = r"([\w_]+)\s*(>=|<=|>|<|==|!=|contains|includes)\s*['\"]?(.+?)['\"]?$"
+        match = re.match(pattern, expr, re.IGNORECASE)
+        if not match:
+            return False
+
+        key, op, raw_value = match.groups()
+        actual = source.get(key)
+        if actual is None:
+            return False
+
+        expected: Any = raw_value.strip()
+        try:
+            expected = json.loads(expected)
+        except json.JSONDecodeError:
+            pass
+
+        if isinstance(actual, bool) and isinstance(expected, str):
+            expected = expected.lower() in {"true", "1", "yes"}
+        elif isinstance(actual, (int, float)) and not isinstance(expected, (int, float)):
+            try:
+                expected = float(expected)
+            except (TypeError, ValueError):
+                return False
+
+        if op == ">":
+            return actual > expected
+        if op == ">=":
+            return actual >= expected
+        if op == "<":
+            return actual < expected
+        if op == "<=":
+            return actual <= expected
+        if op == "==":
+            return actual == expected
+        if op == "!=":
+            return actual != expected
+        if op in {"contains", "includes"}:
+            return str(expected).lower() in str(actual).lower()
+        return False

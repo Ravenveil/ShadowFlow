@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentgraph"
+version = "0.1.0"
+description = "A lightweight multi-agent orchestration framework with swarm intelligence"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "AgentGraph Team", email = "team@agentgraph.dev"}
+]
+keywords = ["multi-agent", "orchestration", "swarm", "ai", "workflow"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "pydantic>=2.0.0",
+    "aiosqlite>=0.19.0",
+    "redis>=5.0.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "pyyaml>=6.0.0",
+    "httpx>=0.26.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.12.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+]
+monitoring = [
+    "prometheus-client>=0.19.0",
+    "structlog>=23.2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/agentgraph/agentgraph"
+Documentation = "https://docs.agentgraph.dev"
+Repository = "https://github.com/agentgraph/agentgraph"
+
+[project.scripts]
+agentgraph = "agentgraph.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agentgraph*"]
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "asyncio: marks async-style tests in the legacy suite",
+]

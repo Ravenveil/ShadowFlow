@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust: [stable, beta]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+        components: rustfmt, clippy
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install Tauri CLI
+      run: |
+        cargo install tauri-cli --locked
+
+    - name: Install Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install frontend dependencies
+      run: |
+        npm install
+
+    - name: Format check
+      run: cargo fmt --all -- --check
+
+    - name: Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Run tests
+      run: cargo test --lib
+
+    - name: Run integration tests
+      run: cargo test --test integration
+
+    - name: Run benchmarks
+      run: |
+        cargo bench
+        echo "::notice::Benchmark completed successfully"
+
+    - name: Generate coverage report
+      uses: actions-rs/llvm-cov@v0.1.17
+      continue-on-error: true
+      with:
+        toolchain: stable
+        clean: true
+        report-path: "**/target/llvm-cov/report.txt"
+        output-directory: "**/target/llvm-cov/html"
+        do-upload: true
+
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v3
+      if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
+      with:
+        name: coverage-report
+        path: target/llvm-cov/html/
+        retention-days: 30
+
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    needs: test
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-msvc
+          - x86_64-apple-darwin
+          # Uncomment to add ARM64 builds
+          # - aarch64-apple-darwin
+          # - aarch64-unknown-linux-gnu
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install frontend dependencies
+      run: |
+        npm install
+
+    - name: Build app
+      if: startsWith(matrix.target, 'aarch64')
+      run: npm run tauri build --target ${{ matrix.target }} -- --universal-apple-silicon
+    - name: Build app
+      if: !startsWith(matrix.target, 'aarch64')
+      run: npm run tauri build --target ${{ matrix.target }}
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: app-${{ matrix.target }}
+        path: src-tauri/target/${{ matrix.target }}/release/bundle/*
+        retention-days: 30

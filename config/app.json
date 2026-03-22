@@ -1,0 +1,8 @@
+{
+  "name": "AgentGraph",
+  "version": "1.0.0",
+  "description": "AgentGraph project for workflow management",
+  "main": "src/index.ts",
+  "author": "",
+  "license": ""
+}

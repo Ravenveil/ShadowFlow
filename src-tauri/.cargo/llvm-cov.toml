@@ -1,0 +1,35 @@
+[coverage]
+# 指定要分析的目录
+output_dir = "target/llvm-cov"
+
+# 导出格式
+report_file = "target/llvm-cov/report.txt"
+html_dir = "target/llvm-cov/html"
+json_file = "target/llvm-cov/report.json"
+
+# 包含的文件
+includes = [
+    "src/**/*.rs",
+    "tests/**/*.rs"
+]
+
+# 排除的文件
+excludes = [
+    "build.rs",
+    "benches/**/*.rs",
+    "examples/**/*.rs",
+    "integration_tests/**/*.rs"
+]
+
+# 选项
+ignore_clean = false
+no_cfg_coverage = true
+open_report = false
+
+# 运行时覆盖路径
+run-env = [
+    "CARGO_LLVM_COV_RUNNER=1"
+]
+
+# 测试命令
+test-threads = "1"
