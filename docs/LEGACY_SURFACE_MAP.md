@@ -60,6 +60,21 @@
 
 - 该入口已改写为当前 contract 版本，但如果后续看到旧草稿，应视为 legacy。
 
+### D. Historical large docs / concept narratives
+
+以下文档仍包含大量历史阶段判断、旧产品叙事或早期集成设想：
+
+- `docs/PHASE0_SUMMARY.md`
+- `docs/AGENTGRAPH_INTEGRATION.md`
+- `docs/CLI_ANYTHING_RELATION.md`
+- `docs/agentgraph与langgraph`
+- `docs/agentgraph计划书`
+- `examples/ai-code-assistant/README.md`
+
+原因：
+
+- 它们保留历史价值，但不应作为当前 Phase 1 contract、当前集成边界或当前 public API 的权威入口。
+
 ## 4. 处理策略
 
 ### 立即执行
@@ -73,6 +88,7 @@
 - 逐步将高价值 legacy 示例迁移到 canonical `WorkflowDefinition`
 - 将无法短期迁移的内容保留为历史研究材料
 - 清理仍依赖旧接口的测试与 README 引导
+- 将高噪音历史大文档收敛为简短 legacy/concept note，并把读者导向当前主线入口
 
 ## 5. 当前结论
 

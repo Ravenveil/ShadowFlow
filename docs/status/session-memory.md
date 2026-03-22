@@ -172,3 +172,28 @@
 - 下一轮最自然接力：
   - 继续压缩 `docs/AGENTGRAPH_INTEGRATION.md`、`PHASE0_SUMMARY.md` 等高噪音历史入口
   - 评估是否将 `tests/legacy/` 目录化，进一步减少文件名单维护成本
+
+## 2026-03-22 / Round 8
+
+- 延续上一轮什么：
+  - 延续 `legacy surface 收敛` 主战役，重点继续处理高噪音历史大文档和概念叙事入口。
+- 完成上一轮哪部分：
+  - 通过多智能体协作，把历史大文档真正压缩到“历史/概念说明”定位：
+    - `docs/PHASE0_SUMMARY.md` 已改成 legacy summary
+    - `docs/AGENTGRAPH_INTEGRATION.md` 已改成 legacy integration note
+    - `docs/CLI_ANYTHING_RELATION.md` 已改成 legacy / concept note
+    - `examples/ai-code-assistant/README.md` 已改成 legacy / concept note
+    - `docs/README.md` 与 `docs/LEGACY_SURFACE_MAP.md` 已补充“历史大文档/概念叙事”边界
+- 放弃上一轮哪部分：
+  - 没有继续改 `agentgraph与langgraph`、`agentgraph计划书`
+  - 没有继续做 `tests/legacy/` 目录迁移
+- 为什么：
+  - 这轮目标是先把最容易继续误导新读者和新集成方的高噪音入口收掉，优先级高于更深层的整理。
+- 本轮关键结论：
+  - 现在的历史大文档已经不再像“当前主线实施指南”，而更像明确受控的归档说明。
+  - 多智能体协作在文档收口上非常有效：按文件切片后，能够并行压缩多个大入口而不互相冲突。
+  - 主线 contract 验证口径没有被这轮文档瘦身破坏。
+- 下一轮最自然接力：
+  - 继续压缩剩余历史大文档
+  - 评估将 legacy tests 目录化
+  - 细化 adapter 消费约定与官方 examples 的对外说明

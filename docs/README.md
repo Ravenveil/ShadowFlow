@@ -57,6 +57,11 @@ AgentGraph 文档入口页。
 - [agentgraph与langgraph](agentgraph与langgraph)
 - [agentgraph计划书](agentgraph计划书)
 
+注意：
+
+- 这些文档主要用于理解历史背景、设计来源和早期叙事
+- 它们不应覆盖 `CORE_CHARTER / RUNTIME_CONTRACT_SPEC / WORKFLOW_SCHEMA` 这条当前主线
+
 ### 如果你要看教程或示例
 
 先读：
@@ -124,6 +129,14 @@ AgentGraph 文档入口页。
 - [Python API: Memory (Legacy)](api/python/Memory.md)
 - [创建协作式多智能体 (Legacy)](tutorials/multi-agent/creating-cooperative-agents.md)
 
+### H. 历史大文档与概念叙事
+
+- [Phase 0 完成报告](PHASE0_SUMMARY.md)
+- [AgentGraph 集成方案](AGENTGRAPH_INTEGRATION.md)
+- [CLI-Anything 与 AgentGraph / Shadow 的关系理解](CLI_ANYTHING_RELATION.md)
+- [agentgraph与langgraph](agentgraph与langgraph)
+- [agentgraph计划书](agentgraph计划书)
+
 ---
 
 ## 4. 当前推荐阅读路径
@@ -167,6 +180,8 @@ AgentGraph 文档入口页。
 - [Core Charter](CORE_CHARTER.md)
 - [Runtime Contract Spec](RUNTIME_CONTRACT_SPEC.md)
 - [Workflow Schema](WORKFLOW_SCHEMA.md)
+- [Adapter Boundary](ADAPTER_BOUNDARY.md)
+- [HTTP API README](api/http/README.md)
 - [Phase 1 主战役草稿](plans/agentgraph-phase1-campaign-draft.md)
 - [Legacy Surface Map](LEGACY_SURFACE_MAP.md)
 
