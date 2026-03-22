@@ -229,3 +229,38 @@
   - 继续处理仍未迁移的 legacy 示例
   - 评估是否进一步削薄 legacy Python API 导出和对外说明
   - 进入更实质的 adapter 消费边界与官方验证矩阵扩展
+
+## 2026-03-23 / Round 10
+
+- 延续上一轮什么：
+  - 延续 `legacy surface 收敛` 主战役，但把重点从“历史文档/测试降噪”切到“legacy 示例迁移 + 官方验证矩阵代码化”。
+- 完成上一轮哪部分：
+  - 已把 6 个高价值 legacy YAML 收敛成新的 canonical runtime-contract 样例：
+    - `simple-assistant.yaml`
+    - `code-review-phase1.yaml`
+    - `research-report-phase1.yaml`
+    - `content-creation-phase1.yaml`
+    - `data-processing-phase1.yaml`
+    - `github-monitoring-phase1.yaml`
+  - 新增 `examples/runtime-contract/official-examples.yaml` 作为官方样例注册表
+  - 新增 `agentgraph/runtime/official_examples.py`，把官方样例清单和统一加载逻辑正式放进代码
+  - `tests/test_runtime_examples.py` 改成基于官方样例注册表的参数化验证矩阵
+- 放弃上一轮哪部分：
+  - 没有继续把本轮主成果表述成文档治理
+  - 没有继续优先处理 legacy Python API 或额外历史背景稿
+- 为什么：
+  - 用户明确指出不能一直围绕文档/示例说明打转，这轮必须把“示例迁移”真正落到代码基线和自动化验证里，才算在推进“我们的代码”。
+- 本轮关键结论：
+  - AgentGraph 现在不再靠手工维护“哪几个 YAML 算官方样例”，而是有了代码里的官方样例注册表。
+  - 默认 `pytest -q` 现在不仅验证 runtime contract 本身，也会验证全部官方样例的：
+    - manifest 一致性
+    - service validate/run
+    - CLI validate
+  - 这使“legacy 示例迁移”第一次真正变成主线代码资产，而不是仅存在于文档说明里。
+- 多智能体执行结论：
+  - worker 适合按示例族切片迁移 YAML
+  - 主线程更适合负责官方样例注册表、测试矩阵、状态写回和主线提交
+- 下一轮最自然接力：
+  - 继续围绕 adapter boundary 扩展官方验证矩阵
+  - 评估是否加入 checkpoint/resume 的官方样例矩阵
+  - 继续收敛仍未迁移的 legacy 示例和模板

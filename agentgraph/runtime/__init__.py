@@ -12,6 +12,14 @@ from agentgraph.runtime.contracts import (
     WorkflowDefinition,
     WorkflowValidationResult,
 )
+from agentgraph.runtime.official_examples import (
+    OFFICIAL_EXAMPLES_MANIFEST,
+    OfficialExampleSpec,
+    get_official_example,
+    list_official_examples,
+    load_official_examples_manifest,
+    load_official_workflow,
+)
 from agentgraph.runtime.service import RuntimeService
 
 __all__ = [
@@ -20,6 +28,8 @@ __all__ = [
     "CheckpointState",
     "EdgeDefinition",
     "NodeDefinition",
+    "OFFICIAL_EXAMPLES_MANIFEST",
+    "OfficialExampleSpec",
     "ResumeRequest",
     "RunRecord",
     "RunResult",
@@ -28,4 +38,8 @@ __all__ = [
     "StepRecord",
     "WorkflowDefinition",
     "WorkflowValidationResult",
+    "get_official_example",
+    "list_official_examples",
+    "load_official_examples_manifest",
+    "load_official_workflow",
 ]

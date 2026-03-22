@@ -12,11 +12,18 @@
 
 ## Phase 1 官方示例
 
+- [official-examples.yaml](runtime-contract/official-examples.yaml)
 - [docs-gap-review.yaml](runtime-contract/docs-gap-review.yaml)
 - [parallel-synthesis.yaml](runtime-contract/parallel-synthesis.yaml)
 - [research-review-loop.yaml](runtime-contract/research-review-loop.yaml)
+- [simple-assistant.yaml](runtime-contract/simple-assistant.yaml)
+- [code-review-phase1.yaml](runtime-contract/code-review-phase1.yaml)
+- [research-report-phase1.yaml](runtime-contract/research-report-phase1.yaml)
+- [content-creation-phase1.yaml](runtime-contract/content-creation-phase1.yaml)
+- [data-processing-phase1.yaml](runtime-contract/data-processing-phase1.yaml)
+- [github-monitoring-phase1.yaml](runtime-contract/github-monitoring-phase1.yaml)
 
-这三份示例是当前阶段判断 AgentGraph 是否具备“独立、稳定、可集成编排层雏形”的权威样例。
+`official-examples.yaml` 是当前官方样例注册表；测试矩阵和后续自动化应优先围绕这份清单，而不是手工维护示例列表。
 
 ## 快速运行
 

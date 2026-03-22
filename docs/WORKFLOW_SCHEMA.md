@@ -223,10 +223,18 @@ CLI 和 HTTP API 都消费 `RuntimeRequest`，而 `workflow` 字段就是这份 
 
 当前阶段的正式 contract 对齐示例：
 
+- `examples/runtime-contract/official-examples.yaml`
 - `examples/runtime-contract/docs-gap-review.yaml`
 - `examples/runtime-contract/research-review-loop.yaml`
+- `examples/runtime-contract/parallel-synthesis.yaml`
+- `examples/runtime-contract/simple-assistant.yaml`
+- `examples/runtime-contract/code-review-phase1.yaml`
+- `examples/runtime-contract/research-report-phase1.yaml`
+- `examples/runtime-contract/content-creation-phase1.yaml`
+- `examples/runtime-contract/data-processing-phase1.yaml`
+- `examples/runtime-contract/github-monitoring-phase1.yaml`
 
-这两份示例是 Phase 1 评估“独立成立标准”时的权威样例。
+其中 `official-examples.yaml` 是当前官方样例注册表；验证矩阵和后续迁移应优先以它为准。
 
 ---
 
