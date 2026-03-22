@@ -65,7 +65,26 @@
 4. 如果需要恢复点，保存 `CheckpointRef`
 5. 如发生中断，再按 `checkpoint_id` 触发恢复
 
-## 6. 当前未承诺
+## 6. 官方验证基线
+
+当前 adapter boundary 的官方验证基线，已经不是纯文档约定，而是由以下资产共同维护：
+
+- `examples/runtime-contract/official-examples.yaml`
+- `agentgraph/runtime/official_examples.py`
+- `tests/test_runtime_examples.py`
+- `tests/test_runtime_contract.py`
+
+其中当前已覆盖：
+
+- 官方样例的 `validate`
+- 官方样例的 `run`
+- 选定官方样例的 `checkpoint -> resume`
+- HTTP `run / get_run / get_checkpoint / resume` 最小宿主调用链
+- parallel/barrier 输出中的 `branch_outputs`
+
+宿主如果要判断当前边界是否被破坏，应该优先看这条验证基线，而不是回看旧概念文档。
+
+## 7. 当前未承诺
 
 - streaming adapter 协议
 - 多租户 checkpoint store 标准
@@ -78,7 +97,7 @@
 - `control.barrier` join
 - barrier 输出中的 `branch_outputs`
 
-## 7. 当前结论
+## 8. 当前结论
 
 当前阶段 AgentGraph 的 adapter boundary 是 contract-first，而不是 implementation-first。
 

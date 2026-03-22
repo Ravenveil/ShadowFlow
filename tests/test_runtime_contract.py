@@ -2,7 +2,14 @@ import asyncio
 
 from fastapi.testclient import TestClient
 
-from agentgraph.runtime import ResumeRequest, RuntimeRequest, RuntimeService, WorkflowDefinition
+from agentgraph.runtime import (
+    ResumeRequest,
+    RuntimeRequest,
+    RuntimeService,
+    WorkflowDefinition,
+    get_official_example,
+    load_official_workflow,
+)
 from agentgraph.server import app
 
 
@@ -238,3 +245,80 @@ def test_parallel_workflow_can_resume_after_first_branch():
     assert resumed.run.metadata["resumed_from_checkpoint_id"] == branch_checkpoint.checkpoint_id
     assert [step.node_id for step in resumed.steps] == ["research_b", "merge", "writer"]
     assert resumed.steps[1].output["branch_count"] == 2
+
+
+def test_fastapi_adapter_boundary_supports_run_checkpoint_and_resume():
+    client = TestClient(app)
+    example = get_official_example("research-review-loop")
+    workflow = load_official_workflow(example)
+
+    run_response = client.post(
+        "/workflow/run",
+        json={
+            "workflow": workflow.model_dump(mode="json"),
+            "input": example.input,
+            "metadata": {"source_system": "adapter-boundary-test", **example.metadata},
+        },
+    )
+
+    assert run_response.status_code == 200
+    payload = run_response.json()
+    assert sorted(payload.keys()) == ["artifacts", "checkpoints", "errors", "final_output", "run", "steps", "trace"]
+    assert payload["run"]["workflow_id"] == example.id
+    assert payload["run"]["status"] == "succeeded"
+    assert isinstance(payload["steps"], list) and payload["steps"]
+    assert isinstance(payload["artifacts"], list)
+    assert isinstance(payload["checkpoints"], list)
+    assert isinstance(payload["trace"], list)
+    assert isinstance(payload["final_output"], dict)
+
+    run_id = payload["run"]["run_id"]
+    get_run_response = client.get(f"/runs/{run_id}")
+    assert get_run_response.status_code == 200
+    assert get_run_response.json()["run"]["run_id"] == run_id
+
+    checkpoint = next(
+        item for item in payload["checkpoints"] if item["state"]["current_node_id"] == example.resume_from_checkpoint_node_id
+    )
+    checkpoint_response = client.get(f"/checkpoints/{checkpoint['checkpoint_id']}")
+    assert checkpoint_response.status_code == 200
+    checkpoint_payload = checkpoint_response.json()
+    assert checkpoint_payload["run_id"] == run_id
+    assert checkpoint_payload["state"]["current_node_id"] == example.resume_from_checkpoint_node_id
+    assert checkpoint_payload["state"]["next_node_id"] == example.expected_resumed_nodes[0]
+
+    resume_response = client.post(
+        f"/runs/{run_id}/resume",
+        json={
+            "checkpoint_id": checkpoint["checkpoint_id"],
+            "metadata": {"source_system": "adapter-boundary-test", "resume_case": example.id},
+        },
+    )
+    assert resume_response.status_code == 200
+    resumed_payload = resume_response.json()
+    assert resumed_payload["run"]["metadata"]["resumed_from_checkpoint_id"] == checkpoint["checkpoint_id"]
+    assert resumed_payload["run"]["metadata"]["resumed_from_run_id"] == run_id
+    assert [step["node_id"] for step in resumed_payload["steps"]] == example.expected_resumed_nodes
+    assert resumed_payload["final_output"]["node_id"] == example.expected_resumed_terminal_node
+
+
+def test_parallel_example_exposes_adapter_boundary_branch_outputs():
+    example = get_official_example("parallel-synthesis")
+    workflow = load_official_workflow(example)
+    service = RuntimeService()
+
+    result = asyncio.run(
+        service.run(
+            RuntimeRequest(
+                workflow=workflow,
+                input=example.input,
+                metadata={"source_system": "adapter-boundary-test", **example.metadata},
+            )
+        )
+    )
+
+    barrier_step = next(step for step in result.steps if step.node_id == "merge")
+    assert barrier_step.output["parallel_group"] == "fanout"
+    assert barrier_step.output["branch_count"] == example.expected_parallel_branch_count
+    assert sorted(barrier_step.output["branch_outputs"].keys()) == ["research_a", "research_b"]
+    assert barrier_step.output["branches_completed"] == ["research_a", "research_b"]

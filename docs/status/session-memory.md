@@ -264,3 +264,34 @@
   - 继续围绕 adapter boundary 扩展官方验证矩阵
   - 评估是否加入 checkpoint/resume 的官方样例矩阵
   - 继续收敛仍未迁移的 legacy 示例和模板
+
+## 2026-03-23 / Round 11
+
+- 延续上一轮什么：
+  - 延续“官方样例注册表 + 参数化验证矩阵”主线，但把重点进一步收敛到 checkpoint/resume 与 adapter boundary。
+- 完成上一轮哪部分：
+  - `official-examples.yaml` 现在已经能表达官方样例的 resume 期望
+  - `tests/test_runtime_examples.py` 现在会对带 resume 配置的官方样例执行 `run -> checkpoint -> resume`
+  - `tests/test_runtime_contract.py` 现在包含 HTTP adapter boundary 基线：
+    - `POST /workflow/run`
+    - `GET /runs/{id}`
+    - `GET /checkpoints/{id}`
+    - `POST /runs/{id}/resume`
+  - parallel/barrier 的 `branch_outputs` 也被纳入 adapter boundary 断言
+- 放弃上一轮哪部分：
+  - 没有继续新增更多 legacy 示例迁移
+  - 没有扩展新的 runtime 能力类型
+- 为什么：
+  - 这一轮更高杠杆的主线不是“再多几个 YAML”，而是把外部宿主真正关心的恢复链和 boundary 形状纳入默认回归基线。
+- 本轮关键结论：
+  - 官方样例矩阵现在不仅覆盖 `validate/run`，也开始覆盖 `checkpoint/resume`。
+  - adapter boundary 不再只是文档承诺，而已经有 HTTP 与 service 侧的自动化断言基线。
+  - 默认 `pytest -q` 已扩展到 `30 passed`，说明新的 resume/boundary 基线已经与现有主线兼容。
+- 本轮关键验证：
+  - `pytest -q` -> `30 passed`
+  - `python -m agentgraph.cli validate -w examples/runtime-contract/parallel-synthesis.yaml` -> `valid=true`
+  - `python -m agentgraph.cli run -w examples/runtime-contract/research-review-loop.yaml -i '{"goal":"Produce a research review"}'` -> `succeeded`
+- 下一轮最自然接力：
+  - 继续把 adapter boundary 细化为宿主消费约定，例如 artifact/checkpoint/writeback 分层
+  - 评估是否把 resume 样例扩展到更多迁移后的官方 workflow
+  - 再考虑 checkpoint store / multi-tenant 边界的 Phase 1.5 约束

@@ -25,6 +25,12 @@ examples:
     expected_terminal_node: "reviewer"
     expected_artifact_names:
       - "research-review-summary.md"
+    resume_from_checkpoint_node_id: "researcher"
+    expected_resumed_nodes:
+      - "reviewer"
+    expected_resumed_terminal_node: "reviewer"
+    expected_resume_artifact_names:
+      - "research-review-summary.md"
     tags:
       - "native"
       - "research"
@@ -40,6 +46,14 @@ examples:
     expected_artifact_names:
       - "parallel-synthesis-summary.md"
     expected_parallel_branch_count: 2
+    resume_from_checkpoint_node_id: "research_a"
+    expected_resumed_nodes:
+      - "research_b"
+      - "merge"
+      - "writer"
+    expected_resumed_terminal_node: "writer"
+    expected_resume_artifact_names:
+      - "parallel-synthesis-summary.md"
     tags:
       - "native"
       - "parallel"
@@ -103,6 +117,12 @@ examples:
     expected_artifact_names:
       - "content-creation-final.md"
     expected_parallel_branch_count: 2
+    resume_from_checkpoint_node_id: "reviewer"
+    expected_resumed_nodes:
+      - "editor"
+    expected_resumed_terminal_node: "editor"
+    expected_resume_artifact_names:
+      - "content-creation-final.md"
     source_legacy_paths:
       - "examples/multi-agent/content-creation-workflow.yaml"
     tags:

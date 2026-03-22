@@ -24,6 +24,10 @@ class OfficialExampleSpec(BaseModel):
     expected_terminal_node: str
     expected_artifact_names: List[str] = Field(default_factory=list)
     expected_parallel_branch_count: Optional[int] = None
+    resume_from_checkpoint_node_id: Optional[str] = None
+    expected_resumed_nodes: List[str] = Field(default_factory=list)
+    expected_resumed_terminal_node: Optional[str] = None
+    expected_resume_artifact_names: List[str] = Field(default_factory=list)
     source_legacy_paths: List[str] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
 
