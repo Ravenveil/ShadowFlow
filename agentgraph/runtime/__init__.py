@@ -9,6 +9,7 @@ from agentgraph.runtime.contracts import (
     RunResult,
     RuntimeRequest,
     StepRecord,
+    WritebackRef,
     WorkflowDefinition,
     WorkflowValidationResult,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "RuntimeRequest",
     "RuntimeService",
     "StepRecord",
+    "WritebackRef",
     "WorkflowDefinition",
     "WorkflowValidationResult",
     "get_official_example",

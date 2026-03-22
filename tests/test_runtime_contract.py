@@ -133,6 +133,10 @@ def test_runtime_service_returns_contract_shape():
     assert result.final_output["message"] == "[reviewer] created notes"
     assert result.final_output["copied_input"]["goal"] == "Analyze docs gap and produce notes"
     assert result.artifacts[0].name == "review-notes.md"
+    assert result.artifacts[0].writeback.channel == "artifact"
+    assert result.artifacts[0].writeback.host_action == "persist_artifact_ref"
+    assert result.checkpoints[0].writeback.channel == "checkpoint"
+    assert result.checkpoints[0].writeback.host_action == "persist_checkpoint_ref"
     assert len(result.checkpoints) == 2
 
 
@@ -180,6 +184,8 @@ def test_fastapi_contract_endpoints():
     checkpoint_response = client.get(f"/checkpoints/{checkpoint_id}")
     assert checkpoint_response.status_code == 200
     assert checkpoint_response.json()["checkpoint_id"] == checkpoint_id
+    assert checkpoint_response.json()["writeback"]["channel"] == "checkpoint"
+    assert checkpoint_response.json()["writeback"]["host_action"] == "persist_checkpoint_ref"
 
 
 def test_runtime_service_can_resume_from_checkpoint():
@@ -300,6 +306,10 @@ def test_fastapi_adapter_boundary_supports_run_checkpoint_and_resume():
     assert resumed_payload["run"]["metadata"]["resumed_from_run_id"] == run_id
     assert [step["node_id"] for step in resumed_payload["steps"]] == example.expected_resumed_nodes
     assert resumed_payload["final_output"]["node_id"] == example.expected_resumed_terminal_node
+    assert checkpoint_payload["writeback"]["resume_supported"] is True
+    assert checkpoint_payload["writeback"]["next_node_id"] == example.expected_resumed_nodes[0]
+    assert resumed_payload["artifacts"][0]["writeback"]["channel"] == "artifact"
+    assert resumed_payload["artifacts"][0]["writeback"]["host_action"] == "persist_artifact_ref"
 
 
 def test_parallel_example_exposes_adapter_boundary_branch_outputs():
@@ -322,3 +332,4 @@ def test_parallel_example_exposes_adapter_boundary_branch_outputs():
     assert barrier_step.output["branch_count"] == example.expected_parallel_branch_count
     assert sorted(barrier_step.output["branch_outputs"].keys()) == ["research_a", "research_b"]
     assert barrier_step.output["branches_completed"] == ["research_a", "research_b"]
+    assert result.checkpoints[0].writeback.channel == "checkpoint"

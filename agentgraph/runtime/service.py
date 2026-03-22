@@ -15,6 +15,7 @@ from agentgraph.runtime.contracts import (
     RunResult,
     RuntimeRequest,
     StepRecord,
+    WritebackRef,
     WorkflowDefinition,
     WorkflowValidationResult,
     utc_now,
@@ -180,7 +181,13 @@ class RuntimeService:
                 }
             ]
             step_output = self._execute_node(node, current_output, state, request.context)
-            step_artifacts = self._build_artifacts(run_id, index, current_node_id, step_output)
+            step_artifacts = self._build_artifacts(
+                run_id=run_id,
+                workflow_id=request.workflow.workflow_id,
+                index=index,
+                node_id=current_node_id,
+                step_output=step_output,
+            )
             step_trace.extend(
                 {
                     "event": "tool_result",
@@ -231,11 +238,23 @@ class RuntimeService:
                         "shared_state": {k: v for k, v in state.items() if k not in {"visited_nodes", "step_outputs"}},
                     },
                 ),
+                writeback=WritebackRef(
+                    channel="checkpoint",
+                    target="host",
+                    mode="reference",
+                    host_action="persist_checkpoint_ref",
+                ),
+                metadata={
+                    "workflow_id": request.workflow.workflow_id,
+                    "entrypoint": request.workflow.entrypoint,
+                },
             )
             checkpoints.append(checkpoint)
 
             next_node_id = self._resolve_next_node(request.workflow, node, step_output, state)
             checkpoint.state.next_node_id = next_node_id
+            checkpoint.writeback.resume_supported = next_node_id is not None
+            checkpoint.writeback.next_node_id = next_node_id
             trace.append(
                 {
                     "event": "route_decision",
@@ -349,6 +368,7 @@ class RuntimeService:
     def _build_artifacts(
         self,
         run_id: str,
+        workflow_id: str,
         index: int,
         node_id: str,
         step_output: Dict[str, Any],
@@ -369,7 +389,18 @@ class RuntimeService:
                 name=payload.get("name", f"{node_id}-artifact-{index}.json"),
                 uri=payload.get("uri", f"memory://{run_id}/{node_id}/{index}"),
                 producer_step_id=f"step-{index:03d}",
-                metadata={"content": payload.get("content")},
+                writeback=WritebackRef(
+                    channel="artifact",
+                    target="host",
+                    mode="reference",
+                    host_action="persist_artifact_ref",
+                    content_field="metadata.content" if payload.get("content") is not None else None,
+                ),
+                metadata={
+                    "content": payload.get("content"),
+                    "workflow_id": workflow_id,
+                    "producer_node_id": node_id,
+                },
             )
         ]
 

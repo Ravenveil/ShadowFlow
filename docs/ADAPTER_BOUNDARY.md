@@ -69,6 +69,7 @@
 
 当前 adapter boundary 的官方验证基线，已经不是纯文档约定，而是由以下资产共同维护：
 
+- `docs/WRITEBACK_ADAPTER_CONTRACT.md`
 - `examples/runtime-contract/official-examples.yaml`
 - `agentgraph/runtime/official_examples.py`
 - `tests/test_runtime_examples.py`
@@ -83,6 +84,10 @@
 - parallel/barrier 输出中的 `branch_outputs`
 
 宿主如果要判断当前边界是否被破坏，应该优先看这条验证基线，而不是回看旧概念文档。
+
+如果宿主要进一步理解 artifact/checkpoint 的 writeback 约定，请直接看：
+
+- `docs/WRITEBACK_ADAPTER_CONTRACT.md`
 
 ## 7. 当前未承诺
 

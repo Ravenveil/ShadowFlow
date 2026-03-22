@@ -295,3 +295,30 @@
   - 继续把 adapter boundary 细化为宿主消费约定，例如 artifact/checkpoint/writeback 分层
   - 评估是否把 resume 样例扩展到更多迁移后的官方 workflow
   - 再考虑 checkpoint store / multi-tenant 边界的 Phase 1.5 约束
+
+## 2026-03-23 / Round 12
+
+- 延续上一轮什么：
+  - 延续 checkpoint/resume 官方样例矩阵与 adapter boundary 基线，但把重点进一步收敛到 artifact/checkpoint/writeback 宿主消费约定。
+- 完成上一轮哪部分：
+  - `ArtifactRef` 与 `CheckpointRef` 现在都有显式 `writeback` 字段，而不是只靠松散 metadata 表达宿主动作
+  - runtime service 现在会为 artifact/checkpoint 统一生成 writeback envelope
+  - `tests/test_runtime_examples.py` 与 `tests/test_runtime_contract.py` 已收紧到字段级一致性断言
+  - 新增 `docs/WRITEBACK_ADAPTER_CONTRACT.md`，把宿主 writeback 约定单独固定下来
+- 放弃上一轮哪部分：
+  - 没有继续扩更多官方样例
+  - 没有进入 checkpoint store / multi-tenant 设计
+- 为什么：
+  - 当前最关键的主线不是加更多对象，而是把宿主真正要消费的 artifact/checkpoint/writeback 契约固定得更明确、更可测。
+- 本轮关键结论：
+  - AgentGraph 现在对外不只是返回 artifact/checkpoint，而是返回“可被宿主直接保存和继续处理”的 writeback 契约。
+  - writeback 字段已经进入默认 `pytest -q` 基线，不再只是文档上的建议。
+  - adapter boundary 进一步从“对象级存在”收紧到了“字段级一致性”。
+- 本轮关键验证：
+  - `pytest -q` -> `30 passed`
+  - `python -m agentgraph.cli validate -w examples/runtime-contract/content-creation-phase1.yaml` -> `valid=true`
+  - `python -m agentgraph.cli run -w examples/runtime-contract/parallel-synthesis.yaml -i '{"goal":"Synthesize two research branches"}'` -> `succeeded`
+- 下一轮最自然接力：
+  - 继续细化宿主 writeback 流程里的 artifact/checkpoint/writeback target 约定
+  - 评估是否给不同宿主场景补 `writeback target` / `writeback mode` 的 Phase 1.5 边界
+  - 再进入 checkpoint store / multi-tenant 约束

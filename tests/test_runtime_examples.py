@@ -48,11 +48,24 @@ def assert_run_result_adapter_boundary(result) -> None:
         assert checkpoint.state.current_node_id is not None
         assert isinstance(checkpoint.state.visited_nodes, list)
         assert isinstance(checkpoint.state.last_output, dict)
+        assert checkpoint.writeback.channel == "checkpoint"
+        assert checkpoint.writeback.host_action == "persist_checkpoint_ref"
+        assert checkpoint.writeback.target == "host"
+        assert checkpoint.writeback.mode == "reference"
+        assert checkpoint.writeback.resume_supported == (checkpoint.state.next_node_id is not None)
+        assert checkpoint.writeback.next_node_id == checkpoint.state.next_node_id
+        assert checkpoint.metadata["workflow_id"] == result.run.workflow_id
 
     for artifact in result.artifacts:
         assert artifact.artifact_id.startswith("artifact-")
         assert artifact.producer_step_id.startswith("step-")
         assert artifact.kind in {"text", "json", "document", "report", "patch", "log"}
+        assert artifact.writeback.channel == "artifact"
+        assert artifact.writeback.host_action == "persist_artifact_ref"
+        assert artifact.writeback.target == "host"
+        assert artifact.writeback.mode == "reference"
+        assert artifact.writeback.content_field == ("metadata.content" if artifact.metadata.get("content") else None)
+        assert artifact.metadata["workflow_id"] == result.run.workflow_id
 
 
 def test_official_examples_manifest_is_consistent():

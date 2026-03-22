@@ -136,12 +136,23 @@ class RunRecord(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class WritebackRef(BaseModel):
+    channel: Literal["artifact", "checkpoint"]
+    target: Literal["host", "docs", "memory", "graph"] = "host"
+    mode: Literal["reference", "inline"] = "reference"
+    host_action: Literal["persist_artifact_ref", "persist_checkpoint_ref"]
+    content_field: Optional[str] = None
+    resume_supported: Optional[bool] = None
+    next_node_id: Optional[str] = None
+
+
 class ArtifactRef(BaseModel):
     artifact_id: str
     kind: Literal["text", "json", "document", "report", "patch", "log"] = "json"
     name: str
     uri: str
     producer_step_id: str
+    writeback: WritebackRef
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -160,6 +171,7 @@ class CheckpointRef(BaseModel):
     state_ref: Optional[str] = None
     state: CheckpointState
     created_at: datetime = Field(default_factory=utc_now)
+    writeback: WritebackRef
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
