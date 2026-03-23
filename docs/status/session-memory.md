@@ -427,3 +427,27 @@
 - 下一轮最自然接力：
   - 把真正的宿主 writeback adapter stub / reference implementation 放进代码
   - 再推进 checkpoint store / tenant scope 最小契约
+
+## 2026-03-23 / Round 15
+
+- 延续上一轮什么：
+  - 延续“AgentGraph 已具备 Shadow-ready bridge，但责任边界与执行分工还需要正式落库”的判断。
+- 完成上一轮哪部分：
+  - 已把 Shadow / AgentGraph 的责任边界正式写成权威文档：
+    - `docs/SHADOW_AGENTGRAPH_RESPONSIBILITY_MATRIX.md`
+  - 已把 Shadow 与 AgentGraph 的后续任务拆分写成执行计划：
+    - `docs/status/agent-plans/2026-03-23-shadow-agentgraph-split-plan.md`
+  - 已新增一份尽量少英文、面向人的中文解释：
+    - `docs/status/agent-runs/2026-03-23-shadow-agentgraph-human-explainer.md`
+- 放弃上一轮哪部分：
+  - 没有继续扩新的 runtime 能力
+  - 没有开始真实 Shadow 接线代码
+- 为什么：
+  - 当前更高杠杆的是先把“生产集成归谁、公共契约归谁、两边接下来分别做什么”写成仓库资产，避免后续再靠对话反复澄清。
+- 本轮关键结论：
+  - 生产集成归 Shadow，通用编排契约归 AgentGraph，这个边界现在已经正式文档化。
+  - 双计划已经落库，Shadow 和 AgentGraph 后续都能按计划拆分执行，而不是继续混做。
+  - 面向人的说明文档现在明确要求尽量少英文，必要英文必须当场解释。
+- 下一轮最自然接力：
+  - Shadow 侧进入真实写回适配器、检查点存储和请求上下文外部化
+  - AgentGraph 侧进入请求上下文正式接口、检查点存储边界强化和失败语义继续收紧

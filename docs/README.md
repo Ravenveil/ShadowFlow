@@ -44,10 +44,15 @@ AgentGraph 文档入口页。
 - [Runtime Contract Spec](RUNTIME_CONTRACT_SPEC.md)
 - [Workflow Schema](WORKFLOW_SCHEMA.md)
 - [Adapter Boundary](ADAPTER_BOUNDARY.md)
+- [Shadow 与 AgentGraph 责任矩阵](SHADOW_AGENTGRAPH_RESPONSIBILITY_MATRIX.md)
 - [Writeback Adapter Contract](WRITEBACK_ADAPTER_CONTRACT.md)
 - [Checkpoint Store Contract](CHECKPOINT_STORE_CONTRACT.md)
 - [Architecture](ARCHITECTURE.md)
 - [HTTP API README](api/http/README.md)
+
+如果你想看一份尽量少英文、专门面向人的中文解释，可直接看：
+
+- [Shadow 和 AgentGraph 现在到底怎么分工（中文解释版）](status/agent-runs/2026-03-23-shadow-agentgraph-human-explainer.md)
 
 ### 如果你要理解设计来源和历史叙事
 
@@ -128,6 +133,7 @@ AgentGraph 文档入口页。
 
 - [HTTP API README](api/http/README.md)
 - [Adapter Boundary](ADAPTER_BOUNDARY.md)
+- [Shadow 与 AgentGraph 责任矩阵](SHADOW_AGENTGRAPH_RESPONSIBILITY_MATRIX.md)
 - [Writeback Adapter Contract](WRITEBACK_ADAPTER_CONTRACT.md)
 - [Checkpoint Store Contract](CHECKPOINT_STORE_CONTRACT.md)
 
@@ -187,8 +193,10 @@ AgentGraph 文档入口页。
 1. [Core Charter](CORE_CHARTER.md)
 2. [Runtime Contract Spec](RUNTIME_CONTRACT_SPEC.md)
 3. [Workflow Schema](WORKFLOW_SCHEMA.md)
-4. [Adapter Boundary](ADAPTER_BOUNDARY.md)
-5. [HTTP API README](api/http/README.md)
+4. [Shadow 与 AgentGraph 责任矩阵](SHADOW_AGENTGRAPH_RESPONSIBILITY_MATRIX.md)
+5. [Adapter Boundary](ADAPTER_BOUNDARY.md)
+6. [Checkpoint Store Contract](CHECKPOINT_STORE_CONTRACT.md)
+7. [HTTP API README](api/http/README.md)
 
 ---
 
