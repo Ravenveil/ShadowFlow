@@ -5,6 +5,7 @@ import re
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from agentgraph.runtime.checkpoint_store import BaseCheckpointStore
 from agentgraph.runtime.contracts import (
     ArtifactRef,
     CheckpointRef,
@@ -20,13 +21,20 @@ from agentgraph.runtime.contracts import (
     WorkflowValidationResult,
     utc_now,
 )
+from agentgraph.runtime.host_adapter import BaseWritebackAdapter
 
 
 class RuntimeService:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        writeback_adapter: Optional[BaseWritebackAdapter] = None,
+        checkpoint_store: Optional[BaseCheckpointStore] = None,
+    ) -> None:
         self._runs: Dict[str, RunResult] = {}
         self._requests_by_run_id: Dict[str, RuntimeRequest] = {}
         self._checkpoints: Dict[str, CheckpointRef] = {}
+        self._writeback_adapter = writeback_adapter
+        self._checkpoint_store = checkpoint_store or getattr(writeback_adapter, "checkpoint_store", None)
 
     def validate_workflow(self, workflow: WorkflowDefinition) -> WorkflowValidationResult:
         warnings: List[str] = []
@@ -67,7 +75,7 @@ class RuntimeService:
         if original_request is None:
             raise ValueError(f"run not found for resume: {run_id}")
 
-        checkpoint = self._checkpoints.get(resume_request.checkpoint_id)
+        checkpoint = self.get_checkpoint(resume_request.checkpoint_id)
         if checkpoint is None:
             raise ValueError(f"checkpoint not found: {resume_request.checkpoint_id}")
         if checkpoint.run_id != run_id:
@@ -101,7 +109,15 @@ class RuntimeService:
         return result
 
     def get_checkpoint(self, checkpoint_id: str) -> Optional[CheckpointRef]:
-        return self._checkpoints.get(checkpoint_id)
+        checkpoint = self._checkpoints.get(checkpoint_id)
+        if checkpoint is not None:
+            return checkpoint
+        if self._checkpoint_store is not None:
+            return self._checkpoint_store.get(checkpoint_id)
+        return None
+
+    def register_request_context(self, run_id: str, request: RuntimeRequest) -> None:
+        self._requests_by_run_id[run_id] = request
 
     async def _execute(
         self,
@@ -267,6 +283,8 @@ class RuntimeService:
             )
             current_node_id = next_node_id
             self._checkpoints[checkpoint.checkpoint_id] = checkpoint
+            if self._checkpoint_store is not None:
+                self._checkpoint_store.put(checkpoint)
 
         else:
             errors.append({"message": "workflow exceeded max_steps guard", "code": "max_steps_exceeded"})
@@ -284,6 +302,11 @@ class RuntimeService:
             checkpoints=checkpoints,
             errors=errors,
         )
+        if self._writeback_adapter is not None:
+            receipts = self._writeback_adapter.persist_run_result(result, checkpoint_store=self._checkpoint_store)
+            result.run.metadata["writeback_receipts"] = [
+                receipt.model_dump(mode="json") for receipt in receipts
+            ]
         self._runs[run_id] = result
         return result
 

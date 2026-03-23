@@ -28,6 +28,8 @@ AgentGraph 当前阶段的正式定位是：
 - Structured `run -> steps -> final_output -> trace -> artifacts -> checkpoints`
 - Canonical YAML / JSON workflow definition
 - Basic parallel fan-out + barrier join
+- Reference writeback adapter stubs for `docs / memory / graph`
+- Minimal checkpoint store contract with in-memory reference implementation
 - Phase 1 examples aligned with runtime contract
 
 ## Installation
@@ -123,6 +125,8 @@ agentgraph run -w examples/runtime-contract/docs-gap-review.yaml -i "{\"goal\":\
 - canonical workflow schema
 - unified CLI / HTTP entrypoints
 - step / artifact / checkpoint result model
+- writeback adapter reference implementation
+- checkpoint store minimal contract
 - basic parallel / barrier control flow
 - 至少两个可重复执行的端到端样例
 

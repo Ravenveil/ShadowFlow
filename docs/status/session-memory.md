@@ -358,6 +358,42 @@
   - `checkpoint store` 最小外部契约
   - writeback 失败后的最小重试语义
 
+## 2026-03-23 / Round 14
+
+- 延续上一轮什么：
+  - 延续 writeback 场景化、adapter boundary、checkpoint/resume 与官方验证矩阵主线。
+- 完成上一轮哪部分：
+  - 已实现最小宿主桥接层：
+    - `ReferenceWritebackAdapter`
+    - `InMemoryCheckpointStore`
+    - `RuntimeService.register_request_context`
+    - `RuntimeService` 对 checkpoint store 的 fallback resume
+  - 已补 reference adapter / checkpoint store 测试：
+    - `tests/test_runtime_adapters.py`
+  - 已补 checkpoint store 最小契约文档：
+    - `docs/CHECKPOINT_STORE_CONTRACT.md`
+- 放弃上一轮哪部分：
+  - 没有开始真实 Shadow adapter
+  - 没有实现多租户 checkpoint store
+  - 没有实现 writeback 失败重试协议
+- 为什么：
+  - 当前唯一主战役是先把“Shadow-ready bridge”做成最小可运行 stub，而不是过早进入 Shadow 私有实现耦合。
+- 本轮关键结论：
+  - AgentGraph 现在已经不仅能产出 writeback 指示，还能通过 reference adapter 把 artifact/checkpoint 按 `docs / memory / graph / host` 分桶写回 stub。
+  - checkpoint 现在已经有最小 store 契约，并支持在新 `RuntimeService` 实例中，通过共享 store + 重新注册 request context 继续 resume。
+  - 对“能不能接 Shadow”的判断更新为：
+    - 可以开始接 Shadow 做受控集成
+    - 但还不是“接上就等于完整可生产运行”，因为真实 Shadow writeback adapter、request context 外部化、多租户 store 仍未完成
+- 本轮关键验证：
+  - `pytest -q tests/test_runtime_adapters.py` -> `3 passed`
+  - `pytest -q` -> `41 passed`
+  - `python -m agentgraph.cli validate -w examples/runtime-contract/docs-gap-review.yaml` -> `valid=true`
+  - reference adapter smoke -> `status=succeeded; docs_artifacts=1; memory_checkpoints=2; receipts=3`
+- 下一轮最自然接力：
+  - `Shadow adapter binding`
+  - `request context` 外部化
+  - checkpoint store tenant / retention 边界
+
 ## 2026-03-23 / Round 13
 
 - 延续上一轮什么：

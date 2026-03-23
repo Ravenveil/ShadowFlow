@@ -45,6 +45,7 @@ AgentGraph 文档入口页。
 - [Workflow Schema](WORKFLOW_SCHEMA.md)
 - [Adapter Boundary](ADAPTER_BOUNDARY.md)
 - [Writeback Adapter Contract](WRITEBACK_ADAPTER_CONTRACT.md)
+- [Checkpoint Store Contract](CHECKPOINT_STORE_CONTRACT.md)
 - [Architecture](ARCHITECTURE.md)
 - [HTTP API README](api/http/README.md)
 
@@ -97,6 +98,7 @@ AgentGraph 文档入口页。
 - [Workflow Schema](WORKFLOW_SCHEMA.md)
 - [Adapter Boundary](ADAPTER_BOUNDARY.md)
 - [Writeback Adapter Contract](WRITEBACK_ADAPTER_CONTRACT.md)
+- [Checkpoint Store Contract](CHECKPOINT_STORE_CONTRACT.md)
 - [AgentGraph 是什么产品，以及后续应该怎么推进](WHAT_IS_AGENTGRAPH.md)
 - [Phase 1 主战役草稿](plans/agentgraph-phase1-campaign-draft.md)
 
@@ -127,6 +129,7 @@ AgentGraph 文档入口页。
 - [HTTP API README](api/http/README.md)
 - [Adapter Boundary](ADAPTER_BOUNDARY.md)
 - [Writeback Adapter Contract](WRITEBACK_ADAPTER_CONTRACT.md)
+- [Checkpoint Store Contract](CHECKPOINT_STORE_CONTRACT.md)
 
 ### F. API 与教程
 

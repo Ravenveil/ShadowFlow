@@ -106,6 +106,7 @@
 - `agentgraph/runtime/official_examples.py`
 - `tests/test_runtime_examples.py`
 - `tests/test_runtime_contract.py`
+- `tests/test_runtime_adapters.py`
 
 当前已覆盖：
 
@@ -117,6 +118,8 @@
 - invalid target/mode 的校验失败
 - `inline` 无内容的运行失败
 - parallel/barrier 输出中的 `branch_outputs`
+- reference writeback adapter 的 `docs / memory / graph` 分桶写回
+- in-memory checkpoint store 的最小回读与跨 service resume
 
 ## 8. 当前未承诺
 
@@ -135,6 +138,11 @@
 ## 9. 当前结论
 
 当前阶段 AgentGraph 的 adapter boundary 已经是 contract-first 且 writeback-aware。
+
+当前还提供最小 reference implementation：
+
+- `agentgraph.runtime.ReferenceWritebackAdapter`
+- `agentgraph.runtime.InMemoryCheckpointStore`
 
 外部系统当前只需要围绕：
 

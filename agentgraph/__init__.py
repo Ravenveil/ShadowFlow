@@ -17,7 +17,15 @@ __author__ = "AgentGraph Team"
 __license__ = "MIT"
 
 from agentgraph.core.agent import Agent, AgentConfig
-from agentgraph.runtime import ResumeRequest, RunResult, RuntimeRequest, RuntimeService, WorkflowDefinition
+from agentgraph.runtime import (
+    InMemoryCheckpointStore,
+    ReferenceWritebackAdapter,
+    ResumeRequest,
+    RunResult,
+    RuntimeRequest,
+    RuntimeService,
+    WorkflowDefinition,
+)
 
 try:
     from agentgraph.core.graph import AgentGraph
@@ -50,6 +58,8 @@ __all__ = [
     "ResumeRequest",
     "RuntimeService",
     "RunResult",
+    "ReferenceWritebackAdapter",
+    "InMemoryCheckpointStore",
     "Agent",
     "AgentConfig",
     "AgentGraph",

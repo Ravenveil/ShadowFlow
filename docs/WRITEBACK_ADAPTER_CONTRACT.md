@@ -187,6 +187,10 @@
   - `inline` 无内容的失败路径
   - parallel/barrier 与 writeback 共存回归
 
+当前 reference implementation：
+
+- `agentgraph.runtime.ReferenceWritebackAdapter`
+
 ## 8. 当前结论
 
 当前阶段，AgentGraph 已经能够：
@@ -200,3 +204,10 @@
 - 直接替宿主持久化 docs/memory/graph
 - 定义多租户 checkpoint store 标准
 - 定义 writeback 失败后的跨宿主重试协议
+
+但当前已经提供：
+
+- `ReferenceWritebackAdapter`
+- `InMemoryCheckpointStore`
+
+可以作为 Shadow 或其他宿主对接前的最小桥接 stub。
