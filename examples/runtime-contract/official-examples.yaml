@@ -11,6 +11,10 @@ examples:
     expected_terminal_node: "reviewer"
     expected_artifact_names:
       - "docs-gap-review-notes.md"
+    expected_artifact_writeback_target: "docs"
+    expected_artifact_writeback_mode: "inline"
+    expected_checkpoint_writeback_target: "memory"
+    expected_checkpoint_writeback_mode: "reference"
     tags:
       - "native"
       - "review"
@@ -25,6 +29,10 @@ examples:
     expected_terminal_node: "reviewer"
     expected_artifact_names:
       - "research-review-summary.md"
+    expected_artifact_writeback_target: "docs"
+    expected_artifact_writeback_mode: "reference"
+    expected_checkpoint_writeback_target: "memory"
+    expected_checkpoint_writeback_mode: "reference"
     resume_from_checkpoint_node_id: "researcher"
     expected_resumed_nodes:
       - "reviewer"
@@ -45,6 +53,8 @@ examples:
     expected_terminal_node: "writer"
     expected_artifact_names:
       - "parallel-synthesis-summary.md"
+    expected_checkpoint_writeback_target: "graph"
+    expected_checkpoint_writeback_mode: "reference"
     expected_parallel_branch_count: 2
     resume_from_checkpoint_node_id: "research_a"
     expected_resumed_nodes:
@@ -116,6 +126,10 @@ examples:
     expected_terminal_node: "editor"
     expected_artifact_names:
       - "content-creation-final.md"
+    expected_artifact_writeback_target: "host"
+    expected_artifact_writeback_mode: "reference"
+    expected_checkpoint_writeback_target: "memory"
+    expected_checkpoint_writeback_mode: "reference"
     expected_parallel_branch_count: 2
     resume_from_checkpoint_node_id: "reviewer"
     expected_resumed_nodes:

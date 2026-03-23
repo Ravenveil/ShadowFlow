@@ -23,7 +23,26 @@ RESUMABLE_OFFICIAL_EXAMPLES = [
 ]
 
 
-def assert_run_result_adapter_boundary(result) -> None:
+def resolve_expected_writeback(workflow, channel: str, request_metadata=None, *, node_id=None):
+    resolved = {"target": "host", "mode": "reference"}
+    workflow_writeback = workflow.defaults.get("writeback", {})
+    if isinstance(workflow_writeback, dict) and isinstance(workflow_writeback.get(channel), dict):
+        resolved.update(workflow_writeback[channel])
+
+    request_writeback = (request_metadata or {}).get("writeback", {})
+    if isinstance(request_writeback, dict) and isinstance(request_writeback.get(channel), dict):
+        resolved.update(request_writeback[channel])
+
+    if channel == "artifact" and node_id is not None:
+        node = next(node for node in workflow.nodes if node.id == node_id)
+        artifact_config = node.config.get("artifact")
+        if isinstance(artifact_config, dict) and isinstance(artifact_config.get("writeback"), dict):
+            resolved.update(artifact_config["writeback"])
+
+    return resolved
+
+
+def assert_run_result_adapter_boundary(result, workflow, request_metadata=None) -> None:
     assert result.run.run_id.startswith("run-")
     assert result.run.request_id.startswith("req-")
     assert result.run.status in {"succeeded", "failed", "cancelled", "checkpointed", "waiting"}
@@ -42,6 +61,11 @@ def assert_run_result_adapter_boundary(result) -> None:
         assert isinstance(step.trace, list)
         assert isinstance(step.artifacts, list)
 
+    expected_checkpoint_writeback = resolve_expected_writeback(
+        workflow,
+        "checkpoint",
+        request_metadata,
+    )
     for checkpoint in result.checkpoints:
         assert checkpoint.run_id == result.run.run_id
         assert checkpoint.checkpoint_id.startswith("ckpt-")
@@ -50,8 +74,8 @@ def assert_run_result_adapter_boundary(result) -> None:
         assert isinstance(checkpoint.state.last_output, dict)
         assert checkpoint.writeback.channel == "checkpoint"
         assert checkpoint.writeback.host_action == "persist_checkpoint_ref"
-        assert checkpoint.writeback.target == "host"
-        assert checkpoint.writeback.mode == "reference"
+        assert checkpoint.writeback.target == expected_checkpoint_writeback["target"]
+        assert checkpoint.writeback.mode == expected_checkpoint_writeback["mode"]
         assert checkpoint.writeback.resume_supported == (checkpoint.state.next_node_id is not None)
         assert checkpoint.writeback.next_node_id == checkpoint.state.next_node_id
         assert checkpoint.metadata["workflow_id"] == result.run.workflow_id
@@ -62,9 +86,21 @@ def assert_run_result_adapter_boundary(result) -> None:
         assert artifact.kind in {"text", "json", "document", "report", "patch", "log"}
         assert artifact.writeback.channel == "artifact"
         assert artifact.writeback.host_action == "persist_artifact_ref"
-        assert artifact.writeback.target == "host"
-        assert artifact.writeback.mode == "reference"
-        assert artifact.writeback.content_field == ("metadata.content" if artifact.metadata.get("content") else None)
+        producer_step = next(step for step in result.steps if step.step_id == artifact.producer_step_id)
+        expected_artifact_writeback = resolve_expected_writeback(
+            workflow,
+            "artifact",
+            request_metadata,
+            node_id=producer_step.node_id,
+        )
+        assert artifact.writeback.target == expected_artifact_writeback["target"]
+        assert artifact.writeback.mode == expected_artifact_writeback["mode"]
+        expected_content_field = (
+            "metadata.content"
+            if expected_artifact_writeback["mode"] == "inline" and artifact.metadata.get("content") is not None
+            else None
+        )
+        assert artifact.writeback.content_field == expected_content_field
         assert artifact.metadata["workflow_id"] == result.run.workflow_id
 
 
@@ -89,6 +125,7 @@ def test_official_examples_manifest_is_consistent():
 def test_official_examples_validate_and_run(example):
     service = RuntimeService()
     workflow = load_official_workflow(example)
+    request_metadata = {"source_system": "pytest-example", **example.metadata}
 
     validation = service.validate_workflow(workflow)
     assert validation.valid is True
@@ -98,12 +135,12 @@ def test_official_examples_validate_and_run(example):
             RuntimeRequest(
                 workflow=workflow,
                 input=example.input,
-                metadata={"source_system": "pytest-example", **example.metadata},
+                metadata=request_metadata,
             )
         )
     )
 
-    assert_run_result_adapter_boundary(result)
+    assert_run_result_adapter_boundary(result, workflow, request_metadata)
     assert result.run.status == "succeeded"
     assert result.run.workflow_id == workflow.workflow_id
     assert len(result.steps) >= example.min_steps
@@ -123,13 +160,14 @@ def test_official_examples_validate_and_run(example):
 def test_official_examples_resume_from_manifest_checkpoint(example):
     service = RuntimeService()
     workflow = load_official_workflow(example)
+    initial_metadata = {"source_system": "pytest-resume", **example.metadata}
 
     initial = asyncio.run(
         service.run(
             RuntimeRequest(
                 workflow=workflow,
                 input=example.input,
-                metadata={"source_system": "pytest-resume", **example.metadata},
+                metadata=initial_metadata,
             )
         )
     )
@@ -147,7 +185,7 @@ def test_official_examples_resume_from_manifest_checkpoint(example):
         )
     )
 
-    assert_run_result_adapter_boundary(resumed)
+    assert_run_result_adapter_boundary(resumed, workflow, initial_metadata)
     assert resumed.run.status == "succeeded"
     assert resumed.run.metadata["resumed_from_checkpoint_id"] == checkpoint.checkpoint_id
     assert resumed.run.metadata["resumed_from_run_id"] == initial.run.run_id
@@ -157,6 +195,35 @@ def test_official_examples_resume_from_manifest_checkpoint(example):
     actual_resume_artifacts = [artifact.name for artifact in resumed.artifacts]
     for artifact_name in example.expected_resume_artifact_names:
         assert artifact_name in actual_resume_artifacts
+
+
+def test_runtime_request_writeback_override_takes_precedence_over_workflow_defaults():
+    service = RuntimeService()
+    example = next(item for item in OFFICIAL_EXAMPLES if item.id == "docs-gap-review")
+    workflow = load_official_workflow(example)
+    request_metadata = {
+        "source_system": "pytest-writeback-override",
+        "writeback": {
+            "artifact": {"target": "graph", "mode": "reference"},
+            "checkpoint": {"target": "host", "mode": "reference"},
+        },
+    }
+
+    result = asyncio.run(
+        service.run(
+            RuntimeRequest(
+                workflow=workflow,
+                input=example.input,
+                metadata=request_metadata,
+            )
+        )
+    )
+
+    assert_run_result_adapter_boundary(result, workflow, request_metadata)
+    assert result.artifacts[0].writeback.target == "graph"
+    assert result.artifacts[0].writeback.mode == "reference"
+    assert result.artifacts[0].writeback.content_field is None
+    assert result.checkpoints[0].writeback.target == "host"
 
 
 @pytest.mark.parametrize("example", OFFICIAL_EXAMPLES, ids=lambda example: example.id)

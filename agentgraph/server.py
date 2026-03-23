@@ -36,6 +36,8 @@ async def validate_workflow(workflow: WorkflowDefinition):
 async def run_workflow(request: RuntimeRequest):
     try:
         return await runtime_service.run(request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

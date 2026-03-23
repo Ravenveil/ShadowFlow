@@ -322,3 +322,37 @@
   - 继续细化宿主 writeback 流程里的 artifact/checkpoint/writeback target 约定
   - 评估是否给不同宿主场景补 `writeback target` / `writeback mode` 的 Phase 1.5 边界
   - 再进入 checkpoint store / multi-tenant 约束
+
+## 2026-03-23 / Round 13
+
+- 延续上一轮什么：
+  - 延续 artifact/checkpoint/writeback adapter 契约与 resume/adapter boundary 基线。
+- 完成上一轮哪部分：
+  - 把 `writeback.target / writeback.mode` 从静态默认值推进到了可场景化配置：
+    - `workflow.defaults.writeback`
+    - `RuntimeRequest.metadata.writeback`
+    - `node.config.artifact.writeback`
+  - 把 writeback 失败路径正式纳入默认回归：
+    - 非法 target/mode 在 contract 校验期失败
+    - `mode=inline` 但无内容在 runtime/HTTP 运行期失败
+  - 官方样例矩阵现在已覆盖：
+    - `docs-gap-review` 的 `docs + inline artifact / memory checkpoint`
+    - `research-review-loop` 的 `docs artifact / memory checkpoint`
+    - `parallel-synthesis` 的 `graph checkpoint`
+    - `content-creation-phase1` 的 workflow 默认 + 节点级 artifact override
+- 放弃上一轮哪部分：
+  - 没有继续进入 checkpoint store / multi-tenant
+  - 没有实现真正宿主 writeback adapter
+- 为什么：
+  - 当前更高杠杆的是先把“宿主怎么理解 writeback、什么情况下会失败”收紧成可执行契约，再谈具体持久化 backend。
+- 本轮关键结论：
+  - AgentGraph 现在已经具备“可被宿主消费”的 writeback 场景化能力，而不再只是固定 `host/reference`。
+  - 默认 `pytest -q` 现在覆盖 writeback 优先级、失败路径、HTTP 400/422 边界与 resume 兼容性。
+  - 当前主线已经能用于受控 Phase 1 宿主集成：canonical workflow、CLI/HTTP validate/run、checkpoint/resume、artifact/checkpoint/writeback 合同输出。
+- 本轮关键验证：
+  - `pytest -q` -> `38 passed`
+  - `python -m agentgraph.cli validate -w examples/runtime-contract/content-creation-phase1.yaml` -> `valid=true`
+  - `python -m agentgraph.cli run -w examples/runtime-contract/docs-gap-review.yaml -i '{"goal":"Analyze docs coverage and produce review notes"}'` -> `succeeded`
+- 下一轮最自然接力：
+  - 把真正的宿主 writeback adapter stub / reference implementation 放进代码
+  - 再推进 checkpoint store / tenant scope 最小契约

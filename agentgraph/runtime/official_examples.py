@@ -23,6 +23,10 @@ class OfficialExampleSpec(BaseModel):
     min_steps: int = 1
     expected_terminal_node: str
     expected_artifact_names: List[str] = Field(default_factory=list)
+    expected_artifact_writeback_target: str = "host"
+    expected_artifact_writeback_mode: str = "reference"
+    expected_checkpoint_writeback_target: str = "host"
+    expected_checkpoint_writeback_mode: str = "reference"
     expected_parallel_branch_count: Optional[int] = None
     resume_from_checkpoint_node_id: Optional[str] = None
     expected_resumed_nodes: List[str] = Field(default_factory=list)

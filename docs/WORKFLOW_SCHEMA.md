@@ -43,6 +43,25 @@ metadata: {}
 - `defaults`: 默认 runtime 选项
 - `metadata`: 非执行关键元数据
 
+`defaults` 当前已稳定支持：
+
+- `memory_scope`
+- `writeback`
+
+示例：
+
+```yaml
+defaults:
+  memory_scope: "session"
+  writeback:
+    artifact:
+      target: "docs"
+      mode: "inline"
+    checkpoint:
+      target: "memory"
+      mode: "reference"
+```
+
 ---
 
 ## 3. NodeDefinition
@@ -74,6 +93,7 @@ metadata: {}
 - `config.copy_input`: 从 step input 复制字段到输出
 - `config.context_echo`: 从 request context 回显字段
 - `config.artifact`: 为该 step 生成 artifact
+- `config.artifact.writeback`: 当前 artifact 的节点级 writeback override
 - `type: control.parallel`: Phase 1 基础 fan-out 控制节点
 - `type: control.barrier`: Phase 1 基础 join 控制节点
 
@@ -128,6 +148,26 @@ metadata: {}
 - 多层嵌套 fan-out
 - 分支内再分支
 - 真正并发调度或远程 worker 分发
+
+### 3.5 Artifact writeback override
+
+当前只有 artifact 支持节点级 writeback override：
+
+```yaml
+artifact:
+  kind: "document"
+  name: "content-creation-final.md"
+  content: "# Final"
+  writeback:
+    target: "host"
+    mode: "reference"
+```
+
+优先级：
+
+1. `defaults.writeback`
+2. `RuntimeRequest.metadata.writeback`
+3. `node.config.artifact.writeback`
 
 ---
 

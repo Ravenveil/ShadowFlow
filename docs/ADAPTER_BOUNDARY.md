@@ -42,6 +42,11 @@
 - `RunResult.artifacts`
 - `RunResult.checkpoints`
 
+其中当前宿主必须额外理解：
+
+- `ArtifactRef.writeback`
+- `CheckpointRef.writeback`
+
 ## 4. Checkpoint 边界
 
 `CheckpointRef` 是当前阶段最小恢复边界。
@@ -65,6 +70,11 @@
 4. 如果需要恢复点，保存 `CheckpointRef`
 5. 如发生中断，再按 `checkpoint_id` 触发恢复
 
+如果宿主需要把结果继续写回自己的 docs / memory / graph substrate，则应继续读取：
+
+- `artifact.writeback.target / mode`
+- `checkpoint.writeback.target / mode`
+
 ## 6. 官方验证基线
 
 当前 adapter boundary 的官方验证基线，已经不是纯文档约定，而是由以下资产共同维护：
@@ -80,7 +90,10 @@
 - 官方样例的 `validate`
 - 官方样例的 `run`
 - 选定官方样例的 `checkpoint -> resume`
+- 官方样例中的 scenarioized `writeback.target / writeback.mode`
 - HTTP `run / get_run / get_checkpoint / resume` 最小宿主调用链
+- artifact 节点级 writeback override
+- inline writeback 缺内容的失败路径
 - parallel/barrier 输出中的 `branch_outputs`
 
 宿主如果要判断当前边界是否被破坏，应该优先看这条验证基线，而不是回看旧概念文档。

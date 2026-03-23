@@ -182,9 +182,11 @@ class RuntimeService:
             ]
             step_output = self._execute_node(node, current_output, state, request.context)
             step_artifacts = self._build_artifacts(
+                request=request,
                 run_id=run_id,
                 workflow_id=request.workflow.workflow_id,
                 index=index,
+                node=node,
                 node_id=current_node_id,
                 step_output=step_output,
             )
@@ -240,8 +242,8 @@ class RuntimeService:
                 ),
                 writeback=WritebackRef(
                     channel="checkpoint",
-                    target="host",
-                    mode="reference",
+                    target=self._resolve_writeback_config(request, "checkpoint").get("target", "host"),
+                    mode=self._resolve_writeback_config(request, "checkpoint").get("mode", "reference"),
                     host_action="persist_checkpoint_ref",
                 ),
                 metadata={
@@ -367,9 +369,11 @@ class RuntimeService:
 
     def _build_artifacts(
         self,
+        request: RuntimeRequest,
         run_id: str,
         workflow_id: str,
         index: int,
+        node: NodeDefinition,
         node_id: str,
         step_output: Dict[str, Any],
     ) -> List[ArtifactRef]:
@@ -382,6 +386,15 @@ class RuntimeService:
         else:
             payload = {"content": artifact_payload}
 
+        writeback_config = self._resolve_writeback_config(request, "artifact", payload, node=node)
+        target = writeback_config.get("target", "host")
+        mode = writeback_config.get("mode", "reference")
+        has_inline_content = payload.get("content") is not None
+        if mode == "inline" and not has_inline_content:
+            raise ValueError(
+                f"artifact writeback for node {node_id} requires content when mode=inline"
+            )
+
         return [
             ArtifactRef(
                 artifact_id=f"artifact-{uuid4().hex[:10]}",
@@ -391,10 +404,10 @@ class RuntimeService:
                 producer_step_id=f"step-{index:03d}",
                 writeback=WritebackRef(
                     channel="artifact",
-                    target="host",
-                    mode="reference",
+                    target=target,
+                    mode=mode,
                     host_action="persist_artifact_ref",
-                    content_field="metadata.content" if payload.get("content") is not None else None,
+                    content_field="metadata.content" if mode == "inline" and has_inline_content else None,
                 ),
                 metadata={
                     "content": payload.get("content"),
@@ -403,6 +416,35 @@ class RuntimeService:
                 },
             )
         ]
+
+    def _resolve_writeback_config(
+        self,
+        request: RuntimeRequest,
+        channel: str,
+        payload: Optional[Dict[str, Any]] = None,
+        *,
+        node: Optional[NodeDefinition] = None,
+    ) -> Dict[str, Any]:
+        workflow_defaults = request.workflow.defaults.get("writeback", {})
+        request_overrides = request.metadata.get("writeback", {})
+        resolved: Dict[str, Any] = {
+            **workflow_defaults.get(channel, {}),
+            **request_overrides.get(channel, {}),
+        }
+
+        if channel == "artifact" and isinstance(payload, dict):
+            payload_writeback = payload.get("writeback")
+            if isinstance(payload_writeback, dict):
+                resolved.update(payload_writeback)
+            elif node is not None:
+                node_artifact = node.config.get("artifact")
+                if isinstance(node_artifact, dict) and isinstance(node_artifact.get("writeback"), dict):
+                    resolved.update(node_artifact["writeback"])
+
+        if channel == "checkpoint":
+            resolved.setdefault("mode", "reference")
+
+        return resolved
 
     def _resolve_next_node(
         self,

@@ -311,7 +311,13 @@ trace 至少应支持以下事件：
 
 - `ArtifactRef` 当前必须带 `writeback`
 - 宿主应优先保存 artifact reference，而不是假设 runtime 会替它写回
+- `writeback.target` 当前支持：`host | docs | memory | graph`
+- `writeback.mode` 当前支持：`reference | inline`
 - 如果当前 artifact 含 inline 内容，统一通过 `writeback.content_field == "metadata.content"` 暴露
+- 当前优先级为：
+  - `workflow.defaults.writeback`
+  - `RuntimeRequest.metadata.writeback`
+  - `node.config.artifact.writeback`
 
 ---
 
@@ -341,6 +347,8 @@ trace 至少应支持以下事件：
 ### 12.3 当前阶段 resume / writeback 要求
 
 - `CheckpointRef` 当前必须带 `writeback`
+- `writeback.target` 当前支持：`host | docs | memory | graph`
+- `writeback.mode` 当前固定为 `reference`
 - `writeback.resume_supported` 表示宿主是否应把它当作可恢复入口保存
 - `writeback.next_node_id` 表示当前恢复后建议的下一节点
 

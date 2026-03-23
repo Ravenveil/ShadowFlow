@@ -4,6 +4,13 @@ name: "Content Creation Phase 1"
 entrypoint: "fanout"
 defaults:
   memory_scope: "session"
+  writeback:
+    artifact:
+      target: "memory"
+      mode: "reference"
+    checkpoint:
+      target: "memory"
+      mode: "reference"
 metadata:
   category: "runtime-contract"
   purpose: "phase1-canonical-content-creation"
@@ -110,6 +117,9 @@ nodes:
         kind: "document"
         name: "content-creation-final.md"
         content: "# Content Creation Final\n\nThe final version is ready."
+        writeback:
+          target: "docs"
+          mode: "inline"
 edges:
   - from: "merge"
     to: "writer"

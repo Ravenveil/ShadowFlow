@@ -11,6 +11,38 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+WRITEBACK_TARGETS = {"host", "docs", "memory", "graph"}
+ARTIFACT_WRITEBACK_MODES = {"reference", "inline"}
+CHECKPOINT_WRITEBACK_MODES = {"reference"}
+
+
+def _validate_writeback_channel_config(channel: str, config: Any, scope: str) -> None:
+    if not isinstance(config, dict):
+        raise ValueError(f"{scope} writeback.{channel} must be an object")
+
+    target = config.get("target", "host")
+    mode = config.get("mode", "reference")
+
+    if target not in WRITEBACK_TARGETS:
+        raise ValueError(f"{scope} writeback.{channel}.target must be one of {sorted(WRITEBACK_TARGETS)}")
+
+    valid_modes = ARTIFACT_WRITEBACK_MODES if channel == "artifact" else CHECKPOINT_WRITEBACK_MODES
+    if mode not in valid_modes:
+        raise ValueError(f"{scope} writeback.{channel}.mode must be one of {sorted(valid_modes)}")
+
+
+def validate_writeback_bundle(bundle: Any, scope: str) -> None:
+    if bundle is None:
+        return
+    if not isinstance(bundle, dict):
+        raise ValueError(f"{scope} writeback must be an object")
+
+    for channel in bundle:
+        if channel not in {"artifact", "checkpoint"}:
+            raise ValueError(f"{scope} writeback supports only artifact/checkpoint channels")
+        _validate_writeback_channel_config(channel, bundle[channel], scope)
+
+
 class NodeDefinition(BaseModel):
     id: str
     kind: Literal["agent", "node"] = "agent"
@@ -44,6 +76,7 @@ class WorkflowDefinition(BaseModel):
 
     @model_validator(mode="after")
     def validate_graph(self) -> "WorkflowDefinition":
+        validate_writeback_bundle(self.defaults.get("writeback"), "workflow defaults")
         node_ids = {node.id for node in self.nodes}
         nodes_by_id = {node.id: node for node in self.nodes}
         outgoing_edges: Dict[str, List[EdgeDefinition]] = {}
@@ -62,6 +95,10 @@ class WorkflowDefinition(BaseModel):
             incoming_edges.setdefault(edge.to_id, []).append(edge)
 
         for node in self.nodes:
+            artifact_config = node.config.get("artifact")
+            if isinstance(artifact_config, dict) and "writeback" in artifact_config:
+                _validate_writeback_channel_config("artifact", artifact_config["writeback"], f"node {node.id} artifact")
+
             if node.type != "control.parallel":
                 continue
 
@@ -121,6 +158,7 @@ class RuntimeRequest(BaseModel):
     def apply_idempotency_key(self) -> "RuntimeRequest":
         if self.idempotency_key is None:
             self.idempotency_key = self.request_id
+        validate_writeback_bundle(self.metadata.get("writeback"), "runtime request metadata")
         return self
 
 

@@ -1,5 +1,7 @@
 import asyncio
+from copy import deepcopy
 
+import pytest
 from fastapi.testclient import TestClient
 
 from agentgraph.runtime import (
@@ -18,6 +20,12 @@ WORKFLOW_PAYLOAD = {
     "version": "0.1",
     "name": "Docs Gap Review",
     "entrypoint": "planner",
+    "defaults": {
+        "writeback": {
+            "artifact": {"target": "docs", "mode": "inline"},
+            "checkpoint": {"target": "memory", "mode": "reference"},
+        }
+    },
     "nodes": [
         {
             "id": "planner",
@@ -57,6 +65,12 @@ PARALLEL_WORKFLOW_PAYLOAD = {
     "version": "0.1",
     "name": "Parallel Synthesis",
     "entrypoint": "fanout",
+    "defaults": {
+        "writeback": {
+            "artifact": {"target": "docs", "mode": "reference"},
+            "checkpoint": {"target": "graph", "mode": "reference"},
+        }
+    },
     "nodes": [
         {
             "id": "fanout",
@@ -106,6 +120,11 @@ PARALLEL_WORKFLOW_PAYLOAD = {
             "config": {
                 "role": "writer",
                 "message_template": "[writer] produced the synthesis summary.",
+                "artifact": {
+                    "kind": "report",
+                    "name": "parallel-synthesis-summary.md",
+                    "content": "# summary",
+                },
             },
         },
     ],
@@ -113,6 +132,37 @@ PARALLEL_WORKFLOW_PAYLOAD = {
         {"from": "merge", "to": "writer", "type": "conditional", "condition": "result.branch_count >= 2"},
         {"from": "writer", "to": "END", "type": "final"},
     ],
+}
+
+NODE_OVERRIDE_WORKFLOW_PAYLOAD = {
+    "workflow_id": "node-override-check",
+    "version": "0.1",
+    "name": "Node Override Check",
+    "entrypoint": "draft",
+    "defaults": {
+        "writeback": {
+            "artifact": {"target": "memory", "mode": "reference"},
+            "checkpoint": {"target": "memory", "mode": "reference"},
+        }
+    },
+    "nodes": [
+        {
+            "id": "draft",
+            "kind": "agent",
+            "type": "content.write",
+            "config": {
+                "role": "writer",
+                "message_template": "[writer] drafted the content.",
+                "artifact": {
+                    "kind": "document",
+                    "name": "node-override.md",
+                    "content": "# node override",
+                    "writeback": {"target": "docs", "mode": "inline"},
+                },
+            },
+        }
+    ],
+    "edges": [{"from": "draft", "to": "END", "type": "final"}],
 }
 
 
@@ -135,8 +185,13 @@ def test_runtime_service_returns_contract_shape():
     assert result.artifacts[0].name == "review-notes.md"
     assert result.artifacts[0].writeback.channel == "artifact"
     assert result.artifacts[0].writeback.host_action == "persist_artifact_ref"
+    assert result.artifacts[0].writeback.target == "docs"
+    assert result.artifacts[0].writeback.mode == "inline"
+    assert result.artifacts[0].writeback.content_field == "metadata.content"
     assert result.checkpoints[0].writeback.channel == "checkpoint"
     assert result.checkpoints[0].writeback.host_action == "persist_checkpoint_ref"
+    assert result.checkpoints[0].writeback.target == "memory"
+    assert result.checkpoints[0].writeback.mode == "reference"
     assert len(result.checkpoints) == 2
 
 
@@ -146,12 +201,104 @@ def test_runtime_service_validates_entrypoint():
         "entrypoint": "missing-node",
     }
 
-    try:
+    with pytest.raises(Exception, match="entrypoint must reference an existing node"):
         WorkflowDefinition.model_validate(invalid_payload)
-    except Exception as exc:
-        assert "entrypoint must reference an existing node" in str(exc)
-    else:
-        raise AssertionError("expected workflow validation to fail")
+
+
+def test_workflow_validation_rejects_invalid_writeback_defaults():
+    invalid_checkpoint_mode = deepcopy(WORKFLOW_PAYLOAD)
+    invalid_checkpoint_mode["defaults"]["writeback"]["checkpoint"]["mode"] = "inline"
+
+    with pytest.raises(Exception, match="workflow defaults writeback.checkpoint.mode"):
+        WorkflowDefinition.model_validate(invalid_checkpoint_mode)
+
+    invalid_artifact_target = deepcopy(WORKFLOW_PAYLOAD)
+    invalid_artifact_target["defaults"]["writeback"]["artifact"]["target"] = "invalid"
+
+    with pytest.raises(Exception, match="workflow defaults writeback.artifact.target"):
+        WorkflowDefinition.model_validate(invalid_artifact_target)
+
+
+def test_runtime_request_validation_rejects_invalid_writeback_metadata():
+    with pytest.raises(Exception, match="runtime request metadata writeback.checkpoint.mode"):
+        RuntimeRequest.model_validate(
+            {
+                "workflow": WORKFLOW_PAYLOAD,
+                "input": {"goal": "bad request"},
+                "metadata": {"writeback": {"checkpoint": {"mode": "inline"}}},
+            }
+        )
+
+    with pytest.raises(Exception, match="runtime request metadata writeback.artifact.target"):
+        RuntimeRequest.model_validate(
+            {
+                "workflow": WORKFLOW_PAYLOAD,
+                "input": {"goal": "bad request"},
+                "metadata": {"writeback": {"artifact": {"target": "invalid"}}},
+            }
+        )
+
+
+def test_runtime_request_writeback_override_takes_precedence():
+    service = RuntimeService()
+    request = RuntimeRequest(
+        workflow=WorkflowDefinition.model_validate(WORKFLOW_PAYLOAD),
+        input={"goal": "Override writeback targets"},
+        metadata={
+            "source_system": "pytest",
+            "writeback": {
+                "artifact": {"target": "graph", "mode": "reference"},
+                "checkpoint": {"target": "host", "mode": "reference"},
+            },
+        },
+    )
+
+    result = asyncio.run(service.run(request))
+
+    assert result.artifacts[0].writeback.target == "graph"
+    assert result.artifacts[0].writeback.mode == "reference"
+    assert result.artifacts[0].writeback.content_field is None
+    assert result.checkpoints[0].writeback.target == "host"
+    assert result.checkpoints[0].writeback.mode == "reference"
+
+
+def test_node_level_artifact_writeback_override_takes_highest_precedence():
+    service = RuntimeService()
+    request = RuntimeRequest(
+        workflow=WorkflowDefinition.model_validate(NODE_OVERRIDE_WORKFLOW_PAYLOAD),
+        input={"goal": "Check node override"},
+        metadata={
+            "source_system": "pytest",
+            "writeback": {
+                "artifact": {"target": "graph", "mode": "reference"},
+                "checkpoint": {"target": "host", "mode": "reference"},
+            },
+        },
+    )
+
+    result = asyncio.run(service.run(request))
+
+    assert result.artifacts[0].writeback.target == "docs"
+    assert result.artifacts[0].writeback.mode == "inline"
+    assert result.artifacts[0].writeback.content_field == "metadata.content"
+    assert result.checkpoints[0].writeback.target == "host"
+
+
+def test_inline_artifact_without_content_fails_runtime():
+    service = RuntimeService()
+    invalid_payload = deepcopy(WORKFLOW_PAYLOAD)
+    invalid_payload["nodes"][1]["config"]["artifact"].pop("content")
+
+    with pytest.raises(ValueError, match="requires content when mode=inline"):
+        asyncio.run(
+            service.run(
+                RuntimeRequest(
+                    workflow=WorkflowDefinition.model_validate(invalid_payload),
+                    input={"goal": "Analyze docs gap and produce notes"},
+                    metadata={"source_system": "pytest"},
+                )
+            )
+        )
 
 
 def test_fastapi_contract_endpoints():
@@ -174,6 +321,10 @@ def test_fastapi_contract_endpoints():
     run_result = run_response.json()
     assert run_result["run"]["status"] == "succeeded"
     assert len(run_result["steps"]) == 2
+    assert run_result["artifacts"][0]["writeback"]["target"] == "docs"
+    assert run_result["artifacts"][0]["writeback"]["mode"] == "inline"
+    assert run_result["checkpoints"][0]["writeback"]["target"] == "memory"
+    assert run_result["checkpoints"][0]["writeback"]["mode"] == "reference"
 
     run_id = run_result["run"]["run_id"]
     get_response = client.get(f"/runs/{run_id}")
@@ -186,6 +337,44 @@ def test_fastapi_contract_endpoints():
     assert checkpoint_response.json()["checkpoint_id"] == checkpoint_id
     assert checkpoint_response.json()["writeback"]["channel"] == "checkpoint"
     assert checkpoint_response.json()["writeback"]["host_action"] == "persist_checkpoint_ref"
+    assert checkpoint_response.json()["writeback"]["target"] == "memory"
+
+
+def test_fastapi_validation_rejects_invalid_writeback_configs():
+    client = TestClient(app)
+
+    invalid_workflow = deepcopy(WORKFLOW_PAYLOAD)
+    invalid_workflow["defaults"]["writeback"]["checkpoint"]["mode"] = "inline"
+    validate_response = client.post("/workflow/validate", json=invalid_workflow)
+    assert validate_response.status_code == 422
+
+    run_response = client.post(
+        "/workflow/run",
+        json={
+            "workflow": WORKFLOW_PAYLOAD,
+            "input": {"goal": "bad request"},
+            "metadata": {"writeback": {"checkpoint": {"mode": "inline"}}},
+        },
+    )
+    assert run_response.status_code == 422
+
+
+def test_fastapi_run_returns_400_for_inline_artifact_without_content():
+    client = TestClient(app)
+    invalid_workflow = deepcopy(WORKFLOW_PAYLOAD)
+    invalid_workflow["nodes"][1]["config"]["artifact"].pop("content")
+
+    run_response = client.post(
+        "/workflow/run",
+        json={
+            "workflow": invalid_workflow,
+            "input": {"goal": "Analyze docs gap and produce notes"},
+            "metadata": {"source_system": "api"},
+        },
+    )
+
+    assert run_response.status_code == 400
+    assert "requires content when mode=inline" in run_response.json()["detail"]
 
 
 def test_runtime_service_can_resume_from_checkpoint():
@@ -210,6 +399,8 @@ def test_runtime_service_can_resume_from_checkpoint():
     assert resumed.run.metadata["resumed_from_checkpoint_id"] == checkpoint_id
     assert resumed.steps[0].node_id == "reviewer"
     assert resumed.final_output["message"] == "[reviewer] created notes"
+    assert resumed.artifacts[0].writeback.target == "docs"
+    assert resumed.artifacts[0].writeback.mode == "inline"
 
 
 def test_runtime_service_supports_parallel_barrier():
@@ -227,6 +418,7 @@ def test_runtime_service_supports_parallel_barrier():
     assert result.steps[3].output["branch_count"] == 2
     assert sorted(result.steps[3].output["branch_outputs"].keys()) == ["research_a", "research_b"]
     assert result.final_output["message"] == "[writer] produced the synthesis summary."
+    assert result.checkpoints[0].writeback.target == "graph"
 
 
 def test_parallel_workflow_can_resume_after_first_branch():
@@ -251,6 +443,7 @@ def test_parallel_workflow_can_resume_after_first_branch():
     assert resumed.run.metadata["resumed_from_checkpoint_id"] == branch_checkpoint.checkpoint_id
     assert [step.node_id for step in resumed.steps] == ["research_b", "merge", "writer"]
     assert resumed.steps[1].output["branch_count"] == 2
+    assert resumed.checkpoints[0].writeback.target == "graph"
 
 
 def test_fastapi_adapter_boundary_supports_run_checkpoint_and_resume():
@@ -277,6 +470,8 @@ def test_fastapi_adapter_boundary_supports_run_checkpoint_and_resume():
     assert isinstance(payload["checkpoints"], list)
     assert isinstance(payload["trace"], list)
     assert isinstance(payload["final_output"], dict)
+    assert payload["checkpoints"][0]["writeback"]["target"] == "memory"
+    assert payload["checkpoints"][0]["writeback"]["mode"] == "reference"
 
     run_id = payload["run"]["run_id"]
     get_run_response = client.get(f"/runs/{run_id}")
@@ -292,6 +487,7 @@ def test_fastapi_adapter_boundary_supports_run_checkpoint_and_resume():
     assert checkpoint_payload["run_id"] == run_id
     assert checkpoint_payload["state"]["current_node_id"] == example.resume_from_checkpoint_node_id
     assert checkpoint_payload["state"]["next_node_id"] == example.expected_resumed_nodes[0]
+    assert checkpoint_payload["writeback"]["target"] == "memory"
 
     resume_response = client.post(
         f"/runs/{run_id}/resume",
@@ -310,6 +506,8 @@ def test_fastapi_adapter_boundary_supports_run_checkpoint_and_resume():
     assert checkpoint_payload["writeback"]["next_node_id"] == example.expected_resumed_nodes[0]
     assert resumed_payload["artifacts"][0]["writeback"]["channel"] == "artifact"
     assert resumed_payload["artifacts"][0]["writeback"]["host_action"] == "persist_artifact_ref"
+    assert resumed_payload["artifacts"][0]["writeback"]["target"] == "docs"
+    assert resumed_payload["artifacts"][0]["writeback"]["mode"] == "reference"
 
 
 def test_parallel_example_exposes_adapter_boundary_branch_outputs():
@@ -333,3 +531,6 @@ def test_parallel_example_exposes_adapter_boundary_branch_outputs():
     assert sorted(barrier_step.output["branch_outputs"].keys()) == ["research_a", "research_b"]
     assert barrier_step.output["branches_completed"] == ["research_a", "research_b"]
     assert result.checkpoints[0].writeback.channel == "checkpoint"
+    assert result.checkpoints[0].writeback.target == "graph"
+    assert result.artifacts[0].writeback.target == "docs"
+    assert result.artifacts[0].writeback.mode == "reference"
