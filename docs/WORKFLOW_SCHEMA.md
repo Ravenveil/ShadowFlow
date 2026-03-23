@@ -1,7 +1,7 @@
 # AgentGraph Workflow Schema
 
 > 版本：0.1
-> 日期：2026-03-22
+> 日期：2026-03-23
 > 状态：Draft
 > 适用阶段：Phase 1 / Runtime Contract Campaign
 
@@ -159,8 +159,8 @@ artifact:
   name: "content-creation-final.md"
   content: "# Final"
   writeback:
-    target: "host"
-    mode: "reference"
+    target: "docs"
+    mode: "inline"
 ```
 
 优先级：
@@ -168,6 +168,14 @@ artifact:
 1. `defaults.writeback`
 2. `RuntimeRequest.metadata.writeback`
 3. `node.config.artifact.writeback`
+
+合法性约束：
+
+- `artifact.writeback.target`: `host | docs | memory | graph`
+- `artifact.writeback.mode`: `reference | inline`
+- `checkpoint.writeback.mode`: 只允许 `reference`
+- 节点级 override 当前只覆盖 artifact，不覆盖 checkpoint
+- 若 `artifact.writeback.mode == inline`，artifact 必须提供 `content`
 
 ---
 
@@ -231,7 +239,13 @@ CLI 和 HTTP API 都消费 `RuntimeRequest`，而 `workflow` 字段就是这份 
   "memory_scope": "session",
   "execution_mode": "sync",
   "metadata": {
-    "source_system": "cli"
+    "source_system": "cli",
+    "writeback": {
+      "artifact": {
+        "target": "graph",
+        "mode": "reference"
+      }
+    }
   }
 }
 ```
@@ -255,7 +269,12 @@ CLI 和 HTTP API 都消费 `RuntimeRequest`，而 `workflow` 字段就是这份 
 - 真正循环恢复
 - streaming
 - workflow 引用注册表
-- 可插拔 memory adapter 接入到新 runtime contract
+- runtime 内部可插拔 memory adapter 接入到新 runtime contract
+
+说明：
+
+- `writeback.target = memory` 表示宿主把结果写回自己的 memory substrate
+- 它不等价于 AgentGraph 当前已经提供内置 memory adapter 实现
 
 ---
 

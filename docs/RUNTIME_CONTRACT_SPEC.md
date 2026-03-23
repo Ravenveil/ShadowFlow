@@ -1,7 +1,7 @@
 # AgentGraph Runtime Contract Spec
 
 > 版本：0.1
-> 日期：2026-03-22
+> 日期：2026-03-23
 > 状态：Draft
 > 适用阶段：Phase 1 / Runtime Contract Campaign
 
@@ -86,6 +86,12 @@
 - `defaults`: 默认 runtime 选项
 - `metadata`: 非执行关键元信息
 
+当前 `defaults` 已支持：
+
+- `memory_scope`
+- `writeback.artifact`
+- `writeback.checkpoint`
+
 ---
 
 ## 5. NodeDefinition
@@ -120,6 +126,11 @@
 - 基础并行 fan-out + barrier join 节点
 - 有限循环/重试节点
 - Phase 1 ideal 中可加入并行/barrier 节点
+
+当前与 writeback 直接相关的节点配置是：
+
+- `config.artifact`
+- `config.artifact.writeback`
 
 ---
 
@@ -182,6 +193,11 @@
 - `execution_mode`: `sync | async`
 - `idempotency_key`: 幂等键
 - `metadata`: 宿主附带信息
+
+当前 `metadata` 还可带：
+
+- `writeback.artifact`
+- `writeback.checkpoint`
 
 ### 7.3 宿主推荐附带元数据
 
@@ -294,6 +310,13 @@ trace 至少应支持以下事件：
   "name": "review-notes.md",
   "uri": "file:///tmp/review-notes.md",
   "producer_step_id": "step-002",
+  "writeback": {
+    "channel": "artifact",
+    "target": "docs",
+    "mode": "inline",
+    "host_action": "persist_artifact_ref",
+    "content_field": "metadata.content"
+  },
   "metadata": {}
 }
 ```
@@ -334,6 +357,14 @@ trace 至少应支持以下事件：
   "step_id": "step-002",
   "state_ref": "checkpoint://run-001/step-002",
   "created_at": "2026-03-22T14:00:03Z",
+  "writeback": {
+    "channel": "checkpoint",
+    "target": "memory",
+    "mode": "reference",
+    "host_action": "persist_checkpoint_ref",
+    "resume_supported": true,
+    "next_node_id": "reviewer"
+  },
   "metadata": {}
 }
 ```
@@ -363,24 +394,24 @@ trace 至少应支持以下事件：
 ```json
 {
   "run": {},
-  "status": "succeeded",
-  "final_output": {},
   "steps": [],
+  "final_output": {},
+  "trace": [],
   "artifacts": [],
   "checkpoints": [],
-  "errors": [],
-  "metadata": {}
+  "errors": []
 }
 ```
 
 ### 13.2 当前阶段最小要求
 
 - `run`
-- `status`
 - `final_output`
 - `steps[]`
+- `trace[]`
 - `artifacts[]`
-- `metadata`
+- `checkpoints[]`
+- `errors[]`
 
 ### 13.3 推荐扩展字段
 
@@ -485,6 +516,8 @@ CLI 可以提供人类友好格式，但必须能输出 machine-readable JSON。
 - `tool.*`
 - `checkpoint.*`
 - `adapter.*`
+- `workflow.writeback_*`
+- `runtime.writeback_*`
 
 ---
 
@@ -534,7 +567,7 @@ Shadow 或其他宿主系统与 AgentGraph 的最小边界应是：
 
 本规范之后，建议补充以下文档：
 
-1. `WORKFLOW_SCHEMA_REFERENCE.md`
+1. `WORKFLOW_SCHEMA.md`
 2. `EXECUTION_MODEL.md`
 3. `SHADOW_ADAPTER_GUIDE.md`
 

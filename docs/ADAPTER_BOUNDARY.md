@@ -1,25 +1,28 @@
 # AgentGraph Adapter Boundary
 
 > 版本：0.1
-> 日期：2026-03-22
+> 日期：2026-03-23
 > 状态：Draft
 
 ## 1. 文档目的
 
-本文件定义外部宿主系统如何把 AgentGraph 当作黑盒 runtime 调用，而不依赖内部实现细节。
+本文件定义外部宿主系统如何把 AgentGraph 当作黑盒 runtime 调用，而不依赖内部 graph、memory 或 router 实现。
 
 ## 2. 宿主只需要理解的对象
 
 - `WorkflowDefinition`
 - `RuntimeRequest`
 - `RunResult`
+- `ArtifactRef`
 - `CheckpointRef`
+- `WritebackRef`
 
 宿主不应依赖：
 
 - `agentgraph.core.graph.AgentGraph`
 - legacy memory 实现
 - legacy router / topology 细节
+- `CheckpointState.state` 的内部实现细节
 
 ## 3. 最小调用边界
 
@@ -29,7 +32,9 @@
 
 - 一份 canonical `WorkflowDefinition`
 - 一份 `RuntimeRequest.input`
-- 可选 `context` / `metadata`
+- 可选 `context`
+- 可选 `metadata`
+- 可选 `metadata.writeback`
 
 ### 输出边界
 
@@ -42,12 +47,31 @@
 - `RunResult.artifacts`
 - `RunResult.checkpoints`
 
-其中当前宿主必须额外理解：
+## 4. 宿主最小 writeback 分流规则
 
-- `ArtifactRef.writeback`
-- `CheckpointRef.writeback`
+宿主当前必须消费：
 
-## 4. Checkpoint 边界
+- `writeback.channel`
+- `writeback.target`
+- `writeback.mode`
+- `writeback.host_action`
+
+最小分流规则：
+
+1. `artifact + inline`
+   - 读 `writeback.content_field`
+   - 当前若存在 inline 内容，固定读取 `metadata.content`
+2. `artifact + reference`
+   - 读 `uri`
+3. `checkpoint + reference`
+   - 读 `checkpoint_id / state_ref`
+   - 若 `resume_supported == true`，再保存 `next_node_id`
+
+如果需要更细的字段约定，请直接看：
+
+- `docs/WRITEBACK_ADAPTER_CONTRACT.md`
+
+## 5. Checkpoint 边界
 
 `CheckpointRef` 是当前阶段最小恢复边界。
 
@@ -56,28 +80,26 @@
 - 保存 `checkpoint_id`
 - 查询其关联 `run_id`
 - 在支持恢复的情况下请求从该 checkpoint 恢复
+- 按 `writeback.target` 把 checkpoint ref 写回自己的 memory/graph/host substrate
 
 宿主不应：
 
 - 假设底层一定是数据库、文件或特定内存结构
 - 直接解析 runtime 内部对象实现
+- 把 `CheckpointState.state` 当作长期稳定公共接口
 
-## 5. 推荐宿主流程
+## 6. 推荐宿主流程
 
 1. 调用 `validate`
 2. 调用 `run`
 3. 读取 `RunResult`
-4. 如果需要恢复点，保存 `CheckpointRef`
-5. 如发生中断，再按 `checkpoint_id` 触发恢复
+4. 按 `ArtifactRef.writeback` / `CheckpointRef.writeback` 分流
+5. 如果需要恢复点，保存 `CheckpointRef`
+6. 如发生中断，再按 `checkpoint_id` 触发恢复
 
-如果宿主需要把结果继续写回自己的 docs / memory / graph substrate，则应继续读取：
+## 7. 官方验证基线
 
-- `artifact.writeback.target / mode`
-- `checkpoint.writeback.target / mode`
-
-## 6. 官方验证基线
-
-当前 adapter boundary 的官方验证基线，已经不是纯文档约定，而是由以下资产共同维护：
+当前 adapter boundary 由以下基线共同维护：
 
 - `docs/WRITEBACK_ADAPTER_CONTRACT.md`
 - `examples/runtime-contract/official-examples.yaml`
@@ -85,29 +107,24 @@
 - `tests/test_runtime_examples.py`
 - `tests/test_runtime_contract.py`
 
-其中当前已覆盖：
+当前已覆盖：
 
-- 官方样例的 `validate`
-- 官方样例的 `run`
+- 官方样例 `validate`
+- 官方样例 `run`
 - 选定官方样例的 `checkpoint -> resume`
-- 官方样例中的 scenarioized `writeback.target / writeback.mode`
-- HTTP `run / get_run / get_checkpoint / resume` 最小宿主调用链
-- artifact 节点级 writeback override
-- inline writeback 缺内容的失败路径
+- service/HTTP 的 artifact/checkpoint writeback 字段
+- workflow/request/node 三层 writeback 优先级
+- invalid target/mode 的校验失败
+- `inline` 无内容的运行失败
 - parallel/barrier 输出中的 `branch_outputs`
 
-宿主如果要判断当前边界是否被破坏，应该优先看这条验证基线，而不是回看旧概念文档。
-
-如果宿主要进一步理解 artifact/checkpoint 的 writeback 约定，请直接看：
-
-- `docs/WRITEBACK_ADAPTER_CONTRACT.md`
-
-## 7. 当前未承诺
+## 8. 当前未承诺
 
 - streaming adapter 协议
 - 多租户 checkpoint store 标准
 - 远程 worker adapter
 - 真正并发调度语义
+- writeback 失败后的统一重试协议
 
 当前已支持的最小并行边界是：
 
@@ -115,15 +132,15 @@
 - `control.barrier` join
 - barrier 输出中的 `branch_outputs`
 
-## 8. 当前结论
+## 9. 当前结论
 
-当前阶段 AgentGraph 的 adapter boundary 是 contract-first，而不是 implementation-first。
+当前阶段 AgentGraph 的 adapter boundary 已经是 contract-first 且 writeback-aware。
 
-外部系统只需要围绕：
+外部系统当前只需要围绕：
 
 - workflow schema
 - runtime request
 - run result
-- checkpoint reference
+- artifact/checkpoint writeback
 
 来调用 AgentGraph。
