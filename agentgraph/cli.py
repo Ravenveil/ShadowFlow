@@ -944,7 +944,13 @@ def main():
     serve_parser = subparsers.add_parser('serve', help='Start HTTP server')
     serve_parser.add_argument('--port', type=int, default=8000, help='Server port')
     serve_parser.add_argument('--host', default='0.0.0.0', help='Server host')
-    
+
+    mcp_parser = subparsers.add_parser('mcp', help='Start MCP server (stdio mode by default)')
+    mcp_parser.add_argument('--stdio', action='store_true', default=True, help='Run in stdio mode (default)')
+    mcp_parser.add_argument('--http', action='store_true', default=False, help='Run HTTP debug server instead of stdio')
+    mcp_parser.add_argument('--port', type=int, default=3002, help='HTTP debug server port (--http only)')
+    mcp_parser.add_argument('--host', default='127.0.0.1', help='HTTP debug server host (--http only)')
+
     args = parser.parse_args()
     
     if args.command == 'validate':
@@ -1113,6 +1119,10 @@ def main():
         from agentgraph.server import app
         import uvicorn
         uvicorn.run(app, host=args.host, port=args.port)
+    elif args.command == 'mcp':
+        from agentgraph.mcp_server import main as mcp_main
+        use_stdio = not args.http
+        mcp_main(stdio=use_stdio, host=args.host, port=args.port)
     else:
         parser.print_help()
 
