@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from agentgraph.runtime.contracts import CheckpointRef, utc_now
 
 
-WritebackTarget = Literal["host", "docs", "memory", "graph"]
+WritebackTarget = Literal["host", "docs", "memory", "graph", "zerog"]
 
 
 class StoredCheckpointRecord(BaseModel):

@@ -13,7 +13,7 @@ but they are not the authoritative public entrypoint for the current runtime cam
 """
 
 __version__ = "0.1.0"
-__author__ = "AgentGraph Team"
+__author__ = "Ravenveil"
 __license__ = "MIT"
 
 from agentgraph.core.agent import Agent, AgentConfig
@@ -28,6 +28,7 @@ from agentgraph.highlevel import (
 )
 from agentgraph.runtime import (
     InMemoryCheckpointStore,
+    ZeroGCheckpointStore,
     ReferenceWritebackAdapter,
     ResumeRequest,
     RunResult,
@@ -69,6 +70,7 @@ __all__ = [
     "RunResult",
     "ReferenceWritebackAdapter",
     "InMemoryCheckpointStore",
+    "ZeroGCheckpointStore",
     "Agent",
     "AgentConfig",
     "AgentGraph",

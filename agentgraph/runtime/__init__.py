@@ -29,6 +29,7 @@ from agentgraph.runtime.checkpoint_store import (
     BaseCheckpointStore,
     InMemoryCheckpointStore,
     StoredCheckpointRecord,
+    ZeroGCheckpointStore,
 )
 from agentgraph.runtime.host_adapter import (
     BaseWritebackAdapter,
@@ -95,6 +96,7 @@ __all__ = [
     "RuntimeService",
     "StepRecord",
     "StoredCheckpointRecord",
+    "ZeroGCheckpointStore",
     "WritebackReceipt",
     "WritebackRef",
     "WorkflowGraph",

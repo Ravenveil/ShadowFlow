@@ -31,39 +31,39 @@ import { createHash } from "crypto";
 // 0G SDK integration (lazy-imported so bridge boots even without SDK)
 // ---------------------------------------------------------------------------
 
-let kvClient: any = null;
+// 0G KV context (lazy-initialized)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let zerogCtx: any = null;
 
-async function getKvClient() {
-  if (kvClient) return kvClient;
+const ZEROG_TESTNET_RPC     = "https://evmrpc-testnet.0g.ai";
+const ZEROG_TESTNET_FLOW    = "0xbD2C3F0E65eDF5582141C35969d66e34629cC768";
+const ZEROG_TESTNET_KV_RPC  = "https://0g-storage-kv-testnet-rpc.0g.ai";
+
+async function getZerogCtx(): Promise<any> {
+  if (zerogCtx) return zerogCtx;
 
   const privateKey = process.env.ZEROG_PRIVATE_KEY;
-  if (!privateKey) {
-    throw new Error("ZEROG_PRIVATE_KEY env var is required");
-  }
+  if (!privateKey) throw new Error("ZEROG_PRIVATE_KEY env var is required");
 
-  try {
-    // Dynamic import — works whether SDK is installed or not at boot time
-    const { ZgFile, Indexer, getFlowContract } = await import(
-      "@0glabs/0g-ts-sdk"
-    );
-    const { ethers } = await import("ethers");
+  // Use require() to avoid esm/cjs dual-package type conflicts
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const sdk    = require("@0glabs/0g-ts-sdk");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ethers = require("ethers");
 
-    const rpcUrl =
-      process.env.ZEROG_RPC_URL || "https://evmrpc-testnet.0g.ai";
-    const kvAddress =
-      process.env.ZEROG_KV_ADDRESS ||
-      "0x0460aA47b41a66694c0a73f667a1b795A5ED3556"; // 0G testnet KV contract
+  const rpcUrl   = process.env.ZEROG_RPC_URL      || ZEROG_TESTNET_RPC;
+  const kvRpc    = process.env.ZEROG_KV_RPC       || ZEROG_TESTNET_KV_RPC;
+  const flowAddr = process.env.ZEROG_FLOW_ADDR    || ZEROG_TESTNET_FLOW;
+  const nodeUrls = (process.env.ZEROG_STORAGE_NODES || "https://storage-testnet.0g.ai").split(",");
 
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const signer = new ethers.Wallet(privateKey, provider);
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const signer   = new ethers.Wallet(privateKey, provider);
+  const flow     = sdk.getFlowContract(flowAddr, signer);
+  const kvReader = new sdk.KvClient(kvRpc);
 
-    // @0glabs/0g-ts-sdk KVClient
-    const { KVClient } = await import("@0glabs/0g-ts-sdk");
-    kvClient = new KVClient(kvAddress, signer);
-    return kvClient;
-  } catch (err: any) {
-    throw new Error(`Failed to initialize 0G KV client: ${err.message}`);
-  }
+  zerogCtx = { sdk, ethers, kvReader, signer, flow, storageNodes: nodeUrls, rpcUrl, provider };
+  console.log(`[bridge] 0G ctx ready  rpc=${rpcUrl}  flow=${flowAddr}`);
+  return zerogCtx;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,22 +85,36 @@ async function kvPut(key: string, value: string): Promise<void> {
     memStore.set(key, value);
     return;
   }
-  const client = await getKvClient();
-  // 0G KV Store uses fixed-length stream IDs derived from user namespace
+  const ctx = await getZerogCtx();
+
+  // Build storage node clients
+  const clients = ctx.storageNodes.map((url: string) => new ctx.sdk.StorageNode(url));
+
+  // Batcher(version, clients, flowContract, ethersProvider)
+  const batcher = new ctx.sdk.Batcher(0, clients, ctx.flow, ctx.provider);
+
+  // streamId = sha256(key), kvField = Buffer.from("v")
   const streamId = deriveStreamId(key);
-  const encoder = new TextEncoder();
-  await client.set(streamId, "value", encoder.encode(value));
+  const encoded  = Buffer.from(value, "utf8");
+  batcher.streamDataBuilder.set(streamId, Buffer.from("v"), encoded);
+
+  const result = await batcher.exec();
+  const txHash = Array.isArray(result) ? result[0] : result;
+  console.log(`[bridge] 0G put  key=${key}  tx=${txHash}`);
 }
 
 async function kvGet(key: string): Promise<string | null> {
   if (useMemFallback()) {
     return memStore.get(key) ?? null;
   }
-  const client = await getKvClient();
+  const ctx = await getZerogCtx();
   const streamId = deriveStreamId(key);
   try {
-    const bytes: Uint8Array = await client.get(streamId, "value");
-    return bytes ? new TextDecoder().decode(bytes) : null;
+    // getValue(streamId, key, startIndex, length, version?)
+    const bytes: Uint8Array | null = await ctx.kvReader.getValue(
+      streamId, Buffer.from("v"), 0, 0
+    );
+    return bytes && bytes.length > 0 ? Buffer.from(bytes).toString("utf8") : null;
   } catch {
     return null;
   }

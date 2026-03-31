@@ -10,7 +10,7 @@ from agentgraph.runtime.checkpoint_store import BaseCheckpointStore, InMemoryChe
 from agentgraph.runtime.contracts import ArtifactRef, CheckpointRef, RunResult, utc_now
 
 
-WritebackTarget = Literal["host", "docs", "memory", "graph"]
+WritebackTarget = Literal["host", "docs", "memory", "graph", "zerog"]
 
 
 class WritebackReceipt(BaseModel):

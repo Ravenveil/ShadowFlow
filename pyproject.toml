@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentgraph"
-version = "0.1.0"
-description = "A lightweight multi-agent orchestration framework with swarm intelligence"
+version = "0.3.0"
+description = "Multi-agent workflow orchestration with pluggable checkpoint stores (Memory / File / 0G)"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "AgentGraph Team", email = "team@agentgraph.dev"}
+    {name = "Ravenveil"}
 ]
-keywords = ["multi-agent", "orchestration", "swarm", "ai", "workflow"]
+keywords = ["multi-agent", "orchestration", "ai", "workflow", "0g", "checkpoint"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -21,19 +21,40 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 requires-python = ">=3.9"
+# 核心依赖：只装这些就能跑 agentgraph run / ask / status
 dependencies = [
     "pydantic>=2.0.0",
-    "aiosqlite>=0.19.0",
-    "redis>=5.0.0",
-    "fastapi>=0.109.0",
-    "uvicorn>=0.27.0",
     "pyyaml>=6.0.0",
-    "httpx>=0.26.0",
+    "httpx>=0.26.0",     # ZeroGCheckpointStore HTTP 客户端 & CLI 执行器
 ]
 
 [project.optional-dependencies]
+# pip install agentgraph[zerog]  — 使用 0G KV 链上存储
+zerog = [
+    "httpx>=0.26.0",
+]
+# pip install agentgraph[server]  — REST API server (agentgraph server)
+server = [
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+]
+# pip install agentgraph[memory]  — Redis / SQLite 持久化
+memory = [
+    "aiosqlite>=0.19.0",
+    "redis>=5.0.0",
+]
+# pip install agentgraph[all]  — 全功能
+all = [
+    "httpx>=0.26.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "aiosqlite>=0.19.0",
+    "redis>=5.0.0",
+]
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
@@ -42,15 +63,11 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.8.0",
 ]
-monitoring = [
-    "prometheus-client>=0.19.0",
-    "structlog>=23.2.0",
-]
 
 [project.urls]
-Homepage = "https://github.com/agentgraph/agentgraph"
-Documentation = "https://docs.agentgraph.dev"
-Repository = "https://github.com/agentgraph/agentgraph"
+Homepage = "https://github.com/Ravenveil/AgentGraph"
+Repository = "https://github.com/Ravenveil/AgentGraph"
+"Bug Tracker" = "https://github.com/Ravenveil/AgentGraph/issues"
 
 [project.scripts]
 agentgraph = "agentgraph.cli:main"
