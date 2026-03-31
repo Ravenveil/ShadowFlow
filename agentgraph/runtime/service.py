@@ -8,19 +8,32 @@ from uuid import uuid4
 from agentgraph.runtime.checkpoint_store import BaseCheckpointStore
 from agentgraph.runtime.contracts import (
     ArtifactRef,
+    ChatMessage,
+    ChatMessageRequest,
+    ChatSession,
+    ChatSessionCreateRequest,
+    ChatSessionRecord,
+    ChatTurnResult,
     CheckpointRef,
     CheckpointState,
     NodeDefinition,
     ResumeRequest,
     RunRecord,
+    RunGraph,
+    RunGraphNode,
     RunResult,
+    RunSummary,
     RuntimeRequest,
     StepRecord,
     WritebackRef,
+    WorkflowGraph,
+    WorkflowGraphEdge,
+    WorkflowGraphNode,
     WorkflowDefinition,
     WorkflowValidationResult,
     utc_now,
 )
+from agentgraph.runtime.executors import ExecutorRegistry
 from agentgraph.runtime.host_adapter import BaseWritebackAdapter
 
 
@@ -29,12 +42,21 @@ class RuntimeService:
         self,
         writeback_adapter: Optional[BaseWritebackAdapter] = None,
         checkpoint_store: Optional[BaseCheckpointStore] = None,
+        executor_registry: Optional[ExecutorRegistry] = None,
+        run_store: Optional[Any] = None,
+        request_context_store: Optional[Any] = None,
+        chat_session_store: Optional[Any] = None,
     ) -> None:
         self._runs: Dict[str, RunResult] = {}
         self._requests_by_run_id: Dict[str, RuntimeRequest] = {}
         self._checkpoints: Dict[str, CheckpointRef] = {}
+        self._chat_sessions: Dict[str, ChatSession] = {}
         self._writeback_adapter = writeback_adapter
         self._checkpoint_store = checkpoint_store or getattr(writeback_adapter, "checkpoint_store", None)
+        self._run_store = run_store or getattr(writeback_adapter, "run_store", None)
+        self._request_context_store = request_context_store
+        self._chat_session_store = chat_session_store
+        self._executor_registry = executor_registry or ExecutorRegistry()
 
     def validate_workflow(self, workflow: WorkflowDefinition) -> WorkflowValidationResult:
         warnings: List[str] = []
@@ -68,10 +90,18 @@ class RuntimeService:
             initial_output=request.input.copy(),
         )
         self._requests_by_run_id[result.run.run_id] = request
+        if self._request_context_store is not None:
+            self._request_context_store.put(result.run.run_id, request)
+        if self._run_store is not None:
+            self._run_store.put(result)
         return result
 
     async def resume(self, run_id: str, resume_request: ResumeRequest) -> RunResult:
         original_request = self._requests_by_run_id.get(run_id)
+        if original_request is None and self._request_context_store is not None:
+            original_request = self._request_context_store.get(run_id)
+            if original_request is not None:
+                self._requests_by_run_id[run_id] = original_request
         if original_request is None:
             raise ValueError(f"run not found for resume: {run_id}")
 
@@ -106,6 +136,10 @@ class RuntimeService:
             initial_output=checkpoint.state.last_output or original_request.input.copy(),
         )
         self._requests_by_run_id[result.run.run_id] = resumed_request
+        if self._request_context_store is not None:
+            self._request_context_store.put(result.run.run_id, resumed_request)
+        if self._run_store is not None:
+            self._run_store.put(result)
         return result
 
     def get_checkpoint(self, checkpoint_id: str) -> Optional[CheckpointRef]:
@@ -118,6 +152,8 @@ class RuntimeService:
 
     def register_request_context(self, run_id: str, request: RuntimeRequest) -> None:
         self._requests_by_run_id[run_id] = request
+        if self._request_context_store is not None:
+            self._request_context_store.put(run_id, request)
 
     async def _execute(
         self,
@@ -196,7 +232,7 @@ class RuntimeService:
                     "timestamp": step_started_at.isoformat(),
                 }
             ]
-            step_output = self._execute_node(node, current_output, state, request.context)
+            step_output = await self._execute_node(node, current_output, state, request.context)
             step_artifacts = self._build_artifacts(
                 request=request,
                 run_id=run_id,
@@ -311,9 +347,202 @@ class RuntimeService:
         return result
 
     def get_run(self, run_id: str) -> Optional[RunResult]:
-        return self._runs.get(run_id)
+        result = self._runs.get(run_id)
+        if result is not None:
+            return result
+        if self._run_store is not None:
+            return self._run_store.get(run_id)
+        return None
 
-    def _execute_node(
+    def list_runs(self) -> List[RunSummary]:
+        runs = [
+            RunSummary(
+                run_id=result.run.run_id,
+                request_id=result.run.request_id,
+                workflow_id=result.run.workflow_id,
+                status=result.run.status,
+                started_at=result.run.started_at,
+                ended_at=result.run.ended_at,
+                current_step_id=result.run.current_step_id,
+                metadata=result.run.metadata,
+            )
+            for result in self._runs.values()
+        ]
+        if self._run_store is not None:
+            existing = {item.run_id for item in runs}
+            for item in self._run_store.list_runs():
+                if item.run_id not in existing:
+                    runs.append(item)
+        return sorted(runs, key=lambda item: item.started_at, reverse=True)
+
+    def export_workflow_graph(self, workflow: WorkflowDefinition) -> WorkflowGraph:
+        return WorkflowGraph(
+            workflow_id=workflow.workflow_id,
+            name=workflow.name,
+            entrypoint=workflow.entrypoint,
+            nodes=[
+                WorkflowGraphNode(
+                    id=node.id,
+                    label=node.config.get("role", node.id),
+                    kind=node.kind,
+                    type=node.type,
+                    entrypoint=node.id == workflow.entrypoint,
+                    metadata={
+                        "role": node.config.get("role"),
+                        "outputs": node.outputs,
+                        "inputs": node.inputs,
+                    },
+                )
+                for node in workflow.nodes
+            ],
+            edges=[
+                WorkflowGraphEdge(
+                    from_id=edge.from_id,
+                    to_id=edge.to_id,
+                    type=edge.type,
+                    condition=edge.condition,
+                    metadata=edge.metadata,
+                )
+                for edge in workflow.edges
+            ],
+            metadata=workflow.metadata,
+        )
+
+    def export_run_graph(self, run_id: str) -> Optional[RunGraph]:
+        result = self.get_run(run_id)
+        request = self._requests_by_run_id.get(run_id)
+        if request is None and self._request_context_store is not None:
+            request = self._request_context_store.get(run_id)
+        if result is None or request is None:
+            return None
+
+        steps_by_node_id = {step.node_id: step for step in result.steps}
+        workflow_graph = self.export_workflow_graph(request.workflow)
+        nodes: List[RunGraphNode] = []
+        for node in workflow_graph.nodes:
+            step = steps_by_node_id.get(node.id)
+            nodes.append(
+                RunGraphNode(
+                    id=node.id,
+                    label=node.label,
+                    kind=node.kind,
+                    type=node.type,
+                    status=step.status if step is not None else "not_started",
+                    step_id=step.step_id if step is not None else None,
+                    index=step.index if step is not None else None,
+                    entrypoint=node.entrypoint,
+                    metadata=node.metadata,
+                )
+            )
+
+        return RunGraph(
+            run_id=result.run.run_id,
+            workflow_id=result.run.workflow_id,
+            status=result.run.status,
+            entrypoint=result.run.entrypoint,
+            nodes=nodes,
+            edges=workflow_graph.edges,
+            metadata=result.run.metadata,
+        )
+
+    def create_chat_session(self, request: ChatSessionCreateRequest) -> ChatSession:
+        session_id = f"session-{uuid4().hex[:12]}"
+        record = ChatSessionRecord(
+            session_id=session_id,
+            title=request.title,
+            executor=request.executor,
+            metadata=request.metadata,
+        )
+        messages: List[ChatMessage] = []
+        if isinstance(request.system_prompt, str) and request.system_prompt.strip():
+            messages.append(
+                ChatMessage(
+                    role="system",
+                    content=request.system_prompt.strip(),
+                )
+            )
+        session = ChatSession(session=record, messages=messages)
+        self._chat_sessions[session_id] = session
+        if self._chat_session_store is not None:
+            self._chat_session_store.put(session)
+        return session.model_copy(deep=True)
+
+    def list_chat_sessions(self) -> List[ChatSessionRecord]:
+        sessions = [item.session for item in self._chat_sessions.values()]
+        if self._chat_session_store is not None:
+            existing = {item.session_id for item in sessions}
+            for item in self._chat_session_store.list_sessions():
+                if item.session.session_id not in existing:
+                    sessions.append(item.session)
+        return sorted(sessions, key=lambda item: item.updated_at, reverse=True)
+
+    def get_chat_session(self, session_id: str) -> Optional[ChatSession]:
+        session = self._chat_sessions.get(session_id)
+        if session is None and self._chat_session_store is not None:
+            session = self._chat_session_store.get(session_id)
+            if session is not None:
+                self._chat_sessions[session_id] = session
+        if session is None:
+            return None
+        return session.model_copy(deep=True)
+
+    async def send_chat_message(self, session_id: str, request: ChatMessageRequest) -> ChatTurnResult:
+        session = self._chat_sessions.get(session_id)
+        if session is None:
+            raise ValueError(f"chat session not found: {session_id}")
+
+        user_message = ChatMessage(role="user", content=request.content, metadata=request.metadata)
+        session.messages.append(user_message)
+        prompt = self._build_chat_prompt(session.messages)
+        payload = {
+            "prompt": prompt,
+            "step_input": {
+                "message": request.content,
+                "session_id": session_id,
+                "history": [
+                    {"role": item.role, "content": item.content}
+                    for item in session.messages
+                ],
+            },
+            "context": request.context,
+            "state": {"chat_session_id": session_id},
+            "node": {"id": "chat", "type": "chat.turn", "role": "assistant"},
+        }
+        executor_output = await self._executor_registry.execute(session.session.executor, payload)
+        response_text = str(
+            executor_output.get("response_text")
+            or executor_output.get("message")
+            or executor_output.get("result")
+            or ""
+        ).strip()
+        assistant_message = ChatMessage(role="assistant", content=response_text, metadata={"executor": executor_output.get("executor", {})})
+        session.messages.append(assistant_message)
+        session.session.updated_at = utc_now()
+        if self._chat_session_store is not None:
+            self._chat_session_store.put(session)
+        return ChatTurnResult(
+            session=session.session.model_copy(deep=True),
+            user_message=user_message,
+            assistant_message=assistant_message,
+            response_text=response_text,
+            raw_output=executor_output,
+            trace=[
+                {
+                    "event": "chat_turn",
+                    "session_id": session_id,
+                    "message": f"user={request.content!r}",
+                    "timestamp": utc_now().isoformat(),
+                },
+                {
+                    "event": "chat_response",
+                    "session_id": session_id,
+                    "message": response_text,
+                    "timestamp": utc_now().isoformat(),
+                },
+            ],
+        )
+
+    async def _execute_node(
         self,
         node: NodeDefinition,
         step_input: Dict[str, Any],
@@ -334,6 +563,26 @@ class RuntimeService:
             "handled_by": role,
             "state": {},
         }
+
+        executor_config = node.config.get("executor")
+        if isinstance(executor_config, dict):
+            output = await self._execute_executor_node(
+                node=node,
+                executor_config=executor_config,
+                step_input=step_input,
+                state=state,
+                context=context,
+                base_output=output,
+                prompt=prompt,
+            )
+            self._apply_node_config_output(
+                node=node,
+                output=output,
+                step_input=step_input,
+                context=context,
+                prompt=prompt,
+            )
+            return output
 
         if node.type == "control.parallel":
             branches = [branch for branch in node.config.get("branches", []) if isinstance(branch, str)]
@@ -371,24 +620,78 @@ class RuntimeService:
                 output["artifact"] = node.config["artifact"]
             return output
 
+        self._apply_node_config_output(
+            node=node,
+            output=output,
+            step_input=step_input,
+            context=context,
+            prompt=prompt,
+        )
+        return output
+
+    async def _execute_executor_node(
+        self,
+        node: NodeDefinition,
+        executor_config: Dict[str, Any],
+        step_input: Dict[str, Any],
+        state: Dict[str, Any],
+        context: Dict[str, Any],
+        base_output: Dict[str, Any],
+        prompt: str,
+    ) -> Dict[str, Any]:
+        payload = {
+            "prompt": prompt,
+            "step_input": step_input,
+            "state": state,
+            "context": context,
+            "node": {
+                "id": node.id,
+                "type": node.type,
+                "role": base_output["handled_by"],
+            },
+        }
+        result = json.loads(
+            json.dumps(
+                await self._executor_registry.execute(executor_config, payload),
+                ensure_ascii=False,
+                default=str,
+            )
+        )
+        output = dict(base_output)
+        if isinstance(result, dict):
+            output.update(result)
+        else:
+            output["result"] = result
+        return output
+
+    def _apply_node_config_output(
+        self,
+        *,
+        node: NodeDefinition,
+        output: Dict[str, Any],
+        step_input: Dict[str, Any],
+        context: Dict[str, Any],
+        prompt: str,
+    ) -> None:
         if prompt:
-            output["prompt"] = prompt
-        if "set_state" in node.config:
+            output.setdefault("prompt", prompt)
+        if "set_state" in node.config and isinstance(node.config["set_state"], dict):
             output["state"].update(node.config["set_state"])
         if "emit" in node.config and isinstance(node.config["emit"], dict):
-            output.update(node.config["emit"])
+            for key, value in node.config["emit"].items():
+                output.setdefault(key, value)
         if "copy_input" in node.config:
             keys = node.config["copy_input"]
             if isinstance(keys, list):
-                output["copied_input"] = {key: step_input.get(key) for key in keys}
-        if "artifact" in node.config:
+                output.setdefault("copied_input", {key: step_input.get(key) for key in keys})
+        if "artifact" in node.config and "artifact" not in output:
             output["artifact"] = node.config["artifact"]
-        if "decision" in node.config:
+        if "artifacts" in node.config and "artifacts" not in output:
+            output["artifacts"] = node.config["artifacts"]
+        if "decision" in node.config and "decision" not in output:
             output["decision"] = node.config["decision"]
-        if "context_echo" in node.config:
+        if "context_echo" in node.config and "context" not in output:
             output["context"] = {key: context.get(key) for key in node.config["context_echo"]}
-
-        return output
 
     def _build_artifacts(
         self,
@@ -400,45 +703,51 @@ class RuntimeService:
         node_id: str,
         step_output: Dict[str, Any],
     ) -> List[ArtifactRef]:
-        artifact_payload = step_output.get("artifact")
-        if not artifact_payload:
+        artifact_payloads: List[Any] = []
+        if "artifact" in step_output:
+            artifact_payloads.append(step_output["artifact"])
+        if isinstance(step_output.get("artifacts"), list):
+            artifact_payloads.extend(step_output["artifacts"])
+        if not artifact_payloads:
             return []
+        artifact_refs: List[ArtifactRef] = []
+        for artifact_offset, artifact_payload in enumerate(artifact_payloads, start=1):
+            if isinstance(artifact_payload, dict):
+                payload = artifact_payload
+            else:
+                payload = {"content": artifact_payload}
 
-        if isinstance(artifact_payload, dict):
-            payload = artifact_payload
-        else:
-            payload = {"content": artifact_payload}
-
-        writeback_config = self._resolve_writeback_config(request, "artifact", payload, node=node)
-        target = writeback_config.get("target", "host")
-        mode = writeback_config.get("mode", "reference")
-        has_inline_content = payload.get("content") is not None
-        if mode == "inline" and not has_inline_content:
-            raise ValueError(
-                f"artifact writeback for node {node_id} requires content when mode=inline"
+            writeback_config = self._resolve_writeback_config(request, "artifact", payload, node=node)
+            target = writeback_config.get("target", "host")
+            mode = writeback_config.get("mode", "reference")
+            has_inline_content = payload.get("content") is not None
+            if mode == "inline" and not has_inline_content:
+                raise ValueError(
+                    f"artifact writeback for node {node_id} requires content when mode=inline"
+                )
+            artifact_refs.append(
+                ArtifactRef(
+                    artifact_id=f"artifact-{uuid4().hex[:10]}",
+                    kind=payload.get("kind", "json"),
+                    name=payload.get("name", f"{node_id}-artifact-{index}-{artifact_offset}.json"),
+                    uri=payload.get("uri", f"memory://{run_id}/{node_id}/{index}/{artifact_offset}"),
+                    producer_step_id=f"step-{index:03d}",
+                    writeback=WritebackRef(
+                        channel="artifact",
+                        target=target,
+                        mode=mode,
+                        host_action="persist_artifact_ref",
+                        content_field="metadata.content" if mode == "inline" and has_inline_content else None,
+                    ),
+                    metadata={
+                        "content": payload.get("content"),
+                        "workflow_id": workflow_id,
+                        "producer_node_id": node_id,
+                    },
+                )
             )
 
-        return [
-            ArtifactRef(
-                artifact_id=f"artifact-{uuid4().hex[:10]}",
-                kind=payload.get("kind", "json"),
-                name=payload.get("name", f"{node_id}-artifact-{index}.json"),
-                uri=payload.get("uri", f"memory://{run_id}/{node_id}/{index}"),
-                producer_step_id=f"step-{index:03d}",
-                writeback=WritebackRef(
-                    channel="artifact",
-                    target=target,
-                    mode=mode,
-                    host_action="persist_artifact_ref",
-                    content_field="metadata.content" if mode == "inline" and has_inline_content else None,
-                ),
-                metadata={
-                    "content": payload.get("content"),
-                    "workflow_id": workflow_id,
-                    "producer_node_id": node_id,
-                },
-            )
-        ]
+        return artifact_refs
 
     def _resolve_writeback_config(
         self,
@@ -562,6 +871,15 @@ class RuntimeService:
             return self._eval_expr(expr.strip(), target)
 
         return self._eval_expr(normalized, step_output)
+
+    def _build_chat_prompt(self, messages: List[ChatMessage]) -> str:
+        segments: List[str] = []
+        for message in messages:
+            if not message.content.strip():
+                continue
+            segments.append(f"{message.role.upper()}:\n{message.content.strip()}")
+        segments.append("ASSISTANT:")
+        return "\n\n".join(segments)
 
     def _eval_expr(self, expr: str, source: Dict[str, Any]) -> bool:
         pattern = r"([\w_]+)\s*(>=|<=|>|<|==|!=|contains|includes)\s*['\"]?(.+?)['\"]?$"

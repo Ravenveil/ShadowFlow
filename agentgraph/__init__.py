@@ -17,6 +17,15 @@ __author__ = "AgentGraph Team"
 __license__ = "MIT"
 
 from agentgraph.core.agent import Agent, AgentConfig
+from agentgraph.highlevel import (
+    AgentSpec,
+    RoleSpec,
+    SkillSpec,
+    SpecRegistry,
+    TemplateCompiler,
+    ToolSpec,
+    WorkflowTemplateSpec,
+)
 from agentgraph.runtime import (
     InMemoryCheckpointStore,
     ReferenceWritebackAdapter,
@@ -67,4 +76,11 @@ __all__ = [
     "Memory",
     "SQLiteMemory",
     "RedisMemory",
+    "ToolSpec",
+    "SkillSpec",
+    "RoleSpec",
+    "AgentSpec",
+    "WorkflowTemplateSpec",
+    "SpecRegistry",
+    "TemplateCompiler",
 ]

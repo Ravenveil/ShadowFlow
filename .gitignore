@@ -16,6 +16,7 @@ node_modules/
 src-tauri/target/
 
 .venv/
+.smoke-venv/
 venv/
 env/
 
@@ -24,3 +25,4 @@ nul.okm
 simple_data_pipeline_workflow.json
 simple_test.py
 test_planner.py
+.opencode

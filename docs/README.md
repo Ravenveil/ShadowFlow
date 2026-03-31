@@ -81,6 +81,7 @@ AgentGraph 文档入口页。
 
 先读：
 
+- [CLI 安装与使用](CLI_INSTALL_AND_USAGE.md)
 - [你的第一个工作流](tutorials/getting-started/your-first-workflow.md)
 - [Legacy Surface Map](LEGACY_SURFACE_MAP.md)
 - [自定义节点开发](tutorials/advanced/custom-node-development.md)

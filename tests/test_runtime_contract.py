@@ -1,10 +1,18 @@
 import asyncio
 from copy import deepcopy
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
 from agentgraph.runtime import (
+    ChatMessageRequest,
+    ChatSessionCreateRequest,
     ResumeRequest,
     RuntimeRequest,
     RuntimeService,
@@ -13,6 +21,14 @@ from agentgraph.runtime import (
     load_official_workflow,
 )
 from agentgraph.server import app
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def make_local_test_dir(prefix: str) -> Path:
+    path = Path.home() / ".codex" / "memories" / "agentgraph-test-output" / f"{prefix}-{uuid4().hex[:8]}"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 WORKFLOW_PAYLOAD = {
@@ -534,3 +550,422 @@ def test_parallel_example_exposes_adapter_boundary_branch_outputs():
     assert result.checkpoints[0].writeback.target == "graph"
     assert result.artifacts[0].writeback.target == "docs"
     assert result.artifacts[0].writeback.mode == "reference"
+
+
+def test_runtime_service_exports_workflow_graph_and_chat_session():
+    service = RuntimeService()
+    workflow = WorkflowDefinition.model_validate(WORKFLOW_PAYLOAD)
+
+    graph = service.export_workflow_graph(workflow)
+    assert graph.workflow_id == workflow.workflow_id
+    assert graph.entrypoint == workflow.entrypoint
+    assert len(graph.nodes) == len(workflow.nodes)
+    assert graph.nodes[0].entrypoint is True
+
+    session = service.create_chat_session(
+        ChatSessionCreateRequest.model_validate(
+            {
+            "title": "pytest chat",
+            "executor": {
+                "kind": "cli",
+                "provider": "generic",
+                "command": sys.executable,
+                "args": [
+                    "-c",
+                    (
+                        "import json,sys;"
+                        "payload=json.load(sys.stdin);"
+                        "print(json.dumps({'message':'echo:' + payload['step_input']['message']}))"
+                    ),
+                ],
+                "stdin": "json",
+                "parse": "json",
+            },
+            "system_prompt": "你是一个简洁助手。",
+            "metadata": {"source_system": "pytest"},
+            }
+        )
+    )
+    assert session.session.title == "pytest chat"
+    assert session.messages[0].role == "system"
+
+    turn = asyncio.run(
+        service.send_chat_message(
+            session.session.session_id,
+            ChatMessageRequest.model_validate({"content": "hello"}),
+        )
+    )
+    assert turn.response_text == "echo:hello"
+    reloaded_session = service.get_chat_session(session.session.session_id)
+    assert reloaded_session is not None
+    assert [item.role for item in reloaded_session.messages] == ["system", "user", "assistant"]
+
+
+def test_fastapi_exposes_runs_graph_and_chat_endpoints():
+    client = TestClient(app)
+
+    graph_response = client.post("/workflow/graph", json=WORKFLOW_PAYLOAD)
+    assert graph_response.status_code == 200
+    graph_payload = graph_response.json()
+    assert graph_payload["workflow_id"] == WORKFLOW_PAYLOAD["workflow_id"]
+    assert graph_payload["entrypoint"] == WORKFLOW_PAYLOAD["entrypoint"]
+
+    run_response = client.post(
+        "/workflow/run",
+        json={
+            "workflow": WORKFLOW_PAYLOAD,
+            "input": {"goal": "Expose run list and graph"},
+            "metadata": {"source_system": "api-panel-test"},
+        },
+    )
+    assert run_response.status_code == 200
+    run_payload = run_response.json()
+    run_id = run_payload["run"]["run_id"]
+
+    runs_response = client.get("/runs")
+    assert runs_response.status_code == 200
+    assert any(item["run_id"] == run_id for item in runs_response.json())
+
+    run_graph_response = client.get(f"/runs/{run_id}/graph")
+    assert run_graph_response.status_code == 200
+    run_graph_payload = run_graph_response.json()
+    assert run_graph_payload["run_id"] == run_id
+    assert any(node["id"] == "planner" and node["status"] == "succeeded" for node in run_graph_payload["nodes"])
+
+    create_session_response = client.post(
+        "/chat/sessions",
+        json={
+            "title": "api chat",
+            "executor": {
+                "kind": "cli",
+                "provider": "generic",
+                "command": sys.executable,
+                "args": [
+                    "-c",
+                    (
+                        "import json,sys;"
+                        "payload=json.load(sys.stdin);"
+                        "print(json.dumps({'message':'chat:' + payload['step_input']['message']}))"
+                    ),
+                ],
+                "stdin": "json",
+                "parse": "json",
+            },
+            "system_prompt": "你是测试助手。",
+        },
+    )
+    assert create_session_response.status_code == 200
+    session_payload = create_session_response.json()
+    session_id = session_payload["session"]["session_id"]
+
+    send_message_response = client.post(
+        f"/chat/sessions/{session_id}/messages",
+        json={"content": "ping"},
+    )
+    assert send_message_response.status_code == 200
+    turn_payload = send_message_response.json()
+    assert turn_payload["response_text"] == "chat:ping"
+
+    get_session_response = client.get(f"/chat/sessions/{session_id}")
+    assert get_session_response.status_code == 200
+    messages = get_session_response.json()["messages"]
+    assert [item["role"] for item in messages] == ["system", "user", "assistant"]
+
+
+def test_cli_graph_command_exports_workflow_graph():
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agentgraph.cli",
+            "graph",
+            "-w",
+            "examples/runtime-contract/docs-gap-review.yaml",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert payload["workflow_id"] == "docs-gap-review"
+    assert payload["entrypoint"] == "planner"
+
+
+def test_cli_chat_command_supports_single_turn_generic_executor():
+    runtime_root = make_local_test_dir("chat-single-turn")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agentgraph.cli",
+            "chat",
+            "--kind",
+            "cli",
+            "--provider",
+            "generic",
+            "--command",
+            sys.executable,
+            "--args-json",
+            json.dumps(
+                [
+                    "-c",
+                    (
+                        "import json,sys;"
+                        "payload=json.load(sys.stdin);"
+                        "print(json.dumps({'message':'chat-test:' + payload['step_input']['message']}))"
+                    ),
+                ]
+            ),
+            "--stdin-mode",
+            "json",
+            "--parse",
+            "json",
+            "--message",
+            "hello",
+            "--root",
+            str(runtime_root),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert payload["response_text"] == "chat-test:hello"
+    assert payload["assistant_message"]["content"] == "chat-test:hello"
+    shutil.rmtree(runtime_root, ignore_errors=True)
+
+
+def test_cli_runs_checkpoints_and_resume_commands_support_persisted_runtime_root():
+    runtime_root = make_local_test_dir("persisted-runtime")
+
+    run_completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agentgraph.cli",
+            "run",
+            "-w",
+            "examples/runtime-contract/research-review-loop.yaml",
+            "-i",
+            '{"goal":"cli persisted resume"}',
+            "--writeback",
+            "markdown",
+            "--writeback-root",
+            str(runtime_root),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert run_completed.returncode == 0, run_completed.stderr
+    run_payload = json.loads(run_completed.stdout)
+    run_id = run_payload["run"]["run_id"]
+    checkpoint_id = next(
+        item["checkpoint_id"]
+        for item in run_payload["checkpoints"]
+        if item["state"]["current_node_id"] == "researcher"
+    )
+
+    runs_list_completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agentgraph.cli",
+            "runs",
+            "list",
+            "--root",
+            str(runtime_root),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert runs_list_completed.returncode == 0, runs_list_completed.stderr
+    runs_list_payload = json.loads(runs_list_completed.stdout)
+    assert any(item["run_id"] == run_id for item in runs_list_payload)
+
+    run_get_completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agentgraph.cli",
+            "runs",
+            "get",
+            "--run-id",
+            run_id,
+            "--root",
+            str(runtime_root),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert run_get_completed.returncode == 0, run_get_completed.stderr
+    run_get_payload = json.loads(run_get_completed.stdout)
+    assert run_get_payload["run"]["run_id"] == run_id
+
+    run_graph_completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agentgraph.cli",
+            "runs",
+            "graph",
+            "--run-id",
+            run_id,
+            "--root",
+            str(runtime_root),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert run_graph_completed.returncode == 0, run_graph_completed.stderr
+    run_graph_payload = json.loads(run_graph_completed.stdout)
+    assert run_graph_payload["run_id"] == run_id
+    assert any(node["id"] == "reviewer" for node in run_graph_payload["nodes"])
+
+    checkpoint_get_completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agentgraph.cli",
+            "checkpoints",
+            "get",
+            "--checkpoint-id",
+            checkpoint_id,
+            "--root",
+            str(runtime_root),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert checkpoint_get_completed.returncode == 0, checkpoint_get_completed.stderr
+    checkpoint_payload = json.loads(checkpoint_get_completed.stdout)
+    assert checkpoint_payload["checkpoint_id"] == checkpoint_id
+
+    resume_completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agentgraph.cli",
+            "resume",
+            "--run-id",
+            run_id,
+            "--checkpoint-id",
+            checkpoint_id,
+            "--root",
+            str(runtime_root),
+            "--metadata",
+            '{"source_system":"pytest-cli-resume"}',
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert resume_completed.returncode == 0, resume_completed.stderr
+    resume_payload = json.loads(resume_completed.stdout)
+    assert resume_payload["run"]["metadata"]["resumed_from_run_id"] == run_id
+    assert resume_payload["run"]["metadata"]["resumed_from_checkpoint_id"] == checkpoint_id
+    assert resume_payload["steps"][0]["node_id"] == "reviewer"
+    shutil.rmtree(runtime_root, ignore_errors=True)
+
+
+def test_cli_sessions_commands_support_persisted_chat_sessions():
+    runtime_root = make_local_test_dir("persisted-chat")
+    chat_completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agentgraph.cli",
+            "chat",
+            "--kind",
+            "cli",
+            "--provider",
+            "generic",
+            "--command",
+            sys.executable,
+            "--args-json",
+            json.dumps(
+                [
+                    "-c",
+                    (
+                        "import json,sys;"
+                        "payload=json.load(sys.stdin);"
+                        "print(json.dumps({'message':'chat-test:' + payload['step_input']['message']}))"
+                    ),
+                ]
+            ),
+            "--stdin-mode",
+            "json",
+            "--parse",
+            "json",
+            "--message",
+            "hello persisted",
+            "--root",
+            str(runtime_root),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert chat_completed.returncode == 0, chat_completed.stderr
+    chat_payload = json.loads(chat_completed.stdout)
+    session_id = chat_payload["session"]["session_id"]
+
+    sessions_list_completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agentgraph.cli",
+            "sessions",
+            "list",
+            "--root",
+            str(runtime_root),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert sessions_list_completed.returncode == 0, sessions_list_completed.stderr
+    sessions_list_payload = json.loads(sessions_list_completed.stdout)
+    assert any(item["session_id"] == session_id for item in sessions_list_payload)
+
+    session_get_completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agentgraph.cli",
+            "sessions",
+            "get",
+            "--session-id",
+            session_id,
+            "--root",
+            str(runtime_root),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert session_get_completed.returncode == 0, session_get_completed.stderr
+    session_payload = json.loads(session_get_completed.stdout)
+    assert session_payload["session"]["session_id"] == session_id
+    assert [item["role"] for item in session_payload["messages"]] == ["user", "assistant"]
+    shutil.rmtree(runtime_root, ignore_errors=True)

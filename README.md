@@ -2,7 +2,6 @@
 
 A lightweight multi-agent orchestration runtime for contract-first workflows.
 
-[![PyPI](https://img.shields.io/pypi/v/agentgraph)](https://pypi.org/project/agentgraph/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](docs/)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
@@ -20,6 +19,7 @@ AgentGraph 当前阶段的正式定位是：
 - [Core Charter](docs/CORE_CHARTER.md)
 - [Runtime Contract Spec](docs/RUNTIME_CONTRACT_SPEC.md)
 - [Workflow Schema](docs/WORKFLOW_SCHEMA.md)
+- [CLI 安装与使用](docs/CLI_INSTALL_AND_USAGE.md)
 
 ## Features
 
@@ -28,11 +28,18 @@ AgentGraph 当前阶段的正式定位是：
 - Structured `run -> steps -> final_output -> trace -> artifacts -> checkpoints`
 - Canonical YAML / JSON workflow definition
 - Basic parallel fan-out + barrier join
+- Unified executor layer for `CLI` and `API`
+- Built-in provider adapters for `Codex CLI`, `Claude CLI`, `OpenAI Responses API`, and `Anthropic Messages API`
+- Markdown writeback backend for `runs / artifacts / checkpoints`
 - Reference writeback adapter stubs for `docs / memory / graph`
 - Minimal checkpoint store contract with in-memory reference implementation
 - Phase 1 examples aligned with runtime contract
+- High-level `Tool / Skill / Role / Agent / WorkflowTemplate` schema with template compiler
 
 ## Installation
+
+当前阶段推荐使用源码安装。
+`agentgraph` 这个 PyPI 名称已被其他项目占用，因此本项目暂未以该名字公开发布到 PyPI。
 
 ### From Source
 
@@ -41,6 +48,17 @@ git clone https://github.com/your-org/agentgraph.git
 cd agentgraph
 pip install -e .[dev]
 ```
+
+安装完成后可验证：
+
+```bash
+agentgraph --help
+python -m agentgraph.cli --help
+```
+
+更完整的前置条件、CLI provider、API key、writeback 说明见：
+
+- [CLI 安装与使用](docs/CLI_INSTALL_AND_USAGE.md)
 
 ## Quick Start
 
@@ -92,7 +110,78 @@ agentgraph validate -w workflow.yaml
 agentgraph run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}"
 ```
 
-### 4. Serve HTTP API
+使用 markdown writeback：
+
+```bash
+agentgraph run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}" --writeback markdown --writeback-root ./agentgraph-runtime
+```
+
+说明：
+
+- 未显式传 `--writeback-root` / `--root` 时，CLI 会优先读取环境变量 `AGENTGRAPH_RUNTIME_ROOT`
+- 若未设置该环境变量，会回退到用户级 runtime 数据目录
+
+### 4. Export Workflow Graph
+
+```bash
+agentgraph graph -w workflow.yaml
+```
+
+### 5. Compile a High-Level Template
+
+```bash
+agentgraph compile --template docs-review-template --registry-root examples/highlevel/minimal-registry --var goal="Audit docs"
+```
+
+### 6. Inspect or Scaffold High-Level Specs
+
+```bash
+agentgraph presets list
+agentgraph patterns list
+agentgraph role-presets list
+agentgraph registry counts --registry-root examples/highlevel/minimal-registry
+agentgraph registry list --registry-root examples/highlevel/minimal-registry --kind agents
+agentgraph registry export --registry-root examples/highlevel/minimal-registry --output-root ./exported-registry
+agentgraph registry import --registry-root ./my-registry --preset single-reviewer --workflow-id docs_review_pack
+agentgraph init tool --registry-root ./my-registry --id filesystem --kind builtin
+agentgraph init role --registry-root ./my-registry --id reviewer
+agentgraph init role --registry-root ./my-registry --id strict_reviewer --preset reviewer
+agentgraph init skill --registry-root ./my-registry --id docs_review
+agentgraph init agent --registry-root ./my-registry --id docs_reviewer --role reviewer --skill docs_review --tool filesystem
+agentgraph init template --registry-root ./my-registry --id docs_review_template --agent-ref docs_reviewer --agent-node-id reviewer
+agentgraph init workflow --registry-root ./my-registry --id docs_review_pack --pattern single-reviewer --goal "Audit docs"
+agentgraph scaffold --registry-root ./my-registry --pattern planner-coder-reviewer --workflow-id feature_lane --goal "Ship a safe feature plan"
+agentgraph init workflow --registry-root ./my-registry --id research_lane --task-kind research --goal "Collect evidence and package a final summary"
+agentgraph init workflow --registry-root ./my-registry --id feature_lane --preset planner-coder-reviewer --goal "Ship a safe feature plan" --assign planner.focus="Only define execution milestones" --assign reviewer.owned_topics="regression,tests"
+```
+
+编译时如果你想直接看“这次生成了什么”，可以附带摘要：
+
+```bash
+agentgraph compile --template docs-review-template --registry-root examples/highlevel/minimal-registry --var goal="Audit docs" --summary json
+```
+
+### 7. Chat With an Executor
+
+单轮对话：
+
+```bash
+agentgraph chat --kind cli --provider claude --parse claude-json --message "请用一句中文介绍 AgentGraph"
+```
+
+### 8. Inspect Persisted Runtime Data
+
+```bash
+agentgraph runs list
+agentgraph runs get --run-id <run_id>
+agentgraph runs graph --run-id <run_id>
+agentgraph checkpoints get --checkpoint-id <checkpoint_id>
+agentgraph sessions list
+agentgraph sessions get --session-id <session_id>
+agentgraph resume --run-id <run_id> --checkpoint-id <checkpoint_id>
+```
+
+### 9. Serve HTTP API
 
 ```bash
 agentgraph serve --port 8000
@@ -102,7 +191,14 @@ agentgraph serve --port 8000
 
 - `POST /workflow/validate`
 - `POST /workflow/run`
+- `POST /workflow/graph`
+- `GET /runs`
 - `GET /runs/{id}`
+- `GET /runs/{id}/graph`
+- `POST /chat/sessions`
+- `GET /chat/sessions`
+- `GET /chat/sessions/{id}`
+- `POST /chat/sessions/{id}/messages`
 
 ## Official Phase 1 Examples
 
@@ -110,11 +206,74 @@ agentgraph serve --port 8000
 - [parallel-synthesis](examples/runtime-contract/parallel-synthesis.yaml)
 - [research-review-loop](examples/runtime-contract/research-review-loop.yaml)
 
+## Executor Examples
+
+- Generic local CLI: [cli-generic-local](examples/runtime-contract/cli-generic-local.yaml)
+- Codex CLI: [cli-agent-execution](examples/runtime-contract/cli-agent-execution.yaml)
+- Claude CLI: [cli-claude-execution](examples/runtime-contract/cli-claude-execution.yaml)
+- OpenAI API: [api-agent-execution](examples/runtime-contract/api-agent-execution.yaml)
+- Anthropic API: [api-anthropic-execution](examples/runtime-contract/api-anthropic-execution.yaml)
+
+## High-Level Spec Example
+
+- Minimal registry: [minimal-registry](examples/highlevel/minimal-registry)
+
+## Built-In Presets
+
+- `single-reviewer`
+- `planner-coder-reviewer`
+- `research-review-publish`
+
+也可以把它们当作第一版 workflow pattern library：
+
+- `agentgraph patterns list`
+
+## Built-In Role Archetypes
+
+- `planner`
+- `coder`
+- `reviewer`
+- `researcher`
+- `publisher`
+- `qa`
+
+推荐入口：
+
+- `agentgraph init workflow`
+- `agentgraph scaffold`
+
+工作流层支持固定角色指派：
+
+- 在 `WorkflowTemplateSpec.agents[].assignment` 中声明
+- 或通过 `agentgraph init workflow --assign`
+- 或通过 `agentgraph scaffold --assign`
+
+工作流模板层现在还支持：
+
+- `policy_matrix`
+- `stages / lanes`
+- compile-time governance validation
+- `task-kind -> pattern` 的推荐式入口
+
 运行示例：
 
 ```bash
 agentgraph validate -w examples/runtime-contract/docs-gap-review.yaml
 agentgraph run -w examples/runtime-contract/docs-gap-review.yaml -i "{\"goal\":\"Analyze docs gaps\"}"
+```
+
+CLI executor 示例：
+
+```bash
+agentgraph run -w examples/runtime-contract/cli-agent-execution.yaml -i "{\"goal\":\"实现一个最小 CLI 调度验证\"}"
+agentgraph run -w examples/runtime-contract/cli-claude-execution.yaml -i "{\"goal\":\"实现一个最小 Claude CLI 调度验证\"}"
+```
+
+API executor 示例：
+
+```bash
+agentgraph run -w examples/runtime-contract/api-agent-execution.yaml -i "{\"goal\":\"生成一个 API 执行计划\"}"
+agentgraph run -w examples/runtime-contract/api-anthropic-execution.yaml -i "{\"goal\":\"生成一个 Anthropic API 执行计划\"}"
 ```
 
 ## Phase 1 Focus

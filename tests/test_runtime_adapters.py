@@ -1,6 +1,14 @@
 import asyncio
+import shutil
+from pathlib import Path
+from uuid import uuid4
 
 from agentgraph.runtime import (
+    ChatSessionCreateRequest,
+    FileChatSessionStore,
+    FileCheckpointStore,
+    FileRequestContextStore,
+    FileRunStore,
     InMemoryCheckpointStore,
     ReferenceWritebackAdapter,
     ResumeRequest,
@@ -9,6 +17,11 @@ from agentgraph.runtime import (
     get_official_example,
     load_official_workflow,
 )
+
+def make_local_test_dir(prefix: str) -> Path:
+    path = Path.home() / ".codex" / "memories" / "agentgraph-test-output" / f"{prefix}-{uuid4().hex[:8]}"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def build_service_with_reference_adapter():
@@ -125,3 +138,83 @@ def test_checkpoint_store_supports_resume_across_runtime_instances_with_register
     assert resumed.run.status == "succeeded"
     assert resumed.run.metadata["resumed_from_checkpoint_id"] == checkpoint.checkpoint_id
     assert [step.node_id for step in resumed.steps] == example.expected_resumed_nodes
+
+
+def test_file_backed_runtime_stores_support_run_listing_and_resume_across_instances():
+    root = make_local_test_dir("file-runtime-store")
+    checkpoint_store = FileCheckpointStore(root / "checkpoint-store")
+    run_store = FileRunStore(root / "runs")
+    request_context_store = FileRequestContextStore(root / "requests")
+
+    example = get_official_example("research-review-loop")
+    workflow = load_official_workflow(example)
+    request = RuntimeRequest(
+        workflow=workflow,
+        input=example.input,
+        metadata={"source_system": "pytest-file-store", **example.metadata},
+    )
+
+    service1 = RuntimeService(
+        checkpoint_store=checkpoint_store,
+        run_store=run_store,
+        request_context_store=request_context_store,
+    )
+    initial = asyncio.run(service1.run(request))
+    checkpoint = next(
+        item for item in initial.checkpoints if item.state.current_node_id == example.resume_from_checkpoint_node_id
+    )
+
+    service2 = RuntimeService(
+        checkpoint_store=checkpoint_store,
+        run_store=run_store,
+        request_context_store=request_context_store,
+    )
+    runs = service2.list_runs()
+    assert any(item.run_id == initial.run.run_id for item in runs)
+    persisted = service2.get_run(initial.run.run_id)
+    assert persisted is not None
+    assert persisted.run.run_id == initial.run.run_id
+
+    resumed = asyncio.run(
+        service2.resume(
+            initial.run.run_id,
+            ResumeRequest(
+                checkpoint_id=checkpoint.checkpoint_id,
+                metadata={"source_system": "pytest-file-store-resume"},
+            ),
+        )
+    )
+
+    assert resumed.run.status == "succeeded"
+    assert resumed.run.metadata["resumed_from_checkpoint_id"] == checkpoint.checkpoint_id
+    assert [step.node_id for step in resumed.steps] == example.expected_resumed_nodes
+    shutil.rmtree(root, ignore_errors=True)
+
+
+def test_file_chat_session_store_supports_cross_instance_listing_and_readback():
+    root = make_local_test_dir("file-chat-store")
+    chat_session_store = FileChatSessionStore(root / "chat" / "sessions")
+
+    service1 = RuntimeService(chat_session_store=chat_session_store)
+    session = service1.create_chat_session(
+        ChatSessionCreateRequest(
+            title="Persisted Chat",
+            executor={
+                "kind": "cli",
+                "provider": "generic",
+                "command": "python",
+                "args": ["-c", "print('unused')"],
+                "stdin": "none",
+                "parse": "text",
+            },
+            metadata={"source_system": "pytest-chat-store"},
+        )
+    )
+
+    service2 = RuntimeService(chat_session_store=chat_session_store)
+    sessions = service2.list_chat_sessions()
+    assert any(item.session_id == session.session.session_id for item in sessions)
+    restored = service2.get_chat_session(session.session.session_id)
+    assert restored is not None
+    assert restored.session.session_id == session.session.session_id
+    shutil.rmtree(root, ignore_errors=True)

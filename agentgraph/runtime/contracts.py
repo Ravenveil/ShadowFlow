@@ -99,6 +99,14 @@ class WorkflowDefinition(BaseModel):
             if isinstance(artifact_config, dict) and "writeback" in artifact_config:
                 _validate_writeback_channel_config("artifact", artifact_config["writeback"], f"node {node.id} artifact")
 
+            executor_config = node.config.get("executor")
+            if executor_config is not None:
+                if not isinstance(executor_config, dict):
+                    raise ValueError(f"node {node.id} executor must be an object")
+                executor_kind = executor_config.get("kind")
+                if executor_kind not in {"cli", "api"}:
+                    raise ValueError(f"node {node.id} executor.kind must be one of ['api', 'cli']")
+
             if node.type != "control.parallel":
                 continue
 
@@ -249,3 +257,116 @@ class WorkflowValidationResult(BaseModel):
 class ResumeRequest(BaseModel):
     checkpoint_id: str
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RunSummary(BaseModel):
+    run_id: str
+    request_id: str
+    workflow_id: str
+    status: Literal["accepted", "validated", "running", "succeeded", "failed", "cancelled", "checkpointed", "waiting"]
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    current_step_id: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkflowGraphNode(BaseModel):
+    id: str
+    label: str
+    kind: str
+    type: str
+    entrypoint: bool = False
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkflowGraphEdge(BaseModel):
+    from_id: str
+    to_id: str
+    type: str
+    condition: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkflowGraph(BaseModel):
+    workflow_id: str
+    name: str
+    entrypoint: str
+    nodes: List[WorkflowGraphNode] = Field(default_factory=list)
+    edges: List[WorkflowGraphEdge] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RunGraphNode(BaseModel):
+    id: str
+    label: str
+    kind: str
+    type: str
+    status: Literal["pending", "running", "succeeded", "failed", "skipped", "cancelled", "not_started"] = "not_started"
+    step_id: Optional[str] = None
+    index: Optional[int] = None
+    entrypoint: bool = False
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RunGraph(BaseModel):
+    run_id: str
+    workflow_id: str
+    status: str
+    entrypoint: str
+    nodes: List[RunGraphNode] = Field(default_factory=list)
+    edges: List[WorkflowGraphEdge] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatMessage(BaseModel):
+    message_id: str = Field(default_factory=lambda: f"msg-{uuid4().hex[:12]}")
+    role: Literal["system", "user", "assistant"]
+    content: str
+    created_at: datetime = Field(default_factory=utc_now)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatSessionRecord(BaseModel):
+    session_id: str
+    title: Optional[str] = None
+    status: Literal["active", "archived"] = "active"
+    executor: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatSession(BaseModel):
+    session: ChatSessionRecord
+    messages: List[ChatMessage] = Field(default_factory=list)
+
+
+class ChatSessionCreateRequest(BaseModel):
+    title: Optional[str] = None
+    executor: Dict[str, Any]
+    system_prompt: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_executor(self) -> "ChatSessionCreateRequest":
+        if not isinstance(self.executor, dict):
+            raise ValueError("executor must be an object")
+        kind = self.executor.get("kind")
+        if kind not in {"cli", "api"}:
+            raise ValueError("executor.kind must be one of ['api', 'cli']")
+        return self
+
+
+class ChatMessageRequest(BaseModel):
+    content: str
+    context: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatTurnResult(BaseModel):
+    session: ChatSessionRecord
+    user_message: ChatMessage
+    assistant_message: ChatMessage
+    response_text: str
+    raw_output: Dict[str, Any] = Field(default_factory=dict)
+    trace: List[Dict[str, Any]] = Field(default_factory=list)
