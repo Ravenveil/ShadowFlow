@@ -177,6 +177,10 @@ class CliExecutor(BaseExecutor):
                 raise ValueError("executor.env must be a string map")
             env = {**os.environ, **raw_env}
 
+        # claude CLI refuses to run inside a Claude Code session unless CLAUDECODE is unset
+        if provider == "claude" and "CLAUDECODE" in os.environ:
+            env = {k: v for k, v in (env or os.environ).items() if k != "CLAUDECODE"}
+
         invocation["env"] = env
         invocation["cwd"] = config.get("cwd")
         return invocation
