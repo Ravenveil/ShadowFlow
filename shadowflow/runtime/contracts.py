@@ -526,6 +526,10 @@ class ActivationTrainingSample(BaseModel):
     feedback_ids: List[str] = Field(default_factory=list)
     reward_hints: Dict[str, float] = Field(default_factory=dict)
     signals: Dict[str, Any] = Field(default_factory=dict)
+    # Phase 2: assembly-level wire-back fields.
+    # Populated when the workflow was produced by AssemblyCompiler from a goal.
+    assembly_block_id: Optional[str] = None
+    assembly_goal: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 

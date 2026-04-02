@@ -1458,6 +1458,11 @@ class AssemblyCompiler:
                         }
                         for block in assembly.blocks
                     ],
+                    # Phase 2 wire-back: block_id→node_id mapping for
+                    # ActivationTrainingSample assembly field population.
+                    "assembly_block_node_map": {
+                        block.ref: block.id for block in assembly.blocks
+                    },
                 },
             }
         )

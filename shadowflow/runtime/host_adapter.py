@@ -7,7 +7,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from shadowflow.runtime.checkpoint_store import BaseCheckpointStore, InMemoryCheckpointStore
-from shadowflow.runtime.contracts import ArtifactRef, CheckpointRef, RunResult, utc_now
+from shadowflow.runtime.contracts import ArtifactRef, CheckpointRef, ExecutionFeedbackRecord, RunResult, utc_now
 
 
 WritebackTarget = Literal["host", "docs", "memory", "graph", "zerog"]
@@ -41,6 +41,12 @@ class BaseWritebackAdapter:
         result: RunResult,
         checkpoint_store: Optional[BaseCheckpointStore] = None,
     ) -> List[WritebackReceipt]:
+        raise NotImplementedError
+
+    def persist_feedback(
+        self,
+        feedback: ExecutionFeedbackRecord,
+    ) -> WritebackReceipt:
         raise NotImplementedError
 
 

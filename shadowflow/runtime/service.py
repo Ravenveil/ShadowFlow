@@ -1745,6 +1745,12 @@ class RuntimeService:
                 continue
             feedback_by_step_id.setdefault(record.step_id, []).append(record)
 
+        # Phase 2: assembly wire-back — read block→node mapping from run metadata
+        assembly_block_node_map: Dict[str, str] = result.run.metadata.get("assembly_block_node_map", {})
+        # Invert: node_id → block_ref for lookup
+        node_to_block: Dict[str, str] = {node_id: block_ref for block_ref, node_id in assembly_block_node_map.items()}
+        assembly_goal: Optional[str] = result.run.metadata.get("assembly_goal")
+
         samples: List[ActivationTrainingSample] = []
         for step in result.steps:
             activation = activations_by_step_id.get(step.step_id)
@@ -1788,6 +1794,8 @@ class RuntimeService:
                     feedback_ids=[record.feedback_id for record in feedback_records],
                     reward_hints=reward_hints,
                     signals=feedback_records[-1].signals if feedback_records else {},
+                    assembly_block_id=node_to_block.get(step.node_id),
+                    assembly_goal=assembly_goal if node_to_block else None,
                     metadata={
                         "activation_id": activation.activation_id,
                         "activation_tags": activation.tags,
