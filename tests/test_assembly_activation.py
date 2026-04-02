@@ -276,6 +276,68 @@ def test_cli_assemble_goal_exits_1_on_incomplete():
 
 
 # ---------------------------------------------------------------------------
+# Step A — assemble --goal --compile (one-shot goal → WorkflowDefinition)
+# ---------------------------------------------------------------------------
+
+def test_cli_assemble_goal_with_compile_outputs_workflow():
+    """When --compile --provider --executor-kind are given, output a full WorkflowDefinition."""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "shadowflow.cli",
+            "assemble",
+            "--goal",
+            "plan and execute the task",
+            "--compile",
+            "--provider",
+            "claude",
+            "--executor-kind",
+            "cli",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    # Should be a compiled WorkflowDefinition
+    assert "workflow_id" in payload
+    assert "nodes" in payload
+    assert "entrypoint" in payload
+    # Should carry assembly metadata
+    assert payload["metadata"]["assembly_goal"] == "plan and execute the task"
+    assert "assembly_block_node_map" in payload["metadata"]
+
+
+def test_cli_assemble_compile_incomplete_goal_exits_1():
+    """--compile with an OOD goal should still exit 1."""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "shadowflow.cli",
+            "assemble",
+            "--goal",
+            "xyzzy frobnicate quux",
+            "--compile",
+            "--provider",
+            "claude",
+            "--executor-kind",
+            "cli",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 1
+    payload = json.loads(completed.stdout)
+    assert payload["complete"] is False
+
+
+# ---------------------------------------------------------------------------
 # Step 7 — End-to-end: assemble → compile → WorkflowDefinition
 # ---------------------------------------------------------------------------
 

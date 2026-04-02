@@ -339,17 +339,34 @@ async def registry_list_command(registry_root: str, kind: str) -> int:
     return 0
 
 
-async def assemble_goal_command(goal: str) -> int:
+async def assemble_goal_command(
+    goal: str,
+    *,
+    compile: bool = False,
+    provider: str | None = None,
+    executor_kind: str | None = None,
+) -> int:
     """
     Catalog-level activation: given a goal string, return ActivationResult +
-    a partial WorkflowAssemblySpec (blocks + links). Does NOT compile to
-    WorkflowDefinition — compile requires knowing which agent/executor runs
-    each block, which is a separate concern.
+    a partial WorkflowAssemblySpec (blocks + links).
+
+    With --compile --provider --executor-kind: go one step further and produce
+    a full WorkflowDefinition by auto-binding a default agent to every
+    agent-kind block. This is the "one-shot goal → executable workflow" path.
 
     Exit code 0 if complete=True (all required capabilities covered).
     Exit code 1 if complete=False (prints missing_capabilities).
     """
-    from shadowflow.highlevel import build_builtin_block_catalog, WorkflowAssemblySpec, WorkflowAssemblyBlockSpec
+    from shadowflow.highlevel import (
+        AgentSpec,
+        AssemblyCompiler,
+        ExecutorProfileSpec,
+        RoleSpec,
+        SpecRegistry,
+        WorkflowAssemblyBlockSpec,
+        WorkflowAssemblySpec,
+        build_builtin_block_catalog,
+    )
     from shadowflow.assembly.activation import ActivationSelector, ConnectionResolver
 
     catalog = build_builtin_block_catalog()
@@ -359,30 +376,66 @@ async def assemble_goal_command(goal: str) -> int:
     activation = selector.select(goal, catalog)
     links = resolver.resolve(activation.candidates)
 
+    if not activation.complete:
+        output = {
+            "complete": False,
+            "missing_capabilities": activation.missing_capabilities,
+            "fallback_policy": activation.fallback_policy,
+            "candidates": [c.model_dump(mode="json") for c in activation.candidates],
+            "assembly": None,
+        }
+        print(json.dumps(output, ensure_ascii=False, indent=2))
+        return 1
+
+    # Build assembly blocks — bind default agent when compiling
+    default_agent_id = "__default_agent__" if compile else None
     assembly_blocks = [
-        WorkflowAssemblyBlockSpec(id=c.block_id, ref=c.block_id)
+        WorkflowAssemblyBlockSpec(
+            id=c.block_id,
+            ref=c.block_id,
+            agent=default_agent_id if catalog[c.block_id].compile.node_kind == "agent" else None,
+        )
         for c in activation.candidates
     ]
 
-    assembly: Any = None
-    if assembly_blocks:
-        assembly = WorkflowAssemblySpec(
-            assembly_id="assembled",
-            name=f"assembled: {goal[:60]}",
-            goal=goal,
-            blocks=assembly_blocks,
-            links=links,
-        ).model_dump(mode="json", by_alias=True)
+    assembly = WorkflowAssemblySpec(
+        assembly_id="assembled",
+        name=f"assembled: {goal[:60]}",
+        goal=goal,
+        blocks=assembly_blocks,
+        links=links,
+    )
 
-    output = {
-        "complete": activation.complete,
-        "missing_capabilities": activation.missing_capabilities,
-        "fallback_policy": activation.fallback_policy,
-        "candidates": [c.model_dump(mode="json") for c in activation.candidates],
-        "assembly": assembly,
-    }
-    print(json.dumps(output, ensure_ascii=False, indent=2))
-    return 0 if activation.complete else 1
+    if not compile:
+        output = {
+            "complete": True,
+            "missing_capabilities": [],
+            "fallback_policy": activation.fallback_policy,
+            "candidates": [c.model_dump(mode="json") for c in activation.candidates],
+            "assembly": assembly.model_dump(mode="json", by_alias=True),
+        }
+        print(json.dumps(output, ensure_ascii=False, indent=2))
+        return 0
+
+    # --compile mode: create an in-memory registry with a default agent + role
+    provider = provider or "claude"
+    executor_kind = executor_kind or "cli"
+    default_role = RoleSpec(role_id="__default_role__", version="0.1", name="Default Worker")
+    default_agent = AgentSpec(
+        agent_id="__default_agent__",
+        version="0.1",
+        name="Default Agent",
+        role="__default_role__",
+        executor=ExecutorProfileSpec(kind=executor_kind, provider=provider),
+    )
+    registry = SpecRegistry(
+        roles={"__default_role__": default_role},
+        agents={"__default_agent__": default_agent},
+    )
+    compiler = AssemblyCompiler(registry)
+    workflow = compiler.compile(assembly)
+    print(json.dumps(workflow.model_dump(mode="json"), ensure_ascii=False, indent=2))
+    return 0
 
 
 async def registry_get_command(registry_root: str, kind: str, spec_id: str) -> int:
@@ -1008,6 +1061,9 @@ def main():
 
     assemble_parser = subparsers.add_parser('assemble', help='Assemble a workflow from a goal using catalog-level activation')
     assemble_parser.add_argument('--goal', required=True, help='Natural-language goal description')
+    assemble_parser.add_argument('--compile', action='store_true', default=False, help='Compile to a full WorkflowDefinition (requires --provider and --executor-kind)')
+    assemble_parser.add_argument('--provider', default=None, help='Executor provider (e.g. claude, openai, ollama)')
+    assemble_parser.add_argument('--executor-kind', choices=['cli', 'api'], default=None, dest='executor_kind', help='Executor kind')
 
     args = parser.parse_args()
     
@@ -1182,7 +1238,12 @@ def main():
         use_stdio = not args.http
         mcp_main(stdio=use_stdio, host=args.host, port=args.port)
     elif args.command == 'assemble':
-        sys.exit(asyncio.run(assemble_goal_command(args.goal)))
+        sys.exit(asyncio.run(assemble_goal_command(
+            args.goal,
+            compile=args.compile,
+            provider=args.provider,
+            executor_kind=args.executor_kind,
+        )))
     else:
         parser.print_help()
 
