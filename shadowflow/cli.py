@@ -438,6 +438,131 @@ async def assemble_goal_command(
     return 0
 
 
+async def do_goal_command(
+    goal: str,
+    *,
+    provider: str = "codex",
+    executor_kind: str = "cli",
+    cwd: str | None = None,
+    context: str | None = None,
+    writeback: str = "reference",
+    export_training: bool = False,
+) -> int:
+    """
+    One-shot: assemble → compile → execute a goal end-to-end.
+
+    This is the "give it a task and it runs" command:
+      shadowflow do "analyze the data and generate a report" --cwd /path/to/project --provider codex
+    """
+    from shadowflow.highlevel import (
+        AgentSpec,
+        AssemblyCompiler,
+        ExecutorProfileSpec,
+        RoleSpec,
+        SpecRegistry,
+        WorkflowAssemblyBlockSpec,
+        WorkflowAssemblySpec,
+        build_builtin_block_catalog,
+    )
+    from shadowflow.assembly.activation import ActivationSelector, ConnectionResolver
+    from shadowflow.runtime.contracts import RuntimeRequest
+    from shadowflow.runtime.service import RuntimeService
+
+    catalog = build_builtin_block_catalog()
+    selector = ActivationSelector()
+    resolver = ConnectionResolver()
+
+    # Step 1: Assemble
+    activation = selector.select(goal, catalog)
+
+    if not activation.complete:
+        print(json.dumps({
+            "status": "failed",
+            "reason": "assembly_incomplete",
+            "missing_capabilities": activation.missing_capabilities,
+            "fallback_policy": activation.fallback_policy,
+        }, ensure_ascii=False, indent=2))
+        return 1
+
+    links = resolver.resolve(activation.candidates)
+
+    # Step 2: Compile with default agent (pass cwd into executor config)
+    executor_config: Dict[str, Any] = {"kind": executor_kind, "provider": provider}
+    if cwd:
+        executor_config["cwd"] = cwd
+
+    default_role = RoleSpec(role_id="__do_role__", version="0.1", name="Do Worker")
+    default_agent = AgentSpec(
+        agent_id="__do_agent__",
+        version="0.1",
+        name="Do Agent",
+        role="__do_role__",
+        executor=ExecutorProfileSpec(**executor_config),
+    )
+
+    assembly_blocks = [
+        WorkflowAssemblyBlockSpec(
+            id=c.block_id,
+            ref=c.block_id,
+            agent="__do_agent__" if catalog[c.block_id].compile.node_kind == "agent" else None,
+        )
+        for c in activation.candidates
+    ]
+
+    assembly = WorkflowAssemblySpec(
+        assembly_id="do",
+        name=f"do: {goal[:60]}",
+        goal=goal,
+        blocks=assembly_blocks,
+        links=links,
+    )
+
+    registry = SpecRegistry(
+        roles={"__do_role__": default_role},
+        agents={"__do_agent__": default_agent},
+    )
+    workflow = AssemblyCompiler(registry).compile(assembly)
+
+    # Step 3: Execute
+    input_payload: Dict[str, Any] = {"goal": goal}
+    if context:
+        input_payload["context"] = context
+    if cwd:
+        input_payload["project_path"] = cwd
+
+    request = RuntimeRequest(
+        workflow=workflow,
+        input=input_payload,
+        metadata={
+            "source_system": "shadowflow_do",
+            "assembly_goal": workflow.metadata.get("assembly_goal", goal),
+            "assembly_block_node_map": workflow.metadata.get("assembly_block_node_map", {}),
+        },
+    )
+
+    runtime_service = _build_runtime_service(writeback_mode=writeback)
+    result = await runtime_service.run(request)
+
+    # Step 4: Output
+    output: Dict[str, Any] = {
+        "status": "completed",
+        "goal": goal,
+        "blocks": [c.block_id for c in activation.candidates],
+        "steps": len(result.steps),
+        "final_output": result.final_output,
+    }
+    if result.errors:
+        output["errors"] = result.errors
+
+    # Step 5: Optional training data export
+    if export_training:
+        dataset = runtime_service.export_activation_training_dataset(result.run.run_id)
+        output["training_samples"] = len(dataset.samples)
+
+    print(json.dumps(output, ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
 async def registry_get_command(registry_root: str, kind: str, spec_id: str) -> int:
     registry = SpecRegistry.load_from_root(registry_root)
     item = registry.get_kind(kind, spec_id)
@@ -1065,6 +1190,15 @@ def main():
     assemble_parser.add_argument('--provider', default=None, help='Executor provider (e.g. claude, openai, ollama)')
     assemble_parser.add_argument('--executor-kind', choices=['cli', 'api'], default=None, dest='executor_kind', help='Executor kind')
 
+    do_parser = subparsers.add_parser('do', help='One-shot: assemble + compile + execute a goal end-to-end')
+    do_parser.add_argument('goal', help='Natural-language goal description')
+    do_parser.add_argument('--provider', default='codex', help='Executor provider (default: codex)')
+    do_parser.add_argument('--executor-kind', choices=['cli', 'api'], default='cli', dest='executor_kind', help='Executor kind')
+    do_parser.add_argument('--cwd', default=None, help='Working directory for executor (e.g. path to target project)')
+    do_parser.add_argument('--context', default=None, help='Extra context string to pass to executor')
+    do_parser.add_argument('--writeback', choices=['reference', 'markdown'], default='reference')
+    do_parser.add_argument('--export-training', action='store_true', default=False, dest='export_training', help='Export training samples after execution')
+
     args = parser.parse_args()
     
     if args.command == 'validate':
@@ -1243,6 +1377,16 @@ def main():
             compile=args.compile,
             provider=args.provider,
             executor_kind=args.executor_kind,
+        )))
+    elif args.command == 'do':
+        sys.exit(asyncio.run(do_goal_command(
+            args.goal,
+            provider=args.provider,
+            executor_kind=args.executor_kind,
+            cwd=args.cwd,
+            context=args.context,
+            writeback=args.writeback,
+            export_training=args.export_training,
         )))
     else:
         parser.print_help()

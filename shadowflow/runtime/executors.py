@@ -224,6 +224,9 @@ class CliExecutor(BaseExecutor):
             "--json",
             "-",
         ]
+        approval_mode = config.get("approval_mode", "full-auto")
+        if approval_mode == "full-auto":
+            command.append("--full-auto")
         model = config.get("model")
         if isinstance(model, str) and model:
             command.extend(["--model", model])
