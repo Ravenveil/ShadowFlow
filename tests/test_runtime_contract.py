@@ -10,7 +10,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from agentgraph.runtime import (
+from shadowflow.runtime import (
     ChatMessageRequest,
     ChatSessionCreateRequest,
     ResumeRequest,
@@ -20,13 +20,13 @@ from agentgraph.runtime import (
     get_official_example,
     load_official_workflow,
 )
-from agentgraph.server import app
+from shadowflow.server import app
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def make_local_test_dir(prefix: str) -> Path:
-    path = Path.home() / ".codex" / "memories" / "agentgraph-test-output" / f"{prefix}-{uuid4().hex[:8]}"
+    path = Path.home() / ".codex" / "memories" / "shadowflow-test-output" / f"{prefix}-{uuid4().hex[:8]}"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -478,12 +478,32 @@ def test_fastapi_adapter_boundary_supports_run_checkpoint_and_resume():
 
     assert run_response.status_code == 200
     payload = run_response.json()
-    assert sorted(payload.keys()) == ["artifacts", "checkpoints", "errors", "final_output", "run", "steps", "trace"]
+    assert sorted(payload.keys()) == [
+        "activation_candidates",
+        "activations",
+        "artifacts",
+        "checkpoints",
+        "errors",
+        "feedback",
+        "final_output",
+        "handoffs",
+        "memory_events",
+        "run",
+        "steps",
+        "tasks",
+        "trace",
+    ]
     assert payload["run"]["workflow_id"] == example.id
     assert payload["run"]["status"] == "succeeded"
     assert isinstance(payload["steps"], list) and payload["steps"]
+    assert isinstance(payload["tasks"], list) and payload["tasks"]
     assert isinstance(payload["artifacts"], list)
     assert isinstance(payload["checkpoints"], list)
+    assert isinstance(payload["handoffs"], list)
+    assert isinstance(payload["activations"], list)
+    assert isinstance(payload["activation_candidates"], list)
+    assert isinstance(payload["feedback"], list)
+    assert isinstance(payload["memory_events"], list)
     assert isinstance(payload["trace"], list)
     assert isinstance(payload["final_output"], dict)
     assert payload["checkpoints"][0]["writeback"]["target"] == "memory"
@@ -603,6 +623,25 @@ def test_runtime_service_exports_workflow_graph_and_chat_session():
 
 def test_fastapi_exposes_runs_graph_and_chat_endpoints():
     client = TestClient(app)
+    child_workflow_payload = {
+        "workflow_id": "api-child-workflow",
+        "version": "0.1",
+        "name": "API Child Workflow",
+        "entrypoint": "child",
+        "nodes": [
+            {
+                "id": "child",
+                "kind": "agent",
+                "type": "agent.execute",
+                "config": {
+                    "role": "child",
+                    "message_template": "[child] delegated execution complete",
+                    "context_echo": ["repo"],
+                },
+            }
+        ],
+        "edges": [{"from": "child", "to": "END", "type": "final"}],
+    }
 
     graph_response = client.post("/workflow/graph", json=WORKFLOW_PAYLOAD)
     assert graph_response.status_code == 200
@@ -631,6 +670,76 @@ def test_fastapi_exposes_runs_graph_and_chat_endpoints():
     run_graph_payload = run_graph_response.json()
     assert run_graph_payload["run_id"] == run_id
     assert any(node["id"] == "planner" and node["status"] == "succeeded" for node in run_graph_payload["nodes"])
+    assert run_graph_payload["projection_kind"] == "run_graph"
+    assert "activation_candidate_count" in run_graph_payload["summary"]
+    assert "activation_count" in run_graph_payload["summary"]
+    assert "feedback_count" in run_graph_payload["summary"]
+
+    child_run_response = client.post(
+        f"/runs/{run_id}/children",
+        json={
+            "workflow": child_workflow_payload,
+            "input": {"goal": "Spawn child from API"},
+            "context": {"repo": "ShadowFlow"},
+            "parent_step_id": run_payload["steps"][0]["step_id"],
+            "task_title": "API Child Task",
+            "handoff_goal": "Return delegated API findings.",
+        },
+    )
+    assert child_run_response.status_code == 200
+    child_run_payload = child_run_response.json()
+    assert child_run_payload["run"]["parent_run_id"] == run_id
+    assert child_run_payload["tasks"][0]["parent_task_id"] == run_payload["tasks"][0]["task_id"]
+
+    task_tree_response = client.get(f"/runs/{run_id}/task-tree")
+    assert task_tree_response.status_code == 200
+    task_tree_payload = task_tree_response.json()
+    assert task_tree_payload["projection_kind"] == "task_tree"
+    assert any(node["entity_type"] == "task" for node in task_tree_payload["nodes"])
+    assert any(edge["edge_type"] == "belongs_to_task" for edge in task_tree_payload["edges"])
+    assert task_tree_payload["summary"]["run_count"] == 2
+    assert "activation_candidate_count" in task_tree_payload["summary"]
+    assert "activation_count" in task_tree_payload["summary"]
+    assert "feedback_count" in task_tree_payload["summary"]
+    assert any(
+        edge["edge_type"] == "delegation"
+        and edge["from_id"] == run_id
+        and edge["to_id"] == child_run_payload["run"]["run_id"]
+        for edge in task_tree_payload["edges"]
+    )
+    assert "graph projection" in task_tree_payload["metadata"]["projection_note"]
+
+    artifact_lineage_response = client.get(f"/runs/{run_id}/artifact-lineage")
+    assert artifact_lineage_response.status_code == 200
+    artifact_lineage_payload = artifact_lineage_response.json()
+    assert artifact_lineage_payload["projection_kind"] == "artifact_lineage_graph"
+    assert any(node["entity_type"] == "artifact" for node in artifact_lineage_payload["nodes"])
+
+    memory_graph_response = client.get(f"/runs/{run_id}/memory-graph")
+    assert memory_graph_response.status_code == 200
+    memory_graph_payload = memory_graph_response.json()
+    assert memory_graph_payload["projection_kind"] == "memory_relation_graph"
+    assert any(node["entity_type"] == "memory_event" for node in memory_graph_payload["nodes"])
+    assert any(node["entity_type"] == "activation_candidate" for node in memory_graph_payload["nodes"])
+    assert any(node["entity_type"] == "activation" for node in memory_graph_payload["nodes"])
+    assert any(node["entity_type"] == "feedback_signal" for node in memory_graph_payload["nodes"])
+    assert any(edge["edge_type"] == "candidate_for_activation" for edge in memory_graph_payload["edges"])
+    assert any(edge["edge_type"] == "activates" for edge in memory_graph_payload["edges"])
+    assert any(edge["edge_type"] == "records_feedback" for edge in memory_graph_payload["edges"])
+
+    checkpoint_lineage_response = client.get(f"/runs/{run_id}/checkpoint-lineage")
+    assert checkpoint_lineage_response.status_code == 200
+    checkpoint_lineage_payload = checkpoint_lineage_response.json()
+    assert checkpoint_lineage_payload["projection_kind"] == "checkpoint_lineage_graph"
+    assert any(node["entity_type"] == "checkpoint" for node in checkpoint_lineage_payload["nodes"])
+
+    training_dataset_response = client.get(f"/runs/{run_id}/training-dataset")
+    assert training_dataset_response.status_code == 200
+    training_dataset_payload = training_dataset_response.json()
+    assert training_dataset_payload["dataset_kind"] == "activation_training_dataset"
+    assert training_dataset_payload["summary"]["sample_count"] >= 1
+    assert training_dataset_payload["samples"][0]["candidates"]
+    assert "scoring_breakdown" in training_dataset_payload["samples"][0]["candidates"][0]
 
     create_session_response = client.post(
         "/chat/sessions",
@@ -677,7 +786,7 @@ def test_cli_graph_command_exports_workflow_graph():
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "graph",
             "-w",
             "examples/runtime-contract/docs-gap-review.yaml",
@@ -700,7 +809,7 @@ def test_cli_chat_command_supports_single_turn_generic_executor():
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "chat",
             "--kind",
             "cli",
@@ -748,7 +857,7 @@ def test_cli_runs_checkpoints_and_resume_commands_support_persisted_runtime_root
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "run",
             "-w",
             "examples/runtime-contract/research-review-loop.yaml",
@@ -778,7 +887,7 @@ def test_cli_runs_checkpoints_and_resume_commands_support_persisted_runtime_root
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "runs",
             "list",
             "--root",
@@ -797,7 +906,7 @@ def test_cli_runs_checkpoints_and_resume_commands_support_persisted_runtime_root
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "runs",
             "get",
             "--run-id",
@@ -818,7 +927,7 @@ def test_cli_runs_checkpoints_and_resume_commands_support_persisted_runtime_root
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "runs",
             "graph",
             "--run-id",
@@ -840,7 +949,7 @@ def test_cli_runs_checkpoints_and_resume_commands_support_persisted_runtime_root
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "checkpoints",
             "get",
             "--checkpoint-id",
@@ -861,7 +970,7 @@ def test_cli_runs_checkpoints_and_resume_commands_support_persisted_runtime_root
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "resume",
             "--run-id",
             run_id,
@@ -891,7 +1000,7 @@ def test_cli_sessions_commands_support_persisted_chat_sessions():
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "chat",
             "--kind",
             "cli",
@@ -932,7 +1041,7 @@ def test_cli_sessions_commands_support_persisted_chat_sessions():
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "sessions",
             "list",
             "--root",
@@ -951,7 +1060,7 @@ def test_cli_sessions_commands_support_persisted_chat_sessions():
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "sessions",
             "get",
             "--session-id",
@@ -969,3 +1078,4 @@ def test_cli_sessions_commands_support_persisted_chat_sessions():
     assert session_payload["session"]["session_id"] == session_id
     assert [item["role"] for item in session_payload["messages"]] == ["user", "assistant"]
     shutil.rmtree(runtime_root, ignore_errors=True)
+

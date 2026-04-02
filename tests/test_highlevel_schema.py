@@ -3,14 +3,23 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
-from agentgraph.highlevel import SpecRegistry, TemplateCompiler, summarize_workflow_definition
-from agentgraph.runtime import WorkflowDefinition
+from shadowflow.highlevel import AssemblyCompiler, SpecRegistry, TemplateCompiler, WorkflowAssemblySpec, summarize_workflow_definition
+from shadowflow.runtime import WorkflowDefinition
 
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_REGISTRY_ROOT = ROOT / "examples" / "highlevel" / "minimal-registry"
+
+
+def _write_yaml(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
 
 
 def test_spec_registry_loads_example_highlevel_specs():
@@ -243,6 +252,238 @@ def test_template_policy_matrix_and_stages_compile_into_node_config_and_summary(
     assert workflow_summary["stage_ids"] == ["review"]
     assert workflow_summary["lanes"] == ["quality"]
     assert workflow_summary["agents"][0]["policy"]["requires_confirmation"] is True
+
+
+def test_template_local_activation_compiles_into_node_config_and_summary(tmp_path):
+    registry_root = tmp_path / "registry"
+    for dirname in ("tools", "skills", "roles", "agents", "templates"):
+        (registry_root / dirname).mkdir(parents=True, exist_ok=True)
+
+    (registry_root / "tools" / "filesystem.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "tool_id": "filesystem",
+                "version": "0.1",
+                "kind": "builtin",
+                "name": "Filesystem",
+                "runtime": {"builtin": "filesystem"},
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    (registry_root / "skills" / "review.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "skill_id": "review",
+                "version": "0.1",
+                "name": "Review",
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    (registry_root / "roles" / "reviewer.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "role_id": "reviewer",
+                "version": "0.1",
+                "name": "Reviewer",
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    (registry_root / "agents" / "reviewer_agent.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "agent_id": "reviewer_agent",
+                "version": "0.1",
+                "name": "Reviewer Agent",
+                "role": "reviewer",
+                "skills": ["review"],
+                "tools": ["filesystem"],
+                "executor": {"kind": "cli", "provider": "claude"},
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    (registry_root / "agents" / "delegate_agent.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "agent_id": "delegate_agent",
+                "version": "0.1",
+                "name": "Delegate Agent",
+                "role": "reviewer",
+                "skills": ["review"],
+                "tools": ["filesystem"],
+                "executor": {"kind": "cli", "provider": "claude"},
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    (registry_root / "templates" / "activation_review.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "template_id": "activation_review",
+                "version": "0.1",
+                "name": "Activation Review",
+                "activation": {
+                    "enabled": True,
+                    "default_mode": "local",
+                    "signal_sources": ["goal", "feedback"],
+                    "selection_threshold": 0.7,
+                    "top_k": 1,
+                    "budget": 1,
+                    "signal_weights": {"goal": 0.2, "feedback": 0.4},
+                    "candidate_type_weights": {"delegate_target": 1.2, "subgoal": 0.8},
+                },
+                "agents": [
+                    {
+                        "id": "reviewer",
+                        "ref": "reviewer_agent",
+                        "local_activation": {
+                            "mode": "local",
+                            "tags": ["quality", "docs"],
+                            "activate_when": ["goal:docs", "feedback:risk"],
+                            "delegate_candidates": ["delegate"],
+                            "subgoal_triggers": ["gap:missing-context"],
+                            "review_gates": ["artifact:needs_review"],
+                            "retry_gates": ["feedback:rework"],
+                        },
+                    },
+                    {
+                        "id": "delegate",
+                        "ref": "delegate_agent",
+                    },
+                ],
+                "flow": {
+                    "entrypoint": "reviewer",
+                    "edges": [
+                        {"from": "reviewer", "to": "delegate"},
+                        {"from": "delegate", "to": "END", "type": "final"},
+                    ],
+                },
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+
+    registry = SpecRegistry.load_from_root(registry_root)
+    workflow = TemplateCompiler(registry).compile(registry.get_template("activation_review"))
+    node = next(node for node in workflow.nodes if node.id == "reviewer")
+    summary = summarize_workflow_definition(workflow)
+
+    assert workflow.metadata["template_activation"]["default_mode"] == "local"
+    assert workflow.metadata["template_activation"]["selection_threshold"] == 0.7
+    assert workflow.metadata["template_activation"]["top_k"] == 1
+    assert workflow.metadata["template_activation"]["budget"] == 1
+    assert workflow.metadata["template_activation"]["signal_weights"]["goal"] == 0.2
+    assert workflow.metadata["template_activation"]["candidate_type_weights"]["delegate_target"] == 1.2
+    assert node.config["local_activation"]["mode"] == "local"
+    assert node.config["local_activation"]["delegate_candidates"] == ["delegate"]
+    assert node.metadata["activation_mode"] == "local"
+    assert node.metadata["activation_tags"] == ["quality", "docs"]
+    assert summary["activation_modes"] == ["always", "local"]
+    assert summary["activation_tags"] == ["docs", "quality"]
+    assert summary["delegate_candidates"] == ["delegate"]
+    assert summary["agents"][0]["local_activation"]["mode"] == "local"
+
+
+def test_template_local_activation_rejects_unknown_delegate_candidate(tmp_path):
+    registry_root = tmp_path / "registry"
+    for dirname in ("tools", "skills", "roles", "agents", "templates"):
+        (registry_root / dirname).mkdir(parents=True, exist_ok=True)
+
+    (registry_root / "tools" / "filesystem.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "tool_id": "filesystem",
+                "version": "0.1",
+                "kind": "builtin",
+                "name": "Filesystem",
+                "runtime": {"builtin": "filesystem"},
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    (registry_root / "skills" / "review.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "skill_id": "review",
+                "version": "0.1",
+                "name": "Review",
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    (registry_root / "roles" / "reviewer.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "role_id": "reviewer",
+                "version": "0.1",
+                "name": "Reviewer",
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    (registry_root / "agents" / "reviewer_agent.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "agent_id": "reviewer_agent",
+                "version": "0.1",
+                "name": "Reviewer Agent",
+                "role": "reviewer",
+                "skills": ["review"],
+                "tools": ["filesystem"],
+                "executor": {"kind": "cli", "provider": "claude"},
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    (registry_root / "templates" / "broken_activation.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "template_id": "broken_activation",
+                "version": "0.1",
+                "name": "Broken Activation",
+                "agents": [
+                    {
+                        "id": "reviewer",
+                        "ref": "reviewer_agent",
+                        "local_activation": {
+                            "mode": "local",
+                            "delegate_candidates": ["ghost"],
+                        },
+                    }
+                ],
+                "flow": {"entrypoint": "reviewer", "edges": [{"from": "reviewer", "to": "END", "type": "final"}]},
+            },
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="local_activation references unknown delegate candidates: ghost"):
+        SpecRegistry.load_from_root(registry_root)
 
 
 def test_template_compile_rejects_read_only_policy_for_write_capable_tool(tmp_path):
@@ -793,7 +1034,7 @@ def test_cli_compile_command_outputs_compiled_workflow_json():
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "compile",
             "--template",
             "docs-review-template",
@@ -820,7 +1061,7 @@ def test_cli_registry_commands_expose_example_registry():
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "registry",
             "counts",
             "--registry-root",
@@ -840,7 +1081,7 @@ def test_cli_registry_commands_expose_example_registry():
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "registry",
             "list",
             "--registry-root",
@@ -861,7 +1102,7 @@ def test_cli_registry_commands_expose_example_registry():
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "registry",
             "get",
             "--registry-root",
@@ -888,7 +1129,7 @@ def test_cli_init_commands_scaffold_specs_and_support_compile(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "init",
             "tool",
             "--registry-root",
@@ -909,7 +1150,7 @@ def test_cli_init_commands_scaffold_specs_and_support_compile(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "init",
             "role",
             "--registry-root",
@@ -928,7 +1169,7 @@ def test_cli_init_commands_scaffold_specs_and_support_compile(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "init",
             "skill",
             "--registry-root",
@@ -947,7 +1188,7 @@ def test_cli_init_commands_scaffold_specs_and_support_compile(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "init",
             "agent",
             "--registry-root",
@@ -972,7 +1213,7 @@ def test_cli_init_commands_scaffold_specs_and_support_compile(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "init",
             "template",
             "--registry-root",
@@ -995,7 +1236,7 @@ def test_cli_init_commands_scaffold_specs_and_support_compile(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "compile",
             "--template",
             "docs_review_template",
@@ -1021,7 +1262,7 @@ def test_cli_compile_supports_summary_json():
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "compile",
             "--template",
             "docs-review-template",
@@ -1053,7 +1294,7 @@ def test_cli_presets_list_and_init_workflow(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "presets",
             "list",
         ],
@@ -1070,7 +1311,7 @@ def test_cli_presets_list_and_init_workflow(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "patterns",
             "list",
         ],
@@ -1087,7 +1328,7 @@ def test_cli_presets_list_and_init_workflow(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "init",
             "workflow",
             "--registry-root",
@@ -1123,7 +1364,7 @@ def test_cli_init_workflow_supports_assignment_overrides(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "init",
             "workflow",
             "--registry-root",
@@ -1165,7 +1406,7 @@ def test_cli_role_presets_and_init_role_with_preset(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "role-presets",
             "list",
         ],
@@ -1182,7 +1423,7 @@ def test_cli_role_presets_and_init_role_with_preset(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "init",
             "role",
             "--registry-root",
@@ -1212,7 +1453,7 @@ def test_cli_scaffold_non_interactive_materializes_preset_and_compiles(tmp_path)
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "scaffold",
             "--registry-root",
             str(registry_root),
@@ -1253,7 +1494,7 @@ def test_cli_init_workflow_supports_task_kind_pattern_recommendation(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "init",
             "workflow",
             "--registry-root",
@@ -1290,7 +1531,7 @@ def test_cli_init_workflow_does_not_materialize_registry_when_output_exists(tmp_
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "init",
             "workflow",
             "--registry-root",
@@ -1323,7 +1564,7 @@ def test_cli_registry_export_and_import_round_trip(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "registry",
             "export",
             "--registry-root",
@@ -1344,7 +1585,7 @@ def test_cli_registry_export_and_import_round_trip(tmp_path):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "registry",
             "import",
             "--registry-root",
@@ -1361,3 +1602,205 @@ def test_cli_registry_export_and_import_round_trip(tmp_path):
     imported_registry = SpecRegistry.load_from_root(imported_root)
     assert "docs_reviewer" in imported_registry.agents
     assert "docs-review-template" in imported_registry.templates
+
+
+def test_spec_registry_loads_blocks_and_assemblies(tmp_path):
+    registry_root = tmp_path / "registry"
+    _write_yaml(
+        registry_root / "blocks" / "review_gate.yaml",
+        {
+            "block_id": "review_gate",
+            "kind": "control",
+            "type": "approval_gate",
+            "label": "Review Gate",
+            "compile": {
+                "node_kind": "node",
+                "node_type": "control.gate",
+            },
+        },
+    )
+    _write_yaml(
+        registry_root / "assemblies" / "delivery.yaml",
+        {
+            "assembly_id": "delivery",
+            "name": "Delivery Lane",
+            "blocks": [
+                {"id": "gate", "ref": "review_gate"},
+            ],
+            "links": [],
+        },
+    )
+
+    registry = SpecRegistry.load_from_root(registry_root)
+
+    assert "review_gate" in registry.blocks
+    assert "delivery" in registry.assemblies
+    assert registry.counts()["blocks"] == 1
+    assert registry.counts()["assemblies"] == 1
+
+
+def test_assembly_compiler_builds_template_and_workflow_definition(tmp_path):
+    registry_root = tmp_path / "registry"
+    for dirname in ("roles", "agents", "assemblies"):
+        (registry_root / dirname).mkdir(parents=True, exist_ok=True)
+
+    _write_yaml(
+        registry_root / "roles" / "planner.yaml",
+        {
+            "role_id": "planner",
+            "version": "0.1",
+            "name": "Planner",
+        },
+    )
+    _write_yaml(
+        registry_root / "roles" / "reviewer.yaml",
+        {
+            "role_id": "reviewer",
+            "version": "0.1",
+            "name": "Reviewer",
+        },
+    )
+    _write_yaml(
+        registry_root / "agents" / "planner_agent.yaml",
+        {
+            "agent_id": "planner_agent",
+            "version": "0.1",
+            "name": "Planner Agent",
+            "role": "planner",
+            "executor": {"kind": "cli", "provider": "claude"},
+        },
+    )
+    _write_yaml(
+        registry_root / "agents" / "reviewer_agent.yaml",
+        {
+            "agent_id": "reviewer_agent",
+            "version": "0.1",
+            "name": "Reviewer Agent",
+            "role": "reviewer",
+            "executor": {"kind": "cli", "provider": "claude"},
+        },
+    )
+    _write_yaml(
+        registry_root / "assemblies" / "delivery_lane.yaml",
+        {
+            "assembly_id": "delivery_lane",
+            "version": "0.1",
+            "name": "Delivery Lane",
+            "goal": "Ship a feature safely",
+            "entrypoint": "plan_step",
+            "blocks": [
+                {"id": "plan_step", "ref": "plan", "agent": "planner_agent"},
+                {"id": "review_step", "ref": "review", "agent": "reviewer_agent"},
+                {"id": "save_point", "ref": "checkpoint", "config": {"channel": "artifact"}},
+            ],
+            "links": [
+                {"from": "plan_step", "to": "review_step"},
+                {"from": "review_step", "to": "save_point"},
+                {"from": "save_point", "to": "END", "type": "final"},
+            ],
+        },
+    )
+
+    registry = SpecRegistry.load_from_root(registry_root)
+    assembly = registry.get_assembly("delivery_lane")
+    compiler = AssemblyCompiler(registry)
+
+    template = compiler.compile_to_template(assembly)
+    workflow = compiler.compile(assembly)
+
+    assert template.template_id == "delivery_lane"
+    assert [agent.id for agent in template.agents] == ["plan_step", "review_step"]
+    assert [node.id for node in template.nodes] == ["save_point"]
+    assert template.nodes[0].type == "checkpoint.write"
+    assert isinstance(workflow, WorkflowDefinition)
+    assert workflow.entrypoint == "plan_step"
+    assert {node.type for node in workflow.nodes} == {"agent.execute", "checkpoint.write"}
+    assert workflow.metadata["assembly_id"] == "delivery_lane"
+
+
+def test_assembly_compiler_materializes_delegate_child_template(tmp_path):
+    registry_root = tmp_path / "registry"
+    for dirname in ("roles", "agents", "templates", "assemblies"):
+        (registry_root / dirname).mkdir(parents=True, exist_ok=True)
+
+    _write_yaml(
+        registry_root / "roles" / "reviewer.yaml",
+        {
+            "role_id": "reviewer",
+            "version": "0.1",
+            "name": "Reviewer",
+        },
+    )
+    _write_yaml(
+        registry_root / "agents" / "reviewer_agent.yaml",
+        {
+            "agent_id": "reviewer_agent",
+            "version": "0.1",
+            "name": "Reviewer Agent",
+            "role": "reviewer",
+            "executor": {"kind": "cli", "provider": "claude"},
+            "prompt_template": "Review delegated work for {{goal}}",
+        },
+    )
+    _write_yaml(
+        registry_root / "templates" / "child_lane.yaml",
+        {
+            "template_id": "child_lane",
+            "version": "0.1",
+            "name": "Child Lane",
+            "parameters": {"goal": {"type": "string", "required": True}},
+            "agents": [{"id": "child_worker", "ref": "reviewer_agent"}],
+            "flow": {
+                "entrypoint": "child_worker",
+                "edges": [{"from": "child_worker", "to": "END", "type": "final"}],
+            },
+        },
+    )
+    _write_yaml(
+        registry_root / "assemblies" / "delegate_lane.yaml",
+        {
+            "assembly_id": "delegate_lane",
+            "version": "0.1",
+            "name": "Delegate Lane",
+            "parameters": {"goal": {"type": "string", "required": True}},
+            "blocks": [
+                {
+                    "id": "delegate_step",
+                    "ref": "delegate",
+                    "agent": "reviewer_agent",
+                    "assignment": {"handoff_goal": "Send child result back to parent"},
+                    "config": {"child_template": "child_lane", "context_mode": "inherit"},
+                }
+            ],
+            "links": [{"from": "delegate_step", "to": "END", "type": "final"}],
+        },
+    )
+
+    registry = SpecRegistry.load_from_root(registry_root)
+    assembly = registry.get_assembly("delegate_lane")
+    workflow = AssemblyCompiler(registry).compile(assembly, parameters={"goal": "Investigate regression"})
+    delegate_node = workflow.nodes[0]
+
+    assert delegate_node.type == "agent.execute"
+    assert delegate_node.config["delegated"]["workflow"]["workflow_id"] == "child_lane"
+    assert delegate_node.config["delegated"]["context_mode"] == "inherit"
+    assert delegate_node.config["delegated"]["handoff_goal"] == "Send child result back to parent"
+
+
+def test_workflow_assembly_rejects_cycle_by_default():
+    with pytest.raises(ValueError, match="allow_cycles is false"):
+        WorkflowAssemblySpec.model_validate(
+            {
+                "assembly_id": "cyclic",
+                "name": "Cyclic",
+                "blocks": [
+                    {"id": "a", "ref": "plan", "agent": "planner"},
+                    {"id": "b", "ref": "review", "agent": "reviewer"},
+                ],
+                "links": [
+                    {"from": "a", "to": "b"},
+                    {"from": "b", "to": "a"},
+                ],
+            }
+        )
+

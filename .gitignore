@@ -9,6 +9,8 @@ __pycache__/
 .claude/settings.local.json
 
 agentgraph.egg-info/
+shadowflow.egg-info/
+*.tgz
 dist/
 build/
 
@@ -26,3 +28,4 @@ simple_data_pipeline_workflow.json
 simple_test.py
 test_planner.py
 .opencode
+.gstack/

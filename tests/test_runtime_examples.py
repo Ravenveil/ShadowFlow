@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agentgraph.runtime import (
+from shadowflow.runtime import (
     OFFICIAL_EXAMPLES_MANIFEST,
     ResumeRequest,
     RuntimeRequest,
@@ -232,7 +232,7 @@ def test_official_examples_cli_validate(example):
         [
             sys.executable,
             "-m",
-            "agentgraph.cli",
+            "shadowflow.cli",
             "validate",
             "-w",
             str(example.workflow_path),
@@ -247,3 +247,4 @@ def test_official_examples_cli_validate(example):
     payload = json.loads(completed.stdout)
     assert payload["valid"] is True
     assert payload["workflow_id"] == example.id
+

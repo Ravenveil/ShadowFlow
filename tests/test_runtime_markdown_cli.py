@@ -3,8 +3,8 @@ import fnmatch
 import sys
 from pathlib import Path
 
-from agentgraph.cli import _build_runtime_service
-from agentgraph.runtime import FileCheckpointStore, MarkdownWritebackAdapter, RuntimeRequest, RuntimeService, WorkflowDefinition
+from shadowflow.cli import _build_runtime_service
+from shadowflow.runtime import FileCheckpointStore, MarkdownWritebackAdapter, RuntimeRequest, RuntimeService, WorkflowDefinition
 
 
 CLI_WORKFLOW_PAYLOAD = {
@@ -130,3 +130,4 @@ def test_cli_builds_markdown_runtime_service(monkeypatch):
     assert isinstance(service, RuntimeService)
     assert isinstance(service._writeback_adapter, MarkdownWritebackAdapter)
     assert isinstance(service._checkpoint_store, FileCheckpointStore)
+

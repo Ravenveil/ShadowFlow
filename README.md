@@ -1,4 +1,4 @@
-# AgentGraph
+# ShadowFlow
 
 A lightweight multi-agent orchestration runtime for contract-first workflows.
 
@@ -6,9 +6,9 @@ A lightweight multi-agent orchestration runtime for contract-first workflows.
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](docs/)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 
-## What AgentGraph Is
+## What ShadowFlow Is
 
-AgentGraph 当前阶段的正式定位是：
+ShadowFlow 当前阶段的正式定位是：
 
 - 一个独立的 runtime / schema / adapter 项目
 - 一个可被 CLI 与 HTTP API 调用的多智能体编排运行时
@@ -53,7 +53,7 @@ pip install -e .[dev]
 
 ```bash
 agentgraph --help
-python -m agentgraph.cli --help
+python -m shadowflow.cli --help
 ```
 
 更完整的前置条件、CLI provider、API key、writeback 说明见：
@@ -113,12 +113,12 @@ agentgraph run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}"
 使用 markdown writeback：
 
 ```bash
-agentgraph run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}" --writeback markdown --writeback-root ./agentgraph-runtime
+agentgraph run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}" --writeback markdown --writeback-root ./shadowflow-runtime
 ```
 
 说明：
 
-- 未显式传 `--writeback-root` / `--root` 时，CLI 会优先读取环境变量 `AGENTGRAPH_RUNTIME_ROOT`
+- 未显式传 `--writeback-root` / `--root` 时，CLI 会优先读取环境变量 `SHADOWFLOW_RUNTIME_ROOT`
 - 若未设置该环境变量，会回退到用户级 runtime 数据目录
 
 ### 4. Export Workflow Graph
@@ -166,7 +166,7 @@ agentgraph compile --template docs-review-template --registry-root examples/high
 单轮对话：
 
 ```bash
-agentgraph chat --kind cli --provider claude --parse claude-json --message "请用一句中文介绍 AgentGraph"
+agentgraph chat --kind cli --provider claude --parse claude-json --message "请用一句中文介绍 ShadowFlow"
 ```
 
 ### 8. Inspect Persisted Runtime Data
@@ -310,3 +310,4 @@ agentgraph run -w examples/runtime-contract/api-anthropic-execution.yaml -i "{\"
 - [ ] Example migration cleanup
 - [ ] Checkpoint recovery refinement
 - [ ] Legacy interface/test baseline cleanup
+

@@ -368,6 +368,24 @@ nodes:
 10. `agentgraph-shadow-wave-positioning-v1.md`
    记录 AgentGraph、Shadow 与 Wave 之间的定位判断：我们不做 Wave，而是让自己的 CLI / agent 工作流能够舒服地运行在 Wave 这类终端工作台中
 
+11. `shadowflow-shadow-cli-shadow-ui-boundary-v1.md`
+   改名为 `ShadowFlow` 后的职责边界文档，明确 `ShadowFlow / Shadow CLI / Shadow UI` 三层分工，并固定“ShadowFlow 聚焦引擎、用户侧 CLI 统一由 Shadow CLI 承接”的新边界
+
+12. `shadowflow-engine-scope-v1.md`
+   ShadowFlow 作为引擎的正式范围定义，明确当前该做的引擎能力和不该继续承担的产品壳能力
+
+13. `shadowflow-engine-task-list-v1.md`
+   基于引擎范围定义拆出的 P0/P1 任务清单，作为后续实现推进的执行入口
+
+14. `shadowflow-workflow-assembly-contract-v1.md`
+   把 ShadowFlow 从 pattern recommendation 推进为 workflow assembly 系统，明确 block catalog、assembly spec、constraint 与 recipe 的关系
+
+15. `shadowflow-language-strategy-v1.md`
+   明确 ShadowFlow 当前继续使用 Python 的判断，以及未来 Rust kernel / TypeScript 产品层的职责边界
+
+16. `shadowflow-towow-spontaneous-assembly-v1.md`
+   评估 ToWow/通爻在“自发协作 / 自发装配”上的启发，并判断它如何接到 ShadowFlow 的 assembly 主线
+
 ---
 
 ## 14. 最终结论

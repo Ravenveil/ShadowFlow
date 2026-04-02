@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agentgraph.runtime import RuntimeRequest, RuntimeService, WorkflowDefinition
-from agentgraph.runtime.executors import ApiExecutor, CliExecutor
+from shadowflow.runtime import RuntimeRequest, RuntimeService, WorkflowDefinition
+from shadowflow.runtime.executors import ApiExecutor, CliExecutor
 
 
 def test_cli_executor_runs_generic_subprocess_and_maps_result():
@@ -139,7 +139,7 @@ def test_claude_cli_provider_wrapper_uses_non_interactive_json(monkeypatch):
         captured["kwargs"] = kwargs
         return Completed()
 
-    monkeypatch.setattr("agentgraph.runtime.executors.subprocess.run", fake_run)
+    monkeypatch.setattr("shadowflow.runtime.executors.subprocess.run", fake_run)
 
     executor = CliExecutor()
     result = asyncio.run(
@@ -192,7 +192,7 @@ def test_codex_cli_provider_wrapper_uses_exec_jsonl(monkeypatch):
         captured["kwargs"] = kwargs
         return Completed()
 
-    monkeypatch.setattr("agentgraph.runtime.executors.subprocess.run", fake_run)
+    monkeypatch.setattr("shadowflow.runtime.executors.subprocess.run", fake_run)
 
     executor = CliExecutor()
     result = asyncio.run(
@@ -253,7 +253,7 @@ def test_api_executor_calls_openai_responses(monkeypatch):
             return FakeResponse()
 
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
-    monkeypatch.setattr("agentgraph.runtime.executors.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("shadowflow.runtime.executors.httpx.AsyncClient", FakeAsyncClient)
 
     executor = ApiExecutor()
     result = asyncio.run(
@@ -315,7 +315,7 @@ def test_api_executor_calls_anthropic_messages(monkeypatch):
             return FakeResponse()
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic-key")
-    monkeypatch.setattr("agentgraph.runtime.executors.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("shadowflow.runtime.executors.httpx.AsyncClient", FakeAsyncClient)
 
     executor = ApiExecutor()
     result = asyncio.run(
@@ -405,3 +405,4 @@ def test_workflow_validation_rejects_invalid_executor_kind():
                 "edges": [{"from": "start", "to": "END", "type": "final"}],
             }
         )
+

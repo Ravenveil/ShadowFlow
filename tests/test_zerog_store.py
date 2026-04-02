@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
-from agentgraph.runtime.checkpoint_store import ZeroGCheckpointStore
-from agentgraph.runtime.contracts import CheckpointRef
+from shadowflow.runtime.checkpoint_store import ZeroGCheckpointStore
+from shadowflow.runtime.contracts import CheckpointRef
 
 
 # ---------------------------------------------------------------------------
@@ -150,3 +150,4 @@ class TestZeroGCheckpointStore:
         ckpt = _make_checkpoint("run-x", "ckpt-x", "node")
         with pytest.raises(Exception):
             store.put(ckpt)
+

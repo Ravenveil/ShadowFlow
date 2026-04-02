@@ -1,10 +1,12 @@
 import asyncio
 import shutil
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
-from agentgraph.runtime import (
+from shadowflow.runtime import (
     ChatSessionCreateRequest,
+    ChatSession,
     FileChatSessionStore,
     FileCheckpointStore,
     FileRequestContextStore,
@@ -14,12 +16,13 @@ from agentgraph.runtime import (
     ResumeRequest,
     RuntimeRequest,
     RuntimeService,
+    RunResult,
     get_official_example,
     load_official_workflow,
 )
 
 def make_local_test_dir(prefix: str) -> Path:
-    path = Path.home() / ".codex" / "memories" / "agentgraph-test-output" / f"{prefix}-{uuid4().hex[:8]}"
+    path = Path.home() / ".codex" / "memories" / "shadowflow-test-output" / f"{prefix}-{uuid4().hex[:8]}"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -218,3 +221,54 @@ def test_file_chat_session_store_supports_cross_instance_listing_and_readback():
     assert restored is not None
     assert restored.session.session_id == session.session.session_id
     shutil.rmtree(root, ignore_errors=True)
+
+
+def test_file_run_store_list_prefers_summary_files_over_full_results():
+    root = make_local_test_dir("file-run-summary-index")
+    run_store = FileRunStore(root / "runs")
+    example = get_official_example("docs-gap-review")
+    service = RuntimeService(run_store=run_store)
+
+    result = asyncio.run(
+        service.run(
+            RuntimeRequest(
+                workflow=load_official_workflow(example),
+                input=example.input,
+                metadata={"source_system": "pytest-summary-index", **example.metadata},
+            )
+        )
+    )
+
+    with patch.object(RunResult, "model_validate_json", side_effect=AssertionError("full run payload should not be parsed")):
+        runs = run_store.list_runs()
+
+    assert any(item.run_id == result.run.run_id for item in runs)
+    shutil.rmtree(root, ignore_errors=True)
+
+
+def test_file_chat_session_store_list_prefers_summary_files_over_full_sessions():
+    root = make_local_test_dir("file-session-summary-index")
+    store = FileChatSessionStore(root / "chat" / "sessions")
+    service = RuntimeService(chat_session_store=store)
+
+    session = service.create_chat_session(
+        ChatSessionCreateRequest(
+            title="Indexed Chat",
+            executor={
+                "kind": "cli",
+                "provider": "generic",
+                "command": "python",
+                "args": ["-c", "print('unused')"],
+                "stdin": "none",
+                "parse": "text",
+            },
+            metadata={"source_system": "pytest-summary-index"},
+        )
+    )
+
+    with patch.object(ChatSession, "model_validate_json", side_effect=AssertionError("full session payload should not be parsed")):
+        sessions = store.list_sessions()
+
+    assert any(item.session.session_id == session.session.session_id for item in sessions)
+    shutil.rmtree(root, ignore_errors=True)
+

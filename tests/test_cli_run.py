@@ -11,8 +11,8 @@ import pytest
 # ---------------------------------------------------------------------------
 
 def _parse_run_args(argv: list[str]):
-    """Parse 'agentgraph run <argv>' using the real argparse setup from cli.py."""
-    import agentgraph.cli as cli_module
+    """Parse 'shadowflow run <argv>' using the real argparse setup from cli.py."""
+    import shadowflow.cli as cli_module
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command")
@@ -66,24 +66,24 @@ class TestRunArgParsing:
 
 class TestBuildRuntimeService:
     def test_store_file_returns_file_checkpoint_store(self):
-        from agentgraph.cli import _build_runtime_service
-        from agentgraph.runtime.markdown_adapter import FileCheckpointStore
+        from shadowflow.cli import _build_runtime_service
+        from shadowflow.runtime.markdown_adapter import FileCheckpointStore
 
         svc = _build_runtime_service(store="file")
         assert isinstance(svc._checkpoint_store, FileCheckpointStore)
 
     def test_store_memory_returns_in_memory_store(self):
-        from agentgraph.cli import _build_runtime_service
-        from agentgraph.runtime import InMemoryCheckpointStore
+        from shadowflow.cli import _build_runtime_service
+        from shadowflow.runtime import InMemoryCheckpointStore
 
         svc = _build_runtime_service(store="memory")
         assert isinstance(svc._checkpoint_store, InMemoryCheckpointStore)
 
     def test_store_zerog_requires_bridge_import(self):
         """ZeroGCheckpointStore import fails gracefully if module missing."""
-        from agentgraph.cli import _build_runtime_service
+        from shadowflow.cli import _build_runtime_service
 
-        with patch.dict("sys.modules", {"agentgraph.runtime.checkpoint_store": None}):
+        with patch.dict("sys.modules", {"shadowflow.runtime.checkpoint_store": None}):
             with pytest.raises(Exception):
                 _build_runtime_service(store="zerog")
 
@@ -96,7 +96,7 @@ class TestEndToEnd:
     def test_three_node_workflow_with_memory_store(self):
         """Run the existing cli-generic-local.yaml and assert 3 checkpoints + success."""
         import asyncio
-        from agentgraph.cli import run_workflow
+        from shadowflow.cli import run_workflow
 
         yaml_path = str(Path(__file__).parent.parent / "examples" / "runtime-contract" / "cli-generic-local.yaml")
         result_json = None
@@ -117,7 +117,7 @@ class TestEndToEnd:
     def test_workflow_file_store_writes_to_disk(self, tmp_path):
         """File store writes checkpoint JSON files to disk."""
         import asyncio
-        from agentgraph.cli import run_workflow
+        from shadowflow.cli import run_workflow
 
         yaml_path = str(Path(__file__).parent.parent / "examples" / "runtime-contract" / "cli-generic-local.yaml")
 
@@ -138,3 +138,4 @@ class TestEndToEnd:
         assert ckpt_dir.exists()
         ckpt_files = list(ckpt_dir.glob("ckpt-*.json"))
         assert len(ckpt_files) >= 1
+
