@@ -80,9 +80,9 @@ CLI 入口：
 
 ---
 
-## Phase 3 前置：数据积累 + v2 拓扑（待做）
+## Phase 3 前置：数据积累 + v2 拓扑
 
-### Step A：默认 agent 绑定（消除摩擦，开始积累数据）
+### Step A：默认 agent 绑定（消除摩擦，开始积累数据） ✅
 
 现在 assemble → compile 需要手动绑 agent，太摩擦了。需要加默认 agent 绑定策略：
 
@@ -93,17 +93,16 @@ shadowflow assemble --goal "xxx" --provider claude --executor-kind cli
 
 **为什么先做这个：** 没有真实执行，就没有 ActivationTrainingSample。没有数据，Phase 3 就是空中楼阁。
 
-### Step B：v2 ConnectionResolver（确定性拓扑推断）
+### Step B：v2 ConnectionResolver（确定性拓扑推断） ✅
 
-TODOS.md 里记着的。RL 如果只能学线性链，学习空间太小。
-
-实现方案：
+实现内容：
 1. `WorkflowBlockSpec` 加 `input_requirements: List[str]`（与 capabilities 对称）
-2. `ConnectionResolver.resolve()` 基于 capability 依赖图推断：
-   - block A 的 capabilities 包含 block B 的 input_requirements → 加边 A→B
-3. 支持 fan-out（parallel）和 fan-in（barrier）拓扑
+2. `ConnectionResolver.resolve(candidates, catalog, strategy="capability")` 基于 capability 依赖图推断
+3. 支持 fan-out（一对多边）和 fan-in（多对一边）拓扑
+4. 环检测、孤立 block 处理、向后兼容（strategy="linear" 不变）
+5. 22 个测试覆盖所有场景
 
-**为什么排在 A 后面：** v1 线性链足够跑起来积累初始数据，但 RL 需要更大的动作空间才有意义。
+详细设计：`docs/plans/spontaneous-assembly/step-b-v2-topology-inference.md`
 
 ---
 
@@ -186,11 +185,11 @@ class ActivationBandit:
 ## 执行优先级
 
 ```
-现在 → Step A（默认 agent 绑定，一键执行，积累数据）
-      → Step B（v2 ConnectionResolver，拓扑推断）
-      → Phase 3 Step 1（Contextual Bandit spike）
-远期 → Phase 3 Step 2（Policy Gradient）
-      → Phase 4（因果增强）
+✅ Step A（默认 agent 绑定，一键执行，积累数据）
+✅ Step B（v2 ConnectionResolver，拓扑推断）
+✅ Phase 3 Step 1（Contextual Bandit — ActivationBandit token affinity table）
+现在 → Phase 3 Step 2（Policy Gradient — 需要 200+ samples + v2 拓扑）
+远期 → Phase 4（因果增强）
 ```
 
 ## 参考文献

@@ -128,24 +128,30 @@ class ConnectionResolver:
     """
     Resolves a list of activation candidates into WorkflowAssemblyLinkSpec connections.
 
-    v1: linear chain only — block1 → block2 → ... → END.
-    Only worker-kind blocks are supported in the linear chain; control/delegation/
-    persistence blocks are deferred to v2 topology inference.
-
-    # TODO(v2): Replace linear chain with capability-dependency graph inference.
-    # When block A's output capabilities match block B's input_requirements,
-    # add edge A→B. This enables fan-in/fan-out and non-linear topologies.
-    # Track in TODOS.md: parallel/barrier block handling in ConnectionResolver v2.
+    v1 (strategy="linear"): linear chain — block1 → block2 → ... → END.
+    v2 (strategy="capability"): capability-dependency graph inference.
+        When block A's capabilities satisfy block B's input_requirements, add edge A→B.
+        Supports fan-out (one provider → multiple consumers) and fan-in (multiple
+        providers → one consumer). Detects cycles and handles isolated blocks.
     """
 
     def resolve(
         self,
         candidates: List[CatalogActivationCandidate],
+        catalog: Optional[Dict[str, "WorkflowBlockSpec"]] = None,  # type: ignore[name-defined]
+        strategy: Literal["linear", "capability"] = "linear",
     ) -> List["WorkflowAssemblyLinkSpec"]:  # type: ignore[name-defined]
-        from shadowflow.highlevel import WorkflowAssemblyLinkSpec
-
         if not candidates:
             return []
+        if strategy == "capability" and catalog is not None:
+            return self._resolve_capability(candidates, catalog)
+        return self._resolve_linear(candidates)
+
+    def _resolve_linear(
+        self,
+        candidates: List[CatalogActivationCandidate],
+    ) -> List["WorkflowAssemblyLinkSpec"]:  # type: ignore[name-defined]
+        from shadowflow.highlevel import WorkflowAssemblyLinkSpec
 
         links: List[WorkflowAssemblyLinkSpec] = []
         for i, candidate in enumerate(candidates):
@@ -155,4 +161,81 @@ class ConnectionResolver:
                     {"from": candidate.block_id, "to": next_id}
                 )
             )
+        return links
+
+    def _resolve_capability(
+        self,
+        candidates: List[CatalogActivationCandidate],
+        catalog: Dict[str, "WorkflowBlockSpec"],  # type: ignore[name-defined]
+    ) -> List["WorkflowAssemblyLinkSpec"]:  # type: ignore[name-defined]
+        from shadowflow.highlevel import WorkflowAssemblyLinkSpec
+
+        candidate_ids = [c.block_id for c in candidates]
+
+        # Build capability → provider block mapping (only among candidates)
+        cap_providers: Dict[str, List[str]] = {}
+        for bid in candidate_ids:
+            block = catalog.get(bid)
+            if block is None:
+                continue
+            for cap in block.capabilities:
+                cap_providers.setdefault(cap, []).append(bid)
+
+        # Build edges: for each candidate, find providers for its input_requirements
+        edges: List[tuple[str, str]] = []
+        has_incoming: set[str] = set()
+        has_outgoing: set[str] = set()
+
+        for bid in candidate_ids:
+            block = catalog.get(bid)
+            if block is None:
+                continue
+            for req in block.input_requirements:
+                providers = cap_providers.get(req, [])
+                for provider_id in providers:
+                    if provider_id != bid:  # no self-loops
+                        edges.append((provider_id, bid))
+                        has_outgoing.add(provider_id)
+                        has_incoming.add(bid)
+
+        # Cycle detection via DFS
+        adj: Dict[str, List[str]] = {}
+        for src, dst in edges:
+            adj.setdefault(src, []).append(dst)
+
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color: Dict[str, int] = {bid: WHITE for bid in candidate_ids}
+
+        def _has_cycle(node: str) -> bool:
+            color[node] = GRAY
+            for neighbor in adj.get(node, []):
+                if color.get(neighbor) == GRAY:
+                    return True
+                if color.get(neighbor) == WHITE and _has_cycle(neighbor):
+                    return True
+            color[node] = BLACK
+            return False
+
+        for bid in candidate_ids:
+            if color[bid] == WHITE:
+                if _has_cycle(bid):
+                    raise ValueError(
+                        f"Cycle detected in capability dependency graph among candidates: {candidate_ids}"
+                    )
+
+        # Blocks with no incoming edges and no outgoing edges → isolated, connect to END
+        # Blocks with no outgoing edges (but have incoming) → terminal, connect to END
+        links: List[WorkflowAssemblyLinkSpec] = []
+        for src, dst in edges:
+            links.append(
+                WorkflowAssemblyLinkSpec.model_validate({"from": src, "to": dst})
+            )
+
+        # Connect terminal blocks (no downstream consumers) to END
+        for bid in candidate_ids:
+            if bid not in has_outgoing:
+                links.append(
+                    WorkflowAssemblyLinkSpec.model_validate({"from": bid, "to": "END"})
+                )
+
         return links

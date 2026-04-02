@@ -442,6 +442,10 @@ class WorkflowBlockSpec(BaseModel):
     # Used by ActivationSelector for greedy set-cover matching.
     # Distinct from local_activation.tags (user-facing, bilingual, keyword search).
     capabilities: List[str] = Field(default_factory=list)
+    # input_requirements: capabilities this block needs from upstream blocks.
+    # Used by ConnectionResolver v2 for capability-dependency graph inference.
+    # Empty means the block can serve as an entry point (no upstream dependency).
+    input_requirements: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -556,6 +560,7 @@ def build_builtin_block_catalog() -> Dict[str, WorkflowBlockSpec]:
                 },
                 "local_activation": {"tags": ["plan", "planning", "规划", "计划"]},
                 "capabilities": ["planning", "task_decomposition"],
+                "input_requirements": [],
             }
         ),
         "review": WorkflowBlockSpec.model_validate(
@@ -575,6 +580,7 @@ def build_builtin_block_catalog() -> Dict[str, WorkflowBlockSpec]:
                 },
                 "local_activation": {"tags": ["review", "check", "审查", "检查"]},
                 "capabilities": ["review", "quality_check"],
+                "input_requirements": ["execution"],
             }
         ),
         "execute": WorkflowBlockSpec.model_validate(
@@ -594,6 +600,7 @@ def build_builtin_block_catalog() -> Dict[str, WorkflowBlockSpec]:
                 },
                 "local_activation": {"tags": ["execute", "run", "执行", "运行"]},
                 "capabilities": ["execution", "action"],
+                "input_requirements": ["planning"],
             }
         ),
         "parallel": WorkflowBlockSpec.model_validate(
@@ -611,6 +618,7 @@ def build_builtin_block_catalog() -> Dict[str, WorkflowBlockSpec]:
                 },
                 "local_activation": {"tags": ["parallel", "并行", "fan-out"]},
                 "capabilities": ["parallelism", "fan_out"],
+                "input_requirements": [],
             }
         ),
         "barrier": WorkflowBlockSpec.model_validate(
@@ -629,6 +637,7 @@ def build_builtin_block_catalog() -> Dict[str, WorkflowBlockSpec]:
                 },
                 "local_activation": {"tags": ["barrier", "merge", "汇聚", "同步"]},
                 "capabilities": ["synchronization", "fan_in"],
+                "input_requirements": ["parallelism"],
             }
         ),
         "delegate": WorkflowBlockSpec.model_validate(
@@ -648,6 +657,7 @@ def build_builtin_block_catalog() -> Dict[str, WorkflowBlockSpec]:
                 },
                 "local_activation": {"tags": ["delegate", "sub-agent", "委托", "分派"]},
                 "capabilities": ["delegation", "sub_workflow"],
+                "input_requirements": ["planning"],
             }
         ),
         "artifact": WorkflowBlockSpec.model_validate(
@@ -667,6 +677,7 @@ def build_builtin_block_catalog() -> Dict[str, WorkflowBlockSpec]:
                 },
                 "local_activation": {"tags": ["artifact", "output", "输出", "产物"]},
                 "capabilities": ["artifact_emit", "persistence"],
+                "input_requirements": ["execution"],
             }
         ),
         "checkpoint": WorkflowBlockSpec.model_validate(
@@ -686,6 +697,7 @@ def build_builtin_block_catalog() -> Dict[str, WorkflowBlockSpec]:
                 },
                 "local_activation": {"tags": ["checkpoint", "save", "保存", "检查点"]},
                 "capabilities": ["checkpoint_write", "state_persistence"],
+                "input_requirements": ["execution"],
             }
         ),
     }

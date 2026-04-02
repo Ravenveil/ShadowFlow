@@ -1,7 +1,7 @@
 # Step B：v2 ConnectionResolver 拓扑推断设计
 
 > 日期：2026-04-02
-> 状态：规划完成，待实现
+> 状态：✅ 已实现
 > 前置：Phase 1（ActivationSelector + ConnectionResolver v1）✅
 
 ---
