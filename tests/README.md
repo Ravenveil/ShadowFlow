@@ -1,4 +1,4 @@
-# AgentGraph Tests
+# ShadowFlow Tests
 
 当前 `tests/` 目录同时包含两类测试：
 
@@ -14,7 +14,7 @@
 
 原因不是历史测试没有价值，而是它们主要覆盖以下 legacy surface：
 
-- `AgentGraph` 图对象
+- `ShadowFlow` 图对象
 - `SQLiteMemory` / `RedisMemory` 直接集成
 - `SwarmRouter` / 旧 topology
 - 旧工作流执行模型
@@ -37,7 +37,7 @@ tests/legacy/
 
 ## 为什么要分层
 
-当前 AgentGraph 主线目标是：
+当前 ShadowFlow 主线目标是：
 
 - 固定 workflow schema
 - 固定 runtime request / run result / checkpoint contract

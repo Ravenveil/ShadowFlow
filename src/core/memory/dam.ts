@@ -91,7 +91,7 @@ export class DamManager {
   constructor(config: DamConfig = {}) {
     this.config = {
       maxCheckpoints: config.maxCheckpoints ?? 100,
-      persistencePath: config.persistencePath ?? '.agentgraph/checkpoints',
+      persistencePath: config.persistencePath ?? '.shadowflow/checkpoints',
       autoPersist: config.autoPersist ?? true,
       checkpointExpiration: config.checkpointExpiration ?? 7 * 24 * 60 * 60 * 1000 // 7天
     };

@@ -776,12 +776,12 @@ describe('River Network - Main Flow and Branch Sync (主流与支流同步）', 
 
       mainFlow.addMemory({
         type: 'global',
-        content: { project: 'AgentGraph' },
+        content: { project: 'ShadowFlow' },
       });
 
       const memories = mainFlow.getMemories();
       expect(memories).toHaveLength(1);
-      expect(memories[0].content.project).toBe('AgentGraph');
+      expect(memories[0].content.project).toBe('ShadowFlow');
     });
 
     it('should broadcast to all branches', (done) => {

@@ -16,7 +16,7 @@ impl HttpClient {
     pub fn new(config: AppConfig) -> Result<Self, ShadowError> {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.http_api.timeout_secs))
-            .user_agent("AgentGraph/0.1.0")
+            .user_agent("ShadowFlow/0.1.0")
             .build()?;
 
         Ok(Self { client, config })

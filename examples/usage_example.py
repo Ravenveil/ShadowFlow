@@ -4,7 +4,7 @@ Agent 配置系统使用示例
 """
 
 import asyncio
-from agentgraph.core.agent import AgentConfig, Agent, agent_node
+from shadowflow.core.agent import AgentConfig, Agent, agent_node
 
 # 示例 1: 使用装饰器注册 Agent
 @agent_node({
@@ -74,7 +74,7 @@ async def validate_config():
 # 示例 4: Agent 注册管理
 async def registry_example():
     """Agent 注册表示例"""
-    from agentgraph.core.agent import list_agents, get_agent, register_agent
+    from shadowflow.core.agent import list_agents, get_agent, register_agent
 
     # 列出所有注册的 Agent
     print("已注册的 Agent:")

@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime
 from dataclasses import asdict
 
-from agentgraph.core.agent import Agent, AgentConfig, AgentResult
+from shadowflow.core.agent import Agent, AgentConfig, AgentResult
 
 pytestmark = pytest.mark.legacy
 
@@ -32,7 +32,7 @@ class TestAgentCreation:
 
     def test_agent_creation_with_full_config(self):
         """测试使用完整配置创建 Agent"""
-        from agentgraph.core.agent import ToolConfig
+        from shadowflow.core.agent import ToolConfig
     config = AgentConfig(
         name="full_agent",
         role="完整测试角色",

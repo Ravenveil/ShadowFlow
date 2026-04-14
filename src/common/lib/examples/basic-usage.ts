@@ -1,5 +1,5 @@
 /**
- * AgentGraph 工作流自动生成算法使用示例
+ * ShadowFlow 工作流自动生成算法使用示例
  *
  * 演示如何使用任务分析器和工作流生成器
  */
@@ -154,10 +154,10 @@ async function example6_CustomRules() {
   const generator = createWorkflowGenerator({
     rule_engine: {
       rule_files: [
-        'E:/VScode/AgentGraph/config/rules/complexity-rules.yaml',
-        'E:/VScode/AgentGraph/config/rules/type-rules.yaml',
-        'E:/VScode/AgentGraph/config/rules/quality-rules.yaml',
-        'E:/VScode/AgentGraph/config/rules/parallel-rules.yaml'
+        'E:/VScode/ShadowFlow/config/rules/complexity-rules.yaml',
+        'E:/VScode/ShadowFlow/config/rules/type-rules.yaml',
+        'E:/VScode/ShadowFlow/config/rules/quality-rules.yaml',
+        'E:/VScode/ShadowFlow/config/rules/parallel-rules.yaml'
       ],
       conflict_resolution: 'highest_priority',
       use_default_rules: false

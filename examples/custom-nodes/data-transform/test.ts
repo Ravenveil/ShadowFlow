@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import DataTransformExecutor, { nodeDefinition } from './executor';
-import { NodeContext } from 'agentgraph';
+import { NodeContext } from 'shadowflow';
 
 describe('DataTransformExecutor', () => {
   let executor: DataTransformExecutor;

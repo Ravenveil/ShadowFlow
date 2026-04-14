@@ -28,7 +28,7 @@ except ImportError:
     class AddableDict(dict):
         pass
 
-from agentgraph.core.state import State
+from shadowflow.core.state import State
 
 
 @dataclass

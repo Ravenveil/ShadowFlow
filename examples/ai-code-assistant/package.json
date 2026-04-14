@@ -1,5 +1,5 @@
 {
-  "name": "agentgraph-ai-code-assistant",
+  "name": "shadowflow-ai-code-assistant",
   "version": "1.0.0",
   "description": "AI 代码助手示例 - 展示河流式记忆系统",
   "main": "dist/index.js",
@@ -9,7 +9,7 @@
     "start": "node dist/index.js"
   },
   "keywords": [
-    "agentgraph",
+    "shadowflow",
     "ai",
     "code-assistant",
     "memory-system",

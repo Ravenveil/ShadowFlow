@@ -1,1 +1,1 @@
-"""Legacy test baseline for historical AgentGraph APIs."""
+"""Legacy test baseline for historical ShadowFlow APIs."""

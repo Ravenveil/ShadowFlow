@@ -9,7 +9,7 @@ from functools import wraps
 from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator, ValidationError
-from agentgraph.protocol.claude import ClaudeProtocol, FallbackChain, FallbackConfig, FallbackStrategy
+from shadowflow.protocol.claude import ClaudeProtocol, FallbackChain, FallbackConfig, FallbackStrategy
 
 class ToolConfig(BaseModel):
     """工具配置模型"""

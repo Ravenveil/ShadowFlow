@@ -2,9 +2,9 @@ import pytest
 import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
-from agentgraph.core.graph import AgentGraph
-from agentgraph.core.agent import Agent
-from agentgraph.memory.sqlite import SQLiteMemory
+from shadowflow.core.graph import ShadowFlow
+from shadowflow.core.agent import Agent
+from shadowflow.memory.sqlite import SQLiteMemory
 
 pytestmark = pytest.mark.legacy
 
@@ -12,7 +12,7 @@ pytestmark = pytest.mark.legacy
 async def test_concurrent_agent_execution():
     """测试并发代理执行"""
     memory = SQLiteMemory(":memory:")
-    graph = AgentGraph(memory=memory)
+    graph = ShadowFlow(memory=memory)
 
     # 创建多个代理
     agents = []
@@ -46,7 +46,7 @@ async def test_concurrent_agent_execution():
 @pytest.mark.asyncio
 async def test_semaphore_limitation():
     """测试信号量限制并发数"""
-    from agentgraph.core.utils.concurrency import ConcurrencyLimiter
+    from shadowflow.core.utils.concurrency import ConcurrencyLimiter
 
     limiter = ConcurrencyLimiter(max_concurrent=3)
 
@@ -98,7 +98,7 @@ async def test_memory_concurrent_access():
 @pytest.mark.asyncio
 async def test_circuit_breaker_concurrent():
     """测试并发断路器"""
-    from agentgraph.core.errors import CircuitBreaker
+    from shadowflow.core.errors import CircuitBreaker
 
     circuit_breaker = CircuitBreaker(threshold=5, timeout=1)
 
@@ -124,7 +124,7 @@ async def test_circuit_breaker_concurrent():
 @pytest.mark.asyncio
 async def test_performance_concurrent_requests():
     """测试并发请求性能"""
-    from agentgraph.core.utils.performance import PerformanceTracker
+    from shadowflow.core.utils.performance import PerformanceTracker
 
     tracker = PerformanceTracker()
 
@@ -160,7 +160,7 @@ async def test_performance_concurrent_requests():
 @pytest.mark.asyncio
 async def test_memory_locking():
     """测试内存锁机制"""
-    from agentgraph.core.utils.locking import SharedLock
+    from shadowflow.core.utils.locking import SharedLock
 
     lock = SharedLock()
     shared_value = 0

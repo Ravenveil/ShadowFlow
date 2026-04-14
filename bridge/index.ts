@@ -1,5 +1,5 @@
 /**
- * AgentGraph × 0G KV Bridge
+ * ShadowFlow × 0G KV Bridge
  *
  * Thin HTTP server that wraps @0glabs/0g-ts-sdk KV Store so Python can
  * call it without a native SDK.
@@ -125,7 +125,7 @@ async function kvList(prefix: string): Promise<string[]> {
     return Array.from(memStore.keys()).filter((k) => k.startsWith(prefix));
   }
   // 0G KV doesn't have native prefix-list — we enumerate using a stored index
-  // key: "agentgraph/_index/{prefix_hash}" value: JSON array of keys
+  // key: "shadowflow/_index/{prefix_hash}" value: JSON array of keys
   const indexKey = `_index:${prefix}`;
   const raw = await kvGet(indexKey);
   if (!raw) return [];

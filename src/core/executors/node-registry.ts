@@ -121,7 +121,7 @@ export class NodeRegistry {
         executorFactory,
         registeredAt: new Date(),
         isCustom,
-        metadata: { version: '1.0.0', author: 'AgentGraph' },
+        metadata: { version: '1.0.0', author: 'ShadowFlow' },
       });
 
       // 更新分类索引

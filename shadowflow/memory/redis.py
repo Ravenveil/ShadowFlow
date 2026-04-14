@@ -4,7 +4,7 @@ import json
 import re
 from datetime import datetime
 
-from agentgraph.memory.base import Memory
+from shadowflow.memory.base import Memory
 
 
 class RedisMemory(Memory):
@@ -12,17 +12,17 @@ class RedisMemory(Memory):
     Redis Memory 实现 - 支持三层架构
 
     Key 命名空间：
-    - agentgraph:{user_id}:history - 交互历史
-    - agentgraph:knowledge:{key} - 知识层笔记
-    - agentgraph:links:{key} - 双向链接索引
-    - agentgraph:tags:{name} - 标签索引
-    - agentgraph:session:{session_id} - 上下文层会话
-    - agentgraph:session:{session_id}:messages - 会话消息
-    - agentgraph:workflow:{workflow_id} - 工作流
-    - agentgraph:semantic:pattern:{pattern_id} - 语义层模式
-    - agentgraph:semantic:user:{user_id} - 用户画像
-    - agentgraph:semantic:tasks - 任务历史
-    - agentgraph:search:* - 语义搜索索引（使用 Redis Search 或自定义索引）
+    - shadowflow:{user_id}:history - 交互历史
+    - shadowflow:knowledge:{key} - 知识层笔记
+    - shadowflow:links:{key} - 双向链接索引
+    - shadowflow:tags:{name} - 标签索引
+    - shadowflow:session:{session_id} - 上下文层会话
+    - shadowflow:session:{session_id}:messages - 会话消息
+    - shadowflow:workflow:{workflow_id} - 工作流
+    - shadowflow:semantic:pattern:{pattern_id} - 语义层模式
+    - shadowflow:semantic:user:{user_id} - 用户画像
+    - shadowflow:semantic:tasks - 任务历史
+    - shadowflow:search:* - 语义搜索索引（使用 Redis Search 或自定义索引）
     """
 
     WIKI_LINK_PATTERN = r'\[\[([^\]]+)\]\]'
@@ -60,7 +60,7 @@ class RedisMemory(Memory):
             "timestamp": datetime.now().isoformat()
         }
 
-        key = f"agentgraph:{user_id}:history"
+        key = f"shadowflow:{user_id}:history"
         await client.lpush(key, json.dumps(interaction))
         await client.ltrim(key, 0, 99)
 
@@ -74,7 +74,7 @@ class RedisMemory(Memory):
     ) -> List[Dict[str, Any]]:
         client = await self._get_client()
 
-        key = f"agentgraph:{user_id}:history"
+        key = f"shadowflow:{user_id}:history"
         items = await client.lrange(key, 0, limit - 1)
 
         history = []
@@ -106,7 +106,7 @@ class RedisMemory(Memory):
     async def clear_history(self, user_id: str) -> None:
         client = await self._get_client()
 
-        key = f"agentgraph:{user_id}:history"
+        key = f"shadowflow:{user_id}:history"
         await client.delete(key)
 
     # ========== 知识层接口 ==========
@@ -115,7 +115,7 @@ class RedisMemory(Memory):
         """保存笔记到知识层"""
         client = await self._get_client()
 
-        note_key = f"agentgraph:knowledge:{key}"
+        note_key = f"shadowflow:knowledge:{key}"
         note_data = {
             "key": key,
             "content": content,
@@ -139,17 +139,17 @@ class RedisMemory(Memory):
         """获取笔记"""
         client = await self._get_client()
 
-        note_key = f"agentgraph:knowledge:{key}"
+        note_key = f"shadowflow:knowledge:{key}"
         note = await client.hgetall(note_key)
 
         if note:
             # 获取链接
-            links_key = f"agentgraph:links:{key}"
+            links_key = f"shadowflow:links:{key}"
             links_data = await client.lrange(links_key, 0, -1)
             note["links"] = [json.loads(l) for l in links_data if l]
 
             # 获取标签
-            tags_key = f"agentgraph:tags:note:{key}"
+            tags_key = f"shadowflow:tags:note:{key}"
             tags_data = await client.smembers(tags_key)
             note["tags"] = list(tags_data)
 
@@ -163,7 +163,7 @@ class RedisMemory(Memory):
         results = []
 
         # 1. 搜索笔记内容
-        search_pattern = f"agentgraph:knowledge:*"
+        search_pattern = f"shadowflow:knowledge:*"
         keys = []
         async for key in client.scan_iter(match=search_pattern, count=100):
             if len(keys) >= limit:
@@ -181,7 +181,7 @@ class RedisMemory(Memory):
                     })
 
         # 2. 搜索标签
-        tag_key = f"agentgraph:tags:name:{query.lower()}"
+        tag_key = f"shadowflow:tags:name:{query.lower()}"
         tag_notes = await client.smembers(tag_key)
         for note_key in tag_notes:
             if len(results) >= limit:
@@ -194,7 +194,7 @@ class RedisMemory(Memory):
                 })
 
         # 3. 搜索链接
-        link_key = f"agentgraph:links:target:{query.lower()}"
+        link_key = f"shadowflow:links:target:{query.lower()}"
         link_sources = await client.smembers(link_key)
         for source_key in link_sources:
             if len(results) >= limit:
@@ -213,11 +213,11 @@ class RedisMemory(Memory):
         client = await self._get_client()
 
         backlinks = []
-        link_key = f"agentgraph:links:target:{target_key.lower()}"
+        link_key = f"shadowflow:links:target:{target_key.lower()}"
         sources = await client.smembers(link_key)
 
         for source_key in sources:
-            links_key = f"agentgraph:links:{source_key}"
+            links_key = f"shadowflow:links:{source_key}"
             links_data = await client.lrange(links_key, 0, -1)
             for link_str in links_data:
                 try:
@@ -240,7 +240,7 @@ class RedisMemory(Memory):
         """保存或更新会话"""
         client = await self._get_client()
 
-        session_key = f"agentgraph:session:{session_id}"
+        session_key = f"shadowflow:session:{session_id}"
         session_data = {
             "session_id": session_id,
             "user_id": user_id,
@@ -253,7 +253,7 @@ class RedisMemory(Memory):
         await client.hset(session_key, mapping=session_data)
 
         # 添加到用户会话列表
-        user_sessions_key = f"agentgraph:user:{user_id}:sessions"
+        user_sessions_key = f"shadowflow:user:{user_id}:sessions"
         await client.sadd(user_sessions_key, session_id)
 
     async def add_session_message(
@@ -269,7 +269,7 @@ class RedisMemory(Memory):
         """添加会话消息"""
         client = await self._get_client()
 
-        messages_key = f"agentgraph:session:{session_id}:messages"
+        messages_key = f"shadowflow:session:{session_id}:messages"
         message = {
             "role": role,
             "content": content,
@@ -290,7 +290,7 @@ class RedisMemory(Memory):
         """获取会话消息"""
         client = await self._get_client()
 
-        messages_key = f"agentgraph:session:{session_id}:messages"
+        messages_key = f"shadowflow:session:{session_id}:messages"
         items = await client.lrange(messages_key, 0, limit - 1)
 
         messages = []
@@ -314,7 +314,7 @@ class RedisMemory(Memory):
         """保存工作流"""
         client = await self._get_client()
 
-        workflow_key = f"agentgraph:workflow:{workflow_id}"
+        workflow_key = f"shadowflow:workflow:{workflow_id}"
         workflow_data = {
             "workflow_id": workflow_id,
             "name": name,
@@ -328,7 +328,7 @@ class RedisMemory(Memory):
 
         # 添加到活跃工作流集合
         if status in ["pending", "running"]:
-            await client.sadd("agentgraph:workflows:active", workflow_id)
+            await client.sadd("shadowflow:workflows:active", workflow_id)
 
     async def update_workflow_status(
         self,
@@ -340,30 +340,30 @@ class RedisMemory(Memory):
         """更新工作流状态"""
         client = await self._get_client()
 
-        workflow_key = f"agentgraph:workflow:{workflow_id}"
+        workflow_key = f"shadowflow:workflow:{workflow_id}"
 
         await client.hset(workflow_key, "status", status)
 
         if status == "running":
             await client.hset(workflow_key, "started_at", datetime.now().isoformat())
-            await client.sadd("agentgraph:workflows:active", workflow_id)
+            await client.sadd("shadowflow:workflows:active", workflow_id)
         elif status in ["completed", "failed"]:
             await client.hset(workflow_key, "completed_at", datetime.now().isoformat())
             if result:
                 await client.hset(workflow_key, "result", result)
             if error:
                 await client.hset(workflow_key, "error", error)
-            await client.srem("agentgraph:workflows:active", workflow_id)
+            await client.srem("shadowflow:workflows:active", workflow_id)
 
     async def get_active_workflows(self) -> List[Dict]:
         """获取活跃的工作流"""
         client = await self._get_client()
 
-        active_workflow_ids = await client.smembers("agentgraph:workflows:active")
+        active_workflow_ids = await client.smembers("shadowflow:workflows:active")
 
         workflows = []
         for wf_id in active_workflow_ids:
-            workflow_key = f"agentgraph:workflow:{wf_id}"
+            workflow_key = f"shadowflow:workflow:{wf_id}"
             workflow = await client.hgetall(workflow_key)
             if workflow:
                 workflows.append(workflow)
@@ -382,7 +382,7 @@ class RedisMemory(Memory):
         """保存或更新模式"""
         client = await self._get_client()
 
-        pattern_key = f"agentgraph:semantic:pattern:{pattern_id}"
+        pattern_key = f"shadowflow:semantic:pattern:{pattern_id}"
         pattern_data = {
             "pattern_id": pattern_id,
             "name": name,
@@ -397,19 +397,19 @@ class RedisMemory(Memory):
         await client.hset(pattern_key, mapping=pattern_data)
 
         # 添加到模式集合
-        await client.sadd("agentgraph:semantic:patterns", pattern_id)
+        await client.sadd("shadowflow:semantic:patterns", pattern_id)
 
         # 索引标签
         if tags:
             for tag in tags:
-                tag_key = f"agentgraph:semantic:patterns:tag:{tag.lower()}"
+                tag_key = f"shadowflow:semantic:patterns:tag:{tag.lower()}"
                 await client.sadd(tag_key, pattern_id)
 
     async def update_pattern_success(self, pattern_id: str, success: bool) -> None:
         """更新模式成功率"""
         client = await self._get_client()
 
-        pattern_key = f"agentgraph:semantic:pattern:{pattern_id}"
+        pattern_key = f"shadowflow:semantic:pattern:{pattern_id}"
 
         # 获取当前值
         usage_count = await client.hincrby(pattern_key, "usage_count", 1)
@@ -427,15 +427,15 @@ class RedisMemory(Memory):
         candidates = set()
 
         # 通过标签查找
-        tag_key = f"agentgraph:semantic:patterns:tag:{task_type.lower()}"
+        tag_key = f"shadowflow:semantic:patterns:tag:{task_type.lower()}"
         pattern_ids = await client.smembers(tag_key)
         candidates.update(pattern_ids)
 
         # 如果候选不足，搜索所有模式的名称和描述
         if len(candidates) < limit:
-            all_pattern_ids = await client.smembers("agentgraph:semantic:patterns")
+            all_pattern_ids = await client.smembers("shadowflow:semantic:patterns")
             for pid in all_pattern_ids:
-                pattern_key = f"agentgraph:semantic:pattern:{pid}"
+                pattern_key = f"shadowflow:semantic:pattern:{pid}"
                 pattern = await client.hgetall(pattern_key)
                 if (task_type.lower() in pattern.get("name", "").lower() or
                     task_type.lower() in pattern.get("description", "").lower()):
@@ -444,7 +444,7 @@ class RedisMemory(Memory):
         # 获取完整信息并排序
         patterns = []
         for pid in candidates:
-            pattern_key = f"agentgraph:semantic:pattern:{pid}"
+            pattern_key = f"shadowflow:semantic:pattern:{pid}"
             pattern = await client.hgetall(pattern_key)
             if pattern:
                 pattern["success_rate"] = float(pattern.get("success_rate", 0))
@@ -466,7 +466,7 @@ class RedisMemory(Memory):
         """保存用户画像"""
         client = await self._get_client()
 
-        profile_key = f"agentgraph:semantic:user:{user_id}"
+        profile_key = f"shadowflow:semantic:user:{user_id}"
         profile_data = {
             "user_id": user_id,
             "preferred_agents": json.dumps(preferred_agents or []),
@@ -482,7 +482,7 @@ class RedisMemory(Memory):
         """获取用户画像"""
         client = await self._get_client()
 
-        profile_key = f"agentgraph:semantic:user:{user_id}"
+        profile_key = f"shadowflow:semantic:user:{user_id}"
         profile = await client.hgetall(profile_key)
 
         if profile:
@@ -506,7 +506,7 @@ class RedisMemory(Memory):
         """记录任务完成情况"""
         client = await self._get_client()
 
-        task_key = f"agentgraph:semantic:task:{task_id}"
+        task_key = f"shadowflow:semantic:task:{task_id}"
         task_data = {
             "task_id": task_id,
             "user_id": user_id,
@@ -519,7 +519,7 @@ class RedisMemory(Memory):
         await client.hset(task_key, mapping=task_data)
 
         # 添加到用户任务列表
-        user_tasks_key = f"agentgraph:semantic:user:{user_id}:tasks"
+        user_tasks_key = f"shadowflow:semantic:user:{user_id}:tasks"
         await client.lpush(user_tasks_key, task_id)
         await client.ltrim(user_tasks_key, 0, 99)
 
@@ -531,10 +531,10 @@ class RedisMemory(Memory):
         success_count = 0
 
         if user_id:
-            user_tasks_key = f"agentgraph:semantic:user:{user_id}:tasks"
+            user_tasks_key = f"shadowflow:semantic:user:{user_id}:tasks"
             task_ids = await client.lrange(user_tasks_key, 0, 99)
             for task_id in task_ids:
-                task_key = f"agentgraph:semantic:task:{task_id}"
+                task_key = f"shadowflow:semantic:task:{task_id}"
                 task = await client.hgetall(task_key)
                 if task:
                     total += 1
@@ -542,7 +542,7 @@ class RedisMemory(Memory):
                         success_count += 1
         else:
             # 扫描所有任务
-            task_pattern = "agentgraph:semantic:task:*"
+            task_pattern = "shadowflow:semantic:task:*"
             async for key in client.scan_iter(match=task_pattern, count=100):
                 task = await client.hgetall(key)
                 if task:
@@ -561,7 +561,7 @@ class RedisMemory(Memory):
 
     async def _extract_and_index_links(self, key: str, content: str, client: redis.Redis) -> None:
         """提取并索引链接"""
-        links_key = f"agentgraph:links:{key}"
+        links_key = f"shadowflow:links:{key}"
         await client.delete(links_key)
 
         for match in re.finditer(self.WIKI_LINK_PATTERN, content):
@@ -579,16 +579,16 @@ class RedisMemory(Memory):
             await client.rpush(links_key, json.dumps(link_data))
 
             # 反向索引
-            backlink_key = f"agentgraph:links:target:{target.lower()}"
+            backlink_key = f"shadowflow:links:target:{target.lower()}"
             await client.sadd(backlink_key, key)
 
     async def _extract_and_index_tags(self, key: str, content: str, client: redis.Redis) -> None:
         """提取并索引标签"""
         # 清理旧索引
-        async for old_key in client.scan_iter(match=f"agentgraph:tags:note:{key}*"):
+        async for old_key in client.scan_iter(match=f"shadowflow:tags:note:{key}*"):
             await client.delete(old_key)
 
-        note_tags_key = f"agentgraph:tags:note:{key}"
+        note_tags_key = f"shadowflow:tags:note:{key}"
         tag_counts = {}
 
         for match in re.finditer(self.TAG_PATTERN, content):
@@ -599,7 +599,7 @@ class RedisMemory(Memory):
         for tag_name in tag_counts:
             await client.sadd(note_tags_key, tag_name)
             # 反向索引
-            tag_notes_key = f"agentgraph:tags:name:{tag_name}"
+            tag_notes_key = f"shadowflow:tags:name:{tag_name}"
             await client.sadd(tag_notes_key, key)
 
     async def _index_for_search(self, doc_type: str, doc_data: Dict, doc_id: str) -> None:
@@ -620,7 +620,7 @@ class RedisMemory(Memory):
         words = re.findall(r'\w+', text.lower())
         for word in set(words):
             if len(word) > 2:  # 忽略短词
-                word_index_key = f"agentgraph:search:index:{word}"
+                word_index_key = f"shadowflow:search:index:{word}"
                 await client.zadd(
                     word_index_key,
                     {f"{doc_type}:{doc_id}": datetime.now().timestamp()}

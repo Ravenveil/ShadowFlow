@@ -1,8 +1,8 @@
-# AgentGraph Tauri 桌面应用
+# ShadowFlow Tauri 桌面应用
 
 ## 概述
 
-AgentGraph 是一个基于 Tauri 构建的轻量级、安全、高性能的桌面应用，类似于 LangGraph 的多智能体编排框架。
+ShadowFlow 是一个基于 Tauri 构建的轻量级、安全、高性能的桌面应用，类似于 LangGraph 的多智能体编排框架。
 
 ## 功能特性
 

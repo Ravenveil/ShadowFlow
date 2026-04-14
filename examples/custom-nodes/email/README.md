@@ -109,7 +109,7 @@ nodes:
           user: "user@example.com"
           pass: "${SMTP_PASSWORD}"  # Use environment variable
       from:
-        name: "AgentGraph"
+        name: "ShadowFlow"
         address: "noreply@example.com"
     inputs:
       to: ["user@example.com"]
@@ -132,7 +132,7 @@ nodes:
           user: "user@example.com"
           pass: "${SMTP_PASSWORD}"
       from:
-        name: "AgentGraph"
+        name: "ShadowFlow"
         address: "noreply@example.com"
       content_type: text/html
     inputs:
@@ -141,7 +141,7 @@ nodes:
       body: |
         <html>
           <body>
-            <h1>Welcome to AgentGraph</h1>
+            <h1>Welcome to ShadowFlow</h1>
             <p>Thank you for signing up!</p>
           </body>
         </html>
@@ -162,7 +162,7 @@ nodes:
           user: "user@example.com"
           pass: "${SMTP_PASSWORD}"
       from:
-        name: "AgentGraph"
+        name: "ShadowFlow"
         address: "noreply@example.com"
       template:
         enabled: true
@@ -197,7 +197,7 @@ nodes:
           user: "user@example.com"
           pass: "${SMTP_PASSWORD}"
       from:
-        name: "AgentGraph"
+        name: "ShadowFlow"
         address: "noreply@example.com"
     inputs:
       to: ["user@example.com"]
@@ -224,7 +224,7 @@ nodes:
           user: "user@example.com"
           pass: "${SMTP_PASSWORD}"
       from:
-        name: "AgentGraph"
+        name: "ShadowFlow"
         address: "noreply@example.com"
     inputs:
       to: ["alice@example.com", "bob@example.com"]
@@ -249,7 +249,7 @@ nodes:
           user: "user@example.com"
           pass: "${SMTP_PASSWORD}"
       from:
-        name: "AgentGraph"
+        name: "ShadowFlow"
         address: "noreply@example.com"
       dry_run: true
     inputs:
@@ -273,7 +273,7 @@ nodes:
           user: "user@example.com"
           pass: "${SMTP_PASSWORD}"
       from:
-        name: "AgentGraph"
+        name: "ShadowFlow"
         address: "noreply@example.com"
       template:
         enabled: true
@@ -399,4 +399,4 @@ npm install nodemailer@^6.9.0 handlebars@^4.7.0 mustache@^4.2.0
 
 ## License
 
-This custom node is part of AgentGraph and follows the same license.
+This custom node is part of ShadowFlow and follows the same license.

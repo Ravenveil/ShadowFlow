@@ -8,7 +8,7 @@ import asyncio
 from datetime import datetime
 import uuid
 
-from agentgraph.memory import (
+from shadowflow.memory import (
     SessionMemory,
     UserMemory,
     GlobalMemory,

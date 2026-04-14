@@ -1,16 +1,16 @@
-from agentgraph.core.agent import Agent, AgentConfig, AgentResult
+from shadowflow.core.agent import Agent, AgentConfig, AgentResult
 try:
-    from agentgraph.core.graph import AgentGraph
+    from shadowflow.core.graph import ShadowFlow
 except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
-    AgentGraph = None
+    ShadowFlow = None
 
 try:
-    from agentgraph.core.router import RuleRouter, SwarmRouter
+    from shadowflow.core.router import RuleRouter, SwarmRouter
 except ImportError:  # pragma: no cover - legacy optional export guard
-    from agentgraph.core.router import RuleRouter
+    from shadowflow.core.router import RuleRouter
     SwarmRouter = None
-from agentgraph.core.state import State, AgentState, AgentContext, AgentStatus
-from agentgraph.core.node import (
+from shadowflow.core.state import State, AgentState, AgentContext, AgentStatus
+from shadowflow.core.node import (
     BaseNode,
     NodeConfig,
     NodeResult,
@@ -18,7 +18,7 @@ from agentgraph.core.node import (
     FunctionNode,
     node as node_decorator,
 )
-from agentgraph.core.registry import (
+from shadowflow.core.registry import (
     NodeRegistry,
     RegistryEntry,
     get_registry,
@@ -27,9 +27,9 @@ from agentgraph.core.registry import (
     list_nodes,
     node_exists,
 )
-from agentgraph.core.errors import (
+from shadowflow.core.errors import (
     # Error classes
-    AgentGraphError,
+    ShadowFlowError,
     ValidationError,
     ExecutionError,
     NodeError,
@@ -59,7 +59,7 @@ __all__ = [
     "AgentConfig",
     "AgentResult",
     # Graph
-    "AgentGraph",
+    "ShadowFlow",
     # Router
     "RuleRouter",
     "SwarmRouter",
@@ -84,7 +84,7 @@ __all__ = [
     "list_nodes",
     "node_exists",
     # Errors
-    "AgentGraphError",
+    "ShadowFlowError",
     "ValidationError",
     "ExecutionError",
     "NodeError",

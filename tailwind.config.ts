@@ -8,7 +8,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // AgentGraph 品牌色
+        // ShadowFlow 品牌色
         primary: {
           50: '#eff6ff',
           100: '#dbeafe',

@@ -4,10 +4,10 @@ import asyncio
 import logging
 import re
 
-from agentgraph.core.agent import Agent, AgentResult
-from agentgraph.core.router import Router
-from agentgraph.memory.base import Memory
-from agentgraph.memory.layers import LayeredMemory, LayerType
+from shadowflow.core.agent import Agent, AgentResult
+from shadowflow.core.router import Router
+from shadowflow.memory.base import Memory
+from shadowflow.memory.layers import LayeredMemory, LayerType
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class GraphResult:
     steps: List[AgentResult]
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-class AgentGraph:
+class ShadowFlow:
     def __init__(
         self,
         memory: Optional[LayeredMemory] = None,
@@ -248,7 +248,7 @@ class AgentGraph:
         """
         lines = []
         lines.append("┌─────────────────────────────────┐")
-        lines.append("│         AgentGraph Flow          │")
+        lines.append("│         ShadowFlow Flow          │")
         lines.append("└─────────────────────────────────┘")
         lines.append("")
         lines.append(f"START → [{self._start_agent}]")

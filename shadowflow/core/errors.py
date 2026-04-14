@@ -1,5 +1,5 @@
 """
-Error handling module for AgentGraph.
+Error handling module for ShadowFlow.
 
 This module provides error classes, logging, recovery mechanisms,
 and the circuit breaker pattern for robust error handling.
@@ -16,7 +16,7 @@ from functools import wraps
 
 
 class ErrorCode(Enum):
-    """Standard error codes for AgentGraph."""
+    """Standard error codes for ShadowFlow."""
     # General errors
     UNKNOWN = "E000"
     INTERNAL_ERROR = "E001"
@@ -65,10 +65,10 @@ class ErrorCode(Enum):
     CIRCUIT_TIMEOUT = "E701"
 
 
-class AgentGraphError(Exception):
-    """Base exception class for AgentGraph.
+class ShadowFlowError(Exception):
+    """Base exception class for ShadowFlow.
 
-    All custom exceptions in AgentGraph should inherit from this class.
+    All custom exceptions in ShadowFlow should inherit from this class.
 
     Attributes:
         code: Error code for categorization.
@@ -110,7 +110,7 @@ class AgentGraphError(Exception):
         return f"{self.__class__.__name__}(code={self.code.value}, message={self.message!r})"
 
 
-class ValidationError(AgentGraphError):
+class ValidationError(ShadowFlowError):
     """Exception raised for validation errors."""
 
     def __init__(
@@ -122,7 +122,7 @@ class ValidationError(AgentGraphError):
         super().__init__(message, code, details)
 
 
-class ExecutionError(AgentGraphError):
+class ExecutionError(ShadowFlowError):
     """Exception raised for execution errors."""
 
     def __init__(
@@ -134,7 +134,7 @@ class ExecutionError(AgentGraphError):
         super().__init__(message, code, details)
 
 
-class NodeError(AgentGraphError):
+class NodeError(ShadowFlowError):
     """Exception raised for node-related errors."""
 
     def __init__(
@@ -150,7 +150,7 @@ class NodeError(AgentGraphError):
         super().__init__(message, code, details)
 
 
-class CircuitBreakerError(AgentGraphError):
+class CircuitBreakerError(ShadowFlowError):
     """Exception raised when circuit breaker is open."""
 
     def __init__(
@@ -324,7 +324,7 @@ def validate_range(
 @dataclass
 class ErrorLog:
     """Represents a single error log entry."""
-    error: AgentGraphError
+    error: ShadowFlowError
     context: Dict[str, Any] = field(default_factory=dict)
     stack_trace: str = ""
     timestamp: datetime = field(default_factory=datetime.utcnow)
@@ -339,7 +339,7 @@ class ErrorLogger:
 
     def __init__(
         self,
-        name: str = "agentgraph",
+        name: str = "shadowflow",
         max_history: int = 1000,
         level: int = logging.ERROR
     ):
@@ -368,7 +368,7 @@ class ErrorLogger:
 
     def log(
         self,
-        error: AgentGraphError,
+        error: ShadowFlowError,
         context: Optional[Dict[str, Any]] = None,
         include_trace: bool = True
     ) -> None:
@@ -492,10 +492,10 @@ class ErrorHandler:
             The original error if no fallback is registered.
         """
         # Log the error
-        if isinstance(error, AgentGraphError):
+        if isinstance(error, ShadowFlowError):
             self._logger.log(error, context)
         else:
-            wrapped = AgentGraphError(
+            wrapped = ShadowFlowError(
                 str(error),
                 code=ErrorCode.INTERNAL_ERROR,
                 details={"original_type": type(error).__name__}
@@ -711,10 +711,10 @@ class CircuitBreaker:
             self._stats.failure_count += 1
             self._stats.last_failure_time = datetime.utcnow()
 
-            if isinstance(error, AgentGraphError):
+            if isinstance(error, ShadowFlowError):
                 self._logger.log(error, {"circuit_breaker": self.name})
             else:
-                wrapped = AgentGraphError(
+                wrapped = ShadowFlowError(
                     str(error),
                     code=ErrorCode.EXECUTION_FAILED,
                     details={"circuit_breaker": self.name}

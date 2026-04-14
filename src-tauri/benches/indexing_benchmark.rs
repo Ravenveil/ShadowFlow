@@ -2,8 +2,8 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Benchmark
 use tempfile::tempdir;
 use std::fs;
 use std::path::Path;
-use agentgraph::knowledge_base::KnowledgeBase;
-use agentgraph::config::AppConfig;
+use shadowflow::knowledge_base::KnowledgeBase;
+use shadowflow::config::AppConfig;
 
 fn indexing_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("KnowledgeBase Indexing");

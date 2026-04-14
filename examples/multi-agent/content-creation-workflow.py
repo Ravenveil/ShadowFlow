@@ -6,7 +6,7 @@ working together to create high-quality content.
 """
 
 import asyncio
-from agentgraph import AgentGraph, Agent, AgentConfig, SQLiteMemory
+from shadowflow import ShadowFlow, Agent, AgentConfig, SQLiteMemory
 from typing import Dict, Any
 
 
@@ -153,7 +153,7 @@ async def execute_content_creation_workflow(topic: str, user_id: str):
 
     # Initialize the graph
     memory = SQLiteMemory()
-    graph = AgentGraph(memory=memory)
+    graph = ShadowFlow(memory=memory)
 
     # Create and add agents
     agents = create_content_creation_agents()

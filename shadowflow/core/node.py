@@ -1,5 +1,5 @@
 """
-Node module for AgentGraph.
+Node module for ShadowFlow.
 
 This module provides the base node abstraction for the graph system.
 """

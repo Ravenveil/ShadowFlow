@@ -1,7 +1,7 @@
 import pytest
 import asyncio
-from agentgraph import AgentGraph, Agent, AgentConfig, SQLiteMemory
-from agentgraph.memory.layers import LayeredMemory
+from shadowflow import ShadowFlow, Agent, AgentConfig, SQLiteMemory
+from shadowflow.memory.layers import LayeredMemory
 
 pytestmark = pytest.mark.legacy
 
@@ -32,7 +32,7 @@ async def test_agent_execution():
 @pytest.mark.asyncio
 async def test_graph_creation():
     memory = SQLiteMemory(":memory:")
-    graph = AgentGraph(memory=memory)
+    graph = ShadowFlow(memory=memory)
     
     config = AgentConfig(
         name="test_agent",
@@ -49,7 +49,7 @@ async def test_graph_execution():
     memory = SQLiteMemory(":memory:")
     await memory._initialize()
     # 直接使用 SQLiteMemory，而不是 LayeredMemory
-    graph = AgentGraph(memory=memory)
+    graph = ShadowFlow(memory=memory)
     
     config = AgentConfig(
         name="test_agent",

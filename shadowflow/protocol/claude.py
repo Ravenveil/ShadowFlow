@@ -69,8 +69,8 @@ class FallbackChain:
         return result
 
     async def _delegate(self, delegate_to, *args, **kwargs):
-        # 由 AgentGraph 调用其他 agent
-        raise NotImplementedError("Delegation requires AgentGraph context")
+        # 由 ShadowFlow 调用其他 agent
+        raise NotImplementedError("Delegation requires ShadowFlow context")
 
 
 @dataclass

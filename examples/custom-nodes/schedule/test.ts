@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import ScheduleExecutor, { nodeDefinition, resetAllScheduleStates } from './executor';
-import { NodeContext } from 'agentgraph';
+import { NodeContext } from 'shadowflow';
 
 describe('ScheduleExecutor', () => {
   let executor: ScheduleExecutor;

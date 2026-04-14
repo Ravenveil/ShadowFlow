@@ -5,7 +5,7 @@ Topology 类单元测试
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 
-from agentgraph.core.topology import (
+from shadowflow.core.topology import (
     Topology, TopologyConfig, HierarchicalTopology, MeshTopology,
     RingTopology, StarTopology, TopologyFactory, RouteStrategy,
     create_topology_from_dict

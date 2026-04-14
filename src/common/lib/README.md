@@ -1,6 +1,6 @@
-# AgentGraph 工作流自动生成算法
+# ShadowFlow 工作流自动生成算法
 
-AgentGraph 的核心模块，提供基于任务特征自动生成工作流的能力。
+ShadowFlow 的核心模块，提供基于任务特征自动生成工作流的能力。
 
 ## 特性
 
@@ -14,13 +14,13 @@ AgentGraph 的核心模块，提供基于任务特征自动生成工作流的能
 ### 安装
 
 ```bash
-npm install @agentgraph/generator
+npm install @shadowflow/generator
 ```
 
 ### 基础使用
 
 ```typescript
-import { TaskAnalyzer, WorkflowGenerator } from '@agentgraph/generator';
+import { TaskAnalyzer, WorkflowGenerator } from '@shadowflow/generator';
 
 // 1. 创建分析器并分析任务
 const analyzer = new TaskAnalyzer();
@@ -38,7 +38,7 @@ console.log(workflow.metadata.confidence);  // 置信度
 ### 便捷函数
 
 ```typescript
-import { generateWorkflow } from '@agentgraph/generator';
+import { generateWorkflow } from '@shadowflow/generator';
 
 // 一行代码生成工作流
 const workflow = await generateWorkflow(
@@ -99,7 +99,7 @@ const features = await analyzer.analyze('实现一个用户认证模块');
 解析和执行规则：
 
 ```typescript
-import { RuleEngine } from '@agentgraph/generator';
+import { RuleEngine } from '@shadowflow/generator';
 
 const engine = new RuleEngine({
   rule_files: [

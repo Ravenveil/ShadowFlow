@@ -4,7 +4,7 @@
 import nodemailer, { Transporter, SentMessageInfo } from 'nodemailer';
 import Handlebars from 'handlebars';
 import Mustache from 'mustache';
-import { BaseNodeExecutor, NodeContext, NodeResult } from 'agentgraph';
+import { BaseNodeExecutor, NodeContext, NodeResult } from 'shadowflow';
 
 interface EmailConfig {
   smtp: {

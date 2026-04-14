@@ -1,5 +1,5 @@
 /**
- * AgentGraph 工作流生成器模块
+ * ShadowFlow 工作流生成器模块
  */
 
 export { RuleEngine, RuleParseError, RuleExecutionError, createRuleEngine } from './rule-engine.js';

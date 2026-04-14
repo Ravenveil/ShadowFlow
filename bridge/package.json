@@ -1,7 +1,7 @@
 {
-  "name": "@agentgraph/bridge",
+  "name": "@shadowflow/bridge",
   "version": "0.1.0",
-  "description": "AgentGraph × 0G KV Bridge — HTTP proxy for 0G KV Store",
+  "description": "ShadowFlow × 0G KV Bridge — HTTP proxy for 0G KV Store",
   "main": "dist/index.js",
   "scripts": {
     "start": "ts-node index.ts",

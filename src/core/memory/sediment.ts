@@ -114,8 +114,8 @@ export class SedimentLayer {
 
   constructor(config?: Partial<ISedimentConfig>) {
     this.config = {
-      memoryPath: config?.memoryPath ?? '.claude/projects/E--VScode-AgentGraph/memory',
-      topicDir: config?.topicDir ?? '.claude/projects/E--VScode-AgentGraph/memory/topics',
+      memoryPath: config?.memoryPath ?? '.claude/projects/E--VScode-ShadowFlow/memory',
+      topicDir: config?.topicDir ?? '.claude/projects/E--VScode-ShadowFlow/memory/topics',
       maxEntryLines: config?.maxEntryLines ?? 200,
       minSuccessOccurrences: config?.minSuccessOccurrences ?? 3,
       importanceThreshold: config?.importanceThreshold ?? 0.5,

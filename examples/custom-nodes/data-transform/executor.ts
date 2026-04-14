@@ -5,7 +5,7 @@ import { parseString, Builder } from 'xml2js';
 import { parse as csvParse } from 'csv-parser';
 import { createObjectCsvWriter } from 'csv-writer';
 import { Readable } from 'stream';
-import { BaseNodeExecutor, NodeContext, NodeResult } from 'agentgraph';
+import { BaseNodeExecutor, NodeContext, NodeResult } from 'shadowflow';
 
 interface DataTransformConfig {
   input_format: 'json' | 'xml' | 'csv' | 'auto';

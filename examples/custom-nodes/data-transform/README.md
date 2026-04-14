@@ -280,4 +280,4 @@ npm install xml2js@^0.6.0 csv-parser@^3.0.0 csv-writer@^1.6.0
 
 ## License
 
-This custom node is part of AgentGraph and follows the same license.
+This custom node is part of ShadowFlow and follows the same license.

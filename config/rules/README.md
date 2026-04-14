@@ -1,6 +1,6 @@
-# AgentGraph 工作流自动生成规则配置
+# ShadowFlow 工作流自动生成规则配置
 
-本目录包含 AgentGraph 工作流自动生成算法的规则配置文件。
+本目录包含 ShadowFlow 工作流自动生成算法的规则配置文件。
 
 ## 目录结构
 
@@ -304,7 +304,7 @@ rule_engine:
 启用详细日志以调试规则行为：
 
 ```typescript
-import { createTaskAnalyzer, createWorkflowGenerator } from '@agentgraph/generator';
+import { createTaskAnalyzer, createWorkflowGenerator } from '@shadowflow/generator';
 
 const analyzer = createTaskAnalyzer({ verbose: true });
 const generator = createWorkflowGenerator({ validate: true });

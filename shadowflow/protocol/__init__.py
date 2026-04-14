@@ -1,11 +1,11 @@
-from agentgraph.protocol.claude import (
+from shadowflow.protocol.claude import (
     ClaudeProtocol,
     FallbackChain,
     FallbackConfig,
     FallbackStrategy,
     ReasoningTrace,
 )
-from agentgraph.protocol.validator import (
+from shadowflow.protocol.validator import (
     ResultValidator,
     ValidationResult,
     ValidationIssue,

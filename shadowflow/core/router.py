@@ -6,10 +6,10 @@ import os
 from datetime import datetime
 from dataclasses import dataclass, field
 
-from agentgraph.core.agent import Agent
+from shadowflow.core.agent import Agent
 
 if TYPE_CHECKING:
-    from agentgraph.core.topology import Topology, TopologyConfig, RouteStrategy
+    from shadowflow.core.topology import Topology, TopologyConfig, RouteStrategy
 
 
 class Router(ABC):

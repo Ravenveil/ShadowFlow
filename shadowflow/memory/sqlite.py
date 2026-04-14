@@ -2,13 +2,13 @@ import aiosqlite
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from agentgraph.memory.base import Memory
+from shadowflow.memory.base import Memory
 
 
 class SQLiteMemory(Memory):
     """SQLite Memory - Three-layer architecture support"""
 
-    def __init__(self, db_path: str = "agentgraph.db"):
+    def __init__(self, db_path: str = "shadowflow.db"):
         self.db_path = db_path
         self._initialized = False
         self._db = None

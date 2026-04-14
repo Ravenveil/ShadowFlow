@@ -4,8 +4,8 @@
 """
 
 import asyncio
-from agentgraph.core.agent import AgentConfig, Agent
-from agentgraph.core.topology import (
+from shadowflow.core.agent import AgentConfig, Agent
+from shadowflow.core.topology import (
     TopologyFactory,
     create_topology_from_dict,
     HierarchicalTopology,
@@ -15,7 +15,7 @@ from agentgraph.core.topology import (
     TopologyConfig,
     RouteStrategy
 )
-from agentgraph.core.router import TopologyRouter
+from shadowflow.core.router import TopologyRouter
 
 
 async def demo_hierarchical_topology():
@@ -201,7 +201,7 @@ async def demo_composite_router():
     """演示复合路由器 - 拓扑切换"""
     print("\n=== 复合路由器示例 ===")
 
-    from agentgraph.core.router import CompositeRouter
+    from shadowflow.core.router import CompositeRouter
 
     # 创建多个拓扑
     hierarchical = TopologyFactory.create_hierarchical(

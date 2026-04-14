@@ -2,7 +2,7 @@
 
 > Legacy / Concept Note
 >
-> 这是一份历史性的概念示例，不是当前 AgentGraph 的主线集成入口。当前请优先查看 [Runtime Contract Spec](../../docs/RUNTIME_CONTRACT_SPEC.md) 和 [Official Phase 1 Examples](../../README.md#official-phase-1-examples)。
+> 这是一份历史性的概念示例，不是当前 ShadowFlow 的主线集成入口。当前请优先查看 [Runtime Contract Spec](../../docs/RUNTIME_CONTRACT_SPEC.md) 和 [Official Phase 1 Examples](../../README.md#official-phase-1-examples)。
 
 ## 这份示例保留了什么
 

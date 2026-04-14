@@ -5,7 +5,7 @@
 - `runtime-contract/`
   - Phase 1 官方主线示例
   - 与 `docs/CORE_CHARTER.md`、`docs/RUNTIME_CONTRACT_SPEC.md`、`docs/WORKFLOW_SCHEMA.md` 对齐
-  - 可直接被 `agentgraph validate` / `agentgraph run` 消费
+  - 可直接被 `shadowflow validate` / `shadowflow run` 消费
 - 其他历史示例
   - 主要保留为 legacy / 研究 / 旧接口参考
   - 当前不视为 Phase 1 canonical workflow schema 的权威来源
@@ -30,17 +30,17 @@
 ### 校验 workflow
 
 ```bash
-agentgraph validate -w examples/runtime-contract/docs-gap-review.yaml
+shadowflow validate -w examples/runtime-contract/docs-gap-review.yaml
 ```
 
 ### 执行 workflow
 
 ```bash
-agentgraph run -w examples/runtime-contract/docs-gap-review.yaml -i "{\"goal\":\"Analyze docs gaps\"}"
+shadowflow run -w examples/runtime-contract/docs-gap-review.yaml -i "{\"goal\":\"Analyze docs gaps\"}"
 ```
 
 ```bash
-agentgraph run -w examples/runtime-contract/research-review-loop.yaml -i "{\"goal\":\"Produce a research review\"}"
+shadowflow run -w examples/runtime-contract/research-review-loop.yaml -i "{\"goal\":\"Produce a research review\"}"
 ```
 
 ## Canonical 结构

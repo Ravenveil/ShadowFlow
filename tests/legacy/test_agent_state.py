@@ -1,8 +1,8 @@
 import pytest
 import asyncio
-from agentgraph.core.state import AgentState, AgentContext, AgentStatus
-from agentgraph.core.agent import Agent
-from agentgraph.core.graph import AgentGraph
+from shadowflow.core.state import AgentState, AgentContext, AgentStatus
+from shadowflow.core.agent import Agent
+from shadowflow.core.graph import ShadowFlow
 
 pytestmark = pytest.mark.legacy
 

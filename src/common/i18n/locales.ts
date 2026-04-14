@@ -29,7 +29,7 @@ export const translations = {
 
     // 应用标题
     app: {
-      title: 'AgentGraph',
+      title: 'ShadowFlow',
       subtitle: 'Visual Workflow Editor for AI Agents',
     },
 
@@ -216,7 +216,7 @@ export const translations = {
 
     // 应用标题
     app: {
-      title: 'AgentGraph',
+      title: 'ShadowFlow',
       subtitle: 'AI Agent 可视化工作流编辑器',
     },
 

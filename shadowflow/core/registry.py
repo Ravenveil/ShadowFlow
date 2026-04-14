@@ -1,5 +1,5 @@
 """
-Registry module for AgentGraph.
+Registry module for ShadowFlow.
 
 This module provides the node registry for managing and discovering nodes.
 """
@@ -9,8 +9,8 @@ from dataclasses import dataclass, field
 import threading
 import inspect
 
-from agentgraph.core.node import BaseNode, NodeConfig
-from agentgraph.core.errors import (
+from shadowflow.core.node import BaseNode, NodeConfig
+from shadowflow.core.errors import (
     ValidationError,
     NodeError,
     raise_if_empty,

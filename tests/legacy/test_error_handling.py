@@ -1,17 +1,17 @@
 import pytest
 import asyncio
-from agentgraph.core.errors import (
-    AgentGraphError, ValidationError, ExecutionError, ErrorCode,
+from shadowflow.core.errors import (
+    ShadowFlowError, ValidationError, ExecutionError, ErrorCode,
     ErrorLogger, ErrorHandler, CircuitBreaker, raise_if_empty,
     raise_if_length, validate_type
 )
-from agentgraph.core.state import AgentState, AgentStatus
+from shadowflow.core.state import AgentState, AgentStatus
 
 pytestmark = pytest.mark.legacy
 
 def test_agent_graph_error():
-    """测试 AgentGraph 错误"""
-    error = AgentGraphError("Test error")
+    """测试 ShadowFlow 错误"""
+    error = ShadowFlowError("Test error")
     assert "Test error" in str(error)
     assert error.code == ErrorCode.UNKNOWN
 
@@ -39,7 +39,7 @@ async def test_agent_state_error_handling():
 @pytest.mark.asyncio
 async def test_memory_error_handling():
     """测试记忆系统错误处理"""
-    from agentgraph.memory.sqlite import SQLiteMemory
+    from shadowflow.memory.sqlite import SQLiteMemory
 
     # SQLiteMemory 接受空字符串，创建内存数据库
     memory = SQLiteMemory("")
@@ -51,7 +51,7 @@ async def test_error_logging():
     logger = ErrorLogger()
 
     # 记录错误
-    error = AgentGraphError("Test error")
+    error = ShadowFlowError("Test error")
     logger.log(error)
 
     # 检查日志
@@ -68,10 +68,10 @@ async def test_error_recovery():
     def custom_error_handler(error, context=None):
         return {"recovered": True, "original_error": str(error)}
 
-    handler.register_fallback(AgentGraphError, custom_error_handler)
+    handler.register_fallback(ShadowFlowError, custom_error_handler)
 
     # 测试错误处理
-    error = AgentGraphError("Test error")
+    error = ShadowFlowError("Test error")
     result = handler.handle(error)
 
     assert result["recovered"] is True

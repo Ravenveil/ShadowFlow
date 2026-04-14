@@ -1,11 +1,11 @@
 /**
- * AgentGraph 自动生成算法主入口
+ * ShadowFlow 自动生成算法主入口
  *
  * 本模块提供基于任务特征自动生成工作流的能力
  *
  * @example
  * ```typescript
- * import { TaskAnalyzer, WorkflowGenerator } from '@agentgraph/generator';
+ * import { TaskAnalyzer, WorkflowGenerator } from '@shadowflow/generator';
  *
  * // 1. 分析任务
  * const analyzer = new TaskAnalyzer();

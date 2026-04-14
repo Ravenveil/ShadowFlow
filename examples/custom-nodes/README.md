@@ -1,6 +1,6 @@
-# AgentGraph 自定义节点示例
+# ShadowFlow 自定义节点示例
 
-本目录包含 AgentGraph 的自定义节点示例，展示了如何创建和使用自定义节点。
+本目录包含 ShadowFlow 的自定义节点示例，展示了如何创建和使用自定义节点。
 
 ## 节点列表
 
@@ -14,7 +14,7 @@
 - 可配置的重试逻辑和超时设置
 - 自动 JSON 响应解析
 
-**文件位置：** `E:\VScode\AgentGraph\examples\custom-nodes\api-call\`
+**文件位置：** `E:\VScode\ShadowFlow\examples\custom-nodes\api-call\`
 
 **使用示例：**
 ```yaml
@@ -42,7 +42,7 @@ nodes:
 - 字段重命名和转换
 - 数据验证支持
 
-**文件位置：** `E:\VScode\AgentGraph\examples\custom-nodes\data-transform\`
+**文件位置：** `E:\VScode\ShadowFlow\examples\custom-nodes\data-transform\`
 
 **使用示例：**
 ```yaml
@@ -71,7 +71,7 @@ nodes:
 - 多条件 AND/OR 逻辑
 - 结果排序和限制
 
-**文件位置：** `E:\VScode\AgentGraph\examples\custom-nodes\filter\`
+**文件位置：** `E:\VScode\ShadowFlow\examples\custom-nodes\filter\`
 
 **使用示例：**
 ```yaml
@@ -104,7 +104,7 @@ nodes:
 - 工作日/月度计划
 - 时区支持和时间窗口
 
-**文件位置：** `E:\VScode\AgentGraph\examples\custom-nodes\schedule\`
+**文件位置：** `E:\VScode\ShadowFlow\examples\custom-nodes\schedule\`
 
 **使用示例：**
 ```yaml
@@ -131,7 +131,7 @@ nodes:
 - 模板引擎（Handlebars、Mustache）
 - 附件支持
 
-**文件位置：** `E:\VScode\AgentGraph\examples\custom-nodes\email\`
+**文件位置：** `E:\VScode\ShadowFlow\examples\custom-nodes\email\`
 
 **使用示例：**
 ```yaml
@@ -146,7 +146,7 @@ nodes:
           user: user@example.com
           pass: "${SMTP_PASSWORD}"
       from:
-        name: "AgentGraph"
+        name: "ShadowFlow"
         address: noreply@example.com
     inputs:
       to: ["user@example.com"]
@@ -163,7 +163,7 @@ nodes:
 ### 方法 1：注册到节点注册表
 
 ```typescript
-import { NodeRegistry } from 'agentgraph';
+import { NodeRegistry } from 'shadowflow';
 import ApiCallExecutor from './api-call/executor';
 
 NodeRegistry.register({
@@ -174,7 +174,7 @@ NodeRegistry.register({
 
 ### 方法 2：通过配置文件
 
-在 `agentgraph.config.ts` 中配置：
+在 `shadowflow.config.ts` 中配置：
 
 ```typescript
 export default {
@@ -192,13 +192,13 @@ export default {
 
 ```bash
 # 注册节点
-agentgraph node register ./examples/custom-nodes/api-call
+shadowflow node register ./examples/custom-nodes/api-call
 
 # 验证节点
-agentgraph node validate api-call
+shadowflow node validate api-call
 
 # 测试节点
-agentgraph node test api-call --input '{"data": "test"}'
+shadowflow node test api-call --input '{"data": "test"}'
 ```
 
 ---
@@ -251,7 +251,7 @@ configSchema:
 ### 执行器实现 (executor.ts)
 
 ```typescript
-import { BaseNodeExecutor, NodeContext, NodeResult } from 'agentgraph';
+import { BaseNodeExecutor, NodeContext, NodeResult } from 'shadowflow';
 
 export default class MyNodeExecutor extends BaseNodeExecutor {
   async execute(context: NodeContext): Promise<NodeResult> {
@@ -338,4 +338,4 @@ npm install nodemailer@^6.9.0 handlebars@^4.7.0 mustache@^4.2.0
 
 ## 许可证
 
-这些自定义节点示例遵循 AgentGraph 项目的许可证。
+这些自定义节点示例遵循 ShadowFlow 项目的许可证。

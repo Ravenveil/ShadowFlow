@@ -1,8 +1,8 @@
 import pytest
 import asyncio
-from agentgraph.memory.base import BaseMemory
-from agentgraph.memory.sqlite import SQLiteMemory
-from agentgraph.memory.session import SessionMemory
+from shadowflow.memory.base import BaseMemory
+from shadowflow.memory.sqlite import SQLiteMemory
+from shadowflow.memory.session import SessionMemory
 
 pytestmark = pytest.mark.legacy
 

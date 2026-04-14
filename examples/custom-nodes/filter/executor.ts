@@ -3,7 +3,7 @@
 
 import { get } from 'lodash';
 import { JSONPath } from 'jsonpath-plus';
-import { BaseNodeExecutor, NodeContext, NodeResult } from 'agentgraph';
+import { BaseNodeExecutor, NodeContext, NodeResult } from 'shadowflow';
 
 interface FilterCondition {
   field: string;

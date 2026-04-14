@@ -15,7 +15,7 @@ class SecureEnvelope:
 class SecureExecutionProtocol:
     """
     Implements the Distributed Secure Execution Protocol (SEP).
-    This ensures that any command sent from AgentGraph to a physical 
+    This ensures that any command sent from ShadowFlow to a physical 
     ShadowClaw node is signed and verifiable.
     """
     

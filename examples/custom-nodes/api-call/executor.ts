@@ -2,7 +2,7 @@
 // Executes REST API calls with configurable methods, headers, and body
 
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
-import { BaseNodeExecutor, NodeContext, NodeResult } from 'agentgraph';
+import { BaseNodeExecutor, NodeContext, NodeResult } from 'shadowflow';
 
 interface ApiCallConfig {
   url: string;

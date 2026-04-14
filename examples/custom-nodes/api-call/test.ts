@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import axios from 'axios';
 import ApiCallExecutor, { nodeDefinition } from './executor';
-import { NodeContext } from 'agentgraph';
+import { NodeContext } from 'shadowflow';
 
 // Mock axios
 vi.mock('axios');

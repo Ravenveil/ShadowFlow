@@ -1,9 +1,9 @@
 import pytest
 import asyncio
 from unittest.mock import Mock, AsyncMock
-from agentgraph.core.graph import AgentGraph
-from agentgraph.core.agent import Agent
-from agentgraph.memory.sqlite import SQLiteMemory
+from shadowflow.core.graph import ShadowFlow
+from shadowflow.core.agent import Agent
+from shadowflow.memory.sqlite import SQLiteMemory
 
 pytestmark = pytest.mark.legacy
 
@@ -12,7 +12,7 @@ pytestmark = pytest.mark.legacy
 async def test_workflow_creation():
     """测试工作流创建"""
     memory = SQLiteMemory(":memory:")
-    graph = AgentGraph(memory=memory)
+    graph = ShadowFlow(memory=memory)
 
     # 验证工作流初始化
     assert graph.memory == memory
@@ -23,7 +23,7 @@ async def test_workflow_creation():
 async def test_agent_addition():
     """测试添加代理"""
     memory = SQLiteMemory(":memory:")
-    graph = AgentGraph(memory=memory)
+    graph = ShadowFlow(memory=memory)
 
     # 创建模拟代理
     mock_agent = Mock(spec=Agent)
@@ -42,7 +42,7 @@ async def test_agent_addition():
 async def test_workflow_execution():
     """测试工作流执行"""
     memory = SQLiteMemory(":memory:")
-    graph = AgentGraph(memory=memory)
+    graph = ShadowFlow(memory=memory)
 
     # 创建模拟代理
     mock_agent = Mock(spec=Agent)
@@ -63,7 +63,7 @@ async def test_workflow_execution():
 async def test_workflow_execution_with_error():
     """测试工作流执行错误处理"""
     memory = SQLiteMemory(":memory:")
-    graph = AgentGraph(memory=memory)
+    graph = ShadowFlow(memory=memory)
 
     # 创建会抛出错误的代理
     mock_agent = Mock(spec=Agent)
@@ -81,7 +81,7 @@ async def test_workflow_execution_with_error():
 async def test_parallel_execution():
     """测试并行执行"""
     memory = SQLiteMemory(":memory:")
-    graph = AgentGraph(memory=memory)
+    graph = ShadowFlow(memory=memory)
 
     # 创建多个代理
     agents = []
@@ -110,7 +110,7 @@ async def test_parallel_execution():
 async def test_workflow_metrics():
     """测试工作流指标收集"""
     memory = SQLiteMemory(":memory:")
-    graph = AgentGraph(memory=memory)
+    graph = ShadowFlow(memory=memory)
 
     # 创建代理
     mock_agent = Mock(spec=Agent)

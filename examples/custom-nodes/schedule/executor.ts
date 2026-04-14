@@ -4,7 +4,7 @@
 import { parseExpression } from 'cron-parser';
 import { tz, utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
 import { format, addSeconds, addMinutes, addHours, addDays, startOfDay, set } from 'date-fns';
-import { BaseNodeExecutor, NodeContext, NodeResult } from 'agentgraph';
+import { BaseNodeExecutor, NodeContext, NodeResult } from 'shadowflow';
 
 interface ScheduleConfig {
   mode: 'cron' | 'interval' | 'once' | 'daily' | 'weekly' | 'monthly';

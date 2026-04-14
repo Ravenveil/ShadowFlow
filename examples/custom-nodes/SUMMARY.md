@@ -2,12 +2,12 @@
 
 ## 任务概述
 
-为 AgentGraph 创建了 5 个自定义节点示例，展示了扩展机制的使用方法。
+为 ShadowFlow 创建了 5 个自定义节点示例，展示了扩展机制的使用方法。
 
 ## 已完成的节点
 
 ### 1. API 调用节点 (api-call)
-**路径：** `E:\VScode\AgentGraph\examples\custom-nodes\api-call\`
+**路径：** `E:\VScode\ShadowFlow\examples\custom-nodes\api-call\`
 
 **文件：**
 - `node.yaml` - 节点定义，包含 REST API 配置、认证方式、重试逻辑等
@@ -25,7 +25,7 @@
 ---
 
 ### 2. 数据转换节点 (data-transform)
-**路径：** `E:\VScode\AgentGraph\examples\custom-nodes\data-transform\`
+**路径：** `E:\VScode\ShadowFlow\examples\custom-nodes\data-transform\`
 
 **文件：**
 - `node.yaml` - 节点定义，支持 JSON/XML/CSV 格式转换配置
@@ -43,7 +43,7 @@
 ---
 
 ### 3. 条件过滤节点 (filter)
-**路径：** `E:\VScode\AgentGraph\examples\custom-nodes\filter\`
+**路径：** `E:\VScode\ShadowFlow\examples\custom-nodes\filter\`
 
 **文件：**
 - `node.yaml` - 节点定义，支持多种过滤模式和操作符
@@ -61,7 +61,7 @@
 ---
 
 ### 4. 定时触发节点 (schedule)
-**路径：** `E:\VScode\AgentGraph\examples\custom-nodes\schedule\`
+**路径：** `E:\VScode\ShadowFlow\examples\custom-nodes\schedule\`
 
 **文件：**
 - `node.yaml` - 节点定义，支持多种调度模式
@@ -82,7 +82,7 @@
 ---
 
 ### 5. 邮件通知节点 (email)
-**路径：** `E:\VScode\AgentGraph\examples\custom-nodes\email\`
+**路径：** `E:\VScode\ShadowFlow\examples\custom-nodes\email\`
 
 **文件：**
 - `node.yaml` - 节点定义，完整的 SMTP 配置
@@ -105,7 +105,7 @@
 ## 共同文档
 
 ### 总体 README
-**路径：** `E:\VScode\AgentGraph\examples\custom-nodes\README.md`
+**路径：** `E:\VScode\ShadowFlow\examples\custom-nodes\README.md`
 
 包含：
 - 所有节点的快速概览
@@ -154,7 +154,7 @@
 
 ### 1. 注册节点
 ```typescript
-import { NodeRegistry } from 'agentgraph';
+import { NodeRegistry } from 'shadowflow';
 import ApiCallExecutor from './api-call/executor';
 
 NodeRegistry.register({
@@ -234,4 +234,4 @@ npm test
 
 ## 文件位置
 
-所有文件位于：`E:\VScode\AgentGraph\examples\custom-nodes\`
+所有文件位于：`E:\VScode\ShadowFlow\examples\custom-nodes\`

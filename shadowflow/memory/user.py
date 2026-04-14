@@ -94,7 +94,7 @@ class UserMemory(BaseMemory):
         END;
     """
 
-    def __init__(self, db_path: str = "agentgraph_memory.db"):
+    def __init__(self, db_path: str = "shadowflow_memory.db"):
         """
         初始化用户记忆
 
@@ -508,7 +508,7 @@ class UserMemoryFactory:
     _instances: Dict[str, "UserMemory"] = {}
 
     @classmethod
-    def get(cls, user_id: str, db_path: str = "agentgraph_memory.db") -> "UserMemory":
+    def get(cls, user_id: str, db_path: str = "shadowflow_memory.db") -> "UserMemory":
         """
         获取或创建用户记忆实例
 

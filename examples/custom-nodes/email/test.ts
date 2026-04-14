@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import nodemailer from 'nodemailer';
 import EmailExecutor, { nodeDefinition } from './executor';
-import { NodeContext } from 'agentgraph';
+import { NodeContext } from 'shadowflow';
 
 // Mock nodemailer
 vi.mock('nodemailer', () => ({

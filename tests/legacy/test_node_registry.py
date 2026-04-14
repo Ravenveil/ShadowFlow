@@ -1,6 +1,6 @@
 import pytest
-from agentgraph.core.registry import NodeRegistry
-from agentgraph.core.node import BaseNode, NodeConfig
+from shadowflow.core.registry import NodeRegistry
+from shadowflow.core.node import BaseNode, NodeConfig
 
 pytestmark = pytest.mark.legacy
 

@@ -1,6 +1,6 @@
-# AgentGraph 前端项目
+# ShadowFlow 前端项目
 
-AgentGraph 的 React + TypeScript 前端应用，提供可视化的 AI Agent 工作流编辑器。
+ShadowFlow 的 React + TypeScript 前端应用，提供可视化的 AI Agent 工作流编辑器。
 
 ## 项目结构
 

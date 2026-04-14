@@ -30,8 +30,7 @@ ShadowFlow 当前阶段的正式定位是：
 
 ## Installation
 
-当前阶段推荐使用源码安装。
-`agentgraph` 这个 PyPI 名称已被其他项目占用，因此本项目暂未以该名字公开发布到 PyPI。
+当前阶段推荐使用源码安装，暂未发布到 PyPI。
 
 ### From Source
 
@@ -44,7 +43,7 @@ pip install -e .[dev]
 安装完成后可验证：
 
 ```bash
-agentgraph --help
+shadowflow --help
 python -m shadowflow.cli --help
 ```
 
@@ -98,19 +97,19 @@ metadata: {}
 ### 2. Validate
 
 ```bash
-agentgraph validate -w workflow.yaml
+shadowflow validate -w workflow.yaml
 ```
 
 ### 3. Run
 
 ```bash
-agentgraph run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}"
+shadowflow run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}"
 ```
 
 使用 markdown writeback：
 
 ```bash
-agentgraph run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}" --writeback markdown --writeback-root ./shadowflow-runtime
+shadowflow run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}" --writeback markdown --writeback-root ./shadowflow-runtime
 ```
 
 说明：
@@ -121,41 +120,41 @@ agentgraph run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}" --writebac
 ### 4. Export Workflow Graph
 
 ```bash
-agentgraph graph -w workflow.yaml
+shadowflow graph -w workflow.yaml
 ```
 
 ### 5. Compile a High-Level Template
 
 ```bash
-agentgraph compile --template docs-review-template --registry-root examples/highlevel/minimal-registry --var goal="Audit docs"
+shadowflow compile --template docs-review-template --registry-root examples/highlevel/minimal-registry --var goal="Audit docs"
 ```
 
 ### 6. Inspect or Scaffold High-Level Specs
 
 ```bash
-agentgraph presets list
-agentgraph patterns list
-agentgraph role-presets list
-agentgraph registry counts --registry-root examples/highlevel/minimal-registry
-agentgraph registry list --registry-root examples/highlevel/minimal-registry --kind agents
-agentgraph registry export --registry-root examples/highlevel/minimal-registry --output-root ./exported-registry
-agentgraph registry import --registry-root ./my-registry --preset single-reviewer --workflow-id docs_review_pack
-agentgraph init tool --registry-root ./my-registry --id filesystem --kind builtin
-agentgraph init role --registry-root ./my-registry --id reviewer
-agentgraph init role --registry-root ./my-registry --id strict_reviewer --preset reviewer
-agentgraph init skill --registry-root ./my-registry --id docs_review
-agentgraph init agent --registry-root ./my-registry --id docs_reviewer --role reviewer --skill docs_review --tool filesystem
-agentgraph init template --registry-root ./my-registry --id docs_review_template --agent-ref docs_reviewer --agent-node-id reviewer
-agentgraph init workflow --registry-root ./my-registry --id docs_review_pack --pattern single-reviewer --goal "Audit docs"
-agentgraph scaffold --registry-root ./my-registry --pattern planner-coder-reviewer --workflow-id feature_lane --goal "Ship a safe feature plan"
-agentgraph init workflow --registry-root ./my-registry --id research_lane --task-kind research --goal "Collect evidence and package a final summary"
-agentgraph init workflow --registry-root ./my-registry --id feature_lane --preset planner-coder-reviewer --goal "Ship a safe feature plan" --assign planner.focus="Only define execution milestones" --assign reviewer.owned_topics="regression,tests"
+shadowflow presets list
+shadowflow patterns list
+shadowflow role-presets list
+shadowflow registry counts --registry-root examples/highlevel/minimal-registry
+shadowflow registry list --registry-root examples/highlevel/minimal-registry --kind agents
+shadowflow registry export --registry-root examples/highlevel/minimal-registry --output-root ./exported-registry
+shadowflow registry import --registry-root ./my-registry --preset single-reviewer --workflow-id docs_review_pack
+shadowflow init tool --registry-root ./my-registry --id filesystem --kind builtin
+shadowflow init role --registry-root ./my-registry --id reviewer
+shadowflow init role --registry-root ./my-registry --id strict_reviewer --preset reviewer
+shadowflow init skill --registry-root ./my-registry --id docs_review
+shadowflow init agent --registry-root ./my-registry --id docs_reviewer --role reviewer --skill docs_review --tool filesystem
+shadowflow init template --registry-root ./my-registry --id docs_review_template --agent-ref docs_reviewer --agent-node-id reviewer
+shadowflow init workflow --registry-root ./my-registry --id docs_review_pack --pattern single-reviewer --goal "Audit docs"
+shadowflow scaffold --registry-root ./my-registry --pattern planner-coder-reviewer --workflow-id feature_lane --goal "Ship a safe feature plan"
+shadowflow init workflow --registry-root ./my-registry --id research_lane --task-kind research --goal "Collect evidence and package a final summary"
+shadowflow init workflow --registry-root ./my-registry --id feature_lane --preset planner-coder-reviewer --goal "Ship a safe feature plan" --assign planner.focus="Only define execution milestones" --assign reviewer.owned_topics="regression,tests"
 ```
 
 编译时如果你想直接看“这次生成了什么”，可以附带摘要：
 
 ```bash
-agentgraph compile --template docs-review-template --registry-root examples/highlevel/minimal-registry --var goal="Audit docs" --summary json
+shadowflow compile --template docs-review-template --registry-root examples/highlevel/minimal-registry --var goal="Audit docs" --summary json
 ```
 
 ### 7. Chat With an Executor
@@ -163,25 +162,25 @@ agentgraph compile --template docs-review-template --registry-root examples/high
 单轮对话：
 
 ```bash
-agentgraph chat --kind cli --provider claude --parse claude-json --message "请用一句中文介绍 ShadowFlow"
+shadowflow chat --kind cli --provider claude --parse claude-json --message "请用一句中文介绍 ShadowFlow"
 ```
 
 ### 8. Inspect Persisted Runtime Data
 
 ```bash
-agentgraph runs list
-agentgraph runs get --run-id <run_id>
-agentgraph runs graph --run-id <run_id>
-agentgraph checkpoints get --checkpoint-id <checkpoint_id>
-agentgraph sessions list
-agentgraph sessions get --session-id <session_id>
-agentgraph resume --run-id <run_id> --checkpoint-id <checkpoint_id>
+shadowflow runs list
+shadowflow runs get --run-id <run_id>
+shadowflow runs graph --run-id <run_id>
+shadowflow checkpoints get --checkpoint-id <checkpoint_id>
+shadowflow sessions list
+shadowflow sessions get --session-id <session_id>
+shadowflow resume --run-id <run_id> --checkpoint-id <checkpoint_id>
 ```
 
 ### 9. Serve HTTP API
 
 ```bash
-agentgraph serve --port 8000
+shadowflow serve --port 8000
 ```
 
 核心端点：
@@ -223,7 +222,7 @@ agentgraph serve --port 8000
 
 也可以把它们当作第一版 workflow pattern library：
 
-- `agentgraph patterns list`
+- `shadowflow patterns list`
 
 ## Built-In Role Archetypes
 
@@ -236,14 +235,14 @@ agentgraph serve --port 8000
 
 推荐入口：
 
-- `agentgraph init workflow`
-- `agentgraph scaffold`
+- `shadowflow init workflow`
+- `shadowflow scaffold`
 
 工作流层支持固定角色指派：
 
 - 在 `WorkflowTemplateSpec.agents[].assignment` 中声明
-- 或通过 `agentgraph init workflow --assign`
-- 或通过 `agentgraph scaffold --assign`
+- 或通过 `shadowflow init workflow --assign`
+- 或通过 `shadowflow scaffold --assign`
 
 工作流模板层现在还支持：
 
@@ -255,22 +254,22 @@ agentgraph serve --port 8000
 运行示例：
 
 ```bash
-agentgraph validate -w examples/runtime-contract/docs-gap-review.yaml
-agentgraph run -w examples/runtime-contract/docs-gap-review.yaml -i "{\"goal\":\"Analyze docs gaps\"}"
+shadowflow validate -w examples/runtime-contract/docs-gap-review.yaml
+shadowflow run -w examples/runtime-contract/docs-gap-review.yaml -i "{\"goal\":\"Analyze docs gaps\"}"
 ```
 
 CLI executor 示例：
 
 ```bash
-agentgraph run -w examples/runtime-contract/cli-agent-execution.yaml -i "{\"goal\":\"实现一个最小 CLI 调度验证\"}"
-agentgraph run -w examples/runtime-contract/cli-claude-execution.yaml -i "{\"goal\":\"实现一个最小 Claude CLI 调度验证\"}"
+shadowflow run -w examples/runtime-contract/cli-agent-execution.yaml -i "{\"goal\":\"实现一个最小 CLI 调度验证\"}"
+shadowflow run -w examples/runtime-contract/cli-claude-execution.yaml -i "{\"goal\":\"实现一个最小 Claude CLI 调度验证\"}"
 ```
 
 API executor 示例：
 
 ```bash
-agentgraph run -w examples/runtime-contract/api-agent-execution.yaml -i "{\"goal\":\"生成一个 API 执行计划\"}"
-agentgraph run -w examples/runtime-contract/api-anthropic-execution.yaml -i "{\"goal\":\"生成一个 Anthropic API 执行计划\"}"
+shadowflow run -w examples/runtime-contract/api-agent-execution.yaml -i "{\"goal\":\"生成一个 API 执行计划\"}"
+shadowflow run -w examples/runtime-contract/api-anthropic-execution.yaml -i "{\"goal\":\"生成一个 Anthropic API 执行计划\"}"
 ```
 
 ## Phase 1 Focus

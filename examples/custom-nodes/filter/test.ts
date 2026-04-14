@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import FilterExecutor, { nodeDefinition } from './executor';
-import { NodeContext } from 'agentgraph';
+import { NodeContext } from 'shadowflow';
 
 describe('FilterExecutor', () => {
   let executor: FilterExecutor;

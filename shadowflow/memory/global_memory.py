@@ -72,7 +72,7 @@ class GlobalMemory:
         )
     """
 
-    def __init__(self, db_path: str = "agentgraph_global.db"):
+    def __init__(self, db_path: str = "shadowflow_global.db"):
         """
         初始化全局记忆
 

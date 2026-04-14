@@ -173,4 +173,4 @@ npm install axios@^1.6.0
 
 ## License
 
-This custom node is part of AgentGraph and follows the same license.
+This custom node is part of ShadowFlow and follows the same license.

@@ -13,7 +13,7 @@ BRIDGE_PORT=${BRIDGE_PORT:-3099}
 BRIDGE_DIR="$(cd "$(dirname "$0")/../bridge" && pwd)"
 PYTHON="${PYTHON:-python}"
 
-echo "=== AgentGraph × 0G Bridge E2E Test ==="
+echo "=== ShadowFlow × 0G Bridge E2E Test ==="
 
 # ── 1. Start bridge ────────────────────────────────────────────
 echo
@@ -45,8 +45,8 @@ echo "3. Python ZeroGCheckpointStore round-trip ..."
 $PYTHON - <<PYEOF
 import sys
 sys.path.insert(0, ".")
-from agentgraph.runtime.checkpoint_store import ZeroGCheckpointStore
-from agentgraph.runtime.contracts import CheckpointRef
+from shadowflow.runtime.checkpoint_store import ZeroGCheckpointStore
+from shadowflow.runtime.contracts import CheckpointRef
 
 bridge_url = "http://127.0.0.1:$BRIDGE_PORT"
 store = ZeroGCheckpointStore(bridge_url=bridge_url)

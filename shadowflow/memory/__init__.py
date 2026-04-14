@@ -5,10 +5,10 @@ Memory 模块 - 三层记忆架构
 """
 
 # 原有接口（向后兼容）
-from agentgraph.memory.base import Memory, BaseMemory
+from shadowflow.memory.base import Memory, BaseMemory
 
 # 数据类和枚举
-from agentgraph.memory.base import (
+from shadowflow.memory.base import (
     MemoryScope,
     Interaction,
     Pattern
@@ -16,17 +16,17 @@ from agentgraph.memory.base import (
 
 # 原有的实现
 try:
-    from agentgraph.memory.sqlite import SQLiteMemory
+    from shadowflow.memory.sqlite import SQLiteMemory
 except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
     SQLiteMemory = None
 
 try:
-    from agentgraph.memory.redis import RedisMemory
+    from shadowflow.memory.redis import RedisMemory
 except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
     RedisMemory = None
 
 # 三层架构
-from agentgraph.memory.layers import (
+from shadowflow.memory.layers import (
     LayerType,
     MemoryLayer,
     KnowledgeLayer,
@@ -42,22 +42,22 @@ from agentgraph.memory.layers import (
 )
 
 # 新的三层记忆实现
-from agentgraph.memory.session import SessionMemory
+from shadowflow.memory.session import SessionMemory
 try:
-    from agentgraph.memory.user import UserMemory, ContextResult, UserMemoryFactory
+    from shadowflow.memory.user import UserMemory, ContextResult, UserMemoryFactory
 except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
     UserMemory = None
     ContextResult = None
     UserMemoryFactory = None
 
 try:
-    from agentgraph.memory.global_memory import GlobalMemory, PatternType
+    from shadowflow.memory.global_memory import GlobalMemory, PatternType
 except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
     GlobalMemory = None
     PatternType = None
 
 try:
-    from agentgraph.memory.patterns import PatternManager
+    from shadowflow.memory.patterns import PatternManager
 except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
     PatternManager = None
 

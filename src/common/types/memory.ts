@@ -1,5 +1,5 @@
 /**
- * AgentGraph 记忆系统类型定义
+ * ShadowFlow 记忆系统类型定义
  *
  * 设计原则：
  * 1. 不可变快照 + Reducer 模式（借鉴 LangGraph）

@@ -320,4 +320,4 @@ npm install cron-parser@^4.0.0 date-fns@^3.0.0 date-fns-tz@^2.0.0
 
 ## License
 
-This custom node is part of AgentGraph and follows the same license.
+This custom node is part of ShadowFlow and follows the same license.

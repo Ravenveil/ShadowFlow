@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 from unittest.mock import Mock, patch
-from agentgraph.llm.base import LLMProvider, LLMConfig, LLMResponse, ProviderType
+from shadowflow.llm.base import LLMProvider, LLMConfig, LLMResponse, ProviderType
 
 pytestmark = pytest.mark.legacy
 
@@ -102,7 +102,7 @@ async def test_llm_metrics():
 
 
 @pytest.mark.asyncio
-@patch('agentgraph.llm.openai.AsyncOpenAI')
+@patch('shadowflow.llm.openai.AsyncOpenAI')
 async def test_openai_llm(mock_openai):
     """测试 OpenAI LLM 集成"""
     mock_client = Mock()
@@ -112,7 +112,7 @@ async def test_openai_llm(mock_openai):
     mock_client.chat.completions.create.return_value = mock_response
     mock_openai.return_value = mock_client
 
-    from agentgraph.llm.openai import OpenAILLM
+    from shadowflow.llm.openai import OpenAILLM
     llm = OpenAILLM(api_key="test-key", model="gpt-3.5-turbo")
     response = await llm.chat([{"role": "user", "content": "Hello"}])
 
@@ -121,7 +121,7 @@ async def test_openai_llm(mock_openai):
 
 
 @pytest.mark.asyncio
-@patch('agentgraph.llm.claude.AsyncAnthropic')
+@patch('shadowflow.llm.claude.AsyncAnthropic')
 async def test_claude_llm(mock_anthropic):
     """测试 Claude LLM 集成"""
     mock_client = Mock()
@@ -131,7 +131,7 @@ async def test_claude_llm(mock_anthropic):
     mock_client.messages.create.return_value = mock_response
     mock_anthropic.return_value = mock_client
 
-    from agentgraph.llm.claude import ClaudeLLM
+    from shadowflow.llm.claude import ClaudeLLM
     llm = ClaudeLLM(api_key="test-key", model="claude-3-sonnet-20240229")
     response = await llm.chat([{"role": "user", "content": "Hello"}])
 
