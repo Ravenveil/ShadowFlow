@@ -1,0 +1,23 @@
+{
+  "name": "@agentgraph/bridge",
+  "version": "0.1.0",
+  "description": "AgentGraph × 0G KV Bridge — HTTP proxy for 0G KV Store",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "ts-node index.ts",
+    "build": "tsc",
+    "dev": "ts-node --watch index.ts"
+  },
+  "dependencies": {
+    "@0glabs/0g-ts-sdk": "^0.3.1",
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

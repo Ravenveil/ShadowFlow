@@ -1,0 +1,92 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shadowflow"
+version = "0.3.0"
+description = "Multi-agent workflow orchestration with pluggable checkpoint stores (Memory / File / 0G)"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Ravenveil"}
+]
+keywords = ["multi-agent", "orchestration", "ai", "workflow", "0g", "checkpoint"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.9"
+# 核心依赖：只装这些就能跑 shadowflow run / ask / status
+dependencies = [
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0.0",
+    "httpx>=0.26.0",     # ZeroGCheckpointStore HTTP 客户端 & CLI 执行器
+]
+
+[project.optional-dependencies]
+# pip install shadowflow[zerog]  — 使用 0G KV 链上存储
+zerog = [
+    "httpx>=0.26.0",
+]
+# pip install shadowflow[server]  — REST API server (shadowflow server)
+server = [
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+]
+# pip install shadowflow[memory]  — Redis / SQLite 持久化
+memory = [
+    "aiosqlite>=0.19.0",
+    "redis>=5.0.0",
+]
+# pip install shadowflow[all]  — 全功能
+all = [
+    "httpx>=0.26.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "aiosqlite>=0.19.0",
+    "redis>=5.0.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.12.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Ravenveil/ShadowFlow"
+Repository = "https://github.com/Ravenveil/ShadowFlow"
+"Bug Tracker" = "https://github.com/Ravenveil/ShadowFlow/issues"
+
+[project.scripts]
+shadowflow = "shadowflow.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["shadowflow*"]
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "asyncio: marks async-style tests in the legacy suite",
+    "legacy: marks tests that exercise historical ShadowFlow APIs outside the Phase 1 contract baseline",
+]
+

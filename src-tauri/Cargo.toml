@@ -1,0 +1,47 @@
+[package]
+name = "agentgraph"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["shell-open"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+notify = "6"
+rusqlite = { version = "0.32", features = ["bundled"] }
+walkdir = "2"
+regex = "1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = "1"
+log = "0.4"
+env_logger = "0.11"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.8"
+criterion = "0.5"
+pretty_assertions = "1.4"
+# HTTP API 支持
+reqwest = { version = "0.11", features = ["json", "stream"] }
+tokio-stream = "0.1"
+# 配置管理
+config = "0.14"
+toml = "0.8"
+# 高级并发
+dashmap = "5.5"
+# 异步文件操作
+async-compression = { version = "0.4", features = ["gzip", "tokio"] }
+# 客户端 TLS
+native-tls = "0.2"
+# 基础设施
+tower = { version = "0.4", features = ["timeout", "limit"] }
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+
+[[bench]]
+name = "indexing_benchmark"
+harness = false
