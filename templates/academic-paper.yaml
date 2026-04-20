@@ -1,0 +1,66 @@
+template_id: academic-paper
+version: "0.1"
+name: "Academic Paper"
+description: "6-role academic writing template with PI advisor gate and citation review."
+
+user_role: PI
+default_ops_room_name: PI Study Room
+brief_board_alias: "\u7EC4\u4F1A\u6C47\u62A5"
+theme_color: "#6366F1"
+
+agent_roster:
+  - id: pi
+    name: PI
+    soul: "\u8BFE\u9898\u8D1F\u8D23\u4EBA\uFF0C\u628A\u63A7\u7814\u7A76\u65B9\u5411\u4E0E\u5B66\u672F\u4E25\u8C28\u6027"
+    llm: claude-sonnet-4-6
+  - id: section-writer
+    name: SectionWriter
+    soul: "\u7AE0\u8282\u4E3B\u7B14\uFF0C\u6309 section \u62C6\u5206\u5199\u4F5C\u4EFB\u52A1"
+    llm: claude-sonnet-4-6
+  - id: citation-reviewer
+    name: CitationReviewer
+    soul: "\u6838\u5BF9\u5F15\u7528\u5B8C\u6574\u6027\u3001\u6570\u636E\u51FA\u5904\u3001\u7ED3\u8BBA\u4E0E\u8BC1\u636E\u94FE\u4E00\u81F4\u6027"
+    llm: claude-sonnet-4-6
+  - id: method-reviewer
+    name: MethodReviewer
+    soul: "\u590D\u6838\u5B9E\u9A8C\u65B9\u6CD5\u4E0E\u7EDF\u8BA1\u63A8\u65AD"
+    llm: claude-sonnet-4-6
+  - id: editorial-polisher
+    name: EditorialPolisher
+    soul: "\u6587\u98CE\u6DA6\u8272\u4E0E\u5B66\u672F\u8868\u8FBE\u89C4\u8303\u5316"
+    llm: claude-sonnet-4-6
+  - id: submission-manager
+    name: SubmissionManager
+    soul: "\u4F1A\u8BAE/\u671F\u520A\u6295\u7A3F\u6D41\u7A0B\u7BA1\u7406"
+    llm: claude-sonnet-4-6
+
+group_roster:
+  - id: pi-study-room
+    name: PI Study Room
+    agents: [pi, section-writer, citation-reviewer, method-reviewer, editorial-polisher]
+  - id: submission-war-room
+    name: Submission War Room
+    agents: [pi, submission-manager, editorial-polisher]
+
+parameters:
+  goal:
+    type: string
+    required: true
+
+agents:
+  - id: pi
+    ref: pi
+
+flow:
+  entrypoint: pi
+  edges:
+    - from: pi
+      to: END
+      type: final
+
+policy_matrix:
+  agents: {}
+
+stages: []
+defaults: {}
+metadata: {}

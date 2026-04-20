@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1
+# Story 0.1 — ShadowFlow API (Python / FastAPI)
+# Multi-stage: builder installs pip deps, runtime keeps only site-packages + app code.
+
+FROM python:3.11-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /build
+
+# Copy metadata first so dependency install layer caches across code changes.
+COPY pyproject.toml README.md LICENSE ./
+COPY shadowflow/__init__.py ./shadowflow/__init__.py
+
+# Install the package plus [server] extras (FastAPI + uvicorn).
+# We also include [zerog] so /bridge endpoints work out-of-the-box.
+RUN pip install --prefix=/install ".[server,zerog]"
+
+# Pull in the rest of the source after deps are resolved.
+COPY shadowflow/ ./shadowflow/
+RUN pip install --prefix=/install --no-deps .
+
+
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/install/bin:${PATH}" \
+    PYTHONPATH="/install/lib/python3.11/site-packages"
+
+WORKDIR /app
+
+# Copy the installed tree and app package from builder.
+COPY --from=builder /install /install
+COPY shadowflow/ ./shadowflow/
+
+EXPOSE 8000
+
+CMD ["uvicorn", "shadowflow.server:app", "--host", "0.0.0.0", "--port", "8000"]

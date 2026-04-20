@@ -284,6 +284,25 @@ class TemplateNodeSpec(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class AgentRosterEntry(BaseModel):
+    """UI-layer agent roster entry — lightweight display info for Inbox/AgentDM/TemplateSwitcher."""
+
+    id: str
+    name: str
+    soul: str = ""
+    llm: str = ""
+    tools: List[str] = Field(default_factory=list)
+
+
+class GroupTemplateSpec(BaseModel):
+    """Default group-chat template within a template — used by Inbox '+ New Group' flow."""
+
+    id: str
+    name: str
+    agents: List[str] = Field(default_factory=list)
+    policy_matrix: str = ""
+
+
 class WorkflowStageSpec(BaseModel):
     stage_id: str
     name: str = ""
@@ -322,6 +341,13 @@ class WorkflowTemplateSpec(BaseModel):
     policy_matrix: WorkflowPolicyMatrixSpec = Field(default_factory=WorkflowPolicyMatrixSpec)
     activation: WorkflowActivationSpec = Field(default_factory=WorkflowActivationSpec)
     stages: List[WorkflowStageSpec] = Field(default_factory=list)
+    # Collaboration Quad-View fields (Epic 7 / 2026-04-16 addendum)
+    user_role: str = "Owner"
+    default_ops_room_name: str = ""
+    brief_board_alias: str = "BriefBoard"
+    agent_roster: List[AgentRosterEntry] = Field(default_factory=list)
+    group_roster: List[GroupTemplateSpec] = Field(default_factory=list)
+    theme_color: str = "#6366F1"
     defaults: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -402,6 +428,26 @@ class WorkflowTemplateSpec(BaseModel):
                         raise ValueError(
                             f"template edge {edge.from_id}->{edge.to_id} moves backward across stages"
                         )
+        # Validate agent_roster id uniqueness
+        roster_ids = [entry.id for entry in self.agent_roster]
+        if len(roster_ids) != len(set(roster_ids)):
+            seen: set[str] = set()
+            duplicates = sorted({rid for rid in roster_ids if rid in seen or seen.add(rid)})  # type: ignore[func-returns-value]
+            raise ValueError(f"agent_roster ids must be unique: {', '.join(duplicates)}")
+        # Validate group_roster id uniqueness
+        group_ids = [g.id for g in self.group_roster]
+        if len(group_ids) != len(set(group_ids)):
+            seen_g: set[str] = set()
+            dup_g = sorted({gid for gid in group_ids if gid in seen_g or seen_g.add(gid)})  # type: ignore[func-returns-value]
+            raise ValueError(f"group_roster ids must be unique: {', '.join(dup_g)}")
+        # Validate group_roster agent references exist in agent_roster or agents
+        all_known_ids = {entry.id for entry in self.agent_roster} | agent_ids
+        for group in self.group_roster:
+            unknown = sorted(set(group.agents) - all_known_ids)
+            if unknown:
+                raise ValueError(
+                    f"group_roster '{group.id}' references unknown agent ids: {', '.join(unknown)}"
+                )
         return self
 
 

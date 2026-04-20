@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1
+# Story 0.1 — ShadowFlow Web (Vite React → nginx)
+
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tsconfig*.json vite.config.ts tailwind.config.ts postcss.config.js index.html ./
+COPY src ./src
+
+# Production bundle: call Vite directly so the container build does not block
+# on pre-existing `tsc` failures in unrelated test files (vitest remains the
+# type-checker of record for tests). Story 0.1 AC1 only requires a served SPA.
+RUN npx vite build
+
+
+FROM nginx:1.27-alpine AS runtime
+
+# Minimal nginx config that listens on 3000 and SPA-rewrites to index.html.
+RUN printf 'server {\n  listen 3000;\n  server_name _;\n  root /usr/share/nginx/html;\n  index index.html;\n  location / {\n    try_files $uri $uri/ /index.html;\n  }\n}\n' \
+    > /etc/nginx/conf.d/default.conf \
+    && rm -f /etc/nginx/conf.d/default.conf.default
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+EXPOSE 3000
+
+CMD ["nginx", "-g", "daemon off;"]

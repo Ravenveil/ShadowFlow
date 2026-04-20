@@ -1,4 +1,6 @@
-from fastapi import FastAPI, HTTPException
+import logging
+import os
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Any, Dict, List
 
@@ -24,8 +26,46 @@ from shadowflow.runtime import (
     WorkflowGraph,
 )
 
+logger = logging.getLogger("shadowflow.server")
+
 app = FastAPI(title="ShadowFlow API", version="0.3.0")
 runtime_service = RuntimeService()
+
+# Story 0.1 AC2: start even when API keys are absent (BYOK policy, S1 red line).
+# Keys are primarily supplied by the browser via localStorage; server-side slots
+# exist only for offline bridge / CLI smoke. Missing keys surface as a warning.
+_OPTIONAL_KEYS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY")
+
+
+def _detect_missing_keys() -> List[str]:
+    return [k for k in _OPTIONAL_KEYS if not os.environ.get(k)]
+
+
+@app.on_event("startup")
+async def _warn_on_missing_keys() -> None:
+    missing = _detect_missing_keys()
+    app.state.missing_keys = missing
+    if missing:
+        # Never log key values — only the names. Respects Cross-Cutting Security.
+        logger.warning(
+            "ShadowFlow starting without server-side keys: %s. "
+            "UI will prompt the user to paste keys into localStorage (BYOK).",
+            ", ".join(missing),
+        )
+    else:
+        logger.info("ShadowFlow starting with all optional server-side keys present.")
+
+
+@app.middleware("http")
+async def _missing_key_warning_header(request: Request, call_next):
+    response = await call_next(request)
+    missing = getattr(app.state, "missing_keys", None)
+    if missing:
+        # Clients (including the web UI) can read this header to decide whether
+        # to prompt the user for a localStorage key. Comma-separated for easy parsing.
+        response.headers["X-Shadowflow-Warning"] = "API key missing: " + ",".join(missing)
+    return response
+
 
 # 配置 CORS
 app.add_middleware(
@@ -38,7 +78,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {
+    payload: Dict[str, Any] = {
         "name": "ShadowFlow",
         "version": "0.3.0",
         "status": "running",
@@ -49,6 +89,11 @@ async def root():
             "chat_session": True,
         },
     }
+    missing = getattr(app.state, "missing_keys", None)
+    if missing:
+        payload["warning"] = "API key missing"
+        payload["missing_keys"] = missing
+    return payload
 
 @app.post("/workflow/validate")
 async def validate_workflow(workflow: WorkflowDefinition):
