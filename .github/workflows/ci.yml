@@ -1,0 +1,187 @@
+# ShadowFlow — CI pipeline (Story 0.2)
+# Gates: lint + test + docker build on every PR and push to main.
+# NFR S1 red line: never print secrets to logs.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel in-progress runs for the same PR / branch when new commits arrive.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ------------------------------------------------------------------
+  # Backend lint — ruff (pyflakes F-codes, MVP scope) + mypy (advisory)
+  # ------------------------------------------------------------------
+  lint-backend:
+    name: lint (backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Sanitize: never let real keys leak into CI logs (NFR S1).
+      CI: "true"
+      ZEROG_PRIVATE_KEY: ""
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dev dependencies
+        run: python -m pip install --upgrade pip && pip install -e ".[dev]"
+
+      - name: ruff check
+        run: ruff check shadowflow/
+
+      - name: mypy (advisory, non-blocking)
+        # mypy surfaces 125+ pre-existing type issues in the brownfield code.
+        # Run it for visibility but do not block merges while the MVP is in motion.
+        # Tracked for tightening in a post-MVP story.
+        run: mypy shadowflow/ --ignore-missing-imports --no-strict-optional || true
+
+  # ------------------------------------------------------------------
+  # Frontend lint — eslint
+  # ------------------------------------------------------------------
+  lint-frontend:
+    name: lint (frontend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: eslint
+        run: npm run lint
+
+  # ------------------------------------------------------------------
+  # Backend tests — pytest, exclude tests that need real API keys
+  # ------------------------------------------------------------------
+  test-backend:
+    name: test (backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CI: "true"
+      # All key env vars intentionally blank — pytest -m "not requires_api_key"
+      # filters out tests that need them.
+      ZEROG_PRIVATE_KEY: ""
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install package with dev + server + zerog extras
+        run: python -m pip install --upgrade pip && pip install -e ".[dev,server,zerog]"
+
+      - name: pytest (exclude requires_api_key)
+        run: pytest -m "not requires_api_key" --tb=short
+
+  # ------------------------------------------------------------------
+  # Frontend tests — vitest (jsdom)
+  # ------------------------------------------------------------------
+  test-frontend:
+    name: test (frontend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: vitest
+        run: npm run test:run
+
+  # ------------------------------------------------------------------
+  # Docker image build verification — do not push, only prove builds
+  # ------------------------------------------------------------------
+  build-docker:
+    name: build (docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [lint-backend, lint-frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Dockerfile.api
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.api
+          push: false
+          load: false
+          tags: shadowflow-api:ci
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build Dockerfile.web
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.web
+          push: false
+          load: false
+          tags: shadowflow-web:ci
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  # ------------------------------------------------------------------
+  # Secret scanning — catch key leaks on every PR (NFR S1)
+  # GitHub's built-in secret scanning runs automatically on public repos.
+  # This job adds TruffleHog for commit-diff coverage on PRs.
+  # ------------------------------------------------------------------
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only run on PRs; pushes to main don't produce useful diff scans.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --only-verified

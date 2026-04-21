@@ -798,8 +798,8 @@ describe('River Network - Main Flow and Branch Sync (主流与支流同步）', 
 
       let receivedCount = 0;
 
-      branch1.onMessage(() => receivedCount++ });
-      branch2.onMessage(() => receivedCount++ });
+      branch1.onMessage(() => { receivedCount++; });
+      branch2.onMessage(() => { receivedCount++; });
 
       network.getMainFlow().broadcast('Global announcement');
 
