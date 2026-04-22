@@ -2,14 +2,24 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 import httpx
+
+from shadowflow.runtime.contracts import (
+    AgentCapabilities,
+    AgentEvent,
+    AgentHandle,
+    AgentTask,
+)
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_OPENAI_MODEL = "gpt-5.2"
@@ -92,14 +102,548 @@ class BaseExecutor(ABC):
         raise NotImplementedError
 
 
+class UnknownExecutorError(Exception):
+    """Raised when resolve(kind, provider) finds no registered AgentExecutor."""
+
+    def __init__(self, kind: str, provider: str, available: List[Tuple[str, str]]) -> None:
+        self.kind = kind
+        self.provider = provider
+        self.available = available
+        pairs = ", ".join(f"({k}, {p})" for k, p in sorted(available)) or "(none)"
+        super().__init__(
+            f"No AgentExecutor registered for kind={kind!r} provider={provider!r}. "
+            f"Available: {pairs}"
+        )
+
+
+class AgentExecutor(ABC):
+    """Universal agent plugin contract (Story 2.1 / AR47).
+
+    Parallel to BaseExecutor — existing CliExecutor/ApiExecutor paths are untouched.
+    Story 2.2 will migrate CLI agents over; for now this is the pure ABC.
+    """
+
+    kind: str  # one of Kind = Literal["api", "cli", "mcp", "acp"]
+    provider: str
+
+    @abstractmethod
+    async def dispatch(self, task: AgentTask) -> AgentHandle:
+        """Dispatch a task and return a handle."""
+
+    @abstractmethod
+    def stream_events(self, handle: AgentHandle) -> AsyncIterator[AgentEvent]:
+        """Stream AgentEvent objects for an active handle."""
+
+    @abstractmethod
+    def capabilities(self) -> AgentCapabilities:
+        """Return AgentCapabilities describing what this executor supports."""
+
+
+def _interpolate_args(args_template: List[str], context: Dict[str, str]) -> List[str]:
+    """Interpolate {id}/{stdin}/{run_id} placeholders in args_template."""
+    result = []
+    for arg in args_template:
+        for k, v in context.items():
+            arg = arg.replace("{" + k + "}", v)
+        result.append(arg)
+    return result
+
+
+class CliAgentExecutor(AgentExecutor):
+    """Preset-driven CLI AgentExecutor (Story 2.2 / AR48).
+
+    Replaces CliExecutor's hardcoded provider branches with provider_presets.yaml.
+    Old CliExecutor is preserved as a compatibility shim.
+    """
+
+    kind = "cli"
+
+    def __init__(self, provider: str, preset: Any) -> None:
+        self.provider = provider
+        self._preset = preset  # ProviderPreset instance
+
+    async def dispatch(self, task: AgentTask) -> AgentHandle:
+        preset = self._preset
+        # Build interpolation context
+        context: Dict[str, str] = {
+            "id": task.agent_id,
+            "run_id": task.run_id,
+            "stdin": "",
+        }
+        # Prepare stdin payload + fill context["stdin"] for args_template interpolation.
+        # stdin_format="none" still needs context["stdin"] populated so that presets like
+        # claude (args_template has "{stdin}" but passes prompt via -p flag, not stdin)
+        # get the prompt text into their args. Only the subprocess stdin channel differs.
+        stdin_payload: Optional[str] = None
+        if preset.stdin_format == "json":
+            stdin_payload = json.dumps(task.payload, ensure_ascii=False)
+            context["stdin"] = stdin_payload
+        elif preset.stdin_format == "raw":
+            stdin_payload = compile_execution_prompt(task.payload)
+            context["stdin"] = stdin_payload
+        else:  # "none" — prompt goes into args only, not subprocess stdin
+            context["stdin"] = compile_execution_prompt(task.payload)
+
+        args = _interpolate_args(preset.args_template, context)
+        command = [*preset.command, *args]
+
+        # Interpolate workspace_template ({id}/{run_id}) for downstream JSONL tail.
+        workspace = preset.workspace_template
+        if workspace:
+            workspace = _interpolate_args([workspace], context)[0]
+
+        # Merge env
+        env = {**os.environ, **preset.env} if preset.env else None
+
+        # Health-check: if the binary isn't found, degrade gracefully (Story 2.5).
+        binary = command[0]
+        if not shutil.which(binary):
+            return AgentHandle(
+                run_id=task.run_id,
+                node_id=task.node_id,
+                agent_id=task.agent_id,
+                status="degraded",
+                metadata={
+                    "parse_format": preset.parse_format,
+                    "workspace_template": workspace,
+                    "_degraded": True,
+                    "_degraded_reason": f"binary {binary!r} not found in PATH",
+                    "_provider": self.provider,
+                },
+            )
+
+        try:
+            completed = await asyncio.to_thread(
+                subprocess.run,
+                command,
+                input=stdin_payload,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+                env=env,
+            )
+        except FileNotFoundError as exc:
+            raise ValueError(
+                f"cli agent executor: command not found for provider={self.provider}: {command[0]}"
+            ) from exc
+
+        handle_meta: Dict[str, Any] = {
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "returncode": completed.returncode,
+            "parse_format": preset.parse_format,
+            "workspace_template": workspace,
+        }
+        status = "done" if completed.returncode == 0 else "failed"
+        return AgentHandle(
+            run_id=task.run_id,
+            node_id=task.node_id,
+            agent_id=task.agent_id,
+            status=status,
+            metadata=handle_meta,
+        )
+
+    async def stream_events(self, handle: AgentHandle) -> AsyncIterator[AgentEvent]:
+        # Degraded path: binary was missing at dispatch time (Story 2.5).
+        # Check handle.status (first-class field) rather than metadata flags
+        # so middleware scrubbing metadata cannot cause silent success.
+        if handle.status == "degraded":
+            yield AgentEvent(
+                run_id=handle.run_id, node_id=handle.node_id, agent_id=handle.agent_id,
+                type="agent.degraded",
+                payload={
+                    "reason": handle.metadata.get("_degraded_reason", "binary not found"),
+                    "provider": handle.metadata.get("_provider", self.provider),
+                    "fallback_chain": ["api:claude"],
+                },
+            )
+            return
+
+        parse_format = handle.metadata.get("parse_format", "stdout-text")
+        stdout: str = handle.metadata.get("stdout", "")
+        returncode: int = handle.metadata.get("returncode", 0)
+
+        if returncode != 0:
+            yield AgentEvent(
+                run_id=handle.run_id,
+                node_id=handle.node_id,
+                agent_id=handle.agent_id,
+                type="agent.failed",
+                payload={"stderr": handle.metadata.get("stderr", ""), "returncode": returncode},
+            )
+            return
+
+        if parse_format == "jsonl-tail":
+            async for event in self._stream_stdout_jsonl(handle, stdout):
+                yield event
+        elif parse_format in ("stdout-json", "codex-jsonl"):
+            async for event in self._stream_structured(handle, stdout, parse_format):
+                yield event
+        else:
+            yield AgentEvent(
+                run_id=handle.run_id,
+                node_id=handle.node_id,
+                agent_id=handle.agent_id,
+                type="agent.output",
+                payload={"text": stdout},
+            )
+
+    async def _stream_stdout_jsonl(self, handle: Any, stdout: str) -> AsyncIterator[Any]:
+        """Phase 1 降级实现:按行 split 已捕获的 stdout JSONL。
+
+        原 spec 为 `_stream_jsonl_tail(session_path)` 异步尾追文件
+        (`~/.openclaw/agents/{id}/sessions/*.jsonl`),降级详情见
+        Story 2.2 Review Findings (2026-04-22)。真实文件尾追推迟到 Phase 2。
+        """
+        for line in stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event_data = json.loads(line)
+            except json.JSONDecodeError:
+                event_data = {"text": line}
+            yield AgentEvent(
+                run_id=handle.run_id,
+                node_id=handle.node_id,
+                agent_id=handle.agent_id,
+                type=f"agent.{event_data.get('type', 'output')}",
+                payload=event_data,
+            )
+
+    async def _stream_structured(self, handle: AgentHandle, stdout: str, parse_format: str) -> AsyncIterator[AgentEvent]:
+        text = stdout.strip()
+        try:
+            data = json.loads(text) if text else {}
+        except json.JSONDecodeError:
+            data = {"text": text}
+        yield AgentEvent(
+            run_id=handle.run_id,
+            node_id=handle.node_id,
+            agent_id=handle.agent_id,
+            type="agent.output",
+            payload=data if isinstance(data, dict) else {"result": data},
+        )
+
+    def capabilities(self) -> AgentCapabilities:
+        parse_format = getattr(self._preset, "parse_format", "stdout-text")
+        return AgentCapabilities(
+            streaming=parse_format == "jsonl-tail",
+            approval_required=False,
+            session_resume=False,
+            tool_calls=False,
+        )
+
+
+class AcpAgentExecutor(AgentExecutor):
+    """ACP (Agent Client Protocol) executor — host role via stdio JSON-RPC (Story 2.3 / AR56).
+
+    Spawns the agent as a subprocess, performs ACP handshake, then streams events.
+    """
+
+    kind = "acp"
+
+    def __init__(self, provider: str, command: List[str]) -> None:
+        self.provider = provider
+        self._command = command
+        # Session registry: handle_id → (transport, client).
+        # Live transport/client objects are NOT JSON-serializable so they must
+        # NOT live in AgentHandle.metadata (which Pydantic model_dump_json'd for
+        # SSE broadcast / checkpoint / audit log). Keep them here, addressed by
+        # the handle_id that metadata carries.
+        self._sessions: Dict[str, Any] = {}
+
+    async def dispatch(self, task: AgentTask) -> AgentHandle:
+        from shadowflow.runtime.acp.transport import AcpTransport
+        from shadowflow.runtime.acp.client import AcpClient
+
+        transport = AcpTransport(self._command)
+        try:
+            await transport.start()
+            client = AcpClient(transport)
+            await client.initialize()
+            await client.start_session(
+                run_id=task.run_id,
+                node_id=task.node_id,
+                agent_id=task.agent_id,
+            )
+            prompt = compile_execution_prompt(task.payload)
+            await client.prompt(prompt, context=task.metadata)
+        except Exception as exc:
+            await transport.stop()
+            raise ValueError(f"ACP dispatch failed for provider={self.provider}: {exc}") from exc
+
+        handle = AgentHandle(
+            run_id=task.run_id,
+            node_id=task.node_id,
+            agent_id=task.agent_id,
+            status="running",
+            metadata={
+                "session_id": client.session_id,
+                "provider": self.provider,
+            },
+        )
+        self._sessions[handle.handle_id] = (transport, client)
+        return handle
+
+    async def stream_events(self, handle: AgentHandle) -> AsyncIterator[AgentEvent]:
+        from shadowflow.runtime.acp.transport import AcpSessionTerminated
+
+        session = self._sessions.get(handle.handle_id)
+        if session is None:
+            yield AgentEvent(
+                run_id=handle.run_id, node_id=handle.node_id, agent_id=handle.agent_id,
+                type="agent.failed",
+                payload={"error": f"no ACP session in registry for handle {handle.handle_id}"},
+            )
+            return
+        transport, client = session
+        try:
+            async for event in client.stream_events(handle):
+                yield event
+        except AcpSessionTerminated as exc:
+            yield AgentEvent(
+                run_id=handle.run_id, node_id=handle.node_id, agent_id=handle.agent_id,
+                type="agent.failed",
+                payload={"exit_code": exc.exit_code, "stderr": exc.stderr_tail},
+            )
+        finally:
+            # Phase 5 patch: stream_events.finally unconditionally stops the
+            # transport, so session_resume is NOT actually supported today.
+            # capabilities() is aligned to return session_resume=False.
+            self._sessions.pop(handle.handle_id, None)
+            await transport.stop()
+
+    def capabilities(self) -> AgentCapabilities:
+        return AgentCapabilities(
+            streaming=True,
+            approval_required=True,
+            # Aligned with real stream_events.finally behavior (stops transport).
+            # True resume requires keeping the session alive across stream_events
+            # invocations — tracked as future work in Story 2.3 Review Findings.
+            session_resume=False,
+            tool_calls=True,
+        )
+
+
+class McpAgentExecutor(AgentExecutor):
+    """MCP tool-call executor — single-shot tool invocation via MCP SDK (Story 2.4 / AR53).
+
+    Complements AcpAgentExecutor: ACP manages sessions, MCP handles one-off tool calls.
+    """
+
+    kind = "mcp"
+
+    def __init__(
+        self,
+        provider: str,
+        default_server: str = "",
+        default_tool: str = "run_agent",
+    ) -> None:
+        self.provider = provider
+        self._default_server = default_server
+        self._default_tool = default_tool
+        # Session registry: handle_id → client. See AcpAgentExecutor for rationale.
+        self._sessions: Dict[str, Any] = {}
+
+    # Allow injection of a custom client factory for testing
+    def _make_client(self, config: Any) -> Any:
+        from shadowflow.runtime.mcp.client import McpClient
+        return McpClient(config)
+
+    async def dispatch(self, task: AgentTask) -> AgentHandle:
+        from shadowflow.runtime.mcp.transport import McpTransportConfig
+        from shadowflow.runtime.errors import McpError
+
+        server = str(task.metadata.get("server") or self._default_server)
+        tool_name = str(task.metadata.get("tool") or self._default_tool)
+
+        if not server:
+            raise McpError(
+                code="MCP_SERVER_UNAVAILABLE",
+                detail="No MCP server specified; set executor.server or default_server",
+            )
+
+        try:
+            config = McpTransportConfig.parse(server)
+        except ValueError as exc:
+            raise McpError(code="MCP_SERVER_UNAVAILABLE", detail=str(exc)) from exc
+
+        client = self._make_client(config)
+        try:
+            await client.connect()
+            tools = await client.list_tools()
+        except McpError:
+            await client.close()
+            raise
+        except Exception as exc:
+            await client.close()
+            raise McpError(code="MCP_SERVER_UNAVAILABLE", detail=str(exc)) from exc
+
+        if tool_name not in tools:
+            await client.close()
+            raise McpError(
+                code="MCP_TOOL_NOT_FOUND",
+                detail=f"Tool {tool_name!r} not found",
+                tool=tool_name,
+                available=tools,
+            )
+
+        handle = AgentHandle(
+            run_id=task.run_id,
+            node_id=task.node_id,
+            agent_id=task.agent_id,
+            status="running",
+            metadata={
+                "tool_name": tool_name,
+                "args": task.payload,
+                "provider": self.provider,
+            },
+        )
+        self._sessions[handle.handle_id] = client
+        return handle
+
+    async def stream_events(self, handle: AgentHandle) -> AsyncIterator[AgentEvent]:
+        from shadowflow.runtime.errors import McpError
+
+        client = self._sessions.get(handle.handle_id)
+        tool_name = str(handle.metadata.get("tool_name", ""))
+        args: Dict[str, Any] = handle.metadata.get("args") or {}
+
+        if client is None:
+            yield AgentEvent(
+                run_id=handle.run_id, node_id=handle.node_id, agent_id=handle.agent_id,
+                type="agent.failed",
+                payload={"error": f"no MCP session in registry for handle {handle.handle_id}"},
+            )
+            return
+
+        try:
+            yield AgentEvent(
+                run_id=handle.run_id, node_id=handle.node_id, agent_id=handle.agent_id,
+                type="agent.tool_called", payload={"tool": tool_name, "args": args},
+            )
+            result = await client.call_tool(tool_name, args)
+            yield AgentEvent(
+                run_id=handle.run_id, node_id=handle.node_id, agent_id=handle.agent_id,
+                type="agent.tool_result", payload={"result": result},
+            )
+            yield AgentEvent(
+                run_id=handle.run_id, node_id=handle.node_id, agent_id=handle.agent_id,
+                type="agent.completed", payload={"result": result},
+            )
+        except McpError as exc:
+            yield AgentEvent(
+                run_id=handle.run_id, node_id=handle.node_id, agent_id=handle.agent_id,
+                type="agent.failed",
+                payload={"code": exc.code, "detail": exc.detail},
+            )
+        except Exception as exc:
+            yield AgentEvent(
+                run_id=handle.run_id, node_id=handle.node_id, agent_id=handle.agent_id,
+                type="agent.failed",
+                payload={"code": "MCP_TOOL_ERROR", "detail": str(exc)},
+            )
+        finally:
+            self._sessions.pop(handle.handle_id, None)
+            await client.close()
+
+    def capabilities(self) -> AgentCapabilities:
+        return AgentCapabilities(
+            streaming=False,
+            approval_required=False,
+            session_resume=False,
+            tool_calls=True,
+        )
+
+
+def _build_acp_executors() -> List[AcpAgentExecutor]:
+    """Build default ACP executors for hermes and shadowsoul."""
+    return [
+        AcpAgentExecutor(provider="hermes", command=["hermes", "acp"]),
+        AcpAgentExecutor(provider="shadowsoul", command=["shadow", "acp", "serve"]),
+    ]
+
+
+def _build_mcp_executors() -> List[McpAgentExecutor]:
+    """Build default MCP executors for generic and hermes providers."""
+    return [
+        McpAgentExecutor(provider="generic"),
+        McpAgentExecutor(
+            provider="hermes",
+            default_server="stdio://hermes mcp serve",
+            default_tool="run_agent",
+        ),
+    ]
+
+
+def _build_preset_cli_executors() -> List[CliAgentExecutor]:
+    """Load all presets and instantiate CliAgentExecutor for each.
+
+    Failures are logged rather than raised — a broken provider_presets.yaml
+    must not crash the runtime — but they MUST be visible to operators.
+    """
+    try:
+        from shadowflow.runtime.preset_loader import load_presets
+        presets = load_presets()
+        return [CliAgentExecutor(provider=name, preset=preset) for name, preset in presets.items()]
+    except Exception:
+        logger.warning(
+            "Failed to load CLI provider presets; no preset-driven CliAgentExecutors "
+            "will be registered. Check shadowflow/runtime/provider_presets.yaml.",
+            exc_info=True,
+        )
+        return []
+
+
 class ExecutorRegistry:
     def __init__(self, executors: Optional[List[BaseExecutor]] = None) -> None:
         self._executors: Dict[str, BaseExecutor] = {}
+        # (kind, provider) → AgentExecutor for the new plugin contract
+        self._agent_executors: Dict[Tuple[str, str], AgentExecutor] = {}
         for executor in executors or [CliExecutor(), ApiExecutor()]:
             self.register(executor)
+        # Auto-register preset-driven CliAgentExecutors
+        for agent_executor in _build_preset_cli_executors():
+            self.register_agent(agent_executor)
+        # Auto-register ACP executors (hermes + shadowsoul)
+        for agent_executor in _build_acp_executors():
+            self.register_agent(agent_executor)
+        # Auto-register MCP executors (generic + hermes)
+        for agent_executor in _build_mcp_executors():
+            self.register_agent(agent_executor)
 
     def register(self, executor: BaseExecutor) -> None:
         self._executors[executor.kind] = executor
+
+    def register_agent(self, executor: AgentExecutor) -> None:
+        """Register an AgentExecutor under (kind, provider) composite key.
+
+        Emits a warning on override so silent replacement of default ACP/MCP/CLI
+        executors by user presets is visible to operators.
+        """
+        key = (executor.kind, executor.provider)
+        if key in self._agent_executors:
+            logger.warning(
+                "AgentExecutor overriding existing registration for kind=%r provider=%r "
+                "(old=%s, new=%s)",
+                key[0], key[1],
+                type(self._agent_executors[key]).__name__,
+                type(executor).__name__,
+            )
+        self._agent_executors[key] = executor
+
+    def resolve(self, kind: str, provider: str) -> AgentExecutor:
+        """Find a registered AgentExecutor or raise UnknownExecutorError."""
+        agent_exec = self._agent_executors.get((kind, provider))
+        if agent_exec is None:
+            raise UnknownExecutorError(kind, provider, list(self._agent_executors.keys()))
+        return agent_exec
+
+    def list_agent_executors(self) -> List[Tuple[str, str]]:
+        """Return all registered (kind, provider) pairs."""
+        return list(self._agent_executors.keys())
 
     async def execute(self, config: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
         kind = config.get("kind")

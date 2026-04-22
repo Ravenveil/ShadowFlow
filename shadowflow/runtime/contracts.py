@@ -43,15 +43,31 @@ def validate_writeback_bundle(bundle: Any, scope: str) -> None:
         _validate_writeback_channel_config(channel, bundle[channel], scope)
 
 
+class ApprovalGateConfig(BaseModel):
+    """approval_gate 节点的专属配置。"""
+
+    approver: str
+    on_reject: Literal["retry", "halt", "branch"] = "halt"
+    on_approve: Optional[str] = None
+    timeout_seconds: int = 300
+
+
 class NodeDefinition(BaseModel):
     id: str
     kind: Literal["agent", "node"] = "agent"
     type: str
+    approval: Optional[ApprovalGateConfig] = None
     config: Dict[str, Any] = Field(default_factory=dict)
     inputs: List[str] = Field(default_factory=list)
     outputs: List[str] = Field(default_factory=list)
     retry_policy: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_approval_gate(self) -> "NodeDefinition":
+        if self.type == "approval_gate" and self.approval is None:
+            raise ValueError("approval_gate node must define an 'approval' config block")
+        return self
 
 
 class EdgeDefinition(BaseModel):
@@ -64,6 +80,37 @@ class EdgeDefinition(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class WorkflowPolicyMatrixSpec(BaseModel):
+    """第 8 核心对象：工作流治理规则矩阵（compile-time 非阻塞校验）。"""
+
+    allow_send: Dict[str, List[str]] = Field(default_factory=dict)
+    allow_reject: Dict[str, List[str]] = Field(default_factory=dict)
+    description: Optional[str] = None
+    version: str = "1.0"
+
+    def all_referenced_role_ids(self) -> set:
+        """返回矩阵中引用的全部 role id 集合，供外部校验层使用。"""
+        refs: set = set()
+        for sender, receivers in self.allow_send.items():
+            refs.add(sender)
+            refs.update(receivers)
+        for reviewer, targets in self.allow_reject.items():
+            refs.add(reviewer)
+            refs.update(targets)
+        return refs
+
+    @model_validator(mode="after")
+    def validate_structure(self) -> "WorkflowPolicyMatrixSpec":
+        # 仅校验结构完整性；role id 跨字段校验由 WorkflowDefinition.validate_graph 完成
+        for sender, receivers in self.allow_send.items():
+            if not isinstance(receivers, list):
+                raise ValueError(f"allow_send[{sender!r}] must be a list of role ids")
+        for reviewer, targets in self.allow_reject.items():
+            if not isinstance(targets, list):
+                raise ValueError(f"allow_reject[{reviewer!r}] must be a list of role ids")
+        return self
+
+
 class WorkflowDefinition(BaseModel):
     workflow_id: str
     version: str
@@ -71,6 +118,7 @@ class WorkflowDefinition(BaseModel):
     entrypoint: str
     nodes: List[NodeDefinition]
     edges: List[EdgeDefinition]
+    policy_matrix: Optional[WorkflowPolicyMatrixSpec] = None
     defaults: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -167,6 +215,14 @@ class WorkflowDefinition(BaseModel):
                 raise ValueError(
                     f"barrier node {node.id} must not define incoming edges in Phase 1 fan-out mode"
                 )
+
+        if self.policy_matrix is not None:
+            invalid_roles = self.policy_matrix.all_referenced_role_ids() - node_ids
+            if invalid_roles:
+                raise ValueError(
+                    f"policy_matrix references undeclared role ids: {sorted(invalid_roles)}"
+                )
+
         return self
 
 
@@ -217,7 +273,7 @@ class TaskRecord(BaseModel):
     parent_task_id: Optional[str] = None
     title: Optional[str] = None
     focus: Optional[str] = None
-    status: Literal["accepted", "running", "succeeded", "failed", "cancelled", "waiting"] = "accepted"
+    status: Literal["accepted", "running", "succeeded", "failed", "cancelled", "waiting", "awaiting_approval", "invalidated"] = "accepted"
     created_at: datetime = Field(default_factory=utc_now)
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
@@ -231,7 +287,7 @@ class RunRecord(BaseModel):
     task_id: Optional[str] = None
     parent_run_id: Optional[str] = None
     root_run_id: Optional[str] = None
-    status: Literal["accepted", "validated", "running", "succeeded", "failed", "cancelled", "checkpointed", "waiting"]
+    status: Literal["accepted", "validated", "running", "succeeded", "failed", "cancelled", "checkpointed", "waiting", "awaiting_approval", "paused"]
     started_at: datetime
     ended_at: Optional[datetime] = None
     entrypoint: str
@@ -282,7 +338,7 @@ class StepRecord(BaseModel):
     step_id: str
     run_id: str
     node_id: str
-    status: Literal["pending", "running", "succeeded", "failed", "skipped", "cancelled"]
+    status: Literal["pending", "running", "succeeded", "failed", "skipped", "cancelled", "invalidated"]
     index: int
     input: Dict[str, Any] = Field(default_factory=dict)
     output: Dict[str, Any] = Field(default_factory=dict)
@@ -396,11 +452,19 @@ class RunResult(BaseModel):
     errors: List[Dict[str, Any]] = Field(default_factory=list)
 
 
+class PolicyWarning(BaseModel):
+    code: str
+    pattern: str
+    reason: str
+    reference_url: str = ""
+
+
 class WorkflowValidationResult(BaseModel):
     valid: bool
     workflow_id: Optional[str] = None
     errors: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
+    policy_warnings: List[PolicyWarning] = Field(default_factory=list)
 
 
 class ResumeRequest(BaseModel):
@@ -412,7 +476,7 @@ class RunSummary(BaseModel):
     run_id: str
     request_id: str
     workflow_id: str
-    status: Literal["accepted", "validated", "running", "succeeded", "failed", "cancelled", "checkpointed", "waiting"]
+    status: Literal["accepted", "validated", "running", "succeeded", "failed", "cancelled", "checkpointed", "waiting", "awaiting_approval", "paused"]
     started_at: datetime
     ended_at: Optional[datetime] = None
     current_step_id: Optional[str] = None
@@ -658,3 +722,148 @@ class ChatTurnResult(BaseModel):
     response_text: str
     raw_output: Dict[str, Any] = Field(default_factory=dict)
     trace: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+# ---------- Story 1.5: Trajectory Export ----------
+
+class RunTrajectory(BaseModel):
+    """Structured trajectory for a completed run (AC#1: GET /workflow/runs/{run_id})."""
+
+    run: RunRecord
+    steps: List[StepRecord] = Field(default_factory=list)
+    handoffs: List[HandoffRef] = Field(default_factory=list)
+    checkpoints: List[CheckpointRef] = Field(default_factory=list)
+    final_artifacts: List[ArtifactRef] = Field(default_factory=list)
+    exported_at: datetime = Field(default_factory=utc_now)
+
+
+class TrajectoryBundle(BaseModel):
+    """Full bundle suitable for 0G Storage archival (AC#2: format=trajectory)."""
+
+    trajectory: RunTrajectory
+    workflow_yaml: Optional[str] = None
+    policy_matrix: Optional[WorkflowPolicyMatrixSpec] = None
+    bundle_version: str = "1.0"
+    exported_at: datetime = Field(default_factory=utc_now)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------- Story 2.1: Agent Plugin Contract ----------
+
+Kind = Literal["api", "cli", "mcp", "acp"]
+
+
+class AgentCapabilities(BaseModel):
+    streaming: bool = False
+    approval_required: bool = False
+    session_resume: bool = False
+    tool_calls: bool = False
+
+
+class AgentTask(BaseModel):
+    task_id: str = Field(default_factory=lambda: f"atask-{uuid4().hex[:12]}")
+    run_id: str
+    node_id: str
+    agent_id: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentHandle(BaseModel):
+    handle_id: str = Field(default_factory=lambda: f"ahandle-{uuid4().hex[:12]}")
+    run_id: str
+    node_id: str
+    agent_id: str
+    status: Literal["pending", "running", "done", "failed", "degraded"] = "pending"
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentEvent(BaseModel):
+    run_id: str
+    node_id: str
+    agent_id: str
+    type: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    ts: datetime = Field(default_factory=utc_now)
+
+
+class ProviderPreset(BaseModel):
+    """CLI provider preset loaded from provider_presets.yaml."""
+
+    command: List[str]
+    args_template: List[str] = Field(default_factory=list)
+    stdin_format: Literal["raw", "json", "none"] = "raw"
+    parse_format: Literal["stdout-json", "stdout-text", "jsonl-tail", "codex-jsonl"] = "stdout-text"
+    workspace_template: Optional[str] = None
+    env: Dict[str, str] = Field(default_factory=dict)
+
+
+class AgentSpec(BaseModel):
+    """Agent declaration in a workflow template YAML."""
+
+    id: str
+    soul: Optional[str] = None
+    tools: List[str] = Field(default_factory=list)
+    executor: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def kind(self) -> str:
+        return str(self.executor.get("kind", "api"))
+
+    @property
+    def provider(self) -> str:
+        return str(self.executor.get("provider", ""))
+
+
+# ---------------------------------------------------------------------------
+# WorkflowAssemblySpec — Story 3.4 (AR42: Block Catalog / Stage / Lane 一等公民)
+# ---------------------------------------------------------------------------
+
+BLOCK_KINDS = {"plan", "parallel", "barrier", "retry_gate", "approval_gate", "writeback"}
+
+
+class BlockDef(BaseModel):
+    """AR24–29 6 种 Workflow Block 的单条目录项。"""
+
+    id: str
+    kind: Literal["plan", "parallel", "barrier", "retry_gate", "approval_gate", "writeback"]
+    role: str
+    config: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class LaneDef(BaseModel):
+    """Stage 内的单条泳道 — 一个 role 负责的块序列。"""
+
+    id: str
+    role: str
+    blocks: List[str] = Field(default_factory=list)
+
+
+class StageDef(BaseModel):
+    """顺序阶段 — 内含若干并行泳道，泳道间靠 barrier 汇合。"""
+
+    id: str
+    name: str = ""
+    lanes: List[LaneDef] = Field(default_factory=list)
+
+
+class WorkflowDefaults(BaseModel):
+    llm: Optional[str] = None
+    timeout_seconds: int = 300
+    retry_policy: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkflowAssemblySpec(BaseModel):
+    """顶层 assembly spec — 通过 compile() 展开为 WorkflowDefinition。"""
+
+    workflow_id: str
+    version: str = "1.0"
+    name: str = ""
+    block_catalog: List[BlockDef] = Field(default_factory=list)
+    stages: List[StageDef] = Field(default_factory=list)
+    policy_matrix: Optional[WorkflowPolicyMatrixSpec] = None
+    defaults: WorkflowDefaults = Field(default_factory=WorkflowDefaults)
+    metadata: Dict[str, Any] = Field(default_factory=dict)

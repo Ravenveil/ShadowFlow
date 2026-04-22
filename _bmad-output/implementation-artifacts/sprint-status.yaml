@@ -1,0 +1,144 @@
+# generated: 2026-04-16T05:27:17Z
+# last_updated: 2026-04-22T08:00:00Z  # Epic 4 Chunk B 前端 code review 完成; 4-4 → done; 4-1/2/3/5/6/7/8/9 → in-progress
+# project: ShadowFlow
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+#
+# SHADOWFLOW DEPENDENCY CHAIN (from Implementation Readiness Report 2026-04-16):
+# ============================================================================
+# Epic 0 → Epic 1 → Epic 2 → Epic 3 → Epic 4 → Epic 5 (partially parallel) → Epic 6
+# Note: Story 0.5 has been migrated to Story 2.8 (Agent Plugin Contract doc)
+# Sprint-0 Spike priority: Story 2.7 (Hermes `claw` SPIKE) should run FIRST in Sprint 0
+# Sprint-1 Backlog items (M4 + m1/m2/m3/m7 from readiness report):
+#   - Add Story 0.5 "NFR Acceptance Harness" for P3/S4/S5/A1/R2/TS2/I2 coverage
+#   - Split Story 2.3 into a/b/c when touched
+#   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
+
+generated: 2026-04-16T05:27:17Z
+last_updated: 2026-04-22T08:00:00Z  # Epic 4 Chunk B 前端 code review 完成; 4-4 → done; 4-1/2/3/5/6/7/8/9 → in-progress
+project: ShadowFlow
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # ===== Epic 0: Developer Foundation & One-Click Start =====
+  epic-0: in-progress
+  0-1-docker-compose-一键启动: done
+  0-2-github-actions-ci-流水线: done
+  0-3-pydantic-typescript-类型生成脚本: review
+  0-4-readme-quick-start-独立复现指南: review
+  epic-0-retrospective: optional
+
+  # ===== Epic 1: Runtime Hardening — Policy Matrix + Approval + Checkpoint Resume =====
+  epic-1: in-progress
+  1-1-policy-matrix-核心对象-compile-time-非阻塞校验: review
+  1-2-approval-gate-节点类型: review
+  1-3-运行时真驳回-handoff-事件: review
+  1-4-驳回穿透多层-checkpoint-resume: review
+  1-5-trajectory-export-run-查询-api: review
+  epic-1-retrospective: optional
+
+  # ===== Epic 2: Universal Agent Plugin Contract (ACP + MCP + CLI) =====
+  # Note: Story 2.7 (Hermes claw SPIKE) should run as Sprint-0 first-day spike
+  # Note: Story 2.8 migrated from Epic 0 Story 0.5 (must run after 2.1-2.7 complete)
+  epic-2: in-progress
+  2-1-agentexecutor-abc-四-kind-枚举-注册表: done
+  2-2-cli-executor-通用化-openclaw-hermes-shadowsoul-cli-preset: done
+  2-3-acp-client-实现-hermes-shadowsoul-主协议: review
+  2-4-mcp-client-实现-hermes-tool-暴露补充通道: review
+  2-5-shadowsoul-rust-binary-接入: review
+  2-6-agentevent-归一流-sse-集成: review
+  2-7-hermes-claw-子命令-spike: done
+  2-8-agent-plugin-contract-文档: review
+  epic-2-retrospective: optional
+
+  # ===== Epic 3: Workflow Editor + Template Compilation + 6 Seed Templates =====
+  epic-3: in-progress
+  3-1-react-editor-shell-reactflow-canvas-shadow-ui-复用: in-progress
+  3-2-yaml-编辑器-双向同步-yaml-canvas: in-progress
+  3-3-节点类型-agent-approvalgate-barrier-parallel-retry-decision: review
+  3-4-workflowassemblyspec-compile-主链-academic-paper-走此路径: review
+  3-5-provider-管理-fallback-链-e1-降级: review
+  3-6-6-个种子模板-yaml-定稿-可运行: review
+  # Addendum 2026-04-16 (correct-course): Template YAML schema extension + Wizard
+  3-6-7-模板-yaml-schema-扩展-6-种子模板改造: done
+  3-6-8-template-builder-wizard-mvp: review
+  epic-3-retrospective: optional
+
+  # ===== Epic 4: Live Dashboard + Real-time Observation + Dynamic Policy =====
+  epic-4: in-progress
+  4-1-sse-事件总线-events-endpoint: in-progress  # Chunk B patches pending
+  4-2-livedashboard-看板组件: in-progress         # Chunk B patches pending
+  4-3-驳回事件视觉强化-toast: in-progress         # Chunk B patches pending
+  4-4-节点详情-traceview: done
+  4-5-policymatrixpanel-可视化编辑-运行中改制度: in-progress  # Chunk A+B patches pending
+  4-6-运行中新增角色-re-run-with-new-policy: in-progress      # Chunk A+B patches pending
+  # Added 2026-04-17 via epics-addendum-2026-04-17-observability.md
+  # Fleet-level observability — fills gap identified via edict 10-panel comparison
+  # Pencil frames: ecvHQ (4.7) / rB9nS (4.8) / 6Q8Hd (4.9) in shadowflow-ui-2026-04-16-v2.pen
+  4-7-operations-overview-fleet-视角: in-progress  # Chunk A+B patches pending
+  4-8-trajectory-archive-跨-run-归档视图: in-progress  # Chunk A+B patches pending
+  4-9-policy-matrix-observability-驳回热力: in-progress  # Chunk A+B patches pending
+  epic-4-retrospective: optional
+
+  # ===== Epic 5: 0G Ecosystem Integration + CID Share/Clone =====
+  epic-5: in-progress
+  5-1-0g-storage-前端直调-byok-密钥管理: ready-for-dev
+  5-2-trajectory-sanitize-scan: ready-for-dev
+  5-3-0g-storage-下载-merkle-验证: ready-for-dev
+  5-4-0g-compute-作为第-5-provider-接入: ready-for-dev
+  5-5-import-by-cid-作者署名链: ready-for-dev
+  epic-5-retrospective: optional
+
+  # ===== Epic 6: Agent Interactivity + Demo Station + Pitch Ready =====
+  epic-6: in-progress
+  6-1-agent-gap-detection-反向提问-e2: ready-for-dev
+  6-2-landingpage-slogan-象限图-cta: ready-for-dev
+  6-3-templatespage-6-模板-gallery-quick-demo-预填: ready-for-dev
+  6-4-aboutpage-差异化对比-0g-链上证据-路线图: ready-for-dev
+  epic-6-retrospective: optional
+
+  # ===== Epic 7: Collaboration Quad-View (Inbox + Chat + AgentDM + BriefBoard) =====
+  # Added 2026-04-16 via bmad-correct-course (change-request 2026-04-16-inbox-centric-collaboration)
+  # See epics-addendum-2026-04-16.md for full Story definitions
+  # Dependencies: Epic 1 (Policy Matrix) + Epic 3.6.7 (template schema extension) + Epic 4 (SSE)
+  epic-7: in-progress
+  7-1-inbox-页框架-三列布局-窄导航-消息列表-右侧预览: ready-for-dev
+  7-2-消息列表项-分组-徽章系统: ready-for-dev
+  7-3-新群聊流程-新项目-新群聊-5-步向导: ready-for-dev
+  7-4-inbox-chat-agentdm-路由与面包屑: ready-for-dev
+  7-5-群聊切换-briefboard-模式-segmented-control: ready-for-dev
+  7-6-搜索-tab-过滤: ready-for-dev
+  7-7-approval-gate-面板-内嵌-inbox-预览: ready-for-dev
+  epic-7-retrospective: optional
