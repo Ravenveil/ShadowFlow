@@ -85,7 +85,7 @@ development_status:
 
   # ===== Epic 3: Workflow Editor + Template Compilation + 6 Seed Templates =====
   epic-3: in-progress
-  3-1-react-editor-shell-reactflow-canvas-shadow-ui-复用: in-progress
+  3-1-react-editor-shell-reactflow-canvas-shadow-ui-复用: done
   3-2-yaml-编辑器-双向同步-yaml-canvas: done
   3-3-节点类型-agent-approvalgate-barrier-parallel-retry-decision: done
   3-4-workflowassemblyspec-compile-主链-academic-paper-走此路径: done

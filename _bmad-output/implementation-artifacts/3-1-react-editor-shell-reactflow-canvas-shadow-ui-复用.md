@@ -1,6 +1,6 @@
 # Story 3.1: React Editor Shell + ReactFlow Canvas + Shadow UI 复用
 
-Status: in-progress
+Status: done
 
 ## Story
 
