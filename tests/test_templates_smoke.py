@@ -21,9 +21,7 @@ from shadowflow.highlevel import WorkflowTemplateSpec
 from shadowflow.runtime import RuntimeRequest, RuntimeService
 from shadowflow.runtime.contracts import (
     BlockDef,
-    EdgeDefinition,
     LaneDef,
-    NodeDefinition,
     StageDef,
     WorkflowAssemblySpec,
     WorkflowDefinition,
@@ -144,12 +142,19 @@ def test_academic_paper_assembly_compile_chain_runs():
 # ---------------------------------------------------------------------------
 
 def test_blank_template_has_at_least_one_agent():
-    """blank.yaml must have the agent_1 node declared so it can serve as a scaffold."""
+    """blank.yaml must have the agent_1 node declared so it can serve as a scaffold.
+
+    Note: blank.yaml intentionally has agent_roster=[] (0 roster entries per Story 3.6.7
+    spec); the scaffold agent lives in spec.agents (flow graph). We assert spec.agents
+    because len(spec.agent_roster) >= 0 is trivially True for any list, including empty.
+    """
     path = TEMPLATES_DIR / "blank.yaml"
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     spec = WorkflowTemplateSpec.model_validate(raw)
     # blank template has 1 agent spec in agents list (not agent_roster)
-    assert len(spec.agents) >= 1 or len(spec.agent_roster) >= 0
+    assert len(spec.agents) >= 1, (
+        "blank.yaml must declare at least one agent in `agents` so it can run as a scaffold"
+    )
 
 
 def test_academic_paper_template_has_6_roster_entries():

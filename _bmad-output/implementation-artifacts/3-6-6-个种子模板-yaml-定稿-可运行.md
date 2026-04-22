@@ -1,6 +1,6 @@
 # Story 3.6: 6 个种子模板 YAML 定稿 + 可运行
 
-Status: review
+Status: in-progress
 
 ## Story
 
@@ -128,3 +128,19 @@ claude-sonnet-4-6
 ### File List
 
 - tests/test_templates_smoke.py (new — 11 tests)
+
+## Code Review Findings (2026-04-22)
+
+### Review Mode: direct analysis
+### Decisions Applied
+
+| ID | Finding | Decision |
+|----|---------|---------|
+| P2-α | `test_blank_template_has_at_least_one_agent`: `or len(spec.agent_roster) >= 0` is trivially True for any list (including empty), making the test permanently pass regardless of blank.yaml content | **Fixed** — assertion changed to `len(spec.agents) >= 1` with explanatory docstring |
+| P3-α | `NodeDefinition` and `EdgeDefinition` imported but never used in test_templates_smoke.py | **Fixed** — removed unused imports |
+| D1 | E2E spec `tests/e2e/seed-templates.spec.ts` missing (story T8) | **Deferred (D1=d)** — consistent with other stories' defer pattern (same as Story 3-5 E2E) |
+| D2 | AC2 runtime rejection not tested; `solo-company.yaml` has `policy_matrix: agents: {}` (empty); `TemplateAgentPolicySpec` schema has no reject field; template `agents` list only contains `ceo` so `validate_template()` blocks adding other agents to policy_matrix | **Deferred (D2=d)** — requires template redesign (add full dual-lane flow + runtime PolicyMatrix integration); deferred as separate bugfix |
+
+### Patches Applied (1 file)
+
+- [x] `tests/test_templates_smoke.py` — removed unused `NodeDefinition`/`EdgeDefinition` imports (P3-α); fixed always-true assertion in `test_blank_template_has_at_least_one_agent` (P2-α)
