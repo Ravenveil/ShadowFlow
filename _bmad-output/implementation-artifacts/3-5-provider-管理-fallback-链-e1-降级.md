@@ -1,6 +1,6 @@
 # Story 3.5: Provider 管理 + Fallback 链(E1 降级)
 
-Status: review
+Status: in-progress
 
 ## Story
 
@@ -121,3 +121,21 @@ claude-sonnet-4-6
 - src/core/components/modals/SecretsModal.tsx (new)
 - src/core/hooks/useRunEvents.ts (new)
 - tests/test_llm_fallback.py (new)
+
+## Code Review Findings (2026-04-22)
+
+### Review Mode: direct analysis (subagent rate limit, reviewed inline)
+### Decisions Applied
+
+| ID | Finding | Decision |
+|----|---------|---------|
+| P2-α | ProviderPanel exported but never rendered — AC1 inspector panel is dead | **Fixed** — InspectorTab 新增 "Provider · Fallback" section，所有 agent 节点显示 |
+| P2-β | SecretsModal 从未渲染 — BYOK 密钥引导不可见 | **Fixed** — EditorTopBar 新增 "🔑 Keys" 按钮 + showSecrets state + SecretsModal 渲染 |
+| P2-δ | `provider.fallback` 未在 useRunEvents 命名注册 — SseClient 不会为其添加 EventSource listener，事件静默丢弃 | **Fixed** — useRunEvents.ts 新增 `client.on('provider.fallback', ...)` 命名监听 |
+| D3 | T3 不完整 — RuntimeService 未集成 FallbackProvider（AC2 runtime fallback 不激活）| **Deferred (D3=d)** — FallbackProvider 实现和测试完备；service.py 集成需深入 executor dispatch，延后为独立 bugfix |
+
+### Patches Applied (3 files)
+
+- [x] `src/core/hooks/useRunEvents.ts` — 新增 provider.fallback 命名 SSE listener (P2-δ)
+- [x] `src/EditorPage.tsx` — 导入 ProviderPanel/SecretsModal；InspectorTab 加 Provider · Fallback section；EditorTopBar 加 🔑 Keys 按钮 + showSecrets state + SecretsModal 渲染 (P2-α, P2-β)
+- [x] `_bmad-output/...` — status review→in-progress; sprint-status updated

@@ -12,6 +12,8 @@ import { useYamlSync } from './core/hooks/useYamlSync';
 import { useYamlEditorStore } from './core/hooks/useYamlEditorStore';
 import { parseWorkflowYaml } from './core/lib/yamlSerializer';
 import { ApprovalGateForm } from './core/components/inspector/ApprovalGateForm';
+import { ProviderPanel } from './core/components/inspector/ProviderPanel';
+import { SecretsModal } from './core/components/modals/SecretsModal';
 
 const YamlEditor = lazy(() =>
   import('./core/components/editor/YamlEditor').then((m) => ({ default: m.YamlEditor })),
@@ -1122,6 +1124,17 @@ function InspectorTab({ node, updateNode }: {
         />
       </InspectorSection>
 
+      {/* Provider · Fallback — P2-α fix: ProviderPanel wired for all agent nodes (AC1) */}
+      <InspectorSection>
+        <SectionHdr left="Provider · Fallback" />
+        <ProviderPanel
+          node={node}
+          onUpdate={(id, patch) =>
+            updateNode(id, { data: { ...node.data, ...patch } })
+          }
+        />
+      </InspectorSection>
+
       {/* Last Output */}
       {(d as { lastOutput?: string }).lastOutput && (
         <InspectorSection>
@@ -1315,14 +1328,16 @@ function RunLogTab() {
 function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: () => void; lang: string; onToggleLang: () => void; templateTitle?: string }) {
   const zh = lang === 'CN';
   const { nodes, edges, setNodes, addEdge, clearCanvas } = useWorkflow();
-  const [saveOpen, setSaveOpen]     = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [saveName,   setSaveName]   = useState(templateTitle || '');
-  const [saveDesc,   setSaveDesc]   = useState('');
-  const [importText, setImportText] = useState('');
-  const [importErr,  setImportErr]  = useState<string | null>(null);
-  const [dirty,      setDirty]      = useState(false);
-  const [flashOk,    setFlashOk]    = useState<string | null>(null);
+  const [saveOpen, setSaveOpen]       = useState(false);
+  const [importOpen, setImportOpen]   = useState(false);
+  const [saveName,   setSaveName]     = useState(templateTitle || '');
+  const [saveDesc,   setSaveDesc]     = useState('');
+  const [importText, setImportText]   = useState('');
+  const [importErr,  setImportErr]    = useState<string | null>(null);
+  const [dirty,      setDirty]        = useState(false);
+  const [flashOk,    setFlashOk]      = useState<string | null>(null);
+  // P2-β fix: SecretsModal visibility
+  const [showSecrets, setShowSecrets] = useState(false);
 
   // Mark as dirty when user modifies anything after the initial template load
   const initialCountRef = React.useRef({ n: nodes.length, e: edges.length });
@@ -1430,6 +1445,12 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
           <span style={{ padding: '2px 6px', borderRadius: 4, background: lang === 'EN' ? V.accentTint : 'transparent', color: lang === 'EN' ? V.accentBr : V.fg4 }}>EN</span>
           <span style={{ padding: '2px 6px', borderRadius: 4, background: zh ? V.accentTint : 'transparent', color: zh ? V.accentBr : V.fg4 }}>中</span>
         </button>
+        {/* P2-β fix: BYOK keys modal trigger (S1/AR44 — keys never leave browser) */}
+        <button onClick={() => setShowSecrets(true)}
+          title={zh ? 'API 密钥管理 (BYOK)' : 'API Keys (BYOK)'}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: V.mono, fontSize: 11, color: V.fg3, background: 'transparent', border: `1px solid ${V.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+          🔑 {zh ? '密钥' : 'Keys'}
+        </button>
         <IconBtn title="Settings">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </IconBtn>
@@ -1463,6 +1484,11 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* SecretsModal — P2-β fix: BYOK key management (S1/AR44) */}
+      {showSecrets && (
+        <SecretsModal open={showSecrets} onClose={() => setShowSecrets(false)} />
       )}
 
       {/* Import modal */}

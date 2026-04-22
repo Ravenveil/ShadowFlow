@@ -197,6 +197,9 @@ export function useRunEvents({
     client.on('policy.updated', (payload) => handleEvent(payload as RunEventPayload));
     client.on('run.reconfigured', (payload) => handleEvent(payload as RunEventPayload));
     client.on('run.completed', (payload) => handleEvent(payload as RunEventPayload));
+    // P2-δ fix: provider.fallback must be a named listener so SseClient registers
+    // an EventSource.addEventListener for it (wildcard '*' only fires within _dispatch).
+    client.on('provider.fallback', (payload) => handleEvent(payload as RunEventPayload));
 
     client.connect(runId);
 
