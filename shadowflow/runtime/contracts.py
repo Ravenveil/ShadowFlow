@@ -49,7 +49,7 @@ class ApprovalGateConfig(BaseModel):
     approver: str
     on_reject: Literal["retry", "halt", "branch"] = "halt"
     on_approve: Optional[str] = None
-    timeout_seconds: int = 300
+    timeout_seconds: int = Field(default=300, gt=0)
 
 
 class NodeDefinition(BaseModel):
@@ -101,13 +101,14 @@ class WorkflowPolicyMatrixSpec(BaseModel):
 
     @model_validator(mode="after")
     def validate_structure(self) -> "WorkflowPolicyMatrixSpec":
-        # 仅校验结构完整性；role id 跨字段校验由 WorkflowDefinition.validate_graph 完成
         for sender, receivers in self.allow_send.items():
             if not isinstance(receivers, list):
                 raise ValueError(f"allow_send[{sender!r}] must be a list of role ids")
+            self.allow_send[sender] = list(dict.fromkeys(receivers))
         for reviewer, targets in self.allow_reject.items():
             if not isinstance(targets, list):
                 raise ValueError(f"allow_reject[{reviewer!r}] must be a list of role ids")
+            self.allow_reject[reviewer] = list(dict.fromkeys(targets))
         return self
 
 

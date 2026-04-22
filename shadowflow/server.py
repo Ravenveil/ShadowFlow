@@ -346,8 +346,10 @@ async def submit_approval(run_id: str, body: Dict[str, Any]):
     if not node_id or decision not in {"approve", "reject"}:
         raise HTTPException(status_code=422, detail="node_id and decision (approve|reject) are required")
     if decision == "reject" and reviewer_role:
-        # 通过 policy-matrix 校验的强制驳回通道（Story 1.3）
-        runtime_service.reject(run_id, reviewer_role, node_id, reason)
+        try:
+            runtime_service.reject(run_id, reviewer_role, node_id, reason)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
         return {"run_id": run_id, "node_id": node_id, "decision": decision, "accepted": True}
     ok = runtime_service.submit_approval(run_id, node_id, decision, reason)
     if not ok:

@@ -120,7 +120,7 @@ class RuntimeService:
         node_ids = {node.id for node in workflow.nodes}
         policy_warnings = []
         if workflow.policy_matrix is not None:
-            policy_warnings = validate_best_practices(workflow.policy_matrix, node_ids)
+            policy_warnings = validate_best_practices(workflow.policy_matrix)
 
         return WorkflowValidationResult(
             valid=True,
@@ -858,7 +858,56 @@ class RuntimeService:
                     memory_events=memory_events,
                 )
                 if state.get("_approval_paused"):
-                    # 超时 → 工作流暂停，停止执行
+                    from shadowflow.runtime.events import CHECKPOINT_SAVED as _CKS
+                    _timeout_step = StepRecord(
+                        step_id=step_id,
+                        run_id=run_id,
+                        node_id=current_node_id,
+                        status="cancelled",
+                        index=index,
+                        input=current_output,
+                        output=step_output,
+                        trace=step_trace,
+                        started_at=step_started_at,
+                        ended_at=utc_now(),
+                        metadata={"node_kind": node.kind, "node_type": node.type, "task_id": task.task_id},
+                    )
+                    steps.append(_timeout_step)
+                    _timeout_cp = CheckpointRef(
+                        checkpoint_id=f"ckpt-{uuid4().hex[:10]}",
+                        run_id=run_id,
+                        step_id=step_id,
+                        state_ref=f"checkpoint://{run_id}/{step_id}",
+                        state=CheckpointState(
+                            current_node_id=current_node_id,
+                            next_node_id=current_node_id,
+                            visited_nodes=list(state["visited_nodes"]),
+                            last_output=current_output,
+                            state=self._build_checkpoint_payload(state),
+                        ),
+                        writeback=WritebackRef(
+                            channel="checkpoint",
+                            target=checkpoint_writeback.get("target", "host"),
+                            mode=checkpoint_writeback.get("mode", "reference"),
+                            host_action="persist_checkpoint_ref",
+                        ),
+                        metadata={
+                            "workflow_id": request.workflow.workflow_id,
+                            "entrypoint": request.workflow.entrypoint,
+                            "reason": "approval_timeout",
+                        },
+                    )
+                    checkpoints.append(_timeout_cp)
+                    self._checkpoints[_timeout_cp.checkpoint_id] = _timeout_cp
+                    if self._checkpoint_store is not None:
+                        self._checkpoint_store.put(_timeout_cp)
+                    if self._event_bus is not None:
+                        self._event_bus.publish(run_id, {
+                            "type": _CKS,
+                            "checkpoint_id": _timeout_cp.checkpoint_id,
+                            "node_id": current_node_id,
+                            "reason": "approval_timeout",
+                        })
                     break
             elif self._is_delegated_node(node):
                 step_output = await self._execute_delegated_node(
@@ -2412,6 +2461,7 @@ class RuntimeService:
             )
             state["_approval_paused"] = True
             self._approval_events.pop(key, None)
+            self._approval_decisions.pop(key, None)
             return {"message": "approval_timeout", "approval_status": "timeout", "state": {}}
         finally:
             self._approval_events.pop(key, None)
@@ -2419,6 +2469,10 @@ class RuntimeService:
         decision_data = self._approval_decisions.pop(key, {})
         decision = decision_data.get("decision", "approve")
         reason = decision_data.get("reason", "")
+
+        if decision not in {"approve", "reject"}:
+            decision = "reject"
+            reason = reason or f"invalid decision '{decision_data.get('decision')}' treated as reject"
 
         if decision == "approve":
             trace.append(
@@ -2432,25 +2486,25 @@ class RuntimeService:
             run.status = "running"
             task.status = "running"
             return {"message": "approved", "approval_status": "approved", "approval_reason": reason, "state": {}}
-        else:
-            trace.append(
-                {
-                    "event": APPROVAL_REJECTED,
-                    "node_id": node.id,
-                    "message": f"Approval rejected: {reason}",
-                    "timestamp": utc_now().isoformat(),
-                }
-            )
-            on_reject = approval_cfg.on_reject if approval_cfg else "halt"
-            run.status = "running"
-            task.status = "running"
-            return {
-                "message": "rejected",
-                "approval_status": "rejected",
-                "approval_reason": reason,
-                "on_reject": on_reject,
-                "state": {"_approval_rejected": True, "_on_reject": on_reject},
+
+        trace.append(
+            {
+                "event": APPROVAL_REJECTED,
+                "node_id": node.id,
+                "message": f"Approval rejected: {reason}",
+                "timestamp": utc_now().isoformat(),
             }
+        )
+        on_reject = approval_cfg.on_reject if approval_cfg else "halt"
+        run.status = "running"
+        task.status = "running"
+        return {
+            "message": "rejected",
+            "approval_status": "rejected",
+            "approval_reason": reason,
+            "on_reject": on_reject,
+            "state": {"_approval_rejected": True, "_on_reject": on_reject},
+        }
 
     async def _execute_node(
         self,

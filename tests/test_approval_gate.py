@@ -85,6 +85,12 @@ class TestApprovalGateConfig:
         with pytest.raises(ValidationError):
             ApprovalGateConfig(approver="x", on_reject="unknown_action")
 
+    def test_timeout_seconds_must_be_positive(self):
+        with pytest.raises(ValidationError):
+            ApprovalGateConfig(approver="x", timeout_seconds=0)
+        with pytest.raises(ValidationError):
+            ApprovalGateConfig(approver="x", timeout_seconds=-1)
+
 
 # ---------------------------------------------------------------------------
 # NodeDefinition approval_gate 校验
@@ -197,6 +203,51 @@ class TestApprovalGateTimeout:
         assert result.run.status == "paused"
         # 超时前的节点（prepare）应有 checkpoint
         assert len(result.checkpoints) >= 1
+
+    @pytest.mark.asyncio
+    async def test_timeout_checkpoint_has_gate_metadata(self):
+        """AC#2: timeout checkpoint 记录 approval_timeout 原因，且指向 gate 节点。"""
+        service = RuntimeService()
+        wf = _approval_workflow(timeout_seconds=1)
+        request = _make_request(wf)
+
+        result = await service.run(request)
+        assert result.run.status == "paused"
+        timeout_cps = [cp for cp in result.checkpoints if cp.metadata.get("reason") == "approval_timeout"]
+        assert len(timeout_cps) >= 1, "should have a checkpoint with approval_timeout reason"
+        cp = timeout_cps[0]
+        assert cp.state.current_node_id == "gate"
+        assert cp.state.next_node_id == "gate"
+
+    @pytest.mark.asyncio
+    async def test_timeout_emits_checkpoint_saved_event(self):
+        """AC#2: timeout 路径必须发出 checkpoint.saved 事件到 event bus。"""
+        from shadowflow.runtime.events import RunEventBus
+
+        service = RuntimeService()
+        bus = RunEventBus()
+        service._event_bus = bus
+        wf = _approval_workflow(timeout_seconds=1)
+        request = _make_request(wf)
+
+        result = await service.run(request)
+        assert result.run.status == "paused"
+        run_id = result.run.run_id
+        events = bus.get_events(run_id)
+        ckpt_events = [e for _, e in events if isinstance(e, dict) and e.get("type") == "checkpoint.saved"]
+        assert len(ckpt_events) >= 1, "timeout should emit checkpoint.saved event"
+        assert ckpt_events[0].get("reason") == "approval_timeout"
+
+    @pytest.mark.asyncio
+    async def test_timeout_cleans_up_approval_decisions(self):
+        """Timeout 路径必须清理 _approval_decisions 防止内存泄漏。"""
+        service = RuntimeService()
+        wf = _approval_workflow(timeout_seconds=1)
+        request = _make_request(wf)
+
+        await service.run(request)
+        assert len(service._approval_decisions) == 0, "approval_decisions should be empty after timeout"
+        assert len(service._approval_events) == 0, "approval_events should be empty after timeout"
 
 
 # ---------------------------------------------------------------------------

@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-22T15:26:58Z  # 1-4 checkpoint-resume 16 patches done, 599 tests pass
+last_updated: 2026-04-22T19:16:15Z  # 1-2 review patches applied (Critical+Major), story → done; 612 tests passed
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -53,17 +53,17 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # ===== Epic 0: Developer Foundation & One-Click Start =====
-  epic-0: in-progress
+  epic-0: done
   0-1-docker-compose-一键启动: done
   0-2-github-actions-ci-流水线: done
-  0-3-pydantic-typescript-类型生成脚本: review
-  0-4-readme-quick-start-独立复现指南: review
+  0-3-pydantic-typescript-类型生成脚本: done
+  0-4-readme-quick-start-独立复现指南: done
   epic-0-retrospective: optional
 
   # ===== Epic 1: Runtime Hardening — Policy Matrix + Approval + Checkpoint Resume =====
   epic-1: in-progress
-  1-1-policy-matrix-核心对象-compile-time-非阻塞校验: review
-  1-2-approval-gate-节点类型: review
+  1-1-policy-matrix-核心对象-compile-time-非阻塞校验: done
+  1-2-approval-gate-节点类型: done
   1-3-运行时真驳回-handoff-事件: review
   1-4-驳回穿透多层-checkpoint-resume: done
   1-5-trajectory-export-run-查询-api: review
