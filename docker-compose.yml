@@ -34,7 +34,7 @@ services:
       - "3000:3000"
     depends_on:
       shadowflow-api:
-        condition: service_started
+        condition: service_healthy
     networks:
       - shadowflow-net
     restart: unless-stopped

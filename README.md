@@ -1,314 +1,213 @@
-# ShadowFlow
+# ShadowFlow — Agent Team 的 VSCode
 
-A lightweight multi-agent orchestration runtime for contract-first workflows.
+**Contract-first 多智能体编排平台 · 带驳回闭环 · 一键 Docker 本地跑通**
 
 [![CI](https://github.com/Ravenveil/ShadowFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Ravenveil/ShadowFlow/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](docs/)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
+[![0G Ecosystem](https://img.shields.io/badge/0G-Storage%20%2B%20Compute-6C47FF.svg)](https://0g.ai)
 
-## What ShadowFlow Is
+> **ShadowFlow 的核心赌注**：ACP（Agent Communication Protocol）是下一个 LSP——就像 Language Server Protocol 统一了 IDE 与语言工具链，ACP 将统一 Agent 与协作平台。ShadowFlow 是这个基础设施层的第一个实现。
+>
+> 架构象限图：[docs/design/shadowflow-strategy-bet-v1.md](docs/design/shadowflow-strategy-bet-v1.md)
 
-ShadowFlow 当前阶段的正式定位是：
+---
 
-- 一个独立的 runtime / schema / adapter 项目
-- 一个可被 CLI 与 HTTP API 调用的多智能体编排运行时
-- 一个对外输出结构化 `run / step / trace / artifact / checkpoint` 结果的黑盒引擎
+## Prerequisites
 
-详细边界见：
+| 依赖 | 最低版本 | 说明 |
+|------|---------|------|
+| Docker Desktop | 20.10+ | Windows 用户请开启 "Use WSL 2 based engine" |
+| Git | 2.x+ | 克隆仓库 |
+| API Key（可选） | — | Anthropic / OpenAI / Gemini 任选其一；不填则走浏览器内 BYOK 输入 |
 
-- [Core Charter](docs/CORE_CHARTER.md)
-- [Runtime Contract Spec](docs/RUNTIME_CONTRACT_SPEC.md)
-- [Workflow Schema](docs/WORKFLOW_SCHEMA.md)
-- [CLI 安装与使用](docs/CLI_INSTALL_AND_USAGE.md)
+> **不需要** Python / Node.js 安装——所有依赖均已打包进 Docker 镜像。
 
-## Features
-
-- Contract-first workflow schema
-- Unified CLI and HTTP runtime entrypoints
-- Structured `run -> steps -> final_output -> trace -> artifacts -> checkpoints`
-- Canonical YAML / JSON workflow definition
-- Basic parallel fan-out + barrier join
-- Unified executor layer for `CLI` and `API`
-- Built-in provider adapters for `Codex CLI`, `Claude CLI`, `OpenAI Responses API`, and `Anthropic Messages API`
-- Markdown writeback backend for `runs / artifacts / checkpoints`
-- Reference writeback adapter stubs for `docs / memory / graph`
-- Minimal checkpoint store contract with in-memory reference implementation
-- Phase 1 examples aligned with runtime contract
-- High-level `Tool / Skill / Role / Agent / WorkflowTemplate` schema with template compiler
-
-## Installation
-
-当前阶段推荐使用源码安装。
-`agentgraph` 这个 PyPI 名称已被其他项目占用，因此本项目暂未以该名字公开发布到 PyPI。
-
-### From Source
-
-```bash
-git clone https://github.com/your-org/agentgraph.git
-cd agentgraph
-pip install -e .[dev]
-```
-
-安装完成后可验证：
-
-```bash
-agentgraph --help
-python -m shadowflow.cli --help
-```
-
-更完整的前置条件、CLI provider、API key、writeback 说明见：
-
-- [CLI 安装与使用](docs/CLI_INSTALL_AND_USAGE.md)
+---
 
 ## Quick Start
 
-### 1. Create a Workflow
-
-```yaml
-workflow_id: "docs-gap-review"
-version: "0.1"
-name: "Docs Gap Review"
-entrypoint: "planner"
-nodes:
-  - id: "planner"
-    kind: "agent"
-    type: "planning.analyze"
-    config:
-      role: "planner"
-      prompt: "Analyze documentation gaps."
-      message_template: "[planner] analyzed documentation gaps."
-      emit:
-        gap_count: 2
-  - id: "reviewer"
-    kind: "agent"
-    type: "review.summarize"
-    config:
-      role: "reviewer"
-      prompt: "Summarize the review notes."
-      message_template: "[reviewer] produced review notes."
-edges:
-  - from: "planner"
-    to: "reviewer"
-    type: "conditional"
-    condition: "result.gap_count > 0"
-  - from: "reviewer"
-    to: "END"
-    type: "final"
-defaults: {}
-metadata: {}
+```bash
+git clone https://github.com/Ravenveil/ShadowFlow.git && cd ShadowFlow
+cp .env.example .env          # 可选：填入 API Key；不填走 BYOK
+docker compose up -d
 ```
 
-### 2. Validate
+访问 **http://localhost:3000** — 看到 ShadowFlow 工作流编辑器即成功。
+
+> **提示**：`.env` 中的 key 仅供后端 provider fallback 使用，不会上传或记录到日志（NFR S1）。
+
+---
+
+## 5-Minute Demo
+
+用 **Solo Company** 模板体验双驳回戏剧全流程。
+
+### Step 1 — 选模板
+
+首页点击 **Templates** → 选择 **Solo Company**（独立公司多角色协作模板）→ 点击 **Open**。
+
+### Step 2 — 下发任务
+
+工作流画布打开后，点击顶部工具栏 **Quick Demo** 按钮，自动填充指令：
+
+```
+写一条符合公司合规要求的周报 tweet
+```
+
+点击 **Run** 发起执行。
+
+### Step 3 — 合规官触发驳回
+
+Live Dashboard 右侧出现红色 Toast：
+
+```
+policy.violation — ComplianceOfficer 拒绝本次草稿：含敏感词汇，退回内容官重写
+```
+
+节点图中 `content_draft` 节点变红，触发 `checkpoint rollback`。
+
+### Step 4 — 内容官重跑并通过
+
+系统自动重新调度内容官节点，本次生成合规草稿，节点变绿，看板显示：
+
+```
+node.succeeded — content_draft (retry #1) ✓
+```
+
+### Step 5 — 归档到 0G Storage
+
+右上角点击 **Archive to 0G** → 输入浏览器内 BYOK 密钥 → 确认上传。
+
+成功后获得：
+- **CID**：`0x<sha256-merkle-root>`（示例，需 Epic 5 真实上传后更新）
+- **0G Explorer 链接**：https://explorer-storage.0g.ai/file/<CID>
+
+> ⚠️ **注意**：当前 CID 为占位示例，将在 Epic 5（0G Storage 集成）完成后替换为真实值。
+
+---
+
+## Troubleshooting
+
+### Docker 起不来
 
 ```bash
-agentgraph validate -w workflow.yaml
+# 检查端口冲突
+lsof -i :8000    # API 端口
+lsof -i :3000    # Web 端口（macOS/Linux）
+netstat -an | findstr "8000 3000"   # Windows
 ```
 
-### 3. Run
+停用占用进程后重新 `docker compose up -d`。
+
+### 容器无日志 / 白屏
 
 ```bash
-agentgraph run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}"
+docker compose logs shadowflow-api   # 查 API 错误
+docker compose logs shadowflow-web   # 查前端构建错误
 ```
 
-使用 markdown writeback：
+常见原因：CORS_ORIGINS 未包含 `http://localhost:3000`，检查 `.env` 中的配置。
+
+### Windows 路径问题
+
+确保 Docker Desktop → Settings → General → **"Use the WSL 2 based engine"** 已勾选。
+WSL 2 路径格式：`/mnt/d/...`（不要使用 `D:\...`）。
+
+### 0G TS SDK 在 Windows 不稳定
+
+已知风险（中等概率）：0G TS SDK 在 Windows 环境下可能有 WebSocket/WASM 兼容性问题。
+
+**临时方案**：
+1. 在 macOS / Linux 机器上运行演示
+2. 或使用后端代理模式（`ZEROG_PROXY_MODE=true` 写入 `.env`，密钥存后端）
+
+---
+
+## Architecture Overview
+
+```
+Browser
+  └── React + ReactFlow (Workflow Editor + Live Dashboard)
+        ↕ REST + SSE
+Backend (FastAPI)
+  ├── Runtime Engine  →  TaskRecord / RunRecord / StepRecord / Artifact / Checkpoint
+  ├── Agent Executors →  CLI (Claude / Codex / ShadowSoul) | API | MCP | ACP
+  ├── Policy Matrix   →  compile-time validation + runtime reject → handoff + rollback
+  └── Provider Layer  →  Claude / OpenAI / Gemini / Ollama / 0G Compute (fallback chain)
+        ↕ BYOK
+0G Network
+  ├── 0G Storage      →  trajectory archive (Merkle-verified)
+  └── 0G Compute      →  LLM inference (Provider #5)
+```
+
+完整架构文档：[_bmad-output/planning-artifacts/architecture.md](_bmad-output/planning-artifacts/architecture.md)
+
+运行时契约（7+1 核心对象）：[docs/RUNTIME_CONTRACT_SPEC.md](docs/RUNTIME_CONTRACT_SPEC.md)
+
+---
+
+## How to Plug Your Agent
+
+ShadowFlow 支持四种接入通道：`api`（HTTP 推理）、`cli`（子进程）、`mcp`（MCP tool 单次调用）、`acp`（ACP session + 审批流）。
+
+接入只需两步：① 在 `shadowflow/runtime/provider_presets.yaml` 添加 preset；② 在工作流 YAML 中声明 `provider: <your-agent>`。
+
+完整接入指南（ABC 契约 / YAML 样板 / worked example / 健康检查）：
+
+**[docs/AGENT_PLUGIN_CONTRACT.md](docs/AGENT_PLUGIN_CONTRACT.md)**
+
+> 已内置预设：Hermes（ACP）、OpenClaw（CLI）、ShadowSoul（ACP+CLI 双路径）、Claude / OpenAI / Gemini / Ollama（api）。
+
+---
+
+## Phase 2–3 Roadmap
+
+### Phase 2 — 深度集成
+
+- **Tauri Sidecar**：打包为桌面应用（macOS / Windows），离线可用
+- **Shadow 集成**：接入 Shadow 智能体生态，自动发现并注册 Agent 能力
+- **River Memory 系统**：主流/支流/水闸记忆协议，跨 run 持久化语义记忆
+
+### Phase 3 — 价值网络
+
+- **INFT 铸造**：将高质量 trajectory 铸造为 NFT，建立 Agent 能力链上证据
+- **ACP Marketplace**：Agent Plugin Contract 市集，第三方 Agent 一键接入
+- **Fleet Management**：多项目、多 Agent 舰队级观测与策略治理
+
+---
+
+## Development
+
+### TypeScript Type Generation
+
+Frontend TypeScript interfaces are auto-generated from the Pydantic runtime contracts.
+**After modifying `shadowflow/runtime/contracts.py`**, regenerate and commit the types:
 
 ```bash
-agentgraph run -w workflow.yaml -i "{\"goal\":\"Analyze docs gaps\"}" --writeback markdown --writeback-root ./shadowflow-runtime
+python scripts/generate_ts_types.py
+git add src/core/types/workflow.ts
+git commit -m "chore: regenerate TS types from contracts.py"
 ```
 
-说明：
+The CI `lint-backend` job runs `python scripts/check_contracts.py` and will **fail** if
+`src/core/types/workflow.ts` is out of sync with `contracts.py`.
 
-- 未显式传 `--writeback-root` / `--root` 时，CLI 会优先读取环境变量 `SHADOWFLOW_RUNTIME_ROOT`
-- 若未设置该环境变量，会回退到用户级 runtime 数据目录
-
-### 4. Export Workflow Graph
+### Running Tests
 
 ```bash
-agentgraph graph -w workflow.yaml
+# Backend tests (exclude API key tests)
+pytest -m "not requires_api_key" --tb=short
+
+# Frontend tests
+npm run test:run
+
+# Type drift check
+python scripts/check_contracts.py
 ```
 
-### 5. Compile a High-Level Template
+### Git Workflow
 
-```bash
-agentgraph compile --template docs-review-template --registry-root examples/highlevel/minimal-registry --var goal="Audit docs"
-```
-
-### 6. Inspect or Scaffold High-Level Specs
-
-```bash
-agentgraph presets list
-agentgraph patterns list
-agentgraph role-presets list
-agentgraph registry counts --registry-root examples/highlevel/minimal-registry
-agentgraph registry list --registry-root examples/highlevel/minimal-registry --kind agents
-agentgraph registry export --registry-root examples/highlevel/minimal-registry --output-root ./exported-registry
-agentgraph registry import --registry-root ./my-registry --preset single-reviewer --workflow-id docs_review_pack
-agentgraph init tool --registry-root ./my-registry --id filesystem --kind builtin
-agentgraph init role --registry-root ./my-registry --id reviewer
-agentgraph init role --registry-root ./my-registry --id strict_reviewer --preset reviewer
-agentgraph init skill --registry-root ./my-registry --id docs_review
-agentgraph init agent --registry-root ./my-registry --id docs_reviewer --role reviewer --skill docs_review --tool filesystem
-agentgraph init template --registry-root ./my-registry --id docs_review_template --agent-ref docs_reviewer --agent-node-id reviewer
-agentgraph init workflow --registry-root ./my-registry --id docs_review_pack --pattern single-reviewer --goal "Audit docs"
-agentgraph scaffold --registry-root ./my-registry --pattern planner-coder-reviewer --workflow-id feature_lane --goal "Ship a safe feature plan"
-agentgraph init workflow --registry-root ./my-registry --id research_lane --task-kind research --goal "Collect evidence and package a final summary"
-agentgraph init workflow --registry-root ./my-registry --id feature_lane --preset planner-coder-reviewer --goal "Ship a safe feature plan" --assign planner.focus="Only define execution milestones" --assign reviewer.owned_topics="regression,tests"
-```
-
-编译时如果你想直接看“这次生成了什么”，可以附带摘要：
-
-```bash
-agentgraph compile --template docs-review-template --registry-root examples/highlevel/minimal-registry --var goal="Audit docs" --summary json
-```
-
-### 7. Chat With an Executor
-
-单轮对话：
-
-```bash
-agentgraph chat --kind cli --provider claude --parse claude-json --message "请用一句中文介绍 ShadowFlow"
-```
-
-### 8. Inspect Persisted Runtime Data
-
-```bash
-agentgraph runs list
-agentgraph runs get --run-id <run_id>
-agentgraph runs graph --run-id <run_id>
-agentgraph checkpoints get --checkpoint-id <checkpoint_id>
-agentgraph sessions list
-agentgraph sessions get --session-id <session_id>
-agentgraph resume --run-id <run_id> --checkpoint-id <checkpoint_id>
-```
-
-### 9. Serve HTTP API
-
-```bash
-agentgraph serve --port 8000
-```
-
-核心端点：
-
-- `POST /workflow/validate`
-- `POST /workflow/run`
-- `POST /workflow/graph`
-- `GET /runs`
-- `GET /runs/{id}`
-- `GET /runs/{id}/graph`
-- `POST /chat/sessions`
-- `GET /chat/sessions`
-- `GET /chat/sessions/{id}`
-- `POST /chat/sessions/{id}/messages`
-
-## Official Phase 1 Examples
-
-- [docs-gap-review](examples/runtime-contract/docs-gap-review.yaml)
-- [parallel-synthesis](examples/runtime-contract/parallel-synthesis.yaml)
-- [research-review-loop](examples/runtime-contract/research-review-loop.yaml)
-
-## Executor Examples
-
-- Generic local CLI: [cli-generic-local](examples/runtime-contract/cli-generic-local.yaml)
-- Codex CLI: [cli-agent-execution](examples/runtime-contract/cli-agent-execution.yaml)
-- Claude CLI: [cli-claude-execution](examples/runtime-contract/cli-claude-execution.yaml)
-- OpenAI API: [api-agent-execution](examples/runtime-contract/api-agent-execution.yaml)
-- Anthropic API: [api-anthropic-execution](examples/runtime-contract/api-anthropic-execution.yaml)
-
-## High-Level Spec Example
-
-- Minimal registry: [minimal-registry](examples/highlevel/minimal-registry)
-
-## Built-In Presets
-
-- `single-reviewer`
-- `planner-coder-reviewer`
-- `research-review-publish`
-
-也可以把它们当作第一版 workflow pattern library：
-
-- `agentgraph patterns list`
-
-## Built-In Role Archetypes
-
-- `planner`
-- `coder`
-- `reviewer`
-- `researcher`
-- `publisher`
-- `qa`
-
-推荐入口：
-
-- `agentgraph init workflow`
-- `agentgraph scaffold`
-
-工作流层支持固定角色指派：
-
-- 在 `WorkflowTemplateSpec.agents[].assignment` 中声明
-- 或通过 `agentgraph init workflow --assign`
-- 或通过 `agentgraph scaffold --assign`
-
-工作流模板层现在还支持：
-
-- `policy_matrix`
-- `stages / lanes`
-- compile-time governance validation
-- `task-kind -> pattern` 的推荐式入口
-
-运行示例：
-
-```bash
-agentgraph validate -w examples/runtime-contract/docs-gap-review.yaml
-agentgraph run -w examples/runtime-contract/docs-gap-review.yaml -i "{\"goal\":\"Analyze docs gaps\"}"
-```
-
-CLI executor 示例：
-
-```bash
-agentgraph run -w examples/runtime-contract/cli-agent-execution.yaml -i "{\"goal\":\"实现一个最小 CLI 调度验证\"}"
-agentgraph run -w examples/runtime-contract/cli-claude-execution.yaml -i "{\"goal\":\"实现一个最小 Claude CLI 调度验证\"}"
-```
-
-API executor 示例：
-
-```bash
-agentgraph run -w examples/runtime-contract/api-agent-execution.yaml -i "{\"goal\":\"生成一个 API 执行计划\"}"
-agentgraph run -w examples/runtime-contract/api-anthropic-execution.yaml -i "{\"goal\":\"生成一个 Anthropic API 执行计划\"}"
-```
-
-## Phase 1 Focus
-
-当前主线聚焦于：
-
-- runtime contract
-- canonical workflow schema
-- unified CLI / HTTP entrypoints
-- step / artifact / checkpoint result model
-- writeback adapter reference implementation
-- checkpoint store minimal contract
-- basic parallel / barrier control flow
-- 至少两个可重复执行的端到端样例
-
-## Current Non-Goals
-
-当前阶段明确不做：
-
-- Shadow 全量集成
-- 统一知识图谱 substrate
-- 固定形态工作台
-- 并行扩张 planner / memory / UI / runtime 成巨型平台
-
-## Roadmap
-
-### Phase 1
-
-- [x] Unified runtime contract skeleton
-- [x] CLI / HTTP shared entrypoint
-- [x] Contract-aligned workflow schema document
-- [x] Parallel fan-out + barrier baseline
-- [x] Three contract-aligned official examples
-- [ ] Example migration cleanup
-- [ ] Checkpoint recovery refinement
-- [ ] Legacy interface/test baseline cleanup
-
+- Branches: `epic/{name}` per epic (not per issue)
+- Commit format: `Issue #{number}: {description}`
+- PRs: must pass CI (lint + test + docker + type-drift + secret-scan)

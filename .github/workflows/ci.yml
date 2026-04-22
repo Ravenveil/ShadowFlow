@@ -49,6 +49,9 @@ jobs:
         # Tracked for tightening in a post-MVP story.
         run: mypy shadowflow/ --ignore-missing-imports --no-strict-optional || true
 
+      - name: check TS type drift (contracts.py ↔ workflow.ts)
+        run: python scripts/check_contracts.py
+
   # ------------------------------------------------------------------
   # Frontend lint — eslint
   # ------------------------------------------------------------------
@@ -133,7 +136,7 @@ jobs:
     name: build (docker)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [lint-backend, lint-frontend]
+    needs: [lint-backend, lint-frontend, test-backend, test-frontend]
     steps:
       - uses: actions/checkout@v4
 
@@ -163,25 +166,23 @@ jobs:
           cache-to: type=gha,mode=max,scope=web
 
   # ------------------------------------------------------------------
-  # Secret scanning — catch key leaks on every PR (NFR S1)
+  # Secret scanning — catch key leaks on every PR and push to main (NFR S1)
   # GitHub's built-in secret scanning runs automatically on public repos.
-  # This job adds TruffleHog for commit-diff coverage on PRs.
+  # This job adds TruffleHog for commit-diff coverage on all triggers.
   # ------------------------------------------------------------------
   secret-scan:
     name: secret-scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only run on PRs; pushes to main don't produce useful diff scans.
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: TruffleHog OSS
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3
         with:
           path: ./
-          base: ${{ github.event.pull_request.base.sha }}
-          head: ${{ github.event.pull_request.head.sha }}
+          base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          head: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           extra_args: --only-verified
