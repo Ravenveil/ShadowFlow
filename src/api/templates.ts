@@ -56,11 +56,14 @@ async function _handleResponse<T>(res: Response): Promise<T> {
   if (res.ok) return res.json() as Promise<T>;
   if (res.status === 409) {
     const body = await res.json();
-    throw new TemplateConflictError(body);
+    // FastAPI wraps HTTPException detail as {"detail": {...}} — unwrap one level
+    throw new TemplateConflictError(body?.detail ?? body);
   }
   if (res.status === 422) {
     const body = await res.json();
-    throw new TemplateValidationError(Array.isArray(body) ? body : [body]);
+    // FastAPI wraps HTTPException detail as {"detail": [...]} — unwrap one level
+    const errors: PydanticValidationError[] = body?.detail ?? (Array.isArray(body) ? body : [body]);
+    throw new TemplateValidationError(Array.isArray(errors) ? errors : [errors]);
   }
   if (res.status === 404) {
     throw new TemplateApiError(404, await res.text());

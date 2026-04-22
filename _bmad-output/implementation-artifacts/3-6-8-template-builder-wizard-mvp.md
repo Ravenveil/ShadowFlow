@@ -1,6 +1,6 @@
 # Story 3.6.8: Template Builder Wizard（MVP · Import YAML 降级路径）
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -381,3 +381,19 @@ claude-sonnet-4-6
 - src/core/components/Template/ImportTemplateDialog.tsx (new)
 - src/App.tsx (updated — import + state + button + dialog render)
 - tests/test_template_custom_api.py (new — 7 tests)
+
+## Code Review Findings (2026-04-22)
+
+### Review Mode: direct analysis
+### Decisions Applied
+
+| ID | Finding | Decision |
+|----|---------|---------|
+| P2-α | `_handleResponse` 422 分支: 直接把 FastAPI 响应体 `{"detail": [...]}` 传给 `TemplateValidationError`，Dialog 侧 `e.errors[0].loc` 为 `undefined` → TypeError (crash) | **Fixed** — 提取 `body?.detail` 再构建 errors 数组 |
+| P2-β | `_handleResponse` 409 分支: 直接把 `{"detail": {...}}` 传给 `TemplateConflictError`，`conflictDetail.existing_source` 为 `undefined` → 冲突提示缺源类型信息 | **Fixed** — 提取 `body?.detail ?? body` 传入构造函数 |
+| P3-α | `ImportTemplateDialog.tsx` 缺少 Esc 键关闭处理 (仅 overlay click 可关闭)，小 UX 缺口 | **Deferred (P3-α=d)** — 不影响 AC 通过；列入 V2 polish backlog |
+| D1 | Playwright E2E spec 未交付（Story T9 范围内）| **Deferred (D1=d)** — 与 Story 3-5/3-6 E2E 同步延后，评审方接受 |
+
+### Patches Applied (1 file)
+
+- [x] `src/api/templates.ts` — `_handleResponse`: 409 提取 `body?.detail ?? body`（P2-β）；422 提取 `body?.detail ?? body` 后展开为 PydanticValidationError 数组（P2-α）

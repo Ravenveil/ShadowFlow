@@ -93,7 +93,7 @@ development_status:
   3-6-6-个种子模板-yaml-定稿-可运行: done
   # Addendum 2026-04-16 (correct-course): Template YAML schema extension + Wizard
   3-6-7-模板-yaml-schema-扩展-6-种子模板改造: done
-  3-6-8-template-builder-wizard-mvp: review
+  3-6-8-template-builder-wizard-mvp: done
   epic-3-retrospective: optional
 
   # ===== Epic 4: Live Dashboard + Real-time Observation + Dynamic Policy =====
