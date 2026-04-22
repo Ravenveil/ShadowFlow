@@ -1,6 +1,6 @@
 # Story 3.3: 节点类型 — Agent / ApprovalGate / Barrier / Parallel / Retry / Decision
 
-Status: in-progress
+Status: done
 
 ## Story
 

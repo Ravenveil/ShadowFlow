@@ -1,6 +1,6 @@
 # Story 3.5: Provider 管理 + Fallback 链(E1 降级)
 
-Status: in-progress
+Status: done
 
 ## Story
 

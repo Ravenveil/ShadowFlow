@@ -1,6 +1,6 @@
 # Story 3.2: YAML 编辑器 + 双向同步(YAML ↔ Canvas)
 
-Status: in-progress
+Status: done
 
 ## Story
 

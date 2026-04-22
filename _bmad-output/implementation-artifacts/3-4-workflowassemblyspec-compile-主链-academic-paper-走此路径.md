@@ -1,6 +1,6 @@
 # Story 3.4: WorkflowAssemblySpec → Compile 主链(Academic Paper 走此路径)
 
-Status: in-progress
+Status: done
 
 ## Story
 

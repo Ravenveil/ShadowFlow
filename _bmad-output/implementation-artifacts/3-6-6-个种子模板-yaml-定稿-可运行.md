@@ -1,6 +1,6 @@
 # Story 3.6: 6 个种子模板 YAML 定稿 + 可运行
 
-Status: in-progress
+Status: done
 
 ## Story
 
