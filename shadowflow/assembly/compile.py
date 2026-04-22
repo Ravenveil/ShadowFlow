@@ -276,7 +276,7 @@ def compile(
         nodes=nodes,
         edges=edges,
         policy_matrix=None,
-        defaults=spec.defaults.metadata,
+        defaults=spec.defaults.model_dump(),
         metadata={
             **spec.metadata,
             **({"assembly_policy_matrix": policy_matrix.model_dump()} if policy_matrix else {}),

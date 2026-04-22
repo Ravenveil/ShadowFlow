@@ -1,6 +1,6 @@
 # Story 3.4: WorkflowAssemblySpec → Compile 主链(Academic Paper 走此路径)
 
-Status: review
+Status: in-progress
 
 ## Story
 
@@ -126,3 +126,26 @@ claude-sonnet-4-6
 - shadowflow/assembly/__init__.py (updated — exports compile, compile_agents, CompilationError)
 - shadowflow/server.py (updated — POST /workflow/compile endpoint)
 - tests/test_assembly.py (new — 7 tests)
+
+## Code Review Findings (2026-04-22)
+
+### Review Mode: full (1-layer Blind Hunter + direct analysis — ECH/Auditor agents hit rate limit)
+### Decisions Applied
+
+| ID | Finding | Decision |
+|----|---------|---------|
+| P2-α | `defaults=spec.defaults.metadata` 只传 metadata 子字段，丢失 llm/timeout_seconds/retry_policy | **Fixed** — 改为 `spec.defaults.model_dump()` |
+| P2-β | server.py 未捕获 `ValueError`/`CompilationError` → HTTP 500 | **Fixed** — 新增 except 块返回 422 + COMPILE_ERROR envelope |
+| P2-γ | AR16: generate_ts_types.py 未包含 assembly 类型，workflow.ts 缺失 BlockDef/WorkflowAssemblySpec 等 5 个接口 | **Fixed** — 脚本添加 6 个 assembly 模型，重新生成 workflow.ts（15 interfaces）|
+| P2-δ | T5 集成测试缺失 | **Fixed** — test_assembly.py 新增 test_compile_output_compatible_with_runtime_request |
+| BH-P1-1 | barrier 无入边"断路" | **Dismissed** — validate_graph 明确禁止 barrier 入边（Phase 1 fan-out by design）|
+| BH-P1-2 | kind="agent" 用于 control nodes | **Dismissed** — `Literal["agent","node"]` 均合法 |
+| D1 | `policy_matrix=None` 传给 WorkflowDefinition | **Accepted (D1=a)** — 直接传入会触发 validate_graph role 校验失败（注释有说明）|
+
+### Patches Applied (4 files)
+
+- [x] `shadowflow/assembly/compile.py` — defaults 改为 model_dump() (P2-α)
+- [x] `shadowflow/server.py` — 新增 CompilationError 导入 + 422 error handling (P2-β)
+- [x] `scripts/generate_ts_types.py` — 添加 6 个 assembly 模型 (P2-γ)
+- [x] `src/core/types/workflow.ts` — 重新生成，新增 BlockDef/LaneDef/StageDef/WorkflowDefaults/WorkflowPolicyMatrixSpec/WorkflowAssemblySpec (P2-γ)
+- [x] `tests/test_assembly.py` — T5 集成测试 test_compile_output_compatible_with_runtime_request (P2-δ)

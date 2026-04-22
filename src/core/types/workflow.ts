@@ -26,7 +26,7 @@ export interface TaskRecord {
   parent_task_id?: string | null;
   title?: string | null;
   focus?: string | null;
-  status?: "accepted" | "running" | "succeeded" | "failed" | "cancelled" | "waiting";
+  status?: "accepted" | "running" | "succeeded" | "failed" | "cancelled" | "waiting" | "awaiting_approval" | "invalidated";
   created_at?: string;
   started_at?: string | null;
   ended_at?: string | null;
@@ -40,7 +40,7 @@ export interface RunRecord {
   task_id?: string | null;
   parent_run_id?: string | null;
   root_run_id?: string | null;
-  status: "accepted" | "validated" | "running" | "succeeded" | "failed" | "cancelled" | "checkpointed" | "waiting";
+  status: "accepted" | "validated" | "running" | "succeeded" | "failed" | "cancelled" | "checkpointed" | "waiting" | "awaiting_approval" | "paused";
   started_at: string;
   ended_at?: string | null;
   entrypoint: string;
@@ -52,7 +52,7 @@ export interface StepRecord {
   step_id: string;
   run_id: string;
   node_id: string;
-  status: "pending" | "running" | "succeeded" | "failed" | "skipped" | "cancelled";
+  status: "pending" | "running" | "succeeded" | "failed" | "skipped" | "cancelled" | "invalidated";
   index: number;
   input?: Record<string, unknown>;
   output?: Record<string, unknown>;
@@ -106,5 +106,50 @@ export interface HandoffRef {
   goal?: string | null;
   artifact_ids?: string[];
   created_at?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface BlockDef {
+  id: string;
+  kind: "plan" | "parallel" | "barrier" | "retry_gate" | "approval_gate" | "writeback";
+  role: string;
+  config?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface LaneDef {
+  id: string;
+  role: string;
+  blocks?: string[];
+}
+
+export interface StageDef {
+  id: string;
+  name?: string;
+  lanes?: LaneDef[];
+}
+
+export interface WorkflowDefaults {
+  llm?: string | null;
+  timeout_seconds?: number;
+  retry_policy?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface WorkflowPolicyMatrixSpec {
+  allow_send?: Record<string, string[]>;
+  allow_reject?: Record<string, string[]>;
+  description?: string | null;
+  version?: string;
+}
+
+export interface WorkflowAssemblySpec {
+  workflow_id: string;
+  version?: string;
+  name?: string;
+  block_catalog?: BlockDef[];
+  stages?: StageDef[];
+  policy_matrix?: WorkflowPolicyMatrixSpec | null;
+  defaults?: WorkflowDefaults;
   metadata?: Record<string, unknown>;
 }

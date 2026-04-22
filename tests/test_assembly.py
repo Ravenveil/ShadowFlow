@@ -211,3 +211,50 @@ def test_compile_multi_lane_stage_injects_parallel_barrier():
     node_ids = {n.id for n in definition.nodes}
     assert "writing__parallel" in node_ids
     assert "writing__barrier" in node_ids
+
+
+# ---------------------------------------------------------------------------
+# T5: Integration — compile() output is structurally compatible with RuntimeRequest
+# ---------------------------------------------------------------------------
+
+def test_compile_output_compatible_with_runtime_request():
+    """T5: compiled WorkflowDefinition can be wrapped in RuntimeRequest without validation errors.
+
+    This verifies the structural contract between compile() output and the runtime
+    layer (WorkflowDefinition → RuntimeRequest). Full execution with mock LLM is
+    deferred to test_runtime_contract.py once plan/barrier executor types are registered.
+    """
+    from shadowflow.runtime.contracts import RuntimeRequest
+
+    spec = WorkflowAssemblySpec(
+        workflow_id="t5-integration",
+        version="0.1",
+        name="T5 Integration Test",
+        block_catalog=[
+            BlockDef(id="plan-step", kind="plan", role="agent",
+                     config={"prompt": "Analyze the topic."}),
+            BlockDef(id="writeback-step", kind="writeback", role="agent",
+                     config={"target": "docs", "mode": "reference"}),
+        ],
+        stages=[
+            StageDef(id="stage1", name="Analysis", lanes=[
+                LaneDef(id="lane1", role="agent", blocks=["plan-step", "writeback-step"]),
+            ]),
+        ],
+    )
+
+    definition, warnings = compile(spec)
+
+    # Definition must be structurally valid (validate_graph passes)
+    assert definition.workflow_id == "t5-integration"
+    assert definition.entrypoint == "plan-step"
+    assert any(e.to_id == "END" for e in definition.edges), "must have terminal edge"
+
+    # Can be wrapped in RuntimeRequest (Pydantic model_validate must succeed)
+    request = RuntimeRequest(workflow=definition, input={"goal": "Analyse topic"})
+    assert request.workflow.workflow_id == "t5-integration"
+    assert request.workflow.entrypoint == "plan-step"
+
+    # defaults are fully populated from spec.defaults.model_dump() (P2-α fix)
+    assert isinstance(definition.defaults, dict)
+    assert "timeout_seconds" in definition.defaults

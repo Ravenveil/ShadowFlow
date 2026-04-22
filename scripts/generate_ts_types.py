@@ -24,15 +24,21 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from shadowflow.runtime.contracts import (  # noqa: E402
     ArtifactRef,
+    BlockDef,
     CheckpointRef,
     HandoffRef,
+    LaneDef,
     MemoryEvent,
     RunRecord,
+    StageDef,
     StepRecord,
     TaskRecord,
+    WorkflowAssemblySpec,
+    WorkflowDefaults,
+    WorkflowPolicyMatrixSpec,
 )
 
-# 7 core runtime objects (Story 1.1 will add WorkflowPolicyMatrixSpec as #8).
+# 7 core runtime objects + Story 3.4 assembly spec models (AR16).
 # Supporting types (WritebackRef, CheckpointState, …) are pulled in automatically
 # via each model's $defs when their JSON Schema is generated.
 CORE_MODELS = [
@@ -43,6 +49,13 @@ CORE_MODELS = [
     CheckpointRef,
     MemoryEvent,
     HandoffRef,
+    # Story 3.4 assembly spec types (AR16: Pydantic → TS sync)
+    BlockDef,
+    LaneDef,
+    StageDef,
+    WorkflowDefaults,
+    WorkflowPolicyMatrixSpec,
+    WorkflowAssemblySpec,
 ]
 
 OUTPUT_PATH = PROJECT_ROOT / "src" / "core" / "types" / "workflow.ts"

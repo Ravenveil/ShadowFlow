@@ -42,7 +42,7 @@ from shadowflow.runtime import (
 from shadowflow.runtime.contracts import RunTrajectory, TrajectoryBundle, WorkflowAssemblySpec
 from shadowflow.runtime.errors import PolicyMismatch
 from shadowflow.runtime.trajectory import build_run_trajectory, build_trajectory_bundle
-from shadowflow.assembly.compile import compile as compile_workflow_spec
+from shadowflow.assembly.compile import compile as compile_workflow_spec, CompilationError
 from shadowflow.highlevel import WorkflowTemplateSpec
 
 logger = logging.getLogger("shadowflow.server")
@@ -250,7 +250,14 @@ async def compile_workflow(spec: WorkflowAssemblySpec):
             status_code=422,
             detail={"error": exc.to_dict()},
         )
-    except (ValueError, TypeError) as exc:
+    except (ValueError, CompilationError) as exc:
+        # P2-β fix: compile() raises ValueError (empty catalog) or CompilationError (bad executor);
+        # return 422 with structured envelope, not a raw 500.
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "COMPILE_ERROR", "message": str(exc), "details": {}}},
+        )
+    except TypeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
