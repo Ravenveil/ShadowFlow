@@ -33,7 +33,9 @@ export function useWorkflowActions() {
 
       const newNode: WorkflowNode = {
         id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: 'custom',
+        // P1-δ fix: preserve actual nodeType so external consumers (YAML export, runtime)
+        // can route on node.type. WorkflowCanvas still uses data.nodeType for rfType lookup.
+        type: nodeType,
         position,
         data: nodeData,
       };

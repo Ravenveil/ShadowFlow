@@ -47,7 +47,8 @@ export const ApprovalGateNode = memo(({ data, selected }: NodeProps<NodeData>) =
 
       {/* header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-        <span style={{ fontSize: 15, lineHeight: 1 }}>🛡</span>
+        {/* P3-1 fix: add role="img" + aria-label so screen readers don't mispronounce emoji */}
+        <span role="img" aria-label="shield" style={{ fontSize: 15, lineHeight: 1 }}>🛡</span>
         <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 700, color: '#FAFAFA', letterSpacing: '-.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           ApprovalGate
         </span>

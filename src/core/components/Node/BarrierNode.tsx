@@ -31,7 +31,8 @@ export const BarrierNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
       {/* header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-        <span style={{ fontSize: 15, lineHeight: 1 }}>⊞</span>
+        {/* P3-1 fix: role="img" + aria-label for screen reader clarity */}
+        <span role="img" aria-label="barrier gate" style={{ fontSize: 15, lineHeight: 1 }}>⊞</span>
         <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 700, color: '#FAFAFA', letterSpacing: '-.01em' }}>
           Barrier
         </span>
@@ -45,8 +46,12 @@ export const BarrierNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       {/* status */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: dotColor, boxShadow: isRunning ? `0 0 6px ${dotColor}` : undefined }} />
+        {/* P3 fix: 'error' state was falling through to 'idle' text — add explicit branch */}
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: dotColor }}>
-          {status === 'success' ? 'released' : status === 'running' ? 'waiting' : 'idle'}
+          {status === 'success' ? 'released'
+            : status === 'running' ? 'waiting'
+            : status === 'error'   ? 'error'
+            : 'idle'}
         </span>
       </div>
 

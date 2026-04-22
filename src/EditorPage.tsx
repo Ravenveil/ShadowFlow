@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useCallback, useMemo } from 'react';
 import { WorkflowCanvas, type SfEdgeType } from './core/components/Canvas/WorkflowCanvas';
 import { ReactFlowProvider, useReactFlow } from 'reactflow';
 import { I18nProvider, useI18n } from './common/i18n';
@@ -11,6 +11,7 @@ import { runDemo } from './runtime/demoRunner';
 import { useYamlSync } from './core/hooks/useYamlSync';
 import { useYamlEditorStore } from './core/hooks/useYamlEditorStore';
 import { parseWorkflowYaml } from './core/lib/yamlSerializer';
+import { ApprovalGateForm } from './core/components/inspector/ApprovalGateForm';
 
 const YamlEditor = lazy(() =>
   import('./core/components/editor/YamlEditor').then((m) => ({ default: m.YamlEditor })),
@@ -940,6 +941,26 @@ function InspectorTab({ node, updateNode }: {
   node: WorkflowNode | undefined;
   updateNode: (id: string, updates: Partial<WorkflowNode>) => void;
 }) {
+  // P2-δ fix: pull nodes/edges so ApprovalGateForm can receive roles + downstreamIds
+  const { nodes: allNodes, edges: allEdges } = useWorkflow();
+
+  // Roles = display labels of all agent-category nodes in the current workflow
+  const agentRoles = useMemo(() =>
+    allNodes
+      .filter(n => n.data.category === 'agent')
+      .map(n => {
+        const name = n.data.name;
+        return typeof name === 'string' ? name : (name as Record<string, string>)?.en ?? n.id;
+      }),
+    [allNodes],
+  );
+
+  // Downstream ids = target node ids connected by outgoing edges from the selected node
+  const downstreamIds = useMemo(() => {
+    if (!node) return [];
+    return allEdges.filter(e => e.source === node.id).map(e => e.target);
+  }, [node?.id, allEdges]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<CfgDraft>({ model: '', temperature: '', maxTokens: '', policy: 'none', retryLimit: '3', systemPrompt: '' });
   const [editName, setEditName] = useState('');
@@ -991,6 +1012,20 @@ function InspectorTab({ node, updateNode }: {
         <div style={{ fontFamily: V.mono, fontSize: 11, color: V.fg5 }}>Select a node to inspect</div>
         <div style={{ fontFamily: V.mono, fontSize: 10, color: V.fg5, opacity: .6 }}>Click any node on the canvas</div>
       </div>
+    );
+  }
+
+  // P2-δ fix: approval_gate nodes get a dedicated config form (AC2)
+  if (node.data.nodeType === 'approval_gate') {
+    return (
+      <ApprovalGateForm
+        node={node}
+        roles={agentRoles}
+        downstreamIds={downstreamIds}
+        onUpdate={(id, config) =>
+          updateNode(id, { data: { ...node.data, config } })
+        }
+      />
     );
   }
 

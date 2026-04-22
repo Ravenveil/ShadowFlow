@@ -1,6 +1,6 @@
 # Story 3.3: 节点类型 — Agent / ApprovalGate / Barrier / Parallel / Retry / Decision
 
-Status: review
+Status: in-progress
 
 ## Story
 
@@ -117,3 +117,43 @@ claude-sonnet-4-6
 - src/test/setup.ts (updated — Handle/Position/ReactFlowProvider in mock)
 - src/__tests__/components/ApprovalGateNode.test.tsx (new)
 - src/__tests__/components/ApprovalGateForm.test.tsx (new)
+
+## Code Review Findings (2026-04-22)
+
+### Review Mode: full (3-layer parallel adversarial)
+### Reviewers: Blind Hunter · Edge Case Hunter · Acceptance Auditor
+
+### Decisions Applied
+
+| ID | Finding | Decision |
+|----|---------|---------|
+| P1-α | Registry key `timeout_s` vs form key `timeout` — values never persist | **Fixed** — `ApprovalGateForm` now reads/writes `timeout_s` throughout |
+| P1-β | `parseInt(e.target.value) \|\| DEFAULT_TIMEOUT` snaps valid 0 to 300; makes field unusable mid-edit | **Fixed** — split into `timeoutStr` (display) + `timeoutS` (validated); uses `isNaN` guard; only pushes on valid input |
+| P1-γ | Stale `cfg` closure in `push()` — rapid sequential changes clobber each other | **Fixed** — `push()` now spreads current local state values before `patch`, ensuring no prior change is lost |
+| P1-δ | `addNode` always sets `type: 'custom'` — approval_gate/barrier demoted in YAML export and runtime | **Fixed** — `useWorkflow.addNode` now sets `type: nodeType` |
+| P2-δ | `ApprovalGateForm` exported but never rendered anywhere — AC2 completely dead | **Fixed** — `InspectorTab` branches on `node.data.nodeType === 'approval_gate'` and renders `ApprovalGateForm` with derived `agentRoles` + `downstreamIds` |
+| P2-2 | `ApprovalGateNode` and `BarrierNode` missing from `Node/index.tsx` barrel | **Fixed** — added both exports |
+| P3-BarrierStatus | BarrierNode `error` status falls through to 'idle' text | **Fixed** — explicit `error` branch in status label ternary |
+| P3-1 | Emoji icons lack `role="img"` + `aria-label` | **Fixed** — both ApprovalGateNode (🛡) and BarrierNode (⊞) |
+| P3-2 | `<label>` missing `htmlFor` / inputs missing `id` — WCAG 1.3.1 | **Fixed** — `FIELD_IDS` constants, `Field` component now takes `htmlFor` |
+| P2-6 | No `node-palette.spec.ts` E2E test | **Fixed** — created `tests/e2e/node-palette.spec.ts` with 4 tests |
+| D1 | AR #8 BaseNode inheritance — all nodes are standalone `memo()`, BaseNode is legacy stub | **Accepted (D1=a)** — consistent pattern across all nodes; enforcing would require epic-level refactor |
+| D2 | AR22 common/Select/Input don't exist — form uses plain `<select>`/`<input>` | **Accepted (D2=a)** — design system components don't exist yet; consistent with rest of codebase |
+
+### Deferred Items
+
+- **BH-P2 (rfType silent fallback)**: Misspelled nodeType falls through to SfNode silently. Defer — add `console.warn` in dev mode in a separate cleanup pass.
+- **ECH-P2-5 (BarrierNode dynamic handle reposition)**: When `total` changes at runtime, connected edges visually detach. Deferred to Story 4.2 (this story renders static skeleton only).
+- **ECH-P1-1 (useEffect on `[node.id]`)**: Form won't re-sync if same node's config changes externally (e.g., YAML sync). Deferred — needs a broader "config-externally-updated" subscription pattern, Epic 4 concern.
+- **ECH-P3-3 (registry color vs hardcoded)**: ApprovalGateNode hardcodes amber, registry says green. Deferred to design system skin story.
+
+### Patches Applied (8 files)
+
+- [x] `src/core/hooks/useWorkflow.ts` — `addNode` uses `type: nodeType` (P1-δ)
+- [x] `src/core/components/inspector/ApprovalGateForm.tsx` — timeout_s key + isNaN + stale cfg + htmlFor (P1-α, P1-β, P1-γ, P3-2)
+- [x] `src/EditorPage.tsx` — wire ApprovalGateForm in InspectorTab + imports (P2-δ)
+- [x] `src/core/components/Node/index.tsx` — barrel exports (P2-2)
+- [x] `src/core/components/Node/BarrierNode.tsx` — error status label + aria-label (P3-status, P3-1)
+- [x] `src/core/components/Node/ApprovalGateNode.tsx` — aria-label (P3-1)
+- [x] `tests/e2e/node-palette.spec.ts` — new E2E test (P2-6)
+- [x] sprint-status.yaml + story spec — status review → in-progress

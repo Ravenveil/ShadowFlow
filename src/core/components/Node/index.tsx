@@ -9,3 +9,6 @@ export { ReviewNode } from './Review';
 export { DecisionNode } from './Decision';
 export { CoordinateNode } from './Coordinate';
 export { OutputNode } from './Output';
+// P2-2 fix: new Story 3-3 nodes were missing from the barrel
+export { ApprovalGateNode } from './ApprovalGateNode';
+export { BarrierNode } from './BarrierNode';
