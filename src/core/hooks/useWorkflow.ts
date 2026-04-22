@@ -55,9 +55,9 @@ export function useWorkflowActions() {
         target: targetId,
         sourceHandle,
         targetHandle,
-        type: 'smoothstep',
+        type: 'default',
         animated: true,
-        style: { stroke: '#94a3b8', strokeWidth: 2 },
+        style: { stroke: '#52525B', strokeWidth: 2, strokeLinecap: 'round' },
       };
       workflow.addEdge(edge);
       return edge;

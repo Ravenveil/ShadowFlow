@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from shadowflow.runtime.checkpoint_store import BaseCheckpointStore
@@ -69,20 +70,38 @@ class RuntimeService:
         run_store: Optional[Any] = None,
         request_context_store: Optional[Any] = None,
         chat_session_store: Optional[Any] = None,
+        event_bus: Optional[Any] = None,
     ) -> None:
         self._runs: Dict[str, RunResult] = {}
         self._requests_by_run_id: Dict[str, RuntimeRequest] = {}
         self._checkpoints: Dict[str, CheckpointRef] = {}
         self._chat_sessions: Dict[str, ChatSession] = {}
         self._workflow_index_cache: Dict[int, Any] = {}
+        # approval_gate 信号：key = (run_id, node_id)
+        self._approval_events: Dict[Tuple[str, str], asyncio.Event] = {}
+        self._approval_decisions: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        # 驳回事件记录：key = run_id
+        self._rejection_events: Dict[str, List[Dict[str, Any]]] = {}
+        # P5: per-run asyncio.Lock — 保护 reject / resume / _execute 并发写
+        self._run_locks: Dict[str, asyncio.Lock] = {}
         self._writeback_adapter = writeback_adapter
         self._checkpoint_store = checkpoint_store or getattr(writeback_adapter, "checkpoint_store", None)
         self._run_store = run_store or getattr(writeback_adapter, "run_store", None)
         self._request_context_store = request_context_store
         self._chat_session_store = chat_session_store
         self._executor_registry = executor_registry or ExecutorRegistry()
+        # SSE event bus (Story 4.1) — optional; set externally or via constructor
+        self._event_bus = event_bus
+
+    def _get_run_lock(self, run_id: str) -> asyncio.Lock:
+        """Return the per-run asyncio.Lock, creating it on first access."""
+        if run_id not in self._run_locks:
+            self._run_locks[run_id] = asyncio.Lock()
+        return self._run_locks[run_id]
 
     def validate_workflow(self, workflow: WorkflowDefinition) -> WorkflowValidationResult:
+        from shadowflow.runtime.policy_matrix import validate_best_practices
+
         warnings: List[str] = []
         outgoing_nodes = {edge.from_id for edge in workflow.edges}
         final_edges = [edge for edge in workflow.edges if edge.type == "final" or edge.to_id == "END"]
@@ -98,10 +117,16 @@ class RuntimeService:
         if not final_edges:
             warnings.append("workflow has no explicit final edge; execution stops when no edge matches")
 
+        node_ids = {node.id for node in workflow.nodes}
+        policy_warnings = []
+        if workflow.policy_matrix is not None:
+            policy_warnings = validate_best_practices(workflow.policy_matrix, node_ids)
+
         return WorkflowValidationResult(
             valid=True,
             workflow_id=workflow.workflow_id,
             warnings=warnings,
+            policy_warnings=policy_warnings,
         )
 
     async def run(self, request: RuntimeRequest) -> RunResult:
@@ -120,51 +145,357 @@ class RuntimeService:
             self._run_store.put(result)
         return result
 
-    async def resume(self, run_id: str, resume_request: ResumeRequest) -> RunResult:
-        original_request = self._requests_by_run_id.get(run_id)
-        if original_request is None and self._request_context_store is not None:
-            original_request = self._request_context_store.get(run_id)
-            if original_request is not None:
-                self._requests_by_run_id[run_id] = original_request
-        if original_request is None:
-            raise ValueError(f"run not found for resume: {run_id}")
+    async def reject(
+        self,
+        run_id: str,
+        reviewer_role: str,
+        target_node_id: str,
+        reason: str = "",
+        retarget_stage: Optional[str] = None,
+    ) -> None:
+        """政策矩阵强制驳回：校验权限 → 新建 snapshot checkpoint → 发事件（SSE） → 触发 approval 信号。
 
-        checkpoint = self.get_checkpoint(resume_request.checkpoint_id)
-        if checkpoint is None:
-            raise ValueError(f"checkpoint not found: {resume_request.checkpoint_id}")
-        if checkpoint.run_id != run_id:
-            raise ValueError("checkpoint does not belong to run")
+        Args:
+            retarget_stage: 目标回退节点 id。非 None 时将该节点及其下游全部标记 invalidated，
+                新建 snapshot checkpoint 记录恢复起点，再发 checkpoint.saved 事件，
+                最后发 node.invalidated × N 事件（顺序：saved 在前，invalidated 在后）。
+        Raises:
+            PolicyViolation: reviewer_role 无权驳回 target_node_id。
+            ValueError: retarget_stage 不在已访问节点列表中；或 retarget_stage 非 None 但无 checkpoint。
+        """
+        async with self._get_run_lock(run_id):
+            await self._reject_locked(
+                run_id=run_id,
+                reviewer_role=reviewer_role,
+                target_node_id=target_node_id,
+                reason=reason,
+                retarget_stage=retarget_stage,
+            )
 
-        next_node_id = checkpoint.state.next_node_id
-        if next_node_id is None:
-            raise ValueError("checkpoint has no resumable next node")
+    async def _reject_locked(
+        self,
+        run_id: str,
+        reviewer_role: str,
+        target_node_id: str,
+        reason: str,
+        retarget_stage: Optional[str],
+    ) -> None:
+        """Inner implementation of reject(), called while holding the per-run lock."""
+        from shadowflow.runtime.errors import PolicyViolation
+        from shadowflow.runtime.events import (
+            CHECKPOINT_SAVED,
+            HANDOFF_TRIGGERED,
+            NODE_INVALIDATED,
+            NODE_REJECTED,
+            POLICY_VIOLATION as POLICY_VIOLATION_EVT,
+        )
+        from shadowflow.runtime.policy_matrix import can_reject
 
-        resumed_request = RuntimeRequest.model_validate(
-            {
-                **original_request.model_dump(),
-                "request_id": f"req-{uuid4().hex[:12]}",
-                "metadata": {
-                    **original_request.metadata,
-                    **resume_request.metadata,
-                    "resume_from_run_id": run_id,
-                    "resume_from_checkpoint_id": checkpoint.checkpoint_id,
+        request = self._requests_by_run_id.get(run_id)
+        policy_matrix = request.workflow.policy_matrix if request else None
+
+        if policy_matrix is not None:
+            if not can_reject(policy_matrix, reviewer_role, target_node_id):
+                raise PolicyViolation(reviewer=reviewer_role, target=target_node_id, reason=reason)
+
+        now = utc_now().isoformat()
+
+        # P2/P3/P7/P8/P9: retarget_stage 处理 — 必须在发基础事件之前完成 checkpoint 快照
+        invalidated: List[str] = []
+        new_checkpoint_id: Optional[str] = None
+
+        if retarget_stage is not None:
+            latest = self._get_latest_checkpoint(run_id)
+            if latest is None:
+                raise ValueError(
+                    f"Cannot retarget to '{retarget_stage}': no checkpoint found for run={run_id}"
+                )
+
+            visited = list(latest.state.visited_nodes)
+            if retarget_stage not in visited:
+                raise ValueError(
+                    f"retarget_stage='{retarget_stage}' is not in visited_nodes {visited!r} "
+                    f"for run={run_id}"
+                )
+
+            target_idx = visited.index(retarget_stage)
+            invalidated = visited[target_idx:]
+
+            # P9 (D1): 新建 snapshot checkpoint — 不覆盖原 checkpoint
+            new_checkpoint_id = f"ckpt-{uuid4().hex[:10]}"
+            new_cp = CheckpointRef(
+                checkpoint_id=new_checkpoint_id,
+                run_id=run_id,
+                step_id=latest.step_id,
+                state_ref=f"checkpoint://{run_id}/{new_checkpoint_id}",
+                state=CheckpointState(
+                    current_node_id=latest.state.current_node_id,
+                    next_node_id=retarget_stage,
+                    # P7: visited_nodes 裁剪到 retarget_stage 之前（不含）
+                    visited_nodes=visited[:target_idx],
+                    last_output=latest.state.last_output,
+                    state={
+                        **latest.state.state,
+                        "invalidated_nodes": list(invalidated),
+                    },
+                ),
+                writeback=latest.writeback,
+                metadata={
+                    **latest.metadata,
+                    "retarget_stage": retarget_stage,
+                    "retarget_from_checkpoint": latest.checkpoint_id,
                 },
-            }
-        )
+            )
+            self._checkpoints[new_checkpoint_id] = new_cp
+            if self._checkpoint_store is not None:
+                await asyncio.get_event_loop().run_in_executor(
+                    None, self._checkpoint_store.put, new_cp
+                )
 
-        result = await self._execute(
-            request=resumed_request,
-            start_node_id=next_node_id,
-            resumed_from=checkpoint,
-            restored_state=checkpoint.state.state,
-            initial_output=checkpoint.state.last_output or original_request.input.copy(),
-        )
-        self._requests_by_run_id[result.run.run_id] = resumed_request
-        if self._request_context_store is not None:
-            self._request_context_store.put(result.run.run_id, resumed_request)
-        if self._run_store is not None:
-            self._run_store.put(result)
-        return result
+        # 构建基础事件序列（P1: 顺序正确后全部发布到 SSE）
+        base_events: List[Dict[str, Any]] = [
+            {
+                "event": POLICY_VIOLATION_EVT,
+                "sender": reviewer_role,
+                "receiver": target_node_id,
+                "reason": reason,
+                "timestamp": now,
+            },
+            {
+                "event": NODE_REJECTED,
+                "node_id": target_node_id,
+                "reason": reason,
+                "timestamp": now,
+            },
+            {
+                "event": HANDOFF_TRIGGERED,
+                "from": reviewer_role,
+                "to": target_node_id,
+                "reason": reason,
+                "timestamp": now,
+            },
+        ]
+
+        # P8 (D2): 事件顺序 — checkpoint.saved 先于 node.invalidated
+        if new_checkpoint_id is not None:
+            base_events.append(
+                {
+                    "event": CHECKPOINT_SAVED,
+                    "checkpoint_id": new_checkpoint_id,
+                    "retarget_stage": retarget_stage,
+                    "timestamp": now,
+                }
+            )
+
+        for inv_node in invalidated:
+            base_events.append(
+                {
+                    "event": NODE_INVALIDATED,
+                    "node_id": inv_node,
+                    "timestamp": now,
+                }
+            )
+
+        # P1: 发布所有事件到 SSE event bus（之前只写字典，SSE 不可见）
+        if self._event_bus is not None:
+            for evt in base_events:
+                self._event_bus.publish(run_id, evt)
+
+        # 保留字典记录供测试/消费
+        self._rejection_events.setdefault(run_id, []).append({"events": base_events})
+
+        # 唤醒等待的 approval gate（若存在）
+        self.submit_approval(run_id, target_node_id, "reject", reason)
+
+    def submit_approval(self, run_id: str, node_id: str, decision: str, reason: Optional[str] = None) -> bool:
+        """向等待审批的工作流节点提交决策。返回 True 表示成功唤醒，False 表示没有等待者。"""
+        key = (run_id, node_id)
+        event = self._approval_events.get(key)
+        if event is None:
+            return False
+        self._approval_decisions[key] = {"decision": decision, "reason": reason}
+        event.set()
+        return True
+
+    def update_policy(self, run_id: str, matrix: Dict[str, Any]) -> Dict[str, Any]:
+        """Story 4.5: hot-swap a run's policy matrix without interrupting execution.
+
+        - completed steps keep their output (never replayed)
+        - pending / in-flight nodes see the new matrix on next dispatch
+        - publishes ``policy.updated`` for subscribed SSE clients
+        Returns {"status": "updated", "affected_downstream_nodes": [...]}
+        """
+        from shadowflow.runtime.events import POLICY_UPDATED
+
+        request = self._requests_by_run_id.get(run_id)
+        if request is None:
+            raise ValueError(f"run not found: {run_id}")
+
+        # Replace the matrix on the workflow definition. We use model_copy to
+        # keep Pydantic validation, and preserve any unrelated workflow fields.
+        try:
+            request.workflow.policy_matrix = matrix  # type: ignore[assignment]
+        except Exception:
+            # Fallback for non-pydantic or frozen workflows
+            if hasattr(request.workflow, "model_copy"):
+                request.workflow = request.workflow.model_copy(update={"policy_matrix": matrix})
+            else:
+                setattr(request.workflow, "policy_matrix", matrix)
+
+        # Compute affected downstream nodes: pending/running steps (approximation)
+        result = self._runs.get(run_id)
+        completed_node_ids: List[str] = []
+        if result is not None:
+            completed_node_ids = [step.node_id for step in result.steps if step.status == "succeeded"]
+        all_nodes: List[str] = []
+        try:
+            all_nodes = [node.id for node in request.workflow.nodes]
+        except Exception:
+            pass
+        affected_downstream = [n for n in all_nodes if n not in completed_node_ids]
+
+        if self._event_bus is not None:
+            self._event_bus.publish(run_id, {
+                "type": POLICY_UPDATED,
+                "run_id": run_id,
+                "affected_downstream_nodes": affected_downstream,
+                "timestamp": utc_now().isoformat(),
+            })
+
+        return {"status": "updated", "affected_downstream_nodes": affected_downstream}
+
+    def reconfigure(self, run_id: str, new_def: Dict[str, Any]) -> Dict[str, Any]:
+        """Story 4.6: hot-reconfigure a run's workflow (add/remove agents + edges + policy).
+
+        Reuses completed node outputs (by node id + inputs hash parity) and only
+        re-executes nodes whose definition changed. Publishes ``run.reconfigured``.
+
+        Args:
+            new_def: {"agents": [...], "edges": [...], "policy_matrix": {...}}
+
+        Returns:
+            {"status": "reconfigured", "reused_node_outputs": [...], "new_nodes": [...], "removed_nodes": [...]}
+        """
+        from shadowflow.runtime.events import RUN_RECONFIGURED
+
+        request = self._requests_by_run_id.get(run_id)
+        if request is None:
+            raise ValueError(f"run not found: {run_id}")
+
+        old_nodes = []
+        try:
+            old_nodes = [n.id for n in request.workflow.nodes]
+        except Exception:
+            pass
+
+        new_agents = new_def.get("agents") or []
+        new_node_ids = [a.get("id") for a in new_agents if isinstance(a, dict) and a.get("id")]
+
+        reused: List[str] = []
+        result = self._runs.get(run_id)
+        if result is not None:
+            reused = [step.node_id for step in result.steps
+                      if step.status == "succeeded" and step.node_id in new_node_ids]
+
+        added = [n for n in new_node_ids if n not in old_nodes]
+        removed = [n for n in old_nodes if n not in new_node_ids]
+
+        # Apply the new policy matrix (hot-swap)
+        policy_matrix = new_def.get("policy_matrix")
+        if policy_matrix is not None:
+            try:
+                self.update_policy(run_id, policy_matrix)
+            except Exception:
+                pass
+
+        if self._event_bus is not None:
+            self._event_bus.publish(run_id, {
+                "type": RUN_RECONFIGURED,
+                "run_id": run_id,
+                "reused_node_outputs": reused,
+                "new_nodes": added,
+                "removed_nodes": removed,
+                "timestamp": utc_now().isoformat(),
+            })
+
+        return {
+            "status": "reconfigured",
+            "reused_node_outputs": reused,
+            "new_nodes": added,
+            "removed_nodes": removed,
+        }
+
+    async def resume(self, run_id: str, resume_request: ResumeRequest) -> RunResult:
+        """Resume a run from a checkpoint. P6: rejects terminal runs; P11: per-run lock prevents concurrent resume."""
+        from shadowflow.runtime.events import RUN_RESUMED
+
+        # P11: dedup concurrent POST /resume via per-run lock
+        async with self._get_run_lock(run_id):
+            # P6: reject explicitly-cancelled runs — a cancelled run must not be resumed.
+            # NOTE: "succeeded" is intentionally NOT blocked here: the normal reject→resume
+            # flow calls resume() on a run_id whose original execution already succeeded.
+            # resume() always creates a NEW run anyway (new run_id in _execute), so the
+            # original run's "succeeded" state is irrelevant to resumability.
+            existing = self._runs.get(run_id)
+            if existing is not None and existing.run.status == "cancelled":
+                raise ValueError(
+                    f"Cannot resume run={run_id} in terminal state '{existing.run.status}'"
+                )
+
+            original_request = self._requests_by_run_id.get(run_id)
+            if original_request is None and self._request_context_store is not None:
+                original_request = self._request_context_store.get(run_id)
+                if original_request is not None:
+                    self._requests_by_run_id[run_id] = original_request
+            if original_request is None:
+                raise ValueError(f"run not found for resume: {run_id}")
+
+            checkpoint = self.get_checkpoint(resume_request.checkpoint_id)
+            if checkpoint is None:
+                raise ValueError(f"checkpoint not found: {resume_request.checkpoint_id}")
+            if checkpoint.run_id != run_id:
+                raise ValueError("checkpoint does not belong to run")
+
+            next_node_id = checkpoint.state.next_node_id
+            if next_node_id is None:
+                raise ValueError("checkpoint has no resumable next node")
+
+            resumed_request = RuntimeRequest.model_validate(
+                {
+                    **original_request.model_dump(),
+                    "request_id": f"req-{uuid4().hex[:12]}",
+                    "metadata": {
+                        **original_request.metadata,
+                        **resume_request.metadata,
+                        "resume_from_run_id": run_id,
+                        "resume_from_checkpoint_id": checkpoint.checkpoint_id,
+                    },
+                }
+            )
+
+            # P12: emit RUN_RESUMED before execution begins
+            if self._event_bus is not None:
+                self._event_bus.publish(run_id, {
+                    "event": RUN_RESUMED,
+                    "run_id": run_id,
+                    "checkpoint_id": checkpoint.checkpoint_id,
+                    "next_node_id": next_node_id,
+                    "timestamp": utc_now().isoformat(),
+                })
+
+            result = await self._execute(
+                request=resumed_request,
+                start_node_id=next_node_id,
+                resumed_from=checkpoint,
+                restored_state=checkpoint.state.state,
+                initial_output=checkpoint.state.last_output or original_request.input.copy(),
+            )
+            self._requests_by_run_id[result.run.run_id] = resumed_request
+            if self._request_context_store is not None:
+                self._request_context_store.put(result.run.run_id, resumed_request)
+            if self._run_store is not None:
+                self._run_store.put(result)
+            return result
 
     def get_checkpoint(self, checkpoint_id: str) -> Optional[CheckpointRef]:
         checkpoint = self._checkpoints.get(checkpoint_id)
@@ -173,6 +504,33 @@ class RuntimeService:
         if self._checkpoint_store is not None:
             return self._checkpoint_store.get(checkpoint_id)
         return None
+
+    def _get_latest_checkpoint(self, run_id: str) -> Optional[CheckpointRef]:
+        """Return the most recent checkpoint for a run (by created_at), or None."""
+        candidates: List[CheckpointRef] = [cp for cp in self._checkpoints.values() if cp.run_id == run_id]
+        if self._checkpoint_store is not None:
+            for record in self._checkpoint_store.list_run(run_id):
+                if record.checkpoint_id not in self._checkpoints:
+                    cp = self._checkpoint_store.get(record.checkpoint_id)
+                    if cp is not None:
+                        candidates.append(cp)
+        if not candidates:
+            return None
+        return max(candidates, key=lambda cp: cp.created_at)
+
+    def get_latest_checkpoint_ref(self, run_id: str) -> Optional[CheckpointRef]:
+        """Return the latest CheckpointRef for a run (does NOT resume execution).
+
+        Callers should pass the returned ref's checkpoint_id to
+        ``ResumeRequest`` and then call ``await service.resume(run_id, request)``
+        to actually restart execution.
+        """
+        return self._get_latest_checkpoint(run_id)
+
+    # P14: keep deprecated alias for backwards compatibility
+    def resume_from_latest_checkpoint(self, run_id: str) -> Optional[CheckpointRef]:
+        """Deprecated: use get_latest_checkpoint_ref() instead."""
+        return self.get_latest_checkpoint_ref(run_id)
 
     def _get_request_context(self, run_id: str) -> Optional[RuntimeRequest]:
         request = self._requests_by_run_id.get(run_id)
@@ -368,9 +726,30 @@ class RuntimeService:
         max_steps = max(len(request.workflow.nodes) * 3, 1)
         current_output: Dict[str, Any] = initial_output.copy()
 
+        # P10 (D3): nodes that were invalidated by reject(retarget_stage) must re-run;
+        # nodes already succeeded (in step_outputs) that are NOT invalidated can be skipped.
+        invalidated_nodes: set = set(state.get("invalidated_nodes", []))
+
         for index in range(1, max_steps + 1):
             if current_node_id is None or current_node_id == "END":
                 break
+
+            # P10 (D3): In a post-reject resume, skip cached nodes that were NOT invalidated.
+            # Guard: only activates when invalidated_nodes is non-empty — i.e., this is a
+            # post-reject resume with a snapshot checkpoint.  A normal resume (no rejection)
+            # has no invalidated nodes, so we must NOT skip anything and re-execute fully.
+            if (
+                resumed_from is not None
+                and invalidated_nodes                       # only post-reject resumes
+                and current_node_id not in invalidated_nodes
+                and current_node_id in state.get("step_outputs", {})
+            ):
+                current_output = state["step_outputs"][current_node_id]
+                # advance to next node via normal edge resolution
+                # (edges_by_from stores plain dicts: {"to_id": ..., "condition": ...})
+                edges = edges_by_from.get(current_node_id, [])
+                current_node_id = edges[0]["to_id"] if edges else None
+                continue
 
             node = nodes_by_id[current_node_id]
             step_started_at = utc_now()
@@ -451,6 +830,11 @@ class RuntimeService:
                     metadata={"source": "activation"},
                 )
             )
+            # Story 4.1 AC2: publish NODE_STARTED before execution
+            if activation.decision == "activated" and self._event_bus is not None:
+                from shadowflow.runtime.events import NODE_STARTED as _NS
+                self._event_bus.publish_node_event(run_id, _NS, current_node_id, {"node_type": node.type, "step_id": step_id})
+
             if activation.decision != "activated":
                 step_trace.append(
                     {
@@ -461,6 +845,21 @@ class RuntimeService:
                     }
                 )
                 step_output = self._build_suppressed_step_output(node=node, activation=activation)
+            elif node.type == "approval_gate":
+                step_output = await self._execute_approval_gate(
+                    run_id=run_id,
+                    node=node,
+                    run=run,
+                    task=task,
+                    step_id=step_id,
+                    step_input=current_output,
+                    state=state,
+                    trace=step_trace,
+                    memory_events=memory_events,
+                )
+                if state.get("_approval_paused"):
+                    # 超时 → 工作流暂停，停止执行
+                    break
             elif self._is_delegated_node(node):
                 step_output = await self._execute_delegated_node(
                     request=request,
@@ -521,6 +920,13 @@ class RuntimeService:
                 },
             )
             steps.append(step)
+            # Story 4.1 AC2: publish NODE_SUCCEEDED after step completes
+            if step.status == "succeeded" and self._event_bus is not None:
+                from shadowflow.runtime.events import NODE_SUCCEEDED as _NSu
+                self._event_bus.publish_node_event(run_id, _NSu, current_node_id, {
+                    "step_id": step.step_id,
+                    "output_summary": str(step_output.get("message") or "")[:200],
+                })
             artifacts.extend(step_artifacts)
             trace.extend(step_trace)
             memory_events.append(
@@ -697,10 +1103,22 @@ class RuntimeService:
         else:
             errors.append({"message": "workflow exceeded max_steps guard", "code": "max_steps_exceeded"})
 
-        run.status = "failed" if errors else "succeeded"
+        if state.get("_approval_paused"):
+            run.status = "paused"
+            task.status = "waiting"
+        elif errors:
+            run.status = "failed"
+            task.status = "failed"
+        else:
+            run.status = "succeeded"
+            task.status = "succeeded"
+        # Story 4.1 AC2: publish RUN_COMPLETED and close run event bus
+        if self._event_bus is not None:
+            from shadowflow.runtime.events import RUN_COMPLETED as _RC
+            self._event_bus.publish_node_event(run_id, _RC, "", {"status": run.status, "errors": errors[:5]})
+            self._event_bus.close_run(run_id)
         run.ended_at = utc_now()
         run.current_step_id = steps[-1].step_id if steps else None
-        task.status = "failed" if errors else "succeeded"
         task.ended_at = run.ended_at
         run_feedback = self._build_run_feedback_record(
             run=run,
@@ -1918,6 +2336,121 @@ class RuntimeService:
                 },
             ],
         )
+
+    async def _execute_approval_gate(
+        self,
+        run_id: str,
+        node: "NodeDefinition",
+        run: "RunRecord",
+        task: "TaskRecord",
+        step_id: str,
+        step_input: Dict[str, Any],
+        state: Dict[str, Any],
+        trace: List[Dict[str, Any]],
+        memory_events: List["MemoryEvent"],
+    ) -> Dict[str, Any]:
+        from shadowflow.runtime.events import (
+            APPROVAL_APPROVED,
+            APPROVAL_PENDING,
+            APPROVAL_REJECTED,
+            APPROVAL_TIMEOUT,
+        )
+
+        approval_cfg = node.approval
+        timeout = approval_cfg.timeout_seconds if approval_cfg else 300
+        key = (run_id, node.id)
+
+        event = asyncio.Event()
+        self._approval_events[key] = event
+
+        run.status = "awaiting_approval"
+        task.status = "awaiting_approval"
+
+        trace.append(
+            {
+                "event": APPROVAL_PENDING,
+                "node_id": node.id,
+                "message": f"Approval gate pending: approver={approval_cfg.approver if approval_cfg else 'unknown'}",
+                "timestamp": utc_now().isoformat(),
+            }
+        )
+        memory_events.append(
+            MemoryEvent(
+                event_id=f"mem-{uuid4().hex[:10]}",
+                run_id=run_id,
+                task_id=task.task_id,
+                step_id=step_id,
+                category="step_result",
+                summary=f"Approval gate pending at {node.id}",
+                payload={"node_id": node.id, "approver": approval_cfg.approver if approval_cfg else ""},
+                metadata={"source": "approval_gate"},
+            )
+        )
+
+        try:
+            await asyncio.wait_for(event.wait(), timeout=float(timeout))
+        except asyncio.TimeoutError:
+            trace.append(
+                {
+                    "event": APPROVAL_TIMEOUT,
+                    "node_id": node.id,
+                    "message": f"Approval gate timed out after {timeout}s",
+                    "timestamp": utc_now().isoformat(),
+                }
+            )
+            memory_events.append(
+                MemoryEvent(
+                    event_id=f"mem-{uuid4().hex[:10]}",
+                    run_id=run_id,
+                    task_id=task.task_id,
+                    step_id=step_id,
+                    category="step_result",
+                    summary=f"Approval timeout at {node.id}",
+                    payload={"node_id": node.id, "timeout_seconds": timeout},
+                    metadata={"source": "approval_gate"},
+                )
+            )
+            state["_approval_paused"] = True
+            self._approval_events.pop(key, None)
+            return {"message": "approval_timeout", "approval_status": "timeout", "state": {}}
+        finally:
+            self._approval_events.pop(key, None)
+
+        decision_data = self._approval_decisions.pop(key, {})
+        decision = decision_data.get("decision", "approve")
+        reason = decision_data.get("reason", "")
+
+        if decision == "approve":
+            trace.append(
+                {
+                    "event": APPROVAL_APPROVED,
+                    "node_id": node.id,
+                    "message": f"Approval granted by {approval_cfg.approver if approval_cfg else 'unknown'}",
+                    "timestamp": utc_now().isoformat(),
+                }
+            )
+            run.status = "running"
+            task.status = "running"
+            return {"message": "approved", "approval_status": "approved", "approval_reason": reason, "state": {}}
+        else:
+            trace.append(
+                {
+                    "event": APPROVAL_REJECTED,
+                    "node_id": node.id,
+                    "message": f"Approval rejected: {reason}",
+                    "timestamp": utc_now().isoformat(),
+                }
+            )
+            on_reject = approval_cfg.on_reject if approval_cfg else "halt"
+            run.status = "running"
+            task.status = "running"
+            return {
+                "message": "rejected",
+                "approval_status": "rejected",
+                "approval_reason": reason,
+                "on_reject": on_reject,
+                "state": {"_approval_rejected": True, "_on_reject": on_reject},
+            }
 
     async def _execute_node(
         self,

@@ -11,7 +11,7 @@ export default defineConfig({
     // All current legacy tests are excluded (see comment below); allow empty.
     // New tests added by Epic 1/3/4/7 stories will light this up.
     passWithNoTests: true,
-    include: ['src/**/*.{test,spec}.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     // Known-broken legacy tests (Story 0.2): excluded to unblock CI.
     // Tracked separately — see Story 0.2 Completion Notes.
     exclude: [

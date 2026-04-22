@@ -4,7 +4,7 @@
 
 import React, { memo, useCallback } from 'react';
 import { Handle, Position, NodeProps, NodeData } from 'reactflow';
-import { useI18n } from '../../i18n';
+import { useI18n } from '../../../common/i18n';
 import { clsx } from 'clsx';
 
 export const PlanningNode = memo(({ data, selected }: NodeProps<NodeData>) => {

@@ -3,7 +3,7 @@
 // ============================================================================
 
 import React, { useState, useMemo } from 'react';
-import { useI18n } from '../../i18n';
+import { useI18n } from '../../../common/i18n';
 import { useNodeRegistry } from '../../stores/nodeRegistryStore';
 import { NodeCategory } from '../../types';
 import { clsx } from 'clsx';

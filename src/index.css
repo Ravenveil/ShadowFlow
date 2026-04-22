@@ -1,130 +1,291 @@
 /* ============================================================================
- * AgentGraph 全局样式
+ * ShadowFlow · Global styles
+ * Dark terminal/IDE aesthetic · purple accent · Geist + Geist Mono
  * ============================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* 基础样式 */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* ---- Font families -------------------------------------- */
+:root {
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ---- SKIN SLOTS (7) ----------------------------------------
+     7-slot YAML Skin Pack. Everything downstream derives from these. */
+  --skin-bg:         #0A0A0A;
+  --skin-panel:      #0F0F12;
+  --skin-fg:         #FAFAFA;
+  --skin-muted:      #A1A1AA;
+  --skin-accent:     #A855F7;
+  --skin-accent-ink: #0A0A0A;
+  --skin-border:     #27272A;
+
+  /* ---- Extended palette (derived / functional) ------------ */
+  --bg:              var(--skin-bg);
+  --bg-elev-1:       #0C0C10;
+  --bg-elev-2:       #141414;
+  --bg-elev-3:       #1A1A1A;
+  --bg-elev-4:       #1F1F23;
+  --bg-node:         #1A1A1A;
+  --bg-accent-tint:  #140A1F;
+
+  --fg-0:            #FFFFFF;
+  --fg-1:            var(--skin-fg);
+  --fg-2:            #E4E4E7;
+  --fg-3:            var(--skin-muted);
+  --fg-4:            #71717A;
+  --fg-5:            #52525B;
+  --fg-6:            #3F3F46;
+
+  --border:          var(--skin-border);
+  --border-strong:   #3F3F46;
+  --border-subtle:   #1A1A1A;
+
+  --accent:          var(--skin-accent);
+  --accent-tint:     var(--bg-accent-tint);
+  --accent-dim:      #6B21A8;
+  --accent-bright:   #D8B4FE;
+  --accent-ink:      var(--skin-accent-ink);
+
+  --status-run:      #3B82F6;
+  --status-ok:       #10B981;
+  --status-warn:     #F59E0B;
+  --status-reject:   #EF4444;
+  --status-gated:    #22D3EE;
+  --status-pending:  #71717A;
+  --status-reject-tint: #1A0F12;
+  --status-ok-tint:     #0A1F17;
+  --status-warn-tint:   #1F1810;
+  --status-run-tint:    #0A1020;
+
+  /* ---- Radius -------------------------------------------- */
+  --r-1: 1px; --r-2: 2px; --r-4: 4px; --r-8: 8px;
+  --r-10: 10px; --r-12: 12px; --r-14: 14px; --r-16: 16px;
+
+  /* ---- Spacing (4px base) -------------------------------- */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px;
+  --s-12: 48px; --s-16: 64px;
+
+  /* ---- Shadows ------------------------------------------- */
+  --shadow-pop:  0 0 0 1px rgba(168,85,247,.35), 0 8px 24px -8px rgba(168,85,247,.4);
+  --shadow-card: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-hud:  0 10px 30px -10px rgba(0,0,0,.6);
+  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(168,85,247,.5);
+  --glow-ok:     0 0 0 1px var(--status-ok), 0 0 16px -4px rgba(16,185,129,.4);
+  --glow-reject: 0 0 0 1px var(--status-reject), 0 0 20px -4px rgba(239,68,68,.5);
+
+  /* ---- Motion -------------------------------------------- */
+  --ease-out: cubic-bezier(.16,.84,.44,1);
+  --ease-in-out: cubic-bezier(.4,0,.2,1);
+  --dur-1: 120ms; --dur-2: 180ms; --dur-3: 280ms;
 }
 
-html,
-body {
+/* ============ Base reset ============ */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
   width: 100%;
   height: 100%;
-  overflow: hidden;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+button { font-family: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input, textarea, select { font-family: inherit; color: inherit; }
+
+#root { width: 100%; height: 100%; }
+
+/* ============ Custom animations (Story 4.2/4.3) ============ */
+@keyframes sf-flash-border {
+  0%, 100% { box-shadow: 0 0 0 1.5px #EF4444; }
+  50%       { box-shadow: 0 0 0 3px #EF4444, 0 0 12px -2px rgba(239,68,68,.7); }
+}
+/* 3 flashes × 300ms = 900ms, then transitions to solid red border */
+.animate-flash {
+  animation: sf-flash-border 300ms ease-in-out 3;
 }
 
-#root {
-  width: 100%;
-  height: 100%;
+@keyframes sf-toast-in {
+  from { opacity: 0; transform: translateY(-12px) scale(.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-toast-in {
+  animation: sf-toast-in 200ms var(--ease-out) forwards;
 }
 
-/* ReactFlow 样式覆盖 */
-.react-flow__node {
-  transition: all 0.2s ease;
+/* ============ Scrollbar ============ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--bg-elev-4); border-radius: 4px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* ============ Typography classes ============ */
+.sf-display-xl { font-family: var(--font-sans); font-size: 84px; font-weight: 700; line-height: 1.0; letter-spacing: -.04em; }
+.sf-display-l  { font-family: var(--font-sans); font-size: 62px; font-weight: 800; line-height: 1.02; letter-spacing: -.035em; }
+.sf-display-m  { font-family: var(--font-sans); font-size: 48px; font-weight: 900; line-height: 1.05; letter-spacing: -.03em; }
+.sf-h1         { font-family: var(--font-sans); font-size: 40px; font-weight: 800; line-height: 1.1;  letter-spacing: -.025em; }
+.sf-h2         { font-family: var(--font-sans); font-size: 36px; font-weight: 800; line-height: 1.15; letter-spacing: -.02em; }
+.sf-h3         { font-family: var(--font-sans); font-size: 28px; font-weight: 700; line-height: 1.2;  letter-spacing: -.015em; }
+.sf-h4         { font-family: var(--font-sans); font-size: 22px; font-weight: 800; line-height: 1.25; }
+.sf-h5         { font-family: var(--font-sans); font-size: 18px; font-weight: 700; line-height: 1.3; }
+.sf-body       { font-family: var(--font-sans); font-size: 13px; font-weight: 500; line-height: 1.5; }
+.sf-body-sm    { font-family: var(--font-sans); font-size: 12px; font-weight: 500; line-height: 1.45; }
+.sf-body-lg    { font-family: var(--font-sans); font-size: 15px; font-weight: 500; line-height: 1.55; }
+.sf-label      { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-4); }
+.sf-meta       { font-family: var(--font-mono); font-size: 9px;  font-weight: 400; color: var(--fg-4); letter-spacing: .02em; }
+.sf-mono-sm    { font-family: var(--font-mono); font-size: 10px; font-weight: 500; }
+.sf-mono       { font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+.sf-mono-md    { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+.sf-kbd        { font-family: var(--font-mono); font-size: 10px; font-weight: 600; padding: 1px 5px; border: 1px solid var(--border); border-radius: var(--r-4); color: var(--fg-3); background: var(--bg-elev-2); }
+
+/* ============ Shared components ============ */
+
+/* Top chrome */
+.sf-topbar { height: 60px; border-bottom: 1px solid var(--border); background: var(--skin-panel); display: flex; align-items: center; gap: 16px; padding: 0 20px; }
+.sf-logo { display: flex; align-items: center; gap: 10px; }
+.sf-logo-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; font-family: var(--font-sans); font-weight: 900; font-size: 16px; letter-spacing: -.03em; }
+.sf-logo-word { font-family: var(--font-sans); font-size: 15px; font-weight: 700; letter-spacing: -.02em; }
+.sf-bread { display: flex; align-items: center; gap: 8px; font-family: var(--font-sans); font-size: 13px; font-weight: 500; color: var(--fg-3); }
+.sf-bread .sep { color: var(--fg-5); }
+.sf-bread .cur { color: var(--fg-1); }
+.sf-topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+/* Buttons */
+.sf-btn { height: 32px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out); }
+.sf-btn-primary { background: var(--accent); color: var(--accent-ink); }
+.sf-btn-primary:hover { background: var(--accent-bright); }
+.sf-btn-ghost { background: transparent; color: var(--fg-2); border: 1px solid var(--border); }
+.sf-btn-ghost:hover { background: var(--bg-elev-2); border-color: var(--border-strong); }
+.sf-btn-icon { width: 32px; height: 32px; padding: 0; justify-content: center; border-radius: 8px; color: var(--fg-3); }
+.sf-btn-icon:hover { background: var(--bg-elev-2); color: var(--fg-1); }
+.sf-btn-sm { height: 24px; padding: 0 8px; font-size: 11px; border-radius: 6px; }
+.sf-btn-ok { background: var(--status-ok); color: #06221A; }
+.sf-btn-reject { background: transparent; color: var(--status-reject); border: 1px solid rgba(239,68,68,.4); }
+.sf-btn-reject:hover { background: var(--status-reject-tint); }
+
+/* Chips */
+.sf-chip { height: 22px; padding: 0 8px; border-radius: 6px; background: var(--bg-elev-2); border: 1px solid var(--border); color: var(--fg-3); font-family: var(--font-mono); font-size: 10px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+.sf-chip-accent { background: var(--accent-tint); border-color: rgba(168,85,247,.35); color: var(--accent-bright); }
+.sf-chip-ok     { background: var(--status-ok-tint);     border-color: rgba(16,185,129,.35); color: var(--status-ok); }
+.sf-chip-warn   { background: var(--status-warn-tint);   border-color: rgba(245,158,11,.35);  color: var(--status-warn); }
+.sf-chip-run    { background: var(--status-run-tint);    border-color: rgba(59,130,246,.35);  color: var(--status-run); }
+.sf-chip-reject { background: var(--status-reject-tint); border-color: rgba(239,68,68,.35);   color: var(--status-reject); }
+
+.sf-pill-live { padding: 2px 8px; border-radius: 999px; background: var(--status-run-tint); border: 1px solid rgba(59,130,246,.4); color: var(--status-run); font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px; }
+.sf-pill-live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--status-run); animation: sf-pulse 1.4s ease-in-out infinite; }
+
+.sf-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.sf-dot-run    { background: var(--status-run); animation: sf-pulse 1.4s ease-in-out infinite; }
+.sf-dot-ok     { background: var(--status-ok); }
+.sf-dot-warn   { background: var(--status-warn); }
+.sf-dot-reject { background: var(--status-reject); }
+.sf-dot-idle   { background: var(--fg-5); }
+
+/* Panels */
+.sf-panel { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 12px; }
+.sf-panel-head { padding: 12px 14px 10px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; }
+
+/* Inputs */
+.sf-input { height: 32px; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 8px; color: var(--fg-1); font-size: 13px; padding: 0 10px; width: 100%; transition: border-color var(--dur-1); }
+.sf-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(168,85,247,.25); }
+
+/* DAG nodes */
+.sf-node { width: 160px; min-height: 64px; background: var(--bg-node); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; position: relative; transition: border-color var(--dur-1); }
+.sf-node .t { font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--fg-1); }
+.sf-node .m { font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); margin-top: 2px; }
+.sf-node.selected { border-color: var(--accent); box-shadow: var(--glow-accent); }
+.sf-node.running   { border-color: var(--status-run); }
+.sf-node.ok        { border-color: var(--status-ok); }
+.sf-node.reject    { border-color: var(--status-reject); background: var(--status-reject-tint); }
+
+/* Canvas dot-grid */
+.sf-canvas { background: var(--bg); background-image: radial-gradient(circle, var(--bg-elev-4) 1px, transparent 1.5px); background-size: 24px 24px; background-position: -1px -1px; }
+
+/* Toasts */
+.sf-toast { display: flex; gap: 10px; padding: 12px 14px; border-radius: 10px; background: var(--status-reject-tint); border: 1px solid rgba(239,68,68,.35); max-width: 440px; }
+.sf-toast .body { font-size: 12px; line-height: 1.5; color: var(--fg-2); }
+.sf-toast .hdr  { font-family: var(--font-mono); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--status-reject); margin-bottom: 4px; }
+
+/* Sidebar rows */
+.sf-side-row { padding: 8px 10px; border-radius: 8px; display: flex; align-items: center; gap: 10px; color: var(--fg-2); font-size: 13px; cursor: pointer; transition: background var(--dur-1); }
+.sf-side-row:hover { background: var(--bg-elev-2); }
+.sf-side-row.active { background: var(--accent-tint); color: var(--accent-bright); }
+
+/* Stat cards */
+.sf-stat { background: var(--bg-elev-1); border: 1px solid var(--border); border-left: 2px solid var(--accent); border-radius: 10px; padding: 14px 16px; }
+.sf-stat .k { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-4); }
+.sf-stat .v { font-family: var(--font-sans); font-size: 28px; font-weight: 800; letter-spacing: -.02em; color: var(--fg-1); margin-top: 4px; }
+
+/* Lucide icons */
+.lucide { width: 16px; height: 16px; stroke-width: 1.5; }
+
+/* ============ Animations ============ */
+@keyframes sf-pulse     { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+@keyframes sf-breathe   { 0%,100% { box-shadow: 0 0 0 4px rgba(168,85,247,.12), 0 0 28px -2px rgba(168,85,247,.55); } 50% { box-shadow: 0 0 0 8px rgba(168,85,247,.08), 0 0 44px -2px rgba(168,85,247,.75); } }
+@keyframes sf-ripple    { 0% { transform: scale(1); opacity: .5; } 100% { transform: scale(1.6); opacity: 0; } }
+@keyframes sf-float     { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes sf-marquee   { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes sf-drift-x   { 0% { transform: translateX(-100%); opacity:0 } 20% { opacity:1 } 80% { opacity:1 } 100% { transform: translateX(100%); opacity:0 } }
+@keyframes sf-dash-anim { to { stroke-dashoffset: -12; } }
+@keyframes sf-edge-flow { to { stroke-dashoffset: -100; } }
+
+/* ReactFlow overrides */
+.react-flow            { background: var(--bg) !important; }
+.react-flow__renderer,
+.react-flow__viewport,
+.react-flow__container { background: transparent !important; }
+
+.react-flow__node       { background: transparent !important; border: none !important; padding: 0 !important; box-shadow: none !important; transition: none !important; }
+.react-flow__node.selected,
+.react-flow__node.selectable:focus,
+.react-flow__node.selectable:focus-visible { box-shadow: none !important; outline: none !important; }
+
+/* n8n-style bezier edges — 2px round-cap, state-colored via inline style */
+.react-flow__edge-path  { stroke-linecap: round; stroke-linejoin: round; transition: stroke 150ms var(--ease-out); }
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path { stroke: var(--accent) !important; }
+
+/* Flowing-dash animation during run (matches `.flowing` className from WorkflowCanvas) */
+.react-flow__edge.animated .react-flow__edge-path,
+.react-flow__edge.flowing .react-flow__edge-path {
+  stroke-dasharray: 6 6;
+  animation: sf-edge-flow 1.2s linear infinite;
 }
 
-.react-flow__edge-path {
-  transition: stroke-dashoffset 0.5s ease;
-}
+/* Port handles — bigger + state colored */
+.react-flow__handle     { width: 10px !important; height: 10px !important; border-radius: 50%; border-width: 1.5px !important; background: var(--bg-elev-1) !important; transition: transform 150ms var(--ease-out), box-shadow 150ms var(--ease-out); }
+.react-flow__handle-left  { left: -5px !important; }
+.react-flow__handle-right { right: -5px !important; }
+.react-flow__handle:hover { transform: translate(0, -50%) scale(1.3); box-shadow: 0 0 0 3px rgba(168,85,247,.18); }
+.react-flow__handle-connecting { background: var(--status-reject) !important; border-color: var(--status-reject) !important; transform: translate(0, -50%) scale(1.3); }
+.react-flow__handle-valid      { background: var(--status-ok) !important; border-color: var(--status-ok) !important; }
+.react-flow__attribution { display: none; }
 
-.react-flow__handle {
-  transition: all 0.2s ease;
-}
+/* Selection box */
+.react-flow__selection  { background: rgba(168,85,247,.08); border: 1px solid rgba(168,85,247,.5); }
 
-.react-flow__handle:hover {
-  transform: scale(1.2);
+/* Controls — dark chrome */
+.react-flow__controls-button {
+  background: var(--skin-panel) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--fg-3) !important;
+  fill: currentColor !important;
 }
+.react-flow__controls-button:hover { background: var(--bg-elev-2) !important; color: var(--fg-1) !important; }
+.react-flow__controls-button svg   { fill: currentColor !important; }
 
-.react-flow__handle-connecting {
-  background: #ef4444 !important;
-  transform: scale(1.3);
-}
-
-.react-flow__attribution {
-  display: none;
-}
-
-/* 自定义滚动条 */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-/* 动画 */
-@keyframes pulse-ring {
-  0% {
-    transform: scale(0.8);
-    opacity: 0.8;
-  }
-  100% {
-    transform: scale(2);
-    opacity: 0;
-  }
-}
-
-.running-indicator {
-  position: relative;
-}
-
-.running-indicator::before {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border-radius: inherit;
-  animation: pulse-ring 1.5s infinite;
-}
-
-/* 实用类 */
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.line-clamp-3 {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
+/* Utility */
+.truncate     { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

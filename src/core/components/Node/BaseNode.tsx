@@ -5,7 +5,7 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../../types';
-import { useI18n } from '../../i18n';
+import { useI18n } from '../../../common/i18n';
 import { clsx } from 'clsx';
 
 export const BaseNode = memo(({ data, selected }: NodeProps<NodeData>) => {

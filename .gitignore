@@ -32,3 +32,6 @@ test_planner.py
 
 # 0G agent skills (cloned reference, update via: cd .0g-skills && git pull)
 .0g-skills/
+
+# Custom templates (user-authored, not source-tracked)
+templates/custom/

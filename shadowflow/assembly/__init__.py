@@ -8,10 +8,14 @@ from shadowflow.assembly.activation import (
     CatalogActivationCandidate,
     ConnectionResolver,
 )
+from shadowflow.assembly.compile import CompilationError, compile, compile_agents
 
 __all__ = [
     "ActivationResult",
     "ActivationSelector",
     "CatalogActivationCandidate",
     "ConnectionResolver",
+    "CompilationError",
+    "compile",
+    "compile_agents",
 ]

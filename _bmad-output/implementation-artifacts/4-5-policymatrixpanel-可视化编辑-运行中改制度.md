@@ -140,6 +140,7 @@ _n/a_
 
 - 2026-04-22: Story 4.5 完成,状态 → review
 - 2026-04-22: Code review (Chunk A / 后端) 完成,发现 2 Decision / 6 Patch / 7 Defer,状态 → in-progress
+- 2026-04-22: Code review (Chunk B / 前端) 完成,发现 0 Decision / 4 Patch / 0 Defer
 
 ### Review Findings
 
@@ -160,6 +161,13 @@ Code review 2026-04-22 · Chunk A 后端 (Epic 4 合批) · 3 层并行评审 (B
 - [ ] **[Review][Patch] policy hot-swap 无 per-run `asyncio.Lock`** [shadowflow/runtime/service.py:~492] — 调度循环读 `.allow_send.items()` 期间外部 mutate `policy_matrix` 可见混合状态。加 `self._policy_locks: Dict[run_id, asyncio.Lock]` 并在 update_policy + dispatch 读侧加锁。
 - [ ] **[Review][Patch] `test_publishes_policy_updated_event` 脆弱 + 掩盖异常** [tests/test_policy_runtime_update.py:~33] — 断言 `len(events) == 1`,且 `update_policy` 异常被 `except Exception: pass` 吞掉时仍会发事件,测试仍然绿。改为 `any(e.name == POLICY_UPDATED for e in events)` 且新增一条 assert matrix 实际被应用 (`isinstance(req.workflow.policy_matrix, WorkflowPolicyMatrixSpec)`)。
 - [ ] **[Review][Patch] 缺"已完成节点 output 保留"回归测试** [tests/test_policy_runtime_update.py] — AC3 核心成本控制 invariant 未测。加 test:seed `RunResult.steps = [StepRecord(node_id='agent_a', status='succeeded')]`,调用 `update_policy`,断言返回的 `affected_downstream_nodes` 不含 `agent_a` 且 `step.output` 未变。
+
+#### Patch (Chunk B / 前端)
+
+- [x] **[Review][Patch] BLOCKER · 4.5 AC4 · `isDirty()` 非响应式 — Save 按钮状态永久错误** [`src/core/components/Panel/PolicyMatrixPanel.tsx:42` + `src/core/hooks/usePolicyStore.ts:131`] — `usePolicyStore((s) => s.isDirty)` 订阅稳定函数引用；`markClean()` 改变 `savedMatrix` 但不触发重渲染，Save 按钮不会变回 disabled。修：改为派生 selector：`const dirty = usePolicyStore((s) => !matricesEqual(s.matrix, s.savedMatrix))`，或将 `dirty` 提升为 store 中的 boolean state。
+- [x] **[Review][Patch] 4.5 AC3 · `highlightedCell` 从未被 PolicyMatrixPanel 读取 — cell 高亮功能完全缺失** [`src/core/components/Panel/PolicyMatrixPanel.tsx`] — `usePolicyStore.highlightCell()` 正确写入 `highlightedCell`（含 3s 自动清除），但 PolicyMatrixPanel 从未订阅该字段，矩阵单元格无任何视觉高亮。需在 `<button>` 样式中读取 `highlightedCell`，匹配 `sender===highlightedCell.sender && receiver===highlightedCell.receiver` 时叠加高亮边框。
+- [x] **[Review][Patch] `setAgents()` 不同步 `savedMatrix` — 初始化后 `isDirty()` 误报 true，Save 按钮无故激活** [`src/core/hooks/usePolicyStore.ts:setAgents`] — `setAgents` 填充 `matrix` 但不更新 `savedMatrix`，导致每次 agents 重载后 `isDirty()` 立即 true，用户可能误点 Save 覆盖真实配置。修：在 `setAgents` 末尾同步 `savedMatrix: cloneMatrix(matrix)`。
+- [x] **[Review][Patch] `highlightCell` setTimeout 无清理 — 快速多击导致多个 timer 并发、状态闪烁** [`src/core/hooks/usePolicyStore.ts:highlightCell`] — 每次调用产生一个新 timer，多次快速点击后多个 timer 相互覆盖，最后一个 timer 清除最新的高亮。修：在 store 外层维护 timer ref 并在新调用时先 `clearTimeout`，或在 store 中增加 `_highlightTimer` ref 字段。
 
 #### Deferred (pre-existing, 非本次引入)
 

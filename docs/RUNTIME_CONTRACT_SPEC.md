@@ -44,7 +44,7 @@
 
 ## 3. 核心对象
 
-当前阶段统一 7 个核心对象：
+当前阶段统一 **8 个核心对象**：
 
 - `WorkflowDefinition`
 - `RuntimeRequest`
@@ -53,6 +53,47 @@
 - `ArtifactRef`
 - `CheckpointRef`
 - `RunResult`
+- `WorkflowPolicyMatrixSpec` _(Story 1.1 新增，治理规则矩阵)_
+
+---
+
+### WorkflowPolicyMatrixSpec（第 8 核心对象）
+
+定义工作流级别的治理规则矩阵，嵌入 `WorkflowDefinition.policy_matrix` 字段（可选）。
+
+```python
+class WorkflowPolicyMatrixSpec(BaseModel):
+    allow_send: Dict[str, List[str]] = {}     # sender id → receiver id list
+    allow_reject: Dict[str, List[str]] = {}   # reviewer id → target id list
+    description: Optional[str] = None
+    version: str = "1.0"
+```
+
+**设计约束：**
+
+- `policy_matrix` 字段为 **可选**，老 YAML 不带该字段仍可正常运行（向后兼容）
+- `allow_send` / `allow_reject` 中引用的所有 role id 必须是已声明的节点 id，否则 `WorkflowDefinition` 校验失败（422）
+- Compile-time 违反最佳实践（如事实核查员直接写入法务节点）仅返回 **警告**，不阻塞（R3 NFR 合规）
+- 运行时 `can_send()` / `can_reject()` 帮助函数位于 `shadowflow/runtime/policy_matrix.py`
+
+**validate 端点行为（非阻塞）：**
+
+```
+POST /workflow/validate → 200
+{
+  "valid": true,
+  "warnings": [...],           // 结构性图警告（现有字段）
+  "errors": [...],             // 硬错误（现有字段）
+  "policy_warnings": [         // 策略矩阵最佳实践警告（新增字段）
+    {
+      "code": "POLICY_NOT_RECOMMENDED",
+      "pattern": "factchecker->legal",
+      "reason": "...",
+      "reference_url": "..."
+    }
+  ]
+}
+```
 
 ---
 

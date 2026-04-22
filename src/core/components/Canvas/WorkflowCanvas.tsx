@@ -16,63 +16,32 @@ import ReactFlow, {
   ReactFlowProvider,
   useReactFlow,
 } from 'reactflow';
-import { useI18n } from '../../i18n';
+import { useI18n } from '../../../common/i18n';
 import { useWorkflowActions } from '../../hooks/useWorkflow';
-import {
-  InputNode,
-  PlanningNode,
-  ExecutionNode,
-  ReviewNode,
-  DecisionNode,
-  CoordinateNode,
-  OutputNode,
-} from '../Node';
 import { NodeContextMenu } from '../Node/NodeContextMenu';
+import { SfNode } from '../Node/SfNode';
+import { ApprovalGateNode } from '../Node/ApprovalGateNode';
+import { BarrierNode } from '../Node/BarrierNode';
 import { clsx } from 'clsx';
 
 import 'reactflow/dist/style.css';
 
-// 自定义节点类型映射
 const nodeTypes = {
-  // 输入节点
-  receive: InputNode,
-  understand: InputNode,
-  clarify: InputNode,
-  // 规划节点
-  analyze: PlanningNode,
-  design: PlanningNode,
-  decompose: PlanningNode,
-  spec: PlanningNode,
-  // 执行节点
-  code: ExecutionNode,
-  test: ExecutionNode,
-  generate: ExecutionNode,
-  transform: ExecutionNode,
-  // 审核节点
-  review: ReviewNode,
-  validate: ReviewNode,
-  security: ReviewNode,
-  // 决策节点
-  branch: DecisionNode,
-  loop: DecisionNode,
-  merge: DecisionNode,
-  // 协调节点
-  assign: CoordinateNode,
-  aggregate: CoordinateNode,
-  barrier: CoordinateNode,
-  negotiate: CoordinateNode,
-  sequence: CoordinateNode,
-  parallel: CoordinateNode,
-  // 输出节点
-  report: OutputNode,
-  store: OutputNode,
-  notify: OutputNode,
-  // 默认
-  default: InputNode,
+  custom: SfNode,
+  default: SfNode,
+  agent: SfNode,
+  planning: SfNode,
+  parallel: SfNode,
+  retry: SfNode,
+  decision: SfNode,
+  approval_gate: ApprovalGateNode,
+  barrier: BarrierNode,
 };
 
+export type SfEdgeType = 'default' | 'straight' | 'smoothstep' | 'step';
+
 // 内部画布组件（使用 Provider 后）
-function WorkflowCanvasInner() {
+function WorkflowCanvasInner({ edgeType }: { edgeType?: SfEdgeType }) {
   const { t } = useI18n();
   const { screenToFlowPosition } = useReactFlow();
   const workflow = useWorkflowActions();
@@ -86,13 +55,13 @@ function WorkflowCanvasInner() {
   // 转换内部节点到 ReactFlow 节点格式
   const reactFlowNodes: Node[] = useMemo(() => {
     return workflow.nodes.map(node => {
-      // 根据节点类型选择对应的组件
-      const nodeType = node.data.nodeType || 'default';
-      const componentType = nodeTypes[nodeType as keyof typeof nodeTypes] || 'default';
+      // Map data.nodeType to a registered ReactFlow node type key
+      const dataNodeType = node.data.nodeType || 'default';
+      const rfType = (dataNodeType in nodeTypes) ? dataNodeType : 'custom';
 
       return {
         id: node.id,
-        type: typeof componentType === 'string' ? componentType : 'custom',
+        type: rfType,
         position: node.position,
         data: {
           ...node.data,
@@ -112,7 +81,7 @@ function WorkflowCanvasInner() {
       target: edge.target,
       sourceHandle: edge.sourceHandle,
       targetHandle: edge.targetHandle,
-      type: edge.type || 'smoothstep',
+      type: edgeType || edge.type || 'default',
       animated: edge.animated || workflow.ui.isFlowing, // 运行时自动开启动画
       className: clsx(edge.className, workflow.ui.isFlowing && 'flowing'), // 增加 CSS 动画
       style: edge.style,
@@ -123,7 +92,7 @@ function WorkflowCanvasInner() {
       label: edge.data?.label,
       data: edge.data,
     }));
-  }, [workflow.edges, workflow.ui.isFlowing]);
+  }, [workflow.edges, workflow.ui.isFlowing, edgeType]);
 
   // 处理节点拖拽
   const onNodeDragStop = useCallback(
@@ -273,30 +242,31 @@ function WorkflowCanvasInner() {
         minZoom={0.1}
         maxZoom={2}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-        deleteKeyCode={null} // 我们自己处理
+        deleteKeyCode={null}
+        panOnScroll={true}
+        panOnDrag={true}
+        nodesDraggable={true}
+        onlyRenderVisibleElements={true}
       >
         <Background
           variant={BackgroundVariant.Dots}
-          gap={16}
-          size={1}
-          color="#e2e8f0"
+          gap={24}
+          size={1.5}
+          color="#3F3F46"
         />
 
         <Controls
-          className={clsx(
-            'bg-white shadow-lg border border-gray-200 rounded-lg',
-            '!-translate-x-1/2 !left-1/2'
-          )}
+          style={{ background: '#0F0F12', border: '1px solid #27272A', borderRadius: 8 }}
         />
 
         {workflow.ui.miniMapOpen && (
           <MiniMap
-            className="!bg-white !border !border-gray-200"
+            style={{ background: '#0F0F12', border: '1px solid #27272A' }}
             nodeColor={(node) => {
               const nodeData = node.data as any;
-              return nodeData?.color || '#6b7280';
+              return nodeData?.color || '#52525B';
             }}
-            maskColor="rgba(0, 0, 0, 0.05)"
+            maskColor="rgba(0,0,0,0.4)"
           />
         )}
 
@@ -323,11 +293,9 @@ function WorkflowCanvasInner() {
 
         {/* 提示信息 */}
         {workflow.nodes.length === 0 && (
-          <Panel position="top-center" className="bg-white/80 backdrop-blur-sm shadow-lg rounded-lg p-6 text-center">
-            <p className="text-gray-600 mb-2">{t('nodes.subtitle')}</p>
-            <p className="text-sm text-gray-500">
-              Press {t('shortcuts.undo')} / {t('shortcuts.redo')} to undo/redo
-            </p>
+          <Panel position="top-center" style={{ background: '#0F0F12', border: '1px solid #27272A', borderRadius: 10, padding: '14px 20px', textAlign: 'center' }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#71717A', marginBottom: 4 }}>Drag agents from the left panel to get started</p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#52525B' }}>Connect nodes · Set policy · Run</p>
           </Panel>
         )}
 
@@ -344,11 +312,8 @@ function WorkflowCanvasInner() {
   );
 }
 
-// 带 Provider 的画布组件
-export function WorkflowCanvas() {
-  return (
-    <ReactFlowProvider>
-      <WorkflowCanvasInner />
-    </ReactFlowProvider>
-  );
+// 画布组件 —— 调用方可选地在外层套 ReactFlowProvider 以共享同一个实例
+export function WorkflowCanvas({ edgeType, withProvider = true }: { edgeType?: SfEdgeType; withProvider?: boolean } = {}) {
+  const inner = <WorkflowCanvasInner edgeType={edgeType} />;
+  return withProvider ? <ReactFlowProvider>{inner}</ReactFlowProvider> : inner;
 }

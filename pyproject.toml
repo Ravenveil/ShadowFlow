@@ -47,6 +47,10 @@ memory = [
     "aiosqlite>=0.19.0",
     "redis>=5.0.0",
 ]
+# pip install shadowflow[mcp]  — MCP client support (Story 2.4)
+mcp = [
+    "mcp>=1.0",
+]
 # pip install shadowflow[all]  — 全功能
 all = [
     "httpx>=0.26.0",
@@ -54,6 +58,7 @@ all = [
     "uvicorn>=0.27.0",
     "aiosqlite>=0.19.0",
     "redis>=5.0.0",
+    "mcp>=1.0",
 ]
 dev = [
     "pytest>=7.4.0",

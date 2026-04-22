@@ -3,7 +3,7 @@
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
-import { useI18n } from '../../i18n';
+import { useI18n } from '../../../common/i18n';
 import { useWorkflowActions } from '../../hooks/useWorkflow';
 import { clsx } from 'clsx';
 

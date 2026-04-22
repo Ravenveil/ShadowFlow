@@ -52,7 +52,7 @@ interface WorkflowState {
   // Actions - 批量操作
   setNodes: (nodes: WorkflowNode[]) => void;
   setEdges: (edges: WorkflowEdge[]) => void;
-  setWorkflow: (nodes: WorkflowNode[], edges: WorkflowEdge[]) => void;
+  setWorkflow: (nodes: WorkflowNode[], edges: WorkflowEdge[], opts?: { skipHistory?: boolean }) => void;
 
   // Actions - 选择
   selectNode: (nodeId: string) => void;
@@ -302,13 +302,14 @@ export const useWorkflow = create<WorkflowState>()(
       }),
 
     // 设置完整工作流
-    setWorkflow: (nodes, edges) =>
+    // P2-2 fix: pass { skipHistory: true } from YAML sync to avoid flooding undo stack
+    setWorkflow: (nodes, edges, opts) =>
       set(state => {
         state.nodes = nodes;
         state.edges = edges;
         state.selectedNodeIds = [];
         state.selectedEdgeIds = [];
-        get().saveToHistory('Load workflow');
+        if (!opts?.skipHistory) get().saveToHistory('Load workflow');
       }),
 
     // 选择节点

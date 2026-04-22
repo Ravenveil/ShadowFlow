@@ -19,6 +19,7 @@ from .claude import ClaudeProvider
 from .gemini import GeminiProvider
 from .openai import OpenAIProvider
 from .ollama import OllamaProvider
+from .fallback import AllProvidersFailed, FallbackProvider
 
 __all__ = [
     # 基类和数据类
@@ -31,6 +32,9 @@ __all__ = [
     "GeminiProvider",
     "OpenAIProvider",
     "OllamaProvider",
+    # Fallback chain
+    "AllProvidersFailed",
+    "FallbackProvider",
 ]
 
 

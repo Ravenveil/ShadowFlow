@@ -151,6 +151,7 @@ _n/a_
 
 - 2026-04-22: Story 4.6 完成,状态 → review
 - 2026-04-22: Code review (Chunk A / 后端) 完成,发现 2 Decision / 4 Patch / 1 Defer,状态 → in-progress
+- 2026-04-22: Code review (Chunk B / 前端) 完成,发现 1 Decision / 4 Patch / 0 Defer
 
 ### Review Findings
 
@@ -173,3 +174,18 @@ Code review 2026-04-22 · Chunk A 后端 (Epic 4 合批)。
 #### Deferred
 
 - [x] **[Review][Defer] 无 idempotency key** [shadowflow/runtime/service.py:522] — MVP 可接受;重试等幂已在 server 层未覆盖。
+
+---
+
+Code review 2026-04-22 · Chunk B 前端 (Epic 4 合批) · 3 层并行评审 (Blind / EdgeCase / AcceptanceAuditor)。
+
+#### Decisions Resolved — Chunk B (2026-04-22)
+
+- [x] **[Review][Decision→Patch] 4.6 AC2 · PolicyMatrixPanel "Save & Re-run" 缺默认 `/reconfigure` fetch** — 决议 **(a)**:在 `effectiveSave` 同级新增 `effectiveReRun`:有 `runId` 时直接 `POST /workflow/runs/{runId}/reconfigure`(与 `effectiveSave` 对称),保留 `onReRun` 覆盖 prop。无 runId 时按钮 disabled 并附 tooltip。
+
+#### Patch — Chunk B
+
+- [x] **[Review][Patch] BLOCKER · 4.6 AC4 · `run.reconfigured` 事件无处理分支 — LiveDashboard 拓扑永远不更新** [`src/core/hooks/useRunEvents.ts`] — `handleEvent` 已注册 `run.reconfigured` 监听器，但无对应 `if (type === 'run.reconfigured')` 分支；事件被丢弃，节点增删不反映到 store，LiveDashboard 图拓扑不更新。需新增分支：对 `new_nodes` 调用 `setNodeStatus(id, 'pending')`，对 `removed_nodes` 从 store 移除或标记。
+- [x] **[Review][Patch] 4.6 AC1 · 拖入新 agent 后 `usePolicyStore` 矩阵未自动扩展** [`src/core/components/Panel/PolicyMatrixPanel.tsx`] — Spec 要求"拖入节点时触发 `useWorkflowStore.addAgent` → `usePolicyStore` 监听 agents 变化自动扩展 matrix"，但 PolicyMatrixPanel 内部无该 side-effect wiring。需在 `useEffect` 中监听 `agents` 变化并调 `usePolicyStore.appendAgent`（Story 4.5 scope guardrail 已声明此 action），新行/列默认 `permit`。
+- [x] **[Review][Patch] 4.6 AC2 · `onSave` prop 调用路径无 try/catch — 异常导致 `markClean()` 跳过** [`src/core/components/Panel/PolicyMatrixPanel.tsx effectiveSave`] — `fetch` 路径已正确 guard（`if (!res.ok) return` 在 `markClean()` 前），但 `onSave` prop 调用路径裸调用无 try/catch；`onSave` throw 时 `markClean()` 不执行，Save 按钮永远不退出 dirty 态。加 `try { await onSave(...) } catch { setError(...) } finally { markClean() }` 或等价守卫。
+- [x] **[Review][Patch] 4.6 AC2 · PolicyMatrixPanel "Save & Re-run" 按钮无默认 `/reconfigure` fetch** [`src/core/components/Panel/PolicyMatrixPanel.tsx`] — `onReRun` 仅当外部传 prop 时才渲染按钮；无 prop 时按钮完全消失（违反 AC2 spec：POST `/workflow/runs/{id}/reconfigure`）。新增 `effectiveReRun`：有 `runId` prop → POST `/workflow/runs/{runId}/reconfigure`；有 `onReRun` prop → 覆盖。两者都无时按钮 disabled+tooltip。(源决议 D1a)
