@@ -1,6 +1,6 @@
 # Story 4.6: 运行中新增角色 + Re-run with New Policy
 
-Status: review
+Status: in-progress
 
 ## Story
 
