@@ -1,6 +1,6 @@
 # Story 4.2: LiveDashboard 看板组件
 
-Status: in-progress
+Status: done
 
 ## Story
 
@@ -106,6 +106,7 @@ so that **6 分钟戏剧 J1 能真实上演,不是 mock,观众一眼看到谁在
 ### Change Log
 
 - 2026-04-22: Code review (Chunk B / 前端) 完成，发现 0 Decision / 1 Patch / 3 Defer，状态 → in-progress
+- 2026-04-22: Chunk B P1 BLOCKER (run.reconfigured 分支) 应用，所有 patch [x]，状态 → done
 
 ### Review Findings
 

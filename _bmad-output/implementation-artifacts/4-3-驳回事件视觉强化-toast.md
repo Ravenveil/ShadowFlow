@@ -1,6 +1,6 @@
 # Story 4.3: 驳回事件视觉强化 Toast
 
-Status: in-progress
+Status: done
 
 ## Story
 
@@ -94,6 +94,7 @@ so that **J1 Demo 高光 #1/#2(合规官驳内容官、稽查驳工程师)、J3 
 ### Change Log
 
 - 2026-04-22: Code review (Chunk B / 前端) 完成，发现 0 Decision / 3 Patch / 2 Defer，状态 → in-progress
+- 2026-04-22: Chunk B P6/P7/P8 (toast 位置 + timer + 原子 dismiss) 应用，所有 patch [x]，状态 → done
 
 ### Review Findings
 

@@ -1,6 +1,6 @@
 # Story 4.1: SSE 事件总线 + /events Endpoint
 
-Status: in-progress
+Status: done
 
 ## Story
 
@@ -121,6 +121,7 @@ claude-sonnet-4-6 (Claude Code)
 
 - 2026-04-22: Story 4.1 完成,状态 → review
 - 2026-04-22: Code review (Chunk B / 前端) 完成,发现 0 Decision / 1 Patch / 1 Defer,状态 → in-progress
+- 2026-04-22: Chunk B P15 (sseClient.test.ts) 应用,所有 patch [x],状态 → done
 
 ### Review Findings
 
