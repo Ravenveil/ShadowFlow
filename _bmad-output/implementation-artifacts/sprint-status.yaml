@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-22T15:25:30Z  # 4-1/2/3 Chunk B 补丁全部 [x] → done; 4-5~4-9 Chunk A 后端 patch 待完成
+last_updated: 2026-04-22T15:26:58Z  # 1-4 checkpoint-resume 16 patches done, 599 tests pass
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -65,7 +65,7 @@ development_status:
   1-1-policy-matrix-核心对象-compile-time-非阻塞校验: review
   1-2-approval-gate-节点类型: review
   1-3-运行时真驳回-handoff-事件: review
-  1-4-驳回穿透多层-checkpoint-resume: review
+  1-4-驳回穿透多层-checkpoint-resume: done
   1-5-trajectory-export-run-查询-api: review
   epic-1-retrospective: optional
 
@@ -75,8 +75,8 @@ development_status:
   epic-2: in-progress
   2-1-agentexecutor-abc-四-kind-枚举-注册表: done
   2-2-cli-executor-通用化-openclaw-hermes-shadowsoul-cli-preset: done
-  2-3-acp-client-实现-hermes-shadowsoul-主协议: review
-  2-4-mcp-client-实现-hermes-tool-暴露补充通道: review
+  2-3-acp-client-实现-hermes-shadowsoul-主协议: in-progress
+  2-4-mcp-client-实现-hermes-tool-暴露补充通道: in-progress
   2-5-shadowsoul-rust-binary-接入: review
   2-6-agentevent-归一流-sse-集成: review
   2-7-hermes-claw-子命令-spike: done

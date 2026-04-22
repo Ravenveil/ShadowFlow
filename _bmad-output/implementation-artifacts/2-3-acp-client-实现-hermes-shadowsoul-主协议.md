@@ -1,6 +1,6 @@
 # Story 2.3: ACP Client 实现(Hermes / ShadowSoul 主协议)
 
-Status: review
+Status: in-progress
 
 ## Story
 

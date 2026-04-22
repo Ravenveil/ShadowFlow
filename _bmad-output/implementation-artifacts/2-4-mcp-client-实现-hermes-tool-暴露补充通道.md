@@ -1,6 +1,6 @@
 # Story 2.4: MCP Client 实现(Hermes tool 暴露补充通道)
 
-Status: review
+Status: in-progress
 
 ## Story
 
