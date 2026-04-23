@@ -20,6 +20,9 @@ export default function EditorPage() {
 
   return (
     <I18nProvider language={lang === 'ZH' ? 'zh' : 'en'}>
+      <div className="block bg-[var(--accent)] px-4 py-2 text-center text-xs font-medium text-[var(--accent-ink)] md:hidden">
+        桌面端体验更佳 · Desktop recommended for full editing
+      </div>
       <EditorPageImpl
         onBack={() => navigate('/templates')}
         lang={lang}
