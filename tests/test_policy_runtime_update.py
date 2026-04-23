@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from shadowflow.runtime.contracts import (
     RuntimeRequest,
@@ -61,7 +62,7 @@ class TestUpdatePolicy:
     def test_rejects_invalid_matrix(self):
         """model_validate should reject structurally broken input."""
         svc, _ = _service_with_run()
-        with pytest.raises(Exception):
+        with pytest.raises((ValidationError, ValueError)):
             svc.update_policy("run-4.5-test", {"allow_send": "not-a-dict"})
 
     def test_affected_downstream_excludes_completed(self):
@@ -70,16 +71,17 @@ class TestUpdatePolicy:
         result = svc.update_policy("run-4.5-test", {})
         assert set(result["affected_downstream_nodes"]) == {"agent_a", "agent_b"}
 
-    def test_affected_downstream_excludes_all_terminal_statuses(self):
-        """Nodes in any terminal status (succeeded/failed/skipped/cancelled/invalidated) are excluded."""
+    @pytest.mark.parametrize("terminal_status", ["succeeded", "failed", "skipped", "cancelled", "invalidated"])
+    def test_affected_downstream_excludes_all_terminal_statuses(self, terminal_status):
+        """Nodes in any terminal status are excluded from affected_downstream_nodes."""
         svc, _ = _service_with_run()
         run_id = "run-4.5-test"
         now = utc_now()
         svc._runs[run_id] = RunResult(
             run=RunRecord(run_id=run_id, request_id="req-1", workflow_id="wf-4.5", status="running", started_at=now, entrypoint="agent_a"),
             steps=[
-                StepRecord(step_id="s1", run_id=run_id, node_id="agent_a", status="succeeded", index=1, started_at=now),
-                StepRecord(step_id="s2", run_id=run_id, node_id="agent_b", status="failed", index=2, started_at=now),
+                StepRecord(step_id="s1", run_id=run_id, node_id="agent_a", status=terminal_status, index=1, started_at=now),
+                StepRecord(step_id="s2", run_id=run_id, node_id="agent_b", status=terminal_status, index=2, started_at=now),
             ],
         )
         result = svc.update_policy(run_id, {})
