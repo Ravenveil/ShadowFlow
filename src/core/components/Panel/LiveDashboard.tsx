@@ -24,6 +24,7 @@ interface StatusConfig {
 const STATUS_CONFIG: Record<NodeRunStatus, StatusConfig> = {
   pending:   { bg: 'bg-gray-900',  border: 'border-gray-600', dot: 'bg-gray-400',  label: 'pending' },
   running:   { bg: 'bg-blue-950',  border: 'border-blue-500', dot: 'bg-blue-400',  label: 'running',   pulse: true },
+  waiting_user: { bg: 'bg-amber-950', border: 'border-amber-500', dot: 'bg-amber-400', label: 'waiting_user', pulse: true },
   succeeded: { bg: 'bg-green-950', border: 'border-green-500',dot: 'bg-green-400', label: 'succeeded' },
   failed:    { bg: 'bg-red-950',   border: 'border-red-500',  dot: 'bg-red-400',   label: 'failed' },
   rejected:  { bg: 'bg-red-950',   border: 'border-red-600',  dot: 'bg-red-500',   label: 'rejected',  flash: true },

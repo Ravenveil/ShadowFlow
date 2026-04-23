@@ -105,4 +105,24 @@ describe('useRunStore — SSE event contract', () => {
     expect(timeline[1].kind).toBe('retried');
     expect(timeline[1].fail_reason).toBe('timeout');
   });
+
+  it('agent.gap_detected → waiting_user + pending gap queue', () => {
+    const { setNodeStatus, enqueueGap } = useRunStore.getState();
+    setNodeStatus('section-writer', 'waiting_user');
+    enqueueGap({
+      runId: 'run-sse-test',
+      nodeId: 'section-writer',
+      gapType: 'incomplete_log',
+      description: '实验日志缺少 baseline 数据。',
+      choices: [
+        { id: 'A', label: '补充数据', action: 'pause' },
+        { id: 'B', label: '移除此对比', action: 'drop' },
+        { id: 'C', label: '标记稍后更新', action: 'annotate' },
+      ],
+    });
+    const state = useRunStore.getState();
+    expect(state.nodes['section-writer'].status).toBe('waiting_user');
+    expect(state.pendingGaps).toHaveLength(1);
+    expect(state.pendingGaps[0].gapType).toBe('incomplete_log');
+  });
 });

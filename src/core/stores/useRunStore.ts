@@ -21,6 +21,7 @@ import { immer } from 'zustand/middleware/immer';
 export type NodeRunStatus =
   | 'pending'
   | 'running'
+  | 'waiting_user'
   | 'succeeded'
   | 'failed'
   | 'rejected';
@@ -60,11 +61,27 @@ export interface PolicyViolationRecord {
   ts: number;
 }
 
+export interface GapChoice {
+  id: 'A' | 'B' | 'C';
+  label: string;
+  action: 'pause' | 'drop' | 'annotate' | string;
+}
+
+export interface PendingGap {
+  runId: string;
+  nodeId: string;
+  gapType: string;
+  description: string;
+  choices: GapChoice[];
+  userInput: string;
+}
+
 export interface RunStoreState {
   run_id: string | null;
   nodes: Record<string, NodeState>;
   violations: PolicyViolationRecord[];
   selectedNodeId: string | null;
+  pendingGaps: PendingGap[];
 
   // Actions
   reset: (run_id: string) => void;
@@ -75,6 +92,9 @@ export interface RunStoreState {
   appendTimelineEvent: (nodeId: string, event: TimelineEvent) => void;
   recordPolicyViolation: (violation: Omit<PolicyViolationRecord, 'ts'>) => void;
   selectNode: (nodeId: string | null) => void;
+  enqueueGap: (gap: Omit<PendingGap, 'userInput'> & { userInput?: string }) => void;
+  updateGapInput: (nodeId: string, userInput: string) => void;
+  resolveGap: (nodeId: string) => void;
   /** P1 (4.6 AC4): remove a node from the run (called on run.reconfigured removed_nodes). */
   removeNode: (nodeId: string) => void;
 }
@@ -107,6 +127,7 @@ export const useRunStore = create<RunStoreState>()(
     nodes: {},
     violations: [],
     selectedNodeId: null,
+    pendingGaps: [],
 
     reset(run_id: string) {
       set((state) => {
@@ -114,6 +135,7 @@ export const useRunStore = create<RunStoreState>()(
         state.nodes = {};
         state.violations = [];
         state.selectedNodeId = null;
+        state.pendingGaps = [];
       });
     },
 
@@ -168,6 +190,36 @@ export const useRunStore = create<RunStoreState>()(
     selectNode(nodeId) {
       set((state) => {
         state.selectedNodeId = nodeId;
+      });
+    },
+
+    enqueueGap(gap) {
+      set((state) => {
+        const existing = state.pendingGaps.find((item) => item.nodeId === gap.nodeId);
+        if (existing) {
+          existing.description = gap.description;
+          existing.gapType = gap.gapType;
+          existing.choices = gap.choices;
+          existing.userInput = gap.userInput ?? existing.userInput;
+          return;
+        }
+        state.pendingGaps.push({
+          ...gap,
+          userInput: gap.userInput ?? '',
+        });
+      });
+    },
+
+    updateGapInput(nodeId, userInput) {
+      set((state) => {
+        const pending = state.pendingGaps.find((item) => item.nodeId === nodeId);
+        if (pending) pending.userInput = userInput;
+      });
+    },
+
+    resolveGap(nodeId) {
+      set((state) => {
+        state.pendingGaps = state.pendingGaps.filter((item) => item.nodeId !== nodeId);
       });
     },
 

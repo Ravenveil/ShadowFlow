@@ -47,6 +47,7 @@ interface UseRunEventsOptions {
 // Map SSE event type → NodeRunStatus
 const SSE_TO_STATUS: Record<string, NodeRunStatus> = {
   'node.started':   'running',
+  'agent.gap_detected': 'waiting_user',
   'node.succeeded': 'succeeded',
   'node.failed':    'failed',
   'node.rejected':  'rejected',
@@ -77,6 +78,8 @@ export function useRunEvents({
     setNodeInputs,
     appendTimelineEvent,
     recordPolicyViolation,
+    enqueueGap,
+    resolveGap,
     removeNode,
   } = useRunStore.getState();
 
@@ -102,6 +105,22 @@ export function useRunEvents({
           const err = (payload.error ?? payload.message ?? '') as string;
           setNodeError(nodeId, err);
         }
+      }
+
+      if (type === 'agent.gap_detected' && nodeId) {
+        enqueueGap({
+          runId: String(payload.run_id ?? runId ?? ''),
+          nodeId,
+          gapType: String(payload.gap_type ?? 'unknown'),
+          description: String(payload.description ?? ''),
+          choices: Array.isArray(payload.choices)
+            ? payload.choices as Array<{ id: 'A' | 'B' | 'C'; label: string; action: string }>
+            : [],
+        });
+      }
+
+      if (type === 'node.succeeded' && nodeId) {
+        resolveGap(nodeId);
       }
 
       // Inputs snapshot (usually on node.started)
@@ -186,6 +205,7 @@ export function useRunEvents({
       client.on(eventType, (payload) => handleEvent(payload as RunEventPayload));
     }
     client.on('node.retried', (payload) => handleEvent(payload as RunEventPayload));
+    client.on('agent.gap_detected', (payload) => handleEvent(payload as RunEventPayload));
     client.on('policy.violation', (payload) => handleEvent(payload as RunEventPayload));
     client.on('policy.updated', (payload) => handleEvent(payload as RunEventPayload));
     client.on('run.reconfigured', (payload) => handleEvent(payload as RunEventPayload));
