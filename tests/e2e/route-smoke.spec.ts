@@ -14,6 +14,7 @@ const ROUTES = [
   { path: '/editor',              label: 'Editor (blank)'   },
   { path: '/editor/academic-paper', label: 'Editor (template)' },
   { path: '/templates',           label: 'Templates'        },
+  { path: '/import',              label: 'Import by CID'    },
 ];
 
 const ERROR_BOUNDARY_TEXT = '组件加载出错';

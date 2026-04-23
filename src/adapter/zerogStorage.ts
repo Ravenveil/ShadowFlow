@@ -6,7 +6,7 @@ const VITE_ENV = (import.meta as unknown as { env?: Record<string, string | unde
 const STORAGE_INDEXER = VITE_ENV.VITE_ZEROG_STORAGE_INDEXER ?? 'https://indexer-storage-testnet-turbo.0g.ai';
 const RPC_URL = VITE_ENV.VITE_ZEROG_RPC_URL ?? 'https://evmrpc-testnet.0g.ai';
 
-const CID_RE = /^0x[a-fA-F0-9]{64}$/;
+export const CID_RE = /^0x[a-fA-F0-9]{64}$/;
 const DOWNLOAD_TIMEOUT_MS = 15_000;
 
 export interface UploadResult {
@@ -25,15 +25,21 @@ export class MerkleVerificationError extends Error {
   }
 }
 
+export interface TrajectoryMetadata {
+  author_lineage?: string[];
+  [key: string]: unknown;
+}
+
 export interface DownloadResult {
   bytes: Uint8Array;
   verified: true;
+  trajectory?: { metadata?: TrajectoryMetadata; [key: string]: unknown };
 }
 
-let _downloadInFlight: string | null = null;
+const _downloadsInFlight = new Set<string>();
 
 export function isDownloadInFlight(): boolean {
-  return _downloadInFlight !== null;
+  return _downloadsInFlight.size > 0;
 }
 
 export async function downloadTrajectory(cid: string): Promise<DownloadResult> {
@@ -45,7 +51,7 @@ export async function downloadTrajectory(cid: string): Promise<DownloadResult> {
     );
   }
 
-  if (_downloadInFlight === cid) {
+  if (_downloadsInFlight.has(cid)) {
     throw new MerkleVerificationError(
       'Download already in progress for this CID',
       cid,
@@ -53,7 +59,7 @@ export async function downloadTrajectory(cid: string): Promise<DownloadResult> {
     );
   }
 
-  _downloadInFlight = cid;
+  _downloadsInFlight.add(cid);
   try {
     const indexer = new Indexer(STORAGE_INDEXER);
 
@@ -72,22 +78,34 @@ export async function downloadTrajectory(cid: string): Promise<DownloadResult> {
       }
     })();
 
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
         () => reject(new MerkleVerificationError('下载超时,请检查 CID 或网络', cid, 'timeout')),
         DOWNLOAD_TIMEOUT_MS,
-      ),
-    );
+      );
+    });
 
-    await Promise.race([downloadPromise, timeout]);
+    try {
+      await Promise.race([downloadPromise, timeout]);
+    } finally {
+      clearTimeout(timeoutId!);
+    }
 
     // In browser context, the SDK writes to an in-memory path keyed by CID.
     // We return an empty-but-valid Uint8Array as placeholder — the actual bytes
     // are resolved by the caller via the SDK's browser storage layer.
     // For real browser integration, this would be replaced with Blob URL handling.
-    return { bytes: new Uint8Array(0), verified: true };
+    const bytes = new Uint8Array(0);
+    let trajectory: DownloadResult['trajectory'];
+    if (bytes.length > 0) {
+      try {
+        trajectory = JSON.parse(new TextDecoder().decode(bytes));
+      } catch { /* not valid JSON — leave trajectory undefined */ }
+    }
+    return { bytes, verified: true, trajectory };
   } finally {
-    _downloadInFlight = null;
+    _downloadsInFlight.delete(cid);
   }
 }
 

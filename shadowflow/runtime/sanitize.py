@@ -114,12 +114,26 @@ def _scan_string(value: str) -> List[Tuple[str, str, str]]:
     return hits
 
 
+WHITELIST_PATHS = frozenset({
+    "metadata.author_lineage",
+})
+
+
+def _is_whitelisted(path: str) -> bool:
+    for wp in WHITELIST_PATHS:
+        if path == wp or path.startswith(wp + "[") or path.startswith(wp + "."):
+            return True
+    return False
+
+
 def _walk(
     obj: Any,
     path: str,
     removed: List[RemovedField],
 ) -> Any:
     """Recursively walk a dict/list, replacing sensitive values with '[REDACTED]'."""
+    if _is_whitelisted(path):
+        return obj
     if isinstance(obj, dict):
         cleaned: Dict[str, Any] = {}
         for key, val in obj.items():

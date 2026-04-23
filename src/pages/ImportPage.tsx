@@ -1,15 +1,18 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   downloadTrajectory,
   isDownloadInFlight,
   MerkleVerificationError,
+  CID_RE,
+  type DownloadResult,
 } from '../adapter/zerogStorage';
 import { CidVerifiedBanner } from '../core/components/CidVerifiedBanner';
+import { AuthorLineageChip } from '../core/components/AuthorLineageChip';
 
-const CID_RE = /^0x[a-fA-F0-9]{64}$/;
 const HISTORY_KEY = 'shadowflow_import_cid_history';
 const MAX_HISTORY = 10;
+const EXPLORER_BASE = 'https://storagescan-newton.0g.ai/file/';
 
 interface FailureLog {
   cid: string;
@@ -38,14 +41,29 @@ function addToHistory(cid: string): void {
   saveHistory(history);
 }
 
+function shortenCid(cid: string): string {
+  if (cid.length <= 16) return cid;
+  return `${cid.slice(0, 10)}…${cid.slice(-6)}`;
+}
+
 export default function ImportPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [cid, setCid] = useState('');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'timeout' } | null>(null);
   const [verifiedCid, setVerifiedCid] = useState<string | null>(null);
+  const [authorLineage, setAuthorLineage] = useState<string[]>([]);
   const [history, setHistory] = useState<string[]>(loadHistory);
   const [failureLogs, setFailureLogs] = useState<FailureLog[]>([]);
+
+  // Auto-load CID from query param (e.g. /import?cid=0x...)
+  useEffect(() => {
+    const queryCid = searchParams.get('cid');
+    if (queryCid && CID_RE.test(queryCid.trim()) && !verifiedCid) {
+      setCid(queryCid.trim());
+    }
+  }, [searchParams, verifiedCid]);
 
   useEffect(() => {
     if (!toast) return;
@@ -62,12 +80,16 @@ export default function ImportPage() {
     setLoading(true);
     setToast(null);
     setVerifiedCid(null);
+    setAuthorLineage([]);
 
     try {
-      await downloadTrajectory(trimmed);
+      const result: DownloadResult = await downloadTrajectory(trimmed);
       addToHistory(trimmed);
       setHistory(loadHistory());
       setVerifiedCid(trimmed);
+
+      const lineage = result.trajectory?.metadata?.author_lineage;
+      setAuthorLineage(Array.isArray(lineage) ? lineage : []);
     } catch (err) {
       const isMerkle = err instanceof MerkleVerificationError;
       const errorType = isMerkle ? err.errorType : 'unknown';
@@ -82,6 +104,7 @@ export default function ImportPage() {
         type: errorType === 'timeout' ? 'timeout' : 'error',
       });
       setVerifiedCid(null);
+      setAuthorLineage([]);
 
       setFailureLogs((prev) => [
         ...prev,
@@ -96,13 +119,14 @@ export default function ImportPage() {
     setCid(historyCid);
     setToast(null);
     setVerifiedCid(null);
+    setAuthorLineage([]);
   };
 
   const copyFailureLogs = () => {
     const text = failureLogs
       .map((l) => `CID: ${l.cid} | Error: ${l.error_type} | Time: ${new Date(l.timestamp).toISOString()}`)
       .join('\n');
-    navigator.clipboard.writeText(text).catch(() => {});
+    navigator.clipboard?.writeText(text).catch(() => {});
   };
 
   return (
@@ -229,6 +253,7 @@ export default function ImportPage() {
               setCid(e.target.value);
               setToast(null);
               setVerifiedCid(null);
+              setAuthorLineage([]);
             }}
             placeholder="0x3f7a…bc91 (64-char hex CID)"
             style={{
@@ -297,10 +322,39 @@ export default function ImportPage() {
           </div>
         )}
 
-        {/* Verified banner */}
+        {/* Verified banner + lineage */}
         {verifiedCid && (
           <div style={{ marginBottom: 24 }}>
             <CidVerifiedBanner cid={verifiedCid} />
+
+            {/* Author lineage */}
+            <div style={{ marginTop: 14 }}>
+              <AuthorLineageChip lineage={authorLineage} showPendingSelf />
+            </div>
+
+            {/* CID short identifier + explorer link */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 10,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                color: 'var(--fg-4)',
+              }}
+            >
+              <span>CID: {shortenCid(verifiedCid)}</span>
+              <a
+                href={`${EXPLORER_BASE}${verifiedCid}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--accent-bright)', textDecoration: 'none', fontSize: 11 }}
+              >
+                0G Explorer ↗
+              </a>
+            </div>
+
             <p
               style={{
                 fontFamily: 'var(--font-mono)',
@@ -313,6 +367,25 @@ export default function ImportPage() {
             </p>
           </div>
         )}
+
+        {/* GDPR immutability tooltip */}
+        <div
+          style={{
+            marginTop: 16,
+            padding: '10px 14px',
+            borderRadius: 8,
+            background: 'var(--bg-elev-1)',
+            border: '1px solid var(--border)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--fg-4)',
+            lineHeight: 1.5,
+          }}
+          title="上链后永久不可变,请确认已通过 sanitize。如需撤销,请申请新 CID 并弃用旧链接(PRD GDPR 应对)"
+        >
+          <span style={{ color: 'var(--status-warn)', marginRight: 6 }}>ⓘ</span>
+          上链数据永久不可变 — 发布前请确保已通过 sanitize 扫描。如需撤回内容,只能发布新 CID 并弃用旧链接。
+        </div>
 
         {/* History */}
         {history.length > 0 && (

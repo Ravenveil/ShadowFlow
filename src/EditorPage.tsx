@@ -15,6 +15,10 @@ import { ApprovalGateForm } from './core/components/inspector/ApprovalGateForm';
 import { ProviderPanel } from './core/components/inspector/ProviderPanel';
 import { SecretsModal } from './core/components/modals/SecretsModal';
 import { SanitizeReviewModal, type RemovedFieldItem } from './core/components/modals/SanitizeReviewModal';
+import { uploadTrajectory } from './adapter/zerogStorage';
+import { useZerogSecretsStore } from './core/hooks/useZerogSecretsStore';
+
+const LINEAGE_ALIAS_KEY = 'shadowflow.user_alias';
 
 const YamlEditor = lazy(() =>
   import('./core/components/editor/YamlEditor').then((m) => ({ default: m.YamlEditor })),
@@ -1390,11 +1394,57 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
     }).catch(() => {/* ignore */});
   };
 
+  const performUpload = async (trajectoryPayload: Record<string, unknown>) => {
+    const secretsStore = useZerogSecretsStore.getState();
+    if (!secretsStore.hasEncryptedBlob) {
+      setShowSecrets(true);
+      setFlashOk(zh ? '请先设置 0G 私钥' : 'Set your 0G private key first');
+      setTimeout(() => setFlashOk(null), 3000);
+      return;
+    }
+
+    setPublishBusy(true);
+    try {
+      const userAlias = localStorage.getItem(LINEAGE_ALIAS_KEY) || 'anon';
+      const dk = secretsStore.decryptedKey;
+      const address = dk ? dk.slice(0, 10) : '00000000';
+      const fp = address.replace(/^0x/i, '').slice(0, 8).toLowerCase().padEnd(8, '0');
+      const entry = `${userAlias}@${fp}`;
+
+      const meta = (trajectoryPayload.metadata ?? {}) as Record<string, unknown>;
+      const existingLineage = Array.isArray(meta.author_lineage) ? meta.author_lineage as string[] : [];
+      const updatedPayload = {
+        ...trajectoryPayload,
+        metadata: { ...meta, author_lineage: [...existingLineage, entry] },
+      };
+
+      const bytes = new TextEncoder().encode(JSON.stringify(updatedPayload));
+      const passphrase = prompt(zh ? '输入 0G 密钥口令以签名上传' : 'Enter 0G key passphrase to sign upload');
+      if (!passphrase) {
+        setPublishBusy(false);
+        return;
+      }
+
+      const result = await uploadTrajectory(bytes, passphrase);
+      setFlashOk(zh ? `已发布: 新 CID ${result.cid.slice(0, 14)}…` : `Published: new CID ${result.cid.slice(0, 14)}…`);
+      setTimeout(() => {
+        setFlashOk(null);
+        window.location.href = `/import?cid=${encodeURIComponent(result.cid)}`;
+      }, 1500);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setFlashOk(zh ? `上传失败: ${msg}` : `Upload failed: ${msg}`);
+      setTimeout(() => setFlashOk(null), 4000);
+    } finally {
+      setPublishBusy(false);
+    }
+  };
+
   const doPublish = async () => {
     if (publishBusy) return;
     setPublishBusy(true);
     try {
-      const trajectory = { nodes: nodes.map(n => ({ id: n.id, type: n.type, data: n.data })), edges: edges.map(e => ({ source: e.source, target: e.target })) };
+      const trajectory = { nodes: nodes.map(n => ({ id: n.id, type: n.type, data: n.data })), edges: edges.map(e => ({ source: e.source, target: e.target })), metadata: {} };
       const res = await fetch('/workflow/runs/_draft/trajectory/sanitize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1407,8 +1457,9 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
         setSanitizedTrajectory(data.cleaned_trajectory);
         setSanitizeOpen(true);
       } else {
-        setFlashOk(zh ? '无敏感信息，可上传' : 'No sensitive data found, ready to upload');
-        setTimeout(() => setFlashOk(null), 2200);
+        setPublishBusy(false);
+        await performUpload(trajectory);
+        return;
       }
     } catch {
       setFlashOk(zh ? '扫描失败' : 'Sanitize scan failed');
@@ -1421,11 +1472,11 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
   const onSanitizeConfirm = () => {
     setSanitizeOpen(false);
     setSanitizeFields([]);
-    // sanitizedTrajectory holds the cleaned payload for the upload flow (Story 5.1)
-    void sanitizedTrajectory;
+    const payload = sanitizedTrajectory;
     setSanitizedTrajectory(null);
-    setFlashOk(zh ? '已确认，继续上传流程' : 'Confirmed, proceeding with upload');
-    setTimeout(() => setFlashOk(null), 2200);
+    if (payload) {
+      performUpload(payload);
+    }
   };
 
   return (

@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import EditorPage from './EditorPage';
 import TemplatesPage from './TemplatesPage';
 import { ImportTemplateDialog } from './core/components/Template/ImportTemplateDialog';
@@ -6,7 +7,7 @@ import { ImportTemplateDialog } from './core/components/Template/ImportTemplateD
 // ============ i18n ============
 const T = {
   EN: {
-    nav: ['Product', 'Templates', 'Docs', 'About', 'GitHub ↗'],
+    nav: ['Product', 'Templates', 'Import', 'Docs', 'About', 'GitHub ↗'],
     signIn: 'Sign in',
     openEditor: '▶ Open Editor',
     mainnet: 'MAINNET · block 2 848 310',
@@ -96,7 +97,7 @@ const T = {
     ],
   },
   CN: {
-    nav: ['产品', '模板', '文档', '关于', 'GitHub ↗'],
+    nav: ['产品', '模板', '导入', '文档', '关于', 'GitHub ↗'],
     signIn: '登录',
     openEditor: '▶ 打开编辑器',
     mainnet: '主网 · 区块 2 848 310',
@@ -231,7 +232,7 @@ function MissingKeyBanner(): JSX.Element | null {
 }
 
 // ============ Ticker ============
-function Ticker({ t }: { t: typeof T.EN }) {
+function Ticker({ t }: { t: typeof T.EN | typeof T.CN }) {
   const items = [
     { text: '◆ 0G HACKATHON 2026', accent: true }, { text: '·', dim: true },
     { text: 'MIT LICENSE' }, { text: '·', dim: true },
@@ -440,6 +441,7 @@ function HoverCard({ children, style, onClick }: { children: React.ReactNode; st
 
 // ============ Main App ============
 export default function App(): JSX.Element {
+  const navigate = useNavigate();
   const [lang, setLang] = useState<Lang>('EN');
   const [view, setView] = useState<'landing' | 'templates' | 'editor'>('landing');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('blank');
@@ -449,6 +451,7 @@ export default function App(): JSX.Element {
 
   const chainSteps = t.importSteps;
   const openEditor = () => setView('templates');
+  const openImport = useCallback(() => navigate('/import'), [navigate]);
   const toggleLang = () => setLang(l => l === 'EN' ? 'CN' : 'EN');
   const pickTemplate = (alias: string) => { setSelectedTemplate(alias); setView('editor'); };
 
@@ -482,13 +485,17 @@ export default function App(): JSX.Element {
           <span className="sf-chip" style={{ marginLeft: 8, background: 'var(--accent-tint)', color: 'var(--accent-bright)', borderColor: 'rgba(168,85,247,.35)' }}>0G-native</span>
         </div>
         <nav style={{ display: 'flex', gap: 22 }}>
-          {t.nav.map((item) => (
-            <a key={item} href="#" style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-3)', textDecoration: 'none' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--fg-1)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--fg-3)')}>
-              {item}
-            </a>
-          ))}
+          {t.nav.map((item) => {
+            const isImport = item === 'Import' || item === '导入';
+            return (
+              <a key={item} href="#" style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-3)', textDecoration: 'none' }}
+                onClick={isImport ? (e) => { e.preventDefault(); openImport(); } : undefined}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--fg-1)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--fg-3)')}>
+                {item}
+              </a>
+            );
+          })}
         </nav>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--fg-4)', padding: '0 12px', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)', height: 28 }}>
@@ -562,7 +569,7 @@ export default function App(): JSX.Element {
                 <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent)', animation: 'sf-drift-x 3s ease-in-out infinite' }} />
                 {t.ctaPrimary}
               </button>
-              <button className="sf-btn sf-btn-ghost" style={{ height: 50, padding: '0 26px', fontSize: 14, borderRadius: 10 }}>{t.ctaSecondary}</button>
+              <button onClick={openImport} className="sf-btn sf-btn-ghost" style={{ height: 50, padding: '0 26px', fontSize: 14, borderRadius: 10 }}>{t.ctaSecondary}</button>
             </div>
 
             <div style={{ marginTop: 42, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 28, borderTop: '1px dashed var(--border)', paddingTop: 24, maxWidth: 640 }}>
