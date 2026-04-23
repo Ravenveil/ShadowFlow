@@ -172,6 +172,7 @@ function useRunController() {
 
 function RunButton({ lang }: { lang: string }) {
   const { isRunning, start, stop } = useRunController();
+  const zh = lang === 'CN';
   const label = isRunning
     ? (zh ? '■ 停止' : '■ Stop')
     : (zh ? '▶ 运行' : '▶ Run');

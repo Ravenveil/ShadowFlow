@@ -3,7 +3,10 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import App from './App';
 import { ErrorBoundary } from './core/components/common/ErrorBoundary';
+import { installLeakGuards } from './core/security/leakGuard';
 import './index.css';
+
+installLeakGuards();
 
 // Lazy-loaded routes for code splitting (Vite chunks per route)
 const EditorPage = lazy(() => import('./pages/EditorPage'));
