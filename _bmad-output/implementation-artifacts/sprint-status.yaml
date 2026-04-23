@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-23T09:05:55Z  # Story 8-5 context created; Smoke Run ready for dev
+last_updated: 2026-04-23T09:12:13Z  # +Story 7-8 / 8-3b / 8-7 补充三个缺口故事
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -141,6 +141,7 @@ development_status:
   7-5-群聊切换-briefboard-模式-segmented-control: ready-for-dev
   7-6-搜索-tab-过滤: ready-for-dev
   7-7-approval-gate-面板-内嵌-inbox-预览: ready-for-dev
+  7-8-chat-builder-跳转-对话发起创建: ready-for-dev
   epic-7-retrospective: optional
 
   # ===== Epic 8: Agent Builder 主路径（Goal / Scene / Graph） =====
@@ -149,9 +150,11 @@ development_status:
   8-1-agentblueprint-合同-builder-api-骨架: ready-for-dev
   8-2-goal-mode-目标输入-blueprint-生成: ready-for-dev
   8-3-scene-mode-shell-scene-tree-inspector: ready-for-dev
+  8-3b-roleprofile-深度配置-persona-traits-state-fields: backlog
   8-4-knowledge-dock-绑定主路径: ready-for-dev
   8-5-smoke-run-验证面板-失败解释: ready-for-dev
   8-6-publish-backfill-template-workflow-agentapp: backlog
+  8-7-agent-catalog-已发布浏览-fork: backlog
   epic-8-retrospective: optional
 
   # ===== Epic 9: Knowledge / Memory / Eval Foundation =====
