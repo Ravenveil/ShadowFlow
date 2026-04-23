@@ -181,13 +181,6 @@ export function useRunEvents({
     const client = new SseClient({ baseUrl });
     clientRef.current = client;
 
-    // Register catch-all handler
-    client.on('*', (raw) => {
-      const wrapped = raw as { type: string; payload: unknown };
-      const payload = (wrapped?.payload ?? raw) as RunEventPayload;
-      handleEvent(payload);
-    });
-
     // Named handlers for common lifecycle types
     for (const eventType of Object.keys(SSE_TO_STATUS)) {
       client.on(eventType, (payload) => handleEvent(payload as RunEventPayload));

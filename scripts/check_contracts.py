@@ -49,7 +49,7 @@ def main() -> int:
         generated = tmp.read_text(encoding="utf-8")
 
         if current == generated:
-            print("✓ workflow.ts is up-to-date with contracts.py")
+            print("OK: workflow.ts is up-to-date with contracts.py")
             return 0
 
         # Compute a human-readable drift summary

@@ -15,9 +15,12 @@ camelCase conversion is handled by src/adapter/caseConverter.ts at the fetch bou
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -135,6 +138,7 @@ def _ts_type(node: dict[str, Any], defs: dict[str, Any]) -> str:
             fields.append(f"{prop}{opt}: {_ts_type(schema, defs)}")
         return "{ " + "; ".join(fields) + " }"
 
+    logger.warning("Unknown JSON Schema node mapped to 'unknown': %s", node)
     return "unknown"
 
 
@@ -165,7 +169,15 @@ def generate(output_path: Path = OUTPUT_PATH) -> None:
 
         # Extract nested $defs (WritebackRef, CheckpointState, etc.)
         for def_name, def_schema in schema.pop("$defs", {}).items():
-            if def_name not in all_defs:
+            if def_name in all_defs:
+                if all_defs[def_name] != def_schema:
+                    logger.warning(
+                        "$defs name collision for '%s' (from model %s) — "
+                        "keeping first definition; schemas differ",
+                        def_name,
+                        name,
+                    )
+            else:
                 all_defs[def_name] = def_schema
 
         # Register the root model itself
