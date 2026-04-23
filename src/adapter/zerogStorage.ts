@@ -92,15 +92,43 @@ export async function downloadTrajectory(cid: string): Promise<DownloadResult> {
       clearTimeout(timeoutId!);
     }
 
-    // In browser context, the SDK writes to an in-memory path keyed by CID.
-    // We return an empty-but-valid Uint8Array as placeholder — the actual bytes
-    // are resolved by the caller via the SDK's browser storage layer.
-    // For real browser integration, this would be replaced with Blob URL handling.
-    const bytes = new Uint8Array(0);
+    // SDK confirmed Merkle verification. Now fetch the actual bytes via the
+    // indexer HTTP gateway — the SDK's browser-context download() writes to
+    // an opaque in-memory path that we cannot read back, so we use the
+    // public file endpoint to recover the payload.
+    const fetchUrl = `${STORAGE_INDEXER}/file?root=${encodeURIComponent(cid)}`;
+    const fetchAbort = new AbortController();
+    const fetchTimer = setTimeout(() => fetchAbort.abort(), DOWNLOAD_TIMEOUT_MS);
+    let bytes: Uint8Array;
+    try {
+      const response = await fetch(fetchUrl, { signal: fetchAbort.signal });
+      if (!response.ok) {
+        throw new MerkleVerificationError(
+          `Gateway fetch failed (${response.status})`,
+          cid,
+          'gateway_error',
+        );
+      }
+      bytes = new Uint8Array(await response.arrayBuffer());
+    } catch (error: unknown) {
+      if (error instanceof MerkleVerificationError) throw error;
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new MerkleVerificationError(
+        `Failed to fetch verified bytes: ${msg}`,
+        cid,
+        'gateway_error',
+      );
+    } finally {
+      clearTimeout(fetchTimer);
+    }
+
     let trajectory: DownloadResult['trajectory'];
     if (bytes.length > 0) {
       try {
-        trajectory = JSON.parse(new TextDecoder().decode(bytes));
+        const parsed = JSON.parse(new TextDecoder().decode(bytes));
+        if (parsed && typeof parsed === 'object') {
+          trajectory = parsed as DownloadResult['trajectory'];
+        }
       } catch { /* not valid JSON — leave trajectory undefined */ }
     }
     return { bytes, verified: true, trajectory };

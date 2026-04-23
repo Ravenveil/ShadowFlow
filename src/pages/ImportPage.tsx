@@ -56,14 +56,7 @@ export default function ImportPage() {
   const [authorLineage, setAuthorLineage] = useState<string[]>([]);
   const [history, setHistory] = useState<string[]>(loadHistory);
   const [failureLogs, setFailureLogs] = useState<FailureLog[]>([]);
-
-  // Auto-load CID from query param (e.g. /import?cid=0x...)
-  useEffect(() => {
-    const queryCid = searchParams.get('cid');
-    if (queryCid && CID_RE.test(queryCid.trim()) && !verifiedCid) {
-      setCid(queryCid.trim());
-    }
-  }, [searchParams, verifiedCid]);
+  const [autoLoadedCid, setAutoLoadedCid] = useState<string | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -73,9 +66,9 @@ export default function ImportPage() {
 
   const isValidCid = CID_RE.test(cid.trim());
 
-  const handleLoad = useCallback(async () => {
-    const trimmed = cid.trim();
-    if (!isValidCid || isDownloadInFlight()) return;
+  const handleLoad = useCallback(async (overrideCid?: string) => {
+    const trimmed = (overrideCid ?? cid).trim();
+    if (!CID_RE.test(trimmed) || isDownloadInFlight()) return;
 
     setLoading(true);
     setToast(null);
@@ -113,7 +106,18 @@ export default function ImportPage() {
     } finally {
       setLoading(false);
     }
-  }, [cid, isValidCid]);
+  }, [cid]);
+
+  // Auto-load CID from query param (e.g. /import?cid=0x...). Fires once per
+  // unique query CID — re-firing the same CID would be a wasted round-trip.
+  useEffect(() => {
+    const queryCid = searchParams.get('cid')?.trim();
+    if (!queryCid || !CID_RE.test(queryCid)) return;
+    if (autoLoadedCid === queryCid) return;
+    setCid(queryCid);
+    setAutoLoadedCid(queryCid);
+    void handleLoad(queryCid);
+  }, [searchParams, autoLoadedCid, handleLoad]);
 
   const handleHistoryClick = (historyCid: string) => {
     setCid(historyCid);

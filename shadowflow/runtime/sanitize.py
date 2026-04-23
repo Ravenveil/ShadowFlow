@@ -114,16 +114,29 @@ def _scan_string(value: str) -> List[Tuple[str, str, str]]:
     return hits
 
 
-WHITELIST_PATHS = frozenset({
-    "metadata.author_lineage",
-})
+_LINEAGE_ENTRY_RE = re.compile(r"^[a-zA-Z0-9_-]{1,32}@[a-fA-F0-9]{8}$")
 
 
-def _is_whitelisted(path: str) -> bool:
-    for wp in WHITELIST_PATHS:
-        if path == wp or path.startswith(wp + "[") or path.startswith(wp + "."):
-            return True
-    return False
+def _sanitize_author_lineage(value: Any, path: str, removed: List[RemovedField]) -> List[str]:
+    """Filter ``metadata.author_lineage`` to entries matching ``alias@8hex``.
+
+    Entries that fail the strict format are dropped (logged as removed).
+    This enforces the contract instead of blanket-trusting the subtree.
+    """
+    if not isinstance(value, list):
+        return []
+    cleaned: List[str] = []
+    for i, item in enumerate(value):
+        if isinstance(item, str) and _LINEAGE_ENTRY_RE.match(item):
+            cleaned.append(item)
+        else:
+            sample = item if isinstance(item, str) else type(item).__name__
+            removed.append(RemovedField(
+                path=f"{path}[{i}]",
+                pattern="lineage_format",
+                sample_masked=_mask_sample(str(sample)[:32], "lineage_format"),
+            ))
+    return cleaned
 
 
 def _walk(
@@ -132,8 +145,8 @@ def _walk(
     removed: List[RemovedField],
 ) -> Any:
     """Recursively walk a dict/list, replacing sensitive values with '[REDACTED]'."""
-    if _is_whitelisted(path):
-        return obj
+    if path == "metadata.author_lineage":
+        return _sanitize_author_lineage(obj, path, removed)
     if isinstance(obj, dict):
         cleaned: Dict[str, Any] = {}
         for key, val in obj.items():
