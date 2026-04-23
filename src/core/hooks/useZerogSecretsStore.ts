@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 const LS_KEY = 'shadowflow.secrets.0g';
+const AUTO_CLEAR_MS = 30 * 60 * 1000;
 
 interface EncryptedBlob {
   cipher: string;
@@ -98,6 +99,16 @@ export interface ZerogSecretsState {
   clear: () => void;
 }
 
+let _autoClearTimer: ReturnType<typeof setTimeout> | null = null;
+
+function resetAutoClear(clearFn: () => void) {
+  if (_autoClearTimer) clearTimeout(_autoClearTimer);
+  _autoClearTimer = setTimeout(() => {
+    clearFn();
+    _autoClearTimer = null;
+  }, AUTO_CLEAR_MS);
+}
+
 export const useZerogSecretsStore = create<ZerogSecretsState>((set, get) => {
   if (typeof window !== 'undefined') {
     window.addEventListener('storage', (e) => {
@@ -107,6 +118,14 @@ export const useZerogSecretsStore = create<ZerogSecretsState>((set, get) => {
     });
   }
 
+  const clearMemory = () => {
+    set({ decryptedKey: null, unlockError: null });
+    if (_autoClearTimer) {
+      clearTimeout(_autoClearTimer);
+      _autoClearTimer = null;
+    }
+  };
+
   return {
     decryptedKey: null,
     hasEncryptedBlob: loadBlob() !== null,
@@ -114,14 +133,23 @@ export const useZerogSecretsStore = create<ZerogSecretsState>((set, get) => {
     unlockError: null,
 
     putPrivateKey: async (pk: string, passphrase: string) => {
+      if (!passphrase) throw new Error('Passphrase must not be empty');
       const blob = await encryptPrivateKey(pk, passphrase);
       const err = persistBlob(blob);
-      set({ decryptedKey: pk, hasEncryptedBlob: true, storageError: err, unlockError: null });
+      if (err) {
+        set({ storageError: err, unlockError: null });
+        throw new Error(`Failed to persist encrypted key: ${err}`);
+      }
+      set({ decryptedKey: pk, hasEncryptedBlob: true, storageError: null, unlockError: null });
+      resetAutoClear(clearMemory);
     },
 
     getPrivateKey: async (passphrase: string) => {
       const current = get().decryptedKey;
-      if (current) return current;
+      if (current) {
+        resetAutoClear(clearMemory);
+        return current;
+      }
 
       const blob = loadBlob();
       if (!blob) throw new Error('No encrypted key found in localStorage');
@@ -129,6 +157,7 @@ export const useZerogSecretsStore = create<ZerogSecretsState>((set, get) => {
       try {
         const pk = await decryptPrivateKey(blob, passphrase);
         set({ decryptedKey: pk, unlockError: null });
+        resetAutoClear(clearMemory);
         return pk;
       } catch {
         set({ unlockError: 'Incorrect passphrase' });
@@ -137,7 +166,8 @@ export const useZerogSecretsStore = create<ZerogSecretsState>((set, get) => {
     },
 
     clear: () => {
-      set({ decryptedKey: null, hasEncryptedBlob: false, storageError: null, unlockError: null });
+      clearMemory();
+      set({ hasEncryptedBlob: false, storageError: null });
       try { window.localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
     },
   };

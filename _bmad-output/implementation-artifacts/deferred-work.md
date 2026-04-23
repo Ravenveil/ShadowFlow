@@ -206,3 +206,14 @@ Items deferred during code reviews. Each entry is a real issue that was found bu
 5. `bmad-check-implementation-readiness` 没把前端 smoke 列为 gate
 
 **订正：** sprint-status.yaml:117 `5-1-0g-storage-前端直调-byok-密钥管理: review`（不是 ready-for-dev；2026-04-23 bmad-help 输出有误）。
+
+---
+
+## Deferred from: code review of 5-1-0g-storage-前端直调-byok-密钥管理 (2026-04-23)
+
+- `toBase64` 用 `String.fromCharCode(...spread)` 在大 buffer（>100KB）会 RangeError [src/core/hooks/useZerogSecretsStore.ts:33] — 私钥 32 字节不触发；若函数被复用于大 payload 需改 chunk 写法
+- `getPrivateKey` 内存有缓存时直接返回，不重新验证 passphrase [src/core/hooks/useZerogSecretsStore.ts:123] — 设计行为（session 级访问），测试已覆盖
+- `storage` event listener 无 cleanup / HMR 叠加 [src/core/hooks/useZerogSecretsStore.ts:103] — SPA 生命周期正常，仅 dev HMR 场景
+- `_FRONTEND_DIRECT` 在 Python module import 时冻结，运行时不可切换 [shadowflow/integrations/zerog_storage.py:19] — 标准 FastAPI 模式，需重启生效
+- leakGuard 未覆盖 `XMLHttpRequest` / `navigator.sendBeacon` / `WebSocket` [src/core/security/leakGuard.ts] — 增量加固，ethers 的 JsonRpcProvider 默认走 fetch
+- Playwright E2E 性能测试（10MB ≤ 10s）需真实 0G 网络 [spec P6] — 已在 story Dev Notes 注明延迟到集成环境

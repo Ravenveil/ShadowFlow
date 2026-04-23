@@ -1,6 +1,6 @@
 # Story 5.1: 0G Storage 前端直调 + BYOK 密钥管理
 
-Status: review
+Status: done
 
 ## Story
 
@@ -117,9 +117,38 @@ Claude Opus 4.6 (claude-opus-4-6)
 - ✅ 安装 `@0glabs/0g-ts-sdk@0.3.3`（精确版本锁定）+ `ethers@^6.13.1`
 - ⚠️ Playwright E2E 性能测试（10MB ≤ 10s）和网络断点检查需要真实 0G 网络环境，延迟到集成阶段
 
+### Review Findings
+
+Code review by Claude Opus 4.6 (automated, 3 parallel adversarial layers: Blind Hunter + Edge Case Hunter + Acceptance Auditor)
+
+**已修复 (8 项 PATCH):**
+- [x] [Review][Patch] CRITICAL: 正则 `g` 标志导致 `containsSecret()` 的 `lastIndex` 交替返回 false [leakGuard.ts:1-2] — 移除模块级正则的 `g` 标志，`redact()` 中使用内联带 `g` 正则
+- [x] [Review][Patch] HIGH: fetch 拦截器仅检查 string body，FormData/URLSearchParams 绕过 [leakGuard.ts:32] — 新增 URLSearchParams 序列化检查
+- [x] [Review][Patch] HIGH: fetch 拦截器未检查 URL 中的密钥泄漏 [leakGuard.ts:31] — 新增 URL 参数扫描
+- [x] [Review][Patch] MEDIUM: `installFetchInterceptor`/`installConsoleGuard` 重复调用时叠加包装 [leakGuard.ts:27-71] — 新增幂等性守卫 `_fetchInstalled`/`_consoleInstalled`
+- [x] [Review][Patch] MEDIUM: `putPrivateKey` 在 localStorage 写入失败时仍设置成功状态 [useZerogSecretsStore.ts:117-119] — 失败时抛出异常
+- [x] [Review][Patch] MEDIUM: 接受空 passphrase [useZerogSecretsStore.ts:40] — 新增空值校验
+- [x] [Review][Patch] MEDIUM: `rootHash` 非空断言 `tree!.rootHash()` [zerogStorage.ts:29-30] — 改为显式 null 检查
+- [x] [Review][Patch] LOW: CI secret 扫描 allowlist 按文件名匹配，跨目录同名文件可绕过 [check_contracts.py:87-91] — 改为相对路径匹配
+
+**自主决策 (2 项 DECISION → 已实施):**
+- [x] [Review][Decision] 解密密钥无 TTL 永驻内存 → 新增 30 分钟空闲自动清除 (`AUTO_CLEAR_MS`)
+- [x] [Review][Decision] 正则匹配合法哈希值（rootHash/txHash）可能误报 → 保持当前行为（安全优先于便利，SDK 不经 fetch 通道）
+
+**延迟 (6 项 DEFER — 已知，不阻塞本 Story):**
+- [x] [Review][Defer] `toBase64` spread 在大 buffer 上会 RangeError — 私钥 32 字节不触发
+- [x] [Review][Defer] `getPrivateKey` 内存有缓存时不验证 passphrase — 设计行为
+- [x] [Review][Defer] storage event listener 无 cleanup — SPA 生命周期正常
+- [x] [Review][Defer] `_FRONTEND_DIRECT` import 时冻结不可运行时切换 — Python 标准模式
+- [x] [Review][Defer] Playwright E2E 性能测试待真实 0G 网络 — spec 已注明
+- [x] [Review][Defer] leakGuard 未覆盖 XHR/sendBeacon/WebSocket — 增量加固
+
+**驳回 (3 项 DISMISS):** 测试 console 恢复、EditorPage bug fix 本身、后端测试 reload 设计
+
 ### Change Log
 
 - 2026-04-23: Story 5.1 实现完成 — BYOK 加密密钥管理 + 泄漏防护 + 前端直调 0G Storage + 后端 fallback
+- 2026-04-23: Code review 完成 — 修复 8 项 PATCH (含 1 CRITICAL regex bug) + 2 项自主决策 + 6 DEFER + 3 DISMISS；全部测试通过 (28 tests)
 
 ### File List
 

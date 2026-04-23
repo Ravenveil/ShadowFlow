@@ -85,9 +85,9 @@ def scan_frontend_secrets() -> int:
     ]
 
     allowlist = {
-        "leakGuard.ts",
-        "leakGuard.test.ts",
-        "useZerogSecretsStore.test.ts",
+        Path("src/core/security/leakGuard.ts"),
+        Path("src/core/security/__tests__/leakGuard.test.ts"),
+        Path("src/core/hooks/__tests__/useZerogSecretsStore.test.ts"),
     }
 
     src_dir = PROJECT_ROOT / "src"
@@ -97,7 +97,8 @@ def scan_frontend_secrets() -> int:
     violations: list[str] = []
     for ext in ("*.ts", "*.tsx"):
         for f in src_dir.rglob(ext):
-            if f.name in allowlist:
+            rel = f.relative_to(PROJECT_ROOT)
+            if rel in allowlist:
                 continue
             try:
                 content = f.read_text(encoding="utf-8")
@@ -109,7 +110,6 @@ def scan_frontend_secrets() -> int:
                     context = content[max(0, match.start() - 20):match.end() + 20]
                     if "repeat(" in context or "REDACTED" in context:
                         continue
-                    rel = f.relative_to(PROJECT_ROOT)
                     violations.append(f"  {rel}: {match.group()[:16]}...")
 
     if violations:

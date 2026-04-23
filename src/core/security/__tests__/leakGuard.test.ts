@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { containsSecret, redact, installFetchInterceptor, installConsoleGuard } from '../leakGuard';
+import { containsSecret, redact } from '../leakGuard';
 
 describe('containsSecret', () => {
   it('detects 0x-prefixed 64-char hex private key', () => {
@@ -23,6 +23,13 @@ describe('containsSecret', () => {
     expect(containsSecret(42)).toBe(false);
     expect(containsSecret(null)).toBe(false);
   });
+
+  it('returns consistent results on consecutive calls (no lastIndex bug)', () => {
+    const pk = '0x' + 'ab'.repeat(32);
+    expect(containsSecret(pk)).toBe(true);
+    expect(containsSecret(pk)).toBe(true);
+    expect(containsSecret(pk)).toBe(true);
+  });
 });
 
 describe('redact', () => {
@@ -42,10 +49,13 @@ describe('redact', () => {
 describe('installFetchInterceptor', () => {
   let originalFetch: typeof window.fetch;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     originalFetch = vi.fn().mockResolvedValue(new Response('ok'));
     window.fetch = originalFetch;
-    installFetchInterceptor();
+    // Reset module to clear idempotency flag
+    vi.resetModules();
+    const mod = await import('../leakGuard');
+    mod.installFetchInterceptor();
   });
 
   it('blocks fetch with private key in body', async () => {
@@ -63,6 +73,13 @@ describe('installFetchInterceptor', () => {
     ).rejects.toThrow('header contains a potential private key');
   });
 
+  it('blocks fetch with secret in URL', async () => {
+    const pk = '0x' + 'ab'.repeat(32);
+    await expect(
+      window.fetch(`/api/test?key=${pk}`)
+    ).rejects.toThrow('URL contains a potential private key');
+  });
+
   it('allows normal requests', async () => {
     await window.fetch('/api/test', { method: 'GET' });
     expect(originalFetch).toHaveBeenCalled();
@@ -70,12 +87,14 @@ describe('installFetchInterceptor', () => {
 });
 
 describe('installConsoleGuard', () => {
-  it('redacts secrets from console.log output', () => {
+  it('redacts secrets from console.log output', async () => {
     const originalLog = console.log;
     const logged: unknown[][] = [];
     console.log = (...args: unknown[]) => { logged.push(args); };
 
-    installConsoleGuard();
+    vi.resetModules();
+    const mod = await import('../leakGuard');
+    mod.installConsoleGuard();
 
     const pk = '0x' + 'ab'.repeat(32);
     console.log(`Debug: key=${pk}`);

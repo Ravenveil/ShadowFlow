@@ -1,5 +1,5 @@
-const PRIVATE_KEY_RE = /0x[0-9a-f]{64}/gi;
-const SK_PREFIX_RE = /sk-[A-Za-z0-9_-]{20,}/g;
+const PRIVATE_KEY_RE = /0x[0-9a-f]{64}/i;
+const SK_PREFIX_RE = /sk-[A-Za-z0-9_-]{20,}/;
 
 function containsSecret(value: unknown): boolean {
   if (typeof value !== 'string') return false;
@@ -8,8 +8,8 @@ function containsSecret(value: unknown): boolean {
 
 function redact(value: string): string {
   return value
-    .replace(PRIVATE_KEY_RE, '0x[REDACTED]')
-    .replace(SK_PREFIX_RE, 'sk-[REDACTED]');
+    .replace(/0x[0-9a-f]{64}/gi, '0x[REDACTED]')
+    .replace(/sk-[A-Za-z0-9_-]{20,}/g, 'sk-[REDACTED]');
 }
 
 function scanObject(obj: unknown): boolean {
@@ -24,26 +24,61 @@ function scanObject(obj: unknown): boolean {
   }
 }
 
+function extractUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  if (input instanceof Request) return input.url;
+  return '';
+}
+
+function isSameOrigin(url: string): boolean {
+  if (url.startsWith('/')) return true;
+  try {
+    return new URL(url).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+let _fetchInstalled = false;
+let _consoleInstalled = false;
+
 export function installFetchInterceptor(): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || _fetchInstalled) return;
+  _fetchInstalled = true;
 
   const originalFetch = window.fetch;
   window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
-    if (init?.body && typeof init.body === 'string' && containsSecret(init.body)) {
-      throw new Error('[ShadowFlow] Request blocked: body contains a potential private key or secret');
-    }
+    const url = extractUrl(input);
 
-    if (init?.headers) {
-      const entries =
-        init.headers instanceof Headers
-          ? Array.from(init.headers.entries())
-          : Array.isArray(init.headers)
-            ? init.headers
-            : Object.entries(init.headers);
+    if (!isSameOrigin(url)) {
+      if (containsSecret(url)) {
+        throw new Error('[ShadowFlow] Request blocked: URL contains a potential private key or secret');
+      }
 
-      for (const [, value] of entries) {
-        if (containsSecret(value)) {
-          throw new Error('[ShadowFlow] Request blocked: header contains a potential private key or secret');
+      if (init?.body) {
+        const bodyStr = typeof init.body === 'string'
+          ? init.body
+          : init.body instanceof URLSearchParams
+            ? init.body.toString()
+            : null;
+        if (bodyStr && containsSecret(bodyStr)) {
+          throw new Error('[ShadowFlow] Request blocked: body contains a potential private key or secret');
+        }
+      }
+
+      if (init?.headers) {
+        const entries =
+          init.headers instanceof Headers
+            ? Array.from(init.headers.entries())
+            : Array.isArray(init.headers)
+              ? init.headers
+              : Object.entries(init.headers);
+
+        for (const [, value] of entries) {
+          if (containsSecret(value)) {
+            throw new Error('[ShadowFlow] Request blocked: header contains a potential private key or secret');
+          }
         }
       }
     }
@@ -53,7 +88,8 @@ export function installFetchInterceptor(): void {
 }
 
 export function installConsoleGuard(): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || _consoleInstalled) return;
+  _consoleInstalled = true;
 
   const methods = ['log', 'warn', 'error', 'info', 'debug'] as const;
 

@@ -8,9 +8,6 @@ const localStorageMock = {
 };
 Object.defineProperty(window, 'localStorage', { value: localStorageMock, writable: true });
 
-// Web Crypto API is available in jsdom with Node 20+; if not, these tests
-// will naturally fail at the crypto.subtle calls, which is acceptable.
-
 const { useZerogSecretsStore } = await import('../useZerogSecretsStore');
 
 describe('useZerogSecretsStore', () => {
@@ -32,7 +29,6 @@ describe('useZerogSecretsStore', () => {
     expect(state.decryptedKey).toBe(pk);
     expect(state.hasEncryptedBlob).toBe(true);
 
-    // localStorage should have cipher/iv/salt, NOT plaintext
     const raw = storage['shadowflow.secrets.0g'];
     expect(raw).toBeDefined();
     const blob = JSON.parse(raw);
@@ -46,7 +42,6 @@ describe('useZerogSecretsStore', () => {
     const pk = '0x' + 'cd'.repeat(32);
     await useZerogSecretsStore.getState().putPrivateKey(pk, 'secret123');
 
-    // Clear in-memory key to force decryption from localStorage
     useZerogSecretsStore.setState({ decryptedKey: null });
 
     const result = await useZerogSecretsStore.getState().getPrivateKey('secret123');
@@ -70,7 +65,6 @@ describe('useZerogSecretsStore', () => {
     const pk = '0x' + '11'.repeat(32);
     await useZerogSecretsStore.getState().putPrivateKey(pk, 'pass');
 
-    // Key is cached — should return immediately without passphrase validation
     const result = await useZerogSecretsStore.getState().getPrivateKey('anypass');
     expect(result).toBe(pk);
   });
@@ -91,11 +85,9 @@ describe('useZerogSecretsStore', () => {
     const pk = '0x' + '33'.repeat(32);
     await useZerogSecretsStore.getState().putPrivateKey(pk, 'refresh-test');
 
-    // Simulate page refresh: clear memory but keep localStorage
     useZerogSecretsStore.setState({ decryptedKey: null });
     expect(useZerogSecretsStore.getState().decryptedKey).toBeNull();
 
-    // Must provide passphrase again
     const recovered = await useZerogSecretsStore.getState().getPrivateKey('refresh-test');
     expect(recovered).toBe(pk);
   });
@@ -104,5 +96,12 @@ describe('useZerogSecretsStore', () => {
     await expect(
       useZerogSecretsStore.getState().getPrivateKey('whatever')
     ).rejects.toThrow('No encrypted key found');
+  });
+
+  it('putPrivateKey rejects empty passphrase', async () => {
+    const pk = '0x' + '44'.repeat(32);
+    await expect(
+      useZerogSecretsStore.getState().putPrivateKey(pk, '')
+    ).rejects.toThrow('Passphrase must not be empty');
   });
 });

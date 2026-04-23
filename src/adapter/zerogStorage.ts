@@ -26,9 +26,10 @@ export async function uploadTrajectory(
   const file = await ZgFile.fromBlob(blob);
   try {
     const [tree, treeErr] = await file.merkleTree();
-    if (treeErr) throw new Error(`Merkle tree generation failed: ${treeErr}`);
+    if (treeErr || !tree) throw new Error(`Merkle tree generation failed: ${treeErr ?? 'no tree returned'}`);
 
-    const rootHash = tree!.rootHash();
+    const rootHash = tree.rootHash();
+    if (!rootHash) throw new Error('Merkle tree returned empty root hash');
 
     const [tx, uploadErr] = await indexer.upload(file, RPC_URL, signer);
     if (uploadErr) throw new Error(`0G Storage upload failed: ${uploadErr.message}`);
