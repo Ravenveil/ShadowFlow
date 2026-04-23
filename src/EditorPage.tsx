@@ -14,6 +14,7 @@ import { parseWorkflowYaml } from './core/lib/yamlSerializer';
 import { ApprovalGateForm } from './core/components/inspector/ApprovalGateForm';
 import { ProviderPanel } from './core/components/inspector/ProviderPanel';
 import { SecretsModal } from './core/components/modals/SecretsModal';
+import { SanitizeReviewModal, type RemovedFieldItem } from './core/components/modals/SanitizeReviewModal';
 
 const YamlEditor = lazy(() =>
   import('./core/components/editor/YamlEditor').then((m) => ({ default: m.YamlEditor })),
@@ -1339,6 +1340,11 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
   const [flashOk,    setFlashOk]      = useState<string | null>(null);
   // P2-β fix: SecretsModal visibility
   const [showSecrets, setShowSecrets] = useState(false);
+  // Story 5.2: Sanitize review modal state
+  const [sanitizeOpen, setSanitizeOpen] = useState(false);
+  const [sanitizeFields, setSanitizeFields] = useState<RemovedFieldItem[]>([]);
+  const [sanitizedTrajectory, setSanitizedTrajectory] = useState<Record<string, unknown> | null>(null);
+  const [publishBusy, setPublishBusy] = useState(false);
 
   // Mark as dirty when user modifies anything after the initial template load
   const initialCountRef = React.useRef({ n: nodes.length, e: edges.length });
@@ -1382,6 +1388,44 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
       setFlashOk(zh ? '已复制到剪贴板' : 'Copied to clipboard');
       setTimeout(() => setFlashOk(null), 2200);
     }).catch(() => {/* ignore */});
+  };
+
+  const doPublish = async () => {
+    if (publishBusy) return;
+    setPublishBusy(true);
+    try {
+      const trajectory = { nodes: nodes.map(n => ({ id: n.id, type: n.type, data: n.data })), edges: edges.map(e => ({ source: e.source, target: e.target })) };
+      const res = await fetch('/workflow/runs/_draft/trajectory/sanitize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trajectory }),
+      });
+      if (!res.ok) throw new Error(`Sanitize failed: ${res.status}`);
+      const data = await res.json();
+      if (data.had_matches) {
+        setSanitizeFields(data.removed_fields);
+        setSanitizedTrajectory(data.cleaned_trajectory);
+        setSanitizeOpen(true);
+      } else {
+        setFlashOk(zh ? '无敏感信息，可上传' : 'No sensitive data found, ready to upload');
+        setTimeout(() => setFlashOk(null), 2200);
+      }
+    } catch {
+      setFlashOk(zh ? '扫描失败' : 'Sanitize scan failed');
+      setTimeout(() => setFlashOk(null), 2200);
+    } finally {
+      setPublishBusy(false);
+    }
+  };
+
+  const onSanitizeConfirm = () => {
+    setSanitizeOpen(false);
+    setSanitizeFields([]);
+    // sanitizedTrajectory holds the cleaned payload for the upload flow (Story 5.1)
+    void sanitizedTrajectory;
+    setSanitizedTrajectory(null);
+    setFlashOk(zh ? '已确认，继续上传流程' : 'Confirmed, proceeding with upload');
+    setTimeout(() => setFlashOk(null), 2200);
   };
 
   return (
@@ -1433,6 +1477,13 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
           style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: V.mono, fontSize: 11, color: V.fg3, background: 'transparent', border: `1px solid ${V.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 4v10m0 0-4-4m4 4 4-4M4 20h16"/></svg>
           {zh ? '导出' : 'Export'}
+        </button>
+
+        <button onClick={doPublish} disabled={publishBusy}
+          title={zh ? '发布到 0G Storage（上传前扫描 PII）' : 'Publish to 0G Storage (PII scan before upload)'}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: V.mono, fontSize: 11, color: '#a78bfa', background: 'rgba(168,85,247,.1)', border: '1px solid rgba(168,85,247,.4)', borderRadius: 6, padding: '4px 10px', cursor: publishBusy ? 'wait' : 'pointer', opacity: publishBusy ? 0.6 : 1 }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20V4m0 0-4 4m4-4 4 4M4 20h16"/></svg>
+          {publishBusy ? (zh ? '扫描中…' : 'Scanning…') : (zh ? '发布 0G' : 'Publish 0G')}
         </button>
 
         <button onClick={() => setImportOpen(true)}
@@ -1491,6 +1542,15 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
       {showSecrets && (
         <SecretsModal open={showSecrets} onClose={() => setShowSecrets(false)} />
       )}
+
+      {/* Story 5.2: Sanitize review modal — S2 non-silent confirmation */}
+      <SanitizeReviewModal
+        open={sanitizeOpen}
+        removedFields={sanitizeFields}
+        onConfirm={onSanitizeConfirm}
+        onCancel={() => { setSanitizeOpen(false); setSanitizeFields([]); setSanitizedTrajectory(null); }}
+        zh={zh}
+      />
 
       {/* Import modal */}
       {importOpen && (
