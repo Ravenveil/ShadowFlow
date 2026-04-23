@@ -1,5 +1,5 @@
 # generated: 2026-04-16T05:27:17Z
-# last_updated: 2026-04-23T05:06:24Z  # batch commit 5 patches; sprint-status synced
+# last_updated: 2026-04-23T06:05:48Z  # Story 5-4 → done (code review: 9 patches fixed)
 # project: ShadowFlow
 # project_key: NOKEY
 # tracking_system: file-system
@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-23T05:06:24Z  # Story 5-3 → review; all pending changes committed
+last_updated: 2026-04-23T06:05:48Z  # Story 5-4 → done (code review: 9 patches fixed)
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -116,9 +116,9 @@ development_status:
   epic-5: in-progress
   5-1-0g-storage-前端直调-byok-密钥管理: done
   5-2-trajectory-sanitize-scan: done
-  5-3-0g-storage-下载-merkle-验证: review
-  5-4-0g-compute-作为第-5-provider-接入: ready-for-dev
-  5-5-import-by-cid-作者署名链: ready-for-dev
+  5-3-0g-storage-下载-merkle-验证: in-progress
+  5-4-0g-compute-作为第-5-provider-接入: done
+  5-5-import-by-cid-作者署名链: review
   epic-5-retrospective: optional
 
   # ===== Epic 6: Agent Interactivity + Demo Station + Pitch Ready =====

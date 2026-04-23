@@ -1,6 +1,6 @@
 # Story 5.3: 0G Storage 下载 + Merkle 验证
 
-Status: review
+Status: in-progress
 
 ## Story
 
@@ -112,9 +112,26 @@ Claude Opus 4.6
 - ✅ 失败日志:本地保留 `{cid, error_type, timestamp}`,可一键复制(不含密钥)
 - ✅ 验证失败时不渲染任何模板内容
 
+### Review Findings
+
+Code review by Claude Opus 4.6 (automated, 2026-04-23T05:15:41Z)
+Three-layer review: Blind Hunter + Edge Case Hunter + Acceptance Auditor
+
+- [ ] [Review][Decision] **AC1 未完成 — downloadTrajectory 返回空 Uint8Array(0),未调用 loadTemplateFromYaml** — `downloadTrajectory()` 始终返回 `{ bytes: new Uint8Array(0), verified: true }`,模板数据从未传递给调用方。AC1 要求 "渲染模板" 但 `loadTemplateFromYaml(bytes)` 从未被调用。开发者需决定:(a) 实现 SDK 浏览器端字节捕获 (b) 实现 `zerog_storage.py` 代理回退 (c) 将模板渲染拆分到 Story 5-5
+- [x] [Review][Patch] **setTimeout 超时计时器泄漏** [src/adapter/zerogStorage.ts:75] — 已修复,添加 clearTimeout
+- [x] [Review][Patch] **并发保护 _downloadInFlight 是单字符串,不同 CID 并发下载时互斥锁损坏** [src/adapter/zerogStorage.ts:33] — 已修复,改为 Set<string>
+- [x] [Review][Patch] **/import 路由未加入 E2E smoke test** [tests/e2e/route-smoke.spec.ts:12] — 已修复,添加到 ROUTES
+- [x] [Review][Patch] **CID_RE 正则在 ImportPage 和 zerogStorage 重复定义** [src/pages/ImportPage.tsx:10] — 已修复,从 zerogStorage 导入
+- [x] [Review][Patch] **Clipboard API 缺少 optional chaining** [src/pages/ImportPage.tsx:105] — 已修复,改为 navigator.clipboard?.writeText
+- [x] [Review][Patch] **CTA "Import by CID" 按钮无 onClick 处理** [src/App.tsx:565] — 已修复,wire 到 navigate('/import')
+- [x] [Review][Defer] **失败日志仅存于 React state,页面刷新丢失** — deferred, spec "本地保留" 措辞模糊,可延后处理
+- [x] [Review][Defer] **E2E allowlist 过于宽泛(包含 '404' 和 'net::ERR')** — deferred, pre-existing design
+- [x] [Review][Defer] **uploadTrajectory 无并发保护** — deferred, pre-existing code
+
 ### Change Log
 
 - 2026-04-23: Story 5.3 全部实现 — download API + ImportPage + CidVerifiedBanner + 9 个单元测试
+- 2026-04-23: Code review — 6 个 patch 已修复,1 个 decision_needed(空字节/模板渲染),3 个 defer;状态回退 in-progress
 
 ### File List
 

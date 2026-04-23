@@ -225,3 +225,22 @@ Items deferred during code reviews. Each entry is a real issue that was found bu
 - `onSanitizeConfirm` 丢弃 cleaned trajectory 未触发 0G 上传 [src/EditorPage.tsx:1426-1432] — 跨 Story 集成（5.1 + 5.2 连通），Story 5.3+ 或独立集成 task 解决
 - `phone_intl` 正则 `\+?[1-9]\d{7,14}` 误报率高，匹配时间戳/订单号等 8-15 位数字 [shadowflow/runtime/sanitize.py:33-34] — spec 定义的正则，需产品层面决策是否收紧为 `\+[1-9]\d{7,14}`（必须有 `+` 前缀）
 - SanitizeReviewModal 无 focus trap，tab 可跳出 modal [src/core/components/modals/SanitizeReviewModal.tsx] — 无障碍改进，非 MVP 阻塞
+
+---
+
+## Deferred from: code review of 5-3-0g-storage-下载-merkle-验证 (2026-04-23)
+
+- 失败日志仅存于 React state（`failureLogs` 状态），页面刷新后丢失 [src/pages/ImportPage.tsx:86-89] — spec "本地保留" 措辞模糊，历史 CID 用 localStorage 但失败日志未持久化；可延后到 UX 优化
+- E2E smoke test allowlist 包含 `'404'` 和 `'net::ERR'` 过于宽泛 [tests/e2e/route-smoke.spec.ts:21-28] — 可能压制真实资源加载错误；pre-existing CI 设计，不属本 story
+- `uploadTrajectory` 无并发保护（download 已有 Set<string> mutex） [src/adapter/zerogStorage.ts:99] — pre-existing code，不属本 story scope
+
+---
+
+## Deferred from: code review of 5-4-0g-compute-作为第-5-provider-接入 (2026-04-23)
+
+- httpx.AsyncClient 从未关闭，无 close()/context manager [shadowflow/llm/zerog.py] — pre-existing pattern，其他 provider 也无关闭方法
+- `_ensure_metadata` 无 asyncio.Lock 保护 [shadowflow/llm/zerog.py:157-161] — 并发请求可能重复 spawn bridge 子进程，当前使用模式低风险
+- httpx.ConnectError/DNS 错误未捕获 [shadowflow/llm/zerog.py:258-268] — FallbackProvider 可能 misclassify 原始 httpx 异常
+- AC2 压测无执行证据 — bench 脚本存在但无 `_bmad-output/benchmarks/` 输出文件，需 testnet 运行验证
+- 私钥通过 subprocess 环境变量传递 [shadowflow/llm/zerog.py:48-53] — /proc/<pid>/environ 可读性风险；stdin pipe 更安全但需架构重构
+- 流式响应未显式 aclose() [shadowflow/llm/zerog.py:294-347] — 连接可能半读状态残留，需 response.aclose() in finally
