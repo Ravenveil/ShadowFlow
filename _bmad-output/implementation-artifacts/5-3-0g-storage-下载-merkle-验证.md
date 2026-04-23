@@ -1,6 +1,6 @@
 # Story 5.3: 0G Storage 下载 + Merkle 验证
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -25,27 +25,27 @@ so that **我能信任从 0G 克隆的模板未被篡改**。
 
 ## Tasks / Subtasks
 
-- [ ] **AC1 — zerogStorage 下载 API**
-  - [ ] 扩展 `src/adapter/zerogStorage.ts`,新增 `downloadTrajectory(cid: string): Promise<{bytes, verified: true}>`
-  - [ ] 构造 `Indexer(STORAGE_INDEXER)`,调用 `indexer.download(cid, outputPath, true)`(第三参 `verified=true` 启用 Merkle 校验,AR36)
-  - [ ] 必须 try/catch:`download()` **既可能 throw,也可能返回 error**(0G skill 契约,见 SKILL.md Core Rules)— 两路都要处理
-  - [ ] 浏览器环境下 `outputPath` 用 Blob URL 或内存 Uint8Array(取决于 SDK 支持);若浏览器下载需要代理,走 `shadowflow/integrations/zerog_storage.py` fallback
-  - [ ] CID 格式校验:下载前用正则 `/^0x[a-fA-F0-9]{64}$/` 拒绝非法输入,不浪费网络往返
-- [ ] **AC1 — /import 页面一级入口**
-  - [ ] 新建 `src/pages/ImportPage.tsx`,对应 `/import` 路由(AR15 一级入口,不藏二级菜单)
-  - [ ] 输入框 + "Load" 按钮 + 历史 CID 列表(localStorage 缓存最近 10 条)
-  - [ ] 成功后顶部绿色 Banner:`✓ 0G Storage · CID <短 CID> 验证通过`,含 0G Explorer 外链按钮
-  - [ ] 模板渲染调用现有 `loadTemplateFromYaml(bytes)` 路径(与本地导入共享)
-- [ ] **AC2 — 验证失败处理**
-  - [ ] `downloadTrajectory` 捕获任何 error(throw 或返回)→ 统一抛 `MerkleVerificationError`
-  - [ ] UI 使用 `sonner` 或现有 Toast 系统显示红色 Toast:`Merkle 验证失败,数据可能被篡改`
-  - [ ] 不渲染任何模板内容,Editor 状态保持 empty
-  - [ ] 失败日志本地保留 `{cid, error_type, timestamp}`,供用户复制提交 issue(不含密钥)
-- [ ] **性能与稳定性**
-  - [ ] 下载超时 ≤ 15s,超时 Toast "下载超时,请检查 CID 或网络"
-  - [ ] 并发保护:同一 CID 下载中禁用 "Load" 按钮
-  - [ ] 单元:mock `indexer.download` 两种错误路径(throw + error 返回)均被捕获
-  - [ ] E2E 覆盖 J4:Import → Merkle 验证通过 → 模板渲染
+- [x] **AC1 — zerogStorage 下载 API**
+  - [x] 扩展 `src/adapter/zerogStorage.ts`,新增 `downloadTrajectory(cid: string): Promise<{bytes, verified: true}>`
+  - [x] 构造 `Indexer(STORAGE_INDEXER)`,调用 `indexer.download(cid, outputPath, true)`(第三参 `verified=true` 启用 Merkle 校验,AR36)
+  - [x] 必须 try/catch:`download()` **既可能 throw,也可能返回 error**(0G skill 契约,见 SKILL.md Core Rules)— 两路都要处理
+  - [x] 浏览器环境下 `outputPath` 用 Blob URL 或内存 Uint8Array(取决于 SDK 支持);若浏览器下载需要代理,走 `shadowflow/integrations/zerog_storage.py` fallback
+  - [x] CID 格式校验:下载前用正则 `/^0x[a-fA-F0-9]{64}$/` 拒绝非法输入,不浪费网络往返
+- [x] **AC1 — /import 页面一级入口**
+  - [x] 新建 `src/pages/ImportPage.tsx`,对应 `/import` 路由(AR15 一级入口,不藏二级菜单)
+  - [x] 输入框 + "Load" 按钮 + 历史 CID 列表(localStorage 缓存最近 10 条)
+  - [x] 成功后顶部绿色 Banner:`✓ 0G Storage · CID <短 CID> 验证通过`,含 0G Explorer 外链按钮
+  - [x] 模板渲染调用现有 `loadTemplateFromYaml(bytes)` 路径(与本地导入共享)
+- [x] **AC2 — 验证失败处理**
+  - [x] `downloadTrajectory` 捕获任何 error(throw 或返回)→ 统一抛 `MerkleVerificationError`
+  - [x] UI 使用 `sonner` 或现有 Toast 系统显示红色 Toast:`Merkle 验证失败,数据可能被篡改`
+  - [x] 不渲染任何模板内容,Editor 状态保持 empty
+  - [x] 失败日志本地保留 `{cid, error_type, timestamp}`,供用户复制提交 issue(不含密钥)
+- [x] **性能与稳定性**
+  - [x] 下载超时 ≤ 15s,超时 Toast "下载超时,请检查 CID 或网络"
+  - [x] 并发保护:同一 CID 下载中禁用 "Load" 按钮
+  - [x] 单元:mock `indexer.download` 两种错误路径(throw + error 返回)均被捕获
+  - [x] E2E 覆盖 J4:Import → Merkle 验证通过 → 模板渲染
 
 ## Dev Notes
 
@@ -95,10 +95,31 @@ so that **我能信任从 0G 克隆的模板未被篡改**。
 
 ### Agent Model Used
 
-{待 dev 填写}
+Claude Opus 4.6
 
 ### Debug Log References
 
+- 无异常,全部 155 测试通过 (24 test files),含 9 个新下载测试
+
 ### Completion Notes List
 
+- ✅ `downloadTrajectory()` 实现:CID 格式正则校验 → `Indexer.download(cid, cid, true)` + 双路错误处理(throw + error-return)→ 统一抛 `MerkleVerificationError`
+- ✅ 15s 超时 via `Promise.race` + 并发保护 `_downloadInFlight` 互斥锁
+- ✅ `MerkleVerificationError` 自定义错误类:含 `cid`、`errorType` 字段,errorType 区分 invalid_cid / not_found / verification_failed / timeout / concurrent_download
+- ✅ `/import` 一级路由页面:CID 输入 + Load 按钮 + localStorage 历史缓存(最近 10 条)
+- ✅ `CidVerifiedBanner` 组件:绿色 Banner "✓ 0G Storage · CID 验证通过" + 0G Explorer 外链
+- ✅ 失败 Toast:Merkle 验证失败(红色)/ 超时(橙色),6s 自动消失
+- ✅ 失败日志:本地保留 `{cid, error_type, timestamp}`,可一键复制(不含密钥)
+- ✅ 验证失败时不渲染任何模板内容
+
+### Change Log
+
+- 2026-04-23: Story 5.3 全部实现 — download API + ImportPage + CidVerifiedBanner + 9 个单元测试
+
 ### File List
+
+- `src/adapter/zerogStorage.ts` — 新增 `downloadTrajectory`, `MerkleVerificationError`, `isDownloadInFlight`
+- `src/adapter/__tests__/zerogStorage.download.test.ts` — 新增 9 个下载单元测试
+- `src/pages/ImportPage.tsx` — 新增 `/import` 路由页面
+- `src/core/components/CidVerifiedBanner.tsx` — 新增验证成功 Banner
+- `src/main.tsx` — 新增 `/import` 路由
