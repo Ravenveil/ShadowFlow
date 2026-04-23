@@ -58,29 +58,43 @@ describe('installFetchInterceptor', () => {
     mod.installFetchInterceptor();
   });
 
-  it('blocks fetch with private key in body', async () => {
+  it('blocks cross-origin fetch with private key in body', async () => {
     const pk = '0x' + 'ab'.repeat(32);
     await expect(
-      window.fetch('/api/test', { method: 'POST', body: JSON.stringify({ key: pk }) })
+      window.fetch('https://external.example.com/api', { method: 'POST', body: JSON.stringify({ key: pk }) })
     ).rejects.toThrow('body contains a potential private key');
   });
 
-  it('blocks fetch with secret in headers', async () => {
+  it('blocks cross-origin fetch with secret in headers', async () => {
     await expect(
-      window.fetch('/api/test', {
+      window.fetch('https://external.example.com/api', {
         headers: { 'X-Key': 'sk-ant-api03-abcdefghijklmnopqrstuvwx' },
       })
     ).rejects.toThrow('header contains a potential private key');
   });
 
-  it('blocks fetch with secret in URL', async () => {
+  it('blocks cross-origin fetch with secret in URL', async () => {
     const pk = '0x' + 'ab'.repeat(32);
     await expect(
-      window.fetch(`/api/test?key=${pk}`)
+      window.fetch(`https://external.example.com/api?key=${pk}`)
     ).rejects.toThrow('URL contains a potential private key');
   });
 
-  it('allows normal requests', async () => {
+  it('allows same-origin requests with secrets (internal API calls)', async () => {
+    const pk = '0x' + 'ab'.repeat(32);
+    await window.fetch('/workflow/runs/_draft/trajectory/sanitize', {
+      method: 'POST',
+      body: JSON.stringify({ trajectory: { content: pk } }),
+    });
+    expect(originalFetch).toHaveBeenCalled();
+  });
+
+  it('allows normal cross-origin requests without secrets', async () => {
+    await window.fetch('https://external.example.com/api', { method: 'GET' });
+    expect(originalFetch).toHaveBeenCalled();
+  });
+
+  it('allows normal same-origin requests', async () => {
     await window.fetch('/api/test', { method: 'GET' });
     expect(originalFetch).toHaveBeenCalled();
   });
