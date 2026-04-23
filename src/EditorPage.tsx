@@ -13,10 +13,15 @@ import { useYamlEditorStore } from './core/hooks/useYamlEditorStore';
 import { parseWorkflowYaml } from './core/lib/yamlSerializer';
 import { ApprovalGateForm } from './core/components/inspector/ApprovalGateForm';
 import { ProviderPanel } from './core/components/inspector/ProviderPanel';
+import { GapDetectedModal } from './core/components/modals';
 import { SecretsModal } from './core/components/modals/SecretsModal';
 import { SanitizeReviewModal, type RemovedFieldItem } from './core/components/modals/SanitizeReviewModal';
 import { uploadTrajectory } from './adapter/zerogStorage';
 import { useZerogSecretsStore } from './core/hooks/useZerogSecretsStore';
+import { useRunEvents } from './core/hooks/useRunEvents';
+import { useRunStore } from './core/stores/useRunStore';
+import { postGapResponse } from './core/api/runs';
+import { LiveDashboard } from './core/components/Panel/LiveDashboard';
 
 const LINEAGE_ALIAS_KEY = 'shadowflow.user_alias';
 
@@ -1306,27 +1311,73 @@ function MatrixTab() {
 }
 
 function RunLogTab() {
-  const entries = [
-    { ts: '08:49:01', type: 'ok',  msg: 'Planner · succeeded · cp_plan.done' },
-    { ts: '08:51:14', type: 'ok',  msg: 'LitReviewer · 12 sources · cp_research' },
-    { ts: '08:51:22', type: 'ok',  msg: 'DataScout · 3 datasets · cp_research' },
-    { ts: '08:53:40', type: 'run', msg: 'SectionWriter · streaming · r2/3' },
-    { ts: '08:52:11', type: 'rej', msg: 'Advisor REJECT · missing baseline Zhang(2021)' },
-    { ts: '08:52:11', type: 'warn',msg: '↻ retry_gate 2/3 · rollback cp_draft_v2' },
-  ];
-  const color = (t: string) => t === 'ok' ? V.ok : t === 'rej' ? V.reject : t === 'warn' ? V.warn : V.run;
+  const runId = useRunStore((s) => s.run_id);
+  const pendingGap = useRunStore((s) => s.pendingGaps[0] ?? null);
+
   return (
-    <div style={{ padding: '12px 14px' }}>
-      <SectionHdr left="Run Log" right="run_08_49" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {entries.map((e, i) => (
-          <div key={i} style={{ display: 'flex', gap: 8, padding: '6px 8px', borderRadius: 6, background: V.elev1, border: `1px solid ${V.border}` }}>
-            <span style={{ fontFamily: V.mono, fontSize: 9.5, color: V.fg5, flexShrink: 0, paddingTop: 1 }}>{e.ts}</span>
-            <span style={{ fontFamily: V.mono, fontSize: 10.5, color: color(e.type), lineHeight: 1.4 }}>{e.msg}</span>
-          </div>
-        ))}
+    <div style={{ padding: '12px 14px', height: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <SectionHdr left="Run Log" right={runId ?? 'idle'} />
+      {pendingGap && (
+        <div
+          style={{
+            padding: '8px 10px',
+            borderRadius: 8,
+            background: 'rgba(245, 158, 11, .12)',
+            border: '1px solid rgba(245, 158, 11, .28)',
+            fontFamily: V.mono,
+            fontSize: 10.5,
+            color: '#fcd34d',
+            lineHeight: 1.5,
+          }}
+        >
+          gap pending · {pendingGap.nodeId} · {pendingGap.gapType}
+        </div>
+      )}
+      <div style={{ minHeight: 260, borderRadius: 10, border: `1px solid ${V.border}`, background: V.elev1, overflow: 'hidden' }}>
+        <LiveDashboard className="h-full" />
       </div>
     </div>
+  );
+}
+
+function RuntimeBridge({ runId }: { runId: string | null }) {
+  useRunEvents({ runId });
+  return null;
+}
+
+function GapResponseOverlay({ runId }: { runId: string | null }) {
+  const pendingGap = useRunStore((s) => s.pendingGaps[0] ?? null);
+  const resolveGap = useRunStore((s) => s.resolveGap);
+  const setNodeStatus = useRunStore((s) => s.setNodeStatus);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = useCallback(
+    async (choice: 'A' | 'B' | 'C', userInput?: string) => {
+      if (!runId || !pendingGap || submitting) return;
+      setSubmitting(true);
+      try {
+        const trimmedInput = userInput?.trim();
+        await postGapResponse(runId, {
+          node_id: pendingGap.nodeId,
+          gap_choice: choice,
+          user_input: trimmedInput ? trimmedInput : undefined,
+        });
+        resolveGap(pendingGap.nodeId);
+        setNodeStatus(pendingGap.nodeId, 'running');
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [pendingGap, resolveGap, runId, setNodeStatus, submitting],
+  );
+
+  return (
+    <GapDetectedModal
+      open={Boolean(runId && pendingGap)}
+      gap={pendingGap}
+      submitting={submitting}
+      onSubmit={handleSubmit}
+    />
   );
 }
 
@@ -1668,12 +1719,13 @@ function TemplateLoader({ templateAlias }: { templateAlias: string }) {
 }
 
 export default function EditorPage({
-  onBack, lang, onToggleLang, templateAlias = 'blank',
+  onBack, lang, onToggleLang, templateAlias = 'blank', runId = null,
 }: {
   onBack: () => void;
   lang: string;
   onToggleLang: () => void;
   templateAlias?: string;
+  runId?: string | null;
 }) {
   const zh = lang === 'CN';
   const preset    = PRESETS[templateAlias];
@@ -1687,6 +1739,7 @@ export default function EditorPage({
       <ReactFlowProvider>
         <TemplateLoader templateAlias={templateAlias} />
         <YamlSyncBridge />
+        <RuntimeBridge runId={runId} />
         <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: V.bg }}>
           <EditorTopBar onBack={onBack} lang={lang} onToggleLang={onToggleLang} templateTitle={templateTitle} />
           <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '296px 1fr 336px', minHeight: 0 }}>
@@ -1695,6 +1748,7 @@ export default function EditorPage({
             <RightInspector />
           </div>
           <FinalOutputToast />
+          <GapResponseOverlay runId={runId} />
         </div>
       </ReactFlowProvider>
     </I18nProvider>

@@ -41,8 +41,18 @@ const config: Config = {
           'warn-tint':   '#1F1810',
           'reject-tint': '#1A0F12',
         },
+        shadowflow: {
+          bg: '#0D1117',
+          surface: '#161B22',
+          border: '#21262D',
+          accent: '#A78BFA',
+          success: '#22C55E',
+          warn: '#F59E0B',
+          muted: '#6B7280',
+        },
       },
       borderRadius: {
+        sf: '14px',
         'node': '14px',
         'card': '12px',
         'pill': '999px',

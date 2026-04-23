@@ -93,8 +93,8 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
-  background: var(--bg);
-  color: var(--fg-1);
+  background: #0D1117;
+  color: rgba(255, 255, 255, 0.9);
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
