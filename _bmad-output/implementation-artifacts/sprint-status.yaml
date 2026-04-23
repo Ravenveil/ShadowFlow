@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-23T09:12:13Z  # +Story 7-8 / 8-3b / 8-7 补充三个缺口故事
+last_updated: 2026-04-23T09:20:19Z  # Epic 5 done; 6-1 review; 6-2 in-progress; 7-1 review; batch commit landed
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -113,18 +113,18 @@ development_status:
   epic-4-retrospective: optional
 
   # ===== Epic 5: 0G Ecosystem Integration + CID Share/Clone =====
-  epic-5: in-progress
+  epic-5: done
   5-1-0g-storage-前端直调-byok-密钥管理: done
   5-2-trajectory-sanitize-scan: done
-  5-3-0g-storage-下载-merkle-验证: in-progress
+  5-3-0g-storage-下载-merkle-验证: done
   5-4-0g-compute-作为第-5-provider-接入: done
-  5-5-import-by-cid-作者署名链: review
+  5-5-import-by-cid-作者署名链: done
   epic-5-retrospective: optional
 
   # ===== Epic 6: Agent Interactivity + Demo Station + Pitch Ready =====
   epic-6: in-progress
-  6-1-agent-gap-detection-反向提问-e2: in-progress
-  6-2-landingpage-slogan-象限图-cta: ready-for-dev
+  6-1-agent-gap-detection-反向提问-e2: review
+  6-2-landingpage-slogan-象限图-cta: in-progress
   6-3-templatespage-6-模板-gallery-quick-demo-预填: ready-for-dev
   6-4-aboutpage-差异化对比-0g-链上证据-路线图: ready-for-dev
   epic-6-retrospective: optional
@@ -134,7 +134,7 @@ development_status:
   # See epics-addendum-2026-04-16.md for full Story definitions
   # Dependencies: Epic 1 (Policy Matrix) + Epic 3.6.7 (template schema extension) + Epic 4 (SSE)
   epic-7: in-progress
-  7-1-inbox-页框架-三列布局-窄导航-消息列表-右侧预览: in-progress
+  7-1-inbox-页框架-三列布局-窄导航-消息列表-右侧预览: review
   7-2-消息列表项-分组-徽章系统: ready-for-dev
   7-3-新群聊流程-新项目-新群聊-5-步向导: ready-for-dev
   7-4-inbox-chat-agentdm-路由与面包屑: ready-for-dev
