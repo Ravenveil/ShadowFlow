@@ -54,6 +54,7 @@ from shadowflow.runtime.contracts import (
     utc_now,
 )
 from shadowflow.runtime.executors import ExecutorRegistry
+from shadowflow.runtime.gap_detector import detect_gap
 from shadowflow.runtime.host_adapter import BaseWritebackAdapter
 
 
@@ -87,6 +88,8 @@ class RuntimeService:
         # approval_gate 信号：key = (run_id, node_id)
         self._approval_events: Dict[Tuple[str, str], asyncio.Event] = {}
         self._approval_decisions: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        self._gap_events: Dict[Tuple[str, str], asyncio.Event] = {}
+        self._gap_responses: Dict[Tuple[str, str], Dict[str, Any]] = {}
         # 驳回事件记录：key = run_id
         self._rejection_events: Dict[str, List[Dict[str, Any]]] = {}
         # P5: per-run asyncio.Lock — 保护 reject / resume / _execute 并发写
@@ -330,6 +333,31 @@ class RuntimeService:
             logger.warning("submit_approval: no approval gate waiting for run=%s node=%s decision=%s", run_id, node_id, decision)
             return False
         self._approval_decisions[key] = {"decision": decision, "reason": reason}
+        event.set()
+        return True
+
+    def submit_gap_response(
+        self,
+        run_id: str,
+        node_id: str,
+        gap_choice: str,
+        user_input: Optional[str] = None,
+    ) -> bool:
+        """Submit a response for a waiting gap-detected node."""
+        key = (run_id, node_id)
+        event = self._gap_events.get(key)
+        if event is None:
+            logger.warning(
+                "submit_gap_response: no gap waiter for run=%s node=%s choice=%s",
+                run_id,
+                node_id,
+                gap_choice,
+            )
+            return False
+        self._gap_responses[key] = {
+            "gap_choice": gap_choice,
+            "user_input": user_input,
+        }
         event.set()
         return True
 
@@ -869,6 +897,30 @@ class RuntimeService:
                 from shadowflow.runtime.events import NODE_STARTED as _NS
                 self._event_bus.publish_node_event(run_id, _NS, current_node_id, {"node_type": node.type, "step_id": step_id})
 
+            effective_input = dict(current_output)
+            gap_enabled = isinstance(node.config.get("gap_detection"), dict) or node.type == "section.generate"
+            gap_payload = (
+                detect_gap(effective_input, node.config)
+                if activation.decision == "activated" and gap_enabled
+                else None
+            )
+            if activation.decision == "activated" and gap_payload is not None:
+                gap_response = await self._wait_for_gap_response(
+                    run_id=run_id,
+                    node=node,
+                    run=run,
+                    task=task,
+                    step_id=step_id,
+                    gap_payload=gap_payload,
+                    trace=step_trace,
+                    memory_events=memory_events,
+                )
+                effective_input = self._apply_gap_response(
+                    step_input=effective_input,
+                    gap_payload=gap_payload,
+                    gap_response=gap_response,
+                )
+
             if activation.decision != "activated":
                 step_trace.append(
                     {
@@ -886,7 +938,7 @@ class RuntimeService:
                     run=run,
                     task=task,
                     step_id=step_id,
-                    step_input=current_output,
+                    step_input=effective_input,
                     state=state,
                     trace=step_trace,
                     memory_events=memory_events,
@@ -899,7 +951,7 @@ class RuntimeService:
                         node_id=current_node_id,
                         status="cancelled",
                         index=index,
-                        input=current_output,
+                        input=effective_input,
                         output=step_output,
                         trace=step_trace,
                         started_at=step_started_at,
@@ -916,7 +968,7 @@ class RuntimeService:
                             current_node_id=current_node_id,
                             next_node_id=current_node_id,
                             visited_nodes=list(state["visited_nodes"]),
-                            last_output=current_output,
+                            last_output=effective_input,
                             state=self._build_checkpoint_payload(state),
                         ),
                         writeback=WritebackRef(
@@ -950,11 +1002,11 @@ class RuntimeService:
                     task=task,
                     step_id=step_id,
                     node=node,
-                    step_input=current_output,
+                    step_input=effective_input,
                     state=state,
                 )
             else:
-                step_output = await self._execute_node(node, current_output, state, request.context)
+                step_output = await self._execute_node(node, effective_input, state, request.context)
             step_artifacts = self._build_artifacts(
                 request=request,
                 run_id=run_id,
@@ -981,7 +1033,7 @@ class RuntimeService:
                 node_id=current_node_id,
                 status="succeeded" if activation.decision == "activated" else "skipped",
                 index=index,
-                input=current_output,
+                input=effective_input,
                 output=step_output,
                 trace=step_trace,
                 artifacts=step_artifacts,
@@ -2564,6 +2616,130 @@ class RuntimeService:
             "state": {"_approval_rejected": True, "_on_reject": on_reject},
         }
 
+    async def _wait_for_gap_response(
+        self,
+        *,
+        run_id: str,
+        node: "NodeDefinition",
+        run: "RunRecord",
+        task: "TaskRecord",
+        step_id: str,
+        gap_payload: Dict[str, Any],
+        trace: List[Dict[str, Any]],
+        memory_events: List["MemoryEvent"],
+    ) -> Dict[str, Any]:
+        from shadowflow.runtime.events import AgentGapDetectedEvent, GapChoice
+
+        key = (run_id, node.id)
+        event = asyncio.Event()
+        self._gap_events[key] = event
+        run.status = "waiting_user"
+        task.status = "waiting_user"
+
+        trace.append(
+            {
+                "event": "gap_detected",
+                "node_id": node.id,
+                "message": gap_payload["description"],
+                "timestamp": utc_now().isoformat(),
+            }
+        )
+        memory_events.append(
+            MemoryEvent(
+                event_id=f"mem-{uuid4().hex[:10]}",
+                run_id=run_id,
+                task_id=task.task_id,
+                step_id=step_id,
+                category="step_result",
+                summary=f"Gap detected at {node.id}",
+                payload={
+                    "node_id": node.id,
+                    "gap_type": gap_payload["gap_type"],
+                    "description": gap_payload["description"],
+                },
+                metadata={"source": "gap_detector"},
+            )
+        )
+
+        if self._event_bus is not None:
+            self._event_bus.publish(
+                run_id,
+                AgentGapDetectedEvent(
+                    run_id=run_id,
+                    node_id=node.id,
+                    gap_type=str(gap_payload["gap_type"]),
+                    description=str(gap_payload["description"]),
+                    choices=[GapChoice.model_validate(choice) for choice in gap_payload["choices"]],
+                ),
+            )
+
+        try:
+            await event.wait()
+        finally:
+            self._gap_events.pop(key, None)
+
+        response = self._gap_responses.pop(key, {})
+        run.status = "running"
+        task.status = "running"
+        trace.append(
+            {
+                "event": "gap_resolved",
+                "node_id": node.id,
+                "message": f"Gap resolved with choice {response.get('gap_choice', '?')}",
+                "timestamp": utc_now().isoformat(),
+            }
+        )
+        return response
+
+    def _apply_gap_response(
+        self,
+        *,
+        step_input: Dict[str, Any],
+        gap_payload: Dict[str, Any],
+        gap_response: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        merged = dict(step_input)
+        choice = str(gap_response.get("gap_choice") or "").upper()
+        user_input = gap_response.get("user_input")
+        resolution = {
+            "gap_type": gap_payload["gap_type"],
+            "description": gap_payload["description"],
+            "choice": choice,
+            "user_input": user_input,
+        }
+        merged["_gap_resolution"] = resolution
+        existing = merged.get("gap_resolutions")
+        if isinstance(existing, list):
+            existing.append(resolution)
+        else:
+            merged["gap_resolutions"] = [resolution]
+
+        if choice == "A" and isinstance(user_input, str) and user_input.strip():
+            merged["supplemental_data"] = user_input.strip()
+        elif choice == "B":
+            merged["drop_comparison"] = True
+        elif choice == "C":
+            merged["annotation_placeholder"] = "[TODO: will be updated]"
+        return merged
+
+    def _apply_gap_resolution_output(self, output: Dict[str, Any], step_input: Dict[str, Any]) -> None:
+        resolution = step_input.get("_gap_resolution")
+        if not isinstance(resolution, dict):
+            return
+        choice = str(resolution.get("choice") or "").upper()
+        user_input = resolution.get("user_input")
+        output["gap_resolution"] = resolution
+        output["state"].setdefault("gap_resolution", resolution)
+        if choice == "A" and isinstance(user_input, str) and user_input.strip():
+            output["message"] = f"{output.get('message', '')} [supplemented: {user_input.strip()}]".strip()
+            output["supplemental_data"] = user_input.strip()
+        elif choice == "B":
+            output["message"] = f"{output.get('message', '')} [comparison dropped]".strip()
+            output["drop_comparison"] = True
+        elif choice == "C":
+            output["message"] = f"[TODO: will be updated] {output.get('message', '')}".strip()
+            output["annotation_placeholder"] = "[TODO: will be updated]"
+
     async def _execute_node(
         self,
         node: NodeDefinition,
@@ -2604,6 +2780,7 @@ class RuntimeService:
                 context=context,
                 prompt=prompt,
             )
+            self._apply_gap_resolution_output(output, step_input)
             return output
 
         if node.type == "control.parallel":
@@ -2616,6 +2793,7 @@ class RuntimeService:
             output["branch_count"] = len(branches)
             output["branches"] = branches
             output["barrier"] = barrier
+            self._apply_gap_resolution_output(output, step_input)
             return output
 
         if node.type == "control.barrier":
@@ -2640,6 +2818,7 @@ class RuntimeService:
             )
             if "artifact" in node.config:
                 output["artifact"] = node.config["artifact"]
+            self._apply_gap_resolution_output(output, step_input)
             return output
 
         self._apply_node_config_output(
@@ -2649,6 +2828,7 @@ class RuntimeService:
             context=context,
             prompt=prompt,
         )
+        self._apply_gap_resolution_output(output, step_input)
         return output
 
     def _is_delegated_node(self, node: NodeDefinition) -> bool:
@@ -2730,6 +2910,7 @@ class RuntimeService:
             context=request.context,
             prompt=prompt,
         )
+        self._apply_gap_resolution_output(output, step_input)
         return output
 
     async def _execute_executor_node(

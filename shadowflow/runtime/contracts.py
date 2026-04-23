@@ -274,7 +274,7 @@ class TaskRecord(BaseModel):
     parent_task_id: Optional[str] = None
     title: Optional[str] = None
     focus: Optional[str] = None
-    status: Literal["accepted", "running", "succeeded", "failed", "cancelled", "waiting", "awaiting_approval", "invalidated"] = "accepted"
+    status: Literal["accepted", "running", "succeeded", "failed", "cancelled", "waiting", "waiting_user", "awaiting_approval", "invalidated"] = "accepted"
     created_at: datetime = Field(default_factory=utc_now)
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
@@ -288,7 +288,7 @@ class RunRecord(BaseModel):
     task_id: Optional[str] = None
     parent_run_id: Optional[str] = None
     root_run_id: Optional[str] = None
-    status: Literal["accepted", "validated", "running", "succeeded", "failed", "cancelled", "checkpointed", "waiting", "awaiting_approval", "paused"]
+    status: Literal["accepted", "validated", "running", "succeeded", "failed", "cancelled", "checkpointed", "waiting", "waiting_user", "awaiting_approval", "paused"]
     started_at: datetime
     ended_at: Optional[datetime] = None
     entrypoint: str
@@ -477,7 +477,7 @@ class RunSummary(BaseModel):
     run_id: str
     request_id: str
     workflow_id: str
-    status: Literal["accepted", "validated", "running", "succeeded", "failed", "cancelled", "checkpointed", "waiting", "awaiting_approval", "paused"]
+    status: Literal["accepted", "validated", "running", "succeeded", "failed", "cancelled", "checkpointed", "waiting", "waiting_user", "awaiting_approval", "paused"]
     started_at: datetime
     ended_at: Optional[datetime] = None
     current_step_id: Optional[str] = None

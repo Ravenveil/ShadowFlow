@@ -36,6 +36,7 @@ RUN_RECONFIGURED = "run.reconfigured"  # Story 4.6
 # ---------- 其他 ----------
 HANDOFF_TRIGGERED = "handoff.triggered"
 CHECKPOINT_SAVED = "checkpoint.saved"
+GAP_DETECTED = "agent.gap_detected"
 
 
 # ---------------------------------------------------------------------------
@@ -203,4 +204,20 @@ class PolicyViolationEvent(BaseModel):
     receiver: str
     reason: str
     node_id: str
+    timestamp: datetime = Field(default_factory=_utc_now)
+
+
+class GapChoice(BaseModel):
+    id: str
+    label: str
+    action: str
+
+
+class AgentGapDetectedEvent(BaseModel):
+    type: str = GAP_DETECTED
+    run_id: str
+    node_id: str
+    gap_type: str
+    description: str
+    choices: List[GapChoice]
     timestamp: datetime = Field(default_factory=_utc_now)

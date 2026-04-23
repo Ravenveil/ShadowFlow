@@ -8,8 +8,10 @@ import pytest
 
 from shadowflow.runtime.contracts import AgentEvent
 from shadowflow.runtime.events import (
+    AgentGapDetectedEvent,
     RunEventBus,
     format_sse_event,
+    GAP_DETECTED,
     NODE_STARTED,
     NODE_SUCCEEDED,
     NODE_FAILED,
@@ -191,6 +193,9 @@ class TestEventTypeConstants:
     def test_run_completed_defined(self):
         assert RUN_COMPLETED == "run.completed"
 
+    def test_gap_detected_defined(self):
+        assert GAP_DETECTED == "agent.gap_detected"
+
 
 # ---------------------------------------------------------------------------
 # Story 4.1 — ring buffer (maxlen = 1000)
@@ -243,6 +248,24 @@ class TestPublishNodeEvent:
         bus = RunEventBus()
         seq = bus.publish_node_event("r1", NODE_SUCCEEDED, "node-B")
         assert seq == 0
+
+
+class TestGapDetectedEvent:
+    def test_gap_event_formats_as_named_sse_event(self):
+        event = AgentGapDetectedEvent(
+            run_id="run-gap",
+            node_id="writer",
+            gap_type="incomplete_log",
+            description="实验日志缺少 baseline 数据。",
+            choices=[
+                {"id": "A", "label": "补充数据", "action": "pause"},
+                {"id": "B", "label": "从论文移除此对比", "action": "drop"},
+                {"id": "C", "label": "注释为 'will be updated'", "action": "annotate"},
+            ],
+        )
+        chunk = format_sse_event(9, event)
+        assert "event: agent.gap_detected" in chunk
+        assert "baseline" in chunk
 
 
 # ---------------------------------------------------------------------------

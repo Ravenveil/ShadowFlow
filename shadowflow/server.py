@@ -128,6 +128,12 @@ class CustomTemplateImportRequest(BaseModel):
     yaml_text: str
     overrides: Optional[Dict[str, Any]] = None
 
+
+class GapResponseRequest(BaseModel):
+    node_id: str
+    gap_choice: Literal["A", "B", "C"]
+    user_input: Optional[str] = None
+
 app = FastAPI(title="ShadowFlow API", version="0.3.0")
 run_event_bus = RunEventBus()
 runtime_service = RuntimeService(event_bus=run_event_bus)
@@ -371,6 +377,27 @@ async def submit_approval(run_id: str, body: Dict[str, Any]):
     if not ok:
         raise HTTPException(status_code=404, detail=f"No approval gate waiting for run={run_id} node={node_id}")
     return {"run_id": run_id, "node_id": node_id, "decision": decision, "accepted": True}
+
+
+@app.post("/workflow/runs/{run_id}/gap_response")
+async def submit_gap_response(run_id: str, request: GapResponseRequest):
+    ok = runtime_service.submit_gap_response(
+        run_id,
+        request.node_id,
+        request.gap_choice,
+        request.user_input,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Node is not waiting for gap input: run={run_id} node={request.node_id}",
+        )
+    return {
+        "run_id": run_id,
+        "node_id": request.node_id,
+        "gap_choice": request.gap_choice,
+        "accepted": True,
+    }
 
 
 @app.post("/workflow/runs/{run_id}/resume", response_model=RunResult)
