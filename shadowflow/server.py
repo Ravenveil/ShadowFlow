@@ -148,7 +148,8 @@ app.include_router(_policy_obs_api.router)
 async def shadowflow_error_handler(request: Request, exc: ShadowflowError) -> JSONResponse:
     trace_id = f"trace-{uuid4().hex[:12]}"
     logger.warning("ShadowflowError %s trace_id=%s: %s", exc.code, trace_id, exc.message)
-    status = 422 if exc.code == "POLICY_VIOLATION" else 400
+    _status_map = {"POLICY_VIOLATION": 403, "PROVIDER_TIMEOUT": 504}
+    status = _status_map.get(exc.code, 400)
     return JSONResponse(
         status_code=status,
         content={"error": {**exc.to_dict(), "trace_id": trace_id}},
@@ -345,9 +346,11 @@ async def submit_approval(run_id: str, body: Dict[str, Any]):
     reviewer_role = body.get("reviewer_role")
     if not node_id or decision not in {"approve", "reject"}:
         raise HTTPException(status_code=422, detail="node_id and decision (approve|reject) are required")
-    if decision == "reject" and reviewer_role:
+    if decision == "reject":
+        if not reviewer_role:
+            raise HTTPException(status_code=422, detail="reviewer_role is required when decision is 'reject'")
         try:
-            runtime_service.reject(run_id, reviewer_role, node_id, reason)
+            await runtime_service.reject(run_id, reviewer_role, node_id, reason)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
         return {"run_id": run_id, "node_id": node_id, "decision": decision, "accepted": True}
@@ -384,7 +387,10 @@ async def workflow_resume_run(run_id: str):
 
 
 @app.get("/workflow/runs/{run_id}")
-async def get_workflow_run_trajectory(run_id: str, format: str = "summary"):
+async def get_workflow_run_trajectory(
+    run_id: str,
+    format: Literal["summary", "trajectory"] = "summary",
+):
     """Return run trajectory in summary or full bundle format (Story 1.5).
 
     ?format=summary (default) — {run, steps, handoffs, checkpoints, final_artifacts}
@@ -392,13 +398,19 @@ async def get_workflow_run_trajectory(run_id: str, format: str = "summary"):
     """
     result = runtime_service.get_run(run_id)
     if result is None:
-        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+        raise ShadowflowError(
+            code="RUN_NOT_FOUND",
+            message=f"Run not found: {run_id}",
+        )
 
     if format == "trajectory":
-        request = runtime_service._requests_by_run_id.get(run_id)
-        workflow = request.workflow if request is not None else None
+        req_ctx = runtime_service.get_request_context(run_id)
+        workflow = req_ctx.workflow if req_ctx is not None else None
         bundle = build_trajectory_bundle(result, workflow)
-        return {"data": bundle.model_dump(mode="json", exclude_none=True), "meta": {"format": "trajectory"}}
+        data = bundle.model_dump(mode="json", exclude_none=True)
+        if workflow is None:
+            return {"data": data, "meta": {"format": "trajectory", "workflow_missing": True}}
+        return {"data": data, "meta": {"format": "trajectory"}}
 
     trajectory = build_run_trajectory(result)
     return {"data": trajectory.model_dump(mode="json", exclude_none=True), "meta": {"format": "summary"}}
@@ -518,11 +530,15 @@ async def stream_run_events(run_id: str, request: Request):
 
     Supports Last-Event-ID header for reconnection without missing events.
     """
-    last_event_id_header = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
+    last_event_id_raw = (
+        request.headers.get("last-event-id")
+        or request.headers.get("Last-Event-ID")
+        or request.query_params.get("last_event_id")
+    )
     last_seq: Optional[int] = None
-    if last_event_id_header is not None:
+    if last_event_id_raw is not None:
         try:
-            last_seq = int(last_event_id_header)
+            last_seq = int(last_event_id_raw)
         except ValueError:
             pass
 

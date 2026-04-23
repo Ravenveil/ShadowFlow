@@ -2,31 +2,44 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Set
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from shadowflow.runtime.contracts import PolicyWarning, WorkflowPolicyMatrixSpec
 
-# 内置不推荐模式规则库
 NOT_RECOMMENDED_PATTERNS: List[dict] = [
     {
         "code": "POLICY_NOT_RECOMMENDED",
         "pattern": "factchecker->legal",
         "reason": "事实核查员直接写入法务节点会绕过内容审核层，违反四眼原则",
         "reference_url": "https://shadowflow.dev/docs/policy-matrix#best-practices",
+        "scope": "allow_send",
+        "sender_aliases": {"factchecker", "fact_checker", "事实核查员"},
+        "receiver_aliases": {"legal", "法务"},
     },
     {
         "code": "POLICY_NOT_RECOMMENDED",
         "pattern": "content_officer->editor_direct_reject",
         "reason": "内容官直接驳回主编缺少中间协商环节，容易造成决策短路",
         "reference_url": "https://shadowflow.dev/docs/policy-matrix#best-practices",
+        "scope": "allow_reject",
+        "sender_aliases": {"content_officer", "内容官"},
+        "receiver_aliases": {"editor", "主编"},
     },
 ]
 
-# 便于测试覆盖的规则 id → pattern 映射
-_PATTERN_ALIASES: dict = {
-    "factchecker->legal": ("factchecker", "legal"),
-    "content_officer->editor_direct_reject": ("content_officer", "editor"),
+_SELF_LOOP_RULE: dict = {
+    "code": "SELF_APPROVAL_DISCOURAGED",
+    "pattern": "self->self",
+    "reason": "自我审批/自环违反分权原则，角色不应审批自己的输出",
+    "reference_url": "https://shadowflow.dev/docs/policy-matrix#best-practices",
+}
+
+_EMPTY_LIST_RULE: dict = {
+    "code": "POLICY_EMPTY_RECEIVER_LIST",
+    "pattern": "role->[]",
+    "reason": "空接收者列表语义歧义（deny-all vs 遗漏配置），建议移除该键或显式添加接收者",
+    "reference_url": "https://shadowflow.dev/docs/policy-matrix#best-practices",
 }
 
 
@@ -43,51 +56,103 @@ def can_reject(matrix: "WorkflowPolicyMatrixSpec", reviewer: str, target: str) -
 
 
 def validate_best_practices(
-    matrix: "WorkflowPolicyMatrixSpec", roles: Set[str]
+    matrix: "WorkflowPolicyMatrixSpec",
 ) -> List["PolicyWarning"]:
-    """对矩阵执行最佳实践校验，返回 POLICY_NOT_RECOMMENDED 警告列表（非阻塞）。"""
-    from shadowflow.runtime.contracts import PolicyWarning  # 避免循环导入
+    """对矩阵执行最佳实践校验，返回警告列表（非阻塞）。"""
+    from shadowflow.runtime.contracts import PolicyWarning
 
     warnings: List[PolicyWarning] = []
+    seen: set = set()
 
-    # 检查 allow_send 中的不推荐模式
     for rule in NOT_RECOMMENDED_PATTERNS:
-        alias_pair = _PATTERN_ALIASES.get(rule["pattern"])
-        if alias_pair is None:
-            continue
-        sender_alias, receiver_alias = alias_pair
+        sender_aliases = rule["sender_aliases"]
+        receiver_aliases = rule["receiver_aliases"]
+        scope = rule["scope"]
 
-        for sender, receivers in matrix.allow_send.items():
-            if sender_alias in sender.lower():
-                for receiver in receivers:
-                    if receiver_alias in receiver.lower():
-                        warnings.append(
-                            PolicyWarning(
-                                code=rule["code"],
-                                pattern=f"{sender}->{receiver}",
-                                reason=rule["reason"],
-                                reference_url=rule["reference_url"],
-                            )
-                        )
+        if scope in ("allow_send", "both"):
+            _check_dict(matrix.allow_send, sender_aliases, receiver_aliases,
+                        rule, "allow_send", warnings, seen)
 
-    # 检查 allow_reject 中的不推荐模式
-    for rule in NOT_RECOMMENDED_PATTERNS:
-        alias_pair = _PATTERN_ALIASES.get(rule["pattern"])
-        if alias_pair is None:
-            continue
-        reviewer_alias, target_alias = alias_pair
+        if scope in ("allow_reject", "both"):
+            _check_dict(matrix.allow_reject, sender_aliases, receiver_aliases,
+                        rule, "allow_reject", warnings, seen)
 
-        for reviewer, targets in matrix.allow_reject.items():
-            if reviewer_alias in reviewer.lower():
-                for target in targets:
-                    if target_alias in target.lower():
-                        warnings.append(
-                            PolicyWarning(
-                                code=rule["code"],
-                                pattern=f"{reviewer}->{target}",
-                                reason=rule["reason"],
-                                reference_url=rule["reference_url"],
-                            )
-                        )
+    _check_self_loops(matrix, warnings, seen)
+    _check_empty_lists(matrix, warnings, seen)
 
     return warnings
+
+
+def _check_dict(
+    mapping: dict,
+    sender_aliases: set,
+    receiver_aliases: set,
+    rule: dict,
+    scope_label: str,
+    warnings: list,
+    seen: set,
+) -> None:
+    from shadowflow.runtime.contracts import PolicyWarning
+
+    for sender, receivers in mapping.items():
+        if sender.lower() not in sender_aliases:
+            continue
+        for receiver in dict.fromkeys(receivers):
+            if receiver.lower() in receiver_aliases:
+                key = (rule["pattern"], sender, receiver)
+                if key not in seen:
+                    seen.add(key)
+                    warnings.append(
+                        PolicyWarning(
+                            code=rule["code"],
+                            pattern=f"{sender}->{receiver}",
+                            reason=rule["reason"],
+                            reference_url=rule["reference_url"],
+                        )
+                    )
+
+
+def _check_self_loops(
+    matrix: "WorkflowPolicyMatrixSpec",
+    warnings: list,
+    seen: set,
+) -> None:
+    from shadowflow.runtime.contracts import PolicyWarning
+
+    for reviewer, targets in matrix.allow_reject.items():
+        for target in dict.fromkeys(targets):
+            if reviewer == target:
+                key = ("self_loop", reviewer, target)
+                if key not in seen:
+                    seen.add(key)
+                    warnings.append(
+                        PolicyWarning(
+                            code=_SELF_LOOP_RULE["code"],
+                            pattern=f"{reviewer}->{target}",
+                            reason=_SELF_LOOP_RULE["reason"],
+                            reference_url=_SELF_LOOP_RULE["reference_url"],
+                        )
+                    )
+
+
+def _check_empty_lists(
+    matrix: "WorkflowPolicyMatrixSpec",
+    warnings: list,
+    seen: set,
+) -> None:
+    from shadowflow.runtime.contracts import PolicyWarning
+
+    for label, mapping in [("allow_send", matrix.allow_send), ("allow_reject", matrix.allow_reject)]:
+        for role, targets in mapping.items():
+            if len(targets) == 0:
+                key = ("empty_list", label, role)
+                if key not in seen:
+                    seen.add(key)
+                    warnings.append(
+                        PolicyWarning(
+                            code=_EMPTY_LIST_RULE["code"],
+                            pattern=f"{label}.{role}->[]",
+                            reason=_EMPTY_LIST_RULE["reason"],
+                            reference_url=_EMPTY_LIST_RULE["reference_url"],
+                        )
+                    )

@@ -158,6 +158,13 @@ class RunEventBus:
         }
         return self.publish(run_id, evt)
 
+    def purge_run(self, run_id: str) -> None:
+        """Remove all state for a finished run to free memory."""
+        self._store.pop(run_id, None)
+        self._seq.pop(run_id, None)
+        self._notifiers.pop(run_id, None)
+        self._closed.discard(run_id)
+
     def get_events(self, run_id: str, from_seq: int = 0) -> List[Tuple[int, Any]]:
         """Return buffered (seq, event) pairs for replay / testing."""
         return [(s, e) for s, e in self._store.get(run_id, []) if s >= from_seq]
@@ -191,7 +198,7 @@ def _utc_now() -> datetime:
 
 
 class PolicyViolationEvent(BaseModel):
-    event: str = POLICY_VIOLATION
+    type: str = POLICY_VIOLATION
     sender: str
     receiver: str
     reason: str

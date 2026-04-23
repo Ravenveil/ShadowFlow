@@ -19,8 +19,18 @@ from shadowflow.runtime.contracts import (
     AgentTask,
 )
 
+from shadowflow.runtime.events import AgentEventType
+
 logger = logging.getLogger(__name__)
 
+_JSONL_TYPE_MAP: Dict[str, str] = {
+    "assistant": AgentEventType.OUTPUT,
+    "done": AgentEventType.COMPLETED,
+    "error": AgentEventType.FAILED,
+    "thinking": AgentEventType.THINKING,
+    "tool_call": AgentEventType.TOOL_CALLED,
+    "tool_result": AgentEventType.TOOL_RESULT,
+}
 
 DEFAULT_OPENAI_MODEL = "gpt-5.2"
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
@@ -304,11 +314,13 @@ class CliAgentExecutor(AgentExecutor):
                 event_data = json.loads(line)
             except json.JSONDecodeError:
                 event_data = {"text": line}
+            raw_type = event_data.get("type", "output")
+            canonical_type = _JSONL_TYPE_MAP.get(raw_type, AgentEventType.OUTPUT)
             yield AgentEvent(
                 run_id=handle.run_id,
                 node_id=handle.node_id,
                 agent_id=handle.agent_id,
-                type=f"agent.{event_data.get('type', 'output')}",
+                type=canonical_type,
                 payload=event_data,
             )
 

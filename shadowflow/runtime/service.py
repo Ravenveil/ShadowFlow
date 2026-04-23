@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
+import threading
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
@@ -55,6 +57,11 @@ from shadowflow.runtime.executors import ExecutorRegistry
 from shadowflow.runtime.host_adapter import BaseWritebackAdapter
 
 
+logger = logging.getLogger(__name__)
+
+_REJECTION_EVENTS_PER_RUN_MAX = 100
+
+
 class RuntimeService:
     _condition_splitter = re.compile(r"\s*&&\s*|\s+and\s+")
     _condition_pattern = re.compile(
@@ -90,6 +97,8 @@ class RuntimeService:
         self._request_context_store = request_context_store
         self._chat_session_store = chat_session_store
         self._executor_registry = executor_registry or ExecutorRegistry()
+        # Per-run threading lock for policy hot-swap writes (Story 4.5)
+        self._policy_locks: Dict[str, threading.Lock] = {}
         # SSE event bus (Story 4.1) — optional; set externally or via constructor
         self._event_bus = event_bus
 
@@ -192,7 +201,9 @@ class RuntimeService:
         from shadowflow.runtime.policy_matrix import can_reject
 
         request = self._requests_by_run_id.get(run_id)
-        policy_matrix = request.workflow.policy_matrix if request else None
+        if request is None:
+            raise ValueError(f"Unknown run_id: {run_id!r}")
+        policy_matrix = request.workflow.policy_matrix
 
         if policy_matrix is not None:
             if not can_reject(policy_matrix, reviewer_role, target_node_id):
@@ -258,6 +269,7 @@ class RuntimeService:
                 "event": POLICY_VIOLATION_EVT,
                 "sender": reviewer_role,
                 "receiver": target_node_id,
+                "node_id": target_node_id,
                 "reason": reason,
                 "timestamp": now,
             },
@@ -301,8 +313,11 @@ class RuntimeService:
             for evt in base_events:
                 self._event_bus.publish(run_id, evt)
 
-        # 保留字典记录供测试/消费
-        self._rejection_events.setdefault(run_id, []).append({"events": base_events})
+        # 保留字典记录供测试/消费（per-run 上限防止无界增长）
+        run_rejections = self._rejection_events.setdefault(run_id, [])
+        run_rejections.append({"events": base_events})
+        if len(run_rejections) > _REJECTION_EVENTS_PER_RUN_MAX:
+            del run_rejections[: len(run_rejections) - _REJECTION_EVENTS_PER_RUN_MAX]
 
         # 唤醒等待的 approval gate（若存在）
         self.submit_approval(run_id, target_node_id, "reject", reason)
@@ -312,10 +327,14 @@ class RuntimeService:
         key = (run_id, node_id)
         event = self._approval_events.get(key)
         if event is None:
+            logger.warning("submit_approval: no approval gate waiting for run=%s node=%s decision=%s", run_id, node_id, decision)
             return False
         self._approval_decisions[key] = {"decision": decision, "reason": reason}
         event.set()
         return True
+
+    # Terminal step statuses — nodes in these states are excluded from affected_downstream
+    _TERMINAL_STEP_STATUSES = frozenset({"succeeded", "failed", "skipped", "cancelled", "invalidated"})
 
     def update_policy(self, run_id: str, matrix: Dict[str, Any]) -> Dict[str, Any]:
         """Story 4.5: hot-swap a run's policy matrix without interrupting execution.
@@ -325,34 +344,42 @@ class RuntimeService:
         - publishes ``policy.updated`` for subscribed SSE clients
         Returns {"status": "updated", "affected_downstream_nodes": [...]}
         """
+        from shadowflow.runtime.contracts import WorkflowPolicyMatrixSpec
         from shadowflow.runtime.events import POLICY_UPDATED
 
         request = self._requests_by_run_id.get(run_id)
         if request is None:
             raise ValueError(f"run not found: {run_id}")
 
-        # Replace the matrix on the workflow definition. We use model_copy to
-        # keep Pydantic validation, and preserve any unrelated workflow fields.
-        try:
-            request.workflow.policy_matrix = matrix  # type: ignore[assignment]
-        except Exception:
-            # Fallback for non-pydantic or frozen workflows
-            if hasattr(request.workflow, "model_copy"):
-                request.workflow = request.workflow.model_copy(update={"policy_matrix": matrix})
-            else:
-                setattr(request.workflow, "policy_matrix", matrix)
+        # Validate & coerce the raw dict into a proper Pydantic model (Patch: BLOCKER fix)
+        validated_matrix = WorkflowPolicyMatrixSpec.model_validate(matrix)
 
-        # Compute affected downstream nodes: pending/running steps (approximation)
+        # Per-run lock prevents torn reads during concurrent dispatch (GIL protects ref swap,
+        # but this serializes the full validate→assign→compute sequence)
+        lock = self._policy_locks.setdefault(run_id, threading.Lock())
+        with lock:
+            try:
+                request.workflow.policy_matrix = validated_matrix  # type: ignore[assignment]
+            except Exception:
+                if hasattr(request.workflow, "model_copy"):
+                    request.workflow = request.workflow.model_copy(update={"policy_matrix": validated_matrix})
+                else:
+                    setattr(request.workflow, "policy_matrix", validated_matrix)
+
+        # BFS affected downstream: exclude all terminal-status nodes
         result = self._runs.get(run_id)
-        completed_node_ids: List[str] = []
+        terminal_node_ids: set = set()
         if result is not None:
-            completed_node_ids = [step.node_id for step in result.steps if step.status == "succeeded"]
+            terminal_node_ids = {
+                step.node_id for step in result.steps
+                if step.status in self._TERMINAL_STEP_STATUSES
+            }
         all_nodes: List[str] = []
         try:
             all_nodes = [node.id for node in request.workflow.nodes]
         except Exception:
             pass
-        affected_downstream = [n for n in all_nodes if n not in completed_node_ids]
+        affected_downstream = [n for n in all_nodes if n not in terminal_node_ids]
 
         if self._event_bus is not None:
             self._event_bus.publish(run_id, {
@@ -400,13 +427,14 @@ class RuntimeService:
         added = [n for n in new_node_ids if n not in old_nodes]
         removed = [n for n in old_nodes if n not in new_node_ids]
 
-        # Apply the new policy matrix (hot-swap)
+        # Apply the new policy matrix (hot-swap) — propagate errors instead of swallowing
         policy_matrix = new_def.get("policy_matrix")
+        policy_failure: Optional[str] = None
         if policy_matrix is not None:
             try:
                 self.update_policy(run_id, policy_matrix)
-            except Exception:
-                pass
+            except Exception as exc:
+                policy_failure = str(exc)
 
         if self._event_bus is not None:
             self._event_bus.publish(run_id, {
@@ -418,12 +446,15 @@ class RuntimeService:
                 "timestamp": utc_now().isoformat(),
             })
 
-        return {
+        resp: Dict[str, Any] = {
             "status": "reconfigured",
             "reused_node_outputs": reused,
             "new_nodes": added,
             "removed_nodes": removed,
         }
+        if policy_failure is not None:
+            resp["policy_failure"] = policy_failure
+        return resp
 
     async def resume(self, run_id: str, resume_request: ResumeRequest) -> RunResult:
         """Resume a run from a checkpoint. P6: rejects terminal runs; P11: per-run lock prevents concurrent resume."""
@@ -476,7 +507,7 @@ class RuntimeService:
             # P12: emit RUN_RESUMED before execution begins
             if self._event_bus is not None:
                 self._event_bus.publish(run_id, {
-                    "event": RUN_RESUMED,
+                    "type": RUN_RESUMED,
                     "run_id": run_id,
                     "checkpoint_id": checkpoint.checkpoint_id,
                     "next_node_id": next_node_id,
@@ -539,6 +570,9 @@ class RuntimeService:
             if request is not None:
                 self._requests_by_run_id[run_id] = request
         return request
+
+    def get_request_context(self, run_id: str) -> Optional[RuntimeRequest]:
+        return self._get_request_context(run_id)
 
     def register_request_context(self, run_id: str, request: RuntimeRequest) -> None:
         self._requests_by_run_id[run_id] = request
@@ -976,6 +1010,30 @@ class RuntimeService:
                     "step_id": step.step_id,
                     "output_summary": str(step_output.get("message") or "")[:200],
                 })
+            # Story 4.5 AC2: in-flight post-validation — recheck completed node against
+            # current (possibly hot-swapped) policy matrix
+            if (
+                step.status == "succeeded"
+                and request.workflow.policy_matrix is not None
+                and len(state["visited_nodes"]) >= 2
+            ):
+                from shadowflow.runtime.policy_matrix import can_reject as _can_reject
+                _upstream = state["visited_nodes"][-2]
+                if _can_reject(request.workflow.policy_matrix, reviewer=_upstream, target=current_node_id):
+                    from shadowflow.runtime.events import NODE_REJECTED as _NR
+                    _violation = {
+                        "run_id": run_id,
+                        "step_id": step_id,
+                        "node_id": current_node_id,
+                        "upstream_node_id": _upstream,
+                        "reason": "post_dispatch_policy_violation",
+                        "timestamp": utc_now().isoformat(),
+                    }
+                    rej_list = self._rejection_events.setdefault(run_id, [])
+                    if len(rej_list) < _REJECTION_EVENTS_PER_RUN_MAX:
+                        rej_list.append(_violation)
+                    if self._event_bus is not None:
+                        self._event_bus.publish_node_event(run_id, _NR, current_node_id, _violation)
             artifacts.extend(step_artifacts)
             trace.extend(step_trace)
             memory_events.append(

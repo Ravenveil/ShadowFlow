@@ -779,11 +779,25 @@ class AgentHandle(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+AgentEventTypeLiteral = Literal[
+    "agent.dispatched",
+    "agent.thinking",
+    "agent.tool_called",
+    "agent.tool_result",
+    "agent.completed",
+    "agent.failed",
+    "agent.rejected",
+    "agent.output",
+    "agent.degraded",
+    "agent.approval_requested",
+]
+
+
 class AgentEvent(BaseModel):
     run_id: str
     node_id: str
     agent_id: str
-    type: str
+    type: AgentEventTypeLiteral
     payload: Dict[str, Any] = Field(default_factory=dict)
     ts: datetime = Field(default_factory=utc_now)
 

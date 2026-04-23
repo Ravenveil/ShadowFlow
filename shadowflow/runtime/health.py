@@ -5,11 +5,10 @@ If the binary is absent from PATH, we degrade gracefully rather than hard-crashi
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger("shadowflow.health")
@@ -47,7 +46,8 @@ def check_binary(binary: str, version_args: list[str] | None = None) -> HealthRe
             text=True,
             timeout=3,
         )
-        version = (result.stdout or result.stderr or "").strip().splitlines()[0] or None
+        lines = (result.stdout or result.stderr or "").strip().splitlines()
+        version = lines[0] if lines else None
         return HealthResult(ok=True, binary=binary, path=resolved, version=version)
     except subprocess.TimeoutExpired:
         return HealthResult(ok=False, binary=binary, path=resolved, error="version check timed out")
