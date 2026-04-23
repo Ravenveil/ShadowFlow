@@ -189,3 +189,20 @@ Items deferred during code reviews. Each entry is a real issue that was found bu
 - Force-push 导致 `github.event.before` SHA 在浅克隆中不存在 [.github/workflows/ci.yml:190] — TruffleHog scan 可能失败或跳过；建议加 `git cat-file -e` 前置检查
 - `schema.pop("$defs")` 在迭代中原地修改 schema dict [scripts/generate_ts_types.py:169] — 预先存在模式；若 schema 对象被后续代码复用会丢失 `$defs`
 - `check_contracts.py` 不捕获 `generate_ts_types` 的 `$defs` collision warnings [scripts/check_contracts.py:43-50] — 一致性错误的 schema 两侧相同，drift check 报 OK；建议 generate() 返回 warning count 或 check script 监听 log
+
+---
+
+## Deferred from: 本地 dev 首验 → `/editor` ErrorBoundary 兜底 `zh is not defined`（2026-04-23）
+
+**一行 fix 已 apply：** `src/EditorPage.tsx:175` 添加 `const zh = lang === 'CN';`（RunButton 漏写，调用方 EditorTopBar 用 `'CN'/'EN'` 约定）。
+
+**同文件两套语言约定隐患（非阻塞）：** `RunButton`/`EditorTopBar` 用 `lang: 'CN'|'EN'` + `zh = lang === 'CN'`；`GoalBar` L198 用 `useI18n().language` + `zh = language === 'zh'`。两套判断独立使用不立即崩，但切语言时不同步会产生诡异状态。需统一到 `useI18n()` 一套。
+
+**流程层 5 个漏洞 → 已立 change-request `_bmad-output/change-requests/2026-04-23-frontend-quality-gates.md`：**
+1. CI 不跑 Playwright；`editor-shell.spec.ts` AC1 是"存在但死代码"
+2. `EditorPage.tsx` 无组件级 vitest（只测子组件）
+3. tsc 放行 `zh is not defined`（strict 配置存疑 / 全局 declare 污染）
+4. dev-story / code-review skill 没机械强制"浏览器开一下" — CLAUDE.md 已写但未落地到 skill 步骤
+5. `bmad-check-implementation-readiness` 没把前端 smoke 列为 gate
+
+**订正：** sprint-status.yaml:117 `5-1-0g-storage-前端直调-byok-密钥管理: review`（不是 ready-for-dev；2026-04-23 bmad-help 输出有误）。
