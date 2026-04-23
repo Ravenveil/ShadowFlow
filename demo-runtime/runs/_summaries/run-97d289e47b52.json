@@ -1,0 +1,76 @@
+{
+  "run_id": "run-97d289e47b52",
+  "request_id": "req-61c858fcb4a1",
+  "workflow_id": "docs-gap-review",
+  "status": "succeeded",
+  "started_at": "2026-04-14T14:04:59.153022Z",
+  "ended_at": "2026-04-14T14:04:59.154021Z",
+  "current_step_id": "step-002",
+  "metadata": {
+    "execution_mode": "sync",
+    "memory_scope": "session",
+    "source_system": "cli",
+    "user_id": "default",
+    "writeback_receipts": [
+      {
+        "receipt_id": "wb-754d9f452832",
+        "channel": "artifact",
+        "target": "host",
+        "mode": "reference",
+        "source_id": "run-97d289e47b52",
+        "location": "demo-runtime\\runs\\run-97d289e47b52.json",
+        "host_action": "persist_artifact_ref",
+        "stored_at": "2026-04-14T14:04:59.156104Z",
+        "metadata": {
+          "workflow_id": "docs-gap-review",
+          "kind": "run_summary"
+        }
+      },
+      {
+        "receipt_id": "wb-20eb10d783f1",
+        "channel": "artifact",
+        "target": "docs",
+        "mode": "inline",
+        "source_id": "artifact-11b41c612e",
+        "location": "demo-runtime\\docs\\docs-gap-review-notes.md",
+        "host_action": "persist_artifact_ref",
+        "stored_at": "2026-04-14T14:04:59.156688Z",
+        "metadata": {
+          "artifact_name": "docs-gap-review-notes.md",
+          "workflow_id": "docs-gap-review",
+          "producer_node_id": "reviewer"
+        }
+      },
+      {
+        "receipt_id": "wb-dfff4f6552a7",
+        "channel": "checkpoint",
+        "target": "memory",
+        "mode": "reference",
+        "source_id": "ckpt-996628d62a",
+        "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-996628d62a.json",
+        "host_action": "persist_checkpoint_ref",
+        "stored_at": "2026-04-14T14:04:59.156688Z",
+        "metadata": {
+          "run_id": "run-97d289e47b52",
+          "workflow_id": "docs-gap-review",
+          "current_node_id": "planner"
+        }
+      },
+      {
+        "receipt_id": "wb-18adf604ebcd",
+        "channel": "checkpoint",
+        "target": "memory",
+        "mode": "reference",
+        "source_id": "ckpt-860f24bcae",
+        "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-860f24bcae.json",
+        "host_action": "persist_checkpoint_ref",
+        "stored_at": "2026-04-14T14:04:59.157692Z",
+        "metadata": {
+          "run_id": "run-97d289e47b52",
+          "workflow_id": "docs-gap-review",
+          "current_node_id": "reviewer"
+        }
+      }
+    ]
+  }
+}

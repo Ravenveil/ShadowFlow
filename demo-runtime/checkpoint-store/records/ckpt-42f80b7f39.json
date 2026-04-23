@@ -1,0 +1,16 @@
+{
+  "checkpoint_id": "ckpt-42f80b7f39",
+  "run_id": "run-b13aaf7cef2c",
+  "step_id": "step-001",
+  "target": "graph",
+  "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-42f80b7f39.json",
+  "state_ref": "checkpoint://run-b13aaf7cef2c/step-001",
+  "next_node_id": "research_a",
+  "resume_supported": true,
+  "stored_at": "2026-04-14T14:05:31.317197Z",
+  "metadata": {
+    "workflow_id": "parallel-synthesis",
+    "entrypoint": "fanout",
+    "current_node_id": "fanout"
+  }
+}

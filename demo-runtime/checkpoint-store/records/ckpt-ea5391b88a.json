@@ -1,0 +1,16 @@
+{
+  "checkpoint_id": "ckpt-ea5391b88a",
+  "run_id": "run-b13aaf7cef2c",
+  "step_id": "step-005",
+  "target": "graph",
+  "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-ea5391b88a.json",
+  "state_ref": "checkpoint://run-b13aaf7cef2c/step-005",
+  "next_node_id": null,
+  "resume_supported": false,
+  "stored_at": "2026-04-14T14:05:31.318705Z",
+  "metadata": {
+    "workflow_id": "parallel-synthesis",
+    "entrypoint": "fanout",
+    "current_node_id": "writer"
+  }
+}

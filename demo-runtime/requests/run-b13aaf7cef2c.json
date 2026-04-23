@@ -1,0 +1,145 @@
+{
+  "request_id": "req-1bed11c71afb",
+  "workflow": {
+    "workflow_id": "parallel-synthesis",
+    "version": "0.1",
+    "name": "Parallel Synthesis",
+    "entrypoint": "fanout",
+    "nodes": [
+      {
+        "id": "fanout",
+        "kind": "node",
+        "type": "control.parallel",
+        "config": {
+          "role": "dispatcher",
+          "message_template": "[dispatcher] scheduled research branches.",
+          "branches": [
+            "research_a",
+            "research_b"
+          ],
+          "barrier": "merge"
+        },
+        "inputs": [],
+        "outputs": [],
+        "retry_policy": {},
+        "metadata": {}
+      },
+      {
+        "id": "research_a",
+        "kind": "agent",
+        "type": "research.collect",
+        "config": {
+          "role": "researcher-a",
+          "message_template": "[researcher-a] collected product signals.",
+          "emit": {
+            "topic": "product",
+            "confidence": 7
+          },
+          "set_state": {
+            "product_signal_ready": true
+          }
+        },
+        "inputs": [],
+        "outputs": [],
+        "retry_policy": {},
+        "metadata": {}
+      },
+      {
+        "id": "research_b",
+        "kind": "agent",
+        "type": "research.collect",
+        "config": {
+          "role": "researcher-b",
+          "message_template": "[researcher-b] collected engineering signals.",
+          "emit": {
+            "topic": "engineering",
+            "confidence": 8
+          },
+          "set_state": {
+            "engineering_signal_ready": true
+          }
+        },
+        "inputs": [],
+        "outputs": [],
+        "retry_policy": {},
+        "metadata": {}
+      },
+      {
+        "id": "merge",
+        "kind": "node",
+        "type": "control.barrier",
+        "config": {
+          "role": "synthesizer",
+          "source_parallel": "fanout",
+          "message_template": "[synthesizer] joined branch outputs and prepared synthesis context."
+        },
+        "inputs": [],
+        "outputs": [],
+        "retry_policy": {},
+        "metadata": {}
+      },
+      {
+        "id": "writer",
+        "kind": "agent",
+        "type": "review.summarize",
+        "config": {
+          "role": "writer",
+          "message_template": "[writer] produced the synthesis summary.",
+          "artifact": {
+            "kind": "report",
+            "name": "parallel-synthesis-summary.md",
+            "content": "# Parallel Synthesis Summary"
+          }
+        },
+        "inputs": [],
+        "outputs": [],
+        "retry_policy": {},
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "from_id": "merge",
+        "to_id": "writer",
+        "type": "conditional",
+        "condition": "result.branch_count >= 2",
+        "metadata": {}
+      },
+      {
+        "from_id": "writer",
+        "to_id": "END",
+        "type": "final",
+        "condition": null,
+        "metadata": {}
+      }
+    ],
+    "defaults": {
+      "memory_scope": "session",
+      "writeback": {
+        "artifact": {
+          "target": "docs",
+          "mode": "reference"
+        },
+        "checkpoint": {
+          "target": "graph",
+          "mode": "reference"
+        }
+      }
+    },
+    "metadata": {
+      "category": "runtime-contract",
+      "purpose": "phase1-parallel"
+    }
+  },
+  "input": {
+    "goal": "Parallel research synthesis"
+  },
+  "context": {},
+  "memory_scope": "session",
+  "execution_mode": "sync",
+  "idempotency_key": "req-1bed11c71afb",
+  "metadata": {
+    "source_system": "cli",
+    "user_id": "default"
+  }
+}

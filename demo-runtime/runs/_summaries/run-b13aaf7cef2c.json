@@ -1,0 +1,121 @@
+{
+  "run_id": "run-b13aaf7cef2c",
+  "request_id": "req-1bed11c71afb",
+  "workflow_id": "parallel-synthesis",
+  "status": "succeeded",
+  "started_at": "2026-04-14T14:05:31.309969Z",
+  "ended_at": "2026-04-14T14:05:31.315639Z",
+  "current_step_id": "step-005",
+  "metadata": {
+    "execution_mode": "sync",
+    "memory_scope": "session",
+    "source_system": "cli",
+    "user_id": "default",
+    "writeback_receipts": [
+      {
+        "receipt_id": "wb-fe034b0e43aa",
+        "channel": "artifact",
+        "target": "host",
+        "mode": "reference",
+        "source_id": "run-b13aaf7cef2c",
+        "location": "demo-runtime\\runs\\run-b13aaf7cef2c.json",
+        "host_action": "persist_artifact_ref",
+        "stored_at": "2026-04-14T14:05:31.316677Z",
+        "metadata": {
+          "workflow_id": "parallel-synthesis",
+          "kind": "run_summary"
+        }
+      },
+      {
+        "receipt_id": "wb-53a2f2700735",
+        "channel": "artifact",
+        "target": "docs",
+        "mode": "reference",
+        "source_id": "artifact-4e405eca43",
+        "location": "demo-runtime\\docs\\parallel-synthesis-summary.md",
+        "host_action": "persist_artifact_ref",
+        "stored_at": "2026-04-14T14:05:31.317197Z",
+        "metadata": {
+          "artifact_name": "parallel-synthesis-summary.md",
+          "workflow_id": "parallel-synthesis",
+          "producer_node_id": "writer"
+        }
+      },
+      {
+        "receipt_id": "wb-2290ee06ec53",
+        "channel": "checkpoint",
+        "target": "graph",
+        "mode": "reference",
+        "source_id": "ckpt-42f80b7f39",
+        "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-42f80b7f39.json",
+        "host_action": "persist_checkpoint_ref",
+        "stored_at": "2026-04-14T14:05:31.317197Z",
+        "metadata": {
+          "run_id": "run-b13aaf7cef2c",
+          "workflow_id": "parallel-synthesis",
+          "current_node_id": "fanout"
+        }
+      },
+      {
+        "receipt_id": "wb-ca524344bd17",
+        "channel": "checkpoint",
+        "target": "graph",
+        "mode": "reference",
+        "source_id": "ckpt-16cf46c6b6",
+        "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-16cf46c6b6.json",
+        "host_action": "persist_checkpoint_ref",
+        "stored_at": "2026-04-14T14:05:31.318202Z",
+        "metadata": {
+          "run_id": "run-b13aaf7cef2c",
+          "workflow_id": "parallel-synthesis",
+          "current_node_id": "research_a"
+        }
+      },
+      {
+        "receipt_id": "wb-11bc7032322a",
+        "channel": "checkpoint",
+        "target": "graph",
+        "mode": "reference",
+        "source_id": "ckpt-ceadc54149",
+        "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-ceadc54149.json",
+        "host_action": "persist_checkpoint_ref",
+        "stored_at": "2026-04-14T14:05:31.318705Z",
+        "metadata": {
+          "run_id": "run-b13aaf7cef2c",
+          "workflow_id": "parallel-synthesis",
+          "current_node_id": "research_b"
+        }
+      },
+      {
+        "receipt_id": "wb-b1abbb2f9309",
+        "channel": "checkpoint",
+        "target": "graph",
+        "mode": "reference",
+        "source_id": "ckpt-24dbd4f60b",
+        "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-24dbd4f60b.json",
+        "host_action": "persist_checkpoint_ref",
+        "stored_at": "2026-04-14T14:05:31.318705Z",
+        "metadata": {
+          "run_id": "run-b13aaf7cef2c",
+          "workflow_id": "parallel-synthesis",
+          "current_node_id": "merge"
+        }
+      },
+      {
+        "receipt_id": "wb-10cb5a191575",
+        "channel": "checkpoint",
+        "target": "graph",
+        "mode": "reference",
+        "source_id": "ckpt-ea5391b88a",
+        "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-ea5391b88a.json",
+        "host_action": "persist_checkpoint_ref",
+        "stored_at": "2026-04-14T14:05:31.320226Z",
+        "metadata": {
+          "run_id": "run-b13aaf7cef2c",
+          "workflow_id": "parallel-synthesis",
+          "current_node_id": "writer"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "checkpoint_id": "ckpt-24dbd4f60b",
+  "run_id": "run-b13aaf7cef2c",
+  "step_id": "step-004",
+  "target": "graph",
+  "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-24dbd4f60b.json",
+  "state_ref": "checkpoint://run-b13aaf7cef2c/step-004",
+  "next_node_id": "writer",
+  "resume_supported": true,
+  "stored_at": "2026-04-14T14:05:31.318705Z",
+  "metadata": {
+    "workflow_id": "parallel-synthesis",
+    "entrypoint": "fanout",
+    "current_node_id": "merge"
+  }
+}

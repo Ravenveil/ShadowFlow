@@ -1,0 +1,3592 @@
+{
+  "run": {
+    "run_id": "run-b13aaf7cef2c",
+    "request_id": "req-1bed11c71afb",
+    "workflow_id": "parallel-synthesis",
+    "task_id": "task-fbcf294554f6",
+    "parent_run_id": null,
+    "root_run_id": "run-b13aaf7cef2c",
+    "status": "succeeded",
+    "started_at": "2026-04-14T14:05:31.309969Z",
+    "ended_at": "2026-04-14T14:05:31.315639Z",
+    "entrypoint": "fanout",
+    "current_step_id": "step-005",
+    "metadata": {
+      "execution_mode": "sync",
+      "memory_scope": "session",
+      "source_system": "cli",
+      "user_id": "default",
+      "writeback_receipts": [
+        {
+          "receipt_id": "wb-fe034b0e43aa",
+          "channel": "artifact",
+          "target": "host",
+          "mode": "reference",
+          "source_id": "run-b13aaf7cef2c",
+          "location": "demo-runtime\\runs\\run-b13aaf7cef2c.json",
+          "host_action": "persist_artifact_ref",
+          "stored_at": "2026-04-14T14:05:31.316677Z",
+          "metadata": {
+            "workflow_id": "parallel-synthesis",
+            "kind": "run_summary"
+          }
+        },
+        {
+          "receipt_id": "wb-53a2f2700735",
+          "channel": "artifact",
+          "target": "docs",
+          "mode": "reference",
+          "source_id": "artifact-4e405eca43",
+          "location": "demo-runtime\\docs\\parallel-synthesis-summary.md",
+          "host_action": "persist_artifact_ref",
+          "stored_at": "2026-04-14T14:05:31.317197Z",
+          "metadata": {
+            "artifact_name": "parallel-synthesis-summary.md",
+            "workflow_id": "parallel-synthesis",
+            "producer_node_id": "writer"
+          }
+        },
+        {
+          "receipt_id": "wb-2290ee06ec53",
+          "channel": "checkpoint",
+          "target": "graph",
+          "mode": "reference",
+          "source_id": "ckpt-42f80b7f39",
+          "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-42f80b7f39.json",
+          "host_action": "persist_checkpoint_ref",
+          "stored_at": "2026-04-14T14:05:31.317197Z",
+          "metadata": {
+            "run_id": "run-b13aaf7cef2c",
+            "workflow_id": "parallel-synthesis",
+            "current_node_id": "fanout"
+          }
+        },
+        {
+          "receipt_id": "wb-ca524344bd17",
+          "channel": "checkpoint",
+          "target": "graph",
+          "mode": "reference",
+          "source_id": "ckpt-16cf46c6b6",
+          "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-16cf46c6b6.json",
+          "host_action": "persist_checkpoint_ref",
+          "stored_at": "2026-04-14T14:05:31.318202Z",
+          "metadata": {
+            "run_id": "run-b13aaf7cef2c",
+            "workflow_id": "parallel-synthesis",
+            "current_node_id": "research_a"
+          }
+        },
+        {
+          "receipt_id": "wb-11bc7032322a",
+          "channel": "checkpoint",
+          "target": "graph",
+          "mode": "reference",
+          "source_id": "ckpt-ceadc54149",
+          "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-ceadc54149.json",
+          "host_action": "persist_checkpoint_ref",
+          "stored_at": "2026-04-14T14:05:31.318705Z",
+          "metadata": {
+            "run_id": "run-b13aaf7cef2c",
+            "workflow_id": "parallel-synthesis",
+            "current_node_id": "research_b"
+          }
+        },
+        {
+          "receipt_id": "wb-b1abbb2f9309",
+          "channel": "checkpoint",
+          "target": "graph",
+          "mode": "reference",
+          "source_id": "ckpt-24dbd4f60b",
+          "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-24dbd4f60b.json",
+          "host_action": "persist_checkpoint_ref",
+          "stored_at": "2026-04-14T14:05:31.318705Z",
+          "metadata": {
+            "run_id": "run-b13aaf7cef2c",
+            "workflow_id": "parallel-synthesis",
+            "current_node_id": "merge"
+          }
+        },
+        {
+          "receipt_id": "wb-10cb5a191575",
+          "channel": "checkpoint",
+          "target": "graph",
+          "mode": "reference",
+          "source_id": "ckpt-ea5391b88a",
+          "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-ea5391b88a.json",
+          "host_action": "persist_checkpoint_ref",
+          "stored_at": "2026-04-14T14:05:31.320226Z",
+          "metadata": {
+            "run_id": "run-b13aaf7cef2c",
+            "workflow_id": "parallel-synthesis",
+            "current_node_id": "writer"
+          }
+        }
+      ]
+    }
+  },
+  "tasks": [
+    {
+      "task_id": "task-fbcf294554f6",
+      "run_id": "run-b13aaf7cef2c",
+      "root_task_id": "task-fbcf294554f6",
+      "parent_task_id": null,
+      "title": "Parallel Synthesis",
+      "focus": "Parallel research synthesis",
+      "status": "succeeded",
+      "created_at": "2026-04-14T14:05:31.309969Z",
+      "started_at": "2026-04-14T14:05:31.309969Z",
+      "ended_at": "2026-04-14T14:05:31.315639Z",
+      "metadata": {
+        "workflow_id": "parallel-synthesis",
+        "entrypoint": "fanout",
+        "memory_scope": "session",
+        "parent_run_id": null,
+        "root_run_id": null,
+        "parent_task_id": null,
+        "root_task_id": "task-fbcf294554f6",
+        "parent_step_id": null,
+        "delegated_run": false,
+        "delegation_mode": null,
+        "delegated_from_node_id": null,
+        "handoff_goal": null
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step_id": "step-001",
+      "run_id": "run-b13aaf7cef2c",
+      "node_id": "fanout",
+      "status": "succeeded",
+      "index": 1,
+      "input": {
+        "goal": "Parallel research synthesis"
+      },
+      "output": {
+        "message": "[dispatcher] scheduled research branches.",
+        "node_id": "fanout",
+        "node_type": "control.parallel",
+        "handled_by": "dispatcher",
+        "state": {},
+        "branch_count": 2,
+        "branches": [
+          "research_a",
+          "research_b"
+        ],
+        "barrier": "merge"
+      },
+      "trace": [
+        {
+          "event": "reasoning",
+          "node_id": "fanout",
+          "message": "Executing node fanout (control.parallel)",
+          "timestamp": "2026-04-14T14:05:31.309969+00:00"
+        },
+        {
+          "event": "activation_candidate",
+          "node_id": "fanout",
+          "message": "candidate fanout type=node score=1.00 selected=True",
+          "timestamp": "2026-04-14T14:05:31.309969+00:00"
+        },
+        {
+          "event": "activation",
+          "node_id": "fanout",
+          "message": "activation mode=always decision=activated",
+          "timestamp": "2026-04-14T14:05:31.309969+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "fanout",
+          "message": "node_id='fanout'",
+          "timestamp": "2026-04-14T14:05:31.309969+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "fanout",
+          "message": "node_type='control.parallel'",
+          "timestamp": "2026-04-14T14:05:31.309969+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "fanout",
+          "message": "handled_by='dispatcher'",
+          "timestamp": "2026-04-14T14:05:31.309969+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "fanout",
+          "message": "branch_count=2",
+          "timestamp": "2026-04-14T14:05:31.309969+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "fanout",
+          "message": "branches=['research_a', 'research_b']",
+          "timestamp": "2026-04-14T14:05:31.309969+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "fanout",
+          "message": "barrier='merge'",
+          "timestamp": "2026-04-14T14:05:31.309969+00:00"
+        }
+      ],
+      "artifacts": [],
+      "error": null,
+      "started_at": "2026-04-14T14:05:31.309969Z",
+      "ended_at": "2026-04-14T14:05:31.309969Z",
+      "metadata": {
+        "node_kind": "node",
+        "node_type": "control.parallel",
+        "task_id": "task-fbcf294554f6",
+        "activation_candidate_ids": [
+          "cand-fdea9eb201"
+        ],
+        "selected_candidate_ids": [
+          "cand-fdea9eb201"
+        ],
+        "activation_id": "act-b6955bcf3e",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "activation_tags": [],
+        "delegate_candidates": [],
+        "feedback_channels": [],
+        "feedback_ids": [
+          "fb-bcf0aab039"
+        ]
+      }
+    },
+    {
+      "step_id": "step-002",
+      "run_id": "run-b13aaf7cef2c",
+      "node_id": "research_a",
+      "status": "succeeded",
+      "index": 2,
+      "input": {
+        "goal": "Parallel research synthesis",
+        "message": "[dispatcher] scheduled research branches.",
+        "node_id": "fanout",
+        "node_type": "control.parallel",
+        "handled_by": "dispatcher",
+        "state": {},
+        "branch_count": 2,
+        "branches": [
+          "research_a",
+          "research_b"
+        ],
+        "barrier": "merge"
+      },
+      "output": {
+        "message": "[researcher-a] collected product signals.",
+        "node_id": "research_a",
+        "node_type": "research.collect",
+        "handled_by": "researcher-a",
+        "state": {
+          "product_signal_ready": true
+        },
+        "topic": "product",
+        "confidence": 7
+      },
+      "trace": [
+        {
+          "event": "reasoning",
+          "node_id": "research_a",
+          "message": "Executing node research_a (research.collect)",
+          "timestamp": "2026-04-14T14:05:31.310958+00:00"
+        },
+        {
+          "event": "activation_candidate",
+          "node_id": "research_a",
+          "message": "candidate research_a type=node score=1.00 selected=True",
+          "timestamp": "2026-04-14T14:05:31.310958+00:00"
+        },
+        {
+          "event": "activation",
+          "node_id": "research_a",
+          "message": "activation mode=always decision=activated",
+          "timestamp": "2026-04-14T14:05:31.310958+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "research_a",
+          "message": "node_id='research_a'",
+          "timestamp": "2026-04-14T14:05:31.310958+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "research_a",
+          "message": "node_type='research.collect'",
+          "timestamp": "2026-04-14T14:05:31.310958+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "research_a",
+          "message": "handled_by='researcher-a'",
+          "timestamp": "2026-04-14T14:05:31.310958+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "research_a",
+          "message": "topic='product'",
+          "timestamp": "2026-04-14T14:05:31.310958+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "research_a",
+          "message": "confidence=7",
+          "timestamp": "2026-04-14T14:05:31.310958+00:00"
+        }
+      ],
+      "artifacts": [],
+      "error": null,
+      "started_at": "2026-04-14T14:05:31.310958Z",
+      "ended_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "node_kind": "agent",
+        "node_type": "research.collect",
+        "task_id": "task-fbcf294554f6",
+        "activation_candidate_ids": [
+          "cand-4392b789dd"
+        ],
+        "selected_candidate_ids": [
+          "cand-4392b789dd"
+        ],
+        "activation_id": "act-f215172b18",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "activation_tags": [],
+        "delegate_candidates": [],
+        "feedback_channels": [],
+        "feedback_ids": [
+          "fb-f8c5d97efa"
+        ]
+      }
+    },
+    {
+      "step_id": "step-003",
+      "run_id": "run-b13aaf7cef2c",
+      "node_id": "research_b",
+      "status": "succeeded",
+      "index": 3,
+      "input": {
+        "goal": "Parallel research synthesis",
+        "message": "[researcher-a] collected product signals.",
+        "node_id": "research_a",
+        "node_type": "research.collect",
+        "handled_by": "researcher-a",
+        "state": {
+          "product_signal_ready": true
+        },
+        "topic": "product",
+        "confidence": 7
+      },
+      "output": {
+        "message": "[researcher-b] collected engineering signals.",
+        "node_id": "research_b",
+        "node_type": "research.collect",
+        "handled_by": "researcher-b",
+        "state": {
+          "engineering_signal_ready": true
+        },
+        "topic": "engineering",
+        "confidence": 8
+      },
+      "trace": [
+        {
+          "event": "reasoning",
+          "node_id": "research_b",
+          "message": "Executing node research_b (research.collect)",
+          "timestamp": "2026-04-14T14:05:31.311962+00:00"
+        },
+        {
+          "event": "activation_candidate",
+          "node_id": "research_b",
+          "message": "candidate research_b type=node score=1.00 selected=True",
+          "timestamp": "2026-04-14T14:05:31.311962+00:00"
+        },
+        {
+          "event": "activation",
+          "node_id": "research_b",
+          "message": "activation mode=always decision=activated",
+          "timestamp": "2026-04-14T14:05:31.311962+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "research_b",
+          "message": "node_id='research_b'",
+          "timestamp": "2026-04-14T14:05:31.311962+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "research_b",
+          "message": "node_type='research.collect'",
+          "timestamp": "2026-04-14T14:05:31.312477+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "research_b",
+          "message": "handled_by='researcher-b'",
+          "timestamp": "2026-04-14T14:05:31.312477+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "research_b",
+          "message": "topic='engineering'",
+          "timestamp": "2026-04-14T14:05:31.312477+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "research_b",
+          "message": "confidence=8",
+          "timestamp": "2026-04-14T14:05:31.312477+00:00"
+        }
+      ],
+      "artifacts": [],
+      "error": null,
+      "started_at": "2026-04-14T14:05:31.311962Z",
+      "ended_at": "2026-04-14T14:05:31.312477Z",
+      "metadata": {
+        "node_kind": "agent",
+        "node_type": "research.collect",
+        "task_id": "task-fbcf294554f6",
+        "activation_candidate_ids": [
+          "cand-5038b3ba9a"
+        ],
+        "selected_candidate_ids": [
+          "cand-5038b3ba9a"
+        ],
+        "activation_id": "act-4622d75755",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "activation_tags": [],
+        "delegate_candidates": [],
+        "feedback_channels": [],
+        "feedback_ids": [
+          "fb-662b625998"
+        ]
+      }
+    },
+    {
+      "step_id": "step-004",
+      "run_id": "run-b13aaf7cef2c",
+      "node_id": "merge",
+      "status": "succeeded",
+      "index": 4,
+      "input": {
+        "goal": "Parallel research synthesis",
+        "message": "[researcher-b] collected engineering signals.",
+        "node_id": "research_b",
+        "node_type": "research.collect",
+        "handled_by": "researcher-b",
+        "state": {
+          "engineering_signal_ready": true
+        },
+        "topic": "engineering",
+        "confidence": 8
+      },
+      "output": {
+        "message": "[synthesizer] joined branch outputs and prepared synthesis context.",
+        "node_id": "merge",
+        "node_type": "control.barrier",
+        "handled_by": "synthesizer",
+        "state": {
+          "last_parallel_group": "fanout",
+          "last_parallel_branch_count": 2,
+          "last_parallel_results": {
+            "fanout": {
+              "research_a": {
+                "message": "[researcher-a] collected product signals.",
+                "node_id": "research_a",
+                "node_type": "research.collect",
+                "handled_by": "researcher-a",
+                "state": {
+                  "product_signal_ready": true
+                },
+                "topic": "product",
+                "confidence": 7
+              },
+              "research_b": {
+                "message": "[researcher-b] collected engineering signals.",
+                "node_id": "research_b",
+                "node_type": "research.collect",
+                "handled_by": "researcher-b",
+                "state": {
+                  "engineering_signal_ready": true
+                },
+                "topic": "engineering",
+                "confidence": 8
+              }
+            }
+          }
+        },
+        "parallel_group": "fanout",
+        "branch_count": 2,
+        "branch_outputs": {
+          "research_a": {
+            "message": "[researcher-a] collected product signals.",
+            "node_id": "research_a",
+            "node_type": "research.collect",
+            "handled_by": "researcher-a",
+            "state": {
+              "product_signal_ready": true
+            },
+            "topic": "product",
+            "confidence": 7
+          },
+          "research_b": {
+            "message": "[researcher-b] collected engineering signals.",
+            "node_id": "research_b",
+            "node_type": "research.collect",
+            "handled_by": "researcher-b",
+            "state": {
+              "engineering_signal_ready": true
+            },
+            "topic": "engineering",
+            "confidence": 8
+          }
+        },
+        "branches_completed": [
+          "research_a",
+          "research_b"
+        ]
+      },
+      "trace": [
+        {
+          "event": "reasoning",
+          "node_id": "merge",
+          "message": "Executing node merge (control.barrier)",
+          "timestamp": "2026-04-14T14:05:31.313004+00:00"
+        },
+        {
+          "event": "activation_candidate",
+          "node_id": "merge",
+          "message": "candidate merge type=node score=1.00 selected=True",
+          "timestamp": "2026-04-14T14:05:31.313004+00:00"
+        },
+        {
+          "event": "activation",
+          "node_id": "merge",
+          "message": "activation mode=always decision=activated",
+          "timestamp": "2026-04-14T14:05:31.313004+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "merge",
+          "message": "node_id='merge'",
+          "timestamp": "2026-04-14T14:05:31.313004+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "merge",
+          "message": "node_type='control.barrier'",
+          "timestamp": "2026-04-14T14:05:31.313004+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "merge",
+          "message": "handled_by='synthesizer'",
+          "timestamp": "2026-04-14T14:05:31.313004+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "merge",
+          "message": "parallel_group='fanout'",
+          "timestamp": "2026-04-14T14:05:31.313004+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "merge",
+          "message": "branch_count=2",
+          "timestamp": "2026-04-14T14:05:31.313004+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "merge",
+          "message": "branch_outputs={'research_a': {'message': '[researcher-a] collected product signals.', 'node_id': 'research_a', 'node_type': 'research.collect', 'handled_by': 'researcher-a', 'state': {'product_signal_ready': True}, 'topic': 'product', 'confidence': 7}, 'research_b': {'message': '[researcher-b] collected engineering signals.', 'node_id': 'research_b', 'node_type': 'research.collect', 'handled_by': 'researcher-b', 'state': {'engineering_signal_ready': True}, 'topic': 'engineering', 'confidence': 8}}",
+          "timestamp": "2026-04-14T14:05:31.313004+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "merge",
+          "message": "branches_completed=['research_a', 'research_b']",
+          "timestamp": "2026-04-14T14:05:31.313004+00:00"
+        }
+      ],
+      "artifacts": [],
+      "error": null,
+      "started_at": "2026-04-14T14:05:31.313004Z",
+      "ended_at": "2026-04-14T14:05:31.313004Z",
+      "metadata": {
+        "node_kind": "node",
+        "node_type": "control.barrier",
+        "task_id": "task-fbcf294554f6",
+        "activation_candidate_ids": [
+          "cand-b78a185058"
+        ],
+        "selected_candidate_ids": [
+          "cand-b78a185058"
+        ],
+        "activation_id": "act-e5c16cee81",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "activation_tags": [],
+        "delegate_candidates": [],
+        "feedback_channels": [],
+        "feedback_ids": [
+          "fb-0cfbea15d8"
+        ]
+      }
+    },
+    {
+      "step_id": "step-005",
+      "run_id": "run-b13aaf7cef2c",
+      "node_id": "writer",
+      "status": "succeeded",
+      "index": 5,
+      "input": {
+        "goal": "Parallel research synthesis",
+        "message": "[synthesizer] joined branch outputs and prepared synthesis context.",
+        "node_id": "merge",
+        "node_type": "control.barrier",
+        "handled_by": "synthesizer",
+        "state": {
+          "last_parallel_group": "fanout",
+          "last_parallel_branch_count": 2,
+          "last_parallel_results": {
+            "fanout": {
+              "research_a": {
+                "message": "[researcher-a] collected product signals.",
+                "node_id": "research_a",
+                "node_type": "research.collect",
+                "handled_by": "researcher-a",
+                "state": {
+                  "product_signal_ready": true
+                },
+                "topic": "product",
+                "confidence": 7
+              },
+              "research_b": {
+                "message": "[researcher-b] collected engineering signals.",
+                "node_id": "research_b",
+                "node_type": "research.collect",
+                "handled_by": "researcher-b",
+                "state": {
+                  "engineering_signal_ready": true
+                },
+                "topic": "engineering",
+                "confidence": 8
+              }
+            }
+          }
+        },
+        "parallel_group": "fanout",
+        "branch_count": 2,
+        "branch_outputs": {
+          "research_a": {
+            "message": "[researcher-a] collected product signals.",
+            "node_id": "research_a",
+            "node_type": "research.collect",
+            "handled_by": "researcher-a",
+            "state": {
+              "product_signal_ready": true
+            },
+            "topic": "product",
+            "confidence": 7
+          },
+          "research_b": {
+            "message": "[researcher-b] collected engineering signals.",
+            "node_id": "research_b",
+            "node_type": "research.collect",
+            "handled_by": "researcher-b",
+            "state": {
+              "engineering_signal_ready": true
+            },
+            "topic": "engineering",
+            "confidence": 8
+          }
+        },
+        "branches_completed": [
+          "research_a",
+          "research_b"
+        ]
+      },
+      "output": {
+        "message": "[writer] produced the synthesis summary.",
+        "node_id": "writer",
+        "node_type": "review.summarize",
+        "handled_by": "writer",
+        "state": {},
+        "artifact": {
+          "kind": "report",
+          "name": "parallel-synthesis-summary.md",
+          "content": "# Parallel Synthesis Summary"
+        }
+      },
+      "trace": [
+        {
+          "event": "reasoning",
+          "node_id": "writer",
+          "message": "Executing node writer (review.summarize)",
+          "timestamp": "2026-04-14T14:05:31.314601+00:00"
+        },
+        {
+          "event": "activation_candidate",
+          "node_id": "writer",
+          "message": "candidate writer type=node score=1.00 selected=True",
+          "timestamp": "2026-04-14T14:05:31.315118+00:00"
+        },
+        {
+          "event": "activation",
+          "node_id": "writer",
+          "message": "activation mode=always decision=activated",
+          "timestamp": "2026-04-14T14:05:31.315118+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "writer",
+          "message": "node_id='writer'",
+          "timestamp": "2026-04-14T14:05:31.315118+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "writer",
+          "message": "node_type='review.summarize'",
+          "timestamp": "2026-04-14T14:05:31.315118+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "writer",
+          "message": "handled_by='writer'",
+          "timestamp": "2026-04-14T14:05:31.315118+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "writer",
+          "message": "artifact={'kind': 'report', 'name': 'parallel-synthesis-summary.md', 'content': '# Parallel Synthesis Summary'}",
+          "timestamp": "2026-04-14T14:05:31.315118+00:00"
+        }
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "artifact-4e405eca43",
+          "kind": "report",
+          "name": "parallel-synthesis-summary.md",
+          "uri": "memory://run-b13aaf7cef2c/writer/5/1",
+          "producer_step_id": "step-005",
+          "writeback": {
+            "channel": "artifact",
+            "target": "docs",
+            "mode": "reference",
+            "host_action": "persist_artifact_ref",
+            "content_field": null,
+            "resume_supported": null,
+            "next_node_id": null
+          },
+          "metadata": {
+            "content": "# Parallel Synthesis Summary",
+            "workflow_id": "parallel-synthesis",
+            "producer_node_id": "writer"
+          }
+        }
+      ],
+      "error": null,
+      "started_at": "2026-04-14T14:05:31.314601Z",
+      "ended_at": "2026-04-14T14:05:31.315118Z",
+      "metadata": {
+        "node_kind": "agent",
+        "node_type": "review.summarize",
+        "task_id": "task-fbcf294554f6",
+        "activation_candidate_ids": [
+          "cand-93c82470c1"
+        ],
+        "selected_candidate_ids": [
+          "cand-93c82470c1"
+        ],
+        "activation_id": "act-aa5bc987e5",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "activation_tags": [],
+        "delegate_candidates": [],
+        "feedback_channels": [],
+        "feedback_ids": [
+          "fb-0b3903adbb"
+        ]
+      }
+    }
+  ],
+  "final_output": {
+    "goal": "Parallel research synthesis",
+    "message": "[writer] produced the synthesis summary.",
+    "node_id": "writer",
+    "node_type": "review.summarize",
+    "handled_by": "writer",
+    "state": {},
+    "artifact": {
+      "kind": "report",
+      "name": "parallel-synthesis-summary.md",
+      "content": "# Parallel Synthesis Summary"
+    }
+  },
+  "trace": [
+    {
+      "event": "reasoning",
+      "node_id": "fanout",
+      "message": "Executing node fanout (control.parallel)",
+      "timestamp": "2026-04-14T14:05:31.309969+00:00"
+    },
+    {
+      "event": "activation_candidate",
+      "node_id": "fanout",
+      "message": "candidate fanout type=node score=1.00 selected=True",
+      "timestamp": "2026-04-14T14:05:31.309969+00:00"
+    },
+    {
+      "event": "activation",
+      "node_id": "fanout",
+      "message": "activation mode=always decision=activated",
+      "timestamp": "2026-04-14T14:05:31.309969+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "fanout",
+      "message": "node_id='fanout'",
+      "timestamp": "2026-04-14T14:05:31.309969+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "fanout",
+      "message": "node_type='control.parallel'",
+      "timestamp": "2026-04-14T14:05:31.309969+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "fanout",
+      "message": "handled_by='dispatcher'",
+      "timestamp": "2026-04-14T14:05:31.309969+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "fanout",
+      "message": "branch_count=2",
+      "timestamp": "2026-04-14T14:05:31.309969+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "fanout",
+      "message": "branches=['research_a', 'research_b']",
+      "timestamp": "2026-04-14T14:05:31.309969+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "fanout",
+      "message": "barrier='merge'",
+      "timestamp": "2026-04-14T14:05:31.309969+00:00"
+    },
+    {
+      "event": "route_decision",
+      "node_id": "fanout",
+      "message": "next=research_a",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "feedback_signal",
+      "node_id": "fanout",
+      "message": "Feedback captured for step fanout",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "reasoning",
+      "node_id": "research_a",
+      "message": "Executing node research_a (research.collect)",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "activation_candidate",
+      "node_id": "research_a",
+      "message": "candidate research_a type=node score=1.00 selected=True",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "activation",
+      "node_id": "research_a",
+      "message": "activation mode=always decision=activated",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "research_a",
+      "message": "node_id='research_a'",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "research_a",
+      "message": "node_type='research.collect'",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "research_a",
+      "message": "handled_by='researcher-a'",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "research_a",
+      "message": "topic='product'",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "research_a",
+      "message": "confidence=7",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "route_decision",
+      "node_id": "research_a",
+      "message": "next=research_b",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "feedback_signal",
+      "node_id": "research_a",
+      "message": "Feedback captured for step research_a",
+      "timestamp": "2026-04-14T14:05:31.310958+00:00"
+    },
+    {
+      "event": "reasoning",
+      "node_id": "research_b",
+      "message": "Executing node research_b (research.collect)",
+      "timestamp": "2026-04-14T14:05:31.311962+00:00"
+    },
+    {
+      "event": "activation_candidate",
+      "node_id": "research_b",
+      "message": "candidate research_b type=node score=1.00 selected=True",
+      "timestamp": "2026-04-14T14:05:31.311962+00:00"
+    },
+    {
+      "event": "activation",
+      "node_id": "research_b",
+      "message": "activation mode=always decision=activated",
+      "timestamp": "2026-04-14T14:05:31.311962+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "research_b",
+      "message": "node_id='research_b'",
+      "timestamp": "2026-04-14T14:05:31.311962+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "research_b",
+      "message": "node_type='research.collect'",
+      "timestamp": "2026-04-14T14:05:31.312477+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "research_b",
+      "message": "handled_by='researcher-b'",
+      "timestamp": "2026-04-14T14:05:31.312477+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "research_b",
+      "message": "topic='engineering'",
+      "timestamp": "2026-04-14T14:05:31.312477+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "research_b",
+      "message": "confidence=8",
+      "timestamp": "2026-04-14T14:05:31.312477+00:00"
+    },
+    {
+      "event": "route_decision",
+      "node_id": "research_b",
+      "message": "next=merge",
+      "timestamp": "2026-04-14T14:05:31.312477+00:00"
+    },
+    {
+      "event": "feedback_signal",
+      "node_id": "research_b",
+      "message": "Feedback captured for step research_b",
+      "timestamp": "2026-04-14T14:05:31.312477+00:00"
+    },
+    {
+      "event": "reasoning",
+      "node_id": "merge",
+      "message": "Executing node merge (control.barrier)",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "activation_candidate",
+      "node_id": "merge",
+      "message": "candidate merge type=node score=1.00 selected=True",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "activation",
+      "node_id": "merge",
+      "message": "activation mode=always decision=activated",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "merge",
+      "message": "node_id='merge'",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "merge",
+      "message": "node_type='control.barrier'",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "merge",
+      "message": "handled_by='synthesizer'",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "merge",
+      "message": "parallel_group='fanout'",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "merge",
+      "message": "branch_count=2",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "merge",
+      "message": "branch_outputs={'research_a': {'message': '[researcher-a] collected product signals.', 'node_id': 'research_a', 'node_type': 'research.collect', 'handled_by': 'researcher-a', 'state': {'product_signal_ready': True}, 'topic': 'product', 'confidence': 7}, 'research_b': {'message': '[researcher-b] collected engineering signals.', 'node_id': 'research_b', 'node_type': 'research.collect', 'handled_by': 'researcher-b', 'state': {'engineering_signal_ready': True}, 'topic': 'engineering', 'confidence': 8}}",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "merge",
+      "message": "branches_completed=['research_a', 'research_b']",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "route_decision",
+      "node_id": "merge",
+      "message": "next=writer",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "feedback_signal",
+      "node_id": "merge",
+      "message": "Feedback captured for step merge",
+      "timestamp": "2026-04-14T14:05:31.313004+00:00"
+    },
+    {
+      "event": "reasoning",
+      "node_id": "writer",
+      "message": "Executing node writer (review.summarize)",
+      "timestamp": "2026-04-14T14:05:31.314601+00:00"
+    },
+    {
+      "event": "activation_candidate",
+      "node_id": "writer",
+      "message": "candidate writer type=node score=1.00 selected=True",
+      "timestamp": "2026-04-14T14:05:31.315118+00:00"
+    },
+    {
+      "event": "activation",
+      "node_id": "writer",
+      "message": "activation mode=always decision=activated",
+      "timestamp": "2026-04-14T14:05:31.315118+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "writer",
+      "message": "node_id='writer'",
+      "timestamp": "2026-04-14T14:05:31.315118+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "writer",
+      "message": "node_type='review.summarize'",
+      "timestamp": "2026-04-14T14:05:31.315118+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "writer",
+      "message": "handled_by='writer'",
+      "timestamp": "2026-04-14T14:05:31.315118+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "writer",
+      "message": "artifact={'kind': 'report', 'name': 'parallel-synthesis-summary.md', 'content': '# Parallel Synthesis Summary'}",
+      "timestamp": "2026-04-14T14:05:31.315118+00:00"
+    },
+    {
+      "event": "route_decision",
+      "node_id": "writer",
+      "message": "next=END",
+      "timestamp": "2026-04-14T14:05:31.315118+00:00"
+    },
+    {
+      "event": "feedback_signal",
+      "node_id": "writer",
+      "message": "Feedback captured for step writer",
+      "timestamp": "2026-04-14T14:05:31.315118+00:00"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "artifact-4e405eca43",
+      "kind": "report",
+      "name": "parallel-synthesis-summary.md",
+      "uri": "memory://run-b13aaf7cef2c/writer/5/1",
+      "producer_step_id": "step-005",
+      "writeback": {
+        "channel": "artifact",
+        "target": "docs",
+        "mode": "reference",
+        "host_action": "persist_artifact_ref",
+        "content_field": null,
+        "resume_supported": null,
+        "next_node_id": null
+      },
+      "metadata": {
+        "content": "# Parallel Synthesis Summary",
+        "workflow_id": "parallel-synthesis",
+        "producer_node_id": "writer"
+      }
+    }
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "ckpt-42f80b7f39",
+      "run_id": "run-b13aaf7cef2c",
+      "step_id": "step-001",
+      "state_ref": "checkpoint://run-b13aaf7cef2c/step-001",
+      "state": {
+        "current_node_id": "fanout",
+        "next_node_id": "research_a",
+        "visited_nodes": [
+          "fanout"
+        ],
+        "last_output": {
+          "goal": "Parallel research synthesis",
+          "message": "[dispatcher] scheduled research branches.",
+          "node_id": "fanout",
+          "node_type": "control.parallel",
+          "handled_by": "dispatcher",
+          "state": {},
+          "branch_count": 2,
+          "branches": [
+            "research_a",
+            "research_b"
+          ],
+          "barrier": "merge"
+        },
+        "state": {
+          "step_outputs": {
+            "fanout": {
+              "message": "[dispatcher] scheduled research branches.",
+              "node_id": "fanout",
+              "node_type": "control.parallel",
+              "handled_by": "dispatcher",
+              "state": {},
+              "branch_count": 2,
+              "branches": [
+                "research_a",
+                "research_b"
+              ],
+              "barrier": "merge"
+            },
+            "research_a": {
+              "message": "[researcher-a] collected product signals.",
+              "node_id": "research_a",
+              "node_type": "research.collect",
+              "handled_by": "researcher-a",
+              "state": {
+                "product_signal_ready": true
+              },
+              "topic": "product",
+              "confidence": 7
+            },
+            "research_b": {
+              "message": "[researcher-b] collected engineering signals.",
+              "node_id": "research_b",
+              "node_type": "research.collect",
+              "handled_by": "researcher-b",
+              "state": {
+                "engineering_signal_ready": true
+              },
+              "topic": "engineering",
+              "confidence": 8
+            },
+            "merge": {
+              "message": "[synthesizer] joined branch outputs and prepared synthesis context.",
+              "node_id": "merge",
+              "node_type": "control.barrier",
+              "handled_by": "synthesizer",
+              "state": {
+                "last_parallel_group": "fanout",
+                "last_parallel_branch_count": 2,
+                "last_parallel_results": {
+                  "fanout": {
+                    "research_a": {
+                      "message": "[researcher-a] collected product signals.",
+                      "node_id": "research_a",
+                      "node_type": "research.collect",
+                      "handled_by": "researcher-a",
+                      "state": {
+                        "product_signal_ready": true
+                      },
+                      "topic": "product",
+                      "confidence": 7
+                    },
+                    "research_b": {
+                      "message": "[researcher-b] collected engineering signals.",
+                      "node_id": "research_b",
+                      "node_type": "research.collect",
+                      "handled_by": "researcher-b",
+                      "state": {
+                        "engineering_signal_ready": true
+                      },
+                      "topic": "engineering",
+                      "confidence": 8
+                    }
+                  }
+                }
+              },
+              "parallel_group": "fanout",
+              "branch_count": 2,
+              "branch_outputs": {
+                "research_a": {
+                  "message": "[researcher-a] collected product signals.",
+                  "node_id": "research_a",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-a",
+                  "state": {
+                    "product_signal_ready": true
+                  },
+                  "topic": "product",
+                  "confidence": 7
+                },
+                "research_b": {
+                  "message": "[researcher-b] collected engineering signals.",
+                  "node_id": "research_b",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-b",
+                  "state": {
+                    "engineering_signal_ready": true
+                  },
+                  "topic": "engineering",
+                  "confidence": 8
+                }
+              },
+              "branches_completed": [
+                "research_a",
+                "research_b"
+              ]
+            },
+            "writer": {
+              "message": "[writer] produced the synthesis summary.",
+              "node_id": "writer",
+              "node_type": "review.summarize",
+              "handled_by": "writer",
+              "state": {},
+              "artifact": {
+                "kind": "report",
+                "name": "parallel-synthesis-summary.md",
+                "content": "# Parallel Synthesis Summary"
+              }
+            }
+          },
+          "shared_state": {
+            "parallel": {
+              "fanout": {
+                "branches": [
+                  "research_a",
+                  "research_b"
+                ],
+                "remaining_branches": [
+                  "research_a",
+                  "research_b"
+                ],
+                "branch_outputs": {
+                  "research_a": {
+                    "message": "[researcher-a] collected product signals.",
+                    "node_id": "research_a",
+                    "node_type": "research.collect",
+                    "handled_by": "researcher-a",
+                    "state": {
+                      "product_signal_ready": true
+                    },
+                    "topic": "product",
+                    "confidence": 7
+                  },
+                  "research_b": {
+                    "message": "[researcher-b] collected engineering signals.",
+                    "node_id": "research_b",
+                    "node_type": "research.collect",
+                    "handled_by": "researcher-b",
+                    "state": {
+                      "engineering_signal_ready": true
+                    },
+                    "topic": "engineering",
+                    "confidence": 8
+                  }
+                },
+                "barrier": "merge"
+              }
+            },
+            "active_parallel": "fanout"
+          }
+        }
+      },
+      "created_at": "2026-04-14T14:05:31.309969Z",
+      "writeback": {
+        "channel": "checkpoint",
+        "target": "graph",
+        "mode": "reference",
+        "host_action": "persist_checkpoint_ref",
+        "content_field": null,
+        "resume_supported": true,
+        "next_node_id": "research_a"
+      },
+      "metadata": {
+        "workflow_id": "parallel-synthesis",
+        "entrypoint": "fanout"
+      }
+    },
+    {
+      "checkpoint_id": "ckpt-16cf46c6b6",
+      "run_id": "run-b13aaf7cef2c",
+      "step_id": "step-002",
+      "state_ref": "checkpoint://run-b13aaf7cef2c/step-002",
+      "state": {
+        "current_node_id": "research_a",
+        "next_node_id": "research_b",
+        "visited_nodes": [
+          "fanout",
+          "research_a"
+        ],
+        "last_output": {
+          "goal": "Parallel research synthesis",
+          "message": "[researcher-a] collected product signals.",
+          "node_id": "research_a",
+          "node_type": "research.collect",
+          "handled_by": "researcher-a",
+          "state": {
+            "product_signal_ready": true
+          },
+          "topic": "product",
+          "confidence": 7
+        },
+        "state": {
+          "step_outputs": {
+            "fanout": {
+              "message": "[dispatcher] scheduled research branches.",
+              "node_id": "fanout",
+              "node_type": "control.parallel",
+              "handled_by": "dispatcher",
+              "state": {},
+              "branch_count": 2,
+              "branches": [
+                "research_a",
+                "research_b"
+              ],
+              "barrier": "merge"
+            },
+            "research_a": {
+              "message": "[researcher-a] collected product signals.",
+              "node_id": "research_a",
+              "node_type": "research.collect",
+              "handled_by": "researcher-a",
+              "state": {
+                "product_signal_ready": true
+              },
+              "topic": "product",
+              "confidence": 7
+            },
+            "research_b": {
+              "message": "[researcher-b] collected engineering signals.",
+              "node_id": "research_b",
+              "node_type": "research.collect",
+              "handled_by": "researcher-b",
+              "state": {
+                "engineering_signal_ready": true
+              },
+              "topic": "engineering",
+              "confidence": 8
+            },
+            "merge": {
+              "message": "[synthesizer] joined branch outputs and prepared synthesis context.",
+              "node_id": "merge",
+              "node_type": "control.barrier",
+              "handled_by": "synthesizer",
+              "state": {
+                "last_parallel_group": "fanout",
+                "last_parallel_branch_count": 2,
+                "last_parallel_results": {
+                  "fanout": {
+                    "research_a": {
+                      "message": "[researcher-a] collected product signals.",
+                      "node_id": "research_a",
+                      "node_type": "research.collect",
+                      "handled_by": "researcher-a",
+                      "state": {
+                        "product_signal_ready": true
+                      },
+                      "topic": "product",
+                      "confidence": 7
+                    },
+                    "research_b": {
+                      "message": "[researcher-b] collected engineering signals.",
+                      "node_id": "research_b",
+                      "node_type": "research.collect",
+                      "handled_by": "researcher-b",
+                      "state": {
+                        "engineering_signal_ready": true
+                      },
+                      "topic": "engineering",
+                      "confidence": 8
+                    }
+                  }
+                }
+              },
+              "parallel_group": "fanout",
+              "branch_count": 2,
+              "branch_outputs": {
+                "research_a": {
+                  "message": "[researcher-a] collected product signals.",
+                  "node_id": "research_a",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-a",
+                  "state": {
+                    "product_signal_ready": true
+                  },
+                  "topic": "product",
+                  "confidence": 7
+                },
+                "research_b": {
+                  "message": "[researcher-b] collected engineering signals.",
+                  "node_id": "research_b",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-b",
+                  "state": {
+                    "engineering_signal_ready": true
+                  },
+                  "topic": "engineering",
+                  "confidence": 8
+                }
+              },
+              "branches_completed": [
+                "research_a",
+                "research_b"
+              ]
+            },
+            "writer": {
+              "message": "[writer] produced the synthesis summary.",
+              "node_id": "writer",
+              "node_type": "review.summarize",
+              "handled_by": "writer",
+              "state": {},
+              "artifact": {
+                "kind": "report",
+                "name": "parallel-synthesis-summary.md",
+                "content": "# Parallel Synthesis Summary"
+              }
+            }
+          },
+          "shared_state": {
+            "parallel": {
+              "fanout": {
+                "branches": [
+                  "research_a",
+                  "research_b"
+                ],
+                "remaining_branches": [
+                  "research_b"
+                ],
+                "branch_outputs": {
+                  "research_a": {
+                    "message": "[researcher-a] collected product signals.",
+                    "node_id": "research_a",
+                    "node_type": "research.collect",
+                    "handled_by": "researcher-a",
+                    "state": {
+                      "product_signal_ready": true
+                    },
+                    "topic": "product",
+                    "confidence": 7
+                  },
+                  "research_b": {
+                    "message": "[researcher-b] collected engineering signals.",
+                    "node_id": "research_b",
+                    "node_type": "research.collect",
+                    "handled_by": "researcher-b",
+                    "state": {
+                      "engineering_signal_ready": true
+                    },
+                    "topic": "engineering",
+                    "confidence": 8
+                  }
+                },
+                "barrier": "merge"
+              }
+            },
+            "active_parallel": "fanout",
+            "product_signal_ready": true
+          }
+        }
+      },
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "writeback": {
+        "channel": "checkpoint",
+        "target": "graph",
+        "mode": "reference",
+        "host_action": "persist_checkpoint_ref",
+        "content_field": null,
+        "resume_supported": true,
+        "next_node_id": "research_b"
+      },
+      "metadata": {
+        "workflow_id": "parallel-synthesis",
+        "entrypoint": "fanout"
+      }
+    },
+    {
+      "checkpoint_id": "ckpt-ceadc54149",
+      "run_id": "run-b13aaf7cef2c",
+      "step_id": "step-003",
+      "state_ref": "checkpoint://run-b13aaf7cef2c/step-003",
+      "state": {
+        "current_node_id": "research_b",
+        "next_node_id": "merge",
+        "visited_nodes": [
+          "fanout",
+          "research_a",
+          "research_b"
+        ],
+        "last_output": {
+          "goal": "Parallel research synthesis",
+          "message": "[researcher-b] collected engineering signals.",
+          "node_id": "research_b",
+          "node_type": "research.collect",
+          "handled_by": "researcher-b",
+          "state": {
+            "engineering_signal_ready": true
+          },
+          "topic": "engineering",
+          "confidence": 8
+        },
+        "state": {
+          "step_outputs": {
+            "fanout": {
+              "message": "[dispatcher] scheduled research branches.",
+              "node_id": "fanout",
+              "node_type": "control.parallel",
+              "handled_by": "dispatcher",
+              "state": {},
+              "branch_count": 2,
+              "branches": [
+                "research_a",
+                "research_b"
+              ],
+              "barrier": "merge"
+            },
+            "research_a": {
+              "message": "[researcher-a] collected product signals.",
+              "node_id": "research_a",
+              "node_type": "research.collect",
+              "handled_by": "researcher-a",
+              "state": {
+                "product_signal_ready": true
+              },
+              "topic": "product",
+              "confidence": 7
+            },
+            "research_b": {
+              "message": "[researcher-b] collected engineering signals.",
+              "node_id": "research_b",
+              "node_type": "research.collect",
+              "handled_by": "researcher-b",
+              "state": {
+                "engineering_signal_ready": true
+              },
+              "topic": "engineering",
+              "confidence": 8
+            },
+            "merge": {
+              "message": "[synthesizer] joined branch outputs and prepared synthesis context.",
+              "node_id": "merge",
+              "node_type": "control.barrier",
+              "handled_by": "synthesizer",
+              "state": {
+                "last_parallel_group": "fanout",
+                "last_parallel_branch_count": 2,
+                "last_parallel_results": {
+                  "fanout": {
+                    "research_a": {
+                      "message": "[researcher-a] collected product signals.",
+                      "node_id": "research_a",
+                      "node_type": "research.collect",
+                      "handled_by": "researcher-a",
+                      "state": {
+                        "product_signal_ready": true
+                      },
+                      "topic": "product",
+                      "confidence": 7
+                    },
+                    "research_b": {
+                      "message": "[researcher-b] collected engineering signals.",
+                      "node_id": "research_b",
+                      "node_type": "research.collect",
+                      "handled_by": "researcher-b",
+                      "state": {
+                        "engineering_signal_ready": true
+                      },
+                      "topic": "engineering",
+                      "confidence": 8
+                    }
+                  }
+                }
+              },
+              "parallel_group": "fanout",
+              "branch_count": 2,
+              "branch_outputs": {
+                "research_a": {
+                  "message": "[researcher-a] collected product signals.",
+                  "node_id": "research_a",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-a",
+                  "state": {
+                    "product_signal_ready": true
+                  },
+                  "topic": "product",
+                  "confidence": 7
+                },
+                "research_b": {
+                  "message": "[researcher-b] collected engineering signals.",
+                  "node_id": "research_b",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-b",
+                  "state": {
+                    "engineering_signal_ready": true
+                  },
+                  "topic": "engineering",
+                  "confidence": 8
+                }
+              },
+              "branches_completed": [
+                "research_a",
+                "research_b"
+              ]
+            },
+            "writer": {
+              "message": "[writer] produced the synthesis summary.",
+              "node_id": "writer",
+              "node_type": "review.summarize",
+              "handled_by": "writer",
+              "state": {},
+              "artifact": {
+                "kind": "report",
+                "name": "parallel-synthesis-summary.md",
+                "content": "# Parallel Synthesis Summary"
+              }
+            }
+          },
+          "shared_state": {
+            "parallel": {
+              "fanout": {
+                "branches": [
+                  "research_a",
+                  "research_b"
+                ],
+                "remaining_branches": [],
+                "branch_outputs": {
+                  "research_a": {
+                    "message": "[researcher-a] collected product signals.",
+                    "node_id": "research_a",
+                    "node_type": "research.collect",
+                    "handled_by": "researcher-a",
+                    "state": {
+                      "product_signal_ready": true
+                    },
+                    "topic": "product",
+                    "confidence": 7
+                  },
+                  "research_b": {
+                    "message": "[researcher-b] collected engineering signals.",
+                    "node_id": "research_b",
+                    "node_type": "research.collect",
+                    "handled_by": "researcher-b",
+                    "state": {
+                      "engineering_signal_ready": true
+                    },
+                    "topic": "engineering",
+                    "confidence": 8
+                  }
+                },
+                "barrier": "merge"
+              }
+            },
+            "active_parallel": "fanout",
+            "product_signal_ready": true,
+            "engineering_signal_ready": true
+          }
+        }
+      },
+      "created_at": "2026-04-14T14:05:31.312477Z",
+      "writeback": {
+        "channel": "checkpoint",
+        "target": "graph",
+        "mode": "reference",
+        "host_action": "persist_checkpoint_ref",
+        "content_field": null,
+        "resume_supported": true,
+        "next_node_id": "merge"
+      },
+      "metadata": {
+        "workflow_id": "parallel-synthesis",
+        "entrypoint": "fanout"
+      }
+    },
+    {
+      "checkpoint_id": "ckpt-24dbd4f60b",
+      "run_id": "run-b13aaf7cef2c",
+      "step_id": "step-004",
+      "state_ref": "checkpoint://run-b13aaf7cef2c/step-004",
+      "state": {
+        "current_node_id": "merge",
+        "next_node_id": "writer",
+        "visited_nodes": [
+          "fanout",
+          "research_a",
+          "research_b",
+          "merge"
+        ],
+        "last_output": {
+          "goal": "Parallel research synthesis",
+          "message": "[synthesizer] joined branch outputs and prepared synthesis context.",
+          "node_id": "merge",
+          "node_type": "control.barrier",
+          "handled_by": "synthesizer",
+          "state": {
+            "last_parallel_group": "fanout",
+            "last_parallel_branch_count": 2,
+            "last_parallel_results": {
+              "fanout": {
+                "research_a": {
+                  "message": "[researcher-a] collected product signals.",
+                  "node_id": "research_a",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-a",
+                  "state": {
+                    "product_signal_ready": true
+                  },
+                  "topic": "product",
+                  "confidence": 7
+                },
+                "research_b": {
+                  "message": "[researcher-b] collected engineering signals.",
+                  "node_id": "research_b",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-b",
+                  "state": {
+                    "engineering_signal_ready": true
+                  },
+                  "topic": "engineering",
+                  "confidence": 8
+                }
+              }
+            }
+          },
+          "parallel_group": "fanout",
+          "branch_count": 2,
+          "branch_outputs": {
+            "research_a": {
+              "message": "[researcher-a] collected product signals.",
+              "node_id": "research_a",
+              "node_type": "research.collect",
+              "handled_by": "researcher-a",
+              "state": {
+                "product_signal_ready": true
+              },
+              "topic": "product",
+              "confidence": 7
+            },
+            "research_b": {
+              "message": "[researcher-b] collected engineering signals.",
+              "node_id": "research_b",
+              "node_type": "research.collect",
+              "handled_by": "researcher-b",
+              "state": {
+                "engineering_signal_ready": true
+              },
+              "topic": "engineering",
+              "confidence": 8
+            }
+          },
+          "branches_completed": [
+            "research_a",
+            "research_b"
+          ]
+        },
+        "state": {
+          "step_outputs": {
+            "fanout": {
+              "message": "[dispatcher] scheduled research branches.",
+              "node_id": "fanout",
+              "node_type": "control.parallel",
+              "handled_by": "dispatcher",
+              "state": {},
+              "branch_count": 2,
+              "branches": [
+                "research_a",
+                "research_b"
+              ],
+              "barrier": "merge"
+            },
+            "research_a": {
+              "message": "[researcher-a] collected product signals.",
+              "node_id": "research_a",
+              "node_type": "research.collect",
+              "handled_by": "researcher-a",
+              "state": {
+                "product_signal_ready": true
+              },
+              "topic": "product",
+              "confidence": 7
+            },
+            "research_b": {
+              "message": "[researcher-b] collected engineering signals.",
+              "node_id": "research_b",
+              "node_type": "research.collect",
+              "handled_by": "researcher-b",
+              "state": {
+                "engineering_signal_ready": true
+              },
+              "topic": "engineering",
+              "confidence": 8
+            },
+            "merge": {
+              "message": "[synthesizer] joined branch outputs and prepared synthesis context.",
+              "node_id": "merge",
+              "node_type": "control.barrier",
+              "handled_by": "synthesizer",
+              "state": {
+                "last_parallel_group": "fanout",
+                "last_parallel_branch_count": 2,
+                "last_parallel_results": {
+                  "fanout": {
+                    "research_a": {
+                      "message": "[researcher-a] collected product signals.",
+                      "node_id": "research_a",
+                      "node_type": "research.collect",
+                      "handled_by": "researcher-a",
+                      "state": {
+                        "product_signal_ready": true
+                      },
+                      "topic": "product",
+                      "confidence": 7
+                    },
+                    "research_b": {
+                      "message": "[researcher-b] collected engineering signals.",
+                      "node_id": "research_b",
+                      "node_type": "research.collect",
+                      "handled_by": "researcher-b",
+                      "state": {
+                        "engineering_signal_ready": true
+                      },
+                      "topic": "engineering",
+                      "confidence": 8
+                    }
+                  }
+                }
+              },
+              "parallel_group": "fanout",
+              "branch_count": 2,
+              "branch_outputs": {
+                "research_a": {
+                  "message": "[researcher-a] collected product signals.",
+                  "node_id": "research_a",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-a",
+                  "state": {
+                    "product_signal_ready": true
+                  },
+                  "topic": "product",
+                  "confidence": 7
+                },
+                "research_b": {
+                  "message": "[researcher-b] collected engineering signals.",
+                  "node_id": "research_b",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-b",
+                  "state": {
+                    "engineering_signal_ready": true
+                  },
+                  "topic": "engineering",
+                  "confidence": 8
+                }
+              },
+              "branches_completed": [
+                "research_a",
+                "research_b"
+              ]
+            },
+            "writer": {
+              "message": "[writer] produced the synthesis summary.",
+              "node_id": "writer",
+              "node_type": "review.summarize",
+              "handled_by": "writer",
+              "state": {},
+              "artifact": {
+                "kind": "report",
+                "name": "parallel-synthesis-summary.md",
+                "content": "# Parallel Synthesis Summary"
+              }
+            }
+          },
+          "shared_state": {
+            "parallel": {
+              "fanout": {
+                "branches": [
+                  "research_a",
+                  "research_b"
+                ],
+                "remaining_branches": [],
+                "branch_outputs": {
+                  "research_a": {
+                    "message": "[researcher-a] collected product signals.",
+                    "node_id": "research_a",
+                    "node_type": "research.collect",
+                    "handled_by": "researcher-a",
+                    "state": {
+                      "product_signal_ready": true
+                    },
+                    "topic": "product",
+                    "confidence": 7
+                  },
+                  "research_b": {
+                    "message": "[researcher-b] collected engineering signals.",
+                    "node_id": "research_b",
+                    "node_type": "research.collect",
+                    "handled_by": "researcher-b",
+                    "state": {
+                      "engineering_signal_ready": true
+                    },
+                    "topic": "engineering",
+                    "confidence": 8
+                  }
+                },
+                "barrier": "merge"
+              }
+            },
+            "active_parallel": null,
+            "product_signal_ready": true,
+            "engineering_signal_ready": true,
+            "last_parallel_group": "fanout",
+            "last_parallel_branch_count": 2,
+            "last_parallel_results": {
+              "fanout": {
+                "research_a": {
+                  "message": "[researcher-a] collected product signals.",
+                  "node_id": "research_a",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-a",
+                  "state": {
+                    "product_signal_ready": true
+                  },
+                  "topic": "product",
+                  "confidence": 7
+                },
+                "research_b": {
+                  "message": "[researcher-b] collected engineering signals.",
+                  "node_id": "research_b",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-b",
+                  "state": {
+                    "engineering_signal_ready": true
+                  },
+                  "topic": "engineering",
+                  "confidence": 8
+                }
+              }
+            }
+          }
+        }
+      },
+      "created_at": "2026-04-14T14:05:31.313004Z",
+      "writeback": {
+        "channel": "checkpoint",
+        "target": "graph",
+        "mode": "reference",
+        "host_action": "persist_checkpoint_ref",
+        "content_field": null,
+        "resume_supported": true,
+        "next_node_id": "writer"
+      },
+      "metadata": {
+        "workflow_id": "parallel-synthesis",
+        "entrypoint": "fanout"
+      }
+    },
+    {
+      "checkpoint_id": "ckpt-ea5391b88a",
+      "run_id": "run-b13aaf7cef2c",
+      "step_id": "step-005",
+      "state_ref": "checkpoint://run-b13aaf7cef2c/step-005",
+      "state": {
+        "current_node_id": "writer",
+        "next_node_id": null,
+        "visited_nodes": [
+          "fanout",
+          "research_a",
+          "research_b",
+          "merge",
+          "writer"
+        ],
+        "last_output": {
+          "goal": "Parallel research synthesis",
+          "message": "[writer] produced the synthesis summary.",
+          "node_id": "writer",
+          "node_type": "review.summarize",
+          "handled_by": "writer",
+          "state": {},
+          "artifact": {
+            "kind": "report",
+            "name": "parallel-synthesis-summary.md",
+            "content": "# Parallel Synthesis Summary"
+          }
+        },
+        "state": {
+          "step_outputs": {
+            "fanout": {
+              "message": "[dispatcher] scheduled research branches.",
+              "node_id": "fanout",
+              "node_type": "control.parallel",
+              "handled_by": "dispatcher",
+              "state": {},
+              "branch_count": 2,
+              "branches": [
+                "research_a",
+                "research_b"
+              ],
+              "barrier": "merge"
+            },
+            "research_a": {
+              "message": "[researcher-a] collected product signals.",
+              "node_id": "research_a",
+              "node_type": "research.collect",
+              "handled_by": "researcher-a",
+              "state": {
+                "product_signal_ready": true
+              },
+              "topic": "product",
+              "confidence": 7
+            },
+            "research_b": {
+              "message": "[researcher-b] collected engineering signals.",
+              "node_id": "research_b",
+              "node_type": "research.collect",
+              "handled_by": "researcher-b",
+              "state": {
+                "engineering_signal_ready": true
+              },
+              "topic": "engineering",
+              "confidence": 8
+            },
+            "merge": {
+              "message": "[synthesizer] joined branch outputs and prepared synthesis context.",
+              "node_id": "merge",
+              "node_type": "control.barrier",
+              "handled_by": "synthesizer",
+              "state": {
+                "last_parallel_group": "fanout",
+                "last_parallel_branch_count": 2,
+                "last_parallel_results": {
+                  "fanout": {
+                    "research_a": {
+                      "message": "[researcher-a] collected product signals.",
+                      "node_id": "research_a",
+                      "node_type": "research.collect",
+                      "handled_by": "researcher-a",
+                      "state": {
+                        "product_signal_ready": true
+                      },
+                      "topic": "product",
+                      "confidence": 7
+                    },
+                    "research_b": {
+                      "message": "[researcher-b] collected engineering signals.",
+                      "node_id": "research_b",
+                      "node_type": "research.collect",
+                      "handled_by": "researcher-b",
+                      "state": {
+                        "engineering_signal_ready": true
+                      },
+                      "topic": "engineering",
+                      "confidence": 8
+                    }
+                  }
+                }
+              },
+              "parallel_group": "fanout",
+              "branch_count": 2,
+              "branch_outputs": {
+                "research_a": {
+                  "message": "[researcher-a] collected product signals.",
+                  "node_id": "research_a",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-a",
+                  "state": {
+                    "product_signal_ready": true
+                  },
+                  "topic": "product",
+                  "confidence": 7
+                },
+                "research_b": {
+                  "message": "[researcher-b] collected engineering signals.",
+                  "node_id": "research_b",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-b",
+                  "state": {
+                    "engineering_signal_ready": true
+                  },
+                  "topic": "engineering",
+                  "confidence": 8
+                }
+              },
+              "branches_completed": [
+                "research_a",
+                "research_b"
+              ]
+            },
+            "writer": {
+              "message": "[writer] produced the synthesis summary.",
+              "node_id": "writer",
+              "node_type": "review.summarize",
+              "handled_by": "writer",
+              "state": {},
+              "artifact": {
+                "kind": "report",
+                "name": "parallel-synthesis-summary.md",
+                "content": "# Parallel Synthesis Summary"
+              }
+            }
+          },
+          "shared_state": {
+            "parallel": {
+              "fanout": {
+                "branches": [
+                  "research_a",
+                  "research_b"
+                ],
+                "remaining_branches": [],
+                "branch_outputs": {
+                  "research_a": {
+                    "message": "[researcher-a] collected product signals.",
+                    "node_id": "research_a",
+                    "node_type": "research.collect",
+                    "handled_by": "researcher-a",
+                    "state": {
+                      "product_signal_ready": true
+                    },
+                    "topic": "product",
+                    "confidence": 7
+                  },
+                  "research_b": {
+                    "message": "[researcher-b] collected engineering signals.",
+                    "node_id": "research_b",
+                    "node_type": "research.collect",
+                    "handled_by": "researcher-b",
+                    "state": {
+                      "engineering_signal_ready": true
+                    },
+                    "topic": "engineering",
+                    "confidence": 8
+                  }
+                },
+                "barrier": "merge"
+              }
+            },
+            "active_parallel": null,
+            "product_signal_ready": true,
+            "engineering_signal_ready": true,
+            "last_parallel_group": "fanout",
+            "last_parallel_branch_count": 2,
+            "last_parallel_results": {
+              "fanout": {
+                "research_a": {
+                  "message": "[researcher-a] collected product signals.",
+                  "node_id": "research_a",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-a",
+                  "state": {
+                    "product_signal_ready": true
+                  },
+                  "topic": "product",
+                  "confidence": 7
+                },
+                "research_b": {
+                  "message": "[researcher-b] collected engineering signals.",
+                  "node_id": "research_b",
+                  "node_type": "research.collect",
+                  "handled_by": "researcher-b",
+                  "state": {
+                    "engineering_signal_ready": true
+                  },
+                  "topic": "engineering",
+                  "confidence": 8
+                }
+              }
+            }
+          }
+        }
+      },
+      "created_at": "2026-04-14T14:05:31.315118Z",
+      "writeback": {
+        "channel": "checkpoint",
+        "target": "graph",
+        "mode": "reference",
+        "host_action": "persist_checkpoint_ref",
+        "content_field": null,
+        "resume_supported": false,
+        "next_node_id": null
+      },
+      "metadata": {
+        "workflow_id": "parallel-synthesis",
+        "entrypoint": "fanout"
+      }
+    }
+  ],
+  "handoffs": [
+    {
+      "handoff_id": "handoff-56924beb36",
+      "run_id": "run-b13aaf7cef2c",
+      "from_step_id": "step-001",
+      "from_node_id": "fanout",
+      "to_node_id": "research_a",
+      "goal": null,
+      "artifact_ids": [],
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "workflow_id": "parallel-synthesis"
+      }
+    },
+    {
+      "handoff_id": "handoff-a1fdfa571a",
+      "run_id": "run-b13aaf7cef2c",
+      "from_step_id": "step-002",
+      "from_node_id": "research_a",
+      "to_node_id": "research_b",
+      "goal": null,
+      "artifact_ids": [],
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "workflow_id": "parallel-synthesis"
+      }
+    },
+    {
+      "handoff_id": "handoff-ebe190bb31",
+      "run_id": "run-b13aaf7cef2c",
+      "from_step_id": "step-003",
+      "from_node_id": "research_b",
+      "to_node_id": "merge",
+      "goal": null,
+      "artifact_ids": [],
+      "created_at": "2026-04-14T14:05:31.312477Z",
+      "metadata": {
+        "workflow_id": "parallel-synthesis"
+      }
+    },
+    {
+      "handoff_id": "handoff-62307d8654",
+      "run_id": "run-b13aaf7cef2c",
+      "from_step_id": "step-004",
+      "from_node_id": "merge",
+      "to_node_id": "writer",
+      "goal": null,
+      "artifact_ids": [],
+      "created_at": "2026-04-14T14:05:31.313004Z",
+      "metadata": {
+        "workflow_id": "parallel-synthesis"
+      }
+    }
+  ],
+  "activation_candidates": [
+    {
+      "candidate_id": "cand-fdea9eb201",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-001",
+      "node_id": "fanout",
+      "candidate_type": "node",
+      "candidate_ref": "fanout",
+      "source_signals": [
+        "goal",
+        "context"
+      ],
+      "score": 1.0,
+      "selected": true,
+      "suppressed_reason": null,
+      "created_at": "2026-04-14T14:05:31.309969Z",
+      "metadata": {
+        "node_type": "control.parallel",
+        "node_kind": "node",
+        "scoring_breakdown": {
+          "base_score": 1.0,
+          "type_weight": 1.0,
+          "signal_bonus": 0.0,
+          "weighted_signals": {
+            "goal": 0.0,
+            "context": 0.0
+          },
+          "score": 1.0
+        }
+      }
+    },
+    {
+      "candidate_id": "cand-4392b789dd",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-002",
+      "node_id": "research_a",
+      "candidate_type": "node",
+      "candidate_ref": "research_a",
+      "source_signals": [
+        "goal",
+        "context"
+      ],
+      "score": 1.0,
+      "selected": true,
+      "suppressed_reason": null,
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "node_type": "research.collect",
+        "node_kind": "agent",
+        "scoring_breakdown": {
+          "base_score": 1.0,
+          "type_weight": 1.0,
+          "signal_bonus": 0.0,
+          "weighted_signals": {
+            "goal": 0.0,
+            "context": 0.0
+          },
+          "score": 1.0
+        }
+      }
+    },
+    {
+      "candidate_id": "cand-5038b3ba9a",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-003",
+      "node_id": "research_b",
+      "candidate_type": "node",
+      "candidate_ref": "research_b",
+      "source_signals": [
+        "goal",
+        "context"
+      ],
+      "score": 1.0,
+      "selected": true,
+      "suppressed_reason": null,
+      "created_at": "2026-04-14T14:05:31.311962Z",
+      "metadata": {
+        "node_type": "research.collect",
+        "node_kind": "agent",
+        "scoring_breakdown": {
+          "base_score": 1.0,
+          "type_weight": 1.0,
+          "signal_bonus": 0.0,
+          "weighted_signals": {
+            "goal": 0.0,
+            "context": 0.0
+          },
+          "score": 1.0
+        }
+      }
+    },
+    {
+      "candidate_id": "cand-b78a185058",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-004",
+      "node_id": "merge",
+      "candidate_type": "node",
+      "candidate_ref": "merge",
+      "source_signals": [
+        "goal",
+        "context"
+      ],
+      "score": 1.0,
+      "selected": true,
+      "suppressed_reason": null,
+      "created_at": "2026-04-14T14:05:31.313004Z",
+      "metadata": {
+        "node_type": "control.barrier",
+        "node_kind": "node",
+        "scoring_breakdown": {
+          "base_score": 1.0,
+          "type_weight": 1.0,
+          "signal_bonus": 0.0,
+          "weighted_signals": {
+            "goal": 0.0,
+            "context": 0.0
+          },
+          "score": 1.0
+        }
+      }
+    },
+    {
+      "candidate_id": "cand-93c82470c1",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-005",
+      "node_id": "writer",
+      "candidate_type": "node",
+      "candidate_ref": "writer",
+      "source_signals": [
+        "goal",
+        "context"
+      ],
+      "score": 1.0,
+      "selected": true,
+      "suppressed_reason": null,
+      "created_at": "2026-04-14T14:05:31.315118Z",
+      "metadata": {
+        "node_type": "review.summarize",
+        "node_kind": "agent",
+        "scoring_breakdown": {
+          "base_score": 1.0,
+          "type_weight": 1.0,
+          "signal_bonus": 0.0,
+          "weighted_signals": {
+            "goal": 0.0,
+            "context": 0.0
+          },
+          "score": 1.0
+        }
+      }
+    }
+  ],
+  "activations": [
+    {
+      "activation_id": "act-b6955bcf3e",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-001",
+      "node_id": "fanout",
+      "mode": "always",
+      "decision": "activated",
+      "tags": [],
+      "activate_when": [],
+      "suppress_when": [],
+      "delegate_candidates": [],
+      "subgoal_triggers": [],
+      "retry_gates": [],
+      "review_gates": [],
+      "feedback_channels": [],
+      "signal_sources": [],
+      "reasons": [
+        "runtime_selected"
+      ],
+      "created_at": "2026-04-14T14:05:31.309969Z",
+      "metadata": {
+        "candidate_ids": [
+          "cand-fdea9eb201"
+        ],
+        "selected_candidate_ids": [
+          "cand-fdea9eb201"
+        ],
+        "node_type": "control.parallel",
+        "node_kind": "node",
+        "workflow_activation_enabled": true,
+        "workflow_default_mode": "always"
+      }
+    },
+    {
+      "activation_id": "act-f215172b18",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-002",
+      "node_id": "research_a",
+      "mode": "always",
+      "decision": "activated",
+      "tags": [],
+      "activate_when": [],
+      "suppress_when": [],
+      "delegate_candidates": [],
+      "subgoal_triggers": [],
+      "retry_gates": [],
+      "review_gates": [],
+      "feedback_channels": [],
+      "signal_sources": [],
+      "reasons": [
+        "runtime_selected"
+      ],
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "candidate_ids": [
+          "cand-4392b789dd"
+        ],
+        "selected_candidate_ids": [
+          "cand-4392b789dd"
+        ],
+        "node_type": "research.collect",
+        "node_kind": "agent",
+        "workflow_activation_enabled": true,
+        "workflow_default_mode": "always"
+      }
+    },
+    {
+      "activation_id": "act-4622d75755",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-003",
+      "node_id": "research_b",
+      "mode": "always",
+      "decision": "activated",
+      "tags": [],
+      "activate_when": [],
+      "suppress_when": [],
+      "delegate_candidates": [],
+      "subgoal_triggers": [],
+      "retry_gates": [],
+      "review_gates": [],
+      "feedback_channels": [],
+      "signal_sources": [],
+      "reasons": [
+        "runtime_selected"
+      ],
+      "created_at": "2026-04-14T14:05:31.311962Z",
+      "metadata": {
+        "candidate_ids": [
+          "cand-5038b3ba9a"
+        ],
+        "selected_candidate_ids": [
+          "cand-5038b3ba9a"
+        ],
+        "node_type": "research.collect",
+        "node_kind": "agent",
+        "workflow_activation_enabled": true,
+        "workflow_default_mode": "always"
+      }
+    },
+    {
+      "activation_id": "act-e5c16cee81",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-004",
+      "node_id": "merge",
+      "mode": "always",
+      "decision": "activated",
+      "tags": [],
+      "activate_when": [],
+      "suppress_when": [],
+      "delegate_candidates": [],
+      "subgoal_triggers": [],
+      "retry_gates": [],
+      "review_gates": [],
+      "feedback_channels": [],
+      "signal_sources": [],
+      "reasons": [
+        "runtime_selected"
+      ],
+      "created_at": "2026-04-14T14:05:31.313004Z",
+      "metadata": {
+        "candidate_ids": [
+          "cand-b78a185058"
+        ],
+        "selected_candidate_ids": [
+          "cand-b78a185058"
+        ],
+        "node_type": "control.barrier",
+        "node_kind": "node",
+        "workflow_activation_enabled": true,
+        "workflow_default_mode": "always"
+      }
+    },
+    {
+      "activation_id": "act-aa5bc987e5",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-005",
+      "node_id": "writer",
+      "mode": "always",
+      "decision": "activated",
+      "tags": [],
+      "activate_when": [],
+      "suppress_when": [],
+      "delegate_candidates": [],
+      "subgoal_triggers": [],
+      "retry_gates": [],
+      "review_gates": [],
+      "feedback_channels": [],
+      "signal_sources": [],
+      "reasons": [
+        "runtime_selected"
+      ],
+      "created_at": "2026-04-14T14:05:31.315118Z",
+      "metadata": {
+        "candidate_ids": [
+          "cand-93c82470c1"
+        ],
+        "selected_candidate_ids": [
+          "cand-93c82470c1"
+        ],
+        "node_type": "review.summarize",
+        "node_kind": "agent",
+        "workflow_activation_enabled": true,
+        "workflow_default_mode": "always"
+      }
+    }
+  ],
+  "feedback": [
+    {
+      "feedback_id": "fb-bcf0aab039",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-001",
+      "node_id": "fanout",
+      "source_type": "step",
+      "status": "succeeded",
+      "summary": "Feedback captured for step fanout",
+      "signals": {
+        "node_id": "fanout",
+        "node_type": "control.parallel",
+        "step_status": "succeeded",
+        "activation_id": "act-b6955bcf3e",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "candidate_count": 1,
+        "selected_candidate_count": 1,
+        "delegate_candidate_count": 0,
+        "selected_non_node_candidate_count": 0,
+        "artifact_count": 0,
+        "artifact_ids": [],
+        "checkpoint_id": "ckpt-42f80b7f39",
+        "next_node_id": "research_a",
+        "handoff_id": "handoff-56924beb36",
+        "delegated_run": false,
+        "child_run_id": null,
+        "review_gate_triggered": false,
+        "retry_gate_count": 0
+      },
+      "reward_hints": {
+        "artifact_count": 0.0,
+        "delegated_run": 0.0,
+        "continued_flow": 1.0,
+        "review_gate_triggered": 0.0,
+        "selected_candidates": 1.0
+      },
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "feedback_channels": []
+      }
+    },
+    {
+      "feedback_id": "fb-f8c5d97efa",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-002",
+      "node_id": "research_a",
+      "source_type": "step",
+      "status": "succeeded",
+      "summary": "Feedback captured for step research_a",
+      "signals": {
+        "node_id": "research_a",
+        "node_type": "research.collect",
+        "step_status": "succeeded",
+        "activation_id": "act-f215172b18",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "candidate_count": 1,
+        "selected_candidate_count": 1,
+        "delegate_candidate_count": 0,
+        "selected_non_node_candidate_count": 0,
+        "artifact_count": 0,
+        "artifact_ids": [],
+        "checkpoint_id": "ckpt-16cf46c6b6",
+        "next_node_id": "research_b",
+        "handoff_id": "handoff-a1fdfa571a",
+        "delegated_run": false,
+        "child_run_id": null,
+        "review_gate_triggered": false,
+        "retry_gate_count": 0
+      },
+      "reward_hints": {
+        "artifact_count": 0.0,
+        "delegated_run": 0.0,
+        "continued_flow": 1.0,
+        "review_gate_triggered": 0.0,
+        "selected_candidates": 1.0
+      },
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "feedback_channels": []
+      }
+    },
+    {
+      "feedback_id": "fb-662b625998",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-003",
+      "node_id": "research_b",
+      "source_type": "step",
+      "status": "succeeded",
+      "summary": "Feedback captured for step research_b",
+      "signals": {
+        "node_id": "research_b",
+        "node_type": "research.collect",
+        "step_status": "succeeded",
+        "activation_id": "act-4622d75755",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "candidate_count": 1,
+        "selected_candidate_count": 1,
+        "delegate_candidate_count": 0,
+        "selected_non_node_candidate_count": 0,
+        "artifact_count": 0,
+        "artifact_ids": [],
+        "checkpoint_id": "ckpt-ceadc54149",
+        "next_node_id": "merge",
+        "handoff_id": "handoff-ebe190bb31",
+        "delegated_run": false,
+        "child_run_id": null,
+        "review_gate_triggered": false,
+        "retry_gate_count": 0
+      },
+      "reward_hints": {
+        "artifact_count": 0.0,
+        "delegated_run": 0.0,
+        "continued_flow": 1.0,
+        "review_gate_triggered": 0.0,
+        "selected_candidates": 1.0
+      },
+      "created_at": "2026-04-14T14:05:31.312477Z",
+      "metadata": {
+        "feedback_channels": []
+      }
+    },
+    {
+      "feedback_id": "fb-0cfbea15d8",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-004",
+      "node_id": "merge",
+      "source_type": "step",
+      "status": "succeeded",
+      "summary": "Feedback captured for step merge",
+      "signals": {
+        "node_id": "merge",
+        "node_type": "control.barrier",
+        "step_status": "succeeded",
+        "activation_id": "act-e5c16cee81",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "candidate_count": 1,
+        "selected_candidate_count": 1,
+        "delegate_candidate_count": 0,
+        "selected_non_node_candidate_count": 0,
+        "artifact_count": 0,
+        "artifact_ids": [],
+        "checkpoint_id": "ckpt-24dbd4f60b",
+        "next_node_id": "writer",
+        "handoff_id": "handoff-62307d8654",
+        "delegated_run": false,
+        "child_run_id": null,
+        "review_gate_triggered": false,
+        "retry_gate_count": 0
+      },
+      "reward_hints": {
+        "artifact_count": 0.0,
+        "delegated_run": 0.0,
+        "continued_flow": 1.0,
+        "review_gate_triggered": 0.0,
+        "selected_candidates": 1.0
+      },
+      "created_at": "2026-04-14T14:05:31.313004Z",
+      "metadata": {
+        "feedback_channels": []
+      }
+    },
+    {
+      "feedback_id": "fb-0b3903adbb",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-005",
+      "node_id": "writer",
+      "source_type": "step",
+      "status": "succeeded",
+      "summary": "Feedback captured for step writer",
+      "signals": {
+        "node_id": "writer",
+        "node_type": "review.summarize",
+        "step_status": "succeeded",
+        "activation_id": "act-aa5bc987e5",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "candidate_count": 1,
+        "selected_candidate_count": 1,
+        "delegate_candidate_count": 0,
+        "selected_non_node_candidate_count": 0,
+        "artifact_count": 1,
+        "artifact_ids": [
+          "artifact-4e405eca43"
+        ],
+        "checkpoint_id": "ckpt-ea5391b88a",
+        "next_node_id": null,
+        "handoff_id": null,
+        "delegated_run": false,
+        "child_run_id": null,
+        "review_gate_triggered": false,
+        "retry_gate_count": 0
+      },
+      "reward_hints": {
+        "artifact_count": 1.0,
+        "delegated_run": 0.0,
+        "continued_flow": 0.0,
+        "review_gate_triggered": 0.0,
+        "selected_candidates": 1.0
+      },
+      "created_at": "2026-04-14T14:05:31.315118Z",
+      "metadata": {
+        "feedback_channels": []
+      }
+    },
+    {
+      "feedback_id": "fb-91bef283b5",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": null,
+      "node_id": null,
+      "source_type": "run",
+      "status": "succeeded",
+      "summary": "Run feedback captured for parallel-synthesis",
+      "signals": {
+        "run_status": "succeeded",
+        "step_count": 5,
+        "artifact_count": 1,
+        "checkpoint_count": 5,
+        "handoff_count": 4,
+        "activation_candidate_count": 5,
+        "activation_count": 5,
+        "step_feedback_count": 5
+      },
+      "reward_hints": {
+        "completion": 1.0,
+        "artifact_density": 1.0,
+        "candidate_coverage": 5.0,
+        "activation_coverage": 5.0
+      },
+      "created_at": "2026-04-14T14:05:31.315639Z",
+      "metadata": {
+        "workflow_id": "parallel-synthesis"
+      }
+    }
+  ],
+  "memory_events": [
+    {
+      "event_id": "mem-3d7f91c532",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": null,
+      "category": "task",
+      "summary": "Task started: Parallel Synthesis",
+      "payload": {
+        "focus": "Parallel research synthesis",
+        "workflow_id": "parallel-synthesis",
+        "entrypoint": "fanout"
+      },
+      "created_at": "2026-04-14T14:05:31.309969Z",
+      "metadata": {
+        "source": "runtime_service"
+      }
+    },
+    {
+      "event_id": "mem-9c31f42aaf",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-001",
+      "category": "activation",
+      "summary": "Activation resolved for fanout",
+      "payload": {
+        "activation_id": "act-b6955bcf3e",
+        "node_id": "fanout",
+        "mode": "always",
+        "decision": "activated",
+        "tags": [],
+        "candidate_ids": [
+          "cand-fdea9eb201"
+        ],
+        "selected_candidate_ids": [
+          "cand-fdea9eb201"
+        ],
+        "delegate_candidates": [],
+        "feedback_channels": []
+      },
+      "created_at": "2026-04-14T14:05:31.309969Z",
+      "metadata": {
+        "source": "activation"
+      }
+    },
+    {
+      "event_id": "mem-73d764bc5c",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-001",
+      "category": "step_result",
+      "summary": "[dispatcher] scheduled research branches.",
+      "payload": {
+        "node_id": "fanout",
+        "node_type": "control.parallel",
+        "status": "succeeded",
+        "handled_by": "dispatcher"
+      },
+      "created_at": "2026-04-14T14:05:31.309969Z",
+      "metadata": {
+        "source": "step"
+      }
+    },
+    {
+      "event_id": "mem-9c85a3fc66",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-001",
+      "category": "checkpoint",
+      "summary": "Checkpoint saved after fanout",
+      "payload": {
+        "checkpoint_id": "ckpt-42f80b7f39",
+        "next_node_id": null
+      },
+      "created_at": "2026-04-14T14:05:31.309969Z",
+      "metadata": {
+        "source": "checkpoint"
+      }
+    },
+    {
+      "event_id": "mem-bff178af6b",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-001",
+      "category": "handoff",
+      "summary": "Handoff from fanout to research_a",
+      "payload": {
+        "handoff_id": "handoff-56924beb36",
+        "to_node_id": "research_a",
+        "artifact_ids": [],
+        "goal": null
+      },
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "source": "handoff"
+      }
+    },
+    {
+      "event_id": "mem-2f1fcf37d0",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-001",
+      "category": "feedback_signal",
+      "summary": "Feedback captured for step fanout",
+      "payload": {
+        "feedback_id": "fb-bcf0aab039",
+        "source_type": "step",
+        "status": "succeeded",
+        "signals": {
+          "node_id": "fanout",
+          "node_type": "control.parallel",
+          "step_status": "succeeded",
+          "activation_id": "act-b6955bcf3e",
+          "activation_mode": "always",
+          "activation_decision": "activated",
+          "candidate_count": 1,
+          "selected_candidate_count": 1,
+          "delegate_candidate_count": 0,
+          "selected_non_node_candidate_count": 0,
+          "artifact_count": 0,
+          "artifact_ids": [],
+          "checkpoint_id": "ckpt-42f80b7f39",
+          "next_node_id": "research_a",
+          "handoff_id": "handoff-56924beb36",
+          "delegated_run": false,
+          "child_run_id": null,
+          "review_gate_triggered": false,
+          "retry_gate_count": 0
+        },
+        "reward_hints": {
+          "artifact_count": 0.0,
+          "delegated_run": 0.0,
+          "continued_flow": 1.0,
+          "review_gate_triggered": 0.0,
+          "selected_candidates": 1.0
+        }
+      },
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "source": "feedback"
+      }
+    },
+    {
+      "event_id": "mem-6dbfe10efe",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-002",
+      "category": "activation",
+      "summary": "Activation resolved for research_a",
+      "payload": {
+        "activation_id": "act-f215172b18",
+        "node_id": "research_a",
+        "mode": "always",
+        "decision": "activated",
+        "tags": [],
+        "candidate_ids": [
+          "cand-4392b789dd"
+        ],
+        "selected_candidate_ids": [
+          "cand-4392b789dd"
+        ],
+        "delegate_candidates": [],
+        "feedback_channels": []
+      },
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "source": "activation"
+      }
+    },
+    {
+      "event_id": "mem-8aee131ed0",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-002",
+      "category": "step_result",
+      "summary": "[researcher-a] collected product signals.",
+      "payload": {
+        "node_id": "research_a",
+        "node_type": "research.collect",
+        "status": "succeeded",
+        "handled_by": "researcher-a"
+      },
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "source": "step"
+      }
+    },
+    {
+      "event_id": "mem-4e8663a7b0",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-002",
+      "category": "checkpoint",
+      "summary": "Checkpoint saved after research_a",
+      "payload": {
+        "checkpoint_id": "ckpt-16cf46c6b6",
+        "next_node_id": null
+      },
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "source": "checkpoint"
+      }
+    },
+    {
+      "event_id": "mem-d3e7f2c897",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-002",
+      "category": "handoff",
+      "summary": "Handoff from research_a to research_b",
+      "payload": {
+        "handoff_id": "handoff-a1fdfa571a",
+        "to_node_id": "research_b",
+        "artifact_ids": [],
+        "goal": null
+      },
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "source": "handoff"
+      }
+    },
+    {
+      "event_id": "mem-97c66621ec",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-002",
+      "category": "feedback_signal",
+      "summary": "Feedback captured for step research_a",
+      "payload": {
+        "feedback_id": "fb-f8c5d97efa",
+        "source_type": "step",
+        "status": "succeeded",
+        "signals": {
+          "node_id": "research_a",
+          "node_type": "research.collect",
+          "step_status": "succeeded",
+          "activation_id": "act-f215172b18",
+          "activation_mode": "always",
+          "activation_decision": "activated",
+          "candidate_count": 1,
+          "selected_candidate_count": 1,
+          "delegate_candidate_count": 0,
+          "selected_non_node_candidate_count": 0,
+          "artifact_count": 0,
+          "artifact_ids": [],
+          "checkpoint_id": "ckpt-16cf46c6b6",
+          "next_node_id": "research_b",
+          "handoff_id": "handoff-a1fdfa571a",
+          "delegated_run": false,
+          "child_run_id": null,
+          "review_gate_triggered": false,
+          "retry_gate_count": 0
+        },
+        "reward_hints": {
+          "artifact_count": 0.0,
+          "delegated_run": 0.0,
+          "continued_flow": 1.0,
+          "review_gate_triggered": 0.0,
+          "selected_candidates": 1.0
+        }
+      },
+      "created_at": "2026-04-14T14:05:31.310958Z",
+      "metadata": {
+        "source": "feedback"
+      }
+    },
+    {
+      "event_id": "mem-f724c6193a",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-003",
+      "category": "activation",
+      "summary": "Activation resolved for research_b",
+      "payload": {
+        "activation_id": "act-4622d75755",
+        "node_id": "research_b",
+        "mode": "always",
+        "decision": "activated",
+        "tags": [],
+        "candidate_ids": [
+          "cand-5038b3ba9a"
+        ],
+        "selected_candidate_ids": [
+          "cand-5038b3ba9a"
+        ],
+        "delegate_candidates": [],
+        "feedback_channels": []
+      },
+      "created_at": "2026-04-14T14:05:31.311962Z",
+      "metadata": {
+        "source": "activation"
+      }
+    },
+    {
+      "event_id": "mem-6e43cd4452",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-003",
+      "category": "step_result",
+      "summary": "[researcher-b] collected engineering signals.",
+      "payload": {
+        "node_id": "research_b",
+        "node_type": "research.collect",
+        "status": "succeeded",
+        "handled_by": "researcher-b"
+      },
+      "created_at": "2026-04-14T14:05:31.312477Z",
+      "metadata": {
+        "source": "step"
+      }
+    },
+    {
+      "event_id": "mem-fb3d744ae1",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-003",
+      "category": "checkpoint",
+      "summary": "Checkpoint saved after research_b",
+      "payload": {
+        "checkpoint_id": "ckpt-ceadc54149",
+        "next_node_id": null
+      },
+      "created_at": "2026-04-14T14:05:31.312477Z",
+      "metadata": {
+        "source": "checkpoint"
+      }
+    },
+    {
+      "event_id": "mem-4e5f1a2992",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-003",
+      "category": "handoff",
+      "summary": "Handoff from research_b to merge",
+      "payload": {
+        "handoff_id": "handoff-ebe190bb31",
+        "to_node_id": "merge",
+        "artifact_ids": [],
+        "goal": null
+      },
+      "created_at": "2026-04-14T14:05:31.312477Z",
+      "metadata": {
+        "source": "handoff"
+      }
+    },
+    {
+      "event_id": "mem-9cf208fb01",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-003",
+      "category": "feedback_signal",
+      "summary": "Feedback captured for step research_b",
+      "payload": {
+        "feedback_id": "fb-662b625998",
+        "source_type": "step",
+        "status": "succeeded",
+        "signals": {
+          "node_id": "research_b",
+          "node_type": "research.collect",
+          "step_status": "succeeded",
+          "activation_id": "act-4622d75755",
+          "activation_mode": "always",
+          "activation_decision": "activated",
+          "candidate_count": 1,
+          "selected_candidate_count": 1,
+          "delegate_candidate_count": 0,
+          "selected_non_node_candidate_count": 0,
+          "artifact_count": 0,
+          "artifact_ids": [],
+          "checkpoint_id": "ckpt-ceadc54149",
+          "next_node_id": "merge",
+          "handoff_id": "handoff-ebe190bb31",
+          "delegated_run": false,
+          "child_run_id": null,
+          "review_gate_triggered": false,
+          "retry_gate_count": 0
+        },
+        "reward_hints": {
+          "artifact_count": 0.0,
+          "delegated_run": 0.0,
+          "continued_flow": 1.0,
+          "review_gate_triggered": 0.0,
+          "selected_candidates": 1.0
+        }
+      },
+      "created_at": "2026-04-14T14:05:31.312477Z",
+      "metadata": {
+        "source": "feedback"
+      }
+    },
+    {
+      "event_id": "mem-42f82e7e20",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-004",
+      "category": "activation",
+      "summary": "Activation resolved for merge",
+      "payload": {
+        "activation_id": "act-e5c16cee81",
+        "node_id": "merge",
+        "mode": "always",
+        "decision": "activated",
+        "tags": [],
+        "candidate_ids": [
+          "cand-b78a185058"
+        ],
+        "selected_candidate_ids": [
+          "cand-b78a185058"
+        ],
+        "delegate_candidates": [],
+        "feedback_channels": []
+      },
+      "created_at": "2026-04-14T14:05:31.313004Z",
+      "metadata": {
+        "source": "activation"
+      }
+    },
+    {
+      "event_id": "mem-82897c89c7",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-004",
+      "category": "step_result",
+      "summary": "[synthesizer] joined branch outputs and prepared synthesis context.",
+      "payload": {
+        "node_id": "merge",
+        "node_type": "control.barrier",
+        "status": "succeeded",
+        "handled_by": "synthesizer"
+      },
+      "created_at": "2026-04-14T14:05:31.313004Z",
+      "metadata": {
+        "source": "step"
+      }
+    },
+    {
+      "event_id": "mem-7821a58a25",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-004",
+      "category": "checkpoint",
+      "summary": "Checkpoint saved after merge",
+      "payload": {
+        "checkpoint_id": "ckpt-24dbd4f60b",
+        "next_node_id": null
+      },
+      "created_at": "2026-04-14T14:05:31.313004Z",
+      "metadata": {
+        "source": "checkpoint"
+      }
+    },
+    {
+      "event_id": "mem-592777d843",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-004",
+      "category": "handoff",
+      "summary": "Handoff from merge to writer",
+      "payload": {
+        "handoff_id": "handoff-62307d8654",
+        "to_node_id": "writer",
+        "artifact_ids": [],
+        "goal": null
+      },
+      "created_at": "2026-04-14T14:05:31.313004Z",
+      "metadata": {
+        "source": "handoff"
+      }
+    },
+    {
+      "event_id": "mem-9a9df2ee4f",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-004",
+      "category": "feedback_signal",
+      "summary": "Feedback captured for step merge",
+      "payload": {
+        "feedback_id": "fb-0cfbea15d8",
+        "source_type": "step",
+        "status": "succeeded",
+        "signals": {
+          "node_id": "merge",
+          "node_type": "control.barrier",
+          "step_status": "succeeded",
+          "activation_id": "act-e5c16cee81",
+          "activation_mode": "always",
+          "activation_decision": "activated",
+          "candidate_count": 1,
+          "selected_candidate_count": 1,
+          "delegate_candidate_count": 0,
+          "selected_non_node_candidate_count": 0,
+          "artifact_count": 0,
+          "artifact_ids": [],
+          "checkpoint_id": "ckpt-24dbd4f60b",
+          "next_node_id": "writer",
+          "handoff_id": "handoff-62307d8654",
+          "delegated_run": false,
+          "child_run_id": null,
+          "review_gate_triggered": false,
+          "retry_gate_count": 0
+        },
+        "reward_hints": {
+          "artifact_count": 0.0,
+          "delegated_run": 0.0,
+          "continued_flow": 1.0,
+          "review_gate_triggered": 0.0,
+          "selected_candidates": 1.0
+        }
+      },
+      "created_at": "2026-04-14T14:05:31.313004Z",
+      "metadata": {
+        "source": "feedback"
+      }
+    },
+    {
+      "event_id": "mem-08418453a0",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-005",
+      "category": "activation",
+      "summary": "Activation resolved for writer",
+      "payload": {
+        "activation_id": "act-aa5bc987e5",
+        "node_id": "writer",
+        "mode": "always",
+        "decision": "activated",
+        "tags": [],
+        "candidate_ids": [
+          "cand-93c82470c1"
+        ],
+        "selected_candidate_ids": [
+          "cand-93c82470c1"
+        ],
+        "delegate_candidates": [],
+        "feedback_channels": []
+      },
+      "created_at": "2026-04-14T14:05:31.315118Z",
+      "metadata": {
+        "source": "activation"
+      }
+    },
+    {
+      "event_id": "mem-063ca26c6c",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-005",
+      "category": "step_result",
+      "summary": "[writer] produced the synthesis summary.",
+      "payload": {
+        "node_id": "writer",
+        "node_type": "review.summarize",
+        "status": "succeeded",
+        "handled_by": "writer"
+      },
+      "created_at": "2026-04-14T14:05:31.315118Z",
+      "metadata": {
+        "source": "step"
+      }
+    },
+    {
+      "event_id": "mem-74dae15121",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-005",
+      "category": "artifact",
+      "summary": "Artifact produced: parallel-synthesis-summary.md",
+      "payload": {
+        "artifact_id": "artifact-4e405eca43",
+        "artifact_kind": "report",
+        "target": "docs",
+        "mode": "reference"
+      },
+      "created_at": "2026-04-14T14:05:31.315118Z",
+      "metadata": {
+        "source": "artifact"
+      }
+    },
+    {
+      "event_id": "mem-ad87cf504c",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-005",
+      "category": "checkpoint",
+      "summary": "Checkpoint saved after writer",
+      "payload": {
+        "checkpoint_id": "ckpt-ea5391b88a",
+        "next_node_id": null
+      },
+      "created_at": "2026-04-14T14:05:31.315118Z",
+      "metadata": {
+        "source": "checkpoint"
+      }
+    },
+    {
+      "event_id": "mem-5271292572",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": "step-005",
+      "category": "feedback_signal",
+      "summary": "Feedback captured for step writer",
+      "payload": {
+        "feedback_id": "fb-0b3903adbb",
+        "source_type": "step",
+        "status": "succeeded",
+        "signals": {
+          "node_id": "writer",
+          "node_type": "review.summarize",
+          "step_status": "succeeded",
+          "activation_id": "act-aa5bc987e5",
+          "activation_mode": "always",
+          "activation_decision": "activated",
+          "candidate_count": 1,
+          "selected_candidate_count": 1,
+          "delegate_candidate_count": 0,
+          "selected_non_node_candidate_count": 0,
+          "artifact_count": 1,
+          "artifact_ids": [
+            "artifact-4e405eca43"
+          ],
+          "checkpoint_id": "ckpt-ea5391b88a",
+          "next_node_id": null,
+          "handoff_id": null,
+          "delegated_run": false,
+          "child_run_id": null,
+          "review_gate_triggered": false,
+          "retry_gate_count": 0
+        },
+        "reward_hints": {
+          "artifact_count": 1.0,
+          "delegated_run": 0.0,
+          "continued_flow": 0.0,
+          "review_gate_triggered": 0.0,
+          "selected_candidates": 1.0
+        }
+      },
+      "created_at": "2026-04-14T14:05:31.315118Z",
+      "metadata": {
+        "source": "feedback"
+      }
+    },
+    {
+      "event_id": "mem-0e0e7ec27a",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": null,
+      "category": "feedback_signal",
+      "summary": "Run feedback captured for parallel-synthesis",
+      "payload": {
+        "feedback_id": "fb-91bef283b5",
+        "source_type": "run",
+        "status": "succeeded",
+        "signals": {
+          "run_status": "succeeded",
+          "step_count": 5,
+          "artifact_count": 1,
+          "checkpoint_count": 5,
+          "handoff_count": 4,
+          "activation_candidate_count": 5,
+          "activation_count": 5,
+          "step_feedback_count": 5
+        },
+        "reward_hints": {
+          "completion": 1.0,
+          "artifact_density": 1.0,
+          "candidate_coverage": 5.0,
+          "activation_coverage": 5.0
+        }
+      },
+      "created_at": "2026-04-14T14:05:31.315639Z",
+      "metadata": {
+        "source": "feedback"
+      }
+    },
+    {
+      "event_id": "mem-5e04bb7f25",
+      "run_id": "run-b13aaf7cef2c",
+      "task_id": "task-fbcf294554f6",
+      "step_id": null,
+      "category": "run_summary",
+      "summary": "Run finished with status succeeded",
+      "payload": {
+        "run_id": "run-b13aaf7cef2c",
+        "status": "succeeded",
+        "step_count": 5,
+        "artifact_count": 1,
+        "checkpoint_count": 5,
+        "handoff_count": 4
+      },
+      "created_at": "2026-04-14T14:05:31.315639Z",
+      "metadata": {
+        "source": "runtime_service"
+      }
+    }
+  ],
+  "errors": []
+}

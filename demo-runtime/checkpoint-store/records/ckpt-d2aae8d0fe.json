@@ -1,0 +1,16 @@
+{
+  "checkpoint_id": "ckpt-d2aae8d0fe",
+  "run_id": "run-6facbd9622f3",
+  "step_id": "step-002",
+  "target": "memory",
+  "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-d2aae8d0fe.json",
+  "state_ref": "checkpoint://run-6facbd9622f3/step-002",
+  "next_node_id": null,
+  "resume_supported": false,
+  "stored_at": "2026-04-14T14:20:23.006467Z",
+  "metadata": {
+    "workflow_id": "docs-gap-review",
+    "entrypoint": "planner",
+    "current_node_id": "reviewer"
+  }
+}
