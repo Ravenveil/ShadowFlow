@@ -1,24 +1,43 @@
 # AgentGraph 与 Claw 集成边界 v1
 
-> 日期：2026-03-30
-> 状态：Draft v1
-> 目的：明确 `OpenClaw / ShadowClaw` 在 AgentGraph 中的定位，以及为什么当前阶段先不实现、先回到工作流主线
+> 日期：2026-03-30（初稿）｜ 2026-04-23（Story 2.8 状态升级）
+> 状态：**MVP 基础版已实现**（原 Draft v1 → superseded by Epic 2）
+> 目的：明确 `OpenClaw / ShadowClaw` 在 AgentGraph 中的定位
 
 ---
 
-## 1. 一句话结论
+## 0. 状态升级（2026-04-23）
+
+本文档原 Draft 结论是"先不做 Claw 接入"。Epic 2（Universal Agent Plugin Contract）
+完成后，Claw 家族 agent 的接入已经由**统一 Agent Plugin Contract** 收编——OpenClaw
+走 `kind: cli + provider: openclaw` preset，ShadowSoul 走 `kind: acp + provider:
+shadowsoul`（或降级到 CLI）。因此：
+
+- ✅ **AR59 已兑现**（Agent 接入文档 & SPIKE）
+- ✅ **OpenClaw CLI preset 已落地**（见 Story 2.2 / `shadowflow/runtime/provider_presets.yaml`）
+- ✅ **ShadowSoul ACP + CLI 双路径已落地**（见 Story 2.5）
+- ✅ **Agent Plugin Contract 文档已产出**：详见
+  [`docs/AGENT_PLUGIN_CONTRACT.md`](../../AGENT_PLUGIN_CONTRACT.md)（Story 2.8）
+
+本文件以下章节是原 v1 决策快照，保留作为背景参考；**当前接入做法以
+`AGENT_PLUGIN_CONTRACT.md` 为准**。
+
+---
+
+## 1. 一句话结论（原 v1，已被升级）
 
 `OpenClaw / ShadowClaw` 后续应该支持被 AgentGraph 调度。
 
-但当前阶段：
+但当前阶段（原 v1 写作时）：
 
-- 先**不急着实现 Claw 接入**
-- 先**不为了 Claw 重构整套执行接口**
+- 先**不急着实现 Claw 接入**（已反转：MVP 基础版已实现，详见
+  [`docs/AGENT_PLUGIN_CONTRACT.md`](../../AGENT_PLUGIN_CONTRACT.md)）
+- 先**不为了 Claw 重构整套执行接口**（已被 Epic 2 的 `AgentExecutor` ABC 统一收编）
 - 先把主线收回到 **WorkflowTemplate / policy matrix / stage / validation**
 
 也就是说：
 
-**Claw 集成是明确方向，但不是当前最优先施工项。**
+**Claw 集成是明确方向，但不是当前最优先施工项。**（**更新**：Epic 2 已完成基础施工。）
 
 ---
 
