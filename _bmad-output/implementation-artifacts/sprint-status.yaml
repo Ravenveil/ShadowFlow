@@ -1,5 +1,5 @@
 # generated: 2026-04-16T05:27:17Z
-# last_updated: 2026-04-23T06:05:48Z  # Story 5-4 → done (code review: 9 patches fixed)
+# last_updated: 2026-04-23T06:14:42Z  # Story 5-3 → done, 5-4 done, 5-5 review; batch commit landed
 # project: ShadowFlow
 # project_key: NOKEY
 # tracking_system: file-system
@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-23T06:05:48Z  # Story 5-4 → done (code review: 9 patches fixed)
+last_updated: 2026-04-23T09:05:55Z  # Story 8-5 context created; Smoke Run ready for dev
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -123,7 +123,7 @@ development_status:
 
   # ===== Epic 6: Agent Interactivity + Demo Station + Pitch Ready =====
   epic-6: in-progress
-  6-1-agent-gap-detection-反向提问-e2: ready-for-dev
+  6-1-agent-gap-detection-反向提问-e2: in-progress
   6-2-landingpage-slogan-象限图-cta: ready-for-dev
   6-3-templatespage-6-模板-gallery-quick-demo-预填: ready-for-dev
   6-4-aboutpage-差异化对比-0g-链上证据-路线图: ready-for-dev
@@ -134,7 +134,7 @@ development_status:
   # See epics-addendum-2026-04-16.md for full Story definitions
   # Dependencies: Epic 1 (Policy Matrix) + Epic 3.6.7 (template schema extension) + Epic 4 (SSE)
   epic-7: in-progress
-  7-1-inbox-页框架-三列布局-窄导航-消息列表-右侧预览: ready-for-dev
+  7-1-inbox-页框架-三列布局-窄导航-消息列表-右侧预览: in-progress
   7-2-消息列表项-分组-徽章系统: ready-for-dev
   7-3-新群聊流程-新项目-新群聊-5-步向导: ready-for-dev
   7-4-inbox-chat-agentdm-路由与面包屑: ready-for-dev
@@ -142,3 +142,36 @@ development_status:
   7-6-搜索-tab-过滤: ready-for-dev
   7-7-approval-gate-面板-内嵌-inbox-预览: ready-for-dev
   epic-7-retrospective: optional
+
+  # ===== Epic 8: Agent Builder 主路径（Goal / Scene / Graph） =====
+  # Added 2026-04-23 via epics-addendum-2026-04-23-user-builder.md
+  epic-8: in-progress
+  8-1-agentblueprint-合同-builder-api-骨架: ready-for-dev
+  8-2-goal-mode-目标输入-blueprint-生成: ready-for-dev
+  8-3-scene-mode-shell-scene-tree-inspector: ready-for-dev
+  8-4-knowledge-dock-绑定主路径: ready-for-dev
+  8-5-smoke-run-验证面板-失败解释: ready-for-dev
+  8-6-publish-backfill-template-workflow-agentapp: backlog
+  epic-8-retrospective: optional
+
+  # ===== Epic 9: Knowledge / Memory / Eval Foundation =====
+  # Added 2026-04-23 via epics-addendum-2026-04-23-user-builder.md
+  epic-9: backlog
+  9-1-knowledgepack-crud-ingest-pipeline: backlog
+  9-2-citation-trace-provenance-contract: backlog
+  9-3-memoryprofile-context-writeback: backlog
+  9-4-agent-state-panel-snapshot-restore: backlog
+  9-5-evalprofile-smoke-eval-runner: backlog
+  9-6-smoke-regression-release-report: backlog
+  epic-9-retrospective: optional
+
+  # ===== Epic 10: Agent Kits（场景化 Agent Kits） =====
+  # Added 2026-04-23 via epics-addendum-2026-04-23-user-builder.md
+  epic-10: backlog
+  10-1-research-kit-规划搜集总结报告: backlog
+  10-2-knowledge-assistant-kit-知识问答引用转人工: backlog
+  10-3-review-approval-kit-writer-reviewer-approver: backlog
+  10-4-persona-npc-kit-角色记忆状态关系: backlog
+  10-5-kit-defaults-registry: backlog
+  10-6-kit-smoke-run-eval-pack: backlog
+  epic-10-retrospective: optional
