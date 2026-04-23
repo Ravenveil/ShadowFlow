@@ -87,6 +87,8 @@ def _ts_type(node: dict[str, Any], defs: dict[str, Any]) -> str:
     # allOf — single-item wrapper is common in Pydantic v2 for constrained fields
     if "allOf" in node:
         items = node["allOf"]
+        if not items:
+            return "unknown"
         if len(items) == 1:
             return _ts_type(items[0], defs)
         return " & ".join(_ts_type(s, defs) for s in items)
@@ -112,7 +114,7 @@ def _ts_type(node: dict[str, Any], defs: dict[str, Any]) -> str:
 
     if t == "array":
         items = node.get("items")
-        if not items:
+        if not items or isinstance(items, bool):
             return "unknown[]"
         item_t = _ts_type(items, defs)
         # Wrap union in parens for unambiguous array notation: (A | B)[]
@@ -160,6 +162,7 @@ def _render_interface(name: str, schema: dict[str, Any], defs: dict[str, Any]) -
 def generate(output_path: Path = OUTPUT_PATH) -> None:
     """Collect JSON schemas from CORE_MODELS, then write TypeScript interfaces."""
     all_defs: dict[str, Any] = {}
+    def_origins: dict[str, str] = {}
     root_names: list[str] = []
 
     for model in CORE_MODELS:
@@ -172,13 +175,15 @@ def generate(output_path: Path = OUTPUT_PATH) -> None:
             if def_name in all_defs:
                 if all_defs[def_name] != def_schema:
                     logger.warning(
-                        "$defs name collision for '%s' (from model %s) — "
-                        "keeping first definition; schemas differ",
+                        "$defs name collision for '%s': keeping definition from %s, "
+                        "discarding differing definition from %s",
                         def_name,
+                        def_origins.get(def_name, "unknown"),
                         name,
                     )
             else:
                 all_defs[def_name] = def_schema
+                def_origins[def_name] = name
 
         # Register the root model itself
         if name not in all_defs:
@@ -221,4 +226,5 @@ def generate(output_path: Path = OUTPUT_PATH) -> None:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
     generate()

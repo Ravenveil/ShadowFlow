@@ -179,3 +179,13 @@ Items deferred during code reviews. Each entry is a real issue that was found bu
 - `run_id` 在 `AgentHandle` 与 event payload 两处出现，权威性声明缺失 [docs §2.2 + §4.3] — 文档层次 nit，两处应一致且显式声明哪个是权威
 - `hermes` CLI preset 与 ACP executor 同名，启动时会打 override warning [shadowflow/runtime/provider_presets.yaml:34 vs ExecutorRegistry] — Registry 层收敛，Story 2.3/2.4 封口时一并处理
 - 文档对 `executors.py` / `events.py` 的引用未写 commit hash 或行号（Dev Notes 要求） [docs/AGENT_PLUGIN_CONTRACT.md 全文] — 每次 merge 手动同步成本高，待 CI doc-alignment 自动化（类似 test_agent_plugin_contract.py 思路）
+
+---
+
+## Deferred from: automated code review of Epic 2/3/4 → done batch (2026-04-23)
+
+- CI `head` 表达式仍用内联三目，与 `base` 的 `scan-base` step 重构风格不一致 [.github/workflows/ci.yml:195] — cosmetic 不对称，功能正确；建议 `head` 也走 step output 统一风格
+- `test_reports_policy_failure_instead_of_swallowing` 断言 `status=reconfigured` + `policy_failure` 键同时存在 [tests/test_policy_runtime_update.py:152-162] — 部分成功+内嵌错误 vs 抛异常的 API 设计矛盾；需 RuntimeService.reconfigure 契约明确化
+- Force-push 导致 `github.event.before` SHA 在浅克隆中不存在 [.github/workflows/ci.yml:190] — TruffleHog scan 可能失败或跳过；建议加 `git cat-file -e` 前置检查
+- `schema.pop("$defs")` 在迭代中原地修改 schema dict [scripts/generate_ts_types.py:169] — 预先存在模式；若 schema 对象被后续代码复用会丢失 `$defs`
+- `check_contracts.py` 不捕获 `generate_ts_types` 的 `$defs` collision warnings [scripts/check_contracts.py:43-50] — 一致性错误的 schema 两侧相同，drift check 报 OK；建议 generate() 返回 warning count 或 check script 监听 log
