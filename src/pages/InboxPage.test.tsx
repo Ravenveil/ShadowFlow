@@ -14,9 +14,9 @@ describe('InboxPage', () => {
     expect(screen.getByText('选择一个会话查看详情')).toBeInTheDocument();
   });
 
-  it('matches the default route at /', async () => {
+  it('matches the /inbox route', async () => {
     render(
-      <MemoryRouter initialEntries={['/']}>
+      <MemoryRouter initialEntries={['/inbox']}>
         <AppRoutes />
       </MemoryRouter>,
     );
