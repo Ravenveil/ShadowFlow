@@ -62,6 +62,12 @@ export default function LandingPage() {
             >
               Try Live Demo（无需登录）
             </Link>
+            <Link
+              to="/import"
+              className="inline-flex items-center rounded-pill border border-[var(--accent)] px-7 py-3 text-sm font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            >
+              Import by CID
+            </Link>
             <a
               href={GITHUB_URL}
               target="_blank"
