@@ -18,6 +18,9 @@ import { SecretsModal } from './core/components/modals/SecretsModal';
 import { SanitizeReviewModal, type RemovedFieldItem } from './core/components/modals/SanitizeReviewModal';
 import { uploadTrajectory } from './adapter/zerogStorage';
 import { useZerogSecretsStore } from './core/hooks/useZerogSecretsStore';
+import { useNavigate } from 'react-router-dom';
+import { ethers } from 'ethers';
+import { appendAuthor, validateAlias, LineageError } from './core/lib/lineage';
 import { useRunEvents } from './core/hooks/useRunEvents';
 import { useRunStore } from './core/stores/useRunStore';
 import { postGapResponse } from './core/api/runs';
@@ -1384,6 +1387,7 @@ function GapResponseOverlay({ runId }: { runId: string | null }) {
 // ── Top Bar ───────────────────────────────────────────────────────────────────
 function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: () => void; lang: string; onToggleLang: () => void; templateTitle?: string }) {
   const zh = lang === 'CN';
+  const navigate = useNavigate();
   const { nodes, edges, setNodes, addEdge, clearCanvas } = useWorkflow();
   const [saveOpen, setSaveOpen]       = useState(false);
   const [importOpen, setImportOpen]   = useState(false);
@@ -1454,33 +1458,42 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
       return;
     }
 
+    // Validate alias up-front before any chain interaction.
+    const rawAlias = localStorage.getItem(LINEAGE_ALIAS_KEY) || 'anon';
+    let safeAlias: string;
+    try {
+      safeAlias = validateAlias(rawAlias);
+    } catch (err) {
+      const msg = err instanceof LineageError ? err.message : String(err);
+      setFlashOk(zh ? `用户别名无效: ${msg}` : `Invalid alias: ${msg}`);
+      setTimeout(() => setFlashOk(null), 4000);
+      return;
+    }
+
+    // Prompt passphrase first — we MUST unlock the key to derive the wallet
+    // address. Without it we cannot compute a correct fingerprint, and writing
+    // a placeholder fingerprint into immutable storage is a permanent data bug.
+    const passphrase = window.prompt(
+      zh ? '输入 0G 密钥口令以签名上传' : 'Enter 0G key passphrase to sign upload',
+    );
+    if (!passphrase) return;
+
     setPublishBusy(true);
     try {
-      const userAlias = localStorage.getItem(LINEAGE_ALIAS_KEY) || 'anon';
-      const dk = secretsStore.decryptedKey;
-      const address = dk ? dk.slice(0, 10) : '00000000';
-      const fp = address.replace(/^0x/i, '').slice(0, 8).toLowerCase().padEnd(8, '0');
-      const entry = `${userAlias}@${fp}`;
-
-      const meta = (trajectoryPayload.metadata ?? {}) as Record<string, unknown>;
-      const existingLineage = Array.isArray(meta.author_lineage) ? meta.author_lineage as string[] : [];
-      const updatedPayload = {
-        ...trajectoryPayload,
-        metadata: { ...meta, author_lineage: [...existingLineage, entry] },
-      };
+      const pk = await secretsStore.getPrivateKey(passphrase);
+      const wallet = new ethers.Wallet(pk);
+      const updatedPayload = appendAuthor(
+        trajectoryPayload as Record<string, unknown>,
+        safeAlias,
+        wallet.address,
+      );
 
       const bytes = new TextEncoder().encode(JSON.stringify(updatedPayload));
-      const passphrase = prompt(zh ? '输入 0G 密钥口令以签名上传' : 'Enter 0G key passphrase to sign upload');
-      if (!passphrase) {
-        setPublishBusy(false);
-        return;
-      }
-
       const result = await uploadTrajectory(bytes, passphrase);
       setFlashOk(zh ? `已发布: 新 CID ${result.cid.slice(0, 14)}…` : `Published: new CID ${result.cid.slice(0, 14)}…`);
       setTimeout(() => {
         setFlashOk(null);
-        window.location.href = `/import?cid=${encodeURIComponent(result.cid)}`;
+        navigate(`/import?cid=${encodeURIComponent(result.cid)}`);
       }, 1500);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
