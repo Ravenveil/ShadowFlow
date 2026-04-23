@@ -41,6 +41,7 @@ from shadowflow.runtime import (
 )
 from shadowflow.runtime.contracts import RunTrajectory, TrajectoryBundle, WorkflowAssemblySpec
 from shadowflow.runtime.errors import PolicyMismatch
+from shadowflow.runtime.sanitize import sanitize_trajectory, RemovedField
 from shadowflow.runtime.trajectory import build_run_trajectory, build_trajectory_bundle
 from shadowflow.assembly.compile import compile as compile_workflow_spec, CompilationError
 from shadowflow.highlevel import WorkflowTemplateSpec
@@ -113,6 +114,16 @@ class TemplateListItem(BaseModel):
     source: Literal["seed", "custom"]
 
 
+class SanitizeRequest(BaseModel):
+    trajectory: Dict[str, Any]
+
+
+class SanitizeResponse(BaseModel):
+    cleaned_trajectory: Dict[str, Any]
+    removed_fields: List[Dict[str, str]]
+    had_matches: bool
+
+
 class CustomTemplateImportRequest(BaseModel):
     yaml_text: str
     overrides: Optional[Dict[str, Any]] = None
@@ -128,6 +139,7 @@ runtime_service = RuntimeService(event_bus=run_event_bus)
 from shadowflow.api import ops as _ops_api
 from shadowflow.api import archive as _archive_api
 from shadowflow.api import policy_observability as _policy_obs_api
+from shadowflow.integrations import zerog_storage as _zerog_storage_api
 
 _ops_api.set_aggregator(_ops_api.OpsAggregator(
     runtime_service=runtime_service,
@@ -142,6 +154,7 @@ _policy_obs_api.set_aggregator(_policy_obs_api.PolicyObsAggregator(
 app.include_router(_ops_api.router)
 app.include_router(_archive_api.router)
 app.include_router(_policy_obs_api.router)
+app.include_router(_zerog_storage_api.router)
 
 
 @app.exception_handler(ShadowflowError)
@@ -414,6 +427,20 @@ async def get_workflow_run_trajectory(
 
     trajectory = build_run_trajectory(result)
     return {"data": trajectory.model_dump(mode="json", exclude_none=True), "meta": {"format": "summary"}}
+
+
+@app.post("/workflow/runs/{run_id}/trajectory/sanitize", response_model=SanitizeResponse)
+async def sanitize_run_trajectory(run_id: str, body: SanitizeRequest):
+    """Scan trajectory for PII / secrets before upload to 0G (Story 5.2 AC1)."""
+    cleaned, removed = sanitize_trajectory(body.trajectory)
+    return SanitizeResponse(
+        cleaned_trajectory=cleaned,
+        removed_fields=[
+            {"path": r.path, "pattern": r.pattern, "sample_masked": r.sample_masked}
+            for r in removed
+        ],
+        had_matches=len(removed) > 0,
+    )
 
 
 @app.post("/runs/{run_id}/children", response_model=RunResult)
