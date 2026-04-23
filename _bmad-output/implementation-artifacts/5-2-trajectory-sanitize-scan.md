@@ -1,6 +1,6 @@
 # Story 5.2: Trajectory Sanitize Scan
 
-Status: review
+Status: done
 
 ## Story
 
@@ -116,14 +116,31 @@ Claude Opus 4.6
 - 42 项单元测试全部通过，覆盖正/负样本、递归扫描、Luhn 过滤、脱敏输出、不可变输入
 - 全量回归 687 测试全部通过，0 新增 TS 错误
 
+### Review Findings
+
+Code review by Claude Opus 4.6 (automated, 3 parallel adversarial layers: Blind Hunter + Edge Case Hunter + Acceptance Auditor)
+
+**已修复 (1 项 PATCH):**
+- [x] [Review][Patch] CRITICAL: leakGuard fetch 拦截器阻止 sanitize API 调用——trajectory 含 `0x<64hex>` 或 `sk-*` 时 `doPublish` 被自己的防泄漏拦截器拦截导致"扫描失败" [leakGuard.ts:42-86] — 新增 `isSameOrigin()` 判断，同源请求（发往自己后端）跳过 body/URL/header 扫描；跨域请求继续拦截；15 项 leakGuard 测试全部通过
+
+**延迟 (3 项 DEFER — 已知，不阻塞本 Story):**
+- [x] [Review][Defer] `onSanitizeConfirm` 丢弃 cleaned trajectory 未触发 0G 上传 [EditorPage.tsx:1426-1432] — 跨 Story 集成（5.1 + 5.2 连通），Story 5.3+ 解决
+- [x] [Review][Defer] `phone_intl` 正则 `\+?[1-9]\d{7,14}` 误报率高（匹配时间戳、订单号等 8-15 位数字）[sanitize.py:33-34] — spec 定义的正则，需产品层面决策是否收紧为 `\+[1-9]\d{7,14}`
+- [x] [Review][Defer] SanitizeReviewModal 无 focus trap，tab 可跳出 modal [SanitizeReviewModal.tsx] — 无障碍改进，非 MVP 阻塞
+
+**驳回 (3 项 DISMISS):** `flashOk` 变量名用于错误（功能正常）/ 同字符串重复匹配产生重复 RemovedField（边界情况，可接受）/ Modal 背景点击触发取消（标准 UX）
+
 ### File List
 
 - `shadowflow/runtime/sanitize.py` — 新建：PII/密钥扫描引擎
 - `shadowflow/server.py` — 修改：新增 sanitize 端点 + 请求/响应模型
 - `src/core/components/modals/SanitizeReviewModal.tsx` — 新建：脱敏审查 Modal
 - `src/EditorPage.tsx` — 修改：新增 Publish 0G 按钮 + sanitize 流程 + Modal 集成
+- `src/core/security/leakGuard.ts` — 修改：同源请求跳过密钥扫描（review fix）
+- `src/core/security/__tests__/leakGuard.test.ts` — 修改：新增同源/跨域测试用例
 - `tests/test_sanitize.py` — 新建：42 项单元测试
 
 ### Change Log
 
 - 2026-04-23: Story 5.2 全部任务完成，sanitize 引擎 + API + 前端确认 + 42 项测试
+- 2026-04-23: Code review 完成 — 修复 1 CRITICAL PATCH (leakGuard 同源绕过) + 3 DEFER + 3 DISMISS；15 项 leakGuard 测试通过
