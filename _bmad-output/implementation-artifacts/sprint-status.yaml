@@ -1,5 +1,5 @@
 # generated: 2026-04-16T05:27:17Z
-# last_updated: 2026-04-23T01:14:26Z  # Batch commit: 6 commits landed, 635 tests green; Epic 2/3/4 → done; next: Epic 5
+# last_updated: 2026-04-23T02:15:23Z  # 7 batch commits: Story 4.5 patches done, gitignore, project config, planning artifacts, docs, demo-runtime; tree clean
 # project: ShadowFlow
 # project_key: NOKEY
 # tracking_system: file-system
@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-23T01:14:26Z  # Batch commit: 6 commits (runtime+tests+scripts+docs+artifacts), 635 tests green; Epic 2→done, Epic 3→done, Epic 4→done
+last_updated: 2026-04-23T02:15:23Z  # 7 batch commits: Story 4.5 review patches → done, project config + planning artifacts + docs committed, tree clean; next: Epic 5 Story 5-1
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
