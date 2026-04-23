@@ -11,6 +11,7 @@ installLeakGuards();
 // Lazy-loaded routes for code splitting (Vite chunks per route)
 const EditorPage = lazy(() => import('./pages/EditorPage'));
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage'));
+const ImportPage = lazy(() => import('./pages/ImportPage'));
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -21,6 +22,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Routes>
             <Route path="/" element={<App />} />
             <Route path="/templates" element={<TemplatesPage />} />
+            <Route path="/import" element={<ImportPage />} />
             <Route path="/editor" element={<EditorPage />} />
             <Route path="/editor/:templateId" element={<EditorPage />} />
             {/* P2: Redirect unknown paths to landing instead of re-rendering App at wrong URL */}
