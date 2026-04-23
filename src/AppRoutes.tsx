@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary } from './core/components/common/ErrorBoundary';
 
+const LandingPage = lazy(() => import('./pages/LandingPage'));
 const InboxPage = lazy(() => import('./pages/InboxPage'));
 const EditorPage = lazy(() => import('./pages/EditorPage'));
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage'));
@@ -28,7 +29,8 @@ export function AppRoutes() {
     <ErrorBoundary>
       <Suspense fallback={<div style={{ background: 'var(--bg)', height: '100vh' }} />}>
         <Routes>
-          <Route path="/" element={<InboxPage />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/inbox" element={<InboxPage />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/import" element={<ImportPage />} />
           <Route path="/editor" element={<EditorPage />} />
