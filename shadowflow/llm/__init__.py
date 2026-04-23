@@ -19,6 +19,7 @@ from .claude import ClaudeProvider
 from .gemini import GeminiProvider
 from .openai import OpenAIProvider
 from .ollama import OllamaProvider
+from .zerog import ZeroGComputeProvider
 from .fallback import AllProvidersFailed, FallbackProvider
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "GeminiProvider",
     "OpenAIProvider",
     "OllamaProvider",
+    "ZeroGComputeProvider",
     # Fallback chain
     "AllProvidersFailed",
     "FallbackProvider",
@@ -58,6 +60,7 @@ def create_provider(provider: ProviderType, config: LLMConfig) -> LLMProvider:
         ProviderType.OPENAI: OpenAIProvider,
         ProviderType.DEEPSEEK: OpenAIProvider,  # DeepSeek 使用 OpenAI 兼容接口
         ProviderType.OLLAMA: OllamaProvider,
+        ProviderType.ZERO_G: ZeroGComputeProvider,
     }
 
     provider_class = provider_map.get(provider)

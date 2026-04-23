@@ -17,6 +17,7 @@ class ProviderType(Enum):
     OPENAI = "openai"
     DEEPSEEK = "deepseek"
     OLLAMA = "ollama"
+    ZERO_G = "0g_compute"
 
 
 @dataclass

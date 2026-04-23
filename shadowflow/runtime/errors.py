@@ -52,6 +52,24 @@ class SanitizeRejected(ShadowflowError):
     code = "SANITIZE_REJECTED"
 
 
+class ProviderUnavailableError(ShadowflowError):
+    """Provider 不可用（broker 初始化失败、服务端点无响应等）。"""
+
+    code = "PROVIDER_UNAVAILABLE"
+
+
+class InsufficientBalanceError(ShadowflowError):
+    """0G Compute 账户余额不足。"""
+
+    code = "INSUFFICIENT_BALANCE"
+
+
+class MissingChatIdError(ShadowflowError):
+    """0G Compute 响应缺少 ChatID（ZG-Res-Key header 和 data.id 均缺失）。"""
+
+    code = "MISSING_CHAT_ID"
+
+
 class McpError(Exception):
     """Raised by McpClient / McpAgentExecutor for structured MCP failures (Story 2.4).
 
