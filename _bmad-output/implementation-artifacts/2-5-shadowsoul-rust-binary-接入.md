@@ -1,6 +1,6 @@
 # Story 2.5: ShadowSoul Rust Binary 接入
 
-Status: review
+Status: done
 
 ## Story
 
@@ -93,8 +93,26 @@ so that **Demo 能演示 ShadowFlow 同时编排 Hermes + ShadowSoul + OpenClaw 
 
 {待 dev 填写}
 
+### Review Findings
+
+- [x] [Review][Patch] IndexError: 空输出时 version 解析崩溃 [shadowflow/runtime/health.py:50] — **已修复**: `splitlines()[0]` → `lines[0] if lines else None`
+- [x] [Review][Patch] 未使用的 import (asyncio, field) [shadowflow/runtime/health.py:7,11] — **已修复**: 移除 `asyncio` 和 `field`
+- [x] [Review][Defer] 模板编译时注入 fallback vs 运行时降级 — deferred, 运行时方案解耦更好，Phase 2 考虑
+- [x] [Review][Defer] agent.degraded 事件未触发实际 auto-fallback — deferred, Phase 2 范围
+- Dismissed: 1 (test 命名微偏，noise)
+
 ### Debug Log References
 
 ### Completion Notes List
 
+Code review 2026-04-23: 2 patches applied (IndexError fix + unused imports), 2 deferred to Phase 2, 627 tests passed.
+
 ### File List
+
+- `shadowflow/runtime/health.py` — agent binary 健康检查
+- `shadowflow/runtime/provider_presets.yaml` — shadowsoul CLI preset
+- `shadowflow/runtime/executors.py` — degraded path + ACP 注册
+- `shadowflow/server.py` — startup hook + /health endpoint
+- `docs/SHADOWSOUL_RUNTIME_SPIKE.md` — 决策文档
+- `tests/test_health_shadowsoul.py` — 健康检查测试
+- `tests/test_shadowsoul_fallback.py` — 降级测试

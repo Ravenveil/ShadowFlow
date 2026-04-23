@@ -1,6 +1,6 @@
 # Story 1.1: Policy Matrix 核心对象 + Compile-time 非阻塞校验
 
-Status: review
+Status: done
 
 ## Story
 
@@ -125,15 +125,15 @@ claude-sonnet-4-6
 (核心契约 + R3 非阻塞正确，但最佳实践规则匹配有缺陷，有边界未覆盖)
 
 ### Patch
-- [ ] [Review][Patch] `validate_best_practices(matrix, roles: Set[str])` 的 `roles` 参数从不使用 — 删除或接回规则匹配 [shadowflow/runtime/policy_matrix.py:45]
-- [ ] [Review][Patch] 子串匹配 `in sender.lower()` 导致误报 — `legal_advisor` 触发 `legal` 规则；改精确相等或显式别名表 [shadowflow/runtime/policy_matrix.py:61,63,81,83]
-- [ ] [Review][Patch] `content_officer→editor` 别名对 `allow_send` 和 `allow_reject` 都触发 — rule 意图是"直接驳回"，只应查 `allow_reject` [shadowflow/runtime/policy_matrix.py:29]
-- [ ] [Review][Patch] 同一 pair 同时命中 `allow_send` 与 `allow_reject` 时重复告警 — 加去重 key
-- [ ] [Review][Patch] 中文/Unicode 角色名绕过 ASCII-only 别名表（`事实核查员→法务`零告警，但 spec 举例就是中文） — 扩别名表或改匹配策略
-- [ ] [Review][Patch] 自环 `{"alice":["alice"]}` 不告警 — 加内置规则 `SELF_APPROVAL_DISCOURAGED`
-- [ ] [Review][Patch] `allow_send: {"alice": []}` 语义歧义（deny-all） — 明确拒绝或接受并 doc
-- [ ] [Review][Patch] 重复接收者 `[bob, bob]` 未 dedup — data-level dedup + 测试
-- [ ] [Review][Patch] 补测：自环 / 空列表 / 重复接收者 / 中文角色名 / 子串误报
+- [x] [Review][Patch] `validate_best_practices(matrix, roles: Set[str])` 的 `roles` 参数从不使用 — 已删除
+- [x] [Review][Patch] 子串匹配 `in sender.lower()` 导致误报 — 改为精确相等匹配 + 显式别名表
+- [x] [Review][Patch] `content_officer→editor` 别名对 `allow_send` 和 `allow_reject` 都触发 — 限定 scope=allow_reject
+- [x] [Review][Patch] 同一 pair 同时命中 `allow_send` 与 `allow_reject` 时重复告警 — 加 seen 去重集合
+- [x] [Review][Patch] 中文/Unicode 角色名绕过 ASCII-only 别名表 — 别名表扩展中文（事实核查员/法务/内容官/主编）
+- [x] [Review][Patch] 自环 `{"alice":["alice"]}` 不告警 — 新增 `SELF_APPROVAL_DISCOURAGED` 规则
+- [x] [Review][Patch] `allow_send: {"alice": []}` 语义歧义 — 新增 `POLICY_EMPTY_RECEIVER_LIST` 警告
+- [x] [Review][Patch] 重复接收者 `[bob, bob]` 未 dedup — `validate_structure` 中 data-level dedup
+- [x] [Review][Patch] 补测：自环 / 空列表 / 重复接收者 / 中文角色名 / 子串误报 — 7 个新测试全通过
 
 ### Defer
 - [x] [Review][Defer] 前端 TS 类型缺 `policy_warnings`/`PolicyWarning` — 被 Story 0-3 的 regenerate 动作覆盖
@@ -145,3 +145,4 @@ claude-sonnet-4-6
 ### Change Log
 
 - 2026-04-21T09:16:16Z: Story 1.1 实现完成 — WorkflowPolicyMatrixSpec 第 8 核心对象 + policy matrix 非阻塞校验
+- 2026-04-22T18:12:55Z: Review patches 9/9 全部修复 — 精确匹配替代子串、scope 限定、去重、中文别名、自环告警、空列表告警、接收者 dedup、7 新测试；全套 608 passed → done

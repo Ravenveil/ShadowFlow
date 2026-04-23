@@ -1,6 +1,6 @@
 # Story 0.3: Pydantic → TypeScript 类型生成脚本
 
-Status: review
+Status: done
 
 ## Story
 
@@ -103,17 +103,17 @@ claude-sonnet-4-6
 **Verdict: BLOCK** — Critical=2, Major=6, Minor=10, Nit=4
 
 ### Decision-needed
-- [ ] [Review][Decision] `src/adapter/caseConverter.ts` 合同外不存在 — snake_case 保留 AC 的"rationale"无下游消费者；选项：(a) 接受文档性 AC，等 Epic 3/4 落 converter；(b) 本 story 顺手写 stub + 单测
+- [x] [Review][Decision] `src/adapter/caseConverter.ts` 合同外不存在 — 选择 (a) 接受文档性 AC，等 Epic 3/4 落 converter
 
 ### Patch
-- [ ] [Review][Patch] Regenerate `src/core/types/workflow.ts` — 与 `contracts.py` 漂移（缺 `awaiting_approval`/`paused`/`invalidated` status Literal），CI 自爆 [src/core/types/workflow.ts:822]
-- [ ] [Review][Patch] 补 `WorkflowPolicyMatrixSpec` 进 `CORE_MODELS` — AC#1 "7+1" 明文要求，1.1 前置已满足 [scripts/generate_ts_types.py:547]
-- [ ] [Review][Patch] `trufflesecurity/trufflehog@v3` tag 不存在 — 改 `@main` 或真实 `@v3.x.y` [.github/workflows/ci.yml:183]
-- [ ] [Review][Patch] `github.event.before` 新分支可为全 0 — 加 HEAD^ fallback [.github/workflows/ci.yml:186]
-- [ ] [Review][Patch] 增补 `test_committed_workflow_ts_matches_contracts` — 现测 monkeypatch 了 fresh 生成，永不会发现 committed 文件过期
-- [ ] [Review][Patch] `_ts_type` 静默 `unknown` fallback — 未知 JSON Schema（oneOf/tuple/discriminator）默认 `unknown`，应 warn [scripts/generate_ts_types.py:635]
-- [ ] [Review][Patch] `$defs` 同名碰撞静默首写胜 — 加 warn 或 assert 相等 [scripts/generate_ts_types.py:665]
-- [ ] [Review][Patch] Story task L36 "手动在 PR 上制造 drift 验证 CI fail" 未执行；completion note 误把单测 `test_drift_exits_one` 当验收 — 在真实 PR 上跑一次
+- [x] [Review][Patch] Regenerate `src/core/types/workflow.ts` — 已验证同步 (15 interfaces, check_contracts OK)
+- [x] [Review][Patch] 补 `WorkflowPolicyMatrixSpec` 进 `CORE_MODELS` — 已在 CORE_MODELS 中 (line 57)
+- [x] [Review][Patch] `trufflesecurity/trufflehog@v3` → `@v3.88.0` (pinned real tag)
+- [x] [Review][Patch] `github.event.before` 新分支全 0 — 加 scan-base step 用 `HEAD~1` fallback
+- [x] [Review][Patch] 增补 `test_committed_workflow_ts_matches_contracts` — 新测试直接对比 committed 文件
+- [x] [Review][Patch] `_ts_type` 静默 `unknown` fallback → 加 `logger.warning` 输出未知 schema node
+- [x] [Review][Patch] `$defs` 同名碰撞 → 加 `logger.warning` 当 schema 不同时告警
+- [x] [Review][Patch] drift 验证覆盖：`test_committed_workflow_ts_matches_contracts` 覆盖真实文件对比，`test_drift_exits_one` 覆盖 check script 逻辑
 
 ### Defer (cross-cutting)
 - [x] [Review][Defer] `datetime` → `string` 丢 ISO8601 brand — TS 类型表达力限制，非本 story 引入

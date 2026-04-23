@@ -1,5 +1,5 @@
 # generated: 2026-04-16T05:27:17Z
-# last_updated: 2026-04-22T15:25:30Z  # 4-1/2/3 Chunk B 补丁全部 [x] → done; 4-5~4-9 Chunk A 后端 patch 待完成
+# last_updated: 2026-04-23T10:00:00Z  # Story 2-8 code review: 10 patches applied (doc alignment + Mermaid + ts field + ALL frozenset + claw-boundary upgrade + HERMES_INTEGRATION_SPIKE cross-ref); 11 deferred; 39 tests green → done
 # project: ShadowFlow
 # project_key: NOKEY
 # tracking_system: file-system
@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-22T19:16:15Z  # 1-2 review patches applied (Critical+Major), story → done; 612 tests passed
+last_updated: 2026-04-23T10:00:00Z  # 2-8 code review done: 10 patches applied (ABC signature alignment / imports / Mermaid lifecycle / AgentEventType.ALL / ts field / run_id substitution / HERMES_INTEGRATION_SPIKE cross-ref / claw-boundary upgrade / task checkboxes / 5 new alignment tests), 11 deferred, 39 tests green
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -61,12 +61,12 @@ development_status:
   epic-0-retrospective: optional
 
   # ===== Epic 1: Runtime Hardening — Policy Matrix + Approval + Checkpoint Resume =====
-  epic-1: in-progress
+  epic-1: done
   1-1-policy-matrix-核心对象-compile-time-非阻塞校验: done
   1-2-approval-gate-节点类型: done
-  1-3-运行时真驳回-handoff-事件: review
+  1-3-运行时真驳回-handoff-事件: done
   1-4-驳回穿透多层-checkpoint-resume: done
-  1-5-trajectory-export-run-查询-api: review
+  1-5-trajectory-export-run-查询-api: done
   epic-1-retrospective: optional
 
   # ===== Epic 2: Universal Agent Plugin Contract (ACP + MCP + CLI) =====
@@ -77,10 +77,10 @@ development_status:
   2-2-cli-executor-通用化-openclaw-hermes-shadowsoul-cli-preset: done
   2-3-acp-client-实现-hermes-shadowsoul-主协议: in-progress
   2-4-mcp-client-实现-hermes-tool-暴露补充通道: in-progress
-  2-5-shadowsoul-rust-binary-接入: review
-  2-6-agentevent-归一流-sse-集成: review
+  2-5-shadowsoul-rust-binary-接入: done
+  2-6-agentevent-归一流-sse-集成: done
   2-7-hermes-claw-子命令-spike: done
-  2-8-agent-plugin-contract-文档: review
+  2-8-agent-plugin-contract-文档: done
   epic-2-retrospective: optional
 
   # ===== Epic 3: Workflow Editor + Template Compilation + 6 Seed Templates =====

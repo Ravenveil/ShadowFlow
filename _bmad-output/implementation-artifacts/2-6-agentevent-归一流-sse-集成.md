@@ -1,6 +1,6 @@
 # Story 2.6: AgentEvent 归一流 + SSE 集成
 
-Status: review
+Status: done
 
 ## Story
 
@@ -104,14 +104,44 @@ so that **UI 层零特例,Demo 流畅不卡壳**。
 - [Source: architecture.md#src/core/hooks/useRunEvents.ts(MVP 新增)]
 - [Source: architecture.md#src/adapter/sseClient.ts(Last-Event-ID 重连)]
 
+### Review Findings
+
+- [x] [Review][Patch] 双重事件分发：useRunEvents.ts 同时注册 `*` catch-all 和命名 handler，导致 handleEvent 每事件调用两次 [src/core/hooks/useRunEvents.ts:184] — 已修复：移除 `*` catch-all
+- [x] [Review][Patch] RUN_RESUMED 事件键名错误：service.py 使用 `"event"` 而非 `"type"`，导致 SSE 事件类型为 `message` 而非 `run.resumed` [shadowflow/runtime/service.py:492] — 已修复
+- [x] [Review][Patch] SSE 重连失败：server.py 仅从 HTTP header 读取 Last-Event-ID，但浏览器 EventSource 无法设置自定义 header，前端通过 query param 发送 [shadowflow/server.py:533] — 已修复：增加 query_params fallback
+- [x] [Review][Patch] AgentEvent.type 无 Literal 约束：contracts.py 使用 plain `str`，违反 AC1 规范 [shadowflow/runtime/contracts.py:786] — 已修复：添加 AgentEventTypeLiteral
+- [x] [Review][Patch] PolicyViolationEvent 字段名不一致：使用 `event` 而非 `type`，与系统其余部分不一致 [shadowflow/runtime/events.py:194] — 已修复
+- [x] [Review][Patch] RunEventBus 内存泄漏：close_run 后 _store/_seq/_notifiers/_closed 从未清理 [shadowflow/runtime/events.py] — 已修复：添加 purge_run() 方法
+- [x] [Review][Patch] JSONL 类型未规范化：executor 直接拼接 `agent.{type}` 产生非法类型如 `agent.assistant` [shadowflow/runtime/executors.py:311] — 已修复：添加 _JSONL_TYPE_MAP 映射
+- [x] [Review][Defer] SSE endpoint 无认证 — 跨切面安全问题，不属于 Story 2-6 范畴
+- [x] [Review][Defer] subscribe() 无超时 — 订阅不存在的 run_id 会永久挂起，需要基础设施级修复
+- [x] [Review][Defer] publish() 非线程安全 — asyncio 单线程模式下安全，如需跨线程调用需加锁
+- [x] [Review][Defer] src/__tests__/useRunEvents.test.ts 缺失 — 前端测试基础设施待补充
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
-{待 dev 填写}
+claude-opus-4-6 (bmad-code-review scheduled task)
 
 ### Debug Log References
 
 ### Completion Notes List
 
+- 2026-04-23: 三层并行 code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor)
+- 7 个 patch 级发现全部修复，4 个 defer 级发现记录到 deferred-work.md
+- 630 tests passed, 0 failed
+
 ### File List
+
+- shadowflow/runtime/events.py (PolicyViolationEvent.type + purge_run)
+- shadowflow/runtime/contracts.py (AgentEventTypeLiteral)
+- shadowflow/runtime/executors.py (_JSONL_TYPE_MAP)
+- shadowflow/runtime/service.py (RUN_RESUMED key fix)
+- shadowflow/server.py (Last-Event-ID query param fallback)
+- src/core/hooks/useRunEvents.ts (remove double dispatch)
+- tests/test_events_bus.py (purge_run tests)
+- tests/test_reject_runtime.py (PolicyViolationEvent.type)
+- tests/test_checkpoint_resume.py (RUN_RESUMED key)
+- tests/test_agent_executor_contract.py (AgentEvent Literal types)
+- tests/test_cli_agent_executor.py (JSONL type mapping)

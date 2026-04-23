@@ -147,3 +147,35 @@ Items deferred during code reviews. Each entry is a real issue that was found bu
 
 ### 4-8 Trajectory Archive
 - `useArchiveStore` 无 AbortController —— 多次快速翻页时并发 fetch 无取消,乱序响应可覆盖较新页数据 [`src/core/stores/useArchiveStore.ts`] — 用户操作间隔通常大于 RTT,MVP 可接受,留独立优化故事
+
+---
+
+## Deferred from: code review of story-2.5 ShadowSoul Rust Binary 接入 (2026-04-23)
+
+- 模板编译时注入 `fallback_chain` vs 运行时 dispatch 降级 [shadowflow/runtime/executors.py:198-213] — spec 要求编译时注入,实现为运行时降级;运行时方案解耦更好(health 可在编译到执行间变化),Phase 2 统一
+- `agent.degraded` 事件携带 `fallback_chain: ["api:claude"]` 但 runtime 未实际 auto-fallback re-dispatch [shadowflow/runtime/executors.py:247-261] — 当前仅通知 UI 层,实际回退需人工或 UI 层处理;Phase 2 实现自动 re-dispatch
+
+---
+
+## Deferred from: code review of story-2.6 AgentEvent 归一流 + SSE 集成 (2026-04-23)
+
+- SSE endpoint `/workflow/runs/{run_id}/events` 无认证/鉴权 [shadowflow/server.py:527] — 跨切面安全问题,需统一中间件,不属于 Story 2-6 范畴
+- `subscribe()` 无超时:订阅不存在的 run_id 会永久挂起 [shadowflow/runtime/events.py:subscribe] — 需要基础设施级超时策略,如 asyncio.timeout wrapper
+- `publish()` 非线程安全:asyncio.Event 文档明确标注 not thread-safe [shadowflow/runtime/events.py:publish] — 当前 asyncio 单线程事件循环安全;如需跨线程调用应用 loop.call_soon_threadsafe()
+- `src/__tests__/useRunEvents.test.ts` 缺失 — 前端测试基础设施待补充,需 mock EventSource 框架
+
+---
+
+## Deferred from: code review of story-2.8 Agent Plugin Contract 文档 (2026-04-23)
+
+- `stream_events` 无显式 cancellation contract (`aclose()` / try-finally 语义) [docs/AGENT_PLUGIN_CONTRACT.md §2.1] — 消费者断开连接时 CLI/subprocess 后端可能泄漏子进程；需 ABC v2 RFC
+- `dispatch` 没有声明最大延迟边界 [docs/AGENT_PLUGIN_CONTRACT.md §2.1 + §4.1] — 现声明"非阻塞"但未定义 timeout；需设计层讨论
+- `provider_presets.yaml` 插值 `{id}` / `{run_id}` / `{stdin}` 未定义转义/sanitize 规则 [shadowflow/runtime/executors.py `_interpolate_args`] — 若字段来自用户输入存在命令注入面；需独立 hardening story
+- ACP 命名空间缺 session-expired 事件 [shadowflow/runtime/events.py + docs §6] — ACP session 在底层失效时消费者没有规范化信号；Epic 2 后续 ACP client 能力扩展
+- `AgentCapabilities` 无 `schema_version` 字段 [shadowflow/runtime/contracts.py] — 未来新增能力时无法区分"旧 agent"与"明确不支持"；版本演进预留
+- `/health` 返回 degraded 时 `dispatch` 仍可调用，错误模型不统一 [shadowflow/runtime/executors.py + server.py:559] — 需运行时契约收敛
+- SSE Last-Event-ID reconnect 示例用 `EventSource`，无法携带自定义 auth headers [docs §6.4] — BYOK 安全面，Epic 5 统筹
+- `AgentTask.payload` 为裸 `Dict` 无 schema [shadowflow/runtime/contracts.py:764-770] — 下游各 executor 自行 cast，缺统一 JSON Schema
+- `run_id` 在 `AgentHandle` 与 event payload 两处出现，权威性声明缺失 [docs §2.2 + §4.3] — 文档层次 nit，两处应一致且显式声明哪个是权威
+- `hermes` CLI preset 与 ACP executor 同名，启动时会打 override warning [shadowflow/runtime/provider_presets.yaml:34 vs ExecutorRegistry] — Registry 层收敛，Story 2.3/2.4 封口时一并处理
+- 文档对 `executors.py` / `events.py` 的引用未写 commit hash 或行号（Dev Notes 要求） [docs/AGENT_PLUGIN_CONTRACT.md 全文] — 每次 merge 手动同步成本高，待 CI doc-alignment 自动化（类似 test_agent_plugin_contract.py 思路）

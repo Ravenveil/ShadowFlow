@@ -1,6 +1,6 @@
 # Story 1.4: 驳回穿透多层 + Checkpoint Resume
 
-Status: review
+Status: done
 
 ## Story
 
