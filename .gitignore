@@ -41,3 +41,7 @@ templates/custom/
 .claude/worktrees/
 .claude/skills/
 .agents/
+
+# Test artifacts
+test-results/
+playwright-report/
