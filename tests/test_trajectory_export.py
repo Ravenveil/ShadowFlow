@@ -285,3 +285,113 @@ class TestTrajectoryBundle:
         wf = _workflow()
         bundle = build_trajectory_bundle(result, wf)
         assert len(bundle.trajectory.steps) == 1
+
+    def test_exported_at_deterministic(self):
+        result = _run_result()
+        wf = _workflow()
+        b1 = build_trajectory_bundle(result, wf)
+        b2 = build_trajectory_bundle(result, wf)
+        assert b1.exported_at == b2.exported_at
+        assert b1.trajectory.exported_at == b1.exported_at
+
+
+# ---------------------------------------------------------------------------
+# Non-happy-path run statuses (CRITICAL coverage)
+# ---------------------------------------------------------------------------
+
+def _run_record_with_status(status: str, run_id: str = "run-status-test") -> RunRecord:
+    return RunRecord(
+        run_id=run_id,
+        request_id=f"req-{uuid4().hex[:8]}",
+        workflow_id="wf-test",
+        status=status,
+        started_at=_utc_now(),
+        ended_at=_utc_now() if status in ("succeeded", "failed", "cancelled") else None,
+        entrypoint="outline",
+    )
+
+
+def _run_result_with_status(status: str, step_statuses: list[str] | None = None) -> RunResult:
+    run_id = f"run-{status}"
+    run = _run_record_with_status(status, run_id)
+    steps = []
+    if step_statuses:
+        for i, ss in enumerate(step_statuses):
+            steps.append(_step(run_id, f"node-{i}", status=ss, index=i))
+    else:
+        steps.append(_step(run_id, "outline", status="succeeded"))
+    art = _artifact(steps[0].step_id, run_id)
+    cp = _checkpoint(run_id)
+    hoff = _handoff(run_id, steps[0].step_id)
+    return RunResult(run=run, steps=steps, artifacts=[art], checkpoints=[cp], handoffs=[hoff])
+
+
+class TestRejectedRun:
+    def test_trajectory_builds_for_failed_run(self):
+        result = _run_result_with_status("failed", ["succeeded", "failed"])
+        traj = build_run_trajectory(result)
+        assert traj.run.status == "failed"
+        assert len(traj.steps) == 2
+
+    def test_trajectory_no_final_artifacts_when_none_flagged(self):
+        result = _run_result_with_status("failed", ["succeeded", "failed"])
+        traj = build_run_trajectory(result)
+        assert traj.final_artifacts == []
+
+    def test_bundle_builds_for_failed_run(self):
+        result = _run_result_with_status("failed", ["succeeded", "failed"])
+        wf = _workflow()
+        bundle = build_trajectory_bundle(result, wf)
+        assert bundle.metadata["status"] == "failed"
+
+
+class TestResumedRun:
+    def test_trajectory_builds_for_checkpointed_run(self):
+        result = _run_result_with_status("checkpointed", ["succeeded", "skipped"])
+        traj = build_run_trajectory(result)
+        assert traj.run.status == "checkpointed"
+        assert len(traj.checkpoints) == 1
+
+    def test_exported_at_uses_started_at_when_no_ended(self):
+        result = _run_result_with_status("checkpointed")
+        traj = build_run_trajectory(result)
+        assert traj.exported_at == result.run.started_at
+
+
+class TestAwaitingApprovalRun:
+    def test_trajectory_builds_for_awaiting_approval(self):
+        result = _run_result_with_status("awaiting_approval", ["succeeded", "pending"])
+        traj = build_run_trajectory(result)
+        assert traj.run.status == "awaiting_approval"
+        assert len(traj.steps) == 2
+
+    def test_bundle_for_awaiting_approval_without_workflow(self):
+        result = _run_result_with_status("awaiting_approval")
+        bundle = build_trajectory_bundle(result, workflow=None)
+        assert bundle.workflow_yaml is None
+        assert bundle.policy_matrix is None
+        assert bundle.metadata["status"] == "awaiting_approval"
+
+
+class TestCancelledRun:
+    def test_trajectory_builds_for_cancelled(self):
+        result = _run_result_with_status("cancelled", ["succeeded", "cancelled"])
+        traj = build_run_trajectory(result)
+        assert traj.run.status == "cancelled"
+        assert len(traj.steps) == 2
+
+
+# ---------------------------------------------------------------------------
+# Sorting (deterministic order)
+# ---------------------------------------------------------------------------
+
+class TestSorting:
+    def test_steps_sorted_by_index(self):
+        run_id = "run-sort"
+        run = _run_record(run_id)
+        s2 = _step(run_id, "litreview", index=2)
+        s0 = _step(run_id, "outline", index=0)
+        s1 = _step(run_id, "advisor", index=1)
+        result = RunResult(run=run, steps=[s2, s0, s1], artifacts=[], checkpoints=[], handoffs=[])
+        traj = build_run_trajectory(result)
+        assert [s.index for s in traj.steps] == [0, 1, 2]

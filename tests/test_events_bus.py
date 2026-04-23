@@ -246,6 +246,33 @@ class TestPublishNodeEvent:
 
 
 # ---------------------------------------------------------------------------
+# purge_run — memory cleanup (Story 2.6 review patch)
+# ---------------------------------------------------------------------------
+
+class TestPurgeRun:
+    def test_purge_removes_all_state(self):
+        bus = RunEventBus()
+        bus.publish("r1", _event("r1", "agent.output"))
+        bus.close_run("r1")
+        bus.purge_run("r1")
+        assert bus.get_events("r1") == []
+        assert bus.latest_seq("r1") is None
+
+    def test_purge_nonexistent_run_is_noop(self):
+        bus = RunEventBus()
+        bus.purge_run("no-such-run")
+
+    def test_purge_allows_reuse_of_run_id(self):
+        bus = RunEventBus()
+        bus.publish("r1", _event("r1", "agent.thinking"))
+        bus.close_run("r1")
+        bus.purge_run("r1")
+        seq = bus.publish("r1", _event("r1", "agent.completed"))
+        assert seq == 0
+        assert len(bus.get_events("r1")) == 1
+
+
+# ---------------------------------------------------------------------------
 # Story 4.1 — parallel publish (P5 zero-contention)
 # ---------------------------------------------------------------------------
 

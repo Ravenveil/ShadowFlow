@@ -89,6 +89,22 @@ class TestGenerateTsTypes:
         assert out1.read_text(encoding="utf-8") == out2.read_text(encoding="utf-8")
 
 
+class TestCommittedWorkflowTs:
+    def test_committed_workflow_ts_matches_contracts(self, tmp_path: Path) -> None:
+        """The checked-in workflow.ts must match what generate_ts_types produces now."""
+        committed = ROOT / "src" / "core" / "types" / "workflow.ts"
+        if not committed.exists():
+            pytest.skip("workflow.ts not yet generated")
+        fresh = tmp_path / "workflow.ts"
+        generate_ts_types.generate(fresh)
+        expected = fresh.read_text(encoding="utf-8")
+        actual = committed.read_text(encoding="utf-8")
+        assert actual == expected, (
+            "Committed workflow.ts is out of sync with contracts.py — "
+            "run `python scripts/generate_ts_types.py` and commit the result"
+        )
+
+
 class TestCheckContracts:
     def test_up_to_date_exits_zero(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """check_contracts returns 0 when workflow.ts matches contracts.py."""

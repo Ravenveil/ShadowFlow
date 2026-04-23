@@ -21,7 +21,7 @@ class _ConcreteExecutor(AgentExecutor):
         return AgentHandle(run_id=task.run_id, node_id=task.node_id, agent_id=task.agent_id, status="done")
 
     async def stream_events(self, handle):
-        yield AgentEvent(run_id=handle.run_id, node_id=handle.node_id, agent_id=handle.agent_id, type="done")
+        yield AgentEvent(run_id=handle.run_id, node_id=handle.node_id, agent_id=handle.agent_id, type="agent.completed")
 
     def capabilities(self):
         return AgentCapabilities(streaming=True, tool_calls=True)
@@ -117,7 +117,7 @@ class TestAgentDataStructures:
         assert handle.status == "pending"
 
     def test_agent_event_has_ts(self):
-        event = AgentEvent(run_id="r1", node_id="n1", agent_id="a1", type="start")
+        event = AgentEvent(run_id="r1", node_id="n1", agent_id="a1", type="agent.dispatched")
         assert event.ts is not None
 
     @pytest.mark.asyncio
@@ -134,4 +134,4 @@ class TestAgentDataStructures:
         handle = AgentHandle(run_id="r1", node_id="n1", agent_id="a1")
         events = [e async for e in executor.stream_events(handle)]
         assert len(events) == 1
-        assert events[0].type == "done"
+        assert events[0].type == "agent.completed"

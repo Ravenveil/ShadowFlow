@@ -143,7 +143,7 @@ class TestValidateBestPractices:
         pm = WorkflowPolicyMatrixSpec(
             allow_send={"factchecker": ["legal"]},
         )
-        warnings = validate_best_practices(pm, {"factchecker", "legal"})
+        warnings = validate_best_practices(pm)
         assert len(warnings) >= 1
         codes = [w.code for w in warnings]
         assert "POLICY_NOT_RECOMMENDED" in codes
@@ -152,14 +152,14 @@ class TestValidateBestPractices:
         pm = WorkflowPolicyMatrixSpec(
             allow_send={"agent_a": ["agent_b"]},
         )
-        warnings = validate_best_practices(pm, {"agent_a", "agent_b"})
+        warnings = validate_best_practices(pm)
         assert warnings == []
 
     def test_warning_has_reason(self):
         pm = WorkflowPolicyMatrixSpec(
             allow_send={"factchecker": ["legal"]},
         )
-        warnings = validate_best_practices(pm, {"factchecker", "legal"})
+        warnings = validate_best_practices(pm)
         assert all(isinstance(w, PolicyWarning) for w in warnings)
         assert all(w.reason for w in warnings)
 
@@ -167,10 +167,74 @@ class TestValidateBestPractices:
         pm = WorkflowPolicyMatrixSpec(
             allow_send={"factchecker": ["legal"]},
         )
-        warnings = validate_best_practices(pm, {"factchecker", "legal"})
+        warnings = validate_best_practices(pm)
         w = warnings[0]
         assert w.code == "POLICY_NOT_RECOMMENDED"
         assert "factchecker" in w.pattern or "legal" in w.pattern
+
+    def test_substring_no_false_positive(self):
+        """legal_advisor 不应触发 factchecker->legal 规则。"""
+        pm = WorkflowPolicyMatrixSpec(
+            allow_send={"factchecker": ["legal_advisor"]},
+        )
+        warnings = validate_best_practices(pm)
+        codes = [w.code for w in warnings]
+        assert "POLICY_NOT_RECOMMENDED" not in codes
+
+    def test_chinese_role_names_trigger_warning(self):
+        """中文角色名（事实核查员→法务）应触发最佳实践警告。"""
+        pm = WorkflowPolicyMatrixSpec(
+            allow_send={"事实核查员": ["法务"]},
+        )
+        warnings = validate_best_practices(pm)
+        assert any(w.code == "POLICY_NOT_RECOMMENDED" for w in warnings)
+
+    def test_content_officer_editor_only_reject(self):
+        """content_officer→editor 仅在 allow_reject 中触发，allow_send 中不触发。"""
+        pm_send = WorkflowPolicyMatrixSpec(
+            allow_send={"content_officer": ["editor"]},
+        )
+        pm_reject = WorkflowPolicyMatrixSpec(
+            allow_reject={"content_officer": ["editor"]},
+        )
+        warnings_send = validate_best_practices(pm_send)
+        warnings_reject = validate_best_practices(pm_reject)
+        assert not any(w.code == "POLICY_NOT_RECOMMENDED" for w in warnings_send)
+        assert any(w.code == "POLICY_NOT_RECOMMENDED" for w in warnings_reject)
+
+    def test_self_loop_warning(self):
+        """自环 allow_reject 应触发 SELF_APPROVAL_DISCOURAGED。"""
+        pm = WorkflowPolicyMatrixSpec(
+            allow_reject={"alice": ["alice"]},
+        )
+        warnings = validate_best_practices(pm)
+        assert any(w.code == "SELF_APPROVAL_DISCOURAGED" for w in warnings)
+
+    def test_empty_receiver_list_warning(self):
+        """空接收者列表应触发 POLICY_EMPTY_RECEIVER_LIST。"""
+        pm = WorkflowPolicyMatrixSpec(
+            allow_send={"alice": []},
+        )
+        warnings = validate_best_practices(pm)
+        assert any(w.code == "POLICY_EMPTY_RECEIVER_LIST" for w in warnings)
+
+    def test_duplicate_receivers_deduped(self):
+        """重复接收者在模型层面被去重。"""
+        pm = WorkflowPolicyMatrixSpec(
+            allow_send={"alice": ["bob", "bob", "charlie", "bob"]},
+        )
+        assert pm.allow_send["alice"] == ["bob", "charlie"]
+
+    def test_no_duplicate_warnings_for_same_pair(self):
+        """同一 pair 同时在 allow_send 和 allow_reject 中只产生一条警告（如果 scope 限制命中）。"""
+        pm = WorkflowPolicyMatrixSpec(
+            allow_send={"factchecker": ["legal"]},
+            allow_reject={"factchecker": ["legal"]},
+        )
+        warnings = validate_best_practices(pm)
+        factchecker_legal = [w for w in warnings if "factchecker" in w.pattern and "legal" in w.pattern
+                            and w.code == "POLICY_NOT_RECOMMENDED"]
+        assert len(factchecker_legal) == 1
 
 
 # ---------------------------------------------------------------------------

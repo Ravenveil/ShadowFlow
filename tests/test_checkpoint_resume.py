@@ -542,7 +542,7 @@ class TestEndToEndClosure:
 
         # bus._store holds deque of (seq, event) — read directly (no async consumer needed)
         stored = list(bus._store.get(run_id, []))
-        run_resumed_events = [evt for _seq, evt in stored if evt.get("event") == RUN_RESUMED]
+        run_resumed_events = [evt for _seq, evt in stored if evt.get("type") == RUN_RESUMED]
         assert len(run_resumed_events) >= 1
         assert run_resumed_events[0]["run_id"] == run_id
         assert run_resumed_events[0]["checkpoint_id"] == cp.checkpoint_id

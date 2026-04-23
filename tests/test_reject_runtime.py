@@ -103,7 +103,7 @@ class TestRejectPolicyEnforcement:
 
     @pytest.mark.asyncio
     async def test_reject_no_policy_matrix_allowed(self):
-        """没有 policy_matrix 时，直接放行（无限制）。"""
+        """没有 policy_matrix 时，直接放行（空矩阵=全允许）。"""
         wf = WorkflowDefinition.model_validate(
             {
                 "workflow_id": "no-policy",
@@ -115,10 +115,23 @@ class TestRejectPolicyEnforcement:
             }
         )
         svc, run_id = _service_with_run(wf)
-        # 没有 policy_matrix → 不应抛异常（只尝试 submit_approval，返回 False 即可）
         result = await svc.reject(run_id, "any_reviewer", "b", "test")
-        # 只要没抛 PolicyViolation 即通过
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_reject_unknown_run_id_raises(self):
+        """未知 run_id 应抛 ValueError 而非静默 no-op。"""
+        svc = RuntimeService()
+        with pytest.raises(ValueError, match="Unknown run_id"):
+            await svc.reject("nonexistent-run", "reviewer", "node", "test")
+
+    @pytest.mark.asyncio
+    async def test_reject_self_rejection(self):
+        """reviewer == target 时，若矩阵不允许则抛 PolicyViolation。"""
+        wf = _workflow_with_matrix({"compliance_officer": ["content_officer"]})
+        svc, run_id = _service_with_run(wf)
+        with pytest.raises(PolicyViolation):
+            await svc.reject(run_id, "content_officer", "content_officer", "self reject")
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +170,29 @@ class TestRejectionEventSequence:
         ev = svc._rejection_events[run_id][0]["events"][0]
         assert ev["sender"] == "compliance_officer"
         assert ev["receiver"] == "content_officer"
+        assert ev["node_id"] == "content_officer"
         assert ev["reason"] == "GDPR"
+
+    @pytest.mark.asyncio
+    async def test_rejection_events_published_to_event_bus(self):
+        """验证驳回事件通过 event bus 发布（SSE 可见）。"""
+        from shadowflow.runtime.events import RunEventBus
+
+        wf = _workflow_with_matrix({"compliance_officer": ["content_officer"]})
+        svc, run_id = _service_with_run(wf)
+        bus = RunEventBus()
+        svc._event_bus = bus
+        key = (run_id, "content_officer")
+        svc._approval_events[key] = asyncio.Event()
+
+        await svc.reject(run_id, "compliance_officer", "content_officer", "GDPR")
+
+        bus_events = bus.get_events(run_id)
+        assert len(bus_events) >= 3
+        event_types = [e[1]["event"] for e in bus_events]
+        assert POLICY_VIOLATION in event_types
+        assert NODE_REJECTED in event_types
+        assert HANDOFF_TRIGGERED in event_types
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +207,7 @@ class TestPolicyViolationEvent:
             reason="GDPR",
             node_id="content_officer",
         )
-        assert ev.event == POLICY_VIOLATION
+        assert ev.type == POLICY_VIOLATION
         assert ev.sender == "compliance_officer"
         assert ev.timestamp is not None
 
@@ -233,3 +268,34 @@ class TestRejectionIntegration:
             svc.submit_approval(run_id, node_id, "approve")
         await task
         assert result_holder["r"].run.status == "succeeded"
+
+
+# ---------------------------------------------------------------------------
+# HTTP 错误 envelope 验证
+# ---------------------------------------------------------------------------
+
+class TestHTTPErrorEnvelope:
+    def test_policy_violation_returns_403(self):
+        """PolicyViolation 应返回 HTTP 403 而非 422。"""
+        from starlette.testclient import TestClient
+        from shadowflow.server import app
+
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.post(
+            "/workflow/runs/fake-run/approval",
+            json={"node_id": "n1", "decision": "reject"},
+        )
+        assert resp.status_code == 422
+        assert "reviewer_role" in resp.json()["detail"]
+
+    def test_reject_with_reviewer_but_unknown_run(self):
+        """未知 run_id + reviewer_role 应返回 404。"""
+        from starlette.testclient import TestClient
+        from shadowflow.server import app
+
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.post(
+            "/workflow/runs/nonexistent/approval",
+            json={"node_id": "n1", "decision": "reject", "reviewer_role": "admin"},
+        )
+        assert resp.status_code == 404

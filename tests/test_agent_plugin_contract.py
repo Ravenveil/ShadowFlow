@@ -162,6 +162,7 @@ def test_readme_links_to_agent_plugin_contract() -> None:
 # ---------------------------------------------------------------------------
 
 CROSS_REFS = [
+    "HERMES_INTEGRATION_SPIKE.md",  # AC1 explicit requirement (Sprint 0 deliverable)
     "HERMES_CLAW_SPIKE.md",
     "SHADOWSOUL_RUNTIME_SPIKE.md",
 ]
@@ -172,6 +173,46 @@ def test_cross_reference_present(ref: str) -> None:
     text = _doc_text()
     assert ref in text, (
         f"AGENT_PLUGIN_CONTRACT.md missing cross-reference to {ref!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# AgentEventType.ALL alignment + AgentEvent.ts field documented (review patch)
+# ---------------------------------------------------------------------------
+
+def test_agent_event_type_all_frozenset_in_code() -> None:
+    from shadowflow.runtime.events import AgentEventType
+
+    assert isinstance(AgentEventType.ALL, frozenset)
+    # 7 core + 3 additional = 10 canonical types
+    assert len(AgentEventType.ALL) == 10
+
+
+def test_doc_mentions_agent_event_type_all() -> None:
+    text = _doc_text()
+    assert "AgentEventType.ALL" in text, (
+        "AGENT_PLUGIN_CONTRACT.md should document the canonical `AgentEventType.ALL` frozenset"
+    )
+
+
+def test_doc_mentions_event_ts_field() -> None:
+    """AgentEvent serializes a `ts` field; wire format must document it."""
+    from shadowflow.runtime.contracts import AgentEvent
+
+    assert "ts" in AgentEvent.model_fields
+    text = _doc_text()
+    # §6.3 SSE Wire Format must mention the `ts` field so consumers parse it.
+    assert "`ts`" in text or "\"ts\"" in text, (
+        "AGENT_PLUGIN_CONTRACT.md §6.3 should document the `ts` field in SSE wire format"
+    )
+
+
+def test_doc_imports_pydantic_models_from_contracts_module() -> None:
+    """ABC snippet must import AgentTask/AgentHandle/AgentCapabilities from contracts, not executors."""
+    text = _doc_text()
+    assert "shadowflow.runtime.contracts" in text, (
+        "AGENT_PLUGIN_CONTRACT.md §2.1 should import Pydantic models from "
+        "`shadowflow.runtime.contracts`, not `executors`"
     )
 
 

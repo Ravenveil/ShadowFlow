@@ -151,8 +151,8 @@ class TestStreamEventsJsonlTail:
         )
         events = [e async for e in exc.stream_events(handle)]
         assert len(events) == 2
-        assert events[0].type == "agent.assistant"
-        assert events[1].type == "agent.done"
+        assert events[0].type == "agent.output"
+        assert events[1].type == "agent.completed"
 
     @pytest.mark.asyncio
     async def test_invalid_json_line_emits_output_event(self):
