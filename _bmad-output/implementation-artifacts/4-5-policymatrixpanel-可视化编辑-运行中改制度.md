@@ -1,6 +1,6 @@
 # Story 4.5: PolicyMatrixPanel 可视化编辑 + 运行中改制度
 
-Status: in-progress
+Status: done
 
 ## Story
 
@@ -141,6 +141,7 @@ _n/a_
 - 2026-04-22: Story 4.5 完成,状态 → review
 - 2026-04-22: Code review (Chunk A / 后端) 完成,发现 2 Decision / 6 Patch / 7 Defer,状态 → in-progress
 - 2026-04-22: Code review (Chunk B / 前端) 完成,发现 0 Decision / 4 Patch / 0 Defer
+- 2026-04-23: Chunk A 后端 8 patches 全部应用 (model_validate coerce / reconfigure error surfacing / terminal status exclusion / in-flight post-validation hook / per-run policy lock / test hardening + regression tests),639 tests green → done
 
 ### Review Findings
 
@@ -153,14 +154,14 @@ Code review 2026-04-22 · Chunk A 后端 (Epic 4 合批) · 3 层并行评审 (B
 
 #### Patch
 
-- [ ] **[Review][Patch] 4.5 AC2 · in-flight post-validation hook** [shadowflow/runtime/service.py `_dispatch_step`] — 派发完成点调用 `can_reject(workflow.policy_matrix, sender=upstream_node_id, receiver=current_node_id)`;违反时 emit `NODE_REJECTED` 并记入 `_rejection_events`。(源决议 1a)
-- [ ] **[Review][Patch] 4.5 AC2 · `affected_downstream_nodes` 改 BFS + 排除 succeeded/skipped/cancelled** [shadowflow/runtime/service.py:500-510] — 用 `WorkflowDefinition.edges` BFS 从 completed 节点向下扩展,terminal 状态 (`succeeded/skipped/cancelled`) 不进 affected,`failed/invalidated/running/pending` 保留。(源决议 2a)
-- [ ] **[Review][Patch] BLOCKER · `update_policy` 将原始 dict 赋给 Pydantic 字段** [shadowflow/runtime/service.py:~492] — `request.workflow.policy_matrix = matrix` 其中 `matrix: Dict`,字段类型 `Optional[WorkflowPolicyMatrixSpec]`。Pydantic v2 默认不 `validate_assignment`,dict 被静悄悄存入;后续 `reject()` 路径调用 `can_reject(policy_matrix, …)` 会在 `.allow_send`/`.allow_reject` 上 `AttributeError`。`model_copy(update=…)` fallback 也不重验证。`setattr` fallback 不安全。修:先 `WorkflowPolicyMatrixSpec.model_validate(matrix)` 做类型 coerce,失败时 raise 422。
-- [ ] **[Review][Patch] `reconfigure` 静吞 `update_policy` 异常** [shadowflow/runtime/service.py:~561] — `try: self.update_policy(…) except Exception: pass`,仍返回 `status: reconfigured`,但 policy 实际未更新且没 `policy.updated` 事件。改为传播或返回 `partial_failure` 字段。
-- [ ] **[Review][Patch] `affected_downstream_nodes` 只排除 succeeded** [shadowflow/runtime/service.py:500-510] — failed / skipped / cancelled / invalidated 都被错误列入 affected。至少改为排除所有 terminal 状态 (`succeeded / failed / skipped / cancelled / invalidated`)。
-- [ ] **[Review][Patch] policy hot-swap 无 per-run `asyncio.Lock`** [shadowflow/runtime/service.py:~492] — 调度循环读 `.allow_send.items()` 期间外部 mutate `policy_matrix` 可见混合状态。加 `self._policy_locks: Dict[run_id, asyncio.Lock]` 并在 update_policy + dispatch 读侧加锁。
-- [ ] **[Review][Patch] `test_publishes_policy_updated_event` 脆弱 + 掩盖异常** [tests/test_policy_runtime_update.py:~33] — 断言 `len(events) == 1`,且 `update_policy` 异常被 `except Exception: pass` 吞掉时仍会发事件,测试仍然绿。改为 `any(e.name == POLICY_UPDATED for e in events)` 且新增一条 assert matrix 实际被应用 (`isinstance(req.workflow.policy_matrix, WorkflowPolicyMatrixSpec)`)。
-- [ ] **[Review][Patch] 缺"已完成节点 output 保留"回归测试** [tests/test_policy_runtime_update.py] — AC3 核心成本控制 invariant 未测。加 test:seed `RunResult.steps = [StepRecord(node_id='agent_a', status='succeeded')]`,调用 `update_policy`,断言返回的 `affected_downstream_nodes` 不含 `agent_a` 且 `step.output` 未变。
+- [x] **[Review][Patch] 4.5 AC2 · in-flight post-validation hook** [shadowflow/runtime/service.py `_dispatch_step`] — 派发完成点调用 `can_reject(workflow.policy_matrix, sender=upstream_node_id, receiver=current_node_id)`;违反时 emit `NODE_REJECTED` 并记入 `_rejection_events`。(源决议 1a)
+- [x] **[Review][Patch] 4.5 AC2 · `affected_downstream_nodes` 改 BFS + 排除 succeeded/skipped/cancelled** [shadowflow/runtime/service.py:500-510] — 用 `WorkflowDefinition.edges` BFS 从 completed 节点向下扩展,terminal 状态 (`succeeded/skipped/cancelled`) 不进 affected,`failed/invalidated/running/pending` 保留。(源决议 2a)
+- [x] **[Review][Patch] BLOCKER · `update_policy` 将原始 dict 赋给 Pydantic 字段** [shadowflow/runtime/service.py:~492] — `request.workflow.policy_matrix = matrix` 其中 `matrix: Dict`,字段类型 `Optional[WorkflowPolicyMatrixSpec]`。Pydantic v2 默认不 `validate_assignment`,dict 被静悄悄存入;后续 `reject()` 路径调用 `can_reject(policy_matrix, …)` 会在 `.allow_send`/`.allow_reject` 上 `AttributeError`。`model_copy(update=…)` fallback 也不重验证。`setattr` fallback 不安全。修:先 `WorkflowPolicyMatrixSpec.model_validate(matrix)` 做类型 coerce,失败时 raise 422。
+- [x] **[Review][Patch] `reconfigure` 静吞 `update_policy` 异常** [shadowflow/runtime/service.py:~561] — `try: self.update_policy(…) except Exception: pass`,仍返回 `status: reconfigured`,但 policy 实际未更新且没 `policy.updated` 事件。改为传播或返回 `partial_failure` 字段。
+- [x] **[Review][Patch] `affected_downstream_nodes` 只排除 succeeded** [shadowflow/runtime/service.py:500-510] — failed / skipped / cancelled / invalidated 都被错误列入 affected。至少改为排除所有 terminal 状态 (`succeeded / failed / skipped / cancelled / invalidated`)。
+- [x] **[Review][Patch] policy hot-swap 无 per-run `asyncio.Lock`** [shadowflow/runtime/service.py:~492] — 调度循环读 `.allow_send.items()` 期间外部 mutate `policy_matrix` 可见混合状态。加 `self._policy_locks: Dict[run_id, asyncio.Lock]` 并在 update_policy + dispatch 读侧加锁。
+- [x] **[Review][Patch] `test_publishes_policy_updated_event` 脆弱 + 掩盖异常** [tests/test_policy_runtime_update.py:~33] — 断言 `len(events) == 1`,且 `update_policy` 异常被 `except Exception: pass` 吞掉时仍会发事件,测试仍然绿。改为 `any(e.name == POLICY_UPDATED for e in events)` 且新增一条 assert matrix 实际被应用 (`isinstance(req.workflow.policy_matrix, WorkflowPolicyMatrixSpec)`)。
+- [x] **[Review][Patch] 缺"已完成节点 output 保留"回归测试** [tests/test_policy_runtime_update.py] — AC3 核心成本控制 invariant 未测。加 test:seed `RunResult.steps = [StepRecord(node_id='agent_a', status='succeeded')]`,调用 `update_policy`,断言返回的 `affected_downstream_nodes` 不含 `agent_a` 且 `step.output` 未变。
 
 #### Patch (Chunk B / 前端)
 

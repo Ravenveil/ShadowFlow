@@ -35,3 +35,9 @@ test_planner.py
 
 # Custom templates (user-authored, not source-tracked)
 templates/custom/
+
+# Ephemeral / plugin-managed directories
+.tmp/
+.claude/worktrees/
+.claude/skills/
+.agents/
