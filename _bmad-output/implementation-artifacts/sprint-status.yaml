@@ -1,5 +1,5 @@
 # generated: 2026-04-16T05:27:17Z
-# last_updated: 2026-04-23T04:20:09Z  # Story 5-3 → review; 0G Storage 下载 + Merkle 验证
+# last_updated: 2026-04-23T05:06:24Z  # batch commit 5 patches; sprint-status synced
 # project: ShadowFlow
 # project_key: NOKEY
 # tracking_system: file-system
@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-23T04:14:25Z  # Story 5-3 → in-progress; 0G Storage 下载 + Merkle 验证
+last_updated: 2026-04-23T05:06:24Z  # Story 5-3 → review; all pending changes committed
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
