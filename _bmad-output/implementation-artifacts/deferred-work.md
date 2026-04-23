@@ -217,3 +217,11 @@ Items deferred during code reviews. Each entry is a real issue that was found bu
 - `_FRONTEND_DIRECT` 在 Python module import 时冻结，运行时不可切换 [shadowflow/integrations/zerog_storage.py:19] — 标准 FastAPI 模式，需重启生效
 - leakGuard 未覆盖 `XMLHttpRequest` / `navigator.sendBeacon` / `WebSocket` [src/core/security/leakGuard.ts] — 增量加固，ethers 的 JsonRpcProvider 默认走 fetch
 - Playwright E2E 性能测试（10MB ≤ 10s）需真实 0G 网络 [spec P6] — 已在 story Dev Notes 注明延迟到集成环境
+
+---
+
+## Deferred from: code review of 5-2-trajectory-sanitize-scan (2026-04-23)
+
+- `onSanitizeConfirm` 丢弃 cleaned trajectory 未触发 0G 上传 [src/EditorPage.tsx:1426-1432] — 跨 Story 集成（5.1 + 5.2 连通），Story 5.3+ 或独立集成 task 解决
+- `phone_intl` 正则 `\+?[1-9]\d{7,14}` 误报率高，匹配时间戳/订单号等 8-15 位数字 [shadowflow/runtime/sanitize.py:33-34] — spec 定义的正则，需产品层面决策是否收紧为 `\+[1-9]\d{7,14}`（必须有 `+` 前缀）
+- SanitizeReviewModal 无 focus trap，tab 可跳出 modal [src/core/components/modals/SanitizeReviewModal.tsx] — 无障碍改进，非 MVP 阻塞
