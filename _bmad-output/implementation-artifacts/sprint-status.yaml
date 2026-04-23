@@ -1,5 +1,5 @@
 # generated: 2026-04-16T05:27:17Z
-# last_updated: 2026-04-23T10:00:00Z  # Story 2-8 code review: 10 patches applied (doc alignment + Mermaid + ts field + ALL frozenset + claw-boundary upgrade + HERMES_INTEGRATION_SPIKE cross-ref); 11 deferred; 39 tests green → done
+# last_updated: 2026-04-23T01:14:26Z  # Batch commit: 6 commits landed, 635 tests green; Epic 2/3/4 → done; next: Epic 5
 # project: ShadowFlow
 # project_key: NOKEY
 # tracking_system: file-system
@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-23T10:00:00Z  # 2-8 code review done: 10 patches applied (ABC signature alignment / imports / Mermaid lifecycle / AgentEventType.ALL / ts field / run_id substitution / HERMES_INTEGRATION_SPIKE cross-ref / claw-boundary upgrade / task checkboxes / 5 new alignment tests), 11 deferred, 39 tests green
+last_updated: 2026-04-23T01:14:26Z  # Batch commit: 6 commits (runtime+tests+scripts+docs+artifacts), 635 tests green; Epic 2→done, Epic 3→done, Epic 4→done
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -72,11 +72,11 @@ development_status:
   # ===== Epic 2: Universal Agent Plugin Contract (ACP + MCP + CLI) =====
   # Note: Story 2.7 (Hermes claw SPIKE) should run as Sprint-0 first-day spike
   # Note: Story 2.8 migrated from Epic 0 Story 0.5 (must run after 2.1-2.7 complete)
-  epic-2: in-progress
+  epic-2: done
   2-1-agentexecutor-abc-四-kind-枚举-注册表: done
   2-2-cli-executor-通用化-openclaw-hermes-shadowsoul-cli-preset: done
-  2-3-acp-client-实现-hermes-shadowsoul-主协议: in-progress
-  2-4-mcp-client-实现-hermes-tool-暴露补充通道: in-progress
+  2-3-acp-client-实现-hermes-shadowsoul-主协议: done
+  2-4-mcp-client-实现-hermes-tool-暴露补充通道: done
   2-5-shadowsoul-rust-binary-接入: done
   2-6-agentevent-归一流-sse-集成: done
   2-7-hermes-claw-子命令-spike: done
@@ -84,7 +84,7 @@ development_status:
   epic-2-retrospective: optional
 
   # ===== Epic 3: Workflow Editor + Template Compilation + 6 Seed Templates =====
-  epic-3: in-progress
+  epic-3: done
   3-1-react-editor-shell-reactflow-canvas-shadow-ui-复用: done
   3-2-yaml-编辑器-双向同步-yaml-canvas: done
   3-3-节点类型-agent-approvalgate-barrier-parallel-retry-decision: done
@@ -97,19 +97,19 @@ development_status:
   epic-3-retrospective: optional
 
   # ===== Epic 4: Live Dashboard + Real-time Observation + Dynamic Policy =====
-  epic-4: in-progress
+  epic-4: done
   4-1-sse-事件总线-events-endpoint: done
   4-2-livedashboard-看板组件: done
   4-3-驳回事件视觉强化-toast: done
   4-4-节点详情-traceview: done
-  4-5-policymatrixpanel-可视化编辑-运行中改制度: in-progress  # Chunk A+B patches pending
-  4-6-运行中新增角色-re-run-with-new-policy: in-progress      # Chunk A+B patches pending
+  4-5-policymatrixpanel-可视化编辑-运行中改制度: done
+  4-6-运行中新增角色-re-run-with-new-policy: done
   # Added 2026-04-17 via epics-addendum-2026-04-17-observability.md
   # Fleet-level observability — fills gap identified via edict 10-panel comparison
   # Pencil frames: ecvHQ (4.7) / rB9nS (4.8) / 6Q8Hd (4.9) in shadowflow-ui-2026-04-16-v2.pen
-  4-7-operations-overview-fleet-视角: in-progress  # Chunk A+B patches pending
-  4-8-trajectory-archive-跨-run-归档视图: in-progress  # Chunk A+B patches pending
-  4-9-policy-matrix-observability-驳回热力: in-progress  # Chunk A+B patches pending
+  4-7-operations-overview-fleet-视角: done
+  4-8-trajectory-archive-跨-run-归档视图: done
+  4-9-policy-matrix-observability-驳回热力: done
   epic-4-retrospective: optional
 
   # ===== Epic 5: 0G Ecosystem Integration + CID Share/Clone =====
