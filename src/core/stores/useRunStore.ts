@@ -195,7 +195,9 @@ export const useRunStore = create<RunStoreState>()(
 
     enqueueGap(gap) {
       set((state) => {
-        const existing = state.pendingGaps.find((item) => item.nodeId === gap.nodeId);
+        const existing = state.pendingGaps.find(
+          (item) => item.nodeId === gap.nodeId && item.runId === gap.runId,
+        );
         if (existing) {
           existing.description = gap.description;
           existing.gapType = gap.gapType;
@@ -212,14 +214,18 @@ export const useRunStore = create<RunStoreState>()(
 
     updateGapInput(nodeId, userInput) {
       set((state) => {
-        const pending = state.pendingGaps.find((item) => item.nodeId === nodeId);
+        const pending = state.pendingGaps.find(
+          (item) => item.nodeId === nodeId && item.runId === state.run_id,
+        );
         if (pending) pending.userInput = userInput;
       });
     },
 
     resolveGap(nodeId) {
       set((state) => {
-        state.pendingGaps = state.pendingGaps.filter((item) => item.nodeId !== nodeId);
+        state.pendingGaps = state.pendingGaps.filter(
+          (item) => item.nodeId !== nodeId || item.runId !== state.run_id,
+        );
       });
     },
 

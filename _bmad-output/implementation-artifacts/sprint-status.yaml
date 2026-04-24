@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-23T09:32:11Z  # Story 5-5 → done after code-review (4 findings fixed)
+last_updated: 2026-04-24T01:11:03Z  # Story 6-1 → done after code-review (8 patches applied)
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -123,9 +123,9 @@ development_status:
 
   # ===== Epic 6: Agent Interactivity + Demo Station + Pitch Ready =====
   epic-6: in-progress
-  6-1-agent-gap-detection-反向提问-e2: review
+  6-1-agent-gap-detection-反向提问-e2: done
   6-2-landingpage-slogan-象限图-cta: review
-  6-3-templatespage-6-模板-gallery-quick-demo-预填: ready-for-dev
+  6-3-templatespage-6-模板-gallery-quick-demo-预填: in-progress
   6-4-aboutpage-差异化对比-0g-链上证据-路线图: ready-for-dev
   epic-6-retrospective: optional
 

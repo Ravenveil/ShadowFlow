@@ -118,14 +118,16 @@ def test_gap_response_endpoint_wakes_waiting_node():
     key = ("run-endpoint-gap", "writer")
     runtime_service._gap_events[key] = asyncio.Event()
 
-    with TestClient(app=app) as client:
-        response = client.post(
-            "/workflow/runs/run-endpoint-gap/gap_response",
-            json={"node_id": "writer", "gap_choice": "B"},
-        )
+    try:
+        with TestClient(app=app) as client:
+            response = client.post(
+                "/workflow/runs/run-endpoint-gap/gap_response",
+                json={"node_id": "writer", "gap_choice": "B"},
+            )
 
-    assert response.status_code == 200
-    assert runtime_service._gap_responses[key]["gap_choice"] == "B"
-    assert runtime_service._gap_events[key].is_set() is True
-    runtime_service._gap_events.pop(key, None)
-    runtime_service._gap_responses.pop(key, None)
+        assert response.status_code == 200
+        assert runtime_service._gap_responses[key]["gap_choice"] == "B"
+        assert runtime_service._gap_events[key].is_set() is True
+    finally:
+        runtime_service._gap_events.pop(key, None)
+        runtime_service._gap_responses.pop(key, None)

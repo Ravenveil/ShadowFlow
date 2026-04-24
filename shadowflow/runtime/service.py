@@ -90,6 +90,7 @@ class RuntimeService:
         self._approval_decisions: Dict[Tuple[str, str], Dict[str, Any]] = {}
         self._gap_events: Dict[Tuple[str, str], asyncio.Event] = {}
         self._gap_responses: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        self._gap_timeout_seconds: float = 300.0
         # 驳回事件记录：key = run_id
         self._rejection_events: Dict[str, List[Dict[str, Any]]] = {}
         # P5: per-run asyncio.Lock — 保护 reject / resume / _execute 并发写
@@ -2673,10 +2674,27 @@ class RuntimeService:
                 ),
             )
 
+        timed_out = False
         try:
-            await event.wait()
+            await asyncio.wait_for(event.wait(), timeout=self._gap_timeout_seconds)
+        except asyncio.TimeoutError:
+            timed_out = True
+            trace.append(
+                {
+                    "event": "gap_timeout",
+                    "node_id": node.id,
+                    "message": f"Gap response timed out after {self._gap_timeout_seconds}s; auto-selecting C (annotate)",
+                    "timestamp": utc_now().isoformat(),
+                }
+            )
+            logger.warning("gap_response timed out for run=%s node=%s; defaulting to choice C", run_id, node.id)
         finally:
             self._gap_events.pop(key, None)
+
+        if timed_out:
+            run.status = "running"
+            task.status = "running"
+            return {"gap_choice": "C", "user_input": None}
 
         response = self._gap_responses.pop(key, {})
         run.status = "running"
@@ -2729,7 +2747,8 @@ class RuntimeService:
         choice = str(resolution.get("choice") or "").upper()
         user_input = resolution.get("user_input")
         output["gap_resolution"] = resolution
-        output["state"].setdefault("gap_resolution", resolution)
+        if isinstance(output.get("state"), dict):
+            output["state"].setdefault("gap_resolution", resolution)
         if choice == "A" and isinstance(user_input, str) and user_input.strip():
             output["message"] = f"{output.get('message', '')} [supplemented: {user_input.strip()}]".strip()
             output["supplemental_data"] = user_input.strip()

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { PendingGap } from '../../stores/useRunStore';
 
 interface GapDetectedModalProps {
@@ -28,10 +28,14 @@ export function GapDetectedModal({
   useEffect(() => {
     if (!open || !gap) return;
     const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const inField = target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement;
       if (event.key === 'Escape') onClose?.();
-      if (event.key === '1') onSubmit('A', draft);
-      if (event.key === '2') onSubmit('B', draft);
-      if (event.key === '3') onSubmit('C', draft);
+      if (!inField) {
+        if (event.key === '1') onSubmit('A', draft);
+        if (event.key === '2') onSubmit('B', draft);
+        if (event.key === '3') onSubmit('C', draft);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -78,34 +82,26 @@ export function GapDetectedModal({
             />
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
-            <button
-              data-testid="gap-choice-A"
-              ref={primaryRef}
-              type="button"
-              disabled={submitting}
-              onClick={() => onSubmit('A', draft)}
-              style={{ borderRadius: 12, border: '1px solid rgba(59, 130, 246, .35)', background: 'rgba(30, 64, 175, .18)', color: '#dbeafe', padding: '12px 10px', fontWeight: 700, cursor: 'pointer' }}
-            >
-              1. 补充数据
-            </button>
-            <button
-              data-testid="gap-choice-B"
-              type="button"
-              disabled={submitting}
-              onClick={() => onSubmit('B', draft)}
-              style={{ borderRadius: 12, border: '1px solid rgba(244, 114, 182, .35)', background: 'rgba(131, 24, 67, .18)', color: '#fbcfe8', padding: '12px 10px', fontWeight: 700, cursor: 'pointer' }}
-            >
-              2. 移除此对比
-            </button>
-            <button
-              data-testid="gap-choice-C"
-              type="button"
-              disabled={submitting}
-              onClick={() => onSubmit('C', draft)}
-              style={{ borderRadius: 12, border: '1px solid rgba(245, 158, 11, .35)', background: 'rgba(146, 64, 14, .18)', color: '#fde68a', padding: '12px 10px', fontWeight: 700, cursor: 'pointer' }}
-            >
-              3. 标记稍后更新
-            </button>
+            {gap.choices.map((choice, index) => {
+              const CHOICE_STYLES: Record<string, React.CSSProperties> = {
+                A: { border: '1px solid rgba(59, 130, 246, .35)', background: 'rgba(30, 64, 175, .18)', color: '#dbeafe' },
+                B: { border: '1px solid rgba(244, 114, 182, .35)', background: 'rgba(131, 24, 67, .18)', color: '#fbcfe8' },
+                C: { border: '1px solid rgba(245, 158, 11, .35)', background: 'rgba(146, 64, 14, .18)', color: '#fde68a' },
+              };
+              return (
+                <button
+                  key={choice.id}
+                  data-testid={`gap-choice-${choice.id}`}
+                  ref={index === 0 ? primaryRef : undefined}
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => onSubmit(choice.id, draft)}
+                  style={{ borderRadius: 12, padding: '12px 10px', fontWeight: 700, cursor: 'pointer', ...(CHOICE_STYLES[choice.id] ?? {}) }}
+                >
+                  {index + 1}. {choice.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

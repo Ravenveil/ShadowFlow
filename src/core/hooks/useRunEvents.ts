@@ -205,7 +205,6 @@ export function useRunEvents({
       client.on(eventType, (payload) => handleEvent(payload as RunEventPayload));
     }
     client.on('node.retried', (payload) => handleEvent(payload as RunEventPayload));
-    client.on('agent.gap_detected', (payload) => handleEvent(payload as RunEventPayload));
     client.on('policy.violation', (payload) => handleEvent(payload as RunEventPayload));
     client.on('policy.updated', (payload) => handleEvent(payload as RunEventPayload));
     client.on('run.reconfigured', (payload) => handleEvent(payload as RunEventPayload));

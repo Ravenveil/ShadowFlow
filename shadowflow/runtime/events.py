@@ -6,7 +6,7 @@ import asyncio
 import json
 from collections import deque
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Deque, Dict, List, Optional, Set, Tuple
+from typing import Any, AsyncIterator, Deque, Dict, List, Literal, Optional, Set, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -214,7 +214,7 @@ class GapChoice(BaseModel):
 
 
 class AgentGapDetectedEvent(BaseModel):
-    type: str = GAP_DETECTED
+    type: Literal["agent.gap_detected"] = GAP_DETECTED
     run_id: str
     node_id: str
     gap_type: str
