@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-23T09:20:10Z  # Story 6-2 LandingPage → review
+last_updated: 2026-04-23T09:32:11Z  # Story 5-5 → done after code-review (4 findings fixed)
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -152,6 +152,7 @@ development_status:
   8-3-scene-mode-shell-scene-tree-inspector: ready-for-dev
   8-3b-roleprofile-深度配置-persona-traits-state-fields: backlog
   8-4-knowledge-dock-绑定主路径: ready-for-dev
+  8-4b-tool-registry-mcp-provider-注册凭证管理: ready-for-dev
   8-5-smoke-run-验证面板-失败解释: ready-for-dev
   8-6-publish-backfill-template-workflow-agentapp: backlog
   8-7-agent-catalog-已发布浏览-fork: backlog

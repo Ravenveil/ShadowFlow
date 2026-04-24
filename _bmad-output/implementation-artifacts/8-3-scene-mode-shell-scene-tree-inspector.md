@@ -55,15 +55,34 @@ so that **我用“场景编辑器”的心智创建智能体，而不是被 wor
 **When** 页面渲染 `Scene Tree`
 **Then** 至少出现以下节点层级：
 - `Team` 根节点
-- `Agent` 子节点列表
+- `Agent` 子节点列表（支持**主管-员工层级**，见下）
 - `Shared Tools`
 - `Shared Memory`
 - `Shared Knowledge`
 
+**And** Scene Tree 必须反映 `RoleProfile.sub_agents` 的层级结构：
+```
+Team
+  └── 🎯 Research Manager（主管，can_spawn_tasks=true）
+        ├── 👷 Search Worker 1（员工）
+        ├── 👷 Search Worker 2（员工）
+        └── 📝 Report Writer（员工）
+  └── 🎯 Review Manager（主管）
+        └── 👷 Fact Checker（员工）
+```
+- 主管节点可展开/收起，展示其员工列表
+- 主管节点带特殊图标或标签（区别于普通 Agent）
+- 员工节点缩进显示在主管下方
+- 顶层 Agent（无主管、无员工）仍显示为平级，与现有行为兼容
+
 **And** 当前 Story 至少支持：
-- 展开/收起树节点
+- 展开/收起树节点（包括主管→员工展开）
 - 高亮当前选中项
-- 点击树节点驱动 Canvas 聚焦与 Inspector 切换
+- 点击任意节点（主管或员工）驱动 Canvas 聚焦与 Inspector 切换
+
+**And** Inspector 选中**主管**时，额外展示"员工列表"区域，支持：
+- 查看员工名称与角色
+- "添加员工"按钮（写入 `sub_agents[]`）
 
 **And** 若当前 `blueprint.mode = "single"`，Scene Tree 仍应保留 Team 根，只是在 Team 下显示单个 Agent，避免 UI 分叉出第二套心智
 
