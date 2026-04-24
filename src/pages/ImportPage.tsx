@@ -277,7 +277,7 @@ export default function ImportPage() {
             }}
           />
           <button
-            onClick={handleLoad}
+            onClick={() => handleLoad()}
             disabled={!isValidCid || loading}
             style={{
               height: 48,

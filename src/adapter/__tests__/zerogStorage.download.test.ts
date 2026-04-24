@@ -23,10 +23,30 @@ const { downloadTrajectory, MerkleVerificationError, isDownloadInFlight } =
 
 const VALID_CID = '0x' + 'ab'.repeat(32);
 
+function mockFetchOk(body: ArrayBuffer | string): void {
+  const buffer = typeof body === 'string'
+    ? new TextEncoder().encode(body).buffer
+    : body;
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    arrayBuffer: () => Promise.resolve(buffer),
+  } as unknown as Response);
+}
+
+function mockFetchFail(status: number): void {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: false,
+    status,
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+  } as unknown as Response);
+}
+
 describe('downloadTrajectory', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    mockFetchOk(new ArrayBuffer(0));
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -62,14 +82,14 @@ describe('downloadTrajectory', () => {
     mockDownload.mockRejectedValue(new Error('JsonRpcError: file not found'));
     await expect(downloadTrajectory(VALID_CID)).rejects.toThrow(MerkleVerificationError);
     await expect(
-      downloadTrajectory(VALID_CID).catch((e: MerkleVerificationError) => e.errorType),
+      downloadTrajectory(VALID_CID).catch((e) => (e as InstanceType<typeof MerkleVerificationError>).errorType),
     ).resolves.toBe('not_found');
   });
 
   it('sets errorType=verification_failed for generic errors', async () => {
     mockDownload.mockRejectedValue(new Error('some internal error'));
     await expect(
-      downloadTrajectory(VALID_CID).catch((e: MerkleVerificationError) => e.errorType),
+      downloadTrajectory(VALID_CID).catch((e) => (e as InstanceType<typeof MerkleVerificationError>).errorType),
     ).resolves.toBe('verification_failed');
   });
 
@@ -92,5 +112,32 @@ describe('downloadTrajectory', () => {
     mockDownload.mockRejectedValue(new Error('fail'));
     await downloadTrajectory(VALID_CID).catch(() => {});
     expect(isDownloadInFlight()).toBe(false);
+  });
+
+  it('parses JSON trajectory from gateway bytes (Story 5.5)', async () => {
+    mockDownload.mockResolvedValue(null);
+    const traj = { metadata: { author_lineage: ['alex@12345678'] } };
+    mockFetchOk(JSON.stringify(traj));
+    const result = await downloadTrajectory(VALID_CID);
+    expect(result.verified).toBe(true);
+    expect(result.bytes.length).toBeGreaterThan(0);
+    expect(result.trajectory?.metadata?.author_lineage).toEqual(['alex@12345678']);
+  });
+
+  it('returns undefined trajectory when bytes are not valid JSON', async () => {
+    mockDownload.mockResolvedValue(null);
+    mockFetchOk('not-json-payload');
+    const result = await downloadTrajectory(VALID_CID);
+    expect(result.verified).toBe(true);
+    expect(result.trajectory).toBeUndefined();
+  });
+
+  it('throws gateway_error when HTTP gateway returns 4xx/5xx', async () => {
+    mockDownload.mockResolvedValue(null);
+    mockFetchFail(404);
+    await expect(downloadTrajectory(VALID_CID)).rejects.toThrow(MerkleVerificationError);
+    await expect(
+      downloadTrajectory(VALID_CID).catch((e) => (e as InstanceType<typeof MerkleVerificationError>).errorType),
+    ).resolves.toBe('gateway_error');
   });
 });

@@ -10,6 +10,7 @@ from shadowflow.runtime.lineage import (
     append_author,
     get_lineage,
     make_entry,
+    validate_alias,
     wallet_fingerprint,
 )
 
@@ -47,6 +48,32 @@ class TestMakeEntry:
     def test_whitespace_only_alias_raises(self):
         with pytest.raises(ValueError, match="alias must not be empty"):
             make_entry("   ", "0x1234567890abcdef")
+
+    def test_alias_with_at_rejected(self):
+        # An alias that contains '@' would corrupt the entry format. The validator
+        # blocks the email-as-alias smuggling attempt.
+        with pytest.raises(ValueError, match="alias must match"):
+            make_entry("john@gmail.com", "0x1234567890abcdef")
+
+    def test_alias_with_space_rejected(self):
+        with pytest.raises(ValueError, match="alias must match"):
+            make_entry("alex smith", "0x1234567890abcdef")
+
+    def test_alias_too_long_rejected(self):
+        with pytest.raises(ValueError, match="alias must match"):
+            make_entry("a" * 33, "0x1234567890abcdef")
+
+
+class TestValidateAlias:
+    def test_passes_through_safe_alias(self):
+        assert validate_alias("alex_2026") == "alex_2026"
+
+    def test_strips_whitespace(self):
+        assert validate_alias("  jin-bot  ") == "jin-bot"
+
+    def test_phone_like_alias_rejected(self):
+        with pytest.raises(ValueError, match="alias must match"):
+            validate_alias("+86 138 0000 0000")
 
 
 class TestAppendAuthor:

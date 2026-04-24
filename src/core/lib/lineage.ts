@@ -53,11 +53,15 @@ export function makeEntry(alias: string, address: string): string {
   return `${safeAlias}@${fp}`;
 }
 
+export type AppendedTrajectory<T extends TrajectoryWithMeta> = T & {
+  metadata: { author_lineage: string[] } & NonNullable<T['metadata']>;
+};
+
 export function appendAuthor<T extends TrajectoryWithMeta>(
   trajectory: T,
   alias: string,
   address: string,
-): T {
+): AppendedTrajectory<T> {
   const entry = makeEntry(alias, address);
   const meta = trajectory.metadata ?? {};
   const existing = Array.isArray(meta.author_lineage)
@@ -66,7 +70,7 @@ export function appendAuthor<T extends TrajectoryWithMeta>(
   return {
     ...trajectory,
     metadata: { ...meta, author_lineage: [...existing, entry] },
-  };
+  } as AppendedTrajectory<T>;
 }
 
 export function getLineage(trajectory: unknown): string[] {

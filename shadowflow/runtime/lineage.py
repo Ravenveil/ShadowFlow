@@ -13,7 +13,8 @@ import re
 from typing import Any, Dict, List, Optional
 
 _FINGERPRINT_RE = re.compile(r"^[a-fA-F0-9]{8}$")
-_ENTRY_RE = re.compile(r"^.+@[a-fA-F0-9]{8}$")
+_ALIAS_RE = re.compile(r"^[a-zA-Z0-9_-]{1,32}$")
+_ENTRY_RE = re.compile(r"^[a-zA-Z0-9_-]{1,32}@[a-fA-F0-9]{8}$")
 
 
 def wallet_fingerprint(address: str) -> str:
@@ -27,12 +28,27 @@ def wallet_fingerprint(address: str) -> str:
     return cleaned[:8].lower()
 
 
+def validate_alias(alias: str) -> str:
+    """Trim and validate an author alias against the safe charset.
+
+    The alias travels into immutable on-chain metadata, so it must not contain
+    PII (email/phone) or shape-breaking characters like ``@`` / whitespace.
+    """
+    trimmed = (alias or "").strip()
+    if not trimmed:
+        raise ValueError("Author alias must not be empty")
+    if not _ALIAS_RE.match(trimmed):
+        raise ValueError(
+            "Author alias must match [a-zA-Z0-9_-]{1,32} (no @, no spaces, no PII)",
+        )
+    return trimmed
+
+
 def make_entry(alias: str, address: str) -> str:
     """Build an ``alias@fingerprint`` lineage entry."""
-    if not alias or not alias.strip():
-        raise ValueError("Author alias must not be empty")
+    safe_alias = validate_alias(alias)
     fp = wallet_fingerprint(address)
-    return f"{alias.strip()}@{fp}"
+    return f"{safe_alias}@{fp}"
 
 
 def append_author(

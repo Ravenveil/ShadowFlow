@@ -310,3 +310,62 @@ class TestIntegration:
         cleaned, removed = sanitize_trajectory(traj)
         assert cleaned == traj
         assert removed == []
+
+
+class TestAuthorLineageWhitelist:
+    """Story 5.5: metadata.author_lineage gets format-validated, not blanket trusted."""
+
+    def test_well_formed_entries_pass_through(self):
+        traj = {
+            "metadata": {
+                "author_lineage": ["alex@12345678", "jin@abcdef01"],
+            },
+        }
+        cleaned, removed = sanitize_trajectory(traj)
+        assert cleaned["metadata"]["author_lineage"] == ["alex@12345678", "jin@abcdef01"]
+        assert all(r.pattern != "lineage_format" for r in removed)
+
+    def test_email_alias_in_lineage_is_dropped(self):
+        """Entries that contain '@' anywhere other than the format separator
+        are rejected — an email-as-alias cannot smuggle PII through."""
+        traj = {
+            "metadata": {
+                "author_lineage": ["alex@12345678", "john@gmail.com@abcdef01"],
+            },
+        }
+        cleaned, removed = sanitize_trajectory(traj)
+        assert cleaned["metadata"]["author_lineage"] == ["alex@12345678"]
+        assert any(r.pattern == "lineage_format" for r in removed)
+
+    def test_non_string_entries_dropped(self):
+        traj = {
+            "metadata": {
+                "author_lineage": ["alex@12345678", {"alias": "evil"}, 42, None],
+            },
+        }
+        cleaned, removed = sanitize_trajectory(traj)
+        assert cleaned["metadata"]["author_lineage"] == ["alex@12345678"]
+        assert sum(1 for r in removed if r.pattern == "lineage_format") == 3
+
+    def test_short_or_invalid_fingerprint_dropped(self):
+        traj = {
+            "metadata": {
+                "author_lineage": [
+                    "alex@1234567",      # 7 chars
+                    "alex@123456789",    # 9 chars
+                    "alex@gggggggg",     # not hex
+                    "alex@12345678",     # OK
+                ],
+            },
+        }
+        cleaned, _ = sanitize_trajectory(traj)
+        assert cleaned["metadata"]["author_lineage"] == ["alex@12345678"]
+
+    def test_empty_or_missing_lineage(self):
+        traj = {"metadata": {"author_lineage": []}}
+        cleaned, _ = sanitize_trajectory(traj)
+        assert cleaned["metadata"]["author_lineage"] == []
+
+        traj2 = {"metadata": {"author_lineage": "not-a-list"}}
+        cleaned2, _ = sanitize_trajectory(traj2)
+        assert cleaned2["metadata"]["author_lineage"] == []
