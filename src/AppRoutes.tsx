@@ -7,6 +7,7 @@ const InboxPage = lazy(() => import('./pages/InboxPage'));
 const EditorPage = lazy(() => import('./pages/EditorPage'));
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage'));
 const ImportPage = lazy(() => import('./pages/ImportPage'));
+const AboutPage = lazy(() => import('./pages/AboutPage'));
 
 function RoutePlaceholder({ title }: { title: string }) {
   return (
@@ -36,7 +37,7 @@ export function AppRoutes() {
           <Route path="/editor" element={<EditorPage />} />
           <Route path="/editor/:templateId" element={<EditorPage />} />
           <Route path="/runs/:runId" element={<RoutePlaceholder title="Run Preview" />} />
-          <Route path="/about" element={<RoutePlaceholder title="About ShadowFlow" />} />
+          <Route path="/about" element={<AboutPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

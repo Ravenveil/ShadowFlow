@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-24T01:11:03Z  # Story 6-1 → done after code-review (8 patches applied)
+last_updated: 2026-04-24T03:14:01Z  # Story 6-4 → done (code review: 2 patches applied)
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -124,9 +124,9 @@ development_status:
   # ===== Epic 6: Agent Interactivity + Demo Station + Pitch Ready =====
   epic-6: in-progress
   6-1-agent-gap-detection-反向提问-e2: done
-  6-2-landingpage-slogan-象限图-cta: review
-  6-3-templatespage-6-模板-gallery-quick-demo-预填: in-progress
-  6-4-aboutpage-差异化对比-0g-链上证据-路线图: ready-for-dev
+  6-2-landingpage-slogan-象限图-cta: done
+  6-3-templatespage-6-模板-gallery-quick-demo-预填: done
+  6-4-aboutpage-差异化对比-0g-链上证据-路线图: done
   epic-6-retrospective: optional
 
   # ===== Epic 7: Collaboration Quad-View (Inbox + Chat + AgentDM + BriefBoard) =====
@@ -135,8 +135,8 @@ development_status:
   # Dependencies: Epic 1 (Policy Matrix) + Epic 3.6.7 (template schema extension) + Epic 4 (SSE)
   epic-7: in-progress
   7-1-inbox-页框架-三列布局-窄导航-消息列表-右侧预览: review
-  7-2-消息列表项-分组-徽章系统: ready-for-dev
-  7-3-新群聊流程-新项目-新群聊-5-步向导: ready-for-dev
+  7-2-消息列表项-分组-徽章系统: review
+  7-3-新群聊流程-新项目-新群聊-5-步向导: in-progress
   7-4-inbox-chat-agentdm-路由与面包屑: ready-for-dev
   7-5-群聊切换-briefboard-模式-segmented-control: ready-for-dev
   7-6-搜索-tab-过滤: ready-for-dev
@@ -179,3 +179,10 @@ development_status:
   10-5-kit-defaults-registry: backlog
   10-6-kit-smoke-run-eval-pack: backlog
   epic-10-retrospective: optional
+
+  # ===== Cross-cutting Security Hardening (sprint-change-proposal-2026-04-23-security v2) =====
+  # All 21 findings resolved: 2 CRITICAL / 5 HIGH / 8 MEDIUM / 6 LOW
+  x-1-critical-expression-injection-fix: done
+  x-2-security-hardening-server: done
+  x-3-security-hardening-frontend-infra: done
+  5-2-sanitizer-pattern-patch: done  # 5 new patterns: AWS/Slack/GitHub-PAT/Anthropic/Bearer
