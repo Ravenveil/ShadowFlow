@@ -5,14 +5,18 @@ OpenAI/DeepSeek API 实现
 """
 
 import asyncio
-from typing import Dict, Any, AsyncGenerator
+import json
+import logging
+from typing import Dict, Any, AsyncGenerator, List, Optional
+
+logger = logging.getLogger(__name__)
 
 try:
     import openai
 except ImportError:
     openai = None
 
-from .base import LLMProvider, LLMResponse, LLMConfig, ProviderType, Message
+from .base import LLMProvider, LLMResponse, LLMConfig, ProviderType, Message, ToolCall
 
 
 class OpenAIProvider(LLMProvider):
@@ -99,30 +103,84 @@ class OpenAIProvider(LLMProvider):
         except Exception as e:
             raise RuntimeError(f"OpenAI provider stream error: {e}")
 
-    async def chat(self, messages: list, **kwargs) -> LLMResponse:
-        """对话模式"""
+    async def chat(
+        self,
+        messages: list,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        **kwargs,
+    ) -> LLMResponse:
+        """对话模式；传入 tools 时启用 OpenAI tool_calls 模式"""
         config = self._merge_config(**kwargs)
 
-        # 转换消息格式
+        # 转换消息格式；将 ReAct 中间格式转换为 OpenAI API 格式
         api_messages = []
         for msg in messages:
             if isinstance(msg, Message):
                 api_messages.append(msg.to_dict())
             elif isinstance(msg, dict):
-                api_messages.append(msg)
+                converted = dict(msg)
+                # _tool_calls 是 service.py 的规范中间格式 → OpenAI tool_calls
+                if converted.get("role") == "assistant" and "_tool_calls" in converted:
+                    converted["tool_calls"] = [
+                        {
+                            "id": tc["id"],
+                            "type": "function",
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": json.dumps(tc["args"], ensure_ascii=False),
+                            },
+                        }
+                        for tc in converted.pop("_tool_calls")
+                    ]
+                api_messages.append(converted)
             else:
                 raise ValueError(f"Invalid message type: {type(msg)}")
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.config.model,
-                messages=api_messages,
-                temperature=config.get("temperature", self.config.temperature),
-                max_tokens=config.get("max_tokens", self.config.max_tokens),
-            )
+            create_kwargs: Dict[str, Any] = {
+                "model": self.config.model,
+                "messages": api_messages,
+                "temperature": config.get("temperature", self.config.temperature),
+                "max_tokens": config.get("max_tokens", self.config.max_tokens),
+            }
+
+            # 将 MCP 工具定义格式化为 OpenAI tools 参数
+            # MCP schema: {name, description, inputSchema}
+            # OpenAI API schema: {type:"function", function:{name, description, parameters}}
+            if tools:
+                create_kwargs["tools"] = [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": t["name"],
+                            "description": t.get("description", ""),
+                            "parameters": t.get("inputSchema", t.get("input_schema", {})),
+                        },
+                    }
+                    for t in tools
+                ]
+                create_kwargs["tool_choice"] = "auto"
+
+            response = await self.client.chat.completions.create(**create_kwargs)
 
             choice = response.choices[0]
             content = choice.message.content or ""
+
+            # 解析 tool_calls
+            tool_calls: List[ToolCall] = []
+            if choice.message.tool_calls:
+                for tc in choice.message.tool_calls:
+                    args = tc.function.arguments
+                    if isinstance(args, str):
+                        try:
+                            args = json.loads(args)
+                        except Exception as exc:
+                            logger.warning(
+                                "Failed to parse tool call arguments for '%s': %s — using {}",
+                                tc.function.name, exc,
+                            )
+                            args = {}
+                    tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, args=args))
 
             return LLMResponse(
                 content=content,
@@ -135,14 +193,29 @@ class OpenAIProvider(LLMProvider):
                     "completion_tokens": response.usage.completion_tokens if response.usage else 0,
                     "id": response.id,
                 },
+                tool_calls=tool_calls,
             )
         except openai.APIError as e:
             raise RuntimeError(f"OpenAI API chat error: {e}")
         except Exception as e:
             raise RuntimeError(f"OpenAI provider chat error: {e}")
 
-    async def chat_stream(self, messages: list, **kwargs) -> AsyncGenerator[str, None]:
-        """对话模式流式生成"""
+    async def chat_stream(
+        self,
+        messages: list,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        **kwargs,
+    ) -> AsyncGenerator[str, None]:
+        """对话模式流式生成。
+
+        当 tools 不为空时降级为非流式（streaming tool_call chunk 聚合复杂），
+        委托给 chat() 保证正确性。
+        """
+        if tools:
+            response = await self.chat(messages, tools=tools, **kwargs)
+            yield response.content
+            return
+
         config = self._merge_config(**kwargs)
 
         # 转换消息格式

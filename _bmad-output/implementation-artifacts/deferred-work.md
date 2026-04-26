@@ -4,6 +4,34 @@ Items deferred during code reviews. Each entry is a real issue that was found bu
 
 ---
 
+## Deferred from: automated code review of 11-2/11-3/11-4 (2026-04-26T12:31:55Z)
+
+- **[D-fs1 / HIGH-infra] `_glob` / `_grep` 同步阻塞 asyncio 事件循环** [shadowflow/mcp_servers/fs_server.py `_glob`/`_grep`] — 大目录递归遍历使用同步 I/O 直接在 async 函数中执行，会 block event loop 数秒；修复需 `asyncio.to_thread` 包装，属架构重构，留 Phase 2。
+- **[D-fs2 / LOW] 符号链接目录本身可被 rglob 遍历**  [shadowflow/mcp_servers/fs_server.py `_grep`] — glob 结果已过滤沙箱外文件，但 rglob 遍历过程中符号链接目录内容可被读取；Phase 2 安全 Story 统一处理。
+- **[D-fs3 / LOW] `_write`/`_edit` 非原子写入** [shadowflow/mcp_servers/fs_server.py] — 进程崩溃可导致文件部分写入；建议改用 `os.replace()` 原子写，留 Phase 2 基础设施 Story。
+- **[D-web1 / CRITICAL-design] SSRF — `follow_redirects=True` 无私有 IP 过滤** [shadowflow/mcp_servers/web_server.py `_fetch`] — 工具设计上允许任意 URL（Agent 能力边界在 Policy Matrix）；若需限制，需系统级安全 Story 添加 allowlist/denylist 或禁用重定向跟随。
+- **[D-web2 / MEDIUM] `_cache` 无上限/无主动驱逐** [shadowflow/mcp_servers/web_server.py] — 同 2026-04-25 deferred 条目；bounded LRU 替换留 Phase 2。
+- **[D-11-4-1 / HIGH-design] max_iterations 返回 tool 结果字符串而非 LLM 答复** [shadowflow/runtime/service.py `run_agent_with_tools`] — 同 D6（已在 deferred-work.md）；超出迭代上限时返回值语义歧义，需产品确认是抛异常、返回结构体还是最终一轮 LLM 调用后再返回。
+- **[D-11-4-2 / LOW] 缺少验证 `messages` payload 不含内部标记的测试** [tests/llm/test_tool_use.py] — 多轮工具调用后 `call_args.kwargs["messages"]` 未断言不含 `_is_tool_results` key；留 Story 11-4 补充测试。
+
+---
+
+## Deferred from: code review (2026-04-26T11:56:15Z) — uncommitted changes (Epic 8 / Epic 11 / Security hardening)
+
+- **[D1 / CRITICAL-design] BYOK 设备密钥与密文共存 localStorage** [src/core/hooks/useSecretsStore.ts] — AES-GCM 加密在设备密钥同存同取 localStorage 场景下防御能力有限；代码注释已标明"仅防止静态扫描/被动 XSS"。真正的密钥保护需 WebCrypto non-extractable key + IndexedDB 或 userVerification，留 Phase 2 安全审计 story 决策。
+- **[D2 / HIGH-design] Tool name collision 仅 WARNING，后来者覆盖先来者** [shadowflow/runtime/service.py `run_agent_with_tools`] — MCP 客户端工具名冲突时静默覆盖；MVP 单客户端场景无影响，多客户端时存在"供应链混淆代理"风险。后续需为工具名加 client namespace 前缀（如 `{client_id}:{tool_name}`）。
+- **[D3 / HIGH-infra] slowapi `get_remote_address` 在反向代理后获取 proxy IP** [shadowflow/server.py] — 10/min 限速在 Docker Compose+nginx 部署下作用于所有用户共享 IP；需配置 uvicorn `forwarded_allow_ips` 或自定义 key_func 读取 `X-Forwarded-For`。待部署拓扑确认后修复。
+- **[D4 / HIGH] Zustand `useSecretsStore` storage 事件监听器无法清理** [src/core/hooks/useSecretsStore.ts] — Zustand 单例模式下一个监听器可接受；micro-frontend 拆卸或 HMR 场景下无法 `removeEventListener`。留 Phase 2 重构 store 初始化方式时处理。
+- **[D5 / MEDIUM] `agent.tool_called` SSE 事件中 MCP tool args 未能全量 redact** [shadowflow/runtime/events.py + service.py] — `_redact_sse_payload` 仅按预定义 key 名 redact；第三方 MCP tool 参数字段名不可预测（如 `auth`, `key`, `bearer`）。需要基于值模式的 redact 方案，留安全 hardening story。
+- **[D6 / MEDIUM] ReAct max_iterations 返回值语义歧义** [shadowflow/runtime/service.py `run_agent_with_tools`] — 超出最大轮次时返回最后一条 `role: "tool"` 消息的 `str(result)` 内容，与正常完成无法区分（SSE 事件 `agent.max_iterations_reached` 发出但调用方看不见）。应抛出特定异常或返回带状态的结构体，留 Story 11-4 修复。
+- **[D7 / MEDIUM] `detect_gap` 超深/超宽输入返回 `None` 与"无 gap"语义相同** [shadowflow/runtime/gap_detector.py] — 当前行为：bounds exceeded → 记 WARNING → 返回 `None`；调用方无法区分"正常无 gap"与"输入被拒绝"。应返回哨兵值或抛出，留 Sprint 1 gap-detection 重构处理。
+- **[D8 / LOW] `tool_choice = "auto"` 写死，无法传 `"required"` 或指定函数名** [shadowflow/llm/openai.py] — 限制 ReAct 循环在某些 agent 场景下的控制粒度，MVP 可接受，留 Story 11-4 迭代升级。
+- **[D9 / LOW] `run_agent_with_tools` 无单元/集成测试** [shadowflow/runtime/service.py] — 重要的新执行路径（ReAct 循环、工具调用、SSE 事件、超迭代终止）目前无 pytest 覆盖，留 Story 11-4 DoD 补充测试。
+- **[D10 / LOW] `readOnly` prop 仅前端 UI 约束，无服务端授权** [src/core/components/Panel/PolicyMatrixPanel.tsx] — 客户端 disabled 按钮可绕过直接调 API；需在 `/workflow/runs/{run_id}/policy` endpoint 添加 role-based 权限校验，留 Epic 12 RBAC story。
+- **[D11 / LOW] Zustand `useSecretsStore` 异步初始化无 loading 状态** [src/core/hooks/useSecretsStore.ts] — 首次渲染 `secrets: {}` 可能触发"无密钥"提示，等异步加载完成才恢复；添加 `loading: boolean` 字段可消除闪烁，留 UX 优化阶段。
+
+---
+
 ## Deferred from: code review of 0-1-docker-compose-一键启动 + 0-2-github-actions-ci-流水线 (2026-04-21)
 
 - `@app.on_event("startup")` 已废弃，应迁移到 FastAPI `lifespan` context manager [shadowflow/server.py] — 非阻塞 deprecation warning，已在 Dev Notes 记录
@@ -244,3 +272,111 @@ Items deferred during code reviews. Each entry is a real issue that was found bu
 - AC2 压测无执行证据 — bench 脚本存在但无 `_bmad-output/benchmarks/` 输出文件，需 testnet 运行验证
 - 私钥通过 subprocess 环境变量传递 [shadowflow/llm/zerog.py:48-53] — /proc/<pid>/environ 可读性风险；stdin pipe 更安全但需架构重构
 - 流式响应未显式 aclose() [shadowflow/llm/zerog.py:294-347] — 连接可能半读状态残留，需 response.aclose() in finally
+
+
+## Deferred from: code review of 7-2-消息列表项-分组-徽章系统 (2026-04-24)
+
+- `PLACEHOLDER_TEMPLATE_ID` 硬编码 'academic-paper' [src/core/components/inbox/MessageList.tsx:17] — Story 7.4 路由实现后由动态 templateId 替换
+- SSE `approval.*` 事件未接线到 useInboxStore [src/core/store/useInboxStore.ts] — 需要 run-to-group mapping 在本 story 中尚未建立；`updateGroupStatus` action 已就位，待未来故事补齐 SSE 订阅逻辑
+- fetchInbox 缓存：切换回已访问 template 不会重新拉取 [src/core/store/useInboxStore.ts:41] — MVP 可接受设计；若需实时性可加 TTL 过期机制
+
+---
+
+## Deferred from: automated code review of 7-3 + 7-4 (2026-04-25)
+
+### 7-3 新群聊流程
+- PolicyMatrixPreview 显示全局 usePolicyStore 状态（新群组为空矩阵）而非模板 policy [src/core/components/inbox/CreateGroupDialog.tsx:287] — 修复需为 PolicyMatrixPanel 添加 initialMatrix prop；MVP Step 5 为信息性预览，空矩阵可接受；Phase 2 处理
+- MemberEmailInput 缺少基础 email 格式验证 [src/core/components/inbox/CreateGroupDialog.tsx:236] — AC4 中 Step 3 为 optional skip；轻微 AC3 遗漏，Phase 2 补全
+- groups.py 通过函数内 import 引用 server.py._get_template 循环依赖 [shadowflow/api/groups.py:99] — pre-existing 架构债；建议提取 _get_template 至 shadowflow/runtime/template_registry.py
+
+### 7-4 路由与面包屑
+- recentMessages 缓存无 TTL/无效化机制 [src/core/components/inbox/PreviewPane.tsx:32] — 新消息到达时不自动刷新；Phase 2 SSE 事件触发缓存失效
+- MessageList.tsx 包含 Story 7-6 搜索/过滤功能（scope 混入）— useDebounce / tabCounts / matchesSearch 属于 Story 7-6(in-progress)；功能正确无 harm，待 7-6 正式跟踪时核对 diff 边界
+
+---
+
+## Deferred from: automated code review of 7-5 / 7-6 / 7-7 (2026-04-25)
+
+### 7-5 ChatBriefBoardToggle
+- `briefBoardAlias` 初始渲染为 'BriefBoard'，异步加载模板后闪变真实别名（如"日报"） [src/pages/ChatPage.tsx] — 属常见异步数据加载 UX 模式，可用 Suspense/骨架屏优化，但非 AC 要求；Phase 2 视 UX 打磨需求
+
+### 7-7 ApprovalGatePanel
+- approve/reject 端点无调用方鉴权校验，任意请求可通过/驳回任意 approval_id [shadowflow/api/approvals.py] — 属系统级安全加固，范围超出本 Story；建议纳入 x-5 rate-limiting + auth hardening story 一起处理
+- CORS `allow_methods` 限制为 `["GET", "POST", "OPTIONS"]`，日后若新增 DELETE 端点（如审批撤回）需同步更新 [shadowflow/server.py] — 视后续 Story 需求在 server.py 中按需扩展 allow_methods
+
+
+---
+
+## Deferred from: code review of story 11.1/11.2/11.3/11.4 (2026-04-25)
+
+### 11.1 shell_server — deferred items
+- `run()` 工具接受任意 shell 命令（`shell=True`）——设计层面命令沙箱/allowlist 需求超出本 Story；MCP Server 作为 Agent 工具的安全边界将在系统级安全 Story 统一处理
+- SSH `key_path` 参数接受任意文件路径——key_path 仅作 paramiko `key_filename`，不执行；低风险，可在 SSH 安全加固 Story 统一处理
+- tmux 固定 5 秒等待策略不可靠——输出捕获准确性可通过 `tmux wait-for` 或轮询改善；Phase 2 优化
+- messages 列表跨迭代无上限增长——LLM context 截断属系统级策略，不在 ReAct Loop 本身处理
+
+### 11.3 web_server — deferred items
+- `_cache` 模块级全局 dict 无主动驱逐（仅 TTL 惰性检查）——内存 DoS 风险低（1h TTL 自然过期），bounded LRU 可在 Phase 2 替换
+
+---
+
+## Deferred from: code review of story 7-8 and story 8-1 (2026-04-26)
+
+### 7-8 Chat → Builder Jump
+- Blueprint 状态在 `navigate('/editor')` 时丢失（未通过 sessionStorage 或 router state 传递）[src/pages/BuilderPage.tsx:handleSwitchToGraph] — Story 8.3 Scene/Graph 集成时统一处理 Blueprint → Editor 传递机制
+- generate 端点无单请求鉴权依赖或速率限制保护 [shadowflow/api/builder.py] — 系统级安全策略，纳入 x-5 rate-limiting + auth hardening story
+
+### 8-1 AgentBlueprint Builder API 骨架
+- `sub_agents` 层级结构（主管→员工嵌套）未映射到 `instantiate` 产出的工作流图，当前仅做线性串联 [shadowflow/runtime/builder_service.py:_blueprint_to_template_spec] — 超出 8.1 骨架范围，Story 8.3 实现 Scene Tree 时再连通主管→子节点池映射
+
+## Deferred from: code review of 7-7-approval-gate-面板-内嵌-inbox-预览 (2026-04-26)
+
+- `_approval_registry` / `_reverse_registry` 进程重启后全部丢失，pending 审批无法恢复 [shadowflow/api/approvals.py:31-32] — MVP in-memory 架构设计，与 run_store/checkpoint 一致；需持久化层时统一处理
+- SSE `/api/approvals/events` 流无心跳帧（keepalive），长空闲连接被 Proxy 静默断连后 generator 泄漏 [shadowflow/api/approvals.py:stream_approval_events] — 运维加固，建议 asyncio 定期发送 `: keepalive\n\n` 注释帧
+- `_resolve_run_group_id` / `_resolve_group_run_ids` 每次 SSE tick 全量调用 `svc.list_runs()`（O(n) 磁盘 IO）[shadowflow/api/approvals.py:170-200] — 性能优化，MVP 规模可接受；未来可在 RuntimeService 维护 run_id→group_id 索引
+- `fetchPendingApprovals` 对所有非 2xx 响应静默返回 `[]`，UI 无法区分"无审批"与"服务器错误" [src/api/approvalApi.ts:9-13] — UX 错误态改进，建议加 error/null 返回值
+- `Active Runs` 指标初始化为 0，组件挂载时无后端同步；已运行的 runs 不会被计入直到下次 SSE 事件 [src/core/components/inbox/ApprovalGatePanel.tsx + useInboxStore.ts] — 需后端补充 `GET /api/groups/{id}/metrics` 端点提供初始快照
+
+---
+
+## Deferred from: automated code review of 8-3-scene-mode-shell-scene-tree-inspector (2026-04-26)
+
+- **F5 — RoleInspector 本地 state 在同 role_id blueprint 替换时可能 stale** [src/core/components/builder/inspector/RoleInspector.tsx:73] — `key={role.role_id}` 的缓解措施在 MVP 实践中充分；同 ID 替换场景极少（生成新 blueprint 时 role_id 通常不同）
+
+---
+
+## Deferred from: automated code review of 8-3b-roleprofile-深度配置-persona-traits-state-fields (2026-04-26)
+
+- **D1 — liveRole selector 仅搜索一层 sub_agents，深度 >1 嵌套角色找不到** [src/core/components/builder/inspector/RoleProfilePanel.tsx:120] — 当前 UI 不支持深度嵌套创建（Builder Phase 2 计划），风险窗口可控
+- **D2 — KnowledgeBinding TS 接口有 4 个字段不在 Python 后端（retrieval_mode / freshness_hint / scope / target_ref）** [src/common/types/agent-builder.ts:52] — Story 8.4 KnowledgeDock 的前向规划字段；留 Story 8.4 同步 Python 端实现
+- **D3 — infer_can_spawn model_validator 仅在构造时触发，前端 addSubAgent 后不重新校验** [shadowflow/runtime/contracts_builder.py:52] — blueprint 在 API 边界完整 model_validate()，设计行为；留 Story 8.6 publish 路径时验证
+- **D4 — 无前端→后端端到端集成测试（store 状态 → model_validate() 校验链路）** — E2E 测试属 Epic 6 closing story 范畴；AC7 已覆盖 Python 单元测试
+- **D5 — AccordionSection open 状态为组件级 local state，selection 切换后不重置** [src/core/components/builder/inspector/RoleProfilePanel.tsx:41] — 依赖 BuilderPage `key={role.role_id}` 缓解；留验证
+- **D6 — patchHandoff 在快速双击时 stale liveRole.metadata 可能覆盖并发写入** [src/core/components/builder/inspector/RoleProfilePanel.tsx:159] — MVP 单用户频率不触发；Phase 2 改为 store 原子更新函数
+- **D7 — allRoles flatMap 每次 selector 返回新数组引用，引发额外重渲染** [src/core/components/builder/inspector/RoleProfilePanel.tsx:126] — 无数据错误；Phase 2 引入 shallow 比较优化
+
+- **F24 — 有 role_profiles 为空的 blueprint 时画布渲染 Team Root 而非 empty state** [src/core/components/builder/SceneCanvasShell.tsx:173] — Team root 始终被添加到 projection，"No blueprint" 空态文本对有 blueprint 但无角色的情况永不显示；轻微 UX 边界，可接受
+
+---
+
+## Deferred from: automated code review of 11-1-shell-mcp-server Round 2 (2026-04-26)
+
+- **_tmux_run exit_code 永远为 0** [shell_server.py:239-245] — `tmux send-keys` 无法捕获真实命令退出码；修复需改用 `tmux run-shell` 或 sentinel 输出解析，属架构重设计，超出本 Story patch 范围
+- **capture-pane 固定 5s 捕获可能返回旧命令输出** [shell_server.py:284-296] — 无法判断命令是否完成；需 `tmux wait-for` 或轮询信号机制，与上条同源，Phase 2 重构 _tmux_run 时一并处理
+- **并发 _tmux_run 同 session 竞争条件** [shell_server.py:259-296] — has-session/send-keys/capture-pane 无 session 级锁；需 `asyncio.Lock` per-session 字典，超出本 Story 范围
+- **SSH host 未校验（SSRF/内网 pivot）** [shell_server.py:159] — 设计层面：tool 本身允许任意 host，安全边界在调用方（Policy Matrix/Agent 配置）；系统级安全 Story 统一处理
+
+---
+
+## Deferred from: automated code review of 8-4-knowledge-dock and 8-4b-tool-registry (2026-04-26)
+
+### 8-4 Knowledge Dock
+- **Scene Tree `shared-knowledge` 无动态 badge 计数** [src/core/stores/builderStore.ts:139] — AC6 要求新增/删除绑定后 Scene 有可见反馈；角色层级有 badge，但 shared-knowledge 节点标签固定，无绑定数计数；推迟到 Story 8.5/8.6 完善 Scene 联动
+- **AC8 缺少 Scene Mode 完整路径集成测试** [src/core/components/builder/KnowledgeDock.test.tsx] — 直接渲染 KnowledgeDock 而非测 Scene Tree → Inspector → Dock 完整路径；推迟到 Story 8.6 Scene 路径稳定后补集成测试
+
+### 8-4b Tool Registry
+- **SHA-256 密钥派生无盐值** [shadowflow/runtime/tool_credentials.py:22] — 弱密钥可被彩虹表预计算；建议安全加固 Story 升级为 PBKDF2/Argon2 并附迁移脚本
+- **`_write_provider` 非原子写入** [shadowflow/runtime/tool_registry.py:94-96] — 进程崩溃可损坏 JSON 文件；建议 `os.replace` 原子写模式，独立基础设施 Story 处理
+- **`env_keys` 以明文暴露密钥名** [shadowflow/runtime/tool_registry.py:122-123] — 当前设计允许展示键名（用于 `***` 掩码）；若安全需求收紧可加 hash 混淆
+- **`_SCHEMA_CACHE_DIR` 相对路径依赖进程启动目录** [shadowflow/runtime/tool_registry.py:4] — 建议统一 `SF_DATA_DIR` 环境变量，与 checkpoint store 保持一致
+- **`ToolPicker` 仅加载 `connected` provider 的工具，failed provider 无 Inspector 内重试入口** [src/core/components/builder/inspector/fields/ToolPicker.tsx:212] — 建议在 ToolProvidersTab 中提供明确重试路径，或 ToolPicker 内展示"测试连接"按钮

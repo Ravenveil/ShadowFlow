@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-24T03:14:01Z  # Story 6-4 → done (code review: 2 patches applied)
+last_updated: 2026-04-26T12:31:57Z  # Story 8-5 → review
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -133,56 +133,69 @@ development_status:
   # Added 2026-04-16 via bmad-correct-course (change-request 2026-04-16-inbox-centric-collaboration)
   # See epics-addendum-2026-04-16.md for full Story definitions
   # Dependencies: Epic 1 (Policy Matrix) + Epic 3.6.7 (template schema extension) + Epic 4 (SSE)
-  epic-7: in-progress
-  7-1-inbox-页框架-三列布局-窄导航-消息列表-右侧预览: review
-  7-2-消息列表项-分组-徽章系统: review
-  7-3-新群聊流程-新项目-新群聊-5-步向导: in-progress
-  7-4-inbox-chat-agentdm-路由与面包屑: ready-for-dev
-  7-5-群聊切换-briefboard-模式-segmented-control: ready-for-dev
-  7-6-搜索-tab-过滤: ready-for-dev
-  7-7-approval-gate-面板-内嵌-inbox-预览: ready-for-dev
-  7-8-chat-builder-跳转-对话发起创建: ready-for-dev
+  epic-7: done
+  7-1-inbox-页框架-三列布局-窄导航-消息列表-右侧预览: done
+  7-2-消息列表项-分组-徽章系统: done
+  7-3-新群聊流程-新项目-新群聊-5-步向导: done
+  7-4-inbox-chat-agentdm-路由与面包屑: done
+  7-5-群聊切换-briefboard-模式-segmented-control: done
+  7-6-搜索-tab-过滤: done
+  7-7-approval-gate-面板-内嵌-inbox-预览: done
+  7-8-chat-builder-跳转-对话发起创建: done
   epic-7-retrospective: optional
 
   # ===== Epic 8: Agent Builder 主路径（Goal / Scene / Graph） =====
   # Added 2026-04-23 via epics-addendum-2026-04-23-user-builder.md
   epic-8: in-progress
-  8-1-agentblueprint-合同-builder-api-骨架: ready-for-dev
-  8-2-goal-mode-目标输入-blueprint-生成: ready-for-dev
-  8-3-scene-mode-shell-scene-tree-inspector: ready-for-dev
-  8-3b-roleprofile-深度配置-persona-traits-state-fields: backlog
-  8-4-knowledge-dock-绑定主路径: ready-for-dev
-  8-4b-tool-registry-mcp-provider-注册凭证管理: ready-for-dev
-  8-5-smoke-run-验证面板-失败解释: ready-for-dev
-  8-6-publish-backfill-template-workflow-agentapp: backlog
-  8-7-agent-catalog-已发布浏览-fork: backlog
+  8-1-agentblueprint-合同-builder-api-骨架: done
+  8-2-goal-mode-目标输入-blueprint-生成: in-progress
+  8-3-scene-mode-shell-scene-tree-inspector: in-progress
+  8-3b-roleprofile-深度配置-persona-traits-state-fields: in-progress
+  8-4-knowledge-dock-绑定主路径: in-progress
+  8-4b-tool-registry-mcp-provider-注册凭证管理: in-progress
+  8-5-smoke-run-验证面板-失败解释: review
+  8-6-publish-backfill-template-workflow-agentapp: ready-for-dev
+  8-7-agent-catalog-已发布浏览-fork: ready-for-dev
   epic-8-retrospective: optional
 
   # ===== Epic 9: Knowledge / Memory / Eval Foundation =====
   # Added 2026-04-23 via epics-addendum-2026-04-23-user-builder.md
-  epic-9: backlog
-  9-1-knowledgepack-crud-ingest-pipeline: backlog
-  9-2-citation-trace-provenance-contract: backlog
-  9-3-memoryprofile-context-writeback: backlog
-  9-4-agent-state-panel-snapshot-restore: backlog
-  9-5-evalprofile-smoke-eval-runner: backlog
-  9-6-smoke-regression-release-report: backlog
+  # Story files created 2026-04-24 via create-story workflow
+  epic-9: in-progress
+  9-1-knowledgepack-crud-ingest-pipeline: ready-for-dev
+  9-2-citation-trace-provenance-contract: ready-for-dev
+  9-3-memoryprofile-context-writeback: ready-for-dev
+  9-4-agent-state-panel-snapshot-restore: ready-for-dev
+  9-5-evalprofile-smoke-eval-runner: ready-for-dev
+  9-6-smoke-regression-release-report: ready-for-dev
   epic-9-retrospective: optional
 
   # ===== Epic 10: Agent Kits（场景化 Agent Kits） =====
   # Added 2026-04-23 via epics-addendum-2026-04-23-user-builder.md
-  epic-10: backlog
-  10-1-research-kit-规划搜集总结报告: backlog
-  10-2-knowledge-assistant-kit-知识问答引用转人工: backlog
-  10-3-review-approval-kit-writer-reviewer-approver: backlog
-  10-4-persona-npc-kit-角色记忆状态关系: backlog
-  10-5-kit-defaults-registry: backlog
-  10-6-kit-smoke-run-eval-pack: backlog
+  # Story files created 2026-04-24 via create-story workflow
+  epic-10: in-progress
+  10-1-research-kit-规划搜集总结报告: ready-for-dev
+  10-2-knowledge-assistant-kit-知识问答引用转人工: ready-for-dev
+  10-3-review-approval-kit-writer-reviewer-approver: ready-for-dev
+  10-4-persona-npc-kit-角色记忆状态关系: ready-for-dev
+  10-5-kit-defaults-registry: ready-for-dev
+  10-6-kit-smoke-run-eval-pack: ready-for-dev
   epic-10-retrospective: optional
 
-  # ===== Cross-cutting Security Hardening (sprint-change-proposal-2026-04-23-security v2) =====
-  # All 21 findings resolved: 2 CRITICAL / 5 HIGH / 8 MEDIUM / 6 LOW
+  # ===== Cross-cutting Security Hardening (sprint-change-proposal-2026-04-24-security-v7) =====
+  # v7 (2026-04-24): R1 server.py:696 catch-all 422 str(exc) fixed; R3 groups.py input limits added
+  # v7 new: x-5 rate-limiting coverage gap (MEDIUM) → ready-for-dev
+  # Total closed: 23 items (all CRITICAL/HIGH/MEDIUM + selective LOW); 1 MEDIUM pending (x-5)
   x-1-critical-expression-injection-fix: done
-  x-2-security-hardening-server: done
-  x-3-security-hardening-frontend-infra: done
+  x-2-security-hardening-server: done  # H1 fully closed (500+400/404/422+catch-all); N1 hardened
+  x-3-security-hardening-frontend-infra: done  # R3 groups.py input limits added (2026-04-24 v7)
   5-2-sanitizer-pattern-patch: done  # 5 new patterns: AWS/Slack/GitHub-PAT/Anthropic/Bearer
+  x-4-m7-prototype-pollution-fix: done  # Object.assign safe merge in 5 TS files (2026-04-24)
+  x-5-rate-limiting-coverage: ready-for-dev  # MEDIUM: cover /compile /chat-msg /templates/custom /api/groups
+
+  # ===== Epic 11: MCP Server 套件 + LLM tool_use ReAct 循环 =====
+  epic-11: in-progress
+  11-1-shell-mcp-server: done    # Round 2 review 2026-04-26: 14 patches applied (async blocking, KeyError, agent close, connect timeout, etc.), 5 deferred
+  11-2-fs-mcp-server: done     # Round 2 review 2026-04-26: 4 patches applied (path-traversal CRITICAL×2, OOM, multi-line edit)
+  11-3-web-mcp-server: done    # Round 2 review 2026-04-26: 3 patches applied (cache poisoning, DDG blocking, asyncio.wait_for)
+  11-4-llm-tool-use-react-loop: done  # Round 2 review 2026-04-26: 6 patches applied (CRITICAL×2 _is_tool_results+chat_stream, HIGH×3, MEDIUM×1)

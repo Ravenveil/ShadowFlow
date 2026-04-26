@@ -65,8 +65,11 @@ _REJECTION_EVENTS_PER_RUN_MAX = 100
 
 class RuntimeService:
     _condition_splitter = re.compile(r"\s*&&\s*|\s+and\s+")
+    # Value restricted to: safe chars only, max 500 chars; key max 64 chars.
+    # Excludes shell-special chars (;`$|&<>\r\n) to prevent injection bypass.
     _condition_pattern = re.compile(
-        r"([\w_]+)\s*(>=|<=|>|<|==|!=|contains|includes)\s*['\"]?(.+?)['\"]?$",
+        r"([\w_]{1,64})\s*(>=|<=|>|<|==|!=|contains|includes)\s*"
+        r"['\"]?([^'\";\r\n`$|&<>()\\]{0,500}?)['\"]?$",
         re.IGNORECASE,
     )
 
@@ -3834,3 +3837,125 @@ class RuntimeService:
         if isinstance(value, tuple):
             return [self._json_safe(item) for item in value]
         return str(value)
+
+    # ------------------------------------------------------------------
+    # ReAct Loop (Story 11.4) — LLM tool_use + MCP execution
+    # ------------------------------------------------------------------
+
+    async def run_agent_with_tools(
+        self,
+        agent_blueprint: Any,
+        task: str,
+        mcp_clients: List[Any],
+        llm_provider: Any,
+        run_id: Optional[str] = None,
+        max_iterations: int = 10,
+    ) -> str:
+        """ReAct 循环：LLM 规划 → MCP 工具调用 → 迭代直到 LLM 停止或达最大轮次。
+
+        Args:
+            agent_blueprint: 含 .soul 字段（系统提示）的 agent 规格对象。
+            task: 用户任务字符串。
+            mcp_clients: MCP 客户端列表（duck-typed: list_tools / call_tool）。
+                list_tools() 可返回 List[str] 或 List[Dict{name,description,inputSchema}]。
+            llm_provider: LLMProvider 实例，实现 chat(messages, tools=...) 方法。
+            run_id: 可选 run_id，用于 SSE 事件路由；为 None 时不发送 SSE。
+            max_iterations: 最大 ReAct 轮次，默认 10 次。
+
+        Returns:
+            LLM 最终生成的文本内容。
+        """
+        # 1. 从所有 MCP 客户端收集工具定义
+        tools: List[Dict[str, Any]] = []
+        tool_to_client: Dict[str, Any] = {}
+
+        for client in mcp_clients:
+            raw = await client.list_tools()
+            for item in raw:
+                if isinstance(item, str):
+                    # 旧接口只返回名称，无 schema
+                    tool_def: Dict[str, Any] = {"name": item, "description": "", "inputSchema": {}}
+                else:
+                    tool_def = item
+                tool_name = tool_def["name"]
+                if tool_name in tool_to_client:
+                    logger.warning(
+                        "run_agent_with_tools: tool name collision '%s' — "
+                        "second client overrides first; use namespaced tool names to avoid this.",
+                        tool_name,
+                    )
+                else:
+                    # 仅在无重名时追加到 tools 列表（Anthropic/OpenAI API 不允许重名工具）
+                    tools.append(tool_def)
+                tool_to_client[tool_name] = client
+
+        # 2. 初始化消息列表
+        system_prompt = getattr(agent_blueprint, "soul", None) or ""
+        messages: List[Dict[str, Any]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": task})
+
+        # 3. ReAct 循环
+        for _iteration in range(max_iterations):
+            response = await llm_provider.chat(messages, tools=tools if tools else None)
+
+            if not response.tool_calls:
+                # LLM 决定停止，返回最终文本
+                if run_id is not None and self._event_bus is not None:
+                    self._event_bus.publish(run_id, {
+                        "type": "agent.completed",
+                        "content": response.content,
+                    })
+                return response.content
+
+            # 将 assistant 的 tool_use 回合追加到消息历史
+            messages.append({"role": "assistant", "content": response.content, "_tool_calls": [
+                {"id": tc.id, "name": tc.name, "args": tc.args}
+                for tc in response.tool_calls
+            ]})
+
+            # 执行所有工具调用
+            for call in response.tool_calls:
+                if run_id is not None and self._event_bus is not None:
+                    self._event_bus.publish(run_id, {
+                        "type": "agent.tool_called",
+                        "name": call.name,
+                        "args": call.args,
+                    })
+
+                client_for_tool = tool_to_client.get(call.name)
+                if client_for_tool is None:
+                    result = {"error": f"Tool '{call.name}' not found in any MCP client"}
+                else:
+                    try:
+                        result = await client_for_tool.call_tool(call.name, call.args)
+                    except Exception as exc:
+                        result = {"error": str(exc)}
+
+                if run_id is not None and self._event_bus is not None:
+                    self._event_bus.publish(run_id, {
+                        "type": "agent.tool_result",
+                        "call_id": call.id,
+                        "result": result,
+                    })
+
+                # 将工具结果注入消息列表（OpenAI / Claude 通用格式）
+                # json.dumps 保证结果为合法 JSON 字符串，而非 Python repr（单引号）
+                result_str = (
+                    json.dumps(result, ensure_ascii=False)
+                    if isinstance(result, (dict, list))
+                    else str(result)
+                )
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": result_str,
+                })
+
+        # 超过最大迭代次数，优雅终止
+        if run_id is not None and self._event_bus is not None:
+            self._event_bus.publish(run_id, {"type": "agent.max_iterations_reached"})
+
+        last_content = messages[-1].get("content", "") if messages else ""
+        return str(last_content)
