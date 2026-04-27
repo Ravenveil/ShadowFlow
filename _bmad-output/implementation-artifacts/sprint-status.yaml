@@ -45,7 +45,7 @@
 #   - Add browser smoke AC (Chrome/FF/Edge/Safari) to Epic 6 closing story
 
 generated: 2026-04-16T05:27:17Z
-last_updated: 2026-04-26T12:31:57Z  # Story 8-5 → review
+last_updated: 2026-04-27T02:00:00Z  # Story 8-7 → in-progress (Agent Catalog)
 project: ShadowFlow
 project_key: NOKEY
 tracking_system: file-system
@@ -153,9 +153,9 @@ development_status:
   8-3b-roleprofile-深度配置-persona-traits-state-fields: in-progress
   8-4-knowledge-dock-绑定主路径: in-progress
   8-4b-tool-registry-mcp-provider-注册凭证管理: in-progress
-  8-5-smoke-run-验证面板-失败解释: review
-  8-6-publish-backfill-template-workflow-agentapp: ready-for-dev
-  8-7-agent-catalog-已发布浏览-fork: ready-for-dev
+  8-5-smoke-run-验证面板-失败解释: in-progress
+  8-6-publish-backfill-template-workflow-agentapp: in-progress
+  8-7-agent-catalog-已发布浏览-fork: in-progress
   epic-8-retrospective: optional
 
   # ===== Epic 9: Knowledge / Memory / Eval Foundation =====
@@ -192,6 +192,16 @@ development_status:
   5-2-sanitizer-pattern-patch: done  # 5 new patterns: AWS/Slack/GitHub-PAT/Anthropic/Bearer
   x-4-m7-prototype-pollution-fix: done  # Object.assign safe merge in 5 TS files (2026-04-24)
   x-5-rate-limiting-coverage: ready-for-dev  # MEDIUM: cover /compile /chat-msg /templates/custom /api/groups
+
+  # ===== Epic 12: Agent Team & Workspace + Agent Pack Registry =====
+  # Note: Stories 12.1–12.4 from epics-addendum-2026-04-26-team-workspace.md
+  # Story 12.5 added 2026-04-27: Agent Pack Registry (VSCode language pack analogy)
+  epic-12: in-progress
+  12-1-quick-agent-create-快速创建agent: ready-for-dev
+  12-2-team-创建-角色组装: ready-for-dev
+  12-3-team-workflow-policy-matrix-可视化: ready-for-dev
+  12-4-workspace-template-switcher: ready-for-dev
+  12-5-agent-pack-registry-manifest-install-version: ready-for-dev
 
   # ===== Epic 11: MCP Server 套件 + LLM tool_use ReAct 循环 =====
   epic-11: in-progress
