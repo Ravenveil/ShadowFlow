@@ -1,0 +1,27 @@
+{
+  "name": "agentgraph-ai-code-assistant",
+  "version": "1.0.0",
+  "description": "AI 代码助手示例 - 展示河流式记忆系统",
+  "main": "dist/index.js",
+  "scripts": {
+    "example": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "agentgraph",
+    "ai",
+    "code-assistant",
+    "memory-system",
+    "workflow"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0"
+  }
+}

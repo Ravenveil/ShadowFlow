@@ -1,0 +1,106 @@
+{
+  "request_id": "req-6b7ac3f6adf3",
+  "workflow": {
+    "workflow_id": "docs-gap-review",
+    "version": "0.1",
+    "name": "Docs Gap Review",
+    "entrypoint": "planner",
+    "nodes": [
+      {
+        "id": "planner",
+        "kind": "agent",
+        "type": "planning.analyze",
+        "config": {
+          "role": "planner",
+          "prompt": "Analyze docs coverage and identify gaps.",
+          "message_template": "[planner] identified documentation gaps and created a review plan.",
+          "emit": {
+            "gap_count": 2,
+            "plan_status": "ready"
+          },
+          "set_state": {
+            "gap_count": 2,
+            "review_required": true
+          },
+          "context_echo": [
+            "source_system"
+          ]
+        },
+        "inputs": [],
+        "outputs": [],
+        "retry_policy": {},
+        "metadata": {
+          "stage": "analysis"
+        }
+      },
+      {
+        "id": "reviewer",
+        "kind": "agent",
+        "type": "review.summarize",
+        "config": {
+          "role": "reviewer",
+          "prompt": "Summarize the gaps and produce concrete notes.",
+          "message_template": "[reviewer] completed the gap review and produced review notes.",
+          "copy_input": [
+            "goal"
+          ],
+          "artifact": {
+            "kind": "report",
+            "name": "docs-gap-review-notes.md",
+            "content": "# Docs Gap Review Notes"
+          }
+        },
+        "inputs": [],
+        "outputs": [],
+        "retry_policy": {},
+        "metadata": {
+          "stage": "review"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from_id": "planner",
+        "to_id": "reviewer",
+        "type": "conditional",
+        "condition": "result.gap_count > 0",
+        "metadata": {}
+      },
+      {
+        "from_id": "reviewer",
+        "to_id": "END",
+        "type": "final",
+        "condition": null,
+        "metadata": {}
+      }
+    ],
+    "defaults": {
+      "memory_scope": "session",
+      "writeback": {
+        "artifact": {
+          "target": "docs",
+          "mode": "inline"
+        },
+        "checkpoint": {
+          "target": "memory",
+          "mode": "reference"
+        }
+      }
+    },
+    "metadata": {
+      "category": "runtime-contract",
+      "purpose": "phase1-e2e"
+    }
+  },
+  "input": {
+    "message": "{goal:Analyze docs gaps}"
+  },
+  "context": {},
+  "memory_scope": "session",
+  "execution_mode": "sync",
+  "idempotency_key": "req-6b7ac3f6adf3",
+  "metadata": {
+    "source_system": "cli",
+    "user_id": "default"
+  }
+}

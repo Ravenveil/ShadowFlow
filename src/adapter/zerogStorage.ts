@@ -1,0 +1,177 @@
+import { ZgFile, Indexer } from '@0glabs/0g-ts-sdk';
+import { ethers } from 'ethers';
+import { useZerogSecretsStore } from '@/core/hooks/useZerogSecretsStore';
+
+const VITE_ENV = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
+const STORAGE_INDEXER = VITE_ENV.VITE_ZEROG_STORAGE_INDEXER ?? 'https://indexer-storage-testnet-turbo.0g.ai';
+const RPC_URL = VITE_ENV.VITE_ZEROG_RPC_URL ?? 'https://evmrpc-testnet.0g.ai';
+
+export const CID_RE = /^0x[a-fA-F0-9]{64}$/;
+const DOWNLOAD_TIMEOUT_MS = 15_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+export interface UploadResult {
+  cid: string;
+  txHash: string;
+}
+
+export class MerkleVerificationError extends Error {
+  constructor(
+    message: string,
+    public readonly cid: string,
+    public readonly errorType: string,
+  ) {
+    super(message);
+    this.name = 'MerkleVerificationError';
+  }
+}
+
+export interface TrajectoryMetadata {
+  author_lineage?: string[];
+  [key: string]: unknown;
+}
+
+export interface DownloadResult {
+  bytes: Uint8Array;
+  verified: true;
+  trajectory?: { metadata?: TrajectoryMetadata; [key: string]: unknown };
+}
+
+const _downloadsInFlight = new Set<string>();
+
+export function isDownloadInFlight(): boolean {
+  return _downloadsInFlight.size > 0;
+}
+
+export async function downloadTrajectory(cid: string): Promise<DownloadResult> {
+  if (!CID_RE.test(cid)) {
+    throw new MerkleVerificationError(
+      `Invalid CID format: expected 0x + 64 hex chars`,
+      cid,
+      'invalid_cid',
+    );
+  }
+
+  if (_downloadsInFlight.has(cid)) {
+    throw new MerkleVerificationError(
+      'Download already in progress for this CID',
+      cid,
+      'concurrent_download',
+    );
+  }
+
+  _downloadsInFlight.add(cid);
+  try {
+    const indexer = new Indexer(STORAGE_INDEXER);
+
+    const downloadPromise = (async () => {
+      // download() can THROW in addition to returning errors — handle both paths
+      try {
+        const err = await indexer.download(cid, cid, true);
+        if (err) throw err;
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        throw new MerkleVerificationError(
+          `Merkle 验证失败,数据可能被篡改: ${msg}`,
+          cid,
+          msg.includes('not found') ? 'not_found' : 'verification_failed',
+        );
+      }
+    })();
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new MerkleVerificationError('下载超时,请检查 CID 或网络', cid, 'timeout')),
+        DOWNLOAD_TIMEOUT_MS,
+      );
+    });
+
+    try {
+      await Promise.race([downloadPromise, timeout]);
+    } finally {
+      clearTimeout(timeoutId!);
+    }
+
+    // SDK confirmed Merkle verification. Now fetch the actual bytes via the
+    // indexer HTTP gateway — the SDK's browser-context download() writes to
+    // an opaque in-memory path that we cannot read back, so we use the
+    // public file endpoint to recover the payload.
+    const fetchUrl = `${STORAGE_INDEXER}/file?root=${encodeURIComponent(cid)}`;
+    const fetchAbort = new AbortController();
+    const fetchTimer = setTimeout(() => fetchAbort.abort(), DOWNLOAD_TIMEOUT_MS);
+    let bytes: Uint8Array;
+    try {
+      const response = await fetch(fetchUrl, { signal: fetchAbort.signal });
+      if (!response.ok) {
+        throw new MerkleVerificationError(
+          `Gateway fetch failed (${response.status})`,
+          cid,
+          'gateway_error',
+        );
+      }
+      bytes = new Uint8Array(await response.arrayBuffer());
+    } catch (error: unknown) {
+      if (error instanceof MerkleVerificationError) throw error;
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new MerkleVerificationError(
+        `Failed to fetch verified bytes: ${msg}`,
+        cid,
+        'gateway_error',
+      );
+    } finally {
+      clearTimeout(fetchTimer);
+    }
+
+    let trajectory: DownloadResult['trajectory'];
+    if (bytes.length > 0) {
+      try {
+        const parsed = JSON.parse(new TextDecoder().decode(bytes));
+        if (parsed && typeof parsed === 'object') {
+          trajectory = parsed as DownloadResult['trajectory'];
+        }
+      } catch { /* not valid JSON — leave trajectory undefined */ }
+    }
+    return { bytes, verified: true, trajectory };
+  } finally {
+    _downloadsInFlight.delete(cid);
+  }
+}
+
+export async function uploadTrajectory(
+  bytes: Uint8Array,
+  passphrase: string,
+): Promise<UploadResult> {
+  const store = useZerogSecretsStore.getState();
+  const pk = await store.getPrivateKey(passphrase);
+
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const signer = new ethers.Wallet(pk, provider);
+  const indexer = new Indexer(STORAGE_INDEXER);
+
+  const blob = new Blob([bytes]);
+  const file = await ZgFile.fromBlob(blob);
+  try {
+    const [tree, treeErr] = await file.merkleTree();
+    if (treeErr || !tree) throw new Error(`Merkle tree generation failed: ${treeErr ?? 'no tree returned'}`);
+
+    const rootHash = tree.rootHash();
+    if (!rootHash) throw new Error('Merkle tree returned empty root hash');
+
+    let tx: unknown;
+    await Promise.race([
+      (async () => {
+        const [result, uploadErr] = await indexer.upload(file, RPC_URL, signer);
+        if (uploadErr) throw new Error(`0G Storage upload failed: ${uploadErr.message}`);
+        tx = result;
+      })(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('0G Storage upload timed out after 120s')), UPLOAD_TIMEOUT_MS),
+      ),
+    ]);
+
+    return { cid: rootHash, txHash: String(tx) };
+  } finally {
+    await file.close();
+  }
+}

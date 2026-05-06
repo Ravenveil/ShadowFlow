@@ -1,0 +1,70 @@
+.coverage
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.pyo
+
+.opencode/
+.claude/.opencode/
+.claude/settings.local.json
+
+agentgraph.egg-info/
+shadowflow.egg-info/
+*.tgz
+dist/
+build/
+
+node_modules/
+src-tauri/target/
+
+.venv/
+.smoke-venv/
+venv/
+env/
+
+*.log
+nul.okm
+simple_data_pipeline_workflow.json
+simple_test.py
+test_planner.py
+.opencode
+.gstack/
+
+# 0G agent skills (cloned reference, update via: cd .0g-skills && git pull)
+.0g-skills/
+
+# Custom templates (user-authored, not source-tracked)
+templates/custom/
+
+# Ephemeral / plugin-managed directories
+.tmp/
+.claude/worktrees/
+.claude/skills/
+.agents/
+
+# Test artifacts
+test-results/
+playwright-report/
+
+# Environment / secrets (H4 fix — never commit .env files)
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Runtime state — encrypted tool credentials, catalog snapshots, workflow runs
+# (must never be committed; per code-review-2026-04-27 H4)
+_data/
+.shadowflow/
+
+# Documentation / design files (not source code)
+docs/
+
+# Hardhat build artifacts
+artifacts/
+cache/
+typechain-types/
+
+# Claude Code internal (plans, locks, scheduled tasks)
+.claude/plans/
+.claude/scheduled_tasks.lock

@@ -1,0 +1,87 @@
+{
+  "checkpoint_id": "ckpt-860f24bcae",
+  "run_id": "run-97d289e47b52",
+  "step_id": "step-002",
+  "state_ref": "checkpoint://run-97d289e47b52/step-002",
+  "state": {
+    "current_node_id": "reviewer",
+    "next_node_id": null,
+    "visited_nodes": [
+      "planner",
+      "reviewer"
+    ],
+    "last_output": {
+      "goal": "Analyze docs gaps",
+      "message": "[reviewer] completed the gap review and produced review notes.",
+      "node_id": "reviewer",
+      "node_type": "review.summarize",
+      "handled_by": "reviewer",
+      "state": {},
+      "prompt": "Summarize the gaps and produce concrete notes.",
+      "copied_input": {
+        "goal": "Analyze docs gaps"
+      },
+      "artifact": {
+        "kind": "report",
+        "name": "docs-gap-review-notes.md",
+        "content": "# Docs Gap Review Notes"
+      }
+    },
+    "state": {
+      "step_outputs": {
+        "planner": {
+          "message": "[planner] identified documentation gaps and created a review plan.",
+          "node_id": "planner",
+          "node_type": "planning.analyze",
+          "handled_by": "planner",
+          "state": {
+            "gap_count": 2,
+            "review_required": true
+          },
+          "prompt": "Analyze docs coverage and identify gaps.",
+          "gap_count": 2,
+          "plan_status": "ready",
+          "context": {
+            "source_system": null
+          }
+        },
+        "reviewer": {
+          "message": "[reviewer] completed the gap review and produced review notes.",
+          "node_id": "reviewer",
+          "node_type": "review.summarize",
+          "handled_by": "reviewer",
+          "state": {},
+          "prompt": "Summarize the gaps and produce concrete notes.",
+          "copied_input": {
+            "goal": "Analyze docs gaps"
+          },
+          "artifact": {
+            "kind": "report",
+            "name": "docs-gap-review-notes.md",
+            "content": "# Docs Gap Review Notes"
+          }
+        }
+      },
+      "shared_state": {
+        "parallel": {},
+        "active_parallel": null,
+        "gap_count": 2,
+        "review_required": true
+      }
+    }
+  },
+  "created_at": "2026-04-14T14:04:59.154021Z",
+  "writeback": {
+    "channel": "checkpoint",
+    "target": "memory",
+    "mode": "reference",
+    "host_action": "persist_checkpoint_ref",
+    "content_field": null,
+    "resume_supported": false,
+    "next_node_id": null
+  },
+  "metadata": {
+    "workflow_id": "docs-gap-review",
+    "entrypoint": "planner"
+  }
+}

@@ -1,0 +1,1311 @@
+{
+  "run": {
+    "run_id": "run-97d289e47b52",
+    "request_id": "req-61c858fcb4a1",
+    "workflow_id": "docs-gap-review",
+    "task_id": "task-480b5b859552",
+    "parent_run_id": null,
+    "root_run_id": "run-97d289e47b52",
+    "status": "succeeded",
+    "started_at": "2026-04-14T14:04:59.153022Z",
+    "ended_at": "2026-04-14T14:04:59.154021Z",
+    "entrypoint": "planner",
+    "current_step_id": "step-002",
+    "metadata": {
+      "execution_mode": "sync",
+      "memory_scope": "session",
+      "source_system": "cli",
+      "user_id": "default",
+      "writeback_receipts": [
+        {
+          "receipt_id": "wb-754d9f452832",
+          "channel": "artifact",
+          "target": "host",
+          "mode": "reference",
+          "source_id": "run-97d289e47b52",
+          "location": "demo-runtime\\runs\\run-97d289e47b52.json",
+          "host_action": "persist_artifact_ref",
+          "stored_at": "2026-04-14T14:04:59.156104Z",
+          "metadata": {
+            "workflow_id": "docs-gap-review",
+            "kind": "run_summary"
+          }
+        },
+        {
+          "receipt_id": "wb-20eb10d783f1",
+          "channel": "artifact",
+          "target": "docs",
+          "mode": "inline",
+          "source_id": "artifact-11b41c612e",
+          "location": "demo-runtime\\docs\\docs-gap-review-notes.md",
+          "host_action": "persist_artifact_ref",
+          "stored_at": "2026-04-14T14:04:59.156688Z",
+          "metadata": {
+            "artifact_name": "docs-gap-review-notes.md",
+            "workflow_id": "docs-gap-review",
+            "producer_node_id": "reviewer"
+          }
+        },
+        {
+          "receipt_id": "wb-dfff4f6552a7",
+          "channel": "checkpoint",
+          "target": "memory",
+          "mode": "reference",
+          "source_id": "ckpt-996628d62a",
+          "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-996628d62a.json",
+          "host_action": "persist_checkpoint_ref",
+          "stored_at": "2026-04-14T14:04:59.156688Z",
+          "metadata": {
+            "run_id": "run-97d289e47b52",
+            "workflow_id": "docs-gap-review",
+            "current_node_id": "planner"
+          }
+        },
+        {
+          "receipt_id": "wb-18adf604ebcd",
+          "channel": "checkpoint",
+          "target": "memory",
+          "mode": "reference",
+          "source_id": "ckpt-860f24bcae",
+          "location": "demo-runtime\\checkpoint-store\\checkpoints\\ckpt-860f24bcae.json",
+          "host_action": "persist_checkpoint_ref",
+          "stored_at": "2026-04-14T14:04:59.157692Z",
+          "metadata": {
+            "run_id": "run-97d289e47b52",
+            "workflow_id": "docs-gap-review",
+            "current_node_id": "reviewer"
+          }
+        }
+      ]
+    }
+  },
+  "tasks": [
+    {
+      "task_id": "task-480b5b859552",
+      "run_id": "run-97d289e47b52",
+      "root_task_id": "task-480b5b859552",
+      "parent_task_id": null,
+      "title": "Docs Gap Review",
+      "focus": "Analyze docs gaps",
+      "status": "succeeded",
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "started_at": "2026-04-14T14:04:59.153022Z",
+      "ended_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "workflow_id": "docs-gap-review",
+        "entrypoint": "planner",
+        "memory_scope": "session",
+        "parent_run_id": null,
+        "root_run_id": null,
+        "parent_task_id": null,
+        "root_task_id": "task-480b5b859552",
+        "parent_step_id": null,
+        "delegated_run": false,
+        "delegation_mode": null,
+        "delegated_from_node_id": null,
+        "handoff_goal": null
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step_id": "step-001",
+      "run_id": "run-97d289e47b52",
+      "node_id": "planner",
+      "status": "succeeded",
+      "index": 1,
+      "input": {
+        "goal": "Analyze docs gaps"
+      },
+      "output": {
+        "message": "[planner] identified documentation gaps and created a review plan.",
+        "node_id": "planner",
+        "node_type": "planning.analyze",
+        "handled_by": "planner",
+        "state": {
+          "gap_count": 2,
+          "review_required": true
+        },
+        "prompt": "Analyze docs coverage and identify gaps.",
+        "gap_count": 2,
+        "plan_status": "ready",
+        "context": {
+          "source_system": null
+        }
+      },
+      "trace": [
+        {
+          "event": "reasoning",
+          "node_id": "planner",
+          "message": "Executing node planner (planning.analyze)",
+          "timestamp": "2026-04-14T14:04:59.153022+00:00"
+        },
+        {
+          "event": "activation_candidate",
+          "node_id": "planner",
+          "message": "candidate planner type=node score=1.00 selected=True",
+          "timestamp": "2026-04-14T14:04:59.153022+00:00"
+        },
+        {
+          "event": "activation",
+          "node_id": "planner",
+          "message": "activation mode=always decision=activated",
+          "timestamp": "2026-04-14T14:04:59.153022+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "planner",
+          "message": "node_id='planner'",
+          "timestamp": "2026-04-14T14:04:59.153022+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "planner",
+          "message": "node_type='planning.analyze'",
+          "timestamp": "2026-04-14T14:04:59.153022+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "planner",
+          "message": "handled_by='planner'",
+          "timestamp": "2026-04-14T14:04:59.153022+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "planner",
+          "message": "prompt='Analyze docs coverage and identify gaps.'",
+          "timestamp": "2026-04-14T14:04:59.153022+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "planner",
+          "message": "gap_count=2",
+          "timestamp": "2026-04-14T14:04:59.153022+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "planner",
+          "message": "plan_status='ready'",
+          "timestamp": "2026-04-14T14:04:59.153022+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "planner",
+          "message": "context={'source_system': None}",
+          "timestamp": "2026-04-14T14:04:59.153022+00:00"
+        }
+      ],
+      "artifacts": [],
+      "error": null,
+      "started_at": "2026-04-14T14:04:59.153022Z",
+      "ended_at": "2026-04-14T14:04:59.153022Z",
+      "metadata": {
+        "node_kind": "agent",
+        "node_type": "planning.analyze",
+        "task_id": "task-480b5b859552",
+        "activation_candidate_ids": [
+          "cand-301ebd72bd"
+        ],
+        "selected_candidate_ids": [
+          "cand-301ebd72bd"
+        ],
+        "activation_id": "act-c27e30cd5f",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "activation_tags": [],
+        "delegate_candidates": [],
+        "feedback_channels": [],
+        "feedback_ids": [
+          "fb-03c78f28a9"
+        ]
+      }
+    },
+    {
+      "step_id": "step-002",
+      "run_id": "run-97d289e47b52",
+      "node_id": "reviewer",
+      "status": "succeeded",
+      "index": 2,
+      "input": {
+        "goal": "Analyze docs gaps",
+        "message": "[planner] identified documentation gaps and created a review plan.",
+        "node_id": "planner",
+        "node_type": "planning.analyze",
+        "handled_by": "planner",
+        "state": {
+          "gap_count": 2,
+          "review_required": true
+        },
+        "prompt": "Analyze docs coverage and identify gaps.",
+        "gap_count": 2,
+        "plan_status": "ready",
+        "context": {
+          "source_system": null
+        }
+      },
+      "output": {
+        "message": "[reviewer] completed the gap review and produced review notes.",
+        "node_id": "reviewer",
+        "node_type": "review.summarize",
+        "handled_by": "reviewer",
+        "state": {},
+        "prompt": "Summarize the gaps and produce concrete notes.",
+        "copied_input": {
+          "goal": "Analyze docs gaps"
+        },
+        "artifact": {
+          "kind": "report",
+          "name": "docs-gap-review-notes.md",
+          "content": "# Docs Gap Review Notes"
+        }
+      },
+      "trace": [
+        {
+          "event": "reasoning",
+          "node_id": "reviewer",
+          "message": "Executing node reviewer (review.summarize)",
+          "timestamp": "2026-04-14T14:04:59.154021+00:00"
+        },
+        {
+          "event": "activation_candidate",
+          "node_id": "reviewer",
+          "message": "candidate reviewer type=node score=1.00 selected=True",
+          "timestamp": "2026-04-14T14:04:59.154021+00:00"
+        },
+        {
+          "event": "activation",
+          "node_id": "reviewer",
+          "message": "activation mode=always decision=activated",
+          "timestamp": "2026-04-14T14:04:59.154021+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "reviewer",
+          "message": "node_id='reviewer'",
+          "timestamp": "2026-04-14T14:04:59.154021+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "reviewer",
+          "message": "node_type='review.summarize'",
+          "timestamp": "2026-04-14T14:04:59.154021+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "reviewer",
+          "message": "handled_by='reviewer'",
+          "timestamp": "2026-04-14T14:04:59.154021+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "reviewer",
+          "message": "prompt='Summarize the gaps and produce concrete notes.'",
+          "timestamp": "2026-04-14T14:04:59.154021+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "reviewer",
+          "message": "copied_input={'goal': 'Analyze docs gaps'}",
+          "timestamp": "2026-04-14T14:04:59.154021+00:00"
+        },
+        {
+          "event": "tool_result",
+          "node_id": "reviewer",
+          "message": "artifact={'kind': 'report', 'name': 'docs-gap-review-notes.md', 'content': '# Docs Gap Review Notes'}",
+          "timestamp": "2026-04-14T14:04:59.154021+00:00"
+        }
+      ],
+      "artifacts": [
+        {
+          "artifact_id": "artifact-11b41c612e",
+          "kind": "report",
+          "name": "docs-gap-review-notes.md",
+          "uri": "memory://run-97d289e47b52/reviewer/2/1",
+          "producer_step_id": "step-002",
+          "writeback": {
+            "channel": "artifact",
+            "target": "docs",
+            "mode": "inline",
+            "host_action": "persist_artifact_ref",
+            "content_field": "metadata.content",
+            "resume_supported": null,
+            "next_node_id": null
+          },
+          "metadata": {
+            "content": "# Docs Gap Review Notes",
+            "workflow_id": "docs-gap-review",
+            "producer_node_id": "reviewer"
+          }
+        }
+      ],
+      "error": null,
+      "started_at": "2026-04-14T14:04:59.154021Z",
+      "ended_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "node_kind": "agent",
+        "node_type": "review.summarize",
+        "task_id": "task-480b5b859552",
+        "activation_candidate_ids": [
+          "cand-b13559b003"
+        ],
+        "selected_candidate_ids": [
+          "cand-b13559b003"
+        ],
+        "activation_id": "act-105cd702be",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "activation_tags": [],
+        "delegate_candidates": [],
+        "feedback_channels": [],
+        "feedback_ids": [
+          "fb-6382cb987d"
+        ]
+      }
+    }
+  ],
+  "final_output": {
+    "goal": "Analyze docs gaps",
+    "message": "[reviewer] completed the gap review and produced review notes.",
+    "node_id": "reviewer",
+    "node_type": "review.summarize",
+    "handled_by": "reviewer",
+    "state": {},
+    "prompt": "Summarize the gaps and produce concrete notes.",
+    "copied_input": {
+      "goal": "Analyze docs gaps"
+    },
+    "artifact": {
+      "kind": "report",
+      "name": "docs-gap-review-notes.md",
+      "content": "# Docs Gap Review Notes"
+    }
+  },
+  "trace": [
+    {
+      "event": "reasoning",
+      "node_id": "planner",
+      "message": "Executing node planner (planning.analyze)",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "activation_candidate",
+      "node_id": "planner",
+      "message": "candidate planner type=node score=1.00 selected=True",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "activation",
+      "node_id": "planner",
+      "message": "activation mode=always decision=activated",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "planner",
+      "message": "node_id='planner'",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "planner",
+      "message": "node_type='planning.analyze'",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "planner",
+      "message": "handled_by='planner'",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "planner",
+      "message": "prompt='Analyze docs coverage and identify gaps.'",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "planner",
+      "message": "gap_count=2",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "planner",
+      "message": "plan_status='ready'",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "planner",
+      "message": "context={'source_system': None}",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "route_decision",
+      "node_id": "planner",
+      "message": "next=reviewer",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "feedback_signal",
+      "node_id": "planner",
+      "message": "Feedback captured for step planner",
+      "timestamp": "2026-04-14T14:04:59.153022+00:00"
+    },
+    {
+      "event": "reasoning",
+      "node_id": "reviewer",
+      "message": "Executing node reviewer (review.summarize)",
+      "timestamp": "2026-04-14T14:04:59.154021+00:00"
+    },
+    {
+      "event": "activation_candidate",
+      "node_id": "reviewer",
+      "message": "candidate reviewer type=node score=1.00 selected=True",
+      "timestamp": "2026-04-14T14:04:59.154021+00:00"
+    },
+    {
+      "event": "activation",
+      "node_id": "reviewer",
+      "message": "activation mode=always decision=activated",
+      "timestamp": "2026-04-14T14:04:59.154021+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "reviewer",
+      "message": "node_id='reviewer'",
+      "timestamp": "2026-04-14T14:04:59.154021+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "reviewer",
+      "message": "node_type='review.summarize'",
+      "timestamp": "2026-04-14T14:04:59.154021+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "reviewer",
+      "message": "handled_by='reviewer'",
+      "timestamp": "2026-04-14T14:04:59.154021+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "reviewer",
+      "message": "prompt='Summarize the gaps and produce concrete notes.'",
+      "timestamp": "2026-04-14T14:04:59.154021+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "reviewer",
+      "message": "copied_input={'goal': 'Analyze docs gaps'}",
+      "timestamp": "2026-04-14T14:04:59.154021+00:00"
+    },
+    {
+      "event": "tool_result",
+      "node_id": "reviewer",
+      "message": "artifact={'kind': 'report', 'name': 'docs-gap-review-notes.md', 'content': '# Docs Gap Review Notes'}",
+      "timestamp": "2026-04-14T14:04:59.154021+00:00"
+    },
+    {
+      "event": "route_decision",
+      "node_id": "reviewer",
+      "message": "next=END",
+      "timestamp": "2026-04-14T14:04:59.154021+00:00"
+    },
+    {
+      "event": "feedback_signal",
+      "node_id": "reviewer",
+      "message": "Feedback captured for step reviewer",
+      "timestamp": "2026-04-14T14:04:59.154021+00:00"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "artifact-11b41c612e",
+      "kind": "report",
+      "name": "docs-gap-review-notes.md",
+      "uri": "memory://run-97d289e47b52/reviewer/2/1",
+      "producer_step_id": "step-002",
+      "writeback": {
+        "channel": "artifact",
+        "target": "docs",
+        "mode": "inline",
+        "host_action": "persist_artifact_ref",
+        "content_field": "metadata.content",
+        "resume_supported": null,
+        "next_node_id": null
+      },
+      "metadata": {
+        "content": "# Docs Gap Review Notes",
+        "workflow_id": "docs-gap-review",
+        "producer_node_id": "reviewer"
+      }
+    }
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "ckpt-996628d62a",
+      "run_id": "run-97d289e47b52",
+      "step_id": "step-001",
+      "state_ref": "checkpoint://run-97d289e47b52/step-001",
+      "state": {
+        "current_node_id": "planner",
+        "next_node_id": "reviewer",
+        "visited_nodes": [
+          "planner"
+        ],
+        "last_output": {
+          "goal": "Analyze docs gaps",
+          "message": "[planner] identified documentation gaps and created a review plan.",
+          "node_id": "planner",
+          "node_type": "planning.analyze",
+          "handled_by": "planner",
+          "state": {
+            "gap_count": 2,
+            "review_required": true
+          },
+          "prompt": "Analyze docs coverage and identify gaps.",
+          "gap_count": 2,
+          "plan_status": "ready",
+          "context": {
+            "source_system": null
+          }
+        },
+        "state": {
+          "step_outputs": {
+            "planner": {
+              "message": "[planner] identified documentation gaps and created a review plan.",
+              "node_id": "planner",
+              "node_type": "planning.analyze",
+              "handled_by": "planner",
+              "state": {
+                "gap_count": 2,
+                "review_required": true
+              },
+              "prompt": "Analyze docs coverage and identify gaps.",
+              "gap_count": 2,
+              "plan_status": "ready",
+              "context": {
+                "source_system": null
+              }
+            },
+            "reviewer": {
+              "message": "[reviewer] completed the gap review and produced review notes.",
+              "node_id": "reviewer",
+              "node_type": "review.summarize",
+              "handled_by": "reviewer",
+              "state": {},
+              "prompt": "Summarize the gaps and produce concrete notes.",
+              "copied_input": {
+                "goal": "Analyze docs gaps"
+              },
+              "artifact": {
+                "kind": "report",
+                "name": "docs-gap-review-notes.md",
+                "content": "# Docs Gap Review Notes"
+              }
+            }
+          },
+          "shared_state": {
+            "parallel": {},
+            "active_parallel": null,
+            "gap_count": 2,
+            "review_required": true
+          }
+        }
+      },
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "writeback": {
+        "channel": "checkpoint",
+        "target": "memory",
+        "mode": "reference",
+        "host_action": "persist_checkpoint_ref",
+        "content_field": null,
+        "resume_supported": true,
+        "next_node_id": "reviewer"
+      },
+      "metadata": {
+        "workflow_id": "docs-gap-review",
+        "entrypoint": "planner"
+      }
+    },
+    {
+      "checkpoint_id": "ckpt-860f24bcae",
+      "run_id": "run-97d289e47b52",
+      "step_id": "step-002",
+      "state_ref": "checkpoint://run-97d289e47b52/step-002",
+      "state": {
+        "current_node_id": "reviewer",
+        "next_node_id": null,
+        "visited_nodes": [
+          "planner",
+          "reviewer"
+        ],
+        "last_output": {
+          "goal": "Analyze docs gaps",
+          "message": "[reviewer] completed the gap review and produced review notes.",
+          "node_id": "reviewer",
+          "node_type": "review.summarize",
+          "handled_by": "reviewer",
+          "state": {},
+          "prompt": "Summarize the gaps and produce concrete notes.",
+          "copied_input": {
+            "goal": "Analyze docs gaps"
+          },
+          "artifact": {
+            "kind": "report",
+            "name": "docs-gap-review-notes.md",
+            "content": "# Docs Gap Review Notes"
+          }
+        },
+        "state": {
+          "step_outputs": {
+            "planner": {
+              "message": "[planner] identified documentation gaps and created a review plan.",
+              "node_id": "planner",
+              "node_type": "planning.analyze",
+              "handled_by": "planner",
+              "state": {
+                "gap_count": 2,
+                "review_required": true
+              },
+              "prompt": "Analyze docs coverage and identify gaps.",
+              "gap_count": 2,
+              "plan_status": "ready",
+              "context": {
+                "source_system": null
+              }
+            },
+            "reviewer": {
+              "message": "[reviewer] completed the gap review and produced review notes.",
+              "node_id": "reviewer",
+              "node_type": "review.summarize",
+              "handled_by": "reviewer",
+              "state": {},
+              "prompt": "Summarize the gaps and produce concrete notes.",
+              "copied_input": {
+                "goal": "Analyze docs gaps"
+              },
+              "artifact": {
+                "kind": "report",
+                "name": "docs-gap-review-notes.md",
+                "content": "# Docs Gap Review Notes"
+              }
+            }
+          },
+          "shared_state": {
+            "parallel": {},
+            "active_parallel": null,
+            "gap_count": 2,
+            "review_required": true
+          }
+        }
+      },
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "writeback": {
+        "channel": "checkpoint",
+        "target": "memory",
+        "mode": "reference",
+        "host_action": "persist_checkpoint_ref",
+        "content_field": null,
+        "resume_supported": false,
+        "next_node_id": null
+      },
+      "metadata": {
+        "workflow_id": "docs-gap-review",
+        "entrypoint": "planner"
+      }
+    }
+  ],
+  "handoffs": [
+    {
+      "handoff_id": "handoff-21fc277559",
+      "run_id": "run-97d289e47b52",
+      "from_step_id": "step-001",
+      "from_node_id": "planner",
+      "to_node_id": "reviewer",
+      "goal": null,
+      "artifact_ids": [],
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "metadata": {
+        "workflow_id": "docs-gap-review"
+      }
+    }
+  ],
+  "activation_candidates": [
+    {
+      "candidate_id": "cand-301ebd72bd",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-001",
+      "node_id": "planner",
+      "candidate_type": "node",
+      "candidate_ref": "planner",
+      "source_signals": [
+        "goal",
+        "context"
+      ],
+      "score": 1.0,
+      "selected": true,
+      "suppressed_reason": null,
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "metadata": {
+        "node_type": "planning.analyze",
+        "node_kind": "agent",
+        "scoring_breakdown": {
+          "base_score": 1.0,
+          "type_weight": 1.0,
+          "signal_bonus": 0.0,
+          "weighted_signals": {
+            "goal": 0.0,
+            "context": 0.0
+          },
+          "score": 1.0
+        }
+      }
+    },
+    {
+      "candidate_id": "cand-b13559b003",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-002",
+      "node_id": "reviewer",
+      "candidate_type": "node",
+      "candidate_ref": "reviewer",
+      "source_signals": [
+        "goal",
+        "context"
+      ],
+      "score": 1.0,
+      "selected": true,
+      "suppressed_reason": null,
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "node_type": "review.summarize",
+        "node_kind": "agent",
+        "scoring_breakdown": {
+          "base_score": 1.0,
+          "type_weight": 1.0,
+          "signal_bonus": 0.0,
+          "weighted_signals": {
+            "goal": 0.0,
+            "context": 0.0
+          },
+          "score": 1.0
+        }
+      }
+    }
+  ],
+  "activations": [
+    {
+      "activation_id": "act-c27e30cd5f",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-001",
+      "node_id": "planner",
+      "mode": "always",
+      "decision": "activated",
+      "tags": [],
+      "activate_when": [],
+      "suppress_when": [],
+      "delegate_candidates": [],
+      "subgoal_triggers": [],
+      "retry_gates": [],
+      "review_gates": [],
+      "feedback_channels": [],
+      "signal_sources": [],
+      "reasons": [
+        "runtime_selected"
+      ],
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "metadata": {
+        "candidate_ids": [
+          "cand-301ebd72bd"
+        ],
+        "selected_candidate_ids": [
+          "cand-301ebd72bd"
+        ],
+        "node_type": "planning.analyze",
+        "node_kind": "agent",
+        "workflow_activation_enabled": true,
+        "workflow_default_mode": "always"
+      }
+    },
+    {
+      "activation_id": "act-105cd702be",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-002",
+      "node_id": "reviewer",
+      "mode": "always",
+      "decision": "activated",
+      "tags": [],
+      "activate_when": [],
+      "suppress_when": [],
+      "delegate_candidates": [],
+      "subgoal_triggers": [],
+      "retry_gates": [],
+      "review_gates": [],
+      "feedback_channels": [],
+      "signal_sources": [],
+      "reasons": [
+        "runtime_selected"
+      ],
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "candidate_ids": [
+          "cand-b13559b003"
+        ],
+        "selected_candidate_ids": [
+          "cand-b13559b003"
+        ],
+        "node_type": "review.summarize",
+        "node_kind": "agent",
+        "workflow_activation_enabled": true,
+        "workflow_default_mode": "always"
+      }
+    }
+  ],
+  "feedback": [
+    {
+      "feedback_id": "fb-03c78f28a9",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-001",
+      "node_id": "planner",
+      "source_type": "step",
+      "status": "succeeded",
+      "summary": "Feedback captured for step planner",
+      "signals": {
+        "node_id": "planner",
+        "node_type": "planning.analyze",
+        "step_status": "succeeded",
+        "activation_id": "act-c27e30cd5f",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "candidate_count": 1,
+        "selected_candidate_count": 1,
+        "delegate_candidate_count": 0,
+        "selected_non_node_candidate_count": 0,
+        "artifact_count": 0,
+        "artifact_ids": [],
+        "checkpoint_id": "ckpt-996628d62a",
+        "next_node_id": "reviewer",
+        "handoff_id": "handoff-21fc277559",
+        "delegated_run": false,
+        "child_run_id": null,
+        "review_gate_triggered": false,
+        "retry_gate_count": 0
+      },
+      "reward_hints": {
+        "artifact_count": 0.0,
+        "delegated_run": 0.0,
+        "continued_flow": 1.0,
+        "review_gate_triggered": 0.0,
+        "selected_candidates": 1.0
+      },
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "metadata": {
+        "feedback_channels": []
+      }
+    },
+    {
+      "feedback_id": "fb-6382cb987d",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-002",
+      "node_id": "reviewer",
+      "source_type": "step",
+      "status": "succeeded",
+      "summary": "Feedback captured for step reviewer",
+      "signals": {
+        "node_id": "reviewer",
+        "node_type": "review.summarize",
+        "step_status": "succeeded",
+        "activation_id": "act-105cd702be",
+        "activation_mode": "always",
+        "activation_decision": "activated",
+        "candidate_count": 1,
+        "selected_candidate_count": 1,
+        "delegate_candidate_count": 0,
+        "selected_non_node_candidate_count": 0,
+        "artifact_count": 1,
+        "artifact_ids": [
+          "artifact-11b41c612e"
+        ],
+        "checkpoint_id": "ckpt-860f24bcae",
+        "next_node_id": null,
+        "handoff_id": null,
+        "delegated_run": false,
+        "child_run_id": null,
+        "review_gate_triggered": false,
+        "retry_gate_count": 0
+      },
+      "reward_hints": {
+        "artifact_count": 1.0,
+        "delegated_run": 0.0,
+        "continued_flow": 0.0,
+        "review_gate_triggered": 0.0,
+        "selected_candidates": 1.0
+      },
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "feedback_channels": []
+      }
+    },
+    {
+      "feedback_id": "fb-a74ae1150b",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": null,
+      "node_id": null,
+      "source_type": "run",
+      "status": "succeeded",
+      "summary": "Run feedback captured for docs-gap-review",
+      "signals": {
+        "run_status": "succeeded",
+        "step_count": 2,
+        "artifact_count": 1,
+        "checkpoint_count": 2,
+        "handoff_count": 1,
+        "activation_candidate_count": 2,
+        "activation_count": 2,
+        "step_feedback_count": 2
+      },
+      "reward_hints": {
+        "completion": 1.0,
+        "artifact_density": 1.0,
+        "candidate_coverage": 2.0,
+        "activation_coverage": 2.0
+      },
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "workflow_id": "docs-gap-review"
+      }
+    }
+  ],
+  "memory_events": [
+    {
+      "event_id": "mem-3c48b09c52",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": null,
+      "category": "task",
+      "summary": "Task started: Docs Gap Review",
+      "payload": {
+        "focus": "Analyze docs gaps",
+        "workflow_id": "docs-gap-review",
+        "entrypoint": "planner"
+      },
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "metadata": {
+        "source": "runtime_service"
+      }
+    },
+    {
+      "event_id": "mem-f53b244763",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-001",
+      "category": "activation",
+      "summary": "Activation resolved for planner",
+      "payload": {
+        "activation_id": "act-c27e30cd5f",
+        "node_id": "planner",
+        "mode": "always",
+        "decision": "activated",
+        "tags": [],
+        "candidate_ids": [
+          "cand-301ebd72bd"
+        ],
+        "selected_candidate_ids": [
+          "cand-301ebd72bd"
+        ],
+        "delegate_candidates": [],
+        "feedback_channels": []
+      },
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "metadata": {
+        "source": "activation"
+      }
+    },
+    {
+      "event_id": "mem-dd431f3c99",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-001",
+      "category": "step_result",
+      "summary": "[planner] identified documentation gaps and created a review plan.",
+      "payload": {
+        "node_id": "planner",
+        "node_type": "planning.analyze",
+        "status": "succeeded",
+        "handled_by": "planner"
+      },
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "metadata": {
+        "source": "step"
+      }
+    },
+    {
+      "event_id": "mem-04339718ca",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-001",
+      "category": "checkpoint",
+      "summary": "Checkpoint saved after planner",
+      "payload": {
+        "checkpoint_id": "ckpt-996628d62a",
+        "next_node_id": null
+      },
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "metadata": {
+        "source": "checkpoint"
+      }
+    },
+    {
+      "event_id": "mem-0ad3ee25c6",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-001",
+      "category": "handoff",
+      "summary": "Handoff from planner to reviewer",
+      "payload": {
+        "handoff_id": "handoff-21fc277559",
+        "to_node_id": "reviewer",
+        "artifact_ids": [],
+        "goal": null
+      },
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "metadata": {
+        "source": "handoff"
+      }
+    },
+    {
+      "event_id": "mem-6efcf52388",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-001",
+      "category": "feedback_signal",
+      "summary": "Feedback captured for step planner",
+      "payload": {
+        "feedback_id": "fb-03c78f28a9",
+        "source_type": "step",
+        "status": "succeeded",
+        "signals": {
+          "node_id": "planner",
+          "node_type": "planning.analyze",
+          "step_status": "succeeded",
+          "activation_id": "act-c27e30cd5f",
+          "activation_mode": "always",
+          "activation_decision": "activated",
+          "candidate_count": 1,
+          "selected_candidate_count": 1,
+          "delegate_candidate_count": 0,
+          "selected_non_node_candidate_count": 0,
+          "artifact_count": 0,
+          "artifact_ids": [],
+          "checkpoint_id": "ckpt-996628d62a",
+          "next_node_id": "reviewer",
+          "handoff_id": "handoff-21fc277559",
+          "delegated_run": false,
+          "child_run_id": null,
+          "review_gate_triggered": false,
+          "retry_gate_count": 0
+        },
+        "reward_hints": {
+          "artifact_count": 0.0,
+          "delegated_run": 0.0,
+          "continued_flow": 1.0,
+          "review_gate_triggered": 0.0,
+          "selected_candidates": 1.0
+        }
+      },
+      "created_at": "2026-04-14T14:04:59.153022Z",
+      "metadata": {
+        "source": "feedback"
+      }
+    },
+    {
+      "event_id": "mem-f4212ce44e",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-002",
+      "category": "activation",
+      "summary": "Activation resolved for reviewer",
+      "payload": {
+        "activation_id": "act-105cd702be",
+        "node_id": "reviewer",
+        "mode": "always",
+        "decision": "activated",
+        "tags": [],
+        "candidate_ids": [
+          "cand-b13559b003"
+        ],
+        "selected_candidate_ids": [
+          "cand-b13559b003"
+        ],
+        "delegate_candidates": [],
+        "feedback_channels": []
+      },
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "source": "activation"
+      }
+    },
+    {
+      "event_id": "mem-a460859768",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-002",
+      "category": "step_result",
+      "summary": "[reviewer] completed the gap review and produced review notes.",
+      "payload": {
+        "node_id": "reviewer",
+        "node_type": "review.summarize",
+        "status": "succeeded",
+        "handled_by": "reviewer"
+      },
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "source": "step"
+      }
+    },
+    {
+      "event_id": "mem-45722ec694",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-002",
+      "category": "artifact",
+      "summary": "Artifact produced: docs-gap-review-notes.md",
+      "payload": {
+        "artifact_id": "artifact-11b41c612e",
+        "artifact_kind": "report",
+        "target": "docs",
+        "mode": "inline"
+      },
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "source": "artifact"
+      }
+    },
+    {
+      "event_id": "mem-d38fd0e702",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-002",
+      "category": "checkpoint",
+      "summary": "Checkpoint saved after reviewer",
+      "payload": {
+        "checkpoint_id": "ckpt-860f24bcae",
+        "next_node_id": null
+      },
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "source": "checkpoint"
+      }
+    },
+    {
+      "event_id": "mem-dbd8d2877a",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": "step-002",
+      "category": "feedback_signal",
+      "summary": "Feedback captured for step reviewer",
+      "payload": {
+        "feedback_id": "fb-6382cb987d",
+        "source_type": "step",
+        "status": "succeeded",
+        "signals": {
+          "node_id": "reviewer",
+          "node_type": "review.summarize",
+          "step_status": "succeeded",
+          "activation_id": "act-105cd702be",
+          "activation_mode": "always",
+          "activation_decision": "activated",
+          "candidate_count": 1,
+          "selected_candidate_count": 1,
+          "delegate_candidate_count": 0,
+          "selected_non_node_candidate_count": 0,
+          "artifact_count": 1,
+          "artifact_ids": [
+            "artifact-11b41c612e"
+          ],
+          "checkpoint_id": "ckpt-860f24bcae",
+          "next_node_id": null,
+          "handoff_id": null,
+          "delegated_run": false,
+          "child_run_id": null,
+          "review_gate_triggered": false,
+          "retry_gate_count": 0
+        },
+        "reward_hints": {
+          "artifact_count": 1.0,
+          "delegated_run": 0.0,
+          "continued_flow": 0.0,
+          "review_gate_triggered": 0.0,
+          "selected_candidates": 1.0
+        }
+      },
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "source": "feedback"
+      }
+    },
+    {
+      "event_id": "mem-43a8208f51",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": null,
+      "category": "feedback_signal",
+      "summary": "Run feedback captured for docs-gap-review",
+      "payload": {
+        "feedback_id": "fb-a74ae1150b",
+        "source_type": "run",
+        "status": "succeeded",
+        "signals": {
+          "run_status": "succeeded",
+          "step_count": 2,
+          "artifact_count": 1,
+          "checkpoint_count": 2,
+          "handoff_count": 1,
+          "activation_candidate_count": 2,
+          "activation_count": 2,
+          "step_feedback_count": 2
+        },
+        "reward_hints": {
+          "completion": 1.0,
+          "artifact_density": 1.0,
+          "candidate_coverage": 2.0,
+          "activation_coverage": 2.0
+        }
+      },
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "source": "feedback"
+      }
+    },
+    {
+      "event_id": "mem-d6f71b8ba2",
+      "run_id": "run-97d289e47b52",
+      "task_id": "task-480b5b859552",
+      "step_id": null,
+      "category": "run_summary",
+      "summary": "Run finished with status succeeded",
+      "payload": {
+        "run_id": "run-97d289e47b52",
+        "status": "succeeded",
+        "step_count": 2,
+        "artifact_count": 1,
+        "checkpoint_count": 2,
+        "handoff_count": 1
+      },
+      "created_at": "2026-04-14T14:04:59.154021Z",
+      "metadata": {
+        "source": "runtime_service"
+      }
+    }
+  ],
+  "errors": []
+}

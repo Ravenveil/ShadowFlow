@@ -1,0 +1,8 @@
+{
+  "name": "ShadowFlow",
+  "version": "1.0.0",
+  "description": "ShadowFlow project for workflow management",
+  "main": "src/index.ts",
+  "author": "",
+  "license": ""
+}

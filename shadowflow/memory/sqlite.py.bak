@@ -1,0 +1,708 @@
+import aiosqlite
+from typing import Dict, List, Optional, Any
+from datetime import datetime
+
+from agentgraph.memory.base import Memory
+
+
+class SQLiteMemory(Memory):
+    """
+    SQLite Memory 实现 - 支持三层架构
+
+    表结构：
+    - interactions: 用户-Agent 交互记录（兼容原有接口）
+    - knowledge_notes: 知识层笔记
+    - wiki_links: 双向链接
+    - tags: 标签
+    - sessions: 上下文层会话
+    - session_messages: 会话消息
+    - workflows: 工作流状态
+    - agent_patterns: 语义层模式
+    - user_profiles: 用户画像
+    """
+
+    def __init__(self, db_path: str = "agentgraph.db"):
+        self.db_path = db_path
+        self._initialized = False
+        self._db = None  # 持久连接
+
+    async def _get_db(self):
+        """获取数据库连接（保持单一连接以支持 :memory:）"""
+        if self._db is None:
+            self._db = await aiosqlite.connect(self.db_path)
+        return self._db
+
+    async def _initialize(self):
+        """初始化数据库表结构"""
+        if self._initialized:
+            return
+
+        db = await self._get_db()
+        # 原有的 interactions 表（保持兼容）
+        await db.execute("""
+                CREATE TABLE IF NOT EXISTS interactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    agent_id TEXT NOT NULL,
+                    input TEXT NOT NULL,
+                    output TEXT NOT NULL,
+                    reasoning TEXT,
+                    confidence REAL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_interactions_user_id
+                ON interactions(user_id)
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_interactions_timestamp
+                ON interactions(timestamp DESC)
+            """)
+
+            # 知识层 - 笔记表
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS knowledge_notes (
+                    key TEXT PRIMARY KEY,
+                    content TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    word_count INTEGER DEFAULT 0
+                )
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notes_updated_at
+                ON knowledge_notes(updated_at DESC)
+            """)
+
+            # 知识层 - 双向链接表
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS wiki_links (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_key TEXT NOT NULL,
+                    target_key TEXT NOT NULL,
+                    line_number INTEGER NOT NULL,
+                    context TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(source_key, target_key, line_number)
+                )
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_wiki_links_source
+                ON wiki_links(source_key)
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_wiki_links_target
+                ON wiki_links(target_key)
+            """)
+
+            # 知识层 - 标签表
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS tags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    source_key TEXT NOT NULL,
+                    count INTEGER DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(name, source_key)
+                )
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_tags_name
+                ON tags(name)
+                """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_tags_source
+                ON tags(source_key)
+            """)
+
+            # 上下文层 - 会话表
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS sessions (
+                    session_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    project_context TEXT,
+                    workflow_state TEXT,
+                    environment_state TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sessions_user_id
+                ON sessions(user_id)
+            """)
+
+            # 上下文层 - 会话消息表
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS session_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    agent_id TEXT,
+                    reasoning TEXT,
+                    confidence REAL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    metadata TEXT
+                )
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_session_messages_session
+                ON session_messages(session_id, timestamp DESC)
+            """)
+
+            # 上下文层 - 工作流表
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS workflows (
+                    workflow_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    status TEXT DEFAULT 'pending',
+                    definition TEXT,
+                    result TEXT,
+                    error TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    started_at DATETIME,
+                    completed_at DATETIME
+                )
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_workflows_status
+                ON workflows(status)
+            """)
+
+            # 语义层 - Agent 模式表
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS agent_patterns (
+                    pattern_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    success_rate REAL DEFAULT 0.0,
+                    usage_count INTEGER DEFAULT 0,
+                    last_used DATETIME,
+                    tags TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_patterns_success_rate
+                ON agent_patterns(success_rate DESC)
+            """)
+
+            # 语义层 - 用户画像表
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS user_profiles (
+                    user_id TEXT PRIMARY KEY,
+                    preferred_agents TEXT,
+                    interaction_style TEXT DEFAULT 'standard',
+                    task_patterns TEXT,
+                    session_count INTEGER DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # 语义层 - 任务历史表
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS task_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    agent_id TEXT,
+                    success BOOLEAN NOT NULL,
+                    metadata TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_task_history_user
+                ON task_history(user_id, timestamp DESC)
+            """)
+
+            await db.commit()
+
+        self._initialized = True
+
+    async def close(self):
+        """关闭数据库连接"""
+        if self._db:
+            await self._db.close()
+            self._db = None
+
+    # ========== 原有接口（保持兼容）==========
+
+    async def save_interaction(
+        self,
+        user_id: str,
+        agent_id: str,
+        input: str,
+        output: str,
+        reasoning: Optional[str] = None,
+        confidence: Optional[float] = None
+    ) -> None:
+        await self._initialize()
+        db = await self._get_db()
+
+        await db.execute("""
+            INSERT INTO interactions
+            (user_id, agent_id, input, output, reasoning, confidence)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_id, agent_id, input, output, reasoning, confidence))
+        await db.commit()
+
+    async def get_history(
+        self,
+        user_id: str,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        await self._initialize()
+        db = await self._get_db()
+
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT * FROM interactions
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (user_id, limit))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_summary(
+        self,
+        user_id: str,
+        role: Optional[str] = None
+    ) -> str:
+        history = await self.get_history(user_id, limit=5)
+
+        if not history:
+            return "No previous interactions."
+
+        summary = f"User {user_id} has {len(history)} recent interactions:\n"
+        for item in history:
+            summary += f"- {item['agent_id']}: {item['output'][:50]}...\n"
+
+        return summary
+
+    async def clear_history(self, user_id: str) -> None:
+        await self._initialize()
+        db = await self._get_db()
+
+        await db.execute("""
+            DELETE FROM interactions WHERE user_id = ?
+        """, (user_id,))
+        await db.commit()
+
+    # ========== 知识层接口 ==========
+
+    async def save_note(self, key: str, content: str) -> None:
+        """保存笔记到知识层"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            word_count = len(content.split())
+            now = datetime.now().isoformat()
+
+            # 检查笔记是否存在
+            cursor = await db.execute("SELECT key FROM knowledge_notes WHERE key = ?", (key,))
+            existing = await cursor.fetchone()
+
+            if existing:
+                # 更新现有笔记
+                await db.execute("""
+                    UPDATE knowledge_notes
+                    SET content = ?, updated_at = ?, word_count = ?
+                    WHERE key = ?
+                """, (content, now, word_count, key))
+                # 清除旧的链接和标签
+                await db.execute("DELETE FROM wiki_links WHERE source_key = ?", (key,))
+                await db.execute("DELETE FROM tags WHERE source_key = ?", (key,))
+            else:
+                # 插入新笔记
+                await db.execute("""
+                    INSERT INTO knowledge_notes (key, content, created_at, updated_at, word_count)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (key, content, now, now, word_count))
+
+            # 提取并保存链接
+            import re
+            wiki_link_pattern = r'\[\[([^\]]+)\]\]'
+            for match in re.finditer(wiki_link_pattern, content):
+                target = match.group(1)
+                line_number = content[:match.start()].count('\n') + 1
+                lines = content.split('\n')
+                context = lines[min(line_number - 1, len(lines) - 1)].strip()
+                await db.execute("""
+                    INSERT OR IGNORE INTO wiki_links
+                    (source_key, target_key, line_number, context)
+                    VALUES (?, ?, ?, ?)
+                """, (key, target, line_number, context))
+
+            # 提取并保存标签
+            tag_pattern = r'#([a-zA-Z0-9_\-]+)'
+            tag_counts = {}
+            for match in re.finditer(tag_pattern, content):
+                tag_name = match.group(1)
+                tag_counts[tag_name] = tag_counts.get(tag_name, 0) + 1
+
+            for tag_name, count in tag_counts.items():
+                await db.execute("""
+                    INSERT OR REPLACE INTO tags (name, source_key, count)
+                    VALUES (?, ?, ?)
+                """, (tag_name, key, count))
+
+            await db.commit()
+
+    async def get_note(self, key: str) -> Optional[Dict]:
+        """获取笔记"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM knowledge_notes WHERE key = ?", (key,))
+            row = await cursor.fetchone()
+            if row:
+                # 获取链接
+                cursor_links = await db.execute(
+                    "SELECT * FROM wiki_links WHERE source_key = ?", (key,)
+                )
+                links = [dict(row) for row in await cursor_links.fetchall()]
+
+                # 获取标签
+                cursor_tags = await db.execute(
+                    "SELECT * FROM tags WHERE source_key = ?", (key,)
+                )
+                tags = [dict(row) for row in await cursor_tags.fetchall()]
+
+                note = dict(row)
+                note["links"] = links
+                note["tags"] = tags
+                return note
+            return None
+
+    async def search_knowledge(self, query: str, limit: int = 10) -> List[Dict]:
+        """搜索知识层"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            search_query = f"%{query}%"
+
+            # 搜索笔记内容
+            cursor = await db.execute("""
+                SELECT key, content,
+                       substr(content, 1, 200) as preview
+                FROM knowledge_notes
+                WHERE content LIKE ? OR key LIKE ?
+                LIMIT ?
+            """, (search_query, search_query, limit))
+            notes = [dict(row) for row in await cursor.fetchall()]
+
+            # 搜索标签
+            cursor = await db.execute("""
+                SELECT DISTINCT source_key, name
+                FROM tags
+                WHERE name LIKE ?
+                LIMIT ?
+            """, (search_query, limit))
+            tag_results = [dict(row) for row in await cursor_tags.fetchall()] if (
+                cursor_tags := await db.execute("""
+                    SELECT DISTINCT source_key, name
+                    FROM tags
+                    WHERE name LIKE ?
+                    LIMIT ?
+                """, (search_query, limit))
+            ) else []
+
+            # 搜索链接
+            cursor = await db.execute("""
+                SELECT DISTINCT source_key, target_key
+                FROM wiki_links
+                WHERE target_key LIKE ?
+                LIMIT ?
+            """, (search_query, limit))
+            link_results = [dict(row) for row in await cursor_links.fetchall()] if (
+                cursor_links := await db.execute("""
+                    SELECT DISTINCT source_key, target_key
+                    FROM wiki_links
+                    WHERE target_key LIKE ?
+                    LIMIT ?
+                """, (search_query, limit))
+            ) else []
+
+            return {
+                "notes": notes,
+                "tags": tag_results,
+                "links": link_results
+            }
+
+    async def get_backlinks(self, target_key: str) -> List[Dict]:
+        """获取反向链接"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("""
+                SELECT * FROM wiki_links WHERE target_key = ?
+            """, (target_key,))
+            return [dict(row) for row in await cursor.fetchall()]
+
+    # ========== 上下文层接口 ==========
+
+    async def save_session(self, session_id: str, user_id: str, data: Dict = None) -> None:
+        """保存或更新会话"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            now = datetime.now().isoformat()
+            project_context = data.get("project_context", {}) if data else {}
+            workflow_state = data.get("workflow_state", {}) if data else {}
+            environment_state = data.get("environment_state", {}) if data else {}
+
+            await db.execute("""
+                INSERT OR REPLACE INTO sessions
+                (session_id, user_id, project_context, workflow_state, environment_state, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (session_id, user_id,
+                  str(project_context), str(workflow_state), str(environment_state), now))
+            await db.commit()
+
+    async def add_session_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        agent_id: Optional[str] = None,
+        reasoning: Optional[str] = None,
+        confidence: Optional[float] = None,
+        metadata: Optional[Dict] = None
+    ) -> None:
+        """添加会话消息"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                INSERT INTO session_messages
+                (session_id, role, content, agent_id, reasoning, confidence, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (session_id, role, content, agent_id, reasoning, confidence,
+                  str(metadata) if metadata else None))
+            await db.commit()
+
+    async def get_session_messages(self, session_id: str, limit: int = 10) -> List[Dict]:
+        """获取会话消息"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("""
+                SELECT * FROM session_messages
+                WHERE session_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (session_id, limit))
+            return [dict(row) for row in await cursor.fetchall()]
+
+    async def save_workflow(
+        self,
+        workflow_id: str,
+        name: str,
+        description: Optional[str] = None,
+        status: str = "pending",
+        definition: Optional[str] = None
+    ) -> None:
+        """保存工作流"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            now = datetime.now().isoformat()
+            await db.execute("""
+                INSERT OR REPLACE INTO workflows
+                (workflow_id, name, description, status, definition, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (workflow_id, name, description, status, definition, now))
+            await db.commit()
+
+    async def update_workflow_status(
+        self,
+        workflow_id: str,
+        status: str,
+        result: Optional[str] = None,
+        error: Optional[str] = None
+    ) -> None:
+        """更新工作流状态"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            now = datetime.now().isoformat()
+            if status == "running":
+                await db.execute("""
+                    UPDATE workflows
+                    SET status = ?, started_at = ?
+                    WHERE workflow_id = ?
+                """, (status, now, workflow_id))
+            elif status in ["completed", "failed"]:
+                await db.execute("""
+                    UPDATE workflows
+                    SET status = ?, completed_at = ?, result = ?, error = ?
+                    WHERE workflow_id = ?
+                """, (status, now, result, error, workflow_id))
+            else:
+                await db.execute("""
+                    UPDATE workflows SET status = ? WHERE workflow_id = ?
+                """, (status, workflow_id))
+            await db.commit()
+
+    async def get_active_workflows(self) -> List[Dict]:
+        """获取活跃的工作流"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("""
+                SELECT * FROM workflows
+                WHERE status IN ('pending', 'running')
+                ORDER BY created_at DESC
+            """)
+            return [dict(row) for row in await cursor.fetchall()]
+
+    # ========== 语义层接口 ==========
+
+    async def save_pattern(
+        self,
+        pattern_id: str,
+        name: str,
+        description: str,
+        tags: List[str] = None
+    ) -> None:
+        """保存或更新模式"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            now = datetime.now().isoformat()
+            await db.execute("""
+                INSERT OR REPLACE INTO agent_patterns
+                (pattern_id, name, description, tags, created_at, last_used)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (pattern_id, name, description, str(tags), now, now))
+            await db.commit()
+
+    async def update_pattern_success(self, pattern_id: str, success: bool) -> None:
+        """更新模式成功率"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # 获取当前状态
+            cursor = await db.execute("""
+                SELECT usage_count, success_rate FROM agent_patterns WHERE pattern_id = ?
+            """, (pattern_id,))
+            row = await cursor.fetchone()
+            if row:
+                usage_count, current_rate = row
+                new_count = usage_count + 1
+                # 更新成功率（简单平均）
+                new_rate = (current_rate * usage_count + (1.0 if success else 0.0)) / new_count
+                now = datetime.now().isoformat()
+                await db.execute("""
+                    UPDATE agent_patterns
+                    SET usage_count = ?, success_rate = ?, last_used = ?
+                    WHERE pattern_id = ?
+                """, (new_count, new_rate, now, pattern_id))
+                await db.commit()
+
+    async def get_best_patterns(self, task_type: str, limit: int = 3) -> List[Dict]:
+        """获取针对特定任务类型的最佳模式"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            search_query = f"%{task_type}%"
+            cursor = await db.execute("""
+                SELECT * FROM agent_patterns
+                WHERE name LIKE ? OR description LIKE ? OR tags LIKE ?
+                ORDER BY success_rate DESC, usage_count DESC
+                LIMIT ?
+            """, (search_query, search_query, search_query, limit))
+            return [dict(row) for row in await cursor.fetchall()]
+
+    async def save_user_profile(
+        self,
+        user_id: str,
+        preferred_agents: List[str] = None,
+        interaction_style: str = "standard",
+        task_patterns: List[str] = None
+    ) -> None:
+        """保存用户画像"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            now = datetime.now().isoformat()
+            await db.execute("""
+                INSERT OR REPLACE INTO user_profiles
+                (user_id, preferred_agents, interaction_style, task_patterns, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, str(preferred_agents), interaction_style,
+                  str(task_patterns), now))
+            await db.commit()
+
+    async def get_user_profile(self, user_id: str) -> Optional[Dict]:
+        """获取用户画像"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("""
+                SELECT * FROM user_profiles WHERE user_id = ?
+            """, (user_id,))
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+    async def record_task(
+        self,
+        task_id: str,
+        user_id: str,
+        agent_id: Optional[str],
+        success: bool,
+        metadata: Dict = None
+    ) -> None:
+        """记录任务完成情况"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                INSERT INTO task_history
+                (task_id, user_id, agent_id, success, metadata)
+                VALUES (?, ?, ?, ?, ?)
+            """, (task_id, user_id, agent_id, success, str(metadata) if metadata else None))
+            await db.commit()
+
+    async def get_task_statistics(self, user_id: Optional[str] = None) -> Dict:
+        """获取任务统计"""
+        await self._initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            if user_id:
+                cursor = await db.execute("""
+                    SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count
+                    FROM task_history WHERE user_id = ?
+                """, (user_id,))
+            else:
+                cursor = await db.execute("""
+                    SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count
+                    FROM task_history
+                """)
+            row = await cursor.fetchone()
+            if row:
+                total, success_count = row
+                return {
+                    "total": total,
+                    "success": success_count,
+                    "failure": total - success_count,
+                    "success_rate": success_count / total if total > 0 else 0.0
+                }
+            return {"total": 0, "success": 0, "failure": 0, "success_rate": 0.0}
