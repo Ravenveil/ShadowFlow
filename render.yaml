@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: shadowflow-api
+    runtime: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -e ".[server]"
+    startCommand: uvicorn shadowflow.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: SF_ENV
+        value: production
+      - key: CORS_ORIGINS
+        value: "https://shadowflow.vercel.app,https://shadowflow-crbuu68so-xs-projects-3586a90f.vercel.app"
