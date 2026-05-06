@@ -65,6 +65,9 @@ artifacts/
 cache/
 typechain-types/
 
-# Claude Code internal (plans, locks, scheduled tasks)
-.claude/plans/
-.claude/scheduled_tasks.lock
+# Claude Code internal (entire directory — project rules live in CLAUDE.md)
+.claude/
+
+# BMAD planning artifacts
+_bmad/
+_bmad-output/
