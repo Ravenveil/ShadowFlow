@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { Indexer, ZgFile } from '@0glabs/0g-ts-sdk';
+import { Indexer } from '@0glabs/0g-ts-sdk';
 import { useCallback, useEffect, useState } from 'react';
 
 const _ENV = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
@@ -153,11 +153,12 @@ export async function uploadYamlForMarket(yamlText: string): Promise<string> {
   if (!_win.ethereum) throw new Error('请安装 MetaMask');
 
   const bytes = new TextEncoder().encode(yamlText);
-  // ZgFile type definitions lag the actual API; cast to access fromBlob
+  const blob = new Blob([bytes], { type: 'text/yaml' });
+  // Dynamic import to prevent Vite/Rollup from bundling ZgFile's Node.js fs dependencies
+  const { ZgFile } = await import('@0glabs/0g-ts-sdk');
   const ZgFileAny = ZgFile as unknown as {
     fromBlob: (blob: Blob) => Promise<{ merkleTree: () => Promise<[{ rootHash: () => string | null }, unknown | null]>; close: () => Promise<void> }>;
   };
-  const blob = new Blob([bytes], { type: 'text/yaml' });
   const file = await ZgFileAny.fromBlob(blob);
 
   try {
