@@ -4,6 +4,7 @@ services:
     runtime: python
     region: singapore
     plan: free
+    pythonVersion: "3.11.0"
     buildCommand: pip install -e ".[server]"
     startCommand: uvicorn shadowflow.server:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
@@ -13,4 +14,4 @@ services:
       - key: SF_ENV
         value: production
       - key: CORS_ORIGINS
-        value: "https://shadowflow.vercel.app,https://shadowflow-crbuu68so-xs-projects-3586a90f.vercel.app"
+        value: "https://shadowflow-crbuu68so-xs-projects-3586a90f.vercel.app,https://shadowflow.onrender.com"
