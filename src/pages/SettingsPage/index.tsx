@@ -1,0 +1,438 @@
+/**
+ * SettingsPage — Hi-Fi v2 redesign · opendesign 1:1 migration
+ *
+ * Visual blueprint: `_handoff_tmp/shadowflow/project/hf-pages.jsx` → HfSettings
+ * (lines 326-419). 2-column layout: 240px left rail of categories grouped by
+ * section header (账户 / 外观 / 集成 / 0G / 数据), right scrollable detail
+ * pane that swaps based on the selected category.
+ *
+ * Tokens used (from `colors_and_type.css` + `hf-shared.jsx` HF_THEME_CSS):
+ *   --t-bg / --t-panel / --t-fg / --t-fg-2..5 / --t-border / --t-accent /
+ *   --t-accent-tint / --t-accent-ink     — all theme-aware (day + night).
+ *
+ * Concrete handoff references:
+ *   • L339-356  — outer 2-col grid + 240px nav with `borderRight: 1px solid
+ *                 var(--t-border)` and `background: var(--t-panel)`.
+ *   • L341-344  — title block (`Settings` 16px/800 + `设置 · ⌘ ,` meta).
+ *   • L347      — group label (`hf-label`, padding `4px 12px 5px`).
+ *   • L348-353  — nav item: 7px/12px padding, 6px radius, 12.5px font, weight
+ *                 700 when active, 500 otherwise. Active = `--t-accent-tint`
+ *                 background + 3px purple bar at `left:-8` (16px tall).
+ *   • L357      — right pane padding `24px 32px`.
+ *
+ * Preservation rule (CLAUDE.md "只能加，不能删"): all 12 existing settings
+ * sub-components are kept as-is and routed under the 5 spec groups. We add
+ * 4 placeholder entries (billing / shortcuts / on-chain / workspace) where
+ * the spec asks for them — those render <ComingSoonSection/>. Default active
+ * section is `wallet` to match the spec's centered Wallet content.
+ *
+ * Active selection persists to `window.location.hash` (e.g. `#wallet`) so
+ * deep-linking + browser back/forward work. Falls back to in-memory state
+ * if hash is absent.
+ *
+ * The HfLayout already wraps this route; we render only:
+ *   HfTopBar (50px crumbs)  +  240px settings nav  +  scrollable right pane.
+ */
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useI18n } from '../../common/i18n';
+import { ToolProvidersTab } from './ToolProvidersTab';
+import { AgentBackendSection } from '../../core/components/settings/AgentBackendSection';
+import { ConnectorsSection } from '../../core/components/settings/ConnectorsSection';
+import { AppearanceSection } from '../../core/components/settings/AppearanceSection';
+import { LanguageSection } from '../../core/components/settings/LanguageSection';
+import { McpIntegrationsSection } from '../../core/components/settings/McpIntegrationsSection';
+import { AboutSection } from '../../core/components/settings/AboutSection';
+import { PetSettings } from '../../core/components/pet/PetSettings';
+import { NotificationsSection } from '../../core/components/settings/NotificationsSection';
+import { AdvancedSection } from '../../core/components/settings/AdvancedSection';
+import { MediaProvidersSection } from '../../core/components/settings/MediaProvidersSection';
+import { WelcomeSection } from '../../core/components/settings/WelcomeSection';
+import { HfTopBar, HfPill } from '../../components/hifi';
+import { WalletSection } from './WalletSection';
+
+// ---------------------------------------------------------------------------
+// Section ids — 12 existing + 4 placeholders + 1 wallet (= 17)
+// ---------------------------------------------------------------------------
+
+type SectionId =
+  // 账户
+  | 'welcome'      // existing — used as Profile entry
+  | 'about'        // existing — used as Account entry
+  | 'billing'      // placeholder
+  // 外观
+  | 'appearance'
+  | 'shortcuts'    // placeholder
+  | 'language'
+  // 集成
+  | 'agent-backend'
+  | 'tool-providers'
+  | 'connectors'
+  | 'mcp-integrations'
+  // 0G
+  | 'wallet'       // backed by /api/wallet/*
+  | 'onchain'      // placeholder
+  // 数据
+  | 'notifications'
+  | 'advanced'
+  | 'media-providers'
+  | 'pet'
+  | 'workspace';   // placeholder
+
+interface NavItem {
+  id: SectionId;
+  label: string;
+  comingSoon?: boolean;
+}
+
+interface NavGroup {
+  group: string;
+  items: NavItem[];
+}
+
+type Translate = (zh: string, en: string) => string;
+
+const buildNavGroups = (T: Translate): NavGroup[] => [
+  {
+    group: T('账户', 'Account'),
+    items: [
+      { id: 'welcome', label: T('Profile · 快速上手', 'Profile · Quick Start') },
+      { id: 'about',   label: T('Account · 关于',     'Account · About') },
+      { id: 'billing', label: T('Billing',            'Billing'), comingSoon: true },
+    ],
+  },
+  {
+    group: T('外观', 'Appearance'),
+    items: [
+      { id: 'appearance', label: T('Appearance · 外观', 'Appearance') },
+      { id: 'shortcuts',  label: T('Shortcuts',         'Shortcuts'), comingSoon: true },
+      { id: 'language',   label: T('Language · 语言',   'Language') },
+    ],
+  },
+  {
+    group: T('集成', 'Integrations'),
+    items: [
+      { id: 'agent-backend',     label: T('Models & Providers', 'Models & Providers') },
+      { id: 'tool-providers',    label: T('Tool Providers',     'Tool Providers') },
+      { id: 'connectors',        label: T('Connectors',         'Connectors') },
+      { id: 'mcp-integrations',  label: T('MCP 集成',           'MCP Integrations') },
+    ],
+  },
+  {
+    group: T('0G', '0G'),
+    items: [
+      { id: 'wallet',  label: T('Wallet',   'Wallet') },
+      { id: 'onchain', label: T('On-chain', 'On-chain'), comingSoon: true },
+    ],
+  },
+  {
+    group: T('数据', 'Data'),
+    items: [
+      { id: 'notifications',    label: T('Notifications · 通知',  'Notifications') },
+      { id: 'advanced',         label: T('Privacy & Data · 高级', 'Privacy & Data · Advanced') },
+      { id: 'media-providers',  label: T('媒体提供商',            'Media Providers') },
+      { id: 'pet',              label: T('宠物',                  'Pet') },
+      { id: 'workspace',        label: T('Workspace',             'Workspace'), comingSoon: true },
+    ],
+  },
+];
+
+// Static reference list (English, used purely for SectionId enumeration / hash routing).
+// Labels here are never rendered — runtime labels come from buildNavGroups(T) at render time.
+const STATIC_NAV_GROUPS = buildNavGroups((_zh, en) => en);
+const ALL_IDS = STATIC_NAV_GROUPS.flatMap((g) => g.items.map((it) => it.id));
+const ID_SET = new Set<string>(ALL_IDS);
+
+const DEFAULT_SECTION: SectionId = 'wallet';
+
+function readHashSection(): SectionId | null {
+  if (typeof window === 'undefined') return null;
+  const raw = window.location.hash.replace(/^#\/?/, '').trim();
+  if (raw && ID_SET.has(raw)) return raw as SectionId;
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Placeholder
+// ---------------------------------------------------------------------------
+
+function ComingSoonSection({ label }: { label: string }) {
+  const { language } = useI18n();
+  const blurb =
+    language === 'zh'
+      ? '此功能正在开发中，敬请期待。'
+      : 'This feature is in development. Stay tuned.';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div>
+        <div className="hf-label" style={{ color: 'var(--t-accent)' }}>
+          {label.toUpperCase()}
+        </div>
+        <div
+          style={{
+            fontSize: 24,
+            fontWeight: 800,
+            marginTop: 4,
+            letterSpacing: '-.02em',
+            color: 'var(--t-fg)',
+          }}
+        >
+          {label}
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--t-fg-3)', marginTop: 6 }}>
+          {blurb}
+        </p>
+      </div>
+      <div
+        className="hf-card"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '64px 16px',
+          gap: 8,
+        }}
+      >
+        <div style={{ fontSize: 32 }}>🚧</div>
+        <HfPill>● coming soon</HfPill>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section wrapper — keeps existing Tailwind / `sf-*` token components
+// embedded inside the new Hi-Fi v2 pane while the redesign rolls out across
+// sub-sections incrementally.
+// ---------------------------------------------------------------------------
+
+function LegacySectionWrap({ children }: { children: ReactNode }) {
+  return <div style={{ maxWidth: 760 }}>{children}</div>;
+}
+
+// ---------------------------------------------------------------------------
+// Nav button — hover state + active 3px purple bar (handoff hf-pages.jsx L350)
+// ---------------------------------------------------------------------------
+
+interface NavButtonProps {
+  item: NavItem;
+  active: boolean;
+  onSelect: (id: SectionId) => void;
+}
+
+function NavButton({ item, active, onSelect }: NavButtonProps) {
+  const [hover, setHover] = useState(false);
+
+  // Background + label color logic mirrors hf-pages.jsx L349:
+  // active  → tint background, accent-tinted label
+  // hover   → subtle elevation (panel-2)
+  // default → transparent / fg-2 label
+  const bg = active
+    ? 'var(--t-accent-tint)'
+    : hover
+      ? 'var(--t-panel-2)'
+      : 'transparent';
+  const labelColor = active ? 'var(--t-accent)' : 'var(--t-fg-2)';
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(item.id)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      aria-current={active ? 'page' : undefined}
+      style={{
+        position: 'relative',
+        display: 'flex',
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '7px 12px',     // L349 padding
+        borderRadius: 6,         // L349 borderRadius
+        marginBottom: 1,
+        fontSize: 12.5,          // L349 fontSize
+        fontWeight: active ? 700 : 500,  // L349 fontWeight
+        color: labelColor,
+        background: bg,
+        cursor: 'pointer',
+        border: 'none',
+        textAlign: 'left',
+        fontFamily: 'inherit',
+        transition: 'background 120ms ease-out, color 120ms ease-out',
+      }}
+    >
+      {/* 3px purple active bar — handoff L350 (left:-8, w:3, h:16) */}
+      {active && (
+        <span
+          style={{
+            position: 'absolute',
+            left: -8,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 3,
+            height: 16,
+            background: 'var(--t-accent)',
+            borderRadius: 2,
+          }}
+        />
+      )}
+      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {item.label}
+      </span>
+      {item.comingSoon && (
+        <span
+          className="hf-mono"
+          style={{
+            fontSize: 8.5,
+            fontWeight: 600,
+            color: 'var(--t-fg-5)',
+            letterSpacing: '.08em',
+            padding: '1px 5px',
+            border: '1px solid var(--t-border)',
+            borderRadius: 3,
+            background: 'var(--t-bg)',
+            flexShrink: 0,
+          }}
+        >
+          SOON
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export default function SettingsPage() {
+  const { language } = useI18n();
+  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
+  const NAV_GROUPS = useMemo(() => buildNavGroups(T), [language]);
+
+  const SECTION_LABEL = useMemo<Record<SectionId, string>>(
+    () =>
+      NAV_GROUPS.flatMap((g) => g.items).reduce<Record<SectionId, string>>(
+        (acc, item) => {
+          acc[item.id] = item.label;
+          return acc;
+        },
+        {} as Record<SectionId, string>,
+      ),
+    [NAV_GROUPS],
+  );
+
+  // Default = Wallet (matches the centered Wallet content in hf-pages.jsx L338).
+  // Persists via window.location.hash so refresh + deep links work.
+  const [activeSection, setActiveSection] = useState<SectionId>(() => {
+    return readHashSection() ?? DEFAULT_SECTION;
+  });
+
+  // Sync hash → state when user uses browser back/forward.
+  useEffect(() => {
+    function onHash() {
+      const next = readHashSection();
+      if (next && next !== activeSection) setActiveSection(next);
+    }
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, [activeSection]);
+
+  // Sync state → hash (only when changed by user; avoids writing on initial
+  // load if the hash already matches).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const current = window.location.hash.replace(/^#\/?/, '').trim();
+    if (current !== activeSection) {
+      // Use replaceState so it doesn't clutter history with every click.
+      const newUrl = `${window.location.pathname}${window.location.search}#${activeSection}`;
+      window.history.replaceState(null, '', newUrl);
+    }
+  }, [activeSection]);
+
+  return (
+    <>
+      <HfTopBar />
+
+      <div
+        style={{
+          flex: 1,
+          display: 'grid',
+          gridTemplateColumns: '240px 1fr',  // L339 — 240px nav + 1fr detail
+          minHeight: 0,
+        }}
+      >
+        {/* ── 240px settings nav ── (hf-pages.jsx L340) */}
+        <aside
+          style={{
+            borderRight: '1px solid var(--t-border)',  // L340
+            padding: '14px 8px',                       // L340
+            overflow: 'auto',
+            background: 'var(--t-panel)',              // L340
+          }}
+        >
+          {/* Title block — handoff L341-344 */}
+          <div style={{ padding: '4px 12px 12px' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--t-fg)' }}>
+              {T('设置', 'Settings')}
+            </div>
+            <div className="hf-meta">{T('设置 · ⌘ ,', 'Settings · ⌘ ,')}</div>
+          </div>
+
+          {NAV_GROUPS.map((g) => (
+            <div key={g.group} style={{ marginBottom: 10 }}>
+              {/* Group label — handoff L347 */}
+              <div className="hf-label" style={{ padding: '4px 12px 5px' }}>
+                {g.group}
+              </div>
+              {g.items.map((item) => (
+                <NavButton
+                  key={item.id}
+                  item={item}
+                  active={activeSection === item.id}
+                  onSelect={setActiveSection}
+                />
+              ))}
+            </div>
+          ))}
+        </aside>
+
+        {/* ── Right content ── (hf-pages.jsx L357 padding 24px 32px) */}
+        <div
+          style={{
+            padding: '24px 32px',
+            overflow: 'auto',
+            background: 'var(--t-bg)',
+          }}
+        >
+          {/* 账户 */}
+          {activeSection === 'welcome'   && <LegacySectionWrap><WelcomeSection /></LegacySectionWrap>}
+          {activeSection === 'about'     && <LegacySectionWrap><AboutSection /></LegacySectionWrap>}
+          {activeSection === 'billing'   && <ComingSoonSection label={SECTION_LABEL.billing} />}
+
+          {/* 外观 */}
+          {activeSection === 'appearance' && <LegacySectionWrap><AppearanceSection /></LegacySectionWrap>}
+          {activeSection === 'shortcuts'  && <ComingSoonSection label={SECTION_LABEL.shortcuts} />}
+          {activeSection === 'language'   && <LegacySectionWrap><LanguageSection /></LegacySectionWrap>}
+
+          {/* 集成 */}
+          {activeSection === 'agent-backend'     && <LegacySectionWrap><AgentBackendSection /></LegacySectionWrap>}
+          {activeSection === 'tool-providers'    && <LegacySectionWrap><ToolProvidersTab /></LegacySectionWrap>}
+          {activeSection === 'connectors'        && <LegacySectionWrap><ConnectorsSection /></LegacySectionWrap>}
+          {activeSection === 'mcp-integrations'  && <LegacySectionWrap><McpIntegrationsSection /></LegacySectionWrap>}
+
+          {/* 0G */}
+          {activeSection === 'wallet'  && <WalletSection />}
+          {activeSection === 'onchain' && <ComingSoonSection label={SECTION_LABEL.onchain} />}
+
+          {/* 数据 */}
+          {activeSection === 'notifications'    && <LegacySectionWrap><NotificationsSection /></LegacySectionWrap>}
+          {activeSection === 'advanced'         && <LegacySectionWrap><AdvancedSection /></LegacySectionWrap>}
+          {activeSection === 'media-providers'  && <LegacySectionWrap><MediaProvidersSection /></LegacySectionWrap>}
+          {activeSection === 'pet'              && <LegacySectionWrap><PetSettings /></LegacySectionWrap>}
+          {activeSection === 'workspace'        && <ComingSoonSection label={SECTION_LABEL.workspace} />}
+        </div>
+      </div>
+    </>
+  );
+}

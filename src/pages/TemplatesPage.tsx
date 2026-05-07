@@ -240,7 +240,6 @@ export default function TemplatesPage() {
   return (
     <>
       <HfTopBar
-        crumbs={['ShadowFlow', '论文实验室', 'Templates']}
         right={
           <button
             type="button"

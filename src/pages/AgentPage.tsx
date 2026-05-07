@@ -1,0 +1,823 @@
+/**
+ * AgentPage — Hi-Fi v2 redesign (Story 12.1, T3 Pages-B)
+ *
+ * UI PROTECTION: 只能加，不能删。所有原有功能必须保留：
+ *   - 列出 Agent (GET /api/agents)
+ *   - 删除 Agent
+ *   - 「+ Quick Hire」表单（取代旧的 CreateAgentModal）—— 保留快速创建路径
+ *   - 「自建」高级模式仍可通过 BlueprintModal 导入 (?import=...) 触发
+ *   - 空状态引导
+ *   - 删除错误提示
+ *   - Card click → /agent-dm/:agentId（按计划接入）；旧 /builder?agent_id 回退
+ *
+ * 视觉来源：/tmp/shadowflow-handoff/shadowflow/project/hf-pages.jsx HfAgents
+ *   1fr 左 grid (人才库 + 3-col cards) + 320px 右 Quick Hire 面板
+ */
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  listAgents,
+  deleteAgent,
+  quickCreateAgent,
+  AgentApiError,
+} from '../api/agents';
+import type { AgentRecord } from '../api/agents';
+import { BlueprintModal } from '../components/agents/BlueprintModal';
+import { HfTopBar, HfAvatar, HfPill } from '../components/hifi';
+
+// ---------------------------------------------------------------------------
+// Types & helpers
+// ---------------------------------------------------------------------------
+
+type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
+type FilterKey = 'all' | 'hired' | 'available' | 'community';
+
+// Map agent status → status badge color token (matches HfAtoms HfStatus)
+function statusColor(s: AgentRecord['status']): string {
+  if (s === 'running') return 'var(--t-run)';
+  if (s === 'paused') return 'var(--t-warn)';
+  if (s === 'error') return 'var(--t-err)';
+  return 'var(--t-ok)';
+}
+
+// Glyph for an agent — try first non-ASCII char of name, else first letter, else ✦
+function agentGlyph(name: string): string {
+  if (!name) return '✦';
+  // Find first CJK / unicode char
+  for (const ch of name) {
+    if (/[一-鿿]/.test(ch)) return ch;
+  }
+  return name.charAt(0).toUpperCase() || '✦';
+}
+
+// Color for an agent — derive from name hash → palette
+const PALETTE = [
+  'var(--t-accent)',
+  'var(--t-warn)',
+  'var(--t-run)',
+  'var(--t-ok)',
+  'var(--t-err)',
+];
+function agentColor(agent: AgentRecord): string {
+  const seed = (agent.agent_id || agent.name || 'x').charCodeAt(0) || 0;
+  return PALETTE[seed % PALETTE.length];
+}
+
+// Role label (mono caps) — try blueprint.role_profiles[0].role else source
+function agentRole(agent: AgentRecord): string {
+  const rp = (agent.blueprint as Record<string, unknown> | undefined)?.role_profiles;
+  if (Array.isArray(rp) && rp.length > 0) {
+    const first = rp[0] as Record<string, unknown>;
+    const role = (first.role as string) || (first.name as string);
+    if (typeof role === 'string' && role.length > 0) return role.toUpperCase();
+  }
+  return agent.source === 'catalog' ? 'CATALOG' : 'AGENT';
+}
+
+// Permission level label — derive from blueprint.policy or default L1
+function agentLevel(agent: AgentRecord): number {
+  const policy = (agent.blueprint as Record<string, unknown> | undefined)?.policy_level;
+  if (typeof policy === 'number') return Math.max(1, Math.min(3, policy));
+  // fallback: rotate through 1..3 by id hash for visual variety
+  const seed = (agent.agent_id || agent.name || 'x').charCodeAt(0) || 0;
+  return (seed % 3) + 1;
+}
+
+// ---------------------------------------------------------------------------
+// AgentPage — Hi-Fi v2
+// ---------------------------------------------------------------------------
+
+export function AgentPage() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Data
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
+  const [loadStatus, setLoadStatus] = useState<LoadStatus>('idle');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Quick Hire form state
+  const nameRef = useRef<HTMLInputElement>(null);
+  const [hireName, setHireName] = useState('');
+  const [hireRole, setHireRole] = useState('Reader');
+  const [hireSoul, setHireSoul] = useState('');
+  const [hireModel, setHireModel] = useState('claude-sonnet-4');
+  const [hireLevel, setHireLevel] = useState<'L1' | 'L2' | 'L3'>('L1');
+  const [hiring, setHiring] = useState(false);
+  const [hireError, setHireError] = useState<string | null>(null);
+  const [recent, setRecent] = useState<Array<{ time: string; text: string }>>([]);
+
+  // Filter chips
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Delete state
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Auto-open BlueprintModal if ?import= param is present (preserves D3 import flow)
+  const [pendingImport, setPendingImport] = useState(() => searchParams.get('import'));
+  useEffect(() => {
+    const importParam = searchParams.get('import');
+    if (importParam) setPendingImport(importParam);
+  }, [searchParams]);
+
+  // Fetch agents
+  const fetchAgents = useCallback(async () => {
+    setLoadStatus('loading');
+    setErrorMsg(null);
+    try {
+      const data = await listAgents();
+      setAgents(data);
+      setLoadStatus('success');
+    } catch (err) {
+      const msg = err instanceof AgentApiError
+        ? `加载失败（${err.status}）`
+        : '加载失败，请刷新重试';
+      setErrorMsg(msg);
+      setLoadStatus('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAgents();
+  }, [fetchAgents]);
+
+  // Filtered list
+  const visibleAgents = useMemo(() => {
+    let list = agents;
+    if (filter === 'hired') list = list.filter((a) => a.status !== 'idle' || a.source === 'catalog');
+    else if (filter === 'available') list = list.filter((a) => a.status === 'idle');
+    else if (filter === 'community') list = list.filter((a) => a.source === 'catalog');
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (a) =>
+          a.name.toLowerCase().includes(q) ||
+          a.soul.toLowerCase().includes(q) ||
+          agentRole(a).toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [agents, filter, search]);
+
+  // Hire submit
+  async function handleHire(e: React.FormEvent) {
+    e.preventDefault();
+    if (!hireName.trim() || !hireSoul.trim() || hiring) return;
+    setHiring(true);
+    setHireError(null);
+    try {
+      const agent = await quickCreateAgent({
+        name: hireName.trim(),
+        soul: hireSoul.trim(),
+      });
+      setAgents((prev) => [agent, ...prev]);
+      setRecent((prev) => [
+        { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), text: `${agent.name} hired` },
+        ...prev,
+      ].slice(0, 5));
+      // Clear form
+      setHireName('');
+      setHireSoul('');
+    } catch (err) {
+      if (err instanceof AgentApiError) {
+        setHireError(`创建失败（${err.status}）：${err.code}`);
+      } else {
+        setHireError('网络异常，请稍后重试');
+      }
+    } finally {
+      setHiring(false);
+    }
+  }
+
+  // Delete
+  async function handleDelete(agentId: string) {
+    setDeletingId(agentId);
+    setDeleteError(null);
+    try {
+      await deleteAgent(agentId);
+      setAgents((prev) => prev.filter((a) => a.agent_id !== agentId));
+    } catch (err) {
+      const msg = err instanceof AgentApiError ? `删除失败（${err.status}）` : '删除失败，请重试';
+      setDeleteError(msg);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  // Header "+ Quick Hire" → focus name input in panel
+  function focusQuickHire() {
+    nameRef.current?.focus();
+    nameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // BlueprintModal-imported agent join the list (preserves AC for D3)
+  function handleImported(agent: AgentRecord) {
+    setAgents((prev) => [agent, ...prev]);
+    setSearchParams((p) => { p.delete('import'); return p; });
+    setPendingImport(null);
+    setRecent((prev) => [
+      { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), text: `${agent.name} imported` },
+      ...prev,
+    ].slice(0, 5));
+  }
+
+  const counts = useMemo(() => {
+    const hired = agents.filter((a) => a.status !== 'idle' || a.source === 'catalog').length;
+    const community = agents.filter((a) => a.source === 'catalog').length;
+    return { hired, community };
+  }, [agents]);
+
+  return (
+    <>
+      <HfTopBar
+        right={
+          <button
+            type="button"
+            onClick={focusQuickHire}
+            className="hf-btn hf-btn-pri"
+            style={{ fontSize: 11 }}
+            data-testid="new-agent-btn"
+          >
+            + Quick Hire
+          </button>
+        }
+      />
+
+      <div
+        style={{
+          flex: 1,
+          display: 'grid',
+          gridTemplateColumns: '1fr 320px',
+          minHeight: 0,
+        }}
+      >
+        {/* ── Left grid: 人才库 ───────────────────────────────────────────── */}
+        <div style={{ padding: '18px 24px', overflow: 'auto' }}>
+          {/* Header row */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              marginBottom: 14,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span style={{ fontSize: 18, fontWeight: 800 }}>人才库</span>
+            <span className="hf-meta">
+              {counts.hired} hired · {counts.community} community
+            </span>
+            <div style={{ flex: 1 }} />
+            {([
+              ['all', '全部'],
+              ['hired', '已雇'],
+              ['available', '可雇'],
+              ['community', '社区 0G'],
+            ] as Array<[FilterKey, string]>).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setFilter(k)}
+                className={filter === k ? 'hf-chip hf-chip-acc' : 'hf-chip'}
+                style={{ fontSize: 10, cursor: 'pointer' }}
+                data-testid={`filter-${k}`}
+              >
+                {label}
+              </button>
+            ))}
+            {searchOpen ? (
+              <input
+                type="text"
+                value={search}
+                placeholder="搜索…"
+                onChange={(e) => setSearch(e.target.value)}
+                onBlur={() => { if (!search) setSearchOpen(false); }}
+                autoFocus
+                style={{
+                  fontSize: 10,
+                  padding: '3px 8px',
+                  borderRadius: 5,
+                  background: 'var(--t-panel-2)',
+                  color: 'var(--t-fg)',
+                  border: '1px solid var(--t-border)',
+                  outline: 'none',
+                  width: 120,
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="hf-chip"
+                style={{ fontSize: 10, cursor: 'pointer' }}
+                aria-label="搜索"
+              >
+                ⌕
+              </button>
+            )}
+          </div>
+
+          {/* Errors */}
+          {deleteError && (
+            <div
+              role="alert"
+              style={{
+                marginBottom: 12,
+                padding: '8px 12px',
+                fontSize: 12,
+                color: 'var(--t-err)',
+                background: 'color-mix(in oklab, var(--t-err) 10%, transparent)',
+                border: '1px solid color-mix(in oklab, var(--t-err) 35%, transparent)',
+                borderRadius: 8,
+              }}
+            >
+              {deleteError}
+              <button
+                type="button"
+                onClick={() => setDeleteError(null)}
+                style={{
+                  marginLeft: 10,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--t-err)',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                关闭
+              </button>
+            </div>
+          )}
+
+          {/* Loading */}
+          {loadStatus === 'loading' && (
+            <div className="hf-meta" style={{ padding: '40px 0', textAlign: 'center' }}>
+              加载中…
+            </div>
+          )}
+
+          {/* Load error */}
+          {loadStatus === 'error' && (
+            <div
+              role="alert"
+              style={{
+                padding: '12px 14px',
+                fontSize: 13,
+                color: 'var(--t-err)',
+                background: 'color-mix(in oklab, var(--t-err) 10%, transparent)',
+                border: '1px solid color-mix(in oklab, var(--t-err) 35%, transparent)',
+                borderRadius: 8,
+              }}
+            >
+              {errorMsg}
+              <button
+                type="button"
+                onClick={fetchAgents}
+                style={{
+                  marginLeft: 10,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--t-err)',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                重试
+              </button>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {loadStatus === 'success' && agents.length === 0 && (
+            <EmptyState onNewAgent={focusQuickHire} />
+          )}
+
+          {/* Filtered empty */}
+          {loadStatus === 'success' && agents.length > 0 && visibleAgents.length === 0 && (
+            <div
+              className="hf-meta"
+              style={{ padding: '40px 0', textAlign: 'center' }}
+            >
+              没有匹配的 Agent。
+            </div>
+          )}
+
+          {/* Card grid */}
+          {loadStatus === 'success' && visibleAgents.length > 0 && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                gap: 10,
+              }}
+              data-testid="agent-grid"
+            >
+              {visibleAgents.map((agent) => (
+                <AgentTile
+                  key={agent.agent_id}
+                  agent={agent}
+                  isDeleting={deletingId === agent.agent_id}
+                  onDelete={handleDelete}
+                  onOpen={() => navigate(`/agent-dm/${agent.agent_id}`)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Right panel: Quick Hire ─────────────────────────────────────── */}
+        <aside
+          style={{
+            borderLeft: '1px solid var(--t-border)',
+            padding: '16px 18px',
+            overflow: 'auto',
+            background: 'var(--t-panel)',
+          }}
+        >
+          <form onSubmit={handleHire}>
+            <div className="hf-label" style={{ color: 'var(--t-accent)', marginBottom: 8 }}>
+              QUICK HIRE · 30 秒招一个
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>
+              给名字 + 灵魂 → 上岗
+            </div>
+
+            <FormRow label="名字">
+              <input
+                ref={nameRef}
+                type="text"
+                value={hireName}
+                onChange={(e) => setHireName(e.target.value)}
+                placeholder="读读"
+                data-testid="hire-name"
+                style={inputStyle()}
+              />
+            </FormRow>
+
+            <FormRow label="角色">
+              <input
+                type="text"
+                value={hireRole}
+                onChange={(e) => setHireRole(e.target.value)}
+                placeholder="Reader"
+                style={inputStyle()}
+              />
+            </FormRow>
+
+            <FormRow label="灵魂" tall>
+              <textarea
+                value={hireSoul}
+                onChange={(e) => setHireSoul(e.target.value)}
+                placeholder="抓取/抽样长文本，按重要性排序，输出结构化摘要"
+                data-testid="hire-soul"
+                rows={3}
+                style={{ ...inputStyle(), minHeight: 56, resize: 'vertical', fontFamily: 'inherit' }}
+              />
+            </FormRow>
+
+            <FormRow label="模型">
+              <select
+                value={hireModel}
+                onChange={(e) => setHireModel(e.target.value)}
+                style={inputStyle()}
+              >
+                <option value="claude-sonnet-4">claude-sonnet-4</option>
+                <option value="claude-opus-4">claude-opus-4</option>
+                <option value="claude-haiku-4">claude-haiku-4</option>
+                <option value="gpt-5">gpt-5</option>
+                <option value="zhipu-glm-4">zhipu-glm-4</option>
+              </select>
+            </FormRow>
+
+            <FormRow label="权限 L">
+              <select
+                value={hireLevel}
+                onChange={(e) => setHireLevel(e.target.value as 'L1' | 'L2' | 'L3')}
+                style={inputStyle()}
+              >
+                <option value="L1">L1 · 只读</option>
+                <option value="L2">L2 · 工具</option>
+                <option value="L3">L3 · 外发（需审批）</option>
+              </select>
+            </FormRow>
+
+            {hireError && (
+              <div
+                role="alert"
+                style={{
+                  marginBottom: 10,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                  color: 'var(--t-err)',
+                  background: 'color-mix(in oklab, var(--t-err) 10%, transparent)',
+                  border: '1px solid color-mix(in oklab, var(--t-err) 35%, transparent)',
+                  borderRadius: 6,
+                }}
+              >
+                {hireError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={!hireName.trim() || !hireSoul.trim() || hiring}
+              className="hf-btn hf-btn-pri"
+              style={{
+                width: '100%',
+                justifyContent: 'center',
+                fontSize: 12,
+                padding: '9px 0',
+                opacity: !hireName.trim() || !hireSoul.trim() || hiring ? 0.5 : 1,
+                cursor: !hireName.trim() || !hireSoul.trim() || hiring ? 'not-allowed' : 'pointer',
+              }}
+              data-testid="hire-submit"
+            >
+              {hiring ? '上岗中…' : '✦ 上岗'}
+            </button>
+          </form>
+
+          {/* Recent hires */}
+          <div className="hf-label" style={{ marginTop: 18, marginBottom: 8 }}>
+            近期招聘
+          </div>
+          {recent.length === 0 ? (
+            <div className="hf-meta" style={{ fontSize: 10 }}>
+              还没有动作 — Quick Hire 一个试试。
+            </div>
+          ) : (
+            recent.map((r, i) => (
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '5px 0',
+                  fontSize: 11,
+                  color: 'var(--t-fg-3)',
+                }}
+              >
+                <span className="hf-meta">{r.time}</span>
+                <span>· {r.text}</span>
+              </div>
+            ))
+          )}
+        </aside>
+      </div>
+
+      {/* BlueprintModal — preserved for D3 import flow (?import=...) */}
+      {pendingImport && (
+        <BlueprintModal
+          agent={{
+            agent_id: '',
+            name: '',
+            soul: '',
+            workspace_id: '',
+            blueprint: {},
+            status: 'idle',
+            source: 'quick_hire',
+            created_at: '',
+          } as AgentRecord}
+          initialImport={pendingImport}
+          onClose={() => {
+            setPendingImport(null);
+            setSearchParams((p) => { p.delete('import'); return p; });
+          }}
+          onImported={handleImported}
+        />
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function inputStyle(): CSSProperties {
+  return {
+    width: '100%',
+    padding: '7px 10px',
+    minHeight: 32,
+    fontSize: 12.5,
+    color: 'var(--t-fg-2)',
+    background: 'var(--t-bg)',
+    border: '1px solid var(--t-border)',
+    borderRadius: 12,
+    outline: 'none',
+    boxSizing: 'border-box',
+  };
+}
+
+function FormRow({
+  label,
+  tall,
+  children,
+}: {
+  label: string;
+  tall?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div className="hf-label" style={{ fontSize: 9, marginBottom: 5 }}>
+        {label}
+      </div>
+      <div style={{ minHeight: tall ? 56 : 32 }}>{children}</div>
+    </div>
+  );
+}
+
+function EmptyState({ onNewAgent }: { onNewAgent: () => void }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 14,
+        padding: '60px 0',
+        textAlign: 'center',
+      }}
+    >
+      <div
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: 32,
+          border: '1px solid var(--t-border)',
+          background: 'var(--t-panel-2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 28,
+          color: 'var(--t-fg-3)',
+        }}
+      >
+        ✦
+      </div>
+      <div>
+        <p style={{ fontSize: 13, color: 'var(--t-fg-2)' }}>还没有 Agent。</p>
+        <p
+          className="hf-meta"
+          style={{ marginTop: 4, fontSize: 11, color: 'var(--t-fg-4)' }}
+        >
+          填一下右侧 Quick Hire — 给它一个名字 + 灵魂，就能开始工作。
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onNewAgent}
+        className="hf-btn hf-btn-pri"
+        style={{ fontSize: 11 }}
+        data-testid="empty-new-agent-btn"
+      >
+        + 新建 Agent
+      </button>
+    </div>
+  );
+}
+
+interface AgentTileProps {
+  agent: AgentRecord;
+  isDeleting: boolean;
+  onDelete: (id: string) => void;
+  onOpen: () => void;
+}
+
+function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
+  const [hover, setHover] = useState(false);
+  const role = agentRole(agent);
+  const glyph = agentGlyph(agent.name);
+  const color = agentColor(agent);
+  const level = agentLevel(agent);
+  const hired = agent.status !== 'idle' || agent.source === 'catalog';
+  const soulPreview =
+    agent.soul.length > 70 ? agent.soul.slice(0, 70) + '…' : agent.soul || '—';
+  const model =
+    ((agent.blueprint as Record<string, unknown> | undefined)?.model as string) ||
+    'sonnet-4';
+
+  function handleDeleteClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (window.confirm(`删除 ${agent.name}?`)) onDelete(agent.agent_id);
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="hf-card"
+      data-testid={`agent-card-${agent.agent_id}`}
+      style={{
+        position: 'relative',
+        padding: 14,
+        cursor: 'pointer',
+        opacity: isDeleting ? 0.4 : 1,
+        pointerEvents: isDeleting ? 'none' : 'auto',
+        borderColor: hover ? 'color-mix(in oklab, var(--t-accent) 50%, var(--t-border))' : 'var(--t-border)',
+        transition: 'border-color 160ms',
+      }}
+    >
+      {/* Top row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <HfAvatar
+          glyph={glyph}
+          color={color}
+          size={36}
+          status={agent.status === 'running' ? 'run' : undefined}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 13.5,
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {agent.name || '—'}
+          </div>
+          <div className="hf-mono" style={{ fontSize: 9.5, color: 'var(--t-fg-4)', marginTop: 2 }}>
+            {role}
+          </div>
+        </div>
+        {hired && <HfPill>已雇</HfPill>}
+        {!hired && agent.source === 'catalog' && <HfPill color="var(--t-run)">社区</HfPill>}
+      </div>
+
+      {/* Soul preview */}
+      <div
+        style={{
+          fontSize: 11.5,
+          color: 'var(--t-fg-3)',
+          marginBottom: 10,
+          minHeight: 30,
+          lineHeight: 1.5,
+        }}
+      >
+        {soulPreview}
+      </div>
+
+      {/* Chips + status */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className="hf-chip" style={{ fontSize: 9.5 }}>
+          {model}
+        </span>
+        <span className="hf-chip" style={{ fontSize: 9.5 }}>
+          L{level}
+        </span>
+        <span
+          className="hf-chip"
+          style={{ fontSize: 9.5, color: statusColor(agent.status) }}
+        >
+          ● {agent.status}
+        </span>
+        <div style={{ flex: 1 }} />
+        {hover && !isDeleting && (
+          <button
+            type="button"
+            onClick={handleDeleteClick}
+            aria-label="删除 Agent"
+            style={{
+              fontSize: 10,
+              padding: '2px 6px',
+              border: 'none',
+              borderRadius: 4,
+              background: 'transparent',
+              color: 'var(--t-fg-4)',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--t-err)';
+              (e.currentTarget as HTMLButtonElement).style.background =
+                'color-mix(in oklab, var(--t-err) 12%, transparent)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--t-fg-4)';
+              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            }}
+          >
+            删除
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default AgentPage;

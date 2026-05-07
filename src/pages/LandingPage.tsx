@@ -6,6 +6,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { useTheme } from '../components/hifi/useTheme';
 
 const GITHUB_URL = import.meta.env.VITE_GITHUB_URL || 'https://github.com/nicekate/ShadowFlow';
 
@@ -199,6 +200,55 @@ type Lang = 'EN' | 'CN';
 // these here so the map destructures stay TS-clean.
 type StatRow = { k: string; v: string; d: string; up?: boolean; mono?: boolean };
 type ProofRow = { k: string; v: string; d: string; grad?: boolean; mono?: boolean };
+
+// ============ Theme Toggle (Landing-styled) ============
+// Reuses the global useTheme hook so this button stays in sync with HfTopBar's
+// toggle and the Settings page. Sun = currently dark, click → light. Moon =
+// currently light, click → dark. "system" pref is treated as whatever the OS
+// currently resolves to.
+function LandingNavThemeToggle({ ariaLabel }: { ariaLabel: string }) {
+  const { theme, setTheme } = useTheme();
+  const [hover, setHover] = useState(false);
+
+  const resolvedDark =
+    theme === 'dark' ||
+    (theme === 'system' &&
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  return (
+    <button
+      type="button"
+      className="sf-btn sf-btn-ghost"
+      aria-label={ariaLabel}
+      title={ariaLabel}
+      onClick={() => void setTheme(resolvedDark ? 'light' : 'dark')}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: 34,
+        padding: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: hover ? 'var(--accent-bright)' : 'var(--fg-2)',
+        transition: 'color 140ms ease, background 140ms ease, border-color 140ms ease',
+      }}
+    >
+      {resolvedDark ? (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+        </svg>
+      ) : (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      )}
+    </button>
+  );
+}
 
 // ============ Ticker ============
 function Ticker({ t }: { t: typeof T.EN }) {
@@ -433,11 +483,12 @@ export default function LandingPage() {
       <div style={{ minHeight: '100vh', background: 'var(--bg)', overflowX: 'hidden' }}>
 
         {/* ====== TOP NAV ====== */}
-        <div style={{ height: 60, borderBottom: '1px solid var(--border)', background: 'rgba(10,10,10,.85)', backdropFilter: 'blur(14px)', display: 'flex', alignItems: 'center', gap: 28, padding: '0 32px', position: 'sticky', top: 0, zIndex: 50 }}>
+        {/* Background uses color-mix on --bg so day/night flip via useTheme works without losing the translucent blur. */}
+        <div style={{ height: 60, borderBottom: '1px solid var(--border)', background: 'color-mix(in srgb, var(--bg) 85%, transparent)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', display: 'flex', alignItems: 'center', gap: 28, padding: '0 32px', position: 'sticky', top: 0, zIndex: 50 }}>
           <div className="sf-logo">
             <div className="sf-logo-mark">S</div>
             <div className="sf-logo-word">ShadowFlow</div>
-            <span className="sf-chip" style={{ marginLeft: 8, background: 'var(--accent-tint)', color: 'var(--accent-bright)', borderColor: 'rgba(168,85,247,.35)' }}>0G-native</span>
+            <span className="sf-chip" style={{ marginLeft: 8, background: 'var(--accent-tint)', color: 'var(--accent-bright)', borderColor: 'color-mix(in srgb, var(--accent) 50%, transparent)' }}>0G-native</span>
           </div>
           <nav style={{ display: 'flex', gap: 22 }}>
             {t.nav.map((item) => (
@@ -468,6 +519,7 @@ export default function LandingPage() {
             <button className="sf-btn sf-btn-ghost" onClick={toggleLang}>
               {lang === 'EN' ? '中 / EN' : 'EN / 中'}
             </button>
+            <LandingNavThemeToggle ariaLabel={lang === 'EN' ? 'Toggle theme' : '切换主题'} />
             <button className="sf-btn sf-btn-ghost">{t.signIn}</button>
             <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="sf-btn sf-btn-ghost">GitHub ↗</a>
             <button className="sf-btn sf-btn-primary" onClick={openEditor}>{t.openEditor}</button>
