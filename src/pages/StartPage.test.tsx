@@ -1,79 +1,150 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
-import StartPage from './StartPage';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-// Mock GoalClarityWizard to avoid router-dependency in wizard
-vi.mock('../core/components/builder/GoalClarityWizard', () => ({
-  GoalClarityWizard: ({ onSkip }: { onSkip: () => void }) => (
-    <div data-testid="goal-clarity-wizard">
-      <button onClick={onSkip}>跳过</button>
-    </div>
-  ),
+// Mock catalog API
+vi.mock('../api/catalog', () => ({
+  listCatalogApps: vi.fn(),
 }));
 
-function renderStartPage(path = '/start') {
+// Mock useNavigate
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>();
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
+
+import { listCatalogApps } from '../api/catalog';
+import StartPage from './StartPage';
+
+function renderStartPage() {
   return render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter>
       <StartPage />
     </MemoryRouter>,
   );
 }
 
+function _mkApp(id: string, name: string, publishedAt: string) {
+  return {
+    app_id: id,
+    name,
+    goal: '',
+    kit_type: 'custom',
+    author: '',
+    published_at: publishedAt,
+    fork_count: 0,
+    forked_from: null,
+    template_id: '',
+    workflow_id: '',
+    blueprint_id: id,
+  };
+}
+
+function _appsResp(apps: ReturnType<typeof _mkApp>[]) {
+  return {
+    data: { apps },
+    meta: { total: apps.length, page: 1, page_size: 3, kit_type: 'all', q: '' },
+  };
+}
+
+function _emptyResp() {
+  return _appsResp([]);
+}
+
 describe('StartPage', () => {
-  it('renders the start page container', () => {
-    renderStartPage();
-    expect(screen.getByTestId('start-page')).toBeInTheDocument();
+  beforeEach(() => {
+    mockNavigate.mockReset();
+    vi.mocked(listCatalogApps).mockResolvedValue(_emptyResp());
   });
 
-  it('renders three primitive cards', () => {
+  it('renders the start page container', async () => {
     renderStartPage();
-    expect(screen.getByTestId('primitive-card-agent')).toBeInTheDocument();
+    expect(await screen.findByTestId('start-page')).toBeInTheDocument();
+  });
+
+  it('renders all three primitive cards', async () => {
+    renderStartPage();
+    expect(await screen.findByTestId('primitive-card-agent')).toBeInTheDocument();
     expect(screen.getByTestId('primitive-card-team')).toBeInTheDocument();
-    expect(screen.getByTestId('primitive-card-catalog')).toBeInTheDocument();
+    expect(screen.getByTestId('primitive-card-templates')).toBeInTheDocument();
   });
 
-  it('shows card titles', () => {
+  it('renders correct card titles', async () => {
     renderStartPage();
-    expect(screen.getByText('创建 Agent')).toBeInTheDocument();
-    expect(screen.getByText('创建 Team')).toBeInTheDocument();
+    expect(await screen.findByText('创建 Agent')).toBeInTheDocument();
+    expect(screen.getByText('创建 Agent Team')).toBeInTheDocument();
     expect(screen.getByText('从模板开始')).toBeInTheDocument();
   });
 
-  it('renders the wizard trigger button', () => {
+  it('clicking "创建 Agent" card navigates to /builder?mode=single', async () => {
+    const user = userEvent.setup();
     renderStartPage();
-    expect(screen.getByTestId('goal-clarity-wizard-trigger')).toBeInTheDocument();
+    const card = await screen.findByTestId('primitive-card-agent');
+    await user.click(card);
+    expect(mockNavigate).toHaveBeenCalledWith('/builder?mode=single');
   });
 
-  it('wizard is hidden by default', () => {
+  it('clicking "创建 Agent Team" card navigates to /builder?mode=team', async () => {
+    const user = userEvent.setup();
     renderStartPage();
-    expect(screen.queryByTestId('goal-clarity-wizard')).not.toBeInTheDocument();
+    const card = await screen.findByTestId('primitive-card-team');
+    await user.click(card);
+    expect(mockNavigate).toHaveBeenCalledWith('/builder?mode=team');
   });
 
-  it('clicking wizard trigger shows GoalClarityWizard', async () => {
+  it('clicking "从模板开始" card navigates to /templates', async () => {
+    const user = userEvent.setup();
     renderStartPage();
-    await userEvent.click(screen.getByTestId('goal-clarity-wizard-trigger'));
-    expect(screen.getByTestId('goal-clarity-wizard')).toBeInTheDocument();
+    const card = await screen.findByTestId('primitive-card-templates');
+    await user.click(card);
+    expect(mockNavigate).toHaveBeenCalledWith('/templates');
   });
 
-  it('wizard trigger is hidden when wizard is open', async () => {
+  it('shows empty state when no recent apps', async () => {
+    vi.mocked(listCatalogApps).mockResolvedValue(_emptyResp());
     renderStartPage();
-    await userEvent.click(screen.getByTestId('goal-clarity-wizard-trigger'));
-    expect(screen.queryByTestId('goal-clarity-wizard-trigger')).not.toBeInTheDocument();
+    expect(await screen.findByText('暂无最近记录')).toBeInTheDocument();
   });
 
-  it('wizard closes when onSkip is triggered', async () => {
+  it('shows empty state when catalog API fails', async () => {
+    vi.mocked(listCatalogApps).mockRejectedValue(new Error('network error'));
     renderStartPage();
-    await userEvent.click(screen.getByTestId('goal-clarity-wizard-trigger'));
-    expect(screen.getByTestId('goal-clarity-wizard')).toBeInTheDocument();
-    // Click the mocked skip button inside the wizard
-    await userEvent.click(screen.getByRole('button', { name: '跳过' }));
-    expect(screen.queryByTestId('goal-clarity-wizard')).not.toBeInTheDocument();
+    expect(await screen.findByText('暂无最近记录')).toBeInTheDocument();
   });
 
-  it('auto-opens wizard when ?wizard=1 in URL', () => {
-    renderStartPage('/start?wizard=1');
-    expect(screen.getByTestId('goal-clarity-wizard')).toBeInTheDocument();
+  it('logs warning when catalog API fails (Round-1 M2)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.mocked(listCatalogApps).mockRejectedValue(new Error('boom'));
+    renderStartPage();
+    await screen.findByText('暂无最近记录');
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[StartPage] listCatalogApps failed:',
+      expect.any(Error),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('shows recent apps list when data is available', async () => {
+    vi.mocked(listCatalogApps).mockResolvedValue(
+      _appsResp([
+        _mkApp('1', 'My Agent', '2026-04-01T00:00:00Z'),
+        _mkApp('2', 'Team Alpha', '2026-04-10T00:00:00Z'),
+      ]),
+    );
+    renderStartPage();
+    expect(await screen.findByText('My Agent')).toBeInTheDocument();
+    expect(screen.getByText('Team Alpha')).toBeInTheDocument();
+  });
+
+  it('calls listCatalogApps with page_size 3', async () => {
+    renderStartPage();
+    await waitFor(() => {
+      expect(listCatalogApps).toHaveBeenCalledWith({ page_size: 3 });
+    });
   });
 });

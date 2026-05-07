@@ -5,9 +5,11 @@ import { PreviewPane } from '@/core/components/inbox/PreviewPane';
 export default function InboxPage() {
   return (
     <div
-      className="flex h-screen flex-row overflow-hidden bg-shadowflow-bg text-white/90"
+      className="flex h-screen flex-row overflow-hidden"
       style={{
-        backgroundImage: 'radial-gradient(#21262D 1px, transparent 1px)',
+        background: 'var(--t-bg)',
+        color: 'var(--t-fg)',
+        backgroundImage: 'radial-gradient(var(--t-border) 1px, transparent 1px)',
         backgroundSize: '120px 120px',
       }}
     >

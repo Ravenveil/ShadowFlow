@@ -1,6 +1,10 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary } from './core/components/common/ErrorBoundary';
+import { HfLayout } from './components/hifi/HfLayout';
+// AppLayout is intentionally NOT imported here — application routes are
+// wrapped by HfLayout (Hi-Fi v2). The file `components/layout/AppLayout.tsx`
+// is kept on disk for fallback / unused.
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const InboxPage = lazy(() => import('./pages/InboxPage'));
@@ -8,10 +12,31 @@ const EditorPage = lazy(() => import('./pages/EditorPage'));
 const TemplatesPage = lazy(() => import('./pages/TemplatesPage'));
 const ImportPage = lazy(() => import('./pages/ImportPage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
+const AgentDMPage = lazy(() => import('./pages/AgentDMPage'));
+const BuilderPage = lazy(() => import('./pages/BuilderPage'));
+const CatalogPage = lazy(() => import('./pages/CatalogPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
+const EvalsPage = lazy(() => import('./pages/EvalsPage'));
+const AgentPage = lazy(() => import('./pages/AgentPage'));
+const TeamListPage = lazy(() =>
+  import('./pages/TeamPage').then((m) => ({ default: m.TeamListPage }))
+);
+const TeamDetailPage = lazy(() =>
+  import('./pages/TeamPage').then((m) => ({ default: m.TeamDetailPage }))
+);
 const StartPage = lazy(() => import('./pages/StartPage'));
-const MarketplacePage = lazy(() => import('./pages/MarketplacePage'));
+const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
+const RunsListPage = lazy(() =>
+  import('./pages/RunsPage').then((m) => ({ default: m.RunsListPage }))
+);
+const RunDetailPage = lazy(() =>
+  import('./pages/RunsPage').then((m) => ({ default: m.RunDetailPage }))
+);
 
-function RoutePlaceholder({ title }: { title: string }) {
+// Kept for future use — other routes may still need placeholder slots
+export function RoutePlaceholder({ title }: { title: string }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-shadowflow-bg px-6 text-white/90">
       <div className="w-full max-w-xl rounded-sf border border-shadowflow-border bg-shadowflow-surface p-8 text-center">
@@ -30,18 +55,35 @@ function RoutePlaceholder({ title }: { title: string }) {
 export function AppRoutes() {
   return (
     <ErrorBoundary>
-      <Suspense fallback={<div style={{ background: 'var(--bg)', height: '100vh' }} />}>
+      <Suspense fallback={<div style={{ background: 'var(--bg, #0D1117)', height: '100vh' }} />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/inbox" element={<InboxPage />} />
-          <Route path="/templates" element={<TemplatesPage />} />
-          <Route path="/import" element={<ImportPage />} />
-          <Route path="/editor" element={<EditorPage />} />
-          <Route path="/editor/:templateId" element={<EditorPage />} />
-          <Route path="/runs/:runId" element={<RoutePlaceholder title="Run Preview" />} />
-          <Route path="/marketplace" element={<MarketplacePage />} />
+          {/* ── Marketing / standalone pages (no workspace bar) ── */}
           <Route path="/about" element={<AboutPage />} />
-          <Route path="/start" element={<StartPage />} />
+
+          {/* ── Application pages (Hi-Fi v2 chrome: HfLayout sidebar shell) ── */}
+          <Route element={<HfLayout />}>
+            <Route path="/inbox" element={<InboxPage />} />
+            <Route path="/templates" element={<TemplatesPage />} />
+            <Route path="/import" element={<ImportPage />} />
+            <Route path="/editor" element={<EditorPage />} />
+            <Route path="/editor/:templateId" element={<EditorPage />} />
+            <Route path="/runs" element={<RunsListPage />} />
+            <Route path="/runs/:runId" element={<RunDetailPage />} />
+            <Route path="/chat/:groupId" element={<ChatPage />} />
+            <Route path="/agent-dm/:agentId" element={<AgentDMPage />} />
+            <Route path="/builder" element={<BuilderPage />} />
+            <Route path="/catalog" element={<CatalogPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/knowledge" element={<KnowledgePage />} />
+            <Route path="/evals" element={<EvalsPage />} />
+            <Route path="/agents" element={<AgentPage />} />
+            <Route path="/teams" element={<TeamListPage />} />
+            <Route path="/teams/:teamId" element={<TeamDetailPage />} />
+            <Route path="/start" element={<StartPage />} />
+          </Route>
+          {/* ── FB-HiFi Workspace (standalone chrome, no AppLayout) ── */}
+          <Route path="/workspace" element={<WorkspacePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

@@ -1,6 +1,6 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, useNavigate } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { GoalClarityWizard, inferIntents } from './GoalClarityWizard';
 
@@ -209,6 +209,69 @@ describe('GoalClarityWizard', () => {
       renderWizard(onSkip);
       await userEvent.click(screen.getByTestId('wizard-skip-btn'));
       expect(sessionStorage.getItem('sf_wizard_state')).toBeNull();
+    });
+  });
+
+  // ── Story 13-4 H2 — persistence + restore-on-mount ────────────────────────
+  describe('persistence (H2)', () => {
+    it('persists goal/intents/step to sessionStorage on every keystroke (Step 1)', async () => {
+      renderWizard();
+      const textarea = screen.getByTestId('wizard-goal-input');
+      await userEvent.type(textarea, '研究市场');
+
+      const stored = sessionStorage.getItem('sf_wizard_state');
+      expect(stored).not.toBeNull();
+      const parsed = JSON.parse(stored!);
+      expect(parsed.goal).toBe('研究市场');
+      expect(parsed.step).toBe(1);
+      expect(parsed.intents).toEqual(expect.arrayContaining(['research']));
+    });
+
+    it('restores {goal, intents, step} from sessionStorage on mount', () => {
+      sessionStorage.setItem(
+        'sf_wizard_state',
+        JSON.stringify({ goal: '恢复目标', intents: ['research', 'writing'], step: 2 }),
+      );
+      renderWizard();
+      // Step 2 should be active (restored)
+      expect(screen.getByTestId('wizard-step-2')).toBeInTheDocument();
+      // Going back to Step 1 should show the restored goal
+    });
+
+    it('restores goal text into textarea on mount when step=1', () => {
+      sessionStorage.setItem(
+        'sf_wizard_state',
+        JSON.stringify({ goal: '草稿目标', intents: ['other'], step: 1 }),
+      );
+      renderWizard();
+      const textarea = screen.getByTestId('wizard-goal-input') as HTMLTextAreaElement;
+      expect(textarea.value).toBe('草稿目标');
+    });
+  });
+
+  // ── Story 13-4 H3 — back navigation Step 2 → Step 1 ───────────────────────
+  describe('back navigation (H3)', () => {
+    it('Step 2 has a back button that returns to Step 1 with state preserved', async () => {
+      renderWizard();
+      await userEvent.type(screen.getByTestId('wizard-goal-input'), '写一份研究报告');
+      await userEvent.click(screen.getByTestId('wizard-next-btn'));
+      expect(screen.getByTestId('wizard-step-2')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByTestId('wizard-back-btn'));
+      expect(screen.getByTestId('wizard-step-1')).toBeInTheDocument();
+
+      const textarea = screen.getByTestId('wizard-goal-input') as HTMLTextAreaElement;
+      expect(textarea.value).toBe('写一份研究报告');
+    });
+
+    it('clicking step indicator dot 1 from Step 2 returns to Step 1', async () => {
+      renderWizard();
+      await userEvent.type(screen.getByTestId('wizard-goal-input'), '需要分析数据');
+      await userEvent.click(screen.getByTestId('wizard-next-btn'));
+      expect(screen.getByTestId('wizard-step-2')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByTestId('wizard-step-dot-1'));
+      expect(screen.getByTestId('wizard-step-1')).toBeInTheDocument();
     });
   });
 });

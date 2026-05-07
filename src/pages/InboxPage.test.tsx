@@ -6,7 +6,7 @@ import InboxPage from './InboxPage';
 
 describe('InboxPage', () => {
   it('renders the three-column inbox shell', () => {
-    render(<InboxPage />);
+    render(<MemoryRouter><InboxPage /></MemoryRouter>);
 
     expect(screen.getByTestId('narrow-nav')).toBeInTheDocument();
     expect(screen.getByTestId('message-list')).toBeInTheDocument();

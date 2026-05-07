@@ -7,6 +7,7 @@ import OnChainEvidence from '../core/components/about/OnChainEvidence';
 import RoadmapTimeline from '../core/components/about/RoadmapTimeline';
 import AcademicCitations from '../core/components/about/AcademicCitations';
 import QuadrantChart from '../core/components/landing/QuadrantChart';
+import { useI18n } from '../common/i18n';
 
 type AnchorId = 'differentiation' | 'onchain' | 'roadmap';
 
@@ -29,6 +30,251 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
     <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white/95 mb-2">
       {children}
     </h2>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// WalletStatsPanel — additive section beneath OnChainEvidence on /about.
+// Visual blueprint: handoff `hf-pages.jsx` HfSettings (Wallet card · KPI grid ·
+// activity table). Token-only, i18n inline. No new deps / store / API.
+// ────────────────────────────────────────────────────────────────────────────
+
+function WalletStatsPanel() {
+  const { language } = useI18n();
+  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
+
+  const stats: Array<[string, string, string]> = [
+    [T('TEAMS PUBLISHED', 'TEAMS PUBLISHED'), '3', T('含 1 个 fork', '1 fork incl.')],
+    [T('CIDS HELD', 'CIDS HELD'), '12', T('引用别人 team', 'team refs')],
+    [T('GAS BUDGET', 'GAS BUDGET'), '0.42 OG', T('本月剩余', 'remaining mo.')],
+    [T('CITATIONS', 'CITATIONS'), '7', T('被人 fork', 'forked by others')],
+  ];
+
+  const rows: Array<[string, string, string, string, 'ok' | 'warn']> = [
+    ['09:14', 'team.publish', T('论文深读小队', 'PaperLab Squad'), 'cid://Qm…3bx2a', 'ok'],
+    [T('昨日', 'yesterday'), 'team.fork', T('from Newsroom', 'from Newsroom'), 'cid://Qm…f0d12', 'ok'],
+    [T('昨日', 'yesterday'), 'team.update', T('Rebuttal 起草', 'Rebuttal Drafting'), 'cid://Qm…99cda', 'warn'],
+  ];
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <p
+        className="font-mono"
+        style={{
+          fontSize: 10,
+          letterSpacing: '0.18em',
+          color: 'var(--t-accent)',
+          textTransform: 'uppercase',
+          marginBottom: 6,
+        }}
+      >
+        ✦ 0G · WALLET
+      </p>
+      <h3
+        style={{
+          fontSize: 18,
+          fontWeight: 700,
+          letterSpacing: '-0.02em',
+          color: 'var(--t-fg, var(--fg-1))',
+          marginBottom: 14,
+        }}
+      >
+        {T('链上钱包 · on-chain team CID', 'On-chain wallet · team CID')}
+      </h3>
+
+      {/* Wallet card */}
+      <div
+        style={{
+          padding: 14,
+          borderRadius: 10,
+          background: 'var(--t-panel, var(--bg-elev-1))',
+          border: '1px solid var(--t-border, var(--border))',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          marginBottom: 14,
+        }}
+      >
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            background: 'var(--t-accent-tint, var(--accent-tint))',
+            color: 'var(--t-accent, var(--accent))',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 18,
+            flexShrink: 0,
+          }}
+        >
+          ✦
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--t-fg, var(--fg-1))' }}>
+              {T('0G Galileo Testnet', '0G Galileo Testnet')}
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                padding: '2px 7px',
+                borderRadius: 5,
+                background: 'color-mix(in oklab, var(--t-ok, #10B981) 16%, transparent)',
+                border: '1px solid color-mix(in oklab, var(--t-ok, #10B981) 35%, transparent)',
+                color: 'var(--t-ok, #10B981)',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              ● connected
+            </span>
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: 'var(--t-fg-3, var(--fg-3))',
+              marginTop: 4,
+            }}
+          >
+            0x3f7a · 4d12 · ab98 · bc91
+          </div>
+        </div>
+      </div>
+
+      {/* KPI grid */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gap: 10,
+          marginBottom: 14,
+        }}
+      >
+        {stats.map(([k, v, s]) => (
+          <div
+            key={k}
+            style={{
+              padding: '12px 14px',
+              borderRadius: 10,
+              background: 'var(--t-panel, var(--bg-elev-1))',
+              border: '1px solid var(--t-border, var(--border))',
+            }}
+          >
+            <div
+              className="font-mono"
+              style={{
+                fontSize: 9,
+                letterSpacing: '0.08em',
+                color: 'var(--t-fg-4, var(--fg-4))',
+                marginBottom: 6,
+                textTransform: 'uppercase',
+              }}
+            >
+              {k}
+            </div>
+            <div
+              style={{
+                fontSize: 22,
+                fontWeight: 800,
+                letterSpacing: '-0.02em',
+                color: 'var(--t-fg, var(--fg-1))',
+              }}
+            >
+              {v}
+            </div>
+            <div
+              style={{
+                fontSize: 10,
+                color: 'var(--t-fg-4, var(--fg-4))',
+                marginTop: 3,
+              }}
+            >
+              {s}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Activity table */}
+      <p
+        className="font-mono"
+        style={{
+          fontSize: 9,
+          letterSpacing: '0.12em',
+          color: 'var(--t-fg-4, var(--fg-4))',
+          textTransform: 'uppercase',
+          marginBottom: 8,
+        }}
+      >
+        {T('最近上链 · ACTIVITY', 'recent on-chain · ACTIVITY')}
+      </p>
+      <div
+        style={{
+          padding: '4px 0',
+          borderRadius: 10,
+          background: 'var(--t-panel, var(--bg-elev-1))',
+          border: '1px solid var(--t-border, var(--border))',
+        }}
+      >
+        {rows.map((r, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '70px 130px 1fr 180px 80px',
+              padding: '10px 16px',
+              alignItems: 'center',
+              gap: 14,
+              borderTop: i > 0 ? '1px dashed var(--t-border, var(--border))' : 'none',
+            }}
+          >
+            <span style={{ fontSize: 10.5, color: 'var(--t-fg-4, var(--fg-4))' }}>{r[0]}</span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                color: 'var(--t-accent, var(--accent))',
+              }}
+            >
+              {r[1]}
+            </span>
+            <span style={{ fontSize: 12.5, color: 'var(--t-fg, var(--fg-1))' }}>{r[2]}</span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--t-fg-4, var(--fg-4))',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {r[3]}
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                padding: '2px 7px',
+                borderRadius: 5,
+                textAlign: 'center',
+                background: `color-mix(in oklab, var(--t-${r[4]}) 16%, transparent)`,
+                border: `1px solid color-mix(in oklab, var(--t-${r[4]}) 35%, transparent)`,
+                color: `var(--t-${r[4]})`,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              ● {r[4]}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -192,6 +438,10 @@ export default function AboutPage() {
           </p>
 
           <OnChainEvidence />
+
+          {/* WalletStatsPanel — handoff `hf-pages.jsx` HfSettings lines 358-400.
+              4 KPI cards + recent on-chain activity table. Pure UI, additive. */}
+          <WalletStatsPanel />
         </section>
 
         {/* ──────────────────────────────── DIVIDER ──────────────────────────────── */}

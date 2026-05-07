@@ -93,13 +93,25 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
-  background: #0D1117;
-  color: rgba(255, 255, 255, 0.9);
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Theme-aware root surface lives on <html> only — useTheme writes
+   data-theme to documentElement, and this is the lowest-cost place
+   to flip background/foreground for the whole app (legacy pages
+   included). <body> stays transparent so it never masks <html>. */
+html {
+  background: var(--t-bg, #FAFAF7);
+  color: var(--t-fg, #0A0A0A);
+  transition: background-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+}
+body {
+  background: transparent;
+  color: inherit;
 }
 
 button { font-family: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
@@ -289,3 +301,273 @@ input, textarea, select { font-family: inherit; color: inherit; }
 /* Utility */
 .truncate     { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ============================================================================
+ * Hi-Fi v2 Design System (HF) — Day + Night theme tokens
+ * Coexists with the legacy --sf-* tokens above. Components opt-in by either
+ * (a) being mounted under [data-theme="day"|"night"] (set by useTheme hook on
+ * the documentElement) and (b) using `var(--t-*)` token references.
+ * ============================================================================ */
+
+:root,
+[data-theme="night"] {
+  --t-bg:        #0A0A0A;
+  --t-panel:     #0F0F12;
+  --t-panel-2:   #141418;
+  --t-panel-3:   #1A1A1F;
+  --t-fg:        #FAFAFA;
+  --t-fg-2:      #E4E4E7;
+  --t-fg-3:      #A1A1AA;
+  --t-fg-4:      #71717A;
+  --t-fg-5:      #52525B;
+  --t-fg-6:      #3F3F46;
+  --t-border:    #27272A;
+  --t-border-2:  #3F3F46;
+  --t-accent:    #A855F7;
+  --t-accent-bright: #D8B4FE;
+  --t-accent-tint: rgba(168,85,247,.14);
+  --t-accent-ink: #0A0A0A;
+  --t-ok:        #10B981;
+  --t-warn:      #F59E0B;
+  --t-err:       #EF4444;
+  --t-run:       #3B82F6;
+  --t-gated:     #22D3EE;
+  --t-dot:       rgba(255,255,255,.06);
+}
+
+[data-theme="day"] {
+  --t-bg:        #FAFAF7;
+  --t-panel:     #FFFFFF;
+  --t-panel-2:   #F4F3EE;
+  --t-panel-3:   #EDEBE3;
+  --t-fg:        #0A0A0A;
+  --t-fg-2:      #1F1F23;
+  --t-fg-3:      #52525B;
+  --t-fg-4:      #71717A;
+  --t-fg-5:      #A1A1AA;
+  --t-fg-6:      #D4D4D8;
+  --t-border:    #E4E2D8;
+  --t-border-2:  #C8C5B7;
+  --t-accent:    #7C3AED;
+  --t-accent-bright: #6D28D9;
+  --t-accent-tint: rgba(124,58,237,.10);
+  --t-accent-ink: #FFFFFF;
+  --t-ok:        #047857;
+  --t-warn:      #B45309;
+  --t-err:       #B91C1C;
+  --t-run:       #1D4ED8;
+  --t-gated:     #0E7490;
+  --t-dot:       rgba(0,0,0,.07);
+
+  /* Legacy --skin-* / --bg-* / --fg-* / --accent-* day overrides
+     so components using these older token names also flip on theme switch. */
+  --skin-bg:         #FAFAF7;
+  --skin-panel:      #FFFFFF;
+  --skin-fg:         #0A0A0A;
+  --skin-muted:      #52525B;
+  --skin-accent:     #7C3AED;
+  --skin-accent-ink: #FFFFFF;
+  --skin-border:     #E4E2D8;
+
+  --bg-elev-1:       #FFFFFF;
+  --bg-elev-2:       #F4F3EE;
+  --bg-elev-3:       #EDEBE3;
+  --bg-elev-4:       #E4E2D8;
+  --bg-node:         #FFFFFF;
+  --bg-accent-tint:  rgba(124,58,237,.08);
+
+  --fg-0:            #000000;
+  --fg-2:            #1F1F23;
+  --fg-4:            #71717A;
+  --fg-5:            #A1A1AA;
+  --fg-6:            #D4D4D8;
+
+  --border-strong:   #C8C5B7;
+  --border-subtle:   #EDEBE3;
+
+  --accent-dim:      #5B21B6;
+  --accent-bright:   #6D28D9;
+
+  --status-reject-tint: #FEE2E2;
+  --status-ok-tint:     #D1FAE5;
+  --status-warn-tint:   #FEF3C7;
+  --status-run-tint:    #DBEAFE;
+
+  --shadow-pop:  0 0 0 1px rgba(124,58,237,.30), 0 8px 24px -8px rgba(124,58,237,.30);
+  --shadow-card: 0 1px 2px rgba(0,0,0,.08);
+  --shadow-hud:  0 10px 30px -10px rgba(0,0,0,.18);
+  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(124,58,237,.35);
+}
+
+/* ============================================================================
+ * Day-theme overrides for legacy Tailwind dark utility classes
+ *
+ * 50+ legacy components use `bg-shadowflow-bg`, `bg-zinc-900`, `text-white/90`
+ * and similar fixed-dark Tailwind classes from before the day theme existed.
+ * Migrating each one to theme-aware tokens is a long road; meanwhile these
+ * rules transparently flip them when the user is on day theme so the page
+ * actually looks light. Order matters: rules below need to come AFTER the
+ * `[data-theme="day"]` token definitions so var() lookups resolve to day
+ * values.
+ * ========================================================================= */
+
+[data-theme="day"] .bg-shadowflow-bg       { background-color: var(--t-bg) !important; }
+[data-theme="day"] .bg-shadowflow-surface  { background-color: var(--t-panel) !important; }
+[data-theme="day"] .bg-shadowflow-border   { background-color: var(--t-border) !important; }
+[data-theme="day"] .border-shadowflow-bg     { border-color: var(--t-border) !important; }
+[data-theme="day"] .border-shadowflow-surface{ border-color: var(--t-border) !important; }
+[data-theme="day"] .border-shadowflow-border{ border-color: var(--t-border) !important; }
+[data-theme="day"] .text-shadowflow-muted  { color: var(--t-fg-3) !important; }
+[data-theme="day"] .text-shadowflow-accent { color: var(--t-accent) !important; }
+
+[data-theme="day"] .bg-sf-bg     { background-color: var(--t-bg) !important; }
+[data-theme="day"] .bg-sf-panel  { background-color: var(--t-panel) !important; }
+[data-theme="day"] .bg-sf-elev1, [data-theme="day"] .bg-sf-elev-1 { background-color: var(--t-panel) !important; }
+[data-theme="day"] .bg-sf-elev2, [data-theme="day"] .bg-sf-elev-2 { background-color: var(--t-panel-2) !important; }
+[data-theme="day"] .bg-sf-elev3, [data-theme="day"] .bg-sf-elev-3 { background-color: var(--t-panel-3) !important; }
+[data-theme="day"] .bg-sf-elev4, [data-theme="day"] .bg-sf-elev-4 { background-color: var(--t-panel-3) !important; }
+[data-theme="day"] .bg-sf-border { background-color: var(--t-border) !important; }
+[data-theme="day"] .border-sf-border { border-color: var(--t-border) !important; }
+[data-theme="day"] .text-sf-fg0,
+[data-theme="day"] .text-sf-fg1 { color: var(--t-fg) !important; }
+[data-theme="day"] .text-sf-fg2 { color: var(--t-fg-2) !important; }
+[data-theme="day"] .text-sf-fg3 { color: var(--t-fg-3) !important; }
+[data-theme="day"] .text-sf-fg4 { color: var(--t-fg-4) !important; }
+[data-theme="day"] .text-sf-fg5 { color: var(--t-fg-5) !important; }
+[data-theme="day"] .text-sf-fg6 { color: var(--t-fg-6) !important; }
+[data-theme="day"] .bg-sf-accent       { background-color: var(--t-accent) !important; color: var(--t-accent-ink) !important; }
+[data-theme="day"] .text-sf-accent     { color: var(--t-accent) !important; }
+[data-theme="day"] .border-sf-accent   { border-color: var(--t-accent) !important; }
+[data-theme="day"] .bg-sf-accent-tint  { background-color: var(--t-accent-tint) !important; }
+
+/* Generic Tailwind grayscale → flip to readable light-mode equivalents.
+   Only the deep-dark shades; mid-grays (bg-gray-500 etc.) stay as-is so
+   on-purpose neutral chrome doesn't get clobbered. */
+[data-theme="day"] .bg-black            { background-color: var(--t-bg) !important; }
+[data-theme="day"] .bg-zinc-950,
+[data-theme="day"] .bg-neutral-950,
+[data-theme="day"] .bg-gray-950         { background-color: var(--t-bg) !important; }
+[data-theme="day"] .bg-zinc-900,
+[data-theme="day"] .bg-neutral-900,
+[data-theme="day"] .bg-gray-900         { background-color: var(--t-panel) !important; }
+[data-theme="day"] .bg-zinc-800,
+[data-theme="day"] .bg-neutral-800,
+[data-theme="day"] .bg-gray-800         { background-color: var(--t-panel-2) !important; }
+[data-theme="day"] .bg-zinc-700,
+[data-theme="day"] .bg-neutral-700,
+[data-theme="day"] .bg-gray-700         { background-color: var(--t-panel-3) !important; }
+[data-theme="day"] .border-zinc-800,
+[data-theme="day"] .border-neutral-800,
+[data-theme="day"] .border-gray-800,
+[data-theme="day"] .border-zinc-700,
+[data-theme="day"] .border-neutral-700,
+[data-theme="day"] .border-gray-700     { border-color: var(--t-border) !important; }
+
+[data-theme="day"] .text-white,
+[data-theme="day"] [class*="text-white/"] { color: var(--t-fg) !important; }
+[data-theme="day"] .text-zinc-100,
+[data-theme="day"] .text-neutral-100,
+[data-theme="day"] .text-gray-100,
+[data-theme="day"] .text-zinc-200,
+[data-theme="day"] .text-neutral-200,
+[data-theme="day"] .text-gray-200       { color: var(--t-fg) !important; }
+[data-theme="day"] .text-zinc-300,
+[data-theme="day"] .text-neutral-300,
+[data-theme="day"] .text-gray-300       { color: var(--t-fg-2) !important; }
+[data-theme="day"] .text-zinc-400,
+[data-theme="day"] .text-neutral-400,
+[data-theme="day"] .text-gray-400       { color: var(--t-fg-3) !important; }
+[data-theme="day"] .text-zinc-500,
+[data-theme="day"] .text-neutral-500,
+[data-theme="day"] .text-gray-500       { color: var(--t-fg-4) !important; }
+
+/* Tailwind purple-* day-theme harmonization (continued from earlier) */
+[data-theme="day"] .text-purple-300,
+[data-theme="day"] .text-purple-400,
+[data-theme="day"] .text-purple-500    { color: var(--t-accent) !important; }
+[data-theme="day"] .text-purple-600,
+[data-theme="day"] .text-purple-700,
+[data-theme="day"] .text-purple-800,
+[data-theme="day"] .text-purple-900    { color: var(--t-accent-bright) !important; }
+[data-theme="day"] .bg-purple-500,
+[data-theme="day"] .bg-purple-600,
+[data-theme="day"] .bg-purple-700      { background-color: var(--t-accent) !important; color: var(--t-accent-ink) !important; }
+[data-theme="day"] .bg-purple-100,
+[data-theme="day"] .bg-purple-200,
+[data-theme="day"] .bg-purple-300,
+[data-theme="day"] .bg-purple-400      { background-color: var(--t-accent-tint) !important; color: var(--t-accent) !important; }
+[data-theme="day"] .bg-purple-800,
+[data-theme="day"] .bg-purple-900,
+[data-theme="day"] .bg-purple-950      { background-color: var(--t-accent-tint) !important; color: var(--t-accent-bright) !important; }
+[data-theme="day"] .border-purple-200,
+[data-theme="day"] .border-purple-300,
+[data-theme="day"] .border-purple-400,
+[data-theme="day"] .border-purple-500,
+[data-theme="day"] .border-purple-600,
+[data-theme="day"] .border-purple-700,
+[data-theme="day"] .border-purple-800,
+[data-theme="day"] .border-purple-900  { border-color: var(--t-accent) !important; }
+[data-theme="day"] .ring-purple-300,
+[data-theme="day"] .ring-purple-400,
+[data-theme="day"] .ring-purple-500,
+[data-theme="day"] .ring-purple-600,
+[data-theme="day"] .ring-purple-700    { --tw-ring-color: var(--t-accent) !important; }
+[data-theme="day"] .from-purple-300,
+[data-theme="day"] .from-purple-400,
+[data-theme="day"] .from-purple-500,
+[data-theme="day"] .from-purple-600,
+[data-theme="day"] .from-purple-700    { --tw-gradient-from: var(--t-accent) !important; }
+[data-theme="day"] .to-purple-300,
+[data-theme="day"] .to-purple-400,
+[data-theme="day"] .to-purple-500,
+[data-theme="day"] .to-purple-600,
+[data-theme="day"] .to-purple-700      { --tw-gradient-to: var(--t-accent) !important; }
+[data-theme="day"] .via-purple-400,
+[data-theme="day"] .via-purple-500,
+[data-theme="day"] .via-purple-600     { --tw-gradient-via: var(--t-accent) !important; }
+
+.hf-root {
+  background: var(--t-bg);
+  color: var(--t-fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.hf-mono  { font-family: var(--font-mono); }
+.hf-label { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--t-fg-4); }
+.hf-meta  { font-family: var(--font-mono); font-size: 10px; color: var(--t-fg-4); }
+.hf-card  { background: var(--t-panel); border: 1px solid var(--t-border); border-radius: 12px; }
+.hf-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 9px; border-radius: 6px;
+  background: var(--t-panel-2); border: 1px solid var(--t-border);
+  font-size: 11px; color: var(--t-fg-2);
+}
+.hf-chip-acc {
+  background: var(--t-accent-tint);
+  border-color: color-mix(in oklab, var(--t-accent) 35%, transparent);
+  color: var(--t-accent);
+}
+.hf-kbd {
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 600;
+  padding: 1px 5px; border: 1px solid var(--t-border); border-radius: 3px;
+  color: var(--t-fg-3); background: var(--t-panel);
+}
+.hf-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 8px;
+  background: var(--t-panel); border: 1px solid var(--t-border);
+  color: var(--t-fg-2); font-size: 12px; cursor: pointer;
+}
+.hf-btn-pri {
+  background: var(--t-accent); color: var(--t-accent-ink); border-color: var(--t-accent);
+  font-weight: 700;
+}
+.hf-dotgrid {
+  background-image: radial-gradient(circle, var(--t-dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+@keyframes hf-pulse  { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+@keyframes hf-cursor { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes hf-dash   { to { stroke-dashoffset: -16; } }
