@@ -27,14 +27,23 @@ import {
   MessageCircle,
   Workflow,
   BookOpen,
-  Target,
   Paperclip,
   Link2,
   Hash,
   Clipboard,
   History,
+  Download,
+  ArrowRight,
+  Play,
+  Pause,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { listCatalogApps } from '../api/catalog';
+import { listPacks } from '../api/knowledge';
+import type { KnowledgePack } from '../common/types/knowledge';
+import { listRuns } from '../api/runs';
+import type { RunSummary } from '../api/runs';
 import type { CatalogAppSummary } from '../common/types/catalog';
 import { GoalClarityWizard } from '../core/components/builder/GoalClarityWizard';
 import { HfTopBar } from '../components/hifi';
@@ -440,6 +449,97 @@ function PrimitiveCard({ testId, glyph, title, description, onClick }: Primitive
 }
 
 // ---------------------------------------------------------------------------
+// RecentRuns — 2-col grid showing last few runs (from Wireframe v2 design)
+// ---------------------------------------------------------------------------
+
+const RUN_STATUS_META: Record<string, { label: string; color: string; Icon: typeof Play }> = {
+  running:         { label: 'running',   color: '#22c55e', Icon: Play },
+  paused:          { label: 'paused',    color: '#f59e0b', Icon: Pause },
+  waiting_user:    { label: 'waiting',   color: '#f59e0b', Icon: Pause },
+  awaiting_approval:{ label: 'approval', color: '#f59e0b', Icon: Pause },
+  succeeded:       { label: 'done',      color: '#6b7280', Icon: CheckCircle2 },
+  failed:          { label: 'failed',    color: '#ef4444', Icon: XCircle },
+  cancelled:       { label: 'cancelled', color: '#6b7280', Icon: XCircle },
+};
+
+function fmtRelative(iso: string): string {
+  try {
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return '刚刚';
+    if (m < 60) return `${m} 分钟前`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} 小时前`;
+    return `${Math.floor(h / 24)} 天前`;
+  } catch {
+    return '—';
+  }
+}
+
+function RecentRuns() {
+  const [runs, setRuns] = useState<RunSummary[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listRuns()
+      .then((data) => { if (!cancelled) setRuns(data.slice(0, 6)); })
+      .catch(() => { if (!cancelled) setRuns([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (runs !== null && runs.length === 0) return null;
+
+  return (
+    <section style={{ width: '100%' }}>
+      <div className="hf-label" style={{ marginBottom: 10 }}>
+        继续上一次 · RECENT
+      </div>
+      {runs === null ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {[0, 1].map((i) => (
+            <div key={i} style={{ height: 60, borderRadius: 8, background: 'var(--t-panel-2)', animation: 'sf-pulse 1.4s ease-in-out infinite' }} />
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {runs.map((run) => {
+            const meta = RUN_STATUS_META[run.status] ?? { label: run.status, color: 'var(--t-fg-4)', Icon: Play };
+            const isActive = run.status === 'running' || run.status === 'waiting_user' || run.status === 'awaiting_approval';
+            return (
+              <div
+                key={run.run_id}
+                className="hf-card"
+                style={{
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                  cursor: 'pointer',
+                  borderColor: isActive ? 'color-mix(in oklab, var(--t-accent) 30%, var(--t-border))' : undefined,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {run.workflow_id || run.run_id.slice(0, 8)}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: meta.color, flexShrink: 0 }}>
+                    <meta.Icon size={10} strokeWidth={2.5} aria-hidden />
+                    {meta.label}
+                  </span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)' }}>
+                  {fmtRelative(run.started_at)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // StartPage
 // ---------------------------------------------------------------------------
 
@@ -454,14 +554,6 @@ const SUGGESTIONS: Array<[string, string]> = [
 
 type Mode = 'auto' | 'single' | 'team';
 type Output = 'answer' | 'report' | 'review' | 'workflow';
-type KSource = 'documents' | 'urls' | 'pack' | 'none';
-
-const KNOWLEDGE_OPTIONS: Array<[KSource, string]> = [
-  ['documents', 'Documents'],
-  ['urls', 'URLs'],
-  ['pack', 'Knowledge Pack'],
-  ['none', 'None · decide later'],
-];
 
 const OUTPUT_OPTIONS: Array<[Output, string]> = [
   ['answer', 'Answer'],
@@ -487,9 +579,9 @@ export default function StartPage() {
   const [showWizard, setShowWizard] = useState(false);
   const [composer, setComposer] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [audience, setAudience] = useState('');
-  const [audienceOpen, setAudienceOpen] = useState(false);
-  const [knowledge, setKnowledge] = useState<KSource[]>([]);
+  const [knowledge, setKnowledge] = useState<string[]>([]); // selected pack IDs
+  const [knowledgePacks, setKnowledgePacks] = useState<KnowledgePack[] | null>(null);
+  const [knowledgePacksLoading, setKnowledgePacksLoading] = useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   const [outputOpen, setOutputOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('auto');
@@ -498,7 +590,6 @@ export default function StartPage() {
   const [output, setOutput] = useState<Output>('report');
   const [toast, setToast] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const audienceRef = useRef<HTMLDivElement | null>(null);
   const knowledgeRef = useRef<HTMLDivElement | null>(null);
   const outputRef = useRef<HTMLDivElement | null>(null);
   const addRef = useRef<HTMLDivElement | null>(null);
@@ -506,7 +597,6 @@ export default function StartPage() {
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       const t = e.target as Node;
-      if (audienceOpen && audienceRef.current && !audienceRef.current.contains(t)) setAudienceOpen(false);
       if (knowledgeOpen && knowledgeRef.current && !knowledgeRef.current.contains(t)) setKnowledgeOpen(false);
       if (outputOpen && outputRef.current && !outputRef.current.contains(t)) setOutputOpen(false);
       if (modeOpen && modeRef.current && !modeRef.current.contains(t)) setModeOpen(false);
@@ -514,7 +604,7 @@ export default function StartPage() {
     }
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [audienceOpen, knowledgeOpen, outputOpen, modeOpen, addOpen]);
+  }, [knowledgeOpen, outputOpen, modeOpen, addOpen]);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -563,13 +653,6 @@ export default function StartPage() {
     review: <MessageSquareQuote size={14} strokeWidth={2} />,
     workflow: <Workflow size={14} strokeWidth={2} />,
   };
-  const KNOWLEDGE_LABELS: Record<KSource, [string, string]> = {
-    documents: [T('文档', 'Documents'), 'Documents'],
-    urls: ['URLs', 'URLs'],
-    pack: [T('知识包', 'Knowledge Pack'), 'Knowledge Pack'],
-    none: [T('跳过', 'Skip'), 'Skip'],
-  };
-
   // Auto-open wizard via ?wizard=1 (Story 13.4)
   useEffect(() => {
     if (searchParams.get('wizard') === '1') {
@@ -583,7 +666,6 @@ export default function StartPage() {
     // 'auto' lets the backend decide single vs team based on goal complexity.
     params.set('mode', mode);
     if (text) params.set('goal', text);
-    if (audience.trim()) params.set('audience', audience.trim());
     if (knowledge.length > 0) params.set('knowledge', knowledge.join(','));
     if (output) params.set('output', output);
     navigate(`/builder?${params.toString()}`);
@@ -596,10 +678,21 @@ export default function StartPage() {
     }
   }
 
-  function toggleKnowledge(k: KSource) {
+  function toggleKnowledgePack(packId: string) {
     setKnowledge((prev) =>
-      prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k],
+      prev.includes(packId) ? prev.filter((x) => x !== packId) : [...prev, packId],
     );
+  }
+
+  function openKnowledge() {
+    setKnowledgeOpen((v) => !v);
+    if (knowledgePacks === null && !knowledgePacksLoading) {
+      setKnowledgePacksLoading(true);
+      listPacks({ limit: 20 })
+        .then((res) => setKnowledgePacks(res.data.packs))
+        .catch(() => setKnowledgePacks([]))
+        .finally(() => setKnowledgePacksLoading(false));
+    }
   }
 
   function handleSuggestion(label: string) {
@@ -873,59 +966,83 @@ export default function StartPage() {
                             notImpl(T('最近 prompt', 'Recent prompts'));
                           },
                         },
+                        {
+                          glyph: <Download size={14} strokeWidth={2} />,
+                          label: T('✦ 导入 Skill', '✦ Import Skill'),
+                          testId: 'start-chip-import-skill',
+                          onClick: () => {
+                            setAddOpen(false);
+                            notImpl(T('导入 Skill', 'Import Skill'));
+                          },
+                          accent: true,
+                        },
+                        {
+                          glyph: <Workflow size={14} strokeWidth={2} />,
+                          label: T('⊞ 导入 Workflow', '⊞ Import Workflow'),
+                          testId: 'start-chip-import-workflow',
+                          onClick: () => {
+                            setAddOpen(false);
+                            notImpl(T('导入 Workflow', 'Import Workflow'));
+                          },
+                          accent: true,
+                        },
                       ] as Array<{
                         glyph: ReactNode;
                         label: string;
                         testId: string;
                         onClick: () => void;
+                        accent?: boolean;
                       }>
-                    ).map((item) => (
-                      <button
-                        key={item.testId}
-                        type="button"
-                        onClick={item.onClick}
-                        data-testid={item.testId}
-                        style={{
-                          display: 'flex',
-                          width: '100%',
-                          alignItems: 'center',
-                          gap: 8,
-                          padding: '8px 10px',
-                          background: 'transparent',
-                          color: 'var(--t-fg-2)',
-                          border: 'none',
-                          borderRadius: 5,
-                          fontSize: 12,
-                          fontFamily: 'inherit',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          transition: 'background 120ms ease',
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background =
-                            'var(--t-panel-2)';
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background =
-                            'transparent';
-                        }}
-                      >
-                        <span
-                          aria-hidden
+                    ).map((item, idx) => (
+                      <React.Fragment key={item.testId}>
+                        {idx === 5 && (
+                          <div style={{ height: 1, background: 'var(--t-border)', margin: '4px 6px' }} />
+                        )}
+                        <button
+                          type="button"
+                          onClick={item.onClick}
+                          data-testid={item.testId}
                           style={{
-                            display: 'inline-flex',
-                            width: 18,
-                            height: 18,
+                            display: 'flex',
+                            width: '100%',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 14,
-                            flexShrink: 0,
+                            gap: 8,
+                            padding: '8px 10px',
+                            background: 'transparent',
+                            color: item.accent ? 'var(--t-accent)' : 'var(--t-fg-2)',
+                            border: 'none',
+                            borderRadius: 5,
+                            fontSize: 12,
+                            fontFamily: 'inherit',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            transition: 'background 120ms ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.background =
+                              item.accent ? 'var(--t-accent-tint)' : 'var(--t-panel-2)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
                           }}
                         >
-                          {item.glyph}
-                        </span>
-                        <span style={{ flex: 1 }}>{item.label}</span>
-                      </button>
+                          <span
+                            aria-hidden
+                            style={{
+                              display: 'inline-flex',
+                              width: 18,
+                              height: 18,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 14,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {item.glyph}
+                          </span>
+                          <span style={{ flex: 1 }}>{item.label}</span>
+                        </button>
+                      </React.Fragment>
                     ))}
                   </div>
                 )}
@@ -1107,7 +1224,7 @@ export default function StartPage() {
                 )}
               </div>
 
-              {/* KNOWLEDGE chip */}
+              {/* KNOWLEDGE chip — calls /knowledge/packs */}
               <div ref={knowledgeRef} style={{ position: 'relative', flexShrink: 0 }}>
                 <ChipBtn
                   glyph={<BookOpen size={14} strokeWidth={2} />}
@@ -1115,9 +1232,9 @@ export default function StartPage() {
                   hasArrow
                   active={knowledgeOpen}
                   configured={knowledge.length > 0}
-                  onClick={() => setKnowledgeOpen((v) => !v)}
+                  onClick={openKnowledge}
                   testId="start-knowledge-chip"
-                  title={T('知识来源', 'Knowledge sources')}
+                  title={T('挂载知识包', 'Attach knowledge pack')}
                 />
                 {knowledgeOpen && (
                   <div
@@ -1125,7 +1242,7 @@ export default function StartPage() {
                       position: 'absolute',
                       bottom: 'calc(100% + 6px)',
                       left: 0,
-                      minWidth: 180,
+                      minWidth: 220,
                       background: 'var(--t-panel)',
                       border: '1px solid var(--t-border)',
                       borderRadius: 8,
@@ -1134,110 +1251,72 @@ export default function StartPage() {
                       zIndex: 20,
                     }}
                   >
-                    {KNOWLEDGE_OPTIONS.map(([k]) => {
-                      const on = knowledge.includes(k);
-                      return (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => toggleKnowledge(k)}
-                          data-testid={`start-knowledge-${k}`}
-                          style={{
-                            display: 'flex',
-                            width: '100%',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '6px 10px',
-                            background: on ? 'var(--t-accent-tint)' : 'transparent',
-                            color: on ? 'var(--t-accent)' : 'var(--t-fg-2)',
-                            border: 'none',
-                            borderRadius: 4,
-                            fontSize: 12,
-                            fontFamily: 'inherit',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                          }}
-                        >
-                          <span
-                            aria-hidden="true"
+                    <div style={{ padding: '4px 10px 6px', fontSize: 10, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+                      {T('知识包', 'Knowledge Packs')}
+                    </div>
+                    {knowledgePacksLoading ? (
+                      <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--t-fg-4)' }}>{T('加载中…', 'Loading…')}</div>
+                    ) : knowledgePacks && knowledgePacks.length > 0 ? (
+                      knowledgePacks.map((pack) => {
+                        const on = knowledge.includes(pack.pack_id);
+                        return (
+                          <button
+                            key={pack.pack_id}
+                            type="button"
+                            onClick={() => toggleKnowledgePack(pack.pack_id)}
+                            data-testid={`start-knowledge-pack-${pack.pack_id}`}
                             style={{
-                              width: 10,
-                              height: 10,
-                              borderRadius: 3,
-                              border: on ? '1px solid var(--t-accent)' : '1px solid var(--t-fg-4)',
-                              background: on ? 'var(--t-accent)' : 'transparent',
-                              flexShrink: 0,
+                              display: 'flex',
+                              width: '100%',
+                              alignItems: 'center',
+                              gap: 8,
+                              padding: '6px 10px',
+                              background: on ? 'var(--t-accent-tint)' : 'transparent',
+                              color: on ? 'var(--t-accent)' : 'var(--t-fg-2)',
+                              border: 'none',
+                              borderRadius: 4,
+                              fontSize: 12,
+                              fontFamily: 'inherit',
+                              cursor: 'pointer',
+                              textAlign: 'left',
                             }}
-                          />
-                          <span>
-                            {language === 'zh' ? KNOWLEDGE_LABELS[k][0] : KNOWLEDGE_LABELS[k][1]}
-                          </span>
+                          >
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 3,
+                                border: on ? '1px solid var(--t-accent)' : '1px solid var(--t-fg-4)',
+                                background: on ? 'var(--t-accent)' : 'transparent',
+                                flexShrink: 0,
+                              }}
+                            />
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {pack.name}
+                            </span>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div style={{ padding: '6px 10px 8px' }}>
+                        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--t-fg-3)' }}>
+                          {T('暂无知识包', 'No knowledge packs yet')}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => { setKnowledgeOpen(false); navigate('/settings?section=knowledge'); }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--t-accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
+                        >
+                          <ArrowRight size={11} strokeWidth={2} aria-hidden />
+                          {T('前往 Knowledge 管理', 'Manage Knowledge')}
                         </button>
-                      );
-                    })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* AUDIENCE chip · click → expand inline mini input */}
-              <div ref={audienceRef} style={{ position: 'relative', flexShrink: 0 }}>
-                <ChipBtn
-                  glyph={<Target size={14} strokeWidth={2} />}
-                  label={audience.trim() || undefined}
-                  active={audienceOpen}
-                  configured={!!audience.trim()}
-                  onClick={() => setAudienceOpen((v) => !v)}
-                  testId="start-audience-chip"
-                  title={T('受众', 'Audience')}
-                />
-                {audienceOpen && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: 'calc(100% + 6px)',
-                      left: 0,
-                      width: 280,
-                      background: 'var(--t-panel)',
-                      border: '1px solid var(--t-border)',
-                      borderRadius: 8,
-                      padding: 8,
-                      boxShadow: '0 8px 24px -8px rgba(0,0,0,.35)',
-                      zIndex: 20,
-                    }}
-                  >
-                    <div
-                      className="hf-meta"
-                      style={{ fontSize: 10, marginBottom: 6 }}
-                    >
-                      {T('谁来读这份产物', 'Who is this for')}
-                    </div>
-                    <input
-                      autoFocus
-                      value={audience}
-                      onChange={(e) => setAudience(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') setAudienceOpen(false);
-                      }}
-                      placeholder={T(
-                        '例：内部工程团队，约 20 人',
-                        'e.g. internal eng team, ~20 readers',
-                      )}
-                      data-testid="start-audience"
-                      style={{
-                        width: '100%',
-                        padding: '6px 8px',
-                        borderRadius: 5,
-                        border: '1px solid var(--t-border)',
-                        background: 'var(--t-bg)',
-                        color: 'var(--t-fg)',
-                        fontFamily: 'inherit',
-                        fontSize: 12,
-                        outline: 'none',
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
 
               <div style={{ flex: 1, minWidth: 6 }} />
               <span className="hf-kbd">⌘ ⏎</span>
@@ -1315,6 +1394,9 @@ export default function StartPage() {
               </button>
             ))}
           </div>
+
+          {/* Recent runs — from Wireframe v2 "继续上一次" */}
+          <RecentRuns />
 
           {/* Three primitives — preserved feature */}
           <div>
