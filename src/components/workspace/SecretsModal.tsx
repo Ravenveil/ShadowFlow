@@ -53,9 +53,9 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
   padding: '7px 10px',
   borderRadius: 6,
-  background: 'var(--bg-elev-2)',
-  border: '1px solid var(--border)',
-  color: 'var(--fg-1)',
+  background: 'var(--t-panel-2)',
+  border: '1px solid var(--t-border)',
+  color: 'var(--t-fg)',
   fontFamily: 'var(--font-mono)',
   fontSize: 12,
   outline: 'none',
@@ -64,7 +64,7 @@ const inputStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   fontFamily: 'var(--font-mono)',
   fontSize: 11,
-  color: 'var(--fg-3)',
+  color: 'var(--t-fg-3)',
   display: 'block',
   marginBottom: 4,
 };
@@ -98,7 +98,7 @@ export function SecretsModal({ onClose }: { onClose: () => void }) {
       <div style={{
         width: 440,
         background: 'var(--skin-panel)',
-        border: '1px solid var(--border)',
+        border: '1px solid var(--t-border)',
         borderRadius: 10,
         boxShadow: 'var(--shadow-pop)',
         padding: 20,
@@ -181,11 +181,11 @@ export function SecretsModal({ onClose }: { onClose: () => void }) {
           marginTop: 10,
           padding: '6px 8px',
           borderRadius: 5,
-          background: 'var(--bg-elev-2)',
-          border: '1px solid var(--border)',
+          background: 'var(--t-panel-2)',
+          border: '1px solid var(--t-border)',
           fontFamily: 'var(--font-mono)',
           fontSize: 10,
-          color: 'var(--fg-4)',
+          color: 'var(--t-fg-4)',
           lineHeight: 1.5,
         }}>
           Keys 仅保存在本地浏览器 localStorage。发送消息时会通过 X-LLM-Key 请求头传给本地后端，后端再去调用 LLM 服务。Ollama 本地模型无需填写 key，仅需设置 Backend URL 即可。

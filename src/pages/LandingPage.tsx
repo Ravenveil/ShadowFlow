@@ -232,7 +232,7 @@ function LandingNavThemeToggle({ ariaLabel }: { ariaLabel: string }) {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: hover ? 'var(--accent-bright)' : 'var(--fg-2)',
+        color: hover ? 'var(--t-accent-bright)' : 'var(--t-fg-2)',
         transition: 'color 140ms ease, background 140ms ease, border-color 140ms ease',
       }}
     >
@@ -264,13 +264,13 @@ function Ticker({ t }: { t: typeof T.EN }) {
   const row = (
     <span style={{ display: 'inline-flex', gap: 48, paddingLeft: 48 }}>
       {items.map((item, i) => (
-        <span key={i} style={{ color: item.accent ? 'var(--accent-bright)' : item.dim ? 'var(--fg-5)' : undefined }}>{item.text}</span>
+        <span key={i} style={{ color: item.accent ? 'var(--t-accent-bright)' : item.dim ? 'var(--t-fg-5)' : undefined }}>{item.text}</span>
       ))}
     </span>
   );
   return (
-    <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', position: 'relative', zIndex: 2, marginBottom: 24, height: 28, borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
-      <div style={{ display: 'inline-flex', gap: 48, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-4)', letterSpacing: '.18em', textTransform: 'uppercase', fontWeight: 600, animation: 'sf-marquee 50s linear infinite', whiteSpace: 'nowrap' }}>
+    <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', position: 'relative', zIndex: 2, marginBottom: 24, height: 28, borderTop: '1px solid var(--t-border)', borderBottom: '1px solid var(--t-border)', display: 'flex', alignItems: 'center' }}>
+      <div style={{ display: 'inline-flex', gap: 48, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)', letterSpacing: '.18em', textTransform: 'uppercase', fontWeight: 600, animation: 'sf-marquee 50s linear infinite', whiteSpace: 'nowrap' }}>
         {row}{row}
       </div>
     </div>
@@ -281,11 +281,11 @@ function Ticker({ t }: { t: typeof T.EN }) {
 function Orb({ state, style, glyph, badge, badgeColor }: { state: 'ok' | 'run' | 'rej'; style: React.CSSProperties; glyph: string; badge: string; badgeColor: string }) {
   const stateStyles: Record<string, React.CSSProperties> = {
     ok:  { borderColor: 'var(--status-ok)', boxShadow: '0 0 0 3px rgba(16,185,129,.08)' },
-    run: { borderColor: 'var(--accent)', boxShadow: '0 0 0 4px rgba(168,85,247,.12), 0 0 28px -2px rgba(168,85,247,.6)', animation: 'sf-breathe 2.4s ease-in-out infinite' },
+    run: { borderColor: 'var(--t-accent)', boxShadow: '0 0 0 4px rgba(168,85,247,.12), 0 0 28px -2px rgba(168,85,247,.6)', animation: 'sf-breathe 2.4s ease-in-out infinite' },
     rej: { borderColor: 'var(--status-reject)', boxShadow: '0 0 0 4px rgba(239,68,68,.1)' },
   };
   return (
-    <div style={{ position: 'absolute', width: 54, height: 54, borderRadius: '50%', background: 'var(--bg-elev-3)', border: '1.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-sans)', fontSize: 20, fontWeight: 900, color: 'var(--fg-1)', letterSpacing: '-.03em', zIndex: 3, ...stateStyles[state], ...style }}>
+    <div style={{ position: 'absolute', width: 54, height: 54, borderRadius: '50%', background: 'var(--t-panel)', border: '1.5px solid var(--t-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-sans)', fontSize: 20, fontWeight: 900, color: 'var(--t-fg)', letterSpacing: '-.03em', zIndex: 3, ...stateStyles[state], ...style }}>
       {glyph}
       <div style={{ position: 'absolute', bottom: -5, left: '50%', transform: 'translateX(-50%)', width: 18, height: 18, borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-sans)', fontWeight: 900, fontSize: 9, border: '2px solid var(--skin-panel)', background: badgeColor, color: '#fff' }}>{badge}</div>
       {state === 'rej' && <div style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%', background: 'var(--status-reject)', color: '#2A0A0F', fontWeight: 900, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--skin-panel)' }}>✗</div>}
@@ -295,7 +295,7 @@ function Orb({ state, style, glyph, badge, badgeColor }: { state: 'ok' | 'run' |
 
 function OrbLabel({ label, style, color, accent, children }: { label: string; style: React.CSSProperties; color?: string; accent?: boolean; children?: React.ReactNode }) {
   return (
-    <div style={{ position: 'absolute', fontFamily: 'var(--font-sans)', fontSize: 10, fontWeight: 700, color: color ?? (accent ? 'var(--accent-bright)' : 'var(--fg-2)'), letterSpacing: '-.01em', zIndex: 3, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, ...style }}>
+    <div style={{ position: 'absolute', fontFamily: 'var(--font-sans)', fontSize: 10, fontWeight: 700, color: color ?? (accent ? 'var(--t-accent-bright)' : 'var(--t-fg-2)'), letterSpacing: '-.01em', zIndex: 3, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, ...style }}>
       {label}{children}
     </div>
   );
@@ -303,7 +303,7 @@ function OrbLabel({ label, style, color, accent, children }: { label: string; st
 
 function HcMsg({ children, accent, reject, style }: { children: React.ReactNode; accent?: boolean; reject?: boolean; style?: React.CSSProperties }) {
   return (
-    <div style={{ position: 'absolute', background: reject ? 'var(--status-reject-tint)' : accent ? 'linear-gradient(180deg, rgba(168,85,247,.08), var(--bg-elev-2))' : 'var(--bg-elev-2)', border: `1px solid ${reject ? 'rgba(239,68,68,.35)' : accent ? 'rgba(168,85,247,.4)' : 'var(--border)'}`, borderRadius: 10, padding: '6px 10px', fontSize: 10.5, color: 'var(--fg-2)', maxWidth: 180, lineHeight: 1.35, zIndex: 4, animation: 'sf-float 4s ease-in-out infinite', ...style }}>
+    <div style={{ position: 'absolute', background: reject ? 'var(--status-reject-tint)' : accent ? 'linear-gradient(180deg, rgba(168,85,247,.08), var(--t-panel))' : 'var(--t-panel)', border: `1px solid ${reject ? 'rgba(239,68,68,.35)' : accent ? 'rgba(168,85,247,.4)' : 'var(--t-border)'}`, borderRadius: 10, padding: '6px 10px', fontSize: 10.5, color: 'var(--t-fg-2)', maxWidth: 180, lineHeight: 1.35, zIndex: 4, animation: 'sf-float 4s ease-in-out infinite', ...style }}>
       {children}
     </div>
   );
@@ -312,18 +312,18 @@ function HcMsg({ children, accent, reject, style }: { children: React.ReactNode;
 // ============ Hero Canvas ============
 function HeroCanvas() {
   return (
-    <div style={{ position: 'relative', aspectRatio: '1.02', background: `radial-gradient(ellipse at 50% 40%, rgba(168,85,247,.06), transparent 65%), var(--skin-panel)`, border: '1px solid var(--border)', borderRadius: 28, overflow: 'hidden', boxShadow: '0 40px 80px -20px rgba(0,0,0,.5), 0 0 0 1px var(--border), 0 0 120px -10px rgba(168,85,247,.2)' }}>
-      <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle, var(--bg-elev-4) 1px, transparent 1px)', backgroundSize: '22px 22px', opacity: .35 }} />
+    <div style={{ position: 'relative', aspectRatio: '1.02', background: `radial-gradient(ellipse at 50% 40%, rgba(168,85,247,.06), transparent 65%), var(--skin-panel)`, border: '1px solid var(--t-border)', borderRadius: 28, overflow: 'hidden', boxShadow: '0 40px 80px -20px rgba(0,0,0,.5), 0 0 0 1px var(--t-border), 0 0 120px -10px rgba(168,85,247,.2)' }}>
+      <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle, var(--t-panel) 1px, transparent 1px)', backgroundSize: '22px 22px', opacity: .35 }} />
       <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 30% 20%, rgba(168,85,247,.2), transparent 50%)', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', top: 14, left: 14, right: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 5 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 6 }}>
             {['#EF4444', '#F59E0B', '#10B981'].map((c) => <div key={c} style={{ width: 10, height: 10, borderRadius: '50%', background: c }} />)}
           </div>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)', letterSpacing: '.1em' }}>run_2026_04_16_08_49 · academic_paper</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', letterSpacing: '.1em' }}>run_2026_04_16_08_49 · academic_paper</span>
         </div>
-        <div style={{ display: 'flex', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-4)' }}>
-          <span>r2/3</span><span style={{ color: 'var(--fg-5)' }}>·</span><span>87ms SSE</span>
+        <div style={{ display: 'flex', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)' }}>
+          <span>r2/3</span><span style={{ color: 'var(--t-fg-5)' }}>·</span><span>87ms SSE</span>
         </div>
       </div>
       <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} viewBox="0 0 480 490" preserveAspectRatio="none">
@@ -343,7 +343,7 @@ function HeroCanvas() {
         <circle r="2.5" fill="#D8B4FE"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#hf2" /></animateMotion></circle>
       </svg>
       <div style={{ position: 'absolute', top: 85, left: 160, width: 120, height: 220, border: '1.5px dashed rgba(168,85,247,.35)', borderRadius: 18, zIndex: 1, pointerEvents: 'none' }}>
-        <div style={{ position: 'absolute', top: -10, left: 16, background: 'var(--skin-panel)', padding: '2px 10px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--accent-bright)' }}>↯ fan-out</div>
+        <div style={{ position: 'absolute', top: -10, left: 16, background: 'var(--skin-panel)', padding: '2px 10px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-accent-bright)' }}>↯ fan-out</div>
       </div>
       <Orb state="ok"  style={{ top: 112, left: 48 }}  glyph="P" badge="C"  badgeColor="#D97706" />
       <OrbLabel label="Planner"       style={{ top: 174, left: 40,  width: 70 }} />
@@ -353,24 +353,24 @@ function HeroCanvas() {
       <OrbLabel label="DataScout"     style={{ top: 302, left: 180, width: 75 }} />
       <Orb state="run" style={{ top: 250, left: 300 }} glyph="W" badge="C"  badgeColor="#D97706" />
       <OrbLabel label="SectionWriter" accent style={{ top: 312, left: 288, width: 80 }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--fg-4)', fontWeight: 600 }}>● r2/3 · 87ms</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--t-fg-4)', fontWeight: 600 }}>● r2/3 · 87ms</span>
       </OrbLabel>
       <Orb state="rej" style={{ top: 160, left: 398 }} glyph="A" badge="C"  badgeColor="#D97706" />
       <OrbLabel label="Advisor" style={{ top: 222, left: 385, width: 75 }} color="var(--status-reject)" />
       <HcMsg accent style={{ top: 210, left: 252, animationDelay: '-.5s' }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>→ handoff · streaming</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: 'var(--t-fg-4)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>→ handoff · streaming</div>
         "Methods §3.2 draft — 12 sources tagged…"
       </HcMsg>
       <HcMsg reject style={{ top: 64, left: 290, animationDelay: '-1.5s' }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: 'var(--status-reject)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>✗ advisor · reject</div>
         "Gap — no baseline comparison to Zhang (2021)."
       </HcMsg>
-      <div style={{ position: 'absolute', bottom: 16, left: 16, right: 16, background: 'var(--bg-elev-2)', border: '1px solid rgba(168,85,247,.3)', borderRadius: 12, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 6 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--accent-tint)', border: '1px solid rgba(168,85,247,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--accent-bright)', flexShrink: 0 }}>⊞</div>
+      <div style={{ position: 'absolute', bottom: 16, left: 16, right: 16, background: 'var(--t-panel)', border: '1px solid rgba(168,85,247,.3)', borderRadius: 12, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 6 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--t-accent-tint)', border: '1px solid rgba(168,85,247,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--t-accent-bright)', flexShrink: 0 }}>⊞</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--status-reject)', letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 700 }}>POLICY MATRIX · BLOCKED</div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-0)', lineHeight: 1.3 }}>Advisor.reject(SectionWriter)</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-4)', marginTop: 2 }}>rollback → cp_draft_v2 · retry 2/3</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg)', lineHeight: 1.3 }}>Advisor.reject(SectionWriter)</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', marginTop: 2 }}>rollback → cp_draft_v2 · retry 2/3</div>
         </div>
         <span className="sf-chip sf-chip-accent" style={{ flexShrink: 0 }}>⑂ fork</span>
       </div>
@@ -387,11 +387,11 @@ function PolicyMini() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '54px repeat(3, 1fr)', gap: 3, fontFamily: 'var(--font-mono)', fontSize: 9.5 }}>
       {['', 'WRITER', 'CRITIC', 'PUBLISH'].map((h) => (
-        <div key={h} style={{ padding: '4px 0', textAlign: 'center', background: h ? 'var(--bg-elev-2)' : 'transparent', border: '1px solid var(--border)', borderRadius: 3, color: 'var(--fg-2)', fontWeight: 700 }}>{h}</div>
+        <div key={h} style={{ padding: '4px 0', textAlign: 'center', background: h ? 'var(--t-panel)' : 'transparent', border: '1px solid var(--t-border)', borderRadius: 3, color: 'var(--t-fg-2)', fontWeight: 700 }}>{h}</div>
       ))}
       {rows.map(([role, c1, c2, c3]) => (
         [
-          <div key={`${role}-label`} style={{ padding: '4px 0', textAlign: 'center', background: 'var(--bg-elev-1)', border: '1px solid var(--border)', borderRadius: 3, color: 'var(--fg-3)', fontWeight: 700, fontSize: 9 }}>{role}</div>,
+          <div key={`${role}-label`} style={{ padding: '4px 0', textAlign: 'center', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 3, color: 'var(--t-fg-3)', fontWeight: 700, fontSize: 9 }}>{role}</div>,
           ...[c1, c2, c3].map((c, i) => (
             <div key={`${role}-${i}`} style={{ padding: '4px 0', textAlign: 'center', borderRadius: 3, border: '1px solid', background: c === 'ok' ? 'var(--status-ok-tint)' : c === 'no' ? 'var(--status-reject-tint)' : 'var(--status-warn-tint)', color: c === 'ok' ? 'var(--status-ok)' : c === 'no' ? 'var(--status-reject)' : 'var(--status-warn)', borderColor: c === 'ok' ? 'rgba(16,185,129,.3)' : c === 'no' ? 'rgba(239,68,68,.3)' : 'rgba(245,158,11,.3)' }}>{c === 'ok' ? '✓' : c === 'no' ? '✗' : '⊞'}</div>
           )),
@@ -404,16 +404,16 @@ function PolicyMini() {
 function CheckpointMini() {
   return (
     <div style={{ position: 'relative', height: 40 }}>
-      <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 2, background: 'linear-gradient(90deg, var(--status-ok), var(--status-ok) 44%, var(--status-reject) 50%, var(--accent) 56%, var(--accent))' }} />
+      <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 2, background: 'linear-gradient(90deg, var(--status-ok), var(--status-ok) 44%, var(--status-reject) 50%, var(--t-accent) 56%, var(--t-accent))' }} />
       {[
         { left: '10%', color: 'var(--status-ok)', label: 'cp_plan' },
         { left: '40%', color: 'var(--status-ok)', label: 'cp_draft' },
         { left: '50%', color: 'var(--status-reject)', label: 'REJECT' },
-        { left: '60%', color: 'var(--accent)', label: 'retry_2', pulse: true },
+        { left: '60%', color: 'var(--t-accent)', label: 'retry_2', pulse: true },
       ].map(({ left, color, label, pulse }) => (
         <div key={label} style={{ position: 'absolute', left, top: '50%', transform: 'translate(-50%, -50%)' }}>
-          <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--bg)', border: `2px solid ${color}`, ...(pulse ? { boxShadow: `0 0 0 4px rgba(168,85,247,.18)`, animation: 'sf-pulse 1.4s ease-in-out infinite' } : {}) }} />
-          <div style={{ position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-3)', whiteSpace: 'nowrap' }}>{label}</div>
+          <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--t-bg)', border: `2px solid ${color}`, ...(pulse ? { boxShadow: `0 0 0 4px rgba(168,85,247,.18)`, animation: 'sf-pulse 1.4s ease-in-out infinite' } : {}) }} />
+          <div style={{ position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-3)', whiteSpace: 'nowrap' }}>{label}</div>
         </div>
       ))}
     </div>
@@ -424,8 +424,8 @@ function ChainMini({ steps }: { steps: readonly string[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {steps.map((text, n) => (
-        <div key={n} style={{ display: 'flex', gap: 8, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-3)' }}>
-          <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--accent-tint)', color: 'var(--accent-bright)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, border: '1px solid rgba(168,85,247,.3)', flexShrink: 0 }}>{n + 1}</div>
+        <div key={n} style={{ display: 'flex', gap: 8, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-3)' }}>
+          <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, border: '1px solid rgba(168,85,247,.3)', flexShrink: 0 }}>{n + 1}</div>
           {text}
         </div>
       ))}
@@ -441,7 +441,7 @@ function HoverCard({ children, style, onClick }: { children: React.ReactNode; st
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       onClick={onClick}
-      style={{ ...style, transition: 'all var(--dur-2)', border: `1px solid ${hov ? 'rgba(168,85,247,.4)' : 'var(--border)'}`, transform: hov ? 'translateY(-3px)' : '' }}
+      style={{ ...style, transition: 'all var(--dur-2)', border: `1px solid ${hov ? 'rgba(168,85,247,.4)' : 'var(--t-border)'}`, transform: hov ? 'translateY(-3px)' : '' }}
     >
       {children}
     </div>
@@ -480,40 +480,40 @@ export default function LandingPage() {
         <meta name="twitter:image" content="/og-image.png" />
       </Helmet>
 
-      <div style={{ minHeight: '100vh', background: 'var(--bg)', overflowX: 'hidden' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--t-bg)', overflowX: 'hidden' }}>
 
         {/* ====== TOP NAV ====== */}
         {/* Background uses color-mix on --bg so day/night flip via useTheme works without losing the translucent blur. */}
-        <div style={{ height: 60, borderBottom: '1px solid var(--border)', background: 'color-mix(in srgb, var(--bg) 85%, transparent)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', display: 'flex', alignItems: 'center', gap: 28, padding: '0 32px', position: 'sticky', top: 0, zIndex: 50 }}>
+        <div style={{ height: 60, borderBottom: '1px solid var(--t-border)', background: 'color-mix(in srgb, var(--t-bg) 85%, transparent)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', display: 'flex', alignItems: 'center', gap: 28, padding: '0 32px', position: 'sticky', top: 0, zIndex: 50 }}>
           <div className="sf-logo">
             <div className="sf-logo-mark">S</div>
             <div className="sf-logo-word">ShadowFlow</div>
-            <span className="sf-chip" style={{ marginLeft: 8, background: 'var(--accent-tint)', color: 'var(--accent-bright)', borderColor: 'color-mix(in srgb, var(--accent) 50%, transparent)' }}>0G-native</span>
+            <span className="sf-chip" style={{ marginLeft: 8, background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', borderColor: 'color-mix(in srgb, var(--t-accent) 50%, transparent)' }}>0G-native</span>
           </div>
           <nav style={{ display: 'flex', gap: 22 }}>
             {t.nav.map((item) => (
-              <a key={item} href="#" style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-3)', textDecoration: 'none' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--fg-1)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--fg-3)')}>
+              <a key={item} href="#" style={{ fontSize: 13, fontWeight: 500, color: 'var(--t-fg-3)', textDecoration: 'none' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--t-fg)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--t-fg-3)')}>
                 {item}
               </a>
             ))}
             <a
               href="/catalog"
               onClick={(e) => { e.preventDefault(); navigate('/catalog'); }}
-              style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent-bright)', textDecoration: 'none', cursor: 'pointer' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--fg-1)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--accent-bright)')}
+              style={{ fontSize: 13, fontWeight: 500, color: 'var(--t-accent-bright)', textDecoration: 'none', cursor: 'pointer' }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--t-fg)')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--t-accent-bright)')}
               data-testid="landing-nav-catalog"
             >
               {lang === 'EN' ? 'Catalog' : 'Agent 目录'}
             </a>
           </nav>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--fg-4)', padding: '0 12px', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)', height: 28 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--t-fg-4)', padding: '0 12px', borderLeft: '1px solid var(--t-border)', borderRight: '1px solid var(--t-border)', height: 28 }}>
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-ok)', boxShadow: '0 0 8px var(--status-ok)', animation: 'sf-pulse 1.8s ease-in-out infinite' }} />
               <span>{t.mainnet}</span>
-              <span style={{ color: 'var(--fg-5)' }}>·</span>
+              <span style={{ color: 'var(--t-fg-5)' }}>·</span>
               <span>{t.pinned}</span>
             </div>
             <button className="sf-btn sf-btn-ghost" onClick={toggleLang}>
@@ -530,39 +530,39 @@ export default function LandingPage() {
         <div style={{ position: 'relative', padding: '60px 40px 40px', maxWidth: 1440, margin: '0 auto', overflow: 'hidden', minHeight: 820 }}>
           <div style={{ position: 'absolute', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle, rgba(168,85,247,.18), transparent 65%)', pointerEvents: 'none', filter: 'blur(30px)', zIndex: 0, top: -100, right: -200 }} />
           <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, rgba(59,130,246,.14), transparent 65%)', pointerEvents: 'none', filter: 'blur(30px)', zIndex: 0, bottom: -200, left: -150 }} />
-          <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(var(--bg-elev-4) 1px, transparent 1px), linear-gradient(90deg, var(--bg-elev-4) 1px, transparent 1px)', backgroundSize: '60px 60px', opacity: .35, maskImage: 'radial-gradient(ellipse at 50% 40%, black 10%, transparent 70%)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(var(--t-panel) 1px, transparent 1px), linear-gradient(90deg, var(--t-panel) 1px, transparent 1px)', backgroundSize: '60px 60px', opacity: .35, maskImage: 'radial-gradient(ellipse at 50% 40%, black 10%, transparent 70%)', pointerEvents: 'none' }} />
 
           <Ticker t={t} />
 
           <div style={{ position: 'relative', zIndex: 2, display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 52, alignItems: 'center', marginTop: 36 }}>
             <div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--accent-bright)', padding: '7px 14px', borderRadius: 999, background: 'var(--accent-tint)', border: '1px solid rgba(168,85,247,.45)', marginBottom: 22 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--t-accent-bright)', padding: '7px 14px', borderRadius: 999, background: 'var(--t-accent-tint)', border: '1px solid rgba(168,85,247,.45)', marginBottom: 22 }}>
                 {t.eyebrow}
               </div>
 
               <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: 'clamp(52px, 6vw, 96px)', fontWeight: 900, lineHeight: .93, letterSpacing: '-.048em', margin: '0 0 28px' }}>
                 {t.h1a}{' '}
-                <span style={{ color: 'var(--fg-5)', position: 'relative', display: 'inline-block' }}>
+                <span style={{ color: 'var(--t-fg-5)', position: 'relative', display: 'inline-block' }}>
                   {t.h1strike}
                   <span style={{ position: 'absolute', left: -4, right: -4, top: '50%', height: 4, background: 'var(--status-reject)', borderRadius: 2, transform: 'rotate(-2deg)', display: 'block' }} />
                 </span>
                 <br />{t.h1b}{' '}
                 <span style={{ background: 'linear-gradient(90deg, #C084FC, #A855F7 40%, #7C3AED)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', position: 'relative', display: 'inline-block' }}>
                   {t.h1grad}
-                  <span style={{ position: 'absolute', left: 0, right: 0, bottom: -4, height: 3, background: 'linear-gradient(90deg, transparent, var(--accent) 40%, var(--accent-bright) 60%, transparent)', display: 'block' }} />
+                  <span style={{ position: 'absolute', left: 0, right: 0, bottom: -4, height: 3, background: 'linear-gradient(90deg, transparent, var(--t-accent) 40%, var(--t-accent-bright) 60%, transparent)', display: 'block' }} />
                 </span>
                 <br />{t.h1c}
               </h1>
 
-              <p style={{ fontSize: 19, lineHeight: 1.55, color: 'var(--fg-3)', maxWidth: 560, margin: '0 0 32px' }}>
+              <p style={{ fontSize: 19, lineHeight: 1.55, color: 'var(--t-fg-3)', maxWidth: 560, margin: '0 0 32px' }}>
                 {t.lead.split(/\{policy\}|\{cid\}/).reduce<React.ReactNode[]>((acc, part, i) => {
                   if (i === 0) return [part];
                   if (t.lead.indexOf('{policy}') < t.lead.indexOf('{cid}')) {
-                    if (i === 1) return [...acc, <strong key="policy" style={{ color: 'var(--fg-0)', fontWeight: 700 }}>{t.leadPolicy}</strong>, part];
-                    return [...acc, <span key="cid" style={{ background: 'var(--accent-tint)', color: 'var(--accent-bright)', padding: '0 6px', borderRadius: 4, fontWeight: 600 }}>{t.leadCid}</span>, part];
+                    if (i === 1) return [...acc, <strong key="policy" style={{ color: 'var(--t-fg)', fontWeight: 700 }}>{t.leadPolicy}</strong>, part];
+                    return [...acc, <span key="cid" style={{ background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', padding: '0 6px', borderRadius: 4, fontWeight: 600 }}>{t.leadCid}</span>, part];
                   } else {
-                    if (i === 1) return [...acc, <span key="cid" style={{ background: 'var(--accent-tint)', color: 'var(--accent-bright)', padding: '0 6px', borderRadius: 4, fontWeight: 600 }}>{t.leadCid}</span>, part];
-                    return [...acc, <strong key="policy" style={{ color: 'var(--fg-0)', fontWeight: 700 }}>{t.leadPolicy}</strong>, part];
+                    if (i === 1) return [...acc, <span key="cid" style={{ background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', padding: '0 6px', borderRadius: 4, fontWeight: 600 }}>{t.leadCid}</span>, part];
+                    return [...acc, <strong key="policy" style={{ color: 'var(--t-fg)', fontWeight: 700 }}>{t.leadPolicy}</strong>, part];
                   }
                 }, [])}
               </p>
@@ -575,12 +575,12 @@ export default function LandingPage() {
                 <button className="sf-btn sf-btn-ghost" onClick={() => navigate('/import')} style={{ height: 50, padding: '0 26px', fontSize: 14, borderRadius: 10 }}>{t.ctaSecondary}</button>
               </div>
 
-              <div style={{ marginTop: 42, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 28, borderTop: '1px dashed var(--border)', paddingTop: 24, maxWidth: 640 }}>
+              <div style={{ marginTop: 42, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 28, borderTop: '1px dashed var(--t-border)', paddingTop: 24, maxWidth: 640 }}>
                 {(t.stats as StatRow[]).map(({ k, v, d, up, mono }) => (
                   <div key={k}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--fg-5)' }}>{k}</div>
-                    <div style={{ fontSize: mono ? 22 : 28, fontWeight: 800, color: 'var(--fg-0)', letterSpacing: '-.02em', marginTop: 4, lineHeight: 1, fontFamily: mono ? 'var(--font-mono)' : undefined }}>{v}</div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: up ? 'var(--status-ok)' : 'var(--fg-4)', marginTop: 4 }}>{d}</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-fg-5)' }}>{k}</div>
+                    <div style={{ fontSize: mono ? 22 : 28, fontWeight: 800, color: 'var(--t-fg)', letterSpacing: '-.02em', marginTop: 4, lineHeight: 1, fontFamily: mono ? 'var(--font-mono)' : undefined }}>{v}</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: up ? 'var(--status-ok)' : 'var(--t-fg-4)', marginTop: 4 }}>{d}</div>
                   </div>
                 ))}
               </div>
@@ -591,27 +591,27 @@ export default function LandingPage() {
 
         {/* ====== VS RIVALS ====== */}
         <section style={{ maxWidth: 1440, margin: '0 auto', padding: '80px 40px', background: 'linear-gradient(180deg, transparent, rgba(168,85,247,.04), transparent)' }}>
-          <div style={{ marginBottom: 18, display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--accent-bright)' }}>
-            <span style={{ display: 'inline-block', width: 22, height: 1, background: 'var(--accent)' }} />{t.vsEyebrow}
+          <div style={{ marginBottom: 18, display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--t-accent-bright)' }}>
+            <span style={{ display: 'inline-block', width: 22, height: 1, background: 'var(--t-accent)' }} />{t.vsEyebrow}
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 48, marginBottom: 48 }}>
             <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 'clamp(36px, 4vw, 60px)', fontWeight: 900, letterSpacing: '-.035em', margin: 0, lineHeight: 1 }}>
-              {t.vsH2a}{' '}<span style={{ background: 'linear-gradient(90deg, var(--accent), var(--accent-bright))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.vsH2b}</span>
+              {t.vsH2a}{' '}<span style={{ background: 'linear-gradient(90deg, var(--t-accent), var(--t-accent-bright))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.vsH2b}</span>
             </h2>
-            <p style={{ fontSize: 14, color: 'var(--fg-3)', maxWidth: 420, lineHeight: 1.55 }}>{t.vsSubtitle}</p>
+            <p style={{ fontSize: 14, color: 'var(--t-fg-3)', maxWidth: 420, lineHeight: 1.55 }}>{t.vsSubtitle}</p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             {t.rivals.map(({ name, them, us, note, stat }) => (
-              <HoverCard key={name} style={{ padding: '28px 26px', background: 'var(--bg-elev-1)', border: '1px solid var(--border)', borderRadius: 18, position: 'relative', overflow: 'hidden', cursor: 'default' }}>
-                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 2, background: 'var(--fg-5)' }} />
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--fg-4)' }}>{name}</div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--fg-2)', margin: '14px 0 10px', lineHeight: 1.35, textDecoration: 'line-through', textDecorationColor: 'var(--fg-5)' }}>{them}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-bright)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ display: 'inline-block', width: 16, height: 1, background: 'var(--accent)' }} />ShadowFlow
+              <HoverCard key={name} style={{ padding: '28px 26px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 18, position: 'relative', overflow: 'hidden', cursor: 'default' }}>
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 2, background: 'var(--t-fg-5)' }} />
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>{name}</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--t-fg-2)', margin: '14px 0 10px', lineHeight: 1.35, textDecoration: 'line-through', textDecorationColor: 'var(--t-fg-5)' }}>{them}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--t-accent-bright)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ display: 'inline-block', width: 16, height: 1, background: 'var(--t-accent)' }} />ShadowFlow
                 </div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--fg-0)', lineHeight: 1.35, letterSpacing: '-.015em' }}>{us}</div>
-                <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px dashed var(--border)', fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--fg-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>{note}</span><span style={{ color: 'var(--fg-2)', fontWeight: 700 }}>+{stat}</span>
+                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--t-fg)', lineHeight: 1.35, letterSpacing: '-.015em' }}>{us}</div>
+                <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px dashed var(--t-border)', fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--t-fg-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>{note}</span><span style={{ color: 'var(--t-fg-2)', fontWeight: 700 }}>+{stat}</span>
                 </div>
               </HoverCard>
             ))}
@@ -620,19 +620,19 @@ export default function LandingPage() {
 
         {/* ====== FEATURES ====== */}
         <section style={{ maxWidth: 1440, margin: '0 auto', padding: '80px 40px' }}>
-          <div style={{ marginBottom: 18, display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--accent-bright)' }}>
-            <span style={{ display: 'inline-block', width: 22, height: 1, background: 'var(--accent)' }} />{t.featEyebrow}
+          <div style={{ marginBottom: 18, display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--t-accent-bright)' }}>
+            <span style={{ display: 'inline-block', width: 22, height: 1, background: 'var(--t-accent)' }} />{t.featEyebrow}
           </div>
           <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 'clamp(36px, 4vw, 60px)', fontWeight: 900, letterSpacing: '-.035em', margin: '0 0 48px', lineHeight: 1 }}>
-            {t.featH2a}{' '}<span style={{ background: 'linear-gradient(90deg, var(--accent), var(--accent-bright))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.featH2b}</span>
+            {t.featH2a}{' '}<span style={{ background: 'linear-gradient(90deg, var(--t-accent), var(--t-accent-bright))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.featH2b}</span>
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             {t.featItems.map(({ icon, title, desc }, idx) => (
-              <HoverCard key={title} style={{ padding: '28px 26px 24px', background: 'var(--bg-elev-1)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden' }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--accent-tint)', border: '1px solid rgba(168,85,247,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: 'var(--accent-bright)', marginBottom: 18 }}>{icon}</div>
+              <HoverCard key={title} style={{ padding: '28px 26px 24px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 18, overflow: 'hidden' }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--t-accent-tint)', border: '1px solid rgba(168,85,247,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: 'var(--t-accent-bright)', marginBottom: 18 }}>{icon}</div>
                 <h3 style={{ fontFamily: 'var(--font-sans)', fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 10px' }}>{title}</h3>
-                <p style={{ fontSize: 14, color: 'var(--fg-3)', lineHeight: 1.55, margin: '0 0 20px' }}>{desc}</p>
-                <div style={{ height: 110, margin: '0 -26px -24px', padding: '16px 26px', borderTop: '1px dashed var(--border)', background: 'var(--bg)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <p style={{ fontSize: 14, color: 'var(--t-fg-3)', lineHeight: 1.55, margin: '0 0 20px' }}>{desc}</p>
+                <div style={{ height: 110, margin: '0 -26px -24px', padding: '16px 26px', borderTop: '1px dashed var(--t-border)', background: 'var(--t-bg)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   {idx === 0 && <PolicyMini />}
                   {idx === 1 && <CheckpointMini />}
                   {idx === 2 && <ChainMini steps={t.importSteps} />}
@@ -644,13 +644,13 @@ export default function LandingPage() {
 
         {/* ====== PROOF WALL ====== */}
         <section style={{ maxWidth: 1440, margin: '0 auto', padding: '0 40px 80px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', background: 'var(--bg-elev-1)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 18, overflow: 'hidden' }}>
             {(t.proofItems as ProofRow[]).map(({ k, v, d, grad, mono }, i) => (
-              <div key={k} style={{ padding: '28px 26px', borderRight: i < 3 ? '1px solid var(--border)' : undefined, position: 'relative' }}>
-                <div style={{ position: 'absolute', left: 0, top: 0, width: 2, height: 24, background: 'var(--accent)', opacity: .5 }} />
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--fg-5)' }}>{k}</div>
-                <div style={{ fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)', fontSize: mono ? 22 : 44, fontWeight: 900, letterSpacing: '-.03em', margin: '6px 0 2px', lineHeight: 1, ...(grad ? { background: 'linear-gradient(90deg, var(--accent-bright), var(--accent))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' } : { color: 'var(--fg-0)' }) }}>{v}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-4)', marginTop: 4 }}>{d}</div>
+              <div key={k} style={{ padding: '28px 26px', borderRight: i < 3 ? '1px solid var(--t-border)' : undefined, position: 'relative' }}>
+                <div style={{ position: 'absolute', left: 0, top: 0, width: 2, height: 24, background: 'var(--t-accent)', opacity: .5 }} />
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-fg-5)' }}>{k}</div>
+                <div style={{ fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)', fontSize: mono ? 22 : 44, fontWeight: 900, letterSpacing: '-.03em', margin: '6px 0 2px', lineHeight: 1, ...(grad ? { background: 'linear-gradient(90deg, var(--t-accent-bright), var(--t-accent))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' } : { color: 'var(--t-fg)' }) }}>{v}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)', marginTop: 4 }}>{d}</div>
               </div>
             ))}
           </div>
@@ -660,8 +660,8 @@ export default function LandingPage() {
         <section style={{ maxWidth: 1440, margin: '0 auto', padding: '0 40px 80px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--accent-bright)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ display: 'inline-block', width: 22, height: 1, background: 'var(--accent)' }} />{t.tplEyebrow}
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--t-accent-bright)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ display: 'inline-block', width: 22, height: 1, background: 'var(--t-accent)' }} />{t.tplEyebrow}
               </div>
               <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 36, fontWeight: 900, letterSpacing: '-.02em', margin: 0 }}>{t.tplH2}</h2>
             </div>
@@ -669,15 +669,15 @@ export default function LandingPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
             {t.templates.map(({ alias, title, cjk, desc }) => (
-              <HoverCard key={alias} onClick={() => pickTemplate(alias)} style={{ padding: '18px 20px', background: 'var(--bg-elev-1)', border: '1px solid var(--border)', borderRadius: 14, cursor: 'pointer' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.12em', color: 'var(--accent-bright)', fontWeight: 700 }}>{alias}</div>
+              <HoverCard key={alias} onClick={() => pickTemplate(alias)} style={{ padding: '18px 20px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 14, cursor: 'pointer' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.12em', color: 'var(--t-accent-bright)', fontWeight: 700 }}>{alias}</div>
                 <h4 style={{ fontFamily: 'var(--font-sans)', fontSize: 17, fontWeight: 800, letterSpacing: '-.015em', margin: '3px 0 8px', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  {title}<span style={{ color: 'var(--fg-5)', fontSize: 13 }}>{cjk}</span>
+                  {title}<span style={{ color: 'var(--t-fg-5)', fontSize: 13 }}>{cjk}</span>
                 </h4>
-                <p style={{ fontSize: 12, color: 'var(--fg-3)', lineHeight: 1.5, margin: '0 0 14px' }}>{desc}</p>
-                <div style={{ paddingTop: 10, borderTop: '1px dashed var(--border)', display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>
+                <p style={{ fontSize: 12, color: 'var(--t-fg-3)', lineHeight: 1.5, margin: '0 0 14px' }}>{desc}</p>
+                <div style={{ paddingTop: 10, borderTop: '1px dashed var(--t-border)', display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>
                   <span>{t.tplFooterUse}</span>
-                  <span style={{ color: 'var(--accent-bright)' }}>{t.tplFooterPreview}</span>
+                  <span style={{ color: 'var(--t-accent-bright)' }}>{t.tplFooterPreview}</span>
                 </div>
               </HoverCard>
             ))}
@@ -686,23 +686,23 @@ export default function LandingPage() {
 
         {/* ====== IMPORT CID ====== */}
         <section style={{ maxWidth: 1440, margin: '0 auto', padding: '0 40px 80px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 32, padding: 40, background: 'radial-gradient(ellipse at top left, rgba(168,85,247,.12), transparent 55%), radial-gradient(ellipse at bottom right, rgba(59,130,246,.08), transparent 55%), var(--bg-elev-1)', border: '1px solid var(--border)', borderRadius: 24, position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: 'linear-gradient(180deg, var(--accent), transparent)' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 32, padding: 40, background: 'radial-gradient(ellipse at top left, rgba(168,85,247,.12), transparent 55%), radial-gradient(ellipse at bottom right, rgba(59,130,246,.08), transparent 55%), var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 24, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: 'linear-gradient(180deg, var(--t-accent), transparent)' }} />
             <div>
               <div style={{ fontSize: 40, fontWeight: 900, letterSpacing: '-.03em', lineHeight: 1.05 }}>
                 {t.importH2a}<br />
-                <span style={{ background: 'linear-gradient(90deg, var(--accent-bright), var(--accent))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.importH2b}</span>
+                <span style={{ background: 'linear-gradient(90deg, var(--t-accent-bright), var(--t-accent))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.importH2b}</span>
               </div>
-              <p style={{ fontSize: 14, color: 'var(--fg-3)', margin: '14px 0 24px', lineHeight: 1.6, maxWidth: 520 }}>{t.importDesc}</p>
+              <p style={{ fontSize: 14, color: 'var(--t-fg-3)', margin: '14px 0 24px', lineHeight: 1.6, maxWidth: 520 }}>{t.importDesc}</p>
               <div style={{ display: 'flex', gap: 8, maxWidth: 620 }}>
-                <input ref={cidRef} className="sf-input" placeholder={t.importPlaceholder} style={{ height: 50, fontFamily: 'var(--font-mono)', fontSize: 12, paddingLeft: 14, background: 'var(--bg)' }} />
+                <input ref={cidRef} className="sf-input" placeholder={t.importPlaceholder} style={{ height: 50, fontFamily: 'var(--font-mono)', fontSize: 12, paddingLeft: 14, background: 'var(--t-bg)' }} />
                 <button className="sf-btn sf-btn-primary" style={{ height: 50, padding: '0 24px', flexShrink: 0 }} onClick={goImport}>{t.importBtn}</button>
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, justifyContent: 'center' }}>
               {t.importSteps.map((step, n) => (
-                <div key={n} style={{ display: 'flex', gap: 10, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-3)', padding: '10px 12px', background: 'var(--skin-panel)', border: '1px solid var(--border)', borderRadius: 10 }}>
-                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--accent-tint)', color: 'var(--accent-bright)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, border: '1px solid rgba(168,85,247,.3)', flexShrink: 0 }}>{n + 1}</div>
+                <div key={n} style={{ display: 'flex', gap: 10, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-3)', padding: '10px 12px', background: 'var(--skin-panel)', border: '1px solid var(--t-border)', borderRadius: 10 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, border: '1px solid rgba(168,85,247,.3)', flexShrink: 0 }}>{n + 1}</div>
                   {step}
                 </div>
               ))}
@@ -714,9 +714,9 @@ export default function LandingPage() {
         <div style={{ position: 'relative', maxWidth: 1440, margin: '40px auto 0', padding: '60px 40px', textAlign: 'center', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle, rgba(168,85,247,.18), transparent 65%)', pointerEvents: 'none', filter: 'blur(30px)' }} />
           <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 'clamp(48px, 5vw, 76px)', fontWeight: 900, letterSpacing: '-.04em', lineHeight: 1, margin: '0 0 14px', position: 'relative', zIndex: 2 }}>
-            {t.ctaBandH2a}{' '}<span style={{ background: 'linear-gradient(90deg, var(--accent-bright), var(--accent))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.ctaBandH2b}</span>
+            {t.ctaBandH2a}{' '}<span style={{ background: 'linear-gradient(90deg, var(--t-accent-bright), var(--t-accent))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.ctaBandH2b}</span>
           </h2>
-          <p style={{ fontSize: 17, color: 'var(--fg-3)', margin: '0 auto 30px', maxWidth: 560, position: 'relative', zIndex: 2 }}>{t.ctaBandSub}</p>
+          <p style={{ fontSize: 17, color: 'var(--t-fg-3)', margin: '0 auto 30px', maxWidth: 560, position: 'relative', zIndex: 2 }}>{t.ctaBandSub}</p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', position: 'relative', zIndex: 2 }}>
             <button onClick={openEditor} className="sf-btn sf-btn-primary" style={{ height: 52, padding: '0 30px', fontSize: 14, position: 'relative', overflow: 'hidden' }}>
               <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent)', animation: 'sf-drift-x 3s ease-in-out infinite' }} />
@@ -727,16 +727,16 @@ export default function LandingPage() {
         </div>
 
         {/* ====== FOOTER ====== */}
-        <footer style={{ borderTop: '1px solid var(--border)', padding: '32px 40px', maxWidth: 1440, margin: '40px auto 0', display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-4)' }}>
+        <footer style={{ borderTop: '1px solid var(--t-border)', padding: '32px 40px', maxWidth: 1440, margin: '40px auto 0', display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)' }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div className="sf-logo-mark" style={{ width: 20, height: 20, borderRadius: 5, fontSize: 12 }}>S</div>
             <span>{t.footerCopy}</span>
           </div>
           <div style={{ display: 'flex', gap: 20 }}>
             {t.footerLinks.map((link) => (
-              <a key={link} href="#" style={{ color: 'var(--fg-4)', textDecoration: 'none' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--fg-2)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--fg-4)')}>
+              <a key={link} href="#" style={{ color: 'var(--t-fg-4)', textDecoration: 'none' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--t-fg-2)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--t-fg-4)')}>
                 {link}
               </a>
             ))}

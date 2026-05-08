@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ShadowFlow — 让每个人都能设计自己的 AI 协作团队</title>
+    <!-- Pre-paint theme bootstrap: stamp data-theme on <html> before
+         the first paint so [data-theme="night"] / [data-theme="day"]
+         selectors and var(--t-bg) resolve from frame 1. The actual
+         user preference is loaded from the backend by useTheme on
+         mount and may flip this to "day"; defaulting to "night" here
+         matches the :root token block so existing dark UI is unchanged.
+         If matchMedia indicates a light OS, prefer "day" to soften the
+         FOUC for users who picked "system" or "light". -->
+    <script>
+      (function () {
+        var t = 'night';
+        try {
+          if (window.matchMedia && !window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            t = 'day';
+          }
+        } catch (_) {}
+        document.documentElement.setAttribute('data-theme', t);
+      })();
+    </script>
     <meta name="description" content="链上可验证的 AI 多 Agent 协作平台，团队即资产" />
     <meta property="og:title" content="让每个人都能设计自己的 AI 协作团队，团队本身是链上资产" />
     <meta property="og:description" content="链上可验证的 AI 多 Agent 协作平台，团队即资产" />

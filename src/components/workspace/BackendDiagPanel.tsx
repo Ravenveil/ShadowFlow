@@ -51,14 +51,14 @@ export function BackendDiagPanel({ onClose }: { onClose: () => void }) {
   return (
     <div style={{
       position: 'fixed', top: 80, right: 20, width: 480, zIndex: 100,
-      background: 'var(--skin-panel)', border: '1px solid var(--border)',
+      background: 'var(--skin-panel)', border: '1px solid var(--t-border)',
       borderRadius: 10, boxShadow: 'var(--shadow-pop)', padding: 14,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700 }}>
           <Stethoscope size={14} strokeWidth={2} /> 后端连通诊断
         </span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>
           → {API_BASE}
         </span>
         <span style={{ flex: 1 }} />
@@ -74,8 +74,8 @@ export function BackendDiagPanel({ onClose }: { onClose: () => void }) {
 
       <div style={{
         marginTop: 10, padding: '6px 8px', borderRadius: 5,
-        background: 'var(--bg-elev-2)', border: '1px solid var(--border)',
-        fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)',
+        background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
+        fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)',
         lineHeight: 1.5,
       }}>
         三项都 ✓ 即代表前端 → Python 后端 → 数据返回 全栈通。<br />
@@ -90,24 +90,24 @@ function Row({ label, result }: { label: string; result: Result }) {
     result.kind === 'ok'      ? ['var(--status-ok)',     '✓ ok']
     : result.kind === 'err'   ? ['var(--status-reject)', '✗ err']
     : result.kind === 'loading' ? ['var(--status-run)',  '… run']
-    : ['var(--fg-5)', '— idle'];
+    : ['var(--t-fg-5)', '— idle'];
 
   return (
     <div style={{
       display: 'flex', alignItems: 'flex-start', gap: 8,
       padding: '6px 8px', borderRadius: 5, marginTop: 4,
-      background: 'var(--bg-elev-2)', border: '1px solid var(--border)',
+      background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
     }}>
       <span style={{
         fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
         color, minWidth: 50,
       }}>{badge}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--fg-2)' }}>{label}</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--t-fg-2)' }}>{label}</div>
         {result.kind === 'ok' && (
           <pre style={{
             margin: '3px 0 0', fontFamily: 'var(--font-mono)', fontSize: 9.5,
-            color: 'var(--fg-3)', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 90, overflow: 'auto',
+            color: 'var(--t-fg-3)', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 90, overflow: 'auto',
           }}>{JSON.stringify(result.data, null, 1).slice(0, 400)}{JSON.stringify(result.data).length > 400 ? '…' : ''}</pre>
         )}
         {result.kind === 'err' && (
@@ -116,7 +116,7 @@ function Row({ label, result }: { label: string; result: Result }) {
           </div>
         )}
         {result.kind === 'ok' && (
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-5)', marginTop: 2 }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)', marginTop: 2 }}>
             {result.ms}ms
           </div>
         )}

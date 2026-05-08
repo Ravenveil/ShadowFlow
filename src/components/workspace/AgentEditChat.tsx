@@ -121,8 +121,8 @@ export function AgentEditChat({ agentId, onAgentUpdated }: AgentEditChatProps) {
         style={{
           margin: '0 0 2px',
           padding: '10px 14px',
-          background: 'var(--bg-elev-1)',
-          border: '1px solid var(--border)',
+          background: 'var(--t-panel)',
+          border: '1px solid var(--t-border)',
           borderRadius: 10,
           cursor: 'pointer',
           display: 'flex',
@@ -131,7 +131,7 @@ export function AgentEditChat({ agentId, onAgentUpdated }: AgentEditChatProps) {
           transition: 'border-color 120ms',
         }}
         onMouseOver={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-        onMouseOut={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+        onMouseOut={e => (e.currentTarget.style.borderColor = 'var(--t-border)')}
       >
         <span style={{ width: 14, height: 14, display: 'flex', color: 'var(--accent-bright)' }}>{FBIcons.chat}</span>
         <span style={{ fontSize: 12, color: 'var(--fg-4)' }}>对话修改 Agent ... 说"把 soul 改成..."、粘贴 skill 链接</span>
@@ -142,14 +142,14 @@ export function AgentEditChat({ agentId, onAgentUpdated }: AgentEditChatProps) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column',
-      border: '1px solid var(--border)', borderRadius: 10,
-      background: 'var(--bg-elev-1)', overflow: 'hidden',
+      border: '1px solid var(--t-border)', borderRadius: 10,
+      background: 'var(--t-panel)', overflow: 'hidden',
       maxHeight: 360, minHeight: 180,
     }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6,
-        padding: '7px 12px', borderBottom: '1px solid var(--border)',
+        padding: '7px 12px', borderBottom: '1px solid var(--t-border)',
         background: 'var(--skin-panel)', flexShrink: 0,
       }}>
         <span style={{ width: 14, height: 14, display: 'flex', color: 'var(--accent-bright)' }}>{FBIcons.chat}</span>
@@ -191,8 +191,8 @@ export function AgentEditChat({ agentId, onAgentUpdated }: AgentEditChatProps) {
                 fontFamily: 'var(--font-mono)',
                 fontSize: 11,
               } : {
-                background: 'var(--bg-elev-2)',
-                border: '1px solid var(--border)',
+                background: 'var(--t-panel-2)',
+                border: '1px solid var(--t-border)',
                 color: 'var(--fg-2)',
               }),
             }}>
@@ -220,7 +220,7 @@ export function AgentEditChat({ agentId, onAgentUpdated }: AgentEditChatProps) {
         {sending && (
           <div style={{
             padding: '6px 10px', borderRadius: 8,
-            background: 'var(--bg-elev-2)', border: '1px solid var(--border)',
+            background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
             fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-4)',
             alignSelf: 'flex-start',
           }}>
@@ -234,13 +234,13 @@ export function AgentEditChat({ agentId, onAgentUpdated }: AgentEditChatProps) {
         flex: messages.length === 0 ? 1 : undefined,
         flexShrink: 0,
         display: 'flex', flexDirection: 'column',
-        borderTop: messages.length > 0 ? '1px solid var(--border)' : undefined,
+        borderTop: messages.length > 0 ? '1px solid var(--t-border)' : undefined,
       }}>
         {/* Provider selector */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 3,
           padding: '4px 10px',
-          background: 'var(--bg-elev-1)', flexShrink: 0,
+          background: 'var(--t-panel)', flexShrink: 0,
         }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-5)', marginRight: 3 }}>LLM</span>
           {PROVIDERS.map(p => (
@@ -250,7 +250,7 @@ export function AgentEditChat({ agentId, onAgentUpdated }: AgentEditChatProps) {
               style={{
                 fontFamily: 'var(--font-mono)', fontSize: 9.5,
                 padding: '1px 6px', borderRadius: 3,
-                border: p === provider ? '1px solid var(--accent-bright)' : '1px solid var(--border)',
+                border: p === provider ? '1px solid var(--accent-bright)' : '1px solid var(--t-border)',
                 background: p === provider ? 'var(--accent-bright)' : 'transparent',
                 color: p === provider ? '#fff' : 'var(--fg-4)',
                 cursor: 'pointer', transition: 'all 0.12s',
