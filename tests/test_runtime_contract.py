@@ -390,7 +390,10 @@ def test_fastapi_run_returns_400_for_inline_artifact_without_content():
     )
 
     assert run_response.status_code == 400
-    assert "requires content when mode=inline" in run_response.json()["detail"]
+    detail = run_response.json()["detail"]
+    # Server now returns structured {"error": {"code": ..., "message": ...}} envelope
+    error_msg = detail if isinstance(detail, str) else detail.get("error", {}).get("message", "")
+    assert "requires content when mode=inline" in error_msg
 
 
 def test_runtime_service_can_resume_from_checkpoint():

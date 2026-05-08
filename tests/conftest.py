@@ -5,6 +5,24 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """全局 limiter 隔离：每个测试前后清空 slowapi MemoryStorage 计数，
+    防止跨测试文件的限速状态积累导致非限速测试误收 429。
+    """
+    try:
+        from shadowflow.api._limiter import limiter
+        limiter.reset()
+    except Exception:
+        pass
+    yield
+    try:
+        from shadowflow.api._limiter import limiter
+        limiter.reset()
+    except Exception:
+        pass
+
+
 PHASE1_BASELINE_TEST_FILES = {
     "test_runtime_contract.py",
     "test_runtime_examples.py",

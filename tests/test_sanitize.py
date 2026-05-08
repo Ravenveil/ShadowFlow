@@ -369,3 +369,52 @@ class TestAuthorLineageWhitelist:
         traj2 = {"metadata": {"author_lineage": "not-a-list"}}
         cleaned2, _ = sanitize_trajectory(traj2)
         assert cleaned2["metadata"]["author_lineage"] == []
+
+
+# ---------------------------------------------------------------------------
+# Story 5-2 追补 — 5 种新增凭证模式 (M1 修复)
+# ---------------------------------------------------------------------------
+
+
+class TestNewCredentialPatterns:
+    def test_aws_access_key_detected(self):
+        traj = {"output": "Using AKIAIOSFODNN7EXAMPLE to connect"}
+        cleaned, removed = sanitize_trajectory(traj)
+        assert "[REDACTED]" in cleaned["output"]
+        assert any(r.pattern == "aws_access_key" for r in removed)
+
+    def test_aws_access_key_mask(self):
+        masked = _mask_sample("AKIAIOSFODNN7EXAMPLE", "aws_access_key")
+        assert masked.startswith("AKIA")
+        assert "****" in masked
+        assert masked.endswith("MPLE")
+
+    def test_slack_token_detected(self):
+        traj = {"config": "token=xoxb-1234567890-abcdefghij"}
+        cleaned, removed = sanitize_trajectory(traj)
+        assert "[REDACTED]" in cleaned["config"]
+        assert any(r.pattern == "slack_token" for r in removed)
+
+    def test_github_fine_grained_pat_detected(self):
+        pat = "github_pat_" + "A" * 82
+        traj = {"meta": {"token": pat}}
+        cleaned, removed = sanitize_trajectory(traj)
+        # Blacklist field 'token' triggers first, or pattern match — both redact
+        assert cleaned["meta"]["token"] == "[REDACTED]"
+
+    def test_anthropic_api_key_detected(self):
+        traj = {"msg": "key=sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ12345678"}
+        cleaned, removed = sanitize_trajectory(traj)
+        assert "[REDACTED]" in cleaned["msg"]
+        assert any(r.pattern == "anthropic_api_key" for r in removed)
+
+    def test_bearer_token_header_detected(self):
+        traj = {"headers": "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0In0.xyz"}
+        cleaned, removed = sanitize_trajectory(traj)
+        assert "[REDACTED]" in cleaned["headers"]
+        assert any(r.pattern in ("bearer_token_header", "jwt") for r in removed)
+
+    def test_total_pattern_count_at_least_14(self):
+        """Regression guard: sanitizer must cover ≥ 14 credential patterns."""
+        from shadowflow.runtime.sanitize import _PATTERNS
+        assert len(_PATTERNS) >= 14
