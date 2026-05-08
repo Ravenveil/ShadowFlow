@@ -3,13 +3,14 @@ import Editor, { type OnMount } from '@monaco-editor/react';
 import type * as Monaco from 'monaco-editor';
 import { useYamlEditorStore } from '../../hooks/useYamlEditorStore';
 import { parseWorkflowYaml } from '../../lib/yamlSerializer';
+import { AlertTriangle } from '../../../common/icons/iconRegistry';
 
-// P3-2 fix: define theme once at module level; calling defineTheme on every mount
-// is safe but causes a full theme object diff on hot-reload and multi-instance scenarios.
-let _sfDarkDefined = false;
-function ensureSfDarkTheme(monaco: typeof Monaco) {
-  if (_sfDarkDefined) return;
-  _sfDarkDefined = true;
+// Monaco theme spec only accepts literal hex (no CSS var()), so we define
+// both day + night themes and toggle via setTheme on data-theme change.
+let _sfThemesDefined = false;
+function ensureSfThemes(monaco: typeof Monaco) {
+  if (_sfThemesDefined) return;
+  _sfThemesDefined = true;
   monaco.editor.defineTheme('sf-dark', {
     base: 'vs-dark',
     inherit: true,
@@ -25,6 +26,28 @@ function ensureSfDarkTheme(monaco: typeof Monaco) {
       'editorBracketMatch.border': '#a78bfa',
     },
   });
+  monaco.editor.defineTheme('sf-light', {
+    base: 'vs',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#FFFFFF',
+      'editor.foreground': '#0A0A0A',
+      'editor.lineHighlightBackground': '#F4F3EE',
+      'editorLineNumber.foreground': '#A1A1AA',
+      'editorCursor.foreground': '#7C3AED',
+      'editor.selectionBackground': '#E9D5FF',
+      'editorBracketMatch.background': '#EDEBE3',
+      'editorBracketMatch.border': '#7C3AED',
+    },
+  });
+}
+
+function readMonacoTheme(): 'sf-dark' | 'sf-light' {
+  if (typeof document === 'undefined') return 'sf-dark';
+  return document.documentElement.getAttribute('data-theme') === 'day'
+    ? 'sf-light'
+    : 'sf-dark';
 }
 
 interface YamlEditorProps {
@@ -81,10 +104,21 @@ export function YamlEditor({ onChange, onBlur, height = '100%' }: YamlEditorProp
       onBlurRef.current?.(text);
     });
 
-    // P3-2 fix: defineTheme extracted to module-level ensureSfDarkTheme (called once)
-    ensureSfDarkTheme(monaco);
-    monaco.editor.setTheme('sf-dark');
+    ensureSfThemes(monaco);
+    monaco.editor.setTheme(readMonacoTheme());
   }, [applyErrorMarkers]);
+
+  // Re-apply Monaco theme whenever documentElement[data-theme] flips.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const target = document.documentElement;
+    const obs = new MutationObserver(() => {
+      const monaco = monacoRef.current;
+      if (monaco) monaco.editor.setTheme(readMonacoTheme());
+    });
+    obs.observe(target, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
 
   const handleChange = useCallback((value: string | undefined) => {
     const text = value ?? '';
@@ -93,7 +127,7 @@ export function YamlEditor({ onChange, onBlur, height = '100%' }: YamlEditorProp
   }, [setYamlText, onChange]);
 
   return (
-    <div style={{ height, display: 'flex', flexDirection: 'column', background: '#0d1117' }}>
+    <div style={{ height, display: 'flex', flexDirection: 'column', background: 'var(--t-panel)' }}>
       {lastYamlError && (
         // P2-4 fix: add role="alert" + aria-live so screen readers announce parse errors
         <div
@@ -112,7 +146,7 @@ export function YamlEditor({ onChange, onBlur, height = '100%' }: YamlEditorProp
             flexShrink: 0,
           }}
         >
-          ⚠ {lastYamlError}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><AlertTriangle size={11} strokeWidth={2} /> {lastYamlError}</span>
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0 }}>

@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import type { NodeData } from '../../types';
 
-const COLOR = '#3B82F6';  // blue — barrier accent
+const COLOR = 'var(--t-run)';  // blue — barrier accent
 
 export const BarrierNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   const status = data.status || 'idle';
@@ -10,12 +10,12 @@ export const BarrierNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   const arrived = (data.config as Record<string, unknown>)?.arrived as number ?? 0;
   const total   = (data.config as Record<string, unknown>)?.total   as number ?? 2;
 
-  const dotColor = status === 'success' ? '#10B981' : status === 'error' ? '#EF4444' : COLOR;
+  const dotColor = status === 'success' ? 'var(--t-ok)' : status === 'error' ? 'var(--t-err)' : COLOR;
 
   return (
     <div style={{
-      background: '#0F0F12',
-      border: `1.5px solid ${selected ? COLOR : '#27272A'}`,
+      background: 'var(--t-panel)',
+      border: `1.5px solid ${selected ? COLOR : 'var(--t-border)'}`,
       borderRadius: 12,
       minWidth: 152,
       maxWidth: 192,
@@ -33,13 +33,13 @@ export const BarrierNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
         {/* P3-1 fix: role="img" + aria-label for screen reader clarity */}
         <span role="img" aria-label="barrier gate" style={{ fontSize: 15, lineHeight: 1 }}>⊞</span>
-        <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 700, color: '#FAFAFA', letterSpacing: '-.01em' }}>
+        <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 700, color: 'var(--t-fg)', letterSpacing: '-.01em' }}>
           Barrier
         </span>
       </div>
 
       {/* arrival counter */}
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: isRunning ? COLOR : '#71717A', marginBottom: 8 }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: isRunning ? COLOR : 'var(--t-fg-4)', marginBottom: 8 }}>
         arrived · {arrived}/{total}
       </div>
 
@@ -60,7 +60,7 @@ export const BarrierNode = memo(({ data, selected }: NodeProps<NodeData>) => {
         <Handle key={`in-${i}`} type="target" position={Position.Top} id={`in-${i}`}
           style={{
             width: 9, height: 9, borderRadius: '50%',
-            background: '#0C0C10',
+            background: 'var(--t-bg)',
             border: `1.5px solid ${COLOR}`,
             left: `${((i + 1) / (arr.length + 1)) * 100}%`,
             top: -5,
@@ -71,7 +71,7 @@ export const BarrierNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
       {/* single output handle (bottom) */}
       <Handle type="source" position={Position.Bottom} id="out"
-        style={{ width: 10, height: 10, borderRadius: '50%', background: '#0C0C10', border: `1.5px solid ${COLOR}`, bottom: -5, left: '50%', transform: 'translateX(-50%)' }}
+        style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--t-bg)', border: `1.5px solid ${COLOR}`, bottom: -5, left: '50%', transform: 'translateX(-50%)' }}
       />
     </div>
   );

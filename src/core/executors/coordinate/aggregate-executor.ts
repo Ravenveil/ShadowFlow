@@ -261,10 +261,13 @@ export class AggregateExecutor extends BaseNodeExecutor {
    */
   private merge(data: any[]): any {
     const result: Record<string, any> = {};
+    const UNSAFE = new Set(['__proto__', 'constructor', 'prototype']);
 
     for (const item of data) {
-      if (typeof item === 'object' && item !== null) {
-        Object.assign(result, item);
+      if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+        for (const [k, v] of Object.entries(item)) {
+          if (!UNSAFE.has(k)) result[k] = v;
+        }
       }
     }
 

@@ -3,8 +3,12 @@
 // ============================================================================
 
 import { useEffect, useState } from 'react';
-import { PRESETS, type TemplatePreset } from './templates/presets';
+import { useNavigate } from 'react-router-dom';
+import { PRESETS } from './templates/presets';
 import { listUserTemplates, deleteUserTemplate, type UserTemplate } from './templates/userTemplates';
+import { QUICK_DEMO_PROMPTS } from './core/constants/quickDemoPrompts';
+import { TemplateCard as QuickDemoCard } from './core/components/templates/TemplateCard';
+import { listTemplates, type TemplateListItem } from './api/templates';
 
 type Lang = 'EN' | 'CN';
 
@@ -50,6 +54,10 @@ const COPY = {
     retry:    'Retry depth',
     featured: '★ FEATURED',
     bilingual:'中 bilingual',
+    sectionBuilder:  'Builder Generated',
+    emptyBuilder:    'No Builder-generated templates yet. Use the Agent Builder to publish your first Agent.',
+    builderBadge:    'Builder',
+    openInEditor:    'Open in editor',
   },
   CN: {
     title:    '选择模板',
@@ -72,30 +80,26 @@ const COPY = {
     retry:    'Retry depth',
     featured: '★ 精选',
     bilingual:'中英双语',
+    sectionBuilder:  'Builder 生成',
+    emptyBuilder:    '还没有 Builder 生成的模板。使用 Agent Builder 发布你的第一个 Agent。',
+    builderBadge:    'Builder',
+    openInEditor:    '在编辑器中打开',
   },
 } as const;
 
-// Background accent colors for each template's preview ribbon
-const RIBBON_COLORS: Record<string, string> = {
-  academic_paper: '#A855F7',
-  solo_company:   '#22D3EE',
-  newsroom:       '#0EA5E9',
-  modern_startup: '#10B981',
-  blank:          '#71717A',
-};
 
 interface TemplatesPageProps {
   onBack: () => void;
   onPick: (alias: string) => void;
+  onQuickDemo: (alias: string) => void;
   lang: Lang;
   onToggleLang: () => void;
 }
 
-export default function TemplatesPage({ onBack, onPick, lang, onToggleLang }: TemplatesPageProps) {
+export default function TemplatesPage({ onBack, onPick, onQuickDemo, lang, onToggleLang }: TemplatesPageProps) {
   const t = COPY[lang];
   const allAliases = Object.keys(PRESETS);
-  const featured = PRESETS.academic_paper;
-  const rest = allAliases.filter(a => a !== 'academic_paper').map(a => PRESETS[a]);
+  const allTemplates = allAliases.map(a => PRESETS[a]);
 
   const [userTpls, setUserTpls] = useState<UserTemplate[]>([]);
   useEffect(() => { setUserTpls(listUserTemplates()); }, []);
@@ -105,6 +109,14 @@ export default function TemplatesPage({ onBack, onPick, lang, onToggleLang }: Te
     deleteUserTemplate(tpl.alias);
     refreshUser();
   };
+
+  // Builder-generated templates (Story 8.6 AC6)
+  const [builderTpls, setBuilderTpls] = useState<TemplateListItem[]>([]);
+  useEffect(() => {
+    listTemplates()
+      .then(items => setBuilderTpls(items.filter(it => it.builder_origin === 'builder')))
+      .catch(() => { /* silent — server may not be running in local dev */ });
+  }, []);
 
   return (
     <div style={{ minHeight: '100vh', background: V.bg, color: V.fg1 }}>
@@ -133,6 +145,17 @@ export default function TemplatesPage({ onBack, onPick, lang, onToggleLang }: Te
 
       {/* Body */}
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '48px 40px 80px' }}>
+        {/* Breadcrumb */}
+        <nav style={{ fontFamily: V.mono, fontSize: 11, color: V.fg5, marginBottom: 24, display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', color: V.fg4, cursor: 'pointer', fontFamily: V.mono, fontSize: 11, padding: 0 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = V.fg1; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = V.fg4; }}>
+            Home
+          </button>
+          <span style={{ color: V.fg5 }}>&gt;</span>
+          <span style={{ color: V.fg3 }}>Templates</span>
+        </nav>
+
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 40, marginBottom: 36 }}>
           <div>
@@ -146,20 +169,47 @@ export default function TemplatesPage({ onBack, onPick, lang, onToggleLang }: Te
               {t.sub}
             </p>
           </div>
-          <button
-            onClick={() => onPick('blank')}
-            style={{ fontFamily: V.sans, fontSize: 13, fontWeight: 600, color: 'var(--accent-ink)', background: V.accent, border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', flexShrink: 0, height: 40 }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-bright)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent)'; }}>
-            {t.blankOpen}
-          </button>
         </div>
 
-        {/* Featured */}
-        <div style={{ marginBottom: 40 }}>
-          <SectionHeader label={t.sectionFeatured} />
-          <FeaturedCard preset={featured} lang={lang} copy={t} onPick={() => onPick(featured.alias)} />
+        {/* 6 Template Quick Demo Gallery */}
+        <style>{`
+          .sf-tpl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+          @media (max-width: 1024px) { .sf-tpl-grid { grid-template-columns: repeat(2, 1fr); } }
+          @media (max-width: 640px) { .sf-tpl-grid { grid-template-columns: 1fr; } }
+        `}</style>
+        <div className="sf-tpl-grid" style={{ marginBottom: 48 }}>
+          {allTemplates.map(p => {
+            const demo = QUICK_DEMO_PROMPTS[p.alias] ?? QUICK_DEMO_PROMPTS.blank;
+            return (
+              <QuickDemoCard
+                key={p.alias}
+                preset={p}
+                demo={demo}
+                lang={lang}
+                onQuickDemo={() => p.alias === 'blank' ? onPick('blank') : onQuickDemo(p.alias)}
+                onCustomEdit={() => onPick(p.alias)}
+              />
+            );
+          })}
         </div>
+
+        {/* Builder Generated templates (Story 8.6 AC6) */}
+        {builderTpls.length > 0 && (
+          <div style={{ marginBottom: 40 }}>
+            <SectionHeader label={t.sectionBuilder} meta={`${builderTpls.length}`} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+              {builderTpls.map(tpl => (
+                <BuilderTemplateCard
+                  key={tpl.template_id}
+                  tpl={tpl}
+                  builderBadge={t.builderBadge}
+                  openInEditorLabel={t.openInEditor}
+                  onPick={() => onPick(tpl.template_id)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* My templates */}
         <div style={{ marginBottom: 40 }}>
@@ -175,14 +225,6 @@ export default function TemplatesPage({ onBack, onPick, lang, onToggleLang }: Te
               ))}
             </div>
           )}
-        </div>
-
-        {/* Grid of other templates */}
-        <SectionHeader label={t.sectionAll} meta={t.remaining(rest.length)} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginTop: 14 }}>
-          {rest.map(p => (
-            <TemplateCard key={p.alias} preset={p} lang={lang} copy={t} onPick={() => onPick(p.alias)} />
-          ))}
         </div>
       </div>
     </div>
@@ -202,179 +244,6 @@ function SectionHeader({ label, meta }: { label: string; meta?: string }) {
   );
 }
 
-function FeaturedCard({ preset, lang, copy, onPick }: { preset: TemplatePreset; lang: Lang; copy: typeof COPY.EN; onPick: () => void }) {
-  const [hov, setHov] = useState(false);
-  const ribbon = RIBBON_COLORS[preset.alias] || V.accent;
-
-  return (
-    <div
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{
-        display: 'grid', gridTemplateColumns: '400px 1fr',
-        background: V.panel, border: `1px solid ${hov ? 'rgba(168,85,247,.4)' : V.border}`,
-        borderRadius: 20, overflow: 'hidden', position: 'relative',
-        transition: 'all 180ms', cursor: 'default',
-      }}>
-      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: `linear-gradient(180deg, ${ribbon}, rgba(168,85,247,.1))` }} />
-
-      <div style={{ padding: '32px 32px', display: 'flex', flexDirection: 'column', gap: 16, borderRight: `1px solid ${V.border}` }}>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: V.mono, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: V.accentTint, color: V.accentBr, border: `1px solid rgba(168,85,247,.4)` }}>{copy.featured}</span>
-          <span style={{ fontFamily: V.mono, fontSize: 10, padding: '3px 8px', borderRadius: 6, background: V.elev2, color: V.fg3, border: `1px solid ${V.border}` }}>
-            TPL · {preset.alias.toUpperCase()}
-          </span>
-          <span style={{ fontFamily: V.mono, fontSize: 10, padding: '3px 8px', borderRadius: 6, background: V.elev2, color: V.fg3, border: `1px solid ${V.border}` }}>{copy.bilingual}</span>
-        </div>
-
-        <h2 style={{ fontFamily: V.sans, fontSize: 36, fontWeight: 900, letterSpacing: '-.025em', lineHeight: 1.05, margin: '4px 0 0' }}>
-          {preset.title[lang === 'CN' ? 'zh' : 'en']}
-          <span style={{ color: V.fg5, fontWeight: 700, marginLeft: 10, fontSize: 24 }}>· {preset.cjk}</span>
-        </h2>
-
-        <p style={{ fontSize: 14, color: V.fg3, lineHeight: 1.6, margin: 0 }}>
-          {preset.description[lang === 'CN' ? 'zh' : 'en']}
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px', padding: '14px 0', borderTop: `1px dashed ${V.border}`, borderBottom: `1px dashed ${V.border}` }}>
-          <Stat k={copy.agents}   v={String(preset.stats.agents)} />
-          <Stat k={copy.edges}    v={String(preset.stats.edges)} />
-          <Stat k={copy.services} v={preset.stats.services} mono />
-          <Stat k={copy.retry}    v={String(preset.stats.retryDepth)} mono />
-        </div>
-
-        <div style={{ fontFamily: V.mono, fontSize: 10.5, color: V.fg4, lineHeight: 1.6 }}>
-          <div>by <span style={{ color: V.accentBr }}>@ravenveil</span> · seed · MIT</div>
-          <div>cid://bafybei…55fbzdi</div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
-          <button onClick={onPick}
-            style={{ flex: 1.4, height: 40, fontFamily: V.sans, fontSize: 13, fontWeight: 600, color: 'var(--accent-ink)', background: V.accent, border: 'none', borderRadius: 8, cursor: 'pointer' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-bright)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent)'; }}>
-            {copy.forkOpen}
-          </button>
-          <button
-            style={{ flex: 1, height: 40, fontFamily: V.sans, fontSize: 13, fontWeight: 600, color: V.fg2, background: 'transparent', border: `1px solid ${V.border}`, borderRadius: 8, cursor: 'pointer' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = V.elev2; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}>
-            {copy.preview}
-          </button>
-        </div>
-      </div>
-
-      {/* Preview panel — shows node graph visually */}
-      <PreviewGraph preset={preset} />
-    </div>
-  );
-}
-
-function Stat({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
-  return (
-    <div>
-      <div style={{ fontFamily: V.mono, fontSize: 9.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: V.fg4 }}>{k}</div>
-      <div style={{ fontFamily: mono ? V.mono : V.sans, fontSize: mono ? 15 : 20, fontWeight: mono ? 700 : 800, letterSpacing: '-.015em', color: V.fg1, lineHeight: 1, marginTop: 4 }}>{v}</div>
-    </div>
-  );
-}
-
-function TemplateCard({ preset, lang, copy, onPick }: { preset: TemplatePreset; lang: Lang; copy: typeof COPY.EN; onPick: () => void }) {
-  const [hov, setHov] = useState(false);
-  const ribbon = RIBBON_COLORS[preset.alias] || V.accent;
-  const isBlank = preset.alias === 'blank';
-
-  return (
-    <div
-      onClick={onPick}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{
-        background: isBlank ? 'transparent' : V.panel,
-        border: isBlank
-          ? `1px dashed ${hov ? ribbon : V.borderSub}`
-          : `1px solid ${hov ? 'rgba(168,85,247,.4)' : V.border}`,
-        borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
-        transition: 'all 180ms',
-        display: 'flex', flexDirection: 'column',
-      }}>
-      {!isBlank && (
-        <div style={{ height: 120, position: 'relative', overflow: 'hidden', background: V.bg, backgroundImage: 'radial-gradient(circle, var(--bg-elev-4) 1px, transparent 1px)', backgroundSize: '14px 14px', borderBottom: `1px solid ${V.border}` }}>
-          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: ribbon, opacity: .6 }} />
-          <PreviewMini preset={preset} />
-        </div>
-      )}
-      <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-        <div style={{ fontFamily: V.mono, fontSize: 9.5, fontWeight: 700, color: V.accentBr, letterSpacing: '.12em', textTransform: 'uppercase' }}>
-          {preset.alias}
-        </div>
-        <h4 style={{ fontFamily: V.sans, fontSize: 17, fontWeight: 800, letterSpacing: '-.015em', margin: 0, display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          {preset.title[lang === 'CN' ? 'zh' : 'en']}
-          <span style={{ color: V.fg5, fontSize: 13, fontWeight: 700 }}>· {preset.cjk}</span>
-        </h4>
-        <p style={{ fontSize: 12.5, color: V.fg3, lineHeight: 1.55, margin: 0, flex: 1 }}>
-          {preset.description[lang === 'CN' ? 'zh' : 'en']}
-        </p>
-        <div style={{ paddingTop: 10, borderTop: `1px dashed ${V.border}`, display: 'flex', justifyContent: 'space-between', fontFamily: V.mono, fontSize: 10, color: V.fg4 }}>
-          {isBlank ? (
-            <span>{copy.blankOpen}</span>
-          ) : (
-            <>
-              <span>{preset.stats.agents} agents · {preset.stats.edges} edges</span>
-              <span style={{ color: V.accentBr }}>{copy.forkOpen}</span>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Simple SVG preview — dots for nodes, lines for edges
-function PreviewMini({ preset }: { preset: TemplatePreset }) {
-  if (!preset.nodes.length) return null;
-
-  // Normalize positions to fit 280×100 viewport
-  const xs = preset.nodes.map(n => n.position.x);
-  const ys = preset.nodes.map(n => n.position.y);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const rangeX = Math.max(maxX - minX, 1);
-  const rangeY = Math.max(maxY - minY, 1);
-
-  const scale = (x: number, y: number) => {
-    const sx = 20 + ((x - minX) / rangeX) * 240;
-    const sy = 20 + ((y - minY) / rangeY) * 80;
-    return { sx, sy };
-  };
-
-  const posMap = new Map<string, { sx: number; sy: number }>();
-  preset.nodes.forEach(n => posMap.set(n.id, scale(n.position.x, n.position.y)));
-
-  return (
-    <svg width="100%" height="120" viewBox="0 0 280 120" style={{ position: 'absolute', inset: 0 }}>
-      {/* edges */}
-      {preset.edges.map((e, i) => {
-        const a = posMap.get(e.source); const b = posMap.get(e.target);
-        if (!a || !b) return null;
-        const midX = (a.sx + b.sx) / 2;
-        return (
-          <path key={i}
-            d={`M ${a.sx} ${a.sy} C ${midX} ${a.sy}, ${midX} ${b.sy}, ${b.sx} ${b.sy}`}
-            stroke="rgba(168,85,247,.45)" strokeWidth={1.5} fill="none" strokeLinecap="round" />
-        );
-      })}
-      {/* nodes */}
-      {preset.nodes.map(n => {
-        const p = posMap.get(n.id);
-        if (!p) return null;
-        return (
-          <g key={n.id}>
-            <circle cx={p.sx} cy={p.sy} r={6} fill="var(--bg-elev-3)" stroke="var(--accent)" strokeWidth={1.5} />
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 function UserTemplateCard({ tpl, lang, onPick, onDelete, deleteLabel }: { tpl: UserTemplate; lang: Lang; onPick: () => void; onDelete: () => void; deleteLabel: string }) {
   const [hov, setHov] = useState(false);
@@ -386,6 +255,7 @@ function UserTemplateCard({ tpl, lang, onPick, onDelete, deleteLabel }: { tpl: U
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{
         background: V.panel,
+        /* fixme: token — rgba(168,85,247,.4) is alpha 0.4, no matching tint token */
         border: `1px solid ${hov ? 'rgba(168,85,247,.4)' : V.border}`,
         borderRadius: 14, overflow: 'hidden',
         transition: 'all 180ms',
@@ -421,53 +291,72 @@ function UserTemplateCard({ tpl, lang, onPick, onDelete, deleteLabel }: { tpl: U
   );
 }
 
-function PreviewGraph({ preset }: { preset: TemplatePreset }) {
-  if (!preset.nodes.length) return <div style={{ minHeight: 440, background: V.bg, backgroundImage: 'radial-gradient(circle, var(--bg-elev-4) 1px, transparent 1px)', backgroundSize: '18px 18px' }} />;
 
-  const xs = preset.nodes.map(n => n.position.x);
-  const ys = preset.nodes.map(n => n.position.y);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const rangeX = Math.max(maxX - minX, 1);
-  const rangeY = Math.max(maxY - minY, 1);
+// ── BuilderTemplateCard — Story 8.6 AC6 ──────────────────────────────────────
 
-  const scale = (x: number, y: number) => ({
-    sx: 80 + ((x - minX) / rangeX) * 600,
-    sy: 60 + ((y - minY) / rangeY) * 300,
-  });
-
-  const posMap = new Map<string, { sx: number; sy: number }>();
-  preset.nodes.forEach(n => posMap.set(n.id, scale(n.position.x, n.position.y)));
+function BuilderTemplateCard({ tpl, builderBadge, openInEditorLabel, onPick }: {
+  tpl: TemplateListItem;
+  builderBadge: string;
+  openInEditorLabel: string;
+  onPick: () => void;
+}) {
+  const [hov, setHov] = useState(false);
+  // Patch 19: use React Router navigate instead of <a href> hard navigation
+  const navigate = useNavigate();
 
   return (
-    <div style={{ position: 'relative', minHeight: 440, background: V.bg, backgroundImage: 'radial-gradient(circle, var(--bg-elev-4) 1px, transparent 1px)', backgroundSize: '18px 18px', overflow: 'hidden' }}>
-      <svg width="100%" height="100%" viewBox="0 0 760 440" style={{ position: 'absolute', inset: 0 }}>
-        {preset.edges.map((e, i) => {
-          const a = posMap.get(e.source); const b = posMap.get(e.target);
-          if (!a || !b) return null;
-          const midX = (a.sx + b.sx) / 2;
-          return (
-            <path key={i}
-              d={`M ${a.sx} ${a.sy} C ${midX} ${a.sy}, ${midX} ${b.sy}, ${b.sx} ${b.sy}`}
-              stroke="rgba(168,85,247,.55)" strokeWidth={2} fill="none" strokeLinecap="round" />
-          );
-        })}
-      </svg>
-      {preset.nodes.map(n => {
-        const p = posMap.get(n.id);
-        if (!p) return null;
-        return (
-          <div key={n.id} style={{
-            position: 'absolute', left: p.sx - 60, top: p.sy - 18,
-            width: 120, padding: '8px 10px', borderRadius: 10,
-            background: V.elev3 || 'var(--bg-elev-3)', border: `1px solid ${V.border}`,
-            fontFamily: V.sans, fontSize: 12, fontWeight: 700, color: V.fg1,
-            textAlign: 'center', boxShadow: '0 1px 2px rgba(0,0,0,.4)',
-          }}>
-            {n.nodeType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-          </div>
-        );
-      })}
+    <div
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      data-testid={`builder-template-card-${tpl.template_id}`}
+      style={{
+        background: V.panel,
+        /* fixme: token — rgba(168,85,247,.4) is alpha 0.4, no matching tint token */
+        border: `1px solid ${hov ? 'rgba(168,85,247,.4)' : V.border}`,
+        borderRadius: 14, overflow: 'hidden',
+        transition: 'all 180ms',
+        display: 'flex', flexDirection: 'column',
+      }}>
+      <div onClick={onPick} style={{ cursor: 'pointer', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Builder badge — distinguishes from seed templates (AC6) */}
+          <span
+            data-testid={`builder-badge-${tpl.template_id}`}
+            style={{
+              fontFamily: V.mono, fontSize: 9.5, fontWeight: 700,
+              color: 'var(--accent-ink)',
+              background: V.accent,
+              letterSpacing: '.08em', textTransform: 'uppercase',
+              padding: '1px 6px', borderRadius: 4,
+            }}>
+            {builderBadge}
+          </span>
+          <span style={{ fontFamily: V.mono, fontSize: 9.5, color: V.fg5 }}>
+            {tpl.template_id ? `${tpl.template_id.slice(0, 8)}…` : '—'}
+          </span>
+        </div>
+        <h4 style={{ fontFamily: V.sans, fontSize: 17, fontWeight: 800, letterSpacing: '-.015em', margin: 0, color: V.fg1 }}>
+          {tpl.name}
+        </h4>
+        {tpl.description && (
+          <p style={{ fontSize: 12.5, color: V.fg3, lineHeight: 1.55, margin: 0, flex: 1 }}>
+            {tpl.description}
+          </p>
+        )}
+      </div>
+      {tpl.workflow_id && (
+        <div style={{ borderTop: `1px solid ${V.borderSub}`, padding: '8px 12px', display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={() => navigate(`/editor?workflowId=${tpl.workflow_id}`)}
+            data-testid={`open-editor-btn-${tpl.template_id}`}
+            style={{ fontFamily: V.mono, fontSize: 10, color: V.accentBr, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'underline'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'none'; }}>
+            {openInEditorLabel}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
+

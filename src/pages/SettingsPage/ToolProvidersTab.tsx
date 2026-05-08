@@ -10,6 +10,7 @@
  * Credentials are shown as *** (never plain-text from backend).
  */
 import { useEffect, useState } from 'react';
+import { AlertTriangle as TpAlert } from '../../common/icons/iconRegistry';
 import type { McpProvider, RegisterProviderPayload } from '../../common/types/agent-builder';
 
 // ---------------------------------------------------------------------------
@@ -265,7 +266,7 @@ function RegisterForm({ onSuccess, onCancel }: RegisterFormProps) {
 
       {error && (
         <p className="rounded-[7px] bg-sf-reject/10 px-3 py-2 font-mono text-[11px] text-sf-reject">
-          ✕ {error}
+          <span className="inline-flex items-center gap-1.5"><TpAlert size={11} strokeWidth={2} /> {error}</span>
         </p>
       )}
 

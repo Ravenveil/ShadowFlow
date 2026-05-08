@@ -1,8 +1,11 @@
+import { useLocation, useNavigate } from 'react-router-dom';
+
 const NAV_ITEMS = [
-  { key: 'messages', label: '消息', title: '消息', icon: 'message' },
-  { key: 'templates', label: '模板', title: '模板', icon: 'templates' },
-  { key: 'runs', label: '运行', title: '运行', icon: 'runs' },
-  { key: 'archive', label: '归档', title: '归档', icon: 'archive' },
+  { key: 'start', label: '开始', title: '开始', icon: 'start', to: '/start' },
+  { key: 'messages', label: '消息', title: '消息', icon: 'message', to: '/inbox' },
+  { key: 'templates', label: '模板', title: '模板', icon: 'templates', to: '/templates' },
+  { key: 'runs', label: '运行', title: '运行', icon: 'runs', to: '/runs' },
+  { key: 'archive', label: '归档', title: '归档', icon: 'archive', to: '/catalog' },
 ] as const;
 
 function NavIcon({ kind }: { kind: (typeof NAV_ITEMS)[number]['icon'] }) {
@@ -15,6 +18,12 @@ function NavIcon({ kind }: { kind: (typeof NAV_ITEMS)[number]['icon'] }) {
   };
 
   switch (kind) {
+    case 'start':
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5">
+          <path d="M5 4l14 8-14 8V4z" {...common} />
+        </svg>
+      );
     case 'templates':
       return (
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5">
@@ -53,6 +62,8 @@ function NavIcon({ kind }: { kind: (typeof NAV_ITEMS)[number]['icon'] }) {
 }
 
 export function NarrowNav() {
+  const navigate = useNavigate();
+  const location = useLocation();
   return (
     <nav
       data-testid="narrow-nav"
@@ -66,14 +77,17 @@ export function NarrowNav() {
       </div>
 
       <div className="flex flex-col items-center gap-3">
-        {NAV_ITEMS.map((item, index) => {
-          const active = index === 0;
+        {NAV_ITEMS.map((item) => {
+          const active =
+            location.pathname === item.to || location.pathname.startsWith(item.to + '/');
           return (
             <button
               key={item.key}
               type="button"
+              data-testid={`narrow-nav-${item.key}`}
               aria-label={item.label}
               aria-current={active ? 'page' : undefined}
+              onClick={() => navigate(item.to)}
               className={`flex h-10 w-10 items-center justify-center rounded-sf border transition ${
                 active
                   ? 'border-shadowflow-accent/30 bg-shadowflow-accent/10 text-shadowflow-accent'
@@ -89,7 +103,7 @@ export function NarrowNav() {
 
       <button
         type="button"
-        onClick={() => console.log('TODO: user profile')}
+        onClick={() => navigate('/workspace')}
         className="mt-auto flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 font-semibold text-white/80"
         aria-label="当前用户"
       >

@@ -57,7 +57,7 @@ export function GapDetectedModal({
         onClick={(event) => event.stopPropagation()}
       >
         <div style={{ padding: '20px 22px 14px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: '#f59e0b', marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--t-warn)', marginBottom: 8 }}>
             Agent Gap Detected
           </div>
           <h2 id="gap-detected-modal-title" style={{ margin: 0, fontSize: 20, lineHeight: 1.15, color: 'var(--fg-0)' }}>
@@ -84,9 +84,9 @@ export function GapDetectedModal({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
             {gap.choices.map((choice, index) => {
               const CHOICE_STYLES: Record<string, React.CSSProperties> = {
-                A: { border: '1px solid rgba(59, 130, 246, .35)', background: 'rgba(30, 64, 175, .18)', color: '#dbeafe' },
-                B: { border: '1px solid rgba(244, 114, 182, .35)', background: 'rgba(131, 24, 67, .18)', color: '#fbcfe8' },
-                C: { border: '1px solid rgba(245, 158, 11, .35)', background: 'rgba(146, 64, 14, .18)', color: '#fde68a' },
+                A: { border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)', background: 'color-mix(in oklab, var(--t-accent) 18%, var(--t-panel))', color: 'var(--t-fg)' },
+                B: { border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)', background: 'color-mix(in oklab, var(--t-accent-tint) 60%, var(--t-panel))', color: 'var(--t-fg)' },
+                C: { border: '1px solid color-mix(in oklab, var(--t-warn) 35%, transparent)', background: 'color-mix(in oklab, var(--t-warn) 18%, var(--t-panel))', color: 'var(--t-warn)' },
               };
               return (
                 <button

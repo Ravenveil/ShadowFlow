@@ -13,6 +13,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../../common/i18n';
+import { Icon } from '../../../common/icons/iconRegistry';
 
 function IconRefreshCw({ spinning, cls }: { spinning?: boolean; cls?: string }) {
   return (
@@ -135,10 +136,10 @@ function AgentCard({
     >
       {/* Avatar */}
       <div
-        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[8px] text-[18px]"
-        style={{ background: `${avatar.color}22` }}
+        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[8px]"
+        style={{ background: `${avatar.color}22`, color: avatar.color }}
       >
-        {avatar.emoji}
+        <Icon token={avatar.emoji} size={18} />
       </div>
 
       {/* Info */}

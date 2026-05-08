@@ -27,7 +27,7 @@ interface SectionProps {
 function Section({ title, defaultOpen = true, children }: SectionProps): JSX.Element {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{ borderBottom: '1px solid var(--border)' }}>
+    <div style={{ borderBottom: '1px solid var(--t-border)' }}>
       <button
         onClick={() => setOpen((o) => !o)}
         style={{
@@ -39,7 +39,7 @@ function Section({ title, defaultOpen = true, children }: SectionProps): JSX.Ele
           fontWeight: 700,
           letterSpacing: '.1em',
           textTransform: 'uppercase',
-          color: 'var(--fg-3)',
+          color: 'var(--t-fg-3)',
           background: 'transparent',
           border: 'none',
           cursor: 'pointer',
@@ -83,12 +83,12 @@ function JsonBlock({ data, label }: { data: unknown; label: string }): JSX.Eleme
   const [expanded, setExpanded] = useState(size <= INPUTS_AUTO_COLLAPSE_BYTES);
 
   if (!hasValue) {
-    return <div style={{ fontSize: 12, color: 'var(--fg-5)' }}>(no {label})</div>;
+    return <div style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>(no {label})</div>;
   }
 
   return (
     <div>
-      <div style={{ fontSize: 10, color: 'var(--fg-5)', fontFamily: 'var(--font-mono)', marginBottom: 4 }}>
+      <div style={{ fontSize: 10, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)', marginBottom: 4 }}>
         {size}B {size > INPUTS_AUTO_COLLAPSE_BYTES ? '· auto-collapsed' : ''}
       </div>
       {expanded ? (
@@ -96,8 +96,8 @@ function JsonBlock({ data, label }: { data: unknown; label: string }): JSX.Eleme
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
-            background: 'var(--bg-elev-1)',
-            border: '1px solid var(--border)',
+            background: 'var(--t-panel-2)',
+            border: '1px solid var(--t-border)',
             borderRadius: 6,
             padding: 10,
             margin: 0,
@@ -115,10 +115,10 @@ function JsonBlock({ data, label }: { data: unknown; label: string }): JSX.Eleme
           style={{
             fontSize: 11,
             padding: '6px 10px',
-            background: 'var(--bg-elev-1)',
-            border: '1px solid var(--border)',
+            background: 'var(--t-panel-2)',
+            border: '1px solid var(--t-border)',
             borderRadius: 6,
-            color: 'var(--accent-bright)',
+            color: 'var(--t-accent)',
             cursor: 'pointer',
           }}
         >
@@ -134,7 +134,7 @@ function OutputsBlock({ node }: { node: NodeState }): JSX.Element {
   const contentType = node.contentType ?? 'text/plain';
 
   if (out === undefined || out === null || out === '') {
-    return <div style={{ fontSize: 12, color: 'var(--fg-5)' }}>(no output)</div>;
+    return <div style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>(no output)</div>;
   }
 
   if (contentType.startsWith('application/json')) {
@@ -149,7 +149,7 @@ function OutputsBlock({ node }: { node: NodeState }): JSX.Element {
         style={{
           fontSize: 13,
           lineHeight: 1.55,
-          color: 'var(--fg-2)',
+          color: 'var(--t-fg-2)',
           whiteSpace: 'pre-wrap',
         }}
       >
@@ -163,8 +163,8 @@ function OutputsBlock({ node }: { node: NodeState }): JSX.Element {
       style={{
         fontFamily: 'var(--font-mono)',
         fontSize: 11,
-        background: 'var(--bg-elev-1)',
-        border: '1px solid var(--border)',
+        background: 'var(--t-panel-2)',
+        border: '1px solid var(--t-border)',
         borderRadius: 6,
         padding: 10,
         margin: 0,
@@ -177,11 +177,11 @@ function OutputsBlock({ node }: { node: NodeState }): JSX.Element {
 }
 
 const TIMELINE_COLORS: Record<TimelineEvent['kind'], string> = {
-  started:   'var(--accent)',
-  retried:   '#F59E0B',
-  succeeded: '#22C55E',
-  rejected:  '#EF4444',
-  failed:    '#B91C1C',
+  started:   'var(--t-run)',
+  retried:   'var(--t-warn)',
+  succeeded: 'var(--t-ok)',
+  rejected:  'var(--t-err)',
+  failed:    'var(--t-err)',
 };
 
 function TimelineRow({ event }: { event: TimelineEvent }): JSX.Element {
@@ -204,18 +204,18 @@ function TimelineRow({ event }: { event: TimelineEvent }): JSX.Element {
         }}
       />
       <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-3)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-3)' }}>
           {time}
         </span>
         <span style={{ fontSize: 12, fontWeight: 700, color }}>
           {event.kind}
         </span>
-        <span style={{ fontSize: 11, color: 'var(--fg-5)' }}>
+        <span style={{ fontSize: 11, color: 'var(--t-fg-4)' }}>
           #{event.attempt}
         </span>
       </div>
       {event.fail_reason && (
-        <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 2 }}>
+        <div style={{ fontSize: 11, color: 'var(--t-fg-3)', marginTop: 2 }}>
           {event.fail_reason}
         </div>
       )}
@@ -224,7 +224,7 @@ function TimelineRow({ event }: { event: TimelineEvent }): JSX.Element {
           onClick={() => setExpanded((x) => !x)}
           style={{
             fontSize: 10,
-            color: 'var(--accent-bright)',
+            color: 'var(--t-accent)',
             background: 'transparent',
             border: 'none',
             padding: 0,
@@ -276,8 +276,8 @@ export function TraceView({ nodeId, onClose }: TraceViewProps = {}): JSX.Element
         right: 0,
         bottom: 0,
         width: PANEL_WIDTH,
-        background: 'var(--skin-panel, #0F0F11)',
-        borderLeft: '1px solid var(--border)',
+        background: 'var(--t-panel)',
+        borderLeft: '1px solid var(--t-border)',
         transform: open ? 'translateX(0)' : `translateX(${PANEL_WIDTH}px)`,
         transition: 'transform 280ms ease-out',
         zIndex: 40,
@@ -292,15 +292,15 @@ export function TraceView({ nodeId, onClose }: TraceViewProps = {}): JSX.Element
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '12px 16px',
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--bg-elev-1)',
+          borderBottom: '1px solid var(--t-border)',
+          background: 'var(--t-panel-2)',
         }}
       >
         <div>
-          <div style={{ fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--fg-5)' }}>
+          <div style={{ fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>
             TraceView
           </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg-0)' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-fg)' }}>
             {effectiveId ?? '—'}
           </div>
         </div>
@@ -310,7 +310,7 @@ export function TraceView({ nodeId, onClose }: TraceViewProps = {}): JSX.Element
           style={{
             background: 'transparent',
             border: 'none',
-            color: 'var(--fg-3)',
+            color: 'var(--t-fg-3)',
             fontSize: 18,
             cursor: 'pointer',
             padding: '4px 8px',
@@ -321,7 +321,7 @@ export function TraceView({ nodeId, onClose }: TraceViewProps = {}): JSX.Element
       </header>
 
       {open && !node && (
-        <div style={{ padding: 20, color: 'var(--fg-4)', fontSize: 13 }}>
+        <div style={{ padding: 20, color: 'var(--t-fg-3)', fontSize: 13 }}>
           No node state yet. Waiting for events…
         </div>
       )}
@@ -336,7 +336,7 @@ export function TraceView({ nodeId, onClose }: TraceViewProps = {}): JSX.Element
           </Section>
           <Section title={`Timeline (${node.timeline.length})`}>
             {node.timeline.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--fg-5)' }}>(no events yet)</div>
+              <div style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>(no events yet)</div>
             ) : (
               <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {node.timeline.map((evt, idx) => (
@@ -351,10 +351,10 @@ export function TraceView({ nodeId, onClose }: TraceViewProps = {}): JSX.Element
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: 11,
-                  background: '#1a0f12',
-                  border: '1px solid #EF444455',
+                  background: 'var(--t-panel-2)',
+                  border: '1px solid var(--t-err)',
                   borderRadius: 6,
-                  color: '#FCA5A5',
+                  color: 'var(--t-err)',
                   padding: 10,
                   margin: 0,
                   whiteSpace: 'pre-wrap',
@@ -365,7 +365,7 @@ export function TraceView({ nodeId, onClose }: TraceViewProps = {}): JSX.Element
                 {node.error}
               </pre>
             ) : (
-              <div style={{ fontSize: 12, color: 'var(--fg-5)' }}>(no error)</div>
+              <div style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>(no error)</div>
             )}
           </Section>
         </div>

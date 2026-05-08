@@ -98,7 +98,7 @@ export default function QuadrantChart({ className, style }: { className?: string
           return (
             <g key={p.name}>
               <circle cx={sx} cy={sy} r={20} fill="#A855F718" />
-              <circle cx={sx} cy={sy} r={6} fill="#A855F7" />
+              <circle cx={sx} cy={sy} r={6} fill="var(--t-accent)" />
               <text
                 x={sx}
                 y={sy - 12}

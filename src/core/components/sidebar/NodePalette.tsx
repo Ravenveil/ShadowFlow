@@ -1,10 +1,14 @@
 import React from 'react';
+import { CheckCircle2, Split, Bookmark } from '../../../common/icons/iconRegistry';
+import { RotateCw, Hourglass, ArrowRight, type LucideIcon } from 'lucide-react';
 
 export interface PaletteItem {
   id: string;
   label: string;
   meta: string;
   group: 'agent' | 'gate';
+  /** Optional Lucide icon shown before {meta}. Replaces legacy unicode glyphs. */
+  icon?: LucideIcon;
 }
 
 const DEFAULT_AGENTS: PaletteItem[] = [
@@ -17,12 +21,12 @@ const DEFAULT_AGENTS: PaletteItem[] = [
 ];
 
 const DEFAULT_GATES: PaletteItem[] = [
-  { id: 'retry',         label: 'Retry Gate',    meta: '↻ double-reject', group: 'gate' },
-  { id: 'approval_gate', label: 'Approval Gate', meta: '✓ human · policy', group: 'gate' },
-  { id: 'parallel',      label: 'Fan-out',        meta: '⚑ parallel',      group: 'gate' },
-  { id: 'barrier',       label: 'Barrier',        meta: '⊞ await all',     group: 'gate' },
-  { id: 'merge',         label: 'Merge',          meta: '→ join lanes',    group: 'gate' },
-  { id: 'checkpoint',    label: 'Checkpoint',     meta: '◆ snapshot',      group: 'gate' },
+  { id: 'retry',         label: 'Retry Gate',    meta: 'double-reject', group: 'gate', icon: RotateCw },
+  { id: 'approval_gate', label: 'Approval Gate', meta: 'human · policy', group: 'gate', icon: CheckCircle2 },
+  { id: 'parallel',      label: 'Fan-out',        meta: 'parallel',      group: 'gate', icon: Split },
+  { id: 'barrier',       label: 'Barrier',        meta: 'await all',     group: 'gate', icon: Hourglass },
+  { id: 'merge',         label: 'Merge',          meta: 'join lanes',    group: 'gate', icon: ArrowRight },
+  { id: 'checkpoint',    label: 'Checkpoint',     meta: 'snapshot',      group: 'gate', icon: Bookmark },
 ];
 
 interface NodePaletteProps {
@@ -31,6 +35,7 @@ interface NodePaletteProps {
 }
 
 function PaletteRow({ item }: { item: PaletteItem }) {
+  const IconCmp = item.icon;
   return (
     <div
       draggable
@@ -41,11 +46,14 @@ function PaletteRow({ item }: { item: PaletteItem }) {
         background: 'var(--bg-elev-2)', border: '1px solid var(--border)',
         margin: '0 8px 4px',
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168,85,247,.4)'; }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168,85,247,.4)' /* fixme: token */; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
     >
       <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600, color: 'var(--fg-1)' }}>{item.label}</span>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-5)' }}>{item.meta}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-5)' }}>
+        {IconCmp ? <IconCmp size={11} strokeWidth={2} aria-hidden /> : null}
+        {item.meta}
+      </span>
     </div>
   );
 }

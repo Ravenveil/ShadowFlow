@@ -5,6 +5,7 @@
 
 import { BaseNodeExecutor } from '../base-node-executor';
 import { NodeContext, NodeResult, TransformResult } from '../../types/node.types';
+import { evaluateFilterExpression, evaluateValueExpression, SafeExpressionError } from '../../security/safeExpression';
 
 /**
  * 转换操作类型
@@ -266,17 +267,10 @@ export class TransformExecutor extends BaseNodeExecutor {
       return data;
     }
 
-    // 简化版过滤 - 实际应该使用表达式解析器
     try {
-      const filterFn = new Function('item', `return ${filter_condition}`);
-      return data.filter(item => {
-        try {
-          return filterFn(item);
-        } catch {
-          return false;
-        }
-      });
-    } catch {
+      return data.filter(item => evaluateFilterExpression(filter_condition, item as Record<string, unknown>));
+    } catch (err) {
+      if (err instanceof SafeExpressionError) throw err;
       return data;
     }
   }
@@ -366,10 +360,9 @@ export class TransformExecutor extends BaseNodeExecutor {
     }
 
     try {
-      // 注意：在生产环境中应该使用安全的函数执行方式
-      const fn = new Function('data', `return ${custom_function}`);
-      return fn(data);
-    } catch {
+      return evaluateValueExpression(custom_function, { data });
+    } catch (err) {
+      if (err instanceof SafeExpressionError) throw err;
       return data;
     }
   }

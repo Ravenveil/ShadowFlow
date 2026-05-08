@@ -1,4 +1,5 @@
 import React from 'react';
+import { MapPin } from '../../../common/icons/iconRegistry';
 import { useWorkflow } from '../../stores/workflowStore';
 import { MemoryChunk } from '../../types/river';
 import { clsx } from 'clsx';
@@ -100,7 +101,7 @@ const MemoryCard: React.FC<{ chunk: MemoryChunk }> = ({ chunk }) => {
       )}
 
       <div className="text-[10px] opacity-60 flex items-center mt-1">
-        <span className="mr-1">📍</span> from {chunk.sourceNodeId}
+        <span className="mr-1 inline-flex items-center"><MapPin size={10} strokeWidth={2} /></span> from {chunk.sourceNodeId}
         {chunk.metadata?.confidence && (
           <span className="ml-auto px-1.5 py-0.5 bg-white/50 rounded border border-current opacity-80">
             {Math.round(chunk.metadata.confidence * 100)}% conf

@@ -1,4 +1,5 @@
 import React, { Component, type ReactNode } from 'react';
+import { AlertTriangle as EbAlert } from '../../../common/icons/iconRegistry';
 
 interface Props {
   children: ReactNode;
@@ -35,7 +36,7 @@ export class ErrorBoundary extends Component<Props, State> {
       const canRetry = this.state.retryCount < MAX_RETRIES;
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16, padding: 32, textAlign: 'center', background: 'var(--bg)', color: 'var(--fg-2)' }}>
-          <span style={{ fontSize: 32 }}>⚠</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-warn, #F59E0B)' }}><EbAlert size={32} strokeWidth={2} /></span>
           <div>
             <p style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg-1)', marginBottom: 4 }}>组件加载出错</p>
             <p style={{ fontSize: 11, color: 'var(--fg-4)', fontFamily: 'var(--font-mono)' }}>

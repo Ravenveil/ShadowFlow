@@ -3,9 +3,10 @@
  * 3-column layout: run list (left) + stage timeline + event log (mid) + export panel (right).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo } from 'react';
+import { AlertTriangle, Ban, CheckCircle2 } from '../../common/icons/iconRegistry';
+import { Loader2 } from 'lucide-react';
 import { useArchiveStore, ArchiveWindow, ArchiveRun } from '../stores/useArchiveStore';
-import { useRunRegistryEntry } from '../hooks/useRunRegistry';
 
 /** P14: format milliseconds into a human-readable duration string. */
 function formatDuration(ms: number | null): string {
@@ -47,23 +48,27 @@ function RunCard({ run, onClick, selected }: { run: ArchiveRun; onClick: () => v
         <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-5)' }}>{run.run_id}</div>
         {/* P14: duration column */}
         <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-4)' }}>
-          {run.status === 'running' ? '⟳ running' : formatDuration(run.duration_ms)}
+          {run.status === 'running' ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Loader2 size={11} strokeWidth={2} className="animate-spin" aria-hidden /> running
+            </span>
+          ) : formatDuration(run.duration_ms)}
         </div>
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
         {run.status === 'succeeded' && (
-          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: '#22C55E22', color: '#22C55E' }}>✓ done</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: '#22C55E22', color: '#22C55E' }}><CheckCircle2 size={11} strokeWidth={2} aria-hidden /> done</span>
         )}
         {/* P14: rejections badge */}
         {run.badges.rejections > 0 && (
-          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: '#F59E0B22', color: '#F59E0B' }}>⟲ {run.badges.rejections}× rejected</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: '#F59E0B22', color: '#F59E0B' }}><Ban size={11} strokeWidth={2} aria-hidden /> {run.badges.rejections}× rejected</span>
         )}
         {/* P14: approvals badge */}
         {run.badges.approvals > 0 && (
-          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: '#A07AFF22', color: '#A07AFF' }}>◆ {run.badges.approvals} approvals</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: '#A07AFF22', color: '#A07AFF' }}><CheckCircle2 size={11} strokeWidth={2} aria-hidden /> {run.badges.approvals} approvals</span>
         )}
         {run.badges.aborted && (
-          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: '#EF444422', color: '#EF4444' }}>⚠ cancelled</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: '#EF444422', color: '#EF4444' }}><AlertTriangle size={11} strokeWidth={2} /> cancelled</span>
         )}
       </div>
     </button>
@@ -94,75 +99,6 @@ function deriveStages(trajectory: Record<string, unknown> | null): StageResult[]
     }
   }
   return Object.values(outcomes);
-}
-
-function CidChip({ runId }: { runId: string }) {
-  const { entry, loading, contractDeployed } = useRunRegistryEntry(runId);
-  const [copied, setCopied] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  if (!contractDeployed) return null;
-
-  const cid = entry?.cid ?? null;
-  const status = loading ? 'pending' : (cid ? 'confirmed' : 'not-found');
-
-  const shortHash = cid ? cid.slice(2, 10) : null;
-  const explorerUrl = cid ? `https://storagescan-galileo.0g.ai/file/${cid}` : null;
-
-  const handleCopy = async () => {
-    if (!cid) return;
-    try {
-      await navigator.clipboard.writeText(cid);
-      setCopied(true);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => setCopied(false), 2000);
-    } catch { /* insecure context */ }
-  };
-
-  const statusColor = status === 'confirmed' ? '#22C55E' : status === 'pending' ? '#F97316' : '#EF4444';
-  const statusLabel = status === 'confirmed' ? '确认' : status === 'pending' ? '待确认' : '未找到';
-
-  return (
-    <div style={{ marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-      <div style={{ fontSize: 10, color: 'var(--fg-5)', marginBottom: 4, fontFamily: 'var(--font-mono)' }}>0G CID</div>
-      {loading && (
-        <div style={{ fontSize: 10, color: 'var(--fg-5)' }}>正在查询链上记录…</div>
-      )}
-      {!loading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-          <span style={{ padding: '1px 6px', borderRadius: 999, fontSize: 10, background: `${statusColor}22`, color: statusColor }}>
-            {statusLabel}
-          </span>
-          {shortHash && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-2)' }}>
-              {shortHash}…
-            </span>
-          )}
-          {explorerUrl && (
-            <a
-              href={explorerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="在 0G Explorer 查看"
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 44, minHeight: 44, color: 'var(--accent-bright)', textDecoration: 'none', fontSize: 14 }}
-            >
-              ↗
-            </a>
-          )}
-          {cid && (
-            <button
-              type="button"
-              onClick={handleCopy}
-              aria-label="复制 CID"
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 44, minHeight: 44, background: 'transparent', border: 'none', cursor: 'pointer', color: copied ? '#22C55E' : 'var(--fg-4)', fontSize: 14, padding: 0 }}
-            >
-              {copied ? '✓' : '⎘'}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export function ArchivePage({ apiBase = '' }: { apiBase?: string } = {}): JSX.Element {
@@ -269,8 +205,6 @@ export function ArchivePage({ apiBase = '' }: { apiBase?: string } = {}): JSX.El
         <button type="button" data-testid="export-0g" disabled title="Configure 0G key in Settings first" style={{ padding: '6px 10px', fontSize: 12, background: 'var(--bg-elev-1)', border: '1px solid rgba(160,122,255,0.3)', borderRadius: 8, cursor: 'not-allowed', color: 'var(--fg-5)' }}>
           Upload to 0G Storage
         </button>
-
-        {selected_run_id && <CidChip runId={selected_run_id} />}
 
         <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700 }}>Metrics</div>
         {selectedRun ? (

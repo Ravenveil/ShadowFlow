@@ -8,7 +8,6 @@ const RPC_URL = VITE_ENV.VITE_ZEROG_RPC_URL ?? 'https://evmrpc-testnet.0g.ai';
 
 export const CID_RE = /^0x[a-fA-F0-9]{64}$/;
 const DOWNLOAD_TIMEOUT_MS = 15_000;
-const UPLOAD_TIMEOUT_MS = 120_000;
 
 export interface UploadResult {
   cid: string;
@@ -158,17 +157,8 @@ export async function uploadTrajectory(
     const rootHash = tree.rootHash();
     if (!rootHash) throw new Error('Merkle tree returned empty root hash');
 
-    let tx: unknown;
-    await Promise.race([
-      (async () => {
-        const [result, uploadErr] = await indexer.upload(file, RPC_URL, signer);
-        if (uploadErr) throw new Error(`0G Storage upload failed: ${uploadErr.message}`);
-        tx = result;
-      })(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('0G Storage upload timed out after 120s')), UPLOAD_TIMEOUT_MS),
-      ),
-    ]);
+    const [tx, uploadErr] = await indexer.upload(file, RPC_URL, signer);
+    if (uploadErr) throw new Error(`0G Storage upload failed: ${uploadErr.message}`);
 
     return { cid: rootHash, txHash: String(tx) };
   } finally {

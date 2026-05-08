@@ -15,6 +15,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ClipboardPaste } from 'lucide-react';
 import { PRESETS } from '../templates/presets';
 import {
   listUserTemplates,
@@ -245,10 +246,11 @@ export default function TemplatesPage() {
             type="button"
             onClick={handlePasteCid}
             className="hf-btn"
-            style={{ fontSize: 11 }}
+            style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 6 }}
             data-testid="paste-cid-btn"
           >
-            ↗ 粘贴 CID
+            <ClipboardPaste size={12} strokeWidth={2} aria-hidden />
+            <span>粘贴 CID</span>
           </button>
         }
       />

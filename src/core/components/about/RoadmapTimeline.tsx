@@ -1,3 +1,5 @@
+import { CheckCircle2 as RoadCheck } from '../../../common/icons/iconRegistry';
+
 interface Phase {
   phase: string;
   label: string;
@@ -71,7 +73,7 @@ const STATUS_STYLES = {
   },
 };
 
-const STATUS_SUFFIX = { done: '✅', next: '→ Next', future: '→ Future' };
+const STATUS_SUFFIX = { done: 'CheckCircle2', next: '→ Next', future: '→ Future' };
 
 export default function RoadmapTimeline() {
   return (
@@ -79,7 +81,7 @@ export default function RoadmapTimeline() {
       {/* Vertical line */}
       <div
         className="absolute left-4 top-4 bottom-4 w-px"
-        style={{ background: 'linear-gradient(to bottom, #10B981, #A855F7, #27272A)' }}
+        style={{ background: 'linear-gradient(to bottom, #10B981, var(--t-accent), #27272A)' }}
         aria-hidden="true"
       />
 
@@ -111,7 +113,12 @@ export default function RoadmapTimeline() {
                     className="px-2 py-0.5 rounded-pill text-[10px] font-mono font-medium"
                     style={styles.label}
                   >
-                    {phase.label} {STATUS_SUFFIX[phase.status]}
+                    {phase.label}{' '}
+                    {phase.status === 'done' ? (
+                      <RoadCheck size={11} strokeWidth={2} className="inline align-[-2px]" />
+                    ) : (
+                      STATUS_SUFFIX[phase.status]
+                    )}
                   </span>
                   <span className="font-mono text-[10px] text-sf-fg4 ml-auto">{phase.period}</span>
                 </div>

@@ -256,12 +256,12 @@ function WorkflowCanvasInner({ edgeType }: { edgeType?: SfEdgeType }) {
         />
 
         <Controls
-          style={{ background: '#0F0F12', border: '1px solid #27272A', borderRadius: 8 }}
+          style={{ background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 8 }}
         />
 
         {workflow.ui.miniMapOpen && (
           <MiniMap
-            style={{ background: '#0F0F12', border: '1px solid #27272A' }}
+            style={{ background: 'var(--t-panel)', border: '1px solid var(--t-border)' }}
             nodeColor={(node) => {
               const nodeData = node.data as any;
               return nodeData?.color || '#52525B';
@@ -276,7 +276,7 @@ function WorkflowCanvasInner({ edgeType }: { edgeType?: SfEdgeType }) {
             <div className="flex items-center gap-3">
               <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full" />
               <div className="text-sm">
-                <p className="font-medium">{t('workflowStarted')}</p>
+                <p className="font-medium">{t('messages.workflowStarted')}</p>
                 <div className="mt-2 w-48 h-2 bg-gray-200 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-blue-500 transition-all duration-300"
@@ -293,9 +293,9 @@ function WorkflowCanvasInner({ edgeType }: { edgeType?: SfEdgeType }) {
 
         {/* 提示信息 */}
         {workflow.nodes.length === 0 && (
-          <Panel position="top-center" style={{ background: '#0F0F12', border: '1px solid #27272A', borderRadius: 10, padding: '14px 20px', textAlign: 'center' }}>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#71717A', marginBottom: 4 }}>Drag agents from the left panel to get started</p>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#52525B' }}>Connect nodes · Set policy · Run</p>
+          <Panel position="top-center" style={{ background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 10, padding: '14px 20px', textAlign: 'center' }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--t-fg-3)', marginBottom: 4 }}>Drag agents from the left panel to get started</p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>Connect nodes · Set policy · Run</p>
           </Panel>
         )}
 

@@ -5,6 +5,7 @@
 
 import { BaseNodeExecutor } from '../base-node-executor';
 import { NodeContext, NodeResult } from '../../types/node.types';
+import { evaluateBooleanExpression, SafeExpressionError } from '../../security/safeExpression';
 
 /**
  * 循环类型
@@ -356,9 +357,9 @@ Return only "continue" or "break".
    */
   private async evaluateCondition(context: NodeContext, condition: string): Promise<boolean> {
     try {
-      const fn = new Function('variables', `return ${condition}`);
-      return Boolean(fn(context.state.variables));
-    } catch {
+      return evaluateBooleanExpression(condition, context.state.variables as Record<string, unknown>);
+    } catch (err) {
+      if (err instanceof SafeExpressionError) throw err;
       return false;
     }
   }
@@ -368,9 +369,9 @@ Return only "continue" or "break".
    */
   private async checkBreakCondition(context: NodeContext, breakCondition: string): Promise<boolean> {
     try {
-      const fn = new Function('variables', `return ${breakCondition}`);
-      return Boolean(fn(context.state.variables));
-    } catch {
+      return evaluateBooleanExpression(breakCondition, context.state.variables as Record<string, unknown>);
+    } catch (err) {
+      if (err instanceof SafeExpressionError) throw err;
       return false;
     }
   }

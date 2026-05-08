@@ -31,6 +31,7 @@
  */
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Hand, MousePointer2, Play, Upload, Users, ZoomIn } from 'lucide-react';
 import {
   deleteTeam,
   getTeam,
@@ -191,18 +192,11 @@ function TeamListPage() {
         color: 'var(--t-fg)',
       }}
     >
-      <HfTopBar
-        right={
-          <button
-            type="button"
-            className="hf-btn hf-btn-pri"
-            style={{ fontSize: 11 }}
-            onClick={() => setShowModal(true)}
-          >
-            + 新建 Team
-          </button>
-        }
-      />
+      {/* TeamListPage is the workspace overview itself ("Team = Workspace" in
+          ShadowFlow's mental model), so the workspace switcher is dropped
+          here — picking a team IS picking a workspace. The page-level
+          "+ 新建 Team" button below (line ~258) is the only entry point. */}
+      <HfTopBar hideWorkspace />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '20px 28px' }}>
         <div style={{ maxWidth: 1080, margin: '0 auto' }}>
@@ -298,11 +292,10 @@ function TeamListPage() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 24,
                   color: 'var(--t-accent)',
                 }}
               >
-                ⊞
+                <Users size={32} strokeWidth={2} aria-hidden />
               </div>
               <div>
                 <p style={{ fontSize: 13, color: 'var(--t-fg-2)', margin: 0 }}>
@@ -488,9 +481,15 @@ function LaneDiagram({ lanes }: { lanes: LaneData[] }) {
           gap: 6,
         }}
       >
-        <span className="hf-chip" style={{ fontSize: 10 }}>⊟ select</span>
-        <span className="hf-chip" style={{ fontSize: 10 }}>⊞ pan</span>
-        <span className="hf-chip" style={{ fontSize: 10 }}>⊕ zoom</span>
+        <span className="hf-chip" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <MousePointer2 size={11} strokeWidth={2} aria-hidden /> select
+        </span>
+        <span className="hf-chip" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Hand size={11} strokeWidth={2} aria-hidden /> pan
+        </span>
+        <span className="hf-chip" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <ZoomIn size={11} strokeWidth={2} aria-hidden /> zoom
+        </span>
       </div>
     </div>
   );
@@ -589,11 +588,19 @@ function TeamDetailPage() {
       <HfTopBar
         right={
           <>
-            <button type="button" className="hf-btn" style={{ fontSize: 11 }}>
-              ↗ 上链
+            <button
+              type="button"
+              className="hf-btn"
+              style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+            >
+              <Upload size={12} strokeWidth={2} aria-hidden /> 上链
             </button>
-            <button type="button" className="hf-btn hf-btn-pri" style={{ fontSize: 11 }}>
-              ▶ Run
+            <button
+              type="button"
+              className="hf-btn hf-btn-pri"
+              style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+            >
+              <Play size={12} strokeWidth={2} aria-hidden /> Run
             </button>
           </>
         }

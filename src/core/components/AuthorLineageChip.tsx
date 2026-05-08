@@ -66,7 +66,7 @@ export function AuthorLineageChip({ lineage, showPendingSelf }: AuthorLineageChi
                 padding: '4px 10px',
                 borderRadius: 6,
                 background: 'var(--accent-tint)',
-                border: '1px solid rgba(168,85,247,.3)',
+                border: '1px solid var(--t-accent-tint)',
                 color: 'var(--accent-bright)',
                 fontWeight: 600,
                 fontSize: 11,

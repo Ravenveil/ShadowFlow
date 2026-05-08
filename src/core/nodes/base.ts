@@ -19,7 +19,7 @@ export interface IExecutableNode {
   name: { en: string; zh: string };
   description: { en: string; zh: string };
   category: NodeCategory;
-  icon: string;
+  icon?: string;
   inputs: PortDefinition[];
   outputs: PortDefinition[];
   configSchema?: Record<string, any>;

@@ -12,8 +12,11 @@
  */
 import { useMemo, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
+import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { HfDot } from './HfAtoms';
 import { useI18n } from '../../common/i18n';
+import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
 
 export type HfSidebarActive =
   | 'start'
@@ -25,7 +28,7 @@ export type HfSidebarActive =
 
 interface NavItem {
   k: HfSidebarActive;
-  g: string;
+  Icon: LucideIcon;
   label: string;
   hint: string;
   to: string;
@@ -33,11 +36,11 @@ interface NavItem {
 }
 
 const buildNavItems = (T: (zh: string, en: string) => string): NavItem[] => [
-  { k: 'start',     g: '✦', label: T('开始',   'Start'),     hint: '⌘1', to: '/start' },
-  { k: 'chat',      g: '☰', label: T('聊天',   'Chat'),      hint: '⌘2', to: '/chat/default', badge: 3 },
-  { k: 'teams',     g: '⊞', label: T('团队',   'Teams'),     hint: '⌘3', to: '/teams' },
-  { k: 'agents',    g: '◉', label: T('员工',   'Agents'),    hint: '⌘4', to: '/agents' },
-  { k: 'templates', g: '◆', label: T('模板',   'Templates'), hint: '⌘5', to: '/templates' },
+  { k: 'start',     Icon: Home,           label: T('开始', 'Start'),     hint: '⌘1', to: '/start' },
+  { k: 'chat',      Icon: MessageCircle,  label: T('聊天', 'Chat'),      hint: '⌘2', to: '/chat/default', badge: 3 },
+  { k: 'teams',     Icon: Users,          label: T('团队', 'Teams'),     hint: '⌘3', to: '/teams' },
+  { k: 'agents',    Icon: Bot,            label: T('员工', 'Agents'),    hint: '⌘4', to: '/agents' },
+  { k: 'templates', Icon: LayoutTemplate, label: T('模板', 'Templates'), hint: '⌘5', to: '/templates' },
 ];
 
 interface HfSidebarProps {
@@ -125,7 +128,9 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
           borderRadius: 8,
         }}
       >
-        <span style={{ color: 'var(--t-fg-4)', fontSize: 11 }}>⌕</span>
+        <span style={{ color: 'var(--t-fg-4)', display: 'inline-flex', alignItems: 'center' }}>
+          <Search size={12} strokeWidth={2} aria-hidden />
+        </span>
         <span style={{ flex: 1, fontSize: 11.5, color: 'var(--t-fg-4)' }}>{T('跳转 / 搜索', 'Jump / Search')}</span>
         <span className="hf-kbd">⌘K</span>
       </div>
@@ -142,12 +147,13 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
             <span
               style={{
                 width: 18,
-                textAlign: 'center',
-                fontSize: 13,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 color: on ? 'var(--t-accent)' : 'var(--t-fg-3)',
               }}
             >
-              {it.g}
+              <it.Icon size={14} strokeWidth={1.75} aria-hidden />
             </span>
             <span
               style={{
@@ -198,11 +204,13 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
             style={{
               width: 18,
               textAlign: 'center',
-              fontSize: 13,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               color: active === 'settings' ? 'var(--t-accent)' : 'var(--t-fg-3)',
             }}
           >
-            ⚙
+            <HfSettingsIcon size={14} strokeWidth={2} />
           </span>
           <span
             style={{

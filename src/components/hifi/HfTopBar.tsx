@@ -12,6 +12,7 @@
  * already shows the product name.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Plus } from 'lucide-react';
 import { LanguageSwitcher } from '../../core/components/common/LanguageSwitcher';
 import { useTheme } from './useTheme';
 import { useI18n } from '../../common/i18n';
@@ -436,7 +437,7 @@ function WorkspaceCrumb() {
               (e.currentTarget as HTMLDivElement).style.background = 'transparent';
             }}
           >
-            <span style={{ fontSize: 13, lineHeight: 1 }}>✦</span>
+            <Plus size={13} strokeWidth={2} aria-hidden />
             <span>{T('新建工作区', 'New workspace')}</span>
           </div>
           <div

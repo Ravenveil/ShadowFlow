@@ -19,8 +19,8 @@ export function KPICard({ label, value, delta, deltaColor, width = 340, valueCol
       style={{
         width,
         padding: '14px 16px',
-        background: '#0F0F11',
-        border: '1px solid var(--border)',
+        background: 'var(--t-panel)',
+        border: '1px solid var(--t-border)',
         borderRadius: 14,
         display: 'flex',
         flexDirection: 'column',

@@ -7,6 +7,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../../types';
 import { useI18n } from '../../../common/i18n';
 import { clsx } from 'clsx';
+import { Icon } from '../../../common/icons/iconRegistry';
 
 export const BaseNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   const { t, language } = useI18n();
@@ -64,8 +65,8 @@ export const BaseNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       <div className="p-3">
         {/* 图标和标题 */}
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-lg" role="img" aria-label="icon">
-            {data.icon}
+          <span className="inline-flex items-center justify-center text-sf-fg2" aria-label="icon">
+            <Icon token={data.icon} size={18} />
           </span>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-sm truncate">

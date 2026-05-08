@@ -162,8 +162,17 @@ export class MergeExecutor extends BaseNodeExecutor {
    * 合并对象
    */
   private mergeObjects(inputs: any[], config: MergeConfig): any {
+    const UNSAFE = new Set(['__proto__', 'constructor', 'prototype']);
     if (!config.deep_merge) {
-      return Object.assign({}, ...inputs);
+      const result: Record<string, any> = {};
+      for (const src of inputs) {
+        if (typeof src === 'object' && src !== null && !Array.isArray(src)) {
+          for (const [k, v] of Object.entries(src)) {
+            if (!UNSAFE.has(k)) result[k] = v;
+          }
+        }
+      }
+      return result;
     }
 
     const result: Record<string, any> = {};
@@ -181,19 +190,20 @@ export class MergeExecutor extends BaseNodeExecutor {
    * 深度合并
    */
   private deepMerge(target: Record<string, any>, source: Record<string, any>): void {
-    for (const key in source) {
-      if (source.hasOwnProperty(key)) {
-        const sourceValue = source[key];
-        const targetValue = target[key];
+    const UNSAFE = new Set(['__proto__', 'constructor', 'prototype']);
+    // Use Object.keys() instead of for...in to avoid iterating inherited prototype properties
+    for (const key of Object.keys(source)) {
+      if (UNSAFE.has(key)) continue;
+      const sourceValue = source[key];
+      const targetValue = target[key];
 
-        if (typeof sourceValue === 'object' && sourceValue !== null &&
-            typeof targetValue === 'object' && targetValue !== null &&
-            !Array.isArray(sourceValue) && !Array.isArray(targetValue)) {
-          target[key] = target[key] || {};
-          this.deepMerge(target[key], sourceValue);
-        } else {
-          target[key] = sourceValue;
-        }
+      if (typeof sourceValue === 'object' && sourceValue !== null &&
+          typeof targetValue === 'object' && targetValue !== null &&
+          !Array.isArray(sourceValue) && !Array.isArray(targetValue)) {
+        target[key] = target[key] || {};
+        this.deepMerge(target[key], sourceValue);
+      } else {
+        target[key] = sourceValue;
       }
     }
   }

@@ -5,6 +5,7 @@
 
 import { BaseNodeExecutor } from '../base-node-executor';
 import { NodeContext, NodeResult } from '../../types/node.types';
+import { evaluateBooleanExpression, SafeExpressionError } from '../../security/safeExpression';
 
 /**
  * 分支条件类型
@@ -139,10 +140,9 @@ export class BranchExecutor extends BaseNodeExecutor {
     }
 
     try {
-      // 简化版表达式评估 - 实际应使用安全的表达式解析器
-      const fn = new Function('inputs', `return ${condition}`);
-      return Boolean(fn(context.inputs));
-    } catch {
+      return evaluateBooleanExpression(condition, context.inputs as Record<string, unknown>);
+    } catch (err) {
+      if (err instanceof SafeExpressionError) throw err;
       return false;
     }
   }

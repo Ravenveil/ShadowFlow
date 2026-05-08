@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Bot, Search } from 'lucide-react';
 import {
   listAgents,
   deleteAgent,
@@ -40,14 +41,17 @@ function statusColor(s: AgentRecord['status']): string {
   return 'var(--t-ok)';
 }
 
-// Glyph for an agent — try first non-ASCII char of name, else first letter, else ✦
-function agentGlyph(name: string): string {
-  if (!name) return '✦';
+// Glyph for an agent — try first non-ASCII char of name, else first letter.
+// Returns null when no usable monogram can be derived (caller should render
+// a Bot icon fallback instead of a sparkle/text glyph).
+function agentGlyph(name: string): string | null {
+  if (!name) return null;
   // Find first CJK / unicode char
   for (const ch of name) {
     if (/[一-鿿]/.test(ch)) return ch;
   }
-  return name.charAt(0).toUpperCase() || '✦';
+  const initial = name.charAt(0).toUpperCase();
+  return initial || null;
 }
 
 // Color for an agent — derive from name hash → palette
@@ -312,10 +316,10 @@ export function AgentPage() {
                 type="button"
                 onClick={() => setSearchOpen(true)}
                 className="hf-chip"
-                style={{ fontSize: 10, cursor: 'pointer' }}
+                style={{ fontSize: 10, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
                 aria-label="搜索"
               >
-                ⌕
+                <Search size={12} strokeWidth={2} aria-hidden />
               </button>
             )}
           </div>
@@ -654,11 +658,10 @@ function EmptyState({ onNewAgent }: { onNewAgent: () => void }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 28,
           color: 'var(--t-fg-3)',
         }}
       >
-        ✦
+        <Bot size={28} strokeWidth={2} aria-hidden />
       </div>
       <div>
         <p style={{ fontSize: 13, color: 'var(--t-fg-2)' }}>还没有 Agent。</p>
@@ -734,12 +737,54 @@ function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
     >
       {/* Top row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <HfAvatar
-          glyph={glyph}
-          color={color}
-          size={36}
-          status={agent.status === 'running' ? 'run' : undefined}
-        />
+        {glyph !== null ? (
+          <HfAvatar
+            glyph={glyph}
+            color={color}
+            size={36}
+            status={agent.status === 'running' ? 'run' : undefined}
+          />
+        ) : (
+          <div
+            style={{
+              position: 'relative',
+              flexShrink: 0,
+              width: 36,
+              height: 36,
+            }}
+          >
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 36 * 0.28,
+                background: `color-mix(in oklab, ${color} 18%, var(--t-panel-2))`,
+                border: `1px solid color-mix(in oklab, ${color} 45%, transparent)`,
+                color,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Bot size={18} strokeWidth={2} aria-hidden />
+            </div>
+            {agent.status === 'running' && (
+              <span
+                style={{
+                  position: 'absolute',
+                  right: -1,
+                  bottom: -1,
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  background: 'var(--t-run)',
+                  border: '2px solid var(--t-panel)',
+                  animation: 'hf-pulse 1.4s ease-in-out infinite',
+                }}
+              />
+            )}
+          </div>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSecretsStore, type ProviderSecrets } from '../../hooks/useSecretsStore';
+import { AlertTriangle as SmCoreAlert } from '../../../common/icons/iconRegistry';
 
 const PROVIDERS: { key: keyof ProviderSecrets; label: string; placeholder: string }[] = [
   { key: 'anthropic', label: 'Claude (Anthropic)', placeholder: 'sk-ant-...' },
@@ -56,7 +57,7 @@ export function SecretsModal({ open, onClose }: SecretsModalProps) {
         </h2>
         {/* D6: BYOK plaintext localStorage warning banner */}
         <div style={{ margin: '0 0 20px', padding: '8px 12px', background: 'rgba(234,179,8,.08)', border: '1px solid rgba(234,179,8,.25)', borderRadius: 8, fontSize: 11, color: 'var(--fg-4)', fontFamily: 'var(--font-mono)', lineHeight: 1.6 }}>
-          ⚠ 密钥仅存本机浏览器 localStorage，不经过服务器。<br />
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><SmCoreAlert size={11} strokeWidth={2} /> 密钥仅存本机浏览器 localStorage，不经过服务器。</span><br />
           <span style={{ color: 'var(--fg-5)' }}>请勿在公共设备使用 · 清除浏览器数据时密钥将丢失</span>
         </div>
 

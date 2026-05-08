@@ -21,13 +21,14 @@ interface StatusConfig {
   flash?: boolean;
 }
 
+// Use CSS tokens so status colors stay semantic (red/yellow/green/blue) on both day/night skins.
 const STATUS_CONFIG: Record<NodeRunStatus, StatusConfig> = {
-  pending:   { bg: 'bg-gray-900',  border: 'border-gray-600', dot: 'bg-gray-400',  label: 'pending' },
-  running:   { bg: 'bg-blue-950',  border: 'border-blue-500', dot: 'bg-blue-400',  label: 'running',   pulse: true },
-  waiting_user: { bg: 'bg-amber-950', border: 'border-amber-500', dot: 'bg-amber-400', label: 'waiting_user', pulse: true },
-  succeeded: { bg: 'bg-green-950', border: 'border-green-500',dot: 'bg-green-400', label: 'succeeded' },
-  failed:    { bg: 'bg-red-950',   border: 'border-red-500',  dot: 'bg-red-400',   label: 'failed' },
-  rejected:  { bg: 'bg-red-950',   border: 'border-red-600',  dot: 'bg-red-500',   label: 'rejected',  flash: true },
+  pending:      { bg: 'var(--t-panel-2)', border: 'var(--t-border)', dot: 'var(--t-fg-4)', label: 'pending' },
+  running:      { bg: 'var(--t-panel-2)', border: 'var(--t-run)',    dot: 'var(--t-run)',  label: 'running',      pulse: true },
+  waiting_user: { bg: 'var(--t-panel-2)', border: 'var(--t-warn)',   dot: 'var(--t-warn)', label: 'waiting_user', pulse: true },
+  succeeded:    { bg: 'var(--t-panel-2)', border: 'var(--t-ok)',     dot: 'var(--t-ok)',   label: 'succeeded' },
+  failed:       { bg: 'var(--t-panel-2)', border: 'var(--t-err)',    dot: 'var(--t-err)',  label: 'failed' },
+  rejected:     { bg: 'var(--t-panel-2)', border: 'var(--t-err)',    dot: 'var(--t-err)',  label: 'rejected',     flash: true },
 };
 
 // ---------------------------------------------------------------------------
@@ -53,24 +54,29 @@ const NodeCard = memo(({ nodeId }: NodeCardProps) => {
       onClick={() => selectNode(nodeId)}
       className={[
         'rounded-lg border transition-all duration-300 p-3 flex flex-col gap-1 text-left',
-        'hover:ring-2 hover:ring-blue-500/40 focus:outline-none focus:ring-2 focus:ring-blue-500',
-        isSelected ? 'ring-2 ring-blue-500' : '',
-        cfg.bg,
-        cfg.border,
+        'hover:ring-2 focus:outline-none focus:ring-2',
         cfg.pulse ? 'animate-pulse' : '',
         cfg.flash ? 'animate-flash' : '',
       ].join(' ')}
+      style={{
+        background: cfg.bg,
+        borderColor: cfg.border,
+        boxShadow: isSelected ? '0 0 0 2px var(--t-run)' : undefined,
+      }}
     >
       <div className="flex items-center gap-2">
-        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
-        <span className="text-xs font-semibold text-zinc-100 truncate">{nodeId}</span>
-        <span className={`ml-auto text-[10px] font-mono ${cfg.dot.replace('bg-', 'text-')}`}>{cfg.label}</span>
+        <span
+          className="w-2 h-2 rounded-full flex-shrink-0"
+          style={{ background: cfg.dot }}
+        />
+        <span className="text-xs font-semibold truncate" style={{ color: 'var(--t-fg)' }}>{nodeId}</span>
+        <span className="ml-auto text-[10px] font-mono" style={{ color: cfg.dot }}>{cfg.label}</span>
       </div>
       {node.output && (
-        <p className="text-[10px] text-zinc-400 truncate pl-4">{node.output}</p>
+        <p className="text-[10px] truncate pl-4" style={{ color: 'var(--t-fg-3)' }}>{node.output}</p>
       )}
       {node.error && (
-        <p className="text-[10px] text-red-400 truncate pl-4">{node.error}</p>
+        <p className="text-[10px] truncate pl-4" style={{ color: 'var(--t-err)' }}>{node.error}</p>
       )}
     </button>
   );
@@ -93,7 +99,10 @@ export const LiveDashboard = memo(({ className = '' }: LiveDashboardProps) => {
 
   if (!runId) {
     return (
-      <div className={`flex items-center justify-center h-full text-zinc-500 text-sm ${className}`}>
+      <div
+        className={`flex items-center justify-center h-full text-sm ${className}`}
+        style={{ color: 'var(--t-fg-4)' }}
+      >
         暂无运行中的 Run
       </div>
     );
@@ -102,18 +111,18 @@ export const LiveDashboard = memo(({ className = '' }: LiveDashboardProps) => {
   return (
     <div className={`flex flex-col gap-3 p-4 overflow-auto ${className}`} data-testid="live-dashboard">
       {/* Run header */}
-      <div className="flex items-center gap-2 text-xs text-zinc-400">
-        <span className="font-mono text-zinc-200">{runId}</span>
+      <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--t-fg-3)' }}>
+        <span className="font-mono" style={{ color: 'var(--t-fg-2)' }}>{runId}</span>
         <span>·</span>
         <span>{nodeIds.length} 节点</span>
         {violations.length > 0 && (
-          <span className="ml-auto text-red-400">{violations.length} 次 policy 驳回</span>
+          <span className="ml-auto" style={{ color: 'var(--t-err)' }}>{violations.length} 次 policy 驳回</span>
         )}
       </div>
 
       {/* Node cards grid */}
       {nodeIds.length === 0 ? (
-        <div className="text-zinc-600 text-xs text-center py-6">等待节点事件...</div>
+        <div className="text-xs text-center py-6" style={{ color: 'var(--t-fg-4)' }}>等待节点事件...</div>
       ) : (
         <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
           {nodeIds.map((id) => (
@@ -124,10 +133,13 @@ export const LiveDashboard = memo(({ className = '' }: LiveDashboardProps) => {
 
       {/* Policy violation log */}
       {violations.length > 0 && (
-        <div className="mt-2 border border-red-900 rounded-lg p-2">
-          <p className="text-[10px] text-red-400 font-semibold mb-1">Policy 驳回记录</p>
+        <div
+          className="mt-2 rounded-lg p-2"
+          style={{ border: '1px solid var(--t-err)' }}
+        >
+          <p className="text-[10px] font-semibold mb-1" style={{ color: 'var(--t-err)' }}>Policy 驳回记录</p>
           {violations.slice(-5).map((v, i) => (
-            <p key={i} className="text-[10px] text-zinc-400 truncate">
+            <p key={i} className="text-[10px] truncate" style={{ color: 'var(--t-fg-3)' }}>
               {v.sender} → {v.receiver}: {v.reason}
             </p>
           ))}

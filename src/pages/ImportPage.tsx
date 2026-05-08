@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Timer as ImpTimer } from '../common/icons/iconRegistry';
 import {
   downloadTrajectory,
   isDownloadInFlight,
@@ -205,7 +206,9 @@ export default function ImportPage() {
             boxShadow: '0 8px 24px rgba(0,0,0,.3)',
           }}
         >
-          <span>{toast.type === 'timeout' ? '⏱' : '✗'}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+            {toast.type === 'timeout' ? <ImpTimer size={14} strokeWidth={2} /> : '✗'}
+          </span>
           {toast.message}
           <button
             onClick={() => setToast(null)}

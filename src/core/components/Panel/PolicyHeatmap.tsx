@@ -5,12 +5,12 @@ import { HeatmapRow } from '../../stores/usePolicyObsStore';
 import { STAGE_ORDER } from '../../../common/types/stage';
 
 export function heatmapColor(count: number): string {
-  if (count === 0) return '#18181B';
+  if (count === 0) return 'var(--t-panel-2)';
   if (count <= 5) return '#1A2535';
   if (count <= 15) return '#1B3A6B';
   if (count <= 25) return '#1D5EA0';
-  if (count <= 40) return '#F59E0B';
-  return '#EF4444';
+  if (count <= 40) return 'var(--t-warn)';
+  return 'var(--t-err)';
 }
 
 export function PolicyHeatmap({
@@ -32,12 +32,12 @@ export function PolicyHeatmap({
   ];
 
   return (
-    <div data-testid="policy-heatmap" style={{ padding: 12, background: '#0F0F11', border: '1px solid var(--border)', borderRadius: 14 }}>
+    <div data-testid="policy-heatmap" style={{ padding: 12, background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>Policy × Stage heatmap</div>
         <div style={{ display: 'flex', gap: 4 }}>
           {legend.map((l) => (
-            <span key={l.label} style={{ fontSize: 9, color: 'var(--fg-4)', fontFamily: 'var(--font-mono)', display: 'inline-flex', gap: 3, alignItems: 'center' }}>
+            <span key={l.label} style={{ fontSize: 9, color: 'var(--t-fg-3)', fontFamily: 'var(--font-mono)', display: 'inline-flex', gap: 3, alignItems: 'center' }}>
               <span style={{ width: 8, height: 8, background: l.color, display: 'inline-block' }} />{l.label}
             </span>
           ))}
@@ -46,10 +46,10 @@ export function PolicyHeatmap({
       <div style={{ display: 'grid', gridTemplateColumns: `200px repeat(${STAGE_ORDER.length}, 1fr)`, gap: 4 }}>
         <div />
         {STAGE_ORDER.map((s) => (
-          <div key={s} style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--fg-5)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>{s}</div>
+          <div key={s} style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>{s}</div>
         ))}
         {rows.length === 0 && (
-          <div style={{ gridColumn: `span ${STAGE_ORDER.length + 1}`, fontSize: 12, color: 'var(--fg-5)' }}>No rejection events in window.</div>
+          <div style={{ gridColumn: `span ${STAGE_ORDER.length + 1}`, fontSize: 12, color: 'var(--t-fg-4)' }}>No rejection events in window.</div>
         )}
         {rows.map((row) => {
           const total = STAGE_ORDER.reduce((acc, s) => acc + (row.counts[s] ?? 0), 0);
@@ -62,7 +62,7 @@ export function PolicyHeatmap({
                   textAlign: 'left',
                   background: selected === row.policy ? 'rgba(106,158,255,0.12)' : 'transparent',
                   border: 'none',
-                  color: 'var(--fg-1)',
+                  color: 'var(--t-fg-2)',
                   fontSize: 12,
                   padding: 6,
                   cursor: 'pointer',
@@ -70,7 +70,7 @@ export function PolicyHeatmap({
                 }}
               >
                 {row.policy}{' '}
-                <span style={{ fontSize: 10, color: 'var(--fg-5)', fontFamily: 'var(--font-mono)' }}>{total}</span>
+                <span style={{ fontSize: 10, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)' }}>{total}</span>
               </button>
               {STAGE_ORDER.map((s) => {
                 const c = row.counts[s] ?? 0;
@@ -85,7 +85,7 @@ export function PolicyHeatmap({
                     style={{
                       background: bg,
                       border: 'none',
-                      color: c > 25 ? '#0F0F11' : 'var(--fg-3)',
+                      color: c > 25 ? 'var(--t-bg)' : 'var(--t-fg-3)',
                       fontSize: 11,
                       fontFamily: 'var(--font-mono)',
                       height: 28,

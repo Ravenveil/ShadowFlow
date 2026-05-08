@@ -7,6 +7,7 @@ import { useI18n } from '../../../common/i18n';
 import { useNodeRegistry } from '../../stores/nodeRegistryStore';
 import { NodeCategory } from '../../types';
 import { clsx } from 'clsx';
+import { Icon } from '../../../common/icons/iconRegistry';
 
 // 分类配置
 const categoryConfig: Record<
@@ -39,8 +40,8 @@ function DraggableNode({ node, onDragStart }: { node: any; onDragStart: (e: Reac
       )}
     >
       <div className="flex items-center gap-2">
-        <span className="text-lg" role="img">
-          {node.icon}
+        <span className="inline-flex items-center justify-center text-sf-fg2">
+          <Icon token={node.icon} size={18} />
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">
@@ -75,8 +76,8 @@ function CategorySection({
         onClick={onToggle}
         className="w-full flex items-center gap-2 p-3 hover:bg-gray-50 transition-colors"
       >
-        <span className="text-lg" role="img">
-          {config.icon}
+        <span className="inline-flex items-center justify-center text-sf-fg2">
+          <Icon token={config.icon} size={18} />
         </span>
         <span className="flex-1 text-left font-medium">
           {t(`categories.${category}`)}

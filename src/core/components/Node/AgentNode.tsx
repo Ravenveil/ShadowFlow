@@ -14,15 +14,15 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import type { NodeData } from '../../types';
 
 const STATUS_STYLE: Record<string, { dot: string; ring: string; extra?: string }> = {
-  pending:   { dot: '#6B7280', ring: '#6B7280' },
-  running:   { dot: '#3B82F6', ring: '#3B82F6', extra: 'animate-pulse' },
-  succeeded: { dot: '#10B981', ring: '#10B981' },
-  failed:    { dot: '#EF4444', ring: '#EF4444' },
-  rejected:  { dot: '#EF4444', ring: '#EF4444', extra: 'animate-flash' },
+  pending:   { dot: 'var(--t-fg-4)', ring: 'var(--t-fg-4)' },
+  running:   { dot: 'var(--t-run)', ring: 'var(--t-run)', extra: 'animate-pulse' },
+  succeeded: { dot: 'var(--t-ok)', ring: 'var(--t-ok)' },
+  failed:    { dot: 'var(--t-err)', ring: 'var(--t-err)' },
+  rejected:  { dot: 'var(--t-err)', ring: 'var(--t-err)', extra: 'animate-flash' },
   // legacy aliases
-  idle:    { dot: '#6B7280', ring: '#6B7280' },
-  success: { dot: '#10B981', ring: '#10B981' },
-  error:   { dot: '#EF4444', ring: '#EF4444' },
+  idle:    { dot: 'var(--t-fg-4)', ring: 'var(--t-fg-4)' },
+  success: { dot: 'var(--t-ok)', ring: 'var(--t-ok)' },
+  error:   { dot: 'var(--t-err)', ring: 'var(--t-err)' },
 };
 
 export const AgentNode = memo(({ data, selected }: NodeProps<NodeData>) => {
@@ -38,8 +38,8 @@ export const AgentNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       data-testid={`agent-node-${agentId}`}
       data-status={status}
       style={{
-        background: '#0F0F12',
-        border: `1.5px solid ${selected ? style.ring : '#27272A'}`,
+        background: 'var(--t-panel)',
+        border: `1.5px solid ${selected ? style.ring : 'var(--t-border)'}`,
         borderRadius: 10,
         minWidth: 140,
         maxWidth: 200,
@@ -65,7 +65,7 @@ export const AgentNode = memo(({ data, selected }: NodeProps<NodeData>) => {
           background: style.dot, flexShrink: 0,
         }} />
         <span style={{
-          fontSize: 12, fontWeight: 600, color: '#E4E4E7',
+          fontSize: 12, fontWeight: 600, color: 'var(--t-fg)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {label}
@@ -73,13 +73,13 @@ export const AgentNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       </div>
 
       {agentId !== label && (
-        <div style={{ fontSize: 10, color: '#71717A', marginTop: 2, paddingLeft: 14 }}>
+        <div style={{ fontSize: 10, color: 'var(--t-fg-4)', marginTop: 2, paddingLeft: 14 }}>
           {agentId}
         </div>
       )}
 
-      <Handle type="target" position={Position.Left} style={{ background: '#52525B' }} />
-      <Handle type="source" position={Position.Right} style={{ background: '#52525B' }} />
+      <Handle type="target" position={Position.Left} style={{ background: 'var(--t-fg-4)' }} />
+      <Handle type="source" position={Position.Right} style={{ background: 'var(--t-fg-4)' }} />
     </div>
   );
 });

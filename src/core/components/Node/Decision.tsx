@@ -6,6 +6,7 @@ import React, { memo, useCallback } from 'react';
 import { Handle, Position, NodeProps, NodeData } from 'reactflow';
 import { useI18n } from '../../../common/i18n';
 import { clsx } from 'clsx';
+import { Icon } from '../../../common/icons/iconRegistry';
 
 export const DecisionNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   const { t, language } = useI18n();
@@ -31,7 +32,7 @@ export const DecisionNode = memo(({ data, selected }: NodeProps<NodeData>) => {
     branch: {
       icon: '🔀',
       title: 'Branch',
-      color: '#F59E0B',
+      color: 'var(--t-warn)',
       bgColor: 'bg-amber-50',
       borderColor: 'border-amber-300',
       handleColor: 'bg-amber-500',
@@ -39,7 +40,7 @@ export const DecisionNode = memo(({ data, selected }: NodeProps<NodeData>) => {
     loop: {
       icon: '🔁',
       title: 'Loop',
-      color: '#8B5CF6',
+      color: 'var(--t-accent)',
       bgColor: 'bg-purple-50',
       borderColor: 'border-purple-300',
       handleColor: 'bg-purple-500',
@@ -47,7 +48,7 @@ export const DecisionNode = memo(({ data, selected }: NodeProps<NodeData>) => {
     merge: {
       icon: '🔀',
       title: 'Merge',
-      color: '#10B981',
+      color: 'var(--t-ok)',
       bgColor: 'bg-green-50',
       borderColor: 'border-green-300',
       handleColor: 'bg-green-500',
@@ -85,7 +86,7 @@ export const DecisionNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       )}
       style={{
         borderColor: selected ? undefined : config.borderColor,
-        backgroundColor: `${config.color}10`,
+        backgroundColor: `color-mix(in oklab, ${config.color} 10%, transparent)`,
       }}
       onDoubleClick={handleDoubleClick}
     >
@@ -112,8 +113,8 @@ export const DecisionNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       <div className="p-3">
         {/* 图标和标题 */}
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-xl" role="img" aria-label="icon">
-            {config.icon}
+          <span className="inline-flex items-center justify-center text-sf-fg2" aria-label="icon">
+            <Icon token={config.icon} size={20} />
           </span>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-sm truncate">

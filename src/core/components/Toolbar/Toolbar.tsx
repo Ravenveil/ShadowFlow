@@ -3,6 +3,8 @@
 // ============================================================================
 
 import React, { useState, useRef } from 'react';
+import { ZoomIn, ZoomOut, Maximize2, Ruler } from '../../../common/icons/iconRegistry';
+import { Undo2, Redo2, Download, Play, Square } from 'lucide-react';
 import { useI18n } from '../../../common/i18n';
 import { useWorkflowActions } from '../../hooks/useWorkflow';
 import { useExecution } from '../../hooks/useExecution';
@@ -157,14 +159,14 @@ export function Toolbar() {
       {/* 撤销/重做 */}
       <div className="flex items-center gap-1">
         <ToolButton
-          icon="↶"
-          label={t('common.save')}
+          icon={<Undo2 size={16} strokeWidth={2} aria-hidden />}
+          label={t('toolbar.undo')}
           onClick={workflow.undo}
           disabled={!workflow.canUndo}
           shortcut="Ctrl+Z"
         />
         <ToolButton
-          icon="↷"
+          icon={<Redo2 size={16} strokeWidth={2} aria-hidden />}
           label={t('toolbar.redo')}
           onClick={workflow.redo}
           disabled={!workflow.canRedo}
@@ -177,17 +179,17 @@ export function Toolbar() {
       {/* 画布控制 */}
       <div className="flex items-center gap-1">
         <ToolButton
-          icon="🔍+"
+          icon={<ZoomIn size={16} strokeWidth={2} />}
           label={t('toolbar.zoomIn')}
           onClick={() => workflow.setZoom(workflow.ui.zoom + 0.1)}
         />
         <ToolButton
-          icon="🔍-"
+          icon={<ZoomOut size={16} strokeWidth={2} />}
           label={t('toolbar.zoomOut')}
           onClick={() => workflow.setZoom(workflow.ui.zoom - 0.1)}
         />
         <ToolButton
-          icon="⛶"
+          icon={<Maximize2 size={16} strokeWidth={2} />}
           label={t('toolbar.fitView')}
           onClick={() => workflow.setZoom(1)}
         />
@@ -199,7 +201,7 @@ export function Toolbar() {
       <Dropdown
         trigger={
           <>
-            <span className="text-lg">📐</span>
+            <span className="inline-flex items-center text-sf-fg2"><Ruler size={16} strokeWidth={2} /></span>
             <span className="text-xs">{t('toolbar.autoLayout')}</span>
           </>
         }
@@ -223,7 +225,7 @@ export function Toolbar() {
       <Dropdown
         trigger={
           <>
-            <span className="text-lg">💾</span>
+            <span className="inline-flex items-center text-sf-fg2"><Download size={16} strokeWidth={2} aria-hidden /></span>
             <span className="text-xs">{t('common.export')}</span>
           </>
         }
@@ -274,8 +276,12 @@ export function Toolbar() {
               : 'bg-blue-500 text-white hover:bg-blue-600'
           )}
         >
-          <span className={clsx('text-lg', workflow.isRunning && 'animate-pulse')}>
-            {workflow.isRunning ? '⏹' : '▶'}
+          <span className={clsx('inline-flex items-center', workflow.isRunning && 'animate-pulse')}>
+            {workflow.isRunning ? (
+              <Square size={16} strokeWidth={2} aria-hidden />
+            ) : (
+              <Play size={16} strokeWidth={2} aria-hidden />
+            )}
           </span>
           <span className="hidden sm:inline">
             {workflow.isRunning ? t('common.stop') : t('common.run')}

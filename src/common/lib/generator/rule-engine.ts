@@ -781,8 +781,11 @@ export class RuleEngine {
 
       case 'modify_node':
         const nodeToModify = workflow.nodes.find(n => n.id === action.node_id);
-        if (nodeToModify) {
-          Object.assign(nodeToModify, action.modifications);
+        if (nodeToModify && typeof action.modifications === 'object' && action.modifications !== null) {
+          const UNSAFE = new Set(['__proto__', 'constructor', 'prototype']);
+          for (const [k, v] of Object.entries(action.modifications as Record<string, unknown>)) {
+            if (!UNSAFE.has(k)) (nodeToModify as Record<string, unknown>)[k] = v;
+          }
           nodes = 1;
         }
         break;

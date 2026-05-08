@@ -5,6 +5,7 @@
 
 import { BaseNodeExecutor } from '../base-node-executor';
 import { NodeContext, NodeResult } from '../../types/node.types';
+import { evaluateBooleanExpression, SafeExpressionError } from '../../security/safeExpression';
 
 /**
  * 验证类型
@@ -384,9 +385,7 @@ Return JSON:
     error: ValidationError;
   } {
     try {
-      // 注意：在生产环境中应使用安全的表达式评估
-      const validate = new Function('artifact', `return ${rule.expression}`);
-      const result = validate(artifact);
+      const result = evaluateBooleanExpression(rule.expression, { artifact } as Record<string, unknown>);
 
       if (!result) {
         return {

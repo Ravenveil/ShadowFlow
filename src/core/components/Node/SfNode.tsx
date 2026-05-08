@@ -2,14 +2,15 @@ import { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../../types';
 import { useI18n } from '../../../common/i18n';
+import { Icon } from '../../../common/icons/iconRegistry';
 
 // Status → accent color
 const STATUS_COLOR: Record<string, string> = {
-  idle:    '#52525B',
-  running: '#A855F7',
-  success: '#10B981',
-  error:   '#EF4444',
-  warning: '#F59E0B',
+  idle:    'var(--t-fg-4)',
+  running: 'var(--t-accent)',
+  success: 'var(--t-ok)',
+  error:   'var(--t-err)',
+  warning: 'var(--t-warn)',
 };
 
 const STATUS_LABEL: Record<string, { en: string; zh: string }> = {
@@ -23,8 +24,8 @@ const STATUS_LABEL: Record<string, { en: string; zh: string }> = {
 export const SfNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   const { language } = useI18n();
   const status = data.status || 'idle';
-  const nodeColor = data.color || '#A855F7';
-  const statusColor = STATUS_COLOR[status] ?? '#52525B';
+  const nodeColor = data.color || 'var(--t-accent)';
+  const statusColor = STATUS_COLOR[status] ?? 'var(--t-fg-4)';
   const isRunning = status === 'running';
   const label = STATUS_LABEL[status]?.[language as 'en' | 'zh'] ?? status;
   const name = typeof data.name === 'string' ? data.name : (data.name as Record<string, string>)?.[language] ?? data.name?.['en'] ?? 'Node';
@@ -33,8 +34,8 @@ export const SfNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   return (
     <div
       style={{
-        background: '#0F0F12',
-        border: `1.5px solid ${selected ? nodeColor : '#27272A'}`,
+        background: 'var(--t-panel)',
+        border: `1.5px solid ${selected ? nodeColor : 'var(--t-border)'}`,
         borderRadius: 12,
         minWidth: 152,
         maxWidth: 192,
@@ -52,14 +53,16 @@ export const SfNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
       {/* icon + name */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-        <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{data.icon}</span>
-        <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 700, color: '#FAFAFA', letterSpacing: '-.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, flexShrink: 0, color: 'var(--t-fg-2)' }}>
+          <Icon token={data.icon} size={16} />
+        </span>
+        <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 700, color: 'var(--t-fg)', letterSpacing: '-.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {name}
         </span>
       </div>
 
       {/* description / model */}
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: '#71717A', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {desc}
       </div>
 
@@ -82,12 +85,12 @@ export const SfNode = memo(({ data, selected }: NodeProps<NodeData>) => {
         position={Position.Left}
         style={{
           width: 10, height: 10, borderRadius: '50%',
-          background: status === 'running' ? `${nodeColor}33` : '#0C0C10',
+          background: status === 'running' ? `${nodeColor}33` : 'var(--t-bg)',
           border: `1.5px solid ${
-            status === 'reject' ? '#F59E0B'
-            : status === 'success' ? '#10B981'
+            status === 'reject' ? 'var(--t-warn)'
+            : status === 'success' ? 'var(--t-ok)'
             : status === 'running' ? nodeColor
-            : '#52525B'
+            : 'var(--t-fg-4)'
           }`,
           left: -5, top: '50%',
           boxShadow: status === 'running' ? `0 0 0 3px ${nodeColor}26` : 'none',
@@ -100,10 +103,10 @@ export const SfNode = memo(({ data, selected }: NodeProps<NodeData>) => {
         position={Position.Right}
         style={{
           width: 10, height: 10, borderRadius: '50%',
-          background: status === 'running' ? `${nodeColor}33` : '#0C0C10',
+          background: status === 'running' ? `${nodeColor}33` : 'var(--t-bg)',
           border: `1.5px solid ${
-            status === 'success' ? '#10B981'
-            : status === 'error'   ? '#EF4444'
+            status === 'success' ? 'var(--t-ok)'
+            : status === 'error'   ? 'var(--t-err)'
             : nodeColor
           }`,
           right: -5, top: '50%',

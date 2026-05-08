@@ -80,7 +80,7 @@ export function PolicyObservabilityPage({ apiBase = '' }: { apiBase?: string } =
       {/* Summary bar */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <KPICard label="总驳回" value={summary?.total_rejections ?? 0} delta={`${(summary?.rejection_rate_pct ?? 0).toFixed(1)}% of runs`} />
-        <KPICard label="Top policy" value={summary?.top_policy?.name || '—'} delta={`${summary?.top_policy?.count ?? 0} triggers`} valueColor="#F59E0B" />
+        <KPICard label="Top policy" value={summary?.top_policy?.name || '—'} delta={`${summary?.top_policy?.count ?? 0} triggers`} valueColor="var(--t-warn)" />
         <KPICard label="Top stage" value={summary?.top_stage?.name || '—'} delta={`${summary?.top_stage?.count ?? 0} at stage`} />
         <KPICard label="Recovered" value={`${(summary?.recovered_rate_pct ?? 0).toFixed(1)}%`} valueColor="#22C55E" />
         <KPICard label="Median loops" value={(summary?.median_loops ?? 0).toFixed(1)} />

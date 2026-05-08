@@ -7,7 +7,8 @@
  * - Max 3 visible, extras queue
  */
 
-import React, { useEffect, useState, memo } from 'react';
+import { useEffect, useState, memo } from 'react';
+import { AlertTriangle } from '../../../common/icons/iconRegistry';
 import { useRejectionToastStore, RejectionToastItem } from '../../stores/useRejectionToastStore';
 import { usePolicyStore } from '../../hooks/usePolicyStore';
 
@@ -40,18 +41,26 @@ const SingleToast = memo(({ toast }: SingleToastProps) => {
       role="alert"
       data-testid={`rejection-toast-${toast.id}`}
       onClick={handleClick}
-      className="animate-toast-in cursor-pointer select-none rounded-xl bg-red-600 text-white shadow-2xl px-5 py-4"
-      style={{ fontSize: '18px', fontWeight: 700 }}
+      className="animate-toast-in cursor-pointer select-none rounded-xl shadow-2xl px-5 py-4"
+      style={{
+        fontSize: '18px',
+        fontWeight: 700,
+        background: 'var(--t-err)',
+        color: 'var(--t-fg)',
+      }}
     >
       <div className="flex items-center gap-3">
-        <span aria-hidden style={{ fontSize: 22 }}>⚠️</span>
+        <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          <AlertTriangle size={22} strokeWidth={2} />
+        </span>
         <span className="flex-1">
           Policy Matrix: <strong>{toast.sender}</strong> 驳回{' '}
           <strong>{toast.receiver}</strong>
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); dismiss(toast.id); }}
-          className="text-white/70 hover:text-white text-sm font-normal"
+          className="text-sm font-normal"
+          style={{ color: 'color-mix(in oklab, var(--t-fg) 70%, transparent)' }}
           aria-label="关闭"
         >
           ✕
@@ -59,7 +68,10 @@ const SingleToast = memo(({ toast }: SingleToastProps) => {
       </div>
 
       {expanded && toast.reason && (
-        <div className="mt-2 text-sm font-normal bg-red-700/60 rounded-lg px-3 py-2">
+        <div
+          className="mt-2 text-sm font-normal rounded-lg px-3 py-2"
+          style={{ background: 'color-mix(in oklab, var(--t-err) 60%, var(--t-panel))' }}
+        >
           <span className="opacity-70">原因：</span>{toast.reason}
         </div>
       )}

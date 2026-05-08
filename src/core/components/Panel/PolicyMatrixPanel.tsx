@@ -16,13 +16,14 @@
  */
 
 import { useEffect, useMemo } from 'react';
+import { AlertTriangle as PolicyAlert } from '../../../common/icons/iconRegistry';
 import { usePolicyStore, CellState, PolicyMatrix } from '../../hooks/usePolicyStore';
 import { useWorkflow } from '../../stores/workflowStore';
 
 const STATE_STYLES: Record<CellState, { bg: string; color: string; glyph: string; label: string }> = {
-  permit: { bg: 'rgba(34,197,94,0.18)',  color: '#22C55E', glyph: '✓', label: 'Permit' },
-  deny:   { bg: 'rgba(239,68,68,0.22)',  color: '#EF4444', glyph: '✗', label: 'Deny' },
-  warn:   { bg: 'rgba(245,158,11,0.22)', color: '#F59E0B', glyph: '⚠', label: 'Warn (non-blocking)' },
+  permit: { bg: 'color-mix(in oklab, var(--t-ok) 18%, transparent)',  color: 'var(--t-ok)',  glyph: '✓', label: 'Permit' },
+  deny:   { bg: 'color-mix(in oklab, var(--t-err) 22%, transparent)', color: 'var(--t-err)', glyph: '✗', label: 'Deny' },
+  warn:   { bg: 'color-mix(in oklab, var(--t-warn) 22%, transparent)', color: 'var(--t-warn)', glyph: '⚠', label: 'Warn (non-blocking)' },
 };
 
 export interface PolicyMatrixPanelProps {
@@ -33,6 +34,8 @@ export interface PolicyMatrixPanelProps {
   /** For Story 4.6: optional re-run handler override (triggers full reconfigure). */
   onReRun?: (matrix: PolicyMatrix) => void | Promise<void>;
   onSaveAsTemplate?: (matrix: PolicyMatrix) => void;
+  /** Story 7.3: when true, disables all interactions and hides action buttons. */
+  readOnly?: boolean;
 }
 
 export function PolicyMatrixPanel({
@@ -41,6 +44,7 @@ export function PolicyMatrixPanel({
   apiBase = '',
   onReRun,
   onSaveAsTemplate,
+  readOnly = false,
 }: PolicyMatrixPanelProps): JSX.Element {
   const agents         = usePolicyStore((s) => s.agents);
   const matrix         = usePolicyStore((s) => s.matrix);
@@ -131,7 +135,7 @@ export function PolicyMatrixPanel({
       data-testid="policy-matrix-panel"
       aria-label="Policy Matrix Panel"
       style={{
-        background: 'var(--skin-panel, #0F0F11)',
+        background: 'var(--skin-panel, var(--t-panel))',
         border: '1px solid var(--border)',
         borderRadius: 14,
         padding: 16,
@@ -150,7 +154,7 @@ export function PolicyMatrixPanel({
             {rows.length} × {rows.length} sender × receiver
           </div>
         </div>
-        {onSaveAsTemplate && (
+        {!readOnly && onSaveAsTemplate && (
           <button
             type="button"
             onClick={() => onSaveAsTemplate(matrix)}
@@ -169,7 +173,7 @@ export function PolicyMatrixPanel({
           </button>
         )}
         {/* P16: Re-run button shown whenever onReRun prop OR runId is available */}
-        {canReRun && (
+        {!readOnly && canReRun && (
           <button
             type="button"
             disabled={!dirty}
@@ -179,9 +183,9 @@ export function PolicyMatrixPanel({
             style={{
               padding: '6px 12px',
               fontSize: 12,
-              color: dirty ? '#fff' : 'var(--fg-5)',
-              background: dirty ? '#A07AFF' : 'var(--bg-elev-1)',
-              border: '1px solid rgba(168,85,247,.4)',
+              color: dirty ? 'var(--t-fg)' : 'var(--fg-5)',
+              background: dirty ? 'var(--t-accent)' : 'var(--bg-elev-1)',
+              border: '1px solid color-mix(in oklab, var(--t-accent) 40%, transparent)',
               borderRadius: 8,
               cursor: dirty ? 'pointer' : 'not-allowed',
             }}
@@ -189,24 +193,26 @@ export function PolicyMatrixPanel({
             Save &amp; Re-run
           </button>
         )}
-        <button
-          type="button"
-          disabled={!dirty}
-          onClick={effectiveSave}
-          data-testid="policy-save"
-          style={{
-            padding: '6px 12px',
-            fontSize: 12,
-            fontWeight: 600,
-            color: dirty ? '#fff' : 'var(--fg-5)',
-            background: dirty ? 'var(--accent)' : 'var(--bg-elev-1)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            cursor: dirty ? 'pointer' : 'not-allowed',
-          }}
-        >
-          Save &amp; Apply
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            disabled={!dirty}
+            onClick={effectiveSave}
+            data-testid="policy-save"
+            style={{
+              padding: '6px 12px',
+              fontSize: 12,
+              fontWeight: 600,
+              color: dirty ? 'var(--t-fg)' : 'var(--fg-5)',
+              background: dirty ? 'var(--accent)' : 'var(--bg-elev-1)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              cursor: dirty ? 'pointer' : 'not-allowed',
+            }}
+          >
+            Save &amp; Apply
+          </button>
+        )}
       </header>
 
       {rows.length === 0 ? (
@@ -259,20 +265,21 @@ export function PolicyMatrixPanel({
                           data-testid={`cell-${sender}-${receiver}`}
                           data-state={state}
                           title={`${sender} → ${receiver}: ${styling.label}`}
-                          onClick={() => cycle(sender, receiver)}
+                          onClick={() => !readOnly && cycle(sender, receiver)}
+                          disabled={readOnly}
                           style={{
                             width: 34,
                             height: 24,
                             border: isHighlighted
-                              ? '2px solid #F59E0B'
-                              : `1px solid ${styling.color}55`,
+                              ? '2px solid var(--t-warn)'
+                              : `1px solid color-mix(in oklab, ${styling.color} 33%, transparent)`,
                             background: styling.bg,
                             color: styling.color,
                             borderRadius: 4,
                             fontSize: 12,
-                            cursor: 'pointer',
+                            cursor: readOnly ? 'default' : 'pointer',
                             fontWeight: 700,
-                            outline: isHighlighted ? '1px solid #F59E0B40' : undefined,
+                            outline: isHighlighted ? '1px solid color-mix(in oklab, var(--t-warn) 25%, transparent)' : undefined,
                             transition: 'border 0.15s, outline 0.15s',
                           }}
                         >
@@ -289,7 +296,7 @@ export function PolicyMatrixPanel({
       )}
 
       <footer style={{ fontSize: 10, color: 'var(--fg-5)', fontFamily: 'var(--font-mono)' }}>
-        ✓ permit &nbsp;·&nbsp; ✗ deny &nbsp;·&nbsp; ⚠ warn (non-blocking) &nbsp;·&nbsp; click to cycle
+        ✓ permit &nbsp;·&nbsp; ✗ deny &nbsp;·&nbsp; <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, verticalAlign: 'middle' }}><PolicyAlert size={10} strokeWidth={2} /> warn (non-blocking)</span> &nbsp;·&nbsp; click to cycle
       </footer>
     </section>
   );

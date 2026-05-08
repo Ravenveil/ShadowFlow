@@ -113,9 +113,9 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
     >
       <div
         style={{
-          background: '#0D1117',
+          background: 'var(--t-bg)',
           borderRadius: 14,
-          border: '1px solid #30363D',
+          border: '1px solid var(--t-fg-4)',
           padding: '28px 32px',
           width: 560,
           maxWidth: '95vw',
@@ -127,41 +127,41 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
         }}
       >
         {/* Title */}
-        <h2 style={{ color: '#E6EDF3', margin: 0, fontSize: 18, fontWeight: 600 }}>
+        <h2 style={{ color: 'var(--t-fg)', margin: 0, fontSize: 18, fontWeight: 600 }}>
           + 新建模板（从 YAML 导入）
         </h2>
 
         {/* YAML input */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={{ color: '#8B949E', fontSize: 13 }}>YAML 内容</label>
+          <label style={{ color: 'var(--t-fg-3)', fontSize: 13 }}>YAML 内容</label>
           <textarea
             value={yamlText}
             onChange={(e) => setYamlText(e.target.value)}
             placeholder={PLACEHOLDER_YAML}
             rows={10}
             style={{
-              background: '#161B22', color: '#E6EDF3',
-              border: '1px solid #30363D', borderRadius: 8,
+              background: 'var(--t-panel)', color: 'var(--t-fg)',
+              border: '1px solid var(--t-fg-4)', borderRadius: 8,
               padding: '10px 12px', fontFamily: 'monospace', fontSize: 12,
               resize: 'vertical', outline: 'none',
             }}
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: '#8B949E', fontSize: 12 }}>或上传文件:</span>
+            <span style={{ color: 'var(--t-fg-3)', fontSize: 12 }}>或上传文件:</span>
             <input
               ref={fileRef}
               type="file"
               accept=".yaml,.yml"
               onChange={handleFileChange}
-              style={{ color: '#8B949E', fontSize: 12 }}
+              style={{ color: 'var(--t-fg-3)', fontSize: 12 }}
             />
           </div>
         </div>
 
         {/* Override fields */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={{ color: '#8B949E', fontSize: 13 }}>
-            Template ID <span style={{ color: '#F85149' }}>*</span>
+          <label style={{ color: 'var(--t-fg-3)', fontSize: 13 }}>
+            Template ID <span style={{ color: 'var(--t-err)' }}>*</span>
           </label>
           <input
             type="text"
@@ -169,24 +169,24 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
             onChange={(e) => setTemplateId(e.target.value)}
             placeholder="my-company"
             style={{
-              background: '#161B22', color: '#E6EDF3',
-              border: '1px solid #30363D', borderRadius: 8,
+              background: 'var(--t-panel)', color: 'var(--t-fg)',
+              border: '1px solid var(--t-fg-4)', borderRadius: 8,
               padding: '8px 12px', fontSize: 14, outline: 'none',
             }}
           />
-          <span style={{ color: '#6E7681', fontSize: 11 }}>小写字母、数字和短横线，3-40 个字符</span>
+          <span style={{ color: 'var(--t-fg-4)', fontSize: 11 }}>小写字母、数字和短横线，3-40 个字符</span>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={{ color: '#8B949E', fontSize: 13 }}>User Role（可选）</label>
+          <label style={{ color: 'var(--t-fg-3)', fontSize: 13 }}>User Role（可选）</label>
           <input
             type="text"
             value={userRole}
             onChange={(e) => setUserRole(e.target.value)}
             placeholder="CEO / Founder / PI ..."
             style={{
-              background: '#161B22', color: '#E6EDF3',
-              border: '1px solid #30363D', borderRadius: 8,
+              background: 'var(--t-panel)', color: 'var(--t-fg)',
+              border: '1px solid var(--t-fg-4)', borderRadius: 8,
               padding: '8px 12px', fontSize: 14, outline: 'none',
             }}
           />
@@ -195,11 +195,11 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
         {/* Error display */}
         {errors.length > 0 && (
           <div style={{
-            background: '#1A0000', border: '1px solid #F85149',
+            background: 'color-mix(in oklab, var(--t-err) 12%, var(--t-panel))', border: '1px solid var(--t-err)',
             borderRadius: 8, padding: '10px 14px',
           }}>
             {errors.map((e, i) => (
-              <div key={i} style={{ color: '#F85149', fontSize: 13 }}>{e}</div>
+              <div key={i} style={{ color: 'var(--t-err)', fontSize: 13 }}>{e}</div>
             ))}
           </div>
         )}
@@ -212,8 +212,8 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
             title="多租户企业模式 · Phase 3 启用"
             style={{
               marginRight: 'auto',
-              background: 'transparent', color: '#6E7681',
-              border: '1px solid #30363D', borderRadius: 8,
+              background: 'transparent', color: 'var(--t-fg-4)',
+              border: '1px solid var(--t-fg-4)', borderRadius: 8,
               padding: '8px 14px', fontSize: 13, cursor: 'not-allowed',
             }}
           >
@@ -223,8 +223,8 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
           <button
             onClick={onClose}
             style={{
-              background: 'transparent', color: '#8B949E',
-              border: '1px solid #30363D', borderRadius: 8,
+              background: 'transparent', color: 'var(--t-fg-3)',
+              border: '1px solid var(--t-fg-4)', borderRadius: 8,
               padding: '8px 18px', fontSize: 14, cursor: 'pointer',
             }}
           >
@@ -235,8 +235,8 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
             onClick={handleImport}
             disabled={loading}
             style={{
-              background: loading ? '#5B4F8A' : '#A78BFA',
-              color: '#0D1117',
+              background: loading ? 'color-mix(in oklab, var(--t-accent) 50%, var(--t-panel))' : 'var(--t-accent)',
+              color: 'var(--t-bg)',
               border: 'none', borderRadius: 8,
               padding: '8px 22px', fontSize: 14, fontWeight: 600,
               cursor: loading ? 'not-allowed' : 'pointer',
@@ -246,7 +246,7 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
             {loading && (
               <span style={{
                 display: 'inline-block', width: 14, height: 14,
-                border: '2px solid #0D1117', borderTopColor: 'transparent',
+                border: '2px solid var(--t-bg)', borderTopColor: 'transparent',
                 borderRadius: '50%', animation: 'spin 0.7s linear infinite',
               }} />
             )}
