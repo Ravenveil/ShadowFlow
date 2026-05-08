@@ -22,9 +22,6 @@ import {
   Sparkles,
   User,
   Users,
-  FileText,
-  MessageSquareQuote,
-  MessageCircle,
   Workflow,
   BookOpen,
   Paperclip,
@@ -553,14 +550,6 @@ const SUGGESTIONS: Array<[string, string]> = [
 ];
 
 type Mode = 'auto' | 'single' | 'team';
-type Output = 'answer' | 'report' | 'review' | 'workflow';
-
-const OUTPUT_OPTIONS: Array<[Output, string]> = [
-  ['answer', 'Answer'],
-  ['report', 'Report'],
-  ['review', 'Review'],
-  ['workflow', 'Workflow draft'],
-];
 
 // Attachments shown as chips between the textarea and the chip row.
 type AttachmentType = 'file' | 'url' | 'cid';
@@ -583,28 +572,24 @@ export default function StartPage() {
   const [knowledgePacks, setKnowledgePacks] = useState<KnowledgePack[] | null>(null);
   const [knowledgePacksLoading, setKnowledgePacksLoading] = useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
-  const [outputOpen, setOutputOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('auto');
   const [modeOpen, setModeOpen] = useState(false);
   const modeRef = useRef<HTMLDivElement | null>(null);
-  const [output, setOutput] = useState<Output>('report');
   const [toast, setToast] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const knowledgeRef = useRef<HTMLDivElement | null>(null);
-  const outputRef = useRef<HTMLDivElement | null>(null);
   const addRef = useRef<HTMLDivElement | null>(null);
   // Close popovers on outside click
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       const t = e.target as Node;
       if (knowledgeOpen && knowledgeRef.current && !knowledgeRef.current.contains(t)) setKnowledgeOpen(false);
-      if (outputOpen && outputRef.current && !outputRef.current.contains(t)) setOutputOpen(false);
       if (modeOpen && modeRef.current && !modeRef.current.contains(t)) setModeOpen(false);
       if (addOpen && addRef.current && !addRef.current.contains(t)) setAddOpen(false);
     }
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [knowledgeOpen, outputOpen, modeOpen, addOpen]);
+  }, [knowledgeOpen, modeOpen, addOpen]);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -641,18 +626,6 @@ export default function StartPage() {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }
 
-  const OUTPUT_LABELS: Record<Output, [string, string]> = {
-    answer: ['Answer', 'Answer'],
-    report: ['Report', 'Report'],
-    review: ['Review', 'Review'],
-    workflow: ['Workflow draft', 'Workflow draft'],
-  };
-  const OUTPUT_GLYPH: Record<Output, ReactNode> = {
-    answer: <MessageCircle size={14} strokeWidth={2} />,
-    report: <FileText size={14} strokeWidth={2} />,
-    review: <MessageSquareQuote size={14} strokeWidth={2} />,
-    workflow: <Workflow size={14} strokeWidth={2} />,
-  };
   // Auto-open wizard via ?wizard=1 (Story 13.4)
   useEffect(() => {
     if (searchParams.get('wizard') === '1') {
@@ -667,7 +640,6 @@ export default function StartPage() {
     params.set('mode', mode);
     if (text) params.set('goal', text);
     if (knowledge.length > 0) params.set('knowledge', knowledge.join(','));
-    if (output) params.set('output', output);
     navigate(`/builder?${params.toString()}`);
   }
 
@@ -1153,76 +1125,6 @@ export default function StartPage() {
                 )}
               </div>
 
-              {/* OUTPUT chip */}
-              <div ref={outputRef} style={{ position: 'relative', flexShrink: 0 }}>
-                <ChipBtn
-                  glyph={OUTPUT_GLYPH[output]}
-                  label={language === 'zh' ? OUTPUT_LABELS[output][0] : OUTPUT_LABELS[output][1]}
-                  hasArrow
-                  active={outputOpen}
-                  configured={output !== 'report'}
-                  onClick={() => setOutputOpen((v) => !v)}
-                  testId="start-output-chip"
-                />
-                {outputOpen && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: 'calc(100% + 6px)',
-                      left: 0,
-                      minWidth: 160,
-                      background: 'var(--t-panel)',
-                      border: '1px solid var(--t-border)',
-                      borderRadius: 8,
-                      padding: 4,
-                      boxShadow: '0 8px 24px -8px rgba(0,0,0,.35)',
-                      zIndex: 20,
-                    }}
-                  >
-                    {OUTPUT_OPTIONS.map(([k]) => (
-                      <button
-                        key={k}
-                        type="button"
-                        onClick={() => {
-                          setOutput(k);
-                          setOutputOpen(false);
-                        }}
-                        data-testid={`start-output-${k}`}
-                        style={{
-                          display: 'flex',
-                          width: '100%',
-                          alignItems: 'center',
-                          gap: 8,
-                          padding: '6px 10px',
-                          background: output === k ? 'var(--t-accent-tint)' : 'transparent',
-                          color: output === k ? 'var(--t-accent)' : 'var(--t-fg-2)',
-                          border: 'none',
-                          borderRadius: 4,
-                          fontSize: 12,
-                          fontFamily: 'inherit',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <span
-                          aria-hidden
-                          style={{
-                            display: 'inline-flex',
-                            width: 14,
-                            height: 14,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0,
-                          }}
-                        >
-                          {OUTPUT_GLYPH[k]}
-                        </span>
-                        <span>{language === 'zh' ? OUTPUT_LABELS[k][0] : OUTPUT_LABELS[k][1]}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
 
               {/* KNOWLEDGE chip — calls /knowledge/packs */}
               <div ref={knowledgeRef} style={{ position: 'relative', flexShrink: 0 }}>
