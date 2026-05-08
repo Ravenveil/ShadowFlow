@@ -34,8 +34,8 @@ function RunCard({ run, onClick, selected }: { run: ArchiveRun; onClick: () => v
         padding: 10,
         textAlign: 'left',
         background: selected ? 'rgba(106,158,255,0.08)' : '#0F0F11',
-        border: '1px solid var(--border)',
-        borderLeft: selected ? '3px solid #6A9EFF' : '1px solid var(--border)',
+        border: '1px solid var(--t-border)',
+        borderLeft: selected ? '3px solid #6A9EFF' : '1px solid var(--t-border)',
         borderRadius: 10,
         cursor: 'pointer',
         display: 'flex',
@@ -43,11 +43,11 @@ function RunCard({ run, onClick, selected }: { run: ArchiveRun; onClick: () => v
         gap: 3,
       }}
     >
-      <div style={{ fontSize: 12, color: 'var(--fg-1)', fontWeight: 600 }}>{run.intent || run.run_id}</div>
+      <div style={{ fontSize: 12, color: 'var(--t-fg)', fontWeight: 600 }}>{run.intent || run.run_id}</div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-5)' }}>{run.run_id}</div>
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--t-fg-5)' }}>{run.run_id}</div>
         {/* P14: duration column */}
-        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-4)' }}>
+        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--t-fg-4)' }}>
           {run.status === 'running' ? (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <Loader2 size={11} strokeWidth={2} className="animate-spin" aria-hidden /> running
@@ -139,35 +139,35 @@ export function ArchivePage({ apiBase = '' }: { apiBase?: string } = {}): JSX.El
   };
 
   return (
-    <main data-testid="archive-page" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
+    <main data-testid="archive-page" style={{ display: 'flex', minHeight: '100vh', background: 'var(--t-bg)' }}>
       {/* Left: run list */}
-      <aside style={{ width: 360, padding: 16, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-0)' }}>Archive</div>
+      <aside style={{ width: 360, padding: 16, borderRight: '1px solid var(--t-border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t-fg)' }}>Archive</div>
         <input
           data-testid="archive-search"
           placeholder="Search intent / agent / policy…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') fetchRuns(apiBase); }}
-          style={{ padding: '6px 8px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-elev-1)', color: 'var(--fg-1)' }}
+          style={{ padding: '6px 8px', fontSize: 12, border: '1px solid var(--t-border)', borderRadius: 6, background: 'var(--t-panel)', color: 'var(--t-fg)' }}
         />
         <select
           data-testid="archive-window"
           value={timeWindow}
           onChange={(e) => setWindow(e.target.value as ArchiveWindow)}
-          style={{ padding: '4px 8px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-elev-1)', color: 'var(--fg-1)' }}
+          style={{ padding: '4px 8px', fontSize: 12, border: '1px solid var(--t-border)', borderRadius: 6, background: 'var(--t-panel)', color: 'var(--t-fg)' }}
         >
           {WINDOWS.map((w) => <option key={w} value={w}>{`Window: ${w}`}</option>)}
         </select>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'auto', flex: 1 }}>
           {runs.length === 0 && !loading && (
-            <div style={{ fontSize: 12, color: 'var(--fg-5)' }}>No runs yet.</div>
+            <div style={{ fontSize: 12, color: 'var(--t-fg-5)' }}>No runs yet.</div>
           )}
           {runs.map((r) => (
             <RunCard key={r.run_id} run={r} onClick={() => selectRun(r.run_id)} selected={r.run_id === selected_run_id} />
           ))}
           {cursor && (
-            <button type="button" onClick={() => loadMore(apiBase)} style={{ fontSize: 12, padding: 6, background: 'transparent', color: 'var(--accent-bright)', border: 'none', cursor: 'pointer' }}>
+            <button type="button" onClick={() => loadMore(apiBase)} style={{ fontSize: 12, padding: 6, background: 'transparent', color: 'var(--t-accent-bright)', border: 'none', cursor: 'pointer' }}>
               load more →
             </button>
           )}
@@ -177,12 +177,12 @@ export function ArchivePage({ apiBase = '' }: { apiBase?: string } = {}): JSX.El
       {/* Mid: timeline + events */}
       <section style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {!selected_run_id ? (
-          <div style={{ fontSize: 13, color: 'var(--fg-5)' }}>Select a run from the list to see its trajectory.</div>
+          <div style={{ fontSize: 13, color: 'var(--t-fg-5)' }}>Select a run from the list to see its trajectory.</div>
         ) : (
           <>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg-0)' }}>{selected_run_id}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-fg)' }}>{selected_run_id}</div>
             <StageTimeline stages={stages} />
-            <div style={{ fontSize: 12, color: 'var(--fg-4)', padding: 12, border: '1px solid var(--border)', borderRadius: 10, maxHeight: 320, overflow: 'auto' }}>
+            <div style={{ fontSize: 12, color: 'var(--t-fg-4)', padding: 12, border: '1px solid var(--t-border)', borderRadius: 10, maxHeight: 320, overflow: 'auto' }}>
               {!trajectory ? 'loading trajectory…' : (
                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                   {JSON.stringify(trajectory, null, 2).slice(0, 4000)}
@@ -194,15 +194,15 @@ export function ArchivePage({ apiBase = '' }: { apiBase?: string } = {}): JSX.El
       </section>
 
       {/* Right: export + metrics */}
-      <aside style={{ width: 320, padding: 16, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <aside style={{ width: 320, padding: 16, borderLeft: '1px solid var(--t-border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 700 }}>Export</div>
-        <button type="button" data-testid="export-md" onClick={copyMarkdown} disabled={!trajectory} style={{ padding: '6px 10px', fontSize: 12, background: 'var(--bg-elev-1)', border: '1px solid var(--border)', borderRadius: 8, cursor: trajectory ? 'pointer' : 'not-allowed', color: 'var(--fg-2)' }}>
+        <button type="button" data-testid="export-md" onClick={copyMarkdown} disabled={!trajectory} style={{ padding: '6px 10px', fontSize: 12, background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 8, cursor: trajectory ? 'pointer' : 'not-allowed', color: 'var(--t-fg-2)' }}>
           Copy as Markdown
         </button>
-        <button type="button" data-testid="export-json" onClick={downloadJson} disabled={!trajectory} style={{ padding: '6px 10px', fontSize: 12, background: 'var(--bg-elev-1)', border: '1px solid var(--border)', borderRadius: 8, cursor: trajectory ? 'pointer' : 'not-allowed', color: 'var(--fg-2)' }}>
+        <button type="button" data-testid="export-json" onClick={downloadJson} disabled={!trajectory} style={{ padding: '6px 10px', fontSize: 12, background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 8, cursor: trajectory ? 'pointer' : 'not-allowed', color: 'var(--t-fg-2)' }}>
           Download JSON
         </button>
-        <button type="button" data-testid="export-0g" disabled title="Configure 0G key in Settings first" style={{ padding: '6px 10px', fontSize: 12, background: 'var(--bg-elev-1)', border: '1px solid rgba(160,122,255,0.3)', borderRadius: 8, cursor: 'not-allowed', color: 'var(--fg-5)' }}>
+        <button type="button" data-testid="export-0g" disabled title="Configure 0G key in Settings first" style={{ padding: '6px 10px', fontSize: 12, background: 'var(--t-panel)', border: '1px solid rgba(160,122,255,0.3)', borderRadius: 8, cursor: 'not-allowed', color: 'var(--t-fg-5)' }}>
           Upload to 0G Storage
         </button>
 
@@ -215,7 +215,7 @@ export function ArchivePage({ apiBase = '' }: { apiBase?: string } = {}): JSX.El
             <div>status: {selectedRun.status}</div>
           </div>
         ) : (
-          <div style={{ fontSize: 12, color: 'var(--fg-5)' }}>(select a run)</div>
+          <div style={{ fontSize: 12, color: 'var(--t-fg-5)' }}>(select a run)</div>
         )}
       </aside>
     </main>

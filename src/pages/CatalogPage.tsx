@@ -99,9 +99,9 @@ function FilterButton({
         padding: '0 14px',
         fontSize: 12,
         borderRadius: 8,
-        border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-        background: active ? 'var(--accent-tint)' : 'var(--bg-elev-1)',
-        color: active ? 'var(--accent-bright)' : 'var(--fg-2)',
+        border: `1px solid ${active ? 'var(--t-accent)' : 'var(--t-border)'}`,
+        background: active ? 'var(--t-accent-tint)' : 'var(--t-panel)',
+        color: active ? 'var(--t-accent-bright)' : 'var(--t-fg-2)',
         cursor: 'pointer',
         fontFamily: 'var(--font-mono)',
       }}
@@ -135,8 +135,8 @@ function CatalogCard({
     <div
       data-testid={`catalog-card-${app.app_id}`}
       style={{
-        background: 'var(--bg-elev-1)',
-        border: '1px solid var(--border)',
+        background: 'var(--t-panel)',
+        border: '1px solid var(--t-border)',
         borderRadius: 14,
         padding: 18,
         display: 'flex',
@@ -158,14 +158,14 @@ function CatalogCard({
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 10,
-              color: 'var(--accent-bright)',
+              color: 'var(--t-accent-bright)',
               textTransform: 'uppercase',
               letterSpacing: '.12em',
             }}
           >
             {app.kit_type}
           </span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>
             {fmtDate(app.published_at)}
           </span>
         </div>
@@ -173,7 +173,7 @@ function CatalogCard({
           style={{
             fontSize: 17,
             fontWeight: 700,
-            color: 'var(--fg-0)',
+            color: 'var(--t-fg)',
             lineHeight: 1.25,
           }}
         >
@@ -182,7 +182,7 @@ function CatalogCard({
         <div
           style={{
             fontSize: 13,
-            color: 'var(--fg-3)',
+            color: 'var(--t-fg-3)',
             lineHeight: 1.5,
             display: '-webkit-box',
             WebkitLineClamp: 2,
@@ -200,9 +200,9 @@ function CatalogCard({
           justifyContent: 'space-between',
           fontFamily: 'var(--font-mono)',
           fontSize: 11,
-          color: 'var(--fg-4)',
+          color: 'var(--t-fg-4)',
           paddingTop: 8,
-          borderTop: '1px solid var(--border-subtle)',
+          borderTop: '1px solid var(--t-border)',
         }}
       >
         <span>by {app.author || 'anonymous'} · forks {app.fork_count}</span>
@@ -215,9 +215,9 @@ function CatalogCard({
             padding: '0 12px',
             fontSize: 12,
             borderRadius: 6,
-            border: '1px solid var(--accent)',
-            background: forking ? 'var(--bg-elev-2)' : 'var(--accent-tint)',
-            color: 'var(--accent-bright)',
+            border: '1px solid var(--t-accent)',
+            background: forking ? 'var(--t-panel)' : 'var(--t-accent-tint)',
+            color: 'var(--t-accent-bright)',
             cursor: forking ? 'progress' : 'pointer',
             fontFamily: 'var(--font-mono)',
           }}
@@ -235,13 +235,13 @@ function CatalogCard({
           height: 30,
           fontSize: 12,
           borderRadius: 6,
-          border: '1px solid var(--border)',
+          border: '1px solid var(--t-border)',
           background: !promoteEnabled
-            ? 'var(--bg-elev-2)'
+            ? 'var(--t-panel)'
             : promoting
-            ? 'var(--bg-elev-2)'
-            : 'var(--bg-elev-1)',
-          color: !promoteEnabled ? 'var(--fg-5)' : 'var(--fg-1)',
+            ? 'var(--t-panel)'
+            : 'var(--t-panel)',
+          color: !promoteEnabled ? 'var(--t-fg-5)' : 'var(--t-fg)',
           cursor: !promoteEnabled ? 'not-allowed' : promoting ? 'progress' : 'pointer',
           fontFamily: 'var(--font-mono)',
         }}
@@ -276,8 +276,8 @@ function DetailDrawer({
         top: 0,
         bottom: 0,
         width: 'min(520px, 100vw)',
-        background: 'var(--bg-elev-1)',
-        borderLeft: '1px solid var(--border)',
+        background: 'var(--t-panel)',
+        borderLeft: '1px solid var(--t-border)',
         boxShadow: '-12px 0 30px rgba(0,0,0,.45)',
         zIndex: 100,
         display: 'flex',
@@ -287,7 +287,7 @@ function DetailDrawer({
       <div
         style={{
           padding: '18px 20px',
-          borderBottom: '1px solid var(--border)',
+          borderBottom: '1px solid var(--t-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -297,7 +297,7 @@ function DetailDrawer({
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
-            color: 'var(--fg-4)',
+            color: 'var(--t-fg-4)',
             textTransform: 'uppercase',
             letterSpacing: '.12em',
           }}
@@ -310,7 +310,7 @@ function DetailDrawer({
           style={{
             background: 'transparent',
             border: 'none',
-            color: 'var(--fg-3)',
+            color: 'var(--t-fg-3)',
             cursor: 'pointer',
             fontSize: 18,
           }}
@@ -318,8 +318,8 @@ function DetailDrawer({
           ×
         </button>
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', color: 'var(--fg-1)' }}>
-        {loading && <div style={{ color: 'var(--fg-3)' }}>加载中…</div>}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', color: 'var(--t-fg)' }}>
+        {loading && <div style={{ color: 'var(--t-fg-3)' }}>加载中…</div>}
         {error && (
           <div data-testid="detail-error" style={{ color: 'var(--status-reject)', fontSize: 13 }}>
             {error}
@@ -328,8 +328,8 @@ function DetailDrawer({
         {detail && !loading && !error && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ fontSize: 22, fontWeight: 700 }}>{detail.name || detail.app_id}</div>
-            <div style={{ fontSize: 13, color: 'var(--fg-3)', lineHeight: 1.6 }}>
-              <span style={{ color: 'var(--fg-4)' }}>Goal: </span>
+            <div style={{ fontSize: 13, color: 'var(--t-fg-3)', lineHeight: 1.6 }}>
+              <span style={{ color: 'var(--t-fg-4)' }}>Goal: </span>
               {detail.goal || detail.description || '—'}
             </div>
             <div
@@ -339,7 +339,7 @@ function DetailDrawer({
                 gap: 10,
                 fontFamily: 'var(--font-mono)',
                 fontSize: 12,
-                color: 'var(--fg-3)',
+                color: 'var(--t-fg-3)',
               }}
             >
               <div>Mode: {detail.mode}</div>
@@ -353,8 +353,8 @@ function DetailDrawer({
             </div>
             {detail.role_names.length > 0 && (
               <div>
-                <div style={{ fontSize: 12, color: 'var(--fg-4)', marginBottom: 6 }}>Roles</div>
-                <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--fg-2)', fontSize: 13 }}>
+                <div style={{ fontSize: 12, color: 'var(--t-fg-4)', marginBottom: 6 }}>Roles</div>
+                <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--t-fg-2)', fontSize: 13 }}>
                   {detail.role_names.map((rn, i) => (
                     <li key={`${rn}-${i}`}>{rn}</li>
                   ))}
@@ -370,9 +370,9 @@ function DetailDrawer({
                 height: 40,
                 fontSize: 13,
                 borderRadius: 10,
-                border: '1px solid var(--accent)',
-                background: forking ? 'var(--bg-elev-2)' : 'var(--accent-tint)',
-                color: 'var(--accent-bright)',
+                border: '1px solid var(--t-accent)',
+                background: forking ? 'var(--t-panel)' : 'var(--t-accent-tint)',
+                color: 'var(--t-accent-bright)',
                 cursor: forking ? 'progress' : 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}
@@ -531,17 +531,17 @@ export default function CatalogPage() {
   return (
     <div
       data-testid="catalog-page"
-      style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--fg-1)' }}
+      style={{ minHeight: '100vh', background: 'var(--t-bg)', color: 'var(--t-fg)' }}
     >
       {/* Header */}
       <div
         style={{
           padding: '20px 32px',
-          borderBottom: '1px solid var(--border)',
+          borderBottom: '1px solid var(--t-border)',
           display: 'flex',
           alignItems: 'center',
           gap: 18,
-          background: 'var(--bg-elev-1)',
+          background: 'var(--t-panel)',
         }}
       >
         <button
@@ -549,7 +549,7 @@ export default function CatalogPage() {
           style={{
             background: 'transparent',
             border: 'none',
-            color: 'var(--fg-3)',
+            color: 'var(--t-fg-3)',
             cursor: 'pointer',
             fontFamily: 'var(--font-mono)',
             fontSize: 12,
@@ -557,13 +557,13 @@ export default function CatalogPage() {
         >
           ← 返回
         </button>
-        <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
+        <div style={{ width: 1, height: 20, background: 'var(--t-border)' }} />
         <h1 style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>Agent 目录</h1>
         <span
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
-            color: 'var(--fg-4)',
+            color: 'var(--t-fg-4)',
           }}
         >
           已发布 Agent · 一键 Fork 进 Builder
@@ -578,8 +578,8 @@ export default function CatalogPage() {
           flexWrap: 'wrap',
           gap: 10,
           alignItems: 'center',
-          background: 'var(--bg-elev-1)',
-          borderBottom: '1px solid var(--border-subtle)',
+          background: 'var(--t-panel)',
+          borderBottom: '1px solid var(--t-border)',
         }}
       >
         {KIT_FILTERS.map((f) => (
@@ -590,7 +590,7 @@ export default function CatalogPage() {
             onClick={() => setKitFilter(f.value)}
           />
         ))}
-        <div style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 6px' }} />
+        <div style={{ width: 1, height: 22, background: 'var(--t-border)', margin: '0 6px' }} />
         <input
           data-testid="catalog-search-input"
           value={keyword}
@@ -603,14 +603,14 @@ export default function CatalogPage() {
             padding: '0 12px',
             fontSize: 13,
             borderRadius: 8,
-            border: '1px solid var(--border)',
-            background: 'var(--bg)',
-            color: 'var(--fg-1)',
+            border: '1px solid var(--t-border)',
+            background: 'var(--t-bg)',
+            color: 'var(--t-fg)',
             fontFamily: 'inherit',
             outline: 'none',
           }}
         />
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-4)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)' }}>
           {visibleApps.length} / {apps.length}
         </span>
       </div>
@@ -618,7 +618,7 @@ export default function CatalogPage() {
       {/* Body */}
       <div style={{ padding: 32 }}>
         {listStatus === 'loading' && (
-          <div data-testid="catalog-loading" style={{ color: 'var(--fg-3)', textAlign: 'center', padding: 40 }}>
+          <div data-testid="catalog-loading" style={{ color: 'var(--t-fg-3)', textAlign: 'center', padding: 40 }}>
             加载中…
           </div>
         )}
@@ -644,16 +644,16 @@ export default function CatalogPage() {
             style={{
               textAlign: 'center',
               padding: 60,
-              border: '1px dashed var(--border)',
+              border: '1px dashed var(--t-border)',
               borderRadius: 12,
-              color: 'var(--fg-3)',
+              color: 'var(--t-fg-3)',
               display: 'flex',
               flexDirection: 'column',
               gap: 14,
               alignItems: 'center',
             }}
           >
-            <div style={{ fontSize: 16, color: 'var(--fg-1)' }}>还没有已发布的 Agent</div>
+            <div style={{ fontSize: 16, color: 'var(--t-fg)' }}>还没有已发布的 Agent</div>
             <div style={{ fontSize: 13 }}>使用 Builder 发布第一个 Agent，让其他人也能 Fork 它。</div>
             <button
               data-testid="empty-builder-cta"
@@ -663,9 +663,9 @@ export default function CatalogPage() {
                 padding: '0 18px',
                 fontSize: 13,
                 borderRadius: 8,
-                border: '1px solid var(--accent)',
-                background: 'var(--accent-tint)',
-                color: 'var(--accent-bright)',
+                border: '1px solid var(--t-accent)',
+                background: 'var(--t-accent-tint)',
+                color: 'var(--t-accent-bright)',
                 cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}
@@ -681,8 +681,8 @@ export default function CatalogPage() {
             style={{
               textAlign: 'center',
               padding: 40,
-              color: 'var(--fg-3)',
-              border: '1px dashed var(--border)',
+              color: 'var(--t-fg-3)',
+              border: '1px dashed var(--t-border)',
               borderRadius: 12,
             }}
           >
@@ -723,9 +723,9 @@ export default function CatalogPage() {
             bottom: 28,
             left: '50%',
             transform: 'translateX(-50%)',
-            background: 'var(--bg-elev-2)',
+            background: 'var(--t-panel)',
             border: '1px solid var(--status-reject)',
-            color: 'var(--fg-0)',
+            color: 'var(--t-fg)',
             padding: '12px 18px',
             borderRadius: 10,
             fontSize: 13,
@@ -746,7 +746,7 @@ export default function CatalogPage() {
             style={{
               background: 'transparent',
               border: 'none',
-              color: 'var(--fg-3)',
+              color: 'var(--t-fg-3)',
               cursor: 'pointer',
               fontSize: 16,
             }}
@@ -765,9 +765,9 @@ export default function CatalogPage() {
             bottom: 80,
             left: '50%',
             transform: 'translateX(-50%)',
-            background: 'var(--bg-elev-2)',
+            background: 'var(--t-panel)',
             border: '1px solid var(--status-reject)',
-            color: 'var(--fg-0)',
+            color: 'var(--t-fg)',
             padding: '12px 18px',
             borderRadius: 10,
             fontSize: 13,
@@ -781,7 +781,7 @@ export default function CatalogPage() {
           <span>{promoteError}</span>
           <button
             onClick={() => setPromoteError(null)}
-            style={{ background: 'transparent', border: 'none', color: 'var(--fg-3)', cursor: 'pointer', fontSize: 16 }}
+            style={{ background: 'transparent', border: 'none', color: 'var(--t-fg-3)', cursor: 'pointer', fontSize: 16 }}
           >
             ×
           </button>

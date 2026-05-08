@@ -75,7 +75,7 @@ function WalletStatsPanel() {
           fontSize: 18,
           fontWeight: 700,
           letterSpacing: '-0.02em',
-          color: 'var(--t-fg, var(--fg-1))',
+          color: 'var(--t-fg, var(--t-fg))',
           marginBottom: 14,
         }}
       >
@@ -87,8 +87,8 @@ function WalletStatsPanel() {
         style={{
           padding: 14,
           borderRadius: 10,
-          background: 'var(--t-panel, var(--bg-elev-1))',
-          border: '1px solid var(--t-border, var(--border))',
+          background: 'var(--t-panel, var(--t-panel))',
+          border: '1px solid var(--t-border, var(--t-border))',
           display: 'flex',
           alignItems: 'center',
           gap: 14,
@@ -100,8 +100,8 @@ function WalletStatsPanel() {
             width: 40,
             height: 40,
             borderRadius: 10,
-            background: 'var(--t-accent-tint, var(--accent-tint))',
-            color: 'var(--t-accent, var(--accent))',
+            background: 'var(--t-accent-tint, var(--t-accent-tint))',
+            color: 'var(--t-accent, var(--t-accent))',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -113,7 +113,7 @@ function WalletStatsPanel() {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--t-fg, var(--fg-1))' }}>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--t-fg, var(--t-fg))' }}>
               {T('0G Galileo Testnet', '0G Galileo Testnet')}
             </span>
             <span
@@ -136,7 +136,7 @@ function WalletStatsPanel() {
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 11,
-              color: 'var(--t-fg-3, var(--fg-3))',
+              color: 'var(--t-fg-3, var(--t-fg-3))',
               marginTop: 4,
             }}
           >
@@ -160,8 +160,8 @@ function WalletStatsPanel() {
             style={{
               padding: '12px 14px',
               borderRadius: 10,
-              background: 'var(--t-panel, var(--bg-elev-1))',
-              border: '1px solid var(--t-border, var(--border))',
+              background: 'var(--t-panel, var(--t-panel))',
+              border: '1px solid var(--t-border, var(--t-border))',
             }}
           >
             <div
@@ -169,7 +169,7 @@ function WalletStatsPanel() {
               style={{
                 fontSize: 9,
                 letterSpacing: '0.08em',
-                color: 'var(--t-fg-4, var(--fg-4))',
+                color: 'var(--t-fg-4, var(--t-fg-4))',
                 marginBottom: 6,
                 textTransform: 'uppercase',
               }}
@@ -181,7 +181,7 @@ function WalletStatsPanel() {
                 fontSize: 22,
                 fontWeight: 800,
                 letterSpacing: '-0.02em',
-                color: 'var(--t-fg, var(--fg-1))',
+                color: 'var(--t-fg, var(--t-fg))',
               }}
             >
               {v}
@@ -189,7 +189,7 @@ function WalletStatsPanel() {
             <div
               style={{
                 fontSize: 10,
-                color: 'var(--t-fg-4, var(--fg-4))',
+                color: 'var(--t-fg-4, var(--t-fg-4))',
                 marginTop: 3,
               }}
             >
@@ -205,7 +205,7 @@ function WalletStatsPanel() {
         style={{
           fontSize: 9,
           letterSpacing: '0.12em',
-          color: 'var(--t-fg-4, var(--fg-4))',
+          color: 'var(--t-fg-4, var(--t-fg-4))',
           textTransform: 'uppercase',
           marginBottom: 8,
         }}
@@ -216,8 +216,8 @@ function WalletStatsPanel() {
         style={{
           padding: '4px 0',
           borderRadius: 10,
-          background: 'var(--t-panel, var(--bg-elev-1))',
-          border: '1px solid var(--t-border, var(--border))',
+          background: 'var(--t-panel, var(--t-panel))',
+          border: '1px solid var(--t-border, var(--t-border))',
         }}
       >
         {rows.map((r, i) => (
@@ -229,25 +229,25 @@ function WalletStatsPanel() {
               padding: '10px 16px',
               alignItems: 'center',
               gap: 14,
-              borderTop: i > 0 ? '1px dashed var(--t-border, var(--border))' : 'none',
+              borderTop: i > 0 ? '1px dashed var(--t-border, var(--t-border))' : 'none',
             }}
           >
-            <span style={{ fontSize: 10.5, color: 'var(--t-fg-4, var(--fg-4))' }}>{r[0]}</span>
+            <span style={{ fontSize: 10.5, color: 'var(--t-fg-4, var(--t-fg-4))' }}>{r[0]}</span>
             <span
               style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 11,
-                color: 'var(--t-accent, var(--accent))',
+                color: 'var(--t-accent, var(--t-accent))',
               }}
             >
               {r[1]}
             </span>
-            <span style={{ fontSize: 12.5, color: 'var(--t-fg, var(--fg-1))' }}>{r[2]}</span>
+            <span style={{ fontSize: 12.5, color: 'var(--t-fg, var(--t-fg))' }}>{r[2]}</span>
             <span
               style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 10,
-                color: 'var(--t-fg-4, var(--fg-4))',
+                color: 'var(--t-fg-4, var(--t-fg-4))',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -326,12 +326,12 @@ export default function AboutPage() {
 
       <div
         className="min-h-screen"
-        style={{ background: 'var(--bg)', color: 'var(--fg-1)', scrollBehavior: 'smooth' }}
+        style={{ background: 'var(--t-bg)', color: 'var(--t-fg)', scrollBehavior: 'smooth' }}
       >
         {/* ──────────────────────────────── TOP NAV ──────────────────────────────── */}
         <header
           className="sticky top-0 z-40 border-b"
-          style={{ borderColor: 'var(--border)', background: 'rgba(10,10,10,0.92)', backdropFilter: 'blur(12px)' }}
+          style={{ borderColor: 'var(--t-border)', background: 'rgba(10,10,10,0.92)', backdropFilter: 'blur(12px)' }}
         >
           <div className="mx-auto max-w-4xl px-6 flex items-center justify-between h-12 gap-4">
             <button
@@ -349,8 +349,8 @@ export default function AboutPage() {
                   onClick={() => scrollTo(id)}
                   className="px-3 py-1 rounded text-xs font-medium transition-colors duration-150"
                   style={{
-                    background: activeSection === id ? 'var(--accent-tint)' : 'transparent',
-                    color: activeSection === id ? 'var(--accent-bright)' : 'var(--fg-4)',
+                    background: activeSection === id ? 'var(--t-accent-tint)' : 'transparent',
+                    color: activeSection === id ? 'var(--t-accent-bright)' : 'var(--t-fg-4)',
                     border: activeSection === id ? '1px solid var(--accent-dim)' : '1px solid transparent',
                   }}
                   aria-current={activeSection === id ? 'location' : undefined}
@@ -363,7 +363,7 @@ export default function AboutPage() {
             <button
               onClick={() => navigate('/editor')}
               className="shrink-0 px-3 py-1 rounded-pill text-xs font-medium transition-colors duration-150"
-              style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+              style={{ background: 'var(--t-accent)', color: 'var(--t-accent-ink)' }}
             >
               ▶ 打开编辑器
             </button>
@@ -405,7 +405,7 @@ export default function AboutPage() {
             <p className="font-mono text-[10px] uppercase tracking-widest text-sf-fg4 mb-4 text-center">
               蓝海象限定位图
             </p>
-            <div className="rounded-sf border overflow-hidden" style={{ borderColor: 'var(--border)', background: 'var(--bg-elev-1)' }}>
+            <div className="rounded-sf border overflow-hidden" style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel)' }}>
               <QuadrantChart
                 className="w-full"
                 style={{ maxHeight: 360 }}
@@ -419,7 +419,7 @@ export default function AboutPage() {
 
         {/* ──────────────────────────────── DIVIDER ──────────────────────────────── */}
         <div className="mx-auto max-w-4xl px-6">
-          <div className="border-t" style={{ borderColor: 'var(--border)' }} />
+          <div className="border-t" style={{ borderColor: 'var(--t-border)' }} />
         </div>
 
         {/* ──────────────────────────────── SECTION 2: ON-CHAIN EVIDENCE ──────────────────────────────── */}
@@ -446,7 +446,7 @@ export default function AboutPage() {
 
         {/* ──────────────────────────────── DIVIDER ──────────────────────────────── */}
         <div className="mx-auto max-w-4xl px-6">
-          <div className="border-t" style={{ borderColor: 'var(--border)' }} />
+          <div className="border-t" style={{ borderColor: 'var(--t-border)' }} />
         </div>
 
         {/* ──────────────────────────────── SECTION 3: ROADMAP ──────────────────────────────── */}
@@ -481,7 +481,7 @@ export default function AboutPage() {
         {/* ──────────────────────────────── FOOTER CTA ──────────────────────────────── */}
         <div
           className="border-t"
-          style={{ borderColor: 'var(--border)', background: 'var(--bg-elev-1)' }}
+          style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel)' }}
         >
           <div className="mx-auto max-w-4xl px-6 py-12 text-center">
             <p className="font-mono text-[10px] uppercase tracking-widest text-sf-fg4 mb-4">
@@ -494,14 +494,14 @@ export default function AboutPage() {
               <button
                 onClick={() => navigate('/editor')}
                 className="px-6 py-2.5 rounded-pill text-sm font-semibold transition-colors duration-150"
-                style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+                style={{ background: 'var(--t-accent)', color: 'var(--t-accent-ink)' }}
               >
                 ▶ 打开编辑器
               </button>
               <button
                 onClick={() => navigate('/templates')}
                 className="px-6 py-2.5 rounded-pill text-sm font-medium border transition-colors duration-150"
-                style={{ borderColor: 'var(--border)', color: 'var(--fg-2)' }}
+                style={{ borderColor: 'var(--t-border)', color: 'var(--t-fg-2)' }}
               >
                 浏览 6 个种子模板
               </button>
@@ -512,7 +512,7 @@ export default function AboutPage() {
         {/* ──────────────────────────────── PAGE FOOTER ──────────────────────────────── */}
         <footer
           className="border-t px-6 py-4 text-center"
-          style={{ borderColor: 'var(--border)' }}
+          style={{ borderColor: 'var(--t-border)' }}
         >
           <p className="font-mono text-[10px] text-sf-fg5">
             ShadowFlow · Ravenveil · MIT · 0G Hackathon 2026

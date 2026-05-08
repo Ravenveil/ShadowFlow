@@ -27,25 +27,25 @@ function ChatHeader({ conv, onSearchToggle, onDrawerOpen }: ChatHeaderProps) {
   return (
     <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--t-border)', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--skin-panel)', flexShrink: 0 }}>
       <span style={{
-        width: 36, height: 36, borderRadius: 8, background: 'var(--bg-elev-3)', border: '1px solid var(--t-border)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-bright)',
+        width: 36, height: 36, borderRadius: 8, background: 'var(--t-panel-3)', border: '1px solid var(--t-border)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-accent-bright)',
       }}>
         <span style={{ width: 18, height: 18, display: 'flex' }}>{FBIcons.hash}</span>
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span data-testid="chat-title" style={{ fontSize: 14, fontWeight: 700 }}>{CONV_TITLES[conv]}</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-5)' }}>· 5 人</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-5)' }}>· 5 人</span>
           <span className="fb-dot fb-dot-ok" />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>4 在线</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>4 在线</span>
           {conv === 'main' && <span className="fb-pill-live">RUNNING · #042</span>}
           <span style={{
             fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
             padding: '1px 6px', borderRadius: 4, border: '1px solid var(--t-border)',
-            background: 'var(--bg-elev-2)', color: 'var(--fg-4)',
+            background: 'var(--t-panel-2)', color: 'var(--t-fg-4)',
           }}>POLICY · L2-strict</span>
         </div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ display: 'flex' }}>
             {[['读', 'var(--t-accent)'], ['批', 'var(--t-warn)'], ['查', 'var(--t-gated, var(--t-accent))'], ['写', 'var(--t-err)'], ['审', 'var(--t-ok)']].map(([g, c], i) => (
               <span key={i} style={{ marginLeft: i === 0 ? 0 : -6, zIndex: 5 - i }}>
@@ -72,14 +72,14 @@ function PinnedBrief() {
   return (
     <div style={{
       padding: '9px 18px', borderBottom: '1px solid var(--t-border)',
-      background: 'color-mix(in oklab, var(--t-accent) 5%, var(--bg-elev-1))',
+      background: 'color-mix(in oklab, var(--t-accent) 5%, var(--t-panel))',
       display: 'flex', alignItems: 'flex-start', gap: 10, flexShrink: 0,
     }}>
       <span style={{ color: 'var(--t-accent)', display: 'flex', marginTop: 1, width: 14, height: 14 }}>{CI.pin}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, color: 'var(--accent-bright)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>BRIEF · run #042</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-4)' }}>由 张明 置顶 · 09:14</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, color: 'var(--t-accent-bright)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>BRIEF · run #042</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)' }}>由 张明 置顶 · 09:14</span>
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 3, lineHeight: 1.45 }}>
           <b>目标</b> 深读 arXiv:2410.11215，找出方法/实验中的不一致，重写有问题段落 ·
@@ -88,13 +88,13 @@ function PinnedBrief() {
           <b style={{ marginLeft: 6 }}>Gate</b> CRITIC → REVIEW
         </div>
         {expanded && (
-          <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--fg-3)', lineHeight: 1.55 }}>
+          <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--t-fg-3)', lineHeight: 1.55 }}>
             <div><b>参与 Agents：</b> 读读 (Reader) · 阿批 (Critic) · 查查 (Checker) · 小写 (Writer) · 审审 (Reviewer)</div>
             <div style={{ marginTop: 4 }}><b>当前阶段：</b> 小写正在执行 r2/3 重写 → 等待 审审 最终过审</div>
           </div>
         )}
       </div>
-      <span onClick={() => setExpanded(e => !e)} style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-4)', cursor: 'pointer', flexShrink: 0 }}>
+      <span onClick={() => setExpanded(e => !e)} style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', cursor: 'pointer', flexShrink: 0 }}>
         {expanded ? '收起 ▴' : '展开 ▾'}
       </span>
     </div>
@@ -136,10 +136,10 @@ export function ChatMain({ conv, messages, onSend, onAddReaction, onThreadOpen, 
       <ChatHeader conv={conv} onSearchToggle={() => setSearchOpen(o => !o)} onDrawerOpen={onDrawerOpen} />
       {searchOpen && (
         <div style={{
-          padding: '8px 18px', borderBottom: '1px solid var(--t-border)', background: 'var(--bg-elev-1)',
+          padding: '8px 18px', borderBottom: '1px solid var(--t-border)', background: 'var(--t-panel)',
           display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
         }}>
-          <span style={{ width: 14, height: 14, display: 'flex', color: 'var(--fg-4)' }}>{FBIcons.search}</span>
+          <span style={{ width: 14, height: 14, display: 'flex', color: 'var(--t-fg-4)' }}>{FBIcons.search}</span>
           <input
             autoFocus
             value={searchQuery}
@@ -147,17 +147,17 @@ export function ChatMain({ conv, messages, onSend, onAddReaction, onThreadOpen, 
             placeholder="搜索消息…"
             style={{
               flex: 1, border: 'none', outline: 'none', background: 'transparent',
-              fontSize: 12, color: 'var(--fg-1)', fontFamily: 'inherit',
+              fontSize: 12, color: 'var(--t-fg)', fontFamily: 'inherit',
             }}
           />
           <span onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
-            style={{ fontSize: 10, color: 'var(--fg-4)', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>ESC</span>
+            style={{ fontSize: 10, color: 'var(--t-fg-4)', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>ESC</span>
         </div>
       )}
       {conv === 'main' && <PinnedBrief />}
       <div ref={scrollRef} data-testid="chat-messages" style={{ flex: 1, overflow: 'auto', padding: '14px 22px 6px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {messages.length === 0 && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-5)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
             暂无消息
           </div>
         )}
@@ -190,8 +190,8 @@ export function ChatMain({ conv, messages, onSend, onAddReaction, onThreadOpen, 
         })}
       </div>
       {/* Provider selector strip */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 18px 4px', borderTop: '1px solid var(--t-border)', background: 'var(--bg-elev-1)', flexShrink: 0 }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-4)', letterSpacing: '0.05em', marginRight: 4 }}>LLM</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 18px 4px', borderTop: '1px solid var(--t-border)', background: 'var(--t-panel)', flexShrink: 0 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', letterSpacing: '0.05em', marginRight: 4 }}>LLM</span>
         {LLM_PROVIDERS.map(p => (
           <button
             key={p}
@@ -202,9 +202,9 @@ export function ChatMain({ conv, messages, onSend, onAddReaction, onThreadOpen, 
               fontSize: 10,
               padding: '2px 8px',
               borderRadius: 4,
-              border: p === provider ? '1px solid var(--accent-bright)' : '1px solid var(--t-border)',
-              background: p === provider ? 'var(--accent-bright)' : 'transparent',
-              color: p === provider ? 'var(--t-accent-ink)' : 'var(--fg-3)',
+              border: p === provider ? '1px solid var(--t-accent-bright)' : '1px solid var(--t-border)',
+              background: p === provider ? 'var(--t-accent-bright)' : 'transparent',
+              color: p === provider ? 'var(--t-accent-ink)' : 'var(--t-fg-3)',
               cursor: 'pointer',
               transition: 'all 0.12s',
             }}

@@ -19,7 +19,7 @@ function SkeletonPill() {
         width: 110,
         height: 22,
         borderRadius: 5,
-        background: 'var(--bg-elev-2, #1c1c1c)',
+        background: 'var(--t-panel-2, #1c1c1c)',
         animation: 'pulse 1.5s ease-in-out infinite',
       }}
       aria-hidden="true"
@@ -40,15 +40,15 @@ function StatPill({ label, value }: StatPillProps) {
         gap: 5,
         padding: '3px 9px',
         borderRadius: 5,
-        background: 'var(--bg-elev-2, #1c1c1c)',
-        border: '1px solid var(--border, rgba(255,255,255,0.08))',
+        background: 'var(--t-panel-2, #1c1c1c)',
+        border: '1px solid var(--t-border, rgba(255,255,255,0.08))',
         fontFamily: 'var(--font-mono)',
         fontSize: 11,
-        color: 'var(--fg-3, #A1A1AA)',
+        color: 'var(--t-fg-3, #A1A1AA)',
         whiteSpace: 'nowrap',
       }}
     >
-      <span style={{ color: 'var(--fg-4, #71717A)' }}>{label}:</span>
+      <span style={{ color: 'var(--t-fg-4, #71717A)' }}>{label}:</span>
       {' '}{value}
     </span>
   );
@@ -95,11 +95,11 @@ export function MemoryStatsBar({ agentId }: MemoryStatsBarProps) {
       )}
 
       {status === 'error' && (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-5, #52525B)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-5, #52525B)' }}>
           Stats unavailable{' '}
           <button
             onClick={load}
-            style={{ color: 'var(--fg-3, #A1A1AA)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', padding: 0 }}
+            style={{ color: 'var(--t-fg-3, #A1A1AA)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', padding: 0 }}
             aria-label="重试加载 Memory Stats"
           >
             retry
@@ -116,7 +116,7 @@ export function MemoryStatsBar({ agentId }: MemoryStatsBarProps) {
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 10,
-              color: 'var(--fg-5, #52525B)',
+              color: 'var(--t-fg-5, #52525B)',
               fontStyle: 'italic',
             }}
           >

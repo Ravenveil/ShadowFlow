@@ -50,7 +50,7 @@ export { describeSchedule };
 
 function SkeletonRow() {
   return (
-    <div style={{ height: 18, borderRadius: 4, background: 'var(--bg-elev-2, #1c1c1c)', marginBottom: 6 }} />
+    <div style={{ height: 18, borderRadius: 4, background: 'var(--t-panel-2, #1c1c1c)', marginBottom: 6 }} />
   );
 }
 
@@ -173,8 +173,8 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
     right: 0,
     width: 320,
     height: '100vh',
-    background: 'var(--bg-elev-1, #141414)',
-    borderLeft: '1px solid var(--border, rgba(255,255,255,0.08))',
+    background: 'var(--t-panel, #141414)',
+    borderLeft: '1px solid var(--t-border, rgba(255,255,255,0.08))',
     display: 'flex',
     flexDirection: 'column',
     zIndex: 500,
@@ -194,14 +194,14 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
       onKeyDown={handleKeyDown}
     >
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid var(--border, rgba(255,255,255,0.08))' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: 'var(--fg-1, #fff)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid var(--t-border, rgba(255,255,255,0.08))' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: 'var(--t-fg, #fff)' }}>
           Schedule
         </span>
         <button
           onClick={onClose}
           aria-label="关闭 Schedule Drawer"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-4, #71717A)', fontSize: 18, lineHeight: 1, padding: '2px 4px' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t-fg-4, #71717A)', fontSize: 18, lineHeight: 1, padding: '2px 4px' }}
         >
           ×
         </button>
@@ -215,7 +215,7 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
           <>
             {/* Frequency */}
             <div style={{ marginBottom: 14 }}>
-              <div style={{ ...mono, color: 'var(--fg-4, #71717A)', marginBottom: 6 }}>频率</div>
+              <div style={{ ...mono, color: 'var(--t-fg-4, #71717A)', marginBottom: 6 }}>频率</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 {(['daily', 'weekly', 'custom'] as FreqMode[]).map((f) => (
                   <label key={f} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
@@ -225,9 +225,9 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
                       value={f}
                       checked={mode === f}
                       onChange={() => setMode(f)}
-                      style={{ accentColor: 'var(--accent, #6366F1)' }}
+                      style={{ accentColor: 'var(--t-accent, #6366F1)' }}
                     />
-                    <span style={{ ...mono, color: 'var(--fg-2, #D4D4D8)', textTransform: 'capitalize' }}>{f}</span>
+                    <span style={{ ...mono, color: 'var(--t-fg-2, #D4D4D8)', textTransform: 'capitalize' }}>{f}</span>
                   </label>
                 ))}
               </div>
@@ -236,17 +236,17 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
             {/* Time picker */}
             {mode !== 'custom' && (
               <div style={{ marginBottom: 14 }}>
-                <div style={{ ...mono, color: 'var(--fg-4, #71717A)', marginBottom: 6 }}>时间（24h）</div>
+                <div style={{ ...mono, color: 'var(--t-fg-4, #71717A)', marginBottom: 6 }}>时间（24h）</div>
                 <input
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
                   style={{
                     ...mono,
-                    background: 'var(--bg-elev-2, #1c1c1c)',
-                    border: '1px solid var(--border, rgba(255,255,255,0.1))',
+                    background: 'var(--t-panel-2, #1c1c1c)',
+                    border: '1px solid var(--t-border, rgba(255,255,255,0.1))',
                     borderRadius: 5,
-                    color: 'var(--fg-1, #fff)',
+                    color: 'var(--t-fg, #fff)',
                     padding: '5px 8px',
                     width: '100%',
                   }}
@@ -257,11 +257,11 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
             {/* Weekday selector */}
             {mode === 'weekly' && (
               <div style={{ marginBottom: 14 }}>
-                <div style={{ ...mono, color: 'var(--fg-4, #71717A)', marginBottom: 6 }}>星期</div>
+                <div style={{ ...mono, color: 'var(--t-fg-4, #71717A)', marginBottom: 6 }}>星期</div>
                 <select
                   value={weekday}
                   onChange={(e) => setWeekday(e.target.value)}
-                  style={{ ...mono, background: 'var(--bg-elev-2, #1c1c1c)', border: '1px solid var(--border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--fg-1, #fff)', padding: '5px 8px', width: '100%' }}
+                  style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--t-fg, #fff)', padding: '5px 8px', width: '100%' }}
                 >
                   {DAYS.map((d, i) => (
                     <option key={d} value={DAY_CRON[i]}>{d}</option>
@@ -273,34 +273,34 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
             {/* Custom cron */}
             {mode === 'custom' && (
               <div style={{ marginBottom: 14 }}>
-                <div style={{ ...mono, color: 'var(--fg-4, #71717A)', marginBottom: 6 }}>Cron 表达式</div>
+                <div style={{ ...mono, color: 'var(--t-fg-4, #71717A)', marginBottom: 6 }}>Cron 表达式</div>
                 <input
                   type="text"
                   value={custom}
                   onChange={(e) => setCustom(e.target.value)}
                   placeholder="0 8 * * 1-5"
-                  style={{ ...mono, background: 'var(--bg-elev-2, #1c1c1c)', border: '1px solid var(--border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--fg-1, #fff)', padding: '5px 8px', width: '100%' }}
+                  style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--t-fg, #fff)', padding: '5px 8px', width: '100%' }}
                 />
               </div>
             )}
 
             {/* Agent ID */}
             <div style={{ marginBottom: 14 }}>
-              <div style={{ ...mono, color: 'var(--fg-4, #71717A)', marginBottom: 6 }}>执行 Agent ID</div>
+              <div style={{ ...mono, color: 'var(--t-fg-4, #71717A)', marginBottom: 6 }}>执行 Agent ID</div>
               <input
                 type="text"
                 value={agentId}
                 onChange={(e) => setAgentId(e.target.value)}
                 placeholder="agent-id"
-                style={{ ...mono, background: 'var(--bg-elev-2, #1c1c1c)', border: '1px solid var(--border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--fg-1, #fff)', padding: '5px 8px', width: '100%' }}
+                style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--t-fg, #fff)', padding: '5px 8px', width: '100%' }}
               />
             </div>
 
             {/* Task description */}
             <div style={{ marginBottom: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ ...mono, color: 'var(--fg-4, #71717A)' }}>任务描述</span>
-                <span style={{ ...mono, fontSize: 10, color: description.length > 100 ? 'var(--fg-warn, #F59E0B)' : 'var(--fg-5, #52525B)' }}>
+                <span style={{ ...mono, color: 'var(--t-fg-4, #71717A)' }}>任务描述</span>
+                <span style={{ ...mono, fontSize: 10, color: description.length > 100 ? 'var(--fg-warn, #F59E0B)' : 'var(--t-fg-5, #52525B)' }}>
                   {description.length}/500
                 </span>
               </div>
@@ -310,15 +310,15 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
                 placeholder="每日早报摘要…"
                 rows={3}
                 maxLength={500}
-                style={{ ...mono, background: 'var(--bg-elev-2, #1c1c1c)', border: '1px solid var(--border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--fg-1, #fff)', padding: '5px 8px', width: '100%', resize: 'vertical' }}
+                style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--t-fg, #fff)', padding: '5px 8px', width: '100%', resize: 'vertical' }}
               />
             </div>
 
             {/* Next run */}
             {existing?.next_run_time && (
               <div style={{ marginBottom: 14 }}>
-                <div style={{ ...mono, color: 'var(--fg-4, #71717A)', marginBottom: 4 }}>下次执行</div>
-                <span style={{ ...mono, color: 'var(--fg-3, #A1A1AA)' }}>
+                <div style={{ ...mono, color: 'var(--t-fg-4, #71717A)', marginBottom: 4 }}>下次执行</div>
+                <span style={{ ...mono, color: 'var(--t-fg-3, #A1A1AA)' }}>
                   {new Date(existing.next_run_time).toLocaleString('zh-CN')}
                 </span>
               </div>
@@ -339,7 +339,7 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
                 style={{
                   flex: 1,
                   ...mono,
-                  background: saveState === 'saved' ? '#065F46' : 'var(--accent, #6366F1)',
+                  background: saveState === 'saved' ? '#065F46' : 'var(--t-accent, #6366F1)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: 6,
@@ -362,17 +362,17 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
 
             {/* History */}
             <div>
-              <div style={{ ...mono, color: 'var(--fg-4, #71717A)', marginBottom: 8 }}>最近运行</div>
+              <div style={{ ...mono, color: 'var(--t-fg-4, #71717A)', marginBottom: 8 }}>最近运行</div>
               {runsLoading ? (
                 <>{[0,1,2,3,4].map((i) => <SkeletonRow key={i} />)}</>
               ) : runs.length === 0 ? (
-                <span style={{ ...mono, color: 'var(--fg-5, #52525B)', fontSize: 11 }}>No runs yet</span>
+                <span style={{ ...mono, color: 'var(--t-fg-5, #52525B)', fontSize: 11 }}>No runs yet</span>
               ) : (
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                   {runs.map((r) => (
                     <li key={r.run_id} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: r.status === 'succeeded' ? 'var(--t-ok)' : 'var(--t-err)', flexShrink: 0 }} />
-                      <span style={{ ...mono, fontSize: 11, color: 'var(--fg-3, #A1A1AA)' }}>
+                      <span style={{ ...mono, fontSize: 11, color: 'var(--t-fg-3, #A1A1AA)' }}>
                         {new Date(r.triggered_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                       </span>
                       <span style={{ ...mono, fontSize: 10, color: r.status === 'succeeded' ? 'var(--t-ok)' : 'var(--t-err)' }}>{r.status}</span>

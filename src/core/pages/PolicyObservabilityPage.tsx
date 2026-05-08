@@ -43,10 +43,10 @@ export function PolicyObservabilityPage({ apiBase = '' }: { apiBase?: string } =
   };
 
   return (
-    <main data-testid="policy-obs-page" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16, minHeight: '100vh', background: 'var(--bg)' }}>
+    <main data-testid="policy-obs-page" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16, minHeight: '100vh', background: 'var(--t-bg)' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--fg-5)' }}>
+          <div style={{ fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-fg-5)' }}>
             Policy Observability
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Rejection patterns &amp; triggers</h1>
@@ -55,7 +55,7 @@ export function PolicyObservabilityPage({ apiBase = '' }: { apiBase?: string } =
           data-testid="obs-window"
           value={window}
           onChange={(e) => setWindow(e.target.value as ObsWindow)}
-          style={{ padding: '6px 10px', background: 'var(--bg-elev-1)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg-1)', fontSize: 12 }}
+          style={{ padding: '6px 10px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 8, color: 'var(--t-fg)', fontSize: 12 }}
         >
           {WINDOWS.map((w) => <option key={w} value={w}>{`Last ${w}`}</option>)}
         </select>
@@ -63,7 +63,7 @@ export function PolicyObservabilityPage({ apiBase = '' }: { apiBase?: string } =
           type="button"
           data-testid="edit-matrix-btn"
           onClick={() => { window === 'all' ? void 0 : void 0; location.assign(`/editor?panel=policy${selected_policy ? `&highlight=${selected_policy}` : ''}`); }}
-          style={{ padding: '6px 12px', fontSize: 12, background: 'var(--bg-elev-1)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--fg-2)', cursor: 'pointer' }}
+          style={{ padding: '6px 12px', fontSize: 12, background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 8, color: 'var(--t-fg-2)', cursor: 'pointer' }}
         >
           Edit matrix →
         </button>
@@ -71,7 +71,7 @@ export function PolicyObservabilityPage({ apiBase = '' }: { apiBase?: string } =
           type="button"
           data-testid="download-csv-btn"
           onClick={onDownloadCsv}
-          style={{ padding: '6px 12px', fontSize: 12, background: 'var(--accent)', border: '1px solid transparent', borderRadius: 8, color: '#fff', cursor: 'pointer' }}
+          style={{ padding: '6px 12px', fontSize: 12, background: 'var(--t-accent)', border: '1px solid transparent', borderRadius: 8, color: '#fff', cursor: 'pointer' }}
         >
           Download CSV
         </button>
@@ -89,15 +89,15 @@ export function PolicyObservabilityPage({ apiBase = '' }: { apiBase?: string } =
       {/* Heatmap + examples */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 16 }}>
         <PolicyHeatmap rows={heatmap} selected={selected_policy} onSelect={selectPolicy} />
-        <section style={{ padding: 12, background: '#0F0F11', border: '1px solid var(--border)', borderRadius: 14 }}>
+        <section style={{ padding: 12, background: '#0F0F11', border: '1px solid var(--t-border)', borderRadius: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
-            Examples {selected_policy && <span style={{ color: 'var(--fg-5)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>· {selected_policy}</span>}
+            Examples {selected_policy && <span style={{ color: 'var(--t-fg-5)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>· {selected_policy}</span>}
           </div>
           {!selected_policy && (
-            <div style={{ fontSize: 12, color: 'var(--fg-5)' }}>Click a policy in the heatmap to see recent triggers.</div>
+            <div style={{ fontSize: 12, color: 'var(--t-fg-5)' }}>Click a policy in the heatmap to see recent triggers.</div>
           )}
           {selected_policy && exampleList.length === 0 && (
-            <div style={{ fontSize: 12, color: 'var(--fg-5)' }}>No recent examples for this policy.</div>
+            <div style={{ fontSize: 12, color: 'var(--t-fg-5)' }}>No recent examples for this policy.</div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {exampleList.map((ex, i) => (
@@ -105,14 +105,14 @@ export function PolicyObservabilityPage({ apiBase = '' }: { apiBase?: string } =
                 key={i}
                 href={`/archive/${ex.run_id}`}
                 data-testid={`example-row-${i}`}
-                style={{ padding: 8, background: 'var(--bg-elev-1)', borderRadius: 8, textDecoration: 'none', color: 'var(--fg-1)', fontSize: 12 }}
+                style={{ padding: 8, background: 'var(--t-panel)', borderRadius: 8, textDecoration: 'none', color: 'var(--t-fg)', fontSize: 12 }}
               >
                 <div style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-5)' }}>{ex.run_id.slice(0, 12)}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-5)' }}>{ex.run_id.slice(0, 12)}</span>
                   <span style={{ padding: '1px 6px', borderRadius: 999, fontSize: 10, background: 'rgba(106,158,255,0.2)', color: '#9EBBFF', textTransform: 'uppercase' }}>{ex.stage}</span>
-                  <span style={{ fontSize: 10, color: 'var(--fg-5)' }}>{ex.outcome}</span>
+                  <span style={{ fontSize: 10, color: 'var(--t-fg-5)' }}>{ex.outcome}</span>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--fg-2)', marginTop: 2 }}>{ex.reason}</div>
+                <div style={{ fontSize: 12, color: 'var(--t-fg-2)', marginTop: 2 }}>{ex.reason}</div>
               </a>
             ))}
           </div>

@@ -31,13 +31,13 @@ export function OperationsPage({ apiBase = '' }: { apiBase?: string } = {}): JSX
   }, [apiBase, window, fetchAll]);
 
   return (
-    <main data-testid="operations-page" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16, minHeight: '100vh', background: 'var(--bg)' }}>
+    <main data-testid="operations-page" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16, minHeight: '100vh', background: 'var(--t-bg)' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--fg-5)' }}>
+          <div style={{ fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-fg-5)' }}>
             Operations
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: 'var(--fg-0)' }}>Fleet Overview</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: 'var(--t-fg)' }}>Fleet Overview</h1>
         </div>
         <select
           data-testid="ops-window-select"
@@ -45,9 +45,9 @@ export function OperationsPage({ apiBase = '' }: { apiBase?: string } = {}): JSX
           onChange={(e) => setWindow(e.target.value as OpsWindow)}
           style={{
             padding: '6px 10px',
-            background: 'var(--bg-elev-1)',
-            color: 'var(--fg-1)',
-            border: '1px solid var(--border)',
+            background: 'var(--t-panel)',
+            color: 'var(--t-fg)',
+            border: '1px solid var(--t-border)',
             borderRadius: 8,
             fontSize: 12,
           }}
@@ -90,7 +90,7 @@ export function OperationsPage({ apiBase = '' }: { apiBase?: string } = {}): JSX
       <ApprovalQueueStrip items={approvals} />
 
       {loading && (
-        <div style={{ fontSize: 11, color: 'var(--fg-5)' }}>loading…</div>
+        <div style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>loading…</div>
       )}
     </main>
   );

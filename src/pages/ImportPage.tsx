@@ -135,12 +135,12 @@ export default function ImportPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--fg-1)' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--t-bg)', color: 'var(--t-fg)' }}>
       {/* Nav bar */}
       <div
         style={{
           height: 60,
-          borderBottom: '1px solid var(--border)',
+          borderBottom: '1px solid var(--t-border)',
           background: 'rgba(10,10,10,.85)',
           backdropFilter: 'blur(14px)',
           display: 'flex',
@@ -157,7 +157,7 @@ export default function ImportPage() {
           style={{
             background: 'none',
             border: 'none',
-            color: 'var(--fg-3)',
+            color: 'var(--t-fg-3)',
             fontSize: 13,
             cursor: 'pointer',
             fontFamily: 'var(--font-sans)',
@@ -173,7 +173,7 @@ export default function ImportPage() {
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
-            color: 'var(--fg-4)',
+            color: 'var(--t-fg-4)',
             letterSpacing: '.1em',
           }}
         >
@@ -243,7 +243,7 @@ export default function ImportPage() {
         <p
           style={{
             fontSize: 15,
-            color: 'var(--fg-3)',
+            color: 'var(--t-fg-3)',
             margin: '0 0 32px',
             lineHeight: 1.6,
           }}
@@ -269,10 +269,10 @@ export default function ImportPage() {
               padding: '0 14px',
               fontFamily: 'var(--font-mono)',
               fontSize: 13,
-              background: 'var(--bg-elev-1)',
-              border: `1px solid ${cid && !isValidCid ? 'rgba(239,68,68,.5)' : 'var(--border)'}`,
+              background: 'var(--t-panel)',
+              border: `1px solid ${cid && !isValidCid ? 'rgba(239,68,68,.5)' : 'var(--t-border)'}`,
               borderRadius: 10,
-              color: 'var(--fg-1)',
+              color: 'var(--t-fg)',
               outline: 'none',
             }}
             onKeyDown={(e) => {
@@ -287,8 +287,8 @@ export default function ImportPage() {
               padding: '0 24px',
               borderRadius: 10,
               border: 'none',
-              background: !isValidCid || loading ? 'var(--bg-elev-3)' : 'var(--accent)',
-              color: !isValidCid || loading ? 'var(--fg-5)' : '#fff',
+              background: !isValidCid || loading ? 'var(--t-panel)' : 'var(--t-accent)',
+              color: !isValidCid || loading ? 'var(--t-fg-5)' : '#fff',
               fontSize: 14,
               fontWeight: 700,
               cursor: !isValidCid || loading ? 'not-allowed' : 'pointer',
@@ -348,7 +348,7 @@ export default function ImportPage() {
                 marginTop: 10,
                 fontFamily: 'var(--font-mono)',
                 fontSize: 12,
-                color: 'var(--fg-4)',
+                color: 'var(--t-fg-4)',
               }}
             >
               <span>CID: {shortenCid(verifiedCid)}</span>
@@ -356,7 +356,7 @@ export default function ImportPage() {
                 href={`${EXPLORER_BASE}${verifiedCid}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ color: 'var(--accent-bright)', textDecoration: 'none', fontSize: 11 }}
+                style={{ color: 'var(--t-accent-bright)', textDecoration: 'none', fontSize: 11 }}
               >
                 0G Explorer ↗
               </a>
@@ -366,7 +366,7 @@ export default function ImportPage() {
               style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 12,
-                color: 'var(--fg-4)',
+                color: 'var(--t-fg-4)',
                 marginTop: 10,
               }}
             >
@@ -381,11 +381,11 @@ export default function ImportPage() {
             marginTop: 16,
             padding: '10px 14px',
             borderRadius: 8,
-            background: 'var(--bg-elev-1)',
-            border: '1px solid var(--border)',
+            background: 'var(--t-panel)',
+            border: '1px solid var(--t-border)',
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
-            color: 'var(--fg-4)',
+            color: 'var(--t-fg-4)',
             lineHeight: 1.5,
           }}
           title="上链后永久不可变,请确认已通过 sanitize。如需撤销,请申请新 CID 并弃用旧链接(PRD GDPR 应对)"
@@ -404,7 +404,7 @@ export default function ImportPage() {
                 fontWeight: 700,
                 letterSpacing: '.12em',
                 textTransform: 'uppercase',
-                color: 'var(--fg-4)',
+                color: 'var(--t-fg-4)',
                 marginBottom: 12,
               }}
             >
@@ -420,17 +420,17 @@ export default function ImportPage() {
                     alignItems: 'center',
                     gap: 8,
                     padding: '8px 12px',
-                    background: 'var(--bg-elev-1)',
-                    border: '1px solid var(--border)',
+                    background: 'var(--t-panel)',
+                    border: '1px solid var(--t-border)',
                     borderRadius: 8,
-                    color: 'var(--fg-2)',
+                    color: 'var(--t-fg-2)',
                     fontFamily: 'var(--font-mono)',
                     fontSize: 12,
                     cursor: 'pointer',
                     textAlign: 'left',
                   }}
                 >
-                  <span style={{ color: 'var(--accent-bright)' }}>⑂</span>
+                  <span style={{ color: 'var(--t-accent-bright)' }}>⑂</span>
                   {h}
                 </button>
               ))}
@@ -456,7 +456,7 @@ export default function ImportPage() {
                   fontWeight: 700,
                   letterSpacing: '.12em',
                   textTransform: 'uppercase',
-                  color: 'var(--fg-5)',
+                  color: 'var(--t-fg-5)',
                   margin: 0,
                 }}
               >
@@ -466,12 +466,12 @@ export default function ImportPage() {
                 onClick={copyFailureLogs}
                 style={{
                   background: 'none',
-                  border: '1px solid var(--border)',
+                  border: '1px solid var(--t-border)',
                   borderRadius: 6,
                   padding: '4px 10px',
                   fontFamily: 'var(--font-mono)',
                   fontSize: 10,
-                  color: 'var(--fg-4)',
+                  color: 'var(--t-fg-4)',
                   cursor: 'pointer',
                 }}
               >
@@ -484,7 +484,7 @@ export default function ImportPage() {
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: 11,
-                  color: 'var(--fg-5)',
+                  color: 'var(--t-fg-5)',
                   padding: '4px 0',
                 }}
               >
