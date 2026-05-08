@@ -3,8 +3,10 @@
 // ============================================================================
 
 import { WorkflowNode, WorkflowEdge } from '../types';
+import { getApiBase } from './_base';
+import { toast } from '../common/toast';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = getApiBase();
 
 export interface RunWorkflowRequest {
   workflow_id: string;
@@ -52,13 +54,15 @@ export async function runWorkflow(request: RunWorkflowRequest): Promise<RunWorkf
 
     return await response.json();
   } catch (error: any) {
+    const msg = error?.message || 'Unknown error occurred';
     console.error('API Error:', error);
+    toast.error(`运行失败：${msg}`);
     return {
       result: '',
       steps: [],
       metadata: {},
       status: 'error',
-      error: error.message || 'Unknown error occurred',
+      error: msg,
     };
   }
 }

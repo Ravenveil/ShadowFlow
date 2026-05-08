@@ -74,15 +74,15 @@ export const useOpsStore = create<OpsState>()((set, get) => ({
 
   fetchAll: async (apiBase = '') => {
     set({ loading: true, error: null });
+    // P11 (review Chunk B): check .ok before parsing — 4xx/5xx would otherwise
+    // silently parse the error body and overwrite store with garbage.
+    const fetchJson = async (url: string): Promise<unknown> => {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText} — ${url}`);
+      return r.json();
+    };
     try {
       const w = get().window;
-      // P11 (review Chunk B): check .ok before parsing — 4xx/5xx would otherwise
-      // silently parse the error body and overwrite store with garbage.
-      async function fetchJson(url: string): Promise<unknown> {
-        const r = await fetch(url);
-        if (!r.ok) throw new Error(`${r.status} ${r.statusText} — ${url}`);
-        return r.json();
-      }
       const [kpiRes, agentsRes, providersRes, approvalsRes] = await Promise.all([
         fetchJson(`${apiBase}/ops/kpi?window=${w}`),
         fetchJson(`${apiBase}/agents/health`),

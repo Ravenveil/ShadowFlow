@@ -674,3 +674,44 @@ export const MemorySystemTypes = {
   Role: {} as Role,
   Priority: {} as Priority,
 };
+
+// ==================== MemoryProfile (Story 9.3) ====================
+
+export type WritebackPolicy = 'always' | 'on_task_complete' | 'on_session_end' | 'manual';
+export type StateSyncPolicy = 'eager' | 'lazy' | 'disabled';
+export type CompressionPolicy = 'none' | 'summarize' | 'select_top_k';
+
+export interface MemoryProfile {
+  profile_id: string;
+  working_memory_limit: number;
+  episodic_retention_days: number;
+  semantic_retrieval_top_k: number;
+  writeback_policy: WritebackPolicy;
+  state_sync_policy: StateSyncPolicy;
+  compression_policy: CompressionPolicy;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateMemoryProfilePayload {
+  working_memory_limit?: number;
+  episodic_retention_days?: number;
+  semantic_retrieval_top_k?: number;
+  writeback_policy?: WritebackPolicy;
+  state_sync_policy?: StateSyncPolicy;
+  compression_policy?: CompressionPolicy;
+}
+
+export interface UpdateMemoryProfilePayload {
+  working_memory_limit?: number;
+  episodic_retention_days?: number;
+  semantic_retrieval_top_k?: number;
+  writeback_policy?: WritebackPolicy;
+  state_sync_policy?: StateSyncPolicy;
+  compression_policy?: CompressionPolicy;
+}
+
+export interface MemoryApiResponse<T> {
+  data: T;
+  meta: Record<string, unknown>;
+}

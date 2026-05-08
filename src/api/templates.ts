@@ -1,6 +1,7 @@
 import type { Template } from '../common/types/template';
+import { getApiBase } from './_base';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = getApiBase();
 
 export interface TemplateListItem {
   template_id: string;
@@ -12,6 +13,13 @@ export interface TemplateListItem {
   agent_roster_count: number;
   group_roster_count: number;
   source: 'seed' | 'custom';
+  /** Set to "builder" for templates generated via Builder (Story 8.6). */
+  builder_origin: string;
+  /** Workflow ID for /editor?workflowId=... (only set when builder_origin == "builder"). */
+  workflow_id: string;
+  description: string;
+  /** Kit tags from Blueprint publish profile (Story 8.6 AC6). */
+  kit_tags?: string[];
 }
 
 export interface ImportTemplatePayload {

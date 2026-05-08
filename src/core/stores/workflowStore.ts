@@ -212,7 +212,10 @@ export const useWorkflow = create<WorkflowState>()(
       set(state => {
         const nodeIndex = state.nodes.findIndex(n => n.id === nodeId);
         if (nodeIndex !== -1) {
-          Object.assign(state.nodes[nodeIndex], updates);
+          const UNSAFE = new Set(['__proto__', 'constructor', 'prototype']);
+          for (const [k, v] of Object.entries(updates as Record<string, unknown>)) {
+            if (!UNSAFE.has(k)) (state.nodes[nodeIndex] as Record<string, unknown>)[k] = v;
+          }
         }
       }),
 
@@ -275,7 +278,10 @@ export const useWorkflow = create<WorkflowState>()(
       set(state => {
         const edgeIndex = state.edges.findIndex(e => e.id === edgeId);
         if (edgeIndex !== -1) {
-          Object.assign(state.edges[edgeIndex], updates);
+          const UNSAFE = new Set(['__proto__', 'constructor', 'prototype']);
+          for (const [k, v] of Object.entries(updates as Record<string, unknown>)) {
+            if (!UNSAFE.has(k)) (state.edges[edgeIndex] as Record<string, unknown>)[k] = v;
+          }
         }
       }),
 

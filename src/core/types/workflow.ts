@@ -26,7 +26,7 @@ export interface TaskRecord {
   parent_task_id?: string | null;
   title?: string | null;
   focus?: string | null;
-  status?: "accepted" | "running" | "succeeded" | "failed" | "cancelled" | "waiting" | "awaiting_approval" | "invalidated";
+  status?: "accepted" | "running" | "succeeded" | "failed" | "cancelled" | "waiting" | "waiting_user" | "awaiting_approval" | "invalidated";
   created_at?: string;
   started_at?: string | null;
   ended_at?: string | null;
@@ -40,7 +40,7 @@ export interface RunRecord {
   task_id?: string | null;
   parent_run_id?: string | null;
   root_run_id?: string | null;
-  status: "accepted" | "validated" | "running" | "succeeded" | "failed" | "cancelled" | "checkpointed" | "waiting" | "awaiting_approval" | "paused";
+  status: "accepted" | "validated" | "running" | "succeeded" | "failed" | "cancelled" | "checkpointed" | "waiting" | "waiting_user" | "awaiting_approval" | "paused";
   started_at: string;
   ended_at?: string | null;
   entrypoint: string;
