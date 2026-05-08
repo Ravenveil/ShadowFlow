@@ -8,7 +8,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { FBAv, FBIcons } from '../FBAtoms';
 import { CI } from './icons';
-import { LLM_PROVIDERS, type LLMProvider } from '../TabChat';
+import type { LLMProvider } from '../TabChat';
 import {
   DayDivider, SystemNote, SystemCard, AgentMsg, UserMsg,
   ApprovalGate, TypingIndicator,
@@ -112,15 +112,7 @@ interface ChatMainProps {
   onProviderChange?: (p: LLMProvider) => void;
 }
 
-const PROVIDER_LABELS: Record<LLMProvider, string> = {
-  zhipu:    '智谱',
-  openai:   'OpenAI',
-  claude:   'Claude',
-  deepseek: 'DeepSeek',
-  ollama:   'Ollama',
-};
-
-export function ChatMain({ conv, messages, onSend, onAddReaction, onThreadOpen, onDrawerOpen, provider = 'zhipu', onProviderChange }: ChatMainProps) {
+export function ChatMain({ conv, messages, onSend, onAddReaction, onThreadOpen, onDrawerOpen, provider, onProviderChange }: ChatMainProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -189,31 +181,7 @@ export function ChatMain({ conv, messages, onSend, onAddReaction, onThreadOpen, 
           return null;
         })}
       </div>
-      {/* Provider selector strip */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 18px 4px', borderTop: '1px solid var(--t-border)', background: 'var(--t-panel)', flexShrink: 0 }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', letterSpacing: '0.05em', marginRight: 4 }}>LLM</span>
-        {LLM_PROVIDERS.map(p => (
-          <button
-            key={p}
-            data-testid={`provider-btn-${p}`}
-            onClick={() => onProviderChange?.(p)}
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              padding: '2px 8px',
-              borderRadius: 4,
-              border: p === provider ? '1px solid var(--t-accent-bright)' : '1px solid var(--t-border)',
-              background: p === provider ? 'var(--t-accent-bright)' : 'transparent',
-              color: p === provider ? 'var(--t-accent-ink)' : 'var(--t-fg-3)',
-              cursor: 'pointer',
-              transition: 'all 0.12s',
-            }}
-          >
-            {PROVIDER_LABELS[p]}
-          </button>
-        ))}
-      </div>
-      <Composer onSend={onSend} />
+      <Composer onSend={onSend} provider={provider} onProviderChange={onProviderChange} />
     </div>
   );
 }
