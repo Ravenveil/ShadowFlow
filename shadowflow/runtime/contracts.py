@@ -739,13 +739,18 @@ class RunTrajectory(BaseModel):
 
 
 class TrajectoryBundle(BaseModel):
-    """Full bundle suitable for 0G Storage archival (AC#2: format=trajectory)."""
+    """Full bundle suitable for 0G Storage archival (AC#2: format=trajectory).
+
+    Story 9.2 added the top-level `citations` list — one entry per
+    `CitationTrace`, empty when the run has no provenance to surface.
+    """
 
     trajectory: RunTrajectory
     workflow_yaml: Optional[str] = None
     policy_matrix: Optional[WorkflowPolicyMatrixSpec] = None
     bundle_version: str = "1.0"
     exported_at: datetime = Field(default_factory=utc_now)
+    citations: List[Dict[str, Any]] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -790,6 +795,12 @@ AgentEventTypeLiteral = Literal[
     "agent.output",
     "agent.degraded",
     "agent.approval_requested",
+    # Story 2.9 — ExternalMemoryBridge events
+    "agent.memory_drink",
+    "agent.memory_pour",
+    "agent.memory_feedback",
+    "agent.memory_bridge_circuit_break",
+    "agent.memory_bridge_circuit_recover",
 ]
 
 

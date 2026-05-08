@@ -5,7 +5,7 @@ LLM Provider 抽象基类
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, AsyncGenerator
+from typing import Dict, Any, List, Optional, AsyncGenerator
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -18,6 +18,18 @@ class ProviderType(Enum):
     DEEPSEEK = "deepseek"
     OLLAMA = "ollama"
     ZERO_G = "0g_compute"
+    ZHIPU = "zhipu"
+
+
+@dataclass
+class ToolCall:
+    """LLM 工具调用数据类"""
+    id: str
+    name: str
+    args: Dict[str, Any]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"id": self.id, "name": self.name, "args": self.args}
 
 
 @dataclass
@@ -29,6 +41,7 @@ class LLMResponse:
     tokens_used: int = 0
     finish_reason: str = "stop"
     metadata: Dict[str, Any] = field(default_factory=dict)
+    tool_calls: List[ToolCall] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -39,6 +52,7 @@ class LLMResponse:
             "tokens_used": self.tokens_used,
             "finish_reason": self.finish_reason,
             "metadata": self.metadata,
+            "tool_calls": [tc.to_dict() for tc in self.tool_calls],
         }
 
 
@@ -111,32 +125,44 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    async def chat(self, messages: list, **kwargs) -> LLMResponse:
+    async def chat(
+        self,
+        messages: list,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        **kwargs,
+    ) -> LLMResponse:
         """
         对话模式
 
         Args:
             messages: 消息列表，每个元素是 Message 或字典
+            tools: MCP 工具定义列表（可选）。每个元素形如
+                   {"name": str, "description": str, "inputSchema": {...}}
             **kwargs: 额外参数
 
         Returns:
-            LLMResponse 对象
+            LLMResponse 对象；若 LLM 发出工具调用则 tool_calls 非空
         """
         pass
 
-    async def chat_stream(self, messages: list, **kwargs) -> AsyncGenerator[str, None]:
+    async def chat_stream(
+        self,
+        messages: list,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        **kwargs,
+    ) -> AsyncGenerator[str, None]:
         """
         对话模式流式生成（默认实现）
 
         Args:
             messages: 消息列表
+            tools: MCP 工具定义列表（可选）
             **kwargs: 额外参数
 
         Yields:
             生成的文本片段
         """
-        # 默认实现：子类可以覆盖以提供更高效的流式对话
-        response = await self.chat(messages, **kwargs)
+        response = await self.chat(messages, tools=tools, **kwargs)
         yield response.content
 
     def _merge_config(self, **kwargs) -> Dict[str, Any]:

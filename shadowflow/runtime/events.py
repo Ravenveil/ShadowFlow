@@ -179,6 +179,25 @@ class RunEventBus:
 # SSE formatting helpers
 # ---------------------------------------------------------------------------
 
+_SSE_REDACT_KEYS = frozenset({
+    "private_key", "api_key", "password", "authorization",
+    "secret", "secret_key", "access_token", "refresh_token",
+    "token", "credential", "credentials",
+})
+
+
+def _redact_sse_payload(obj: Any) -> Any:
+    """Recursively redact sensitive keys from SSE payloads before sending to clients."""
+    if isinstance(obj, dict):
+        return {
+            k: "[REDACTED]" if k.lower() in _SSE_REDACT_KEYS else _redact_sse_payload(v)
+            for k, v in obj.items()
+        }
+    if isinstance(obj, (list, tuple)):
+        return [_redact_sse_payload(item) for item in obj]
+    return obj
+
+
 def format_sse_event(seq: int, event: Any) -> str:
     """Encode an event as an SSE chunk (id / event / data lines).
 
@@ -190,7 +209,7 @@ def format_sse_event(seq: int, event: Any) -> str:
     else:
         event_type = getattr(event, "type", "message")
         payload = event.model_dump(mode="json", exclude_none=True) if hasattr(event, "model_dump") else {}
-    data = json.dumps(payload, ensure_ascii=False)
+    data = json.dumps(_redact_sse_payload(payload), ensure_ascii=False)
     return f"id: {seq}\nevent: {event_type}\ndata: {data}\n\n"
 
 

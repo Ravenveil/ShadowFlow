@@ -1,6 +1,28 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
+
+_logger = logging.getLogger("shadowflow.gap_detector")
+
+_MAX_DEPTH = 10
+_MAX_KEYS = 100
+
+
+def _check_depth(obj: Any, depth: int = 0) -> None:
+    """Guard against deeply nested or oversized dicts that could cause stack exhaustion."""
+    if depth > _MAX_DEPTH:
+        raise ValueError(f"Input nesting depth exceeds {_MAX_DEPTH}")
+    if isinstance(obj, dict):
+        if len(obj) > _MAX_KEYS:
+            raise ValueError(f"Input dict key count exceeds {_MAX_KEYS}")
+        for v in obj.values():
+            _check_depth(v, depth + 1)
+    elif isinstance(obj, list):
+        if len(obj) > _MAX_KEYS:
+            raise ValueError(f"Input list length exceeds {_MAX_KEYS}")
+        for item in obj:
+            _check_depth(item, depth + 1)
 
 
 DEFAULT_CHOICES: List[Dict[str, str]] = [
@@ -16,6 +38,15 @@ def detect_gap(inputs: Dict[str, Any], node_config: Optional[Dict[str, Any]] = N
     Heuristics are intentionally conservative: false positives are preferable to
     silently inventing missing paper evidence.
     """
+    # N2 fix: guard against oversized/deeply nested inputs (DoS prevention)
+    try:
+        _check_depth(inputs)
+        if node_config:
+            _check_depth(node_config)
+    except ValueError as exc:
+        _logger.warning("gap_detector: input rejected (bounds exceeded) — %s", exc)
+        return None
+
     config = node_config or {}
     detector_cfg = config.get("gap_detection") if isinstance(config.get("gap_detection"), dict) else {}
 

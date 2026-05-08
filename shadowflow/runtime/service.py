@@ -108,12 +108,56 @@ class RuntimeService:
         self._policy_locks: Dict[str, threading.Lock] = {}
         # SSE event bus (Story 4.1) — optional; set externally or via constructor
         self._event_bus = event_bus
+        # Story 9.3: optional ContextBuilder for memory writeback
+        self._context_builder: Optional[Any] = None
 
     def _get_run_lock(self, run_id: str) -> asyncio.Lock:
         """Return the per-run asyncio.Lock, creating it on first access."""
         if run_id not in self._run_locks:
             self._run_locks[run_id] = asyncio.Lock()
         return self._run_locks[run_id]
+
+    def _record_citation_traces(
+        self,
+        *,
+        run_id: str,
+        node: NodeDefinition,
+        step: StepRecord,
+        step_output: Dict[str, Any],
+    ) -> None:
+        """Story 9.2 hook: persist citation traces and write summary to step.metadata.
+
+        Reads optional `citation_traces` (list[dict]) from step_output; this is
+        the forward-compatible extension point that knowledge-grounded executors
+        will populate. Honors `node.config['citation_required']` for the
+        `citation_missing` warning.
+        """
+        node_config = node.config or {}
+        citation_required = bool(node_config.get("citation_required", False))
+        raw_traces = step_output.get("citation_traces") or []
+
+        if not citation_required and not raw_traces:
+            return
+
+        from shadowflow.runtime.citation_service import (
+            CitationTrace,
+            get_service as _get_citation_service,
+        )
+
+        validated: List[CitationTrace] = []
+        for item in raw_traces:
+            if not isinstance(item, dict):
+                continue
+            try:
+                validated.append(CitationTrace.model_validate(item))
+            except ValueError:
+                # Drop malformed entries silently — never break the run.
+                continue
+
+        svc = _get_citation_service()
+        attached = svc.attach_trace(run_id, step.node_id, validated) if validated else []
+        summary = svc.summary_for_step(attached, citation_required=citation_required)
+        step.metadata["citation_summary"] = summary.model_dump(mode="json")
 
     def validate_workflow(self, workflow: WorkflowDefinition) -> WorkflowValidationResult:
         from shadowflow.runtime.policy_matrix import validate_best_practices
@@ -1059,6 +1103,24 @@ class RuntimeService:
                 },
             )
             steps.append(step)
+            # Story 9.2 AC4: citation enrichment hook — non-invasive, metadata-only.
+            # Reads optional `citation_traces` from step_output (executors that
+            # surface KnowledgePack hits attach this list) and records a
+            # `citation_summary` on the step. Missing citations on a node that
+            # declared `citation_required: true` raise the warning flag.
+            try:
+                self._record_citation_traces(
+                    run_id=run_id,
+                    node=node,
+                    step=step,
+                    step_output=step_output,
+                )
+            except Exception:  # pragma: no cover - hook must not break runs
+                logger.exception(
+                    "citation hook failed for run_id=%s node_id=%s",
+                    run_id,
+                    current_node_id,
+                )
             # Story 4.1 AC2: publish NODE_SUCCEEDED after step completes
             if step.status == "succeeded" and self._event_bus is not None:
                 from shadowflow.runtime.events import NODE_SUCCEEDED as _NSu
@@ -1352,6 +1414,17 @@ class RuntimeService:
                 receipt.model_dump(mode="json") for receipt in receipts
             ]
         self._runs[run_id] = result
+        # Story 9.3: fire-and-forget memory writeback (non-blocking)
+        if self._context_builder is not None:
+            _agent_id = str(result.run.metadata.get("agent_id") or result.run.workflow_id)
+            asyncio.create_task(
+                self._context_builder.writeback(
+                    run_id=run_id,
+                    agent_id=_agent_id,
+                    events=memory_events,
+                    trigger="on_task_complete",
+                )
+            )
         return result
 
     def get_run(self, run_id: str) -> Optional[RunResult]:
@@ -3959,3 +4032,401 @@ class RuntimeService:
 
         last_content = messages[-1].get("content", "") if messages else ""
         return str(last_content)
+
+    # ------------------------------------------------------------------
+    # Long-task execution with checkpoint/resume (Story 11.5)
+    # ------------------------------------------------------------------
+
+    async def run_agent_long_task(
+        self,
+        agent_id: str,
+        session_id: str,
+        agent_blueprint: Any,
+        task: str,
+        mcp_clients: List[Any],
+        llm_provider: Any,
+        run_id: Optional[str] = None,
+        max_iterations_per_segment: int = 20,
+        max_segments: int = 10,
+        max_error_retries: int = 3,
+    ) -> "TaskReport":
+        """Long-task ReAct executor with workspace context, self-healing and segmentation.
+
+        Extends run_agent_with_tools with:
+        - Persistent AgentWorkspaceContext across segments
+        - Error self-recovery (up to max_error_retries per tool call)
+        - Auto-segment every max_iterations_per_segment steps
+        - Structured TaskReport on completion
+
+        Args:
+            agent_id: Agent identifier.
+            session_id: Session identifier (also used as Redis/store key).
+            agent_blueprint: Agent spec with .soul system prompt.
+            task: Natural-language task description.
+            mcp_clients: List of MCP client objects.
+            llm_provider: LLMProvider implementing chat(..., tools=...).
+            run_id: Optional run_id for SSE events.
+            max_iterations_per_segment: ReAct iterations per segment (default 20).
+            max_segments: Max number of segments (default 10).
+            max_error_retries: Max self-healing retries per tool error (default 3).
+
+        Returns:
+            TaskReport with execution summary.
+        """
+        import time as _time_mod
+        from shadowflow.runtime.workspace_context import (
+            AgentWorkspaceContext,
+            TaskReport,
+            get_store,
+        )
+
+        ctx_store = get_store()
+        start_time = _time_mod.monotonic()
+
+        # Load or create workspace context (supports resume)
+        ctx = ctx_store.load(agent_id, session_id)
+        is_resume = ctx is not None and len(ctx.completed_steps) > 0
+        if ctx is None:
+            ctx = AgentWorkspaceContext(
+                agent_id=agent_id,
+                session_id=session_id,
+                task_description=task,
+            )
+
+        # Collect tools once (same logic as run_agent_with_tools)
+        tools: List[Dict[str, Any]] = []
+        tool_to_client: Dict[str, Any] = {}
+        for client in mcp_clients:
+            raw = await client.list_tools()
+            for item in raw:
+                tool_def: Dict[str, Any] = (
+                    item if isinstance(item, dict)
+                    else {"name": item, "description": "", "inputSchema": {}}
+                )
+                tname = tool_def["name"]
+                if tname not in tool_to_client:
+                    tools.append(tool_def)
+                tool_to_client[tname] = client
+
+        # System prompt
+        system_prompt = getattr(agent_blueprint, "soul", None) or ""
+
+        errors_log: List[str] = []
+        total_recovery_attempts = 0
+
+        for segment_idx in range(max_segments):
+            # Build messages for this segment
+            messages: List[Dict[str, Any]] = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+
+            # Inject resume context from previous segments
+            if is_resume or segment_idx > 0:
+                resume_text = ctx.resume_prompt()
+                if resume_text:
+                    messages.append({"role": "user", "content": resume_text})
+
+            messages.append({"role": "user", "content": task})
+
+            if run_id is not None and self._event_bus is not None:
+                self._event_bus.publish(run_id, {
+                    "type": "agent.segment_started",
+                    "segment_index": segment_idx,
+                    "total_steps": len(ctx.completed_steps),
+                })
+
+            # Run one segment
+            segment_final_content = ""
+            for iteration in range(max_iterations_per_segment):
+                response = await llm_provider.chat(messages, tools=tools if tools else None)
+
+                if not response.tool_calls:
+                    # LLM decided to stop
+                    segment_final_content = response.content
+                    if run_id is not None and self._event_bus is not None:
+                        self._event_bus.publish(run_id, {
+                            "type": "agent.completed",
+                            "segment_index": segment_idx,
+                            "content": response.content,
+                        })
+                    # Save context and return report
+                    ctx_store.save(ctx)
+                    return TaskReport(
+                        task_id=session_id,
+                        agent_id=agent_id,
+                        session_id=session_id,
+                        status="completed",
+                        duration_seconds=_time_mod.monotonic() - start_time,
+                        segments=segment_idx + 1,
+                        steps_taken=len(ctx.completed_steps),
+                        task_description=task,
+                        errors=errors_log,
+                        recovery_attempts=total_recovery_attempts,
+                    )
+
+                # Append assistant tool_use turn
+                messages.append({
+                    "role": "assistant",
+                    "content": response.content,
+                    "_tool_calls": [
+                        {"id": tc.id, "name": tc.name, "args": tc.args}
+                        for tc in response.tool_calls
+                    ],
+                })
+
+                # Execute tool calls with self-healing
+                for call in response.tool_calls:
+                    if run_id is not None and self._event_bus is not None:
+                        self._event_bus.publish(run_id, {
+                            "type": "agent.tool_called",
+                            "name": call.name,
+                            "args": call.args,
+                            "segment": segment_idx,
+                            "step": len(ctx.completed_steps),
+                        })
+
+                    client_for_tool = tool_to_client.get(call.name)
+                    if client_for_tool is None:
+                        result = {"error": f"Tool '{call.name}' not found"}
+                        ctx.add_step(call.name, result, status="failed")
+                    else:
+                        result, step_status = await self._exec_tool_with_recovery(
+                            client_for_tool, call, ctx,
+                            max_retries=max_error_retries,
+                            run_id=run_id,
+                        )
+                        if step_status == "failed":
+                            error_str = (
+                                str(result.get("error", result))
+                                if isinstance(result, dict)
+                                else str(result)
+                            )
+                            errors_log.append(f"{call.name}: {error_str}")
+                            # AC2: LLM-driven error analysis + optional fix attempt
+                            fix_analysis = await self._analyze_error_with_llm(
+                                error=error_str,
+                                tool_name=call.name,
+                                llm_provider=llm_provider,
+                            )
+                            if fix_analysis["fix_command"] not in ("NONE", "", None):
+                                shell_tool = next(
+                                    (t for t in ("shell_exec", "bash", "run_command")
+                                     if t in tool_to_client),
+                                    None,
+                                )
+                                if shell_tool:
+                                    class _FixCall:  # noqa: N801
+                                        id = f"fix-{call.id}"
+                                        name = shell_tool
+                                        args = {"command": fix_analysis["fix_command"]}
+                                    fix_result, _ = await self._exec_tool_with_recovery(
+                                        tool_to_client[shell_tool],
+                                        _FixCall(),
+                                        ctx,
+                                        max_retries=1,
+                                        run_id=run_id,
+                                    )
+                                    ctx.add_step(
+                                        shell_tool,
+                                        fix_result,
+                                        description=f"Auto-fix: {fix_analysis['fix_command']}",
+                                        status="done",
+                                    )
+                                    if run_id is not None and self._event_bus is not None:
+                                        self._event_bus.publish(run_id, {
+                                            "type": "agent.error_fix_applied",
+                                            "fix_command": fix_analysis["fix_command"],
+                                            "error_type": fix_analysis["error_type"],
+                                        })
+                            # Inject analysis into message context for next iteration
+                            messages.append({
+                                "role": "user",
+                                "content": (
+                                    f"[系统] 错误分析: {fix_analysis['error_type']}. "
+                                    f"{fix_analysis['analysis']}"
+                                ),
+                            })
+                        elif step_status == "recovered":
+                            total_recovery_attempts += ctx.current_error_attempts
+                        ctx.add_step(call.name, result, status=step_status)
+
+                    if run_id is not None and self._event_bus is not None:
+                        self._event_bus.publish(run_id, {
+                            "type": "agent.tool_result",
+                            "call_id": call.id,
+                            "result": result,
+                        })
+
+                    result_str = (
+                        json.dumps(result, ensure_ascii=False)
+                        if isinstance(result, (dict, list))
+                        else str(result)
+                    )
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": result_str,
+                    })
+
+                    # Update working_dir from shell results
+                    if call.name in ("shell_exec", "bash", "run_command"):
+                        if isinstance(result, dict) and "cwd" in result:
+                            ctx.working_dir = str(result["cwd"])
+
+                # Persist context after every step
+                ctx_store.save(ctx)
+
+            # Segment limit reached — AC3: LLM-generated checkpoint summary
+            segment_summary = await self._generate_segment_summary(
+                ctx, segment_idx, llm_provider
+            )
+            ctx.add_checkpoint_summary(segment_idx, segment_summary)
+            ctx_store.save(ctx)
+
+            if run_id is not None and self._event_bus is not None:
+                self._event_bus.publish(run_id, {
+                    "type": "agent.segment_checkpoint",
+                    "segment_index": segment_idx,
+                    "summary": segment_summary,
+                    "total_steps": len(ctx.completed_steps),
+                })
+
+        # Exhausted all segments
+        ctx_store.save(ctx)
+        return TaskReport(
+            task_id=session_id,
+            agent_id=agent_id,
+            session_id=session_id,
+            status="stopped",
+            duration_seconds=_time_mod.monotonic() - start_time,
+            segments=max_segments,
+            steps_taken=len(ctx.completed_steps),
+            task_description=task,
+            errors=errors_log,
+            recovery_attempts=total_recovery_attempts,
+        )
+
+    async def _exec_tool_with_recovery(
+        self,
+        client: Any,
+        call: Any,
+        ctx: "AgentWorkspaceContext",
+        max_retries: int = 3,
+        run_id: Optional[str] = None,
+    ) -> tuple:
+        """Execute a tool call with error self-recovery.
+
+        Returns (result, status) where status in {"done", "failed", "recovered"}.
+        """
+        from shadowflow.runtime.workspace_context import AgentWorkspaceContext  # noqa: F401
+        ctx.current_error_attempts = 0
+
+        last_error: Optional[str] = None
+        for attempt in range(max_retries + 1):
+            try:
+                result = await client.call_tool(call.name, call.args)
+                # Check for non-zero exit code in shell results
+                if isinstance(result, dict):
+                    exit_code = result.get("exit_code", result.get("returncode", 0))
+                    stderr = result.get("stderr", "")
+                    if exit_code != 0 and stderr:
+                        raise RuntimeError(f"exit_code={exit_code}: {stderr[:500]}")
+                status = "recovered" if ctx.current_error_attempts > 0 else "done"
+                ctx.current_error_attempts = 0
+                return result, status
+            except Exception as exc:
+                last_error = str(exc)
+                ctx.current_error_attempts = attempt + 1
+                if attempt < max_retries:
+                    if run_id is not None and self._event_bus is not None:
+                        self._event_bus.publish(run_id, {
+                            "type": "agent.error_recovery",
+                            "tool": call.name,
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                            "error": last_error[:300],
+                        })
+                    # Exponential backoff (minimal for interactive tasks)
+                    await asyncio.sleep(0.5 * (attempt + 1))
+                else:
+                    break
+
+        return {"error": last_error or "unknown error"}, "failed"
+
+    async def _analyze_error_with_llm(
+        self,
+        error: str,
+        tool_name: str,
+        llm_provider: Any,
+    ) -> dict:
+        """AC2: Ask LLM to classify error type and suggest a single shell fix command.
+
+        Returns dict with keys: error_type, fix_command, analysis.
+        Falls back to defaults if LLM is unavailable.
+        """
+        if llm_provider is None:
+            return {"error_type": "unknown", "fix_command": "NONE", "analysis": ""}
+        prompt = (
+            f"Tool '{tool_name}' failed with this error:\n{error[:500]}\n\n"
+            "Classify the error (one of: dependency_missing, permission_error, "
+            "path_error, runtime_error, other) and suggest ONE shell fix command "
+            "(or NONE if not fixable by a shell command).\n"
+            "Reply in this exact format:\n"
+            "TYPE: <error_type>\n"
+            "FIX: <command_or_NONE>\n"
+            "ANALYSIS: <one sentence>\n"
+        )
+        try:
+            response = await llm_provider.chat(
+                [{"role": "user", "content": prompt}],
+                tools=None,
+            )
+            text = (response.content or "").strip()
+            result: dict = {"error_type": "other", "fix_command": "NONE", "analysis": ""}
+            for line in text.splitlines():
+                if line.startswith("TYPE:"):
+                    result["error_type"] = line.split(":", 1)[1].strip()
+                elif line.startswith("FIX:"):
+                    result["fix_command"] = line.split(":", 1)[1].strip()
+                elif line.startswith("ANALYSIS:"):
+                    result["analysis"] = line.split(":", 1)[1].strip()
+            return result
+        except Exception:
+            return {"error_type": "unknown", "fix_command": "NONE", "analysis": ""}
+
+    async def _generate_segment_summary(
+        self,
+        ctx: Any,
+        segment_idx: int,
+        llm_provider: Any,
+    ) -> str:
+        """AC3: Use LLM to generate a concise (≤200 char) summary of a completed segment.
+
+        Falls back to a template string if LLM is unavailable.
+        """
+        recent_steps = ctx.completed_steps[-10:]
+        fallback = (
+            f"段 {segment_idx + 1}: 执行了 {len(recent_steps)} 个工具调用，"
+            f"共 {len(ctx.completed_steps)} 步完成。"
+        )
+        if llm_provider is None:
+            return fallback
+        steps_text = "\n".join(
+            f"  {s.index}. {s.tool_called}: {s.result_summary[:100]}"
+            for s in recent_steps
+        )
+        prompt = (
+            f"任务: {ctx.task_description[:200]}\n"
+            f"段 {segment_idx + 1} 执行情况（最近 {len(recent_steps)} 步）:\n"
+            f"{steps_text}\n\n"
+            "用不超过 200 字符的中文总结这段完成了什么（一句话，不含引号）："
+        )
+        try:
+            response = await llm_provider.chat(
+                [{"role": "user", "content": prompt}],
+                tools=None,
+            )
+            summary = (response.content or "").strip()[:200]
+            return summary if summary else fallback
+        except Exception:
+            return fallback

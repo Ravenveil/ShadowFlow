@@ -55,6 +55,22 @@ _PATTERNS: List[Tuple[str, re.Pattern[str]]] = [
     ("eth_private_key", re.compile(
         r"0x[a-fA-F0-9]{64}"
     )),
+    # Story 5-2 补丁 — 5 种新增凭证模式 (M1 修复)
+    ("aws_access_key", re.compile(
+        r"(?<![A-Z0-9])AKIA[0-9A-Z]{16}(?![A-Z0-9])"
+    )),
+    ("slack_token", re.compile(
+        r"xox[baprs]-[0-9A-Za-z\-]{10,}"
+    )),
+    ("github_fine_grained_pat", re.compile(
+        r"github_pat_[A-Za-z0-9_]{80,110}"
+    )),
+    ("anthropic_api_key", re.compile(
+        r"sk-ant-[A-Za-z0-9\-_]{20,}"
+    )),
+    ("bearer_token_header", re.compile(
+        r"(?i)Bearer\s+[A-Za-z0-9\-_\.+/=]{20,}"
+    )),
 ]
 
 
@@ -96,6 +112,16 @@ def _mask_sample(value: str, pattern_name: str) -> str:
         return "eyJ***...***"
     if pattern_name == "eth_private_key":
         return "0x" + value[2:6] + "..." + value[-4:]
+    if pattern_name == "aws_access_key":
+        return value[:4] + "****" + value[-4:]
+    if pattern_name in ("slack_token", "github_fine_grained_pat", "anthropic_api_key"):
+        return value[:8] + "..." + value[-3:] if len(value) > 11 else value[:8] + "..."
+    if pattern_name == "bearer_token_header":
+        parts = value.split(None, 1)
+        if len(parts) == 2:
+            tok = parts[1]
+            return f"Bearer {tok[:6]}...{tok[-3:]}" if len(tok) > 9 else "Bearer ***"
+        return "Bearer ***"
     return "***"
 
 
