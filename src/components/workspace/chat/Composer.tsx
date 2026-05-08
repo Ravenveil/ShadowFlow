@@ -16,8 +16,8 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  Sliders, Paperclip, Loader2, ChevronDown, Send, Square,
-  X, Download, Workflow, Globe, AtSign, GitBranch,
+  Sliders, Loader2, ChevronDown, Send, Square,
+  X, Download, Workflow, Globe, GitBranch,
 } from 'lucide-react';
 import { CI } from './icons';
 import { SLASH_COMMANDS } from './mockData';
@@ -428,7 +428,7 @@ export function Composer({ onSend, streaming = false, onStop, agents = DEFAULT_A
           <ToolBtn
             icon={uploading
               ? <Loader2 size={13} strokeWidth={2} style={{ animation: 'spin 1s linear infinite' }} />
-              : <Paperclip size={13} strokeWidth={2} />}
+              : CI.clip}
             title="上传文件"
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
@@ -496,7 +496,7 @@ export function Composer({ onSend, streaming = false, onStop, agents = DEFAULT_A
 
           {/* @ / / smile scissor task */}
           {([
-            { icon: <AtSign size={13} strokeWidth={2} />, title: '@', onClick: () => { setText(t => t + '@'); textareaRef.current?.focus(); } },
+            { icon: CI.at,   title: '@', onClick: () => { setText(t => t + '@'); textareaRef.current?.focus(); } },
             { icon: CI.slash,   title: '/',    onClick: () => { setText('/'); textareaRef.current?.focus(); } },
             { icon: CI.smile,   title: '表情', onClick: undefined },
             { icon: CI.scissor, title: '截图', onClick: undefined },
@@ -524,7 +524,7 @@ export function Composer({ onSend, streaming = false, onStop, agents = DEFAULT_A
                 {f.dataUrl ? (
                   <img src={f.dataUrl} alt="" style={{ width: 20, height: 20, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} />
                 ) : (
-                  <span style={{ display: 'inline-flex', color: 'var(--t-fg-4)' }}><Paperclip size={11} strokeWidth={2} /></span>
+                  <span style={{ display: 'inline-flex', color: 'var(--t-fg-4)', width: 11, height: 11 }}>{CI.clip}</span>
                 )}
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{f.name}</span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)', flexShrink: 0 }}>{prettySize(f.size)}</span>
