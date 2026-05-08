@@ -205,7 +205,7 @@ function RunButton({ lang }: { lang: string }) {
         border: 'none', borderRadius: 8, padding: '6px 16px',
         cursor: 'pointer', transition: 'background 120ms',
       }}
-      onMouseEnter={e => { e.currentTarget.style.background = isRunning ? '#dc2626' : 'var(--accent-bright)'; }}
+      onMouseEnter={e => { e.currentTarget.style.background = isRunning ? '#dc2626' : 'var(--t-accent-bright)'; }}
       onMouseLeave={e => { e.currentTarget.style.background = isRunning ? V.reject : V.accent; }}>
       {label}
     </button>
@@ -936,7 +936,7 @@ function CfgSelect({ label, value, options, onChange }: {
 }
 
 const STATUS_CHIP: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  idle:    { label: '○ idle',      color: 'var(--fg-4)',       bg: 'var(--bg-elev-2)',          border: 'var(--border)' },
+  idle:    { label: '○ idle',      color: 'var(--t-fg-4)',     bg: 'var(--t-panel-2)',          border: 'var(--t-border)' },
   running: { label: '● streaming', color: 'var(--status-run)', bg: 'var(--status-run-tint)',    border: 'rgba(59,130,246,.35)' },
   success: { label: '✓ done',      color: 'var(--status-ok)',  bg: 'var(--status-ok-tint)',     border: 'rgba(16,185,129,.35)' },
   error:   { label: '✗ error',     color: 'var(--status-reject)', bg: 'var(--status-reject-tint)', border: 'rgba(239,68,68,.35)' },
