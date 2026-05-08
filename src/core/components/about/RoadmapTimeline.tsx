@@ -63,12 +63,12 @@ const STATUS_STYLES = {
   },
   next: {
     dot: '#A855F7',
-    label: { background: 'var(--accent-tint)', color: 'var(--accent-bright)', border: '1px solid var(--accent)' },
+    label: { background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', border: '1px solid var(--t-accent)' },
     line: '#A855F7',
   },
   future: {
     dot: '#3F3F46',
-    label: { background: 'transparent', color: 'var(--fg-4)', border: '1px solid var(--border)' },
+    label: { background: 'transparent', color: 'var(--t-fg-4)', border: '1px solid var(--t-border)' },
     line: '#27272A',
   },
 };
@@ -94,7 +94,7 @@ export default function RoadmapTimeline() {
               <div
                 className="absolute left-0 top-1 w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2"
                 style={{
-                  background: phase.status === 'done' ? 'var(--status-ok-tint)' : phase.status === 'next' ? 'var(--accent-tint)' : 'var(--bg-elev-2)',
+                  background: phase.status === 'done' ? 'var(--status-ok-tint)' : phase.status === 'next' ? 'var(--t-accent-tint)' : 'var(--t-panel-2)',
                   borderColor: styles.dot,
                 }}
                 aria-hidden="true"
@@ -106,7 +106,7 @@ export default function RoadmapTimeline() {
               </div>
 
               {/* Content */}
-              <div className="flex-1 rounded-sf border p-5" style={{ borderColor: 'var(--border)', background: 'var(--bg-elev-1)' }}>
+              <div className="flex-1 rounded-sf border p-5" style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel)' }}>
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span className="font-mono text-[10px] text-sf-fg4">{phase.phase}</span>
                   <span

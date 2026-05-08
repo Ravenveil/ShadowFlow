@@ -19,7 +19,7 @@ interface TaskItem {
 }
 
 const COLUMNS: { key: TaskStatus; label: string; accent: string }[] = [
-  { key: 'todo', label: '待办', accent: 'var(--fg-3)' },
+  { key: 'todo', label: '待办', accent: 'var(--t-fg-3)' },
   { key: 'doing', label: '进行中', accent: 'var(--status-run)' },
   { key: 'done', label: '已完成', accent: 'var(--status-ok)' },
 ];
@@ -43,13 +43,13 @@ const MOCK_TASKS: Record<TaskStatus, TaskItem[]> = {
 const PRIORITY_COLOR: Record<string, string> = {
   P0: 'var(--status-reject)',
   P1: 'var(--status-warn)',
-  P2: 'var(--fg-4)',
+  P2: 'var(--t-fg-4)',
 };
 
 function TaskCard({ task }: { task: TaskItem }) {
   return (
     <div style={{
-      padding: '10px 12px', borderRadius: 8, background: 'var(--bg-elev-2)',
+      padding: '10px 12px', borderRadius: 8, background: 'var(--t-panel-2)',
       border: '1px solid var(--t-border)', cursor: 'pointer',
       transition: 'border-color 120ms',
     }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--t-accent)')}
@@ -63,18 +63,18 @@ function TaskCard({ task }: { task: TaskItem }) {
         }}>{task.priority}</span>
         {task.tags?.map(tag => (
           <span key={tag} style={{
-            fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-4)',
-            padding: '1px 5px', borderRadius: 3, background: 'var(--bg-elev-3)',
+            fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-4)',
+            padding: '1px 5px', borderRadius: 3, background: 'var(--t-panel-3)',
             border: '1px solid var(--t-border)',
           }}>{tag}</span>
         ))}
         <span style={{ flex: 1 }} />
         <FBAv glyph={task.assignee.glyph} color={task.assignee.color} size={20} square />
       </div>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-1)', lineHeight: 1.4 }}>{task.title}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg)', lineHeight: 1.4 }}>{task.title}</div>
       {task.due && (
         <div style={{
-          marginTop: 6, fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-4)',
+          marginTop: 6, fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)',
           display: 'flex', alignItems: 'center', gap: 4,
         }}>
           <span style={{ width: 11, height: 11, display: 'flex' }}>{CI.cal}</span>
@@ -96,15 +96,15 @@ export function RailTaskPanel() {
         padding: '12px 18px', borderBottom: '1px solid var(--t-border)',
         display: 'flex', alignItems: 'center', gap: 12, background: 'var(--skin-panel)', flexShrink: 0,
       }}>
-        <span style={{ width: 18, height: 18, display: 'flex', color: 'var(--accent-bright)' }}>{CI.task}</span>
+        <span style={{ width: 18, height: 18, display: 'flex', color: 'var(--t-accent-bright)' }}>{CI.task}</span>
         <span style={{ fontSize: 14, fontWeight: 700 }}>任务看板</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>{total} 项</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>{total} 项</span>
         <span style={{ flex: 1 }} />
         {(['all', 'mine'] as const).map(f => (
           <span key={f} onClick={() => setFilter(f)} style={{
             padding: '3px 10px', borderRadius: 11, fontSize: 10.5, fontWeight: 600, cursor: 'pointer',
-            background: f === filter ? 'var(--accent-tint)' : 'var(--bg-elev-2)',
-            color: f === filter ? 'var(--accent-bright)' : 'var(--fg-3)',
+            background: f === filter ? 'var(--t-accent-tint)' : 'var(--t-panel-2)',
+            color: f === filter ? 'var(--t-accent-bright)' : 'var(--t-fg-3)',
             border: `1px solid ${f === filter ? 'color-mix(in oklab, var(--t-accent) 35%, transparent)' : 'var(--t-border)'}`,
           }}>{f === 'all' ? '全部' : '我的'}</span>
         ))}
@@ -116,15 +116,15 @@ export function RailTaskPanel() {
           <div key={col.key} style={{ flex: 1, minWidth: 180, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px',
-              borderRadius: 6, background: 'var(--bg-elev-1)',
+              borderRadius: 6, background: 'var(--t-panel)',
             }}>
               <span style={{
                 width: 8, height: 8, borderRadius: '50%', background: col.accent,
               }} />
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--fg-2)' }}>{col.label}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--t-fg-2)' }}>{col.label}</span>
               <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-4)',
-                padding: '0 5px', borderRadius: 8, background: 'var(--bg-elev-2)',
+                fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-4)',
+                padding: '0 5px', borderRadius: 8, background: 'var(--t-panel-2)',
                 border: '1px solid var(--t-border)',
               }}>{MOCK_TASKS[col.key].length}</span>
             </div>

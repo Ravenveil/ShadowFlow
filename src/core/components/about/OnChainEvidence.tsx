@@ -19,8 +19,8 @@ function CopyButton({ text }: { text: string }) {
       onClick={handleCopy}
       className="ml-2 px-2 py-0.5 rounded text-[10px] font-mono border transition-colors duration-150"
       style={{
-        borderColor: copied ? 'var(--status-ok)' : 'var(--border)',
-        color: copied ? 'var(--status-ok)' : 'var(--fg-4)',
+        borderColor: copied ? 'var(--status-ok)' : 'var(--t-border)',
+        color: copied ? 'var(--status-ok)' : 'var(--t-fg-4)',
         background: 'transparent',
       }}
       aria-label="复制 CID"
@@ -44,7 +44,7 @@ function CidCard({ cid }: { cid: EvidenceCid }) {
   return (
     <article
       className="rounded-sf border p-5"
-      style={{ borderColor: 'var(--border)', background: 'var(--bg-elev-1)' }}
+      style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel)' }}
       aria-label={`${cid.templateName} 链上证据`}
     >
       {/* Header */}
@@ -61,8 +61,8 @@ function CidCard({ cid }: { cid: EvidenceCid }) {
           rel="noopener noreferrer"
           className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-medium transition-colors duration-150"
           style={{
-            background: 'var(--accent)',
-            color: 'var(--accent-ink)',
+            background: 'var(--t-accent)',
+            color: '#fff',
           }}
           aria-label={`在 0G Explorer 查看 CID ${cid.shortHash}`}
         >
@@ -103,9 +103,9 @@ function CidCard({ cid }: { cid: EvidenceCid }) {
                 key={author}
                 className="px-2 py-0.5 rounded-pill text-[10px] font-mono"
                 style={{
-                  background: 'var(--accent-tint)',
-                  color: 'var(--accent-bright)',
-                  border: '1px solid var(--accent-dim)',
+                  background: 'var(--t-accent-tint)',
+                  color: 'var(--t-accent-bright)',
+                  border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)',
                 }}
               >
                 {author}

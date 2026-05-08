@@ -24,7 +24,7 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor: string; c
     <div style={{ marginBottom: 14 }}>
       <label
         htmlFor={htmlFor}
-        style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, color: 'var(--fg-4)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.1em' }}
+        style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, color: 'var(--t-fg-4)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.1em' }}
       >
         {label}
       </label>
@@ -34,15 +34,15 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor: string; c
 }
 
 const selectStyle: React.CSSProperties = {
-  width: '100%', padding: '5px 8px', background: 'var(--bg-elev-2)',
-  border: '1px solid var(--border)', borderRadius: 6,
-  color: 'var(--fg-1)', fontSize: 12, fontFamily: 'var(--font-mono)',
+  width: '100%', padding: '5px 8px', background: 'var(--t-panel-2)',
+  border: '1px solid var(--t-border)', borderRadius: 6,
+  color: 'var(--t-fg)', fontSize: 12, fontFamily: 'var(--font-mono)',
   outline: 'none', cursor: 'pointer',
 };
 const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '5px 8px', background: 'var(--bg-elev-2)',
-  border: '1px solid var(--border)', borderRadius: 6,
-  color: 'var(--fg-1)', fontSize: 12, fontFamily: 'var(--font-mono)',
+  width: '100%', padding: '5px 8px', background: 'var(--t-panel-2)',
+  border: '1px solid var(--t-border)', borderRadius: 6,
+  color: 'var(--t-fg)', fontSize: 12, fontFamily: 'var(--font-mono)',
   outline: 'none', boxSizing: 'border-box',
 };
 
@@ -82,7 +82,7 @@ export function ApprovalGateForm({ node, roles, downstreamIds, onUpdate }: Appro
 
   return (
     <div style={{ padding: 14 }}>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--fg-5)', marginBottom: 12 }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-fg-5)', marginBottom: 12 }}>
         approval gate · config
       </div>
 
@@ -132,7 +132,7 @@ export function ApprovalGateForm({ node, roles, downstreamIds, onUpdate }: Appro
         />
       </Field>
 
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-5)', lineHeight: 1.6 }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)', lineHeight: 1.6 }}>
         approve → green handle · reject → red handle
       </div>
     </div>

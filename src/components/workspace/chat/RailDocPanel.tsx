@@ -20,7 +20,7 @@ interface DocItem {
 const DOC_TYPE_META: Record<string, { icon: JSX.Element; label: string; color: string }> = {
   paper: { icon: CI.doc, label: '论文', color: 'var(--t-accent)' },
   draft: { icon: CI.doc, label: '草稿', color: 'var(--status-warn)' },
-  note:  { icon: CI.doc, label: '笔记', color: 'var(--fg-3)' },
+  note:  { icon: CI.doc, label: '笔记', color: 'var(--t-fg-3)' },
   data:  { icon: CI.doc, label: '数据', color: 'var(--status-ok)' },
 };
 
@@ -40,10 +40,10 @@ function DocRow({ doc }: { doc: DocItem }) {
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px',
       borderRadius: 8, cursor: 'pointer', transition: 'background 120ms',
-    }} onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elev-2)')}
+    }} onMouseEnter={e => (e.currentTarget.style.background = 'var(--t-panel-2)')}
        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
       <span style={{
-        width: 32, height: 32, borderRadius: 7, background: `color-mix(in oklab, ${meta.color} 12%, var(--bg-elev-2))`,
+        width: 32, height: 32, borderRadius: 7, background: `color-mix(in oklab, ${meta.color} 12%, var(--t-panel-2))`,
         border: `1px solid color-mix(in oklab, ${meta.color} 25%, transparent)`,
         display: 'flex', alignItems: 'center', justifyContent: 'center', color: meta.color, flexShrink: 0,
       }}>
@@ -52,7 +52,7 @@ function DocRow({ doc }: { doc: DocItem }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {doc.pinned && <span style={{ width: 10, height: 10, display: 'flex', color: 'var(--t-accent)' }}>{CI.pin}</span>}
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {doc.title}
           </span>
         </div>
@@ -63,10 +63,10 @@ function DocRow({ doc }: { doc: DocItem }) {
             background: `color-mix(in oklab, ${meta.color} 10%, transparent)`,
           }}>{meta.label}</span>
           {doc.version && <span style={{
-            fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-4)',
-            padding: '0 4px', borderRadius: 3, background: 'var(--bg-elev-3)', border: '1px solid var(--t-border)',
+            fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-4)',
+            padding: '0 4px', borderRadius: 3, background: 'var(--t-panel-3)', border: '1px solid var(--t-border)',
           }}>{doc.version}</span>}
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-5)' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-5)' }}>
             {doc.author.name} · {doc.updated}
           </span>
         </div>
@@ -87,22 +87,22 @@ export function RailDocPanel() {
         padding: '12px 18px', borderBottom: '1px solid var(--t-border)',
         display: 'flex', alignItems: 'center', gap: 12, background: 'var(--skin-panel)', flexShrink: 0,
       }}>
-        <span style={{ width: 18, height: 18, display: 'flex', color: 'var(--accent-bright)' }}>{CI.doc}</span>
+        <span style={{ width: 18, height: 18, display: 'flex', color: 'var(--t-accent-bright)' }}>{CI.doc}</span>
         <span style={{ fontSize: 14, fontWeight: 700 }}>文档</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>{MOCK_DOCS.length} 份</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>{MOCK_DOCS.length} 份</span>
       </div>
 
       {/* Doc list */}
       <div style={{ flex: 1, overflow: 'auto', padding: '8px 4px' }}>
         {pinned.length > 0 && (
           <>
-            <div style={{ padding: '6px 14px 4px', fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, color: 'var(--fg-4)', letterSpacing: '0.06em' }}>
+            <div style={{ padding: '6px 14px 4px', fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, color: 'var(--t-fg-4)', letterSpacing: '0.06em' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Pin size={11} strokeWidth={2} /> 置顶</span>
             </div>
             {pinned.map(d => <DocRow key={d.id} doc={d} />)}
           </>
         )}
-        <div style={{ padding: '10px 14px 4px', fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, color: 'var(--fg-4)', letterSpacing: '0.06em' }}>
+        <div style={{ padding: '10px 14px 4px', fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, color: 'var(--t-fg-4)', letterSpacing: '0.06em' }}>
           最近文档
         </div>
         {rest.map(d => <DocRow key={d.id} doc={d} />)}

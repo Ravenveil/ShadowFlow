@@ -151,7 +151,7 @@ export default function KnowledgeDock({ bindings, onChange }: KnowledgeDockProps
       style={{
         width: 280,
         background: 'var(--t-panel)',
-        border: '1px solid var(--border, #2D333B)',
+        border: '1px solid var(--t-border, #2D333B)',
         borderRadius: 12,
         padding: 14,
         display: 'flex',
@@ -164,7 +164,7 @@ export default function KnowledgeDock({ bindings, onChange }: KnowledgeDockProps
         <Link
           to="/knowledge"
           data-testid="dock-open-page"
-          style={{ fontSize: 11, opacity: 0.75, textDecoration: 'none', color: 'var(--accent, #6FA8FF)' }}
+          style={{ fontSize: 11, opacity: 0.75, textDecoration: 'none', color: 'var(--t-accent, #6FA8FF)' }}
         >
           管理 →
         </Link>
@@ -188,7 +188,7 @@ export default function KnowledgeDock({ bindings, onChange }: KnowledgeDockProps
                 gap: 8,
                 fontSize: 12,
                 background: 'var(--t-bg)',
-                border: '1px solid var(--border, #2D333B)',
+                border: '1px solid var(--t-border, #2D333B)',
                 borderRadius: 8,
                 padding: '6px 10px',
               }}
@@ -233,7 +233,7 @@ export default function KnowledgeDock({ bindings, onChange }: KnowledgeDockProps
             width: '100%',
             height: 30,
             background: 'transparent',
-            border: '1px dashed var(--border, #2D333B)',
+            border: '1px dashed var(--t-border, #2D333B)',
             borderRadius: 8,
             color: 'var(--fg, #E6EDF3)',
             fontSize: 12,
@@ -250,7 +250,7 @@ export default function KnowledgeDock({ bindings, onChange }: KnowledgeDockProps
               left: 0,
               right: 0,
               background: 'var(--t-bg)',
-              border: '1px solid var(--border, #2D333B)',
+              border: '1px solid var(--t-border, #2D333B)',
               borderRadius: 8,
               maxHeight: 220,
               overflowY: 'auto',

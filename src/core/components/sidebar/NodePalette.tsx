@@ -43,14 +43,14 @@ function PaletteRow({ item }: { item: PaletteItem }) {
       style={{
         display: 'flex', flexDirection: 'column', gap: 2,
         padding: '8px 12px', cursor: 'grab', borderRadius: 6,
-        background: 'var(--bg-elev-2)', border: '1px solid var(--border)',
+        background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
         margin: '0 8px 4px',
       }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168,85,247,.4)' /* fixme: token */; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--t-border)'; }}
     >
-      <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600, color: 'var(--fg-1)' }}>{item.label}</span>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-5)' }}>
+      <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600, color: 'var(--t-fg)' }}>{item.label}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-5)' }}>
         {IconCmp ? <IconCmp size={11} strokeWidth={2} aria-hidden /> : null}
         {item.meta}
       </span>
@@ -60,7 +60,7 @@ function PaletteRow({ item }: { item: PaletteItem }) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ padding: '12px 12px 6px', fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--fg-4)' }}>
+    <div style={{ padding: '12px 12px 6px', fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>
       {children}
     </div>
   );

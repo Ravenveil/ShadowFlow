@@ -55,7 +55,7 @@ export function RoutePlaceholder({ title }: { title: string }) {
 export function AppRoutes() {
   return (
     <ErrorBoundary>
-      <Suspense fallback={<div style={{ background: 'var(--bg, #0D1117)', height: '100vh' }} />}>
+      <Suspense fallback={<div style={{ background: 'var(--t-bg, #0D1117)', height: '100vh' }} />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           {/* ── Marketing / standalone pages (no workspace bar) ── */}

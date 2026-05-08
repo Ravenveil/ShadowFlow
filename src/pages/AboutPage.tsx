@@ -351,7 +351,7 @@ export default function AboutPage() {
                   style={{
                     background: activeSection === id ? 'var(--t-accent-tint)' : 'transparent',
                     color: activeSection === id ? 'var(--t-accent-bright)' : 'var(--t-fg-4)',
-                    border: activeSection === id ? '1px solid var(--accent-dim)' : '1px solid transparent',
+                    border: activeSection === id ? '1px solid var(--t-accent-dim)' : '1px solid transparent',
                   }}
                   aria-current={activeSection === id ? 'location' : undefined}
                 >

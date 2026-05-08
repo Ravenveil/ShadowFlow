@@ -31,7 +31,7 @@ export function MemoryRecallRow({ memories }: MemoryRecallRowProps) {
         strokeWidth={1.4}
         strokeLinecap="round"
         strokeLinejoin="round"
-        style={{ width: 14, height: 14, color: 'var(--fg-4)', flexShrink: 0 }}
+        style={{ width: 14, height: 14, color: 'var(--t-fg-4)', flexShrink: 0 }}
       >
         <rect x="1" y="2.5" width="12" height="9" rx="1.5" />
         <line x1="4" y1="2.5" x2="4" y2="11.5" />
@@ -42,7 +42,7 @@ export function MemoryRecallRow({ memories }: MemoryRecallRowProps) {
         style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 11,
-          color: 'var(--fg-3)',
+          color: 'var(--t-fg-3)',
         }}
       >
         {memories} {memories === 1 ? 'memory' : 'memories'} recalled

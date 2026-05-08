@@ -4,7 +4,7 @@ function PaperCard({ paper }: { paper: AcademicPaper }) {
   return (
     <article
       className="rounded-sf border p-5 flex flex-col gap-3"
-      style={{ borderColor: 'var(--border)', background: 'var(--bg-elev-1)' }}
+      style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel)' }}
       aria-label={paper.title}
     >
       <div className="flex items-start justify-between gap-3">
@@ -20,7 +20,7 @@ function PaperCard({ paper }: { paper: AcademicPaper }) {
           target="_blank"
           rel="noopener noreferrer"
           className="shrink-0 px-2.5 py-1 rounded text-xs font-mono border transition-colors duration-150 hover:border-sf-accent hover:text-sf-accent"
-          style={{ borderColor: 'var(--border)', color: 'var(--fg-4)' }}
+          style={{ borderColor: 'var(--t-border)', color: 'var(--t-fg-4)' }}
           aria-label={`阅读论文：${paper.title}`}
         >
           ↗ 原文
@@ -29,7 +29,7 @@ function PaperCard({ paper }: { paper: AcademicPaper }) {
 
       <div
         className="rounded px-3 py-2 text-xs leading-relaxed"
-        style={{ background: 'var(--bg-elev-2)', color: 'var(--fg-3)' }}
+        style={{ background: 'var(--t-panel-2)', color: 'var(--t-fg-3)' }}
       >
         <span className="font-mono text-[10px] text-sf-accent block mb-1">
           {paper.venue}

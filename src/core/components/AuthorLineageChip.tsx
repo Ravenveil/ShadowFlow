@@ -29,7 +29,7 @@ export function AuthorLineageChip({ lineage, showPendingSelf }: AuthorLineageChi
           fontWeight: 700,
           letterSpacing: '.1em',
           textTransform: 'uppercase',
-          color: 'var(--fg-4)',
+          color: 'var(--t-fg-4)',
           marginRight: 8,
         }}
       >
@@ -41,9 +41,9 @@ export function AuthorLineageChip({ lineage, showPendingSelf }: AuthorLineageChi
           style={{
             padding: '4px 10px',
             borderRadius: 6,
-            background: 'var(--bg-elev-2)',
-            border: '1px solid var(--border)',
-            color: 'var(--fg-4)',
+            background: 'var(--t-panel-2)',
+            border: '1px solid var(--t-border)',
+            color: 'var(--t-fg-4)',
             fontSize: 11,
           }}
         >
@@ -56,7 +56,7 @@ export function AuthorLineageChip({ lineage, showPendingSelf }: AuthorLineageChi
         return (
           <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
             {i > 0 && (
-              <span style={{ color: 'var(--fg-5)', margin: '0 4px', fontSize: 11 }}>→</span>
+              <span style={{ color: 'var(--t-fg-5)', margin: '0 4px', fontSize: 11 }}>→</span>
             )}
             <span
               style={{
@@ -65,16 +65,16 @@ export function AuthorLineageChip({ lineage, showPendingSelf }: AuthorLineageChi
                 gap: 4,
                 padding: '4px 10px',
                 borderRadius: 6,
-                background: 'var(--accent-tint)',
+                background: 'var(--t-accent-tint)',
                 border: '1px solid var(--t-accent-tint)',
-                color: 'var(--accent-bright)',
+                color: 'var(--t-accent-bright)',
                 fontWeight: 600,
                 fontSize: 11,
               }}
             >
               {alias}
               {fingerprint && (
-                <span style={{ color: 'var(--fg-4)', fontWeight: 400, fontSize: 10 }}>
+                <span style={{ color: 'var(--t-fg-4)', fontWeight: 400, fontSize: 10 }}>
                   @{fingerprint}
                 </span>
               )}
@@ -86,7 +86,7 @@ export function AuthorLineageChip({ lineage, showPendingSelf }: AuthorLineageChi
       {showPendingSelf && (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
           {lineage.length > 0 && (
-            <span style={{ color: 'var(--fg-5)', margin: '0 4px', fontSize: 11 }}>→</span>
+            <span style={{ color: 'var(--t-fg-5)', margin: '0 4px', fontSize: 11 }}>→</span>
           )}
           <span
             style={{

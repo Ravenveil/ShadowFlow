@@ -25,7 +25,7 @@ function AccordionItem({ item, isOpen, onToggle, index }: AccordionItemProps) {
   return (
     <div
       className="border-b border-sf-border last:border-b-0"
-      style={{ borderColor: 'var(--border)' }}
+      style={{ borderColor: 'var(--t-border)' }}
     >
       <button
         id={`vs-btn-${item.id}`}
@@ -86,7 +86,7 @@ export default function VsCompareAccordion() {
   return (
     <div
       className="rounded-sf border overflow-hidden"
-      style={{ borderColor: 'var(--border)', background: 'var(--bg-elev-1)' }}
+      style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel)' }}
     >
       {VS_COMPARE_DATA.map((item, index) => (
         <AccordionItem

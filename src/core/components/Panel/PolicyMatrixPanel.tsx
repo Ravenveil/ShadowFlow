@@ -136,7 +136,7 @@ export function PolicyMatrixPanel({
       aria-label="Policy Matrix Panel"
       style={{
         background: 'var(--skin-panel, var(--t-panel))',
-        border: '1px solid var(--border)',
+        border: '1px solid var(--t-border)',
         borderRadius: 14,
         padding: 16,
         display: 'flex',
@@ -147,10 +147,10 @@ export function PolicyMatrixPanel({
     >
       <header style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--fg-5)' }}>
+          <div style={{ fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-fg-5)' }}>
             Policy Matrix
           </div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg-0)' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--t-fg)' }}>
             {rows.length} × {rows.length} sender × receiver
           </div>
         </div>
@@ -162,9 +162,9 @@ export function PolicyMatrixPanel({
             style={{
               padding: '6px 12px',
               fontSize: 12,
-              color: 'var(--fg-2)',
-              background: 'var(--bg-elev-1)',
-              border: '1px solid var(--border)',
+              color: 'var(--t-fg-2)',
+              background: 'var(--t-panel)',
+              border: '1px solid var(--t-border)',
               borderRadius: 8,
               cursor: 'pointer',
             }}
@@ -183,8 +183,8 @@ export function PolicyMatrixPanel({
             style={{
               padding: '6px 12px',
               fontSize: 12,
-              color: dirty ? 'var(--t-fg)' : 'var(--fg-5)',
-              background: dirty ? 'var(--t-accent)' : 'var(--bg-elev-1)',
+              color: dirty ? 'var(--t-fg)' : 'var(--t-fg-5)',
+              background: dirty ? 'var(--t-accent)' : 'var(--t-panel)',
               border: '1px solid color-mix(in oklab, var(--t-accent) 40%, transparent)',
               borderRadius: 8,
               cursor: dirty ? 'pointer' : 'not-allowed',
@@ -203,9 +203,9 @@ export function PolicyMatrixPanel({
               padding: '6px 12px',
               fontSize: 12,
               fontWeight: 600,
-              color: dirty ? 'var(--t-fg)' : 'var(--fg-5)',
-              background: dirty ? 'var(--accent)' : 'var(--bg-elev-1)',
-              border: '1px solid var(--border)',
+              color: dirty ? 'var(--t-fg)' : 'var(--t-fg-5)',
+              background: dirty ? 'var(--t-accent)' : 'var(--t-panel)',
+              border: '1px solid var(--t-border)',
               borderRadius: 8,
               cursor: dirty ? 'pointer' : 'not-allowed',
             }}
@@ -216,7 +216,7 @@ export function PolicyMatrixPanel({
       </header>
 
       {rows.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--fg-4)' }}>No agents configured.</div>
+        <div style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>No agents configured.</div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table
@@ -230,11 +230,11 @@ export function PolicyMatrixPanel({
           >
             <thead>
               <tr>
-                <th style={{ padding: 4, textAlign: 'left', color: 'var(--fg-5)' }}></th>
+                <th style={{ padding: 4, textAlign: 'left', color: 'var(--t-fg-5)' }}></th>
                 {rows.map((r) => (
                   <th
                     key={`col-${r}`}
-                    style={{ padding: 4, textAlign: 'center', color: 'var(--fg-3)', fontWeight: 600 }}
+                    style={{ padding: 4, textAlign: 'center', color: 'var(--t-fg-3)', fontWeight: 600 }}
                   >
                     {r}
                   </th>
@@ -244,7 +244,7 @@ export function PolicyMatrixPanel({
             <tbody>
               {rows.map((sender) => (
                 <tr key={`row-${sender}`}>
-                  <th style={{ padding: 4, textAlign: 'left', color: 'var(--fg-3)', fontWeight: 600 }}>
+                  <th style={{ padding: 4, textAlign: 'left', color: 'var(--t-fg-3)', fontWeight: 600 }}>
                     {sender}
                   </th>
                   {rows.map((receiver) => {
@@ -295,7 +295,7 @@ export function PolicyMatrixPanel({
         </div>
       )}
 
-      <footer style={{ fontSize: 10, color: 'var(--fg-5)', fontFamily: 'var(--font-mono)' }}>
+      <footer style={{ fontSize: 10, color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono)' }}>
         ✓ permit &nbsp;·&nbsp; ✗ deny &nbsp;·&nbsp; <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, verticalAlign: 'middle' }}><PolicyAlert size={10} strokeWidth={2} /> warn (non-blocking)</span> &nbsp;·&nbsp; click to cycle
       </footer>
     </section>

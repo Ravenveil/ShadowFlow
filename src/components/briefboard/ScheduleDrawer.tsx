@@ -300,7 +300,7 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
             <div style={{ marginBottom: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span style={{ ...mono, color: 'var(--t-fg-4, #71717A)' }}>任务描述</span>
-                <span style={{ ...mono, fontSize: 10, color: description.length > 100 ? 'var(--fg-warn, #F59E0B)' : 'var(--t-fg-5, #52525B)' }}>
+                <span style={{ ...mono, fontSize: 10, color: description.length > 100 ? 'var(--t-warn, #F59E0B)' : 'var(--t-fg-5, #52525B)' }}>
                   {description.length}/500
                 </span>
               </div>

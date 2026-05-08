@@ -62,7 +62,7 @@ export function Composer({ onSend }: { onSend: (text: string) => void }) {
       {skillLink && (
         <div style={{
           marginBottom: 8, padding: '7px 10px', borderRadius: 7,
-          background: 'var(--t-accent-tint)', border: '1px solid color-mix(in oklab, var(--accent) 40%, transparent)',
+          background: 'var(--t-accent-tint)', border: '1px solid color-mix(in oklab, var(--t-accent) 40%, transparent)',
           display: 'flex', alignItems: 'center', gap: 8,
           fontFamily: 'var(--font-mono)', fontSize: 11,
         }}>

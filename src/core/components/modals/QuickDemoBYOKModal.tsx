@@ -52,8 +52,8 @@ export function QuickDemoBYOKModal({ open, onClose }: QuickDemoBYOKModalProps) {
         aria-modal="true"
         aria-labelledby="byok-modal-title"
         style={{
-          background: 'var(--bg-elev-2)',
-          border: '1px solid var(--border)',
+          background: 'var(--t-panel-2)',
+          border: '1px solid var(--t-border)',
           borderRadius: 14,
           padding: '28px 32px',
           width: 440,
@@ -67,7 +67,7 @@ export function QuickDemoBYOKModal({ open, onClose }: QuickDemoBYOKModalProps) {
             margin: '0 0 8px',
             fontSize: 18,
             fontWeight: 800,
-            color: 'var(--fg-0)',
+            color: 'var(--t-fg)',
             letterSpacing: '-.02em',
           }}
         >
@@ -77,7 +77,7 @@ export function QuickDemoBYOKModal({ open, onClose }: QuickDemoBYOKModalProps) {
           style={{
             margin: '0 0 20px',
             fontSize: 13,
-            color: 'var(--fg-3)',
+            color: 'var(--t-fg-3)',
             lineHeight: 1.6,
           }}
         >
@@ -96,16 +96,16 @@ export function QuickDemoBYOKModal({ open, onClose }: QuickDemoBYOKModalProps) {
               fontSize: 14,
               fontWeight: 700,
               color: 'var(--accent-ink)',
-              background: 'var(--accent)',
+              background: 'var(--t-accent)',
               border: 'none',
               borderRadius: 8,
               cursor: 'pointer',
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-bright)';
+              (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-accent-bright)';
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent)';
+              (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-accent)';
             }}
           >
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -120,14 +120,14 @@ export function QuickDemoBYOKModal({ open, onClose }: QuickDemoBYOKModalProps) {
             alignItems: 'center',
             gap: 12,
             marginBottom: 16,
-            color: 'var(--fg-5)',
+            color: 'var(--t-fg-5)',
             fontSize: 11,
             fontFamily: 'var(--font-mono)',
           }}
         >
-          <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          <div style={{ flex: 1, height: 1, background: 'var(--t-border)' }} />
           或手动填入
-          <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          <div style={{ flex: 1, height: 1, background: 'var(--t-border)' }} />
         </div>
 
         <label
@@ -136,7 +136,7 @@ export function QuickDemoBYOKModal({ open, onClose }: QuickDemoBYOKModalProps) {
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
             fontWeight: 700,
-            color: 'var(--fg-4)',
+            color: 'var(--t-fg-4)',
             textTransform: 'uppercase',
             letterSpacing: '.08em',
             marginBottom: 4,
@@ -153,10 +153,10 @@ export function QuickDemoBYOKModal({ open, onClose }: QuickDemoBYOKModalProps) {
           style={{
             width: '100%',
             padding: '8px 10px',
-            background: 'var(--bg-elev-3)',
-            border: '1px solid var(--border)',
+            background: 'var(--t-panel-3)',
+            border: '1px solid var(--t-border)',
             borderRadius: 6,
-            color: 'var(--fg-1)',
+            color: 'var(--t-fg)',
             fontSize: 12,
             fontFamily: 'var(--font-mono)',
             boxSizing: 'border-box',
@@ -173,9 +173,9 @@ export function QuickDemoBYOKModal({ open, onClose }: QuickDemoBYOKModalProps) {
             style={{
               padding: '7px 16px',
               borderRadius: 8,
-              background: 'var(--bg-elev-3)',
-              border: '1px solid var(--border)',
-              color: 'var(--fg-2)',
+              background: 'var(--t-panel-3)',
+              border: '1px solid var(--t-border)',
+              color: 'var(--t-fg-2)',
               fontSize: 13,
               cursor: 'pointer',
               fontWeight: 600,
@@ -189,7 +189,7 @@ export function QuickDemoBYOKModal({ open, onClose }: QuickDemoBYOKModalProps) {
               style={{
                 padding: '7px 16px',
                 borderRadius: 8,
-                background: 'var(--accent)',
+                background: 'var(--t-accent)',
                 border: 'none',
                 color: 'var(--accent-ink)',
                 fontSize: 13,

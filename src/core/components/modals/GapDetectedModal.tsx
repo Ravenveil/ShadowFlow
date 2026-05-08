@@ -53,32 +53,32 @@ export function GapDetectedModal({
       onClick={() => onClose?.()}
     >
       <div
-        style={{ width: 520, maxWidth: 'calc(100vw - 32px)', background: 'var(--bg-elev-2)', border: '1px solid rgba(245, 158, 11, .35)', borderRadius: 18, boxShadow: '0 24px 64px rgba(0, 0, 0, .45)', overflow: 'hidden' }}
+        style={{ width: 520, maxWidth: 'calc(100vw - 32px)', background: 'var(--t-panel-2)', border: '1px solid rgba(245, 158, 11, .35)', borderRadius: 18, boxShadow: '0 24px 64px rgba(0, 0, 0, .45)', overflow: 'hidden' }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div style={{ padding: '20px 22px 14px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ padding: '20px 22px 14px', borderBottom: '1px solid var(--t-border)' }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--t-warn)', marginBottom: 8 }}>
             Agent Gap Detected
           </div>
-          <h2 id="gap-detected-modal-title" style={{ margin: 0, fontSize: 20, lineHeight: 1.15, color: 'var(--fg-0)' }}>
+          <h2 id="gap-detected-modal-title" style={{ margin: 0, fontSize: 20, lineHeight: 1.15, color: 'var(--t-fg)' }}>
             这个节点缺少关键信息，先别让 Agent 瞎填
           </h2>
         </div>
         <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ fontSize: 12, color: 'var(--fg-4)', fontFamily: 'var(--font-mono)' }}>
+          <div style={{ fontSize: 12, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)' }}>
             {gap.nodeId} · {gap.gapType}
           </div>
-          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--fg-2)' }}>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--t-fg-2)' }}>
             {gap.description}
           </p>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-3)' }}>可选补充输入</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg-3)' }}>可选补充输入</span>
             <textarea
               data-testid="gap-detected-input"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               placeholder="如果你选 A，可以把补充数据写在这里。"
-              style={{ minHeight: 88, resize: 'vertical', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-elev-3)', color: 'var(--fg-1)', padding: '12px 14px', fontSize: 13, lineHeight: 1.5 }}
+              style={{ minHeight: 88, resize: 'vertical', borderRadius: 12, border: '1px solid var(--t-border)', background: 'var(--t-panel-3)', color: 'var(--t-fg)', padding: '12px 14px', fontSize: 13, lineHeight: 1.5 }}
             />
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>

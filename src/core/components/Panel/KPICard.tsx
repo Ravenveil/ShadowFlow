@@ -27,14 +27,14 @@ export function KPICard({ label, value, delta, deltaColor, width = 340, valueCol
         gap: 2,
       }}
     >
-      <div style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--fg-5)' }}>
+      <div style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--t-fg-5)' }}>
         {label}
       </div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: valueColor ?? 'var(--fg-0)', lineHeight: 1.1 }}>
+      <div style={{ fontSize: 28, fontWeight: 800, color: valueColor ?? 'var(--t-fg)', lineHeight: 1.1 }}>
         {value}
       </div>
       {delta !== undefined && (
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: deltaColor ?? 'var(--fg-4)' }}>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: deltaColor ?? 'var(--t-fg-4)' }}>
           {delta}
         </div>
       )}

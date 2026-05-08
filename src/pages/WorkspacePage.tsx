@@ -43,8 +43,8 @@ export default function WorkspacePage() {
         style={{
           position: 'fixed', top: 14, right: 330, zIndex: 50,
           padding: '4px 10px', borderRadius: 6,
-          background: 'var(--bg-elev-2)', border: '1px solid var(--border)',
-          color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11,
+          background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
+          color: 'var(--t-fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11,
           cursor: 'pointer',
           display: 'inline-flex', alignItems: 'center', gap: 6,
         }}
@@ -59,8 +59,8 @@ export default function WorkspacePage() {
         style={{
           position: 'fixed', top: 14, right: 220, zIndex: 50,
           padding: '4px 10px', borderRadius: 6,
-          background: 'var(--bg-elev-2)', border: '1px solid var(--border)',
-          color: 'var(--fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11,
+          background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
+          color: 'var(--t-fg-3)', fontFamily: 'var(--font-mono)', fontSize: 11,
           cursor: 'pointer',
           display: 'inline-flex', alignItems: 'center', gap: 6,
         }}
@@ -73,7 +73,7 @@ export default function WorkspacePage() {
       {/* ── Tab content pane ─────────────────────────────────────── */}
       <div style={{
         flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0,
-        background: 'var(--bg)',
+        background: 'var(--t-bg)',
       }}>
         {tab === 'agents'    && <TabAgents onNavigateToChat={() => setTab('chat')} onNavigateToTeams={() => setTab('teams')} />}
         {tab === 'teams'     && <TabTeams onNavigateToChat={() => setTab('chat')} />}

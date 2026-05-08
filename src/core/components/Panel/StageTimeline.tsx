@@ -35,7 +35,7 @@ export function StageTimeline({ stages }: { stages: StageResult[] }): JSX.Elemen
                   margin: '0 auto',
                 }}
               />
-              <div style={{ fontSize: 10, color: 'var(--fg-5)', marginTop: 4, textTransform: 'uppercase' }}>
+              <div style={{ fontSize: 10, color: 'var(--t-fg-5)', marginTop: 4, textTransform: 'uppercase' }}>
                 {name}
               </div>
               {entry.retry_count > 0 && (
@@ -58,7 +58,7 @@ export function StageTimeline({ stages }: { stages: StageResult[] }): JSX.Elemen
               )}
             </div>
             {idx < STAGE_ORDER.length - 1 && (
-              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              <div style={{ flex: 1, height: 1, background: 'var(--t-border)' }} />
             )}
           </div>
         );

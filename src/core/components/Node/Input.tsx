@@ -5,79 +5,51 @@
 import React, { memo, useCallback } from 'react';
 import { Handle, Position, NodeProps, NodeData } from 'reactflow';
 import { useI18n } from '../../../common/i18n';
-import { clsx } from 'clsx';
 import { Icon } from '../../../common/icons/iconRegistry';
+
+// Status → token color
+const STATUS_COLOR: Record<string, string> = {
+  idle:    'var(--t-border)',
+  running: 'var(--t-run)',
+  success: 'var(--t-ok)',
+  error:   'var(--t-err)',
+  warning: 'var(--t-warn)',
+};
 
 export const InputNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   const { t, language } = useI18n();
 
-  const statusColors = {
-    idle: 'border-gray-300',
-    running: 'border-blue-500 animate-pulse',
-    success: 'border-green-500',
-    error: 'border-red-500',
-    warning: 'border-yellow-500',
+  // 节点类型特定配置 — emoji tokens mapped to Lucide by iconRegistry
+  const nodeConfig: Record<string, { icon: string; color: string }> = {
+    input:     { icon: '📥',  color: 'var(--t-ok)' },
+    understand: { icon: '🧠', color: 'var(--t-accent)' },
+    clarify:   { icon: '❓',  color: 'var(--t-warn)' },
   };
 
-  const statusBgColors = {
-    idle: 'bg-gray-50',
-    running: 'bg-blue-50',
-    success: 'bg-green-50',
-    error: 'bg-red-50',
-    warning: 'bg-yellow-50',
-  };
-
-  // 节点类型特定配置
-  const nodeConfig = {
-    input: {
-      icon: '📥',
-      title: 'Input',
-      color: 'var(--t-ok)',
-      bgColor: 'bg-green-50',
-      borderColor: 'border-green-300',
-      handleColor: 'bg-green-500',
-    },
-    understand: {
-      icon: '🧠',
-      title: 'Understand',
-      color: 'var(--t-accent)',
-      bgColor: 'bg-purple-50',
-      borderColor: 'border-purple-300',
-      handleColor: 'bg-purple-500',
-    },
-    clarify: {
-      icon: '❓',
-      title: 'Clarify',
-      color: 'var(--t-warn)',
-      bgColor: 'bg-amber-50',
-      borderColor: 'border-amber-300',
-      handleColor: 'bg-amber-500',
-    }
-  };
-
-  const config = nodeConfig[data.nodeType as keyof typeof nodeConfig] || nodeConfig.input;
+  const config = nodeConfig[data.nodeType as string] ?? nodeConfig.input;
+  const status = data.status || 'idle';
+  const statusColor = STATUS_COLOR[status] ?? 'var(--t-border)';
+  const isRunning = status === 'running';
+  const nodeColor = config.color;
 
   // 处理节点双击
   const handleDoubleClick = useCallback(() => {
-    // 触发节点编辑
     const event = new CustomEvent('node-edit', { detail: { nodeId: data.nodeId } });
     window.dispatchEvent(event);
   }, [data.nodeId]);
 
+  const cfg = data.config as Record<string, unknown> | undefined;
+
   return (
     <div
-      className={clsx(
-        'rounded-lg border-2 shadow-sm transition-all cursor-pointer',
-        statusColors[data.status || 'idle'],
-        statusBgColors[data.status || 'idle'],
-        selected && 'ring-2 ring-offset-2 ring-blue-500',
-        config.bgColor,
-        'min-w-[200px]',
-        'hover:shadow-md'
-      )}
       style={{
-        borderColor: selected ? undefined : config.borderColor,
-        backgroundColor: `color-mix(in oklab, ${config.color} 10%, transparent)`,
+        borderRadius: 10,
+        border: `2px solid ${selected ? nodeColor : statusColor}`,
+        background: `color-mix(in oklab, ${nodeColor} 8%, var(--t-panel))`,
+        minWidth: 200,
+        boxShadow: selected ? `0 0 0 2px ${nodeColor}66` : '0 4px 12px -4px rgba(0,0,0,.5)',
+        cursor: 'pointer',
+        transition: 'border-color .15s, box-shadow .15s',
       }}
       onDoubleClick={handleDoubleClick}
     >
@@ -88,12 +60,10 @@ export const InputNode = memo(({ data, selected }: NodeProps<NodeData>) => {
           type="target"
           position={Position.Top}
           id={input.name}
-          className={clsx(
-            'w-3 h-3 !border-2',
-            input.required ? '!border-red-500' : '!border-gray-400',
-            config.handleColor
-          )}
           style={{
+            width: 12, height: 12, borderRadius: '50%',
+            background: 'var(--t-bg)',
+            border: `2px solid ${input.required ? 'var(--t-err)' : 'var(--t-border)'}`,
             left: `${((index + 1) / (data.inputs.length || 1)) * 100}%`,
             transform: 'translateX(-50%)',
           }}
@@ -101,17 +71,17 @@ export const InputNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       ))}
 
       {/* 节点内容 */}
-      <div className="p-3">
+      <div style={{ padding: 12 }}>
         {/* 图标和标题 */}
-        <div className="flex items-center gap-2 mb-2">
-          <span className="inline-flex items-center justify-center text-sf-fg2" aria-label="icon">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-2)' }} aria-label="icon">
             <Icon token={config.icon} size={20} />
           </span>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-sm truncate">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--t-fg)', margin: 0 }}>
               {data.name[language]}
             </h3>
-            <p className="text-xs text-gray-600 truncate">
+            <p style={{ fontSize: 11, color: 'var(--t-fg-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>
               {data.description[language]}
             </p>
           </div>
@@ -119,17 +89,13 @@ export const InputNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
         {/* 状态指示器 */}
         {data.status && data.status !== 'idle' && (
-          <div className="flex items-center gap-1 text-xs mt-2">
-            <div
-              className={clsx(
-                'w-2 h-2 rounded-full',
-                data.status === 'running' && 'animate-bounce bg-blue-500',
-                data.status === 'success' && 'bg-green-500',
-                data.status === 'error' && 'bg-red-500',
-                data.status === 'warning' && 'bg-yellow-500'
-              )}
-            />
-            <span className="capitalize">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, marginTop: 8 }}>
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: statusColor,
+              animation: isRunning ? 'sf-pulse 1.8s ease-in-out infinite' : undefined,
+            }} />
+            <span style={{ textTransform: 'capitalize', color: statusColor }}>
               {t(`status.${data.status}`)}
             </span>
           </div>
@@ -137,50 +103,48 @@ export const InputNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
         {/* 运行进度条 */}
         {data.status === 'running' && data.progress && (
-          <div className="mt-2">
-            <div className="w-full h-1 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-500 transition-all duration-300"
-                style={{ width: `${data.progress}%` }}
-              />
+          <div style={{ marginTop: 8 }}>
+            <div style={{ width: '100%', height: 3, background: 'var(--t-border)', borderRadius: 9999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', background: 'var(--t-run)', transition: 'width .3s', width: `${data.progress}%` }} />
             </div>
-            <p className="text-xs text-gray-500 mt-1 text-right">
+            <p style={{ fontSize: 11, color: 'var(--t-fg-4)', marginTop: 2, textAlign: 'right' }}>
               {data.progress.toFixed(0)}%
             </p>
           </div>
         )}
 
         {/* 节点配置指示器 */}
-        {Object.keys(data.config || {}).length > 0 && (
-          <div className="mt-2 pt-2 border-t border-gray-200">
-            <div className="flex items-center gap-1">
-              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {cfg && Object.keys(cfg).length > 0 && (
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--t-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <svg style={{ width: 12, height: 12, color: 'var(--t-fg-4)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span className="text-xs text-gray-500">
-                {Object.keys(data.config || {}).length} properties
+              <span style={{ fontSize: 11, color: 'var(--t-fg-4)' }}>
+                {Object.keys(cfg).length} properties
               </span>
             </div>
           </div>
         )}
-
-        {/* 输出端口 */}
-        {data.outputs.map((output, index) => (
-          <Handle
-            key={`output-${output.name}`}
-            type="source"
-            position={Position.Bottom}
-            id={output.name}
-            className="w-3 h-3 !border-2 !border-gray-400"
-            style={{
-              left: `${((index + 1) / (data.outputs.length || 1)) * 100}%`,
-              transform: 'translateX(-50%)',
-              backgroundColor: config.handleColor,
-            }}
-          />
-        ))}
       </div>
+
+      {/* 输出端口 */}
+      {data.outputs.map((output, index) => (
+        <Handle
+          key={`output-${output.name}`}
+          type="source"
+          position={Position.Bottom}
+          id={output.name}
+          style={{
+            width: 12, height: 12, borderRadius: '50%',
+            background: nodeColor,
+            border: '2px solid var(--t-border)',
+            left: `${((index + 1) / (data.outputs.length || 1)) * 100}%`,
+            transform: 'translateX(-50%)',
+          }}
+        />
+      ))}
     </div>
   );
 });

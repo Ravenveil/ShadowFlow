@@ -62,7 +62,7 @@ function recordToStatus(r: AgentRecord): AgentStatus {
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   run:  { label: '运行中', color: 'var(--status-run)' },
   ok:   { label: '就绪', color: 'var(--status-ok)' },
-  idle: { label: '待命', color: 'var(--fg-4)' },
+  idle: { label: '待命', color: 'var(--t-fg-4)' },
   warn: { label: '异常', color: 'var(--status-warn)' },
 };
 
@@ -70,7 +70,7 @@ function AgentRow({ agent, onDM, onPause }: { agent: AgentStatus; onDM: (a: Agen
   const st = STATUS_LABELS[agent.status];
   return (
     <div style={{
-      padding: '12px 14px', borderRadius: 8, background: 'var(--bg-elev-1)',
+      padding: '12px 14px', borderRadius: 8, background: 'var(--t-panel)',
       border: '1px solid var(--t-border)', display: 'flex', gap: 10, alignItems: 'flex-start',
       cursor: 'pointer', transition: 'border-color 120ms',
     }} onMouseEnter={e => (e.currentTarget.style.borderColor = agent.color)}
@@ -78,7 +78,7 @@ function AgentRow({ agent, onDM, onPause }: { agent: AgentStatus; onDM: (a: Agen
       <FBAv glyph={agent.glyph} color={agent.color} size={34} square status={agent.status} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--fg-1)' }}>{agent.name}</span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--t-fg)' }}>{agent.name}</span>
           <span style={{
             fontFamily: 'var(--font-mono)', fontSize: 8.5, fontWeight: 800,
             color: agent.color, padding: '1px 5px', borderRadius: 3, letterSpacing: '0.05em',
@@ -96,21 +96,21 @@ function AgentRow({ agent, onDM, onPause }: { agent: AgentStatus; onDM: (a: Agen
             {st.label}
           </span>
         </div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-3)', marginTop: 3 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-3)', marginTop: 3 }}>
           {agent.lastAction}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-4)' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-4)' }}>
             {agent.model}
           </span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-5)' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>
             · {agent.tokens} tokens
           </span>
           <span style={{ flex: 1 }} />
           <button onClick={() => onDM(agent)} style={{
             fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 8px', borderRadius: 4,
-            border: '1px solid var(--t-border)', background: 'var(--bg-elev-2)',
-            color: 'var(--fg-3)', cursor: 'pointer',
+            border: '1px solid var(--t-border)', background: 'var(--t-panel-2)',
+            color: 'var(--t-fg-3)', cursor: 'pointer',
           }}>DM</button>
           {agent.status === 'run' && <button onClick={() => onPause(agent)} style={{
             fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 8px', borderRadius: 4,
@@ -179,15 +179,15 @@ export function RailBotPanel() {
         padding: '12px 18px', borderBottom: '1px solid var(--t-border)',
         display: 'flex', alignItems: 'center', gap: 12, background: 'var(--skin-panel)', flexShrink: 0,
       }}>
-        <span style={{ width: 18, height: 18, display: 'flex', color: 'var(--accent-bright)' }}>{CI.bot}</span>
+        <span style={{ width: 18, height: 18, display: 'flex', color: 'var(--t-accent-bright)' }}>{CI.bot}</span>
         <span style={{ fontSize: 14, fontWeight: 700 }}>Agents</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>
           {loadState === 'ok' ? `${agents.length} 人 · ${running} 运行中` : (loadState === 'loading' ? '加载中…' : '加载失败')}
         </span>
         <span style={{ flex: 1 }} />
         <span style={{
-          fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-4)',
-          padding: '3px 8px', borderRadius: 4, background: 'var(--bg-elev-2)', border: '1px solid var(--t-border)',
+          fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)',
+          padding: '3px 8px', borderRadius: 4, background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
         }}>
           GET /api/agents
         </span>
@@ -195,10 +195,10 @@ export function RailBotPanel() {
 
       {/* Agent list */}
       <div style={{ flex: 1, overflow: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {loadState === 'loading' && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-4)', textAlign: 'center', padding: 20 }}>加载 agents…</div>}
+        {loadState === 'loading' && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)', textAlign: 'center', padding: 20 }}>加载 agents…</div>}
         {loadState === 'error' && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--status-reject)', padding: 14 }}>✗ {errorMsg}</div>}
         {loadState === 'ok' && agents.length === 0 && (
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-4)', textAlign: 'center', padding: 20 }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)', textAlign: 'center', padding: 20 }}>
             暂无 agent — 在 Agents tab 创建第一个
           </div>
         )}

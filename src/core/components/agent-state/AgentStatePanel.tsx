@@ -66,8 +66,8 @@ function FieldRow({ label, value, onEdit }: FieldRowProps) {
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
-      <span style={{ flex: '0 0 140px', fontSize: 12, color: 'var(--fg-3)', fontFamily: 'monospace' }}>{label}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid var(--t-border)' }}>
+      <span style={{ flex: '0 0 140px', fontSize: 12, color: 'var(--t-fg-3)', fontFamily: 'monospace' }}>{label}</span>
       {editing ? (
         <>
           <input
@@ -75,18 +75,18 @@ function FieldRow({ label, value, onEdit }: FieldRowProps) {
             value={draft}
             onChange={e => setDraft(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-            style={{ flex: 1, background: 'var(--bg-elev-3)', border: '1px solid var(--accent)', borderRadius: 4, color: 'var(--fg-0)', fontSize: 12, padding: '2px 6px', fontFamily: 'monospace' }}
+            style={{ flex: 1, background: 'var(--t-panel-3)', border: '1px solid var(--t-accent)', borderRadius: 4, color: 'var(--t-fg)', fontSize: 12, padding: '2px 6px', fontFamily: 'monospace' }}
           />
           <button onClick={commit} style={_btnSm('var(--status-approve)')} aria-label="确认"><Check size={12} strokeWidth={2.5} aria-hidden /></button>
-          <button onClick={() => setEditing(false)} style={_btnSm('var(--bg-elev-3)')} aria-label="取消"><X size={12} strokeWidth={2.5} aria-hidden /></button>
+          <button onClick={() => setEditing(false)} style={_btnSm('var(--t-panel-3)')} aria-label="取消"><X size={12} strokeWidth={2.5} aria-hidden /></button>
         </>
       ) : (
         <>
-          <span style={{ flex: 1, fontSize: 12, color: 'var(--fg-1)', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--t-fg)', fontFamily: 'monospace', wordBreak: 'break-all' }}>
             {typeof value === 'object' ? JSON.stringify(value) : String(value ?? '—')}
           </span>
           {isEditable && (
-            <button onClick={startEdit} style={_btnSm('var(--bg-elev-3)')} aria-label="编辑"><Pencil size={12} strokeWidth={2} aria-hidden /></button>
+            <button onClick={startEdit} style={_btnSm('var(--t-panel-3)')} aria-label="编辑"><Pencil size={12} strokeWidth={2} aria-hidden /></button>
           )}
         </>
       )}
@@ -97,9 +97,9 @@ function FieldRow({ label, value, onEdit }: FieldRowProps) {
 function _btnSm(bg: string): React.CSSProperties {
   return {
     background: bg,
-    border: '1px solid var(--border)',
+    border: '1px solid var(--t-border)',
     borderRadius: 4,
-    color: 'var(--fg-2)',
+    color: 'var(--t-fg-2)',
     fontSize: 11,
     padding: '2px 6px',
     cursor: 'pointer',
@@ -214,7 +214,7 @@ export function AgentStatePanel({ agentId }: AgentStatePanelProps) {
   if (loading) {
     return (
       <div style={_panelWrap()}>
-        <p style={{ color: 'var(--fg-3)', fontSize: 13 }}>加载中…</p>
+        <p style={{ color: 'var(--t-fg-3)', fontSize: 13 }}>加载中…</p>
       </div>
     );
   }
@@ -223,8 +223,8 @@ export function AgentStatePanel({ agentId }: AgentStatePanelProps) {
     <div style={_panelWrap()}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--fg-0)' }}>Agent 状态</h3>
-        <button onClick={load} style={_btnSm('var(--bg-elev-3)')}>↺ 刷新</button>
+        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--t-fg)' }}>Agent 状态</h3>
+        <button onClick={load} style={_btnSm('var(--t-panel-3)')}>↺ 刷新</button>
       </div>
 
       {error && (
@@ -264,13 +264,13 @@ export function AgentStatePanel({ agentId }: AgentStatePanelProps) {
             />
           ))
         ) : (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)' }}>暂无状态字段</p>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--t-fg-3)' }}>暂无状态字段</p>
         )}
       </Collapsible>
 
       {/* ---- Session Summary ---- */}
       <Section title="Session Summary">
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-2)', whiteSpace: 'pre-wrap', lineHeight: 1.6, maxHeight: 120, overflowY: 'auto' }}>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--t-fg-2)', whiteSpace: 'pre-wrap', lineHeight: 1.6, maxHeight: 120, overflowY: 'auto' }}>
           {state?.session_summary || '—'}
         </p>
       </Section>
@@ -280,23 +280,23 @@ export function AgentStatePanel({ agentId }: AgentStatePanelProps) {
         {state?.recent_artifacts?.length ? (
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {state.recent_artifacts.map((a, i) => (
-              <li key={i} style={{ fontSize: 12, color: 'var(--fg-2)', padding: '2px 0' }}>{a}</li>
+              <li key={i} style={{ fontSize: 12, color: 'var(--t-fg-2)', padding: '2px 0' }}>{a}</li>
             ))}
           </ul>
         ) : (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)' }}>暂无产出</p>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--t-fg-3)' }}>暂无产出</p>
         )}
       </Section>
 
       {/* ---- 快照操作栏 ---- */}
       <Section title="快照操作">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-          <button onClick={handleSnapshot} style={_actionBtn('var(--bg-elev-3)')}>
+          <button onClick={handleSnapshot} style={_actionBtn('var(--t-panel-3)')}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <Camera size={12} strokeWidth={2} /> 创建快照
             </span>
           </button>
-          <button onClick={() => setSnapshotsOpen(o => !o)} style={_actionBtn('var(--bg-elev-3)')}>
+          <button onClick={() => setSnapshotsOpen(o => !o)} style={_actionBtn('var(--t-panel-3)')}>
             {snapshotsOpen ? '▲ 收起列表' : '▼ 展开列表'}
           </button>
           <button onClick={() => setConfirmReset(true)} style={_actionBtn('rgba(239,68,68,.15)', 'var(--status-reject)')}>
@@ -307,15 +307,15 @@ export function AgentStatePanel({ agentId }: AgentStatePanelProps) {
         </div>
 
         {snapshotsOpen && (
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+          <div style={{ borderTop: '1px solid var(--t-border)', paddingTop: 8 }}>
             {snapshots.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-3)' }}>暂无快照</p>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--t-fg-3)' }}>暂无快照</p>
             ) : (
               snapshots.map(snap => (
-                <div key={snap.snapshot_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--fg-1)', flex: '0 0 80px' }}>{_shortId(snap.snapshot_id)}</span>
-                  <span style={{ fontSize: 11, color: 'var(--fg-3)', flex: 1 }}>{_formatDate(snap.created_at)}</span>
-                  <span style={{ fontSize: 11, color: 'var(--fg-3)', flex: '0 0 50px' }}>v{snap.state_version}</span>
+                <div key={snap.snapshot_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid var(--t-border)' }}>
+                  <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--t-fg)', flex: '0 0 80px' }}>{_shortId(snap.snapshot_id)}</span>
+                  <span style={{ fontSize: 11, color: 'var(--t-fg-3)', flex: 1 }}>{_formatDate(snap.created_at)}</span>
+                  <span style={{ fontSize: 11, color: 'var(--t-fg-3)', flex: '0 0 50px' }}>v{snap.state_version}</span>
                   <button
                     onClick={() => setConfirmRestore(snap.snapshot_id)}
                     style={_actionBtn('rgba(59,130,246,.15)', '#60a5fa')}
@@ -357,8 +357,8 @@ export function AgentStatePanel({ agentId }: AgentStatePanelProps) {
 
 function _panelWrap(): React.CSSProperties {
   return {
-    background: 'var(--bg-elev-1)',
-    border: '1px solid var(--border)',
+    background: 'var(--t-panel)',
+    border: '1px solid var(--t-border)',
     borderRadius: 12,
     padding: '16px 20px',
     minWidth: 320,
@@ -369,10 +369,10 @@ function _panelWrap(): React.CSSProperties {
   };
 }
 
-function _actionBtn(bg: string, color = 'var(--fg-2)'): React.CSSProperties {
+function _actionBtn(bg: string, color = 'var(--t-fg-2)'): React.CSSProperties {
   return {
     background: bg,
-    border: '1px solid var(--border)',
+    border: '1px solid var(--t-border)',
     borderRadius: 6,
     color,
     fontSize: 12,
@@ -385,7 +385,7 @@ function _actionBtn(bg: string, color = 'var(--fg-2)'): React.CSSProperties {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{title}</p>
+      <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--t-fg-3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{title}</p>
       {children}
     </div>
   );
@@ -396,7 +396,7 @@ function Collapsible({ title, open, onToggle, children }: { title: string; open:
     <div style={{ marginBottom: 12 }}>
       <button
         onClick={onToggle}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '.06em', display: 'flex', alignItems: 'center', gap: 4 }}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--t-fg-3)', textTransform: 'uppercase', letterSpacing: '.06em', display: 'flex', alignItems: 'center', gap: 4 }}
       >
         {open ? '▼' : '▶'} {title}
       </button>

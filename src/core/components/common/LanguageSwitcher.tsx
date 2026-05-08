@@ -24,9 +24,9 @@ export function LanguageSwitcher({ className }: LanguageSwitcherProps) {
       style={{
         padding: '4px 10px',
         borderRadius: 6,
-        border: '1px solid var(--border)',
-        background: 'var(--bg-elev-2)',
-        color: 'var(--fg-2)',
+        border: '1px solid var(--t-border)',
+        background: 'var(--t-panel-2)',
+        color: 'var(--t-fg-2)',
         fontFamily: 'var(--font-mono)',
         fontSize: 11,
         fontWeight: 700,
@@ -37,11 +37,11 @@ export function LanguageSwitcher({ className }: LanguageSwitcherProps) {
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(168,85,247,.5)' /* fixme: token */;
-        (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent-bright)';
+        (e.currentTarget as HTMLButtonElement).style.color = 'var(--t-accent-bright)';
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
-        (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-2)';
+        (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-border)';
+        (e.currentTarget as HTMLButtonElement).style.color = 'var(--t-fg-2)';
       }}
     >
       {language === 'en' ? '中 / EN' : 'EN / 中'}

@@ -35,23 +35,23 @@ export class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback;
       const canRetry = this.state.retryCount < MAX_RETRIES;
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16, padding: 32, textAlign: 'center', background: 'var(--bg)', color: 'var(--fg-2)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16, padding: 32, textAlign: 'center', background: 'var(--t-bg)', color: 'var(--t-fg-2)' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-warn, #F59E0B)' }}><EbAlert size={32} strokeWidth={2} /></span>
           <div>
-            <p style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg-1)', marginBottom: 4 }}>组件加载出错</p>
-            <p style={{ fontSize: 11, color: 'var(--fg-4)', fontFamily: 'var(--font-mono)' }}>
+            <p style={{ fontWeight: 700, fontSize: 13, color: 'var(--t-fg)', marginBottom: 4 }}>组件加载出错</p>
+            <p style={{ fontSize: 11, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)' }}>
               {this.state.error?.message ?? '未知错误'}
             </p>
           </div>
           {canRetry ? (
             <button
               onClick={this.handleRetry}
-              style={{ padding: '6px 16px', borderRadius: 8, background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+              style={{ padding: '6px 16px', borderRadius: 8, background: 'var(--t-accent)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
             >
               重试（剩余 {MAX_RETRIES - this.state.retryCount} 次）
             </button>
           ) : (
-            <p style={{ fontSize: 11, color: 'var(--fg-5)', fontFamily: 'var(--font-mono)' }}>
+            <p style={{ fontSize: 11, color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono)' }}>
               已达最大重试次数，请刷新页面
             </p>
           )}

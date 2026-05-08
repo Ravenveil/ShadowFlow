@@ -1,7 +1,7 @@
 export type NodeStatus = 'idle' | 'running' | 'success' | 'error' | 'pending' | 'rejected';
 
 const STATUS_MAP: Record<NodeStatus, { label: string; bg: string; color: string; border: string }> = {
-  idle:     { label: '空闲',   bg: 'var(--bg-elev-2)',           color: 'var(--fg-4)',          border: 'var(--border)' },
+  idle:     { label: '空闲',   bg: 'var(--t-panel-2)',           color: 'var(--t-fg-4)',          border: 'var(--t-border)' },
   pending:  { label: '等待',   bg: 'rgba(245,158,11,.08)',        color: 'var(--status-warn)',   border: 'rgba(245,158,11,.3)' },
   running:  { label: '运行中', bg: 'rgba(59,130,246,.08)',        color: 'var(--status-run)',    border: 'rgba(59,130,246,.3)' },
   success:  { label: '成功',   bg: 'var(--status-ok-tint)',       color: 'var(--status-ok)',     border: 'rgba(16,185,129,.3)' },

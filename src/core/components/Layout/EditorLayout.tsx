@@ -18,16 +18,16 @@ export function EditorLayout({
   inspectorWidth = 280,
 }: EditorLayoutProps) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', background: 'var(--bg)', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', background: 'var(--t-bg)', overflow: 'hidden' }}>
       {/* Toolbar row */}
-      <div style={{ height: 48, flexShrink: 0, borderBottom: '1px solid var(--border)', background: 'var(--bg-elev-1)' }}>
+      <div style={{ height: 48, flexShrink: 0, borderBottom: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
         {toolbar}
       </div>
 
       {/* Main content area: sidebar + canvas + inspector */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left sidebar — P10: data-testid for E2E assertions */}
-        <div data-testid="editor-sidebar" style={{ width: sidebarWidth, flexShrink: 0, borderRight: '1px solid var(--border)', background: 'var(--bg-elev-1)', overflowY: 'auto' }}>
+        <div data-testid="editor-sidebar" style={{ width: sidebarWidth, flexShrink: 0, borderRight: '1px solid var(--t-border)', background: 'var(--t-panel)', overflowY: 'auto' }}>
           {sidebar}
         </div>
 
@@ -37,7 +37,7 @@ export function EditorLayout({
         </div>
 
         {/* Right inspector — P10: data-testid for E2E assertions */}
-        <div data-testid="editor-inspector" style={{ width: inspectorWidth, flexShrink: 0, borderLeft: '1px solid var(--border)', background: 'var(--bg-elev-1)', overflowY: 'auto' }}>
+        <div data-testid="editor-inspector" style={{ width: inspectorWidth, flexShrink: 0, borderLeft: '1px solid var(--t-border)', background: 'var(--t-panel)', overflowY: 'auto' }}>
           {inspector}
         </div>
       </div>

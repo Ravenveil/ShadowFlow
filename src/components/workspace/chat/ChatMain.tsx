@@ -81,7 +81,7 @@ function PinnedBrief() {
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, color: 'var(--t-accent-bright)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>BRIEF · run #042</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)' }}>由 张明 置顶 · 09:14</span>
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 3, lineHeight: 1.45 }}>
+        <div style={{ fontSize: 11.5, color: 'var(--t-fg-2)', marginTop: 3, lineHeight: 1.45 }}>
           <b>目标</b> 深读 arXiv:2410.11215，找出方法/实验中的不一致，重写有问题段落 ·
           <b style={{ marginLeft: 6 }}>SLA</b> 30min ·
           <b style={{ marginLeft: 6 }}>预算</b> 5k tokens ·

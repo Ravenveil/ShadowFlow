@@ -134,7 +134,7 @@ const labelStyle: React.CSSProperties = {
   fontFamily: 'var(--font-mono)',
   fontSize: 9.5,
   fontWeight: 700,
-  color: 'var(--fg-4)',
+  color: 'var(--t-fg-4)',
   marginBottom: 4,
   textTransform: 'uppercase' as const,
   letterSpacing: '.1em',
@@ -155,15 +155,15 @@ function StepIndicator({ current, total }: { current: Step; total: number }) {
             height: 8,
             borderRadius: 4,
             background: n === current
-              ? 'var(--accent, #7c5cfc)'
+              ? 'var(--t-accent, #7c5cfc)'
               : n < current
-              ? 'var(--accent-dim, #5a3db8)'
-              : 'var(--border, #2a2a3a)',
+              ? 'var(--t-accent-dim, #5a3db8)'
+              : 'var(--t-border, #2a2a3a)',
             transition: 'all .2s',
           }}
         />
       ))}
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)', marginLeft: 4 }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', marginLeft: 4 }}>
         步骤 {current} / {total}
       </span>
     </div>
@@ -188,8 +188,8 @@ function OptionCard<T extends string>({
         textAlign: 'left',
         padding: '10px 14px',
         borderRadius: 10,
-        border: `1.5px solid ${selected ? 'var(--accent, #7c5cfc)' : 'var(--border, #2a2a3a)'}`,
-        background: selected ? 'rgba(124, 92, 252, 0.08)' : 'var(--bg-elev-2, #14141e)',
+        border: `1.5px solid ${selected ? 'var(--t-accent, #7c5cfc)' : 'var(--t-border, #2a2a3a)'}`,
+        background: selected ? 'rgba(124, 92, 252, 0.08)' : 'var(--t-panel-2)',
         cursor: 'pointer',
         transition: 'all .15s',
         display: 'flex',
@@ -198,20 +198,20 @@ function OptionCard<T extends string>({
       }}
     >
       {option.icon && (
-        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, marginTop: 1, color: 'var(--fg-2, #c5c5d6)' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, marginTop: 1, color: 'var(--t-fg-2, #c5c5d6)' }}>
           <Icon token={option.icon} size={18} />
         </span>
       )}
       <div>
-        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--fg-1, #e8e8f0)', marginBottom: 2 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--t-fg, #e8e8f0)', marginBottom: 2 }}>
           {option.label}
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--fg-3, #7a7a9a)', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11.5, color: 'var(--t-fg-3, #7a7a9a)', lineHeight: 1.5 }}>
           {option.desc}
         </div>
       </div>
       {selected && (
-        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', color: 'var(--accent, #7c5cfc)' }} aria-label="selected">
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', color: 'var(--t-accent, #7c5cfc)' }} aria-label="selected">
           <Check size={14} strokeWidth={2.5} aria-hidden />
         </span>
       )}
@@ -234,7 +234,7 @@ function RoleCard({
     amber: '#f59e0b',
     green: '#34d399',
   };
-  const accent = colorMap[role.color] ?? 'var(--accent, #7c5cfc)';
+  const accent = colorMap[role.color] ?? 'var(--t-accent, #7c5cfc)';
   return (
     <div
       style={{
@@ -251,7 +251,7 @@ function RoleCard({
       </span>
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1, #e8e8f0)' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-fg, #e8e8f0)' }}>
             {customName ?? role.name}
           </span>
           <span
@@ -270,7 +270,7 @@ function RoleCard({
             {role.badge}
           </span>
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--fg-3, #7a7a9a)', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11.5, color: 'var(--t-fg-3, #7a7a9a)', lineHeight: 1.5 }}>
           {role.desc}
         </div>
       </div>
@@ -306,10 +306,10 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
   const renderStep1 = () => (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg-1)', margin: '0 0 4px' }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--t-fg)', margin: '0 0 4px' }}>
           内容是什么类型？
         </h3>
-        <p style={{ fontSize: 12.5, color: 'var(--fg-3)', margin: 0 }}>
+        <p style={{ fontSize: 12.5, color: 'var(--t-fg-3)', margin: 0 }}>
           选择最贴近您场景的内容类型，Kit 会自动调整 Writer 角色的输出格式。
         </p>
       </div>
@@ -326,10 +326,10 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
 
       <div>
         <div style={{ marginBottom: 24 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg-1)', margin: '0 0 4px' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--t-fg)', margin: '0 0 4px' }}>
             内容由谁来审核？
           </h3>
-          <p style={{ fontSize: 12.5, color: 'var(--fg-3)', margin: 0 }}>
+          <p style={{ fontSize: 12.5, color: 'var(--t-fg-3)', margin: 0 }}>
             选择审批层级，决定审批流程需要经过多少环节。
           </p>
         </div>
@@ -344,24 +344,24 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
                 textAlign: 'left',
                 padding: '12px 14px',
                 borderRadius: 10,
-                border: `1.5px solid ${state.approval_levels === opt.value ? 'var(--accent, #7c5cfc)' : 'var(--border, #2a2a3a)'}`,
+                border: `1.5px solid ${state.approval_levels === opt.value ? 'var(--t-accent, #7c5cfc)' : 'var(--t-border, #2a2a3a)'}`,
                 background: state.approval_levels === opt.value
                   ? 'rgba(124, 92, 252, 0.08)'
-                  : 'var(--bg-elev-2, #14141e)',
+                  : 'var(--t-panel-2)',
                 cursor: 'pointer',
                 transition: 'all .15s',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, color: 'var(--fg-2, #c5c5d6)' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, color: 'var(--t-fg-2, #c5c5d6)' }}>
                   <Icon token={opt.icon} size={18} />
                 </span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)' }}>{opt.label}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-fg)' }}>{opt.label}</span>
                 {state.approval_levels === opt.value && (
-                  <span style={{ marginLeft: 'auto', color: 'var(--accent, #7c5cfc)' }}>✓</span>
+                  <span style={{ marginLeft: 'auto', color: 'var(--t-accent, #7c5cfc)' }}>✓</span>
                 )}
               </div>
-              <p style={{ fontSize: 11.5, color: 'var(--fg-3)', margin: '0 0 8px 26px' }}>
+              <p style={{ fontSize: 11.5, color: 'var(--t-fg-3)', margin: '0 0 8px 26px' }}>
                 {opt.desc}
               </p>
               <div style={{ display: 'flex', gap: 4, marginLeft: 26 }}>
@@ -371,11 +371,11 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
                     style={{
                       fontSize: 10,
                       fontFamily: 'var(--font-mono)',
-                      background: 'var(--bg-elev-3, #1a1a2e)',
-                      border: '1px solid var(--border)',
+                      background: 'var(--t-panel-3)',
+                      border: '1px solid var(--t-border)',
                       borderRadius: 4,
                       padding: '1px 6px',
-                      color: 'var(--fg-3)',
+                      color: 'var(--t-fg-3)',
                     }}
                   >
                     {r}
@@ -395,9 +395,9 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
       {/* 驳回上限 */}
       <div>
         <label style={labelStyle}>驳回上限（max_reject_rounds）</label>
-        <p style={{ fontSize: 11.5, color: 'var(--fg-3)', margin: '0 0 10px' }}>
+        <p style={{ fontSize: 11.5, color: 'var(--t-fg-3)', margin: '0 0 10px' }}>
           Writer 被驳回超过此轮次后，流程标记为"需升级处理"。当前：
-          <strong style={{ color: 'var(--accent, #7c5cfc)' }}> {state.max_reject_rounds} 轮</strong>
+          <strong style={{ color: 'var(--t-accent, #7c5cfc)' }}> {state.max_reject_rounds} 轮</strong>
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <input
@@ -406,7 +406,7 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
             max={10}
             value={state.max_reject_rounds}
             onChange={(e) => update('max_reject_rounds', Number(e.target.value))}
-            style={{ flex: 1, accentColor: 'var(--accent, #7c5cfc)' }}
+            style={{ flex: 1, accentColor: 'var(--t-accent, #7c5cfc)' }}
           />
           <span
             style={{
@@ -415,13 +415,13 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
               fontFamily: 'var(--font-mono)',
               fontSize: 16,
               fontWeight: 700,
-              color: 'var(--accent, #7c5cfc)',
+              color: 'var(--t-accent, #7c5cfc)',
             }}
           >
             {state.max_reject_rounds}
           </span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--fg-5)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>
           <span>1（严格）</span>
           <span>10（宽松）</span>
         </div>
@@ -445,7 +445,7 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
       {/* 角色命名（可选） */}
       <div>
         <label style={labelStyle}>审核角色命名（可选）</label>
-        <p style={{ fontSize: 11.5, color: 'var(--fg-3)', margin: '0 0 10px' }}>
+        <p style={{ fontSize: 11.5, color: 'var(--t-fg-3)', margin: '0 0 10px' }}>
           可自定义审核人和审批人的显示名称，默认使用 "Reviewer" 和 "Approver"。
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -461,9 +461,9 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
                 width: '100%',
                 padding: '6px 10px',
                 borderRadius: 8,
-                border: '1px solid var(--border)',
-                background: 'var(--bg-elev-2)',
-                color: 'var(--fg-1)',
+                border: '1px solid var(--t-border)',
+                background: 'var(--t-panel-2)',
+                color: 'var(--t-fg)',
                 fontSize: 13,
                 fontFamily: 'var(--font-mono)',
                 outline: 'none',
@@ -484,9 +484,9 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
                   width: '100%',
                   padding: '6px 10px',
                   borderRadius: 8,
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg-elev-2)',
-                  color: 'var(--fg-1)',
+                  border: '1px solid var(--t-border)',
+                  background: 'var(--t-panel-2)',
+                  color: 'var(--t-fg)',
                   fontSize: 13,
                   fontFamily: 'var(--font-mono)',
                   outline: 'none',
@@ -504,10 +504,10 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
   const renderStep3 = () => (
     <div>
       <div style={{ marginBottom: 16 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg-1)', margin: '0 0 4px' }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--t-fg)', margin: '0 0 4px' }}>
           Blueprint 预览
         </h3>
-        <p style={{ fontSize: 12, color: 'var(--fg-3)', margin: 0 }}>
+        <p style={{ fontSize: 12, color: 'var(--t-fg-3)', margin: 0 }}>
           确认角色配置与 Policy 规则，点击「生成 Blueprint」后开始构建。
         </p>
       </div>
@@ -534,8 +534,8 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
       <div
         style={{
           borderRadius: 10,
-          border: '1px solid var(--border)',
-          background: 'var(--bg-elev-2)',
+          border: '1px solid var(--t-border)',
+          background: 'var(--t-panel-2)',
           padding: '12px 14px',
           marginBottom: 16,
         }}
@@ -547,7 +547,7 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
             fontWeight: 700,
             letterSpacing: '.12em',
             textTransform: 'uppercase',
-            color: 'var(--fg-4)',
+            color: 'var(--t-fg-4)',
             marginBottom: 10,
           }}
         >
@@ -586,8 +586,8 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
               />
             </>
           )}
-          <div style={{ marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-            <span style={{ color: 'var(--fg-4)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
+          <div style={{ marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--t-border)' }}>
+            <span style={{ color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
               驳回上限：{state.max_reject_rounds} 轮 · 超出后标记 escalated
             </span>
           </div>
@@ -607,11 +607,11 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
             style={{
               fontSize: 10,
               fontFamily: 'var(--font-mono)',
-              background: 'var(--bg-elev-3, #1a1a2e)',
-              border: '1px solid var(--border)',
+              background: 'var(--t-panel-3)',
+              border: '1px solid var(--t-border)',
               borderRadius: 4,
               padding: '2px 7px',
-              color: 'var(--fg-3)',
+              color: 'var(--t-fg-3)',
             }}
           >
             {label}: {value}
@@ -658,18 +658,18 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
         maxWidth: 520,
         margin: '0 auto',
         padding: '24px 20px',
-        background: 'var(--bg-panel, #0f0f1a)',
+        background: 'var(--t-panel)',
         borderRadius: 16,
-        border: '1px solid var(--border)',
+        border: '1px solid var(--t-border)',
       }}
       data-testid="review-approval-wizard"
     >
       {/* 顶部标题 */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--accent, #7c5cfc)', marginBottom: 4 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--t-accent, #7c5cfc)', marginBottom: 4 }}>
           Review &amp; Approval Kit
         </div>
-        <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--fg-1)', margin: 0, letterSpacing: '-.02em' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--t-fg)', margin: 0, letterSpacing: '-.02em' }}>
           配置审批流程
         </h2>
       </div>
@@ -710,7 +710,7 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
           alignItems: 'center',
           marginTop: 24,
           paddingTop: 16,
-          borderTop: '1px solid var(--border)',
+          borderTop: '1px solid var(--t-border)',
         }}
       >
         {/* 左侧：取消 / 返回 */}
@@ -720,9 +720,9 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
           style={{
             padding: '8px 16px',
             borderRadius: 8,
-            border: '1px solid var(--border)',
+            border: '1px solid var(--t-border)',
             background: 'transparent',
-            color: 'var(--fg-3)',
+            color: 'var(--t-fg-3)',
             fontFamily: 'var(--font-mono)',
             fontSize: 12,
             cursor: 'pointer',
@@ -742,8 +742,8 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
               padding: '8px 20px',
               borderRadius: 8,
               border: 'none',
-              background: canNext ? 'var(--accent, #7c5cfc)' : 'var(--border)',
-              color: canNext ? 'white' : 'var(--fg-5)',
+              background: canNext ? 'var(--t-accent, #7c5cfc)' : 'var(--t-border)',
+              color: canNext ? 'white' : 'var(--t-fg-5)',
               fontFamily: 'var(--font-mono)',
               fontSize: 12,
               fontWeight: 700,
@@ -763,7 +763,7 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
               padding: '8px 20px',
               borderRadius: 8,
               border: 'none',
-              background: 'var(--accent, #7c5cfc)',
+              background: 'var(--t-accent, #7c5cfc)',
               color: 'white',
               fontFamily: 'var(--font-mono)',
               fontSize: 12,
@@ -823,13 +823,13 @@ function PolicyRow({
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5 }}>
       <span
         style={{
-          background: 'var(--bg-elev-3)',
-          border: '1px solid var(--border)',
+          background: 'var(--t-panel-3)',
+          border: '1px solid var(--t-border)',
           borderRadius: 4,
           padding: '1px 6px',
           fontFamily: 'var(--font-mono)',
           fontSize: 10,
-          color: 'var(--fg-2)',
+          color: 'var(--t-fg-2)',
           whiteSpace: 'nowrap',
         }}
       >
@@ -840,19 +840,19 @@ function PolicyRow({
       </span>
       <span
         style={{
-          background: 'var(--bg-elev-3)',
-          border: '1px solid var(--border)',
+          background: 'var(--t-panel-3)',
+          border: '1px solid var(--t-border)',
           borderRadius: 4,
           padding: '1px 6px',
           fontFamily: 'var(--font-mono)',
           fontSize: 10,
-          color: 'var(--fg-2)',
+          color: 'var(--t-fg-2)',
           whiteSpace: 'nowrap',
         }}
       >
         {receiver}
       </span>
-      <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>{label}</span>
+      <span style={{ color: 'var(--t-fg-4)', fontSize: 11 }}>{label}</span>
     </div>
   );
 }

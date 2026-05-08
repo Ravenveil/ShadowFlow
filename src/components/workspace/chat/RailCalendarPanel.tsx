@@ -47,16 +47,16 @@ function MiniCalendar({ selected, onSelect }: { selected: number; onSelect: (d: 
         return (
           <div key={i} onClick={() => onSelect(d)} style={{
             flex: 1, textAlign: 'center', padding: '6px 0', borderRadius: 8, cursor: 'pointer',
-            background: isSel ? 'var(--accent-tint)' : 'transparent',
+            background: isSel ? 'var(--t-accent-tint)' : 'transparent',
             border: isSel ? '1px solid color-mix(in oklab, var(--t-accent) 40%, transparent)' : '1px solid transparent',
             transition: 'all 120ms',
           }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-4)', marginBottom: 2 }}>{WEEK_DAYS[i]}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-4)', marginBottom: 2 }}>{WEEK_DAYS[i]}</div>
             <div style={{
               fontSize: 13, fontWeight: isToday ? 800 : 600,
-              color: isToday ? 'var(--accent-bright)' : 'var(--fg-2)',
+              color: isToday ? 'var(--t-accent-bright)' : 'var(--t-fg-2)',
             }}>{d}</div>
-            {isToday && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent-bright)', margin: '2px auto 0' }} />}
+            {isToday && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--t-accent-bright)', margin: '2px auto 0' }} />}
           </div>
         );
       })}
@@ -79,13 +79,13 @@ function EventCard({ event }: { event: CalEvent }) {
           color: style.border, padding: '1px 5px', borderRadius: 3,
           background: `color-mix(in oklab, ${style.border} 18%, transparent)`,
         }}>{style.label}</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-3)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-3)' }}>
           {event.time} · {event.duration}
         </span>
         <span style={{ flex: 1 }} />
         {event.agent && <FBAv glyph={event.agent.glyph} color={event.agent.color} size={20} square />}
       </div>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-1)', marginTop: 5, lineHeight: 1.4 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg)', marginTop: 5, lineHeight: 1.4 }}>
         {event.title}
       </div>
     </div>
@@ -104,29 +104,29 @@ export function RailCalendarPanel() {
         padding: '12px 18px', borderBottom: '1px solid var(--t-border)',
         display: 'flex', alignItems: 'center', gap: 12, background: 'var(--skin-panel)', flexShrink: 0,
       }}>
-        <span style={{ width: 18, height: 18, display: 'flex', color: 'var(--accent-bright)' }}>{CI.cal}</span>
+        <span style={{ width: 18, height: 18, display: 'flex', color: 'var(--t-accent-bright)' }}>{CI.cal}</span>
         <span style={{ fontSize: 14, fontWeight: 700 }}>日历</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>
           {today.getFullYear()} {monthNames[today.getMonth()]}
         </span>
         <span style={{ flex: 1 }} />
         <span style={{
-          fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent-bright)',
-          padding: '3px 10px', borderRadius: 11, background: 'var(--accent-tint)',
+          fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-accent-bright)',
+          padding: '3px 10px', borderRadius: 11, background: 'var(--t-accent-tint)',
           border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)',
           cursor: 'pointer', fontWeight: 600,
         }}>今天</span>
       </div>
 
       {/* Mini week strip */}
-      <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--t-border)', background: 'var(--bg-elev-1)', flexShrink: 0 }}>
+      <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--t-border)', background: 'var(--t-panel)', flexShrink: 0 }}>
         <MiniCalendar selected={selectedDay} onSelect={setSelectedDay} />
       </div>
 
       {/* Event list */}
       <div style={{ flex: 1, overflow: 'auto', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{
-          fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, color: 'var(--fg-4)',
+          fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, color: 'var(--t-fg-4)',
           letterSpacing: '0.06em', textTransform: 'uppercase', padding: '4px 0',
         }}>
           {selectedDay === today.getDate() ? '今日日程' : `${selectedDay}日日程`} · {TODAY_EVENTS.length} 项
@@ -136,7 +136,7 @@ export function RailCalendarPanel() {
         ))}
         <div style={{
           marginTop: 8, padding: '12px', borderRadius: 8, border: '1px dashed var(--t-border)',
-          textAlign: 'center', cursor: 'pointer', color: 'var(--fg-4)', fontSize: 11.5,
+          textAlign: 'center', cursor: 'pointer', color: 'var(--t-fg-4)', fontSize: 11.5,
           transition: 'border-color 120ms',
         }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--t-accent)')}
            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--t-border)')}>

@@ -42,7 +42,7 @@ export function ProviderPanel({ node, onUpdate }: ProviderPanelProps) {
     fontFamily: 'var(--font-mono)',
     fontSize: 10,
     fontWeight: 600,
-    color: 'var(--fg-4)',
+    color: 'var(--t-fg-4)',
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: '.08em',
@@ -50,10 +50,10 @@ export function ProviderPanel({ node, onUpdate }: ProviderPanelProps) {
   const select: React.CSSProperties = {
     width: '100%',
     padding: '6px 8px',
-    background: 'var(--bg-elev-2)',
-    border: '1px solid var(--border)',
+    background: 'var(--t-panel-2)',
+    border: '1px solid var(--t-border)',
     borderRadius: 6,
-    color: 'var(--fg-1)',
+    color: 'var(--t-fg)',
     fontSize: 12,
     fontFamily: 'var(--font-mono)',
     boxSizing: 'border-box',
@@ -65,13 +65,13 @@ export function ProviderPanel({ node, onUpdate }: ProviderPanelProps) {
     marginBottom: 6,
     fontSize: 12,
     fontFamily: 'var(--font-mono)',
-    color: 'var(--fg-2)',
+    color: 'var(--t-fg-2)',
     cursor: 'pointer',
   };
 
   return (
     <div style={{ padding: 16 }}>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--fg-4)', marginBottom: 12 }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 12 }}>
         Provider
       </div>
 
@@ -102,11 +102,11 @@ export function ProviderPanel({ node, onUpdate }: ProviderPanelProps) {
               type="checkbox"
               checked={fallbackChain.includes(p)}
               onChange={() => toggleFallback(p)}
-              style={{ accentColor: 'var(--accent)' }}
+              style={{ accentColor: 'var(--t-accent)' }}
             />
             {p}
             {fallbackChain.includes(p) && (
-              <span style={{ color: 'var(--fg-5)', fontSize: 10 }}>
+              <span style={{ color: 'var(--t-fg-5)', fontSize: 10 }}>
                 #{fallbackChain.indexOf(p) + 1}
               </span>
             )}

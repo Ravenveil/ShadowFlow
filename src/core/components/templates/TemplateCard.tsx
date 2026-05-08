@@ -4,18 +4,18 @@ import type { TemplatePreset } from '../../../templates/presets';
 import type { TemplateDemo } from '../../constants/quickDemoPrompts';
 
 const V = {
-  panel: 'var(--skin-panel)',
-  bg: 'var(--bg)',
-  elev2: 'var(--bg-elev-2)',
-  border: 'var(--border)',
-  borderSub: 'var(--border-subtle)',
-  fg1: 'var(--fg-1)',
-  fg3: 'var(--fg-3)',
-  fg4: 'var(--fg-4)',
-  fg5: 'var(--fg-5)',
-  accent: 'var(--accent)',
-  accentBr: 'var(--accent-bright)',
-  accentTint: 'var(--accent-tint)',
+  panel: 'var(--t-panel)',
+  bg: 'var(--t-bg)',
+  elev2: 'var(--t-panel-2)',
+  border: 'var(--t-border)',
+  borderSub: 'var(--t-border)',
+  fg1: 'var(--t-fg)',
+  fg3: 'var(--t-fg-3)',
+  fg4: 'var(--t-fg-4)',
+  fg5: 'var(--t-fg-5)',
+  accent: 'var(--t-accent)',
+  accentBr: 'var(--t-accent-bright)',
+  accentTint: 'var(--t-accent-tint)',
   mono: 'var(--font-mono)',
   sans: 'var(--font-sans)',
 };
@@ -71,7 +71,7 @@ export function TemplateCard({ preset, demo, lang, onQuickDemo, onCustomEdit }: 
             position: 'relative',
             overflow: 'hidden',
             background: V.bg,
-            backgroundImage: 'radial-gradient(circle, var(--bg-elev-4) 1px, transparent 1px)',
+            backgroundImage: 'radial-gradient(circle, var(--t-panel-3) 1px, transparent 1px)',
             backgroundSize: '14px 14px',
             borderBottom: `1px solid ${V.border}`,
           }}
@@ -172,10 +172,10 @@ export function TemplateCard({ preset, demo, lang, onQuickDemo, onCustomEdit }: 
               overflow: 'hidden',
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-bright)';
+              (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-accent-bright)';
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent)';
+              (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-accent)';
             }}
           >
             {isBlank ? (
@@ -273,8 +273,8 @@ function PreviewMini({ preset }: { preset: TemplatePreset }) {
               cx={p.sx}
               cy={p.sy}
               r={6}
-              fill="var(--bg-elev-3)"
-              stroke={n.overrideColor || 'var(--accent)'}
+              fill="var(--t-panel-3)"
+              stroke={n.overrideColor || 'var(--t-accent)'}
               strokeWidth={1.5}
             />
           </g>

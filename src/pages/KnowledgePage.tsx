@@ -306,7 +306,7 @@ export default function KnowledgePage() {
           style={{
             height: 36,
             padding: '0 18px',
-            background: 'var(--accent, #6FA8FF)',
+            background: 'var(--t-accent, #6FA8FF)',
             color: '#0B1220',
             border: 'none',
             borderRadius: 8,
@@ -342,7 +342,7 @@ export default function KnowledgePage() {
       {status === 'success' && total === 0 && (
         <div
           style={{
-            border: '1px dashed var(--border, #2D333B)',
+            border: '1px dashed var(--t-border, #2D333B)',
             borderRadius: 14,
             padding: '40px 24px',
             textAlign: 'center',
@@ -397,7 +397,7 @@ function PackCard({
       data-testid={`pack-card-${pack.pack_id}`}
       style={{
         background: 'var(--t-panel)',
-        border: '1px solid var(--border, #2D333B)',
+        border: '1px solid var(--t-border, #2D333B)',
         borderRadius: 14,
         padding: 16,
       }}
@@ -437,7 +437,7 @@ function PackCard({
               padding: '0 12px',
               fontSize: 11,
               background: 'transparent',
-              border: '1px solid var(--border, #2D333B)',
+              border: '1px solid var(--t-border, #2D333B)',
               color: 'var(--fg, #E6EDF3)',
               borderRadius: 6,
               cursor: 'pointer',
@@ -469,7 +469,7 @@ function PackCard({
           style={{
             marginTop: 14,
             paddingTop: 14,
-            borderTop: '1px solid var(--border, #2D333B)',
+            borderTop: '1px solid var(--t-border, #2D333B)',
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
@@ -589,7 +589,7 @@ function CreatePackModal({
       <div
         style={{
           background: 'var(--t-panel)',
-          border: '1px solid var(--border, #2D333B)',
+          border: '1px solid var(--t-border, #2D333B)',
           borderRadius: 12,
           padding: 24,
           width: '100%',
@@ -696,7 +696,7 @@ function CreatePackModal({
               height: 34,
               padding: '0 16px',
               background: 'transparent',
-              border: '1px solid var(--border, #2D333B)',
+              border: '1px solid var(--t-border, #2D333B)',
               color: 'var(--fg, #E6EDF3)',
               borderRadius: 6,
               cursor: 'pointer',
@@ -711,7 +711,7 @@ function CreatePackModal({
             style={{
               height: 34,
               padding: '0 18px',
-              background: canSubmit && !submitting ? 'var(--accent, #6FA8FF)' : 'rgba(120,120,120,0.3)',
+              background: canSubmit && !submitting ? 'var(--t-accent, #6FA8FF)' : 'rgba(120,120,120,0.3)',
               border: 'none',
               borderRadius: 6,
               color: '#0B1220',
@@ -747,7 +747,7 @@ function Field({
 const textInputStyle: React.CSSProperties = {
   width: '100%',
   background: 'var(--t-bg)',
-  border: '1px solid var(--border, #2D333B)',
+  border: '1px solid var(--t-border, #2D333B)',
   borderRadius: 6,
   padding: '8px 10px',
   color: 'var(--fg, #E6EDF3)',
