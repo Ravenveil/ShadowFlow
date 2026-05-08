@@ -10,9 +10,9 @@
  * now shows only a minimalist brand bar to reclaim vertical space for
  * navigation. Search / NAV / Settings / user card unchanged.
  */
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search } from 'lucide-react';
+import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { HfDot } from './HfAtoms';
 import { useI18n } from '../../common/i18n';
@@ -78,69 +78,170 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
   const { language } = useI18n();
   const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
   const NAV_ITEMS = useMemo(() => buildNavItems(T), [language]);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const W = collapsed ? 56 : 220;
 
   return (
     <aside
       style={{
-        width: 220,
+        width: W,
         flexShrink: 0,
         background: 'var(--t-panel)',
         borderRight: '1px solid var(--t-border)',
         display: 'flex',
         flexDirection: 'column',
-        padding: '12px 10px',
+        padding: collapsed ? '12px 6px' : '12px 10px',
+        transition: 'width 200ms ease, padding 200ms ease',
+        overflow: 'hidden',
       }}
     >
-      {/* Minimalist brand bar — workspace switcher relocated to ChatPage */}
+      {/* Brand bar + collapse toggle */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          padding: '10px 12px',
+          padding: collapsed ? '10px 4px' : '10px 12px',
           marginBottom: 8,
+          justifyContent: collapsed ? 'center' : 'flex-start',
         }}
       >
-        <span style={{ fontSize: 13, color: 'var(--t-accent)' }}>✦</span>
-        <span
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 13, color: 'var(--t-accent)', flexShrink: 0 }}>✦</span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+                color: 'var(--t-fg-2)',
+                flex: 1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              SHADOWFLOW
+            </span>
+          </>
+        )}
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          title={collapsed ? T('展开侧边栏', 'Expand sidebar') : T('收起侧边栏', 'Collapse sidebar')}
           style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.14em',
-            color: 'var(--t-fg-2)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--t-fg-4)',
+            padding: 4,
+            borderRadius: 5,
+            flexShrink: 0,
           }}
         >
-          SHADOWFLOW
-        </span>
+          {collapsed
+            ? <PanelLeftOpen size={14} strokeWidth={1.75} aria-hidden />
+            : <PanelLeftClose size={14} strokeWidth={1.75} aria-hidden />
+          }
+        </button>
       </div>
 
-      {/* Search */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '7px 10px',
-          marginBottom: 14,
-          background: 'var(--t-bg)',
-          border: '1px solid var(--t-border)',
-          borderRadius: 8,
-        }}
-      >
-        <span style={{ color: 'var(--t-fg-4)', display: 'inline-flex', alignItems: 'center' }}>
-          <Search size={12} strokeWidth={2} aria-hidden />
-        </span>
-        <span style={{ flex: 1, fontSize: 11.5, color: 'var(--t-fg-4)' }}>{T('跳转 / 搜索', 'Jump / Search')}</span>
-        <span className="hf-kbd">⌘K</span>
-      </div>
+      {/* Search — hidden when collapsed */}
+      {!collapsed && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '7px 10px',
+            marginBottom: 14,
+            background: 'var(--t-bg)',
+            border: '1px solid var(--t-border)',
+            borderRadius: 8,
+          }}
+        >
+          <span style={{ color: 'var(--t-fg-4)', display: 'inline-flex', alignItems: 'center' }}>
+            <Search size={12} strokeWidth={2} aria-hidden />
+          </span>
+          <span style={{ flex: 1, fontSize: 11.5, color: 'var(--t-fg-4)' }}>{T('跳转 / 搜索', 'Jump / Search')}</span>
+          <span className="hf-kbd">⌘K</span>
+        </div>
+      )}
 
-      <div className="hf-label" style={{ padding: '2px 12px 6px' }}>
-        {T('导航', 'NAVIGATION')}
-      </div>
+      {/* Collapsed: search icon only */}
+      {collapsed && (
+        <div
+          title={T('跳转 / 搜索', 'Jump / Search')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '7px 0',
+            marginBottom: 14,
+            color: 'var(--t-fg-4)',
+            cursor: 'pointer',
+          }}
+        >
+          <Search size={14} strokeWidth={2} aria-hidden />
+        </div>
+      )}
+
+      {!collapsed && (
+        <div className="hf-label" style={{ padding: '2px 12px 6px' }}>
+          {T('导航', 'NAVIGATION')}
+        </div>
+      )}
 
       {NAV_ITEMS.map((it) => {
         const on = it.k === active;
+        if (collapsed) {
+          return (
+            <Link
+              key={it.k}
+              to={it.to}
+              title={it.label}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                padding: '9px 0',
+                marginBottom: 1,
+                borderRadius: 7,
+                background: on ? 'var(--t-accent-tint)' : 'transparent',
+                textDecoration: 'none',
+                color: 'inherit',
+              }}
+            >
+              {on && <span style={{ ...activeBar, left: -6 }} />}
+              <span style={{ color: on ? 'var(--t-accent)' : 'var(--t-fg-3)', display: 'inline-flex' }}>
+                <it.Icon size={16} strokeWidth={1.75} aria-hidden />
+              </span>
+              {it.badge ? (
+                <span style={{
+                  position: 'absolute',
+                  top: 5,
+                  right: 6,
+                  width: 14,
+                  height: 14,
+                  borderRadius: '50%',
+                  background: 'var(--t-accent)',
+                  color: 'var(--t-accent-ink)',
+                  fontSize: 8,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: 'var(--font-mono)',
+                }}>
+                  {it.badge}
+                </span>
+              ) : null}
+            </Link>
+          );
+        }
         return (
           <Link key={it.k} to={it.to} style={rowStyle(on)}>
             {on && <span style={activeBar} />}
@@ -198,69 +299,130 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
 
       {/* Settings + user */}
       <div style={{ borderTop: '1px solid var(--t-border)', paddingTop: 6 }}>
-        <Link to="/settings" style={rowStyle(active === 'settings')}>
-          {active === 'settings' && <span style={activeBar} />}
-          <span
+        {collapsed ? (
+          <Link
+            to="/settings"
+            title={T('设置', 'Settings')}
             style={{
-              width: 18,
-              textAlign: 'center',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: active === 'settings' ? 'var(--t-accent)' : 'var(--t-fg-3)',
-            }}
-          >
-            <HfSettingsIcon size={14} strokeWidth={2} />
-          </span>
-          <span
-            style={{
-              flex: 1,
-              fontSize: 12.5,
-              color: 'var(--t-fg-2)',
-              fontWeight: active === 'settings' ? 700 : 500,
-            }}
-          >
-            {T('设置', 'Settings')}
-          </span>
-          <span className="hf-kbd">⌘,</span>
-        </Link>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '8px 10px',
-            marginTop: 6,
-            background: 'var(--t-panel-2)',
-            border: '1px solid var(--t-border)',
-            borderRadius: 8,
-            cursor: 'pointer',
-          }}
-        >
-          <div
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: '50%',
-              background: 'var(--t-ok)',
-              color: 'var(--t-bg)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: 10,
+              position: 'relative',
+              padding: '9px 0',
+              marginBottom: 6,
+              borderRadius: 7,
+              background: active === 'settings' ? 'var(--t-accent-tint)' : 'transparent',
+              textDecoration: 'none',
+              color: 'inherit',
             }}
           >
-            张
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 600 }}>张明</div>
-            <div className="hf-meta" style={{ fontSize: 9 }}>
-              0x3f7a…bc91
+            {active === 'settings' && <span style={{ ...activeBar, left: -6 }} />}
+            <span style={{ color: active === 'settings' ? 'var(--t-accent)' : 'var(--t-fg-3)', display: 'inline-flex' }}>
+              <HfSettingsIcon size={16} strokeWidth={2} />
+            </span>
+          </Link>
+        ) : (
+          <Link to="/settings" style={rowStyle(active === 'settings')}>
+            {active === 'settings' && <span style={activeBar} />}
+            <span
+              style={{
+                width: 18,
+                textAlign: 'center',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: active === 'settings' ? 'var(--t-accent)' : 'var(--t-fg-3)',
+              }}
+            >
+              <HfSettingsIcon size={14} strokeWidth={2} />
+            </span>
+            <span
+              style={{
+                flex: 1,
+                fontSize: 12.5,
+                color: 'var(--t-fg-2)',
+                fontWeight: active === 'settings' ? 700 : 500,
+              }}
+            >
+              {T('设置', 'Settings')}
+            </span>
+            <span className="hf-kbd">⌘,</span>
+          </Link>
+        )}
+
+        {/* User card */}
+        {collapsed ? (
+          <div
+            title="张明 · 0x3f7a…bc91"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 0',
+              cursor: 'pointer',
+              position: 'relative',
+            }}
+          >
+            <div
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: '50%',
+                background: 'var(--t-ok)',
+                color: 'var(--t-bg)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                fontSize: 10,
+              }}
+            >
+              张
             </div>
+            <span style={{ position: 'absolute', bottom: 8, right: 6 }}>
+              <HfDot color="var(--t-ok)" pulse />
+            </span>
           </div>
-          <HfDot color="var(--t-ok)" pulse />
-        </div>
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '8px 10px',
+              marginTop: 6,
+              background: 'var(--t-panel-2)',
+              border: '1px solid var(--t-border)',
+              borderRadius: 8,
+              cursor: 'pointer',
+            }}
+          >
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: 'var(--t-ok)',
+                color: 'var(--t-bg)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                fontSize: 10,
+                flexShrink: 0,
+              }}
+            >
+              张
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 600 }}>张明</div>
+              <div className="hf-meta" style={{ fontSize: 9 }}>
+                0x3f7a…bc91
+              </div>
+            </div>
+            <HfDot color="var(--t-ok)" pulse />
+          </div>
+        )}
       </div>
     </aside>
   );
