@@ -144,7 +144,7 @@ interface FBAvProps {
   square?: boolean;
 }
 
-export function FBAv({ glyph, color = 'var(--accent)', size = 32, status, square }: FBAvProps) {
+export function FBAv({ glyph, color = 'var(--t-accent)', size = 32, status, square }: FBAvProps) {
   return (
     <span
       className="fb-av"
@@ -152,7 +152,7 @@ export function FBAv({ glyph, color = 'var(--accent)', size = 32, status, square
         width: size,
         height: size,
         fontSize: size * 0.42,
-        background: `color-mix(in oklab, ${color} 18%, var(--bg-elev-2))`,
+        background: `color-mix(in oklab, ${color} 18%, var(--t-panel-2))`,
         borderColor: `color-mix(in oklab, ${color} 45%, transparent)`,
         color,
         borderRadius: square ? size * 0.22 : size * 0.28,
@@ -185,7 +185,7 @@ interface FBPillProps {
   style?: CSSProperties;
 }
 
-export function FBPill({ color = 'var(--fg-4)', dim, children, style }: FBPillProps) {
+export function FBPill({ color = 'var(--t-fg-4)', dim, children, style }: FBPillProps) {
   return (
     <span
       className="fb-pill"
@@ -275,7 +275,7 @@ export function FBChrome({ active, theme, onTabChange, onThemeToggle, onNotifica
             <span
               className="t-icon"
               style={{
-                color: t.key === active ? 'var(--accent)' : 'var(--fg-4)',
+                color: t.key === active ? 'var(--t-accent)' : 'var(--t-fg-4)',
                 width: 16,
                 height: 16,
                 display: 'flex',

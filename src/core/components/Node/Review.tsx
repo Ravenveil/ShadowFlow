@@ -5,57 +5,32 @@
 import React, { memo, useCallback } from 'react';
 import { Handle, Position, NodeProps, NodeData } from 'reactflow';
 import { useI18n } from '../../../common/i18n';
-import { clsx } from 'clsx';
 import { Icon } from '../../../common/icons/iconRegistry';
+
+// Status → token color
+const STATUS_COLOR: Record<string, string> = {
+  idle:    'var(--t-border)',
+  running: 'var(--t-run)',
+  success: 'var(--t-ok)',
+  error:   'var(--t-err)',
+  warning: 'var(--t-warn)',
+};
 
 export const ReviewNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   const { t, language } = useI18n();
 
-  const statusColors = {
-    idle: 'border-gray-300',
-    running: 'border-blue-500 animate-pulse',
-    success: 'border-green-500',
-    error: 'border-red-500',
-    warning: 'border-yellow-500',
+  // 节点类型特定配置 — emoji icons mapped to Lucide by iconRegistry
+  const nodeConfig: Record<string, { icon: string; color: string }> = {
+    review:   { icon: '👀',  color: 'var(--t-accent)' },
+    validate: { icon: '✅',  color: 'var(--t-ok)' },
+    security: { icon: '🔒',  color: 'var(--t-err)' },
   };
 
-  const statusBgColors = {
-    idle: 'bg-gray-50',
-    running: 'bg-blue-50',
-    success: 'bg-green-50',
-    error: 'bg-red-50',
-    warning: 'bg-yellow-50',
-  };
-
-  // 节点类型特定配置
-  const nodeConfig = {
-    review: {
-      icon: '👀',
-      title: 'Review',
-      color: 'var(--t-accent)',
-      bgColor: 'bg-purple-50',
-      borderColor: 'border-purple-300',
-      handleColor: 'bg-purple-500',
-    },
-    validate: {
-      icon: '✅',
-      title: 'Validate',
-      color: 'var(--t-ok)',
-      bgColor: 'bg-green-50',
-      borderColor: 'border-green-300',
-      handleColor: 'bg-green-500',
-    },
-    security: {
-      icon: '🔒',
-      title: 'Security Audit',
-      color: 'var(--t-err)',
-      bgColor: 'bg-red-50',
-      borderColor: 'border-red-300',
-      handleColor: 'bg-red-500',
-    }
-  };
-
-  const config = nodeConfig[data.nodeType as keyof typeof nodeConfig] || nodeConfig.review;
+  const config = nodeConfig[data.nodeType as string] ?? nodeConfig.review;
+  const status = data.status || 'idle';
+  const statusColor = STATUS_COLOR[status] ?? 'var(--t-border)';
+  const isRunning = status === 'running';
+  const nodeColor = config.color;
 
   // 处理节点双击
   const handleDoubleClick = useCallback(() => {
@@ -63,27 +38,21 @@ export const ReviewNode = memo(({ data, selected }: NodeProps<NodeData>) => {
     window.dispatchEvent(event);
   }, [data.nodeId]);
 
-  // 显示审核标准
-  const criteria = data.config?.criteria || [];
-
-  // 显示审核结果
-  const reviewScore = data.config?.score;
-  const reviewChecks = data.config?.checkResults || [];
+  const cfg = data.config as Record<string, unknown> | undefined;
+  const criteria = (cfg?.criteria as string[]) || [];
+  const reviewScore = cfg?.score as number | undefined;
+  const reviewChecks = (cfg?.checkResults as Array<{ passed: boolean; name: string }>) || [];
 
   return (
     <div
-      className={clsx(
-        'rounded-lg border-2 shadow-sm transition-all cursor-pointer',
-        statusColors[data.status || 'idle'],
-        statusBgColors[data.status || 'idle'],
-        selected && 'ring-2 ring-offset-2 ring-blue-500',
-        config.bgColor,
-        'min-w-[200px]',
-        'hover:shadow-md'
-      )}
       style={{
-        borderColor: selected ? undefined : config.borderColor,
-        backgroundColor: `color-mix(in oklab, ${config.color} 10%, transparent)`,
+        borderRadius: 10,
+        border: `2px solid ${selected ? nodeColor : statusColor}`,
+        background: `color-mix(in oklab, ${nodeColor} 8%, var(--t-panel))`,
+        minWidth: 200,
+        boxShadow: selected ? `0 0 0 2px ${nodeColor}66` : '0 4px 12px -4px rgba(0,0,0,.5)',
+        cursor: 'pointer',
+        transition: 'border-color .15s, box-shadow .15s',
       }}
       onDoubleClick={handleDoubleClick}
     >
@@ -94,12 +63,10 @@ export const ReviewNode = memo(({ data, selected }: NodeProps<NodeData>) => {
           type="target"
           position={Position.Top}
           id={input.name}
-          className={clsx(
-            'w-3 h-3 !border-2',
-            input.required ? '!border-red-500' : '!border-gray-400',
-            config.handleColor
-          )}
           style={{
+            width: 12, height: 12, borderRadius: '50%',
+            background: 'var(--t-bg)',
+            border: `2px solid ${input.required ? 'var(--t-err)' : 'var(--t-border)'}`,
             left: `${((index + 1) / (data.inputs.length || 1)) * 100}%`,
             transform: 'translateX(-50%)',
           }}
@@ -107,17 +74,17 @@ export const ReviewNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       ))}
 
       {/* 节点内容 */}
-      <div className="p-3">
+      <div style={{ padding: 12 }}>
         {/* 图标和标题 */}
-        <div className="flex items-center gap-2 mb-2">
-          <span className="inline-flex items-center justify-center text-sf-fg2" aria-label="icon">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-2)' }} aria-label="icon">
             <Icon token={config.icon} size={20} />
           </span>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-sm truncate">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--t-fg)', margin: 0 }}>
               {data.name[language]}
             </h3>
-            <p className="text-xs text-gray-600 truncate">
+            <p style={{ fontSize: 11, color: 'var(--t-fg-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>
               {data.description[language]}
             </p>
           </div>
@@ -125,17 +92,13 @@ export const ReviewNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
         {/* 状态指示器 */}
         {data.status && data.status !== 'idle' && (
-          <div className="flex items-center gap-1 text-xs mt-2">
-            <div
-              className={clsx(
-                'w-2 h-2 rounded-full',
-                data.status === 'running' && 'animate-bounce bg-blue-500',
-                data.status === 'success' && 'bg-green-500',
-                data.status === 'error' && 'bg-red-500',
-                data.status === 'warning' && 'bg-yellow-500'
-              )}
-            />
-            <span className="capitalize">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, marginTop: 8 }}>
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: statusColor,
+              animation: isRunning ? 'sf-pulse 1.8s ease-in-out infinite' : undefined,
+            }} />
+            <span style={{ textTransform: 'capitalize', color: statusColor }}>
               {t(`status.${data.status}`)}
             </span>
           </div>
@@ -143,19 +106,16 @@ export const ReviewNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
         {/* 审核分数 */}
         {reviewScore !== undefined && (
-          <div className="mt-2 pt-2 border-t border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--t-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg style={{ width: 12, height: 12, color: 'var(--t-fg-4)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                <span className="text-xs text-gray-500">Score</span>
+                <span style={{ fontSize: 11, color: 'var(--t-fg-4)' }}>Score</span>
               </div>
-              <div className="text-xs font-medium">
-                <span className={clsx(
-                  reviewScore >= 80 ? 'text-green-600' :
-                  reviewScore >= 60 ? 'text-yellow-600' : 'text-red-600'
-                )}>
+              <div style={{ fontSize: 11, fontWeight: 500 }}>
+                <span style={{ color: reviewScore >= 80 ? 'var(--t-ok)' : reviewScore >= 60 ? 'var(--t-warn)' : 'var(--t-err)' }}>
                   {reviewScore}%
                 </span>
               </div>
@@ -165,21 +125,16 @@ export const ReviewNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
         {/* 审核项目 */}
         {reviewChecks.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-gray-200">
-            <div className="space-y-1">
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--t-border)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {reviewChecks.slice(0, 3).map((check, index) => (
-                <div key={index} className="flex items-center gap-1 text-xs">
-                  <div
-                    className={clsx(
-                      'w-1.5 h-1.5 rounded-full',
-                      check.passed ? 'bg-green-500' : 'bg-red-500'
-                    )}
-                  />
-                  <span className="truncate text-gray-600">{check.name}</span>
+                <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: check.passed ? 'var(--t-ok)' : 'var(--t-err)', flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--t-fg-3)' }}>{check.name}</span>
                 </div>
               ))}
               {reviewChecks.length > 3 && (
-                <div className="text-xs text-gray-400 text-center">
+                <div style={{ fontSize: 11, color: 'var(--t-fg-5)', textAlign: 'center' }}>
                   +{reviewChecks.length - 3} more checks
                 </div>
               )}
@@ -189,59 +144,60 @@ export const ReviewNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
         {/* 审核标准 */}
         {criteria.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-gray-200">
-            <div className="flex items-center gap-1 mb-1">
-              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--t-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+              <svg style={{ width: 12, height: 12, color: 'var(--t-fg-4)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="text-xs text-gray-500">Criteria</span>
+              <span style={{ fontSize: 11, color: 'var(--t-fg-4)' }}>Criteria</span>
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {criteria.slice(0, 3).map((criterion, index) => (
                 <span
                   key={index}
-                  className="text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded"
+                  style={{ fontSize: 11, background: 'var(--t-bg)', color: 'var(--t-fg-3)', padding: '1px 6px', borderRadius: 4, border: '1px solid var(--t-border)' }}
                 >
                   {criterion}
                 </span>
               ))}
               {criteria.length > 3 && (
-                <span className="text-xs text-gray-400">+{criteria.length - 3}</span>
+                <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>+{criteria.length - 3}</span>
               )}
             </div>
           </div>
         )}
 
         {/* 问题标记 */}
-        {data.status === 'warning' && data.config?.issues && data.config.issues.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-yellow-200">
-            <div className="flex items-start gap-1">
-              <svg className="w-3 h-3 text-yellow-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+        {data.status === 'warning' && cfg?.issues && (cfg.issues as unknown[]).length > 0 && (
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid var(--t-warn)` }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+              <svg style={{ width: 12, height: 12, color: 'var(--t-warn)', flexShrink: 0, marginTop: 1 }} fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
-              <span className="text-xs text-yellow-600">
-                {data.config.issues.length} issue{data.config.issues.length > 1 ? 's' : ''}
+              <span style={{ fontSize: 11, color: 'var(--t-warn)' }}>
+                {(cfg.issues as unknown[]).length} issue{(cfg.issues as unknown[]).length > 1 ? 's' : ''}
               </span>
             </div>
           </div>
         )}
-
-        {/* 输出端口 */}
-        {data.outputs.map((output, index) => (
-          <Handle
-            key={`output-${output.name}`}
-            type="source"
-            position={Position.Bottom}
-            id={output.name}
-            className="w-3 h-3 !border-2 !border-gray-400"
-            style={{
-              left: `${((index + 1) / (data.outputs.length || 1)) * 100}%`,
-              transform: 'translateX(-50%)',
-              backgroundColor: config.handleColor,
-            }}
-          />
-        ))}
       </div>
+
+      {/* 输出端口 */}
+      {data.outputs.map((output, index) => (
+        <Handle
+          key={`output-${output.name}`}
+          type="source"
+          position={Position.Bottom}
+          id={output.name}
+          style={{
+            width: 12, height: 12, borderRadius: '50%',
+            background: nodeColor,
+            border: '2px solid var(--t-border)',
+            left: `${((index + 1) / (data.outputs.length || 1)) * 100}%`,
+            transform: 'translateX(-50%)',
+          }}
+        />
+      ))}
     </div>
   );
 });

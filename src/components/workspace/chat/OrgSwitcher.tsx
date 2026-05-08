@@ -123,7 +123,7 @@ export function OrgSwitcher() {
           <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {triggerName}
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-4)', marginTop: 1 }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', marginTop: 1 }}>
             {triggerSub}
           </div>
         </div>
@@ -137,7 +137,7 @@ export function OrgSwitcher() {
           boxShadow: 'var(--shadow-pop)', padding: 5,
         }}>
           {loadState === 'loading' && (
-            <div style={{ padding: '12px 10px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-4)', textAlign: 'center' }}>
+            <div style={{ padding: '12px 10px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)', textAlign: 'center' }}>
               加载中…
             </div>
           )}
@@ -179,7 +179,7 @@ export function OrgSwitcher() {
                   <div style={{ fontSize: 12, fontWeight: isCur ? 700 : 600, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {ws.name}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-5)', marginTop: 1 }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)', marginTop: 1 }}>
                     {ws.agent_count} agents · {ws.team_count} teams
                   </div>
                 </div>
@@ -204,13 +204,13 @@ export function OrgSwitcher() {
             }}><span style={{ width: 14, height: 14, display: 'flex' }}>{FBIcons.plus}</span></span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg-2)' }}>创建 / 加入 Workspace</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-4)', marginTop: 1 }}>新建工作空间 · POST /api/workspaces</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-4)', marginTop: 1 }}>新建工作空间 · POST /api/workspaces</div>
             </div>
           </div>
 
           <div style={{ padding: '5px 7px 1px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-5)', letterSpacing: '0.04em' }}>⌘ ⇧ O 切换</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-5)' }}>{workspaces.length} workspaces</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)', letterSpacing: '0.04em' }}>⌘ ⇧ O 切换</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>{workspaces.length} workspaces</span>
           </div>
         </div>
       )}
@@ -225,7 +225,7 @@ export function OrgSwitcher() {
             borderRadius: 10, padding: 20, boxShadow: 'var(--shadow-pop)',
           }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>创建 Workspace</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--fg-4)', marginBottom: 14 }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--t-fg-4)', marginBottom: 14 }}>
               新建一个公司 / 实验室 · POST /api/workspaces
             </div>
             <input

@@ -118,18 +118,18 @@ function QuickHireModal({ onClose, onCreated }: { onClose: () => void; onCreated
       background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
-        width: 520, background: 'var(--skin-panel)', border: '1px solid var(--border)',
+        width: 520, background: 'var(--skin-panel)', border: '1px solid var(--t-border)',
         borderRadius: 12, boxShadow: 'var(--shadow-pop)', padding: 22,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <span style={{ fontSize: 16, fontWeight: 800 }}>+ 新建 Agent</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>Quick Hire · Story 12.1</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>Quick Hire · Story 12.1</span>
           <span style={{ flex: 1 }} />
           <button className="fb-btn fb-btn-icon" onClick={onClose}>×</button>
         </div>
 
         <label style={{ display: 'block', marginBottom: 14 }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--fg-2)', marginBottom: 5 }}>名字</div>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--t-fg-2)', marginBottom: 5 }}>名字</div>
           <input
             data-testid="qh-name"
             value={name}
@@ -138,15 +138,15 @@ function QuickHireModal({ onClose, onCreated }: { onClose: () => void; onCreated
             disabled={submitting}
             style={{
               width: '100%', padding: '8px 10px',
-              background: 'var(--bg-elev-2)', border: '1px solid var(--border)',
-              borderRadius: 6, color: 'var(--fg-1)', fontSize: 13,
+              background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
+              borderRadius: 6, color: 'var(--t-fg)', fontSize: 13,
               fontFamily: 'var(--font-sans)', outline: 'none',
             }}
           />
         </label>
 
         <label style={{ display: 'block', marginBottom: 14 }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--fg-2)', marginBottom: 5 }}>角色描述（Soul）</div>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--t-fg-2)', marginBottom: 5 }}>角色描述（Soul）</div>
           <textarea
             data-testid="qh-soul"
             value={soul}
@@ -156,8 +156,8 @@ function QuickHireModal({ onClose, onCreated }: { onClose: () => void; onCreated
             rows={5}
             style={{
               width: '100%', padding: '8px 10px',
-              background: 'var(--bg-elev-2)', border: '1px solid var(--border)',
-              borderRadius: 6, color: 'var(--fg-1)', fontSize: 12.5, lineHeight: 1.55,
+              background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
+              borderRadius: 6, color: 'var(--t-fg)', fontSize: 12.5, lineHeight: 1.55,
               fontFamily: 'var(--font-sans)', outline: 'none', resize: 'vertical',
             }}
           />
@@ -172,7 +172,7 @@ function QuickHireModal({ onClose, onCreated }: { onClose: () => void; onCreated
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-5)' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-5)' }}>
             高级（工具权限 / 层级）后端会填默认值
           </span>
           <span style={{ flex: 1 }} />
@@ -256,7 +256,7 @@ export function TabAgents({ onNavigateToChat, onNavigateToTeams }: TabAgentsProp
 
   if (state.kind === 'loading') {
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-4)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
         加载 Agents 中…
       </div>
     );
@@ -266,7 +266,7 @@ export function TabAgents({ onNavigateToChat, onNavigateToTeams }: TabAgentsProp
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--status-reject)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
         <div data-testid="agents-error">加载失败：{state.msg}</div>
-        <div style={{ fontSize: 10.5, color: 'var(--fg-4)' }}>检查 Python 后端 (uvicorn shadowflow.server:app) 是否在 :8000</div>
+        <div style={{ fontSize: 10.5, color: 'var(--t-fg-4)' }}>检查 Python 后端 (uvicorn shadowflow.server:app) 是否在 :8000</div>
         <button className="fb-btn fb-btn-ghost fb-btn-sm" onClick={refresh}>重试</button>
       </div>
     );
@@ -284,12 +284,12 @@ export function TabAgents({ onNavigateToChat, onNavigateToTeams }: TabAgentsProp
 
       {/* ── Left: agent list ───────────────────────────────────── */}
       <div style={{
-        width: 300, borderRight: '1px solid var(--border)',
-        background: 'var(--bg-elev-1)', display: 'flex', flexDirection: 'column', minHeight: 0,
+        width: 300, borderRight: '1px solid var(--t-border)',
+        background: 'var(--t-panel)', display: 'flex', flexDirection: 'column', minHeight: 0,
       }}>
         <div style={{ padding: '14px 16px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="fb-label">Agents</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>· {agents.length}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>· {agents.length}</span>
           <button data-testid="open-hire" className="fb-btn fb-btn-icon" onClick={() => setHireOpen(true)} style={{ marginLeft: 'auto', width: 24, height: 24 }} title="新建 Agent">
             <span style={{ width: 14, height: 14, display: 'flex' }}>{FBIcons.plus}</span>
           </button>
@@ -302,7 +302,7 @@ export function TabAgents({ onNavigateToChat, onNavigateToTeams }: TabAgentsProp
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="按角色 / 模型筛选"
-              style={{ background: 'transparent', border: 0, outline: 0, color: 'var(--fg-1)', fontSize: 12, flex: 1, fontFamily: 'var(--font-sans)' }}
+              style={{ background: 'transparent', border: 0, outline: 0, color: 'var(--t-fg)', fontSize: 12, flex: 1, fontFamily: 'var(--font-sans)' }}
             />
           </div>
         </div>
@@ -312,16 +312,16 @@ export function TabAgents({ onNavigateToChat, onNavigateToTeams }: TabAgentsProp
             const realIdx = agents.indexOf(a);
             return (
               <div key={a.agent_id} onClick={() => setSelectedIdx(realIdx)} className={`fb-row ${realIdx === selectedIdx ? 'active' : ''}`} style={{
-                borderLeft: realIdx === selectedIdx ? '2px solid var(--accent)' : '2px solid transparent',
+                borderLeft: realIdx === selectedIdx ? '2px solid var(--t-accent)' : '2px solid transparent',
                 paddingLeft: 10,
               }}>
                 <FBAv glyph={a.g} color={a.color} size={36} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: realIdx === selectedIdx ? 700 : 600, color: 'var(--fg-1)' }}>{a.name}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>· {a.role}</span>
+                    <span style={{ fontSize: 13, fontWeight: realIdx === selectedIdx ? 700 : 600, color: 'var(--t-fg)' }}>{a.name}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>· {a.role}</span>
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 1 }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 1 }}>
                     {a.model}
                   </div>
                 </div>
@@ -345,32 +345,32 @@ export function TabAgents({ onNavigateToChat, onNavigateToTeams }: TabAgentsProp
             );
           })}
           {filtered.length === 0 && agents.length > 0 && (
-            <div style={{ padding: '16px', textAlign: 'center', color: 'var(--fg-5)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+            <div style={{ padding: '16px', textAlign: 'center', color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
               没有匹配的 Agent
             </div>
           )}
           {agents.length === 0 && (
             <div data-testid="agents-empty" style={{
               margin: '20px 4px', padding: '16px 12px', textAlign: 'center',
-              border: '1px dashed var(--border)', borderRadius: 8,
-              color: 'var(--fg-4)', fontSize: 12, lineHeight: 1.6,
+              border: '1px dashed var(--t-border)', borderRadius: 8,
+              color: 'var(--t-fg-4)', fontSize: 12, lineHeight: 1.6,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, color: 'var(--fg-3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, color: 'var(--t-fg-3)' }}>
                 <Armchair size={20} strokeWidth={2} />
               </div>
               还没有 Agent。<br />
-              点右上 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--fg-2)' }}>+</span> 招一个。
+              点右上 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--t-fg-2)' }}>+</span> 招一个。
             </div>
           )}
           <div
             onClick={() => setHireOpen(true)}
             style={{
               margin: '6px 4px 0', padding: '10px', textAlign: 'center',
-              border: '1px dashed var(--border)', borderRadius: 8,
-              color: 'var(--fg-4)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              border: '1px dashed var(--t-border)', borderRadius: 8,
+              color: 'var(--t-fg-4)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
               transition: 'background 120ms',
             }}
-            onMouseOver={e => (e.currentTarget.style.background = 'var(--bg-elev-2)')}
+            onMouseOver={e => (e.currentTarget.style.background = 'var(--t-panel-2)')}
             onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
           >
             + 新建 Agent
@@ -381,10 +381,10 @@ export function TabAgents({ onNavigateToChat, onNavigateToTeams }: TabAgentsProp
       {/* ── Center: profile + chat ─────────────────────────────── */}
       <div style={{
         flex: 1, display: 'flex', flexDirection: 'column',
-        background: 'var(--bg)', minWidth: 0, minHeight: 0,
+        background: 'var(--t-bg)', minWidth: 0, minHeight: 0,
       }}>
         {!cur && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-5)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
             选一个 Agent 看详情，或点 + 新建
           </div>
         )}
@@ -397,19 +397,19 @@ export function TabAgents({ onNavigateToChat, onNavigateToTeams }: TabAgentsProp
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.015em' }}>{cur.name}</span>
-                    <FBPill color="var(--accent-bright)">{cur.role.toUpperCase()}</FBPill>
-                    <FBPill color="var(--fg-4)" dim>{cur.level}</FBPill>
+                    <FBPill color="var(--t-accent-bright)">{cur.role.toUpperCase()}</FBPill>
+                    <FBPill color="var(--t-fg-4)" dim>{cur.level}</FBPill>
                     <span className={`fb-dot ${DOT_CLASS[cur.status]}`} style={{ marginLeft: 4 }} />
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-4)', marginTop: 4, letterSpacing: '0.02em' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)', marginTop: 4, letterSpacing: '0.02em' }}>
                     {cur.model} · agent_id={cur.agent_id}
                   </div>
-                  <div style={{ marginTop: 10, fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55, maxWidth: 680 }}>
+                  <div style={{ marginTop: 10, fontSize: 13, color: 'var(--t-fg-2)', lineHeight: 1.55, maxWidth: 680 }}>
                     {cur.desc}
                   </div>
                 </div>
                 <button className="fb-btn fb-btn-ghost" style={{ display: 'flex', gap: 6, alignItems: 'center' }} onClick={onNavigateToChat}>
-                  <span style={{ color: 'var(--fg-3)', width: 14, height: 14, display: 'flex' }}>{FBIcons.chat}</span>
+                  <span style={{ color: 'var(--t-fg-3)', width: 14, height: 14, display: 'flex' }}>{FBIcons.chat}</span>
                   DM
                 </button>
                 <button className="fb-btn fb-btn-primary" style={{ display: 'flex', gap: 6, alignItems: 'center' }} onClick={onNavigateToTeams}>
@@ -422,11 +422,11 @@ export function TabAgents({ onNavigateToChat, onNavigateToTeams }: TabAgentsProp
               <div className="fb-card" style={{ padding: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span className="fb-label">灵魂 Prompt · system</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>来自 backend.soul</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>来自 backend.soul</span>
                 </div>
                 <div style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.6, color: 'var(--fg-2)',
-                  padding: '10px 12px', background: 'var(--bg-elev-2)', borderRadius: 8, border: '1px solid var(--border)',
+                  fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.6, color: 'var(--t-fg-2)',
+                  padding: '10px 12px', background: 'var(--t-panel-2)', borderRadius: 8, border: '1px solid var(--t-border)',
                   whiteSpace: 'pre-wrap',
                 }}>
                   {cur.soul}
@@ -438,21 +438,21 @@ export function TabAgents({ onNavigateToChat, onNavigateToTeams }: TabAgentsProp
                 <div className="fb-card" style={{ padding: 12 }}>
                   <div className="fb-label" style={{ marginBottom: 8 }}>技能</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {cur.skills.length === 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-5)' }}>—</span>}
+                    {cur.skills.length === 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-5)' }}>—</span>}
                     {cur.skills.map(s => (
-                      <span key={s} className="fb-pill" style={{ color: 'var(--fg-2)', background: 'var(--bg-elev-2)', borderColor: 'var(--border)' }}>{s}</span>
+                      <span key={s} className="fb-pill" style={{ color: 'var(--t-fg-2)', background: 'var(--t-panel-2)', borderColor: 'var(--t-border)' }}>{s}</span>
                     ))}
                   </div>
                 </div>
                 <div className="fb-card" style={{ padding: 12 }}>
                   <div className="fb-label" style={{ marginBottom: 8 }}>工具权限 · {cur.level.split(' ')[0]}</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {cur.tools.length === 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-5)' }}>—</span>}
+                    {cur.tools.length === 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-5)' }}>—</span>}
                     {cur.tools.map(t => (
                       <span key={t.n} className="fb-pill" style={{
-                        color: t.ok ? 'var(--status-ok)' : 'var(--fg-5)',
-                        background: t.ok ? 'var(--status-ok-tint)' : 'var(--bg-elev-2)',
-                        borderColor: t.ok ? 'color-mix(in oklab, var(--status-ok) 30%, transparent)' : 'var(--border)',
+                        color: t.ok ? 'var(--status-ok)' : 'var(--t-fg-5)',
+                        background: t.ok ? 'var(--status-ok-tint)' : 'var(--t-panel-2)',
+                        borderColor: t.ok ? 'color-mix(in oklab, var(--status-ok) 30%, transparent)' : 'var(--t-border)',
                       }}>
                         {t.ok ? '✓' : '✗'} {t.n}
                       </span>
@@ -472,64 +472,64 @@ export function TabAgents({ onNavigateToChat, onNavigateToTeams }: TabAgentsProp
 
       {/* ── Right: history & teams ─────────────────────────────── */}
       <div style={{
-        width: 300, borderLeft: '1px solid var(--border)',
-        background: 'var(--bg-elev-1)', display: 'flex', flexDirection: 'column', minHeight: 0,
+        width: 300, borderLeft: '1px solid var(--t-border)',
+        background: 'var(--t-panel)', display: 'flex', flexDirection: 'column', minHeight: 0,
       }}>
         <div style={{ padding: '14px 16px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="fb-label">In teams</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>
             · {cur?.teams.filter(t => t.live).length ?? 0} active
           </span>
         </div>
         <div style={{ padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {!cur || cur.teams.length === 0 ? (
-            <div style={{ padding: '8px', fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--fg-5)', textAlign: 'center' }}>
+            <div style={{ padding: '8px', fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--t-fg-5)', textAlign: 'center' }}>
               暂未加入任何 Team
             </div>
           ) : cur.teams.map((t, i) => (
             <div key={i} className="fb-row">
               <span style={{
-                width: 30, height: 30, borderRadius: 8, background: 'var(--bg-elev-3)', border: '1px solid var(--border)',
+                width: 30, height: 30, borderRadius: 8, background: 'var(--t-panel-3)', border: '1px solid var(--t-border)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: 'var(--fg-3)',
+                fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: 'var(--t-fg-3)',
               }}>×5</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 600 }}>{t.n}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>{t.role}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>{t.role}</div>
               </div>
               {t.live && <span className="fb-pill-live">LIVE</span>}
             </div>
           ))}
         </div>
 
-        <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)' }}>
+        <div style={{ padding: '10px 16px', borderTop: '1px solid var(--t-border)' }}>
           <span className="fb-label">最近运行</span>
         </div>
         <div style={{ padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {!cur || cur.history.length === 0 ? (
-            <div style={{ padding: '8px', fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--fg-5)', textAlign: 'center' }}>
+            <div style={{ padding: '8px', fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--t-fg-5)', textAlign: 'center' }}>
               暂无运行记录
             </div>
           ) : cur.history.map((h, i) => (
             <div key={i} style={{
               display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px',
-              background: 'var(--bg-elev-2)', border: '1px solid var(--border)', borderRadius: 6,
+              background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 6,
             }}>
               <span className="fb-dot fb-dot-ok" />
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--fg-2)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.m}</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-5)' }}>{h.t}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--t-fg-2)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.m}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-5)' }}>{h.t}</span>
             </div>
           ))}
         </div>
 
         <div style={{ flex: 1 }} />
         <div style={{
-          padding: '10px 16px', borderTop: '1px solid var(--border)',
+          padding: '10px 16px', borderTop: '1px solid var(--t-border)',
           display: 'flex', alignItems: 'center', gap: 8,
-          fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)',
+          fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)',
         }}>
           <span className="fb-dot fb-dot-ok" />
-          tokens 30d · <span style={{ color: 'var(--fg-2)' }}>{cur?.tokens ?? '—'}</span> · cost <span style={{ color: 'var(--fg-2)' }}>{cur?.cost ?? '—'}</span>
+          tokens 30d · <span style={{ color: 'var(--t-fg-2)' }}>{cur?.tokens ?? '—'}</span> · cost <span style={{ color: 'var(--t-fg-2)' }}>{cur?.cost ?? '—'}</span>
         </div>
       </div>
     </>
