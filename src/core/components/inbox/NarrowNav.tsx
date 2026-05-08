@@ -1,14 +1,9 @@
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useI18n } from '../../../common/i18n';
 
-const NAV_ITEMS = [
-  { key: 'start', label: '开始', title: '开始', icon: 'start', to: '/start' },
-  { key: 'messages', label: '消息', title: '消息', icon: 'message', to: '/inbox' },
-  { key: 'templates', label: '模板', title: '模板', icon: 'templates', to: '/templates' },
-  { key: 'runs', label: '运行', title: '运行', icon: 'runs', to: '/runs' },
-  { key: 'archive', label: '归档', title: '归档', icon: 'archive', to: '/catalog' },
-] as const;
+type NavIconKind = 'start' | 'message' | 'templates' | 'runs' | 'archive';
 
-function NavIcon({ kind }: { kind: (typeof NAV_ITEMS)[number]['icon'] }) {
+function NavIcon({ kind }: { kind: NavIconKind }) {
   const common = {
     fill: 'none',
     stroke: 'currentColor',
@@ -64,6 +59,15 @@ function NavIcon({ kind }: { kind: (typeof NAV_ITEMS)[number]['icon'] }) {
 export function NarrowNav() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useI18n();
+
+  const NAV_ITEMS: Array<{ key: string; label: string; title: string; icon: NavIconKind; to: string }> = [
+    { key: 'start', label: t('shell.navStart'), title: t('shell.navStart'), icon: 'start', to: '/start' },
+    { key: 'messages', label: t('inbox.title'), title: t('inbox.title'), icon: 'message', to: '/inbox' },
+    { key: 'templates', label: t('shell.navTemplates'), title: t('shell.navTemplates'), icon: 'templates', to: '/templates' },
+    { key: 'runs', label: t('common.run'), title: t('common.run'), icon: 'runs', to: '/runs' },
+    { key: 'archive', label: t('common.about'), title: t('common.about'), icon: 'archive', to: '/catalog' },
+  ];
   return (
     <nav
       data-testid="narrow-nav"
@@ -105,7 +109,7 @@ export function NarrowNav() {
         type="button"
         onClick={() => navigate('/workspace')}
         className="mt-auto flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 font-semibold text-white/80"
-        aria-label="当前用户"
+        aria-label={t('inbox.currentUser')}
       >
         J
       </button>

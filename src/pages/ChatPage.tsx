@@ -67,8 +67,7 @@ function statusToken(status: GroupItem['status']): 'run' | 'warn' | 'ok' | 'gate
 // Single-shot timeline of recent tool calls per group; pure UI (no live API).
 // When a real activity stream lands we just swap the source array.
 function RecentActivity({ group }: { group: GroupItem | undefined }) {
-  const { language } = useI18n();
-  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
+  const { t } = useI18n();
 
   // Derive a small synthetic feed from the group's metrics so it feels alive
   // even without backend wiring. Stable per group (no random re-renders).
@@ -97,7 +96,7 @@ function RecentActivity({ group }: { group: GroupItem | undefined }) {
   return (
     <div style={{ padding: '14px 14px 18px' }}>
       <div className="hf-label" style={{ marginBottom: 8 }}>
-        {T('最近活动', 'RECENT ACTIVITY')}
+        {t('chat.recentActivity')}
       </div>
       {items.map(([s, t, a], i) => (
         <div
@@ -133,12 +132,11 @@ function RecentActivity({ group }: { group: GroupItem | undefined }) {
 function ApprovalsMiniList({
   groupId,
   pendingCount,
-  T,
 }: {
   groupId: string;
   pendingCount: number;
-  T: (zh: string, en: string) => string;
 }) {
+  const { t } = useI18n();
   const items = useMemo(() => {
     type Decision = 'approve' | 'reject' | 'pending';
     const seed: Array<{ approver: string; decision: Decision; ago: string }> = [
@@ -158,7 +156,7 @@ function ApprovalsMiniList({
   return (
     <div data-testid="approvals-mini-list" style={{ padding: '14px 14px 18px' }}>
       <div className="hf-label" style={{ marginBottom: 8 }}>
-        {T('待审批', 'PENDING')} · {pendingCount}
+        {t('chat.pendingApprovals')} · {pendingCount}
       </div>
       {items.map((it, i) => (
         <button
@@ -221,7 +219,7 @@ function ApprovalsMiniList({
           marginTop: 8,
         }}
       >
-        ↻ {T('刷新', 'refresh')}
+        ↻ {t('chat.refresh')}
       </div>
     </div>
   );
@@ -234,8 +232,7 @@ export default function ChatPage() {
   const group = groups.find((g) => g.id === groupId);
   const groupName = group?.name ?? groupId ?? '';
   const metrics = group?.metrics ?? DEFAULT_METRICS;
-  const { language } = useI18n();
-  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
+  const { t } = useI18n();
 
   const [activeTab, setActiveTab] = useState<'chat' | 'briefboard' | 'approvals'>('chat');
   const [briefBoardAlias, setBriefBoardAlias] = useState('BriefBoard');
@@ -344,7 +341,7 @@ export default function ChatPage() {
               <HfDot color={isRunning ? 'var(--t-accent)' : 'var(--t-fg-5)'} pulse={isRunning} />
               {isRunning ? `RUNNING · ${runningCount}` : 'IDLE'}
             </span>
-            <CreateAgentButton label="基于此对话创建 Agent" builderUrl={builderUrl} />
+            <CreateAgentButton label={t('chat.createAgentFromChat')} builderUrl={builderUrl} />
           </>
         }
       />
@@ -374,14 +371,14 @@ export default function ChatPage() {
           }}
         >
           <div className="hf-label" style={{ padding: '4px 10px 8px' }}>
-            团队 · TEAMS
+            {t('chat.teamsSectionLabel')}
           </div>
           {groups.length === 0 && (
             <div
               className="hf-meta"
               style={{ padding: '6px 10px', fontSize: 10 }}
             >
-              暂无团队 · 在 Teams 创建
+              {t('chat.noTeams')}
             </div>
           )}
           {groups.map((t) => {
@@ -463,11 +460,11 @@ export default function ChatPage() {
           })}
 
           <div className="hf-label" style={{ padding: '14px 10px 8px' }}>
-            DM · 直接对话
+            {t('chat.dmSectionLabel')}
           </div>
           {useInboxStore.getState().agentDMs.length === 0 && (
             <div className="hf-meta" style={{ padding: '6px 10px', fontSize: 10 }}>
-              暂无 DM
+              {t('chat.noDMs')}
             </div>
           )}
           {useInboxStore.getState().agentDMs.map((d) => (
@@ -593,13 +590,13 @@ export default function ChatPage() {
                   }}
                 >
                   <div className="hf-label" style={{ marginBottom: 12 }}>
-                    {T('审批工作流', 'APPROVAL WORKFLOW')}
+                    {t('chat.approvalWorkflow')}
                   </div>
                   <ApprovalGatePanel groupId={groupId} />
                 </div>
               ) : (
                 <div className="hf-meta" style={{ padding: 24, fontSize: 12 }}>
-                  {T('选择一个团队查看审批', 'Select a team to view approvals')}
+                  {t('chat.selectTeamToView')}
                 </div>
               )}
             </div>
@@ -635,11 +632,11 @@ export default function ChatPage() {
                       }}
                     >
                       <p style={{ fontSize: 13, color: 'var(--t-fg-4)', margin: 0 }}>
-                        {T('暂无消息，发送第一条', 'No messages — send the first one')}
+                        {t('chat.noMessages')}
                       </p>
                       {chatStream.loading && (
                         <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>
-                          {T('加载中...', 'Loading...')}
+                          {t('chat.loading')}
                         </span>
                       )}
                     </div>
@@ -691,10 +688,7 @@ export default function ChatPage() {
                     void handleSend();
                   }
                 }}
-                placeholder={T(
-                  '@阿批 把第 3 处不一致写成 issue…',
-                  '@reviewer turn the 3rd inconsistency into an issue…'
-                )}
+                placeholder={t('chat.composerPlaceholder')}
                 style={{
                   flex: 1,
                   fontSize: 13,
@@ -721,8 +715,8 @@ export default function ChatPage() {
                 onClick={() => void handleSend()}
               >
                 {chatStream.loading
-                  ? T('发送中…', 'Sending…')
-                  : T('发送', 'Send')}
+                  ? t('chat.sending')
+                  : t('chat.send')}
               </button>
             </div>
           </div>
@@ -743,7 +737,6 @@ export default function ChatPage() {
               <ApprovalsMiniList
                 groupId={groupId}
                 pendingCount={metrics.pendingApprovalsCount}
-                T={T}
               />
             ) : (
               <>
@@ -753,7 +746,7 @@ export default function ChatPage() {
             )
           ) : (
             <div className="hf-meta" style={{ padding: 14 }}>
-              {T('选择一个团队查看审批', 'Select a team to view approvals')}
+              {t('chat.selectTeamToView')}
             </div>
           )}
         </div>

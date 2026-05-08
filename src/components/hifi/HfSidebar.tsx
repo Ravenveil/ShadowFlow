@@ -12,6 +12,7 @@
  */
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
+import { openQuickSwitcher } from './QuickSwitcher';
 import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { HfDot } from './HfAtoms';
@@ -35,12 +36,12 @@ interface NavItem {
   badge?: number;
 }
 
-const buildNavItems = (T: (zh: string, en: string) => string): NavItem[] => [
-  { k: 'start',     Icon: Home,           label: T('开始', 'Start'),     hint: '⌘1', to: '/start' },
-  { k: 'chat',      Icon: MessageCircle,  label: T('聊天', 'Chat'),      hint: '⌘2', to: '/chat/default', badge: 3 },
-  { k: 'teams',     Icon: Users,          label: T('团队', 'Teams'),     hint: '⌘3', to: '/teams' },
-  { k: 'agents',    Icon: Bot,            label: T('员工', 'Agents'),    hint: '⌘4', to: '/agents' },
-  { k: 'templates', Icon: LayoutTemplate, label: T('模板', 'Templates'), hint: '⌘5', to: '/templates' },
+const buildNavItems = (t: (key: string) => string): NavItem[] => [
+  { k: 'start',     Icon: Home,           label: t('shell.navStart'),     hint: '⌘1', to: '/start' },
+  { k: 'chat',      Icon: MessageCircle,  label: t('shell.navChat'),      hint: '⌘2', to: '/chat/default', badge: 3 },
+  { k: 'teams',     Icon: Users,          label: t('shell.navTeams'),     hint: '⌘3', to: '/teams' },
+  { k: 'agents',    Icon: Bot,            label: t('shell.navAgents'),    hint: '⌘4', to: '/agents' },
+  { k: 'templates', Icon: LayoutTemplate, label: t('shell.navTemplates'), hint: '⌘5', to: '/templates' },
 ];
 
 interface HfSidebarProps {
@@ -75,9 +76,8 @@ const activeBar: CSSProperties = {
 };
 
 export function HfSidebar({ active = 'start' }: HfSidebarProps) {
-  const { language } = useI18n();
-  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
-  const NAV_ITEMS = useMemo(() => buildNavItems(T), [language]);
+  const { t } = useI18n();
+  const NAV_ITEMS = useMemo(() => buildNavItems(t), [t]);
   const [collapsed, setCollapsed] = useState(false);
 
   const W = collapsed ? 56 : 220;
@@ -127,7 +127,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
         )}
         <button
           onClick={() => setCollapsed(c => !c)}
-          title={collapsed ? T('展开侧边栏', 'Expand sidebar') : T('收起侧边栏', 'Collapse sidebar')}
+          title={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -151,6 +151,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
       {/* Search — hidden when collapsed */}
       {!collapsed && (
         <div
+          onClick={openQuickSwitcher}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -160,12 +161,13 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
             background: 'var(--t-bg)',
             border: '1px solid var(--t-border)',
             borderRadius: 8,
+            cursor: 'pointer',
           }}
         >
           <span style={{ color: 'var(--t-fg-4)', display: 'inline-flex', alignItems: 'center' }}>
             <Search size={12} strokeWidth={2} aria-hidden />
           </span>
-          <span style={{ flex: 1, fontSize: 11.5, color: 'var(--t-fg-4)' }}>{T('跳转 / 搜索', 'Jump / Search')}</span>
+          <span style={{ flex: 1, fontSize: 11.5, color: 'var(--t-fg-4)' }}>{t('shell.search')}</span>
           <span className="hf-kbd">⌘K</span>
         </div>
       )}
@@ -173,7 +175,8 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
       {/* Collapsed: search icon only */}
       {collapsed && (
         <div
-          title={T('跳转 / 搜索', 'Jump / Search')}
+          title={t('shell.search')}
+          onClick={openQuickSwitcher}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -190,7 +193,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
 
       {!collapsed && (
         <div className="hf-label" style={{ padding: '2px 12px 6px' }}>
-          {T('导航', 'NAVIGATION')}
+          {t('shell.navigation')}
         </div>
       )}
 
@@ -302,7 +305,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
         {collapsed ? (
           <Link
             to="/settings"
-            title={T('设置', 'Settings')}
+            title={t('shell.settings')}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -344,7 +347,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
                 fontWeight: active === 'settings' ? 700 : 500,
               }}
             >
-              {T('设置', 'Settings')}
+              {t('shell.settings')}
             </span>
             <span className="hf-kbd">⌘,</span>
           </Link>

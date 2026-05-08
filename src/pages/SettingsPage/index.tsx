@@ -89,58 +89,101 @@ interface NavGroup {
   items: NavItem[];
 }
 
-type Translate = (zh: string, en: string) => string;
-
-const buildNavGroups = (T: Translate): NavGroup[] => [
+// Static section IDs for hash routing (labels not needed here)
+const STATIC_NAV_GROUPS: NavGroup[] = [
   {
-    group: T('账户', 'Account'),
+    group: 'Account',
     items: [
-      { id: 'welcome', label: T('Profile · 快速上手', 'Profile · Quick Start') },
-      { id: 'about',   label: T('Account · 关于',     'Account · About') },
-      { id: 'billing', label: T('Billing',            'Billing'), comingSoon: true },
+      { id: 'welcome', label: 'Profile · Quick Start' },
+      { id: 'about',   label: 'Account · About' },
+      { id: 'billing', label: 'Billing', comingSoon: true },
     ],
   },
   {
-    group: T('外观', 'Appearance'),
+    group: 'Appearance',
     items: [
-      { id: 'appearance', label: T('Appearance · 外观', 'Appearance') },
-      { id: 'shortcuts',  label: T('Shortcuts',         'Shortcuts'), comingSoon: true },
-      { id: 'language',   label: T('Language · 语言',   'Language') },
+      { id: 'appearance', label: 'Appearance' },
+      { id: 'shortcuts',  label: 'Shortcuts', comingSoon: true },
+      { id: 'language',   label: 'Language' },
     ],
   },
   {
-    group: T('集成', 'Integrations'),
+    group: 'Integrations',
     items: [
-      { id: 'agent-backend',     label: T('Models & Providers', 'Models & Providers') },
-      { id: 'tool-providers',    label: T('Tool Providers',     'Tool Providers') },
-      { id: 'connectors',        label: T('Connectors',         'Connectors') },
-      { id: 'mcp-integrations',  label: T('MCP 集成',           'MCP Integrations') },
+      { id: 'agent-backend',    label: 'Models & Providers' },
+      { id: 'tool-providers',   label: 'Tool Providers' },
+      { id: 'connectors',       label: 'Connectors' },
+      { id: 'mcp-integrations', label: 'MCP Integrations' },
     ],
   },
   {
-    group: T('0G', '0G'),
+    group: '0G',
     items: [
-      { id: 'wallet',  label: T('Wallet',   'Wallet') },
-      { id: 'onchain', label: T('On-chain', 'On-chain'), comingSoon: true },
+      { id: 'wallet',  label: 'Wallet' },
+      { id: 'onchain', label: 'On-chain', comingSoon: true },
     ],
   },
   {
-    group: T('数据', 'Data'),
+    group: 'Data',
     items: [
-      { id: 'notifications',    label: T('Notifications · 通知',  'Notifications') },
-      { id: 'advanced',         label: T('Privacy & Data · 高级', 'Privacy & Data · Advanced') },
-      { id: 'media-providers',  label: T('媒体提供商',            'Media Providers') },
-      { id: 'pet',              label: T('宠物',                  'Pet') },
-      { id: 'workspace',        label: T('Workspace',             'Workspace'), comingSoon: true },
+      { id: 'notifications',   label: 'Notifications' },
+      { id: 'advanced',        label: 'Privacy & Data · Advanced' },
+      { id: 'media-providers', label: 'Media Providers' },
+      { id: 'pet',             label: 'Pet' },
+      { id: 'workspace',       label: 'Workspace', comingSoon: true },
     ],
   },
 ];
 
-// Static reference list (English, used purely for SectionId enumeration / hash routing).
-// Labels here are never rendered — runtime labels come from buildNavGroups(T) at render time.
-const STATIC_NAV_GROUPS = buildNavGroups((_zh, en) => en);
 const ALL_IDS = STATIC_NAV_GROUPS.flatMap((g) => g.items.map((it) => it.id));
 const ID_SET = new Set<string>(ALL_IDS);
+
+function buildNavGroups(t: (key: string) => string): NavGroup[] {
+  return [
+    {
+      group: t('settings.groupAccount'),
+      items: [
+        { id: 'welcome', label: t('settings.navProfile') },
+        { id: 'about',   label: t('settings.navAccount') },
+        { id: 'billing', label: t('settings.navBilling'), comingSoon: true },
+      ],
+    },
+    {
+      group: t('settings.groupAppearance'),
+      items: [
+        { id: 'appearance', label: t('settings.navAppearance') },
+        { id: 'shortcuts',  label: t('settings.navShortcuts'), comingSoon: true },
+        { id: 'language',   label: t('settings.navLanguage') },
+      ],
+    },
+    {
+      group: t('settings.groupIntegrations'),
+      items: [
+        { id: 'agent-backend',    label: t('settings.navModels') },
+        { id: 'tool-providers',   label: t('settings.navToolProviders') },
+        { id: 'connectors',       label: t('settings.navConnectors') },
+        { id: 'mcp-integrations', label: t('settings.navMcp') },
+      ],
+    },
+    {
+      group: t('settings.group0G'),
+      items: [
+        { id: 'wallet',  label: t('settings.navWallet') },
+        { id: 'onchain', label: t('settings.navOnchain'), comingSoon: true },
+      ],
+    },
+    {
+      group: t('settings.groupData'),
+      items: [
+        { id: 'notifications',   label: t('settings.navNotifications') },
+        { id: 'advanced',        label: t('settings.navPrivacy') },
+        { id: 'media-providers', label: t('settings.navMedia') },
+        { id: 'pet',             label: t('settings.navPet') },
+        { id: 'workspace',       label: t('settings.navWorkspace'), comingSoon: true },
+      ],
+    },
+  ];
+}
 
 const DEFAULT_SECTION: SectionId = 'wallet';
 
@@ -156,11 +199,8 @@ function readHashSection(): SectionId | null {
 // ---------------------------------------------------------------------------
 
 function ComingSoonSection({ label }: { label: string }) {
-  const { language } = useI18n();
-  const blurb =
-    language === 'zh'
-      ? '此功能正在开发中，敬请期待。'
-      : 'This feature is in development. Stay tuned.';
+  const { t } = useI18n();
+  const blurb = t('settings.comingSoonBlurb');
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
@@ -306,9 +346,8 @@ function NavButton({ item, active, onSelect }: NavButtonProps) {
 // ---------------------------------------------------------------------------
 
 export default function SettingsPage() {
-  const { language } = useI18n();
-  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
-  const NAV_GROUPS = useMemo(() => buildNavGroups(T), [language]);
+  const { t } = useI18n();
+  const NAV_GROUPS = useMemo(() => buildNavGroups(t), [t]);
 
   const SECTION_LABEL = useMemo<Record<SectionId, string>>(
     () =>
@@ -374,9 +413,9 @@ export default function SettingsPage() {
           {/* Title block — handoff L341-344 */}
           <div style={{ padding: '4px 12px 12px' }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--t-fg)' }}>
-              {T('设置', 'Settings')}
+              {t('settings.title')}
             </div>
-            <div className="hf-meta">{T('设置 · ⌘ ,', 'Settings · ⌘ ,')}</div>
+            <div className="hf-meta">{t('settings.titleMeta')}</div>
           </div>
 
           {NAV_GROUPS.map((g) => (

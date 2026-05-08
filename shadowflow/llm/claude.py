@@ -15,6 +15,52 @@ except ImportError:
 from .base import LLMProvider, LLMResponse, LLMConfig, ProviderType, Message, ToolCall
 
 
+def _normalize_vision_content(content):
+    """Convert OpenAI-style content list to Claude API format.
+
+    OpenAI image_url block:
+      {"type": "image_url", "image_url": {"url": "data:<media_type>;base64,<data>"}}
+    Claude image block:
+      {"type": "image", "source": {"type": "base64", "media_type": "<media_type>", "data": "<data>"}}
+    """
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return content
+    result = []
+    for part in content:
+        if not isinstance(part, dict):
+            result.append(part)
+            continue
+        if part.get("type") == "image_url":
+            url = (part.get("image_url") or {}).get("url", "")
+            if url.startswith("data:"):
+                # Parse data URL: data:<media_type>;base64,<data>
+                try:
+                    header, data = url.split(",", 1)
+                    media_type = header.split(":")[1].split(";")[0]
+                except (ValueError, IndexError):
+                    media_type = "image/jpeg"
+                    data = url
+                result.append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": data,
+                    },
+                })
+            else:
+                # Remote URL — Claude supports url source type
+                result.append({
+                    "type": "image",
+                    "source": {"type": "url", "url": url},
+                })
+        else:
+            result.append(part)
+    return result
+
+
 class ClaudeProvider(LLMProvider):
     """Claude API Provider"""
 
@@ -164,6 +210,9 @@ class ClaudeProvider(LLMProvider):
             else:
                 # 普通消息：移除内部标记后追加
                 clean = {k: v for k, v in raw.items() if k != "_is_tool_results"}
+                if "content" in clean:
+                    clean = dict(clean)
+                    clean["content"] = _normalize_vision_content(clean["content"])
                 api_messages.append(clean)
 
         # 移除内部聚合标记，不得传给 Anthropic API（会导致 400/422）
@@ -260,7 +309,10 @@ class ClaudeProvider(LLMProvider):
             if msg_dict["role"] == "system":
                 system_message = msg_dict["content"]
             else:
-                api_messages.append({"role": msg_dict["role"], "content": msg_dict.get("content", "")})
+                api_messages.append({
+                    "role": msg_dict["role"],
+                    "content": _normalize_vision_content(msg_dict.get("content", "")),
+                })
 
         try:
             create_kwargs: Dict[str, Any] = {

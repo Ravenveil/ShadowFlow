@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { CI } from './icons';
 import { SLASH_COMMANDS } from './mockData';
+import type { ContentPart } from '../../../api/chat';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,7 +31,8 @@ interface StagedFile {
   id: string;
   name: string;
   size: number;
-  dataUrl?: string; // preview for images
+  file: File;       // original File object for reading on send
+  dataUrl?: string; // preview for images (pre-read for thumbnails)
 }
 
 interface AgentMention {
@@ -67,6 +69,28 @@ function prettySize(bytes: number): string {
 
 function looksLikeImage(name: string) {
   return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(name);
+}
+
+const FILE_TEXT_RE = /\.(txt|md|markdown|py|ts|tsx|js|jsx|json|yaml|yml|toml|csv|sh|bash|html|css|xml|sql|rs|go|java|c|cpp|h|hpp|rb|php|r|swift|kt|lua|pl|scala|dart|cfg|ini|log)$/i;
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target?.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target?.result as string);
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +135,7 @@ function ToolBtn({
 // ---------------------------------------------------------------------------
 
 interface ComposerProps {
-  onSend: (text: string) => void;
+  onSend: (content: string | ContentPart[]) => void;
   streaming?: boolean;
   onStop?: () => void;
   agents?: AgentMention[];
@@ -198,12 +222,12 @@ export function Composer({ onSend, streaming = false, onStop, agents = DEFAULT_A
       if (looksLikeImage(file.name)) {
         const reader = new FileReader();
         reader.onload = (ev) => {
-          newStaged.push({ id, name: file.name, size: file.size, dataUrl: ev.target?.result as string });
+          newStaged.push({ id, name: file.name, size: file.size, file, dataUrl: ev.target?.result as string });
           if (--pending === 0) { setStaged(s => [...s, ...newStaged]); setUploading(false); }
         };
         reader.readAsDataURL(file);
       } else {
-        newStaged.push({ id, name: file.name, size: file.size });
+        newStaged.push({ id, name: file.name, size: file.size, file });
         if (--pending === 0) { setStaged(s => [...s, ...newStaged]); setUploading(false); }
       }
     });
@@ -262,13 +286,50 @@ export function Composer({ onSend, streaming = false, onStop, agents = DEFAULT_A
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      doSend();
+      void doSend();
     }
   };
 
-  function doSend() {
+  async function doSend() {
     if (!text.trim() && staged.length === 0) return;
-    onSend(text.trim());
+
+    if (staged.length === 0) {
+      onSend(text.trim());
+    } else {
+      const parts: ContentPart[] = [];
+      if (text.trim()) parts.push({ type: 'text', text: text.trim() });
+
+      for (const sf of staged) {
+        if (looksLikeImage(sf.name)) {
+          if (sf.size > MAX_IMAGE_BYTES) {
+            parts.push({ type: 'text', text: `[图片过大，已跳过: ${sf.name} (${prettySize(sf.size)}，限 5 MB)]` });
+            continue;
+          }
+          try {
+            const url = sf.dataUrl ?? await readFileAsDataUrl(sf.file);
+            parts.push({ type: 'image_url', image_url: { url } });
+          } catch {
+            parts.push({ type: 'text', text: `[图片读取失败: ${sf.name}]` });
+          }
+        } else if (FILE_TEXT_RE.test(sf.name)) {
+          try {
+            const content = await readFileAsText(sf.file);
+            parts.push({ type: 'text', text: `\`\`\`${sf.name}\n${content}\n\`\`\`` });
+          } catch {
+            parts.push({ type: 'text', text: `[文件读取失败: ${sf.name}]` });
+          }
+        } else {
+          parts.push({ type: 'text', text: `[附件: ${sf.name} (${prettySize(sf.size)})]` });
+        }
+      }
+
+      const result: string | ContentPart[] =
+        parts.length === 1 && parts[0].type === 'text'
+          ? parts[0].text
+          : parts;
+      onSend(result);
+    }
+
     setText('');
     setStaged([]);
     setMention(null);
@@ -584,7 +645,7 @@ export function Composer({ onSend, streaming = false, onStop, agents = DEFAULT_A
               data-testid="composer-send"
               type="button"
               disabled={!text.trim() && staged.length === 0}
-              onClick={doSend}
+              onClick={() => void doSend()}
               className="fb-btn fb-btn-primary fb-btn-sm"
               style={{ display: 'flex', gap: 5, alignItems: 'center', opacity: (text.trim() || staged.length > 0) ? 1 : 0.4 }}
             >

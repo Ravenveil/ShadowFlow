@@ -9,6 +9,7 @@ import { useState, useRef, useEffect } from 'react';
 import { FBAv, FBIcons } from '../FBAtoms';
 import { CI } from './icons';
 import type { LLMProvider } from '../TabChat';
+import type { ContentPart } from '../../../api/chat';
 import {
   DayDivider, SystemNote, SystemCard, AgentMsg, UserMsg,
   ApprovalGate, TypingIndicator,
@@ -104,7 +105,7 @@ function PinnedBrief() {
 interface ChatMainProps {
   conv: ConvId;
   messages: MsgItem[];
-  onSend: (text: string) => void;
+  onSend: (content: string | ContentPart[]) => void;
   onAddReaction: (msgId: number, emo: string) => void;
   onThreadOpen: () => void;
   onDrawerOpen?: (tab: string) => void;

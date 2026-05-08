@@ -24,6 +24,7 @@ import {
 } from '../templates/userTemplates';
 import { listTemplates, type TemplateListItem } from '../api/templates';
 import { HfTopBar, HfPill } from '../components/hifi';
+import { useI18n } from '../common/i18n';
 
 // ---------------------------------------------------------------------------
 // Types & helpers
@@ -92,6 +93,7 @@ function presetLevel(alias: string): number {
 export default function TemplatesPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { t } = useI18n();
   const lang: Lang = 'CN'; // hi-fi spec is CN-first; original page lang switch retained at TopBar globally
 
   // Current applied template — taken from URL ?current=alias (some flows pass it),
@@ -213,24 +215,24 @@ export default function TemplatesPage() {
     });
   }
 
-  function handleApply(t: UnifiedTemplate) {
-    navigate(t.applyHref);
+  function handleApply(tpl: UnifiedTemplate) {
+    navigate(tpl.applyHref);
   }
 
-  function handlePreview(t: UnifiedTemplate) {
-    navigate(t.previewHref);
+  function handlePreview(tpl: UnifiedTemplate) {
+    navigate(tpl.previewHref);
   }
 
-  function handleFork(t: UnifiedTemplate) {
+  function handleFork(tpl: UnifiedTemplate) {
     // Local fork = jump to editor in fork mode (preserves existing semantics
     // because /editor/:alias loads a template into a fresh canvas you can save)
-    navigate(`${t.applyHref}${t.applyHref.includes('?') ? '&' : '?'}fork=1`);
+    navigate(`${tpl.applyHref}${tpl.applyHref.includes('?') ? '&' : '?'}fork=1`);
   }
 
-  function handleDeleteMine(t: UnifiedTemplate) {
-    if (!t.rawUserTpl) return;
-    if (!window.confirm(`确认删除 "${t.rawUserTpl.title}"?`)) return;
-    deleteUserTemplate(t.rawUserTpl.alias);
+  function handleDeleteMine(tpl: UnifiedTemplate) {
+    if (!tpl.rawUserTpl) return;
+    if (!window.confirm(t('templates.deleteConfirm').replace('{title}', tpl.rawUserTpl.title))) return;
+    deleteUserTemplate(tpl.rawUserTpl.alias);
     setUserTpls(listUserTemplates());
   }
 
@@ -250,7 +252,7 @@ export default function TemplatesPage() {
             data-testid="paste-cid-btn"
           >
             <ClipboardPaste size={12} strokeWidth={2} aria-hidden />
-            <span>粘贴 CID</span>
+            <span>{t('templates.pasteCID')}</span>
           </button>
         }
       />
@@ -266,17 +268,17 @@ export default function TemplatesPage() {
             flexWrap: 'wrap',
           }}
         >
-          <span style={{ fontSize: 20, fontWeight: 800 }}>模板</span>
-          <span className="hf-meta">整套蓝图 (agents+team+DAG) · 一键套用</span>
+          <span style={{ fontSize: 20, fontWeight: 800 }}>{t('templates.title')}</span>
+          <span className="hf-meta">{t('templates.subtitle')}</span>
         </div>
 
         {/* Filter chips */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
           {([
-            ['official', `官方 · ${counts.official}`],
-            ['community', `社区 (0G) · ${counts.community}`],
-            ['mine', `我的 fork · ${counts.mine}`],
-            ['fav', `收藏 · ${counts.fav}`],
+            ['official', t('templates.filterOfficial').replace('{count}', String(counts.official))],
+            ['community', t('templates.filterCommunity').replace('{count}', String(counts.community))],
+            ['mine', t('templates.filterMine').replace('{count}', String(counts.mine))],
+            ['fav', t('templates.filterFav').replace('{count}', String(counts.fav))],
           ] as Array<[FilterKey, string]>).map(([k, label]) => (
             <button
               key={k}
@@ -302,12 +304,12 @@ export default function TemplatesPage() {
             }}
           >
             {filter === 'community'
-              ? '当前没有社区模板。试试 ↗ 粘贴 CID 导入一个。'
+              ? t('templates.emptyCommunity')
               : filter === 'mine'
-                ? '还没有自定义模板。在编辑器里点"保存"把当前画布存成模板。'
+                ? t('templates.emptyMine')
                 : filter === 'fav'
-                  ? '还没有收藏。点击卡片右上角的 ☆ 收藏。'
-                  : '没有可用模板。'}
+                  ? t('templates.emptyFav')
+                  : t('templates.emptyGeneric')}
           </div>
         )}
 
@@ -321,16 +323,16 @@ export default function TemplatesPage() {
             }}
             data-testid="template-grid"
           >
-            {visible.map((t) => (
+            {visible.map((tpl) => (
               <TemplateCard
-                key={t.key}
-                tpl={t}
-                fav={favorites.has(t.key)}
-                onToggleFav={() => toggleFav(t.key)}
-                onApply={() => handleApply(t)}
-                onPreview={() => handlePreview(t)}
-                onFork={() => handleFork(t)}
-                onDeleteMine={t.source === 'mine' ? () => handleDeleteMine(t) : undefined}
+                key={tpl.key}
+                tpl={tpl}
+                fav={favorites.has(tpl.key)}
+                onToggleFav={() => toggleFav(tpl.key)}
+                onApply={() => handleApply(tpl)}
+                onPreview={() => handlePreview(tpl)}
+                onFork={() => handleFork(tpl)}
+                onDeleteMine={tpl.source === 'mine' ? () => handleDeleteMine(tpl) : undefined}
               />
             ))}
           </div>
@@ -364,6 +366,7 @@ function TemplateCard({
   onDeleteMine,
 }: TemplateCardProps) {
   const [hover, setHover] = useState(false);
+  const { t } = useI18n();
 
   return (
     <div
@@ -417,15 +420,15 @@ function TemplateCard({
             {tpl.pathLabel}
           </div>
         </div>
-        {tpl.current && <HfPill>当前</HfPill>}
+        {tpl.current && <HfPill>{t('templates.currentPill')}</HfPill>}
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onToggleFav();
           }}
-          aria-label={fav ? '取消收藏' : '收藏'}
-          title={fav ? '取消收藏' : '收藏'}
+          aria-label={fav ? t('templates.unfavBtn') : t('templates.favBtn')}
+          title={fav ? t('templates.unfavBtn') : t('templates.favBtn')}
           style={{
             background: 'transparent',
             border: 'none',
@@ -494,7 +497,7 @@ function TemplateCard({
           }}
           data-testid={`apply-${tpl.key}`}
         >
-          套用
+          {t('templates.applyBtn')}
         </button>
         <button
           type="button"
@@ -503,7 +506,7 @@ function TemplateCard({
           style={{ fontSize: 11, padding: '6px 10px', cursor: 'pointer' }}
           data-testid={`preview-${tpl.key}`}
         >
-          预览
+          {t('templates.previewBtn')}
         </button>
         <button
           type="button"
@@ -523,7 +526,7 @@ function TemplateCard({
         <button
           type="button"
           onClick={onDeleteMine}
-          aria-label="删除"
+          aria-label={t('templates.deleteBtn')}
           style={{
             position: 'absolute',
             right: 8,
@@ -543,7 +546,7 @@ function TemplateCard({
             (e.currentTarget as HTMLButtonElement).style.color = 'var(--t-fg-5)';
           }}
         >
-          删除
+          {t('templates.deleteBtn')}
         </button>
       )}
     </div>

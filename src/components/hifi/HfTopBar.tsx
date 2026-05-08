@@ -38,8 +38,7 @@ function tierColor(latency: number): string {
  * Click opens the 0G testnet block explorer in a new tab.
  */
 function NetworkLatencyChip() {
-  const { language } = useI18n();
-  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
+  const { t } = useI18n();
   // TODO: replace with real GET /api/health.latency once endpoint exists
   const [latency, setLatency] = useState(87);
   const [hover, setHover] = useState(false);
@@ -61,10 +60,7 @@ function NetworkLatencyChip() {
       rel="noopener noreferrer"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      title={T(
-        `已连接 0G 测试网 · 最近 ping ${latency}ms · 点击打开链状态`,
-        `Connected to 0G testnet · last ping ${latency}ms · click to open status`,
-      )}
+      title={t('shell.networkTitle', { latency })}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -105,7 +101,7 @@ function NetworkLatencyChip() {
  */
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const { language } = useI18n();
+  const { t } = useI18n();
   const [hover, setHover] = useState(false);
 
   const resolvedDark =
@@ -116,14 +112,7 @@ function ThemeToggle() {
       window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   const next = resolvedDark ? 'light' : 'dark';
-  const title =
-    language === 'zh'
-      ? resolvedDark
-        ? '切到浅色'
-        : '切到深色'
-      : resolvedDark
-        ? 'Switch to Light'
-        : 'Switch to Dark';
+  const title = resolvedDark ? t('shell.switchToLight') : t('shell.switchToDark');
 
   return (
     <button
@@ -170,8 +159,7 @@ function ThemeToggle() {
  * workspaces with agent/team counts and a footer to create a new one.
  */
 function WorkspaceCrumb() {
-  const { language } = useI18n();
-  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
+  const { t } = useI18n();
 
   const current = useWorkspaceStore(selectCurrentWorkspace);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
@@ -211,10 +199,10 @@ function WorkspaceCrumb() {
     };
   }, [open]);
 
-  const name = current?.name ?? T('论文实验室', 'Paper Lab');
+  const name = current?.name ?? t('shell.workspaceDefaultName');
 
-  const agentLabel = T('员工', 'agents');
-  const teamLabel = T('团队', 'teams');
+  const agentLabel = t('shell.workspaceAgentUnit');
+  const teamLabel = t('shell.workspaceTeamUnit');
 
   function handleSwitch(id: string) {
     switchTo(id);
@@ -241,7 +229,7 @@ function WorkspaceCrumb() {
         onMouseLeave={() => setHover(false)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={T('切换工作区', 'Switch workspace')}
+        aria-label={t('shell.workspaceSwitchLabel')}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -285,7 +273,7 @@ function WorkspaceCrumb() {
       {open && (
         <div
           role="listbox"
-          aria-label={T('工作区列表', 'Workspace list')}
+          aria-label={t('shell.workspaceList')}
           style={{
             position: 'absolute',
             top: 'calc(100% + 6px)',
@@ -306,7 +294,7 @@ function WorkspaceCrumb() {
               className="hf-meta"
               style={{ padding: '8px 10px', fontSize: 10, color: 'var(--t-fg-4)' }}
             >
-              {T('暂无工作区', 'No workspaces yet')}
+              {t('shell.noWorkspaces')}
             </div>
           )}
           {workspaces.map((w) => {
@@ -392,7 +380,7 @@ function WorkspaceCrumb() {
                 </div>
                 {isActive && (
                   <span
-                    aria-label={T('当前', 'Active')}
+                    aria-label={t('shell.workspaceActiveLabel')}
                     style={{ color: 'var(--t-accent)', fontSize: 12, flexShrink: 0 }}
                   >
                     ✓
@@ -438,7 +426,7 @@ function WorkspaceCrumb() {
             }}
           >
             <Plus size={13} strokeWidth={2} aria-hidden />
-            <span>{T('新建工作区', 'New workspace')}</span>
+            <span>{t('shell.newWorkspace')}</span>
           </div>
           <div
             style={{
@@ -450,7 +438,7 @@ function WorkspaceCrumb() {
               textAlign: 'right',
             }}
           >
-            {T('⌘⇧O 切换', '⌘⇧O switch')}
+            {t('shell.workspaceSwitchShortcut')}
           </div>
         </div>
       )}

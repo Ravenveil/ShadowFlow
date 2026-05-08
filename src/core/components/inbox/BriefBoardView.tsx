@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchBriefBoard, type BriefBoardEntry } from '../../../api/groupApi';
+import { useI18n } from '../../../common/i18n';
 
 interface BriefBoardViewProps {
   groupId: string;
@@ -7,6 +8,7 @@ interface BriefBoardViewProps {
 }
 
 export function BriefBoardView({ groupId, date }: BriefBoardViewProps) {
+  const { t } = useI18n();
   const today = date ?? new Date().toLocaleDateString('en-CA');
   const [entries, setEntries] = useState<BriefBoardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,13 +24,14 @@ export function BriefBoardView({ groupId, date }: BriefBoardViewProps) {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-white/35">
-        加载中…
+        {t('inbox.loading')}
       </div>
     );
   }
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto px-6 py-4">
+      {/* TODO: i18n — "今日 · {today}" and "今天暂无 Agent 产出 · 运行一个工作流开始协作" have no locale key yet */}
       <h2 className="mb-4 text-sm font-semibold text-white/60">今日 · {today}</h2>
       {entries.length === 0 ? (
         <p className="text-sm text-white/35">今天暂无 Agent 产出 · 运行一个工作流开始协作</p>

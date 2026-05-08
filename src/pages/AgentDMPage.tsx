@@ -102,12 +102,12 @@ const MOCK_RECENT_RUNS: Array<{ when: string; what: string; ok: 'ok' | 'warn' | 
 
 interface BubbleProps {
   msg: MockMessage;
-  T: (zh: string, en: string) => string;
   agentName: string;
   agentGlyph: string;
 }
 
-function MessageBubble({ msg, T, agentName, agentGlyph }: BubbleProps) {
+function MessageBubble({ msg, agentName, agentGlyph }: BubbleProps) {
+  const { t } = useI18n();
   const isUser = msg.role === 'user';
   const rowStyle: CSSProperties = {
     display: 'flex',
@@ -188,10 +188,11 @@ function MessageBubble({ msg, T, agentName, agentGlyph }: BubbleProps) {
         </div>
         <span style={metaStyle}>
           {msg.timestamp}
-          {isUser && msg.status ? ` · ${statusGlyph(msg.status)} ${T(
-            msg.status === 'read' ? '已读' : msg.status === 'delivered' ? '已送达' : '已发送',
-            msg.status.toUpperCase(),
-          )}` : ''}
+          {isUser && msg.status ? ` · ${statusGlyph(msg.status)} ${
+            msg.status === 'read' ? t('agentDM.msgRead') :
+            msg.status === 'delivered' ? t('agentDM.msgDelivered') :
+            t('agentDM.msgSent')
+          }` : ''}
         </span>
       </div>
     </div>
@@ -200,11 +201,11 @@ function MessageBubble({ msg, T, agentName, agentGlyph }: BubbleProps) {
 
 interface AgentCardProps {
   agent: typeof MOCK_AGENT;
-  T: (zh: string, en: string) => string;
   language: 'zh' | 'en';
 }
 
-function AgentCard({ agent, T, language }: AgentCardProps) {
+function AgentCard({ agent, language }: AgentCardProps) {
+  const { t } = useI18n();
   const metricRow: CSSProperties = {
     display: 'flex',
     justifyContent: 'space-between',
@@ -258,25 +259,25 @@ function AgentCard({ agent, T, language }: AgentCardProps) {
       {/* metrics block */}
       <div>
         <div className="hf-label" style={{ marginBottom: 6 }}>
-          {T('指标', 'METRICS')}
+          {t('agentDM.metricsLabel')}
         </div>
         <div style={metricRow}>
-          <span style={metricLabel}>{T('运行', 'RUNS')}</span>
+          <span style={metricLabel}>{t('agentDM.metricsRuns')}</span>
           <span style={metricValue}>{agent.runs}</span>
         </div>
         <div style={metricRow}>
-          <span style={metricLabel}>{T('平均耗时', 'AVG')}</span>
+          <span style={metricLabel}>{t('agentDM.metricsAvg')}</span>
           <span style={metricValue}>{agent.avgDuration}</span>
         </div>
         <div style={metricRow}>
-          <span style={metricLabel}>{T('成功率', 'SUCCESS')}</span>
+          <span style={metricLabel}>{t('agentDM.metricsSuccess')}</span>
           <span style={metricValue}>{Math.round(agent.successRate * 100)}%</span>
         </div>
         <div style={metricRow}>
-          <span style={metricLabel}>{T('状态', 'STATUS')}</span>
+          <span style={metricLabel}>{t('agentDM.metricsStatus')}</span>
           <span style={{ ...metricValue, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <HfDot color="var(--t-ok)" pulse size={7} />
-            <span style={{ color: 'var(--t-ok)' }}>{T('在线', 'ONLINE')}</span>
+            <span style={{ color: 'var(--t-ok)' }}>{t('agentDM.metricsOnline')}</span>
           </span>
         </div>
       </div>
@@ -284,7 +285,7 @@ function AgentCard({ agent, T, language }: AgentCardProps) {
       {/* recent runs */}
       <div>
         <div className="hf-label" style={{ marginBottom: 8 }}>
-          {T('最近运行', 'RECENT RUNS')}
+          {t('agentDM.recentRuns')}
         </div>
         {MOCK_RECENT_RUNS.map((r, i) => (
           <div
@@ -331,8 +332,7 @@ export default function AgentDMPage() {
   const agentDMs = useInboxStore((s) => s.agentDMs);
   const agentMeta = agentDMs.find((a) => a.agentId === agentId);
   const agentName = agentMeta?.agentName ?? agentId ?? '';
-  const { language } = useI18n();
-  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
+  const { language, t } = useI18n();
 
   // Compose displayed agent profile: prefer real inbox-store metadata, fall
   // back to mock fixture (`agent-001` via test, or no agentId).
@@ -377,7 +377,7 @@ export default function AgentDMPage() {
       id: `u-${Date.now()}`,
       role: 'user',
       content: text,
-      timestamp: T('刚刚', 'just now'),
+      timestamp: t('agentDM.msgJustNow'),
       status: 'sent',
     };
     setMessages((prev) => [...prev, newMsg]);
@@ -390,8 +390,8 @@ export default function AgentDMPage() {
         {
           id: `a-${Date.now()}`,
           role: 'agent',
-          content: T('收到，我来处理。', 'Got it, on it.'),
-          timestamp: T('刚刚', 'just now'),
+          content: t('agentDM.msgReceived'),
+          timestamp: t('agentDM.msgJustNow'),
         },
       ]);
       scrollToBottom();
@@ -427,7 +427,7 @@ export default function AgentDMPage() {
       <HfTopBar
         right={
           <CreateAgentButton
-            label="创建类似 Agent"
+            label={t('agentDM.createSimilar')}
             builderUrl={builderUrl}
           />
         }
@@ -476,7 +476,7 @@ export default function AgentDMPage() {
               className="hf-mono"
               style={{ fontSize: 10, color: 'var(--t-ok)', letterSpacing: '.08em', textTransform: 'uppercase' }}
             >
-              {T('在线', 'online')}
+              {t('agentDM.online')}
             </span>
           </div>
           {agentMeta ? (
@@ -524,7 +524,6 @@ export default function AgentDMPage() {
               <MessageBubble
                 key={m.id}
                 msg={m}
-                T={T}
                 agentName={language === 'zh' ? displayAgent.name : displayAgent.nameEn}
                 agentGlyph={language === 'zh' ? displayAgent.glyph : displayAgent.glyphEn}
               />
@@ -547,12 +546,12 @@ export default function AgentDMPage() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onComposerKeyDown}
-              placeholder={T(
-                `发消息给 ${language === 'zh' ? displayAgent.name : displayAgent.nameEn} ...`,
-                `Message ${displayAgent.nameEn} ...`,
-              )}
+              // TODO: i18n — agentDM.composerPlaceholder has {name} interpolation not supported by t()
+              placeholder={language === 'zh'
+                ? `发消息给 ${displayAgent.name} ...`
+                : `Message ${displayAgent.nameEn} ...`}
               rows={1}
-              aria-label={T('单聊输入框', 'DM composer')}
+              aria-label={t('agentDM.composerAriaLabel')}
               style={{
                 flex: 1,
                 minHeight: 38,
@@ -579,7 +578,7 @@ export default function AgentDMPage() {
               type="button"
               onClick={sendMessage}
               disabled={!draft.trim()}
-              aria-label={T('发送', 'Send')}
+              aria-label={t('agentDM.send')}
               style={{
                 height: 38,
                 padding: '0 14px',
@@ -596,7 +595,7 @@ export default function AgentDMPage() {
                 transition: 'background 120ms ease, color 120ms ease',
               }}
             >
-              <span>{T('发送', 'Send')}</span>
+              <span>{t('agentDM.send')}</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.7 }}>
                 ⌘⏎
               </span>
@@ -612,7 +611,7 @@ export default function AgentDMPage() {
             overflow: 'hidden',
           }}
         >
-          <AgentCard agent={displayAgent} T={T} language={language as 'zh' | 'en'} />
+          <AgentCard agent={displayAgent} language={language as 'zh' | 'en'} />
         </div>
       </div>
 

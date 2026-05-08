@@ -17,8 +17,7 @@ export function ChatBriefBoardToggle({
   onChange,
   pendingApprovalsCount,
 }: ChatBriefBoardToggleProps) {
-  const { language } = useI18n();
-  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
+  const { t } = useI18n();
 
   const segmentClass = (tab: ChatBriefBoardTab) =>
     `px-4 py-1.5 rounded-[10px] text-sm transition-colors ${
@@ -27,7 +26,7 @@ export function ChatBriefBoardToggle({
         : 'text-white/60 hover:text-white/80'
     }`;
 
-  const approvalsLabel = T('审批', 'Approvals');
+  const approvalsLabel = t('chat.tabApprovals');
   const showApprovalsBadge =
     typeof pendingApprovalsCount === 'number' && pendingApprovalsCount > 0;
 
@@ -40,7 +39,7 @@ export function ChatBriefBoardToggle({
         className={segmentClass('chat')}
         onClick={() => onChange('chat')}
       >
-        Chat
+        {t('chat.tabChat')}
       </button>
       <button
         type="button"
@@ -63,7 +62,7 @@ export function ChatBriefBoardToggle({
           {approvalsLabel}
           {showApprovalsBadge && (
             <span
-              aria-label={T('待审批数量', 'pending approvals')}
+              aria-label={t('approval.pendingBadgeLabel')}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',

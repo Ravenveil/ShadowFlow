@@ -44,6 +44,7 @@ import { CreateTeamModal } from '../core/components/team/CreateTeamModal';
 import { TeamDetail } from '../core/components/team/TeamDetail';
 import { HfAvatar, HfTopBar } from '../components/hifi';
 import { PolicyMatrixPanel } from '../core/components/Panel/PolicyMatrixPanel';
+import { useI18n } from '../common/i18n';
 
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -59,6 +60,7 @@ interface TeamListColumnProps {
 }
 
 function TeamListColumn({ teams, activeId, onCreate, onSelect }: TeamListColumnProps) {
+  const { t } = useI18n();
   return (
     <div
       style={{
@@ -76,7 +78,7 @@ function TeamListColumn({ teams, activeId, onCreate, onSelect }: TeamListColumnP
           padding: '4px 8px 10px',
         }}
       >
-        <span className="hf-label">团队列表 · {teams.length}</span>
+        <span className="hf-label">{t('team.listLabel')} · {teams.length}</span>
         <button
           type="button"
           className="hf-btn"
@@ -84,12 +86,12 @@ function TeamListColumn({ teams, activeId, onCreate, onSelect }: TeamListColumnP
           onClick={onCreate}
           data-testid="new-team-btn"
         >
-          + 新建
+          {t('team.newBtn')}
         </button>
       </div>
       {teams.length === 0 ? (
         <div className="hf-meta" style={{ padding: '8px 10px' }}>
-          暂无团队
+          {t('team.noTeams')}
         </div>
       ) : (
         teams.map((t) => {
@@ -132,6 +134,7 @@ function TeamListColumn({ teams, activeId, onCreate, onSelect }: TeamListColumnP
 
 function TeamListPage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const [teams, setTeams] = useState<TeamRecord[]>([]);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('idle');
@@ -148,13 +151,14 @@ function TeamListPage() {
       setTeams(data);
       setLoadStatus('success');
     } catch (err) {
+      /* TODO: i18n — error messages with status code interpolation */
       const msg = err instanceof TeamApiError
-        ? `加载失败（${err.status}）`
-        : '加载失败，请刷新重试';
+        ? `${t('team.loadError')}（${err.status}）`
+        : t('team.loadError');
       setErrorMsg(msg);
       setLoadStatus('error');
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchTeams();
@@ -169,11 +173,12 @@ function TeamListPage() {
     setDeleteError(null);
     try {
       await deleteTeam(teamId);
-      setTeams((prev) => prev.filter((t) => t.team_id !== teamId));
+      setTeams((prev) => prev.filter((tm) => tm.team_id !== teamId));
     } catch (err) {
+      /* TODO: i18n — delete error messages with status code interpolation */
       const msg = err instanceof TeamApiError
-        ? `删除失败（${err.status}）`
-        : '删除失败，请重试';
+        ? `${t('common.delete')} ${t('team.loadError')}（${err.status}）`
+        : t('team.loadError');
       setDeleteError(msg);
     } finally {
       setDeletingId(null);
@@ -202,7 +207,7 @@ function TeamListPage() {
         <div style={{ maxWidth: 1080, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <span style={{ fontSize: 20, fontWeight: 800 }}>Teams</span>
-            <span className="hf-meta">把 Agent 组织成团队，共同完成复杂任务</span>
+            <span className="hf-meta">{t('team.pageSubtitle')}</span>
           </div>
 
           {/* Error banners */}
@@ -248,7 +253,7 @@ function TeamListPage() {
               marginBottom: 14,
             }}
           >
-            <span className="hf-label">官方 · 工作区</span>
+            <span className="hf-label">{t('team.workspaceLabel')}</span>
             <button
               type="button"
               onClick={() => setShowModal(true)}
@@ -256,7 +261,7 @@ function TeamListPage() {
               style={{ fontSize: 11 }}
               data-testid="new-team-btn"
             >
-              + 新建 Team
+              {t('team.newTeam')}
             </button>
           </div>
 
@@ -266,7 +271,7 @@ function TeamListPage() {
               className="hf-meta"
               style={{ padding: '60px 0', textAlign: 'center', fontSize: 12 }}
             >
-              加载中…
+              {t('team.loading')}
             </p>
           )}
 
@@ -299,7 +304,7 @@ function TeamListPage() {
               </div>
               <div>
                 <p style={{ fontSize: 13, color: 'var(--t-fg-2)', margin: 0 }}>
-                  还没有 Team。
+                  {t('team.noTeamYet')}
                 </p>
                 <p
                   style={{
@@ -308,7 +313,7 @@ function TeamListPage() {
                     color: 'var(--t-fg-4)',
                   }}
                 >
-                  点击「+ 新建 Team」，把 Agent 组织起来。
+                  {t('team.newTeamHint')}
                 </p>
               </div>
               <button
@@ -318,7 +323,7 @@ function TeamListPage() {
                 className="hf-btn hf-btn-pri"
                 style={{ fontSize: 12 }}
               >
-                + 新建 Team
+                {t('team.newTeam')}
               </button>
             </div>
           )}
@@ -363,9 +368,9 @@ function TeamListPage() {
 // TeamDetailPage — /teams/:teamId
 // ---------------------------------------------------------------------------
 
-type DetailTab = '成员' | 'Policy Matrix' | '工作流 DAG' | '活动' | '依赖';
+type DetailTab = 'members' | 'policy' | 'dag' | 'activity' | 'dependency';
 
-const DETAIL_TABS: DetailTab[] = ['成员', 'Policy Matrix', '工作流 DAG', '活动', '依赖'];
+const DETAIL_TABS: DetailTab[] = ['members', 'policy', 'dag', 'activity', 'dependency'];
 
 interface LaneAvatar {
   g: string;
@@ -498,13 +503,14 @@ function LaneDiagram({ lanes }: { lanes: LaneData[] }) {
 function TeamDetailPage() {
   const { teamId } = useParams<{ teamId: string }>();
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const [team, setTeam] = useState<TeamRecord | null>(null);
   const [allTeams, setAllTeams] = useState<TeamRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // Default tab matches Hi-Fi v2 spec — `工作流 DAG` is highlighted there.
-  const [activeTab, setActiveTab] = useState<DetailTab>('工作流 DAG');
+  // Default tab matches Hi-Fi v2 spec — DAG is highlighted there.
+  const [activeTab, setActiveTab] = useState<DetailTab>('dag');
 
   // Fetch single team
   useEffect(() => {
@@ -514,10 +520,11 @@ function TeamDetailPage() {
     getTeam(teamId)
       .then(setTeam)
       .catch((err) => {
-        setErrorMsg(err instanceof TeamApiError ? `错误（${err.status}）` : '加载失败');
+        /* TODO: i18n — error with status code interpolation */
+        setErrorMsg(err instanceof TeamApiError ? `${t('team.loadError')}（${err.status}）` : t('team.loadError'));
       })
       .finally(() => setLoading(false));
-  }, [teamId]);
+  }, [teamId, t]);
 
   // Fetch all teams for the left column rail
   useEffect(() => {
@@ -539,7 +546,7 @@ function TeamDetailPage() {
           color: 'var(--t-fg-4)',
         }}
       >
-        加载中…
+        {t('team.loading')}
       </div>
     );
   }
@@ -558,14 +565,14 @@ function TeamDetailPage() {
           color: 'var(--t-fg-3)',
         }}
       >
-        <p style={{ fontSize: 13 }}>{errorMsg ?? 'Team 未找到'}</p>
+        <p style={{ fontSize: 13 }}>{errorMsg ?? t('team.notFoundMsg')}</p>
         <button
           type="button"
           onClick={() => navigate('/teams')}
           className="hf-btn"
           style={{ fontSize: 11 }}
         >
-          ← 返回 Teams
+          {t('team.backToTeams')}
         </button>
       </div>
     );
@@ -593,14 +600,14 @@ function TeamDetailPage() {
               className="hf-btn"
               style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}
             >
-              <Upload size={12} strokeWidth={2} aria-hidden /> 上链
+              <Upload size={12} strokeWidth={2} aria-hidden /> {t('team.onchain')}
             </button>
             <button
               type="button"
               className="hf-btn hf-btn-pri"
               style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}
             >
-              <Play size={12} strokeWidth={2} aria-hidden /> Run
+              <Play size={12} strokeWidth={2} aria-hidden /> {t('team.run')}
             </button>
           </>
         }
@@ -645,7 +652,7 @@ function TeamDetailPage() {
               className="hf-btn"
               style={{ fontSize: 11 }}
             >
-              ← 返回 Teams
+              {t('team.backToTeams')}
             </button>
             <div style={{ minWidth: 0 }}>
               <h2
@@ -683,14 +690,21 @@ function TeamDetailPage() {
               background: 'var(--t-bg)',
             }}
           >
-            {DETAIL_TABS.map((t) => {
-              const on = activeTab === t;
+            {DETAIL_TABS.map((tab) => {
+              const on = activeTab === tab;
+              const tabLabel: Record<DetailTab, string> = {
+                members: t('team.tabMembers'),
+                policy: t('team.tabPolicyMatrix'),
+                dag: t('team.tabWorkflowDAG'),
+                activity: t('team.tabActivity'),
+                dependency: t('team.tabDependency'),
+              };
               return (
                 <button
                   type="button"
-                  key={t}
-                  onClick={() => setActiveTab(t)}
-                  data-testid={`team-detail-tab-${t}`}
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  data-testid={`team-detail-tab-${tab}`}
                   style={{
                     padding: '8px 2px',
                     fontSize: 12.5,
@@ -708,7 +722,7 @@ function TeamDetailPage() {
                     borderBottomColor: on ? 'var(--t-accent)' : 'transparent',
                   }}
                 >
-                  {t}
+                  {tabLabel[tab]}
                 </button>
               );
             })}
@@ -724,32 +738,32 @@ function TeamDetailPage() {
               overflow: 'auto',
             }}
           >
-            {activeTab === '工作流 DAG' && <LaneDiagram lanes={PLACEHOLDER_LANES} />}
+            {activeTab === 'dag' && <LaneDiagram lanes={PLACEHOLDER_LANES} />}
 
-            {activeTab === '成员' && (
+            {activeTab === 'members' && (
               <div style={{ padding: '14px 22px 24px', minWidth: 0 }}>
                 <TeamDetail team={team} onTeamUpdated={setTeam} />
               </div>
             )}
 
-            {activeTab === 'Policy Matrix' && (
+            {activeTab === 'policy' && (
               <div style={{ padding: '14px 22px 24px', minWidth: 0 }}>
                 <PolicyMatrixPanel readOnly={false} />
               </div>
             )}
 
-            {activeTab === '活动' && (
+            {activeTab === 'activity' && (
               <div style={{ padding: '14px 22px 24px', minWidth: 0 }}>
                 <div className="hf-card" style={{ padding: 24 }}>
-                  暂未实现 · Coming soon
+                  {t('team.comingSoon')}
                 </div>
               </div>
             )}
 
-            {activeTab === '依赖' && (
+            {activeTab === 'dependency' && (
               <div style={{ padding: '14px 22px 24px', minWidth: 0 }}>
                 <div className="hf-card" style={{ padding: 24 }}>
-                  暂未实现 · Coming soon
+                  {t('team.comingSoon')}
                 </div>
               </div>
             )}

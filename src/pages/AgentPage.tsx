@@ -25,6 +25,7 @@ import {
 import type { AgentRecord } from '../api/agents';
 import { BlueprintModal } from '../components/agents/BlueprintModal';
 import { HfTopBar, HfAvatar, HfPill } from '../components/hifi';
+import { useI18n } from '../common/i18n';
 
 // ---------------------------------------------------------------------------
 // Types & helpers
@@ -94,6 +95,7 @@ function agentLevel(agent: AgentRecord): number {
 export function AgentPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { t } = useI18n();
 
   // Data
   const [agents, setAgents] = useState<AgentRecord[]>([]);
@@ -136,6 +138,7 @@ export function AgentPage() {
       setAgents(data);
       setLoadStatus('success');
     } catch (err) {
+      // TODO: i18n — error messages with dynamic interpolation, no matching key yet
       const msg = err instanceof AgentApiError
         ? `加载失败（${err.status}）`
         : '加载失败，请刷新重试';
@@ -186,6 +189,7 @@ export function AgentPage() {
       setHireName('');
       setHireSoul('');
     } catch (err) {
+      // TODO: i18n — error messages with dynamic interpolation, no matching key yet
       if (err instanceof AgentApiError) {
         setHireError(`创建失败（${err.status}）：${err.code}`);
       } else {
@@ -204,6 +208,7 @@ export function AgentPage() {
       await deleteAgent(agentId);
       setAgents((prev) => prev.filter((a) => a.agent_id !== agentId));
     } catch (err) {
+      // TODO: i18n — error messages with dynamic interpolation, no matching key yet
       const msg = err instanceof AgentApiError ? `删除失败（${err.status}）` : '删除失败，请重试';
       setDeleteError(msg);
     } finally {
@@ -270,16 +275,16 @@ export function AgentPage() {
               flexWrap: 'wrap',
             }}
           >
-            <span style={{ fontSize: 18, fontWeight: 800 }}>人才库</span>
+            <span style={{ fontSize: 18, fontWeight: 800 }}>{t('agent.talent')}</span>
             <span className="hf-meta">
               {counts.hired} hired · {counts.community} community
             </span>
             <div style={{ flex: 1 }} />
             {([
-              ['all', '全部'],
-              ['hired', '已雇'],
-              ['available', '可雇'],
-              ['community', '社区 0G'],
+              ['all', t('agent.filterAll')],
+              ['hired', t('agent.filterHired')],
+              ['available', t('agent.filterAvailable')],
+              ['community', t('agent.filterCommunity')],
             ] as Array<[FilterKey, string]>).map(([k, label]) => (
               <button
                 key={k}
@@ -296,7 +301,7 @@ export function AgentPage() {
               <input
                 type="text"
                 value={search}
-                placeholder="搜索…"
+                placeholder={t('agent.searchPlaceholder')}
                 onChange={(e) => setSearch(e.target.value)}
                 onBlur={() => { if (!search) setSearchOpen(false); }}
                 autoFocus
@@ -317,7 +322,7 @@ export function AgentPage() {
                 onClick={() => setSearchOpen(true)}
                 className="hf-chip"
                 style={{ fontSize: 10, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
-                aria-label="搜索"
+                aria-label={t('agent.searchLabel')}
               >
                 <Search size={12} strokeWidth={2} aria-hidden />
               </button>
@@ -351,7 +356,7 @@ export function AgentPage() {
                   textDecoration: 'underline',
                 }}
               >
-                关闭
+                {t('agent.closeError')}
               </button>
             </div>
           )}
@@ -359,7 +364,7 @@ export function AgentPage() {
           {/* Loading */}
           {loadStatus === 'loading' && (
             <div className="hf-meta" style={{ padding: '40px 0', textAlign: 'center' }}>
-              加载中…
+              {t('agent.loading')}
             </div>
           )}
 
@@ -389,7 +394,7 @@ export function AgentPage() {
                   textDecoration: 'underline',
                 }}
               >
-                重试
+                {t('common.retry')}
               </button>
             </div>
           )}
@@ -405,7 +410,7 @@ export function AgentPage() {
               className="hf-meta"
               style={{ padding: '40px 0', textAlign: 'center' }}
             >
-              没有匹配的 Agent。
+              {t('agent.noMatch')}
             </div>
           )}
 
@@ -443,46 +448,46 @@ export function AgentPage() {
         >
           <form onSubmit={handleHire}>
             <div className="hf-label" style={{ color: 'var(--t-accent)', marginBottom: 8 }}>
-              QUICK HIRE · 30 秒招一个
+              {t('agent.quickHireLabel')}
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>
-              给名字 + 灵魂 → 上岗
+              {t('agent.quickHireSubtitle')}
             </div>
 
-            <FormRow label="名字">
+            <FormRow label={t('agent.fieldName')}>
               <input
                 ref={nameRef}
                 type="text"
                 value={hireName}
                 onChange={(e) => setHireName(e.target.value)}
-                placeholder="读读"
+                placeholder={t('agent.namePlaceholder')}
                 data-testid="hire-name"
                 style={inputStyle()}
               />
             </FormRow>
 
-            <FormRow label="角色">
+            <FormRow label={t('agent.fieldRole')}>
               <input
                 type="text"
                 value={hireRole}
                 onChange={(e) => setHireRole(e.target.value)}
-                placeholder="Reader"
+                placeholder={t('agent.rolePlaceholder')}
                 style={inputStyle()}
               />
             </FormRow>
 
-            <FormRow label="灵魂" tall>
+            <FormRow label={t('agent.fieldSoul')} tall>
               <textarea
                 value={hireSoul}
                 onChange={(e) => setHireSoul(e.target.value)}
-                placeholder="抓取/抽样长文本，按重要性排序，输出结构化摘要"
+                placeholder={t('agent.soulPlaceholder')}
                 data-testid="hire-soul"
                 rows={3}
                 style={{ ...inputStyle(), minHeight: 56, resize: 'vertical', fontFamily: 'inherit' }}
               />
             </FormRow>
 
-            <FormRow label="模型">
+            <FormRow label={t('agent.fieldModel')}>
               <select
                 value={hireModel}
                 onChange={(e) => setHireModel(e.target.value)}
@@ -496,15 +501,15 @@ export function AgentPage() {
               </select>
             </FormRow>
 
-            <FormRow label="权限 L">
+            <FormRow label={t('agent.fieldLevel')}>
               <select
                 value={hireLevel}
                 onChange={(e) => setHireLevel(e.target.value as 'L1' | 'L2' | 'L3')}
                 style={inputStyle()}
               >
-                <option value="L1">L1 · 只读</option>
-                <option value="L2">L2 · 工具</option>
-                <option value="L3">L3 · 外发（需审批）</option>
+                <option value="L1">{t('agent.levelL1')}</option>
+                <option value="L2">{t('agent.levelL2')}</option>
+                <option value="L3">{t('agent.levelL3')}</option>
               </select>
             </FormRow>
 
@@ -539,17 +544,17 @@ export function AgentPage() {
               }}
               data-testid="hire-submit"
             >
-              {hiring ? '上岗中…' : '✦ 上岗'}
+              {hiring ? t('agent.hiring') : t('agent.hireBtn')}
             </button>
           </form>
 
           {/* Recent hires */}
           <div className="hf-label" style={{ marginTop: 18, marginBottom: 8 }}>
-            近期招聘
+            {t('agent.recentHires')}
           </div>
           {recent.length === 0 ? (
             <div className="hf-meta" style={{ fontSize: 10 }}>
-              还没有动作 — Quick Hire 一个试试。
+              {t('agent.noRecentHires')}
             </div>
           ) : (
             recent.map((r, i) => (
@@ -636,6 +641,7 @@ function FormRow({
 }
 
 function EmptyState({ onNewAgent }: { onNewAgent: () => void }) {
+  const { t } = useI18n();
   return (
     <div
       style={{
@@ -664,12 +670,12 @@ function EmptyState({ onNewAgent }: { onNewAgent: () => void }) {
         <Bot size={28} strokeWidth={2} aria-hidden />
       </div>
       <div>
-        <p style={{ fontSize: 13, color: 'var(--t-fg-2)' }}>还没有 Agent。</p>
+        <p style={{ fontSize: 13, color: 'var(--t-fg-2)' }}>{t('agent.noAgents')}</p>
         <p
           className="hf-meta"
           style={{ marginTop: 4, fontSize: 11, color: 'var(--t-fg-4)' }}
         >
-          填一下右侧 Quick Hire — 给它一个名字 + 灵魂，就能开始工作。
+          {t('agent.noAgentsHint')}
         </p>
       </div>
       <button
@@ -679,7 +685,7 @@ function EmptyState({ onNewAgent }: { onNewAgent: () => void }) {
         style={{ fontSize: 11 }}
         data-testid="empty-new-agent-btn"
       >
-        + 新建 Agent
+        {t('agent.newAgent')}
       </button>
     </div>
   );
@@ -694,6 +700,7 @@ interface AgentTileProps {
 
 function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
   const [hover, setHover] = useState(false);
+  const { t } = useI18n();
   const role = agentRole(agent);
   const glyph = agentGlyph(agent.name);
   const color = agentColor(agent);
@@ -707,6 +714,7 @@ function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
 
   function handleDeleteClick(e: React.MouseEvent) {
     e.stopPropagation();
+    // TODO: i18n — agent.deleteConfirm has {name} interpolation not supported by t()
     if (window.confirm(`删除 ${agent.name}?`)) onDelete(agent.agent_id);
   }
 
@@ -801,8 +809,8 @@ function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
             {role}
           </div>
         </div>
-        {hired && <HfPill>已雇</HfPill>}
-        {!hired && agent.source === 'catalog' && <HfPill color="var(--t-run)">社区</HfPill>}
+        {hired && <HfPill>{t('agent.hired')}</HfPill>}
+        {!hired && agent.source === 'catalog' && <HfPill color="var(--t-run)">{t('agent.community')}</HfPill>}
       </div>
 
       {/* Soul preview */}
@@ -837,7 +845,7 @@ function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
           <button
             type="button"
             onClick={handleDeleteClick}
-            aria-label="删除 Agent"
+            aria-label={t('agent.deleteAgent')}
             style={{
               fontSize: 10,
               padding: '2px 6px',
@@ -857,7 +865,7 @@ function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
               (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
             }}
           >
-            删除
+            {t('agent.deleteBtn')}
           </button>
         )}
       </div>

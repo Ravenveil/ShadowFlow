@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import pathlib
 import re
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
@@ -44,7 +44,7 @@ DEFAULT_MODELS = {
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant", "system"]
-    content: str
+    content: Union[str, List[Any]]
 
 
 class ChatRequest(BaseModel):

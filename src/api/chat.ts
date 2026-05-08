@@ -5,9 +5,13 @@
 
 import { getApiBase } from './_base';
 
+export type TextPart = { type: 'text'; text: string };
+export type ImagePart = { type: 'image_url'; image_url: { url: string } };
+export type ContentPart = TextPart | ImagePart;
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | ContentPart[];
 }
 
 export interface ChatCompletionRequest {

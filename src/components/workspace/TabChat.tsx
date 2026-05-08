@@ -17,6 +17,7 @@ import { RailBotPanel } from './chat/RailBotPanel';
 import { INITIAL_CONV_MSGS } from './chat/mockData';
 import type { ConvId, MsgItem } from './chat/types';
 import { chatCompletion } from '../../api/chat';
+import type { ContentPart } from '../../api/chat';
 
 export const LLM_PROVIDERS = ['zhipu', 'openai', 'claude', 'deepseek', 'ollama'] as const;
 export type LLMProvider = (typeof LLM_PROVIDERS)[number];
@@ -56,7 +57,7 @@ export function TabChat() {
   // AbortController so rapid messages cancel the previous in-flight request
   const abortRef = useRef<AbortController | null>(null);
 
-  const handleSend = useCallback(async (text: string) => {
+  const handleSend = useCallback(async (content: string | ContentPart[]) => {
     // Cancel any previous in-flight request
     if (abortRef.current) {
       abortRef.current.abort();
@@ -73,7 +74,11 @@ export function TabChat() {
     setConvMsgs(prev => {
       const cur = prev[activeConv];
       const filtered = cur.filter(m => m.type !== 'typing');
-      const newMsg: MsgItem = { type: 'user', id: userMsgId, name: '张明', time: timeStr, bodyText: text };
+    const displayText = typeof content === 'string'
+      ? content
+      : content.filter((p): p is import('../../api/chat').TextPart => p.type === 'text')
+          .map(p => p.text).join(' ') || '[图片/文件]';
+    const newMsg: MsgItem = { type: 'user', id: userMsgId, name: '张明', time: timeStr, bodyText: displayText };
       const typingMsg: MsgItem = { type: 'typing', id: typingMsgId };
       return { ...prev, [activeConv]: [...filtered, newMsg, typingMsg] };
     });
@@ -85,12 +90,12 @@ export function TabChat() {
           m.type === 'user' || m.type === 'agent'
         )
         .slice(-20);
-      const llmMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [
+      const llmMessages: Array<{ role: 'user' | 'assistant'; content: string | ContentPart[] }> = [
         ...history.map(m => ({
           role: (m.type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
           content: m.bodyText,
         })),
-        { role: 'user' as const, content: text },
+        { role: 'user' as const, content },
       ];
       const result = await chatCompletion(
         { messages: llmMessages },

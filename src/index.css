@@ -571,3 +571,23 @@ input, textarea, select { font-family: inherit; color: inherit; }
 @keyframes hf-pulse  { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 @keyframes hf-cursor { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes hf-dash   { to { stroke-dashoffset: -16; } }
+
+/* ── Run Session animations ── */
+@keyframes rs-spin  { to { transform: rotate(360deg); } }
+@keyframes rs-pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+@keyframes rs-dash  { to { stroke-dashoffset: -16; } }
+@keyframes rs-fade-up {
+  from { transform: translateY(6px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+@keyframes rs-scale-in {
+  from { transform: scale(.96); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+.rs-anim-spin     { animation: rs-spin  0.9s linear infinite; }
+.rs-anim-pulse    { animation: rs-pulse 1.4s ease-in-out infinite; }
+.rs-anim-fade-up  { animation: rs-fade-up  0.42s cubic-bezier(.22,1,.36,1) both; }
+.rs-anim-scale-in { animation: rs-scale-in 0.40s cubic-bezier(.22,1,.36,1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .rs-anim-spin,.rs-anim-pulse,.rs-anim-fade-up,.rs-anim-scale-in { animation: none; }
+}

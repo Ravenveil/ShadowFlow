@@ -6,6 +6,7 @@ import { RecentMessagesPreview } from './RecentMessagesPreview';
 import { ApprovalGatePanel } from './ApprovalGatePanel';
 import { fetchRecentMessages } from '../../../api/groupApi';
 import type { GroupMetrics } from '../../../common/types/inbox';
+import { useI18n } from '../../../common/i18n';
 
 const DEFAULT_METRICS: GroupMetrics = {
   activeRuns: 0,
@@ -15,6 +16,7 @@ const DEFAULT_METRICS: GroupMetrics = {
 };
 
 export function PreviewPane() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const selectedGroupId = useInboxStore((s) => s.selectedGroupId);
   const groups = useInboxStore((s) => s.groups);
@@ -47,10 +49,10 @@ export function PreviewPane() {
             Placeholder
           </div>
           <h2 className="mt-8 text-2xl font-semibold tracking-[-0.03em] text-white">
-            选择一个会话查看详情
+            {t('inbox.selectConvHint')}
           </h2>
           <p className="mt-3 max-w-sm text-center text-sm text-white/55">
-            从左侧列表选择群聊或单聊开始协作
+            {t('inbox.selectConvDesc')}
           </p>
         </div>
       ) : (
@@ -64,7 +66,7 @@ export function PreviewPane() {
           {/* AC3: Recent messages slot */}
           <section className="rounded-sf border border-white/10 bg-shadowflow-surface px-6 py-6">
             <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.16em] text-white/45">
-              Recent Messages
+              {t('inbox.recentMessages')}
             </p>
             <RecentMessagesPreview
               messages={messages}

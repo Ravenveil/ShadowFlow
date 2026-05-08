@@ -29,13 +29,14 @@ if (!i18n.isInitialized) {
       fallbackLng: 'en',
       interpolation: { escapeValue: false },
       returnNull: false,
+      keySeparator: false,
     });
 }
 
 interface I18nContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
@@ -62,7 +63,7 @@ export function I18nProvider({ children, defaultLanguage = 'en', language: contr
     try { localStorage.setItem(STORAGE_KEY, lang); } catch {}
   }, [i18nInstance]);
 
-  const translate = useCallback((key: string) => tFn(key) as string, [tFn]);
+  const translate = useCallback((key: string, options?: Record<string, unknown>) => tFn(key, options) as string, [tFn]);
 
   return (
     <I18nContext.Provider value={{ language, setLanguage, t: translate }}>

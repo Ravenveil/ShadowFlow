@@ -6,6 +6,7 @@ import { fetchPendingApprovals, approveApproval, rejectApproval } from '../../..
 import { getApiBase } from '../../../api/_base';
 import { useInboxStore } from '../../store/useInboxStore';
 import { ApprovalItem } from './ApprovalItem';
+import { useI18n } from '../../../common/i18n';
 
 interface Props {
   groupId: string;
@@ -22,6 +23,7 @@ const SSE_INITIAL_DELAY = 1000;
 const SSE_MAX_DELAY = 30000;
 
 export function ApprovalGatePanel({ groupId }: Props) {
+  const { t } = useI18n();
   const [items, setItems] = useState<PendingApproval[]>([]);
   const [toast, setToast] = useState<ToastMsg | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -152,12 +154,12 @@ export function ApprovalGatePanel({ groupId }: Props) {
       try {
         await approveApproval(approvalId);
         if (mountedRef.current) {
-          showToast('✓ 已通过审批', true);
+          showToast(t('approval.approveSuccess'), true);
           setItems((prev) => prev.filter((x) => x.approval_id !== approvalId));
         }
       } catch (err) {
         if (mountedRef.current) {
-          showToast(`✗ 操作失败：${err instanceof Error ? err.message : '未知错误'}`, false);
+          showToast(t('approval.opFailed').replace('{msg}', err instanceof Error ? err.message : String(err)), false);
         }
       } finally {
         if (mountedRef.current) setApprovingId(null);
@@ -173,12 +175,12 @@ export function ApprovalGatePanel({ groupId }: Props) {
       try {
         await rejectApproval(approvalId, reason);
         if (mountedRef.current) {
-          showToast('✓ 已驳回', true);
+          showToast(t('approval.rejectSuccess'), true);
           setItems((prev) => prev.filter((x) => x.approval_id !== approvalId));
         }
       } catch (err) {
         if (mountedRef.current) {
-          showToast(`✗ 操作失败：${err instanceof Error ? err.message : '未知错误'}`, false);
+          showToast(t('approval.opFailed').replace('{msg}', err instanceof Error ? err.message : String(err)), false);
         }
         throw err; // re-throw so ApprovalItem keeps dialog open
       } finally {
@@ -200,11 +202,11 @@ export function ApprovalGatePanel({ groupId }: Props) {
       {/* Panel header */}
       <div className="flex items-center justify-between">
         <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-shadowflow-accent">
-          APPROVAL GATE
+          {t('approval.gateLabel')}
         </p>
         {items.length > 0 && (
           <span className="rounded-full bg-[#F59E0B]/20 px-2 py-0.5 font-mono text-[10px] text-[#F59E0B]">
-            {items.length} pending
+            {t('approval.pendingCount').replace('{count}', String(items.length))}
           </span>
         )}
       </div>
@@ -222,7 +224,7 @@ export function ApprovalGatePanel({ groupId }: Props) {
 
       {/* Content */}
       {items.length === 0 ? (
-        <p className="mt-4 text-xs text-green-400">✓ 无待处理审批</p>
+        <p className="mt-4 text-xs text-green-400">{t('approval.noPending')}</p>
       ) : (
         <div className="mt-4 space-y-2">
           {visibleItems.map((item) => (
@@ -241,7 +243,7 @@ export function ApprovalGatePanel({ groupId }: Props) {
               href={`/runs/${encodeURIComponent(firstOverflow.run_id)}#approval-${firstOverflow.gate_id}`}
               className="mt-1 block text-right text-xs text-shadowflow-accent hover:underline"
             >
-              + {overflowCount} more →
+              {t('approval.moreItems').replace('{count}', String(overflowCount))}
             </a>
           )}
         </div>

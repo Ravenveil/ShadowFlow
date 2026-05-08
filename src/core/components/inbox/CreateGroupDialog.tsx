@@ -16,6 +16,7 @@ import { createGroup } from '../../../api/groupApi';
 import { getTemplate } from '../../../api/templates';
 import { useInboxStore } from '../../store/useInboxStore';
 import type { GroupItem } from '../../../common/types/inbox';
+import { useI18n } from '../../../common/i18n';
 
 // ---------------------------------------------------------------------------
 // Types (matches backend template response shape)
@@ -106,8 +107,9 @@ function reducer(state: WizardState, action: WizardAction): WizardState {
 // ---------------------------------------------------------------------------
 
 function WizardStepIndicator({ current, total }: { current: number; total: number }) {
+  const { t } = useI18n();
   return (
-    <div role="list" aria-label="向导步骤" className="flex items-center gap-2">
+    <div role="list" aria-label={t('inbox.createGroup.wizardStepsLabel')} className="flex items-center gap-2">
       {Array.from({ length: total }, (_, i) => {
         const step = i + 1;
         const active = step === current;
@@ -146,9 +148,10 @@ function GroupTemplateSelector({
   selected: GroupTemplateSpec | null;
   onSelect: (t: GroupTemplateSpec) => void;
 }) {
+  const { t } = useI18n();
   if (templates.length === 0) {
     return (
-      <p className="text-sm text-white/40">暂无群聊模板，请先在模板中配置 group_roster。</p>
+      <p className="text-sm text-white/40">{t('inbox.createGroup.noTemplates')}</p>
     );
   }
   return (
@@ -171,7 +174,7 @@ function GroupTemplateSelector({
             <p className="mt-1 text-xs text-white/45">
               {tpl.agents.length > 0
                 ? `${tpl.agents.slice(0, 3).join(', ')}${tpl.agents.length > 3 ? ` +${tpl.agents.length - 3} more` : ''}`
-                : '无预设 Agent'}
+                : t('inbox.createGroup.noAgents')}
             </p>
           </button>
         );
@@ -191,6 +194,7 @@ function AgentRosterSelector({
   selected: string[];
   onToggle: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const kindBadgeFor = (id: string) => {
     const a = availableAgents.find((x) => x.id === id);
     return a?.llm ? 'ACP' : 'CLI';
@@ -229,7 +233,7 @@ function AgentRosterSelector({
         );
       })}
       {agents.length === 0 && (
-        <p className="text-sm text-white/40">该群聊模板没有预设 Agent。</p>
+        <p className="text-sm text-white/40">{t('inbox.createGroup.noAgents')}</p>
       )}
     </div>
   );
@@ -242,6 +246,7 @@ function MemberEmailInput({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col gap-3">
       <textarea
@@ -249,10 +254,10 @@ function MemberEmailInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={4}
-        placeholder="每行一个邮箱或用户 ID"
+        placeholder={t('inbox.createGroup.memberEmailPlaceholder')}
         className="w-full rounded-sf border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 outline-none placeholder:text-white/30 focus:border-[#A78BFA]/60"
       />
-      <p className="text-xs text-white/35">MVP: 成员邀请 Phase 2 启用</p>
+      <p className="text-xs text-white/35">{t('inbox.createGroup.memberEmailHint')}</p>
     </div>
   );
 }
@@ -264,6 +269,7 @@ function GroupNameInput({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { t } = useI18n();
   const MAX = 40;
   return (
     <div className="flex flex-col gap-2">
@@ -273,7 +279,7 @@ function GroupNameInput({
         value={value}
         maxLength={MAX}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="输入群聊名称"
+        placeholder={t('inbox.createGroup.groupNamePlaceholder')}
         className="h-10 w-full rounded-sf border border-white/10 bg-white/5 px-3 text-sm text-white/90 outline-none placeholder:text-white/30 focus:border-[#A78BFA]/60"
       />
       <p className={`text-right text-xs ${value.length >= MAX ? 'text-red-400' : 'text-white/35'}`}>
@@ -284,11 +290,12 @@ function GroupNameInput({
 }
 
 function PolicyMatrixPreview() {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col gap-3">
       <PolicyMatrixPanel readOnly />
       <p className="text-xs text-white/40">
-        进入群聊后，可在 Policy Matrix 面板中微调权限矩阵。
+        {t('inbox.createGroup.policyHint')}
       </p>
     </div>
   );
@@ -305,6 +312,7 @@ interface CreateGroupDialogProps {
 }
 
 export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDialogProps) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(reducer, initialState);
   const [templateSpec, setTemplateSpec] = useState<TemplateSpec | null>(null);
@@ -337,8 +345,8 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
   };
 
   const validateStep = (): string | null => {
-    if (state.step === 1 && !state.selectedGroupTemplate) return '请先选择一个群聊模板';
-    if (state.step === 4 && !state.groupName.trim()) return '群聊名称不能为空';
+    if (state.step === 1 && !state.selectedGroupTemplate) return t('inbox.createGroup.validateTemplate');
+    if (state.step === 4 && !state.groupName.trim()) return t('inbox.createGroup.validateName');
     return null;
   };
 
@@ -383,10 +391,11 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
         lastActivityAt: result.createdAt,
       };
       addGroup(newGroup);
-      showToast(`✓ 群聊 '${result.name}' 已创建`);
+      showToast(t('inbox.createGroup.created').replace('{name}', result.name));
       onClose();
       navigate(`/chat/${result.groupId}`);
     } catch (e) {
+      /* TODO: i18n — no locale key for generic create error fallback */
       setError(e instanceof Error ? e.message : '创建失败，请重试');
     } finally {
       setSubmitting(false);
@@ -399,11 +408,11 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
   const agentRoster = templateSpec?.agent_roster ?? [];
 
   const STEP_TITLES: Record<number, string> = {
-    1: '选择群聊模板',
-    2: '选择 AI 员工',
-    3: '邀请人类成员（可选）',
-    4: '命名群聊',
-    5: '确认 Policy Matrix（可选微调）',
+    1: t('inbox.createGroup.step1'),
+    2: t('inbox.createGroup.step2'),
+    3: t('inbox.createGroup.step3'),
+    4: t('inbox.createGroup.step4'),
+    5: t('inbox.createGroup.step5'),
   };
 
   return (
@@ -434,14 +443,14 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
           {/* Header */}
           <div className="flex items-start justify-between border-b border-white/5 px-6 py-5">
             <div>
-              <p className="text-xs text-white/40">步骤 {state.step} / 5</p>
+              <p className="text-xs text-white/40">{t('inbox.createGroup.stepLabel').replace('{current}', String(state.step)).replace('{total}', '5')}</p>
               <h2 className="mt-1 text-lg font-semibold text-white">
                 {STEP_TITLES[state.step]}
               </h2>
             </div>
             <button
               type="button"
-              aria-label="关闭"
+              aria-label={t('inbox.createGroup.closeLabel')}
               onClick={onClose}
               className="text-white/40 hover:text-white/70"
             >
@@ -506,7 +515,7 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
               disabled={state.step === 1}
               className="rounded-sf px-4 py-2 text-sm text-white/60 hover:text-white disabled:opacity-0"
             >
-              ← 上一步
+              {t('inbox.createGroup.back')}
             </button>
             {state.step < 5 ? (
               <button
@@ -515,7 +524,7 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
                 onClick={handleNext}
                 className="rounded-sf bg-[#A78BFA]/20 px-5 py-2 text-sm font-medium text-[#A78BFA] transition hover:bg-[#A78BFA]/30"
               >
-                下一步 →
+                {t('inbox.createGroup.nextStep')}
               </button>
             ) : (
               <button
@@ -525,7 +534,7 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
                 disabled={submitting}
                 className="rounded-sf bg-[#A78BFA] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#A78BFA]/80 disabled:opacity-60"
               >
-                {submitting ? '创建中…' : '创建群聊'}
+                {submitting ? t('inbox.createGroup.creating') : t('inbox.createGroup.createBtn')}
               </button>
             )}
           </div>

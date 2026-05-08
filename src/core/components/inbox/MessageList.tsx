@@ -6,19 +6,20 @@ import { MessageItem } from './MessageItem';
 import { CreateGroupDialog } from './CreateGroupDialog';
 import { InboxEmptyState } from './InboxEmptyState';
 import { useDebounce } from '../../../common/hooks/useDebounce';
+import { useI18n } from '../../../common/i18n';
 
 type TabKey = 'all' | 'dm' | 'team' | 'unread';
-
-const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'all', label: '全部' },
-  { key: 'dm', label: '单聊' },
-  { key: 'team', label: '群聊' },
-  { key: 'unread', label: '未读' },
-];
 
 const PLACEHOLDER_TEMPLATE_ID = 'academic-paper';
 
 export function MessageList() {
+  const { t } = useI18n();
+  const TABS: Array<{ key: TabKey; label: string }> = [
+    { key: 'all', label: t('inbox.tabAll') },
+    { key: 'dm', label: t('inbox.tabDM') },
+    { key: 'team', label: t('inbox.tabTeam') },
+    { key: 'unread', label: t('inbox.tabUnread') },
+  ];
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -93,32 +94,32 @@ export function MessageList() {
       >
         <div className="sticky top-0 z-10 border-b border-white/5 bg-shadowflow-surface/95 px-5 pb-4 pt-5 backdrop-blur">
           <div className="flex h-14 items-center justify-between">
-            <h2 className="text-2xl font-semibold tracking-[-0.03em] text-white">Inbox</h2>
+            <h2 className="text-2xl font-semibold tracking-[-0.03em] text-white">{t('inbox.title')}</h2>
             <button
               type="button"
               data-testid="new-group-btn"
               onClick={() => setCreateGroupOpen(true)}
               className="rounded-sf bg-shadowflow-accent px-3 py-1.5 text-sm font-medium text-white"
             >
-              + 新群聊
+              {t('inbox.newGroup')}
             </button>
           </div>
 
           <label className="mt-1 block">
-            <span className="sr-only">搜索群聊 / agent / 消息</span>
+            <span className="sr-only">{t('inbox.searchLabel')}</span>
             <div className="relative">
               <input
                 ref={searchInputRef}
                 type="text"
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
-                placeholder="搜索群聊 / agent / 消息…"
+                placeholder={t('inbox.searchPlaceholder')}
                 className="h-10 w-full rounded-sf border border-white/10 bg-white/5 px-3 pr-10 text-sm text-white/90 outline-none placeholder:text-white/35"
               />
               {searchText && (
                 <button
                   type="button"
-                  aria-label="清空搜索"
+                  aria-label={t('inbox.clearSearch')}
                   onClick={() => setSearchText('')}
                   className="absolute inset-y-0 right-3 text-sm text-white/45 transition hover:text-white/80"
                 >
@@ -156,7 +157,7 @@ export function MessageList() {
         </div>
 
         <div className="px-5 py-5">
-          {loading && <p className="text-center text-sm text-white/35">加载中…</p>}
+          {loading && <p className="text-center text-sm text-white/35">{t('inbox.loading')}</p>}
 
           {!loading && !hasResults && (
             <InboxEmptyState
@@ -168,7 +169,7 @@ export function MessageList() {
           {showTeamSection && (
             <section>
               <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-white/50">
-                TEAM RUNS
+                {t('inbox.teamRunsSection')}
               </p>
               <div className="mt-2 flex flex-col gap-1">
                 {filteredGroups.map((g) => (
@@ -188,7 +189,7 @@ export function MessageList() {
           {showDMSection && (
             <section className={showTeamSection ? 'mt-8' : ''}>
               <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-white/50">
-                AGENT DMs
+                {t('inbox.agentDMsSection')}
               </p>
               <div className="mt-2 flex flex-col gap-1">
                 {filteredDMs.map((a) => (

@@ -9,6 +9,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { HfSidebar, type HfSidebarActive } from './HfSidebar';
 import { useTheme } from './useTheme';
 import { PetRail } from '../../core/components/pet/PetRail';
+import { QuickSwitcher } from './QuickSwitcher';
 
 function pathToActive(pathname: string): HfSidebarActive {
   if (pathname.startsWith('/chat')) return 'chat';
@@ -39,6 +40,7 @@ export function HfLayout() {
         <Outlet />
         <PetRail />
       </main>
+      <QuickSwitcher />
     </div>
   );
 }

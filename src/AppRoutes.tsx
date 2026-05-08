@@ -28,6 +28,7 @@ const TeamDetailPage = lazy(() =>
 );
 const StartPage = lazy(() => import('./pages/StartPage'));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
+const RunSessionPage = lazy(() => import('./pages/RunSessionPage'));
 const RunsListPage = lazy(() =>
   import('./pages/RunsPage').then((m) => ({ default: m.RunsListPage }))
 );
@@ -84,6 +85,9 @@ export function AppRoutes() {
           </Route>
           {/* ── FB-HiFi Workspace (standalone chrome, no AppLayout) ── */}
           <Route path="/workspace" element={<WorkspacePage />} />
+          {/* ── Run Session — full-screen split-view, no HfLayout ── */}
+          <Route path="/run-session/:sessionId" element={<RunSessionPage />} />
+          <Route path="/run-session" element={<RunSessionPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

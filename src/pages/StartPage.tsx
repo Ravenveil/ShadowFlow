@@ -36,6 +36,7 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
+import { getApiBase } from '../api/_base';
 import { listCatalogApps } from '../api/catalog';
 import { listPacks } from '../api/knowledge';
 import type { KnowledgePack } from '../common/types/knowledge';
@@ -87,6 +88,7 @@ interface RecentDraftsProps {
 }
 
 function RecentDrafts({ onNavigateCatalog }: RecentDraftsProps) {
+  const { t } = useI18n();
   const [apps, setApps] = useState<CatalogAppSummary[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -112,7 +114,7 @@ function RecentDrafts({ onNavigateCatalog }: RecentDraftsProps) {
   return (
     <section style={{ width: '100%' }}>
       <div className="hf-label" style={{ marginBottom: 10 }}>
-        最近使用
+        {t('start.recentLabel')}
       </div>
       <div className="hf-card" style={{ padding: 14 }}>
         {loading ? (
@@ -123,7 +125,7 @@ function RecentDrafts({ onNavigateCatalog }: RecentDraftsProps) {
           </>
         ) : !apps || apps.length === 0 ? (
           <p style={{ padding: '6px 2px', fontSize: 13, color: 'var(--t-fg-3)', margin: 0 }}>
-            暂无最近记录
+            {t('start.recentEmpty')}
           </p>
         ) : (
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
@@ -460,6 +462,7 @@ const RUN_STATUS_META: Record<string, { label: string; color: string; Icon: type
 };
 
 function fmtRelative(iso: string): string {
+  /* TODO: i18n — relative time strings (刚刚 / N 分钟前 / N 小时前 / N 天前) need locale-aware keys */
   try {
     const diff = Date.now() - new Date(iso).getTime();
     const m = Math.floor(diff / 60000);
@@ -474,6 +477,7 @@ function fmtRelative(iso: string): string {
 }
 
 function RecentRuns() {
+  const { t } = useI18n();
   const [runs, setRuns] = useState<RunSummary[] | null>(null);
 
   useEffect(() => {
@@ -489,7 +493,7 @@ function RecentRuns() {
   return (
     <section style={{ width: '100%' }}>
       <div className="hf-label" style={{ marginBottom: 10 }}>
-        继续上一次 · RECENT
+        {t('start.recentRunsLabel')}
       </div>
       {runs === null ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -563,8 +567,7 @@ interface Attachment {
 export default function StartPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { language } = useI18n();
-  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
+  const { t } = useI18n();
   const [showWizard, setShowWizard] = useState(false);
   const [composer, setComposer] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -572,6 +575,7 @@ export default function StartPage() {
   const [knowledgePacks, setKnowledgePacks] = useState<KnowledgePack[] | null>(null);
   const [knowledgePacksLoading, setKnowledgePacksLoading] = useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [mode, setMode] = useState<Mode>('auto');
   const [modeOpen, setModeOpen] = useState(false);
   const modeRef = useRef<HTMLDivElement | null>(null);
@@ -599,7 +603,7 @@ export default function StartPage() {
   }, [toast]);
 
   function notImpl(label: string) {
-    setToast(T(`${label} · 功能开发中`, `${label} · coming soon`));
+    setToast(`${label} · ${t('common.comingSoon')}`);
   }
 
   // Add attachment (📎 file / 🔗 url / ⛓ cid). Prompts the user, pushes a chip
@@ -607,17 +611,17 @@ export default function StartPage() {
   // file picker / URL input / 0G CID resolver once those flows ship.
   function addAttachment(type: AttachmentType) {
     const ask = type === 'file'
-      ? T('文件名（mock）', 'Filename (mock)')
+      ? t('start.filenameMock')
       : type === 'url'
-        ? T('URL', 'URL')
-        : T('0G CID', '0G CID');
+        ? 'URL'
+        : '0G CID';
     const value = typeof window !== 'undefined' ? window.prompt(ask, '') : null;
     if (!value || !value.trim()) return;
     const id = `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const label = value.trim();
     let meta: string | undefined;
     if (type === 'file') meta = `${(Math.random() * 4 + 0.5).toFixed(1)}MB`;
-    else if (type === 'url') meta = T('feed', 'feed');
+    else if (type === 'url') meta = 'feed';
     else meta = '0G';
     setAttachments((prev) => [...prev, { id, type, label, meta }]);
   }
@@ -633,8 +637,33 @@ export default function StartPage() {
     }
   }, [searchParams]);
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const text = composer.trim();
+    if (!text) return;
+
+    setSubmitting(true);
+
+    try {
+      const resp = await fetch(`${getApiBase()}/api/run-sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goal: text,
+          mode: mode !== 'auto' ? mode : undefined,
+        }),
+      });
+      if (resp.ok) {
+        const data = (await resp.json()) as { session_id: string };
+        navigate(`/run-session/${data.session_id}?goal=${encodeURIComponent(text)}`);
+        return;
+      }
+    } catch {
+      // fall through to original behavior
+    } finally {
+      setSubmitting(false);
+    }
+
+    // Fallback: original behavior
     const params = new URLSearchParams();
     // 'auto' lets the backend decide single vs team based on goal complexity.
     params.set('mode', mode);
@@ -733,7 +762,7 @@ export default function StartPage() {
                 color: 'var(--t-fg)',
               }}
             >
-              今天要做什么？
+              {t('start.heroTitle')}
             </h1>
           </div>
 
@@ -751,7 +780,7 @@ export default function StartPage() {
               value={composer}
               onChange={(e) => setComposer(e.target.value)}
               onKeyDown={handleComposerKey}
-              placeholder="描述一个目标，或粘贴一份 brief…"
+              placeholder={t('start.composerPlaceholder')}
               data-testid="start-composer"
               style={{
                 width: '100%',
@@ -831,7 +860,7 @@ export default function StartPage() {
                     <button
                       type="button"
                       onClick={() => removeAttachment(a.id)}
-                      aria-label={T('移除', 'Remove')}
+                      aria-label={t('start.attachmentRemove')}
                       style={{
                         background: 'transparent',
                         border: 'none',
@@ -867,14 +896,14 @@ export default function StartPage() {
               <div ref={addRef} style={{ position: 'relative', flexShrink: 0 }}>
                 <ChipBtn
                   glyph={<Plus size={14} strokeWidth={2} />}
-                  label={attachments.length > 0 ? undefined : T('Add', 'Add')}
+                  label={attachments.length > 0 ? undefined : t('common.add')}
                   badge={attachments.length > 0 ? attachments.length : undefined}
                   hasArrow
                   active={addOpen}
                   configured={attachments.length > 0}
                   onClick={() => setAddOpen((v) => !v)}
                   testId="start-chip-add"
-                  title={T('添加附件 / 引用', 'Add attachment / reference')}
+                  title={t('start.addAttachment')}
                 />
                 {addOpen && (
                   <div
@@ -895,7 +924,7 @@ export default function StartPage() {
                       [
                         {
                           glyph: <Paperclip size={14} strokeWidth={2} />,
-                          label: T('上传文件', 'Upload file'),
+                          label: t('start.uploadFile'),
                           testId: 'start-chip-attach',
                           onClick: () => {
                             setAddOpen(false);
@@ -922,39 +951,39 @@ export default function StartPage() {
                         },
                         {
                           glyph: <Clipboard size={14} strokeWidth={2} />,
-                          label: T('从剪贴板粘贴', 'Paste from clipboard'),
+                          label: t('start.pasteClipboard'),
                           testId: 'start-chip-paste',
                           onClick: () => {
                             setAddOpen(false);
-                            notImpl(T('从剪贴板', 'Paste'));
+                            notImpl(t('start.pasteClipboard'));
                           },
                         },
                         {
                           glyph: <History size={14} strokeWidth={2} />,
-                          label: T('历史 prompt', 'Recent prompts'),
+                          label: t('start.recentPrompts'),
                           testId: 'start-chip-history',
                           onClick: () => {
                             setAddOpen(false);
-                            notImpl(T('最近 prompt', 'Recent prompts'));
+                            notImpl(t('start.recentPrompts'));
                           },
                         },
                         {
                           glyph: <Download size={14} strokeWidth={2} />,
-                          label: T('✦ 导入 Skill', '✦ Import Skill'),
+                          label: t('start.importSkill'),
                           testId: 'start-chip-import-skill',
                           onClick: () => {
                             setAddOpen(false);
-                            notImpl(T('导入 Skill', 'Import Skill'));
+                            notImpl(t('start.importSkill'));
                           },
                           accent: true,
                         },
                         {
                           glyph: <Workflow size={14} strokeWidth={2} />,
-                          label: T('⊞ 导入 Workflow', '⊞ Import Workflow'),
+                          label: t('start.importWorkflow'),
                           testId: 'start-chip-import-workflow',
                           onClick: () => {
                             setAddOpen(false);
-                            notImpl(T('导入 Workflow', 'Import Workflow'));
+                            notImpl(t('start.importWorkflow'));
                           },
                           accent: true,
                         },
@@ -1034,17 +1063,17 @@ export default function StartPage() {
                   }
                   label={
                     mode === 'auto'
-                      ? T('Auto', 'Auto')
+                      ? t('start.modeAuto')
                       : mode === 'single'
-                        ? T('单兵', 'Single')
-                        : T('团队', 'Team')
+                        ? t('start.modeSingle')
+                        : t('start.modeTeam')
                   }
                   hasArrow
                   active={modeOpen}
                   configured={mode !== 'auto'}
                   onClick={() => setModeOpen((v) => !v)}
                   testId="start-mode-chip"
-                  title={T('运行模式', 'Run mode')}
+                  title={t('start.modeLabel')}
                 />
                 {modeOpen && (
                   <div
@@ -1073,10 +1102,10 @@ export default function StartPage() {
                         );
                       const label =
                         m === 'auto'
-                          ? T('Auto · 自动决定', 'Auto · decide for me')
+                          ? t('start.modeAutoDesc')
                           : m === 'single'
-                            ? T('单兵 · 1 个 Agent', 'Single · 1 Agent')
-                            : T('团队 · 多 Agent', 'Team · multi-Agent');
+                            ? t('start.modeSingleDesc')
+                            : t('start.modeTeamDesc');
                       return (
                         <button
                           key={m}
@@ -1136,7 +1165,7 @@ export default function StartPage() {
                   configured={knowledge.length > 0}
                   onClick={openKnowledge}
                   testId="start-knowledge-chip"
-                  title={T('挂载知识包', 'Attach knowledge pack')}
+                  title={t('start.knowledgeAttach')}
                 />
                 {knowledgeOpen && (
                   <div
@@ -1154,10 +1183,10 @@ export default function StartPage() {
                     }}
                   >
                     <div style={{ padding: '4px 10px 6px', fontSize: 10, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>
-                      {T('知识包', 'Knowledge Packs')}
+                      {t('start.knowledgeLabel')}
                     </div>
                     {knowledgePacksLoading ? (
-                      <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--t-fg-4)' }}>{T('加载中…', 'Loading…')}</div>
+                      <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--t-fg-4)' }}>{t('start.knowledgeLoading')}</div>
                     ) : knowledgePacks && knowledgePacks.length > 0 ? (
                       knowledgePacks.map((pack) => {
                         const on = knowledge.includes(pack.pack_id);
@@ -1203,7 +1232,7 @@ export default function StartPage() {
                     ) : (
                       <div style={{ padding: '6px 10px 8px' }}>
                         <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--t-fg-3)' }}>
-                          {T('暂无知识包', 'No knowledge packs yet')}
+                          {t('start.knowledgeEmpty')}
                         </p>
                         <button
                           type="button"
@@ -1211,7 +1240,7 @@ export default function StartPage() {
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--t-accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
                         >
                           <ArrowRight size={11} strokeWidth={2} aria-hidden />
-                          {T('前往 Knowledge 管理', 'Manage Knowledge')}
+                          {t('start.knowledgeManage')}
                         </button>
                       </div>
                     )}
@@ -1225,6 +1254,7 @@ export default function StartPage() {
               <button
                 type="button"
                 onClick={handleSubmit}
+                disabled={submitting}
                 className="hf-btn hf-btn-pri"
                 style={{
                   fontSize: 12,
@@ -1233,10 +1263,12 @@ export default function StartPage() {
                   height: 28,
                   boxShadow:
                     '0 8px 20px -6px color-mix(in oklab, var(--t-accent) 55%, transparent)',
+                  opacity: submitting ? 0.7 : 1,
+                  cursor: submitting ? 'wait' : 'pointer',
                 }}
                 data-testid="start-submit"
               >
-                ✦ go
+                {submitting ? t('start.submitting') : t('start.submit')}
               </button>
             </div>
           </div>
@@ -1303,7 +1335,7 @@ export default function StartPage() {
           {/* Three primitives — preserved feature */}
           <div>
             <div className="hf-label" style={{ marginBottom: 10 }}>
-              直接开工 · 三种起点
+              {t('start.primitiveTitle')}
             </div>
             <div
               style={{
@@ -1315,22 +1347,22 @@ export default function StartPage() {
               <PrimitiveCard
                 testId="primitive-card-agent"
                 glyph="◉"
-                title="创建 Agent"
-                description="从目标、角色和工具出发，搭一个专注的 AI 助手"
+                title={t('start.createAgent')}
+                description={t('start.createAgentDesc')}
                 onClick={() => navigate('/builder?mode=single')}
               />
               <PrimitiveCard
                 testId="primitive-card-team"
                 glyph="⊞"
-                title="创建 Agent Team"
-                description="把多个 AI 角色组成一个协作团队，分工完成复杂任务"
+                title={t('start.createTeam')}
+                description={t('start.createTeamDesc')}
                 onClick={() => navigate('/builder?mode=team')}
               />
               <PrimitiveCard
                 testId="primitive-card-templates"
                 glyph="◆"
-                title="从模板开始"
-                description="用现有 Agent / Team 模板快速起步，再按需调整"
+                title={t('start.fromTemplate')}
+                description={t('start.fromTemplateDesc')}
                 onClick={() => navigate('/templates')}
               />
             </div>
@@ -1353,7 +1385,7 @@ export default function StartPage() {
                   borderRadius: 999,
                 }}
               >
-                不确定选哪个？让我帮你决定 →
+                {t('start.wizardTrigger')}
               </button>
             </div>
           )}
