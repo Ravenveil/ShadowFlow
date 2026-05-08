@@ -21,7 +21,7 @@ export function ChatRail({ active, onActiveChange }: ChatRailProps) {
   ];
   return (
     <div style={{
-      width: 52, background: 'var(--bg-elev-1)', borderRight: '1px solid var(--border)',
+      width: 52, background: 'var(--t-panel)', borderRight: '1px solid var(--t-border)',
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       padding: '10px 0 14px', gap: 4,
     }}>
@@ -30,8 +30,8 @@ export function ChatRail({ active, onActiveChange }: ChatRailProps) {
           width: 40, height: 42, borderRadius: 8,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           gap: 2, cursor: 'pointer', position: 'relative',
-          background: it.k === active ? 'var(--accent-tint)' : 'transparent',
-          color: it.k === active ? 'var(--accent-bright)' : 'var(--fg-3)',
+          background: it.k === active ? 'var(--t-accent-tint)' : 'transparent',
+          color: it.k === active ? 'var(--t-accent-bright)' : 'var(--t-fg-3)',
           transition: 'background 120ms, color 120ms',
         }}>
           <span style={{ width: 18, height: 18, display: 'flex' }}>{it.ic}</span>
@@ -43,7 +43,7 @@ export function ChatRail({ active, onActiveChange }: ChatRailProps) {
               background: 'var(--status-reject)', color: 'white',
               fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 800,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: '1.5px solid var(--bg-elev-1)',
+              border: '1.5px solid var(--t-panel)',
             }}>{it.badge}</span>
           )}
         </div>
@@ -52,8 +52,8 @@ export function ChatRail({ active, onActiveChange }: ChatRailProps) {
       <div
         title="新建会话"
         onClick={() => onActiveChange('msg')}
-        style={{ width: 40, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-4)', cursor: 'pointer', transition: 'background 120ms' }}
-        onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elev-2)')}
+        style={{ width: 40, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-4)', cursor: 'pointer', transition: 'background 120ms' }}
+        onMouseEnter={e => (e.currentTarget.style.background = 'var(--t-panel-2)')}
         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
       >
         {CI.pls}

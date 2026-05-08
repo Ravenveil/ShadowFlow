@@ -92,7 +92,7 @@ export function OrgSwitcher() {
   const currentWs: WorkspaceSummary | undefined =
     workspaces.find(w => w.workspace_id === currentId) ?? workspaces[0];
 
-  const triggerColor = currentWs?.color ?? 'var(--accent)';
+  const triggerColor = currentWs?.color ?? 'var(--t-accent)';
   const triggerInit = currentWs ? getInitial(currentWs.name) : '…';
   const triggerName = currentWs?.name ?? (loadState === 'loading' ? '加载中…' : '未选 Workspace');
   const triggerSub = currentWs
@@ -107,33 +107,33 @@ export function OrgSwitcher() {
         style={{
           display: 'flex', alignItems: 'center', gap: 9,
           padding: '7px 9px 7px 7px', borderRadius: 8,
-          background: 'var(--bg-elev-2)', border: '1px solid var(--border)', cursor: 'pointer',
+          background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', cursor: 'pointer',
           transition: 'border-color 120ms',
         }}
       >
         <span style={{
           width: 30, height: 30, borderRadius: 7,
-          background: `color-mix(in oklab, ${triggerColor} 22%, var(--bg-elev-2))`,
+          background: `color-mix(in oklab, ${triggerColor} 22%, var(--t-panel-2))`,
           border: `1px solid color-mix(in oklab, ${triggerColor} 50%, transparent)`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontWeight: 900, fontSize: triggerInit.length > 1 ? 10.5 : 13, color: triggerColor,
           letterSpacing: '-0.04em',
         }}>{triggerInit}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {triggerName}
           </div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-4)', marginTop: 1 }}>
             {triggerSub}
           </div>
         </div>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms' }}>▾</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms' }}>▾</span>
       </div>
 
       {open && (
         <div data-testid="org-switcher-dropdown" style={{
           position: 'absolute', top: 54, left: 8, right: 8, zIndex: 30,
-          background: 'var(--skin-panel)', border: '1px solid var(--border)', borderRadius: 10,
+          background: 'var(--skin-panel)', border: '1px solid var(--t-border)', borderRadius: 10,
           boxShadow: 'var(--shadow-pop)', padding: 5,
         }}>
           {loadState === 'loading' && (
@@ -147,14 +147,14 @@ export function OrgSwitcher() {
               加载失败
               <button
                 onClick={() => { fetchWorkspaces(); }}
-                style={{ marginLeft: 8, cursor: 'pointer', color: 'var(--accent-bright)', background: 'none', border: 'none', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                style={{ marginLeft: 8, cursor: 'pointer', color: 'var(--t-accent-bright)', background: 'none', border: 'none', fontSize: 11, fontFamily: 'var(--font-mono)' }}
               >重试</button>
             </div>
           )}
 
           {loadState === 'ok' && workspaces.map((ws) => {
             const isCur = ws.workspace_id === currentId;
-            const wsColor = ws.color ?? 'var(--accent)';
+            const wsColor = ws.color ?? 'var(--t-accent)';
             const wsInit = getInitial(ws.name);
             return (
               <div
@@ -164,26 +164,26 @@ export function OrgSwitcher() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 9,
                   padding: '7px 7px', borderRadius: 6,
-                  background: isCur ? 'var(--accent-tint)' : 'transparent', cursor: 'pointer',
+                  background: isCur ? 'var(--t-accent-tint)' : 'transparent', cursor: 'pointer',
                 }}
               >
                 <span style={{
                   width: 30, height: 30, borderRadius: 7,
-                  background: `color-mix(in oklab, ${wsColor} 18%, var(--bg-elev-2))`,
+                  background: `color-mix(in oklab, ${wsColor} 18%, var(--t-panel-2))`,
                   border: `1px solid color-mix(in oklab, ${wsColor} 45%, transparent)`,
                   color: wsColor,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontWeight: 900, fontSize: wsInit.length > 1 ? 10.5 : 12.5, letterSpacing: '-0.03em',
                 }}>{wsInit}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: isCur ? 700 : 600, color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: 12, fontWeight: isCur ? 700 : 600, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {ws.name}
                   </div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-5)', marginTop: 1 }}>
                     {ws.agent_count} agents · {ws.team_count} teams
                   </div>
                 </div>
-                {isCur && <span style={{ color: 'var(--accent)', display: 'flex', width: 14, height: 14 }}>{FBIcons.check}</span>}
+                {isCur && <span style={{ color: 'var(--t-accent)', display: 'flex', width: 14, height: 14 }}>{FBIcons.check}</span>}
               </div>
             );
           })}
@@ -194,16 +194,16 @@ export function OrgSwitcher() {
             data-testid="org-create-row"
             onClick={() => { setOpen(false); setCreateOpen(true); }}
             style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 7px', borderRadius: 6, cursor: 'pointer', transition: 'background 120ms' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elev-2)')}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--t-panel-2)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           >
             <span style={{
               width: 30, height: 30, borderRadius: 7,
-              background: 'var(--bg-elev-2)', border: '1px dashed var(--border-strong)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-3)',
+              background: 'var(--t-panel-2)', border: '1px dashed var(--border-strong)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-3)',
             }}><span style={{ width: 14, height: 14, display: 'flex' }}>{FBIcons.plus}</span></span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)' }}>创建 / 加入 Workspace</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg-2)' }}>创建 / 加入 Workspace</div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-4)', marginTop: 1 }}>新建工作空间 · POST /api/workspaces</div>
             </div>
           </div>
@@ -221,7 +221,7 @@ export function OrgSwitcher() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            width: 420, background: 'var(--skin-panel)', border: '1px solid var(--border)',
+            width: 420, background: 'var(--skin-panel)', border: '1px solid var(--t-border)',
             borderRadius: 10, padding: 20, boxShadow: 'var(--shadow-pop)',
           }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>创建 Workspace</div>
@@ -237,9 +237,9 @@ export function OrgSwitcher() {
               disabled={creating}
               style={{
                 width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 6,
-                border: `1px solid ${createError ? 'var(--status-reject)' : 'var(--border)'}`,
-                background: 'var(--bg-elev-2)',
-                color: 'var(--fg-1)', fontSize: 12, fontFamily: 'var(--font-mono)', outline: 'none',
+                border: `1px solid ${createError ? 'var(--status-reject)' : 'var(--t-border)'}`,
+                background: 'var(--t-panel-2)',
+                color: 'var(--t-fg)', fontSize: 12, fontFamily: 'var(--font-mono)', outline: 'none',
               }}
             />
             {createError && (

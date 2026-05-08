@@ -57,17 +57,17 @@ export function Composer({ onSend }: { onSend: (text: string) => void }) {
   const showMentionHint = text.includes('@') && !text.endsWith('@');
 
   return (
-    <div style={{ padding: '10px 18px 12px', borderTop: '1px solid var(--border)', background: 'var(--bg-elev-1)', position: 'relative', flexShrink: 0 }}>
+    <div style={{ padding: '10px 18px 12px', borderTop: '1px solid var(--t-border)', background: 'var(--t-panel)', position: 'relative', flexShrink: 0 }}>
       {/* skill link banner */}
       {skillLink && (
         <div style={{
           marginBottom: 8, padding: '7px 10px', borderRadius: 7,
-          background: 'var(--accent-tint)', border: '1px solid color-mix(in oklab, var(--accent) 40%, transparent)',
+          background: 'var(--t-accent-tint)', border: '1px solid color-mix(in oklab, var(--accent) 40%, transparent)',
           display: 'flex', alignItems: 'center', gap: 8,
           fontFamily: 'var(--font-mono)', fontSize: 11,
         }}>
-          <span style={{ color: 'var(--accent-bright)', fontWeight: 700 }}>↓ 检测到 skill 链接</span>
-          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--fg-3)' }}>{skillLink}</span>
+          <span style={{ color: 'var(--t-accent-bright)', fontWeight: 700 }}>↓ 检测到 skill 链接</span>
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--t-fg-3)' }}>{skillLink}</span>
           <button
             className="fb-btn fb-btn-primary fb-btn-sm"
             style={{ fontSize: 11, padding: '2px 8px' }}
@@ -84,21 +84,21 @@ export function Composer({ onSend }: { onSend: (text: string) => void }) {
       {showSlash && filteredCmds.length > 0 && (
         <div data-testid="slash-popup" style={{
           position: 'absolute', bottom: 84, left: 18, width: 340, zIndex: 10,
-          background: 'var(--skin-panel)', border: '1px solid var(--border)', borderRadius: 9,
+          background: 'var(--skin-panel)', border: '1px solid var(--t-border)', borderRadius: 9,
           boxShadow: 'var(--shadow-pop)', padding: 5,
         }}>
           <div style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)', letterSpacing: '0.06em' }}>SLASH COMMANDS</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', letterSpacing: '0.06em' }}>SLASH COMMANDS</span>
             <span style={{ flex: 1 }} />
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-5)' }}>↑↓ 选 · ↵ 用</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-5)' }}>↑↓ 选 · ↵ 用</span>
           </div>
           {filteredCmds.map((it, i) => (
             <div key={it.cmd} onClick={() => applySlash(it.cmd)} data-testid={`slash-${it.cmd.slice(1)}`} style={{
               display: 'flex', alignItems: 'center', gap: 9, padding: '6px 8px', borderRadius: 5,
-              background: i === slashIdx ? 'var(--accent-tint)' : 'transparent', cursor: 'pointer',
+              background: i === slashIdx ? 'var(--t-accent-tint)' : 'transparent', cursor: 'pointer',
             }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: i === slashIdx ? 'var(--accent-bright)' : 'var(--fg-2)', minWidth: 72 }}>{it.cmd}</span>
-              <span style={{ fontSize: 11.5, color: 'var(--fg-3)', flex: 1 }}>{it.d}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: i === slashIdx ? 'var(--t-accent-bright)' : 'var(--t-fg-2)', minWidth: 72 }}>{it.cmd}</span>
+              <span style={{ fontSize: 11.5, color: 'var(--t-fg-3)', flex: 1 }}>{it.d}</span>
             </div>
           ))}
         </div>
@@ -106,7 +106,7 @@ export function Composer({ onSend }: { onSend: (text: string) => void }) {
 
       {/* mention hint */}
       {showMentionHint && (
-        <div style={{ position: 'absolute', top: -46, right: 18, padding: '4px 9px', background: 'var(--bg-elev-2)', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-4)' }}>@ 提及面板可按角色筛选</div>
+        <div style={{ position: 'absolute', top: -46, right: 18, padding: '4px 9px', background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)' }}>@ 提及面板可按角色筛选</div>
       )}
 
       <div style={{ background: 'var(--skin-panel)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 0, overflow: 'hidden' }}>
@@ -118,11 +118,11 @@ export function Composer({ onSend }: { onSend: (text: string) => void }) {
             <span key={i} title={t as string} onClick={() => { if (t === '/') { setText('/'); textareaRef.current?.focus(); } }} style={{
               width: 26, height: 24, borderRadius: 5,
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--fg-4)', cursor: 'pointer',
+              color: 'var(--t-fg-4)', cursor: 'pointer',
             }}><span style={{ width: 14, height: 14, display: 'flex' }}>{ic}</span></span>
           ))}
           <span style={{ flex: 1 }} />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-5)', padding: '0 6px' }}>Markdown</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-5)', padding: '0 6px' }}>Markdown</span>
         </div>
         <div style={{ padding: '8px 12px' }}>
           <textarea
@@ -137,13 +137,13 @@ export function Composer({ onSend }: { onSend: (text: string) => void }) {
             rows={2}
           />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 7px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elev-1)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 7px', borderTop: '1px solid var(--border-subtle)', background: 'var(--t-panel)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-5)' }}>⏎ 发送 · ⇧⏎ 换行 · / 命令</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-5)' }}>⏎ 发送 · ⇧⏎ 换行 · / 命令</span>
             {text.trim() && (
               <>
                 <span className="fb-dot fb-dot-ok" />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--fg-4)' }}>{text.length} 字</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)' }}>{text.length} 字</span>
               </>
             )}
           </div>
