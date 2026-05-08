@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Spec 8.5 · Smoke Run</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+  body { padding: 48px 56px; max-width: 1440px; margin: 0 auto; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent-bright); }
+  h1 { font-size: 36px; letter-spacing: -.03em; font-weight: 800; margin: 4px 0 8px; }
+  .sub { color: var(--fg-3); font-size: 15px; max-width: 760px; line-height: 1.55; margin-bottom: 36px; }
+  .sec { margin-bottom: 48px; }
+  .sec h2 { font-size: 11px; font-family: var(--font-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--fg-4); font-weight: 700; margin: 0 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
+  /* Launch drawer */
+  .launch { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; max-width: 520px; }
+  .launch h3 { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+  .launch .ls { font-family: var(--font-mono); font-size: 10px; color: var(--accent-bright); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 18px; }
+  .lfield { margin-bottom: 14px; }
+  .ll { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-4); margin-bottom: 6px; }
+  .lf-input { width: 100%; min-height: 40px; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--fg-1); font-size: 13px; font-family: var(--font-sans); }
+  textarea.lf-input { resize: none; min-height: 72px; font-size: 12px; }
+  .caps { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; }
+  .cap { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg-elev-1); border: 1px solid var(--border-subtle); border-radius: 8px; font-size: 12px; color: var(--fg-2); }
+  .cap .n { font-family: var(--font-mono); font-size: 11px; }
+  .cap .v { font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); }
+  .lrow { display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--border-subtle); margin-top: 8px; }
+
+  /* Run stage */
+  .runstage { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .rtop { display: flex; align-items: center; padding: 14px 20px; gap: 14px; border-bottom: 1px solid var(--border); }
+  .rh { font-weight: 700; font-size: 14px; }
+  .rstat { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; background: var(--status-run-tint); color: var(--status-run); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .rstat .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--status-run); animation: sf-pulse 1.2s ease-in-out infinite; }
+  @keyframes sf-pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
+  .rmeta { font-family: var(--font-mono); font-size: 10px; color: var(--fg-5); letter-spacing: .08em; }
+
+  .rbody { display: grid; grid-template-columns: 320px 1fr 380px; min-height: 540px; }
+
+  /* Timeline */
+  .timeline { border-right: 1px solid var(--border); padding: 12px; overflow: auto; }
+  .tl-h { font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--fg-4); padding: 6px 10px 12px; }
+  .step { position: relative; padding: 10px 12px 10px 28px; margin-bottom: 4px; border-radius: 7px; cursor: pointer; font-size: 12px; color: var(--fg-2); }
+  .step:hover { background: var(--bg-elev-2); }
+  .step.selected { background: var(--accent-tint); color: var(--accent-bright); }
+  .step::before { content: ""; position: absolute; left: 10px; top: 14px; width: 8px; height: 8px; border-radius: 50%; background: var(--status-ok); }
+  .step.run::before { background: var(--status-run); animation: sf-pulse 1.2s ease-in-out infinite; }
+  .step.wait::before { background: var(--fg-5); }
+  .step.fail::before { background: var(--status-reject); }
+  .step .sname { font-weight: 500; }
+  .step .smeta { font-family: var(--font-mono); font-size: 9px; color: var(--fg-5); letter-spacing: .06em; margin-top: 2px; }
+  .step.selected .smeta { color: var(--accent-bright); opacity:.75 }
+  .step::after { content: ""; position: absolute; left: 13.5px; top: 22px; bottom: -4px; width: 1px; background: var(--border); }
+  .step:last-child::after { display: none; }
+
+  /* Log stream */
+  .log { padding: 16px 20px; overflow: auto; background: var(--bg-elev-1); }
+  .log-row { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.75; display: grid; grid-template-columns: 64px 90px 1fr; gap: 12px; padding: 3px 0; }
+  .log-row .t { color: var(--fg-5); }
+  .log-row .who { color: var(--fg-4); text-transform: uppercase; font-size: 9px; letter-spacing: .08em; padding-top: 2px; }
+  .log-row .msg { color: var(--fg-2); }
+  .log-row.tool .who { color: var(--accent-bright); }
+  .log-row.boss .who { color: var(--status-run); }
+  .log-row.sys .who { color: var(--fg-5); }
+  .log-row.warn .msg { color: var(--status-warn); }
+  .log-row.ok .msg { color: var(--status-ok); }
+  .log-row .ref { color: var(--accent-bright); }
+
+  /* Inspector */
+  .ins { border-left: 1px solid var(--border); padding: 16px 18px; overflow: auto; }
+  .ins .ih { font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-bright); margin-bottom: 4px; }
+  .ins h4 { font-size: 14px; font-weight: 700; margin: 0 0 12px; }
+  .isec { margin-bottom: 16px; }
+  .isec h5 { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-4); margin: 0 0 6px; }
+  .kv { background: var(--bg-elev-1); border: 1px solid var(--border-subtle); border-radius: 7px; padding: 10px 12px; font-family: var(--font-mono); font-size: 11px; line-height: 1.7; color: var(--fg-2); white-space: pre; }
+  .kv .k { color: var(--accent-bright); }
+  .kv .s { color: var(--status-ok); }
+  .ccost { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ccost .c { background: var(--bg-elev-1); border: 1px solid var(--border-subtle); border-radius: 7px; padding: 8px 10px; }
+  .ccost .c .ck { font-family: var(--font-mono); font-size: 8px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-5); }
+  .ccost .c .cv { font-family: var(--font-mono); font-size: 15px; color: var(--fg-1); font-weight: 700; margin-top: 4px; }
+
+  /* Verdict + diff */
+  .verdict-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .verdict { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; border-left: 3px solid var(--status-warn); }
+  .verdict.pass { border-left-color: var(--status-ok); }
+  .verdict .vl { font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--status-warn); font-weight: 700; margin-bottom: 6px; }
+  .verdict.pass .vl { color: var(--status-ok); }
+  .verdict h4 { font-size: 14px; font-weight: 700; margin: 0 0 8px; }
+  .verdict ul { margin: 0; padding-left: 16px; color: var(--fg-3); font-size: 12px; line-height: 1.7; }
+  .verdict .actions { display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+
+  .diff { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .diff h4 { font-size: 14px; font-weight: 700; margin: 0 0 10px; }
+  .diffline { font-family: var(--font-mono); font-size: 11px; line-height: 1.7; padding: 2px 8px; border-radius: 4px; }
+  .diffline.add { background: rgba(16,185,129,.08); color: var(--status-ok); }
+  .diffline.del { background: rgba(239,68,68,.08); color: var(--status-reject); }
+  .diffline.ctx { color: var(--fg-4); }
+</style>
+</head><body>
+
+<span class="eyebrow">Story 8.5 · Smoke Run</span>
+<h1>Before publish, shake it down in a sandbox.</h1>
+<p class="sub">A Smoke Run is a throwaway execution: isolated workspace, fake egress where possible, real LLM calls, capped budget. Three parts: <b>launch drawer</b> (inputs + cost cap) · <b>live run stage</b> (timeline + logs + inspector) · <b>verdict</b> (human review, one click to apply fixes back to blueprint).</p>
+
+<section class="sec">
+  <h2>① Launch drawer</h2>
+  <div class="launch">
+    <div class="ls">● smoke run · sandboxed</div>
+    <h3>Shake down "Coding Research Digest"</h3>
+    <div style="font-size:12px; color:var(--fg-3); line-height:1.55; margin-bottom:18px">
+      Runs against a scratch workspace — no outbound email, no writes to production knowledge. LLM calls are real and metered.
+    </div>
+
+    <div class="lfield">
+      <div class="ll">input · triggers the boss</div>
+      <textarea class="lf-input">Produce this week's digest. Focus: planning strategies in OSS coding agents released since June.</textarea>
+    </div>
+    <div class="lfield">
+      <div class="ll">caps</div>
+      <div class="caps">
+        <div class="cap"><span class="n">max_cost</span><span class="v">$0.50</span></div>
+        <div class="cap"><span class="n">max_steps</span><span class="v">40</span></div>
+        <div class="cap"><span class="n">max_duration</span><span class="v">5 min</span></div>
+        <div class="cap"><span class="n">egress</span><span class="v">stubbed</span></div>
+      </div>
+    </div>
+    <div class="lfield">
+      <div class="ll">knowledge</div>
+      <div style="font-size:12px; color:var(--fg-3)">Inherits blueprint · 4 sources · 1,284 chunks indexed ✓</div>
+    </div>
+    <div class="lrow">
+      <div style="font-family:var(--font-mono); font-size:10px; color:var(--fg-5)">est. $0.14 · 2–3 min</div>
+      <div style="display:flex; gap:8px">
+        <button class="sf-btn sf-btn-ghost sf-btn-sm">Cancel</button>
+        <button class="sf-btn sf-btn-primary sf-btn-sm">▶ Launch smoke run</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <h2>② Live run stage — timeline · log · inspector</h2>
+  <div class="runstage">
+    <div class="rtop">
+      <div class="rh">Coding Research Digest · smoke #42</div>
+      <div class="rstat"><span class="dot"></span>Running</div>
+      <div class="rmeta">step 14/~32 · $0.09 · 1m 12s elapsed</div>
+      <div style="margin-left:auto; display:flex; gap:8px">
+        <button class="sf-btn sf-btn-ghost sf-btn-sm">⏸ Pause</button>
+        <button class="sf-btn sf-btn-ghost sf-btn-sm" style="color:var(--status-reject)">⏹ Stop</button>
+      </div>
+    </div>
+    <div class="rbody">
+
+      <div class="timeline">
+        <div class="tl-h">Execution timeline</div>
+        <div class="step"><div class="sname">Research Manager · plan</div><div class="smeta">3 subtasks · 412 tok · $0.01</div></div>
+        <div class="step"><div class="sname">Search Worker 1 · web_search</div><div class="smeta">"ReAct planning 2024" · 12 results</div></div>
+        <div class="step"><div class="sname">Search Worker 2 · web_search</div><div class="smeta">"Reflexion agents OSS" · 9 results</div></div>
+        <div class="step selected run"><div class="sname">Search Worker 1 · web_fetch ×3</div><div class="smeta">arxiv.org/… · reading (2 of 3)</div></div>
+        <div class="step wait"><div class="sname">Research Manager · reduce</div><div class="smeta">awaiting workers</div></div>
+        <div class="step wait"><div class="sname">Report Writer · compose</div><div class="smeta">—</div></div>
+      </div>
+
+      <div class="log">
+        <div class="log-row sys"><span class="t">00:00.4</span><span class="who">sys</span><span class="msg">Smoke run started · session <span class="ref">run_42a9</span> · sandbox workspace</span></div>
+        <div class="log-row boss"><span class="t">00:01.2</span><span class="who">boss</span><span class="msg">Planning complete · spawning 3 subtasks: [topic.react, topic.reflexion, topic.planexec]</span></div>
+        <div class="log-row"><span class="t">00:03.1</span><span class="who">worker-1</span><span class="msg">Subtask received: topic.react · isolated context opened</span></div>
+        <div class="log-row tool"><span class="t">00:03.8</span><span class="who">tool</span><span class="msg">web_search("ReAct planning 2024") → 12 results in 0.6s</span></div>
+        <div class="log-row"><span class="t">00:04.2</span><span class="who">worker-1</span><span class="msg">Selected 3 candidates for deep read · queuing web_fetch</span></div>
+        <div class="log-row tool"><span class="t">00:05.1</span><span class="who">tool</span><span class="msg">web_fetch(arxiv.org/abs/2405.14573) → 14.2 KB text <span class="ref">[chunk_0412]</span></span></div>
+        <div class="log-row tool"><span class="t">00:07.8</span><span class="who">tool</span><span class="msg">web_fetch(arxiv.org/abs/2406.01234) → 9.8 KB text <span class="ref">[chunk_0413]</span></span></div>
+        <div class="log-row warn"><span class="t">00:09.3</span><span class="who">sys</span><span class="msg">⚠ knowledge binding "OSS-coding-agents-2024.pdf" required citation; worker-1 has not cited yet (warn, not block)</span></div>
+        <div class="log-row"><span class="t">00:10.0</span><span class="who">worker-1</span><span class="msg">Synthesizing: 3 sources, cross-referenced with knowledge bindings…</span></div>
+        <div class="log-row tool run"><span class="t">01:12.4</span><span class="who">tool</span><span class="msg">web_fetch(arxiv.org/abs/2407.08812) · reading…</span></div>
+      </div>
+
+      <div class="ins">
+        <div class="ih">● step · 4 of ~32</div>
+        <h4>web_fetch ×3</h4>
+
+        <div class="isec">
+          <h5>Invocation</h5>
+          <div class="kv"><span class="k">tool</span>: <span class="s">"web_fetch"</span>
+<span class="k">caller</span>: <span class="s">"worker-sw1"</span>
+<span class="k">input</span>: {
+  <span class="k">urls</span>: [
+    <span class="s">"arxiv.org/abs/2405.14573"</span>,
+    <span class="s">"arxiv.org/abs/2406.01234"</span>,
+    <span class="s">"arxiv.org/abs/2407.08812"</span>
+  ]
+}</div>
+        </div>
+
+        <div class="isec">
+          <h5>Cost · tokens so far</h5>
+          <div class="ccost">
+            <div class="c"><div class="ck">input tok</div><div class="cv">4,812</div></div>
+            <div class="c"><div class="ck">output tok</div><div class="cv">1,204</div></div>
+            <div class="c"><div class="ck">cost</div><div class="cv">$0.03</div></div>
+            <div class="c"><div class="ck">duration</div><div class="cv">1m 09s</div></div>
+          </div>
+        </div>
+
+        <div class="isec">
+          <h5>Trace context</h5>
+          <div class="kv"><span class="k">parent</span>: step_01 · boss.plan
+<span class="k">span_id</span>: sp_42a9_004
+<span class="k">attempts</span>: 1</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <h2>③ Verdict — completes with warnings · one-click apply fixes</h2>
+  <div class="verdict-row">
+    <div class="verdict">
+      <div class="vl">● completed with warnings · 2 flagged</div>
+      <h4>Mostly green — two things to look at before you publish.</h4>
+      <ul>
+        <li><b>Citation gate not honored in 1 of 3 subtasks.</b> Worker-1 returned synthesis without <span style="font-family:var(--font-mono); color:var(--fg-2)">[chunk_####]</span> markers. Suggest: make citation <i>required</i> in role prompt.</li>
+        <li><b>web_fetch retried 2× on timeout.</b> Adds ~18s. Suggest: bump per-call timeout to 20s.</li>
+      </ul>
+      <div class="actions">
+        <button class="sf-btn sf-btn-primary sf-btn-sm">Apply both fixes →</button>
+        <button class="sf-btn sf-btn-ghost sf-btn-sm">View full trace</button>
+        <button class="sf-btn sf-btn-ghost sf-btn-sm">↻ Re-run</button>
+      </div>
+    </div>
+
+    <div class="diff">
+      <h4>Preview · what "Apply both fixes" changes</h4>
+      <div style="font-family:var(--font-mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--fg-5); margin-bottom:6px">role_profiles[worker-sw1].prompt</div>
+      <div class="diffline ctx">  You search the open web for high-signal sources.</div>
+      <div class="diffline del">- Return findings with URLs.</div>
+      <div class="diffline add">+ Return findings with URLs. Every claim MUST include [chunk_####] citation from bound knowledge.</div>
+      <div style="font-family:var(--font-mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--fg-5); margin:12px 0 6px">tools.web_fetch.timeout</div>
+      <div class="diffline del">- 8000</div>
+      <div class="diffline add">+ 20000</div>
+    </div>
+  </div>
+</section>
+
+</body></html>

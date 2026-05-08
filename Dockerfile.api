@@ -2,7 +2,7 @@
 # Story 0.1 — ShadowFlow API (Python / FastAPI)
 # Multi-stage: builder installs pip deps, runtime keeps only site-packages + app code.
 
-FROM python:3.11-slim AS builder
+FROM python:3.11.9-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -23,7 +23,7 @@ COPY shadowflow/ ./shadowflow/
 RUN pip install --prefix=/install --no-deps .
 
 
-FROM python:3.11-slim AS runtime
+FROM python:3.11.9-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -32,20 +32,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install Node.js — required by zerog_broker_bridge.mjs (0G Compute/Storage bridge)
-RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Non-root user for security (H4 fix)
+RUN groupadd --system appgroup && useradd --system --gid appgroup appuser
 
 # Copy the installed tree and app package from builder.
 COPY --from=builder /install /install
 COPY shadowflow/ ./shadowflow/
 
-# Copy broker bridge scripts and install their Node deps
-COPY scripts/ ./scripts/
-RUN cd scripts && npm ci --production 2>/dev/null || npm install --production
-
-# Copy seed templates so /templates endpoint returns data
-COPY templates/ ./templates/
+RUN chown -R appuser:appgroup /app
+USER appuser
 
 EXPOSE 8000
 

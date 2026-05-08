@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Spec 8.4b · Tool Registry</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+  body { padding: 48px 56px; max-width: 1440px; margin: 0 auto; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent-bright); }
+  h1 { font-size: 36px; letter-spacing: -.03em; font-weight: 800; margin: 4px 0 8px; }
+  .sub { color: var(--fg-3); font-size: 15px; max-width: 760px; line-height: 1.55; margin-bottom: 36px; }
+  .sec { margin-bottom: 48px; }
+  .sec h2 { font-size: 11px; font-family: var(--font-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--fg-4); font-weight: 700; margin: 0 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
+  .reg-shell { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .reg-top { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
+  .search { flex: 1; max-width: 360px; height: 36px; padding: 0 14px; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; gap: 8px; color: var(--fg-4); font-size: 12px; }
+  .filter-chip { padding: 5px 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg-elev-1); color: var(--fg-3); font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+  .filter-chip.on { background: var(--accent-tint); border-color: var(--accent); color: var(--accent-bright); }
+
+  .reg-body { display: grid; grid-template-columns: 1fr 400px; min-height: 540px; }
+  .tool-grid { padding: 16px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; align-content: start; border-right: 1px solid var(--border); }
+  .tool-card { background: var(--bg-elev-1); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 14px; cursor: pointer; }
+  .tool-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(168,85,247,.2); }
+  .tool-card .th { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+  .tool-card .ticon { width: 30px; height: 30px; border-radius: 7px; background: var(--bg-elev-2); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .tool-card .tn { font-size: 13px; font-weight: 600; color: var(--fg-1); font-family: var(--font-mono); }
+  .tool-card .tt { display: flex; gap: 6px; margin-top: 3px; flex-wrap: wrap; }
+  .tag { font-family: var(--font-mono); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: var(--bg-elev-3); color: var(--fg-4); font-weight: 700; }
+  .tag.builtin { background: rgba(16,185,129,.14); color: var(--status-ok); }
+  .tag.mcp { background: var(--accent-tint); color: var(--accent-bright); }
+  .tag.custom { background: rgba(245,158,11,.15); color: var(--status-warn); }
+  .tag.auth { background: rgba(239,68,68,.14); color: var(--status-reject); }
+  .tool-card .td { font-size: 11px; color: var(--fg-3); line-height: 1.45; }
+  .tool-card .tf { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-subtle); font-family: var(--font-mono); font-size: 9px; color: var(--fg-5); }
+  .ver { color: var(--fg-4); }
+
+  /* Detail */
+  .tool-detail { padding: 24px; overflow: auto; }
+  .tool-detail .th1 { font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-bright); margin-bottom: 6px; }
+  .tool-detail h3 { font-family: var(--font-mono); font-size: 18px; font-weight: 700; margin: 0 0 8px; color: var(--fg-1); }
+  .tool-detail .desc { font-size: 12px; color: var(--fg-3); line-height: 1.6; margin-bottom: 20px; }
+
+  .dsec { margin-bottom: 20px; }
+  .dsec h5 { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-4); margin: 0 0 8px; }
+  .schema { background: var(--bg-elev-1); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px; font-family: var(--font-mono); font-size: 11px; line-height: 1.7; color: var(--fg-2); white-space: pre; overflow-x: auto; }
+  .schema .k { color: var(--accent-bright); }
+  .schema .s { color: var(--status-ok); }
+  .schema .c { color: var(--fg-5); }
+
+  .perm-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--bg-elev-1); border: 1px solid var(--border-subtle); border-radius: 7px; font-size: 12px; margin-bottom: 4px; color: var(--fg-2); }
+  .perm-row .label { display: flex; align-items: center; gap: 6px; }
+  .perm-row .hint { color: var(--fg-5); font-family: var(--font-mono); font-size: 9px; }
+  .tog { width: 30px; height: 16px; border-radius: 8px; background: var(--accent); position: relative; }
+  .tog::after { content: ""; position: absolute; right: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent-ink); }
+  .tog.off { background: var(--bg-elev-3); }
+  .tog.off::after { right: auto; left: 2px; background: var(--fg-4); }
+
+  .bindrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--bg-elev-1); border: 1px solid var(--border-subtle); border-radius: 7px; margin-bottom: 4px; font-size: 12px; color: var(--fg-2); }
+  .cb { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cb.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-size: 10px; }
+  .bindrow .role-tag { margin-left: auto; font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-5); }
+
+  /* Auth drawer */
+  .auth-drawer { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; max-width: 520px; }
+  .auth-drawer h4 { font-family: var(--font-mono); font-size: 14px; font-weight: 700; margin: 0 0 6px; }
+  .auth-drawer .ah { font-family: var(--font-mono); font-size: 10px; color: var(--status-reject); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 14px; }
+  .auth-drawer label { display: block; margin-top: 12px; }
+  .auth-drawer label .ll { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-4); margin-bottom: 4px; }
+  .auth-drawer input { width: 100%; height: 36px; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 7px; padding: 0 12px; font-family: var(--font-mono); font-size: 12px; color: var(--fg-1); }
+  .auth-drawer .row { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; }
+</style>
+</head><body>
+
+<span class="eyebrow">Story 8.4b · Tool Registry</span>
+<h1>Every capability a role can call lives here.</h1>
+<p class="sub">Three tiers — <span style="color:var(--status-ok);font-family:var(--font-mono)">builtin</span> (web_search, web_fetch, code_exec), <span style="color:var(--accent-bright);font-family:var(--font-mono)">MCP</span> (user-connected servers), <span style="color:var(--status-warn);font-family:var(--font-mono)">custom</span> (HTTP/OpenAPI). Registry is per-workspace; bindings are per-role-profile. Tools listed here are the same ones agents expose in their visible-tools inspector.</p>
+
+<section class="sec">
+  <h2>① Registry — grid + detail</h2>
+  <div class="reg-shell">
+    <div class="reg-top">
+      <div class="search"><span>⌕</span><span>Search tools…</span></div>
+      <div class="filter-chip on">All · 24</div>
+      <div class="filter-chip">Builtin · 7</div>
+      <div class="filter-chip">MCP · 12</div>
+      <div class="filter-chip">Custom · 5</div>
+      <div style="margin-left:auto"><button class="sf-btn sf-btn-primary sf-btn-sm">＋ Register tool</button></div>
+    </div>
+    <div class="reg-body">
+      <div class="tool-grid">
+        <div class="tool-card">
+          <div class="th"><div class="ticon">🌐</div><div><div class="tn">web_search</div><div class="tt"><span class="tag builtin">builtin</span></div></div></div>
+          <div class="td">Search the open web. Returns ranked snippets with URLs.</div>
+          <div class="tf"><span class="ver">v1.0</span><span>used by 8 roles</span></div>
+        </div>
+        <div class="tool-card">
+          <div class="th"><div class="ticon">📥</div><div><div class="tn">web_fetch</div><div class="tt"><span class="tag builtin">builtin</span></div></div></div>
+          <div class="td">Fetch a specific URL; returns extracted text + metadata.</div>
+          <div class="tf"><span class="ver">v1.0</span><span>used by 6 roles</span></div>
+        </div>
+        <div class="tool-card">
+          <div class="th"><div class="ticon">⚙</div><div><div class="tn">code_exec</div><div class="tt"><span class="tag builtin">builtin</span><span class="tag">sandboxed</span></div></div></div>
+          <div class="td">Run Python/JS in an isolated sandbox. 60s timeout.</div>
+          <div class="tf"><span class="ver">v2.1</span><span>used by 3 roles</span></div>
+        </div>
+        <div class="tool-card selected">
+          <div class="th"><div class="ticon">📕</div><div><div class="tn">xhs_search</div><div class="tt"><span class="tag mcp">MCP</span><span class="tag auth">auth required</span></div></div></div>
+          <div class="td">Search Xiaohongshu for notes by keyword. Wrapped by xhs-mcp.</div>
+          <div class="tf"><span class="ver">v0.4.1</span><span>used by 2 roles</span></div>
+        </div>
+        <div class="tool-card">
+          <div class="th"><div class="ticon">📬</div><div><div class="tn">gmail.send</div><div class="tt"><span class="tag mcp">MCP</span><span class="tag auth">OAuth</span></div></div></div>
+          <div class="td">Send email from the connected Gmail account.</div>
+          <div class="tf"><span class="ver">v1.2</span><span>0 bindings</span></div>
+        </div>
+        <div class="tool-card">
+          <div class="th"><div class="ticon">💬</div><div><div class="tn">slack.post</div><div class="tt"><span class="tag mcp">MCP</span></div></div></div>
+          <div class="td">Post a message to a Slack channel.</div>
+          <div class="tf"><span class="ver">v1.0</span><span>used by 1 role</span></div>
+        </div>
+        <div class="tool-card">
+          <div class="th"><div class="ticon">🔎</div><div><div class="tn">arxiv_search</div><div class="tt"><span class="tag custom">custom</span></div></div></div>
+          <div class="td">User-registered OpenAPI endpoint. Paper search via arXiv.</div>
+          <div class="tf"><span class="ver">v0.1</span><span>used by 1 role</span></div>
+        </div>
+        <div class="tool-card">
+          <div class="th"><div class="ticon">📊</div><div><div class="tn">notion.query</div><div class="tt"><span class="tag mcp">MCP</span><span class="tag auth">auth</span></div></div></div>
+          <div class="td">Query a Notion database.</div>
+          <div class="tf"><span class="ver">v0.9</span><span>used by 2 roles</span></div>
+        </div>
+      </div>
+
+      <div class="tool-detail">
+        <div class="th1">● selection · mcp tool</div>
+        <h3>xhs_search</h3>
+        <div class="desc">Search Xiaohongshu for notes by keyword. Wrapped by <span style="color:var(--accent-bright); font-family:var(--font-mono)">xhs-mcp</span> server running at <span style="font-family:var(--font-mono); color:var(--fg-2)">mcp://xhs.local:7788</span>.</div>
+
+        <div class="dsec">
+          <h5>Input schema</h5>
+          <div class="schema"><span class="k">{
+  "keyword"</span>: <span class="s">"string"</span>,     <span class="c">// required</span>
+  <span class="k">"limit"</span>: <span class="s">"number"</span>,     <span class="c">// default 20, max 100</span>
+  <span class="k">"sort"</span>: <span class="s">"'hot' | 'new'"</span>
+<span class="k">}</span></div>
+        </div>
+
+        <div class="dsec">
+          <h5>Auth &amp; permissions</h5>
+          <div class="perm-row"><div class="label">Requires session cookie</div><div class="hint">last verified 2h ago</div></div>
+          <div class="perm-row"><div class="label">Rate limit</div><div class="hint">30 req/min · per workspace</div></div>
+          <div class="perm-row"><div class="label">Egress allowed</div><div class="tog"></div></div>
+          <div class="perm-row"><div class="label">Approval gate on call</div><div class="tog off"></div></div>
+        </div>
+
+        <div class="dsec">
+          <h5>Bound to roles · 2 of 4</h5>
+          <div class="bindrow"><span class="cb on">✓</span>Search Worker 1 <span class="role-tag">worker</span></div>
+          <div class="bindrow"><span class="cb on">✓</span>Search Worker 2 <span class="role-tag">worker</span></div>
+          <div class="bindrow"><span class="cb">&nbsp;</span>Research Manager <span class="role-tag">boss</span></div>
+          <div class="bindrow"><span class="cb">&nbsp;</span>Report Writer <span class="role-tag">worker</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <h2>② Auth drawer — when OAuth / cookies needed</h2>
+  <div class="auth-drawer">
+    <div class="ah">● action required · auth missing</div>
+    <h4>Connect Gmail</h4>
+    <div style="font-size:12px; color:var(--fg-3); line-height:1.55">
+      This MCP server uses OAuth 2.0. We'll open a popup to Google; tokens are stored workspace-scoped and encrypted.
+    </div>
+    <label>
+      <div class="ll">scope</div>
+      <input value="gmail.send · gmail.readonly" readonly>
+    </label>
+    <label>
+      <div class="ll">workspace</div>
+      <input value="workspace_7ab2f · Shadowflow Demo" readonly>
+    </label>
+    <div class="row">
+      <div style="font-family:var(--font-mono); font-size:10px; color:var(--fg-5)">revocable anytime from Settings</div>
+      <div style="display:flex; gap:8px">
+        <button class="sf-btn sf-btn-ghost sf-btn-sm">Cancel</button>
+        <button class="sf-btn sf-btn-primary sf-btn-sm">Continue to Google →</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body></html>

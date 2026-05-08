@@ -15,6 +15,33 @@ ZgFile close-in-finally, etc.) and load the relevant `SKILL.md` from
 
 Orchestration rules and activation triggers live in `.0g-skills/AGENTS.md`.
 
+## UI 保护规则
+
+**核心原则：只能加，不能删。在保护已有设计的基础上可以自由修改和改进。**
+
+### 允许的操作 ✅
+- 新增 section、组件、功能区块
+- 改进现有 UI 的样式、交互、动效
+- 新增路由、props、逻辑
+- 在现有页面上叠加新内容
+
+### 禁止的操作 ❌
+- 删除已有的页面 section（Hero、对比表、Feature 卡片、Proof Wall 等）
+- 用简化版本替换已有的完整设计
+- 把多 section 的完整页面缩减为简单占位内容
+- 重写已有 UI 文件导致视觉内容变少
+
+### 重点保护文件
+- `src/pages/LandingPage.tsx` — 完整营销落地页，所有 section 必须保留
+- `src/EditorPage.tsx` — 编辑器主界面
+- `src/pages/TemplatesPage.tsx` — 模板选择页
+- `src/index.css` — 全局设计 token 和 `sf-*` 动画类
+
+### 前端工作流
+- Claude 可以直接做 UI 改动，无需事先确认
+- 大的视觉重设计可以通过 Claude Design（Pencil）出稿后实现
+- 后端功能完成后，前端配套 UI 由 Claude 直接补充，不需要等待设计稿
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill

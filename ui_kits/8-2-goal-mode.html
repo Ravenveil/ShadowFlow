@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Spec 8.2 · Goal Mode</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+  body { padding: 48px 56px; max-width: 1440px; margin: 0 auto; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent-bright); }
+  h1 { font-size: 36px; letter-spacing: -.03em; font-weight: 800; margin: 4px 0 8px; }
+  .sub { color: var(--fg-3); font-size: 15px; max-width: 760px; line-height: 1.55; margin-bottom: 36px; }
+  .sec { margin-bottom: 48px; }
+  .sec h2 { font-size: 11px; font-family: var(--font-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--fg-4); font-weight: 700; margin: 0 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
+  /* Mode switcher */
+  .mode-switch { display: inline-flex; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 10px; padding: 4px; gap: 2px; }
+  .mode-switch button { padding: 6px 16px; border-radius: 7px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--fg-4); }
+  .mode-switch button.active { background: var(--accent); color: var(--accent-ink); }
+  .mode-switch button .num { opacity: .7; margin-right: 4px; }
+
+  /* Main layout */
+  .goal-stage { display: grid; grid-template-columns: 1fr 380px; gap: 24px; }
+  .form-panel { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 14px; padding: 32px; }
+  .form-panel h3 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 6px; }
+  .form-panel .tagline { color: var(--fg-3); font-size: 13px; margin-bottom: 28px; }
+  .field-group { margin-bottom: 22px; }
+  .flabel { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-3); }
+  .flabel .required { color: var(--status-reject); }
+  .flabel .help { font-family: var(--font-sans); text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--fg-5); font-size: 11px; margin-left: auto; }
+  .finput { width: 100%; min-height: 44px; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 10px; color: var(--fg-1); font-size: 14px; padding: 12px 14px; font-family: var(--font-sans); }
+  .finput.focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(168,85,247,.15); }
+  textarea.finput { resize: none; min-height: 72px; }
+  .placeholder { color: var(--fg-5); }
+
+  .choices { display: flex; gap: 8px; flex-wrap: wrap; }
+  .choice { padding: 10px 14px; border-radius: 10px; background: var(--bg-elev-1); border: 1px solid var(--border); font-size: 13px; color: var(--fg-2); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+  .choice.selected { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-bright); }
+  .choice .k { font-family: var(--font-mono); font-size: 10px; color: var(--fg-5); }
+  .choice.selected .k { color: var(--accent-bright); opacity: .7; }
+
+  .cta-row { display: flex; align-items: center; gap: 10px; padding-top: 20px; border-top: 1px solid var(--border-subtle); margin-top: 8px; }
+  .big-cta { height: 44px; padding: 0 22px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
+  .alt-cta { height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--border); color: var(--fg-2); font-size: 13px; font-weight: 600; }
+
+  /* Result card */
+  .result-panel { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px; position: sticky; top: 20px; height: max-content; }
+  .result-panel .r-eyebrow { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-bright); margin-bottom: 10px; }
+  .result-panel h4 { font-size: 18px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 4px; }
+  .result-panel .r-goal { color: var(--fg-3); font-size: 12px; margin-bottom: 18px; font-style: italic; }
+  .conf-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+  .conf-bar .track { flex: 1; height: 6px; background: var(--bg-elev-2); border-radius: 3px; overflow: hidden; }
+  .conf-bar .fill { width: 72%; height: 100%; background: linear-gradient(90deg, var(--status-run), var(--status-ok)); border-radius: 3px; }
+  .conf-bar .n { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--fg-1); }
+  .meta-row { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; font-family: var(--font-mono); font-size: 11px; margin-bottom: 20px; }
+  .meta-row .k { color: var(--fg-5); letter-spacing: .08em; text-transform: uppercase; font-size: 9px; }
+  .meta-row .v { color: var(--fg-2); }
+  .missing-list { background: var(--status-warn-tint); border: 1px solid rgba(245,158,11,.3); border-radius: 8px; padding: 10px 12px; margin-bottom: 20px; }
+  .missing-list .mh { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--status-warn); margin-bottom: 6px; }
+  .missing-list ul { margin: 0; padding-left: 14px; color: var(--fg-2); font-size: 12px; line-height: 1.7; }
+  .next-row { display: flex; flex-direction: column; gap: 8px; }
+  .next-row .next-cta { height: 38px; padding: 0 14px; border-radius: 9px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
+  .next-row .next-cta.primary { background: var(--accent); color: var(--accent-ink); }
+  .next-row .next-cta.ghost { border: 1px solid var(--border); color: var(--fg-2); }
+  .next-row .next-cta .arr { opacity: .6; }
+
+  /* States row */
+  .states { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .state-card { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; min-height: 130px; position: relative; }
+  .state-card .sh { font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; color: var(--fg-4); }
+  .state-card .sd { font-size: 11px; color: var(--fg-3); line-height: 1.5; }
+  .state-card.idle { border-left: 2px solid var(--fg-5); }
+  .state-card.loading { border-left: 2px solid var(--status-run); }
+  .state-card.success { border-left: 2px solid var(--status-ok); }
+  .state-card.valid-err { border-left: 2px solid var(--status-warn); }
+  .state-card.server-err { border-left: 2px solid var(--status-reject); }
+  .mini-cta { margin-top: 10px; height: 26px; padding: 0 10px; border-radius: 6px; font-size: 11px; font-family: var(--font-mono); display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); color: var(--fg-3); }
+  .mini-cta.disabled { opacity: .4; }
+  .spinner { width: 10px; height: 10px; border: 1.5px solid var(--status-run); border-top-color: transparent; border-radius: 50%; animation: sf-spin 0.8s linear infinite; display: inline-block; }
+  @keyframes sf-spin { to { transform: rotate(360deg); } }
+</style>
+</head><body>
+
+<span class="eyebrow">Story 8.2 · Goal Mode</span>
+<h1>Start from intent, not a blank canvas.</h1>
+<p class="sub">Five inputs. One button. Defaults open to <span style="color:var(--accent-bright)">Goal Mode</span> — users don't see nodes, edges, providers, or policy matrices until they're ready. The Builder generates an <span style="font-family:var(--font-mono);color:var(--accent-bright)">AgentBlueprint</span> via <span style="font-family:var(--font-mono);color:var(--accent-bright)">POST /builder/blueprints/generate</span>, then offers four continuation paths.</p>
+
+<section class="sec">
+  <h2>① Mode switcher — top of Builder shell</h2>
+  <div class="mode-switch">
+    <button class="active"><span class="num">01</span> Goal</button>
+    <button><span class="num">02</span> Scene</button>
+    <button><span class="num">03</span> Graph</button>
+  </div>
+</section>
+
+<section class="sec">
+  <h2>② Form + result side-by-side</h2>
+  <div class="goal-stage">
+    <div class="form-panel">
+      <h3>Tell me what this agent should do.</h3>
+      <div class="tagline">I'll grow the skeleton from here. You can refine everything later.</div>
+
+      <div class="field-group">
+        <div class="flabel"><span>goal</span><span class="required">*</span><span class="help">what you want it to accomplish</span></div>
+        <textarea class="finput focus">Survey the last 6 months of open-source coding-agent research and produce a weekly digest for our engineering team.</textarea>
+      </div>
+
+      <div class="field-group">
+        <div class="flabel"><span>audience</span><span class="help">who this is for</span></div>
+        <input class="finput" value="Internal engineering team, ~20 readers">
+      </div>
+
+      <div class="field-group">
+        <div class="flabel"><span>knowledge_sources</span><span class="help">multi-select</span></div>
+        <div class="choices">
+          <div class="choice selected"><span class="k">□</span>Documents</div>
+          <div class="choice selected"><span class="k">□</span>URLs</div>
+          <div class="choice"><span class="k">□</span>Knowledge Pack</div>
+          <div class="choice"><span class="k">□</span>None · decide later</div>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <div class="flabel"><span>mode</span><span class="required">*</span></div>
+        <div class="choices">
+          <div class="choice"><span class="k">○</span>Single assistant</div>
+          <div class="choice selected"><span class="k">●</span>Team · boss + workers</div>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <div class="flabel"><span>desired_output</span><span class="required">*</span></div>
+        <div class="choices">
+          <div class="choice"><span class="k">○</span>Answer</div>
+          <div class="choice selected"><span class="k">●</span>Report</div>
+          <div class="choice"><span class="k">○</span>Review</div>
+          <div class="choice"><span class="k">○</span>Workflow draft</div>
+        </div>
+      </div>
+
+      <div class="cta-row">
+        <button class="big-cta">✨ Generate Blueprint</button>
+        <button class="alt-cta">Start from a template →</button>
+        <button class="alt-cta" style="margin-left:auto; color:var(--fg-4)">Skip to Graph Mode</button>
+      </div>
+    </div>
+
+    <div class="result-panel">
+      <div class="r-eyebrow">● Blueprint generated</div>
+      <h4>Coding Research Digest</h4>
+      <div class="r-goal">"Survey OSS coding-agent research and deliver a weekly digest…"</div>
+      <div class="conf-bar">
+        <span class="n">0.72</span>
+        <div class="track"><div class="fill"></div></div>
+        <span style="font-family:var(--font-mono); font-size:9px; color:var(--fg-5); text-transform:uppercase; letter-spacing:.1em">confidence</span>
+      </div>
+      <div class="meta-row">
+        <span class="k">mode</span><span class="v">team · 1 boss + 3 workers</span>
+        <span class="k">roles</span><span class="v">Research Manager → Scout ×2, Writer</span>
+        <span class="k">tools</span><span class="v">builtin:web_search (default)</span>
+        <span class="k">source</span><span class="v">heuristic</span>
+      </div>
+      <div class="missing-list">
+        <div class="mh">⚠ Missing inputs</div>
+        <ul>
+          <li>No documents uploaded yet — Knowledge Dock can fill this later</li>
+          <li>Citation requirement not set (default: off)</li>
+        </ul>
+      </div>
+      <div class="next-row">
+        <button class="next-cta primary"><span>Accept &amp; enter Scene Mode</span><span class="arr">→</span></button>
+        <button class="next-cta ghost"><span>↻ Regenerate (keeps form)</span></button>
+        <button class="next-cta ghost"><span>Start from a template</span><span class="arr">→</span></button>
+        <button class="next-cta ghost"><span>Open in Graph Mode</span><span class="arr">→</span></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <h2>③ States — no silent failures</h2>
+  <div class="states">
+    <div class="state-card idle">
+      <div class="sh">● idle / empty</div>
+      <div class="sd">Empty form. Primary CTA visible but greyed until <span style="font-family:var(--font-mono);color:var(--fg-2)">goal</span> &amp; <span style="font-family:var(--font-mono);color:var(--fg-2)">mode</span> filled.</div>
+      <div class="mini-cta disabled">Generate</div>
+    </div>
+    <div class="state-card loading">
+      <div class="sh">● loading · submitting</div>
+      <div class="sd">CTA disabled, form locked, spinner inline. Guarded against double-submit.</div>
+      <div class="mini-cta" style="color:var(--status-run)"><span class="spinner"></span>Generating…</div>
+    </div>
+    <div class="state-card success">
+      <div class="sh">● success</div>
+      <div class="sd">Result panel populated. Four next-step CTAs. Form preserved for regenerate.</div>
+      <div class="mini-cta" style="color:var(--status-ok)">✓ Blueprint ready</div>
+    </div>
+    <div class="state-card valid-err">
+      <div class="sh">● validation error</div>
+      <div class="sd"><b style="color:var(--status-warn)">"Goal needs a concrete outcome."</b> Inline under the field. No toast noise.</div>
+      <div class="mini-cta" style="color:var(--status-warn)">↵ fix &amp; resubmit</div>
+    </div>
+    <div class="state-card server-err">
+      <div class="sh">● server / network error</div>
+      <div class="sd"><b style="color:var(--status-reject)">"Generation failed."</b> Translated from 5xx — no traceback surfaced. Retry keeps form.</div>
+      <div class="mini-cta" style="color:var(--status-reject)">↻ try again</div>
+    </div>
+  </div>
+</section>
+
+</body></html>

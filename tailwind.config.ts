@@ -5,6 +5,10 @@ const config: Config = {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // Tailwind `dark:` variant is gated to night theme only.
+  // Project switches via [data-theme="night"|"day"] (set by useTheme on documentElement),
+  // so we use the `variant` form to attach a custom selector instead of `class="dark"`.
+  darkMode: ['variant', '&:where([data-theme="night"], [data-theme="night"] *)'],
   theme: {
     extend: {
       fontFamily: {

@@ -71,3 +71,8 @@ typechain-types/
 # BMAD planning artifacts
 _bmad/
 _bmad-output/
+.vercel
+
+# Local-only review notes & handoff scratch (not source-tracked)
+.shadowflow-review.md
+_handoff_tmp/

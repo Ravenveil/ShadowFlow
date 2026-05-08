@@ -7,8 +7,11 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Literal, Optional
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from shadowflow.api._limiter import limiter
 
 from shadowflow.runtime.errors import ShadowflowError
 from shadowflow.runtime.health import (
@@ -39,7 +42,7 @@ from shadowflow.runtime import (
     WorkflowGraph,
     WorkflowValidationResult,
 )
-from shadowflow.runtime.contracts import RunTrajectory, TrajectoryBundle, WorkflowAssemblySpec
+from shadowflow.runtime.contracts import RunTrajectory, TrajectoryBundle, WorkflowAssemblySpec, WorkflowPolicyMatrixSpec
 from shadowflow.runtime.errors import PolicyMismatch
 from shadowflow.runtime.sanitize import sanitize_trajectory, RemovedField
 from shadowflow.runtime.trajectory import build_run_trajectory, build_trajectory_bundle
@@ -47,6 +50,25 @@ from shadowflow.assembly.compile import compile as compile_workflow_spec, Compil
 from shadowflow.highlevel import WorkflowTemplateSpec
 
 logger = logging.getLogger("shadowflow.server")
+
+
+def _internal_error(exc: Exception) -> HTTPException:
+    """Return a safe 500 error envelope — never exposes exc message to clients."""
+    trace_id = uuid4().hex
+    logger.exception("Internal error [trace=%s]", trace_id, exc_info=exc)
+    return HTTPException(
+        status_code=500,
+        detail={"error": {"code": "INTERNAL_ERROR", "message": "An internal error occurred", "trace_id": trace_id}},
+    )
+
+
+def _client_error(status_code: int, exc: Exception, code: str = "CLIENT_ERROR") -> HTTPException:
+    """Return a structured client error envelope (400/404). Safe to expose exc message."""
+    return HTTPException(
+        status_code=status_code,
+        detail={"error": {"code": code, "message": str(exc)}},
+    )
+
 
 # ---------------------------------------------------------------------------
 # Template Registry (T1: AC2 + AC3)
@@ -112,6 +134,12 @@ class TemplateListItem(BaseModel):
     agent_roster_count: int
     group_roster_count: int
     source: Literal["seed", "custom"]
+    # Builder-generated template fields (Story 8.6) — empty string / empty list when not from Builder
+    builder_origin: str = ""
+    workflow_id: str = ""
+    description: str = ""
+    # R2-Patch-1: kit_tags was missing from server model — frontend TemplateListItem already has it
+    kit_tags: List[str] = Field(default_factory=list)
 
 
 class SanitizeRequest(BaseModel):
@@ -135,6 +163,8 @@ class GapResponseRequest(BaseModel):
     user_input: Optional[str] = None
 
 app = FastAPI(title="ShadowFlow API", version="0.3.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 run_event_bus = RunEventBus()
 runtime_service = RuntimeService(event_bus=run_event_bus)
 
@@ -145,46 +175,33 @@ runtime_service = RuntimeService(event_bus=run_event_bus)
 from shadowflow.api import ops as _ops_api
 from shadowflow.api import archive as _archive_api
 from shadowflow.api import policy_observability as _policy_obs_api
+from shadowflow.api import inbox as _inbox_api
+from shadowflow.api import groups as _groups_api
+from shadowflow.api import approvals as _approvals_api
+from shadowflow.api import builder as _builder_api
+from shadowflow.api import catalog as _catalog_api
+from shadowflow.api import tools as _tools_api
+from shadowflow.api import knowledge as _knowledge_api
+from shadowflow.api import citations as _citations_api
+from shadowflow.api import memory as _memory_api
+from shadowflow.api import state as _state_api
+from shadowflow.api import evals as _evals_api
 from shadowflow.integrations import zerog_storage as _zerog_storage_api
-
-class _ZeroGProviderManager:
-    """Thin adapter that exposes 0G broker list_providers() to OpsAggregator."""
-
-    def list_providers(self):
-        import asyncio
-        import os
-        try:
-            from shadowflow.llm.zerog import ZeroGBrokerBridge
-            bridge = ZeroGBrokerBridge(
-                rpc_url=os.getenv("ZEROG_RPC_URL", "https://evmrpc-testnet.0g.ai"),
-                private_key=os.getenv("ZEROG_PRIVATE_KEY", ""),
-                provider_address=os.getenv("ZEROG_PROVIDER_ADDRESS", ""),
-            )
-            raw = asyncio.run(bridge._call("list"))
-            services = raw.get("services", [])
-            result = []
-            for idx, s in enumerate(services):
-                if not isinstance(s, dict):
-                    continue
-                result.append(type("P", (), {
-                    "id": str(s.get("provider_address", idx)),
-                    "name": str(s.get("model", f"provider_{idx}")),
-                    "model_count": 1,
-                    "p95_ms": 0.0,
-                    "tee_verified": bool(s.get("tee_verified", False)),
-                    "load_pct": 0,
-                })())
-            return result
-        except Exception:
-            return []
-
-
-_zerog_provider_manager = _ZeroGProviderManager() if os.getenv("ZEROG_PRIVATE_KEY") else None
+from shadowflow.api import agents as _agents_api
+from shadowflow.api import teams as _teams_api
+from shadowflow.api import registry as _registry_api
+from shadowflow.api import acp_server as _acp_server_api
+from shadowflow.api import sessions as _sessions_api
+from shadowflow.api import workspaces as _workspaces_api
+from shadowflow.api import chat as _chat_api
+from shadowflow.api import a2a_bridge as _a2a_bridge_api
+from shadowflow.api import schedules as _schedules_api
+from shadowflow.api import settings as _settings_api
+from shadowflow.api import wallet as _wallet_api
 
 _ops_api.set_aggregator(_ops_api.OpsAggregator(
     runtime_service=runtime_service,
     event_bus=run_event_bus,
-    provider_manager=_zerog_provider_manager,
 ))
 _archive_api.set_service(_archive_api.ArchiveService(runtime_service=runtime_service))
 _policy_obs_api.set_aggregator(_policy_obs_api.PolicyObsAggregator(
@@ -192,17 +209,61 @@ _policy_obs_api.set_aggregator(_policy_obs_api.PolicyObsAggregator(
     runtime_service=runtime_service,
 ))
 
+_approvals_api.set_runtime_service(runtime_service)
+
 app.include_router(_ops_api.router)
 app.include_router(_archive_api.router)
 app.include_router(_policy_obs_api.router)
+app.include_router(_inbox_api.router)
+app.include_router(_groups_api.router)
+app.include_router(_approvals_api.router)
 app.include_router(_zerog_storage_api.router)
+app.include_router(_builder_api.router)
+app.include_router(_catalog_api.router)
+app.include_router(_tools_api.router)
+app.include_router(_knowledge_api.router)
+app.include_router(_citations_api.router)
+app.include_router(_memory_api.router)
+app.include_router(_state_api.router)
+app.include_router(_evals_api.router)
+app.include_router(_registry_api.router)  # before agents to avoid /{agent_id} catch-all
+app.include_router(_agents_api.router)
+app.include_router(_teams_api.router)
+app.include_router(_acp_server_api.router)
+app.include_router(_sessions_api.router)
+app.include_router(_workspaces_api.router)
+app.include_router(_chat_api.router)
+# A2A bridge — only mounted when A2A_BRIDGE_ENABLED=true
+if _a2a_bridge_api.A2A_BRIDGE_ENABLED:
+    app.include_router(_a2a_bridge_api.router)
+    logger.info("A2A bridge enabled: GET /.well-known/agent.json  POST /a2a/")
+else:
+    logger.debug("A2A bridge disabled (set A2A_BRIDGE_ENABLED=true to enable)")
+from shadowflow.api.regression import router as _regression_router
+app.include_router(_regression_router)
+app.include_router(_schedules_api.router)
+app.include_router(_settings_api.router)
+app.include_router(_wallet_api.router)
 
 
 @app.exception_handler(ShadowflowError)
 async def shadowflow_error_handler(request: Request, exc: ShadowflowError) -> JSONResponse:
     trace_id = f"trace-{uuid4().hex[:12]}"
     logger.warning("ShadowflowError %s trace_id=%s: %s", exc.code, trace_id, exc.message)
-    _status_map = {"POLICY_VIOLATION": 403, "PROVIDER_TIMEOUT": 504}
+    _status_map = {
+        "POLICY_VIOLATION": 403,
+        "PROVIDER_TIMEOUT": 504,
+        "KNOWLEDGE_PACK_NOT_FOUND": 404,
+        "KNOWLEDGE_PACK_INVALID_ID": 400,  # H2: malformed pack_id (path-traversal etc.)
+        "KNOWLEDGE_PACK_INVALID": 500,     # H3: server-side schema corruption
+        "CATALOG_APP_NOT_FOUND": 404,
+        "CATALOG_BLUEPRINT_INVALID": 422,
+        "CATALOG_SNAPSHOT_MISSING": 500,
+        "CITATION_NOT_FOUND": 404,
+        "STATE_CONFLICT": 409,
+        "AGENT_STATE_NOT_FOUND": 404,
+        "SNAPSHOT_NOT_FOUND": 404,
+    }
     status = _status_map.get(exc.code, 400)
     return JSONResponse(
         status_code=status,
@@ -236,6 +297,18 @@ async def _warn_on_missing_keys() -> None:
 
 
 @app.on_event("startup")
+async def _discover_kits() -> None:
+    """Discover and register all Agent Kits at startup (Story 10.5 C1).
+
+    Replaces per-request scanning in /builder/kits endpoints.
+    """
+    from shadowflow.runtime.kits.registry import discover_and_register_kits
+
+    imported = discover_and_register_kits()
+    logger.info("KitRegistry: discovered %d Kit module(s) at startup", imported)
+
+
+@app.on_event("startup")
 async def _check_agent_binaries() -> None:
     """Check external agent binary availability; warn and cache results (Story 2.5)."""
     import asyncio
@@ -243,6 +316,37 @@ async def _check_agent_binaries() -> None:
     results = await asyncio.to_thread(check_all_agents)
     app.state.agent_health = results
     log_agent_health_warnings(results)
+
+
+@app.on_event("startup")
+async def _start_scheduler() -> None:
+    """Start APScheduler BackgroundScheduler and re-register any persisted schedules (14.2)."""
+    try:
+        from shadowflow.services.scheduler import start_scheduler
+        from shadowflow.api.schedules import _list_schedules, _schedule_job
+        from apscheduler.triggers.cron import CronTrigger
+    except ImportError:
+        logger.warning("scheduler: APScheduler not installed — schedule feature disabled. Run: pip install 'APScheduler>=3.10,<4'")
+        return
+
+    scheduler = start_scheduler()
+    app.state.scheduler = scheduler
+
+    # Re-register persisted schedules after server restart
+    for record in _list_schedules():
+        try:
+            trigger = CronTrigger.from_crontab(record["cron_expression"])
+            sid = record["schedule_id"]
+            scheduler.add_job(_schedule_job, trigger=trigger, id=sid, args=[sid], replace_existing=True)
+        except Exception as exc:
+            logger.warning("scheduler: could not re-register schedule %s: %s", record.get("schedule_id"), exc)
+
+
+@app.on_event("shutdown")
+async def _stop_scheduler() -> None:
+    """Shut down APScheduler gracefully (14.2)."""
+    from shadowflow.services.scheduler import stop_scheduler
+    stop_scheduler()
 
 
 @app.middleware("http")
@@ -256,15 +360,40 @@ async def _missing_key_warning_header(request: Request, call_next):
     return response
 
 
-# 配置 CORS — 从环境变量读取，不能用 * (Starlette 禁止 * + credentials)
-_cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
-_cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    # X-XSS-Protection: 0 is the current best practice — the legacy "1; mode=block"
+    # is deprecated and can introduce XSS vectors in older browsers.
+    response.headers["X-XSS-Protection"] = "0"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+
+# 配置 CORS — origins 由环境变量控制，不允许 wildcard + credentials 同时存在
+_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get(
+        "CORS_ORIGINS", "http://localhost:5173,http://localhost:3000"
+    ).split(",")
+    if o.strip()
+]
+
+# Guard: wildcard origin + credentials is a CORS spec violation and a security hole.
+if "*" in _ALLOWED_ORIGINS:
+    raise RuntimeError(
+        "CORS_ORIGINS must not contain '*' when allow_credentials=True. "
+        "Set explicit origin(s) in the CORS_ORIGINS environment variable."
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Last-Event-ID", "X-LLM-Key", "X-LLM-Provider", "X-LLM-Model"],
 )
 
 @app.get("/")
@@ -287,7 +416,8 @@ async def root():
     return payload
 
 @app.post("/workflow/compile")
-async def compile_workflow(spec: WorkflowAssemblySpec):
+@limiter.limit("20/minute")
+async def compile_workflow(request: Request, spec: WorkflowAssemblySpec):
     """Compile a WorkflowAssemblySpec into a WorkflowDefinition (Story 3.4 AC2).
 
     Returns: {data: {definition, warnings}, meta: {}}
@@ -315,27 +445,30 @@ async def compile_workflow(spec: WorkflowAssemblySpec):
             detail={"error": {"code": "COMPILE_ERROR", "message": str(exc), "details": {}}},
         )
     except TypeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail={"error": {"code": "BAD_REQUEST", "message": str(exc)}})
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc)
 
 
 @app.post("/workflow/validate", response_model=WorkflowValidationResult)
 async def validate_workflow(workflow: WorkflowDefinition):
     try:
         return runtime_service.validate_workflow(workflow)
+    except ValueError as e:
+        raise _client_error(400, e, "VALIDATION_ERROR")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _internal_error(e)
 
 
 @app.post("/workflow/run", response_model=RunResult)
-async def run_workflow(request: RuntimeRequest):
+@limiter.limit("10/minute")
+async def run_workflow(request: Request, body: RuntimeRequest):
     try:
-        return await runtime_service.run(request)
+        return await runtime_service.run(body)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _client_error(400, e, "BAD_REQUEST")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _internal_error(e)
 
 
 @app.post("/workflow/graph", response_model=WorkflowGraph)
@@ -343,9 +476,9 @@ async def export_workflow_graph(workflow: WorkflowDefinition):
     try:
         return runtime_service.export_workflow_graph(workflow)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise _client_error(400, exc, "BAD_REQUEST")
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc)
 
 
 @app.get("/runs", response_model=List[RunSummary])
@@ -361,22 +494,23 @@ async def get_run(run_id: str):
     return result
 
 
+class _PolicyUpdateRequest(BaseModel):
+    matrix: WorkflowPolicyMatrixSpec
+
+
 @app.post("/workflow/runs/{run_id}/policy")
-async def update_run_policy(run_id: str, body: Dict[str, Any]):
+async def update_run_policy(run_id: str, body: _PolicyUpdateRequest):
     """Story 4.5: hot-swap policy matrix on a running/completed run.
 
     Body: {"matrix": {...}}  — new sender×receiver matrix (3-state cells).
     Response: {"status": "updated", "affected_downstream_nodes": [...]}
     """
-    matrix = body.get("matrix")
-    if matrix is None:
-        raise HTTPException(status_code=422, detail="matrix field is required")
     try:
-        return runtime_service.update_policy(run_id, matrix)
+        return runtime_service.update_policy(run_id, body.matrix.model_dump())
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise _client_error(404, exc, "NOT_FOUND")
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc)
 
 
 @app.post("/workflow/runs/{run_id}/reconfigure")
@@ -389,9 +523,9 @@ async def reconfigure_run(run_id: str, body: Dict[str, Any]):
     try:
         return runtime_service.reconfigure(run_id, body)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise _client_error(404, exc, "NOT_FOUND")
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc)
 
 
 @app.post("/workflow/runs/{run_id}/approval")
@@ -408,7 +542,7 @@ async def submit_approval(run_id: str, body: Dict[str, Any]):
         try:
             await runtime_service.reject(run_id, reviewer_role, node_id, reason)
         except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc))
+            raise _client_error(404, exc, "NOT_FOUND")
         return {"run_id": run_id, "node_id": node_id, "decision": decision, "accepted": True}
     ok = runtime_service.submit_approval(run_id, node_id, decision, reason)
     if not ok:
@@ -458,9 +592,9 @@ async def workflow_resume_run(run_id: str):
     try:
         return await runtime_service.resume(run_id, resume_request)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise _client_error(400, exc, "BAD_REQUEST")
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc)
 
 
 @app.get("/workflow/runs/{run_id}")
@@ -508,13 +642,14 @@ async def sanitize_run_trajectory(run_id: str, body: SanitizeRequest):
 
 
 @app.post("/runs/{run_id}/children", response_model=RunResult)
-async def spawn_child_run(run_id: str, request: ChildRunRequest):
+@limiter.limit("10/minute")
+async def spawn_child_run(request: Request, run_id: str, body: ChildRunRequest):
     try:
-        return await runtime_service.spawn_child_run(run_id, request)
+        return await runtime_service.spawn_child_run(run_id, body)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise _client_error(404, exc, "NOT_FOUND")
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc)
 
 
 @app.get("/runs/{run_id}/graph", response_model=RunGraph)
@@ -578,9 +713,9 @@ async def resume_run(run_id: str, request: ResumeRequest):
     try:
         return await runtime_service.resume(run_id, request)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise _client_error(404, exc, "NOT_FOUND")
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc)
 
 
 @app.get("/chat/sessions", response_model=List[ChatSessionRecord])
@@ -593,9 +728,9 @@ async def create_chat_session(request: ChatSessionCreateRequest):
     try:
         return runtime_service.create_chat_session(request)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise _client_error(400, exc, "BAD_REQUEST")
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc)
 
 
 @app.get("/chat/sessions/{session_id}", response_model=ChatSession)
@@ -607,13 +742,14 @@ async def get_chat_session(session_id: str):
 
 
 @app.post("/chat/sessions/{session_id}/messages", response_model=ChatTurnResult)
-async def send_chat_message(session_id: str, request: ChatMessageRequest):
+@limiter.limit("30/minute")
+async def send_chat_message(request: Request, session_id: str, body: ChatMessageRequest):
     try:
-        return await runtime_service.send_chat_message(session_id, request)
+        return await runtime_service.send_chat_message(session_id, body)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise _client_error(404, exc, "NOT_FOUND")
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc)
 
 @app.get("/workflow/runs/{run_id}/events")
 async def stream_run_events(run_id: str, request: Request):
@@ -659,19 +795,20 @@ async def health():
 # ---------------------------------------------------------------------------
 
 @app.post("/templates/custom")
-async def import_custom_template(request: CustomTemplateImportRequest):
+@limiter.limit("5/minute")
+async def import_custom_template(request: Request, body: CustomTemplateImportRequest):
     """Import a YAML string as a custom template (AC1)."""
     # Step 1: parse YAML
     try:
-        raw: Any = yaml.safe_load(request.yaml_text)
-    except yaml.YAMLError as exc:
-        raise HTTPException(status_code=422, detail=[{"loc": ["yaml_text"], "msg": str(exc), "type": "yaml_error"}])
+        raw: Any = yaml.safe_load(body.yaml_text)
+    except yaml.YAMLError:
+        raise HTTPException(status_code=422, detail=[{"loc": ["yaml_text"], "msg": "Invalid YAML: parse error", "type": "yaml_error"}])
 
     if not isinstance(raw, dict):
         raise HTTPException(status_code=422, detail=[{"loc": ["yaml_text"], "msg": "YAML must be a mapping", "type": "value_error"}])
 
     # Step 2: apply overrides
-    overrides = request.overrides or {}
+    overrides = body.overrides or {}
     raw.update({k: v for k, v in overrides.items() if v is not None})
 
     # Step 3: validate
@@ -681,7 +818,7 @@ async def import_custom_template(request: CustomTemplateImportRequest):
         from pydantic import ValidationError
         if isinstance(exc, ValidationError):
             raise HTTPException(status_code=422, detail=exc.errors())
-        raise HTTPException(status_code=422, detail=[{"loc": [], "msg": str(exc), "type": "value_error"}])
+        raise HTTPException(status_code=422, detail=[{"loc": [], "msg": "Template validation error", "type": "value_error"}])
 
     # Step 4: check template_id format
     tid = spec.template_id
@@ -716,6 +853,7 @@ async def list_templates():
     items: List[TemplateListItem] = []
     for entry in _list_templates():
         spec: WorkflowTemplateSpec = entry["spec"]
+        meta = spec.metadata or {}
         items.append(TemplateListItem(
             template_id=spec.template_id,
             name=spec.name,
@@ -726,6 +864,11 @@ async def list_templates():
             agent_roster_count=len(spec.agent_roster),
             group_roster_count=len(spec.group_roster),
             source=entry["source"],
+            builder_origin=str(meta.get("builder_origin", "")),
+            workflow_id=str(meta.get("workflow_id", "")),
+            description=spec.description,
+            # R2-Patch-1: populate kit_tags from metadata (non-Builder templates get empty list)
+            kit_tags=[str(t) for t in (meta.get("kit_tags") or []) if t],
         ))
     return items
 

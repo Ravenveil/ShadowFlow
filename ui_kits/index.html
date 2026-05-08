@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Epic 8 · Builder specs</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+  body { padding: 56px 64px; max-width: 1280px; margin: 0 auto; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent-bright); }
+  h1 { font-size: 42px; letter-spacing: -.03em; font-weight: 800; margin: 6px 0 10px; }
+  .sub { color: var(--fg-3); font-size: 15px; max-width: 720px; line-height: 1.55; margin-bottom: 40px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .card { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px 24px; display: block; text-decoration: none; color: inherit; transition: border-color .15s, transform .15s; }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .card .num { font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-bright); margin-bottom: 8px; }
+  .card h3 { font-size: 20px; letter-spacing: -.015em; font-weight: 700; margin: 0 0 6px; color: var(--fg-1); }
+  .card p { color: var(--fg-3); font-size: 13px; line-height: 1.55; margin: 0 0 14px; }
+  .card .kvs { display: flex; gap: 14px; font-family: var(--font-mono); font-size: 10px; color: var(--fg-5); letter-spacing: .06em; text-transform: uppercase; border-top: 1px solid var(--border-subtle); padding-top: 10px; }
+  .card .kvs .k { color: var(--fg-4); }
+  .flow { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px 24px; margin-bottom: 32px; }
+  .flow h4 { font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--fg-4); margin: 0 0 14px; font-weight: 700; }
+  .flow-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 12px; }
+  .flow-line .step { padding: 6px 10px; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 7px; color: var(--fg-2); }
+  .flow-line .step.active { background: var(--accent-tint); border-color: var(--accent); color: var(--accent-bright); }
+  .flow-line .arr { color: var(--fg-5); }
+</style>
+</head><body>
+
+<span class="eyebrow">Epic 8 · Agent Builder</span>
+<h1>Design specs for the Builder surface.</h1>
+<p class="sub">Six documents, one contract. <b>Goal → Scene → Graph</b> is the user-facing story arc; <span style="font-family:var(--font-mono);color:var(--accent-bright)">AgentBlueprint</span> is the invariant underneath. Each spec defines shell, states, and transitions for a single story.</p>
+
+<div class="flow">
+  <h4>● story flow · how users move through Epic 8</h4>
+  <div class="flow-line">
+    <span class="step">8.2 Goal</span>
+    <span class="arr">→</span>
+    <span class="step active">8.3 Scene</span>
+    <span class="arr">→</span>
+    <span class="step">8.4 Knowledge</span>
+    <span class="arr">·</span>
+    <span class="step">8.4b Tools</span>
+    <span class="arr">→</span>
+    <span class="step">8.5 Smoke Run</span>
+    <span class="arr">→</span>
+    <span class="step" style="color:var(--status-ok); border-color:rgba(16,185,129,.3)">Publish</span>
+  </div>
+</div>
+
+<div class="grid">
+  <a class="card" href="8-1-blueprint-skeleton.html">
+    <div class="num">● 8.1 · foundation</div>
+    <h3>AgentBlueprint contract</h3>
+    <p>The invariant data model. Role profiles (boss/worker), tool bindings, knowledge bindings, lifecycle. Every other story reads and writes this.</p>
+    <div class="kvs"><span><span class="k">kind</span> schema + hierarchy</span><span><span class="k">depends</span> —</span></div>
+  </a>
+  <a class="card" href="8-2-goal-mode.html">
+    <div class="num">● 8.2 · entry</div>
+    <h3>Goal Mode</h3>
+    <p>Five-input form. One button generates a blueprint. Four continuation paths (Scene / Regenerate / Template / Graph). No nodes shown yet.</p>
+    <div class="kvs"><span><span class="k">kind</span> form + result</span><span><span class="k">depends</span> 8.1</span></div>
+  </a>
+  <a class="card" href="8-3-scene-mode.html">
+    <div class="num">● 8.3 · default edit home</div>
+    <h3>Scene Mode shell</h3>
+    <p>Godot-style: Tree · Canvas · Inspector. Blueprint is source of truth; the graph is a derived projection. Mode switcher lives here.</p>
+    <div class="kvs"><span><span class="k">kind</span> shell + dual state</span><span><span class="k">depends</span> 8.1</span></div>
+  </a>
+  <a class="card" href="8-4-knowledge-dock.html">
+    <div class="num">● 8.4 · knowledge</div>
+    <h3>Knowledge Dock</h3>
+    <p>Sources, chunk preview, role bindings, citation policy. Indexing is async — roles can be published while knowledge is still embedding.</p>
+    <div class="kvs"><span><span class="k">kind</span> dock + states</span><span><span class="k">depends</span> 8.1, 8.3</span></div>
+  </a>
+  <a class="card" href="8-4b-tool-registry.html">
+    <div class="num">● 8.4b · capabilities</div>
+    <h3>Tool Registry</h3>
+    <p>Three tiers: builtin · MCP · custom. Per-role visible-tools. Auth drawer for OAuth/cookie flows. Same registry feeds the inspector.</p>
+    <div class="kvs"><span><span class="k">kind</span> registry + auth</span><span><span class="k">depends</span> 8.1, 8.3</span></div>
+  </a>
+  <a class="card" href="8-5-smoke-run.html">
+    <div class="num">● 8.5 · publish gate</div>
+    <h3>Smoke Run</h3>
+    <p>Sandboxed shakedown before publish. Launch drawer · live timeline + logs · verdict with one-click diff apply back to blueprint.</p>
+    <div class="kvs"><span><span class="k">kind</span> run stage + verdict</span><span><span class="k">depends</span> 8.1–8.4b</span></div>
+  </a>
+</div>
+
+</body></html>
