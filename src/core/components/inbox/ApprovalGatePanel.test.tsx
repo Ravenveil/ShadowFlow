@@ -8,7 +8,7 @@
  *  - Empty state when 0 items
  */
 
-import { fireEvent, render, screen, waitFor, act } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, act } from '../../../test/utils';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { ApprovalGatePanel } from './ApprovalGatePanel';
 import type { PendingApproval } from '../../../common/types/inbox';

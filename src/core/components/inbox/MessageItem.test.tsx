@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../../../test/utils';
 import { describe, expect, it, vi } from 'vitest';
 import type { GroupItem, AgentDMItem } from '../../../common/types/inbox';
 import { MessageItem } from './MessageItem';
@@ -43,7 +43,8 @@ describe('MessageItem — GroupItem', () => {
 
   it('shows pending approvals badge when pendingApprovalsCount > 0', () => {
     render(<MessageItem item={mockGroup} onClick={vi.fn()} />);
-    expect(screen.getByText('📋 2')).toBeInTheDocument();
+    // Badge renders lucide icon + count (no emoji); unreadCount=3, pending=2
+    expect(screen.getByText('2')).toBeInTheDocument();
   });
 
   it('does not show unread badge when unreadCount is 0', () => {

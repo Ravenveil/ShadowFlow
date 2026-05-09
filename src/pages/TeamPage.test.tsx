@@ -1,7 +1,7 @@
 /**
  * TeamPage tests — Story 12.2 AC1, AC4, AC5
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '../test/utils';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -142,6 +142,6 @@ describe('TeamDetailPage', () => {
     mockGetTeam.mockRejectedValue(new TeamApiError(404, 'not found'));
     renderDetailPage('team-missing');
     await waitFor(() => expect(screen.queryByTestId('team-detail-loading')).not.toBeInTheDocument());
-    expect(screen.getByText(/错误/)).toBeInTheDocument();
+    expect(screen.getByText(/加载失败/)).toBeInTheDocument();
   });
 });

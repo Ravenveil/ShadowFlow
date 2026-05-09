@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../../../test/utils';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
@@ -16,16 +16,16 @@ describe('NarrowNav', () => {
   it('renders all navigation buttons including 开始', () => {
     renderAt('/inbox');
     expect(screen.getByLabelText('开始')).toBeInTheDocument();
-    expect(screen.getByLabelText('消息')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByLabelText('Inbox')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByLabelText('模板')).toBeInTheDocument();
     expect(screen.getByLabelText('运行')).toBeInTheDocument();
-    expect(screen.getByLabelText('归档')).toBeInTheDocument();
+    expect(screen.getByLabelText('关于')).toBeInTheDocument();
   });
 
   it('marks /start as active when on start page', () => {
     renderAt('/start');
     expect(screen.getByLabelText('开始')).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByLabelText('消息')).not.toHaveAttribute('aria-current');
+    expect(screen.getByLabelText('Inbox')).not.toHaveAttribute('aria-current');
   });
 
   // Round-1 M1 + H1 regression: 点击"运行"后 location 必须停在 /runs

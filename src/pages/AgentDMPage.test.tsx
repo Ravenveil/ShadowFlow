@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../test/utils';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { useInboxStore } from '../core/store/useInboxStore';
@@ -39,7 +39,7 @@ function renderAgentDMPage(agentId = 'agent-001') {
 describe('AgentDMPage — Create Agent button (AC1, Story 7.8)', () => {
   it('renders breadcrumb with agent name', () => {
     renderAgentDMPage();
-    expect(screen.getByText('ResearchBot')).toBeInTheDocument();
+    expect(screen.getAllByText('ResearchBot').length).toBeGreaterThan(0);
   });
 
   it('renders agent kind and status metadata', () => {

@@ -6,12 +6,12 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { PolicyHeatmap, heatmapColor } from '../../core/components/Panel/PolicyHeatmap';
 
 describe('PolicyHeatmap 6-tier color scale', () => {
-  it('returns #18181B for 0', () => expect(heatmapColor(0)).toBe('#18181B'));
+  it('returns css var for 0', () => expect(heatmapColor(0)).toBe('var(--t-panel-2)'));
   it('maps 3 to tier-1 blue', () => expect(heatmapColor(3)).toBe('#1A2535'));
   it('maps 10 to tier-2 blue', () => expect(heatmapColor(10)).toBe('#1B3A6B'));
   it('maps 20 to tier-3 blue', () => expect(heatmapColor(20)).toBe('#1D5EA0'));
-  it('maps 30 to warn orange', () => expect(heatmapColor(30)).toBe('#F59E0B'));
-  it('maps 50 to danger red', () => expect(heatmapColor(50)).toBe('#EF4444'));
+  it('maps 30 to warn css var', () => expect(heatmapColor(30)).toBe('var(--t-warn)'));
+  it('maps 50 to danger css var', () => expect(heatmapColor(50)).toBe('var(--t-err)'));
 });
 
 describe('PolicyHeatmap renders rows + stage columns + selection', () => {

@@ -1,7 +1,14 @@
-import { expect, vi } from 'vitest'
+import { expect, vi, beforeAll } from 'vitest'
 import matchers from '@testing-library/jest-dom/matchers'
 
 expect.extend(matchers)
+
+// i18next initializes with 'en' (localStorage is empty in jsdom).
+// Tests assert Chinese text, so switch to zh before any test runs.
+beforeAll(async () => {
+  const { i18n } = await import('../common/i18n')
+  await i18n.changeLanguage('zh')
+})
 
 // Mock React Flow for tests
 vi.mock('reactflow', () => ({

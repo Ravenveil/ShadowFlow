@@ -8,7 +8,7 @@
  *  - Submit triggers API call (AC3)
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '../../../test/utils';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { CreateGroupDialog } from './CreateGroupDialog';
