@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger("shadowflow.api.run_session")
 
@@ -43,7 +43,7 @@ _sessions: Dict[str, Dict[str, Any]] = {}
 
 
 class RunSessionCreateRequest(BaseModel):
-    goal: str
+    goal: str = Field(..., max_length=2000)
     output_hint: Optional[str] = None
     workspace_id: Optional[str] = None
 
@@ -83,7 +83,7 @@ def _mock_blueprint_yaml(goal: str) -> str:
     """Return a minimal placeholder YAML blueprint."""
     return (
         "name: paper-review-team\n"
-        "description: Auto-generated team for: " + goal[:60] + "\n"
+        "description: Auto-generated team for: " + goal[:60].replace("\n", " ").replace("\r", "") + "\n"
         "coordinator:\n"
         "  type: coordinator\n"
         "  policy_gate: true\n"
@@ -235,9 +235,9 @@ async def _run_assembly(session_id: str, goal: str, output_hint: Optional[str]) 
         session["run_id"] = run_id
 
     except Exception as exc:
-        logger.exception("run_assembly failed for session %s: %s", session_id, exc)
+        logger.exception("run_assembly failed for session %s", session_id, exc_info=exc)
         await queue.put(
-            _sse("error", {"message": str(exc), "session_id": session_id})
+            _sse("error", {"message": "Assembly failed. Please try again.", "session_id": session_id})
         )
         session["status"] = "error"
 
@@ -272,11 +272,12 @@ async def create_run_session(body: RunSessionCreateRequest) -> RunSessionCreateR
         "run_id": None,
     }
 
-    # Fire and forget — the SSE stream drains the queue
-    asyncio.create_task(
+    # Keep a reference so the task isn't garbage-collected before it completes
+    task = asyncio.create_task(
         _run_assembly(session_id, body.goal, body.output_hint),
         name=f"assembly-{session_id}",
     )
+    _sessions[session_id]["task"] = task
 
     stream_url = f"/api/run-sessions/{session_id}/stream"
     logger.info("Created run session %s for goal: %.80s", session_id, body.goal)

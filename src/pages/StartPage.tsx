@@ -564,7 +564,7 @@ interface Attachment {
   meta?: string;
 }
 
-const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.userAgent);
 
 export default function StartPage() {
   const navigate = useNavigate();

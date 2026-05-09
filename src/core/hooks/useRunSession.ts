@@ -117,9 +117,17 @@ export function useRunSession(sessionId: string): RunSessionState {
     timerRef.current = setInterval(() => dispatch({ type: 'TICK_TOKEN' }), 2000);
     return () => {
       cleanup();
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     };
   }, [sessionId]);
+
+  // Stop token animation when assembly completes
+  useEffect(() => {
+    if (state.isComplete && timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, [state.isComplete]);
 
   return state;
 }
