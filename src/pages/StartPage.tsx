@@ -564,6 +564,8 @@ interface Attachment {
   meta?: string;
 }
 
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
 export default function StartPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -1250,7 +1252,7 @@ export default function StartPage() {
 
 
               <div style={{ flex: 1, minWidth: 6 }} />
-              <span className="hf-kbd">⌘ ⏎</span>
+              <span className="hf-kbd">{isMac ? '⌘ ⏎' : 'Ctrl ⏎'}</span>
               <button
                 type="button"
                 onClick={handleSubmit}

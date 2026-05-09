@@ -20,5 +20,6 @@ export function getApiBase(): string {
     // ignore parse errors
   }
   const envBase = (import.meta.env.VITE_API_BASE as string | undefined) ?? '';
-  return envBase.trim().replace(/\/$/, '') || 'http://localhost:8000';
+  // Empty string → relative URLs → Vite proxy handles routing to backend
+  return envBase.trim().replace(/\/$/, '');
 }

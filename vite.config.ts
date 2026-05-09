@@ -14,7 +14,21 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 3007,
     open: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8002',
+        changeOrigin: true,
+        // Keep SSE connections alive — don't buffer
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            if (proxyRes.headers['content-type']?.includes('text/event-stream')) {
+              proxyRes.headers['cache-control'] = 'no-cache';
+            }
+          });
+        },
+      },
+    },
   },
 });
