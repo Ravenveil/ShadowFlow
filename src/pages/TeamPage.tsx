@@ -29,21 +29,27 @@
  *   - Delete team flow + error banner.
  *   - List immediately updates after creation (AC4).
  */
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Hand, MousePointer2, Play, Upload, Users, ZoomIn } from 'lucide-react';
 import {
   deleteTeam,
   getTeam,
+  getTeamPolicy,
+  getTeamWorkflow,
   listTeams,
+  putTeamPolicy,
   TeamApiError,
+  type TeamPolicyMatrix,
   type TeamRecord,
+  type TeamWorkflowNode,
 } from '../api/teams';
 import { TeamCard } from '../core/components/team/TeamCard';
 import { CreateTeamModal } from '../core/components/team/CreateTeamModal';
 import { TeamDetail } from '../core/components/team/TeamDetail';
 import { HfAvatar, HfTopBar } from '../components/hifi';
 import { PolicyMatrixPanel } from '../core/components/Panel/PolicyMatrixPanel';
+import { usePolicyStore, type PolicyMatrix as StorePolicyMatrix } from '../core/hooks/usePolicyStore';
 import { useI18n } from '../common/i18n';
 
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -383,21 +389,52 @@ interface LaneData {
   a: LaneAvatar[];
 }
 
-// Decorative placeholder lanes from Hi-Fi v2 spec. Real DAG hookup is a
-// follow-up — when team.workflow exists we'd derive lanes from it.
-const PLACEHOLDER_LANES: LaneData[] = [
-  { n: 'PLAN',     a: [{ g: '查', n: 'researcher',     c: 'var(--t-run)' }] },
-  { n: 'RESEARCH', a: [
-      { g: '读', n: 'reader', c: 'var(--t-accent)' },
-      { g: '查', n: 'cite',   c: 'var(--t-run)' },
-    ] },
-  { n: 'DRAFT',    a: [{ g: '写', n: 'section_writer', c: 'var(--t-accent)', sel: true }] },
-  { n: 'REVIEW',   a: [
-      { g: '审', n: 'advisor', c: 'var(--t-warn)' },
-      { g: '阿', n: 'critic',  c: 'var(--t-warn)' },
-    ] },
-  { n: 'PUBLISH',  a: [{ g: '发', n: 'publisher', c: 'var(--t-ok)' }] },
+/** Avatar colour palette for dynamically derived lanes. */
+const LANE_COLORS = [
+  'var(--t-accent)',
+  'var(--t-run)',
+  'var(--t-warn)',
+  'var(--t-ok)',
+  'var(--t-err)',
 ];
+
+/**
+ * Derive LaneData[] from a list of WorkflowNodes (when workflow exists),
+ * or fall back to one-agent-per-lane from agent_ids.
+ */
+function deriveLanes(
+  agentIds: string[],
+  workflowNodes: TeamWorkflowNode[],
+): LaneData[] {
+  // If we have real workflow nodes with agent data, group by position (x-axis).
+  if (workflowNodes.length > 0) {
+    // Sort nodes left-to-right (by x position) and create one lane per node.
+    const sorted = [...workflowNodes].sort((a, b) => a.position.x - b.position.x);
+    return sorted.map((node, idx) => {
+      const label = node.data.name || `Agent-${node.id.slice(0, 6)}`;
+      const glyph = label.slice(0, 1);
+      return {
+        n: label.toUpperCase().slice(0, 10),
+        a: [{
+          g: glyph,
+          n: label,
+          c: LANE_COLORS[idx % LANE_COLORS.length],
+        }],
+      };
+    });
+  }
+
+  // Fallback: one lane per agent_id.
+  if (agentIds.length === 0) return [];
+  return agentIds.map((id, idx) => ({
+    n: `AGENT-${idx + 1}`,
+    a: [{
+      g: (idx + 1).toString(),
+      n: `Agent-${id.slice(0, 6)}`,
+      c: LANE_COLORS[idx % LANE_COLORS.length],
+    }],
+  }));
+}
 
 function LaneDiagram({ lanes }: { lanes: LaneData[] }) {
   return (
@@ -512,26 +549,65 @@ function TeamDetailPage() {
   // Default tab matches Hi-Fi v2 spec — DAG is highlighted there.
   const [activeTab, setActiveTab] = useState<DetailTab>('dag');
 
-  // Fetch single team
+  // Workflow nodes for the DAG lane diagram.
+  const [workflowNodes, setWorkflowNodes] = useState<TeamWorkflowNode[]>([]);
+
+  // Policy store actions — used to seed PolicyMatrixPanel with team-specific data.
+  const setAgents   = usePolicyStore((s) => s.setAgents);
+  const setMatrix   = usePolicyStore((s) => s.setMatrix);
+  const resetPolicy = usePolicyStore((s) => s.reset);
+
+  // Track the teamId for which policy was loaded to avoid redundant resets.
+  const policyLoadedForRef = useRef<string | null>(null);
+
+  // Fetch single team + workflow + policy whenever teamId changes.
   useEffect(() => {
     if (!teamId) return;
     setLoading(true);
     setErrorMsg(null);
-    getTeam(teamId)
-      .then(setTeam)
+    setWorkflowNodes([]);
+
+    // Reset policy store only when switching to a different team.
+    if (policyLoadedForRef.current !== teamId) {
+      resetPolicy();
+      policyLoadedForRef.current = null;
+    }
+
+    Promise.all([
+      getTeam(teamId),
+      getTeamWorkflow(teamId).catch(() => ({ nodes: [], edges: [] })),
+      getTeamPolicy(teamId).catch(() => ({})),
+    ])
+      .then(([fetchedTeam, workflow, policy]) => {
+        setTeam(fetchedTeam);
+        setWorkflowNodes(workflow.nodes);
+
+        // Seed policy store: prefer workflow-node ids as agents, else agent_ids.
+        const agentKeys = workflow.nodes.length > 0
+          ? workflow.nodes.map((n) => n.data.agentId || n.id)
+          : fetchedTeam.agent_ids;
+
+        if (agentKeys.length > 0) {
+          setAgents(agentKeys);
+        }
+        if (Object.keys(policy).length > 0) {
+          setMatrix(policy as StorePolicyMatrix, agentKeys.length > 0 ? agentKeys : undefined);
+        }
+        policyLoadedForRef.current = teamId;
+      })
       .catch((err) => {
         /* TODO: i18n — error with status code interpolation */
         setErrorMsg(err instanceof TeamApiError ? `${t('team.loadError')}（${err.status}）` : t('team.loadError'));
       })
       .finally(() => setLoading(false));
-  }, [teamId, t]);
+  }, [teamId, t, resetPolicy, setAgents, setMatrix]);
 
-  // Fetch all teams for the left column rail
+  // Fetch all teams for the left column rail — only once on mount, not per teamId change.
   useEffect(() => {
     listTeams().then(setAllTeams).catch(() => {
       /* fall back to single-team display */
     });
-  }, [teamId]);
+  }, []);
 
   if (loading) {
     return (
@@ -579,6 +655,21 @@ function TeamDetailPage() {
   }
 
   const teamsForRail = allTeams.length > 0 ? allTeams : [team];
+
+  // Derive lane diagram data from real workflow nodes / agent_ids.
+  const derivedLanes = useMemo(
+    () => deriveLanes(team?.agent_ids ?? [], workflowNodes),
+    [team?.agent_ids, workflowNodes],
+  );
+
+  // PolicyMatrixPanel onSave — persists the edited matrix to the team's policy endpoint.
+  const handlePolicySave = useCallback(
+    async (matrix: StorePolicyMatrix) => {
+      if (!teamId) return;
+      await putTeamPolicy(teamId, matrix as TeamPolicyMatrix);
+    },
+    [teamId],
+  );
 
   return (
     <div
@@ -738,7 +829,25 @@ function TeamDetailPage() {
               overflow: 'auto',
             }}
           >
-            {activeTab === 'dag' && <LaneDiagram lanes={PLACEHOLDER_LANES} />}
+            {activeTab === 'dag' && (
+              derivedLanes.length > 0
+                ? <LaneDiagram lanes={derivedLanes} />
+                : (
+                  <div
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--t-fg-4)',
+                      fontSize: 12,
+                      padding: 24,
+                    }}
+                  >
+                    {t('team.noAgentsInDag')}
+                  </div>
+                )
+            )}
 
             {activeTab === 'members' && (
               <div style={{ padding: '14px 22px 24px', minWidth: 0 }}>
@@ -748,7 +857,13 @@ function TeamDetailPage() {
 
             {activeTab === 'policy' && (
               <div style={{ padding: '14px 22px 24px', minWidth: 0 }}>
-                <PolicyMatrixPanel readOnly={false} />
+                {/* PolicyMatrixPanel is seeded with team-specific agents + policy
+                    via usePolicyStore (setAgents / setMatrix) in the fetch effect
+                    above. onSave persists the matrix to /api/teams/:teamId/policy. */}
+                <PolicyMatrixPanel
+                  readOnly={false}
+                  onSave={handlePolicySave}
+                />
               </div>
             )}
 

@@ -113,7 +113,9 @@ export interface ProjectionGraph {
 }
 
 // ---------------------------------------------------------------------------
-// RunSummary — /runs list
+// RunSummary — /runs list (legacy projection-graph oriented type kept for
+// downstream tests / typings; the live /api/runs endpoint now returns the
+// 15.8 RunRecord shape — see RunRecord below).
 // ---------------------------------------------------------------------------
 
 export type RunStatus =
@@ -138,6 +140,34 @@ export interface RunSummary {
   ended_at?: string;
   current_step_id?: string;
   metadata: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// RunRecord — Story 15.8: the persisted run-history shape returned by
+// GET /api/runs. Matches server/src/storage/runs.ts RunRecord 1:1.
+// ---------------------------------------------------------------------------
+
+export type RunRecordStatus = 'completed' | 'failed';
+export type ArtifactType = 'yaml' | 'html' | 'markdown';
+
+export interface RunRecord {
+  run_id: string;
+  session_id: string;
+  goal: string;
+  skill_name: string;
+  skill_display_name: string;
+  artifact_type: ArtifactType | null;
+  artifact_filename: string | null;
+  artifact_url: string | null;
+  status: RunRecordStatus;
+  created_at: string;
+  completed_at: string;
+  project_dir?: string;
+}
+
+interface RunsListResponse {
+  runs: RunRecord[];
+  total: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,37 +284,48 @@ export interface ActivationTrainingDataset {
 // API functions
 // ---------------------------------------------------------------------------
 
-export async function listRuns(): Promise<RunSummary[]> {
-  const res = await fetch(`${getApiBase()}/runs`);
-  return _handleResponse<RunSummary[]>(res);
+/**
+ * listRuns — contract (2026-05-10 review B2 — 守 Story 15.1 决议)。
+ *
+ * GET /api/runs 返回 raw array `RunRecord[]`。15.8 dev 期间一度被改成
+ * `{runs, total}` envelope，违反了 15.1 review 的明确决议；已回退到 raw array。
+ *
+ * 仍兼容 envelope 形态（双形态 fallback）以容忍临时部署不同步：若 server
+ * 端尚未升级回 raw，前端仍能正常 unwrap，避免 hackathon demo 中断。
+ */
+export async function listRuns(): Promise<RunRecord[]> {
+  const res = await fetch(`${getApiBase()}/api/runs`);
+  const parsed = await _handleResponse<RunRecord[] | RunsListResponse>(res);
+  if (Array.isArray(parsed)) return parsed;
+  return parsed.runs ?? [];
 }
 
 export async function getRunGraph(runId: string): Promise<RunGraph> {
-  const res = await fetch(`${getApiBase()}/runs/${encodeURIComponent(runId)}/graph`);
+  const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/graph`);
   return _handleResponse<RunGraph>(res);
 }
 
 export async function getTaskTree(runId: string): Promise<TaskTreeProjection> {
-  const res = await fetch(`${getApiBase()}/runs/${encodeURIComponent(runId)}/task-tree`);
+  const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/task-tree`);
   return _handleResponse<TaskTreeProjection>(res);
 }
 
 export async function getArtifactLineage(runId: string): Promise<ArtifactLineageProjection> {
-  const res = await fetch(`${getApiBase()}/runs/${encodeURIComponent(runId)}/artifact-lineage`);
+  const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/artifact-lineage`);
   return _handleResponse<ArtifactLineageProjection>(res);
 }
 
 export async function getMemoryGraph(runId: string): Promise<MemoryRelationProjection> {
-  const res = await fetch(`${getApiBase()}/runs/${encodeURIComponent(runId)}/memory-graph`);
+  const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/memory-graph`);
   return _handleResponse<MemoryRelationProjection>(res);
 }
 
 export async function getCheckpointLineage(runId: string): Promise<CheckpointLineageProjection> {
-  const res = await fetch(`${getApiBase()}/runs/${encodeURIComponent(runId)}/checkpoint-lineage`);
+  const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/checkpoint-lineage`);
   return _handleResponse<CheckpointLineageProjection>(res);
 }
 
 export async function getActivationTrainingDataset(runId: string): Promise<ActivationTrainingDataset> {
-  const res = await fetch(`${getApiBase()}/runs/${encodeURIComponent(runId)}/training-dataset`);
+  const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/training-dataset`);
   return _handleResponse<ActivationTrainingDataset>(res);
 }

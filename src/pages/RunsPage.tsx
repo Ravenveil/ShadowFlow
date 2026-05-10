@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Inbox } from 'lucide-react';
 import ReactFlow, {
   Node,
   Edge,
@@ -38,7 +39,7 @@ import {
   RunsApiError,
 } from '../api/runs';
 import type {
-  RunSummary,
+  RunRecord,
   RunGraph,
   TaskTreeProjection,
   ArtifactLineageProjection,
@@ -84,18 +85,58 @@ function StatusPill({ status }: { status: string }) {
 // Helpers: date formatting
 // ---------------------------------------------------------------------------
 
-function fmtDate(iso?: string): string {
+// Story 15.8 — RunsListPage moved to relative-time only; legacy helpers are
+// preserved (CLAUDE.md "只能加，不能删") with a `_` prefix so noUnusedLocals
+// stays happy and future callers can still import them.
+export function _fmtDate(iso?: string): string {
   if (!iso) return '—';
   const d = new Date(iso);
   return d.toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-function fmtDuration(start: string, end?: string): string {
+export function _fmtDuration(start: string, end?: string): string {
   if (!end) return '—';
   const ms = new Date(end).getTime() - new Date(start).getTime();
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${(ms / 60000).toFixed(1)}m`;
+}
+
+/** Story 15.8 — relative-time formatter for completed_at column. */
+function fmtRelative(iso?: string): string {
+  if (!iso) return '—';
+  try {
+    const diff = Date.now() - new Date(iso).getTime();
+    if (Number.isNaN(diff)) return '—';
+    const s = Math.max(0, Math.floor(diff / 1000));
+    if (s < 60) return '刚刚';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} 分钟前`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} 小时前`;
+    const d = Math.floor(h / 24);
+    return `${d} 天前`;
+  } catch {
+    return '—';
+  }
+}
+
+const ARTIFACT_BADGE_CLS: Record<string, string> = {
+  html:     'bg-blue-900/40 text-blue-300 border-blue-800/50',
+  yaml:     'bg-amber-900/40 text-amber-300 border-amber-800/50',
+  markdown: 'bg-emerald-900/40 text-emerald-300 border-emerald-800/50',
+};
+
+function ArtifactBadge({ type }: { type: string }) {
+  const cls = ARTIFACT_BADGE_CLS[type] ?? 'bg-zinc-800/60 text-zinc-300 border-zinc-700/50';
+  return (
+    <span
+      data-testid={`run-artifact-badge-${type}`}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase ${cls}`}
+    >
+      {type}
+    </span>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -133,8 +174,8 @@ function Spinner() {
 function EmptyState({ label }: { label: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 py-20 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-shadowflow-border bg-white/5 text-2xl">
-        📭
+      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-shadowflow-border bg-white/5 text-white/30">
+        <Inbox size={24} strokeWidth={1.5} aria-hidden />
       </div>
       <p className="text-sm text-white/50">{label}</p>
     </div>
@@ -628,9 +669,24 @@ export function RunDetailPage() {
 // RunsListPage — /runs
 // ---------------------------------------------------------------------------
 
+/**
+ * RunsListPage — Story 15.8.
+ *
+ * Renders RunRecord rows from GET /api/runs (run history persisted by
+ * server/src/storage/runs.ts after each session completes). Columns:
+ *   - Goal (truncated, 60ch)
+ *   - Skill display name
+ *   - Artifact type badge (html/yaml/markdown)
+ *   - Status pill (completed/failed)
+ *   - Completed-at relative time
+ *   - Actions: 预览 (artifact_url) + 下载 (artifact download)
+ *
+ * The /runs/:runId detail page still consumes legacy projection endpoints,
+ * so clicking a row continues to navigate there.
+ */
 export function RunsListPage() {
   const navigate = useNavigate();
-  const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [runs, setRuns] = useState<RunRecord[]>([]);
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -660,7 +716,7 @@ export function RunsListPage() {
           <div>
             <h1 className="text-lg font-semibold text-white/90">Runs</h1>
             <p className="mt-0.5 text-xs text-white/40">
-              工作流执行记录，点击查看 6 种投影视图。
+              历史执行记录，点击行查看 6 种投影详情。
             </p>
           </div>
           <button
@@ -683,50 +739,90 @@ export function RunsListPage() {
         )}
 
         {loadStatus === 'success' && runs.length === 0 && (
-          <EmptyState label="还没有任何 Run，先在 Editor 页面执行一个工作流。" />
+          <EmptyState label="还没有任何 Run，先在首页运行一个目标。" />
         )}
 
         {loadStatus === 'success' && runs.length > 0 && (
-          <div className="overflow-x-auto rounded border border-shadowflow-border bg-shadowflow-surface"
-               data-testid="runs-table">
+          <div
+            className="overflow-x-auto rounded border border-shadowflow-border bg-shadowflow-surface"
+            data-testid="runs-table"
+          >
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-shadowflow-border text-white/40 text-left">
-                  {['Run ID', 'Workflow', 'Status', 'Started', 'Duration', ''].map((h, i) => (
+                  {['目标', 'Skill', '产物', '状态', '时间', ''].map((h, i) => (
                     <th key={i} className="px-4 py-3 font-mono font-normal whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-shadowflow-border/40">
-                {runs.map((run) => (
-                  <tr
-                    key={run.run_id}
-                    className="hover:bg-white/5 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/runs/${encodeURIComponent(run.run_id)}`)}
-                    data-testid={`run-row-${run.run_id}`}
-                  >
-                    <td className="px-4 py-3 font-mono text-white/60 max-w-[200px] truncate">
-                      {run.run_id}
-                    </td>
-                    <td className="px-4 py-3 text-white/70 max-w-[160px] truncate">
-                      {run.workflow_id}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusPill status={run.status} />
-                    </td>
-                    <td className="px-4 py-3 text-white/50 whitespace-nowrap">
-                      {fmtDate(run.started_at)}
-                    </td>
-                    <td className="px-4 py-3 text-white/40 whitespace-nowrap">
-                      {fmtDuration(run.started_at, run.ended_at)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="text-accent text-[11px] hover:underline">
-                        查看投影 →
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {runs.map((run) => {
+                  const goalShort = run.goal.length > 60 ? run.goal.slice(0, 60) + '…' : run.goal;
+                  return (
+                    <tr
+                      key={run.run_id}
+                      className="hover:bg-white/5 cursor-pointer transition-colors"
+                      onClick={() => navigate(`/runs/${encodeURIComponent(run.run_id)}`)}
+                      data-testid={`run-row-${run.run_id}`}
+                    >
+                      <td
+                        className="px-4 py-3 text-white/80 max-w-[300px] truncate"
+                        data-testid={`run-goal-${run.run_id}`}
+                        title={run.goal}
+                      >
+                        {goalShort}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-white/60 max-w-[160px] truncate"
+                        data-testid={`run-skill-${run.run_id}`}
+                      >
+                        {run.skill_display_name}
+                      </td>
+                      <td className="px-4 py-3">
+                        {run.artifact_type ? <ArtifactBadge type={run.artifact_type} /> : (
+                          <span className="text-white/30">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusPill status={run.status} />
+                      </td>
+                      <td
+                        className="px-4 py-3 text-white/50 whitespace-nowrap"
+                        data-testid={`run-time-${run.run_id}`}
+                      >
+                        {fmtRelative(run.completed_at)}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-right whitespace-nowrap"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {run.artifact_url ? (
+                          <span className="inline-flex items-center gap-3">
+                            <a
+                              href={run.artifact_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-accent text-[11px] hover:underline"
+                              data-testid={`run-preview-${run.run_id}`}
+                            >
+                              预览
+                            </a>
+                            <a
+                              href={run.artifact_url}
+                              download={run.artifact_filename ?? undefined}
+                              className="text-white/50 text-[11px] hover:text-white/80 hover:underline"
+                              data-testid={`run-download-${run.run_id}`}
+                            >
+                              下载
+                            </a>
+                          </span>
+                        ) : (
+                          <span className="text-white/30 text-[11px]">无产物</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

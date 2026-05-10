@@ -49,6 +49,10 @@ import { MediaProvidersSection } from '../../core/components/settings/MediaProvi
 import { WelcomeSection } from '../../core/components/settings/WelcomeSection';
 import { HfTopBar, HfPill } from '../../components/hifi';
 import { WalletSection } from './WalletSection';
+import { ApiKeySettings } from '../../components/ApiKeySettings';
+import { GenerationSettings } from '../../components/GenerationSettings';
+import { CliDetectPanel } from '../../components/CliDetectPanel';
+import { AcpAgentsPanel } from '../../components/AcpAgentsPanel';
 
 // ---------------------------------------------------------------------------
 // Section ids — 12 existing + 4 placeholders + 1 wallet (= 17)
@@ -64,6 +68,10 @@ type SectionId =
   | 'shortcuts'    // placeholder
   | 'language'
   // 集成
+  | 'skill-studio-key'         // Story 15.7 — Anthropic BYOK for Skill Studio runtime
+  | 'skill-studio-generation'  // Story 15.9 — model / max_tokens / temperature / defaults
+  | 'skill-studio-clis'        // Story 15.19 v2 — local AI CLIs auto-discovery
+  | 'skill-studio-acp'         // Story 15.23 — ACP/MCP remote agent discovery
   | 'agent-backend'
   | 'tool-providers'
   | 'connectors'
@@ -110,10 +118,14 @@ const STATIC_NAV_GROUPS: NavGroup[] = [
   {
     group: 'Integrations',
     items: [
-      { id: 'agent-backend',    label: 'Models & Providers' },
-      { id: 'tool-providers',   label: 'Tool Providers' },
-      { id: 'connectors',       label: 'Connectors' },
-      { id: 'mcp-integrations', label: 'MCP Integrations' },
+      { id: 'skill-studio-key',        label: 'Skill Studio · API Key' },
+      { id: 'skill-studio-generation', label: 'Skill Studio · Generation' },
+      { id: 'skill-studio-clis',       label: 'Skill Studio · Local CLIs' },
+      { id: 'skill-studio-acp',        label: 'Skill Studio · Remote Agents (ACP/MCP)' },
+      { id: 'agent-backend',           label: 'Models & Providers' },
+      { id: 'tool-providers',          label: 'Tool Providers' },
+      { id: 'connectors',              label: 'Connectors' },
+      { id: 'mcp-integrations',        label: 'MCP Integrations' },
     ],
   },
   {
@@ -159,10 +171,18 @@ function buildNavGroups(t: (key: string) => string): NavGroup[] {
     {
       group: t('settings.groupIntegrations'),
       items: [
-        { id: 'agent-backend',    label: t('settings.navModels') },
-        { id: 'tool-providers',   label: t('settings.navToolProviders') },
-        { id: 'connectors',       label: t('settings.navConnectors') },
-        { id: 'mcp-integrations', label: t('settings.navMcp') },
+        // Story 15.7 — i18n key not added (intentional: hardcoded label keeps blast radius minimal).
+        { id: 'skill-studio-key',        label: 'Skill Studio · API Key' },
+        // Story 15.9 — generation overrides; label hardcoded to mirror 15.7's pattern.
+        { id: 'skill-studio-generation', label: 'Skill Studio · Generation' },
+        // Story 15.19 v2 — local AI CLIs auto-discovery; hardcoded label.
+        { id: 'skill-studio-clis',       label: 'Skill Studio · Local CLIs' },
+        // Story 15.23 — ACP / MCP remote agents; hardcoded label.
+        { id: 'skill-studio-acp',        label: 'Skill Studio · Remote Agents (ACP/MCP)' },
+        { id: 'agent-backend',           label: t('settings.navModels') },
+        { id: 'tool-providers',          label: t('settings.navToolProviders') },
+        { id: 'connectors',              label: t('settings.navConnectors') },
+        { id: 'mcp-integrations',        label: t('settings.navMcp') },
       ],
     },
     {
@@ -455,6 +475,47 @@ export default function SettingsPage() {
           {activeSection === 'language'   && <LegacySectionWrap><LanguageSection /></LegacySectionWrap>}
 
           {/* 集成 */}
+          {activeSection === 'skill-studio-key' && (
+            <LegacySectionWrap>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <div className="hf-label" style={{ color: 'var(--t-accent)' }}>
+                    {t('skillStudio.byok.sectionEyebrow')}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 24,
+                      fontWeight: 800,
+                      marginTop: 4,
+                      letterSpacing: '-.02em',
+                      color: 'var(--t-fg)',
+                    }}
+                  >
+                    {t('skillStudio.byok.sectionTitle')}
+                  </div>
+                  <p style={{ fontSize: 13, color: 'var(--t-fg-3)', marginTop: 6 }}>
+                    {t('skillStudio.byok.sectionDescPart1')}<code>X-Anthropic-Key</code>{t('skillStudio.byok.sectionDescPart2')}
+                  </p>
+                </div>
+                <ApiKeySettings />
+              </div>
+            </LegacySectionWrap>
+          )}
+          {activeSection === 'skill-studio-generation' && (
+            <LegacySectionWrap>
+              <GenerationSettings />
+            </LegacySectionWrap>
+          )}
+          {activeSection === 'skill-studio-clis' && (
+            <LegacySectionWrap>
+              <CliDetectPanel />
+            </LegacySectionWrap>
+          )}
+          {activeSection === 'skill-studio-acp' && (
+            <LegacySectionWrap>
+              <AcpAgentsPanel />
+            </LegacySectionWrap>
+          )}
           {activeSection === 'agent-backend'     && <LegacySectionWrap><AgentBackendSection /></LegacySectionWrap>}
           {activeSection === 'tool-providers'    && <LegacySectionWrap><ToolProvidersTab /></LegacySectionWrap>}
           {activeSection === 'connectors'        && <LegacySectionWrap><ConnectorsSection /></LegacySectionWrap>}

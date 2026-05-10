@@ -79,13 +79,12 @@ function agentRole(agent: AgentRecord): string {
   return agent.source === 'catalog' ? 'CATALOG' : 'AGENT';
 }
 
-// Permission level label — derive from blueprint.policy or default L1
-function agentLevel(agent: AgentRecord): number {
+// Permission level label — derive from blueprint.policy_level.
+// Returns null when no real level is set (do NOT fabricate a value).
+function agentLevel(agent: AgentRecord): number | null {
   const policy = (agent.blueprint as Record<string, unknown> | undefined)?.policy_level;
   if (typeof policy === 'number') return Math.max(1, Math.min(3, policy));
-  // fallback: rotate through 1..3 by id hash for visual variety
-  const seed = (agent.agent_id || agent.name || 'x').charCodeAt(0) || 0;
-  return (seed % 3) + 1;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -832,7 +831,7 @@ function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
           {model}
         </span>
         <span className="hf-chip" style={{ fontSize: 9.5 }}>
-          L{level}
+          {level != null ? `L${level}` : '—'}
         </span>
         <span
           className="hf-chip"

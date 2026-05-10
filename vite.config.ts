@@ -20,11 +20,13 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8002',
         changeOrigin: true,
+        timeout: 0,       // No timeout — required for SSE long-lived connections
         // Keep SSE connections alive — don't buffer
         configure: (proxy) => {
           proxy.on('proxyRes', (proxyRes) => {
             if (proxyRes.headers['content-type']?.includes('text/event-stream')) {
               proxyRes.headers['cache-control'] = 'no-cache';
+              proxyRes.headers['x-accel-buffering'] = 'no';
             }
           });
         },

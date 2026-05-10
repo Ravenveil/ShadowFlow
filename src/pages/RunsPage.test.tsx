@@ -53,6 +53,27 @@ function makeRunSummary(overrides: Partial<runsApi.RunSummary> = {}): runsApi.Ru
   };
 }
 
+// Story 15.8 — RunsListPage now consumes RunRecord (persisted run history).
+// Provide a separate factory; the legacy makeRunSummary is preserved for any
+// future projection-graph tests that need the old shape.
+function makeRunRecord(overrides: Partial<runsApi.RunRecord> = {}): runsApi.RunRecord {
+  return {
+    run_id: 'run-abc123',
+    session_id: 'sess-abc12345-deadbeef',
+    goal: '生成 Agent Team Blueprint',
+    skill_name: 'agent-team-blueprint',
+    skill_display_name: 'Agent Team Blueprint',
+    artifact_type: 'yaml',
+    artifact_filename: 'team_blueprint.yml',
+    artifact_url: '/projects/sess-abc12345-deadbeef/team_blueprint.yml',
+    status: 'completed',
+    created_at: '2026-05-10T10:00:00Z',
+    completed_at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+    project_dir: '.shadowflow/projects/sess-abc12345-deadbeef',
+    ...overrides,
+  };
+}
+
 function makeRunGraph(): runsApi.RunGraph {
   return {
     projection_kind: 'run_graph',
@@ -211,10 +232,53 @@ describe('RunsListPage', () => {
   });
 
   it('renders run table when runs exist', async () => {
-    mockListRuns.mockResolvedValue([makeRunSummary()]);
+    mockListRuns.mockResolvedValue([makeRunRecord()]);
     render(<MemoryRouter><RunsListPage /></MemoryRouter>);
     expect(await screen.findByTestId('runs-table')).toBeInTheDocument();
     expect(screen.getByTestId('run-row-run-abc123')).toBeInTheDocument();
+  });
+
+  it('renders goal, skill, artifact badge, relative time for each run', async () => {
+    mockListRuns.mockResolvedValue([makeRunRecord({ goal: '我想要的目标 X' })]);
+    render(<MemoryRouter><RunsListPage /></MemoryRouter>);
+    await screen.findByTestId('runs-table');
+    // Goal cell renders the goal text
+    expect(screen.getByTestId('run-goal-run-abc123')).toHaveTextContent('我想要的目标 X');
+    // Skill display name
+    expect(screen.getByTestId('run-skill-run-abc123')).toHaveTextContent('Agent Team Blueprint');
+    // Artifact badge — yaml
+    expect(screen.getByTestId('run-artifact-badge-yaml')).toBeInTheDocument();
+    // Relative time — "X 分钟前" given completed_at = now-3min
+    expect(screen.getByTestId('run-time-run-abc123').textContent).toMatch(/分钟前|刚刚/);
+  });
+
+  it('truncates long goals to 60 chars', async () => {
+    const longGoal = '一'.repeat(80);
+    mockListRuns.mockResolvedValue([makeRunRecord({ goal: longGoal })]);
+    render(<MemoryRouter><RunsListPage /></MemoryRouter>);
+    await screen.findByTestId('runs-table');
+    // Goal cell text should be truncated with ellipsis (60 chars + …)
+    const cell = screen.getByTestId('run-goal-run-abc123');
+    expect(cell.textContent?.length).toBeLessThanOrEqual(61); // 60 + ellipsis char
+    expect(cell.textContent).toContain('…');
+  });
+
+  it('renders preview + download links when artifact exists', async () => {
+    mockListRuns.mockResolvedValue([makeRunRecord()]);
+    render(<MemoryRouter><RunsListPage /></MemoryRouter>);
+    await screen.findByTestId('runs-table');
+    const preview = screen.getByTestId('run-preview-run-abc123');
+    expect(preview).toHaveAttribute('href', '/projects/sess-abc12345-deadbeef/team_blueprint.yml');
+    expect(screen.getByTestId('run-download-run-abc123')).toBeInTheDocument();
+  });
+
+  it('omits preview link when artifact_url is null', async () => {
+    mockListRuns.mockResolvedValue([
+      makeRunRecord({ artifact_url: null, artifact_type: null, artifact_filename: null }),
+    ]);
+    render(<MemoryRouter><RunsListPage /></MemoryRouter>);
+    await screen.findByTestId('runs-table');
+    expect(screen.queryByTestId('run-preview-run-abc123')).not.toBeInTheDocument();
   });
 
   it('shows error banner on API failure', async () => {
@@ -224,19 +288,19 @@ describe('RunsListPage', () => {
     expect(await screen.findByText(/加载失败/)).toBeInTheDocument();
   });
 
-  it('displays status pill for each run', async () => {
+  it('displays status pill (completed / failed) for each run', async () => {
     mockListRuns.mockResolvedValue([
-      makeRunSummary({ status: 'succeeded' }),
-      makeRunSummary({ run_id: 'run-2', status: 'failed' }),
+      makeRunRecord({ status: 'completed' }),
+      makeRunRecord({ run_id: 'run-2', status: 'failed' }),
     ]);
     render(<MemoryRouter><RunsListPage /></MemoryRouter>);
     await screen.findByTestId('runs-table');
-    expect(screen.getAllByText('succeeded').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('completed').length).toBeGreaterThan(0);
     expect(screen.getAllByText('failed').length).toBeGreaterThan(0);
   });
 
   it('navigates to detail page on row click', async () => {
-    mockListRuns.mockResolvedValue([makeRunSummary()]);
+    mockListRuns.mockResolvedValue([makeRunRecord()]);
     // Setup detail page mock so navigation won't break
     mockGetRunGraph.mockReturnValue(new Promise(() => {}));
 

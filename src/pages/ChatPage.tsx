@@ -36,11 +36,12 @@ import { listSchedules, type Schedule } from '../api/schedules';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { getTemplate } from '../api/templates';
 import { buildChatBuilderUrl } from '../core/utils/builderNavigation';
-import type { GroupItem, GroupMetrics } from '../common/types/inbox';
+import type { GroupItem, GroupMetrics, PendingApproval } from '../common/types/inbox';
 import { HfTopBar, HfDot } from '../components/hifi';
 import { useI18n } from '../common/i18n';
 import { ChatStream } from '../core/components/chat/ChatStream';
 import { useChatStream } from '../core/hooks/useChatStream';
+import { fetchPendingApprovals } from '../api/approvalApi';
 
 const DEFAULT_METRICS: GroupMetrics = {
   activeRuns: 0,
@@ -127,8 +128,7 @@ function RecentActivity({ group }: { group: GroupItem | undefined }) {
 
 // ApprovalsMiniList — right-column condensed roster of pending approvals
 // shown when the user is on the Approvals tab (the full panel relocates to
-// the center column). Uses a tiny stable mock feed; swap for live data when
-// a `pendingApprovalsByGroup` selector lands.
+// the center column). Fetches live data from fetchPendingApprovals API.
 function ApprovalsMiniList({
   groupId,
   pendingCount,
@@ -137,78 +137,84 @@ function ApprovalsMiniList({
   pendingCount: number;
 }) {
   const { t } = useI18n();
-  const items = useMemo(() => {
-    type Decision = 'approve' | 'reject' | 'pending';
-    const seed: Array<{ approver: string; decision: Decision; ago: string }> = [
-      { approver: '阿审', decision: 'pending', ago: '2m' },
-      { approver: '小批', decision: 'pending', ago: '7m' },
-      { approver: '老钱', decision: 'approve', ago: '14m' },
-      { approver: 'Maya', decision: 'pending', ago: '21m' },
-      { approver: '阿河', decision: 'reject', ago: '38m' },
-    ];
-    // Deterministic per group; if backend exposes a list later replace this.
-    return seed;
+  const [items, setItems] = useState<PendingApproval[]>([]);
+
+  useEffect(() => {
+    fetchPendingApprovals(groupId)
+      .then(setItems)
+      .catch(() => {
+        // Fail silently — display empty list rather than stale seed data
+        setItems([]);
+      });
   }, [groupId]);
 
-  const decisionColor = (d: 'approve' | 'reject' | 'pending') =>
-    d === 'approve' ? 'var(--t-ok)' : d === 'reject' ? 'var(--t-err)' : 'var(--t-warn)';
+  const decisionColor = (_d: string) => 'var(--t-warn)';
 
   return (
     <div data-testid="approvals-mini-list" style={{ padding: '14px 14px 18px' }}>
       <div className="hf-label" style={{ marginBottom: 8 }}>
         {t('chat.pendingApprovals')} · {pendingCount}
       </div>
-      {items.map((it, i) => (
-        <button
-          type="button"
-          key={`${it.approver}-${i}`}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            width: '100%',
-            padding: '8px 12px',
-            marginBottom: 2,
-            border: 'none',
-            background: 'transparent',
-            color: 'var(--t-fg-2)',
-            cursor: 'pointer',
-            borderRadius: 6,
-            textAlign: 'left',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-panel-2)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-          }}
-        >
-          <HfDot color={decisionColor(it.decision)} size={7} />
-          <span
+      {items.length === 0 && (
+        <div className="hf-meta" style={{ padding: '6px 12px', fontSize: 10 }}>
+          {t('chat.noPendingApprovals')}
+        </div>
+      )}
+      {items.map((it) => {
+        const waitMins = Math.floor(it.waiting_seconds / 60);
+        const agoLabel = waitMins < 60 ? `${waitMins}m` : `${Math.floor(waitMins / 60)}h`;
+        return (
+          <button
+            type="button"
+            key={it.approval_id}
             style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: 'var(--t-fg)',
-              flex: 1,
-              minWidth: 0,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: '100%',
+              padding: '8px 12px',
+              marginBottom: 2,
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--t-fg-2)',
+              cursor: 'pointer',
+              borderRadius: 6,
+              textAlign: 'left',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-panel-2)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
             }}
           >
-            {it.approver}
+            <HfDot color={decisionColor('pending')} size={7} />
             <span
-              className="hf-mono"
-              style={{ fontSize: 9, color: 'var(--t-fg-4)', marginLeft: 6 }}
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--t-fg)',
+                flex: 1,
+                minWidth: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
             >
-              · {it.decision.toUpperCase()}
+              {it.submitter_name}
+              <span
+                className="hf-mono"
+                style={{ fontSize: 9, color: 'var(--t-fg-4)', marginLeft: 6 }}
+              >
+                · {it.submitter_kind.toUpperCase()}
+              </span>
             </span>
-          </span>
-          <span className="hf-meta" style={{ fontSize: 9 }}>
-            {it.ago}
-          </span>
-        </button>
-      ))}
+            <span className="hf-meta" style={{ fontSize: 9 }}>
+              {agoLabel}
+            </span>
+          </button>
+        );
+      })}
       <div
         className="hf-mono"
         style={{
@@ -233,6 +239,9 @@ export default function ChatPage() {
   const groupName = group?.name ?? groupId ?? '';
   const metrics = group?.metrics ?? DEFAULT_METRICS;
   const { t } = useI18n();
+
+  // Subscribe to agentDMs via selector so the component re-renders on updates
+  const agentDMs = useInboxStore((s) => s.agentDMs);
 
   const [activeTab, setActiveTab] = useState<'chat' | 'briefboard' | 'approvals'>('chat');
   const [briefBoardAlias, setBriefBoardAlias] = useState('BriefBoard');
@@ -462,12 +471,12 @@ export default function ChatPage() {
           <div className="hf-label" style={{ padding: '14px 10px 8px' }}>
             {t('chat.dmSectionLabel')}
           </div>
-          {useInboxStore.getState().agentDMs.length === 0 && (
+          {agentDMs.length === 0 && (
             <div className="hf-meta" style={{ padding: '6px 10px', fontSize: 10 }}>
               {t('chat.noDMs')}
             </div>
           )}
-          {useInboxStore.getState().agentDMs.map((d) => (
+          {agentDMs.map((d) => (
             <button
               key={d.agentId}
               type="button"

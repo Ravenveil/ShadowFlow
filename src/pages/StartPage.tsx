@@ -37,11 +37,12 @@ import {
   XCircle,
 } from 'lucide-react';
 import { getApiBase } from '../api/_base';
+import { useSecretsStore } from '../core/hooks/useSecretsStore';
 import { listCatalogApps } from '../api/catalog';
 import { listPacks } from '../api/knowledge';
 import type { KnowledgePack } from '../common/types/knowledge';
 import { listRuns } from '../api/runs';
-import type { RunSummary } from '../api/runs';
+import type { RunRecord } from '../api/runs';
 import type { CatalogAppSummary } from '../common/types/catalog';
 import { GoalClarityWizard } from '../core/components/builder/GoalClarityWizard';
 import { HfTopBar } from '../components/hifi';
@@ -452,13 +453,17 @@ function PrimitiveCard({ testId, glyph, title, description, onClick }: Primitive
 // ---------------------------------------------------------------------------
 
 const RUN_STATUS_META: Record<string, { label: string; color: string; Icon: typeof Play }> = {
+  // Legacy projection statuses — kept for forward-compat if list ever
+  // returns a mix of in-flight runs and persisted records.
   running:         { label: 'running',   color: '#22c55e', Icon: Play },
   paused:          { label: 'paused',    color: '#f59e0b', Icon: Pause },
   waiting_user:    { label: 'waiting',   color: '#f59e0b', Icon: Pause },
   awaiting_approval:{ label: 'approval', color: '#f59e0b', Icon: Pause },
   succeeded:       { label: 'done',      color: '#6b7280', Icon: CheckCircle2 },
-  failed:          { label: 'failed',    color: '#ef4444', Icon: XCircle },
   cancelled:       { label: 'cancelled', color: '#6b7280', Icon: XCircle },
+  // Story 15.8 — RunRecord statuses returned by the persisted /api/runs.
+  completed:       { label: 'done',      color: '#6b7280', Icon: CheckCircle2 },
+  failed:          { label: 'failed',    color: '#ef4444', Icon: XCircle },
 };
 
 function fmtRelative(iso: string): string {
@@ -478,11 +483,13 @@ function fmtRelative(iso: string): string {
 
 function RecentRuns() {
   const { t } = useI18n();
-  const [runs, setRuns] = useState<RunSummary[] | null>(null);
+  const [runs, setRuns] = useState<RunRecord[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     listRuns()
+      // Story 15.8 — listRuns now returns RunRecord[] (envelope unwrapped in
+      // the API client). Slice to the latest 6 — backend already sorts DESC.
       .then((data) => { if (!cancelled) setRuns(data.slice(0, 6)); })
       .catch(() => { if (!cancelled) setRuns([]); });
     return () => { cancelled = true; };
@@ -505,7 +512,9 @@ function RecentRuns() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {runs.map((run) => {
             const meta = RUN_STATUS_META[run.status] ?? { label: run.status, color: 'var(--t-fg-4)', Icon: Play };
-            const isActive = run.status === 'running' || run.status === 'waiting_user' || run.status === 'awaiting_approval';
+            const title = run.goal && run.goal.trim().length > 0
+              ? run.goal
+              : (run.skill_display_name || run.run_id.slice(0, 8));
             return (
               <div
                 key={run.run_id}
@@ -516,20 +525,23 @@ function RecentRuns() {
                   flexDirection: 'column',
                   gap: 6,
                   cursor: 'pointer',
-                  borderColor: isActive ? 'color-mix(in oklab, var(--t-accent) 30%, var(--t-border))' : undefined,
                 }}
+                title={run.goal}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                    {run.workflow_id || run.run_id.slice(0, 8)}
+                    {title}
                   </span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: meta.color, flexShrink: 0 }}>
                     <meta.Icon size={10} strokeWidth={2.5} aria-hidden />
                     {meta.label}
                   </span>
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)' }}>
-                  {fmtRelative(run.started_at)}
+                <div style={{ fontSize: 10, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)', display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {run.skill_display_name}
+                  </span>
+                  <span style={{ flexShrink: 0 }}>{fmtRelative(run.completed_at)}</span>
                 </div>
               </div>
             );
@@ -570,6 +582,7 @@ export default function StartPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useI18n();
+  const { secrets } = useSecretsStore();
   const [showWizard, setShowWizard] = useState(false);
   const [composer, setComposer] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -646,9 +659,11 @@ export default function StartPage() {
     setSubmitting(true);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (secrets.anthropic) headers['X-Anthropic-Key'] = secrets.anthropic;
       const resp = await fetch(`${getApiBase()}/api/run-sessions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           goal: text,
           mode: mode !== 'auto' ? mode : undefined,
