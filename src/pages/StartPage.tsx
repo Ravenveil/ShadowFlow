@@ -1385,6 +1385,75 @@ export default function StartPage() {
             </div>
           </div>
 
+          {/* Story 15.28 — Skill Studio top-level entry card. Placed below the
+              three primitive cards and above Recent drafts so it sits in the
+              user's natural reading flow. Visual reuses `hf-card` so it fits
+              the existing card system without redesign. */}
+          <section data-testid="primitive-card-skill-studio" style={{ width: '100%' }}>
+            <button
+              type="button"
+              onClick={() => navigate('/run-session')}
+              className="hf-card"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 14,
+                padding: 16,
+                width: '100%',
+                textAlign: 'left',
+                cursor: 'pointer',
+                background: 'var(--t-panel)',
+                color: 'var(--t-fg)',
+                border: '1px solid color-mix(in oklab, var(--t-accent) 35%, var(--t-border))',
+                fontFamily: 'inherit',
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  background: 'var(--t-accent-tint)',
+                  color: 'var(--t-accent)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Sparkles size={20} strokeWidth={2} aria-hidden />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-fg)' }}>
+                  {t('skillStudio.entry.startCardTitle')}
+                </div>
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 12,
+                    lineHeight: 1.55,
+                    color: 'var(--t-fg-3)',
+                  }}
+                >
+                  {t('skillStudio.entry.startCardSubtitle')}
+                </div>
+              </div>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: 'var(--t-accent)',
+                  flexShrink: 0,
+                }}
+              >
+                {t('skillStudio.entry.openCta')}
+              </span>
+            </button>
+          </section>
+
           {/* Recent drafts — preserved feature */}
           <RecentDrafts onNavigateCatalog={() => navigate('/catalog')} />
 

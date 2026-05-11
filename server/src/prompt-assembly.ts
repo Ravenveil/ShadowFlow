@@ -1,15 +1,17 @@
 /**
- * prompt-assembly.ts — Story 15.13 — Multi-layer system prompt composer.
+ * prompt-assembly.ts — Story 15.13 / 15.29 — Multi-layer system prompt composer.
  *
- * Implements the OpenDesign-aligned 7-layer "onion":
+ * Implements the OpenDesign-aligned 8-layer "onion" (Story 15.29 added
+ * conversation_history at slot 6):
  *
- *   1. DISCOVERY directives   (force intent restatement + plan)
+ *   1. DISCOVERY directives    (force intent restatement + plan)
  *   2. Identity charter        (anti-AI-slop hard rules)
  *   3. DS injection_prompt     (from design-systems registry / 15.11)
  *   4. Skill system_prompt     (from skills registry / 15.10)
  *   5. Project meta block      (kind / fidelity / animations / ... )
- *   6. Side files              (reference snippets — interface only; 15.12 fills)
- *   7. Framework directive     (mode-specific, e.g. deck → PPTX layout rules)
+ *   6. Conversation history    (multi-turn chat history; 15.29)
+ *   7. Side files              (reference snippets — interface only; 15.12 fills)
+ *   8. Framework directive     (mode-specific, e.g. deck → PPTX layout rules)
  *
  * Layer order is fixed. Each layer is independently togglable via
  * `layer_toggles.<key> = false`. Empty layers (toggled off OR empty content)
@@ -30,6 +32,8 @@ export interface LayerToggles {
   ds?: boolean;
   skill?: boolean;
   project?: boolean;
+  /** Story 15.29 — conversation history layer; default enabled. */
+  conversation_history?: boolean;
   sides?: boolean;
   framework?: boolean;
 }
@@ -44,8 +48,15 @@ export interface ComposeInput {
   /** Optional user-supplied project metadata (kind / fidelity / etc.). */
   project_meta?: Record<string, unknown> | null;
   /**
+   * Story 15.29 — pre-rendered conversation history block. When present and
+   * non-empty, it is injected between project_meta and side_files as the new
+   * layer 6. Empty / missing → drop. assembler.ts owns the rendering (see
+   * its `## CONVERSATION HISTORY` markdown block builder).
+   */
+  conversation_history?: string;
+  /**
    * Side-file reference block. Story 15.12 owns construction; here we just
-   * accept a pre-rendered string and inject it as layer 6. Empty → skip.
+   * accept a pre-rendered string and inject it as layer 7. Empty → skip.
    */
   side_files?: string;
   /** Per-layer overrides; missing keys default to enabled. */
@@ -61,7 +72,15 @@ export interface ComposeResult {
   framework: string | null;
 }
 
-type LayerKey = 'discovery' | 'identity' | 'ds' | 'skill' | 'project' | 'sides' | 'framework';
+type LayerKey =
+  | 'discovery'
+  | 'identity'
+  | 'ds'
+  | 'skill'
+  | 'project'
+  | 'conversation_history'
+  | 'sides'
+  | 'framework';
 
 const LAYER_ORDER: readonly LayerKey[] = [
   'discovery',
@@ -69,6 +88,8 @@ const LAYER_ORDER: readonly LayerKey[] = [
   'ds',
   'skill',
   'project',
+  // Story 15.29 — conversation_history sits between project and sides.
+  'conversation_history',
   'sides',
   'framework',
 ] as const;
@@ -93,9 +114,10 @@ function renderProjectMeta(meta: Record<string, unknown>): string {
 }
 
 /**
- * Compose the system prompt by stacking 7 ordered layers. Empty / disabled
- * layers are dropped. Returns the final prompt plus observability metadata
- * for the `compose` SSE event (layer names only — never the prompt itself).
+ * Compose the system prompt by stacking 8 ordered layers (Story 15.29 added
+ * conversation_history at slot 6). Empty / disabled layers are dropped.
+ * Returns the final prompt plus observability metadata for the `compose` SSE
+ * event (layer names only — never the prompt itself).
  */
 export function composeSystemPrompt(input: ComposeInput): ComposeResult {
   const t = input.layer_toggles ?? {};
@@ -140,13 +162,25 @@ export function composeSystemPrompt(input: ComposeInput): ComposeResult {
   }
   layers.push({ key: 'project', content: projectContent });
 
-  // 6. Side files (15.12 interface — empty by default)
+  // 6. Conversation history (Story 15.29) — assembler.ts pre-renders the
+  // markdown block from `getRecentMessages(conversation_id, 20)`. When the
+  // session has no conversation_id or no messages, the input field is empty
+  // / undefined and the layer is dropped together with all other empty layers.
+  layers.push({
+    key: 'conversation_history',
+    content:
+      t.conversation_history !== false && input.conversation_history
+        ? input.conversation_history
+        : '',
+  });
+
+  // 7. Side files (15.12 interface — empty by default)
   layers.push({
     key: 'sides',
     content: t.sides !== false && input.side_files ? input.side_files : '',
   });
 
-  // 7. Framework directive (mode-driven)
+  // 8. Framework directive (mode-driven)
   let frameworkContent = '';
   let framework: string | null = null;
   if (t.framework !== false) {

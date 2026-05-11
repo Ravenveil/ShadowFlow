@@ -10,6 +10,10 @@ import { useNodeRegistry } from './core/stores/nodeRegistryStore';
 import type { WorkflowNode } from './common/types';
 import { PRESETS, materializePreset } from './templates/presets';
 import { saveUserTemplate, parseWorkflowJSON, exportWorkflowJSON, getUserTemplate } from './templates/userTemplates';
+// Story 15.28 — Save as Skill: serialize current workflow to YAML and POST
+// to /api/skills/save so the FS skill registry picks it up.
+import { serializeWorkflow } from './core/lib/yamlSerializer';
+import { getApiBase } from './api/_base';
 import { runDemo } from './runtime/demoRunner';
 import { useYamlSync } from './core/hooks/useYamlSync';
 import { useYamlEditorStore } from './core/hooks/useYamlEditorStore';
@@ -1408,6 +1412,13 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
   const [sanitizeFields, setSanitizeFields] = useState<RemovedFieldItem[]>([]);
   const [sanitizedTrajectory, setSanitizedTrajectory] = useState<Record<string, unknown> | null>(null);
   const [publishBusy, setPublishBusy] = useState(false);
+  // Story 15.28 — Save as Skill modal state.
+  const [skillSaveOpen, setSkillSaveOpen] = useState(false);
+  const [skillSaveName, setSkillSaveName] = useState('');
+  const [skillSaveDesc, setSkillSaveDesc] = useState('');
+  const [skillSaveBusy, setSkillSaveBusy] = useState(false);
+  const [skillSaveError, setSkillSaveError] = useState<string | null>(null);
+  const [skillSavedId, setSkillSavedId] = useState<string | null>(null);
 
   // Mark as dirty when user modifies anything after the initial template load
   const initialCountRef = React.useRef({ n: nodes.length, e: edges.length });
@@ -1451,6 +1462,66 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
       setFlashOk(zh ? '已复制到剪贴板' : 'Copied to clipboard');
       setTimeout(() => setFlashOk(null), 2200);
     }).catch(() => {/* ignore */});
+  };
+
+  // Story 15.28 — Save current workflow as a Skill on disk.
+  // Renders the workflow as YAML via serializeWorkflow() and POSTs to
+  // /api/skills/save which materialises .shadowflow/skills/<name>/SKILL.md.
+  const openSaveAsSkill = () => {
+    // Default name: kebab-case of templateTitle, fallback to 'untitled-skill'.
+    const seed = (templateTitle || 'untitled-skill')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 64) || 'untitled-skill';
+    setSkillSaveName(seed);
+    setSkillSaveDesc('');
+    setSkillSaveError(null);
+    setSkillSavedId(null);
+    setSkillSaveOpen(true);
+  };
+
+  const doSaveAsSkill = async () => {
+    const name = skillSaveName.trim();
+    if (!name) return;
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/i.test(name)) {
+      setSkillSaveError(zh
+        ? '名称必须是 kebab-case（仅字母数字 / - / _，64 字符以内）'
+        : 'name must be kebab-case (alphanumerics / - / _, ≤64 chars)');
+      return;
+    }
+    setSkillSaveBusy(true);
+    setSkillSaveError(null);
+    try {
+      const yaml = serializeWorkflow(nodes, edges);
+      const resp = await fetch(`${getApiBase()}/api/skills/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          blueprint_yaml: yaml,
+          description: skillSaveDesc.trim() || undefined,
+          mode: 'blueprint',
+          preview_type: 'yaml',
+        }),
+      });
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        const msg = (errBody as { error?: { message?: string } })?.error?.message
+          || `HTTP ${resp.status}`;
+        throw new Error(msg);
+      }
+      const data = (await resp.json()) as { data?: { skill_id?: string } };
+      const savedId = data?.data?.skill_id ?? name;
+      setSkillSavedId(savedId);
+      setFlashOk(zh ? `已保存为 skill ${savedId}` : `Saved as skill ${savedId}`);
+      setTimeout(() => setFlashOk(null), 2400);
+    } catch (err) {
+      const msg = (err as Error).message ?? String(err);
+      setSkillSaveError(msg);
+    } finally {
+      setSkillSaveBusy(false);
+    }
   };
 
   const performUpload = async (trajectoryPayload: Record<string, unknown>) => {
@@ -1598,6 +1669,16 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
           {zh ? '导出' : 'Export'}
         </button>
 
+        {/* Story 15.28 — Save current workflow as a Skill on disk. */}
+        <button
+          onClick={openSaveAsSkill}
+          data-testid="editor-save-as-skill"
+          title={zh ? '保存为 Skill（Skill Studio 可用）' : 'Save as Skill (usable in Skill Studio)'}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: V.mono, fontSize: 11, color: V.fg3, background: 'transparent', border: `1px solid ${V.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+          {zh ? 'Save as Skill' : 'Save as Skill'}
+        </button>
+
         <button onClick={doPublish} disabled={publishBusy}
           title={zh ? '发布到 0G Storage（上传前扫描 PII）' : 'Publish to 0G Storage (PII scan before upload)'}
           style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: V.mono, fontSize: 11, color: 'var(--t-accent)', background: 'var(--t-accent-tint)', border: '1px solid rgba(168,85,247,.4)' /* fixme: token */, borderRadius: 6, padding: '4px 10px', cursor: publishBusy ? 'wait' : 'pointer', opacity: publishBusy ? 0.6 : 1 }}>
@@ -1651,6 +1732,66 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
               <button onClick={() => setSaveOpen(false)} style={btnGhost}>{zh ? '取消' : 'Cancel'}</button>
               <button onClick={doSave} disabled={!saveName.trim()} style={{ ...btnPrimary, opacity: saveName.trim() ? 1 : .5, cursor: saveName.trim() ? 'pointer' : 'not-allowed' }}>
                 {zh ? '保存' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Story 15.28 — Save as Skill modal */}
+      {skillSaveOpen && (
+        <Modal onClose={() => setSkillSaveOpen(false)} title={zh ? '保存当前 workflow 为 Skill' : 'Save current workflow as a Skill'}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <Label>{zh ? '名称（kebab-case）' : 'Name (kebab-case)'}</Label>
+              <input
+                autoFocus
+                value={skillSaveName}
+                onChange={(e) => setSkillSaveName(e.target.value)}
+                placeholder={zh ? '例如：my-landing-page' : 'e.g. my-landing-page'}
+                data-testid="editor-save-as-skill-name"
+                style={modalInput}
+              />
+            </div>
+            <div>
+              <Label>{zh ? '描述（可选）' : 'Description (optional)'}</Label>
+              <textarea
+                value={skillSaveDesc}
+                onChange={(e) => setSkillSaveDesc(e.target.value)}
+                placeholder={zh ? '简短说明这个 skill' : 'Short description of this skill'}
+                style={{ ...modalInput, height: 60, resize: 'vertical' }}
+              />
+            </div>
+            <div style={{ fontFamily: V.mono, fontSize: 10.5, color: V.fg4, padding: '8px 10px', borderRadius: 6, background: V.elev1, border: `1px solid ${V.borderSub}` }}>
+              {nodes.length} {zh ? '个节点' : 'nodes'} · {edges.length} {zh ? '条连线' : 'edges'} · {zh ? '将写入' : 'will write to'} <code>.shadowflow/skills/{skillSaveName.trim() || '<name>'}/SKILL.md</code>
+            </div>
+            {skillSaveError && (
+              <div style={{ fontFamily: V.mono, fontSize: 11, color: V.reject, background: 'var(--status-reject-tint)', padding: '6px 10px', borderRadius: 5, border: '1px solid rgba(239,68,68,.35)' }}>
+                ✗ {skillSaveError}
+              </div>
+            )}
+            {skillSavedId && !skillSaveError && (
+              <div style={{ fontFamily: V.mono, fontSize: 11, color: V.accentBr, background: V.accentTint, padding: '6px 10px', borderRadius: 5, border: '1px solid rgba(168,85,247,.35)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span>✓ {zh ? `已保存：${skillSavedId}` : `Saved: ${skillSavedId}`}</span>
+                <button
+                  type="button"
+                  data-testid="editor-save-as-skill-open-studio"
+                  onClick={() => { setSkillSaveOpen(false); navigate(`/run-session?skill_name=${encodeURIComponent(skillSavedId)}`); }}
+                  style={{ background: 'transparent', border: 'none', color: V.accentBr, cursor: 'pointer', fontFamily: V.mono, fontSize: 11, textDecoration: 'underline' }}
+                >
+                  {zh ? '在 Skill Studio 中打开 →' : 'Open in Skill Studio →'}
+                </button>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button onClick={() => setSkillSaveOpen(false)} style={btnGhost}>{zh ? '关闭' : 'Close'}</button>
+              <button
+                onClick={doSaveAsSkill}
+                disabled={!skillSaveName.trim() || skillSaveBusy}
+                data-testid="editor-save-as-skill-confirm"
+                style={{ ...btnPrimary, opacity: skillSaveName.trim() && !skillSaveBusy ? 1 : 0.5, cursor: skillSaveName.trim() && !skillSaveBusy ? 'pointer' : 'not-allowed' }}
+              >
+                {skillSaveBusy ? (zh ? '保存中…' : 'Saving…') : (zh ? '保存为 Skill' : 'Save as Skill')}
               </button>
             </div>
           </div>

@@ -166,22 +166,38 @@ export function maskApiKey(key: string): string {
 }
 
 /**
- * Build the auth headers to merge into a `fetch` request. Story 15.18 emits
- * one header per non-empty stored key (4 max). Returns an empty object when
- * no keys are stored, so callers can spread unconditionally:
+ * Build the auth headers to merge into a `fetch` request.
+ *
+ * 2026-05-11 review F5 (15.18): provider-scoped 模式 — 默认仅发当前选中
+ * provider 的 1 个 key（最小披露原则）。早期实现把所有 4 key 都附到每个请求，
+ * 在 dev tools / 中间人 / 反代日志里 4 key 全可见 — 真实泄漏面。
+ *
+ *   authHeaders()                  → 发 default provider 的 key（多数场景）
+ *   authHeaders('openai')          → 仅发 openai 的 key
+ *   authHeaders({ all: true })     → 发全部已存的 key（向后兼容老调用）
  *
  *   headers: { 'Content-Type': 'application/json', ...authHeaders() }
  *
- * Note: Story 15.7's contract was `{ 'X-Anthropic-Key': key }` for a single
- * Anthropic key. That contract continues to hold when only the Anthropic key
- * is configured (the other 3 slots are empty); existing tests pass unchanged.
+ * Story 15.7 单 Anthropic key 契约仍兼容：default provider 即 anthropic 时，
+ * 只发 X-Anthropic-Key（与早期 15.7 行为一致）。
  */
-export function authHeaders(): Record<string, string> {
+export function authHeaders(
+  scope?: ProviderId | { all: true },
+): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const id of PROVIDER_IDS) {
-    const k = getStoredApiKey(id);
-    if (k) out[HEADER_NAME[id]] = k;
+  if (scope && typeof scope === 'object' && scope.all) {
+    for (const id of PROVIDER_IDS) {
+      const k = getStoredApiKey(id);
+      if (k) out[HEADER_NAME[id]] = k;
+    }
+    return out;
   }
+  const target: ProviderId =
+    typeof scope === 'string' && (PROVIDER_IDS as readonly string[]).includes(scope)
+      ? (scope as ProviderId)
+      : (getDefaultProvider?.() ?? 'anthropic');
+  const k = getStoredApiKey(target);
+  if (k) out[HEADER_NAME[target]] = k;
   return out;
 }
 

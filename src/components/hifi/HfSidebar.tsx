@@ -13,7 +13,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { openQuickSwitcher } from './QuickSwitcher';
-import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search, PanelLeftClose, PanelLeftOpen, Sparkles, Folder } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { HfDot } from './HfAtoms';
 import { useI18n } from '../../common/i18n';
@@ -25,6 +25,8 @@ export type HfSidebarActive =
   | 'teams'
   | 'agents'
   | 'templates'
+  | 'skill-studio'
+  | 'projects'
   | 'settings';
 
 interface NavItem {
@@ -42,6 +44,11 @@ const buildNavItems = (t: (key: string) => string): NavItem[] => [
   { k: 'teams',     Icon: Users,          label: t('shell.navTeams'),     hint: '⌘3', to: '/teams' },
   { k: 'agents',    Icon: Bot,            label: t('shell.navAgents'),    hint: '⌘4', to: '/agents' },
   { k: 'templates', Icon: LayoutTemplate, label: t('shell.navTemplates'), hint: '⌘5', to: '/templates' },
+  // Story 15.28 — Skill Studio top-level entry. Falls under main nav so users
+  // can reach `/run-session` from any logged-in screen.
+  { k: 'skill-studio', Icon: Sparkles,    label: t('skillStudio.entry.navLabel'), hint: '⌘6', to: '/run-session' },
+  // Story 15.24 — Projects nav entry (Project + Conversation history page).
+  { k: 'projects',     Icon: Folder,      label: t('projects.navLabel'),         hint: '⌘7', to: '/projects' },
 ];
 
 interface HfSidebarProps {
@@ -205,6 +212,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
               key={it.k}
               to={it.to}
               title={it.label}
+              data-testid={`sidenav-${it.k}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -246,7 +254,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
           );
         }
         return (
-          <Link key={it.k} to={it.to} style={rowStyle(on)}>
+          <Link key={it.k} to={it.to} data-testid={`sidenav-${it.k}`} style={rowStyle(on)}>
             {on && <span style={activeBar} />}
             <span
               style={{

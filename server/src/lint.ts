@@ -85,6 +85,10 @@ function detectLanguage(filename: string, explicit?: string): LintLanguage {
 }
 
 /** Public surface. Reads the file from disk, dispatches by extension, returns LintResult. */
+// 2026-05-11 review F3: 上限 512KB 防 lintHtml O(N·M) 全文扫 + readFileSync OOM。
+// OpenDesign 同模式（artifact 上限统一兜底）。超限 → 单 info finding，不解析。
+const MAX_ARTIFACT_BYTES = 512 * 1024;
+
 export function runLint(sessionId: string, filename: string, type?: string): LintResult {
   if (!isSafeSessionId(sessionId)) throw Object.assign(new Error('INVALID_SESSION_ID'), { code: 'INVALID_SESSION_ID' });
   if (!isSafeFilename(filename)) throw Object.assign(new Error('INVALID_FILENAME'), { code: 'INVALID_FILENAME' });
@@ -92,6 +96,26 @@ export function runLint(sessionId: string, filename: string, type?: string): Lin
   const filePath = projectArtifactPath(sessionId, filename);
   if (!fs.existsSync(filePath)) {
     throw Object.assign(new Error('ARTIFACT_NOT_FOUND'), { code: 'ARTIFACT_NOT_FOUND' });
+  }
+  // F3: stat-then-read 防整文件读到内存。
+  const stat = fs.statSync(filePath);
+  if (stat.size > MAX_ARTIFACT_BYTES) {
+    const lang = detectLanguage(filename, type);
+    return {
+      filename,
+      type: lang,
+      language: lang,
+      findings: [
+        {
+          severity: 'info',
+          rule: 'artifact-too-large',
+          line: 1,
+          column: 1,
+          message: `Artifact size ${stat.size}B exceeds lint cap ${MAX_ARTIFACT_BYTES}B — skipped`,
+        },
+      ],
+      summary: { errors: 0, warnings: 0, infos: 1 },
+    };
   }
   const content = fs.readFileSync(filePath, 'utf-8');
   return lintContent(filename, content, type);

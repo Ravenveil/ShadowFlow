@@ -72,11 +72,26 @@ export function encodeFrame(msg: unknown): Buffer {
  * extract whatever complete frames are now available. Bytes that span chunks
  * are buffered internally.
  */
+// 2026-05-11 review F6/F7: LSP 标准模式 16MB 单 frame 上限。
+// 防恶意/runaway server 发 `Content-Length: 99999999999\r\n\r\n` 累 buffer
+// 直到 OOM；同时给 JSON.parse 自然有界（cap frame 后 JSON 必 < 16MB）。
+const MAX_FRAME_BYTES = 16 * 1024 * 1024;
+// 等待 frame 时 buffer 也有上限，防 server 发巨大 header 卡 indexOf。
+const MAX_PENDING_BYTES = MAX_FRAME_BYTES + 64 * 1024;
+
 export class FrameDecoder {
   private buffer = Buffer.alloc(0);
 
   push(chunk: Buffer): void {
     this.buffer = Buffer.concat([this.buffer, chunk]);
+    if (this.buffer.length > MAX_PENDING_BYTES) {
+      // F6: hard reset on runaway buffer (lose pending frame is acceptable —
+      // peer broke contract). Caller's drain() will return [] next call.
+      console.warn(
+        `[jsonrpc-stdio] buffer ${this.buffer.length}B > ${MAX_PENDING_BYTES}B — reset`,
+      );
+      this.buffer = Buffer.alloc(0);
+    }
   }
 
   /** Drain all currently-complete frames; returns parsed JSON objects. */
@@ -93,6 +108,16 @@ export class FrameDecoder {
         continue;
       }
       const len = parseInt(m[1], 10);
+      // F6: reject oversize frame instead of waiting indefinitely for body.
+      if (!Number.isFinite(len) || len < 0 || len > MAX_FRAME_BYTES) {
+        console.warn(
+          `[jsonrpc-stdio] frame Content-Length ${len} > ${MAX_FRAME_BYTES} — skipping frame`,
+        );
+        // Skip past the header; we cannot trust where body ends, so drop all
+        // pending bytes (peer must re-sync). Safer than reading garbage.
+        this.buffer = Buffer.alloc(0);
+        return out;
+      }
       const start = headerEnd + 4;
       if (this.buffer.length < start + len) return out; // need more bytes
       const body = this.buffer.slice(start, start + len).toString('utf8');

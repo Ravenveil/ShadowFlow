@@ -212,20 +212,38 @@ async function defaultCallAnthropic(
   model: string,
   fetchImpl: typeof fetch,
 ): Promise<string> {
-  const res = await fetchImpl('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
-  });
+  // 2026-05-11 review F2: 30s timeout 防 fetch 卡住 → SSE 整流挂死分钟级。
+  // OpenDesign 模式：所有 LLM 出口都 wrap AbortController。
+  const ctrl = new AbortController();
+  const timeoutId = setTimeout(() => ctrl.abort(), 30_000);
+  let res: Response;
+  try {
+    res = await fetchImpl('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') {
+      throw Object.assign(new Error('Anthropic API timeout (30s)'), {
+        code: 'CRITIQUE_API_ERROR',
+        status: 504,
+      });
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw Object.assign(new Error(`Anthropic API ${res.status}: ${text.slice(0, 200)}`), {

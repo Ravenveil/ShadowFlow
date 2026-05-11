@@ -25,6 +25,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Sparkles } from 'lucide-react';
 import { BreadcrumbBar } from '../core/components/inbox/BreadcrumbBar';
 import { GroupMetricsBar } from '../core/components/inbox/GroupMetricsBar';
 import { ChatBriefBoardToggle } from '../core/components/inbox/ChatBriefBoardToggle';
@@ -708,6 +709,36 @@ export default function ChatPage() {
                 }}
               />
               <span className="hf-kbd">⌘ ⏎</span>
+              {/* Story 15.28 — "Run skill →" entry. Takes the current composer
+                  text as a goal and routes to /run-session. Does NOT call
+                  sendMessage; chat history bridging will land in 15.29. */}
+              <button
+                type="button"
+                data-testid="chat-run-skill-button"
+                disabled={!composer.trim()}
+                onClick={() => {
+                  const goal = composer.trim();
+                  if (!goal) return;
+                  navigate(`/run-session?goal=${encodeURIComponent(goal)}`);
+                }}
+                title={t('skillStudio.entry.runSkillFromChat')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 11,
+                  padding: '4px 9px',
+                  borderRadius: 6,
+                  border: '1px solid var(--t-border)',
+                  background: 'transparent',
+                  color: composer.trim() ? 'var(--t-fg-2)' : 'var(--t-fg-5)',
+                  cursor: composer.trim() ? 'pointer' : 'not-allowed',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <Sparkles size={11} strokeWidth={2} aria-hidden />
+                {t('skillStudio.entry.runSkillFromChat')}
+              </button>
               <button
                 type="button"
                 disabled={!composer.trim() || chatStream.loading}

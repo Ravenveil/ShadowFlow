@@ -46,11 +46,20 @@ export interface RunSessionCreateRequest {
    * INVALID_PROVIDER.
    */
   provider?: ProviderId;
+  /**
+   * Story 15.29 — link this run to a Conversation. When omitted, the server
+   * auto-creates an anonymous conversation under the 'default' project and
+   * returns its id on the response so the client can persist + auto-select it
+   * on the next visit.
+   */
+  conversation_id?: string;
 }
 
 export interface RunSessionCreateResponse {
   session_id: string;
   stream_url: string;
+  /** Story 15.29 — always populated by the server (auto-created when omitted). */
+  conversation_id?: string;
 }
 
 export interface ClassifyEvent {

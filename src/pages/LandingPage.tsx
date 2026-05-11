@@ -710,6 +710,49 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ====== Story 15.28 — Skill Studio secondary CTA ======
+            Placed above the main CTA Band so visitors see the BYOK pitch
+            before the GitHub one. All existing sections are preserved. */}
+        <section
+          data-testid="landing-skill-studio-cta"
+          style={{
+            position: 'relative',
+            maxWidth: 1100,
+            margin: '40px auto 0',
+            padding: '40px 40px',
+            textAlign: 'center',
+            background: 'var(--skin-panel, var(--t-panel))',
+            border: '1px solid color-mix(in oklab, var(--t-accent) 30%, var(--t-border))',
+            borderRadius: 18,
+          }}
+        >
+          <h2
+            style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'clamp(28px, 3vw, 40px)',
+              fontWeight: 800,
+              letterSpacing: '-.025em',
+              margin: '0 0 12px',
+              color: 'var(--t-fg)',
+            }}
+          >
+            {lang === 'EN' ? 'Try the Skill Studio (BYOK)' : '试试 Skill Studio (BYOK)'}
+          </h2>
+          <p style={{ fontSize: 15, color: 'var(--t-fg-3)', margin: '0 auto 22px', maxWidth: 580 }}>
+            {lang === 'EN'
+              ? 'No signup required — bring your own API key and generate HTML / YAML / Markdown artifacts.'
+              : '无需注册，自带 API Key 即可生成 HTML / YAML / Markdown 三类 artifact。'}
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/run-session')}
+            className="sf-btn sf-btn-primary"
+            style={{ height: 46, padding: '0 26px', fontSize: 14 }}
+          >
+            {lang === 'EN' ? 'Try Skill Studio →' : '试试 Skill Studio →'}
+          </button>
+        </section>
+
         {/* ====== CTA BAND ====== */}
         <div style={{ position: 'relative', maxWidth: 1440, margin: '40px auto 0', padding: '60px 40px', textAlign: 'center', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle, rgba(168,85,247,.18), transparent 65%)', pointerEvents: 'none', filter: 'blur(30px)' }} />

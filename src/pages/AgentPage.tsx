@@ -15,7 +15,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Bot, Search } from 'lucide-react';
+import { Bot, Search, Sparkles } from 'lucide-react';
 import {
   listAgents,
   deleteAgent,
@@ -700,6 +700,7 @@ interface AgentTileProps {
 function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
   const [hover, setHover] = useState(false);
   const { t } = useI18n();
+  const navigate = useNavigate();
   const role = agentRole(agent);
   const glyph = agentGlyph(agent.name);
   const color = agentColor(agent);
@@ -715,6 +716,21 @@ function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
     e.stopPropagation();
     // TODO: i18n — agent.deleteConfirm has {name} interpolation not supported by t()
     if (window.confirm(`删除 ${agent.name}?`)) onDelete(agent.agent_id);
+  }
+
+  // Story 15.28 — Skill Studio entry. Pass agent_id (and optional skill preset
+  // from blueprint) to /run-session via query so PreparationPanel can pick up
+  // the agent context. Server-side prompt injection is out of scope for this
+  // Story; we only forward the query parameters here.
+  function handleUseInStudioClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    const skillPreset = (agent.blueprint as Record<string, unknown> | undefined)
+      ?.skill_preset as string | undefined;
+    const qs = new URLSearchParams({ agent_id: agent.agent_id });
+    if (skillPreset && typeof skillPreset === 'string' && skillPreset.length > 0) {
+      qs.set('skill_name', skillPreset);
+    }
+    navigate(`/run-session?${qs.toString()}`);
   }
 
   return (
@@ -840,6 +856,44 @@ function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
           ● {agent.status}
         </span>
         <div style={{ flex: 1 }} />
+        {/* Story 15.28 — "Use in Skill Studio" hover action. Always visible
+            on hover (not just for hired agents) so users can pre-select an
+            agent before opening Skill Studio. */}
+        {hover && !isDeleting && (
+          <button
+            type="button"
+            onClick={handleUseInStudioClick}
+            data-testid="agent-card-use-in-studio"
+            aria-label={t('skillStudio.entry.useInStudio')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 10,
+              padding: '2px 8px',
+              border: '1px solid var(--t-border)',
+              borderRadius: 4,
+              background: 'transparent',
+              color: 'var(--t-fg-3)',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--t-accent)';
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                'color-mix(in oklab, var(--t-accent) 50%, var(--t-border))';
+              (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-accent-tint)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--t-fg-3)';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-border)';
+              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            }}
+          >
+            <Sparkles size={11} strokeWidth={2} aria-hidden />
+            {t('skillStudio.entry.useInStudio')}
+          </button>
+        )}
         {hover && !isDeleting && (
           <button
             type="button"

@@ -16,6 +16,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { runSkillAssembler } from '../assembler';
 import { saveRun, type ArtifactType } from '../storage/runs';
+import { getSetting } from '../storage/settings';
 import { SKILLS } from '../skills';
 import { DESIGN_SYSTEMS } from '../design-systems';
 import { composeSystemPrompt, type LayerToggles } from '../prompt-assembly';
@@ -28,6 +29,15 @@ import {
 } from '../llm-providers';
 // Story 15.14 — auto-critique pass after artifact-saved.
 import { runCritique } from '../critic';
+// Story 15.29 — multi-turn conversation glue: validate / auto-create
+// conversation, write user + assistant messages tied to this session.
+import {
+  appendMessage,
+  createConversation,
+  getConversation,
+  getRecentMessages,
+} from '../storage/conversations';
+import { getOrCreateProject } from '../storage/projects';
 
 const router = Router();
 
@@ -59,6 +69,12 @@ interface SessionRecord {
   /** Story 15.12 interface — pre-rendered side-files block; loader to be wired by 15.12. */
   side_files?: string;
   layer_toggles?: LayerToggles;
+  /**
+   * Story 15.29 — conversation this run belongs to. Always set: when the
+   * client omits `conversation_id` we auto-create an anonymous one under
+   * the 'default' project so every run lives somewhere.
+   */
+  conversation_id?: string;
   created_at: number;
 }
 
@@ -116,6 +132,72 @@ function coerceTemperature(raw: unknown): number | undefined {
   return raw >= 0 && raw <= 1 ? raw : undefined;
 }
 
+// ── Story 15.29 — conversation history rendering ─────────────────────────
+//
+// Reads up to 20 recent messages from sqlite (ascending order — getRecentMessages
+// already does this). Excludes the trailing user message we just appended in
+// this turn (so it isn't duplicated inside the history layer AND inside the
+// goal slot). Renders a markdown block with `### User` / `### Assistant`
+// headings. Token-bloat guards:
+//   - per-message content > 1024 char → truncate + "…(truncated)" suffix
+//   - total block > 4096 char → drop oldest until under cap, preserve order
+//
+// Returns `undefined` when there is no conversation_id, no prior messages,
+// or only the single just-written user message — composeSystemPrompt then
+// drops the conversation_history layer entirely.
+const HISTORY_LIMIT = 20;
+const HISTORY_PER_MSG_MAX = 1024;
+const HISTORY_BLOCK_MAX = 4096;
+
+function renderConversationHistoryBlock(
+  conversation_id: string | undefined,
+): string | undefined {
+  if (!conversation_id) return undefined;
+  let msgs;
+  try {
+    msgs = getRecentMessages(conversation_id, HISTORY_LIMIT);
+  } catch (e) {
+    console.error('[run-sessions] getRecentMessages failed:', e);
+    return undefined;
+  }
+  // Drop the trailing user message (it IS this turn's goal — already shown
+  // to the LLM as the user message; the layer is *prior* turns).
+  if (msgs.length > 0 && msgs[msgs.length - 1].role === 'user') {
+    msgs = msgs.slice(0, -1);
+  }
+  if (msgs.length === 0) return undefined;
+
+  const renderOne = (m: { role: string; content: string }): string => {
+    const role =
+      m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System';
+    let body = m.content;
+    if (body.length > HISTORY_PER_MSG_MAX) {
+      body = body.slice(0, HISTORY_PER_MSG_MAX) + '…(truncated)';
+    }
+    return `### ${role}\n${body}`;
+  };
+
+  // Drop oldest until total fits under cap.
+  let rendered = msgs.map(renderOne);
+  let block = rendered.join('\n\n');
+  while (block.length > HISTORY_BLOCK_MAX && rendered.length > 1) {
+    rendered = rendered.slice(1);
+    block = rendered.join('\n\n');
+  }
+  // If even the most recent single message is over cap, hard-truncate it.
+  if (block.length > HISTORY_BLOCK_MAX) {
+    block = block.slice(0, HISTORY_BLOCK_MAX) + '…(truncated)';
+  }
+
+  return [
+    '## CONVERSATION HISTORY',
+    '',
+    '(Earlier turns in this conversation, oldest first. Use them as context — do not restate.)',
+    '',
+    block,
+  ].join('\n');
+}
+
 // In-memory session store (session_id → options)
 const sessionStore = new Map<string, SessionRecord>();
 
@@ -150,6 +232,8 @@ router.post('/', (req: Request, res: Response) => {
     executor,
     // Story 15.18 — optional provider selector.
     provider,
+    // Story 15.29 — optional conversation linkage. Server validates / auto-creates.
+    conversation_id,
   } = req.body as {
     goal?: string;
     skill_name?: string;
@@ -165,6 +249,7 @@ router.post('/', (req: Request, res: Response) => {
     layer_toggles?: unknown;
     executor?: unknown;
     provider?: unknown;
+    conversation_id?: unknown;
   };
 
   if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
@@ -254,6 +339,38 @@ router.post('/', (req: Request, res: Response) => {
   const validated_executor =
     typeof executor === 'string' && executor.trim().length > 0 ? executor.trim() : undefined;
 
+  // ── Story 15.29 — conversation_id validate / auto-create ─────────────────
+  // Three branches:
+  //   (a) string + exists → use it
+  //   (b) string + missing → 400 CONVERSATION_NOT_FOUND
+  //   (c) wrong type → 400 INVALID_CONVERSATION_ID
+  //   (d) undefined → auto-create anonymous conversation under 'default' project
+  let validated_conversation_id: string;
+  if (typeof conversation_id === 'string') {
+    if (!getConversation(conversation_id)) {
+      res.status(400).json({
+        error: {
+          code: 'CONVERSATION_NOT_FOUND',
+          message: `conversation ${conversation_id} not found`,
+        },
+      });
+      return;
+    }
+    validated_conversation_id = conversation_id;
+  } else if (conversation_id !== undefined) {
+    res.status(400).json({
+      error: {
+        code: 'INVALID_CONVERSATION_ID',
+        message: 'conversation_id must be a string when provided',
+      },
+    });
+    return;
+  } else {
+    const project = getOrCreateProject('default', 'Default Project');
+    const conv = createConversation(project.project_id);
+    validated_conversation_id = conv.conversation_id;
+  }
+
   const session_id = uuidv4();
   sessionStore.set(session_id, {
     goal: goal.trim(),
@@ -272,6 +389,7 @@ router.post('/', (req: Request, res: Response) => {
     side_files: validated_side_files,
     layer_toggles: validated_layer_toggles,
     executor: validated_executor,
+    conversation_id: validated_conversation_id,
     created_at: Date.now(),
   });
 
@@ -291,6 +409,9 @@ router.post('/', (req: Request, res: Response) => {
   res.status(201).json({
     session_id,
     stream_url: `/api/run-sessions/${session_id}/stream`,
+    // Story 15.29 — always echo back; client may have omitted (auto-created
+    // anonymous conv). Front-end stores this so the next visit auto-selects it.
+    conversation_id: validated_conversation_id,
   });
 });
 
@@ -345,6 +466,33 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   } = { type: null, filename: null, url: null };
   let sawError = false;
   let sawComplete = false;
+  // Story 15.29 — collect text deltas + the most recent error message so the
+  // finally block can synthesize a useful assistant message. We don't store
+  // a full transcript (cap at 4 KB, only used when no artifact / error fires).
+  let collectedStreamText = '';
+  let lastErrorMessage: string | null = null;
+  // Story 15.29 — stable run_id used by both saveRun() and the assistant
+  // message. Mirrors the legacy `run-${session_id.slice(0, 8)}` shape.
+  const persistedRunId = `run-${id.slice(0, 8)}`;
+
+  // Story 15.29 — write user message at stream start. We do this before
+  // runSkillAssembler so chat history is consistent even if the LLM call
+  // immediately fails (NO_API_KEY, etc.). Failure to write must NOT crash
+  // the stream (try/catch + console.error per spec AC5).
+  if (session.conversation_id) {
+    try {
+      appendMessage(session.conversation_id, {
+        role: 'user',
+        content: session.goal,
+        run_id: null, // run_id is not yet known at user-message time
+      });
+    } catch (e) {
+      console.error(
+        `[run-sessions] failed to write user message for session ${id}:`,
+        e,
+      );
+    }
+  }
 
   // Story 15.13 — multi-layer prompt assembly. Replaces the 15.5 manual
   // `skill + ds.injection` concat. Order: discovery → identity → ds → skill
@@ -357,11 +505,26 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   const sideFilesAuto = session.side_files
     ? { prompt: session.side_files, files: [], truncated: false }
     : loadSkillSideFiles(session.skill_name);
+  // Story 15.29 — render conversation history block from sqlite. We exclude the
+  // user message we just wrote above (created_at is monotonic ascending so the
+  // very last row is "this turn's goal" — repeating it inside the history layer
+  // is duplicative). Truncate single assistant content > 1024 char and cap the
+  // total injected block at 4096 char (drop oldest first) to keep the prompt
+  // sane regardless of conversation length.
+  const conversationHistoryBlock = renderConversationHistoryBlock(
+    session.conversation_id,
+  );
+  if (conversationHistoryBlock) {
+    console.log(
+      `[run-sessions] injecting conversation_history (chars=${conversationHistoryBlock.length})`,
+    );
+  }
   const compose = composeSystemPrompt({
     ds_injection: ds?.injection_prompt,
     skill_system_prompt: skillForPrompt?.system_prompt,
     skill_mode: skillForPrompt?.mode,
     project_meta: session.project_meta ?? null,
+    conversation_history: conversationHistoryBlock,
     side_files: sideFilesAuto.prompt || undefined,
     layer_toggles: session.layer_toggles,
   });
@@ -419,8 +582,23 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
         }
       } else if (event === 'error') {
         sawError = true;
+        // Story 15.29 — capture error message for the assistant message.
+        if (data && typeof data === 'object') {
+          const d = data as { message?: unknown };
+          if (typeof d.message === 'string') lastErrorMessage = d.message;
+        }
       } else if (event === 'complete') {
         sawComplete = true;
+      } else if (event === 'token' || event === 'text-delta') {
+        // Story 15.29 — collect a slim transcript so the finally block has
+        // *something* to write back when no artifact fires (e.g. answer mode).
+        // Hard-cap at 4 KB to bound memory.
+        if (collectedStreamText.length < 4096 && data && typeof data === 'object') {
+          const d = data as { text?: unknown };
+          if (typeof d.text === 'string') {
+            collectedStreamText = (collectedStreamText + d.text).slice(0, 4096);
+          }
+        }
       }
     }
   } catch (err) {
@@ -440,11 +618,17 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     // We run critique BEFORE res.end() so the front-end can subscribe to the
     // critique-progress / critique-result events on the same SSE stream.
     // Critique failure NEVER breaks the main flow (saveRun + res.end still run).
+    // 2026-05-11 review F4 (15.14 AC6): server-side opt-out from settings.json.
+    // sf.auto_critique 默认 true（保留原行为）；用户可 PUT /api/settings/sf.auto_critique
+    // false 跳过 critic 调用，节省 BYOK token。UI toggle 留 follow-up Story。
+    const autoCritique = getSetting('sf.auto_critique');
+    const critiqueEnabled = autoCritique === undefined || autoCritique === true;
     if (
       sawComplete &&
       !abortController.signal.aborted &&
       artifactInfo.filename &&
-      !res.writableEnded
+      !res.writableEnded &&
+      critiqueEnabled
     ) {
       try {
         const userGoal = session.goal;
@@ -460,7 +644,10 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
             filename: artifactInfo.filename,
             user_goal: userGoal,
             expected_steps: expectedSteps,
-            anthropic_key: session.anthropic_key,
+            // 2026-05-11 review F1: 真功能 bug 修复 — sessionStore 字段是 `api_key`
+            // (15.18 multi-provider 改名后)，非 `anthropic_key`。原代码读 undefined →
+            // BYOK 用户的 critique 永远走 env fallback，无 env 时立刻 NO_API_KEY 降级。
+            anthropic_key: session.api_key,
           },
           (stage, message) => sendEvent('critique-progress', { stage, message }),
         );
@@ -503,7 +690,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       try {
         const skill = SKILLS[session.skill_name];
         saveRun({
-          run_id: `run-${id.slice(0, 8)}`,
+          run_id: persistedRunId,
           session_id: id,
           goal: session.goal,
           skill_name: session.skill_name,
@@ -520,6 +707,49 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
         // Don't fail the response just because we couldn't persist the
         // run record — the SSE stream is already over. Log and move on.
         console.error(`[run-sessions] saveRun failed for session ${id}:`, persistErr);
+      }
+    }
+
+    // ── Story 15.29 — write assistant message to conversation log ─────────
+    // Always run (even on client abort) so the chat timeline is complete.
+    // Content priority:
+    //   1. artifact preview ("[Generated artifact: <filename>]")
+    //   2. collected stream text (1st 1024 chars)
+    //   3. abort marker
+    //   4. error marker
+    //   5. empty fallback
+    // Writing failure NEVER reaches the client (try/catch + console.error).
+    if (session.conversation_id) {
+      let summary: string;
+      if (artifactInfo.filename) {
+        summary = `[Generated artifact: ${artifactInfo.filename}]`;
+      } else if (collectedStreamText.trim().length > 0) {
+        summary = collectedStreamText.slice(0, 1024);
+        if (collectedStreamText.length > 1024) summary += '…(truncated)';
+      } else if (abortController.signal.aborted) {
+        summary = '[run aborted by user]';
+      } else if (sawError) {
+        summary = lastErrorMessage
+          ? `[run failed: ${lastErrorMessage}]`
+          : '[run failed]';
+      } else {
+        summary = '[run completed without artifact]';
+      }
+      try {
+        appendMessage(session.conversation_id, {
+          role: 'assistant',
+          content: summary,
+          // Only attach run_id when saveRun actually ran (terminated runs).
+          run_id:
+            !abortController.signal.aborted && (sawComplete || sawError)
+              ? persistedRunId
+              : null,
+        });
+      } catch (e) {
+        console.error(
+          `[run-sessions] failed to write assistant message for session ${id}:`,
+          e,
+        );
       }
     }
   }

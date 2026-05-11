@@ -27,6 +27,8 @@ import { useI18n } from '../common/i18n';
 import { ArtifactPreview } from '../components/ArtifactPreview';
 import { SkillPicker } from '../components/SkillPicker';
 import { DesignSystemPicker } from '../components/DesignSystemPicker';
+// Story 15.29 — Conversation linkage UI in PreparationPanel.
+import { ConversationPicker } from '../components/ConversationPicker';
 import { createRunSession } from '../api/runSessions';
 // Story 15.14 — 5+1 维质量自检雷达图（生成完后挂在右栏底部）
 import { CritiqueResult } from '../components/CritiqueResult';
@@ -1678,6 +1680,13 @@ function PreparationPanel() {
   const [goal, setGoal] = useState<string>(searchParams.get('goal') ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Story 15.29 — selected Conversation. URL `?conversation_id=` takes priority
+  // (so a "back to prep" round-trip auto-selects the previous conversation),
+  // otherwise undefined → "Untitled / start fresh" → server auto-creates a new
+  // anonymous conversation under the 'default' project.
+  const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>(
+    () => searchParams.get('conversation_id') ?? undefined,
+  );
 
   const canSubmit = goal.trim().length > 0 && !submitting;
 
@@ -1705,10 +1714,17 @@ function PreparationPanel() {
         // Only send DS when the skill actually supports one beyond 'none' —
         // avoids leaking stale state from a previous skill selection.
         design_system_id: skillSupportsDS ? dsId : undefined,
+        // Story 15.29 — link to selected conversation; server auto-creates an
+        // anonymous one when undefined and echoes the id back so we can
+        // forward it through the URL so a future "back to prep" round-trip
+        // auto-selects the same Conversation (AC8 step 3).
+        conversation_id: selectedConversationId,
       });
-      navigate(
-        `/run-session/${resp.session_id}?goal=${encodeURIComponent(goal.trim())}`,
-      );
+      const cid = resp.conversation_id ?? selectedConversationId;
+      const qs = new URLSearchParams();
+      qs.set('goal', goal.trim());
+      if (cid) qs.set('conversation_id', cid);
+      navigate(`/run-session/${resp.session_id}?${qs.toString()}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : '启动失败');
       setSubmitting(false);
@@ -1744,6 +1760,15 @@ function PreparationPanel() {
             选择执行 Skill 并描述你的目标，系统会用对应的专业角色规划执行。
           </p>
         </div>
+
+        {/* Story 15.29 — Conversation picker. Shown at the top so users see
+            it before drilling into Skill / DS choices. */}
+        <ConversationPicker
+          projectId="default"
+          selectedId={selectedConversationId}
+          onChange={setSelectedConversationId}
+          disabled={submitting}
+        />
 
         <div>
           <h3 style={{ fontSize: 12, color: 'var(--t-fg-3)', margin: '0 0 12px', fontWeight: 500 }}>

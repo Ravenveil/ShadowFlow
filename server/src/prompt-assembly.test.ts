@@ -56,13 +56,23 @@ function main(): void {
     },
     side_files: '## SIDE FILES\n\n- references/brand.md',
   });
-  check('7 layers included when all data present', full.layers_included.length === 7);
+  // Story 15.29: 8 layers when conversation_history is also supplied; this
+  // assertion stays at 7 because `full` does not provide conversation_history.
+  check('7 layers included when all (non-history) data present', full.layers_included.length === 7);
+  // Story 15.29: with no conversation_history input, that single layer is
+  // dropped — the remaining 7 must still appear in canonical order.
   check(
-    'layers_included matches canonical order',
-    JSON.stringify(full.layers_included) === JSON.stringify(LAYER_ORDER),
+    'layers_included matches canonical order (minus conversation_history)',
+    JSON.stringify(full.layers_included) ===
+      JSON.stringify(LAYER_ORDER.filter((k) => k !== 'conversation_history')),
     full.layers_included,
   );
-  check('layers_skipped is empty when all present', full.layers_skipped.length === 0);
+  check(
+    'layers_skipped is just conversation_history when no history input',
+    full.layers_skipped.length === 1 &&
+      full.layers_skipped[0] === 'conversation_history',
+    full.layers_skipped,
+  );
   check('framework label = "deck" for deck mode', full.framework === 'deck');
   check('total_chars matches prompt.length', full.total_chars === full.prompt.length);
   check('prompt starts with DISCOVERY charter', full.prompt.startsWith(DISCOVERY_CHARTER));
@@ -84,9 +94,9 @@ function main(): void {
     'prompt contains Framework directive (PPTX)',
     full.prompt.includes('PPTX-COMPATIBLE DECK'),
   );
-  // 7 layers → 6 separators
+  // Story 15.29: 7 included layers (no history input) → 6 separators
   const sepCount = full.prompt.split(LAYER_SEPARATOR).length - 1;
-  check('exactly 6 separators between 7 layers', sepCount === 6, `got ${sepCount}`);
+  check('exactly 6 separators between 7 included layers', sepCount === 6, `got ${sepCount}`);
 
   // Layer ORDER verification: walk indexOf for each layer marker
   const idxDiscovery = full.prompt.indexOf('## DISCOVERY MODE');
@@ -157,6 +167,8 @@ function main(): void {
   check('skill included', sparse.layers_included.includes('skill'));
   check('ds skipped', sparse.layers_skipped.includes('ds'));
   check('project skipped', sparse.layers_skipped.includes('project'));
+  // Story 15.29: history skipped when input.conversation_history not supplied.
+  check('conversation_history skipped', sparse.layers_skipped.includes('conversation_history'));
   check('sides skipped', sparse.layers_skipped.includes('sides'));
   check('framework skipped (prototype mode)', sparse.layers_skipped.includes('framework'));
   // Critical: no orphan separator / blank line where empty layers used to be.
@@ -229,11 +241,12 @@ function main(): void {
     },
   });
   check('all-off → 0 included layers', allOff.layers_included.length === 0);
-  check('all-off → 7 skipped layers', allOff.layers_skipped.length === 7);
+  // Story 15.29: 8 layers total (7 + conversation_history)
+  check('all-off → 8 skipped layers', allOff.layers_skipped.length === 8);
   check('all-off → empty prompt', allOff.prompt === '');
   check('all-off → total_chars 0', allOff.total_chars === 0);
 
-  console.log('\n[8] included + skipped partition all 7 layers (any input)');
+  console.log('\n[8] included + skipped partition all 8 layers (any input)');
   const partition = composeSystemPrompt({
     ds_injection: '',
     skill_system_prompt: 'X',
@@ -242,7 +255,7 @@ function main(): void {
   const allKeys = [...partition.layers_included, ...partition.layers_skipped].sort();
   const expected = [...LAYER_ORDER].sort();
   check(
-    'included ∪ skipped = canonical 7 keys',
+    'included ∪ skipped = canonical 8 keys',
     JSON.stringify(allKeys) === JSON.stringify(expected),
     { allKeys, expected },
   );
@@ -261,7 +274,7 @@ function main(): void {
     // layer_toggles intentionally omitted
   });
   check(
-    'undefined toggles → 7 layers',
+    'undefined toggles → 7 layers (no conversation_history input)',
     defaultToggles.layers_included.length === 7,
     defaultToggles.layers_included,
   );
@@ -286,6 +299,107 @@ function main(): void {
   check(
     'event has no prompt text leak (no `prompt` field)',
     !('prompt' in event),
+  );
+
+  // ── Story 15.29 — conversation_history layer ─────────────────────────────
+  console.log('\n[11] Story 15.29 — conversation_history layer');
+
+  // 11a — LAYER_ORDER constant has 8 keys in canonical order
+  const expectedOrder = [
+    'discovery',
+    'identity',
+    'ds',
+    'skill',
+    'project',
+    'conversation_history',
+    'sides',
+    'framework',
+  ];
+  check(
+    'LAYER_ORDER has 8 keys with conversation_history at slot 6',
+    JSON.stringify([...LAYER_ORDER]) === JSON.stringify(expectedOrder),
+    [...LAYER_ORDER],
+  );
+
+  // 11b — conversation_history is inserted between project and sides
+  const withHistory = composeSystemPrompt({
+    skill_system_prompt: '## Skill: X',
+    project_meta: { kind: 'webpage' },
+    conversation_history:
+      '## CONVERSATION HISTORY\n\n### User\n做一个网页\n\n### Assistant\n好的',
+    side_files: '## SIDE FILES\n\n<snippet>',
+  });
+  check(
+    'conversation_history is in layers_included',
+    withHistory.layers_included.includes('conversation_history'),
+    withHistory.layers_included,
+  );
+  const idxProject2 = withHistory.layers_included.indexOf('project');
+  const idxHistory2 = withHistory.layers_included.indexOf('conversation_history');
+  const idxSides2 = withHistory.layers_included.indexOf('sides');
+  check(
+    'project < conversation_history < sides in layers_included',
+    idxProject2 >= 0 && idxProject2 < idxHistory2 && idxHistory2 < idxSides2,
+    { idxProject2, idxHistory2, idxSides2 },
+  );
+  check(
+    'rendered prompt contains the history block text',
+    withHistory.prompt.includes('做一个网页'),
+  );
+  check(
+    'rendered prompt: project block precedes history precedes sides',
+    withHistory.prompt.indexOf('## PROJECT META') <
+      withHistory.prompt.indexOf('做一个网页') &&
+      withHistory.prompt.indexOf('做一个网页') <
+        withHistory.prompt.indexOf('## SIDE FILES'),
+  );
+
+  // 11c — empty / missing conversation_history → drop the layer
+  const noHistory = composeSystemPrompt({
+    skill_system_prompt: 'X',
+    skill_mode: 'prototype',
+  });
+  check(
+    'no history input → conversation_history in layers_skipped',
+    noHistory.layers_skipped.includes('conversation_history'),
+  );
+  check(
+    'no history input → conversation_history NOT in layers_included',
+    !noHistory.layers_included.includes('conversation_history'),
+  );
+
+  // 11d — toggle off explicitly drops the layer even when content present
+  const toggledOff = composeSystemPrompt({
+    skill_system_prompt: 'X',
+    conversation_history: '## CONVERSATION HISTORY\n\n### User\nHELLO',
+    layer_toggles: { conversation_history: false },
+  });
+  check(
+    'toggle off → conversation_history dropped despite content',
+    toggledOff.layers_skipped.includes('conversation_history') &&
+      !toggledOff.prompt.includes('HELLO'),
+  );
+
+  // 11e — pure-whitespace conversation_history is treated as empty
+  const whitespaceHistory = composeSystemPrompt({
+    skill_system_prompt: 'X',
+    conversation_history: '   \n\n  \t  \n',
+  });
+  check(
+    'pure-whitespace history is dropped',
+    whitespaceHistory.layers_skipped.includes('conversation_history'),
+  );
+
+  // 11f — when only conversation_history + skill present, total layers = 3
+  // (discovery + identity + skill are charters that always render)
+  const minimalWithHistory = composeSystemPrompt({
+    skill_system_prompt: 'SKILL',
+    conversation_history: '## CONVERSATION HISTORY\n\n### User\nA',
+  });
+  check(
+    'minimal + history → 4 included layers (discovery+identity+skill+history)',
+    minimalWithHistory.layers_included.length === 4,
+    minimalWithHistory.layers_included,
   );
 
   // ── Summary ───────────────────────────────────────────────────────────────

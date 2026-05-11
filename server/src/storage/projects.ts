@@ -157,6 +157,58 @@ export function updateProject(
   return merged;
 }
 
+/**
+ * Story 15.29 — getOrCreateProject(id, name)
+ *
+ * Find a project by exact `project_id`; if missing, insert a row with that
+ * literal id (instead of the random UUID `createProject` uses) and the given
+ * display name. Used by run-sessions.ts to ensure a `'default'` project
+ * exists as the home for anonymous conversations created when a client
+ * starts a RunSession without an explicit `conversation_id`.
+ *
+ * Idempotent: repeat calls return the existing row.
+ */
+export function getOrCreateProject(
+  project_id: string,
+  name: string,
+): ProjectRecord {
+  const existing = getProject(project_id);
+  if (existing) return existing;
+
+  const now = new Date().toISOString();
+  const workspace_path = path.join(
+    process.cwd(),
+    '.shadowflow',
+    'projects',
+    project_id,
+  );
+  try {
+    fs.mkdirSync(workspace_path, { recursive: true });
+  } catch (err) {
+    console.warn(
+      `[projects] could not create workspace dir ${workspace_path}: ${(err as Error).message}`,
+    );
+  }
+
+  getDb()
+    .prepare(
+      `INSERT INTO projects
+       (project_id, name, workspace_path, skill_id, design_system_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(project_id, name, workspace_path, null, null, now, now);
+
+  return {
+    project_id,
+    name,
+    workspace_path,
+    skill_id: null,
+    design_system_id: null,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
 /** Returns true if a row was deleted (FK CASCADE handles dependents). */
 export function deleteProject(id: string): boolean {
   const info = getDb()
