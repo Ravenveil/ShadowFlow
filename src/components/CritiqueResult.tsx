@@ -27,7 +27,17 @@ const BASE_AXES: Axis[] = [
   { key: 'anti_pattern_free', label: 'Anti-pattern' },
 ];
 
-export function CritiqueResult({ result }: Props): React.ReactElement {
+export function CritiqueResult({ result }: Props): React.ReactElement | null {
+  // 2026-05-11 Story 15.30 follow-up — Silent skip for CRITIQUE_NO_API_KEY.
+  // critique 当前只走 Anthropic Direct（critic.ts 用 fetch 调 messages API），
+  // CLI 模式（cli:auto / cli:claude / etc）下天然无 BYOK key，弹"质量自检
+  // 不可用"黄 banner 反而让用户以为坏了。把 NO_API_KEY 当作配置选择而非故障，
+  // 静默跳过（用户主流程不受影响）。其他真故障（API_ERROR / PARSE_FAILED /
+  // FAILED）仍展示降级 banner 以便排查。
+  if (result.error_code === 'CRITIQUE_NO_API_KEY') {
+    return null;
+  }
+
   // Failure state — degrade gracefully without rendering radar.
   if (!result.scores) {
     return (

@@ -75,6 +75,13 @@ interface SessionRecord {
    * the 'default' project so every run lives somewhere.
    */
   conversation_id?: string;
+  /**
+   * Story 15.14 follow-up 2026-05-11 — per-request auto_critique override
+   * from the UI toggle. When `false` the finally{} block skips the critique
+   * pass. When `undefined` the server falls back to settings.json (default
+   * true to preserve current behavior).
+   */
+  auto_critique?: boolean;
   created_at: number;
 }
 
@@ -243,6 +250,8 @@ router.post('/', (req: Request, res: Response) => {
     provider,
     // Story 15.29 — optional conversation linkage. Server validates / auto-creates.
     conversation_id,
+    // Story 15.14 follow-up — body-level auto_critique override (UI toggle).
+    auto_critique,
   } = req.body as {
     goal?: string;
     skill_name?: string;
@@ -259,6 +268,7 @@ router.post('/', (req: Request, res: Response) => {
     executor?: unknown;
     provider?: unknown;
     conversation_id?: unknown;
+    auto_critique?: unknown;
   };
 
   if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
@@ -399,6 +409,7 @@ router.post('/', (req: Request, res: Response) => {
     layer_toggles: validated_layer_toggles,
     executor: validated_executor,
     conversation_id: validated_conversation_id,
+    auto_critique: typeof auto_critique === 'boolean' ? auto_critique : undefined,
     created_at: Date.now(),
   });
 
@@ -421,6 +432,62 @@ router.post('/', (req: Request, res: Response) => {
     // Story 15.29 — always echo back; client may have omitted (auto-created
     // anonymous conv). Front-end stores this so the next visit auto-selects it.
     conversation_id: validated_conversation_id,
+  });
+});
+
+// ── POST /api/run-sessions/:id/messages ──────────────────────────────────────
+//
+// Follow-up turn within an existing run-session's conversation. Each follow-up
+// becomes a NEW run session that **inherits all settings** from the source
+// (skill_name / DS / provider / BYOK key / model overrides / conversation_id),
+// only the `goal` is replaced with the new user message.
+//
+// Story 15.29 prompt-assembly auto-pulls conversation history via the
+// `conversation_id` layer, so the LLM sees prior turns as context — no
+// extra wiring needed here.
+//
+// Returns the SAME envelope shape as POST /api/run-sessions so the front-end
+// can just open a new EventSource on the returned stream_url.
+router.post('/:id/messages', (req: Request, res: Response) => {
+  const sourceId = req.params.id;
+  const source = sessionStore.get(sourceId);
+  if (!source) {
+    res.status(404).json({
+      error: { code: 'SESSION_NOT_FOUND', message: `Run session ${sourceId} not found` },
+    });
+    return;
+  }
+
+  const body = (req.body ?? {}) as { content?: unknown; goal?: unknown };
+  // Accept either `content` (chat-style payload that the RunSessionPage send box
+  // uses) or `goal` (mirrors POST /api/run-sessions). content wins when both
+  // are present so the chat UX is unambiguous.
+  const raw = typeof body.content === 'string' ? body.content : typeof body.goal === 'string' ? body.goal : '';
+  const content = raw.trim();
+  if (!content) {
+    res.status(400).json({
+      error: { code: 'EMPTY_CONTENT', message: 'content (or goal) must be a non-empty string' },
+    });
+    return;
+  }
+
+  const new_session_id = uuidv4();
+  sessionStore.set(new_session_id, {
+    ...source,
+    goal: content,
+    // Reset created_at so the 1h-cleanup window restarts for the follow-up turn.
+    created_at: Date.now(),
+  });
+
+  console.log(
+    `[run-sessions] Follow-up message: source=${sourceId} → new=${new_session_id} ` +
+      `conversation=${source.conversation_id ?? '(none)'} content="${content.slice(0, 60)}"`,
+  );
+
+  res.status(201).json({
+    session_id: new_session_id,
+    stream_url: `/api/run-sessions/${new_session_id}/stream`,
+    conversation_id: source.conversation_id,
   });
 });
 
@@ -629,8 +696,16 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     // Critique failure NEVER breaks the main flow (saveRun + res.end still run).
     // 2026-05-11 review F4 (15.14 AC6): server-side opt-out from settings.json.
     // sf.auto_critique 默认 true（保留原行为）；用户可 PUT /api/settings/sf.auto_critique
-    // false 跳过 critic 调用，节省 BYOK token。UI toggle 留 follow-up Story。
-    const autoCritique = getSetting('sf.auto_critique');
+    // false 跳过 critic 调用，节省 BYOK token。
+    // 2026-05-11 follow-up — also honor per-request `body.auto_critique` so the
+    // front-end GenerationSettings toggle (writes localStorage, forwarded via
+    // createRunSession body) takes effect WITHOUT needing a settings.json
+    // PUT round-trip. Body wins over server settings when explicit.
+    const sessionAutoCritique = (session as unknown as Record<string, unknown>).auto_critique;
+    const autoCritique =
+      typeof sessionAutoCritique === 'boolean'
+        ? sessionAutoCritique
+        : getSetting('sf.auto_critique');
     const critiqueEnabled = autoCritique === undefined || autoCritique === true;
     if (
       sawComplete &&

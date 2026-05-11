@@ -12,7 +12,7 @@
  */
 import React, { useState, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Check, Circle, X, ExternalLink, Key } from 'lucide-react';
+import { Check, Circle, ExternalLink, Key, Paperclip, Settings, Cpu } from 'lucide-react';
 import { useRunSession } from '../core/hooks/useRunSession';
 import type { RunSessionNode, RunSessionEdge, RunSessionStep } from '../core/hooks/useRunSession';
 import {
@@ -707,7 +707,7 @@ function BlueprintCanvas({ session, zoom, onZoomChange, selectedNodeId, onSelect
 // ---------------------------------------------------------------------------
 // Right panel tab type
 // ---------------------------------------------------------------------------
-type RightTab = 'team' | 'agent' | 'overview';
+type RightTab = 'team' | 'agent' | 'overview' | 'preview';
 
 // ---------------------------------------------------------------------------
 // Right panel — full panel wrapper with toolbar
@@ -725,23 +725,28 @@ interface RightPanelProps {
 
 function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId, onSelectNode, sessionId }: RightPanelProps) {
   const filename = session.blueprintFile ?? 'untitled.yml';
-  const [rightTab, setRightTab] = useState<RightTab>('team');
+  const [rightTab, setRightTab] = useState<RightTab>('overview');
 
-  // Story 15.3 — Outer panel mode: 'canvas' (BlueprintCanvas + sub-tabs) vs
-  // 'preview' (ArtifactPreview iframe / pre). Auto-switches to 'preview' when
-  // useRunSession reducer sets state.activePanel='preview' on BLUEPRINT event.
-  const [panelMode, setPanelMode] = useState<'canvas' | 'preview'>('canvas');
+  // Auto-switch to 'preview' tab when artifact becomes available (Story 15.3)
   const lastActivePanelRef = useRef<typeof session.activePanel>(session.activePanel);
   React.useEffect(() => {
     if (session.activePanel !== lastActivePanelRef.current) {
       lastActivePanelRef.current = session.activePanel;
       if (session.activePanel === 'preview' && session.artifactUrl) {
-        setPanelMode('preview');
+        setRightTab('preview');
       }
     }
   }, [session.activePanel, session.artifactUrl]);
 
   const previewAvailable = !!session.artifactUrl;
+
+  // Derive tab list — preview only appears when artifact available
+  const rightTabs: { key: RightTab; label: string; count?: number }[] = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'team', label: 'Team', count: session.nodes.length > 0 ? session.nodes.length : undefined },
+    { key: 'agent', label: 'Agent', count: session.nodes.filter(n => n.type === 'agent').length || undefined },
+    ...(previewAvailable ? [{ key: 'preview' as RightTab, label: 'Preview' }] : []),
+  ];
 
   return (
     <section
@@ -752,26 +757,47 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
         overflow: 'hidden',
       }}
     >
-      {/* Toolbar */}
+      {/* Single combined toolbar — browser-tab style */}
       <div
         style={{
           height: 44,
           background: 'var(--t-panel)',
           borderBottom: '1px solid var(--t-border)',
           display: 'flex',
-          alignItems: 'center',
-          padding: '0 16px',
-          gap: 12,
+          alignItems: 'flex-end',
           flexShrink: 0,
+          position: 'relative',
+          paddingRight: 16,
         }}
       >
-        {/* Left: BLUEPRINT / filename / badge */}
+        {/* View tabs (left, sit on the border) */}
+        <div style={{ display: 'inline-flex', alignItems: 'flex-end' }}>
+          {rightTabs.map(({ key, label, count }) => (
+            <button
+              key={key}
+              type="button"
+              className={`rs-view-tab${rightTab === key ? ' rs-view-tab-on' : ''}`}
+              onClick={() => setRightTab(key)}
+            >
+              {label}
+              {count !== undefined && (
+                <span className="rs-view-tab-ct">{count}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* File tab (center-left) */}
         <div
           style={{
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: 8,
-            flex: 1,
+            gap: 7,
+            marginLeft: 12,
+            paddingLeft: 12,
+            borderLeft: '1px solid var(--t-border)',
+            alignSelf: 'center',
+            flexShrink: 1,
             minWidth: 0,
           }}
         >
@@ -781,83 +807,42 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
               fontSize: 10,
               fontWeight: 700,
               letterSpacing: '.12em',
-              color: 'var(--t-fg-4)',
               textTransform: 'uppercase',
+              color: 'var(--t-fg-4)',
               flexShrink: 0,
             }}
           >
-            BLUEPRINT
+            Blueprint
           </span>
-          <span style={{ color: 'var(--t-border-2)', fontSize: 12, flexShrink: 0 }}>/</span>
           <span
             style={{
               fontFamily: 'var(--font-mono, monospace)',
-              fontSize: 11,
+              fontSize: 10.5,
+              letterSpacing: '.04em',
               color: 'var(--t-fg-3)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              flex: 1,
             }}
           >
             {filename}
           </span>
-          {!session.isComplete && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '2px 8px',
-                borderRadius: 999,
-                background: 'var(--t-accent-tint)',
-                border: '1px solid var(--t-accent)',
-                fontSize: 10,
-                color: 'var(--t-accent-bright)',
-                fontFamily: 'var(--font-mono, monospace)',
-                flexShrink: 0,
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: 'var(--t-accent)',
-                  animation: 'rs-pulse 1.4s ease-in-out infinite',
-                }}
-              />
-              构建中…
-            </span>
-          )}
         </div>
 
-        {/* Right: icon buttons + actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <button
-            type="button"
-            title="Fit to screen"
-            style={toolbarIconBtn}
-          >
-            ⊡
-          </button>
-          <button
-            type="button"
-            title="Toggle split"
-            style={toolbarIconBtn}
-          >
-            ⇄
-          </button>
+        {/* Status tag */}
+        {!session.isComplete && (
+          <span className="rs-tag" style={{ marginLeft: 10, alignSelf: 'center', flexShrink: 0 }}>
+            <span className="rs-tag-dot" />
+            构建中…
+          </span>
+        )}
+
+        {/* Right tool buttons */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'center' }}>
+          <button type="button" title="Fit to screen" style={toolbarIconBtn}>⊡</button>
+          <button type="button" title="Toggle split" style={toolbarIconBtn}>⇄</button>
           <div style={{ width: 1, height: 16, background: 'var(--t-border)' }} />
-          <button
-            type="button"
-            style={{
-              ...toolbarBtn,
-              color: 'var(--t-fg-3)',
-            }}
-          >
-            查看 YAML
-          </button>
+          <button type="button" style={{ ...toolbarBtn, color: 'var(--t-fg-3)' }}>查看 YAML</button>
           <button
             type="button"
             onClick={session.isComplete ? onOpenEditor : undefined}
@@ -865,7 +850,7 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
             style={{
               ...toolbarBtn,
               background: session.isComplete ? 'var(--t-accent-tint)' : 'transparent',
-              color: session.isComplete ? 'var(--t-accent-bright)' : 'var(--t-border-2)',
+              color: session.isComplete ? 'var(--t-accent-bright)' : 'var(--t-fg-5)',
               border: `1px solid ${session.isComplete ? 'var(--t-accent)' : 'var(--t-border)'}`,
               cursor: session.isComplete ? 'pointer' : 'not-allowed',
             }}
@@ -876,63 +861,13 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
         </div>
       </div>
 
-      {/* Story 15.3 — Outer mode switcher: Blueprint Canvas vs Artifact Preview.
-          Disabled "Artifact 预览" until backend emits artifact_url via blueprint SSE event. */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 4,
-          padding: '6px 16px',
-          borderBottom: '1px solid var(--t-border)',
-          flexShrink: 0,
-          background: 'var(--t-panel)',
-        }}
-      >
-        {([
-          { key: 'canvas', label: '蓝图画布', enabled: true },
-          { key: 'preview', label: 'Artifact 预览', enabled: previewAvailable },
-        ] as const).map(({ key, label, enabled }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => enabled && setPanelMode(key)}
-            disabled={!enabled}
-            data-testid={`panel-mode-${key}`}
-            data-active={panelMode === key}
-            style={{
-              height: 26,
-              padding: '0 12px',
-              borderRadius: 6,
-              fontSize: 12,
-              fontWeight: 600,
-              background: panelMode === key ? 'var(--t-accent-tint)' : 'transparent',
-              color: panelMode === key
-                ? 'var(--t-accent-bright)'
-                : enabled ? 'var(--t-fg-3)' : 'var(--t-fg-5)',
-              border: panelMode === key
-                ? '1px solid rgba(168,85,247,.3)'
-                : '1px solid transparent',
-              cursor: enabled ? 'pointer' : 'not-allowed',
-              opacity: enabled ? 1 : 0.5,
-              fontFamily: 'inherit',
-              transition: 'background 120ms ease, color 120ms ease',
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {panelMode === 'preview' && session.artifactUrl ? (
+      {/* Content area — keyed on tab */}
+      {rightTab === 'preview' && session.artifactUrl ? (
         <ArtifactPreview
           url={session.artifactUrl}
           type={session.artifactType}
           content={session.blueprintYaml ?? ''}
           sessionId={sessionId}
-          // artifact_url shape: /projects/<session_id>/<filename>
-          // 2026-05-10 review M (15.6): URL parsing 取最后段，跨平台安全（避免
-          // Windows 下若 artifactUrl 含 `\` 时 split('/') 失效）。OpenDesign
-          // 用 URL/posix 思路；这里直接用 URL.pathname 对 forward-slash 安全。
           filename={(() => {
             try {
               const u = new URL(session.artifactUrl, window.location.origin);
@@ -944,173 +879,143 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
           })()}
           isComplete={session.isComplete}
         />
-      ) : (
-        <>
-          {/* Sub-tab bar (Team / Agent / Overview) — only visible in canvas mode */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 2,
-              padding: '6px 16px',
-              borderBottom: '1px solid var(--t-border)',
-              flexShrink: 0,
-            }}
-          >
-            {(['team', 'agent', 'overview'] as RightTab[]).map(tab => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setRightTab(tab)}
-                style={{
-                  height: 26,
-                  padding: '0 10px',
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  background: rightTab === tab ? 'var(--t-accent-tint)' : 'transparent',
-                  color: rightTab === tab ? 'var(--t-accent-bright)' : 'var(--t-fg-3)',
-                  border: rightTab === tab ? '1px solid rgba(168,85,247,.3)' : '1px solid transparent',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  transition: 'background 120ms ease, color 120ms ease',
-                }}
-              >
-                {tab === 'team' ? 'Team' : tab === 'agent' ? 'Agent' : 'Overview'}
-              </button>
-            ))}
-          </div>
-
-          {/* Team tab — Blueprint Canvas */}
-          {rightTab === 'team' && (
-            <BlueprintCanvas
-              session={session}
-              zoom={zoom}
-              onZoomChange={onZoomChange}
-              selectedNodeId={selectedNodeId}
-              onSelectNode={onSelectNode}
-            />
-          )}
-
-      {/* Agent tab — selected node details */}
-      {rightTab === 'agent' && (
+      ) : rightTab === 'team' ? (
+        <BlueprintCanvas
+          session={session}
+          zoom={zoom}
+          onZoomChange={onZoomChange}
+          selectedNodeId={selectedNodeId}
+          onSelectNode={onSelectNode}
+        />
+      ) : rightTab === 'agent' ? (
+        /* Agent tab — selected node details */
         <div style={{ padding: 16, overflowY: 'auto', flex: 1 }}>
           {selectedNodeId ? (() => {
             const node = session.nodes.find(n => n.id === selectedNodeId);
-            if (!node) {
-              return (
-                <div style={{ color: 'var(--t-fg-4)', fontSize: 12 }}>
-                  选择一个节点查看详情
-                </div>
-              );
-            }
+            if (!node) return <div style={{ color: 'var(--t-fg-4)', fontSize: 12 }}>选择一个节点查看详情</div>;
             return (
               <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--t-fg)', marginBottom: 4 }}>
-                  {node.title}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--t-fg-3)', marginBottom: 12 }}>
-                  {node.sub}
-                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--t-fg)', marginBottom: 4 }}>{node.title}</div>
+                <div style={{ fontSize: 12, color: 'var(--t-fg-3)', marginBottom: 12 }}>{node.sub}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {node.chips.map((chip, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        padding: '2px 8px',
-                        borderRadius: 6,
-                        background: 'var(--t-panel-2)',
-                        border: '1px solid var(--t-border)',
-                        fontSize: 10,
-                        fontFamily: 'var(--font-mono, monospace)',
-                        color: 'var(--t-fg-3)',
-                      }}
-                    >
-                      {chip}
-                    </span>
+                    <span key={i} style={{ padding: '2px 8px', borderRadius: 6, background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', fontSize: 10, fontFamily: 'var(--font-mono, monospace)', color: 'var(--t-fg-3)' }}>{chip}</span>
                   ))}
                 </div>
               </div>
             );
-          })() : (
-            <div style={{ color: 'var(--t-fg-4)', fontSize: 12 }}>
-              点击 Team 视图中的节点查看详情
-            </div>
-          )}
+          })() : <div style={{ color: 'var(--t-fg-4)', fontSize: 12 }}>点击 Team 视图中的节点查看详情</div>}
         </div>
-      )}
+      ) : (
+        /* Overview tab — redesigned "Review run session" panel */
+        <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', padding: '20px 22px 32px' }}>
 
-      {/* Overview tab — session summary */}
-      {rightTab === 'overview' && (
-        <div style={{ padding: 16, overflowY: 'auto', flex: 1 }}>
-          <div style={{ marginBottom: 12 }}>
-            <div
-              style={{
-                fontSize: 10,
-                fontFamily: 'var(--font-mono, monospace)',
-                color: 'var(--t-fg-4)',
-                textTransform: 'uppercase',
-                letterSpacing: '.1em',
-                marginBottom: 6,
-              }}
-            >
-              模式
+            <h1 style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-.02em', margin: '0 0 4px', color: 'var(--t-fg)' }}>
+              Review run session
+            </h1>
+
+            {/* Status card */}
+            <section style={{ border: '1px solid var(--t-border)', borderRadius: 10, padding: '13px 15px', marginTop: 14, background: 'var(--t-panel)' }}>
+              <p style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--t-fg-2)', margin: '0 0 11px' }}>
+                Your AI team has produced a draft section. Approve to commit to the canvas, or send back for revision. Decisions are routed by the Policy Matrix.
+              </p>
+              <div style={{ display: 'flex', gap: 14, marginBottom: 11 }}>
+                {[
+                  { label: 'Live', on: true },
+                  { label: 'On-chain', on: true },
+                  { label: 'Auto-approve', on: false },
+                ].map(({ label, on }) => (
+                  <label key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--font-mono, monospace)', fontSize: 10, cursor: 'pointer', color: 'var(--t-fg-3)' }}>
+                    <span style={{ width: 15, height: 15, borderRadius: '50%', border: `1px solid ${on ? '#10B981' : 'var(--t-border)'}`, background: on ? '#10B981' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: on ? '#0A0A0A' : 'var(--t-fg-4)', flexShrink: 0 }}>{on ? '✓' : '○'}</span>
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-3)' }}>Open this run</span>
+                <button
+                  type="button"
+                  onClick={session.isComplete ? onOpenEditor : undefined}
+                  style={{ padding: '5px 11px', border: '1px solid var(--t-border)', borderRadius: 7, fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, cursor: 'pointer', background: 'transparent', color: 'var(--t-fg-3)' }}
+                >
+                  ↗ Open in Editor
+                </button>
+              </div>
+            </section>
+
+            {/* Callout — retry budget / warning */}
+            {!session.isComplete && session.nodes.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid rgba(245,158,11,.28)', borderRadius: 10, marginTop: 10, background: 'rgba(245,158,11,.05)' }}>
+                <span style={{ fontSize: 13, flexShrink: 0, color: '#F59E0B' }}>⚠</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--t-fg)' }}>Retry budget low</div>
+                  <div style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, marginTop: 2, lineHeight: 1.4, color: 'var(--t-fg-3)' }}>Reader is on round 2 of 3 — one more rejection will roll back to Draft.</div>
+                </div>
+                <button type="button" style={{ padding: '4px 10px', border: '1px solid rgba(245,158,11,.32)', borderRadius: 6, fontFamily: 'var(--font-mono, monospace)', fontSize: 10, cursor: 'pointer', background: 'transparent', color: '#F59E0B', flexShrink: 0 }}>↻ Adjust</button>
+              </div>
+            )}
+
+            {/* Team section */}
+            <div style={{ marginTop: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 9 }}>
+                <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', flex: 1, color: 'var(--t-fg-3)' }}>Team</span>
+                <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 4, border: '1px solid var(--t-border)', color: 'var(--t-fg-4)' }}>{session.nodes.length || 4}</span>
+                <span style={{ fontSize: 11, opacity: .45, color: 'var(--t-fg-4)' }}>›</span>
+              </div>
+              <div style={{ border: '1px solid var(--t-border)', borderRadius: 8, overflow: 'hidden', background: 'var(--t-panel)' }}>
+                {[
+                  { name: 'workflow-dag', meta: `canvas · ${session.nodes.length || 0} nodes`, status: 'run' as const },
+                  { name: 'policy-matrix', meta: '5 × 5', status: 'ok' as const },
+                  { name: 'handoffs', meta: `${session.edges.length || 0} edges`, status: 'ok' as const },
+                  { name: 'activity-log', meta: `${session.steps.length} events`, status: 'run' as const },
+                ].map(row => (
+                  <button key={row.name} type="button" className="rs-ov-row" onClick={() => setRightTab('team')}>
+                    <span style={{ fontSize: 11, opacity: .38, flexShrink: 0, color: 'var(--t-fg-4)' }}>›</span>
+                    <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+                    <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--t-fg-4)' }}>{row.meta}</span>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, marginLeft: 4, background: row.status === 'run' ? '#A855F7' : '#10B981', boxShadow: row.status === 'run' ? '0 0 5px rgba(168,85,247,.5)' : 'none' }} />
+                  </button>
+                ))}
+              </div>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--t-fg)' }}>
-              {session.mode ?? '—'} · {session.outputType ?? '—'}
-            </div>
+
+            {/* Agents section */}
+            {session.nodes.length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 9 }}>
+                  <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', flex: 1, color: 'var(--t-fg-3)' }}>Agents</span>
+                  <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 4, border: '1px solid var(--t-border)', color: 'var(--t-fg-4)' }}>{session.nodes.filter(n => n.type === 'agent').length}</span>
+                  <span style={{ fontSize: 11, opacity: .45, color: 'var(--t-fg-4)' }}>›</span>
+                </div>
+                <div style={{ border: '1px solid var(--t-border)', borderRadius: 8, overflow: 'hidden', background: 'var(--t-panel)' }}>
+                  {session.nodes.map(node => (
+                    <button key={node.id} type="button" className="rs-ov-row" onClick={() => { onSelectNode(node.id); setRightTab('agent'); }}>
+                      <span style={{ fontSize: 11, opacity: .38, flexShrink: 0, color: 'var(--t-fg-4)' }}>›</span>
+                      <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.id}</span>
+                      <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--t-fg-4)' }}>{node.sub || 'idle'}</span>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, marginLeft: 4, background: node.status === 'ready' ? '#10B981' : node.status === 'building' ? '#A855F7' : 'var(--t-fg-5)' }} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Blueprint file ref */}
+            {session.blueprintFile && (
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--t-border)' }}>
+                <div style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 9, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>Blueprint</div>
+                <div style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, color: 'var(--t-accent-bright)' }}>{session.blueprintFile}</div>
+              </div>
+            )}
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <div
-              style={{
-                fontSize: 10,
-                fontFamily: 'var(--font-mono, monospace)',
-                color: 'var(--t-fg-4)',
-                textTransform: 'uppercase',
-                letterSpacing: '.1em',
-                marginBottom: 6,
-              }}
-            >
-              节点 ({session.nodes.length})
-            </div>
-            {session.nodes.map(n => (
-              <div key={n.id} style={{ fontSize: 12, color: 'var(--t-fg-2)', lineHeight: 2 }}>
-                {n.avatarChar} {n.title}{' '}
-                <span style={{ color: 'var(--t-fg-4)' }}>·</span>{' '}
-                {n.sub}
-              </div>
-            ))}
-          </div>
-          {session.blueprintFile && (
-            <div>
-              <div
-                style={{
-                  fontSize: 10,
-                  fontFamily: 'var(--font-mono, monospace)',
-                  color: 'var(--t-fg-4)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '.1em',
-                  marginBottom: 6,
-                }}
-              >
-                Blueprint
-              </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  fontFamily: 'var(--font-mono, monospace)',
-                  color: 'var(--t-accent-bright)',
-                }}
-              >
-                {session.blueprintFile}
-              </div>
-            </div>
-          )}
         </div>
       )}
-        </>
-      )}
-      {/* Story 15.14 — 5+1 维质量自检结果（生成完成 + critique 完成后才出现） */}
-      {session.critiqueResult && (
+      {/* Story 15.14 — 5+1 维质量自检结果（生成完成 + critique 完成后才出现）
+          2026-05-11 Story 15.30 follow-up: 当 critique 因为无 BYOK key 跳过
+          (NO_API_KEY) 时，CritiqueResult 返回 null — 同时 gate 外层 wrapper
+          以免显示一条空的 borderTop+background 横条。 */}
+      {session.critiqueResult && session.critiqueResult.error_code !== 'CRITIQUE_NO_API_KEY' && (
         <div
           data-testid="critique-result-mount"
           style={{
@@ -1157,6 +1062,15 @@ const toolbarBtn: React.CSSProperties = {
 // ---------------------------------------------------------------------------
 // Left panel
 // ---------------------------------------------------------------------------
+function GenSettingsRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10, color: 'var(--t-fg-4)', width: 80, flexShrink: 0 }}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
 interface LeftPanelProps {
   sessionId: string;
   goal: string;
@@ -1167,6 +1081,9 @@ interface LeftPanelProps {
 
 function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPanelProps) {
   const { t } = useI18n();
+  // 2026-05-11 Story 15.30 follow-up: handleSend 现在派生新 run session 后需要
+  // navigate 到新 URL，让 useRunSession hook 自动 teardown + 重订阅新 SSE 流。
+  const navigate = useNavigate();
   const [message, setMessage] = useState('');
   // Story 15.7: re-render whenever the stored API key changes (save / clear).
   const [apiKey, setApiKey] = useState<string | null>(() => getStoredApiKey());
@@ -1174,17 +1091,36 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
   const agentCount = session.nodes.filter((n) => n.type === 'agent').length;
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
 
-  const handleSend = () => {
-    if (session.isComplete) return;
+  const [showGenSettings, setShowGenSettings] = useState(false);
+
+  const handleSend = async () => {
     const text = message.trim();
     if (!text) return;
-    // POST to /api/run-sessions/:sessionId/messages
-    fetch(`/api/run-sessions/${sessionId}/messages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: text }),
-    }).catch(() => {}); // silently ignore — backend may not be implemented yet
+    // 2026-05-11 Story 15.30 follow-up: POST /messages 现在真接通 server。
+    // Server 用 source session 的全部设置（skill/DS/provider/key/model）派生新
+    // run session，conversation_id 透传 → 15.29 prompt-assembly 自动注入历史。
+    // 拿到新 session_id 后导航到新 RunSessionPage，订阅新 SSE 流（hook 自动 teardown）。
     setMessage('');
+    try {
+      const resp = await fetch(`/api/run-sessions/${sessionId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      });
+      if (!resp.ok) {
+        console.warn(`[run-session] follow-up POST failed: HTTP ${resp.status}`);
+        setMessage(text); // restore so user can retry
+        return;
+      }
+      const data = (await resp.json()) as { session_id?: string };
+      if (data.session_id) {
+        const params = new URLSearchParams({ goal: text });
+        navigate(`/run-session/${data.session_id}?${params.toString()}`);
+      }
+    } catch (err) {
+      console.warn('[run-session] follow-up POST error:', err);
+      setMessage(text);
+    }
   };
 
   return (
@@ -1210,25 +1146,28 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
           flexShrink: 0,
         }}
       >
-        {/* Spinning S mark */}
+        {/* Mark — rounded square with S-curve SVG + spinning conic border */}
         <div
+          className="rs-mark"
           style={{
-            width: 26,
-            height: 26,
-            borderRadius: '50%',
-            background: 'var(--t-accent-tint)',
-            border: '1.5px solid var(--t-accent)',
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            background: 'linear-gradient(135deg, rgba(168,85,247,.28), rgba(168,85,247,.08))',
+            border: '1px solid rgba(168,85,247,.35)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: 12,
-            fontWeight: 800,
             color: 'var(--t-accent-bright)',
-            animation: 'rs-spin 3s linear infinite',
             flexShrink: 0,
+            position: 'relative',
+            overflow: 'hidden',
           }}
         >
-          S
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16" opacity=".22" transform="translate(2 1.5)" />
+            <path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16" transform="translate(2 1.5)" />
+          </svg>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
@@ -1448,8 +1387,8 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
         ) : (!session.isComplete && !session.error) && (
           <div
             style={{
-              border: '1px dashed var(--t-border)',
-              borderRadius: 14,
+              border: '1px solid var(--t-border)',
+              borderRadius: 12,
               background: 'var(--t-panel)',
               padding: '14px 16px',
               fontSize: 12,
@@ -1574,34 +1513,20 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
       <div
         style={{
           borderTop: '1px solid var(--t-border)',
-          padding: '12px 14px 14px',
+          padding: '14px 16px',
           flexShrink: 0,
+          background: 'var(--t-bg)',
         }}
       >
-        {/* Cancel button + textarea row */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
-          <button
-            type="button"
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--t-border)',
-              borderRadius: 6,
-              padding: '5px 10px',
-              fontSize: 11,
-              color: 'var(--t-fg-4)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              flexShrink: 0,
-              alignSelf: 'flex-start',
-              marginTop: 1,
-            }}
-          >
-            <X size={11} strokeWidth={2} />
-            取消
-          </button>
+        {/* Inner bordered container */}
+        <div
+          style={{
+            border: '1px solid var(--t-border)',
+            borderRadius: 16,
+            padding: '10px 12px 8px',
+            background: 'var(--t-panel)',
+          }}
+        >
           <textarea
             value={message}
             onChange={e => setMessage(e.target.value)}
@@ -1612,57 +1537,84 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
               }
             }}
             disabled={session.isComplete}
-            placeholder={session.isComplete ? 'Session 已完成' : '补充说明或调整方向…'}
+            placeholder={session.isComplete ? 'Session 已完成' : '补充指令 · 或保持沉默让 AI 完成 · ⌘↵ 发送'}
             style={{
-              flex: 1,
-              background: 'var(--t-bg)',
-              color: 'var(--t-fg)',
-              border: '1px solid var(--t-border)',
-              borderRadius: 8,
-              padding: '8px 12px',
-              fontSize: 13,
-              resize: 'none',
-              minHeight: 40,
-              maxHeight: 160,
               width: '100%',
-              fontFamily: 'var(--font-mono, monospace)',
+              background: 'transparent',
+              border: 0,
               outline: 'none',
-              lineHeight: 1.5,
+              color: 'var(--t-fg)',
+              fontSize: 13,
+              lineHeight: 1.55,
+              resize: 'none',
+              minHeight: 44,
+              maxHeight: 160,
+              fontFamily: 'inherit',
               opacity: session.isComplete ? 0.5 : 1,
               cursor: session.isComplete ? 'not-allowed' : 'text',
             }}
           />
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={session.isComplete || !message.trim()}
-            style={{
-              background: 'var(--t-accent-tint)',
-              border: '1px solid var(--t-accent)',
-              borderRadius: 6,
-              padding: '5px 10px',
-              fontSize: 11,
-              color: 'var(--t-accent-bright)',
-              cursor: (session.isComplete || !message.trim()) ? 'not-allowed' : 'pointer',
-              fontFamily: 'inherit',
-              flexShrink: 0,
-              alignSelf: 'flex-start',
-              marginTop: 1,
-              opacity: (session.isComplete || !message.trim()) ? 0.4 : 1,
-            }}
-          >
-            ↵
-          </button>
+          {/* composer-bar */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+            {/* Left — icon buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {/* Generation settings */}
+              <button
+                type="button"
+                title="生成参数"
+                onClick={() => setShowGenSettings(v => !v)}
+                style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: showGenSettings ? 'var(--t-accent-tint)' : 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', color: showGenSettings ? 'var(--t-accent-bright)' : 'var(--t-fg-4)' }}
+              >
+                <Settings size={14} strokeWidth={1.8} />
+              </button>
+              {/* Attach */}
+              <button type="button" title="附件" style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', color: 'var(--t-fg-4)' }}>
+                <Paperclip size={14} strokeWidth={1.8} />
+              </button>
+              {/* Model chip */}
+              <button type="button" title="模型" style={{ height: 28, padding: '0 8px', display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--t-border)', borderRadius: 999, background: 'transparent', cursor: 'pointer', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-accent-bright)' }}>
+                <Cpu size={11} strokeWidth={1.8} style={{ color: '#A855F7' }} />
+                claude-sonnet
+              </button>
+            </div>
+            {/* Right — send */}
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={session.isComplete || !message.trim()}
+              style={{
+                width: 32, height: 28,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                background: '#A855F7', border: '1px solid #A855F7', borderRadius: 8,
+                cursor: (session.isComplete || !message.trim()) ? 'not-allowed' : 'pointer',
+                color: '#0A0A0A',
+                opacity: (session.isComplete || !message.trim()) ? 0.4 : 1,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+          </div>
         </div>
-        {/* Keyboard hint */}
-        <div
-          style={{
-            fontFamily: 'var(--font-mono, monospace)',
-            fontSize: 9.5,
-            color: 'var(--t-fg-5)',
-          }}
-        >
-          {isMac ? '⌘↵' : 'Ctrl↵'} 发送 · ⇧↵ 换行
+
+        {/* Generation settings popup */}
+        {showGenSettings && (
+          <div style={{ marginTop: 8, border: '1px solid var(--t-border)', borderRadius: 12, padding: '12px 14px', background: 'var(--t-panel)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <GenSettingsRow label="Temperature">
+              <input type="range" min={0} max={1} step={0.05}
+                defaultValue={parseFloat(localStorage.getItem('sf_temperature') ?? '0.7')}
+                onChange={e => localStorage.setItem('sf_temperature', e.target.value)}
+                style={{ flex: 1, accentColor: '#A855F7' }}
+              />
+            </GenSettingsRow>
+            <GenSettingsRow label="Max tokens">
+              <input type="number" min={256} max={8192} step={256}
+                defaultValue={parseInt(localStorage.getItem('sf_max_tokens') ?? '2048', 10)}
+                onChange={e => localStorage.setItem('sf_max_tokens', e.target.value)}
+                style={{ width: 80, background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 6, padding: '3px 8px', fontSize: 11, color: 'var(--t-fg)', fontFamily: 'var(--font-mono, monospace)', outline: 'none' }}
+              />
+            </GenSettingsRow>
+          </div>
+        )}
         </div>
       </div>
     </aside>
@@ -1679,6 +1631,100 @@ const KEYFRAMES = `
   50% { opacity: 0.45; }
 }
 @keyframes rs-dash { to { stroke-dashoffset: -20; } }
+/* spinning conic-gradient border overlay for the S mark */
+.rs-mark::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 9px;
+  background: conic-gradient(from 0deg, rgba(168,85,247,.7) 0%, transparent 30%);
+  z-index: -1;
+  animation: rs-spin 2.4s linear infinite;
+}
+/* right-panel browser-style view tabs */
+.rs-view-tab {
+  height: 36px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: -1px;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  border: 0;
+  color: var(--t-fg-4);
+  font-family: inherit;
+  transition: color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.rs-view-tab:hover:not(.rs-view-tab-on) { color: var(--t-fg); }
+.rs-view-tab-on {
+  color: var(--t-fg);
+  background: var(--t-bg);
+  box-shadow: inset 1px 0 0 0 var(--t-border), inset -1px 0 0 0 var(--t-border), inset 0 1px 0 0 var(--t-border);
+}
+.rs-view-tab-ct {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  height: 16px;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,.06);
+  color: var(--t-fg-4);
+}
+.rs-view-tab-on .rs-view-tab-ct {
+  background: rgba(168,85,247,.18);
+  color: var(--t-accent-bright);
+}
+/* status tag */
+.rs-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(168,85,247,.14);
+  border: 1px solid rgba(168,85,247,.4);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--t-accent-bright);
+}
+.rs-tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--t-accent);
+  animation: rs-pulse 1.4s ease-in-out infinite;
+}
+/* overview panel rows */
+.rs-ov-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--t-border);
+  color: var(--t-fg);
+  font-family: inherit;
+  transition: background 0.1s;
+}
+.rs-ov-row:first-child { border-top: none; }
+.rs-ov-row:hover { background: rgba(255,255,255,.03); }
 `;
 
 function InjectKeyframes() {
