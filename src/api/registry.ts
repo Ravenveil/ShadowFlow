@@ -84,11 +84,16 @@ export async function listPacks(params?: {
   tags?: string;
   q?: string;
 }): Promise<PackRecord[]> {
-  const url = new URL(`${API_BASE_URL}/api/agents/registry/packs`);
-  if (params?.workspace_id) url.searchParams.set('workspace_id', params.workspace_id);
-  if (params?.tags) url.searchParams.set('tags', params.tags);
-  if (params?.q) url.searchParams.set('q', params.q);
-  const env = await _handle<Envelope<PackRecord[]>>(await fetch(url.toString()));
+  // 2026-05-11 fix — `new URL('/api/...')` (no host) throws TypeError. Use
+  // URLSearchParams for the query, concat with template string.
+  const sp = new URLSearchParams();
+  if (params?.workspace_id) sp.set('workspace_id', params.workspace_id);
+  if (params?.tags) sp.set('tags', params.tags);
+  if (params?.q) sp.set('q', params.q);
+  const qs = sp.toString();
+  const env = await _handle<Envelope<PackRecord[]>>(
+    await fetch(`${API_BASE_URL}/api/agents/registry/packs${qs ? '?' + qs : ''}`),
+  );
   return env.data;
 }
 
@@ -103,8 +108,8 @@ export async function installPack(packId: string, workspaceId = 'default'): Prom
 }
 
 export async function listInstalledPacks(workspaceId = 'default'): Promise<InstalledPackRecord[]> {
-  const url = new URL(`${API_BASE_URL}/api/agents/registry/packs/installed`);
-  url.searchParams.set('workspace_id', workspaceId);
-  const env = await _handle<Envelope<InstalledPackRecord[]>>(await fetch(url.toString()));
+  const env = await _handle<Envelope<InstalledPackRecord[]>>(
+    await fetch(`${API_BASE_URL}/api/agents/registry/packs/installed?workspace_id=${encodeURIComponent(workspaceId)}`),
+  );
   return env.data;
 }

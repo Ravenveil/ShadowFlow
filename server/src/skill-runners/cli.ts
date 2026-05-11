@@ -149,6 +149,12 @@ export async function* runCliSpawn(
     },
   );
 
+  // 2026-05-11 Layer 1 fallback — track whether the parser emitted anything
+  // substantive (text or <sf:*> events). Claude CLI occasionally exits clean
+  // with no assistant output (suspected interaction between heavy cached
+  // system prompt + short user message). When that happens, surface a
+  // synthetic text reply so the UI never goes blank.
+  let sawSubstantive = false;
   try {
     if (!child.stdout) {
       yield {
@@ -157,7 +163,13 @@ export async function* runCliSpawn(
       };
       return;
     }
-    yield* dispatchParser(desc.stream_format, child.stdout, input.session_id, artifactCb);
+    for await (const evt of dispatchParser(desc.stream_format, child.stdout, input.session_id, artifactCb)) {
+      if (evt.event === 'text' || evt.event === 'assemble' || evt.event === 'node' ||
+          evt.event === 'edge' || evt.event === 'blueprint' || evt.event === 'classify') {
+        sawSubstantive = true;
+      }
+      yield evt;
+    }
   } finally {
     if (killTimer) clearTimeout(killTimer);
     if (input.signal) input.signal.removeEventListener('abort', onAbort);
@@ -173,6 +185,14 @@ export async function* runCliSpawn(
         exit_code: code,
         message: `${cliId} 退出码 ${code}`,
         stderr_tail: stderrTail.slice(-500),
+      },
+    };
+  } else if (!sawSubstantive && !input.signal?.aborted) {
+    // Claude CLI exited clean but emitted nothing — give the UI something.
+    yield {
+      event: 'text',
+      data: {
+        text: `（${cliId} 这次没有返回内容，可能是临时网络/缓存问题。请重发，或换一个更具体的目标试试。）`,
       },
     };
   }

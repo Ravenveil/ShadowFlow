@@ -609,6 +609,24 @@ function TeamDetailPage() {
     });
   }, []);
 
+  // 2026-05-11 bug fix — Rules of Hooks: 必须在所有早返 (loading / errorMsg)
+  // 之前调用。原代码把 useMemo + useCallback 放在 if(loading) return 之后，
+  // 第一次 render (loading=true) 时跳过 hook，第二次 (loading=false) 时执行，
+  // hook count 不一致 → "Rendered more hooks than during the previous render"。
+  // 两 hook 已是 null-safe (team?.agent_ids ?? [] / if(!teamId) return)，
+  // 上提到此处不影响行为。
+  const derivedLanes = useMemo(
+    () => deriveLanes(team?.agent_ids ?? [], workflowNodes),
+    [team?.agent_ids, workflowNodes],
+  );
+  const handlePolicySave = useCallback(
+    async (matrix: StorePolicyMatrix) => {
+      if (!teamId) return;
+      await putTeamPolicy(teamId, matrix as TeamPolicyMatrix);
+    },
+    [teamId],
+  );
+
   if (loading) {
     return (
       <div
@@ -655,21 +673,6 @@ function TeamDetailPage() {
   }
 
   const teamsForRail = allTeams.length > 0 ? allTeams : [team];
-
-  // Derive lane diagram data from real workflow nodes / agent_ids.
-  const derivedLanes = useMemo(
-    () => deriveLanes(team?.agent_ids ?? [], workflowNodes),
-    [team?.agent_ids, workflowNodes],
-  );
-
-  // PolicyMatrixPanel onSave — persists the edited matrix to the team's policy endpoint.
-  const handlePolicySave = useCallback(
-    async (matrix: StorePolicyMatrix) => {
-      if (!teamId) return;
-      await putTeamPolicy(teamId, matrix as TeamPolicyMatrix);
-    },
-    [teamId],
-  );
 
   return (
     <div

@@ -92,9 +92,9 @@ export interface MemoryStats {
 }
 
 export async function getMemoryStats(agentId?: string): Promise<MemoryApiResponse<MemoryStats>> {
-  const url = new URL(`${API_BASE_URL}/memory/stats`);
-  if (agentId) url.searchParams.set('agent_id', agentId);
-  const res = await fetch(url.toString());
+  // 2026-05-11 fix — `new URL('/memory/stats')` (no host) throws.
+  const qs = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : '';
+  const res = await fetch(`${API_BASE_URL}/memory/stats${qs}`);
   return _handleResponse<MemoryStats>(res);
 }
 

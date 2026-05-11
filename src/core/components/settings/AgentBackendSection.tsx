@@ -685,6 +685,20 @@ export function AgentBackendSection() {
     setSelectedId(id);
     localStorage.setItem('sf.selectedAgent', id);
     syncAgentSelection(id); // fire-and-forget server sync
+    // 2026-05-11 Bug fix — this panel writes the cosmetic `sf.selectedAgent`
+    // key, but `createRunSession` (src/api/_base.ts → getGenerationSettings)
+    // reads `sf.defaultExecutor` to decide which CLI / direct path to invoke.
+    // Without this mirror write the "✓ Active" indicator was purely visual
+    // and the spawned skill always fell back to anthropic-direct.
+    // Mapping: agent.id → executor token
+    //   'claude' / 'codex' / 'gemini' / 'cursor-agent' / 'qwen-coder' / ... → 'cli:<id>'
+    //   'anthropic' / 'byok' / 'openai' → 'anthropic-direct' (BYOK direct path)
+    const cliIds = new Set([
+      'claude', 'codex', 'gh-copilot', 'cursor-agent', 'cursor',
+      'gemini', 'qwen-coder', 'cline', 'aider', 'windsurf-cli',
+    ]);
+    const executor = cliIds.has(id) ? `cli:${id}` : 'anthropic-direct';
+    localStorage.setItem('sf.defaultExecutor', executor);
   }
 
   const installed = agents.filter((a) => a.installed);

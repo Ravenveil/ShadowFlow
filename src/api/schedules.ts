@@ -52,9 +52,9 @@ export async function createSchedule(body: {
 }
 
 export async function listSchedules(groupId?: string): Promise<{ data: Schedule[]; meta: Record<string, unknown> }> {
-  const url = new URL(`${BASE}/schedules`);
-  if (groupId) url.searchParams.set('group_id', groupId);
-  const res = await fetch(url.toString());
+  // 2026-05-11 fix — `new URL('/schedules')` throws when BASE is empty.
+  const qs = groupId ? `?group_id=${encodeURIComponent(groupId)}` : '';
+  const res = await fetch(`${BASE}/schedules${qs}`);
   return _handle(res);
 }
 

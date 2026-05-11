@@ -173,6 +173,32 @@ ShadowFlow 支持四种接入通道：`api`（HTTP 推理）、`cli`（子进程
 
 ## Development
 
+### Quick start — single-command dev (recommended)
+
+ShadowFlow runs **two backends behind one entry point**:
+- **Python FastAPI** (port 8000) — Epic 1-13 business logic: agents / teams / wallet / inbox / approvals / pets / etc
+- **Node Express** (port 8002) — Skill Studio (Epic 15): cli auto-discovery / ACP / MCP / artifact preview / projects
+- **Vite** (port 3007) — frontend, proxies all `/api/*` to Node 8002
+- Node 8002 reverse-proxies anything not under its 12 routes to Python 8000 — frontend sees a single API surface
+
+Start everything in one terminal:
+
+```bash
+npm run dev:all
+```
+
+This runs Python uvicorn + Node Skill Studio + Vite in parallel via `concurrently`. Logs are colored per stream (PY/NODE/WEB). Ctrl+C stops all three.
+
+Run individually if needed:
+
+```bash
+npm run dev:python   # Python FastAPI on :8000 (via uvicorn)
+npm run dev:server   # Node Skill Studio on :8002
+npm run dev:web      # Vite on :3007
+```
+
+**Architecture note**: Node 8002 is the single API entry. If Python is down, calls to its endpoints return `503 PYTHON_BACKEND_UNAVAILABLE` with a startup hint, not a confusing socket error. See `server/src/proxy-fallback.ts`.
+
 ### TypeScript Type Generation
 
 Frontend TypeScript interfaces are auto-generated from the Pydantic runtime contracts.

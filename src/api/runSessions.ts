@@ -137,6 +137,17 @@ export interface SubstepEvent {
   elapsed_ms?: number;
 }
 
+/**
+ * 2026-05-11 Layer 1 — Claude Code-style conversation mode.
+ * When the LLM decides the user's goal is trivial (e.g. "hi") and replies
+ * in plain natural language, server-side parser emits incremental `text`
+ * events. Front-end accumulates these into a chat bubble instead of
+ * rendering the canvas / step list.
+ */
+export interface TextEvent {
+  text: string;
+}
+
 // ── Story 15.14 — Critique events ─────────────────────────────────────────────
 
 export type CritiqueDimensionKey =
@@ -211,6 +222,7 @@ export function subscribeRunSession(
     onSubstep?: (data: SubstepEvent) => void;
     onCritiqueProgress?: (data: CritiqueProgressEvent) => void;
     onCritiqueResult?: (data: CritiqueResultEvent) => void;
+    onText?: (data: TextEvent) => void;
     onRetrying?: (attempt: number, delayMs: number) => void;
     onError?: (err: Event) => void;
     onServerError?: (message: string, code?: string) => void;
@@ -257,6 +269,8 @@ export function subscribeRunSession(
     // Story 15.14 — critique events
     es.addEventListener('critique-progress', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onCritiqueProgress?.(d); });
     es.addEventListener('critique-result',   (e) => { const d = parse(e as MessageEvent); if (d) handlers.onCritiqueResult?.(d); });
+    // 2026-05-11 Layer 1 — Claude Code-style chat fallback
+    es.addEventListener('text',      (e) => { const d = parse(e as MessageEvent); if (d) handlers.onText?.(d); });
     es.addEventListener('error',     (e) => {
       const d = parse(e as MessageEvent);
       if (d?.message) {

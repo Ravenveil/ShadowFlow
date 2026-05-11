@@ -411,7 +411,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <HfTopBar />
+      <HfTopBar hideWorkspace />
 
       <div
         style={{

@@ -300,6 +300,11 @@ export async function listRuns(): Promise<RunRecord[]> {
   return parsed.runs ?? [];
 }
 
+export async function deleteRun(runId: string): Promise<void> {
+  const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`deleteRun failed: ${res.status}`);
+}
+
 export async function getRunGraph(runId: string): Promise<RunGraph> {
   const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/graph`);
   return _handleResponse<RunGraph>(res);

@@ -127,6 +127,11 @@ export function saveRun(record: RunRecord): void {
   tx();
 }
 
+export function deleteRun(runId: string): boolean {
+  const result = getDb().prepare(`DELETE FROM runs WHERE run_id = ?`).run(runId);
+  return result.changes > 0;
+}
+
 /**
  * Test-only: drop the sqlite handle AND remove any db file in the current
  * cwd's .shadowflow/ dir.

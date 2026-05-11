@@ -20,6 +20,7 @@
     "express": "^4.18.2",
     "gray-matter": "^4.0.3",
     "htmlparser2": "^12.0.0",
+    "http-proxy-middleware": "^3.0.5",
     "js-yaml": "^4.1.1",
     "openai": "^6.37.0",
     "puppeteer-core": "^22.15.0",

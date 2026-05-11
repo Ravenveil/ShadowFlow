@@ -84,9 +84,10 @@ export async function quickCreateAgent(req: QuickCreateRequest): Promise<AgentRe
 }
 
 export async function listAgents(workspaceId?: string): Promise<AgentRecord[]> {
-  const url = new URL(`${API_BASE_URL}/api/agents`);
-  if (workspaceId) url.searchParams.set('workspace_id', workspaceId);
-  const res = await fetch(url.toString());
+  // 2026-05-11 fix — `new URL('/api/agents')` (no host) throws TypeError.
+  // Same bug pattern as teams.ts.
+  const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/agents${qs}`);
   const env = await _handleResponse<Envelope<AgentRecord[]>>(res);
   return env.data;
 }

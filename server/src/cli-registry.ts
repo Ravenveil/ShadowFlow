@@ -43,11 +43,27 @@ export const KNOWN_CLIS: CliDescriptor[] = [
     id: 'claude',
     binary: 'claude',
     version_arg: '--version',
-    needs_env: 'ANTHROPIC_API_KEY',
+    // 2026-05-11 — local `claude login` is the primary auth path for the CLI;
+    // ANTHROPIC_API_KEY env is a fallback. The CLI manages its own credential
+    // store, so the daemon does NOT need a sk-ant- key in ShadowFlow settings
+    // when the user picks executor=cli:claude.
+    needs_env: undefined,
     install_cmd: 'npm i -g @anthropic-ai/claude-cli',
     stream_format: 'claude-stream-json',
-    // Anthropic CLI flags: stream JSON to stdout, take prompt from stdin via -p.
-    extra_args: ['--output-format', 'stream-json', '--print'],
+    // 2026-05-11 bug fix — align with OpenDesign's verified spawn args
+    // (nexu-io/open-design apps/daemon/src/agents.ts):
+    //   • `--verbose` REQUIRED so stream-json mode emits per-token deltas;
+    //     without it the parser sees nothing until EOF and SSE looks hung.
+    //   • `--permission-mode bypassPermissions` REQUIRED so claude doesn't
+    //     pause for "Y/N" tool prompts; without it the child hangs on stdin
+    //     and the front-end reconnects forever.
+    //   • `-p` (short form of --print) keeps the child non-interactive.
+    extra_args: [
+      '-p',
+      '--output-format', 'stream-json',
+      '--verbose',
+      '--permission-mode', 'bypassPermissions',
+    ],
   },
   {
     id: 'codex',

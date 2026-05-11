@@ -230,15 +230,30 @@ export const MAX_TOKENS_MAX = 32768;
 export const TEMPERATURE_MIN = 0;
 export const TEMPERATURE_MAX = 1;
 
+/**
+ * Bug fix 2026-05-11 — keep in sync with `GenerationSettings.tsx`
+ * `DEFAULT_EXECUTOR_STORAGE`. Previously `createRunSession` did NOT read this
+ * key, so even after the user picked `cli:claude` in the Settings panel and
+ * saw "✓ Active" on the CLI card, the request body went without an `executor`
+ * field — the server fell back to `anthropic-direct` and the spawned CLI was
+ * never actually used.
+ */
+export const DEFAULT_EXECUTOR_STORAGE = 'sf.defaultExecutor';
+
 export interface GenerationSettings {
   /**
-   * Front-end currently leaves this `undefined` so the server decides
-   * (env > default). The field is reserved for a future "explicit override"
-   * UI; the server already accepts and validates a string when present.
+   * Model id from `sf.model` (GenerationSettings) or `sf.byokModel`
+   * (AgentBackendSection legacy). Server validates against MODEL_ALLOWLIST;
+   * unknown values silently fall back. SHADOWFLOW_DEFAULT_MODEL env still
+   * overrides at the server boundary.
    */
   model?: string;
   max_tokens?: number;
   temperature?: number;
+  /** Story 15.19 v2 / 15.23 — picked CLI / ACP / MCP executor. */
+  executor?: string;
+  /** Story 15.14 — disable auto critique pass when explicitly false. */
+  auto_critique?: boolean;
 }
 
 /**
@@ -263,10 +278,32 @@ export function getGenerationSettings(): GenerationSettings {
         out.temperature = n;
       }
     }
-    // model is intentionally not read from localStorage in this iteration —
-    // server-side env (SHADOWFLOW_DEFAULT_MODEL) is the source of truth and
-    // the SettingsPage shows it as read-only when env-locked. The interface
-    // keeps the field so a future UI can opt-in.
+    // 2026-05-11 Bug fix — previously the model field was intentionally NOT
+    // read from localStorage ("env wins") which left the GenerationSettings
+    // model dropdown + AgentBackendSection BYOK model dropdown as cosmetic
+    // UI. Now we read both `sf.model` (new GenerationSettings) and
+    // `sf.byokModel` (legacy AgentBackendSection) so the user's pick is
+    // honored. Server still env-locks via SHADOWFLOW_DEFAULT_MODEL when set,
+    // and allowlist-validates the value (unknown → silently fall back to
+    // default). UI shows the lock state via /api/settings/generation-overrides.
+    const m1 = localStorage.getItem('sf.model');
+    const m2 = localStorage.getItem('sf.byokModel');
+    const picked = (m1 && m1.trim()) || (m2 && m2.trim()) || '';
+    if (picked) out.model = picked;
+
+    // Story 15.19 v2 / 15.23 — read default executor selection so the request
+    // actually targets the local CLI / remote agent the user picked.
+    const ex = localStorage.getItem(DEFAULT_EXECUTOR_STORAGE);
+    if (typeof ex === 'string' && ex.trim().length > 0) {
+      out.executor = ex.trim();
+    }
+
+    // 2026-05-11 — read auto_critique so disabling it actually skips the
+    // critique pass on the server (Story 15.14). '0' = disabled, anything
+    // else (or missing) = enabled (default ON).
+    const ac = localStorage.getItem(AUTO_CRITIQUE_STORAGE);
+    if (ac === '0') out.auto_critique = false;
+    else if (ac === '1') out.auto_critique = true;
   } catch {
     // localStorage unavailable (SSR / sandbox) — return empty settings
   }

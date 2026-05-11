@@ -1,5 +1,11 @@
 # Story 0.1 — ShadowFlow one-shot orchestration.
 # Run `cp .env.example .env && docker compose up -d` to bring up the full MVP.
+#
+# Service map:
+#   shadowflow-api  : Python FastAPI (business logic, agents/teams/wallet)  :8000
+#   shadowflow-node : Node.js Skill Studio (run-sessions/cli/acp + reverse  :8002
+#                     proxy fallback to shadowflow-api for unmatched /api)
+#   shadowflow-web  : Vite-built static frontend                            :3000
 
 services:
   shadowflow-api:
@@ -24,6 +30,35 @@ services:
       retries: 5
       start_period: 10s
 
+  shadowflow-node:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: shadowflow/node:dev
+    container_name: shadowflow-node
+    ports:
+      - "8002:8002"
+    environment:
+      NODE_ENV: development
+      PYTHON_BACKEND_URL: http://shadowflow-api:8000
+      PORT: "8002"
+    depends_on:
+      shadowflow-api:
+        condition: service_healthy
+    volumes:
+      - ./server:/app
+      - /app/node_modules            # prevent host node_modules from clobbering image-installed deps
+      - shadowflow_node_data:/app/.shadowflow  # persist SQLite + projects/
+    networks:
+      - shadowflow-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8002/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
   shadowflow-web:
     build:
       context: .
@@ -35,6 +70,8 @@ services:
     depends_on:
       shadowflow-api:
         condition: service_healthy
+      shadowflow-node:
+        condition: service_healthy
     networks:
       - shadowflow-net
     restart: unless-stopped
@@ -42,3 +79,6 @@ services:
 networks:
   shadowflow-net:
     driver: bridge
+
+volumes:
+  shadowflow_node_data:

@@ -726,6 +726,18 @@ interface RightPanelProps {
 function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId, onSelectNode, sessionId }: RightPanelProps) {
   const filename = session.blueprintFile ?? 'untitled.yml';
   const [rightTab, setRightTab] = useState<RightTab>('overview');
+  const agents = session.nodes.filter(n => n.type === 'agent');
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  // When agents arrive, default-select the first one
+  React.useEffect(() => {
+    if (agents.length > 0 && !activeAgentId) setActiveAgentId(agents[0].id);
+  }, [agents.length]);
+
+  const switchToAgent = (nodeId: string) => {
+    setActiveAgentId(nodeId);
+    onSelectNode(nodeId);
+    setRightTab('agent');
+  };
 
   // Auto-switch to 'preview' tab when artifact becomes available (Story 15.3)
   const lastActivePanelRef = useRef<typeof session.activePanel>(session.activePanel);
@@ -888,23 +900,143 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
           onSelectNode={onSelectNode}
         />
       ) : rightTab === 'agent' ? (
-        /* Agent tab — selected node details */
-        <div style={{ padding: 16, overflowY: 'auto', flex: 1 }}>
-          {selectedNodeId ? (() => {
-            const node = session.nodes.find(n => n.id === selectedNodeId);
-            if (!node) return <div style={{ color: 'var(--t-fg-4)', fontSize: 12 }}>选择一个节点查看详情</div>;
-            return (
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--t-fg)', marginBottom: 4 }}>{node.title}</div>
-                <div style={{ fontSize: 12, color: 'var(--t-fg-3)', marginBottom: 12 }}>{node.sub}</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {node.chips.map((chip, i) => (
-                    <span key={i} style={{ padding: '2px 8px', borderRadius: 6, background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', fontSize: 10, fontFamily: 'var(--font-mono, monospace)', color: 'var(--t-fg-3)' }}>{chip}</span>
-                  ))}
-                </div>
+        /* Agent tab — per-agent sub-tabs + rich profile card */
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+          {agents.length === 0 ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-4)', fontSize: 12 }}>
+              等待 Agent 初始化…
+            </div>
+          ) : (
+            <>
+              {/* Agent sub-tab strip */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', borderBottom: '1px solid var(--t-border)', background: 'var(--t-panel)', flexShrink: 0, overflowX: 'auto', paddingLeft: 8 }}>
+                {agents.map(ag => (
+                  <button key={ag.id} type="button"
+                    className={`rs-view-tab${activeAgentId === ag.id ? ' rs-view-tab-on' : ''}`}
+                    onClick={() => { setActiveAgentId(ag.id); onSelectNode(ag.id); }}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    {ag.avatarChar && <span style={{ marginRight: 5, opacity: .7 }}>{ag.avatarChar}</span>}
+                    {ag.title || ag.id}
+                  </button>
+                ))}
               </div>
-            );
-          })() : <div style={{ color: 'var(--t-fg-4)', fontSize: 12 }}>点击 Team 视图中的节点查看详情</div>}
+              {/* Active agent profile */}
+              {(() => {
+                const nd = agents.find(n => n.id === activeAgentId) ?? agents[0];
+                if (!nd) return null;
+                const avatarLetter = nd.avatarChar ?? nd.title?.[0]?.toUpperCase() ?? '?';
+                const isBuilding = nd.status === 'building';
+                const isReady = nd.status === 'ready';
+                // derive timeline states from chips / status
+                const modelChip = nd.chips.find(c => /claude|gpt|gemini|deepseek|qwen/i.test(c));
+                const toolChips = nd.chips.filter(c => !/claude|gpt|gemini|deepseek|qwen|review|plan|write|research/i.test(c));
+                const tl = [
+                  { step: 1, label: 'Identity', title: '命名 · 形象', body: `name  ${nd.title}\nrole  ${nd.type}`, st: 'done' },
+                  { step: 2, label: 'Persona',  title: '角色性格',   body: nd.sub || '—',                     st: nd.sub ? 'done' : 'pending' },
+                  { step: 3, label: 'Model',    title: '模型 · 参数', body: modelChip ?? '待分配',               st: modelChip ? 'done' : (isBuilding ? 'run' : 'pending') },
+                  { step: 4, label: 'Tools',    title: '工具集',     body: toolChips.length ? toolChips.join(' · ') : '挑选中…', st: isReady ? 'done' : (isBuilding ? 'run' : 'pending') },
+                  { step: 5, label: 'Memory',   title: '记忆 · Knowledge', body: '向量库 + scratch',           st: isReady ? 'done' : 'pending' },
+                ] as const;
+
+                // derive "picked" tools (chips that look like capabilities)
+                const pickedTools = nd.chips.filter(c => !/claude|gpt|gemini/i.test(c)).slice(0, 3);
+                const rejectedTools = ['web_search', 'image_gen'].filter(t => !pickedTools.includes(t));
+
+                return (
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 32px' }}>
+                    {/* Agent card */}
+                    <div className="ag-card">
+                      <div className="ag-avatar" style={{ animationPlayState: isBuilding ? 'running' : 'paused' }}>
+                        {avatarLetter}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="ag-name">{nd.title}</div>
+                        <div className="ag-id">
+                          agent_id: <span style={{ color: 'var(--t-fg)' }}>{nd.id}</span>
+                          {' · '}status: <span style={{ color: isReady ? '#10B981' : '#A855F7' }}>{nd.status}</span>
+                        </div>
+                      </div>
+                      <span className="rs-tag" style={{ flexShrink: 0 }}>
+                        <span className="rs-tag-dot" />
+                        {isReady ? '就绪' : '构建中…'}
+                      </span>
+                    </div>
+
+                    {/* 5-step Timeline */}
+                    <div className="ag-tl">
+                      {tl.map(({ step, label, title, body, st }) => (
+                        <div key={step} className={`ag-tl-cell ag-tl-${st}`}>
+                          <div className="ag-tl-step">
+                            <span className="ag-tl-num">{st === 'run' ? '…' : st === 'done' ? '✓' : step}</span>
+                            <span>{label}</span>
+                          </div>
+                          <div className="ag-tl-title">{title}</div>
+                          <div className="ag-tl-body">
+                            {body.split('\n').map((line, i) => {
+                              const [k, ...v] = line.split(/\s{2,}/);
+                              return v.length ? (
+                                <span key={i} style={{ display: 'block' }}>
+                                  <span style={{ color: 'var(--t-accent-bright)', fontWeight: 600 }}>{k}</span>
+                                  {'  '}{v.join('  ')}
+                                </span>
+                              ) : <span key={i} style={{ display: 'block' }}>{line}</span>;
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* System Prompt */}
+                    <div className="ag-prompt">
+                      <div className="ag-prompt-h">
+                        <span>System Prompt</span>
+                        <span style={{ opacity: .6, fontWeight: 400, letterSpacing: '.04em', textTransform: 'none' }}>writing · — / — tokens</span>
+                      </div>
+                      <pre className="ag-prompt-pre">{`role:  ${nd.type === 'coordinator' ? 'Coordinator' : 'Agent'} · ${nd.title}\ntask:  ${nd.sub || '—'}\ntools: ${nd.chips.join(' · ') || '—'}`}</pre>
+                    </div>
+
+                    {/* Tool Decision Log */}
+                    {pickedTools.length > 0 && (
+                      <div className="ag-tool-log">
+                        <div className="ag-tool-log-h">Tool Decision Log
+                          <span style={{ marginLeft: 'auto', opacity: .6 }}>候选 {pickedTools.length + rejectedTools.length} · 选定 {pickedTools.length}</span>
+                        </div>
+                        <div className="ag-tool-grid">
+                          <div className="ag-tool-col">
+                            <div className="ag-tool-col-h">PICKED <span style={{ marginLeft: 'auto' }}>{pickedTools.length}</span></div>
+                            {pickedTools.map(t => (
+                              <div key={t} className="ag-tool-row ag-tool-picked">
+                                <span className="ag-tool-ic" style={{ background: '#10B981', color: '#0A0A0A' }}>✓</span>
+                                <span className="ag-tool-nm">{t}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="ag-tool-col" style={{ borderLeft: '1px solid var(--t-border)' }}>
+                            <div className="ag-tool-col-h">REJECTED <span style={{ marginLeft: 'auto' }}>{rejectedTools.length}</span></div>
+                            {rejectedTools.map(t => (
+                              <div key={t} className="ag-tool-row ag-tool-rejected">
+                                <span className="ag-tool-ic" style={{ color: 'var(--t-fg-4)' }}>✗</span>
+                                <span className="ag-tool-nm" style={{ opacity: .5 }}>{t}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Live stream bar */}
+                    {isBuilding && (
+                      <div className="ag-stream">
+                        <span className="ag-stream-lbl">LIVE</span>
+                        <span style={{ color: 'var(--t-accent-bright)' }}>{nd.sub || '处理中…'}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          )}
         </div>
       ) : (
         /* Overview tab — redesigned "Review run session" panel */
@@ -990,9 +1122,9 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
                 </div>
                 <div style={{ border: '1px solid var(--t-border)', borderRadius: 8, overflow: 'hidden', background: 'var(--t-panel)' }}>
                   {session.nodes.map(node => (
-                    <button key={node.id} type="button" className="rs-ov-row" onClick={() => { onSelectNode(node.id); setRightTab('agent'); }}>
+                    <button key={node.id} type="button" className="rs-ov-row" onClick={() => switchToAgent(node.id)}>
                       <span style={{ fontSize: 11, opacity: .38, flexShrink: 0, color: 'var(--t-fg-4)' }}>›</span>
-                      <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.id}</span>
+                      <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.title || node.id}</span>
                       <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--t-fg-4)' }}>{node.sub || 'idle'}</span>
                       <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, marginLeft: 4, background: node.status === 'ready' ? '#10B981' : node.status === 'building' ? '#A855F7' : 'var(--t-fg-5)' }} />
                     </button>
@@ -1062,15 +1194,6 @@ const toolbarBtn: React.CSSProperties = {
 // ---------------------------------------------------------------------------
 // Left panel
 // ---------------------------------------------------------------------------
-function GenSettingsRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10, color: 'var(--t-fg-4)', width: 80, flexShrink: 0 }}>{label}</span>
-      {children}
-    </div>
-  );
-}
-
 interface LeftPanelProps {
   sessionId: string;
   goal: string;
@@ -1089,32 +1212,61 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
   const [apiKey, setApiKey] = useState<string | null>(() => getStoredApiKey());
   const [showKeyEditor, setShowKeyEditor] = useState(false);
   const agentCount = session.nodes.filter((n) => n.type === 'agent').length;
-  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [showGenSettings, setShowGenSettings] = useState(false);
+  // 2026-05-11 Layer 1 — Claude Code-style chat fallback.
+  // Two triggers (both require "no canvas events seen"):
+  //  (1) LLM is plain-text-replying (chatReply has content) → chat mode.
+  //  (2) Run completed with NO canvas events at all → also chat mode. Covers
+  //      the case where Claude CLI exited silently; route now synthesises a
+  //      fallback text, but the panel state should collapse either way so
+  //      the user sees only the chat surface + input box.
+  const isChatMode =
+    (session.chatReply.length > 0 || session.isComplete) &&
+    session.steps.length === 0 &&
+    session.nodes.length === 0 &&
+    !session.blueprintFile;
 
   const handleSend = async () => {
     const text = message.trim();
-    if (!text) return;
-    // 2026-05-11 Story 15.30 follow-up: POST /messages 现在真接通 server。
-    // Server 用 source session 的全部设置（skill/DS/provider/key/model）派生新
-    // run session，conversation_id 透传 → 15.29 prompt-assembly 自动注入历史。
-    // 拿到新 session_id 后导航到新 RunSessionPage，订阅新 SSE 流（hook 自动 teardown）。
+    if (!text && attachedFiles.length === 0) return;
+
+    // 读取文本类附件内容，拼成 fenced code block 放在消息最前面
+    let fullContent = text;
+    if (attachedFiles.length > 0) {
+      const blocks: string[] = [];
+      for (const file of attachedFiles) {
+        const isText =
+          file.type.startsWith('text/') ||
+          /\.(txt|md|json|yaml|yml|ts|tsx|js|jsx|py|go|rs|sh|bash|css|html|xml|csv|toml|env)$/i.test(file.name);
+        if (isText && file.size <= 100 * 1024) {
+          const content = await file.text();
+          const ext = file.name.split('.').pop() ?? '';
+          blocks.push(`\`\`\`${ext} title="${file.name}"\n${content}\n\`\`\``);
+        } else {
+          blocks.push(`[附件: ${file.name} (${(file.size / 1024).toFixed(1)} KB)]`);
+        }
+      }
+      fullContent = blocks.join('\n\n') + (text ? '\n\n' + text : '');
+    }
+
     setMessage('');
+    setAttachedFiles([]);
     try {
       const resp = await fetch(`/api/run-sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: text }),
+        body: JSON.stringify({ content: fullContent }),
       });
       if (!resp.ok) {
         console.warn(`[run-session] follow-up POST failed: HTTP ${resp.status}`);
-        setMessage(text); // restore so user can retry
+        setMessage(text);
         return;
       }
       const data = (await resp.json()) as { session_id?: string };
       if (data.session_id) {
-        const params = new URLSearchParams({ goal: text });
+        const params = new URLSearchParams({ goal: fullContent.slice(0, 200) });
         navigate(`/run-session/${data.session_id}?${params.toString()}`);
       }
     } catch (err) {
@@ -1361,8 +1513,52 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
           </div>
         )}
 
-        {/* Mode divider */}
-        {session.mode && (
+        {/* Assistant chat bubble — Claude Code-style plain reply. Renders
+            incrementally as `text` SSE events arrive. Shown for both chat
+            mode (no canvas) and the "LLM is thinking out loud before tags"
+            transient window.
+            2026-05-11 bug fix: `chatReply` 偶尔只累积 server text delta 里
+            的换行/空白（Claude 在结构化 <sf:*> 标签之间或正式内容前的换行
+            铺垫），truthy 但视觉是空白竖条。trim 后非空才渲染气泡。*/}
+        {session.chatReply && session.chatReply.trim().length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <div
+              style={{
+                maxWidth: 420,
+                padding: '10px 14px',
+                // 2026-05-11 kit alignment: assistant bubble has sharp
+                // TOP-LEFT corner (speaker comes from upper-left). CSS
+                // shorthand is top-left top-right bottom-right bottom-left.
+                borderRadius: '4px 14px 14px 14px',
+                background: 'var(--t-panel)',
+                border: '1px solid var(--t-border)',
+                color: 'var(--t-fg-2)',
+                fontSize: 13,
+                lineHeight: 1.6,
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {session.chatReply}
+              {!session.isComplete && (
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: 8,
+                    height: 14,
+                    marginLeft: 2,
+                    background: 'var(--t-fg-4)',
+                    verticalAlign: 'text-bottom',
+                    animation: 'sf-blink 1s steps(2) infinite',
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Canvas-mode-only chrome: mode divider + step list. Hidden in chat
+            mode so trivial inputs ("hi") render only the chat bubble. */}
+        {!isChatMode && session.mode && (
           <div
             style={{
               textAlign: 'center',
@@ -1378,13 +1574,15 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
 
         {/* Progress steps — only after SSE delivers the first <sf:step>.
             2026-05-11 UX fix: previously 6 zh-CN placeholders rendered before
-            any work began, leaking implementation detail. */}
-        {session.steps.length > 0 ? (
+            any work began, leaking implementation detail.
+            Layer 1: also suppressed in chat mode (no `<sf:step>` will ever
+            arrive when LLM is plain-text-replying). */}
+        {!isChatMode && session.steps.length > 0 ? (
           <ProgressSteps
             steps={session.steps}
             activeSubsteps={session.activeSubsteps}
           />
-        ) : (!session.isComplete && !session.error) && (
+        ) : (!isChatMode && !session.isComplete && !session.error) && (
           <div
             style={{
               border: '1px solid var(--t-border)',
@@ -1527,6 +1725,38 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
             background: 'var(--t-panel)',
           }}
         >
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={e => {
+              const files = Array.from(e.target.files ?? []);
+              if (files.length) setAttachedFiles(prev => [...prev, ...files]);
+              e.target.value = '';
+            }}
+          />
+          {/* Attached file chips */}
+          {attachedFiles.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+              {attachedFiles.map((f, i) => (
+                <div key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px 2px 6px', border: '1px solid var(--t-border)', borderRadius: 999, fontSize: 11, color: 'var(--t-fg-3)', background: 'var(--t-bg)' }}>
+                  <Paperclip size={10} strokeWidth={1.8} />
+                  <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFiles(prev => prev.filter((_, j) => j !== i))}
+                    style={{ background: 'transparent', border: 0, padding: 0, cursor: 'pointer', color: 'var(--t-fg-4)', lineHeight: 1, marginLeft: 2 }}
+                  >×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* 2026-05-11 Story 15.30 follow-up: 移除 isComplete 禁用 — Story 15.29
+              multi-turn 上线后，session.isComplete=true 正是发后续 message 的
+              黄金时机（handleSend 派生新 run session + 透传 conversation_id 让
+              prompt-assembly 自动注入历史）。原逻辑误把"主流程完成"当"对话结束"。*/}
           <textarea
             value={message}
             onChange={e => setMessage(e.target.value)}
@@ -1536,8 +1766,11 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
                 handleSend();
               }
             }}
-            disabled={session.isComplete}
-            placeholder={session.isComplete ? 'Session 已完成' : '补充指令 · 或保持沉默让 AI 完成 · ⌘↵ 发送'}
+            placeholder={
+              session.isComplete
+                ? '继续对话 · 接着问 · ⌘↵ 发送'
+                : '补充指令 · 或保持沉默让 AI 完成 · ⌘↵ 发送'
+            }
             style={{
               width: '100%',
               background: 'transparent',
@@ -1550,25 +1783,29 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
               minHeight: 44,
               maxHeight: 160,
               fontFamily: 'inherit',
-              opacity: session.isComplete ? 0.5 : 1,
-              cursor: session.isComplete ? 'not-allowed' : 'text',
+              cursor: 'text',
             }}
           />
           {/* composer-bar */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
             {/* Left — icon buttons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {/* Generation settings */}
+              {/* Settings — navigate to /settings page */}
               <button
                 type="button"
-                title="生成参数"
-                onClick={() => setShowGenSettings(v => !v)}
-                style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: showGenSettings ? 'var(--t-accent-tint)' : 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', color: showGenSettings ? 'var(--t-accent-bright)' : 'var(--t-fg-4)' }}
+                title="设置"
+                onClick={() => navigate('/settings')}
+                style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', color: 'var(--t-fg-4)' }}
               >
                 <Settings size={14} strokeWidth={1.8} />
               </button>
               {/* Attach */}
-              <button type="button" title="附件" style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', color: 'var(--t-fg-4)' }}>
+              <button
+                type="button"
+                title="附件"
+                onClick={() => fileInputRef.current?.click()}
+                style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: attachedFiles.length > 0 ? 'var(--t-accent-tint)' : 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', color: attachedFiles.length > 0 ? 'var(--t-accent-bright)' : 'var(--t-fg-4)' }}
+              >
                 <Paperclip size={14} strokeWidth={1.8} />
               </button>
               {/* Model chip */}
@@ -1578,17 +1815,19 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
               </button>
             </div>
             {/* Right — send */}
+            {/* 2026-05-11 Story 15.30 follow-up: send 按钮仅依赖 input 非空 — 不
+                看 session.isComplete (multi-turn 后续轮次允许发送)。*/}
             <button
               type="button"
               onClick={handleSend}
-              disabled={session.isComplete || !message.trim()}
+              disabled={!message.trim() && attachedFiles.length === 0}
               style={{
                 width: 32, height: 28,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 background: '#A855F7', border: '1px solid #A855F7', borderRadius: 8,
-                cursor: (session.isComplete || !message.trim()) ? 'not-allowed' : 'pointer',
+                cursor: (!message.trim() && attachedFiles.length === 0) ? 'not-allowed' : 'pointer',
                 color: '#0A0A0A',
-                opacity: (session.isComplete || !message.trim()) ? 0.4 : 1,
+                opacity: (!message.trim() && attachedFiles.length === 0) ? 0.4 : 1,
               }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -1596,29 +1835,51 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
           </div>
         </div>
 
-        {/* Generation settings popup */}
-        {showGenSettings && (
-          <div style={{ marginTop: 8, border: '1px solid var(--t-border)', borderRadius: 12, padding: '12px 14px', background: 'var(--t-panel)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <GenSettingsRow label="Temperature">
-              <input type="range" min={0} max={1} step={0.05}
-                defaultValue={parseFloat(localStorage.getItem('sf_temperature') ?? '0.7')}
-                onChange={e => localStorage.setItem('sf_temperature', e.target.value)}
-                style={{ flex: 1, accentColor: '#A855F7' }}
-              />
-            </GenSettingsRow>
-            <GenSettingsRow label="Max tokens">
-              <input type="number" min={256} max={8192} step={256}
-                defaultValue={parseInt(localStorage.getItem('sf_max_tokens') ?? '2048', 10)}
-                onChange={e => localStorage.setItem('sf_max_tokens', e.target.value)}
-                style={{ width: 80, background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 6, padding: '3px 8px', fontSize: 11, color: 'var(--t-fg)', fontFamily: 'var(--font-mono, monospace)', outline: 'none' }}
-              />
-            </GenSettingsRow>
-          </div>
-        )}
+        {/* 2026-05-11 kit alignment: composer-hint mono row below the bordered
+            input. Discloses keyboard shortcuts (⌘↵ send / Esc cancel / 📎). */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 4px 0',
+            fontFamily: 'var(--font-mono, monospace)',
+            fontSize: 9.5,
+            color: 'var(--t-fg-5)',
+            letterSpacing: '.04em',
+          }}
+        >
+          <kbd style={kbdStyle}>{kbdSendCmd()}</kbd>
+          <span>发送</span>
+          <span style={{ opacity: 0.4, padding: '0 2px' }}>·</span>
+          <kbd style={kbdStyle}>Esc</kbd>
+          <span>取消</span>
+          <span style={{ opacity: 0.4, padding: '0 2px' }}>·</span>
+          <kbd style={kbdStyle}>📎</kbd>
+          <span>附件</span>
         </div>
       </div>
     </aside>
   );
+}
+
+const kbdStyle: React.CSSProperties = {
+  padding: '1px 4px',
+  border: '1px solid var(--t-border)',
+  background: 'var(--t-panel)',
+  borderRadius: 3,
+  fontSize: 9.5,
+  fontFamily: 'var(--font-mono, monospace)',
+  color: 'var(--t-fg-4)',
+  lineHeight: 1,
+};
+
+// Mac uses ⌘↵, Windows/Linux use Ctrl+↵. Mirror useRunSession's platform-aware
+// shortcut display from the StartPage so the hint matches what the keyDown
+// handler actually accepts.
+function kbdSendCmd(): string {
+  if (typeof navigator === 'undefined') return '⌘↵';
+  return navigator.platform.toLowerCase().includes('mac') ? '⌘↵' : 'Ctrl+↵';
 }
 
 // ---------------------------------------------------------------------------
@@ -1725,6 +1986,151 @@ const KEYFRAMES = `
 }
 .rs-ov-row:first-child { border-top: none; }
 .rs-ov-row:hover { background: rgba(255,255,255,.03); }
+
+/* ── Agent profile card ─────────────────────────────── */
+.ag-card {
+  padding: 18px 20px;
+  border: 1px solid rgba(168,85,247,.45);
+  border-left: 2px solid #A855F7;
+  border-radius: 16px;
+  background: var(--t-panel);
+  box-shadow: 0 0 0 1px rgba(168,85,247,.15), 0 0 28px -8px rgba(168,85,247,.25);
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.ag-avatar {
+  width: 64px; height: 64px;
+  border-radius: 14px;
+  background: rgba(168,85,247,.18);
+  border: 1px solid rgba(168,85,247,.5);
+  color: #EDE9FE;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 800; letter-spacing: -.02em;
+  position: relative; flex-shrink: 0;
+}
+.ag-avatar::after {
+  content: ""; position: absolute; inset: -4px;
+  border-radius: 18px;
+  border: 1px solid transparent;
+  border-top-color: rgba(196,181,253,.55);
+  animation: rs-spin 2s linear infinite;
+}
+.ag-name { font-size: 18px; font-weight: 700; letter-spacing: -.01em; color: var(--t-fg); }
+.ag-id { font-family: var(--font-mono, monospace); font-size: 10.5px; color: var(--t-fg-4); margin-top: 4px; letter-spacing: .04em; }
+
+/* ── Timeline (5-col grid) ──────────────────────────── */
+.ag-tl {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.ag-tl-cell {
+  padding: 12px 13px;
+  min-height: 108px;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+  display: flex; flex-direction: column; gap: 7px;
+}
+.ag-tl-pending { border-style: dashed; opacity: .6; }
+.ag-tl-run { border-color: rgba(168,85,247,.45); background: rgba(168,85,247,.04); }
+.ag-tl-done { border-color: rgba(16,185,129,.35); }
+.ag-tl-step {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 5px; color: var(--t-fg-4);
+}
+.ag-tl-num {
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 1px solid var(--t-border);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 8.5px;
+}
+.ag-tl-done .ag-tl-num { background: #10B981; border-color: #10B981; color: #0A0A0A; }
+.ag-tl-run .ag-tl-num { background: rgba(168,85,247,.18); border-color: #A855F7; color: #C4B5FD; }
+.ag-tl-title { font-size: 12px; font-weight: 600; color: var(--t-fg); letter-spacing: -.005em; }
+.ag-tl-body { font-family: var(--font-mono, monospace); font-size: 10px; line-height: 1.55; color: var(--t-fg-3); flex: 1; }
+
+/* ── System Prompt ──────────────────────────────────── */
+.ag-prompt {
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  background: var(--t-bg);
+}
+.ag-prompt-h {
+  display: flex; justify-content: space-between;
+  padding: 7px 12px;
+  font-family: var(--font-mono, monospace);
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  border-bottom: 1px solid var(--t-border);
+  color: var(--t-fg-4);
+  background: var(--t-panel);
+}
+.ag-prompt-pre {
+  margin: 0; padding: 10px 14px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px; line-height: 1.65;
+  color: var(--t-fg-3); white-space: pre-wrap;
+}
+
+/* ── Tool Decision Log ──────────────────────────────── */
+.ag-tool-log {
+  border: 1px solid var(--t-border);
+  border-radius: 10px; overflow: hidden;
+  background: var(--t-panel);
+  margin-bottom: 14px;
+}
+.ag-tool-log-h {
+  display: flex; align-items: center;
+  padding: 7px 12px;
+  font-family: var(--font-mono, monospace);
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--t-fg-4);
+  border-bottom: 1px solid var(--t-border);
+  background: var(--t-panel);
+}
+.ag-tool-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.ag-tool-col { padding: 10px 12px; }
+.ag-tool-col-h {
+  display: flex; align-items: center; gap: 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--t-fg-4); padding-bottom: 8px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--t-border);
+}
+.ag-tool-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 6px; border-radius: 6px;
+  margin-bottom: 3px; font-size: 10.5px;
+}
+.ag-tool-ic {
+  width: 14px; height: 14px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9px; flex-shrink: 0;
+}
+.ag-tool-nm { font-family: var(--font-mono, monospace); font-size: 10.5px; font-weight: 500; color: var(--t-fg); }
+
+/* ── Live stream bar ────────────────────────────────── */
+.ag-stream {
+  padding: 9px 14px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  background: var(--t-panel);
+  display: flex; align-items: center; gap: 10px;
+  color: var(--t-fg-3);
+}
+.ag-stream-lbl {
+  font-size: 9px; font-weight: 700; letter-spacing: .14em;
+  color: var(--t-fg-5);
+}
 `;
 
 function InjectKeyframes() {
@@ -1980,6 +2386,15 @@ function RunSessionLiveView({ sessionId, goal, onNavigate }: RunSessionLiveViewP
   const [zoom, setZoom] = useState(82);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
+  // 2026-05-11 Layer 1 — chat-mode detection (mirrors LeftPanel).
+  // Triggers when no canvas events at all AND either text streamed in OR
+  // the run completed silently. Collapses the right canvas panel.
+  const isChatMode =
+    (session.chatReply.length > 0 || session.isComplete) &&
+    session.steps.length === 0 &&
+    session.nodes.length === 0 &&
+    !session.blueprintFile;
+
   function handleOpenEditor() {
     if (session.redirectUrl) {
       onNavigate(session.redirectUrl);
@@ -1994,7 +2409,11 @@ function RunSessionLiveView({ sessionId, goal, onNavigate }: RunSessionLiveViewP
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: collapsed ? '44px 1fr' : '420px 1fr',
+          // 2026-05-11 Layer 1: chat mode collapses the right canvas panel
+          // (nothing to draw when LLM is plain-text-replying).
+          gridTemplateColumns: isChatMode
+            ? '1fr'
+            : (collapsed ? '44px 1fr' : '420px 1fr'),
           height: '100vh',
           background: 'var(--t-bg)',
           color: 'var(--t-fg)',
@@ -2010,15 +2429,17 @@ function RunSessionLiveView({ sessionId, goal, onNavigate }: RunSessionLiveViewP
           collapsed={collapsed}
           onCollapse={() => setCollapsed((v) => !v)}
         />
-        <RightPanel
-          session={session}
-          onOpenEditor={handleOpenEditor}
-          zoom={zoom}
-          onZoomChange={setZoom}
-          selectedNodeId={selectedNodeId}
-          onSelectNode={setSelectedNodeId}
-          sessionId={sessionId}
-        />
+        {!isChatMode && (
+          <RightPanel
+            session={session}
+            onOpenEditor={handleOpenEditor}
+            zoom={zoom}
+            onZoomChange={setZoom}
+            selectedNodeId={selectedNodeId}
+            onSelectNode={setSelectedNodeId}
+            sessionId={sessionId}
+          />
+        )}
       </div>
     </>
   );

@@ -11,13 +11,20 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { listRuns } from '../storage/runs';
+import { listRuns, deleteRun } from '../storage/runs';
 
 const router = Router();
 
 // GET /runs → RunRecord[] (raw array, NOT envelope — see contract note above)
 router.get('/', (_req: Request, res: Response) => {
   res.json(listRuns());
+});
+
+// DELETE /runs/:runId
+router.delete('/:runId', (req: Request, res: Response) => {
+  const deleted = deleteRun(req.params.runId);
+  if (deleted) res.json({ ok: true });
+  else res.status(404).json({ error: `Run ${req.params.runId} not found` });
 });
 
 // GET /runs/:runId → placeholder 404 with JSON body

@@ -162,6 +162,19 @@ export function parseAndExtract(
     return '';
   });
 
+  // 2026-05-11 Layer 1 — strip <sf:discovery>...</sf:discovery>. Claude is
+  // told by DISCOVERY_CHARTER to emit this block at the start of every
+  // first reply (intent restatement + plan + ambiguities). The block is
+  // metadata for an inspector view — we don't surface it in the chat
+  // bubble, but if we leave it un-stripped the text-emit branch below
+  // holds back forever waiting for an unknown tag to close. We emit a
+  // `discovery` event so downstream tools could read it; current UI just
+  // ignores. Use [\s\S] so newlines inside the block match.
+  buffer = buffer.replace(/<sf:discovery>([\s\S]*?)<\/sf:discovery>/g, (_match, content: string) => {
+    events.push({ event: 'discovery', data: { body: content.trim() } });
+    return '';
+  });
+
   // sf:complete  (self-closing, attrs optional). Allow attribute values that
   // themselves contain `/` (e.g. redirect="/editor"). We accept any chars that
   // are not `>` until we hit the literal `/>` terminator.
@@ -178,5 +191,42 @@ export function parseAndExtract(
     return '';
   });
 
+  // 2026-05-11 Layer 1 — defensive: any FULLY CLOSED unknown <sf:foo>...</sf:foo>
+  // block left in the buffer would otherwise deadlock the text emit branch
+  // below (it would hold back at `<`). Strip them and emit a generic
+  // `unknown-tag` event so we don't lose information silently. Self-closing
+  // unknown tags (<sf:foo .../>) get the same treatment.
+  buffer = buffer.replace(/<sf:([\w-]+)>([\s\S]*?)<\/sf:\1>/g, (_match, name: string, content: string) => {
+    events.push({ event: 'unknown-tag', data: { name, body: content.trim() } });
+    return '';
+  });
+  buffer = buffer.replace(/<sf:([\w-]+)\s+((?:[^>"']|"[^"]*"|'[^']*')*?)\/>/g, (_match, name: string, attrs: string) => {
+    events.push({ event: 'unknown-tag', data: { name, attrs: parseAttrs(attrs) } });
+    return '';
+  });
+
+  // 2026-05-11 Layer 1 — Claude Code-style conversation mode.
+  // After stripping all known + unknown closed tags, the residual non-tag
+  // text is the LLM's plain natural-language reply. Emit as `text` events.
+  // We only hold back content from the first `<sf:` or `<artifact` prefix
+  // onward — those could be partial tags still streaming. Other `<`
+  // (literal markup the LLM might write, or math like `<5`) flows through.
+  const partialTagIdx = findPartialTagStart(buffer);
+  const safeText = partialTagIdx === -1 ? buffer : buffer.slice(0, partialTagIdx);
+  if (safeText.length > 0) {
+    events.push({ event: 'text', data: { text: safeText } });
+    buffer = partialTagIdx === -1 ? '' : buffer.slice(partialTagIdx);
+  }
+
   return { buffer, events };
+}
+
+// Find the earliest position where the buffer starts a potentially-incomplete
+// known tag (`<sf:` or `<artifact`). Returns -1 if no such prefix exists.
+function findPartialTagStart(buf: string): number {
+  const a = buf.indexOf('<sf:');
+  const b = buf.indexOf('<artifact');
+  if (a === -1) return b;
+  if (b === -1) return a;
+  return Math.min(a, b);
 }

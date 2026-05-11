@@ -220,23 +220,54 @@ export const PetSettings: React.FC = () => {
   const [showPicker, setShowPicker] = useState(false);
   const [customExpanded, setCustomExpanded] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ wrote: number; failed: number } | null>(null);
+  const [syncResult, setSyncResult] = useState<{ wrote: number; failed: number; total: number } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncUpstreamErrors, setSyncUpstreamErrors] = useState<string[]>([]);
 
   async function handleSync() {
     setSyncing(true);
     setSyncResult(null);
     setSyncError(null);
+    setSyncUpstreamErrors([]);
     try {
       const res = await fetch(`${API_BASE}/api/settings/pets/sync?limit=24`, {
         method: 'POST',
         signal: AbortSignal.timeout(30000),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        // 2026-05-11 bug fix: 503 from Node→Python proxy shows real backend
+        // status; surface it instead of generic "network failure".
+        let bodyText = '';
+        try {
+          const errBody = await res.json();
+          bodyText = errBody?.error?.hint ?? errBody?.error?.message ?? errBody?.detail ?? '';
+        } catch {
+          /* not JSON */
+        }
+        if (res.status === 503) {
+          setSyncError(
+            `后端服务不可达（HTTP 503）${bodyText ? ' — ' + bodyText : ''}`,
+          );
+        } else {
+          setSyncError(`同步失败（HTTP ${res.status}）${bodyText ? ' — ' + bodyText : ''}`);
+        }
+        return;
+      }
       const data = await res.json();
-      setSyncResult({ wrote: data.wrote ?? 0, failed: data.failed ?? 0 });
+      setSyncResult({
+        wrote: data.wrote ?? 0,
+        failed: data.failed ?? 0,
+        total: data.total ?? 0,
+      });
+      // 2026-05-11 bug fix: Python pet sync returns errors[] when upstream
+      // community APIs (Supabase / j20.nz) are down. UI must surface those —
+      // previously hidden, user saw "network failure" with no actionable hint.
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        setSyncUpstreamErrors(data.errors);
+      }
     } catch (e) {
-      setSyncError('同步失败，请检查网络连接');
+      const msg = e instanceof Error ? e.message : String(e);
+      setSyncError(`同步失败：${msg}`);
     } finally {
       setSyncing(false);
     }
@@ -384,15 +415,43 @@ export const PetSettings: React.FC = () => {
           >
             {syncing ? '同步中…' : '同步社区宠物'}
           </button>
-          {syncResult && (
+          {syncResult && syncResult.wrote > 0 && (
             <span className="font-mono text-[11px] text-sf-ok">
               ✓ 新增 {syncResult.wrote} 只{syncResult.failed > 0 ? `，失败 ${syncResult.failed}` : ''}
+            </span>
+          )}
+          {syncResult && syncResult.total === 0 && syncUpstreamErrors.length === 0 && (
+            <span className="font-mono text-[11px] text-sf-fg4">
+              社区暂无新宠物
             </span>
           )}
           {syncError && (
             <span className="font-mono text-[11px] text-sf-reject">{syncError}</span>
           )}
         </div>
+        {/* 2026-05-11 bug fix: surface upstream community API failures
+            (Supabase / j20.nz) so user sees the actual cause rather than
+            generic "network failure". */}
+        {syncUpstreamErrors.length > 0 && (
+          <div
+            className="mt-2 rounded-md border border-sf-border bg-sf-elev1 p-3 text-[11px]"
+            role="alert"
+          >
+            <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-sf-fg4">
+              社区源不可用（{syncUpstreamErrors.length} 个）
+            </div>
+            <ul className="space-y-1 text-sf-fg3">
+              {syncUpstreamErrors.map((err, i) => (
+                <li key={i} className="break-all">
+                  <span className="font-mono text-sf-reject">•</span> {err}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-2 text-sf-fg4">
+              这是社区 pet share API（Supabase / j20.nz）的问题，跟你的网络无关。可稍后重试或使用「自定义宠物」上传自己的精灵图。
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

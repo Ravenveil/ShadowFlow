@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef } from 'react';
 import { subscribeRunSession } from '../../api/runSessions';
-import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent } from '../../api/runSessions';
+import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent } from '../../api/runSessions';
 
 export interface RunSessionNode {
   id: string;
@@ -54,16 +54,20 @@ export interface RunSessionState {
   // Story 15.14 — critique pass result + progress.
   critiqueResult: CritiqueResultEvent | null;
   critiqueProgress: CritiqueProgressEvent | null;
+  // 2026-05-11 Layer 1 — accumulated plain-text reply from the LLM. When the
+  // LLM decides the goal is trivial (e.g. "hi") it streams natural language
+  // here instead of <sf:*> tags, and RunSessionPage renders a chat bubble.
+  chatReply: string;
 }
 
-const INITIAL_STEPS: RunSessionStep[] = [
-  { name: '分析目标需求', status: 'pending' },
-  { name: '规划 Agent 角色结构', status: 'pending' },
-  { name: '生成 YAML Blueprint', status: 'pending' },
-  { name: '创建 Agent 节点', status: 'pending' },
-  { name: '配置 Team Workflow', status: 'pending' },
-  { name: '完成 — 跳转 Editor', status: 'pending' },
-];
+// 2026-05-11 UX fix — steps are now driven entirely by `<sf:step>` events
+// from the assembler (each skill / executor can emit its own step labels).
+// Previously hard-coded 6 zh-CN labels for agent-team-blueprint shown as
+// placeholder "pending" rows before any work started, leaking the
+// implementation detail (which skill / how many steps) before the LLM
+// returned anything. Now the panel shows "等待开始…" until the first
+// running step arrives, then appends each step as it appears.
+const INITIAL_STEPS: RunSessionStep[] = [];
 
 type Action =
   | { type: 'CLASSIFY'; payload: ClassifyEvent }
@@ -79,7 +83,8 @@ type Action =
   | { type: 'ERROR'; message: string }
   | { type: 'RETRYING'; attempt: number; delayMs: number }
   | { type: 'CRITIQUE_PROGRESS'; payload: CritiqueProgressEvent }
-  | { type: 'CRITIQUE_RESULT'; payload: CritiqueResultEvent };
+  | { type: 'CRITIQUE_RESULT'; payload: CritiqueResultEvent }
+  | { type: 'TEXT'; payload: TextEvent };
 
 function reducer(state: RunSessionState, action: Action): RunSessionState {
   switch (action.type) {
@@ -87,9 +92,18 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       return { ...state, outputType: action.payload.output_type, mode: action.payload.mode, confidence: action.payload.confidence };
     case 'ASSEMBLE': {
       const { step, status, elapsed_ms } = action.payload;
-      const steps = state.steps.map(s =>
-        s.name === step ? { ...s, status, elapsed: elapsed_ms ? `${(elapsed_ms / 1000).toFixed(1)}s` : s.elapsed } : s
-      );
+      // 2026-05-11 UX fix — append step if first time seen, otherwise update
+      // in place. Eliminates the "6 pending placeholders" pre-render. Each
+      // step now appears only when the assembler announces it.
+      const elapsedFmt = elapsed_ms ? `${(elapsed_ms / 1000).toFixed(1)}s` : undefined;
+      const existingIdx = state.steps.findIndex(s => s.name === step);
+      const steps: RunSessionStep[] = existingIdx === -1
+        ? [...state.steps, { name: step, status, elapsed: elapsedFmt }]
+        : state.steps.map((s, i) =>
+            i === existingIdx
+              ? { ...s, status, elapsed: elapsedFmt ?? s.elapsed }
+              : s,
+          );
       const thinking = status === 'running' ? `正在执行：${step}…` : null;
       return { ...state, steps, thinkingMessage: thinking };
     }
@@ -142,6 +156,8 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       return { ...state, critiqueProgress: action.payload };
     case 'CRITIQUE_RESULT':
       return { ...state, critiqueResult: action.payload, critiqueProgress: null };
+    case 'TEXT':
+      return { ...state, chatReply: state.chatReply + action.payload.text, thinkingMessage: null };
     default:
       return state;
   }
@@ -157,6 +173,7 @@ export function useRunSession(sessionId: string): RunSessionState {
     rationaleCards: [], yamlLines: [], activeSubsteps: [],
     error: null, retrying: false, retryAttempt: 0, retryDelayMs: 0,
     critiqueResult: null, critiqueProgress: null,
+    chatReply: '',
   });
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -176,6 +193,7 @@ export function useRunSession(sessionId: string): RunSessionState {
       onSubstep:   (d) => dispatch({ type: 'SUBSTEP', payload: d }),
       onCritiqueProgress: (d) => dispatch({ type: 'CRITIQUE_PROGRESS', payload: d }),
       onCritiqueResult:   (d) => dispatch({ type: 'CRITIQUE_RESULT', payload: d }),
+      onText:          (d) => dispatch({ type: 'TEXT', payload: d }),
       onRetrying:      (attempt, delayMs) => dispatch({ type: 'RETRYING', attempt, delayMs }),
       onError:         () => dispatch({ type: 'ERROR', message: 'SSE 连接失败，已达最大重试次数' }),
       onServerError:   (message) => dispatch({ type: 'ERROR', message }),

@@ -35,13 +35,14 @@ import {
   Pause,
   CheckCircle2,
   XCircle,
+  Trash2,
 } from 'lucide-react';
 import { getApiBase } from '../api/_base';
 import { useSecretsStore } from '../core/hooks/useSecretsStore';
 import { listCatalogApps } from '../api/catalog';
 import { listPacks } from '../api/knowledge';
 import type { KnowledgePack } from '../common/types/knowledge';
-import { listRuns } from '../api/runs';
+import { listRuns, deleteRun } from '../api/runs';
 import type { RunRecord } from '../api/runs';
 import type { CatalogAppSummary } from '../common/types/catalog';
 import { GoalClarityWizard } from '../core/components/builder/GoalClarityWizard';
@@ -483,17 +484,22 @@ function fmtRelative(iso: string): string {
 
 function RecentRuns() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [runs, setRuns] = useState<RunRecord[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     listRuns()
-      // Story 15.8 — listRuns now returns RunRecord[] (envelope unwrapped in
-      // the API client). Slice to the latest 6 — backend already sorts DESC.
       .then((data) => { if (!cancelled) setRuns(data.slice(0, 6)); })
       .catch(() => { if (!cancelled) setRuns([]); });
     return () => { cancelled = true; };
   }, []);
+
+  const handleDelete = async (e: React.MouseEvent, runId: string) => {
+    e.stopPropagation();
+    setRuns(prev => prev?.filter(r => r.run_id !== runId) ?? prev);
+    try { await deleteRun(runId); } catch { /* best-effort */ }
+  };
 
   if (runs !== null && runs.length === 0) return null;
 
@@ -519,13 +525,8 @@ function RecentRuns() {
               <div
                 key={run.run_id}
                 className="hf-card"
-                style={{
-                  padding: '10px 12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 6,
-                  cursor: 'pointer',
-                }}
+                onClick={() => navigate(`/run-session/${run.session_id}?goal=${encodeURIComponent(run.goal ?? '')}`)}
+                style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer', position: 'relative' }}
                 title={run.goal}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
@@ -536,6 +537,14 @@ function RecentRuns() {
                     <meta.Icon size={10} strokeWidth={2.5} aria-hidden />
                     {meta.label}
                   </span>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDelete(e, run.run_id)}
+                    title="删除"
+                    style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 0, borderRadius: 4, cursor: 'pointer', color: 'var(--t-fg-4)', flexShrink: 0, opacity: 0.5 }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--t-err, #ef4444)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.color = 'var(--t-fg-4)'; }}
+                  ><Trash2 size={12} strokeWidth={2} /></button>
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)', display: 'flex', justifyContent: 'space-between', gap: 6 }}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

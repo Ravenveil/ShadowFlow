@@ -1,25 +1,96 @@
 /**
  * claude-stream-json.ts — Anthropic Claude CLI line-delimited JSON parser (Story 15.19 v2)
  *
- * `claude --output-format stream-json --print` emits one JSON event per line:
- *   {"type":"content_block_delta","delta":{"text":"..."}}
- *   {"type":"message_start", ...}
- *   {"type":"message_stop"}
+ * 2026-05-11 bug fix — `claude --output-format stream-json --verbose` (the
+ * args we now spawn with) emits a NESTED envelope:
  *
- * We extract the text deltas, accumulate them into a buffer, and feed that
- * buffer to `parseAndExtract` so any embedded `<sf:*>` tags emitted by the
- * skill prompt are translated to the same SSE events the existing
- * `anthropic-direct` path produces.
+ *   {"type":"system","subtype":"init",...}
+ *   {"type":"stream_event","event":{"type":"message_start", ...}}
+ *   {"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"..."}}}
+ *   {"type":"stream_event","event":{"type":"content_block_stop","index":0}}
+ *   {"type":"assistant","message":{"id":"...","content":[...]}}
+ *   {"type":"result","usage":{...},"total_cost_usd":...,"stop_reason":"end_turn"}
+ *
+ * Earlier code only matched the FLAT `evt.type==='content_block_delta'` shape
+ * (the non-verbose mode), so every line was silently skipped, text_delta
+ * never accumulated, and the front-end saw a hung SSE stream → "已达最大
+ * 重试次数". This parser now handles BOTH the flat (legacy) and nested
+ * (verbose) envelopes, plus the `result` terminator. Reference:
+ * github.com/nexu-io/open-design apps/daemon/src/claude-stream.ts.
  */
 
 import type { Readable } from 'node:stream';
 import { parseAndExtract, type SseEvent } from '../../parser';
 import type { CliStreamArtifactCb } from './plain-line';
 
-interface ClaudeJsonEvent {
-  type?: string;
-  delta?: { text?: string; type?: string };
-  // We don't care about other fields — schema is permissive on purpose.
+interface DeltaShape {
+  type?: string;       // 'text_delta' | 'thinking_delta' | 'input_json_delta'
+  text?: string;
+  thinking?: string;
+  partial_json?: string;
+}
+
+interface ClaudeFlatEvent {
+  type?: string;        // legacy flat: 'content_block_delta' | 'message_start' | ...
+  delta?: DeltaShape;
+  // 'result' carries usage / stop_reason at the top level
+  stop_reason?: string;
+  usage?: Record<string, unknown>;
+  // 'assistant' / 'user' carry message
+  message?: { content?: Array<{ type?: string; text?: string }> };
+}
+
+interface ClaudeNestedEvent extends ClaudeFlatEvent {
+  // verbose mode: `{type:'stream_event', event:{...}}` wraps the real event.
+  event?: ClaudeFlatEvent;
+  subtype?: string;     // 'system' subtype: 'init' | 'status'
+}
+
+type ClaudeJsonEvent = ClaudeNestedEvent;
+
+/**
+ * Extract a text delta from a single parsed JSON line, regardless of whether
+ * it's the flat or nested envelope. Returns the text to append, or '' if the
+ * event carries no text content.
+ */
+function extractTextDelta(evt: ClaudeJsonEvent): string {
+  // Flat: { type: 'content_block_delta', delta: { type: 'text_delta', text } }
+  if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta' && typeof evt.delta.text === 'string') {
+    return evt.delta.text;
+  }
+  // Flat (legacy non-verbose): { type: 'content_block_delta', delta: { text } }
+  if (evt.type === 'content_block_delta' && typeof evt.delta?.text === 'string') {
+    return evt.delta.text;
+  }
+  // Nested (verbose): { type: 'stream_event', event: { type: 'content_block_delta', delta: {...} } }
+  if (evt.type === 'stream_event' && evt.event) {
+    const inner = evt.event;
+    if (inner.type === 'content_block_delta' && inner.delta?.type === 'text_delta' && typeof inner.delta.text === 'string') {
+      return inner.delta.text;
+    }
+    if (inner.type === 'content_block_delta' && typeof inner.delta?.text === 'string') {
+      return inner.delta.text;
+    }
+  }
+  // Final 'assistant' message wrapper — drain any text content blocks the
+  // verbose stream may not have surfaced individually.
+  if (evt.type === 'assistant' && Array.isArray(evt.message?.content)) {
+    let acc = '';
+    for (const block of evt.message!.content!) {
+      if (block && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string') {
+        acc += block.text;
+      }
+    }
+    return acc;
+  }
+  return '';
+}
+
+/** Is this a stream-terminator event? (`message_stop` / `result`) */
+function isTerminator(evt: ClaudeJsonEvent): boolean {
+  if (evt.type === 'message_stop' || evt.type === 'result') return true;
+  if (evt.type === 'stream_event' && evt.event?.type === 'message_stop') return true;
+  return false;
 }
 
 export async function* parseClaudeStreamJson(
@@ -70,19 +141,19 @@ export async function* parseClaudeStreamJson(
         continue;
       }
 
-      if (
-        evt.type === 'content_block_delta' &&
-        evt.delta &&
-        typeof evt.delta.text === 'string'
-      ) {
-        textBuf += evt.delta.text;
+      // 2026-05-11 — accept both flat and nested envelopes; see file header.
+      const text = extractTextDelta(evt);
+      if (text) {
+        textBuf += text;
         const { buffer: remaining, events } = parseAndExtract(textBuf, sessionId, artifactCb);
         textBuf = remaining;
         for (const e of events) {
           if (e.event === 'complete') sawComplete = true;
           yield e;
         }
-      } else if (evt.type === 'message_stop') {
+        continue;
+      }
+      if (isTerminator(evt)) {
         // Drain whatever's left in the text buffer.
         if (textBuf.trim()) {
           const { buffer: remaining, events } = parseAndExtract(textBuf, sessionId, artifactCb);
@@ -96,13 +167,12 @@ export async function* parseClaudeStreamJson(
     }
   }
 
-  // Stream-end drain.
+  // Stream-end drain — same dual-envelope handling.
   if (lineBuf.trim()) {
     try {
       const evt = JSON.parse(lineBuf) as ClaudeJsonEvent;
-      if (evt.delta && typeof evt.delta.text === 'string') {
-        textBuf += evt.delta.text;
-      }
+      const text = extractTextDelta(evt);
+      if (text) textBuf += text;
     } catch {
       // ignore
     }

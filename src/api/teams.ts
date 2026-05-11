@@ -91,9 +91,12 @@ export async function createTeam(req: CreateTeamRequest): Promise<TeamRecord> {
 }
 
 export async function listTeams(workspaceId?: string): Promise<TeamRecord[]> {
-  const url = new URL(`${API_BASE_URL}/api/teams`);
-  if (workspaceId) url.searchParams.set('workspace_id', workspaceId);
-  const res = await fetch(url.toString());
+  // 2026-05-11 fix — `new URL('/api/teams')` (no host) throws TypeError. When
+  // API_BASE_URL is empty (default, relative URLs go through Vite proxy) we
+  // build the query string manually instead. Symptom was `/teams` page
+  // permanently stuck on 加载失败 even though Node proxy returned 200.
+  const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+  const res = await fetch(`${API_BASE_URL}/api/teams${qs}`);
   const env = await _handleResponse<Envelope<TeamRecord[]>>(res);
   return env.data;
 }

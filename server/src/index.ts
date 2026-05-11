@@ -18,12 +18,15 @@ import cliRouter from './routes/cli';
 import acpRouter from './routes/acp';
 // Story 15.14 — POST /api/artifacts/lint
 import artifactsRouter from './routes/artifacts';
+// Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
+import llmRouter from './routes/llm';
 import { detectAll } from './cli-detector';
 import { detectAcpAgents } from './acp-detector';
 import projectsRouter from './routes/projects';
 import conversationsRouter, {
   projectScopedConversationsRouter,
 } from './routes/conversations';
+import { proxyFallback } from './proxy-fallback';
 import { initSqlite } from './storage/sqlite';
 import { reloadSkills } from './skills';
 import {
@@ -88,6 +91,15 @@ app.use('/api/artifacts', artifactsRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/projects', projectScopedConversationsRouter);
 app.use('/api/conversations', conversationsRouter);
+// Part D — LLM protocol entrypoints. MUST be mounted BEFORE proxyFallback
+// otherwise /api/llm/* would be forwarded to Python instead of handled here.
+app.use('/api/llm', llmRouter);
+
+// ── Fallback to Python FastAPI (default :8000) ────────────────────────────────
+// Single-port UX: any /api/* not matched by the 12 Node routers above is
+// transparently proxied to the Python backend. Mounted BEFORE the 404 catch-all
+// so unmatched /api/* paths reach Python instead of returning a Node 404.
+app.use('/api', proxyFallback);
 
 // ── Static artifacts (Story 15.2) ─────────────────────────────────────────────
 // Serves files written by runSkillAssembler under .shadowflow/projects/<id>/
@@ -181,7 +193,7 @@ detectAcpAgents(true)
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
-  const mode = process.env.ANTHROPIC_API_KEY ? 'Claude-powered' : 'fallback-simulation';
+  const mode = process.env.ANTHROPIC_API_KEY ? 'Claude-powered (server key)' : 'BYOK (user-supplied key)';
   console.log(`
 ╔══════════════════════════════════════════════════════╗
 ║          ShadowFlow API Server — Port ${PORT}          ║
