@@ -190,14 +190,27 @@ export function getOrCreateProject(
     );
   }
 
-  getDb()
-    .prepare(
-      `INSERT INTO projects
-       (project_id, name, workspace_path, skill_id, design_system_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(project_id, name, workspace_path, null, null, now, now);
+  // 2026-05-11 review M3 (15.29 race window): 双 tab cold start 同时 auto-create
+  // 'default' 时两个 SELECT 都看到 null → 两个 INSERT → 第二个 PK 冲突 throw 500。
+  // INSERT OR IGNORE + 失败再 SELECT 是 OpenDesign 标准 upsert 模式。
+  try {
+    getDb()
+      .prepare(
+        `INSERT OR IGNORE INTO projects
+         (project_id, name, workspace_path, skill_id, design_system_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(project_id, name, workspace_path, null, null, now, now);
+  } catch (err) {
+    // INSERT OR IGNORE 几乎不会 throw，但兜底再读一次保正确性
+    console.warn(`[projects] getOrCreateProject INSERT failed (will re-select): ${(err as Error).message}`);
+  }
 
+  // 不论 INSERT 是否落地（或被 OR IGNORE 跳过），权威读 SELECT 取最终行。
+  const final = getProject(project_id);
+  if (final) return final;
+
+  // 极端情况下 SELECT 仍返回 null（DB 异常）— 返回 in-memory 兜底，不阻断调用方。
   return {
     project_id,
     name,

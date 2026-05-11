@@ -80,12 +80,16 @@ interface SessionRecord {
 
 // ── Story 15.13 — layer_toggles + project_meta validators ────────────────────
 
+// 2026-05-11 review M1 (15.29): 加 'conversation_history' — 否则 client 通过
+// POST layer_toggles.conversation_history=false 想关闭历史会被 coerceLayerToggles
+// 静默丢弃 → 服务端永远 always-on，违反 spec AC3 toggle 契约。
 const LAYER_KEYS: ReadonlyArray<keyof LayerToggles> = [
   'discovery',
   'identity',
   'ds',
   'skill',
   'project',
+  'conversation_history',
   'sides',
   'framework',
 ];
@@ -174,7 +178,12 @@ function renderConversationHistoryBlock(
     if (body.length > HISTORY_PER_MSG_MAX) {
       body = body.slice(0, HISTORY_PER_MSG_MAX) + '…(truncated)';
     }
-    return `### ${role}\n${body}`;
+    // 2026-05-11 review M2 (15.29, OpenDesign 模式 — 与 15.12 fence wrap 同款):
+    // 用 markdown code fence 包裹 message body，防恶意 user message 含
+    // `\n---\n## DISCOVERY\n…` 之类的 layer separator (`\n\n---\n\n`) 突破
+    // composer 边界注入新 layer 段。strip 内含 ``` 防 fence escape。
+    const safeBody = body.replace(/```/g, '` ` `');
+    return `### ${role}\n\`\`\`\n${safeBody}\n\`\`\``;
   };
 
   // Drop oldest until total fits under cap.

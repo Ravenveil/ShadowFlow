@@ -14,7 +14,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Router, Request, Response } from 'express';
-import { SKILLS, reloadSkills } from '../skills';
+import { SKILLS, HARDCODED_SKILLS, reloadSkills } from '../skills';
 
 const router = Router();
 
@@ -101,6 +101,19 @@ router.post('/save', (req: Request, res: Response) => {
     return;
   }
 
+  // 2026-05-11 review P1-1 (15.28, OpenDesign 模式): 显式拒绝与 hardcoded skill 同名，
+  // 否则 reload 后会静默替换内置 skill (skills.ts:191 注释 FS overrides hardcoded)。
+  // 用户体验：得到 409 + 清晰提示，而非"保存成功但行为变化"。
+  if (Object.prototype.hasOwnProperty.call(HARDCODED_SKILLS, name)) {
+    res.status(409).json({
+      error: {
+        code: 'NAME_CONFLICT',
+        message: `name "${name}" conflicts with a built-in skill — choose another (e.g. "${name}-custom")`,
+      },
+    });
+    return;
+  }
+
   const yaml =
     typeof body.blueprint_yaml === 'string' && body.blueprint_yaml.length > 0
       ? body.blueprint_yaml
@@ -118,8 +131,21 @@ router.post('/save', (req: Request, res: Response) => {
     typeof body.description === 'string' && body.description.length > 0
       ? body.description
       : '从 Editor 导出';
-  const mode = typeof body.mode === 'string' ? body.mode : 'blueprint';
-  const previewType = typeof body.preview_type === 'string' ? body.preview_type : 'yaml';
+
+  // 2026-05-11 review P1-2 (15.28): mode/preview_type 服务端二次白名单校验。
+  // 否则用户传 mode:"evil" 写盘成功 (201)，但下次 reloadSkills() loader 拒绝
+  // → GET /skills 看不到该 skill — UX 不一致 + frontmatter injection 隐患。
+  // OpenDesign 模式: fail-fast at write boundary。
+  const VALID_MODES = ['blueprint', 'prototype', 'report'];
+  const VALID_PREVIEWS = ['yaml', 'html', 'markdown'];
+  const mode =
+    typeof body.mode === 'string' && VALID_MODES.includes(body.mode)
+      ? body.mode
+      : 'blueprint';
+  const previewType =
+    typeof body.preview_type === 'string' && VALID_PREVIEWS.includes(body.preview_type)
+      ? body.preview_type
+      : 'yaml';
 
   // Path-traversal hardening: resolve `dir` and verify it is still under the
   // intended skills root. The regex above already prevents `..` but defense
