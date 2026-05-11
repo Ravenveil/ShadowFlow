@@ -33,7 +33,11 @@ export async function* dispatchSkillRunner(
   input: RunnerInput,
   _skill?: SkillForDispatch,
 ): AsyncGenerator<RunnerChunk> {
-  const exec = executor && executor.trim().length > 0 ? executor.trim() : 'anthropic-direct';
+  // 2026-05-11 Story 15.30 (OpenDesign 模式 — local CLI first, BYOK fallback):
+  // 默认 'cli:auto' 而非 'anthropic-direct'。cli:auto 路径本身有优雅 fallback
+  // (line 50)：检测到 CLI 用 CLI（无需 BYOK），没 CLI 才退 anthropic-direct。
+  // 用户可在 Settings → Generation 显式选 'anthropic-direct' 强制用 BYOK。
+  const exec = executor && executor.trim().length > 0 ? executor.trim() : 'cli:auto';
 
   // 1. Default / explicit anthropic-direct.
   if (exec === 'anthropic-direct') {

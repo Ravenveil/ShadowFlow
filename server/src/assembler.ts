@@ -377,7 +377,9 @@ export async function* runSkillAssembler(
   const projectDir = path.join(process.cwd(), '.shadowflow', 'projects', session_id);
 
   // Story 15.19 v2 — executor resolution priority: opts > skill > default.
-  const executor = opts.executor ?? skill.executor ?? 'anthropic-direct';
+  // 2026-05-11 Story 15.30: default 'cli:auto' (OpenDesign 模式) — dispatcher
+  // 内部找不到 CLI 时优雅 fallback 到 anthropic-direct，仍兼容 BYOK 流程。
+  const executor = opts.executor ?? skill.executor ?? 'cli:auto';
 
   console.log(
     `[skill-assembler] session=${session_id} executor=${executor}` +

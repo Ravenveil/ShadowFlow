@@ -47,6 +47,20 @@ export interface RunSessionCreateRequest {
    */
   provider?: ProviderId;
   /**
+   * Story 15.19 v2 / 15.23 — explicit executor override. Values:
+   *   - 'anthropic-direct' (default; Anthropic SDK via provider dispatch)
+   *   - 'cli:auto' / 'cli:<id>' (spawn local CLI binary; 15.19 v2)
+   *   - 'acp:<id>' / 'mcp:<server>/<tool>' (remote agent; 15.23)
+   * createRunSession reads `sf.defaultExecutor` from localStorage at request
+   * time so the Settings panel choice takes effect without page reload.
+   */
+  executor?: string;
+  /**
+   * Story 15.14 follow-up — UI toggle (GenerationSettings). `false` skips
+   * the server-side critique pass; `undefined` defers to settings.json.
+   */
+  auto_critique?: boolean;
+  /**
    * Story 15.29 — link this run to a Conversation. When omitted, the server
    * auto-creates an anonymous conversation under the 'default' project and
    * returns its id on the response so the client can persist + auto-select it
@@ -207,6 +221,13 @@ export function subscribeRunSession(
   let retryCount = 0;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let cancelled = false;
+  // 2026-05-11 fix: 区分 server-side fatal error（命名 SSE error 事件，如 NO_API_KEY）
+  // vs 网络层 onerror（连接断开 / readyState=CLOSED）。server fatal 之后 server
+  // 主动 res.end() 会让 EventSource 同时触发原生 onerror — 不应再 retry，否则
+  // 5 次都同样失败，UX 显示"已达最大重试次数"误导用户。OpenDesign `terminated`
+  // 标志位同模式。
+  let serverTerminated = false;
+  // 'complete' 事件也算 terminal — 服务端正常收尾后 EventSource 也会触发 onerror。
   const maxRetries = options?.maxRetries ?? 5;
   const baseDelay = options?.baseDelay ?? 1000;
 
@@ -223,7 +244,13 @@ export function subscribeRunSession(
     es.addEventListener('node',      (e) => { const d = parse(e as MessageEvent); if (d) handlers.onNode?.(d); });
     es.addEventListener('edge',      (e) => { const d = parse(e as MessageEvent); if (d) handlers.onEdge?.(d); });
     es.addEventListener('blueprint', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onBlueprint?.(d); });
-    es.addEventListener('complete',  (e) => { const d = parse(e as MessageEvent); if (d) handlers.onComplete?.(d); });
+    es.addEventListener('complete',  (e) => {
+      // 2026-05-11 fix: complete 是 terminal — 之后 server.end() 会让 onerror 触发，
+      // 不应再 retry。
+      serverTerminated = true;
+      const d = parse(e as MessageEvent);
+      if (d) handlers.onComplete?.(d);
+    });
     es.addEventListener('rationale', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onRationale?.(d); });
     es.addEventListener('yaml-line', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onYamlLine?.(d); });
     es.addEventListener('substep',   (e) => { const d = parse(e as MessageEvent); if (d) handlers.onSubstep?.(d); });
@@ -232,13 +259,20 @@ export function subscribeRunSession(
     es.addEventListener('critique-result',   (e) => { const d = parse(e as MessageEvent); if (d) handlers.onCritiqueResult?.(d); });
     es.addEventListener('error',     (e) => {
       const d = parse(e as MessageEvent);
-      if (d?.message) { es?.close(); handlers.onServerError?.(d.message as string, d.code as string | undefined); }
+      if (d?.message) {
+        // 2026-05-11 fix: server-side fatal error — 标记 terminated 防 onerror 误判网络错重试。
+        serverTerminated = true;
+        es?.close();
+        handlers.onServerError?.(d.message as string, d.code as string | undefined);
+      }
     });
 
     es.onerror = (err) => {
       es?.close();
-      if (cancelled || retryCount >= maxRetries) {
-        handlers.onError?.(err);
+      // 2026-05-11 fix: 如果 server 已经主动结束（complete 或命名 error），onerror
+      // 是预期的副作用而非真网络错——直接退出，不要 retry，不要 onError。
+      if (serverTerminated || cancelled || retryCount >= maxRetries) {
+        if (!serverTerminated && !cancelled) handlers.onError?.(err);
         return;
       }
       const delay = baseDelay * Math.pow(2, retryCount);

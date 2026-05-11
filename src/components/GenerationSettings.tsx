@@ -154,7 +154,9 @@ export function GenerationSettings() {
   // Story 15.23 — detected ACP / MCP remote agents.
   const [acpAgents, setAcpAgents] = useState<DetectedAcpAgent[]>([]);
   const [executorValue, setExecutorValue] = useState<string>(
-    () => getStoredString(DEFAULT_EXECUTOR_STORAGE) ?? 'anthropic-direct',
+    // 2026-05-11 Story 15.30 (OpenDesign 模式): 默认 'cli:auto' — 有 CLI 用 CLI
+    // (无需 BYOK)，无 CLI 才退到 anthropic-direct (需要 BYOK)。
+    () => getStoredString(DEFAULT_EXECUTOR_STORAGE) ?? 'cli:auto',
   );
 
   // Story 15.18 — Default Provider for the BYOK abstraction.

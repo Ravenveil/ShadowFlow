@@ -1284,8 +1284,24 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
           gap: 14,
         }}
       >
-        {/* Story 15.7 — BYOK banner: shown when no Anthropic key is configured. */}
-        {!apiKey && !showKeyEditor && (
+        {/* Story 15.7 — BYOK banner: shown when no Anthropic key is configured.
+            2026-05-11 bug fix — only show when the user is going to use the
+            direct Anthropic SDK path (`anthropic-direct`). When they pick a
+            local CLI (`cli:*`) the child binary handles its own auth (e.g.
+            `claude login`), so the banner is misleading and would block users
+            who legitimately don't have an Anthropic API key. */}
+        {!apiKey && !showKeyEditor && (() => {
+          try {
+            // 2026-05-11 Story 15.30 (OpenDesign 模式): 默认 'cli:auto' — banner
+            // 仅当用户显式选了 anthropic-direct 时才提醒 BYOK。cli:auto 路径无
+            // CLI 时走 anthropic-direct fallback 时，server 端会 emit NO_API_KEY
+            // error 事件，前端通过 onServerError 单独 handle（不再用 banner）。
+            const ex = localStorage.getItem('sf.defaultExecutor') || 'cli:auto';
+            return ex === 'anthropic-direct';
+          } catch {
+            return true;
+          }
+        })() && (
           <div
             data-testid="byok-banner"
             style={{
@@ -1421,12 +1437,31 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
           </div>
         )}
 
-        {/* Progress steps */}
-        {session.steps.length > 0 && (
+        {/* Progress steps — only after SSE delivers the first <sf:step>.
+            2026-05-11 UX fix: previously 6 zh-CN placeholders rendered before
+            any work began, leaking implementation detail. */}
+        {session.steps.length > 0 ? (
           <ProgressSteps
             steps={session.steps}
             activeSubsteps={session.activeSubsteps}
           />
+        ) : (!session.isComplete && !session.error) && (
+          <div
+            style={{
+              border: '1px dashed var(--t-border)',
+              borderRadius: 14,
+              background: 'var(--t-panel)',
+              padding: '14px 16px',
+              fontSize: 12,
+              color: 'var(--t-fg-4)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <InlineSpinner size={10} />
+            <span>等待 LLM 开始…</span>
+          </div>
         )}
 
         {/* Rationale cards */}
