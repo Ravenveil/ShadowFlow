@@ -1374,8 +1374,10 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
         display: 'flex',
         flexDirection: 'column',
         background: 'var(--t-panel)',
-        borderRight: '1px solid var(--t-border)',
-        width: 420,
+        borderRight: isChatMode ? 'none' : '1px solid var(--t-border)',
+        width: isChatMode ? '100%' : 420,
+        maxWidth: isChatMode ? 680 : 420,
+        margin: isChatMode ? '0 auto' : 0,
         flexShrink: 0,
         overflow: 'hidden',
       }}
@@ -1823,7 +1825,7 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
           borderTop: '1px solid var(--t-border)',
           padding: '14px 16px',
           flexShrink: 0,
-          background: 'var(--t-bg)',
+          background: 'var(--t-panel)',
         }}
       >
         {/* Inner bordered container */}
@@ -1878,8 +1880,8 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
             }}
             placeholder={
               session.isComplete
-                ? '继续对话 · 接着问 · ⌘↵ 发送'
-                : '补充指令 · 或保持沉默让 AI 完成 · ⌘↵ 发送'
+                ? `继续对话 · 接着问 · ${kbdSendCmd()} 发送`
+                : `补充指令 · 或保持沉默让 AI 完成 · ${kbdSendCmd()} 发送`
             }
             style={{
               width: '100%',
@@ -1937,9 +1939,9 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
               style={{
                 width: 32, height: 28,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                background: '#A855F7', border: '1px solid #A855F7', borderRadius: 8,
+                background: 'var(--t-accent)', border: '1px solid var(--t-accent)', borderRadius: 8,
                 cursor: (!message.trim() && attachedFiles.length === 0) ? 'not-allowed' : 'pointer',
-                color: '#0A0A0A',
+                color: 'var(--t-accent-ink)',
                 opacity: (!message.trim() && attachedFiles.length === 0) ? 0.4 : 1,
               }}
             >
