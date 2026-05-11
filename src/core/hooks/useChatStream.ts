@@ -323,7 +323,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
           // group_id 1:1 to session_id; if not, we fall back to BYOK.
           const base = (await import('../../api/_base')).getApiBase();
           const res = await fetch(
-            `${base}/chat/sessions/${encodeURIComponent(targetId)}/messages`,
+            `${base}/api/chat/sessions/${encodeURIComponent(targetId)}/messages`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },

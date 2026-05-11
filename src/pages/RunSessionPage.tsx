@@ -12,7 +12,7 @@
  */
 import React, { useState, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Check, Circle, ExternalLink, Key, Paperclip, Settings, Cpu } from 'lucide-react';
+import { Check, Circle, ExternalLink, Key, Paperclip, Settings } from 'lucide-react';
 import { useRunSession } from '../core/hooks/useRunSession';
 import type { RunSessionNode, RunSessionEdge, RunSessionStep } from '../core/hooks/useRunSession';
 import {
@@ -467,6 +467,62 @@ function getAgentPositions(count: number): Array<{ cx: number }> {
   return Array.from({ length: count }, (_, i) => ({ cx: start + i * step }));
 }
 
+// Story 15.x — Tiny YAML syntax highlighter for the floating stream panel.
+// Highlights: # comments, key: prefix, "quoted strings", bare numbers.
+function highlightYamlLine(line: string, idx: number): React.ReactNode {
+  // Whole-line comment
+  if (/^\s*#/.test(line)) {
+    return <span key={idx} className="cmt">{line}{'\n'}</span>;
+  }
+  // Inline-comment split: split on first " #" — keep RHS as comment
+  let body = line;
+  let trailingComment = '';
+  const commentIdx = line.indexOf(' #');
+  if (commentIdx > -1) {
+    body = line.slice(0, commentIdx);
+    trailingComment = line.slice(commentIdx);
+  }
+  // key: prefix
+  const keyMatch = body.match(/^(\s*)([\w.-]+)(:)(.*)$/);
+  let prefix: React.ReactNode = null;
+  let rest = body;
+  if (keyMatch) {
+    prefix = (
+      <>
+        {keyMatch[1]}
+        <span className="key">{keyMatch[2]}</span>
+        {keyMatch[3]}
+      </>
+    );
+    rest = keyMatch[4];
+  }
+  // Tokenize the remaining `rest` into strings / numbers / plain
+  const tokens: React.ReactNode[] = [];
+  const re = /("[^"]*")|('[^']*')|\b(\d+(?:\.\d+)?)\b/g;
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  let tIdx = 0;
+  while ((m = re.exec(rest)) !== null) {
+    if (m.index > lastIdx) tokens.push(rest.slice(lastIdx, m.index));
+    if (m[1] || m[2]) {
+      tokens.push(<span key={`s${tIdx}`} className="str">{m[1] || m[2]}</span>);
+    } else if (m[3]) {
+      tokens.push(<span key={`n${tIdx}`} className="num">{m[3]}</span>);
+    }
+    lastIdx = m.index + m[0].length;
+    tIdx++;
+  }
+  if (lastIdx < rest.length) tokens.push(rest.slice(lastIdx));
+  return (
+    <span key={idx}>
+      {prefix}
+      {tokens}
+      {trailingComment && <span className="cmt">{trailingComment}</span>}
+      {'\n'}
+    </span>
+  );
+}
+
 function BlueprintCanvas({ session, zoom, onZoomChange, selectedNodeId, onSelectNode }: BlueprintCanvasProps) {
   const coordinator = session.nodes.find((n) => n.type === 'coordinator');
   const agents = session.nodes.filter((n) => n.type === 'agent');
@@ -620,7 +676,8 @@ function BlueprintCanvas({ session, zoom, onZoomChange, selectedNodeId, onSelect
         </div>
       </div>
 
-      {/* Canvas meta — bottom left */}
+      {/* Canvas meta — bottom left (legacy single-line). Kept for backward-compat;
+          new `.rs-canvas-meta` overlay below renders the kit's richer 3-group bar. */}
       <div
         style={{
           position: 'absolute',
@@ -634,6 +691,42 @@ function BlueprintCanvas({ session, zoom, onZoomChange, selectedNodeId, onSelect
         }}
       >
         NODES {nodeCount} · EDGES {edgeCount} · MODE {workflowMode}
+      </div>
+
+      {/* Floating YAML stream panel — top-left (kit .rs-yaml-float) */}
+      {session.yamlLines.length > 0 && session.blueprintFile && (
+        <div className="rs-yaml-float" aria-label="blueprint yaml stream">
+          <div className="rs-yaml-head">
+            <span className="ttl">
+              {session.blueprintFile} · {session.yamlLines.length} 行
+            </span>
+            {!session.isComplete && <span className="live">LIVE</span>}
+          </div>
+          <div className="rs-yaml-body">
+            {session.yamlLines.slice(-12).map((ln, i) => highlightYamlLine(ln, i))}
+            {!session.isComplete && <span className="cur" />}
+          </div>
+        </div>
+      )}
+
+      {/* Canvas meta status bar — bottom-left, 3 groups (kit .rs-canvas-meta) */}
+      <div className="rs-canvas-meta" aria-label="canvas status">
+        <span className="group">
+          <span className="lbl">STATUS</span>
+          <span className="val">
+            {session.isComplete ? '已完成' : session.error ? '出错' : '运行中'}
+          </span>
+        </span>
+        <span className="group">
+          <span className="lbl">NODES</span>
+          <span className="val">{session.nodes.length} 个</span>
+        </span>
+        {session.tokenCount > 0 && (
+          <span className="group">
+            <span className="lbl">TOKENS</span>
+            <span className="val">{session.tokenCount.toLocaleString()}</span>
+          </span>
+        )}
       </div>
 
       {/* Zoom controls — bottom right */}
@@ -1513,6 +1606,23 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
           </div>
         )}
 
+        {/* 2026-05-11 kit alignment — system-divider: transitional system event
+            marker inside chat stream. Skipped in chat mode (chat bubbles ARE
+            the visual). Shown when:
+              • stream has nothing yet and run isn't done  → WAITING FOR LLM
+              • run completed without error                → DONE  */}
+        {!isChatMode &&
+          session.steps.length === 0 &&
+          session.nodes.length === 0 &&
+          !session.chatReply &&
+          !session.isComplete &&
+          !session.error && (
+            <div className="system-divider">WAITING FOR LLM</div>
+          )}
+        {!isChatMode && session.isComplete && session.error == null && (
+          <div className="system-divider">DONE</div>
+        )}
+
         {/* Assistant chat bubble — Claude Code-style plain reply. Renders
             incrementally as `text` SSE events arrive. Shown for both chat
             mode (no canvas) and the "LLM is thinking out loud before tags"
@@ -1808,10 +1918,13 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
               >
                 <Paperclip size={14} strokeWidth={1.8} />
               </button>
-              {/* Model chip */}
-              <button type="button" title="模型" style={{ height: 28, padding: '0 8px', display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--t-border)', borderRadius: 999, background: 'transparent', cursor: 'pointer', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-accent-bright)' }}>
-                <Cpu size={11} strokeWidth={1.8} style={{ color: '#A855F7' }} />
-                claude-sonnet
+              {/* Model chip — 2026-05-11 kit alignment: cmp-chip + cmp-chip-meta
+                  pattern. [dot] claude-sonnet | 4.6. Click is a no-op for now
+                  (model picker hook-up out of scope). */}
+              <button type="button" title="模型" className="cmp-chip">
+                <span className="cmp-chip-dot" aria-hidden="true" />
+                <span>claude-sonnet</span>
+                <span className="cmp-chip-meta">4.6</span>
               </button>
             </div>
             {/* Right — send */}

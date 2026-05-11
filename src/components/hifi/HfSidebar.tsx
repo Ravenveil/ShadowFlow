@@ -93,6 +93,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
     <aside
       style={{
         width: W,
+        height: '100%',
         flexShrink: 0,
         background: 'var(--t-panel)',
         borderRight: '1px solid var(--t-border)',

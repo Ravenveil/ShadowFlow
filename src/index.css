@@ -600,3 +600,126 @@ input, textarea, select { font-family: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .rs-anim-spin,.rs-anim-pulse,.rs-anim-fade-up,.rs-anim-scale-in { animation: none; }
 }
+
+/* ============ RunSession LeftPanel kit primitives (2026-05-11) ============ */
+/* system-divider — transitional system event marker inside chat stream.
+   Pattern: ———— WAITING FOR LLM ————  /  ———— DONE ————  */
+.system-divider {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--t-fg-4);
+}
+.system-divider::before,
+.system-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--t-border);
+}
+
+/* cmp-chip — composer meta chip (model picker etc.) */
+.cmp-chip {
+  height: 28px;
+  padding: 0 8px 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  border: 1px solid var(--t-border);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-mono, monospace);
+  font-size: 10.5px;
+  font-weight: 500;
+  transition: background .12s, border-color .12s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--t-accent-bright);
+}
+.cmp-chip:hover {
+  background: var(--t-accent-tint);
+  border-color: var(--t-accent);
+}
+.cmp-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--t-accent);
+  box-shadow: 0 0 6px rgba(168,85,247,.6);
+  flex-shrink: 0;
+}
+.cmp-chip-meta {
+  font-size: 9.5px;
+  opacity: .55;
+  padding-left: 7px;
+  margin-left: 2px;
+  border-left: 1px solid var(--t-border);
+}
+
+/* ── Run Session — canvas meta status bar (kit .rs-canvas-meta, 2026-05-11) ── */
+.rs-canvas-meta {
+  position: absolute; left: 16px; bottom: 14px;
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--font-mono, monospace); font-size: 10px;
+  color: var(--t-fg-4); letter-spacing: .04em;
+  pointer-events: none;
+  z-index: 4;
+}
+.rs-canvas-meta .group { display: flex; align-items: center; gap: 6px; }
+.rs-canvas-meta .group .lbl { color: var(--t-fg-5); }
+.rs-canvas-meta .group .val { color: var(--t-fg-2); }
+
+/* ── Run Session — floating YAML stream panel (kit .rs-yaml-float, 2026-05-11) ── */
+.rs-yaml-float {
+  position: absolute; left: 18px; top: 18px; width: 280px;
+  background: var(--t-panel);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 32px -10px rgba(40,30,20,.12);
+  z-index: 5;
+}
+.rs-yaml-head {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--t-border);
+  display: flex; align-items: center; gap: 8px;
+}
+.rs-yaml-head .ttl {
+  font-family: var(--font-mono, monospace); font-size: 10px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--t-fg-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rs-yaml-head .live {
+  margin-left: auto;
+  font-family: var(--font-mono, monospace); font-size: 9px;
+  color: var(--t-accent-bright); letter-spacing: .08em;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.rs-yaml-head .live::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--t-accent);
+  animation: rs-pulse 1.4s ease-in-out infinite;
+}
+.rs-yaml-body {
+  padding: 10px 12px 12px;
+  font-family: var(--font-mono, monospace); font-size: 10.5px; line-height: 1.55;
+  color: var(--t-fg-2); white-space: pre;
+  max-height: 240px; overflow: auto;
+}
+.rs-yaml-body .key { color: var(--t-accent-bright); font-weight: 600; }
+.rs-yaml-body .str { color: #b45309; }
+.rs-yaml-body .num { color: #0e7490; }
+.rs-yaml-body .cmt { color: var(--t-fg-5); }
+.rs-yaml-body .cur {
+  display: inline-block; width: 6px; height: 11px;
+  background: var(--t-accent); vertical-align: -1px;
+  animation: sf-blink 1s steps(2) infinite;
+}

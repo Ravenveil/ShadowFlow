@@ -27,7 +27,7 @@ export function HfLayout() {
   const active = pathToActive(pathname);
 
   return (
-    <div className="hf-root" style={{ display: 'flex', height: '100vh' }}>
+    <div className="hf-root" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <HfSidebar active={active} />
       <main
         style={{
@@ -35,6 +35,7 @@ export function HfLayout() {
           display: 'flex',
           flexDirection: 'column',
           minWidth: 0,
+          overflow: 'auto',
         }}
       >
         <Outlet />
