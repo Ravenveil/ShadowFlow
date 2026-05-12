@@ -25,7 +25,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Users } from 'lucide-react';
 import { BreadcrumbBar } from '../core/components/inbox/BreadcrumbBar';
 import { GroupMetricsBar } from '../core/components/inbox/GroupMetricsBar';
 import { ChatBriefBoardToggle } from '../core/components/inbox/ChatBriefBoardToggle';
@@ -384,11 +384,22 @@ export default function ChatPage() {
             {t('chat.teamsSectionLabel')}
           </div>
           {groups.length === 0 && (
-            <div
-              className="hf-meta"
-              style={{ padding: '6px 10px', fontSize: 10 }}
-            >
-              {t('chat.noTeams')}
+            <div style={{
+              padding: '28px 16px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              gap: 8, textAlign: 'center',
+            }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 10,
+                background: 'var(--t-bg)', border: '1px solid var(--t-border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--t-fg-4)',
+              }}>
+                <Users size={17} strokeWidth={1.75} aria-hidden />
+              </div>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--t-fg-4)', lineHeight: 1.55 }}>
+                {t('chat.noTeams')}
+              </p>
             </div>
           )}
           {groups.map((t) => {
@@ -630,24 +641,41 @@ export default function ChatPage() {
                   messages={chatStream.messages}
                   showSenderHeader
                   emptyState={
-                    <div
-                      style={{
-                        display: 'flex',
-                        height: '100%',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexDirection: 'column',
-                        gap: 8,
-                        padding: 24,
-                      }}
-                    >
-                      <p style={{ fontSize: 13, color: 'var(--t-fg-4)', margin: 0 }}>
-                        {t('chat.noMessages')}
-                      </p>
-                      {chatStream.loading && (
-                        <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>
-                          {t('chat.loading')}
-                        </span>
+                    <div style={{
+                      display: 'flex', height: '100%',
+                      alignItems: 'center', justifyContent: 'center',
+                      flexDirection: 'column', gap: 12, padding: 32,
+                    }}>
+                      {!groupId ? (
+                        <>
+                          <div style={{
+                            width: 44, height: 44, borderRadius: 12,
+                            background: 'var(--t-panel)', border: '1px solid var(--t-border)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: 'var(--t-fg-4)',
+                          }}>
+                            <Users size={20} strokeWidth={1.5} aria-hidden />
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <p style={{ margin: '0 0 5px', fontSize: 13, fontWeight: 600, color: 'var(--t-fg-2)' }}>
+                              从左侧选择一个 Team
+                            </p>
+                            <p style={{ margin: 0, fontSize: 11, color: 'var(--t-fg-4)', lineHeight: 1.55 }}>
+                              选择后即可查看对话和工作流详情
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p style={{ fontSize: 13, color: 'var(--t-fg-4)', margin: 0 }}>
+                            {t('chat.noMessages')}
+                          </p>
+                          {chatStream.loading && (
+                            <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>
+                              {t('chat.loading')}
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                   }

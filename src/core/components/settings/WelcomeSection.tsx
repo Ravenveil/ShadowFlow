@@ -53,17 +53,18 @@ export function WelcomeSection() {
   return (
     <div className="flex flex-col gap-8">
       {/* Hero */}
-      <div className="rounded-[16px] border border-sf-border bg-gradient-to-br from-sf-accent/10 to-sf-elev2 p-6">
+      <div className="relative rounded-[10px] border border-sf-border bg-sf-elev2 overflow-hidden p-5 pl-[22px]">
+        <div className="absolute inset-y-0 left-0 w-[3px] bg-sf-accent/70" />
         <div className="flex items-center gap-3 mb-3">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] bg-sf-accent/15 text-sf-accent-bright">
-            <Waves size={22} strokeWidth={2} aria-hidden />
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-[9px] border border-sf-border bg-sf-elev3 text-sf-fg2">
+            <Waves size={18} strokeWidth={2} aria-hidden />
           </span>
           <div>
-            <h2 className="text-[20px] font-bold text-sf-fg1">欢迎使用 ShadowFlow</h2>
-            <p className="text-[12px] text-sf-fg4">Agent Team 的 VS Code · ACP 时代的工作流平台</p>
+            <h2 className="text-[17px] font-bold text-sf-fg1">欢迎使用 ShadowFlow</h2>
+            <p className="text-[11px] text-sf-fg4">Agent Team 的 VS Code · ACP 时代的工作流平台</p>
           </div>
         </div>
-        <p className="text-[13px] text-sf-fg2 leading-relaxed">
+        <p className="text-[12px] text-sf-fg3 leading-relaxed">
           ShadowFlow 让你像管理员工一样组建 AI Agent 团队。每个 Agent 有名字、有性格、有专属工具，协同完成复杂任务。
         </p>
       </div>

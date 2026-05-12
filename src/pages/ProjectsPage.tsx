@@ -15,6 +15,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { Copy, Check, FolderOpen } from 'lucide-react';
 import { ProjectListPanel } from '../components/ProjectListPanel';
 import { ConversationHistoryPanel } from '../components/ConversationHistoryPanel';
 import {
@@ -23,6 +24,55 @@ import {
   type ProjectRecord,
 } from '../api/projects';
 import { useI18n } from '../common/i18n';
+
+function relativeTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d ago`;
+    return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  } catch {
+    return iso;
+  }
+}
+
+function PathCell({ path }: { path: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(path).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    }).catch(() => {});
+  }
+  const display = path.length > 46 ? '…' + path.slice(-46) : path;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
+      <FolderOpen size={12} strokeWidth={1.75} style={{ color: 'var(--t-fg-4)', flexShrink: 0 }} aria-hidden />
+      <span style={{
+        flex: 1, fontSize: 12, fontFamily: 'var(--font-mono)',
+        color: 'var(--t-fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }} title={path}>
+        {display}
+      </span>
+      <button
+        type="button"
+        onClick={copy}
+        title="Copy path"
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 22, height: 22, border: '1px solid var(--t-border)',
+          background: 'transparent', borderRadius: 5, cursor: 'pointer',
+          color: copied ? 'var(--t-ok)' : 'var(--t-fg-4)', flexShrink: 0, padding: 0,
+        }}
+      >
+        {copied ? <Check size={10} strokeWidth={2.5} /> : <Copy size={10} strokeWidth={2} />}
+      </button>
+    </div>
+  );
+}
 
 const PAGE_STYLE: React.CSSProperties = {
   display: 'grid',
@@ -51,10 +101,23 @@ const META_LABEL: React.CSSProperties = {
 };
 
 const META_VALUE: React.CSSProperties = {
-  fontSize: 13,
-  color: 'var(--t-fg)',
+  fontSize: 12,
+  color: 'var(--t-fg-2)',
+  marginTop: 5,
+  lineHeight: 1.5,
+};
+
+const META_VALUE_ID: React.CSSProperties = {
+  display: 'inline-block',
+  marginTop: 5,
+  fontSize: 11,
   fontFamily: 'var(--font-mono)',
-  wordBreak: 'break-all',
+  color: 'var(--t-fg-3)',
+  background: 'var(--t-panel)',
+  border: '1px solid var(--t-border)',
+  borderRadius: 5,
+  padding: '2px 7px',
+  letterSpacing: '.02em',
 };
 
 const NAME_INPUT: React.CSSProperties = {
@@ -213,41 +276,33 @@ export default function ProjectsPage() {
 
             <div>
               <div style={META_LABEL}>{t('projects.workspacePath')}</div>
-              <div style={META_VALUE} data-testid="project-meta-path">
-                {meta.workspace_path && meta.workspace_path.length > 0
-                  ? meta.workspace_path
-                  : '—'}
-              </div>
+              {meta.workspace_path && meta.workspace_path.length > 0 ? (
+                <PathCell path={meta.workspace_path} />
+              ) : (
+                <div style={META_VALUE} data-testid="project-meta-path">—</div>
+              )}
             </div>
 
             <div>
               <div style={META_LABEL}>{t('projects.defaultSkill')}</div>
-              <div style={META_VALUE}>{meta.skill_id ?? '—'}</div>
+              {meta.skill_id ? (
+                <span style={META_VALUE_ID}>{meta.skill_id}</span>
+              ) : (
+                <div style={META_VALUE}>—</div>
+              )}
             </div>
 
-            <div style={{ display: 'flex', gap: 24 }}>
+            <div style={{ display: 'flex', gap: 28 }}>
               <div>
                 <div style={META_LABEL}>{t('projects.createdAt')}</div>
-                <div style={META_VALUE}>
-                  {(() => {
-                    try {
-                      return new Date(meta.created_at).toLocaleString();
-                    } catch {
-                      return meta.created_at;
-                    }
-                  })()}
+                <div style={META_VALUE} title={meta.created_at}>
+                  {relativeTime(meta.created_at)}
                 </div>
               </div>
               <div>
                 <div style={META_LABEL}>{t('projects.updatedAt')}</div>
-                <div style={META_VALUE}>
-                  {(() => {
-                    try {
-                      return new Date(meta.updated_at).toLocaleString();
-                    } catch {
-                      return meta.updated_at;
-                    }
-                  })()}
+                <div style={META_VALUE} title={meta.updated_at}>
+                  {relativeTime(meta.updated_at)}
                 </div>
               </div>
             </div>
