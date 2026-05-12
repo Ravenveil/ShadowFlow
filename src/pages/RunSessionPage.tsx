@@ -10,7 +10,7 @@
  * Theme: All colors use var(--t-*) CSS tokens which respond to
  * data-theme="day" / "night" on <html>.
  */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Check, Circle, ExternalLink, Key, Paperclip, Settings } from 'lucide-react';
 import { useRunSession } from '../core/hooks/useRunSession';
@@ -23,6 +23,7 @@ import {
   LAST_DS_STORAGE,
 } from '../api/_base';
 import { ApiKeySettings } from '../components/ApiKeySettings';
+import { ComposerSettingsPopup } from '../components/ComposerSettingsPopup';
 import { useI18n } from '../common/i18n';
 import { ArtifactPreview } from '../components/ArtifactPreview';
 import { SkillPicker } from '../components/SkillPicker';
@@ -30,6 +31,9 @@ import { DesignSystemPicker } from '../components/DesignSystemPicker';
 // Story 15.29 — Conversation linkage UI in PreparationPanel.
 import { ConversationPicker } from '../components/ConversationPicker';
 import { createRunSession } from '../api/runSessions';
+import { quickCreateAgent } from '../api/agents';
+import { createTeam } from '../api/teams';
+import { createGroup } from '../api/groupApi';
 // Story 15.14 — 5+1 维质量自检雷达图（生成完后挂在右栏底部）
 import { CritiqueResult } from '../components/CritiqueResult';
 
@@ -1307,6 +1311,8 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
   const agentCount = session.nodes.filter((n) => n.type === 'agent').length;
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const settingsAnchorRef = useRef<HTMLButtonElement>(null);
 
   // 2026-05-11 Layer 1 — Claude Code-style chat fallback.
   // Two triggers (both require "no canvas events seen"):
@@ -1826,8 +1832,15 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
           padding: '14px 16px',
           flexShrink: 0,
           background: 'var(--t-panel)',
+          position: 'relative',
         }}
       >
+        {showSettings && (
+          <ComposerSettingsPopup
+            onClose={() => setShowSettings(false)}
+            anchorRef={settingsAnchorRef}
+          />
+        )}
         {/* Inner bordered container */}
         <div
           style={{
@@ -1902,12 +1915,20 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
             {/* Left — icon buttons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {/* Settings — navigate to /settings page */}
+              {/* Settings — toggles inline popup */}
               <button
+                ref={settingsAnchorRef}
                 type="button"
-                title="设置"
-                onClick={() => navigate('/settings')}
-                style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', color: 'var(--t-fg-4)' }}
+                title="会话设置"
+                onClick={() => setShowSettings(v => !v)}
+                style={{
+                  width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  background: showSettings ? 'var(--t-accent-tint)' : 'transparent',
+                  border: showSettings ? '1px solid var(--t-accent)' : '0',
+                  borderRadius: 7, cursor: 'pointer',
+                  color: showSettings ? 'var(--t-accent-bright)' : 'var(--t-fg-4)',
+                  transition: 'background .12s, color .12s',
+                }}
               >
                 <Settings size={14} strokeWidth={1.8} />
               </button>
@@ -2500,6 +2521,32 @@ function RunSessionLiveView({ sessionId, goal, onNavigate }: RunSessionLiveViewP
   const [collapsed, setCollapsed] = useState(false);
   const [zoom, setZoom] = useState(82);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [savedTeamId, setSavedTeamId] = useState<string | null>(null);
+  const savedRef = useRef(false);
+
+  // Auto-persist team + agents + chat group when blueprint run completes
+  useEffect(() => {
+    if (!session.isComplete || session.nodes.length === 0 || savedRef.current) return;
+    savedRef.current = true;
+
+    const agentNodes = session.nodes.filter(n => n.type === 'agent');
+    const coordinator = session.nodes.find(n => n.type === 'coordinator');
+    const teamName = coordinator?.title ?? goal.slice(0, 40) ?? 'AI Team';
+
+    (async () => {
+      try {
+        const created = await Promise.all(
+          agentNodes.map(n => quickCreateAgent({ name: n.title, soul: n.sub || n.title }))
+        );
+        const agentIds = created.map(a => a.agent_id);
+        const team = await createTeam({ name: teamName, description: goal, agent_ids: agentIds });
+        await createGroup({ templateId: '', groupTemplateId: '', name: teamName, agentIds: agentIds, memberEmails: [], policyMatrix: {} });
+        setSavedTeamId(team.team_id);
+      } catch (e) {
+        console.warn('[RunSession] auto-save failed:', e);
+      }
+    })();
+  }, [session.isComplete, session.nodes.length]);
 
   // 2026-05-11 Layer 1 — chat-mode detection (mirrors LeftPanel).
   // Triggers when no canvas events at all AND either text streamed in OR
@@ -2521,6 +2568,15 @@ function RunSessionLiveView({ sessionId, goal, onNavigate }: RunSessionLiveViewP
   return (
     <>
       <InjectKeyframes />
+      {savedTeamId && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, background: 'var(--t-ok)', color: '#fff', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', fontSize: 12.5, fontWeight: 600 }}>
+          <span>✓ Team saved —</span>
+          <button type="button" onClick={() => onNavigate('/teams')} style={{ background: 'rgba(255,255,255,.25)', border: 'none', borderRadius: 5, color: '#fff', padding: '2px 10px', cursor: 'pointer', fontSize: 11.5, fontWeight: 700 }}>查看 Teams →</button>
+          <button type="button" onClick={() => onNavigate('/chat/default')} style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 5, color: '#fff', padding: '2px 10px', cursor: 'pointer', fontSize: 11.5 }}>Chat →</button>
+          <button type="button" onClick={() => onNavigate('/agents')} style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 5, color: '#fff', padding: '2px 10px', cursor: 'pointer', fontSize: 11.5 }}>Agents →</button>
+          <button type="button" onClick={() => setSavedTeamId(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 14, opacity: .7 }}>✕</button>
+        </div>
+      )}
       <div
         style={{
           display: 'grid',
