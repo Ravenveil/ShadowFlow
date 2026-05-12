@@ -478,7 +478,7 @@ export function HfTopBar({ right, hideWorkspace = false }: HfTopBarProps) {
         gap: 12,
         padding: '0 22px',
         borderBottom: '1px solid var(--t-border)',
-        background: 'var(--t-bg)',
+        background: 'var(--t-panel)',
       }}
     >
       {!hideWorkspace && <WorkspaceCrumb />}
