@@ -84,12 +84,11 @@ export function AppRoutes() {
             <Route path="/teams/:teamId" element={<TeamDetailPage />} />
             <Route path="/start" element={<StartPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/run-session/:sessionId" element={<RunSessionPage />} />
+            <Route path="/run-session" element={<RunSessionPage />} />
           </Route>
           {/* ── FB-HiFi Workspace (standalone chrome, no AppLayout) ── */}
           <Route path="/workspace" element={<WorkspacePage />} />
-          {/* ── Run Session — full-screen split-view, no HfLayout ── */}
-          <Route path="/run-session/:sessionId" element={<RunSessionPage />} />
-          <Route path="/run-session" element={<RunSessionPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
