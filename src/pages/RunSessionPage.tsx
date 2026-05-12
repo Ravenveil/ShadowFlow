@@ -23,7 +23,7 @@ import {
   LAST_DS_STORAGE,
 } from '../api/_base';
 import { ApiKeySettings } from '../components/ApiKeySettings';
-import { ComposerSettingsPopup } from '../components/ComposerSettingsPopup';
+import { SettingsModal } from '../components/SettingsModal';
 import { useI18n } from '../common/i18n';
 import { ArtifactPreview } from '../components/ArtifactPreview';
 import { SkillPicker } from '../components/SkillPicker';
@@ -1312,7 +1312,6 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const settingsAnchorRef = useRef<HTMLButtonElement>(null);
 
   // 2026-05-11 Layer 1 — Claude Code-style chat fallback.
   // Two triggers (both require "no canvas events seen"):
@@ -1836,10 +1835,7 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
         }}
       >
         {showSettings && (
-          <ComposerSettingsPopup
-            onClose={() => setShowSettings(false)}
-            anchorRef={settingsAnchorRef}
-          />
+          <SettingsModal onClose={() => setShowSettings(false)} />
         )}
         {/* Inner bordered container */}
         <div
@@ -1917,7 +1913,6 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               {/* Settings — toggles inline popup */}
               <button
-                ref={settingsAnchorRef}
                 type="button"
                 title="会话设置"
                 onClick={() => setShowSettings(v => !v)}
