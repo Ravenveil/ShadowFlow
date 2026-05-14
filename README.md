@@ -1,120 +1,97 @@
-# ShadowFlow — Agent Team 的 VSCode
+<details open>
+<summary><b>English</b> · <a href="#中文版">中文</a></summary>
 
-**Contract-first 多智能体编排平台 · 带驳回闭环 · 一键 Docker 本地跑通**
+# ShadowFlow — VSCode for Agent Teams
+
+**Contract-first multi-agent workflow platform · Rejection loops · One-command Docker setup**
 
 [![CI](https://github.com/Ravenveil/ShadowFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Ravenveil/ShadowFlow/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
-[![0G Ecosystem](https://img.shields.io/badge/0G-Storage%20%2B%20Compute-6C47FF.svg)](https://0g.ai)
-
-> **ShadowFlow 的核心赌注**：ACP（Agent Communication Protocol）是下一个 LSP——就像 Language Server Protocol 统一了 IDE 与语言工具链，ACP 将统一 Agent 与协作平台。ShadowFlow 是这个基础设施层的第一个实现。
->
-> 架构象限图：[docs/design/shadowflow-strategy-bet-v1.md](docs/design/shadowflow-strategy-bet-v1.md)
+[![0G Ecosystem](https://img.shields.io/badge/0G-Storage%20%2B%20Compute%20%2B%20Chain-6C47FF.svg)](https://0g.ai)
 
 ---
 
-## Prerequisites
+## Problem Statement
 
-| 依赖 | 最低版本 | 说明 |
-|------|---------|------|
-| Docker Desktop | 20.10+ | Windows 用户请开启 "Use WSL 2 based engine" |
-| Git | 2.x+ | 克隆仓库 |
-| API Key（可选） | — | Anthropic / OpenAI / Gemini 任选其一；不填则走浏览器内 BYOK 输入 |
-
-> **不需要** Python / Node.js 安装——所有依赖均已打包进 Docker 镜像。
+Building with AI agents today means writing brittle orchestration code from scratch, with no way to enforce compliance policies, review outputs before they execute, or roll back when an agent goes off-script. **ShadowFlow** is a contract-first multi-agent workflow platform where teams of AI agents collaborate under human-reviewable policy rules — with rejection loops, checkpoint rollback, 0G-backed audit trails, and a plug-in contract for any agent runtime (Claude Code, Codex, MCP, ACP).
 
 ---
 
-## Quick Start
+## 0G Stack
+
+| 0G Component | Usage in ShadowFlow |
+|---|---|
+| **0G Compute** | Provider #5 in the LLM fallback chain — routes inference to DeepSeek V3.1 / Qwen / Gemma via the 0G Compute Network broker SDK. Automatic `processResponse()` fee settlement after every inference call. |
+| **0G Storage** | Workflow trajectory archive — completed runs are uploaded to 0G Storage as Merkle-verified immutable audit logs. Frontend BYOK mode (browser uploads directly via 0G JS SDK) and backend proxy mode (`ZEROG_FRONTEND_DIRECT=false`). |
+| **0G Chain** | Wallet-based authentication — users connect their 0G Chain wallet; workspace identity and run ownership are tied to the on-chain address. |
+
+> **Contracts**: ShadowFlow does not deploy custom smart contracts. It uses 0G's native ledger and wallet infrastructure directly.
+
+---
+
+## Quick Start (Docker — ~10 min)
+
+### Prerequisites
+
+| Dependency | Min Version | Notes |
+|---|---|---|
+| Docker Desktop | 20.10+ | Windows: enable "Use WSL 2 based engine" |
+| Git | 2.x+ | |
+| API Key (optional) | — | Anthropic / OpenAI / Gemini — any one; leave blank to use BYOK in-browser input |
+
+> **No Python or Node.js install needed** — all dependencies are packaged inside Docker images.
+
+### Run
 
 ```bash
 git clone https://github.com/Ravenveil/ShadowFlow.git && cd ShadowFlow
-cp .env.example .env          # 可选：填入 API Key；不填走 BYOK（Windows cmd: copy .env.example .env）
+cp .env.example .env          # optional: add API key; leave blank for BYOK
 docker compose up -d
 ```
 
-访问 **http://localhost:3000** — 看到 ShadowFlow 工作流编辑器即成功。
+Open **http://localhost:3000** — you should see the ShadowFlow workflow editor.
 
-> **提示**：`.env` 中的 key 仅供后端 provider fallback 使用，不会上传或记录到日志（NFR S1）。
+> Keys in `.env` are used only as backend provider fallback and are never logged or uploaded (NFR S1).
 
 ---
 
 ## 5-Minute Demo
 
-用 **Solo Company** 模板体验双驳回戏剧全流程。
+Experience the full rejection loop with the **Solo Company** template.
 
-### Step 1 — 选模板
+### Step 1 — Pick a template
 
-首页点击 **▶ Quick Demo · 60s**（或导航栏 **Templates**），在模板库中找到 **Solo Company**（独立公司多角色协作模板），点击 **▶ Fork & open** 进入编辑器。
+From the home page click **▶ Quick Demo · 60s** (or navigate to **Templates**), find **Solo Company** (multi-role company collaboration), click **▶ Fork & open**.
 
-### Step 2 — 下发任务
+### Step 2 — Submit a task
 
-工作流画布打开后，在输入区填写指令：
-
-```
-写一条符合公司合规要求的周报 tweet
-```
-
-点击 **Run** 发起执行。
-
-### Step 3 — 合规官触发驳回
-
-Live Dashboard 右侧出现红色 Toast：
+In the workflow editor input area type:
 
 ```
-policy.violation — ComplianceOfficer 拒绝本次草稿：含敏感词汇，退回内容官重写
+Write a compliance-approved weekly tweet
 ```
 
-节点图中 `content_draft` 节点变红，触发 `checkpoint rollback`。
+Click **Run**.
 
-### Step 4 — 内容官重跑并通过
+### Step 3 — Compliance officer triggers rejection
 
-系统自动重新调度内容官节点，本次生成合规草稿，节点变绿，看板显示：
+A red toast appears in the Live Dashboard:
+
+```
+policy.violation — ComplianceOfficer rejected the draft: sensitive content detected, returning to content officer for revision
+```
+
+The `content_draft` node turns red and triggers a `checkpoint rollback`.
+
+### Step 4 — Content officer retries and passes
+
+The system automatically reschedules the content officer node. The revised draft passes policy checks, the node turns green:
 
 ```
 node.succeeded — content_draft (retry #1) ✓
 ```
 
-> **0G 归档**（Epic 5 完成后可用）：运行结束后可将 trajectory 归档至 0G Storage，获得 CID 和链上验证链接。当前版本尚未集成此功能。
-
----
-
-## Troubleshooting
-
-### Docker 起不来
-
-```bash
-# 检查端口冲突（macOS / Linux）
-lsof -i :8000    # API 端口
-lsof -i :3000    # Web 端口
-
-# 检查端口冲突（Windows）
-netstat -an | findstr "8000 3000"
-```
-
-停用占用进程后重新 `docker compose up -d`。
-
-### 容器无日志 / 白屏
-
-```bash
-docker compose logs shadowflow-api   # 查 API 错误
-docker compose logs shadowflow-web   # 查前端构建错误
-```
-
-常见原因：前端构建失败（查看 `shadowflow-web` 容器日志）或端口被占用。
-
-### Windows 路径问题
-
-确保 Docker Desktop → Settings → General → **"Use the WSL 2 based engine"** 已勾选。
-WSL 2 路径格式：`/mnt/d/...`（不要使用 `D:\...`）。
-
-### 0G TS SDK 在 Windows 不稳定
-
-已知风险（中等概率）：0G TS SDK 在 Windows 环境下可能有 WebSocket/WASM 兼容性问题。
-
-**临时方案**：
-1. 在 macOS / Linux 机器上运行演示
-2. 或等待 Epic 5 完成后端代理模式支持
+> **0G Archive**: after a run completes, click the archive button in the run detail panel to upload the full trajectory to 0G Storage and receive a Merkle-verified CID.
 
 ---
 
@@ -124,110 +101,269 @@ WSL 2 路径格式：`/mnt/d/...`（不要使用 `D:\...`）。
 Browser
   └── React + ReactFlow (Workflow Editor + Live Dashboard)
         ↕ REST + SSE
-Backend (FastAPI)
+Backend (FastAPI + Node.js)
   ├── Runtime Engine  →  TaskRecord / RunRecord / StepRecord / Artifact / Checkpoint
-  ├── Agent Executors →  CLI (Claude / Codex / ShadowSoul) | API | MCP | ACP
+  ├── Agent Executors →  CLI (Claude Code / Codex / ShadowSoul) | API | MCP | ACP
   ├── Policy Matrix   →  compile-time validation + runtime reject → handoff + rollback
   └── Provider Layer  →  Claude / OpenAI / Gemini / Ollama / 0G Compute (fallback chain)
         ↕ BYOK
 0G Network
-  ├── 0G Storage      →  trajectory archive (Merkle-verified)
-  └── 0G Compute      →  LLM inference (Provider #5)
+  ├── 0G Storage  →  trajectory archive (Merkle-verified)
+  ├── 0G Compute  →  LLM inference (Provider #5 — DeepSeek / Qwen / Gemma)
+  └── 0G Chain    →  wallet auth + on-chain identity
 ```
 
-完整架构文档：[_bmad-output/planning-artifacts/architecture.md](_bmad-output/planning-artifacts/architecture.md)
-
-运行时契约（7+1 核心对象）：[docs/RUNTIME_CONTRACT_SPEC.md](docs/RUNTIME_CONTRACT_SPEC.md)
+**Two backends, one API surface:**
+- **Python FastAPI** (port 8000) — runtime engine, agents, teams, approvals, policy matrix
+- **Node Express** (port 8002) — Skill Studio: CLI auto-discovery, ACP/MCP broker, artifact preview
+- **Vite** (port 3007) — frontend; proxies `/api/*` to Node 8002; Node reverse-proxies everything else to Python 8000
 
 ---
 
 ## How to Plug Your Agent
 
-ShadowFlow 支持四种接入通道：`api`（HTTP 推理）、`cli`（子进程）、`mcp`（MCP tool 单次调用）、`acp`（ACP session + 审批流）。
+ShadowFlow supports four integration channels: `api` (HTTP inference), `cli` (subprocess), `mcp` (single MCP tool call), `acp` (ACP session + approval flow).
 
-接入只需两步：① 在 `shadowflow/runtime/provider_presets.yaml` 添加 preset；② 在工作流 YAML 中声明 `provider: <your-agent>`。
+Two steps to integrate:
+1. Add a preset to `shadowflow/runtime/provider_presets.yaml`
+2. Declare `provider: <your-agent>` in your workflow YAML
 
-完整接入指南（ABC 契约 / YAML 样板 / worked example / 健康检查）：
-
-**[docs/AGENT_PLUGIN_CONTRACT.md](docs/AGENT_PLUGIN_CONTRACT.md)**
-
-> 已内置预设：Hermes（ACP）、OpenClaw（CLI）、ShadowSoul（ACP+CLI 双路径）、Claude / OpenAI / Gemini / Ollama（api）。
+**Built-in presets:** Hermes (ACP), OpenClaw (CLI), ShadowSoul (ACP+CLI dual path), Claude / OpenAI / Gemini / Ollama (api), 0G Compute (api via broker).
 
 ---
 
-## Phase 2–3 Roadmap
+## Traction
 
-### Phase 2 — 深度集成
+- Active development since March 2026 — 13 epics shipped: runtime engine, agent executor, policy matrix, 0G integration, multi-agent team coordination
+- Core runtime contract (7+1 objects) validated with 80+ backend tests
+- Docker one-command setup verified on macOS and Windows (WSL 2)
 
-- **Tauri Sidecar**：打包为桌面应用（macOS / Windows），离线可用
-- **Shadow 集成**：接入 Shadow 智能体生态，自动发现并注册 Agent 能力
-- **River Memory 系统**：主流/支流/水闸记忆协议，跨 run 持久化语义记忆
+---
 
-### Phase 3 — 价值网络
+## Troubleshooting
 
-- **INFT 铸造**：将高质量 trajectory 铸造为 NFT，建立 Agent 能力链上证据
-- **ACP Marketplace**：Agent Plugin Contract 市集，第三方 Agent 一键接入
-- **Fleet Management**：多项目、多 Agent 舰队级观测与策略治理
+### Docker won't start
+
+```bash
+# macOS / Linux
+lsof -i :8000 && lsof -i :3000
+
+# Windows
+netstat -an | findstr "8000 3000"
+```
+
+Kill the conflicting process then re-run `docker compose up -d`.
+
+### No logs / blank screen
+
+```bash
+docker compose logs shadowflow-api
+docker compose logs shadowflow-web
+```
+
+Common causes: frontend build failure or port already in use.
+
+### Windows path issues
+
+Docker Desktop → Settings → General → **"Use the WSL 2 based engine"** must be checked.
+
+### 0G TS SDK instability on Windows
+
+Known risk: the 0G TS SDK may have WebSocket/WASM compatibility issues on Windows native.
+
+**Workaround:** run the demo on macOS / Linux, or use backend proxy mode (`ZEROG_FRONTEND_DIRECT=false`).
 
 ---
 
 ## Development
 
-### Quick start — single-command dev (recommended)
-
-ShadowFlow runs **two backends behind one entry point**:
-- **Python FastAPI** (port 8000) — Epic 1-13 business logic: agents / teams / wallet / inbox / approvals / pets / etc
-- **Node Express** (port 8002) — Skill Studio (Epic 15): cli auto-discovery / ACP / MCP / artifact preview / projects
-- **Vite** (port 3007) — frontend, proxies all `/api/*` to Node 8002
-- Node 8002 reverse-proxies anything not under its 12 routes to Python 8000 — frontend sees a single API surface
-
-Start everything in one terminal:
+### Quick start
 
 ```bash
 npm run dev:all
 ```
 
-This runs Python uvicorn + Node Skill Studio + Vite in parallel via `concurrently`. Logs are colored per stream (PY/NODE/WEB). Ctrl+C stops all three.
+Runs Python uvicorn + Node Skill Studio + Vite in parallel with colored logs (PY/NODE/WEB). Ctrl+C stops all three.
 
-Run individually if needed:
-
-```bash
-npm run dev:python   # Python FastAPI on :8000 (via uvicorn)
-npm run dev:server   # Node Skill Studio on :8002
-npm run dev:web      # Vite on :3007
-```
-
-**Architecture note**: Node 8002 is the single API entry. If Python is down, calls to its endpoints return `503 PYTHON_BACKEND_UNAVAILABLE` with a startup hint, not a confusing socket error. See `server/src/proxy-fallback.ts`.
-
-### TypeScript Type Generation
-
-Frontend TypeScript interfaces are auto-generated from the Pydantic runtime contracts.
-**After modifying `shadowflow/runtime/contracts.py`**, regenerate and commit the types:
+### Tests
 
 ```bash
-python scripts/generate_ts_types.py
-git add src/core/types/workflow.ts
-git commit -m "chore: regenerate TS types from contracts.py"
+pytest -m "not requires_api_key" --tb=short   # backend
+npm run test:run                               # frontend
+python scripts/check_contracts.py             # type drift
 ```
 
-The CI `lint-backend` job runs `python scripts/check_contracts.py` and will **fail** if
-`src/core/types/workflow.ts` is out of sync with `contracts.py`.
+---
 
-### Running Tests
+## Phase 2–3 Roadmap
+
+### Phase 2 — Deep Integration
+- **Tauri Sidecar**: desktop app (macOS / Windows), offline-capable
+- **River Memory System**: main-stream / tributary / water-gate memory protocol, cross-run semantic persistence
+- **0G Storage backend proxy**: server-side trajectory upload for restricted environments
+
+### Phase 3 — Value Network
+- **INFT Minting**: mint high-quality trajectories as NFTs — on-chain evidence of agent capability
+- **ACP Marketplace**: Agent Plugin Contract marketplace for third-party one-click integration
+- **Fleet Management**: multi-project, multi-agent observability and policy governance
+
+</details>
+
+---
+
+<details id="中文版">
+<summary><a href="#top">English</a> · <b>中文</b></summary>
+
+# ShadowFlow — Agent Team 的 VSCode
+
+**Contract-first 多智能体编排平台 · 带驳回闭环 · 一键 Docker 本地跑通**
+
+[![CI](https://github.com/Ravenveil/ShadowFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Ravenveil/ShadowFlow/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
+[![0G 生态](https://img.shields.io/badge/0G-Storage%20%2B%20Compute%20%2B%20Chain-6C47FF.svg)](https://0g.ai)
+
+---
+
+## 问题痛点
+
+今天的 AI Agent 开发充斥着重复的编排样板代码——没有统一的合规策略执行、无法驳回并回滚失控的 Agent 输出、更没有可审计的链上轨迹。**ShadowFlow** 是一个 contract-first 多智能体工作流平台：AI Agent 团队在人工可审查的 Policy Matrix 下协作，具备驳回闭环、checkpoint 回滚、0G 可验证存档，以及对任何 Agent 运行时（Claude Code、Codex、MCP、ACP）的插件化接入合约。
+
+---
+
+## 0G 技术栈
+
+| 0G 组件 | ShadowFlow 中的用途 |
+|---|---|
+| **0G Compute** | Provider #5 接入去中心化 LLM 推理网络（DeepSeek V3.1 / Qwen / Gemma）；每次推理后自动调用 `processResponse()` 完成费用结算。 |
+| **0G Storage** | 工作流运行轨迹（trajectory）存档至 0G Storage，获得 Merkle 验证的不可篡改审计日志。支持浏览器 BYOK 直传模式（0G JS SDK）和后端代理模式（`ZEROG_FRONTEND_DIRECT=false`）。 |
+| **0G Chain** | 钱包身份认证——用户以 0G Chain 钱包地址登录，工作区与运行记录绑定链上身份。 |
+
+> **合约地址**：ShadowFlow 不部署自定义智能合约，直接使用 0G 原生账本与钱包基础设施。
+
+---
+
+## 快速开始（Docker，约 10 分钟）
+
+### 环境依赖
+
+| 依赖 | 最低版本 | 说明 |
+|------|---------|------|
+| Docker Desktop | 20.10+ | Windows 用户请开启 "Use WSL 2 based engine" |
+| Git | 2.x+ | 克隆仓库 |
+| API Key（可选） | — | Anthropic / OpenAI / Gemini 任选其一；不填走 BYOK 浏览器内输入 |
+
+> **无需** 安装 Python 或 Node.js——所有依赖已打包进 Docker 镜像。
+
+### 运行
 
 ```bash
-# Backend tests (exclude API key tests)
-pytest -m "not requires_api_key" --tb=short
-
-# Frontend tests
-npm run test:run
-
-# Type drift check
-python scripts/check_contracts.py
+git clone https://github.com/Ravenveil/ShadowFlow.git && cd ShadowFlow
+cp .env.example .env          # 可选：填入 API Key；不填走 BYOK
+docker compose up -d
 ```
 
-### Git Workflow
+打开 **http://localhost:3000**，看到 ShadowFlow 工作流编辑器即成功。
 
-- Branches: `epic/{name}` per epic (not per issue)
-- Commit format: `Issue #{number}: {description}`
-- PRs: must pass CI (lint + test + docker + type-drift + secret-scan)
+---
+
+## 5 分钟演示
+
+用 **Solo Company** 模板体验双驳回戏剧全流程。
+
+### Step 1 — 选模板
+
+首页点击 **▶ Quick Demo · 60s**，找到 **Solo Company**，点击 **▶ Fork & open** 进入编辑器。
+
+### Step 2 — 下发任务
+
+```
+写一条符合公司合规要求的周报 tweet
+```
+
+点击 **Run** 发起执行。
+
+### Step 3 — 合规官触发驳回
+
+```
+policy.violation — ComplianceOfficer 拒绝本次草稿：含敏感词汇，退回内容官重写
+```
+
+`content_draft` 节点变红，触发 `checkpoint rollback`。
+
+### Step 4 — 内容官重跑并通过
+
+```
+node.succeeded — content_draft (retry #1) ✓
+```
+
+> **0G 归档**：运行结束后点击归档按钮，将完整轨迹上传至 0G Storage，获得 Merkle 验证 CID。
+
+---
+
+## 架构概览
+
+```
+浏览器
+  └── React + ReactFlow（工作流编辑器 + 实时看板）
+        ↕ REST + SSE
+后端（FastAPI + Node.js）
+  ├── Runtime Engine  →  TaskRecord / RunRecord / StepRecord / Artifact / Checkpoint
+  ├── Agent Executors →  CLI (Claude Code / Codex / ShadowSoul) | API | MCP | ACP
+  ├── Policy Matrix   →  编译期验证 + 运行期驳回 → handoff + rollback
+  └── Provider Layer  →  Claude / OpenAI / Gemini / Ollama / 0G Compute（fallback chain）
+0G 网络
+  ├── 0G Storage  →  trajectory 存档（Merkle 验证）
+  ├── 0G Compute  →  LLM 推理（DeepSeek / Qwen / Gemma）
+  └── 0G Chain    →  钱包身份认证 + 链上 ID
+```
+
+---
+
+## 接入你的 Agent
+
+两步接入：
+1. 在 `shadowflow/runtime/provider_presets.yaml` 添加 preset
+2. 在工作流 YAML 中声明 `provider: <your-agent>`
+
+---
+
+## 牵引力
+
+- 自 2026 年 3 月持续开发，13 个 Epic 已交付
+- 核心运行时契约（7+1 对象）经 80+ 后端测试验证
+- Docker 一键启动已在 macOS 和 Windows（WSL 2）验证通过
+
+---
+
+## 故障排除
+
+```bash
+docker compose logs shadowflow-api   # API 错误
+docker compose logs shadowflow-web   # 前端构建错误
+```
+
+Windows 用户确保 Docker Desktop 开启 **"Use the WSL 2 based engine"**。
+
+---
+
+## 开发者指南
+
+```bash
+npm run dev:all   # 一键启动全部服务
+```
+
+```bash
+pytest -m "not requires_api_key" --tb=short   # 后端测试
+npm run test:run                               # 前端测试
+```
+
+---
+
+## Phase 2–3 路线图
+
+- **Tauri Sidecar**：桌面应用，离线可用
+- **River Memory 系统**：跨 run 持久化语义记忆
+- **INFT 铸造**：高质量 trajectory 铸造为 NFT
+- **ACP Marketplace**：第三方 Agent 一键接入
+
+</details>
