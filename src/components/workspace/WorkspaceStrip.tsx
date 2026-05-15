@@ -3,6 +3,7 @@
  * Replaces the old separate WorkspaceStrip row.
  */
 import { useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { CreateWorkspaceModal } from './CreateWorkspaceModal';
 import type { WorkspaceSummary } from '../../api/workspaces';
@@ -41,20 +42,19 @@ export function WorkspaceSelector() {
         data-testid="org-switcher-trigger"
         onClick={() => setOpen((v) => !v)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 9,
-          padding: '7px 9px 7px 7px', borderRadius: 8,
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '6px 9px', borderRadius: 8,
           background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
-          cursor: 'pointer', transition: 'border-color 120ms',
-          width: 252,
+          cursor: 'pointer', width: 252,
         }}
       >
         <span style={{
-          width: 30, height: 30, borderRadius: 7,
+          width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontWeight: 900, fontSize: init.length > 1 ? 10 : 13,
           background: `color-mix(in oklab, ${color} 22%, var(--t-panel-2))`,
           border: `1px solid color-mix(in oklab, ${color} 50%, transparent)`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 900, fontSize: init.length > 1 ? 10.5 : 13,
-          color: color, letterSpacing: '-0.04em', flexShrink: 0,
+          color: color, letterSpacing: '-0.03em',
         }}>{init}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -64,7 +64,7 @@ export function WorkspaceSelector() {
             {current ? `${current.agent_count} agents · ${current.team_count} teams` : ''}
           </div>
         </div>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms', flexShrink: 0 }}>▾</span>
+        <ChevronDown size={13} strokeWidth={2} style={{ color: 'var(--t-fg-4)', flexShrink: 0, transition: 'transform 150ms', transform: open ? 'rotate(180deg)' : 'none' }} />
       </div>
 
       {open && (
