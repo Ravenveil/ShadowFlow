@@ -51,7 +51,6 @@ import { WelcomeSection } from '../../core/components/settings/WelcomeSection';
 import { HfTopBar, HfPill } from '../../components/hifi';
 import { WalletSection } from './WalletSection';
 import { GenerationSettings } from '../../components/GenerationSettings';
-import { CliDetectPanel } from '../../components/CliDetectPanel';
 import { AcpAgentsPanel } from '../../components/AcpAgentsPanel';
 import { MemorySection } from '../../core/components/settings/MemorySection';
 
@@ -483,9 +482,6 @@ export default function SettingsPage() {
           {activeSection === 'agent-backend' && (
             <LegacySectionWrap>
               <AgentBackendSection />
-              <div style={{ borderTop: '1px solid var(--t-border)', marginTop: 32, paddingTop: 24 }}>
-                <CliDetectPanel />
-              </div>
             </LegacySectionWrap>
           )}
           {activeSection === 'skill-studio-generation' && (

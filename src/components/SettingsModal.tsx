@@ -10,7 +10,6 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { ApiKeySettings } from './ApiKeySettings';
 import { GenerationSettings } from './GenerationSettings';
-import { CliDetectPanel } from './CliDetectPanel';
 import { AcpAgentsPanel } from './AcpAgentsPanel';
 import { WelcomeSection } from '../core/components/settings/WelcomeSection';
 import { AboutSection } from '../core/components/settings/AboutSection';
@@ -30,7 +29,6 @@ type TabId =
   | 'appearance'
   | 'apikeys'
   | 'generation'
-  | 'localclis'
   | 'remoteagents'
   | 'agentbackend'
   | 'toolproviders'
@@ -66,7 +64,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: 'apikeys',      label: 'Skill Studio API Key' },
       { id: 'generation',   label: 'Generation' },
-      { id: 'localclis',    label: 'Local CLIs' },
       { id: 'remoteagents', label: 'Remote Agents' },
       { id: 'agentbackend', label: 'Models & Providers' },
       { id: 'toolproviders',label: 'Tool Providers', soon: true },
@@ -94,7 +91,6 @@ function TabContent({ tab }: { tab: TabId }) {
     case 'appearance':   return <AppearanceSection />;
     case 'apikeys':      return <ApiKeySettings />;
     case 'generation':   return <GenerationSettings />;
-    case 'localclis':    return <CliDetectPanel />;
     case 'remoteagents': return <AcpAgentsPanel />;
     case 'agentbackend': return <AgentBackendSection />;
     case 'toolproviders':return <ComingSoon label="Tool Providers" />;
