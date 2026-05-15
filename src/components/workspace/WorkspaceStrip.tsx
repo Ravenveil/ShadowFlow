@@ -74,7 +74,7 @@ export function WorkspaceStrip() {
               <span style={{
                 fontFamily: 'var(--font-mono)', fontSize: 9.5, lineHeight: 1.2,
                 color: 'var(--t-fg-5)', whiteSpace: 'nowrap',
-              }}>{ws.agent_count} agents · {ws.team_count} teams</span>
+              }}>{ws.agent_count}a · {ws.team_count}t</span>
             </div>
           </button>
         );

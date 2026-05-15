@@ -42,6 +42,7 @@ export function HfLayout() {
   const { pathname } = useLocation();
   const active = pathToActive(pathname);
   const needsLayoutTopBar = LAYOUT_TOPBAR_PREFIXES.some(p => pathname.startsWith(p));
+  const showWorkspaceStrip = !pathname.startsWith('/start') && !pathname.startsWith('/templates');
 
   return (
     <div className="hf-root" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -55,7 +56,7 @@ export function HfLayout() {
           overflow: 'hidden',
         }}
       >
-        <WorkspaceStrip />
+        {showWorkspaceStrip && <WorkspaceStrip />}
         {needsLayoutTopBar && <HfTopBar />}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
           <Outlet />
