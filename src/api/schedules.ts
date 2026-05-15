@@ -43,7 +43,7 @@ export async function createSchedule(body: {
   agent_id: string;
   task_description: string;
 }): Promise<{ data: Schedule; meta: Record<string, unknown> }> {
-  const res = await fetch(`${BASE}/schedules`, {
+  const res = await fetch(`${BASE}/api/schedules`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -54,12 +54,12 @@ export async function createSchedule(body: {
 export async function listSchedules(groupId?: string): Promise<{ data: Schedule[]; meta: Record<string, unknown> }> {
   // 2026-05-11 fix — `new URL('/schedules')` throws when BASE is empty.
   const qs = groupId ? `?group_id=${encodeURIComponent(groupId)}` : '';
-  const res = await fetch(`${BASE}/schedules${qs}`);
+  const res = await fetch(`${BASE}/api/schedules${qs}`);
   return _handle(res);
 }
 
 export async function deleteSchedule(scheduleId: string): Promise<void> {
-  const res = await fetch(`${BASE}/schedules/${scheduleId}`, { method: 'DELETE' });
+  const res = await fetch(`${BASE}/api/schedules/${scheduleId}`, { method: 'DELETE' });
   if (!res.ok && res.status !== 204) {
     let detail: unknown;
     try { detail = await res.json(); } catch { detail = res.statusText; }
@@ -68,6 +68,6 @@ export async function deleteSchedule(scheduleId: string): Promise<void> {
 }
 
 export async function getScheduleRuns(scheduleId: string): Promise<{ data: ScheduleRun[]; meta: Record<string, unknown> }> {
-  const res = await fetch(`${BASE}/schedules/${scheduleId}/runs`);
+  const res = await fetch(`${BASE}/api/schedules/${scheduleId}/runs`);
   return _handle(res);
 }
