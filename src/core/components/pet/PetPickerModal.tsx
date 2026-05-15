@@ -73,7 +73,7 @@ interface CommunityPet {
   tags: string[];
 }
 
-type Tab = 'favorites' | 'builtin' | 'community' | 'custom';
+type Tab = 'favorites' | 'community' | 'custom';
 
 const CUSTOM_PET_KEY = 'sf.customPet';
 
@@ -203,7 +203,7 @@ interface Props {
 
 export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
   const { selectedPetId, setSelectedPet } = usePetStore();
-  const [tab, setTab] = useState<Tab>('builtin');
+  const [tab, setTab] = useState<Tab>('community');
 
   // Favorites
   const [favorites, setFavorites] = useState<string[]>(loadFavorites);
@@ -327,7 +327,6 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
 
   const TAB_LABELS: Record<Tab, string> = {
     favorites: `收藏${favorites.length > 0 ? ` (${favorites.length})` : ''}`,
-    builtin: '内置',
     community: '社区',
     custom: '自定义',
   };
@@ -349,7 +348,7 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-4 flex-shrink-0">
-          {(['favorites', 'builtin', 'community', 'custom'] as Tab[]).map((t) => (
+          {(['favorites', 'community', 'custom'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -444,25 +443,6 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
                   })}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* ── 内置 tab ── */}
-          {tab === 'builtin' && (
-            <div>
-              <p className="text-gray-500 text-xs mb-3">预设内置宠物 — 精选同伴，选一个领养。</p>
-              <div className="grid grid-cols-4 gap-3">
-                {BUILTIN_PETS.map((pet) => (
-                  <BuiltinCard
-                    key={pet.id}
-                    pet={pet}
-                    selected={selectedPetId === pet.id}
-                    isFavorite={favorites.includes(pet.id)}
-                    onToggleFavorite={e => toggleFavorite(e, pet.id)}
-                    onSelect={() => handleSelect(pet.id)}
-                  />
-                ))}
-              </div>
             </div>
           )}
 
