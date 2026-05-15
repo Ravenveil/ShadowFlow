@@ -45,6 +45,7 @@ export function WorkspaceSelector() {
           padding: '7px 9px 7px 7px', borderRadius: 8,
           background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
           cursor: 'pointer', transition: 'border-color 120ms',
+          width: 252,
         }}
       >
         <span style={{
