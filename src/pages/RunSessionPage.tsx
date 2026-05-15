@@ -12,7 +12,7 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Check, Circle, ExternalLink, Key, Paperclip, Settings } from 'lucide-react';
+import { Check, Circle, Cpu, ExternalLink, Key, Paperclip, Settings } from 'lucide-react';
 import { useRunSession } from '../core/hooks/useRunSession';
 import type { RunSessionNode, RunSessionEdge, RunSessionStep } from '../core/hooks/useRunSession';
 import {
@@ -1294,12 +1294,13 @@ const toolbarBtn: React.CSSProperties = {
 interface LeftPanelProps {
   sessionId: string;
   goal: string;
+  skillUrl?: string;
   session: ReturnType<typeof useRunSession>;
   collapsed: boolean;
   onCollapse: () => void;
 }
 
-function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPanelProps) {
+function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }: LeftPanelProps) {
   const { t } = useI18n();
   // 2026-05-11 Story 15.30 follow-up: handleSend 现在派生新 run session 后需要
   // navigate 到新 URL，让 useRunSession hook 自动 teardown + 重订阅新 SSE 流。
@@ -1312,6 +1313,12 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [thinkExpanded, setThinkExpanded] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>(
+    () => localStorage.getItem('sf.model') ?? 'claude-sonnet-4-6',
+  );
+  const modelBtnRef = useRef<HTMLButtonElement>(null);
 
   // 2026-05-11 Layer 1 — Claude Code-style chat fallback.
   // Two triggers (both require "no canvas events seen"):
@@ -1325,6 +1332,18 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
     session.steps.length === 0 &&
     session.nodes.length === 0 &&
     !session.blueprintFile;
+
+  // Close model picker on outside click
+  useEffect(() => {
+    if (!showModelPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (modelBtnRef.current && !modelBtnRef.current.closest('[data-model-picker]')?.contains(e.target as Node)) {
+        setShowModelPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showModelPicker]);
 
   const handleSend = async () => {
     const text = message.trim();
@@ -1444,6 +1463,34 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
           >
             run_{sessionId} · {session.isComplete ? '已完成' : '构建中'}
           </div>
+          {skillUrl && (
+            <a
+              href={skillUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={skillUrl}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                marginTop: 2,
+                fontFamily: 'var(--font-mono, monospace)',
+                fontSize: 9,
+                color: 'var(--t-accent)',
+                textDecoration: 'none',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '100%',
+                opacity: 0.8,
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.opacity = '1'; (e.currentTarget as HTMLAnchorElement).style.textDecoration = 'underline'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.8'; (e.currentTarget as HTMLAnchorElement).style.textDecoration = 'none'; }}
+            >
+              <ExternalLink size={8} strokeWidth={2} aria-hidden style={{ flexShrink: 0 }} />
+              {skillUrl.replace('https://raw.githubusercontent.com/', 'gh/')}
+            </a>
+          )}
         </div>
         <button
           type="button"
@@ -1787,24 +1834,48 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
 
         {/* Thinking bubble */}
         {session.thinkingMessage && (
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <div
+          <div
+            key={session.thinkingMessage}
+            style={{
+              borderRadius: 6,
+              background: 'var(--t-bg)',
+              borderLeft: '2px solid #3B82F6',
+              overflow: 'hidden',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setThinkExpanded(v => !v)}
               style={{
-                padding: '9px 13px',
-                borderRadius: '4px 14px 14px 14px',
-                background: 'var(--t-panel-2)',
-                border: '1px solid var(--t-border)',
-                color: 'var(--t-fg-3)',
-                fontSize: 12,
-                lineHeight: 1.5,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
+                width: '100%',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '8px 12px',
+                textAlign: 'left',
               }}
             >
               <InlineSpinner size={10} />
-              {session.thinkingMessage}
-            </div>
+              <span style={{ fontSize: 12, color: 'var(--t-fg-3)', fontWeight: 500 }}>思考中</span>
+              <span style={{ fontSize: 10, color: 'var(--t-fg-4)', flexShrink: 0, marginLeft: 'auto' }}>
+                {thinkExpanded ? '▼' : '▶'}
+              </span>
+            </button>
+            {thinkExpanded && (
+              <div
+                style={{
+                  padding: '4px 12px 10px 12px',
+                  fontSize: 11,
+                  color: 'var(--t-fg-3)',
+                  lineHeight: 1.5,
+                }}
+              >
+                {session.thinkingMessage}
+              </div>
+            )}
           </div>
         )}
 
@@ -1936,14 +2007,91 @@ function LeftPanel({ sessionId, goal, session, collapsed, onCollapse }: LeftPane
               >
                 <Paperclip size={14} strokeWidth={1.8} />
               </button>
-              {/* Model chip — 2026-05-11 kit alignment: cmp-chip + cmp-chip-meta
-                  pattern. [dot] claude-sonnet | 4.6. Click is a no-op for now
-                  (model picker hook-up out of scope). */}
-              <button type="button" title="模型" className="cmp-chip">
-                <span className="cmp-chip-dot" aria-hidden="true" />
-                <span>claude-sonnet</span>
-                <span className="cmp-chip-meta">4.6</span>
-              </button>
+              {/* Model picker — click to open inline switcher */}
+              <div style={{ position: 'relative' }} data-model-picker>
+                <button
+                  ref={modelBtnRef}
+                  type="button"
+                  title={`模型: ${selectedModel}`}
+                  className="cmp-btn"
+                  onClick={() => setShowModelPicker(v => !v)}
+                  style={showModelPicker ? {
+                    background: 'var(--t-accent-tint)',
+                    borderColor: 'var(--t-accent)',
+                    color: 'var(--t-accent-bright)',
+                  } : undefined}
+                >
+                  <Cpu size={15} strokeWidth={1.8} />
+                </button>
+                {showModelPicker && (
+                  <div style={{
+                    position: 'absolute', bottom: 'calc(100% + 6px)', left: 0,
+                    minWidth: 220, zIndex: 200,
+                    background: 'var(--t-panel)',
+                    border: '1px solid var(--t-border)',
+                    borderRadius: 10,
+                    boxShadow: '0 8px 24px -8px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.04)',
+                    padding: '4px 0',
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      padding: '6px 12px 5px',
+                      fontFamily: 'var(--font-mono, monospace)',
+                      fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase',
+                      color: 'var(--t-fg-4)', fontWeight: 600,
+                    }}>
+                      切换模型
+                    </div>
+                    {([
+                      { value: 'claude-sonnet-4-6', short: 'Sonnet 4.6', sub: 'balanced · default' },
+                      { value: 'claude-opus-4',     short: 'Opus 4',     sub: 'powerful · slower' },
+                      { value: 'claude-haiku-4-5',  short: 'Haiku 4.5',  sub: 'fast · lightweight' },
+                    ] as const).map(m => {
+                      const active = selectedModel === m.value;
+                      return (
+                        <button
+                          key={m.value}
+                          type="button"
+                          onClick={() => {
+                            localStorage.setItem('sf.model', m.value);
+                            setSelectedModel(m.value);
+                            setShowModelPicker(false);
+                          }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '7px 12px', border: 0, cursor: 'pointer',
+                            background: active ? 'var(--t-accent-tint)' : 'transparent',
+                            textAlign: 'left', transition: 'background .1s',
+                          }}
+                          onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--t-hover, var(--t-panel))'; }}
+                          onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                        >
+                          <span style={{
+                            width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                            background: active ? 'var(--t-accent)' : 'var(--t-border-2, var(--t-border))',
+                            boxShadow: active ? '0 0 6px rgba(168,85,247,.6)' : 'none',
+                          }} />
+                          <span style={{ flex: 1 }}>
+                            <span style={{
+                              display: 'block',
+                              fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, fontWeight: 500,
+                              color: active ? 'var(--t-accent-bright)' : 'var(--t-fg)',
+                            }}>{m.short}</span>
+                            <span style={{
+                              display: 'block',
+                              fontFamily: 'var(--font-mono, monospace)', fontSize: 9.5,
+                              color: 'var(--t-fg-4)', marginTop: 1,
+                            }}>{m.sub}</span>
+                          </span>
+                          {active && (
+                            <Check size={12} strokeWidth={2.5} style={{ color: 'var(--t-accent)', flexShrink: 0 }} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
             {/* Right — send */}
             {/* 2026-05-11 Story 15.30 follow-up: send 按钮仅依赖 input 非空 — 不
@@ -2483,6 +2631,7 @@ export default function RunSessionPage() {
   const sessionId = params.sessionId;
   const [searchParams] = useSearchParams();
   const goal = searchParams.get('goal') ?? '';
+  const skillUrl = searchParams.get('skill_url') ?? '';
   const navigate = useNavigate();
 
   // Story 15.4: no :sessionId → preparation phase. Hooks below depend on a
@@ -2500,6 +2649,7 @@ export default function RunSessionPage() {
     <RunSessionLiveView
       sessionId={sessionId}
       goal={goal}
+      skillUrl={skillUrl}
       onNavigate={navigate}
     />
   );
@@ -2508,10 +2658,11 @@ export default function RunSessionPage() {
 interface RunSessionLiveViewProps {
   sessionId: string;
   goal: string;
+  skillUrl?: string;
   onNavigate: ReturnType<typeof useNavigate>;
 }
 
-function RunSessionLiveView({ sessionId, goal, onNavigate }: RunSessionLiveViewProps) {
+function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessionLiveViewProps) {
   const session = useRunSession(sessionId);
   const [collapsed, setCollapsed] = useState(false);
   const [zoom, setZoom] = useState(82);
@@ -2591,6 +2742,7 @@ function RunSessionLiveView({ sessionId, goal, onNavigate }: RunSessionLiveViewP
         <LeftPanel
           sessionId={sessionId}
           goal={goal}
+          skillUrl={skillUrl}
           session={session}
           collapsed={collapsed}
           onCollapse={() => setCollapsed((v) => !v)}

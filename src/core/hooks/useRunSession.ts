@@ -76,7 +76,6 @@ type Action =
   | { type: 'EDGE'; payload: EdgeEvent }
   | { type: 'BLUEPRINT'; payload: BlueprintEvent }
   | { type: 'COMPLETE'; payload: CompleteEvent }
-  | { type: 'TICK_TOKEN' }
   | { type: 'RATIONALE'; payload: RationaleEvent }
   | { type: 'YAML_LINE'; payload: YamlLineEvent }
   | { type: 'SUBSTEP'; payload: SubstepEvent }
@@ -134,12 +133,14 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       };
     case 'COMPLETE':
       return { ...state, isComplete: true, redirectUrl: action.payload.redirect ?? null, thinkingMessage: null };
-    case 'TICK_TOKEN':
-      return { ...state, tokenCount: state.tokenCount + Math.floor(Math.random() * 80 + 20) };
     case 'RATIONALE':
       return { ...state, rationaleCards: [...state.rationaleCards, action.payload] };
     case 'YAML_LINE':
-      return { ...state, yamlLines: [...state.yamlLines, action.payload.line] };
+      return {
+        ...state,
+        yamlLines: [...state.yamlLines, action.payload.line],
+        tokenCount: state.tokenCount + Math.ceil(action.payload.line.length / 4),
+      };
     case 'SUBSTEP':
       return {
         ...state,
@@ -149,7 +150,7 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
         ],
       };
     case 'ERROR':
-      return { ...state, error: action.message, retrying: false };
+      return { ...state, error: action.message, retrying: false, thinkingMessage: null };
     case 'RETRYING':
       return { ...state, retrying: true, retryAttempt: action.attempt, retryDelayMs: action.delayMs, error: null };
     case 'CRITIQUE_PROGRESS':
@@ -157,7 +158,12 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
     case 'CRITIQUE_RESULT':
       return { ...state, critiqueResult: action.payload, critiqueProgress: null };
     case 'TEXT':
-      return { ...state, chatReply: state.chatReply + action.payload.text, thinkingMessage: null };
+      return {
+        ...state,
+        chatReply: state.chatReply + action.payload.text,
+        thinkingMessage: null,
+        tokenCount: state.tokenCount + Math.ceil(action.payload.text.length / 4),
+      };
     default:
       return state;
   }
@@ -176,7 +182,6 @@ export function useRunSession(sessionId: string): RunSessionState {
     chatReply: '',
   });
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -198,11 +203,7 @@ export function useRunSession(sessionId: string): RunSessionState {
       onError:         () => dispatch({ type: 'ERROR', message: 'SSE 连接失败，已达最大重试次数' }),
       onServerError:   (message) => dispatch({ type: 'ERROR', message }),
     });
-    timerRef.current = setInterval(() => dispatch({ type: 'TICK_TOKEN' }), 2000);
-    return () => {
-      cleanup();
-      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    };
+    return cleanup;
   }, [sessionId]);
 
   // 3 分钟 watchdog — session 超时自动标 error
@@ -216,10 +217,9 @@ export function useRunSession(sessionId: string): RunSessionState {
     };
   }, [sessionId]);
 
-  // 当 complete 时清除 watchdog 和 token 动画
+  // 当 complete 时清除 watchdog
   useEffect(() => {
     if (state.isComplete) {
-      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
     }
   }, [state.isComplete]);
