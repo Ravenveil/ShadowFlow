@@ -845,3 +845,64 @@ input, textarea, select { font-family: inherit; color: inherit; }
   overflow-y: auto;
   padding: 24px 28px;
 }
+
+/* ─── Chat inbox row hover effects (FB-HiFi design) ─── */
+.sf-inbox-row {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 120ms;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  position: relative;
+}
+.sf-inbox-row:hover { background: var(--t-panel-2); }
+.sf-inbox-row.active {
+  background: var(--t-accent-tint);
+  border-left: 2px solid var(--t-accent);
+}
+.sf-inbox-row:not(.active) { border-left: 2px solid transparent; }
+
+.sf-dm-row {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 120ms;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+}
+.sf-dm-row:hover { background: var(--t-panel-2); }
+
+.sf-chat-rail-item {
+  width: 40px;
+  height: 42px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  position: relative;
+  transition: background 120ms;
+}
+.sf-chat-rail-item:hover { background: var(--t-panel-2); }
+.sf-chat-rail-item.active {
+  background: var(--t-accent-tint);
+  color: var(--t-accent-bright);
+}
+
+.sf-org-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.sf-org-row:hover { background: var(--t-panel-2); }
+.sf-org-row.active { background: var(--t-accent-tint); }
+
