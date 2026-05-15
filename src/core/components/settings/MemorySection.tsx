@@ -33,8 +33,8 @@ function relativeTime(dateStr: string): string {
 
 const SCOPE_COLORS: Record<MemoryScope, { bg: string; border: string; text: string }> = {
   user:    { bg: 'rgba(37,99,235,.12)',  border: 'rgba(37,99,235,.22)',  text: '#2563EB' },
-  project: { bg: 'rgba(5,150,105,.12)',  border: 'rgba(5,150,105,.22)',  text: '#059669' },
-  session: { bg: 'rgba(168,85,247,.12)', border: 'rgba(168,85,247,.22)', text: '#A855F7' },
+  project: { bg: 'rgba(5,150,105,.12)',  border: 'rgba(5,150,105,.22)',  text: 'var(--t-ok)' },
+  session: { bg: 'rgba(168,85,247,.12)', border: 'rgba(168,85,247,.22)', text: 'var(--t-accent)' },
 };
 
 function ScopeTag({ scope, label }: { scope: MemoryScope; label: string }) {
@@ -69,7 +69,7 @@ function EntryCard({
       onMouseLeave={() => setHovered(false)}
       style={{
         padding: '10px 12px', borderRadius: 8, marginBottom: 6,
-        border: `1px solid ${error ? '#ef4444' : 'var(--t-border)'}`,
+        border: `1px solid ${error ? 'var(--t-err)' : 'var(--t-border)'}`,
         background: 'var(--t-bg)', position: 'relative',
       }}
     >
@@ -87,12 +87,12 @@ function EntryCard({
           {preview}
         </p>
       )}
-      {error && <p style={{ margin: '3px 0 0', fontSize: 11, color: '#ef4444' }}>{error}</p>}
+      {error && <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--t-err)' }}>{error}</p>}
       {hovered && (
         <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
           {[
             { title: '编辑', onClick: onEdit, icon: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z', color: 'var(--t-fg-3)' },
-            { title: '删除', onClick: onDelete, icon: 'M3 6h18 M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6 M10 11v6 M14 11v6 M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2', color: '#ef4444' },
+            { title: '删除', onClick: onDelete, icon: 'M3 6h18 M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6 M10 11v6 M14 11v6 M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2', color: 'var(--t-err)' },
           ].map((btn) => (
             <button key={btn.title} type="button" title={btn.title} onClick={btn.onClick} style={{
               width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -173,7 +173,7 @@ function EntryModal({
           <label style={lbl}>{labelContent}</label>
           <textarea value={content} onChange={(e) => setContent(e.target.value)} maxLength={4000} rows={4}
             style={{ ...inp, resize: 'vertical', height: 'auto', fontFamily: 'inherit' }} />
-          {err && <p style={{ color: '#ef4444', fontSize: 11, margin: '2px 0 8px' }}>{err}</p>}
+          {err && <p style={{ color: 'var(--t-err)', fontSize: 11, margin: '2px 0 8px' }}>{err}</p>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
             <button type="button" onClick={onClose} style={cancelBtn}>{labelCancel}</button>
             <button type="submit" disabled={saving} style={saveBtn}>{saving ? '…' : labelSave}</button>
@@ -334,7 +334,7 @@ export function MemorySection() {
         )}
 
         {loading && <p style={{ color: 'var(--t-fg-4)', fontSize: 12 }}>加载中…</p>}
-        {!loading && loadError && <p style={{ color: '#ef4444', fontSize: 12 }}>{loadError}</p>}
+        {!loading && loadError && <p style={{ color: 'var(--t-err)', fontSize: 12 }}>{loadError}</p>}
 
         {!loading && !loadError && filtered.length === 0 && (
           <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--t-fg-4)' }}>

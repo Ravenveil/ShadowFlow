@@ -113,9 +113,9 @@ export function ZerogStorageSection() {
             borderRadius: 20,
             fontSize: 11,
             fontWeight: 600,
-            background: hasEncryptedBlob ? 'rgba(52,211,153,0.12)' : 'rgba(148,163,184,0.1)',
-            color: hasEncryptedBlob ? '#34d399' : 'var(--t-fg-4)',
-            border: `1px solid ${hasEncryptedBlob ? 'rgba(52,211,153,0.3)' : 'var(--t-border)'}`,
+            background: hasEncryptedBlob ? 'var(--t-ok-tint, rgba(52,211,153,0.12))' : 'rgba(148,163,184,0.1)',
+            color: hasEncryptedBlob ? 'var(--t-ok)' : 'var(--t-fg-4)',
+            border: `1px solid ${hasEncryptedBlob ? 'var(--t-ok-border, rgba(52,211,153,0.3))' : 'var(--t-border)'}`,
           }}
         >
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
@@ -186,7 +186,7 @@ export function ZerogStorageSection() {
       </div>
 
       {error && (
-        <div style={{ fontSize: 11.5, color: '#f87171', marginBottom: 12 }}>{error}</div>
+        <div style={{ fontSize: 11.5, color: 'var(--t-err)', marginBottom: 12 }}>{error}</div>
       )}
 
       <button
@@ -196,9 +196,9 @@ export function ZerogStorageSection() {
         style={{
           padding: '8px 18px',
           borderRadius: 7,
-          background: saved ? 'rgba(52,211,153,0.15)' : 'var(--t-accent)',
-          color: saved ? '#34d399' : '#fff',
-          border: saved ? '1px solid rgba(52,211,153,0.3)' : 'none',
+          background: saved ? 'var(--t-ok-tint, rgba(52,211,153,0.15))' : 'var(--t-accent)',
+          color: saved ? 'var(--t-ok)' : '#fff',
+          border: saved ? '1px solid var(--t-ok-border, rgba(52,211,153,0.3))' : 'none',
           fontSize: 12.5,
           fontWeight: 600,
           cursor: saving ? 'not-allowed' : 'pointer',

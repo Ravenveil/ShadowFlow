@@ -294,13 +294,13 @@ export const PetSettings: React.FC = () => {
   }, [selectedPetId]);
 
   return (
-    <section className="bg-gray-800 border border-gray-700 rounded-lg p-5">
+    <section className="rounded-[12px] border border-sf-border bg-sf-panel p-5">
       {/* Section heading */}
       <div className="flex items-center gap-2 mb-1">
-        <IconPaw size={18} className="text-purple-400" />
-        <h3 className="text-gray-100 font-semibold text-sm">宠物伴侣</h3>
+        <IconPaw size={18} className="text-sf-accent" />
+        <h3 className="text-sf-fg1 font-semibold text-sm">宠物伴侣</h3>
       </div>
-      <p className="text-gray-400 text-xs mb-5">
+      <p className="text-sf-fg4 text-xs mb-5">
         领养一只小伙伴，让它在你的工作区里陪你。
       </p>
 
@@ -312,21 +312,21 @@ export const PetSettings: React.FC = () => {
               spritesheetUrl={pet.spritesheetUrl}
               size={120}
               rowId="idle"
-              className="rounded-lg bg-gray-900 p-1"
+              className="rounded-lg bg-sf-elev0 p-1"
             />
             <div>
-              <p className="text-gray-100 font-medium">{pet.displayName}</p>
+              <p className="text-sf-fg1 font-medium">{pet.displayName}</p>
               {pet.description && (
-                <p className="text-gray-400 text-xs mt-0.5 max-w-[220px] leading-relaxed">
+                <p className="text-sf-fg4 text-xs mt-0.5 max-w-[220px] leading-relaxed">
                   {pet.description}
                 </p>
               )}
             </div>
           </>
         ) : (
-          <div className="flex items-center gap-3 text-gray-500 text-sm">
-            <div className="w-[120px] h-[120px] rounded-lg bg-gray-900 border border-dashed border-gray-700 flex items-center justify-center">
-              <IconPaw size={28} className="text-gray-700" />
+          <div className="flex items-center gap-3 text-sf-fg5 text-sm">
+            <div className="w-[120px] h-[120px] rounded-lg bg-sf-elev0 border border-dashed border-sf-border flex items-center justify-center">
+              <IconPaw size={28} className="text-sf-fg5" />
             </div>
             <span>
               {loadError ? '加载失败，请检查网络' : '还没有选择宠物'}
@@ -339,20 +339,20 @@ export const PetSettings: React.FC = () => {
       <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={() => setShowPicker(true)}
-          className="px-4 py-2 rounded-lg bg-purple-700 hover:bg-purple-600 text-white text-sm font-medium transition-colors"
+          className="px-4 py-2 rounded-lg bg-sf-accent hover:bg-sf-accent-dim text-white text-sm font-medium transition-colors"
         >
           {selectedPetId ? '更换宠物' : '领养宠物'}
         </button>
 
         {/* Visibility toggle */}
         <label className="flex items-center gap-2 cursor-pointer select-none">
-          <span className="text-gray-400 text-sm">在工作区显示</span>
+          <span className="text-sf-fg4 text-sm">在工作区显示</span>
           <button
             role="switch"
             aria-checked={petVisible}
             onClick={() => setPetVisible(!petVisible)}
-            className={`relative inline-flex w-10 h-5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 ${
-              petVisible ? 'bg-purple-600' : 'bg-gray-700'
+            className={`relative inline-flex w-10 h-5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sf-accent ${
+              petVisible ? 'bg-sf-accent' : 'bg-sf-elev2'
             }`}
           >
             <span
