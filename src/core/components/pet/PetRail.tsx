@@ -81,43 +81,6 @@ function clampPos(x: number, y: number): { x: number; y: number } {
   };
 }
 
-/** Small chevron tab visible at the docked edge */
-function DockTab({ side, accent }: { side: 'left' | 'right'; accent: string }) {
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        top: '50%',
-        transform: 'translateY(-50%)',
-        [side === 'right' ? 'left' : 'right']: 0,
-        width: PEEK_PX,
-        height: 40,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: side === 'right' ? '6px 0 0 6px' : '0 6px 6px 0',
-        background: accent + '33',
-        pointerEvents: 'none',
-      }}
-    >
-      <svg
-        width="8"
-        height="14"
-        viewBox="0 0 8 14"
-        fill="none"
-        stroke={accent}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ opacity: 0.8 }}
-      >
-        {side === 'right'
-          ? <polyline points="6 1 2 7 6 13" />
-          : <polyline points="2 1 6 7 2 13" />}
-      </svg>
-    </div>
-  );
-}
 
 export const PetRail: React.FC = () => {
   const { selectedPetId, petVisible } = usePetStore();
@@ -140,7 +103,6 @@ export const PetRail: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const builtinPet = selectedPetId && isBuiltinPet(selectedPetId) ? getBuiltinPet(selectedPetId) : null;
-  const accentColor = builtinPet?.accent ?? '#A855F7';
 
   // Fetch community pet info
   useEffect(() => {
@@ -329,13 +291,8 @@ export const PetRail: React.FC = () => {
           </div>
         )}
 
-        {/* Pet button — wrapped in relative container for the dock tab */}
+        {/* Pet button */}
         <div style={{ position: 'relative' }}>
-          {/* Dock tab (visible edge indicator) */}
-          {dockedSide && !expanded && (
-            <DockTab side={dockedSide} accent={accentColor} />
-          )}
-
           <button
             type="button"
             onClick={handleClick}
