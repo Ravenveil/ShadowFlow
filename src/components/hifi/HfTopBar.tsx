@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { LanguageSwitcher } from '../../core/components/common/LanguageSwitcher';
 import { useTheme } from './useTheme';
 import { useI18n } from '../../common/i18n';
+import { WorkspaceSelector } from '../workspace/WorkspaceStrip';
 
 function tierColor(latency: number): string {
   if (latency < 100) return 'var(--t-ok)';
@@ -133,11 +134,11 @@ interface HfTopBarProps {
   hideWorkspace?: boolean;
 }
 
-export function HfTopBar({ right }: HfTopBarProps) {
+export function HfTopBar({ right, hideWorkspace }: HfTopBarProps) {
   return (
     <header
       style={{
-        height: 50,
+        height: 56,
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
@@ -147,6 +148,7 @@ export function HfTopBar({ right }: HfTopBarProps) {
         background: 'var(--t-panel)',
       }}
     >
+      {!hideWorkspace && <WorkspaceSelector />}
       <div style={{ flex: 1 }} />
       {right}
       <NetworkLatencyChip />

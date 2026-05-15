@@ -1,13 +1,13 @@
 /**
- * WorkspaceStrip — single-row dropdown workspace selector.
- * Shows current workspace; click to open list and switch.
+ * WorkspaceSelector — inline single-row dropdown for the TopBar.
+ * Replaces the old separate WorkspaceStrip row.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { CreateWorkspaceModal } from './CreateWorkspaceModal';
 import type { WorkspaceSummary } from '../../api/workspaces';
 
-export function WorkspaceStrip() {
+export function WorkspaceSelector() {
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const currentId  = useWorkspaceStore((s) => s.currentId);
   const switchTo   = useWorkspaceStore((s) => s.switchTo);
@@ -35,75 +35,49 @@ export function WorkspaceStrip() {
   const init    = current ? (Array.from(current.name)[0] ?? '?') : '?';
 
   return (
-    <div
-      ref={ref}
-      style={{
-        position: 'relative',
-        padding: '6px 18px',
-        borderBottom: '1px solid var(--t-border)',
-        background: 'var(--t-panel)',
-        flexShrink: 0,
-      }}
-    >
-      {/* Trigger button — single row */}
-      <button
-        type="button"
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <div
+        data-testid="org-switcher-trigger"
         onClick={() => setOpen((v) => !v)}
         style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '5px 10px',
-          borderRadius: 8,
-          border: `1px solid color-mix(in oklab, ${color} 35%, var(--t-border))`,
-          background: `color-mix(in oklab, ${color} 10%, var(--t-panel))`,
-          cursor: 'pointer',
-          minWidth: 160,
-          transition: 'all 120ms ease',
+          display: 'flex', alignItems: 'center', gap: 9,
+          padding: '7px 9px 7px 7px', borderRadius: 8,
+          background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
+          cursor: 'pointer', transition: 'border-color 120ms',
         }}
       >
-        <div style={{
-          width: 22, height: 22, borderRadius: 6,
-          background: color, color: '#0A0A0A',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 900, fontSize: 11, flexShrink: 0,
-        }}>{init}</div>
         <span style={{
-          fontSize: 13, fontWeight: 600, color: 'var(--t-fg)',
-          whiteSpace: 'nowrap', flex: 1, textAlign: 'left',
-        }}>
-          {current?.name ?? '—'}
-        </span>
-        <svg
-          width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="var(--t-fg-4)" strokeWidth="1.8" strokeLinecap="round"
-          style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 150ms ease' }}
-        >
-          <polyline points="2,4 6,8 10,4" />
-        </svg>
-      </button>
+          width: 30, height: 30, borderRadius: 7,
+          background: `color-mix(in oklab, ${color} 22%, var(--t-panel-2))`,
+          border: `1px solid color-mix(in oklab, ${color} 50%, transparent)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontWeight: 900, fontSize: init.length > 1 ? 10.5 : 13,
+          color: color, letterSpacing: '-0.04em', flexShrink: 0,
+        }}>{init}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {current?.name ?? '—'}
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', marginTop: 1 }}>
+            {current ? `${current.agent_count} agents · ${current.team_count} teams` : ''}
+          </div>
+        </div>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms', flexShrink: 0 }}>▾</span>
+      </div>
 
-      {/* Dropdown */}
       {open && (
         <div style={{
-          position: 'absolute',
-          top: 'calc(100% - 2px)',
-          left: 18,
-          minWidth: 220,
-          background: 'var(--t-panel)',
-          border: '1px solid var(--t-border)',
-          borderRadius: 10,
+          position: 'absolute', top: 'calc(100% + 6px)', left: 0,
+          minWidth: 200, background: 'var(--t-panel)',
+          border: '1px solid var(--t-border)', borderRadius: 10,
           boxShadow: '0 8px 24px rgba(0,0,0,.18)',
-          zIndex: 200,
-          padding: '6px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
+          zIndex: 200, padding: '6px',
+          display: 'flex', flexDirection: 'column', gap: 2,
         }}>
           {workspaces.map((ws: WorkspaceSummary) => {
-            const on    = ws.workspace_id === currentId;
-            const c     = ws.color || 'var(--t-accent)';
-            const i     = Array.from(ws.name)[0] ?? '?';
+            const on = ws.workspace_id === currentId;
+            const c  = ws.color || 'var(--t-accent)';
+            const i  = Array.from(ws.name)[0] ?? '?';
             return (
               <button
                 key={ws.workspace_id}
@@ -114,8 +88,7 @@ export function WorkspaceStrip() {
                   padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
                   border: on ? `1px solid color-mix(in oklab, ${c} 40%, transparent)` : '1px solid transparent',
                   background: on ? `color-mix(in oklab, ${c} 12%, var(--t-panel))` : 'transparent',
-                  transition: 'all 100ms ease',
-                  width: '100%', textAlign: 'left',
+                  width: '100%', textAlign: 'left', transition: 'all 100ms ease',
                 }}
               >
                 <div style={{
@@ -126,8 +99,7 @@ export function WorkspaceStrip() {
                 }}>{i}</div>
                 <span style={{
                   fontSize: 12, fontWeight: on ? 700 : 500,
-                  color: on ? c : 'var(--t-fg-2)',
-                  whiteSpace: 'nowrap',
+                  color: on ? c : 'var(--t-fg-2)', whiteSpace: 'nowrap',
                 }}>{ws.name}</span>
               </button>
             );
@@ -141,8 +113,7 @@ export function WorkspaceStrip() {
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
                 border: '1px solid transparent', background: 'transparent',
-                width: '100%', textAlign: 'left',
-                color: 'var(--t-fg-4)', fontSize: 12,
+                width: '100%', textAlign: 'left', color: 'var(--t-fg-4)', fontSize: 12,
               }}
             >
               <span style={{
@@ -170,3 +141,6 @@ export function WorkspaceStrip() {
     </div>
   );
 }
+
+/** @deprecated use WorkspaceSelector instead */
+export { WorkspaceSelector as WorkspaceStrip };
