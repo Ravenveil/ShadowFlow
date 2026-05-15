@@ -86,8 +86,8 @@ export function WalletLoginModal({ open, onClose }: WalletLoginModalProps) {
     >
       <div
         style={{
-          background: 'var(--t-surface, #1a1a2e)',
-          border: '1px solid var(--t-border, #333)',
+          background: 'var(--t-panel)',
+          border: '1px solid var(--t-border)',
           borderRadius: 12,
           padding: '28px 32px',
           width: 380,
@@ -105,7 +105,7 @@ export function WalletLoginModal({ open, onClose }: WalletLoginModalProps) {
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            color: 'var(--t-muted, #888)',
+            color: 'var(--t-fg-4)',
             padding: 4,
           }}
           aria-label="Close"
@@ -114,10 +114,10 @@ export function WalletLoginModal({ open, onClose }: WalletLoginModalProps) {
         </button>
 
         {/* Title */}
-        <h2 style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 600, color: 'var(--t-text, #eee)' }}>
+        <h2 style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 600, color: 'var(--t-fg)' }}>
           Sign in to ShadowFlow
         </h2>
-        <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--t-muted, #888)' }}>
+        <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--t-fg-4)' }}>
           0G Chain (testnet · Chain ID 16600)
         </p>
 
@@ -157,9 +157,9 @@ export function WalletLoginModal({ open, onClose }: WalletLoginModalProps) {
             width: '100%',
             padding: '12px 16px',
             background: 'transparent',
-            border: '1px solid var(--t-border, #444)',
+            border: '1px solid var(--t-border)',
             borderRadius: 8,
-            color: 'var(--t-text, #ccc)',
+            color: 'var(--t-fg-2)',
             fontSize: 14,
             fontWeight: 500,
             cursor: loading !== null ? 'not-allowed' : 'pointer',
