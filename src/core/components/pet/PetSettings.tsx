@@ -6,9 +6,9 @@
  *   - Toggle to show/hide PetRail (persisted via usePetStore / localStorage)
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PetSpriteFace from './PetSpriteFace';
-import { getBuiltinPet, isBuiltinPet } from './builtinPets';
+import { getBuiltinPet, isBuiltinPet, BUILTIN_PETS } from './builtinPets';
 
 /** Inline paw-print icon — avoids lucide-react peer dependency */
 const IconPaw: React.FC<{ size?: number; className?: string }> = ({ size = 18, className = '' }) => (
@@ -23,6 +23,255 @@ import { PetPickerModal } from './PetPickerModal';
 import { usePetStore } from './usePetStore';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+
+// ── Pet browser helpers ─────────────────────────────────────────────────────
+
+const IconBrowserStar: React.FC<{ filled?: boolean }> = ({ filled }) => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+
+const IconBrowserRefresh: React.FC<{ spinning?: boolean }> = ({ spinning }) => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={spinning ? 'animate-spin' : ''}>
+    <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+);
+
+const LS_FAV = 'sf.favoritePets';
+function loadFavs(): string[] {
+  try { const r = localStorage.getItem(LS_FAV); return Array.isArray(JSON.parse(r ?? '[]')) ? JSON.parse(r!) : []; } catch { return []; }
+}
+function saveFavs(ids: string[]) { try { localStorage.setItem(LS_FAV, JSON.stringify(ids)); } catch { /* ignore */ } }
+
+interface CommunityPet { id: string; displayName: string; description: string; spritesheetUrl: string; author: string; tags: string[]; }
+
+// ── Inline pet browser (embedded in settings page) ──────────────────────────
+
+type BrowserTab = 'builtin' | 'community' | 'favorites';
+
+function PetInlineBrowser() {
+  const { selectedPetId, setSelectedPet } = usePetStore();
+  const [tab, setTab] = useState<BrowserTab>('builtin');
+  const [favs, setFavs] = useState<string[]>(loadFavs);
+
+  // Community
+  const [communityPets, setCommunityPets] = useState<CommunityPet[]>([]);
+  const [communityLoading, setCommunityLoading] = useState(false);
+  const [communityError, setCommunityError] = useState<string | null>(null);
+
+  function toggleFav(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    setFavs(prev => {
+      const next = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+      saveFavs(next);
+      return next;
+    });
+  }
+
+  const fetchCommunity = useCallback(() => {
+    setCommunityLoading(true);
+    setCommunityError(null);
+    fetch(`${API_BASE}/api/settings/pets`)
+      .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+      .then((d: { pets: CommunityPet[] }) => { setCommunityPets(d.pets ?? []); setCommunityLoading(false); })
+      .catch((err: unknown) => { setCommunityError(err instanceof Error ? err.message : '无法连接后端'); setCommunityLoading(false); });
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'community') fetchCommunity();
+  }, [tab, fetchCommunity]);
+
+  const TAB_LABELS: Record<BrowserTab, string> = {
+    builtin: '内置',
+    community: '社区',
+    favorites: `收藏${favs.length > 0 ? ` (${favs.length})` : ''}`,
+  };
+
+  return (
+    <div className="mt-5 rounded-[12px] border border-sf-border bg-sf-panel p-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2 mb-0.5">
+        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">浏览宠物</span>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1.5">
+        {(['builtin', 'community', 'favorites'] as BrowserTab[]).map(t => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={[
+              'px-3 py-1 rounded-full text-[11px] font-medium transition-colors',
+              tab === t ? 'bg-sf-accent text-white' : 'bg-sf-elev2 text-sf-fg4 hover:text-sf-fg1',
+            ].join(' ')}
+          >
+            {TAB_LABELS[t]}
+          </button>
+        ))}
+      </div>
+
+      {/* ── 内置 tab ── */}
+      {tab === 'builtin' && (
+        <div className="grid grid-cols-4 gap-2">
+          {BUILTIN_PETS.map(pet => {
+            const isSelected = selectedPetId === pet.id;
+            const isFav = favs.includes(pet.id);
+            return (
+              <div
+                key={pet.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedPet(pet.id)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setSelectedPet(pet.id); }}
+                className={[
+                  'relative flex flex-col items-center gap-1.5 p-2.5 rounded-[10px] border cursor-pointer transition-all',
+                  isSelected ? 'border-sf-accent bg-sf-accent-tint' : 'border-sf-border bg-sf-elev2 hover:border-sf-fg5',
+                ].join(' ')}
+              >
+                <button
+                  type="button"
+                  onClick={e => toggleFav(e, pet.id)}
+                  className={`absolute top-1 right-1 transition-colors ${isFav ? 'text-yellow-400' : 'text-sf-fg6 hover:text-yellow-400'}`}
+                >
+                  <IconBrowserStar filled={isFav} />
+                </button>
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-[10px] text-[28px] leading-none"
+                  style={{ backgroundColor: pet.accent + '22' }}
+                >
+                  {pet.glyph}
+                </div>
+                <span className={`text-[11px] text-center truncate w-full font-medium ${isSelected ? 'text-sf-accent-bright' : 'text-sf-fg2'}`}>
+                  {pet.displayName}
+                </span>
+                {isSelected && (
+                  <span className="text-[9px] font-bold text-sf-accent">✓ 使用中</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── 社区 tab ── */}
+      {tab === 'community' && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] text-sf-fg5">来自 ~/.codex/pets 本地目录</p>
+            <button
+              type="button"
+              onClick={fetchCommunity}
+              disabled={communityLoading}
+              className="flex items-center gap-1 rounded-[7px] border border-sf-border px-2 py-1 text-[10px] text-sf-fg4 hover:text-sf-fg1 hover:border-sf-fg5 disabled:opacity-40 transition-colors"
+            >
+              <IconBrowserRefresh spinning={communityLoading} />
+              {communityLoading ? '扫描…' : '刷新'}
+            </button>
+          </div>
+          {communityLoading && <div className="py-8 text-center text-sf-fg5 text-[12px]">正在扫描宠物目录…</div>}
+          {!communityLoading && communityError && (
+            <div className="rounded-[8px] border border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-400">
+              <p className="font-semibold">无法读取宠物目录</p>
+              <p className="text-red-400/70 mt-0.5">{communityError}</p>
+            </div>
+          )}
+          {!communityLoading && !communityError && communityPets.length === 0 && (
+            <div className="py-8 text-center text-sf-fg5 text-[12px]">
+              <p>本地暂无社区宠物</p>
+              <p className="text-[10px] text-sf-fg6 mt-1">在 Open Design 中下载宠物包后会显示在这里</p>
+            </div>
+          )}
+          {!communityLoading && !communityError && communityPets.length > 0 && (
+            <div className="grid grid-cols-4 gap-2">
+              {communityPets.map(pet => {
+                const isSelected = selectedPetId === pet.id;
+                const isFav = favs.includes(pet.id);
+                return (
+                  <div
+                    key={pet.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedPet(pet.id)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setSelectedPet(pet.id); }}
+                    className={[
+                      'relative flex flex-col items-center gap-1.5 p-2.5 rounded-[10px] border cursor-pointer transition-all',
+                      isSelected ? 'border-sf-accent bg-sf-accent-tint' : 'border-sf-border bg-sf-elev2 hover:border-sf-fg5',
+                    ].join(' ')}
+                  >
+                    <button
+                      type="button"
+                      onClick={e => toggleFav(e, pet.id)}
+                      className={`absolute top-1 right-1 transition-colors ${isFav ? 'text-yellow-400' : 'text-sf-fg6 hover:text-yellow-400'}`}
+                    >
+                      <IconBrowserStar filled={isFav} />
+                    </button>
+                    <PetSpriteFace spritesheetUrl={pet.spritesheetUrl} size={48} rowId="idle" />
+                    <span className={`text-[11px] text-center truncate w-full font-medium ${isSelected ? 'text-sf-accent-bright' : 'text-sf-fg2'}`}>
+                      {pet.displayName}
+                    </span>
+                    {isSelected && (
+                      <span className="text-[9px] font-bold text-sf-accent">✓ 使用中</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 收藏 tab ── */}
+      {tab === 'favorites' && (
+        <div>
+          {favs.length === 0 ? (
+            <div className="py-8 text-center text-sf-fg5 text-[12px]">
+              <p>还没有收藏</p>
+              <p className="text-[10px] text-sf-fg6 mt-1">在内置或社区 tab 点击 ★ 收藏</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {favs.map(id => {
+                const builtin = BUILTIN_PETS.find(p => p.id === id);
+                const isSelected = selectedPetId === id;
+                return (
+                  <div
+                    key={id}
+                    className={[
+                      'flex items-center gap-3 p-2.5 rounded-[9px] border cursor-pointer transition-all',
+                      isSelected ? 'border-sf-accent bg-sf-accent-tint' : 'border-sf-border bg-sf-elev2 hover:border-sf-fg5',
+                    ].join(' ')}
+                    onClick={() => setSelectedPet(id)}
+                  >
+                    {builtin ? (
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] text-[20px]" style={{ backgroundColor: builtin.accent + '22' }}>
+                        {builtin.glyph}
+                      </div>
+                    ) : (
+                      <div className="h-9 w-9 shrink-0 rounded-[8px] bg-sf-elev3 flex items-center justify-center text-sf-fg5 text-[11px]">?</div>
+                    )}
+                    <span className={`flex-1 text-[12px] font-medium ${isSelected ? 'text-sf-accent-bright' : 'text-sf-fg2'}`}>
+                      {builtin?.displayName ?? id}
+                    </span>
+                    {isSelected && <span className="text-[10px] font-bold text-sf-accent">✓ 使用中</span>}
+                    <button
+                      type="button"
+                      onClick={e => toggleFav(e, id)}
+                      className="text-yellow-400 hover:text-sf-fg5 transition-colors"
+                    >
+                      <IconBrowserStar filled />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface PetInfo {
   id: string;
@@ -344,6 +593,9 @@ export const PetSettings: React.FC = () => {
           </button>
         </label>
       </div>
+
+      {/* Inline pet browser */}
+      <PetInlineBrowser />
 
       {/* Custom pet creation (collapsible) */}
       <div
