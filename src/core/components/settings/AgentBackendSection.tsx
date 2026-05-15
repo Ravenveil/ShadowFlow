@@ -43,6 +43,8 @@ interface AgentEntry {
   installed: boolean;
   version: string | null;
   path: string | null;
+  docsUrl?: string | null;
+  installHint?: string | null;
 }
 
 // Emoji/color avatars per CLI brand — keys MUST match registry id exactly.
@@ -163,6 +165,28 @@ function AgentCard({
             {agent.path ? ` · ${agent.path}` : ''}
           </p>
         )}
+        {!agent.installed && (agent.installHint || agent.docsUrl) && (
+          <div className="mt-1 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+            {agent.installHint && (
+              <span
+                className="font-mono text-[9px] text-sf-fg5 bg-sf-elev3 px-1.5 py-0.5 rounded select-all cursor-text"
+                title={agent.installHint}
+              >
+                {agent.installHint.length > 28 ? agent.installHint.slice(0, 28) + '…' : agent.installHint}
+              </span>
+            )}
+            {agent.docsUrl && (
+              <a
+                href={agent.docsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-[9px] text-sf-accent hover:underline"
+              >
+                {T('文档', 'Docs')}
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </button>
   );
@@ -177,12 +201,19 @@ interface ModelDef {
 }
 
 const FALLBACK_MODELS: ModelDef[] = [
-  { id: 'claude-opus-4-7',    name: 'Claude Opus 4.7',    provider: 'anthropic' },
-  { id: 'claude-sonnet-4-6',  name: 'Claude Sonnet 4.6',  provider: 'anthropic' },
-  { id: 'claude-haiku-4-5',   name: 'Claude Haiku 4.5',   provider: 'anthropic' },
-  { id: 'gpt-4o',             name: 'GPT-4o',             provider: 'openai'    },
-  { id: 'gpt-4o-mini',        name: 'GPT-4o Mini',        provider: 'openai'    },
-  { id: 'gemini-2.5-pro',     name: 'Gemini 2.5 Pro',     provider: 'google'    },
+  { id: 'claude-opus-4-7',       name: 'Claude Opus 4.7',       provider: 'anthropic' },
+  { id: 'claude-sonnet-4-6',     name: 'Claude Sonnet 4.6',     provider: 'anthropic' },
+  { id: 'claude-haiku-4-5',      name: 'Claude Haiku 4.5',      provider: 'anthropic' },
+  { id: 'claude-3-5-sonnet',     name: 'Claude 3.5 Sonnet',     provider: 'anthropic' },
+  { id: 'gpt-4o',                name: 'GPT-4o',                provider: 'openai'    },
+  { id: 'gpt-4o-mini',           name: 'GPT-4o Mini',           provider: 'openai'    },
+  { id: 'o3',                    name: 'o3',                    provider: 'openai'    },
+  { id: 'o4-mini',               name: 'o4-mini',               provider: 'openai'    },
+  { id: 'gemini-2.5-pro',        name: 'Gemini 2.5 Pro',        provider: 'google'    },
+  { id: 'gemini-2.5-flash',      name: 'Gemini 2.5 Flash',      provider: 'google'    },
+  { id: 'gemini-2.0-flash',      name: 'Gemini 2.0 Flash',      provider: 'google'    },
+  { id: 'deepseek-chat',         name: 'DeepSeek Chat',         provider: 'deepseek'  },
+  { id: 'deepseek-reasoner',     name: 'DeepSeek Reasoner',     provider: 'deepseek'  },
 ];
 
 interface ByokStatus {
@@ -258,6 +289,7 @@ const BYOK_PROVIDERS = [
   { id: 'openai',    name: 'OpenAI',        placeholder: 'sk-…',               baseUrl: 'https://api.openai.com/v1' },
   { id: 'azure',     name: 'Azure OpenAI',  placeholder: 'Azure API key…',      baseUrl: '' },
   { id: 'google',    name: 'Google Gemini', placeholder: 'AIza…',              baseUrl: 'https://generativelanguage.googleapis.com' },
+  { id: 'deepseek',  name: 'DeepSeek',      placeholder: 'sk-…',               baseUrl: 'https://api.deepseek.com/v1' },
   { id: 'ollama',    name: 'Ollama',        placeholder: '无需 API Key',        baseUrl: 'http://localhost:11434' },
 ] as const;
 
@@ -365,6 +397,7 @@ function ByokPanel() {
     if (activeProvider === 'anthropic') return m.provider === 'anthropic';
     if (activeProvider === 'openai' || activeProvider === 'azure') return m.provider === 'openai';
     if (activeProvider === 'google') return m.provider === 'google';
+    if (activeProvider === 'deepseek') return m.provider === 'deepseek';
     return true; // ollama: show all
   });
   // Fall back to all models if none match
@@ -495,23 +528,54 @@ function ByokPanel() {
           </div>
         )}
 
-        {/* Model selector */}
+        {/* Model list */}
         <div className="flex flex-col gap-1.5">
-          <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
-            {T('聊天模型', 'Chat model')}
-          </label>
-          <select
-            value={selectedModel}
-            onChange={e => {
-              setSelectedModel(e.target.value);
-              localStorage.setItem('sf.byokModel', e.target.value);
-            }}
-            className="w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 text-[12px] text-sf-fg1 focus:border-sf-accent focus:outline-none transition-colors"
+          <div className="flex items-center justify-between">
+            <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
+              {T('模型', 'Models')}{' '}
+              <span className="normal-case font-normal text-sf-fg6">({modelOptions.length})</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => fetchByokModels().then(setModels)}
+              className="flex items-center gap-1 rounded-[6px] border border-sf-border px-2 py-1 text-[10px] text-sf-fg4 hover:text-sf-fg1 hover:border-sf-fg5 transition-colors"
+            >
+              <IconRefreshCw cls="h-[9px] w-[9px]" />
+              {T('刷新列表', 'Refresh')}
+            </button>
+          </div>
+          <div
+            className="flex flex-col rounded-[8px] border border-sf-border overflow-hidden"
+            style={{ background: 'var(--t-panel)', maxHeight: 200, overflowY: 'auto' }}
           >
-            {modelOptions.map(m => (
-              <option key={m.id} value={m.id}>{m.name}</option>
+            {modelOptions.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => {
+                  setSelectedModel(m.id);
+                  localStorage.setItem('sf.byokModel', m.id);
+                }}
+                className={[
+                  'flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors',
+                  'border-b border-sf-border/40 last:border-0',
+                  selectedModel === m.id ? 'bg-sf-accent/15' : 'hover:bg-sf-elev2',
+                ].join(' ')}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-medium text-sf-fg1 truncate">{m.name}</div>
+                  <div className="font-mono text-[9px] text-sf-fg5 truncate">{m.id}</div>
+                </div>
+                {selectedModel === m.id && (
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                    className="text-sf-accent flex-shrink-0 shrink-0">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
 
         {/* Test button */}
