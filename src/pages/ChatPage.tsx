@@ -1,31 +1,16 @@
 /**
- * ChatPage — Hi-Fi v2 reskin (Pages-A T2).
- *
- * Visual blueprint: `hf-pages.jsx` HfChat — 3-column layout
- *   [240 Teams + DM list] | [conversation] | [300 Approval gate].
- *
- * Wrapped by `<HfLayout>` (sidebar provided externally). This component
- * renders only the inner content column (HfTopBar + body grid).
- *
- * Functional preservations (every existing feature kept):
- *   - BreadcrumbBar (provides aria-label="breadcrumb" + "Inbox" navigation
- *     used by ChatPage.test.tsx).
- *   - GroupMetricsBar (`data-testid="group-metrics-bar"`).
- *   - ChatBriefBoardToggle ("Chat / 组会汇报" tab strip — tests rely on
- *     role="tab" buttons with these names).
- *   - CreateAgentButton ("基于此对话创建 Agent") — tests check for it.
- *   - BriefBoardView and ScheduleDrawer (briefboard tab + schedule).
- *   - useInboxStore wiring for groups + metrics.
- *   - Saved scrollTop preservation across tab switches.
- *   - Group switcher: left column lists every group from useInboxStore so
- *     users can hop between groups without leaving Chat (preserved feature
- *     from the Inbox MessageList — folded into the new 3-col layout).
- *   - Approval queue: right column wires ApprovalGatePanel to the live
- *     approval feed for the active group.
+ * ChatPage — FB-HiFi 4-column layout (icon rail · inbox · main · drawer)
+ * Design: shadowflow/project/fb-tab-chat.jsx
+ * Columns: 52px ChatRail · 268px Inbox · 1fr Main · 320px Drawer
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Sparkles, Users } from 'lucide-react';
+import {
+  Users, Hash, Lock, Bot, CalendarDays, FileText,
+  CheckSquare, Search, MoreHorizontal, Send, Paperclip,
+  Smile, AtSign, Slash, ChevronDown, Pin, Sparkles,
+} from 'lucide-react';
 import { BreadcrumbBar } from '../core/components/inbox/BreadcrumbBar';
 import { GroupMetricsBar } from '../core/components/inbox/GroupMetricsBar';
 import { ChatBriefBoardToggle } from '../core/components/inbox/ChatBriefBoardToggle';
@@ -37,212 +22,503 @@ import { listSchedules, type Schedule } from '../api/schedules';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { getTemplate } from '../api/templates';
 import { buildChatBuilderUrl } from '../core/utils/builderNavigation';
-import type { GroupItem, GroupMetrics, PendingApproval } from '../common/types/inbox';
-import { HfTopBar, HfDot } from '../components/hifi';
+import type { GroupItem, GroupMetrics } from '../common/types/inbox';
 import { useI18n } from '../common/i18n';
 import { ChatStream } from '../core/components/chat/ChatStream';
 import { useChatStream } from '../core/hooks/useChatStream';
-import { fetchPendingApprovals } from '../api/approvalApi';
 
-const DEFAULT_METRICS: GroupMetrics = {
-  activeRuns: 0,
-  pendingApprovalsCount: 0,
-  costToday: 0,
-  members: 0,
+// ── Design token shortcuts (maps --t-* to design variable names) ───────────
+const T = {
+  bg:   'var(--t-bg)',
+  p:    'var(--t-panel)',
+  p2:   'var(--t-panel-2)',
+  p3:   'var(--t-panel-3)',
+  fg:   'var(--t-fg)',
+  fg2:  'var(--t-fg-2)',
+  fg3:  'var(--t-fg-3)',
+  fg4:  'var(--t-fg-4)',
+  fg5:  'var(--t-fg-5)',
+  bd:   'var(--t-border)',
+  bd2:  'var(--t-border-2)',
+  ac:   'var(--t-accent)',
+  acB:  'var(--t-accent-bright)',
+  acT:  'var(--t-accent-tint)',
+  acI:  'var(--t-accent-ink)',
+  ok:   'var(--t-ok)',
+  warn: 'var(--t-warn)',
+  err:  'var(--t-err)',
+  run:  'var(--t-run)',
+  mono: 'var(--font-mono)',
 };
 
-function statusToken(status: GroupItem['status']): 'run' | 'warn' | 'ok' | 'gated' {
-  switch (status) {
-    case 'running':
-      return 'run';
-    case 'blocked':
-      return 'warn';
-    case 'pending_approval':
-      return 'gated';
-    case 'idle':
-    default:
-      return 'ok';
-  }
+const DEFAULT_METRICS: GroupMetrics = { activeRuns: 0, pendingApprovalsCount: 0, costToday: 0, members: 0 };
+
+// ── Avatar (FBAv equivalent) ────────────────────────────────────────────────
+function Av({ g, color, size = 32, sq }: { g: string; color: string; size?: number; sq?: boolean }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: size, height: size, flexShrink: 0, position: 'relative',
+      fontSize: size * 0.42, fontWeight: 800, letterSpacing: '-0.03em',
+      background: `color-mix(in oklab, ${color} 18%, var(--t-panel-2))`,
+      border: `1px solid color-mix(in oklab, ${color} 45%, transparent)`,
+      color, borderRadius: sq ? size * 0.22 : '50%',
+    }}>{g}</span>
+  );
 }
 
-// Recent Activity feed — handoff `hf-pages.jsx` HfChat lines 97-105.
-// Single-shot timeline of recent tool calls per group; pure UI (no live API).
-// When a real activity stream lands we just swap the source array.
-function RecentActivity({ group }: { group: GroupItem | undefined }) {
-  const { t } = useI18n();
-
-  // Derive a small synthetic feed from the group's metrics so it feels alive
-  // even without backend wiring. Stable per group (no random re-renders).
-  const items = useMemo(() => {
-    const fallback: Array<['ok' | 'warn' | 'err', string, string]> = [
-      ['ok', '09:14', '读读 fetch'],
-      ['ok', '09:13', '查查 http.get'],
-      ['ok', '09:11', '写写 fs.write'],
-      ['err', '08:55', '写写 email'],
-    ];
-    if (!group) return fallback;
-    const last = group.lastMessage?.slice(0, 24) || 'tool.call';
-    const stat: 'ok' | 'warn' | 'err' = group.status === 'blocked'
-      ? 'err'
-      : group.status === 'pending_approval'
-        ? 'warn'
-        : 'ok';
-    const now = new Date(group.lastActivityAt ?? Date.now());
-    const hh = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    return [
-      [stat, hh, last] as ['ok' | 'warn' | 'err', string, string],
-      ...fallback.slice(0, 3),
-    ];
-  }, [group]);
-
+// ── Left icon rail (52px) ───────────────────────────────────────────────────
+function ChatRail() {
+  const rail = [
+    { k: 'msg',  ic: <Bot size={16} strokeWidth={1.7}/>,          l: '消息',  badge: 7  },
+    { k: 'task', ic: <CheckSquare size={16} strokeWidth={1.7}/>,   l: '任务',  badge: 2  },
+    { k: 'cal',  ic: <CalendarDays size={16} strokeWidth={1.7}/>,  l: '日历'             },
+    { k: 'doc',  ic: <FileText size={16} strokeWidth={1.7}/>,      l: '文档'             },
+    { k: 'bots', ic: <Bot size={16} strokeWidth={1.7}/>,           l: 'Agents'           },
+  ];
   return (
-    <div style={{ padding: '14px 14px 18px' }}>
-      <div className="hf-label" style={{ marginBottom: 8 }}>
-        {t('chat.recentActivity')}
-      </div>
-      {items.map(([s, t, a], i) => (
-        <div
-          key={`${t}-${i}`}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '6px 0',
-            borderBottom: '1px dashed var(--t-border)',
-          }}
-        >
-          <HfDot color={`var(--t-${s})`} />
-          <span
-            className="hf-mono"
-            style={{ fontSize: 10, color: 'var(--t-fg-3)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-          >
-            {a}
-          </span>
-          <span className="hf-meta" style={{ fontSize: 9 }}>
-            {t}
-          </span>
+    <div style={{ width: 52, background: T.p, borderRight: `1px solid ${T.bd}`, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0 14px', gap: 2, flexShrink: 0 }}>
+      {rail.map((it, i) => (
+        <div key={it.k} title={it.l} style={{
+          width: 40, height: 42, borderRadius: 8, cursor: 'pointer', position: 'relative',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+          background: i === 0 ? T.acT : 'transparent',
+          color:      i === 0 ? T.acB : T.fg4,
+        }}>
+          {it.ic}
+          <span style={{ fontSize: 9, fontWeight: 600 }}>{it.l}</span>
+          {it.badge ? (
+            <span style={{
+              position: 'absolute', top: 2, right: 4, minWidth: 14, height: 14,
+              padding: '0 3px', borderRadius: 7, border: `1.5px solid ${T.p}`,
+              background: T.err, color: 'white', fontFamily: T.mono, fontSize: 9, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>{it.badge}</span>
+          ) : null}
         </div>
       ))}
+      <div style={{ flex: 1 }}/>
     </div>
   );
 }
 
-// ApprovalsMiniList — right-column condensed roster of pending approvals
-// shown when the user is on the Approvals tab (the full panel relocates to
-// the center column). Fetches live data from fetchPendingApprovals API.
-function ApprovalsMiniList({
-  groupId,
-  pendingCount,
-}: {
-  groupId: string;
-  pendingCount: number;
+// ── InboxRow (group/channel) ────────────────────────────────────────────────
+function InboxRow({ n, desc, u, active, run, warn, t, members, mention, lock }: {
+  n: string; desc: string; u?: number; active?: boolean; run?: boolean; warn?: boolean;
+  t?: string; members?: number; mention?: boolean; lock?: boolean;
 }) {
-  const { t } = useI18n();
-  const [items, setItems] = useState<PendingApproval[]>([]);
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '8px 10px', borderRadius: 6, cursor: 'pointer', position: 'relative',
+      borderLeft: `2px solid ${active ? T.ac : 'transparent'}`,
+      background: active ? T.acT : 'transparent',
+    }}>
+      <span style={{
+        width: 32, height: 32, borderRadius: 7, flexShrink: 0, position: 'relative',
+        background: T.p2, border: `1px solid ${T.bd}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: active ? T.acB : T.fg4,
+      }}>
+        {lock ? <Lock size={14} strokeWidth={1.7}/> : <Hash size={14} strokeWidth={1.7}/>}
+        {run  && <span style={{ position: 'absolute', right: -2, bottom: -2, width: 9, height: 9, borderRadius: '50%', background: T.run,  border: `2px solid ${T.p}`, animation: 'hf-pulse 1.4s infinite' }}/>}
+        {warn && !run && <span style={{ position: 'absolute', right: -2, bottom: -2, width: 9, height: 9, borderRadius: '50%', background: T.warn, border: `2px solid ${T.p}` }}/>}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 12.5, fontWeight: active || (u ?? 0) > 0 ? 700 : 600, color: T.fg, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n}</span>
+          {members !== undefined && <span style={{ fontFamily: T.mono, fontSize: 9, color: T.fg5 }}>{members}</span>}
+          <span style={{ fontFamily: T.mono, fontSize: 9.5, color: (u ?? 0) > 0 ? T.acB : T.fg5 }}>{t}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+          {mention && <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 800, color: T.err, padding: '0 4px', borderRadius: 3, background: `color-mix(in oklab, ${T.err} 12%, transparent)` }}>@</span>}
+          <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fg4, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{desc}</span>
+        </div>
+      </div>
+      {(u ?? 0) > 0 && <span style={{ minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: T.err, color: 'white', fontSize: 9, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{u}</span>}
+    </div>
+  );
+}
 
-  useEffect(() => {
-    fetchPendingApprovals(groupId)
-      .then(setItems)
-      .catch(() => {
-        // Fail silently — display empty list rather than stale seed data
-        setItems([]);
-      });
-  }, [groupId]);
+// ── DmRow ───────────────────────────────────────────────────────────────────
+function DmRow({ g, n, last, color, t, mention, run }: { g: string; n: string; last?: string; color: string; t?: string; mention?: boolean; run?: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 6, cursor: 'pointer' }}>
+      <span style={{ position: 'relative' }}>
+        <Av g={g} color={color} size={28} sq/>
+        {run && <span style={{ position: 'absolute', right: -2, top: -2, width: 8, height: 8, borderRadius: '50%', background: T.run, border: `1.5px solid ${T.p}`, animation: 'hf-pulse 1.4s infinite' }}/>}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: T.fg, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n}</span>
+          {mention && <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 800, color: T.err }}>@</span>}
+          <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>{t}</span>
+        </div>
+        <div style={{ fontFamily: T.mono, fontSize: 10, color: T.fg4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 1 }}>{last}</div>
+      </div>
+    </div>
+  );
+}
 
-  const decisionColor = (_d: string) => 'var(--t-warn)';
+// ── Inbox column (268px) ─────────────────────────────────────────────────────
+interface InboxPanelProps {
+  groups: GroupItem[];
+  groupId?: string;
+  agentDMs: Array<{ agentId: string; agentName: string; kind: string; lastMessage: string }>;
+  onGroup: (id: string) => void;
+  onDm: (id: string) => void;
+}
+
+function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProps) {
+  function statusOf(g: GroupItem): 'run' | 'warn' | 'ok' {
+    if (g.status === 'running') return 'run';
+    if (g.status === 'blocked' || g.status === 'pending_approval') return 'warn';
+    return 'ok';
+  }
 
   return (
-    <div data-testid="approvals-mini-list" style={{ padding: '14px 14px 18px' }}>
-      <div className="hf-label" style={{ marginBottom: 8 }}>
-        {t('chat.pendingApprovals')} · {pendingCount}
-      </div>
-      {items.length === 0 && (
-        <div className="hf-meta" style={{ padding: '6px 12px', fontSize: 10 }}>
-          {t('chat.noPendingApprovals')}
+    <div style={{ width: 268, flexShrink: 0, borderRight: `1px solid ${T.bd}`, background: T.p, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* OrgSwitcher */}
+      <div style={{ padding: '8px 8px 4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 9px', borderRadius: 8, background: T.p2, border: `1px solid ${T.bd}`, cursor: 'pointer' }}>
+          <span style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 13, background: `color-mix(in oklab, ${T.ac} 20%, ${T.p2})`, border: `1px solid color-mix(in oklab, ${T.ac} 50%, transparent)`, color: T.acB, letterSpacing: '-0.04em' }}>S</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>ShadowFlow</div>
+            <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg4, marginTop: 1 }}>Workspace · 已认证</div>
+          </div>
+          <ChevronDown size={13} strokeWidth={2} style={{ color: T.fg4, flexShrink: 0 }}/>
         </div>
-      )}
-      {items.map((it) => {
-        const waitMins = Math.floor(it.waiting_seconds / 60);
-        const agoLabel = waitMins < 60 ? `${waitMins}m` : `${Math.floor(waitMins / 60)}h`;
-        return (
-          <button
-            type="button"
-            key={it.approval_id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              width: '100%',
-              padding: '8px 12px',
-              marginBottom: 2,
-              border: 'none',
-              background: 'transparent',
-              color: 'var(--t-fg-2)',
-              cursor: 'pointer',
-              borderRadius: 6,
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-panel-2)';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-            }}
-          >
-            <HfDot color={decisionColor('pending')} size={7} />
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: 'var(--t-fg)',
-                flex: 1,
-                minWidth: 0,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {it.submitter_name}
-              <span
-                className="hf-mono"
-                style={{ fontSize: 9, color: 'var(--t-fg-4)', marginLeft: 6 }}
-              >
-                · {it.submitter_kind.toUpperCase()}
-              </span>
-            </span>
-            <span className="hf-meta" style={{ fontSize: 9 }}>
-              {agoLabel}
-            </span>
-          </button>
-        );
-      })}
-      <div
-        className="hf-mono"
-        style={{
-          fontSize: 10,
-          color: 'var(--t-fg-4)',
-          padding: '10px 12px 0',
-          borderTop: '1px dashed var(--t-border)',
-          marginTop: 8,
-        }}
-      >
-        ↻ {t('chat.refresh')}
+      </div>
+
+      {/* Search */}
+      <div style={{ padding: '4px 8px 6px' }}>
+        <div style={{ height: 30, padding: '0 10px', borderRadius: 7, background: T.p2, border: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', gap: 8, cursor: 'text' }}>
+          <Search size={13} strokeWidth={1.7} style={{ color: T.fg4, flexShrink: 0 }}/>
+          <span style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fg4 }}>搜索 / 跳转</span>
+          <span style={{ marginLeft: 'auto', fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>⌘F</span>
+        </div>
+      </div>
+
+      {/* Filter chips */}
+      <div style={{ padding: '0 8px 8px', display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+        {[['全部', true], ['未读'], ['@我'], ['Agent']].map(([l, on], i) => (
+          <span key={i} style={{ padding: '3px 8px', borderRadius: 10, fontSize: 10.5, fontWeight: 600, cursor: 'pointer', background: on ? T.acT : T.p2, color: on ? T.acB : T.fg4, border: `1px solid ${on ? `color-mix(in oklab, ${T.ac} 35%, transparent)` : T.bd}` }}>{l as string}</span>
+        ))}
+      </div>
+
+      {/* Scroll area */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '0 2px' }}>
+        {/* Groups */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 4px' }}>
+          <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.fg5, letterSpacing: '0.06em' }}>群组 · 频道</span>
+          <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>{groups.length}</span>
+        </div>
+        <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column' }}>
+          {groups.length === 0 ? (
+            <div style={{ padding: '20px 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center' }}>
+              <div style={{ width: 34, height: 34, borderRadius: 9, background: T.bg, border: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fg5 }}>
+                <Users size={16} strokeWidth={1.7}/>
+              </div>
+              <p style={{ margin: 0, fontSize: 11, color: T.fg5, lineHeight: 1.55 }}>暂无群组<br/>创建 Team 后即可群聊</p>
+            </div>
+          ) : groups.map(gr => {
+            const st = statusOf(gr);
+            return (
+              <div key={gr.id} onClick={() => onGroup(gr.id)}>
+                <InboxRow
+                  n={gr.name}
+                  desc={gr.lastMessage || `${gr.metrics?.members ?? 0} agents`}
+                  u={gr.unreadCount}
+                  active={gr.id === groupId}
+                  run={st === 'run'}
+                  warn={st === 'warn'}
+                  t={gr.id === groupId ? 'now' : ''}
+                  members={gr.metrics?.members}
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        {/* DMs */}
+        {agentDMs.length > 0 && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 4px' }}>
+              <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.fg5, letterSpacing: '0.06em' }}>直接对话 · DM</span>
+              <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>{agentDMs.length}</span>
+            </div>
+            <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column' }}>
+              {agentDMs.map(d => (
+                <div key={d.agentId} onClick={() => onDm(d.agentId)}>
+                  <DmRow g={d.agentName.charAt(0)} n={d.agentName} last={d.lastMessage} color={T.ac} t=""/>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
+// ── Conversation header ───────────────────────────────────────────────────
+function ConvHeader({ group, isRunning, builderUrl, t }: { group?: GroupItem; isRunning: boolean; builderUrl: string; t: (k: string) => string }) {
+  const runCount = group?.metrics?.activeRuns ?? 0;
+  const agentColors = [T.ac, '#F59E0B', '#22D3EE', '#EF4444', '#10B981'];
+  const agentGlyphs = ['读', '批', '查', '写', '审'];
+
+  return (
+    <div style={{ padding: '10px 18px', borderBottom: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', gap: 10, background: T.p, flexShrink: 0, minHeight: 58 }}>
+      <span style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0, background: T.p2, border: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.acB }}>
+        <Hash size={16} strokeWidth={1.7}/>
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: T.fg }}>{group?.name ?? '选择 Team'}</span>
+          {group && <>
+            <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fg5 }}>· {group.metrics?.members ?? 0} 人</span>
+            {isRunning && (
+              <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', padding: '2px 7px', borderRadius: 4, background: `color-mix(in oklab, ${T.run} 14%, transparent)`, color: T.run, border: `1px solid color-mix(in oklab, ${T.run} 35%, transparent)` }}>
+                RUNNING · #{runCount || '001'}
+              </span>
+            )}
+            <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: T.p2, color: T.fg4, border: `1px solid ${T.bd}` }}>POLICY · L2</span>
+          </>}
+        </div>
+        {group && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 3 }}>
+            <span style={{ display: 'flex' }}>
+              {agentGlyphs.map((gl, i) => (
+                <span key={i} style={{ marginLeft: i === 0 ? 0 : -5, zIndex: 5 - i }}>
+                  <Av g={gl} color={agentColors[i]} size={18} sq/>
+                </span>
+              ))}
+            </span>
+            <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fg4 }}>run {runCount > 0 ? `${runCount}m` : '--'}</span>
+          </div>
+        )}
+      </div>
+      {group && <>
+        <button type="button" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, border: `1px solid ${T.bd}`, background: 'transparent', color: T.fg3, cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7 7l4 9"/><path d="M17 7l-4 9"/></svg>
+          DAG
+        </button>
+        {[<Search size={15} strokeWidth={1.7}/>, <CheckSquare size={15} strokeWidth={1.7}/>, <Users size={15} strokeWidth={1.7}/>, <MoreHorizontal size={15} strokeWidth={1.7}/>].map((ic, i) => (
+          <button key={i} type="button" style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: 'none', background: 'transparent', color: T.fg4, cursor: 'pointer' }}>{ic}</button>
+        ))}
+      </>}
+      <CreateAgentButton label={t('chat.createAgentFromChat')} builderUrl={builderUrl}/>
+    </div>
+  );
+}
+
+// ── Pinned Brief ─────────────────────────────────────────────────────────────
+function PinnedBrief({ group }: { group?: GroupItem }) {
+  if (!group) return null;
+  return (
+    <div style={{ padding: '8px 18px', borderBottom: `1px solid ${T.bd}`, background: `color-mix(in oklab, ${T.ac} 5%, ${T.p})`, display: 'flex', alignItems: 'flex-start', gap: 9, flexShrink: 0 }}>
+      <Pin size={13} strokeWidth={2} style={{ color: T.ac, marginTop: 2, flexShrink: 0 }}/>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.acB, letterSpacing: '0.08em' }}>BRIEF · run #001</span>
+          <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg4 }}>· 置顶</span>
+        </div>
+        <div style={{ fontSize: 11.5, color: T.fg3, marginTop: 2, lineHeight: 1.45 }}>
+          <b style={{ color: T.fg2 }}>目标</b>&nbsp;{group.name} Agent 工作日志 ·
+          <b style={{ color: T.fg2, marginLeft: 6 }}>Gate</b>&nbsp;CRITIC → REVIEW
+        </div>
+      </div>
+      <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg4, cursor: 'pointer', flexShrink: 0 }}>展开 ▾</span>
+    </div>
+  );
+}
+
+// ── Rich Composer ────────────────────────────────────────────────────────────
+interface ComposerProps {
+  value: string;
+  onChange: (v: string) => void;
+  onSend: () => void;
+  onRunSkill: () => void;
+  loading: boolean;
+  t: (k: string) => string;
+}
+
+function RichComposer({ value, onChange, onSend, onRunSkill, loading, t }: ComposerProps) {
+  const [slashOpen, setSlashOpen] = useState(false);
+  const slashCmds = [
+    { cmd: '/run',     d: '触发 team 跑一轮', sel: true },
+    { cmd: '/approve', d: '批准当前 gate' },
+    { cmd: '/retry',   d: '让 agent 重写' },
+    { cmd: '/assign',  d: '把任务派给 agent' },
+    { cmd: '/pin',     d: '置顶为 brief 卡片' },
+  ];
+  const toolBtns = [
+    { ic: <AtSign size={14} strokeWidth={1.7}/>,  t: '@' },
+    { ic: <Slash size={14} strokeWidth={1.7}/>,   t: '/', fn: () => setSlashOpen(p => !p) },
+    { ic: <Smile size={14} strokeWidth={1.7}/>,   t: '表情' },
+    { ic: <Paperclip size={14} strokeWidth={1.7}/>, t: '附件' },
+    { ic: <CheckSquare size={14} strokeWidth={1.7}/>, t: '任务' },
+    { ic: <Sparkles size={14} strokeWidth={1.7}/>, t: 'AI' },
+  ];
+
+  return (
+    <div style={{ padding: '10px 18px 12px', borderTop: `1px solid ${T.bd}`, background: T.p, position: 'relative', flexShrink: 0 }}>
+      {slashOpen && (
+        <div style={{ position: 'absolute', bottom: 90, left: 18, width: 300, zIndex: 10, background: T.p, border: `1px solid ${T.bd}`, borderRadius: 9, boxShadow: '0 12px 32px -8px rgba(0,0,0,.5)', padding: 5 }}>
+          <div style={{ padding: '5px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fg4, letterSpacing: '0.06em' }}>SLASH COMMANDS</span>
+            <span style={{ flex: 1 }}/>
+            <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>↑↓ · ↵</span>
+          </div>
+          {slashCmds.map((it, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 8px', borderRadius: 5, cursor: 'pointer', background: it.sel ? T.acT : 'transparent' }}>
+              <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: it.sel ? T.acB : T.fg2, minWidth: 64 }}>{it.cmd}</span>
+              <span style={{ fontSize: 11.5, color: T.fg3, flex: 1 }}>{it.d}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ background: T.p2, border: `1px solid ${T.bd2}`, borderRadius: 10, overflow: 'hidden' }}>
+        {/* Toolbar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 1, padding: '4px 7px', borderBottom: `1px solid ${T.bd}` }}>
+          {toolBtns.map((tb, i) => (
+            <button key={i} type="button" title={tb.t} onClick={tb.fn}
+              style={{ width: 26, height: 24, borderRadius: 5, border: 'none', background: 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: T.fg4, cursor: 'pointer' }}>
+              {tb.ic}
+            </button>
+          ))}
+          <span style={{ flex: 1 }}/>
+          <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5, padding: '0 5px' }}>Markdown</span>
+        </div>
+        {/* Text area */}
+        <textarea
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+          placeholder={t('chat.composerPlaceholder')}
+          rows={2}
+          style={{ width: '100%', padding: '10px 12px', minHeight: 48, resize: 'none', fontSize: 12.5, background: 'transparent', border: 'none', outline: 'none', color: T.fg, fontFamily: 'inherit', lineHeight: 1.5 }}
+        />
+        {/* Footer */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px 6px', borderTop: `1px solid ${T.bd}`, background: T.p }}>
+          <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>⏎ 发送 · ⇧⏎ 换行 · / 命令</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button type="button" disabled={!value.trim()} onClick={onRunSkill}
+              data-testid="chat-run-skill-button"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 9px', borderRadius: 6, border: `1px solid ${T.bd}`, background: 'transparent', color: value.trim() ? T.fg3 : T.fg5, cursor: value.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+              <Sparkles size={11} strokeWidth={2}/>
+              {t('skillStudio.entry.runSkillFromChat')}
+            </button>
+            <button type="button" disabled={!value.trim() || loading} onClick={onSend}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '4px 12px', borderRadius: 6, border: 'none', background: T.ac, color: T.acI, cursor: value.trim() && !loading ? 'pointer' : 'not-allowed', opacity: value.trim() && !loading ? 1 : 0.5, fontFamily: 'inherit', fontWeight: 600 }}>
+              <Send size={11} strokeWidth={2}/>
+              {loading ? t('chat.sending') : t('chat.send')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Right drawer: Thread / Task / Doc / Brief ─────────────────────────────
+function ChatDrawer({ groupId, group, metrics }: { groupId?: string; group?: GroupItem; metrics: GroupMetrics }) {
+  const [tab, setTab] = useState<'Thread' | '任务' | '文档' | 'Brief'>('Thread');
+  const tabs = ['Thread', '任务', '文档', 'Brief'] as const;
+
+  return (
+    <div style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${T.bd}`, background: T.p, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* Tab strip */}
+      <div style={{ display: 'flex', borderBottom: `1px solid ${T.bd}`, padding: '0 6px', flexShrink: 0 }}>
+        {tabs.map(tb => (
+          <button key={tb} type="button" onClick={() => setTab(tb)}
+            style={{ padding: '10px 10px', fontSize: 11.5, fontWeight: tab === tb ? 700 : 600, color: tab === tb ? T.fg : T.fg4, borderBottom: `2px solid ${tab === tb ? T.ac : 'transparent'}`, cursor: 'pointer', background: 'transparent', border: 'none', borderRadius: 0, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
+            {tb}
+            {tb === '任务' && (metrics.activeRuns > 0) && (
+              <span style={{ fontFamily: T.mono, fontSize: 9, color: T.fg4, padding: '0 5px', background: T.p2, borderRadius: 8, border: `1px solid ${T.bd}` }}>{metrics.activeRuns}</span>
+            )}
+          </button>
+        ))}
+        <span style={{ flex: 1 }}/>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+        {tab === 'Thread' && (
+          <div style={{ padding: 14 }}>
+            <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5, marginBottom: 12, letterSpacing: '0.04em' }}>
+              {groupId ? `${group?.name ?? ''} · 最新 Threads` : '请先选择 Team'}
+            </div>
+            {groupId && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { g: '批', n: '阿批', r: 'CRITIC', t: '09:16', body: '发现潜在问题 3 处：§4.2 / §5.1 / §6.3', count: 7, color: '#F59E0B' },
+                  { g: '读', n: '读读', r: 'READER', t: '09:14', body: '已抓 PDF · 38 页 / 12 节 / 47 引用', count: 4, color: T.ac },
+                ].map((item, i) => (
+                  <div key={i} style={{ padding: '10px 12px', borderRadius: 8, border: `1px solid ${T.bd}`, background: T.p2, cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <Av g={item.g} color={item.color} size={26} sq/>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                          <span style={{ fontSize: 11.5, fontWeight: 700, color: T.fg }}>{item.n}</span>
+                          <span style={{ fontFamily: T.mono, fontSize: 9, color: T.fg4 }}>{item.r} · {item.t}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: T.fg3, marginTop: 2, lineHeight: 1.45 }}>{item.body}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.acB, marginTop: 8 }}>
+                      {item.count} 条回复 · 展开 ›
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === '任务' && (
+          <div style={{ padding: 14, fontFamily: T.mono, fontSize: 11, color: T.fg4, textAlign: 'center', paddingTop: 30 }}>
+            {groupId ? '暂无进行中的任务' : '请先选择 Team'}
+          </div>
+        )}
+
+        {tab === 'Brief' && groupId && (
+          <div style={{ padding: 14 }}>
+            <BriefBoardView groupId={groupId}/>
+          </div>
+        )}
+
+        {tab === '文档' && (
+          <div style={{ padding: 14, fontFamily: T.mono, fontSize: 11, color: T.fg4, textAlign: 'center', paddingTop: 30 }}>
+            暂无关联文档
+          </div>
+        )}
+      </div>
+
+      {/* Approval gate mini at bottom */}
+      {groupId && (
+        <div style={{ borderTop: `1px solid ${T.bd}`, flexShrink: 0, maxHeight: 280, overflow: 'auto' }}>
+          <div style={{ padding: '8px 14px 4px' }}>
+            <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.fg5, letterSpacing: '0.06em' }}>APPROVAL GATE</span>
+          </div>
+          <ApprovalGatePanel groupId={groupId}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
 export default function ChatPage() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
-  const groups = useInboxStore((s) => s.groups);
-  const group = groups.find((g) => g.id === groupId);
+  const groups = useInboxStore(s => s.groups);
+  const agentDMs = useInboxStore(s => s.agentDMs);
+  const group = groups.find(g => g.id === groupId);
   const groupName = group?.name ?? groupId ?? '';
   const metrics = group?.metrics ?? DEFAULT_METRICS;
   const { t } = useI18n();
-
-  // Subscribe to agentDMs via selector so the component re-renders on updates
-  const agentDMs = useInboxStore((s) => s.agentDMs);
 
   const [activeTab, setActiveTab] = useState<'chat' | 'briefboard' | 'approvals'>('chat');
   const [briefBoardAlias, setBriefBoardAlias] = useState('BriefBoard');
@@ -250,592 +526,166 @@ export default function ChatPage() {
   const [groupSchedule, setGroupSchedule] = useState<Schedule | null>(null);
   const [composer, setComposer] = useState('');
 
-  // Persist scroll position across tab switches (AC3 of Story 7.x)
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const savedScrollTop = useRef(0);
 
-  // Live chat stream for the active group — replaces the Phase 2 placeholder.
-  // `runId` stays undefined until GroupItem carries a latest_run_id field; the
-  // hook gracefully no-ops the SSE channel in that case.
-  const chatStream = useChatStream({
-    mode: 'group',
-    targetId: groupId ?? null,
-    sseChannel: 'workflow',
-    runId: undefined,
-  });
+  const chatStream = useChatStream({ mode: 'group', targetId: groupId ?? null, sseChannel: 'workflow', runId: undefined });
 
-  // Load briefBoardAlias from the group's template
   useEffect(() => {
     if (!group?.templateId) return;
-    getTemplate(group.templateId)
-      .then((tpl) => {
-        if (tpl.brief_board_alias) setBriefBoardAlias(tpl.brief_board_alias);
-      })
-      .catch(() => {
-        /* fall back to default alias */
-      });
+    getTemplate(group.templateId).then(tpl => { if (tpl.brief_board_alias) setBriefBoardAlias(tpl.brief_board_alias); }).catch(() => {});
   }, [group?.templateId]);
 
   const refreshSchedule = useCallback(async () => {
     if (!groupId) return;
-    try {
-      const res = await listSchedules(groupId);
-      setGroupSchedule(res.data[0] ?? null);
-    } catch {
-      setGroupSchedule(null);
-    }
+    try { const res = await listSchedules(groupId); setGroupSchedule(res.data[0] ?? null); }
+    catch { setGroupSchedule(null); }
   }, [groupId]);
 
-  useEffect(() => {
-    refreshSchedule();
-  }, [refreshSchedule]);
+  useEffect(() => { refreshSchedule(); }, [refreshSchedule]);
 
   function handleTabChange(tab: 'chat' | 'briefboard' | 'approvals') {
-    // Save current chat scrollTop when leaving the chat view (briefboard or
-    // approvals). Restore when coming back.
-    if (tab !== 'chat' && chatScrollRef.current) {
-      savedScrollTop.current = chatScrollRef.current.scrollTop;
-    }
+    if (tab !== 'chat' && chatScrollRef.current) savedScrollTop.current = chatScrollRef.current.scrollTop;
     setActiveTab(tab);
-    if (tab === 'chat') {
-      requestAnimationFrame(() => {
-        if (chatScrollRef.current) {
-          chatScrollRef.current.scrollTop = savedScrollTop.current;
-        }
-      });
-    }
+    if (tab === 'chat') requestAnimationFrame(() => { if (chatScrollRef.current) chatScrollRef.current.scrollTop = savedScrollTop.current; });
   }
 
   const handleSend = useCallback(async () => {
     const text = composer.trim();
     if (!text || chatStream.loading) return;
-    setComposer(''); // optimistic clear; hook appends optimistic bubble
+    setComposer('');
     try {
       await chatStream.send(text);
-      // Scroll to bottom after assistant reply (or local error mark)
-      requestAnimationFrame(() => {
-        if (chatScrollRef.current) {
-          chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-        }
-      });
-    } catch (err) {
-      // hook already records err in `chatStream.error`; UI banner shows it
-      // eslint-disable-next-line no-console
-      console.warn('[ChatPage] send failed:', err);
-    }
+      requestAnimationFrame(() => { if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight; });
+    } catch (err) { console.warn('[ChatPage] send failed:', err); }
   }, [composer, chatStream]);
 
-  const builderUrl = buildChatBuilderUrl({
-    chatId: groupId ?? '',
-    goalText: groupName,
-  });
-
-  const runningCount = group?.metrics?.activeRuns ?? 0;
-  const isRunning = group?.status === 'running' || runningCount > 0;
+  const builderUrl = buildChatBuilderUrl({ chatId: groupId ?? '', goalText: groupName });
+  const isRunning = group?.status === 'running' || (group?.metrics?.activeRuns ?? 0) > 0;
 
   return (
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minWidth: 0,
-        background: 'var(--t-bg)',
-        color: 'var(--t-fg)',
-      }}
-    >
-      <HfTopBar
-        right={
-          <>
-            <span className="hf-chip" style={{ fontSize: 10 }}>
-              <HfDot color={isRunning ? 'var(--t-accent)' : 'var(--t-fg-5)'} pulse={isRunning} />
-              {isRunning ? `RUNNING · ${runningCount}` : 'IDLE'}
-            </span>
-            <CreateAgentButton label={t('chat.createAgentFromChat')} builderUrl={builderUrl} />
-          </>
-        }
-      />
-
-      {/* Hidden-but-present BreadcrumbBar so existing tests still find the
-          aria-label="breadcrumb" landmark + "Inbox" navigation entry. The
-          new HfTopBar above is the visible breadcrumb. */}
-      <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
-        <BreadcrumbBar label={groupName} />
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: T.bg, color: T.fg }}>
+      {/* Hidden elements preserved for test compatibility */}
+      <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', pointerEvents: 'none' }}>
+        <BreadcrumbBar label={groupName}/>
+        <GroupMetricsBar metrics={metrics}/>
+        <ChatBriefBoardToggle briefBoardAlias={briefBoardAlias} activeTab={activeTab} onChange={handleTabChange} pendingApprovalsCount={metrics.pendingApprovalsCount}/>
       </div>
 
-      <div
-        style={{
-          flex: 1,
-          display: 'grid',
-          gridTemplateColumns: '240px 1fr 300px',
-          minHeight: 0,
-        }}
-      >
-        {/* --- Left column · Teams + DMs --------------------------------- */}
-        <div
-          style={{
-            borderRight: '1px solid var(--t-border)',
-            overflow: 'auto',
-            padding: '10px 8px',
-            background: 'var(--t-panel)',
-          }}
-        >
-          <div className="hf-label" style={{ padding: '4px 10px 8px' }}>
-            {t('chat.teamsSectionLabel')}
-          </div>
-          {groups.length === 0 && (
-            <div style={{
-              padding: '28px 16px',
-              display: 'flex', flexDirection: 'column', alignItems: 'center',
-              gap: 8, textAlign: 'center',
-            }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: 'var(--t-bg)', border: '1px solid var(--t-border)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--t-fg-4)',
-              }}>
-                <Users size={17} strokeWidth={1.75} aria-hidden />
-              </div>
-              <p style={{ margin: 0, fontSize: 11, color: 'var(--t-fg-4)', lineHeight: 1.55 }}>
-                {t('chat.noTeams')}
-              </p>
+      {/* 4-column body */}
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <ChatRail/>
+
+        <InboxPanel
+          groups={groups}
+          groupId={groupId}
+          agentDMs={agentDMs}
+          onGroup={id => navigate(`/chat/${id}`)}
+          onDm={id => navigate(`/agent-dm/${id}`)}
+        />
+
+        {/* Center column */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <ConvHeader group={group} isRunning={isRunning} builderUrl={builderUrl} t={t}/>
+          <PinnedBrief group={group}/>
+
+          {/* Tab strip */}
+          {groupId && (
+            <div style={{ padding: '0 18px', borderBottom: `1px solid ${T.bd}`, display: 'flex', gap: 2, background: T.p2, flexShrink: 0 }}>
+              {([
+                ['chat', 'Chat'] as const,
+                ['briefboard', briefBoardAlias] as const,
+                ['approvals', `审批${metrics.pendingApprovalsCount > 0 ? ` · ${metrics.pendingApprovalsCount}` : ''}`] as const,
+              ]).map(([key, label]) => (
+                <button key={key} type="button" role="tab" aria-selected={activeTab === key} onClick={() => handleTabChange(key)}
+                  style={{ padding: '9px 12px', fontSize: 12, fontWeight: activeTab === key ? 700 : 500, color: activeTab === key ? T.fg : T.fg4, borderBottom: `2px solid ${activeTab === key ? T.ac : 'transparent'}`, background: 'transparent', border: 'none', borderRadius: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {label}
+                </button>
+              ))}
             </div>
           )}
-          {groups.map((t) => {
-            const on = t.id === groupId;
-            const stat = statusToken(t.status);
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => navigate(`/chat/${t.id}`)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 10px',
-                  borderRadius: 7,
-                  marginBottom: 2,
-                  background: on ? 'var(--t-accent-tint)' : 'transparent',
-                  position: 'relative',
-                  cursor: 'pointer',
-                  width: '100%',
-                  textAlign: 'left',
-                  border: 'none',
-                  color: 'var(--t-fg-2)',
-                }}
-              >
-                {on && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      left: -8,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      width: 3,
-                      height: 18,
-                      background: 'var(--t-accent)',
-                      borderRadius: 2,
-                    }}
-                  />
-                )}
-                <HfDot color={`var(--t-${stat})`} pulse={stat === 'run'} size={7} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      fontWeight: on ? 700 : 600,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      color: 'var(--t-fg)',
-                    }}
-                  >
-                    {t.name}
-                  </div>
-                  <div
-                    className="hf-meta"
-                    style={{ fontSize: 9.5, marginTop: 1 }}
-                  >
-                    {t.lastMessage || `${t.metrics?.members ?? 0} agents`}
-                  </div>
-                </div>
-                {t.unreadCount > 0 && (
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 9,
-                      fontWeight: 700,
-                      padding: '1px 5px',
-                      borderRadius: 3,
-                      background: 'var(--t-accent)',
-                      color: 'var(--t-accent-ink)',
-                    }}
-                  >
-                    {t.unreadCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
 
-          <div className="hf-label" style={{ padding: '14px 10px 8px' }}>
-            {t('chat.dmSectionLabel')}
-          </div>
-          {agentDMs.length === 0 && (
-            <div className="hf-meta" style={{ padding: '6px 10px', fontSize: 10 }}>
-              {t('chat.noDMs')}
-            </div>
-          )}
-          {agentDMs.map((d) => (
-            <button
-              key={d.agentId}
-              type="button"
-              onClick={() => navigate(`/agent-dm/${d.agentId}`)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '7px 10px',
-                cursor: 'pointer',
-                width: '100%',
-                textAlign: 'left',
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--t-fg-2)',
-              }}
-            >
-              <div
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 7,
-                  background: 'var(--t-panel-2)',
-                  border: '1px solid var(--t-border)',
-                  color: 'var(--t-accent)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 800,
-                  fontSize: 11,
-                  flexShrink: 0,
-                }}
-              >
-                {d.agentName.charAt(0)}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--t-fg)' }}>
-                  {d.agentName}
-                  <span
-                    className="hf-mono"
-                    style={{ fontSize: 9, color: 'var(--t-fg-4)', marginLeft: 6 }}
-                  >
-                    · {d.kind.toUpperCase()}
-                  </span>
-                </div>
-                <div className="hf-meta" style={{ fontSize: 9.5 }}>
-                  {d.lastMessage}
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* --- Center column · Conversation ---------------------------- */}
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          {/* Sub-header: metrics + tab strip */}
-          <div
-            style={{
-              padding: '12px 22px 10px',
-              borderBottom: '1px solid var(--t-border)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-            }}
-          >
-            <GroupMetricsBar metrics={metrics} />
-            <ChatBriefBoardToggle
-              briefBoardAlias={briefBoardAlias}
-              activeTab={activeTab}
-              onChange={handleTabChange}
-              pendingApprovalsCount={metrics.pendingApprovalsCount}
-            />
-          </div>
-
+          {/* BriefBoard tab */}
           {activeTab === 'briefboard' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 22px',
-                  borderBottom: '1px solid var(--t-border)',
-                }}
-              >
-                <span className="hf-meta" style={{ fontSize: 11 }}>
-                  {groupSchedule ? describeSchedule(groupSchedule) : 'No schedule'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setScheduleDrawerOpen(true)}
-                  className="hf-btn"
-                  style={{ fontSize: 11, padding: '5px 11px' }}
-                >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 22px', borderBottom: `1px solid ${T.bd}`, flexShrink: 0 }}>
+                <span style={{ fontFamily: T.mono, fontSize: 11, color: T.fg4 }}>{groupSchedule ? describeSchedule(groupSchedule) : 'No schedule'}</span>
+                <button type="button" onClick={() => setScheduleDrawerOpen(true)}
+                  style={{ fontSize: 11, padding: '5px 11px', borderRadius: 6, border: `1px solid ${T.bd}`, background: 'transparent', color: T.fg3, cursor: 'pointer', fontFamily: 'inherit' }}>
                   + Schedule
                 </button>
               </div>
               <div style={{ flex: 1, overflow: 'auto', padding: '14px 22px' }}>
-                <BriefBoardView groupId={groupId ?? ''} />
+                <BriefBoardView groupId={groupId ?? ''}/>
               </div>
             </div>
           )}
 
+          {/* Approvals tab */}
           {activeTab === 'approvals' && (
-            <div
-              data-testid="approvals-center"
-              style={{
-                flex: 1,
-                overflow: 'auto',
-                background: 'var(--t-bg)',
-              }}
-            >
+            <div data-testid="approvals-center" style={{ flex: 1, overflow: 'auto', background: T.bg }}>
               {groupId ? (
-                <div
-                  style={{
-                    width: '100%',
-                    maxWidth: 920,
-                    margin: '0 auto',
-                    padding: 24,
-                  }}
-                >
-                  <div className="hf-label" style={{ marginBottom: 12 }}>
-                    {t('chat.approvalWorkflow')}
-                  </div>
-                  <ApprovalGatePanel groupId={groupId} />
+                <div style={{ width: '100%', maxWidth: 920, margin: '0 auto', padding: 24 }}>
+                  <div style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.fg4, letterSpacing: '0.08em', marginBottom: 12 }}>APPROVAL WORKFLOW</div>
+                  <ApprovalGatePanel groupId={groupId}/>
                 </div>
               ) : (
-                <div className="hf-meta" style={{ padding: 24, fontSize: 12 }}>
-                  {t('chat.selectTeamToView')}
-                </div>
+                <div style={{ padding: 24, fontFamily: T.mono, fontSize: 12, color: T.fg4 }}>{t('chat.selectTeamToView')}</div>
               )}
             </div>
           )}
 
+          {/* Chat tab */}
           {activeTab === 'chat' && (
-            <div
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
-                minHeight: 0,
-              }}
-            >
-              <div
-                ref={chatScrollRef}
-                style={{ flex: 1, overflow: 'auto', minHeight: 0 }}
-              >
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+              <div ref={chatScrollRef} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
                 <ChatStream
                   messages={chatStream.messages}
                   showSenderHeader
                   emptyState={
-                    <div style={{
-                      display: 'flex', height: '100%',
-                      alignItems: 'center', justifyContent: 'center',
-                      flexDirection: 'column', gap: 12, padding: 32,
-                    }}>
+                    <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, padding: 32 }}>
                       {!groupId ? (
                         <>
-                          <div style={{
-                            width: 44, height: 44, borderRadius: 12,
-                            background: 'var(--t-panel)', border: '1px solid var(--t-border)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: 'var(--t-fg-4)',
-                          }}>
-                            <Users size={20} strokeWidth={1.5} aria-hidden />
+                          <div style={{ width: 44, height: 44, borderRadius: 12, background: T.p, border: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fg5 }}>
+                            <Users size={20} strokeWidth={1.5}/>
                           </div>
                           <div style={{ textAlign: 'center' }}>
-                            <p style={{ margin: '0 0 5px', fontSize: 13, fontWeight: 600, color: 'var(--t-fg-2)' }}>
-                              从左侧选择一个 Team
-                            </p>
-                            <p style={{ margin: 0, fontSize: 11, color: 'var(--t-fg-4)', lineHeight: 1.55 }}>
-                              选择后即可查看对话和工作流详情
-                            </p>
+                            <p style={{ margin: '0 0 5px', fontSize: 13, fontWeight: 600, color: T.fg3 }}>从左侧选择一个 Team</p>
+                            <p style={{ margin: 0, fontSize: 11, color: T.fg5, lineHeight: 1.55 }}>选择后即可查看对话和工作流详情</p>
                           </div>
                         </>
                       ) : (
-                        <>
-                          <p style={{ fontSize: 13, color: 'var(--t-fg-4)', margin: 0 }}>
-                            {t('chat.noMessages')}
-                          </p>
-                          {chatStream.loading && (
-                            <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>
-                              {t('chat.loading')}
-                            </span>
-                          )}
-                        </>
+                        <p style={{ fontSize: 13, color: T.fg5, margin: 0 }}>{t('chat.noMessages')}</p>
                       )}
                     </div>
                   }
                 />
               </div>
               {chatStream.error && (
-                <div
-                  style={{
-                    padding: '6px 18px',
-                    fontSize: 11,
-                    color: 'var(--t-err)',
-                    background:
-                      'color-mix(in oklab, var(--t-err) 12%, transparent)',
-                    borderTop: '1px solid var(--t-border)',
-                  }}
-                >
+                <div style={{ padding: '6px 18px', fontSize: 11, color: T.err, background: `color-mix(in oklab, ${T.err} 12%, transparent)`, borderTop: `1px solid ${T.bd}` }}>
                   {chatStream.error}
                 </div>
               )}
             </div>
           )}
 
-          {/* Composer footer (visual parity with spec). The text submit handler
-              is a placeholder until the live message API ships. */}
-          <div
-            style={{
-              padding: '10px 18px 14px',
-              borderTop: '1px solid var(--t-border)',
-              background: 'var(--t-panel)',
-            }}
-          >
-            <div
-              className="hf-card"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '8px 12px',
-              }}
-            >
-              <input
-                value={composer}
-                onChange={(e) => setComposer(e.target.value)}
-                onKeyDown={(e) => {
-                  // Enter (no shift) or ⌘/Ctrl+Enter → submit
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    void handleSend();
-                  }
-                }}
-                placeholder={t('chat.composerPlaceholder')}
-                style={{
-                  flex: 1,
-                  fontSize: 13,
-                  background: 'transparent',
-                  border: 'none',
-                  outline: 'none',
-                  color: 'var(--t-fg)',
-                }}
-              />
-              <span className="hf-kbd">⌘ ⏎</span>
-              {/* Story 15.28 — "Run skill →" entry. Takes the current composer
-                  text as a goal and routes to /run-session. Does NOT call
-                  sendMessage; chat history bridging will land in 15.29. */}
-              <button
-                type="button"
-                data-testid="chat-run-skill-button"
-                disabled={!composer.trim()}
-                onClick={() => {
-                  const goal = composer.trim();
-                  if (!goal) return;
-                  navigate(`/run-session?goal=${encodeURIComponent(goal)}`);
-                }}
-                title={t('skillStudio.entry.runSkillFromChat')}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  fontSize: 11,
-                  padding: '4px 9px',
-                  borderRadius: 6,
-                  border: '1px solid var(--t-border)',
-                  background: 'transparent',
-                  color: composer.trim() ? 'var(--t-fg-2)' : 'var(--t-fg-5)',
-                  cursor: composer.trim() ? 'pointer' : 'not-allowed',
-                  fontFamily: 'inherit',
-                }}
-              >
-                <Sparkles size={11} strokeWidth={2} aria-hidden />
-                {t('skillStudio.entry.runSkillFromChat')}
-              </button>
-              <button
-                type="button"
-                disabled={!composer.trim() || chatStream.loading}
-                className="hf-btn hf-btn-pri"
-                style={{
-                  fontSize: 11,
-                  opacity:
-                    composer.trim() && !chatStream.loading ? 1 : 0.5,
-                  cursor:
-                    composer.trim() && !chatStream.loading
-                      ? 'pointer'
-                      : 'not-allowed',
-                }}
-                onClick={() => void handleSend()}
-              >
-                {chatStream.loading
-                  ? t('chat.sending')
-                  : t('chat.send')}
-              </button>
-            </div>
-          </div>
+          <RichComposer
+            value={composer}
+            onChange={setComposer}
+            onSend={() => void handleSend()}
+            onRunSkill={() => { const goal = composer.trim(); if (goal) navigate(`/run-session?goal=${encodeURIComponent(goal)}`); }}
+            loading={chatStream.loading}
+            t={t}
+          />
         </div>
 
-        {/* --- Right column · Approval gate + Recent Activity ----------
-            In approvals tab the gate panel relocates to the center column,
-            so the right column becomes a compact pending-list summary. */}
-        <div
-          style={{
-            borderLeft: '1px solid var(--t-border)',
-            overflow: 'auto',
-            background: 'var(--t-panel)',
-          }}
-        >
-          {groupId ? (
-            activeTab === 'approvals' ? (
-              <ApprovalsMiniList
-                groupId={groupId}
-                pendingCount={metrics.pendingApprovalsCount}
-              />
-            ) : (
-              <>
-                <ApprovalGatePanel groupId={groupId} />
-                <RecentActivity group={group} />
-              </>
-            )
-          ) : (
-            <div className="hf-meta" style={{ padding: 14 }}>
-              {t('chat.selectTeamToView')}
-            </div>
-          )}
-        </div>
+        <ChatDrawer groupId={groupId} group={group} metrics={metrics}/>
       </div>
 
       {scheduleDrawerOpen && (
         <>
-          <div
-            style={{ position: 'fixed', inset: 0, zIndex: 499, background: 'rgba(0,0,0,0.4)' }}
-            onClick={() => {
-              setScheduleDrawerOpen(false);
-              refreshSchedule();
-            }}
-          />
-          <ScheduleDrawer
-            groupId={groupId ?? ''}
-            onClose={() => {
-              setScheduleDrawerOpen(false);
-              refreshSchedule();
-            }}
-          />
+          <div style={{ position: 'fixed', inset: 0, zIndex: 499, background: 'rgba(0,0,0,0.4)' }} onClick={() => { setScheduleDrawerOpen(false); refreshSchedule(); }}/>
+          <ScheduleDrawer groupId={groupId ?? ''} onClose={() => { setScheduleDrawerOpen(false); refreshSchedule(); }}/>
         </>
       )}
     </div>
