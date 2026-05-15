@@ -1,6 +1,7 @@
 /**
- * PetPickerModal — 三 tab 宠物选择器。
+ * PetPickerModal — 四 tab 宠物选择器。
  *
+ * 收藏 tab：LocalStorage 持久化，支持拖拽排序。
  * 内置 tab：前端常量 BUILTIN_PETS，无需 API，零延迟。
  * 社区 tab：GET /api/settings/pets（读取本地 ~/.codex/pets 目录），
  *           与 Open Design 使用同一个本地目录，无需外部 API。
@@ -26,9 +27,41 @@ const IconRefresh: React.FC<{ size?: number; spinning?: boolean }> = ({ size = 1
   </svg>
 );
 
+const IconStar: React.FC<{ filled?: boolean; size?: number }> = ({ filled, size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+
+const IconGrip: React.FC<{ size?: number }> = ({ size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+    <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+    <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+  </svg>
+);
+
 import PetSpriteFace from './PetSpriteFace';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+
+// ── Favorites persistence ─────────────────────────────────────────────────
+
+const LS_FAVORITES = 'sf.favoritePets';
+
+function loadFavorites(): string[] {
+  try {
+    const raw = localStorage.getItem(LS_FAVORITES);
+    const parsed = JSON.parse(raw ?? '[]');
+    return Array.isArray(parsed) ? parsed as string[] : [];
+  } catch { return []; }
+}
+
+function saveFavorites(ids: string[]): void {
+  try { localStorage.setItem(LS_FAVORITES, JSON.stringify(ids)); } catch {}
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────
 
 interface CommunityPet {
   id: string;
@@ -40,7 +73,7 @@ interface CommunityPet {
   tags: string[];
 }
 
-type Tab = 'builtin' | 'community' | 'custom';
+type Tab = 'favorites' | 'builtin' | 'community' | 'custom';
 
 const CUSTOM_PET_KEY = 'sf.customPet';
 
@@ -66,24 +99,39 @@ function BuiltinCard({
   pet,
   selected,
   onSelect,
+  isFavorite,
+  onToggleFavorite,
 }: {
   pet: BuiltinPet;
   selected: boolean;
   onSelect: () => void;
+  isFavorite: boolean;
+  onToggleFavorite: (e: React.MouseEvent) => void;
 }) {
   const bg = pet.accent + '22'; // ~13% opacity
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(); }}
       className={[
-        'flex flex-col items-center gap-2 p-3 rounded-lg border transition-all',
+        'relative flex flex-col items-center gap-2 p-3 rounded-lg border transition-all cursor-pointer',
         selected
           ? 'bg-purple-900/40 border-purple-500'
           : 'bg-gray-800 border-gray-700 hover:border-gray-500 hover:bg-gray-750',
       ].join(' ')}
       title={pet.description}
     >
+      {/* Star button */}
+      <button
+        type="button"
+        onClick={onToggleFavorite}
+        className={`absolute top-1 right-1 transition-colors ${isFavorite ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}
+        title={isFavorite ? '取消收藏' : '收藏'}
+      >
+        <IconStar filled={isFavorite} size={12} />
+      </button>
       <div
         className="flex h-14 w-14 items-center justify-center rounded-xl text-[32px] leading-none"
         style={{ backgroundColor: bg }}
@@ -94,7 +142,7 @@ function BuiltinCard({
         {pet.displayName}
       </span>
       <span className="text-[10px] text-gray-500">内置</span>
-    </button>
+    </div>
   );
 }
 
@@ -104,23 +152,38 @@ function CommunityCard({
   pet,
   selected,
   onSelect,
+  isFavorite,
+  onToggleFavorite,
 }: {
   pet: CommunityPet;
   selected: boolean;
   onSelect: () => void;
+  isFavorite: boolean;
+  onToggleFavorite: (e: React.MouseEvent) => void;
 }) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(); }}
       className={[
-        'flex flex-col items-center gap-2 p-3 rounded-lg border transition-all',
+        'relative flex flex-col items-center gap-2 p-3 rounded-lg border transition-all cursor-pointer',
         selected
           ? 'bg-purple-900/40 border-purple-500'
           : 'bg-gray-800 border-gray-700 hover:border-gray-500 hover:bg-gray-750',
       ].join(' ')}
       title={pet.description || pet.displayName}
     >
+      {/* Star button */}
+      <button
+        type="button"
+        onClick={onToggleFavorite}
+        className={`absolute top-1 right-1 transition-colors ${isFavorite ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}
+        title={isFavorite ? '取消收藏' : '收藏'}
+      >
+        <IconStar filled={isFavorite} size={12} />
+      </button>
       <PetSpriteFace spritesheetUrl={pet.spritesheetUrl} size={56} rowId="idle" />
       <span className={`text-xs text-center truncate w-full ${selected ? 'text-purple-300' : 'text-gray-300'}`}>
         {pet.displayName}
@@ -128,7 +191,7 @@ function CommunityCard({
       {pet.author && (
         <span className="text-[10px] text-gray-600 truncate w-full text-center">by {pet.author}</span>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -141,6 +204,10 @@ interface Props {
 export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
   const { selectedPetId, setSelectedPet } = usePetStore();
   const [tab, setTab] = useState<Tab>('builtin');
+
+  // Favorites
+  const [favorites, setFavorites] = useState<string[]>(loadFavorites);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   // Community pets (from ~/.codex/pets via backend)
   const [communityPets, setCommunityPets] = useState<CommunityPet[]>([]);
@@ -155,6 +222,49 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
 
   // Custom pet
   const customPet = loadCustomPet();
+
+  // ── Favorites helpers ──────────────────────────────────────────────────
+
+  function toggleFavorite(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    setFavorites(prev => {
+      const next = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+      saveFavorites(next);
+      return next;
+    });
+  }
+
+  function handleDragStart(e: React.DragEvent, id: string) {
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverId(id);
+  }
+
+  function handleDrop(e: React.DragEvent, targetId: string) {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData('text/plain');
+    if (!sourceId || sourceId === targetId) { setDragOverId(null); return; }
+    setFavorites(prev => {
+      const arr = [...prev];
+      const fromIdx = arr.indexOf(sourceId);
+      const toIdx = arr.indexOf(targetId);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      arr.splice(fromIdx, 1);
+      arr.splice(toIdx, 0, sourceId);
+      saveFavorites(arr);
+      return arr;
+    });
+    setDragOverId(null);
+  }
+
+  function handleDragEnd() { setDragOverId(null); }
+
+  // ── Community fetch / sync ─────────────────────────────────────────────
 
   const fetchCommunity = useCallback(() => {
     setCommunityLoading(true);
@@ -189,7 +299,6 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
       if (Array.isArray(data.errors) && data.errors.length > 0) {
         setSyncErrors(data.errors);
       }
-      // Refresh local list after sync
       fetchCommunity();
     } catch (e) {
       setSyncErrors([e instanceof Error ? e.message : '同步失败']);
@@ -198,7 +307,6 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
     }
   }, [fetchCommunity]);
 
-  // Fetch when switching to community tab
   useEffect(() => {
     if (tab === 'community') fetchCommunity();
   }, [tab, fetchCommunity]);
@@ -218,6 +326,7 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
   }, [onClose]);
 
   const TAB_LABELS: Record<Tab, string> = {
+    favorites: `收藏${favorites.length > 0 ? ` (${favorites.length})` : ''}`,
     builtin: '内置',
     community: '社区',
     custom: '自定义',
@@ -240,7 +349,7 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-4 flex-shrink-0">
-          {(['builtin', 'community', 'custom'] as Tab[]).map((t) => (
+          {(['favorites', 'builtin', 'community', 'custom'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -256,6 +365,88 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
         {/* Body */}
         <div className="flex-1 overflow-y-auto min-h-0">
 
+          {/* ── 收藏 tab ── */}
+          {tab === 'favorites' && (
+            <div>
+              {favorites.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-500">
+                  <IconStar size={32} />
+                  <p className="text-sm">还没有收藏</p>
+                  <p className="text-xs text-gray-600">在「内置」或「社区」tab 点击 ★ 收藏宠物</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-gray-600 text-xs mb-3">拖拽左侧图标可调整顺序</p>
+                  {favorites.map(id => {
+                    const builtin = BUILTIN_PETS.find(p => p.id === id);
+                    return (
+                      <div
+                        key={id}
+                        draggable
+                        onDragStart={e => handleDragStart(e, id)}
+                        onDragOver={e => handleDragOver(e, id)}
+                        onDrop={e => handleDrop(e, id)}
+                        onDragEnd={handleDragEnd}
+                        className={[
+                          'flex items-center gap-3 p-3 rounded-lg border cursor-grab active:cursor-grabbing transition-all',
+                          selectedPetId === id ? 'bg-purple-900/40 border-purple-500' : 'bg-gray-800 border-gray-700',
+                          dragOverId === id ? 'border-purple-400 bg-purple-900/30' : '',
+                        ].join(' ')}
+                      >
+                        {/* Drag handle */}
+                        <span className="text-gray-600 hover:text-gray-400 flex-shrink-0">
+                          <IconGrip size={14} />
+                        </span>
+
+                        {/* Pet avatar */}
+                        {builtin ? (
+                          <div
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[22px] leading-none"
+                            style={{ backgroundColor: builtin.accent + '22' }}
+                          >
+                            {builtin.glyph}
+                          </div>
+                        ) : (
+                          <div className="h-10 w-10 shrink-0 rounded-lg bg-gray-700 flex items-center justify-center text-gray-500 text-xs">
+                            ?
+                          </div>
+                        )}
+
+                        {/* Name */}
+                        <span className="flex-1 text-sm text-gray-200">
+                          {builtin?.displayName ?? id}
+                        </span>
+
+                        {/* Select button */}
+                        <button
+                          type="button"
+                          onClick={() => handleSelect(id)}
+                          className={`text-[11px] px-3 py-1 rounded-md font-medium transition-colors ${
+                            selectedPetId === id
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
+                        >
+                          {selectedPetId === id ? '使用中' : '选用'}
+                        </button>
+
+                        {/* Unfavorite button */}
+                        <button
+                          type="button"
+                          onClick={e => toggleFavorite(e, id)}
+                          className="text-yellow-400 hover:text-gray-500 transition-colors"
+                          title="取消收藏"
+                        >
+                          <IconStar filled size={14} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── 内置 tab ── */}
           {tab === 'builtin' && (
             <div>
@@ -266,6 +457,8 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
                     key={pet.id}
                     pet={pet}
                     selected={selectedPetId === pet.id}
+                    isFavorite={favorites.includes(pet.id)}
+                    onToggleFavorite={e => toggleFavorite(e, pet.id)}
                     onSelect={() => handleSelect(pet.id)}
                   />
                 ))}
@@ -354,6 +547,8 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
                       key={pet.id}
                       pet={pet}
                       selected={selectedPetId === pet.id}
+                      isFavorite={favorites.includes(pet.id)}
+                      onToggleFavorite={e => toggleFavorite(e, pet.id)}
                       onSelect={() => handleSelect(pet.id)}
                     />
                   ))}
