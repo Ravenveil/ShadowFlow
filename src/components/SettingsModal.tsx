@@ -19,6 +19,7 @@ import { ConnectorsSection } from '../core/components/settings/ConnectorsSection
 import { McpIntegrationsSection } from '../core/components/settings/McpIntegrationsSection';
 import { AgentBackendSection } from '../core/components/settings/AgentBackendSection';
 import { ZerogStorageSection } from '../core/components/settings/ZerogStorageSection';
+import { MemorySection } from '../core/components/settings/MemorySection';
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
@@ -35,7 +36,8 @@ type TabId =
   | 'toolproviders'
   | 'connectors'
   | 'mcp'
-  | 'zerog';
+  | 'zerog'
+  | 'memory';
 
 interface NavItem { id: TabId; label: string; soon?: boolean }
 interface NavGroup { label: string; items: NavItem[] }
@@ -52,6 +54,12 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Appearance',
     items: [{ id: 'appearance', label: 'Appearance' }],
+  },
+  {
+    label: 'Memory',
+    items: [
+      { id: 'memory', label: 'River Memory' },
+    ],
   },
   {
     label: 'Integrations',
@@ -93,6 +101,7 @@ function TabContent({ tab }: { tab: TabId }) {
     case 'connectors':   return <ConnectorsSection />;
     case 'mcp':          return <McpIntegrationsSection />;
     case 'zerog':        return <ZerogStorageSection />;
+    case 'memory':       return <MemorySection />;
   }
 }
 
