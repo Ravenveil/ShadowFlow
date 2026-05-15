@@ -10,6 +10,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PetSpriteFace from './PetSpriteFace';
+import { getBuiltinPet, isBuiltinPet } from './builtinPets';
 import { PetPickerModal } from './PetPickerModal';
 import { usePetStore } from './usePetStore';
 
@@ -35,9 +36,17 @@ export const PetRail: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
 
-  // Fetch pet info whenever selectedPetId changes
+  // Derive built-in pet from local constants — no API call needed
+  const builtinPet = selectedPetId && isBuiltinPet(selectedPetId) ? getBuiltinPet(selectedPetId) : null;
+
+  // Fetch pet info whenever selectedPetId changes (skip for built-in pets)
   useEffect(() => {
     if (!selectedPetId) {
+      setPet(null);
+      return;
+    }
+    // 内置宠物从本地常量获取，不需要 API
+    if (isBuiltinPet(selectedPetId)) {
       setPet(null);
       return;
     }
@@ -84,7 +93,7 @@ export const PetRail: React.FC = () => {
     setShowModal(true);
   }, []);
 
-  if (!petVisible || !pet) return null;
+  if (!petVisible || (!pet && !builtinPet)) return null;
 
   return (
     <>
@@ -94,7 +103,7 @@ export const PetRail: React.FC = () => {
           <div
             className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 whitespace-nowrap shadow-lg pointer-events-none"
           >
-            {pet.displayName}
+            {builtinPet?.displayName ?? pet?.displayName ?? ''}
           </div>
         )}
 
@@ -105,14 +114,23 @@ export const PetRail: React.FC = () => {
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
           className="group relative cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded-lg transition-transform hover:scale-110 active:scale-95"
-          aria-label={`宠物：${pet.displayName}，点击互动，双击更换`}
-          title={`${pet.displayName} — 点击互动 · 双击更换`}
+          aria-label={`宠物：${builtinPet?.displayName ?? pet?.displayName ?? '宠物'}，点击互动，双击更换`}
+          title={`${builtinPet?.displayName ?? pet?.displayName ?? '宠物'} — 点击互动 · 双击更换`}
         >
-          <PetSpriteFace
-            spritesheetUrl={pet.spritesheetUrl}
-            size={80}
-            rowId={rowId}
-          />
+          {builtinPet ? (
+            <div
+              className="flex h-20 w-20 items-center justify-center rounded-2xl text-[44px] leading-none"
+              style={{ backgroundColor: builtinPet.accent + '22' }}
+            >
+              {builtinPet.glyph}
+            </div>
+          ) : pet ? (
+            <PetSpriteFace
+              spritesheetUrl={pet.spritesheetUrl}
+              size={80}
+              rowId={rowId}
+            />
+          ) : null}
         </button>
       </div>
 

@@ -8,6 +8,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import PetSpriteFace from './PetSpriteFace';
+import { getBuiltinPet, isBuiltinPet } from './builtinPets';
 
 /** Inline paw-print icon — avoids lucide-react peer dependency */
 const IconPaw: React.FC<{ size?: number; className?: string }> = ({ size = 18, className = '' }) => (
@@ -219,63 +220,13 @@ export const PetSettings: React.FC = () => {
   const [loadError, setLoadError] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [customExpanded, setCustomExpanded] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ wrote: number; failed: number; total: number } | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [syncUpstreamErrors, setSyncUpstreamErrors] = useState<string[]>([]);
 
-  async function handleSync() {
-    setSyncing(true);
-    setSyncResult(null);
-    setSyncError(null);
-    setSyncUpstreamErrors([]);
-    try {
-      const res = await fetch(`${API_BASE}/api/settings/pets/sync?limit=24`, {
-        method: 'POST',
-        signal: AbortSignal.timeout(30000),
-      });
-      if (!res.ok) {
-        // 2026-05-11 bug fix: 503 from Node→Python proxy shows real backend
-        // status; surface it instead of generic "network failure".
-        let bodyText = '';
-        try {
-          const errBody = await res.json();
-          bodyText = errBody?.error?.hint ?? errBody?.error?.message ?? errBody?.detail ?? '';
-        } catch {
-          /* not JSON */
-        }
-        if (res.status === 503) {
-          setSyncError(
-            `后端服务不可达（HTTP 503）${bodyText ? ' — ' + bodyText : ''}`,
-          );
-        } else {
-          setSyncError(`同步失败（HTTP ${res.status}）${bodyText ? ' — ' + bodyText : ''}`);
-        }
-        return;
-      }
-      const data = await res.json();
-      setSyncResult({
-        wrote: data.wrote ?? 0,
-        failed: data.failed ?? 0,
-        total: data.total ?? 0,
-      });
-      // 2026-05-11 bug fix: Python pet sync returns errors[] when upstream
-      // community APIs (Supabase / j20.nz) are down. UI must surface those —
-      // previously hidden, user saw "network failure" with no actionable hint.
-      if (Array.isArray(data.errors) && data.errors.length > 0) {
-        setSyncUpstreamErrors(data.errors);
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setSyncError(`同步失败：${msg}`);
-    } finally {
-      setSyncing(false);
-    }
-  }
+  // Derive built-in pet display from local constants — no API call needed
+  const builtinPet = selectedPetId && isBuiltinPet(selectedPetId) ? getBuiltinPet(selectedPetId) : null;
 
-  // Fetch current pet details
+  // Fetch API-based pet details (community or custom spritesheet)
   useEffect(() => {
-    if (!selectedPetId) {
+    if (!selectedPetId || isBuiltinPet(selectedPetId) || selectedPetId === 'custom') {
       setPet(null);
       return;
     }
@@ -306,7 +257,39 @@ export const PetSettings: React.FC = () => {
 
       {/* Current pet preview */}
       <div className="flex items-center gap-4 mb-5">
-        {selectedPetId && pet ? (
+        {builtinPet ? (
+          <>
+            <div
+              className="flex h-[120px] w-[120px] shrink-0 items-center justify-center rounded-xl text-[64px] leading-none"
+              style={{ backgroundColor: builtinPet.accent + '22' }}
+            >
+              {builtinPet.glyph}
+            </div>
+            <div>
+              <p className="text-sf-fg1 font-medium">{builtinPet.displayName}</p>
+              <p className="text-sf-fg4 text-xs mt-0.5 max-w-[220px] leading-relaxed">{builtinPet.description}</p>
+            </div>
+          </>
+        ) : selectedPetId === 'custom' ? (
+          (() => {
+            let customData: { name?: string; glyph?: string; accent?: string } = {};
+            try { customData = JSON.parse(localStorage.getItem('sf.customPet') ?? '{}'); } catch { /* ignore */ }
+            return (
+              <>
+                <div
+                  className="flex h-[120px] w-[120px] shrink-0 items-center justify-center rounded-xl text-[64px] leading-none"
+                  style={{ backgroundColor: (customData.accent ?? '#A855F7') + '22' }}
+                >
+                  {customData.glyph || '🦄'}
+                </div>
+                <div>
+                  <p className="text-sf-fg1 font-medium">{customData.name || 'Buddy'}</p>
+                  <p className="text-sf-fg4 text-xs mt-0.5">自定义宠物</p>
+                </div>
+              </>
+            );
+          })()
+        ) : selectedPetId && pet ? (
           <>
             <PetSpriteFace
               spritesheetUrl={pet.spritesheetUrl}
@@ -328,9 +311,7 @@ export const PetSettings: React.FC = () => {
             <div className="w-[120px] h-[120px] rounded-lg bg-sf-elev0 border border-dashed border-sf-border flex items-center justify-center">
               <IconPaw size={28} className="text-sf-fg5" />
             </div>
-            <span>
-              {loadError ? '加载失败，请检查网络' : '还没有选择宠物'}
-            </span>
+            <span>{loadError ? '加载失败' : '还没有选择宠物'}</span>
           </div>
         )}
       </div>
@@ -408,61 +389,6 @@ export const PetSettings: React.FC = () => {
         <PetPickerModal onClose={() => setShowPicker(false)} />
       )}
 
-      {/* Community sync */}
-      <div className="border-t border-sf-border pt-5">
-        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
-          社区宠物库
-        </p>
-        <p className="mt-1 text-[11px] text-sf-fg4">
-          从 Codex Pet Share 和 j20 Hatchery 下载社区制作的宠物精灵。
-        </p>
-        <div className="mt-3 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleSync}
-            disabled={syncing}
-            className="rounded-[8px] bg-sf-accent px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40 hover:bg-sf-accent-dim transition-colors"
-          >
-            {syncing ? '同步中…' : '同步社区宠物'}
-          </button>
-          {syncResult && syncResult.wrote > 0 && (
-            <span className="font-mono text-[11px] text-sf-ok">
-              ✓ 新增 {syncResult.wrote} 只{syncResult.failed > 0 ? `，失败 ${syncResult.failed}` : ''}
-            </span>
-          )}
-          {syncResult && syncResult.total === 0 && syncUpstreamErrors.length === 0 && (
-            <span className="font-mono text-[11px] text-sf-fg4">
-              社区暂无新宠物
-            </span>
-          )}
-          {syncError && (
-            <span className="font-mono text-[11px] text-sf-reject">{syncError}</span>
-          )}
-        </div>
-        {/* 2026-05-11 bug fix: surface upstream community API failures
-            (Supabase / j20.nz) so user sees the actual cause rather than
-            generic "network failure". */}
-        {syncUpstreamErrors.length > 0 && (
-          <div
-            className="mt-2 rounded-md border border-sf-border bg-sf-elev1 p-3 text-[11px]"
-            role="alert"
-          >
-            <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-sf-fg4">
-              社区源不可用（{syncUpstreamErrors.length} 个）
-            </div>
-            <ul className="space-y-1 text-sf-fg3">
-              {syncUpstreamErrors.map((err, i) => (
-                <li key={i} className="break-all">
-                  <span className="font-mono text-sf-reject">•</span> {err}
-                </li>
-              ))}
-            </ul>
-            <div className="mt-2 text-sf-fg4">
-              这是社区 pet share API（Supabase / j20.nz）的问题，跟你的网络无关。可稍后重试或使用「自定义宠物」上传自己的精灵图。
-            </div>
-          </div>
-        )}
-      </div>
     </section>
   );
 };
