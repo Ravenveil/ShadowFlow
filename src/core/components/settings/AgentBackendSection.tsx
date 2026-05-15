@@ -257,7 +257,7 @@ function ByokKeyRow({
   label,
   placeholder,
   maskedValue,
-  model,
+  model: _model,
   onSave,
   onClear,
 }: {
