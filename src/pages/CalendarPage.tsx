@@ -107,35 +107,29 @@ export default function CalendarPage() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg, color: T.fg }}>
-      {/* Header */}
-      <div style={{ padding: '18px 28px 14px', borderBottom: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', gap: 12, background: T.p, flexShrink: 0 }}>
-        <span style={{ width: 36, height: 36, borderRadius: 9, background: T.acT, border: `1px solid color-mix(in oklab, ${T.ac} 35%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.acB }}>
-          <CalendarDays size={18} strokeWidth={1.6}/>
-        </span>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.fg }}>日历</h1>
-          <p style={{ margin: 0, fontSize: 11, color: T.fg4, fontFamily: T.mono }}>
-            定时调度 · {totalSchedules} 个计划
-          </p>
-        </div>
+      {/* Sub-header — workspace crumb is provided by HfLayout above */}
+      <div style={{ padding: '10px 28px 10px', borderBottom: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', gap: 10, background: T.p, flexShrink: 0 }}>
+        <CalendarDays size={15} strokeWidth={1.6} style={{ color: T.acB }}/>
+        <span style={{ fontSize: 13, fontWeight: 700, color: T.fg }}>日历</span>
+        <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fg5 }}>· {totalSchedules} 个计划</span>
         <div style={{ flex: 1 }}/>
         <button
           type="button"
           onClick={() => void load()}
           title="刷新"
-          style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${T.bd}`, background: 'transparent', color: T.fg4, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <RefreshCw size={14} strokeWidth={1.7}/>
+          style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${T.bd}`, background: 'transparent', color: T.fg4, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <RefreshCw size={13} strokeWidth={1.7}/>
         </button>
         {groups.length > 0 && (
           <div style={{ position: 'relative' }}>
             <select
               onChange={e => { if (e.target.value) { setDrawerGroupId(e.target.value); e.target.value = ''; } }}
               defaultValue=""
-              style={{ appearance: 'none', padding: '6px 32px 6px 12px', paddingRight: 28, borderRadius: 8, border: `1px solid ${T.bd}`, background: T.p2, color: T.fg, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+              style={{ appearance: 'none', padding: '5px 28px 5px 10px', borderRadius: 7, border: `1px solid ${T.bd}`, background: T.p2, color: T.fg, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>
               <option value="">+ 新建计划</option>
               {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
-            <Plus size={13} strokeWidth={2} style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: T.fg4 }}/>
+            <Plus size={12} strokeWidth={2} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: T.fg4 }}/>
           </div>
         )}
       </div>

@@ -243,6 +243,7 @@ export default function TemplatesPage() {
   return (
     <>
       <HfTopBar
+        hideWorkspace
         right={
           <button
             type="button"
