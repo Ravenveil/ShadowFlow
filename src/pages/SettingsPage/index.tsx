@@ -50,7 +50,6 @@ import { MediaProvidersSection } from '../../core/components/settings/MediaProvi
 import { WelcomeSection } from '../../core/components/settings/WelcomeSection';
 import { HfTopBar, HfPill } from '../../components/hifi';
 import { WalletSection } from './WalletSection';
-import { ApiKeySettings } from '../../components/ApiKeySettings';
 import { GenerationSettings } from '../../components/GenerationSettings';
 import { CliDetectPanel } from '../../components/CliDetectPanel';
 import { AcpAgentsPanel } from '../../components/AcpAgentsPanel';
@@ -484,20 +483,6 @@ export default function SettingsPage() {
           {activeSection === 'agent-backend' && (
             <LegacySectionWrap>
               <AgentBackendSection />
-              <div style={{ borderTop: '1px solid var(--t-border)', marginTop: 32, paddingTop: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <div className="hf-label" style={{ color: 'var(--t-accent)' }}>
-                    {t('skillStudio.byok.sectionEyebrow')}
-                  </div>
-                  <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, letterSpacing: '-.02em', color: 'var(--t-fg)' }}>
-                    {t('skillStudio.byok.sectionTitle')}
-                  </div>
-                  <p style={{ fontSize: 13, color: 'var(--t-fg-3)', marginTop: 6 }}>
-                    {t('skillStudio.byok.sectionDescPart1')}<code>X-Anthropic-Key</code>{t('skillStudio.byok.sectionDescPart2')}
-                  </p>
-                </div>
-                <ApiKeySettings />
-              </div>
               <div style={{ borderTop: '1px solid var(--t-border)', marginTop: 32, paddingTop: 24 }}>
                 <CliDetectPanel />
               </div>
