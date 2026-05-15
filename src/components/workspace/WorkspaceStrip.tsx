@@ -30,9 +30,10 @@ export function WorkspaceSelector() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
+  const getInit = (name: string) => { const a = Array.from(name); return a.length >= 2 ? a[0] + a[1] : (a[0] ?? '?'); };
   const current = workspaces.find((w) => w.workspace_id === currentId) ?? workspaces[0];
   const color   = current?.color || 'var(--t-accent)';
-  const init    = current ? (Array.from(current.name)[0] ?? '?') : '?';
+  const init    = current ? getInit(current.name) : '?';
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
@@ -77,7 +78,7 @@ export function WorkspaceSelector() {
           {workspaces.map((ws: WorkspaceSummary) => {
             const on = ws.workspace_id === currentId;
             const c  = ws.color || 'var(--t-accent)';
-            const i  = Array.from(ws.name)[0] ?? '?';
+            const i  = getInit(ws.name);
             return (
               <button
                 key={ws.workspace_id}
@@ -91,12 +92,15 @@ export function WorkspaceSelector() {
                   width: '100%', textAlign: 'left', transition: 'all 100ms ease',
                 }}
               >
-                <div style={{
-                  width: 20, height: 20, borderRadius: 5,
-                  background: c, color: '#0A0A0A',
+                <span style={{
+                  width: 30, height: 30, borderRadius: 7,
+                  background: `color-mix(in oklab, ${c} 18%, var(--t-panel-2))`,
+                  border: `1px solid color-mix(in oklab, ${c} 45%, transparent)`,
+                  color: c,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: 900, fontSize: 10, flexShrink: 0,
-                }}>{i}</div>
+                  fontWeight: 900, fontSize: i.length > 1 ? 10.5 : 12.5,
+                  letterSpacing: '-0.03em', flexShrink: 0,
+                }}>{i}</span>
                 <span style={{
                   fontSize: 12, fontWeight: on ? 700 : 500,
                   color: on ? c : 'var(--t-fg-2)', whiteSpace: 'nowrap',
