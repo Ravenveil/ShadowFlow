@@ -15,7 +15,6 @@ import { HfTopBar } from './HfTopBar';
 import { useTheme } from './useTheme';
 import { PetRail } from '../../core/components/pet/PetRail';
 import { QuickSwitcher } from './QuickSwitcher';
-import { WorkspaceStrip } from '../workspace/WorkspaceStrip';
 
 function pathToActive(pathname: string): HfSidebarActive {
   if (pathname.startsWith('/chat')) return 'chat';
@@ -42,7 +41,6 @@ export function HfLayout() {
   const { pathname } = useLocation();
   const active = pathToActive(pathname);
   const needsLayoutTopBar = LAYOUT_TOPBAR_PREFIXES.some(p => pathname.startsWith(p));
-  const showWorkspaceStrip = !pathname.startsWith('/start') && !pathname.startsWith('/templates');
 
   return (
     <div className="hf-root" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -56,7 +54,6 @@ export function HfLayout() {
           overflow: 'hidden',
         }}
       >
-        {showWorkspaceStrip && <WorkspaceStrip />}
         {needsLayoutTopBar && <HfTopBar />}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
           <Outlet />
