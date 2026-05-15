@@ -17,8 +17,11 @@ export interface MemorySettings {
 
 const base = () => getApiBase();
 
-export async function listMemoryEntries(): Promise<MemoryEntry[]> {
-  const res = await fetch(`${base()}/api/memory/entries`, { headers: { ...authHeaders() } });
+export async function listMemoryEntries(scope?: MemoryScope): Promise<MemoryEntry[]> {
+  const url = scope
+    ? `${base()}/api/memory-entries?scope=${encodeURIComponent(scope)}`
+    : `${base()}/api/memory-entries`;
+  const res = await fetch(url, { headers: { ...authHeaders() } });
   if (!res.ok) throw new Error(`listMemoryEntries: ${res.status}`);
   return res.json();
 }
@@ -26,7 +29,7 @@ export async function listMemoryEntries(): Promise<MemoryEntry[]> {
 export async function createMemoryEntry(
   data: Pick<MemoryEntry, 'scope' | 'title' | 'content'>,
 ): Promise<MemoryEntry> {
-  const res = await fetch(`${base()}/api/memory/entries`, {
+  const res = await fetch(`${base()}/api/memory-entries`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(data),
@@ -39,7 +42,7 @@ export async function updateMemoryEntry(
   id: string,
   patch: Partial<Pick<MemoryEntry, 'scope' | 'title' | 'content'>>,
 ): Promise<MemoryEntry> {
-  const res = await fetch(`${base()}/api/memory/entries/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${base()}/api/memory-entries/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(patch),
@@ -49,7 +52,7 @@ export async function updateMemoryEntry(
 }
 
 export async function deleteMemoryEntry(id: string): Promise<void> {
-  const res = await fetch(`${base()}/api/memory/entries/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${base()}/api/memory-entries/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: { ...authHeaders() },
   });
@@ -57,14 +60,14 @@ export async function deleteMemoryEntry(id: string): Promise<void> {
 }
 
 export async function getMemorySettings(): Promise<MemorySettings> {
-  const res = await fetch(`${base()}/api/memory/settings`, { headers: { ...authHeaders() } });
+  const res = await fetch(`${base()}/api/memory-entries/settings`, { headers: { ...authHeaders() } });
   if (!res.ok) return { enabled: true };
   return res.json();
 }
 
 export async function updateMemorySettings(patch: { enabled: boolean }): Promise<MemorySettings> {
-  const res = await fetch(`${base()}/api/memory/settings`, {
-    method: 'PATCH',
+  const res = await fetch(`${base()}/api/memory-entries/settings`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(patch),
   });

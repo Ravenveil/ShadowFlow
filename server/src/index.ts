@@ -23,6 +23,7 @@ import llmRouter from './routes/llm';
 import { detectAll } from './cli-detector';
 import { detectAcpAgents } from './acp-detector';
 import projectsRouter from './routes/projects';
+import memoryEntriesRouter from './routes/memory-entries';
 import conversationsRouter, {
   projectScopedConversationsRouter,
 } from './routes/conversations';
@@ -93,6 +94,8 @@ app.use('/api/auth', authRouter);
 // Story 15.16 — Project + Conversation persistence layer.
 app.use('/api/projects', projectsRouter);
 app.use('/api/projects', projectScopedConversationsRouter);
+// Story 16.1 — River Memory CRUD
+app.use('/api/memory-entries', memoryEntriesRouter);
 app.use('/api/conversations', conversationsRouter);
 // Part D — LLM protocol entrypoints. MUST be mounted BEFORE proxyFallback
 // otherwise /api/llm/* would be forwarded to Python instead of handled here.
