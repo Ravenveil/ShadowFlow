@@ -41,7 +41,12 @@ const IconBrowserRefresh: React.FC<{ spinning?: boolean }> = ({ spinning }) => (
 
 const LS_FAV = 'sf.favoritePets';
 function loadFavs(): string[] {
-  try { const r = localStorage.getItem(LS_FAV); return Array.isArray(JSON.parse(r ?? '[]')) ? JSON.parse(r!) : []; } catch { return []; }
+  try {
+    const raw = localStorage.getItem(LS_FAV);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as string[]) : [];
+  } catch { return []; }
 }
 function saveFavs(ids: string[]) { try { localStorage.setItem(LS_FAV, JSON.stringify(ids)); } catch { /* ignore */ } }
 
