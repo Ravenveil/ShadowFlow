@@ -11,7 +11,7 @@
  *   GET  /api/settings/byok/models  → ModelDef[]
  *   PUT  /api/settings/byok         → { provider, apiKey, model }
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useI18n } from '../../../common/i18n';
 import { Icon } from '../../../common/icons/iconRegistry';
 
@@ -251,101 +251,25 @@ async function saveAzureByok(apiKey: string, baseUrl: string, model: string): Pr
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
-// ---- BYOK Key Row -----------------------------------------------------------
+// ---- BYOK Provider definitions ----------------------------------------------
 
-function ByokKeyRow({
-  label,
-  placeholder,
-  maskedValue,
-  model: _model,
-  onSave,
-  onClear,
-}: {
-  label: string;
-  placeholder: string;
-  maskedValue: string | null | undefined;
-  model: string;
-  onSave: (key: string) => Promise<boolean>;
-  onClear?: () => void;
-}) {
-  const { language } = useI18n();
-  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
-  const [input, setInput] = useState('');
-  const [saveState, setSaveState] = useState<SaveState>('idle');
-  const inputRef = useRef<HTMLInputElement>(null);
+const BYOK_PROVIDERS = [
+  { id: 'anthropic', name: 'Anthropic',     placeholder: 'sk-ant-…',           baseUrl: 'https://api.anthropic.com' },
+  { id: 'openai',    name: 'OpenAI',        placeholder: 'sk-…',               baseUrl: 'https://api.openai.com/v1' },
+  { id: 'azure',     name: 'Azure OpenAI',  placeholder: 'Azure API key…',      baseUrl: '' },
+  { id: 'google',    name: 'Google Gemini', placeholder: 'AIza…',              baseUrl: 'https://generativelanguage.googleapis.com' },
+  { id: 'ollama',    name: 'Ollama',        placeholder: '无需 API Key',        baseUrl: 'http://localhost:11434' },
+] as const;
 
-  const inputCls =
-    'w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 text-[12px] text-sf-fg1 placeholder:text-sf-fg5 focus:border-sf-accent focus:outline-none transition-colors';
+type ProviderID = typeof BYOK_PROVIDERS[number]['id'];
 
-  async function handleSave() {
-    if (!input.trim()) return;
-    setSaveState('saving');
-    const ok = await onSave(input.trim());
-    if (ok) {
-      setInput('');
-      setSaveState('saved');
-      setTimeout(() => setSaveState('idle'), 3000);
-    } else {
-      setSaveState('error');
-      setTimeout(() => setSaveState('idle'), 3000);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
-        {label}
-      </label>
-
-      {/* Existing key indicator */}
-      {maskedValue && (
-        <div className="flex items-center gap-2 rounded-[7px] bg-sf-elev3 px-3 py-1.5">
-          <span className="font-mono text-[10px] text-sf-fg4">{T('当前 Key：', 'Current key:')}</span>
-          <span className="font-mono text-[10px] text-sf-fg2">{maskedValue}</span>
-          {onClear && (
-            <button
-              type="button"
-              onClick={onClear}
-              className="ml-auto rounded-[5px] border border-sf-border px-2 py-0.5 font-mono text-[9px] text-sf-fg4 hover:border-sf-reject hover:text-sf-reject transition-colors"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Input + Save row */}
-      <div className="flex gap-2">
-        <input
-          ref={inputRef}
-          type="password"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-          placeholder={placeholder}
-          className={inputCls}
-        />
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!input.trim() || saveState === 'saving'}
-          className="flex-shrink-0 rounded-[8px] bg-sf-accent px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40 hover:bg-sf-accent-dim transition-colors"
-        >
-          {saveState === 'saving' ? '…' : T('保存', 'Save')}
-        </button>
-      </div>
-
-      {saveState === 'saved' && (
-        <p className="font-mono text-[11px] text-sf-ok">{T('✓ 已保存', '✓ Saved')}</p>
-      )}
-      {saveState === 'error' && (
-        <p className="font-mono text-[11px] text-sf-reject">{T('✕ 保存失败，请重试', '✕ Save failed, please retry')}</p>
-      )}
-    </div>
-  );
+function maskKey(val: string | null | undefined): string | null {
+  if (!val) return null;
+  if (val.startsWith('*') || val.startsWith('•')) return val;
+  return `••••${val.slice(-4)}`;
 }
 
-// ---- BYOK Panel -------------------------------------------------------------
+// ---- BYOK Panel (tabbed) ----------------------------------------------------
 
 function ByokPanel() {
   const { language } = useI18n();
@@ -355,287 +279,264 @@ function ByokPanel() {
   const [selectedModel, setSelectedModel] = useState<string>(
     () => localStorage.getItem('sf.byokModel') ?? 'claude-sonnet-4-6'
   );
-
-  // Masked key helpers
-  function maskKey(val: string | null | undefined): string | null {
-    if (!val) return null;
-    // Server may already return a masked value like "****xxxx"
-    if (val.startsWith('*')) return val;
-    return `••••${val.slice(-4)}`;
-  }
+  const [activeProvider, setActiveProvider] = useState<ProviderID>('anthropic');
+  const [showKey, setShowKey] = useState(false);
+  const [keyInput, setKeyInput] = useState('');
+  const [baseUrlInput, setBaseUrlInput] = useState('');
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
 
   useEffect(() => {
-    // Load model list
     fetchByokModels().then(setModels);
-    // Load BYOK status (keys + model)
     fetchByok().then((s) => {
       if (!s) return;
       setByokStatus(s);
-      // Prefer server model, but don't override if user has a local preference
       if (s.model && !localStorage.getItem('sf.byokModel')) {
         setSelectedModel(s.model);
       }
     });
   }, []);
 
-  function handleModelChange(model: string) {
-    setSelectedModel(model);
-    localStorage.setItem('sf.byokModel', model);
-  }
+  const provider = BYOK_PROVIDERS.find(p => p.id === activeProvider)!;
 
-  async function handleSaveAnthropicKey(key: string): Promise<boolean> {
-    const ok = await saveByokKey('anthropic', key, selectedModel);
-    if (ok) {
-      setByokStatus((prev) => ({
-        keys: { ...(prev?.keys ?? {}), anthropic: `••••${key.slice(-4)}` },
-        model: selectedModel,
-      }));
-    }
-    return ok;
-  }
-
-  async function handleSaveOpenAIKey(key: string): Promise<boolean> {
-    const ok = await saveByokKey('openai', key, selectedModel);
-    if (ok) {
-      setByokStatus((prev) => ({
-        keys: { ...(prev?.keys ?? {}), openai: `••••${key.slice(-4)}` },
-        model: selectedModel,
-      }));
-    }
-    return ok;
-  }
-
-  async function handleSaveGoogleKey(key: string): Promise<boolean> {
-    const ok = await saveByokKey('google', key, selectedModel);
-    if (ok) {
-      setByokStatus((prev) => ({
-        keys: { ...(prev?.keys ?? {}), google: `••••${key.slice(-4)}` },
-        model: selectedModel,
-      }));
-    }
-    return ok;
-  }
-
-  async function handleSaveDeepSeekKey(key: string): Promise<boolean> {
-    const ok = await saveByokKey('deepseek', key, selectedModel);
-    if (ok) {
-      setByokStatus((prev) => ({
-        keys: { ...(prev?.keys ?? {}), deepseek: `••••${key.slice(-4)}` },
-        model: selectedModel,
-      }));
-    }
-    return ok;
-  }
-
-  const [azureKeyInput, setAzureKeyInput] = useState('');
-  const [azureBaseUrl, setAzureBaseUrl] = useState(byokStatus?.baseUrls?.azure ?? '');
-  const [azureSaveState, setAzureSaveState] = useState<SaveState>('idle');
-
+  // Reset key input + baseUrl when switching provider tabs
   useEffect(() => {
-    if (byokStatus?.baseUrls?.azure) setAzureBaseUrl(byokStatus.baseUrls.azure);
-  }, [byokStatus]);
-
-  async function handleSaveAzureKey() {
-    if (!azureKeyInput.trim()) return;
-    setAzureSaveState('saving');
-    const ok = await saveAzureByok(azureKeyInput.trim(), azureBaseUrl.trim(), selectedModel);
-    if (ok) {
-      setAzureKeyInput('');
-      setAzureSaveState('saved');
-      setTimeout(() => setAzureSaveState('idle'), 3000);
+    setKeyInput('');
+    setShowKey(false);
+    setSaveState('idle');
+    setTestState('idle');
+    if (activeProvider === 'azure') {
+      setBaseUrlInput(byokStatus?.baseUrls?.azure ?? '');
     } else {
-      setAzureSaveState('error');
-      setTimeout(() => setAzureSaveState('idle'), 3000);
+      setBaseUrlInput(provider.baseUrl);
+    }
+  }, [activeProvider]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep Azure base URL in sync when byokStatus loads
+  useEffect(() => {
+    if (activeProvider === 'azure' && byokStatus?.baseUrls?.azure) {
+      setBaseUrlInput(byokStatus.baseUrls.azure);
+    }
+  }, [byokStatus, activeProvider]);
+
+  async function handleSave() {
+    if (activeProvider !== 'ollama' && !keyInput.trim()) return;
+    setSaveState('saving');
+    let ok = false;
+    if (activeProvider === 'azure') {
+      ok = await saveAzureByok(keyInput.trim(), baseUrlInput.trim(), selectedModel);
+    } else if (activeProvider === 'ollama') {
+      // Ollama: just save empty key with base URL
+      ok = await saveAzureByok('', baseUrlInput.trim(), selectedModel);
+    } else {
+      ok = await saveByokKey(activeProvider, keyInput.trim(), selectedModel);
+    }
+    if (ok) {
+      const maskedNew = keyInput ? `••••${keyInput.slice(-4)}` : null;
+      setKeyInput('');
+      setSaveState('saved');
+      setByokStatus(prev => ({
+        keys: { ...(prev?.keys ?? {}), [activeProvider]: maskedNew },
+        model: selectedModel,
+        baseUrls: activeProvider === 'azure' || activeProvider === 'ollama'
+          ? { ...(prev?.baseUrls ?? {}), [activeProvider]: baseUrlInput.trim() }
+          : prev?.baseUrls,
+      }));
+      setTimeout(() => setSaveState('idle'), 3000);
+    } else {
+      setSaveState('error');
+      setTimeout(() => setSaveState('idle'), 3000);
     }
   }
 
-  async function handleClearAzureKey() {
-    await saveByokKey('azure', '', selectedModel);
-    setByokStatus((prev) => ({
-      keys: { ...(prev?.keys ?? {}), azure: null },
-      baseUrls: { ...(prev?.baseUrls ?? {}), azure: null },
-      model: selectedModel,
-    }));
-    setAzureBaseUrl('');
+  async function handleTest() {
+    setTestState('testing');
+    try {
+      const res = await fetch(`${API_BASE}/api/settings/byok/models`, { signal: AbortSignal.timeout(5000) });
+      setTestState(res.ok ? 'ok' : 'fail');
+    } catch {
+      setTestState('fail');
+    }
+    setTimeout(() => setTestState('idle'), 3000);
   }
 
-  async function handleClearAnthropicKey() {
-    await saveByokKey('anthropic', '', selectedModel);
-    setByokStatus((prev) => ({
-      keys: { ...(prev?.keys ?? {}), anthropic: null },
-      model: selectedModel,
-    }));
-  }
+  // Filtered models for active provider tab
+  const filteredModels = models.filter(m => {
+    if (activeProvider === 'anthropic') return m.provider === 'anthropic';
+    if (activeProvider === 'openai' || activeProvider === 'azure') return m.provider === 'openai';
+    if (activeProvider === 'google') return m.provider === 'google';
+    return true; // ollama: show all
+  });
+  // Fall back to all models if none match
+  const modelOptions = filteredModels.length > 0 ? filteredModels : models;
 
-  async function handleClearOpenAIKey() {
-    await saveByokKey('openai', '', selectedModel);
-    setByokStatus((prev) => ({
-      keys: { ...(prev?.keys ?? {}), openai: null },
-      model: selectedModel,
-    }));
-  }
-
-  async function handleClearGoogleKey() {
-    await saveByokKey('google', '', selectedModel);
-    setByokStatus((prev) => ({
-      keys: { ...(prev?.keys ?? {}), google: null },
-      model: selectedModel,
-    }));
-  }
-
-  async function handleClearDeepSeekKey() {
-    await saveByokKey('deepseek', '', selectedModel);
-    setByokStatus((prev) => ({
-      keys: { ...(prev?.keys ?? {}), deepseek: null },
-      model: selectedModel,
-    }));
-  }
-
-  // Group models by provider for the <select>
-  const providerOrder = ['anthropic', 'openai', 'google', 'deepseek', 'azure'];
-  const grouped: Record<string, ModelDef[]> = {};
-  for (const m of models) {
-    (grouped[m.provider] ??= []).push(m);
-  }
-  for (const p of Object.keys(grouped)) {
-    if (!providerOrder.includes(p)) providerOrder.push(p);
-  }
-
-  const providerLabel: Record<string, string> = {
-    anthropic: 'Anthropic',
-    openai: 'OpenAI',
-    google: 'Google',
-    deepseek: 'DeepSeek',
-    azure: 'Azure OpenAI',
-  };
+  const currentMaskedKey = maskKey(byokStatus?.keys?.[activeProvider as keyof ByokStatus['keys']]);
 
   return (
     <div className="rounded-[10px] border border-sf-border bg-sf-elev2 p-4 flex flex-col gap-4">
       {/* Header */}
-      <div>
-        <p className="text-[12px] font-semibold text-sf-fg2">{T('直接调用模型 API', 'Call model APIs directly')}</p>
-        <p className="mt-0.5 text-[11px] text-sf-fg4">
-          {T(
-            '无需本机 CLI，直接使用 API Key 调用 Claude / OpenAI 等模型。',
-            'No local CLI required — call Claude / OpenAI and other models directly with an API key.',
-          )}
-        </p>
+      <p className="text-[12px] font-semibold text-sf-fg2">{T('直接调用模型 API', 'Call model APIs directly')}</p>
+
+      {/* Provider tabs */}
+      <div className="flex gap-1 flex-wrap">
+        {BYOK_PROVIDERS.map(p => {
+          const hasKey = Boolean(byokStatus?.keys?.[p.id as keyof ByokStatus['keys']]);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setActiveProvider(p.id)}
+              className={[
+                'px-3 py-1.5 rounded-[7px] text-[11px] font-semibold transition-colors flex items-center gap-1',
+                activeProvider === p.id
+                  ? 'bg-sf-accent text-white'
+                  : 'bg-sf-elev3 text-sf-fg4 hover:text-sf-fg2',
+              ].join(' ')}
+            >
+              {p.name}
+              {hasKey && (
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-sf-ok" />
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Anthropic Key */}
-      <ByokKeyRow
-        label="Anthropic API Key"
-        placeholder="sk-ant-…"
-        maskedValue={maskKey(byokStatus?.keys?.anthropic)}
-        model={selectedModel}
-        onSave={handleSaveAnthropicKey}
-        onClear={byokStatus?.keys?.anthropic ? handleClearAnthropicKey : undefined}
-      />
-
-      {/* OpenAI Key */}
-      <ByokKeyRow
-        label="OpenAI API Key"
-        placeholder="sk-…"
-        maskedValue={maskKey(byokStatus?.keys?.openai)}
-        model={selectedModel}
-        onSave={handleSaveOpenAIKey}
-        onClear={byokStatus?.keys?.openai ? handleClearOpenAIKey : undefined}
-      />
-
-      {/* Google Key */}
-      <ByokKeyRow
-        label="GOOGLE API KEY"
-        placeholder="AIza…"
-        maskedValue={maskKey(byokStatus?.keys?.google)}
-        model={selectedModel}
-        onSave={handleSaveGoogleKey}
-        onClear={byokStatus?.keys?.google ? handleClearGoogleKey : undefined}
-      />
-
-      {/* DeepSeek Key */}
-      <ByokKeyRow
-        label="DEEPSEEK API KEY"
-        placeholder="sk-…"
-        maskedValue={maskKey(byokStatus?.keys?.deepseek)}
-        model={selectedModel}
-        onSave={handleSaveDeepSeekKey}
-        onClear={byokStatus?.keys?.deepseek ? handleClearDeepSeekKey : undefined}
-      />
-
-      {/* Azure section */}
-      <div className="flex flex-col gap-2 rounded-[10px] border border-sf-border bg-sf-elev2 p-3">
-        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
-          Azure OpenAI
-        </p>
-        {/* Masked current key */}
-        {byokStatus?.keys?.azure && (
+      {/* Provider form */}
+      <div className="flex flex-col gap-3">
+        {/* Current key indicator */}
+        {currentMaskedKey && (
           <div className="flex items-center gap-2 rounded-[7px] bg-sf-elev3 px-3 py-1.5">
-            <span className="font-mono text-[10px] text-sf-fg4">{T('Key：', 'Key:')}</span>
-            <span className="font-mono text-[10px] text-sf-fg2">{maskKey(byokStatus.keys.azure)}</span>
-            <button type="button" onClick={handleClearAzureKey}
-              className="ml-auto rounded-[5px] border border-sf-border px-2 py-0.5 font-mono text-[9px] text-sf-fg4 hover:border-sf-reject hover:text-sf-reject transition-colors">
-              {T('清除', 'Clear')}
-            </button>
+            <span className="font-mono text-[10px] text-sf-fg4">{T('当前 Key：', 'Current key:')}</span>
+            <span className="font-mono text-[10px] text-sf-fg2">{currentMaskedKey}</span>
           </div>
         )}
-        {/* Endpoint URL */}
-        <input
-          type="text"
-          value={azureBaseUrl}
-          onChange={(e) => setAzureBaseUrl(e.target.value)}
-          placeholder="https://my-resource.openai.azure.com/"
-          className="w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 text-[12px] text-sf-fg1 placeholder:text-sf-fg5 focus:border-sf-accent focus:outline-none transition-colors"
-        />
-        {/* API Key + Save */}
-        <div className="flex gap-2">
-          <input
-            type="password"
-            value={azureKeyInput}
-            onChange={(e) => setAzureKeyInput(e.target.value)}
-            placeholder={T('Azure API 密钥', 'Azure API key')}
-            className="w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 text-[12px] text-sf-fg1 placeholder:text-sf-fg5 focus:border-sf-accent focus:outline-none transition-colors"
-          />
-          <button type="button" onClick={handleSaveAzureKey}
-            disabled={!azureKeyInput.trim() || azureSaveState === 'saving'}
-            className="flex-shrink-0 rounded-[8px] bg-sf-accent px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40 hover:bg-sf-accent-dim transition-colors">
-            {azureSaveState === 'saving' ? '…' : T('保存', 'Save')}
-          </button>
+
+        {/* API Key input */}
+        <div className="flex flex-col gap-1.5">
+          <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
+            API Key
+            {activeProvider === 'ollama' && (
+              <span className="ml-1 normal-case font-normal text-sf-fg5">
+                {T('（本地服务无需填写）', '(not required for local service)')}
+              </span>
+            )}
+          </label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={keyInput}
+                onChange={e => setKeyInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSave()}
+                placeholder={activeProvider === 'ollama' ? T('无需 API Key', 'No API key needed') : provider.placeholder}
+                disabled={activeProvider === 'ollama'}
+                className="w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 pr-9 text-[12px] text-sf-fg1 placeholder:text-sf-fg5 focus:border-sf-accent focus:outline-none transition-colors disabled:opacity-40"
+              />
+              {activeProvider !== 'ollama' && (
+                <button
+                  type="button"
+                  onClick={() => setShowKey(v => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sf-fg5 hover:text-sf-fg2 transition-colors"
+                >
+                  {showKey ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  )}
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={
+                (activeProvider !== 'ollama' && !keyInput.trim()) ||
+                saveState === 'saving'
+              }
+              className="flex-shrink-0 rounded-[8px] bg-sf-accent px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40 hover:bg-sf-accent-dim transition-colors"
+            >
+              {saveState === 'saving' ? '…' : T('保存', 'Save')}
+            </button>
+          </div>
+          {saveState === 'saved' && (
+            <p className="font-mono text-[11px] text-sf-ok">✓ {T('已保存', 'Saved')}</p>
+          )}
+          {saveState === 'error' && (
+            <p className="font-mono text-[11px] text-sf-reject">✕ {T('保存失败', 'Save failed')}</p>
+          )}
         </div>
-        {azureSaveState === 'saved' && <p className="font-mono text-[11px] text-sf-ok">{T('✓ 已保存', '✓ Saved')}</p>}
-        {azureSaveState === 'error' && <p className="font-mono text-[11px] text-sf-reject">{T('✕ 失败', '✕ Failed')}</p>}
-      </div>
 
-      {/* Model selector */}
-      <div className="flex flex-col gap-1.5">
-        <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
-          {T('当前模型', 'Current model')}
-        </label>
-        <select
-          value={selectedModel}
-          onChange={(e) => handleModelChange(e.target.value)}
-          className="w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 text-[12px] text-sf-fg1 focus:border-sf-accent focus:outline-none transition-colors"
-        >
-          {providerOrder
-            .filter((p) => grouped[p]?.length)
-            .map((provider) => (
-              <optgroup key={provider} label={providerLabel[provider] ?? provider}>
-                {grouped[provider].map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-        </select>
-      </div>
-
-      {/* Footer hint */}
-      <p className="font-mono text-[9px] text-sf-fg6">
-        {T(
-          '在 Connectors 配置 Composio 以访问 250+ 工具',
-          'Configure Composio in Connectors to access 250+ tools',
+        {/* Base URL — always visible for Ollama & Azure, hidden for others */}
+        {(activeProvider === 'ollama' || activeProvider === 'azure') && (
+          <div className="flex flex-col gap-1.5">
+            <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
+              Base URL
+            </label>
+            <input
+              type="text"
+              value={baseUrlInput}
+              onChange={e => setBaseUrlInput(e.target.value)}
+              placeholder={provider.baseUrl || 'https://…'}
+              className="w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 text-[12px] font-mono text-sf-fg1 placeholder:text-sf-fg5 focus:border-sf-accent focus:outline-none transition-colors"
+            />
+            <p className="font-mono text-[9px] text-sf-fg6">
+              {activeProvider === 'ollama'
+                ? T('默认 http://localhost:11434', 'Default: http://localhost:11434')
+                : T('Azure 资源端点，如 https://your-resource.openai.azure.com/', 'Azure resource endpoint')}
+            </p>
+          </div>
         )}
-      </p>
+
+        {/* Model selector */}
+        <div className="flex flex-col gap-1.5">
+          <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
+            {T('聊天模型', 'Chat model')}
+          </label>
+          <select
+            value={selectedModel}
+            onChange={e => {
+              setSelectedModel(e.target.value);
+              localStorage.setItem('sf.byokModel', e.target.value);
+            }}
+            className="w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 text-[12px] text-sf-fg1 focus:border-sf-accent focus:outline-none transition-colors"
+          >
+            {modelOptions.map(m => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Test button */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleTest}
+            disabled={testState === 'testing'}
+            className="flex items-center gap-1.5 rounded-[7px] border border-sf-border px-3 py-1.5 text-[11px] font-semibold text-sf-fg3 hover:border-sf-fg4 hover:text-sf-fg1 disabled:opacity-40 transition-colors"
+          >
+            {testState === 'testing' && (
+              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+            )}
+            {T('测试连接', 'Test connection')}
+          </button>
+          {testState === 'ok' && (
+            <span className="font-mono text-[11px] text-sf-ok">✓ {T('连接正常', 'Connected')}</span>
+          )}
+          {testState === 'fail' && (
+            <span className="font-mono text-[11px] text-sf-reject">✕ {T('连接失败', 'Connection failed')}</span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
