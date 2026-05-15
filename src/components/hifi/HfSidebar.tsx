@@ -19,6 +19,7 @@ import { HfDot } from './HfAtoms';
 import { useI18n } from '../../common/i18n';
 import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
 import { useAuth } from '../../core/auth/AuthContext';
+import { WalletLoginModal } from './WalletLoginModal';
 
 export type HfSidebarActive =
   | 'start'
@@ -87,11 +88,12 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
   const { t } = useI18n();
   const NAV_ITEMS = useMemo(() => buildNavItems(t), [t]);
   const [collapsed, setCollapsed] = useState(false);
-  const { user } = useAuth();
+  const [loginOpen, setLoginOpen] = useState(false);
+  const { user, status } = useAuth();
 
   const displayName = user?.display_name
     || (user?.auth_type === 'guest' ? 'Guest' : null)
-    || (user?.address ? `${user.address.slice(0, 6)}…${user.address.slice(-4)}` : '—');
+    || (user?.address ? `${user.address.slice(0, 6)}…${user.address.slice(-4)}` : '');
   const avatarLetter = user?.display_name?.[0]?.toUpperCase()
     || (user?.auth_type === 'guest' ? 'G' : user?.address?.[2]?.toUpperCase() ?? '?');
   const subtitle = user?.auth_type === 'guest'
@@ -103,6 +105,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
   const W = collapsed ? 56 : 220;
 
   return (
+    <>
     <aside
       style={{
         width: W,
@@ -375,80 +378,90 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
           </Link>
         )}
 
-        {/* User card */}
-        {collapsed ? (
-          <div
-            title={`${displayName} · ${subtitle}`}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '8px 0',
-              cursor: 'pointer',
-              position: 'relative',
-            }}
-          >
+        {/* User card — 2 states: unauthenticated / authenticated */}
+        {status !== 'authenticated' ? (
+          /* ── 未登录 ── */
+          collapsed ? (
             <div
+              title="Sign In"
+              onClick={() => setLoginOpen(true)}
               style={{
-                width: 26,
-                height: 26,
-                borderRadius: '50%',
-                background: 'var(--t-ok)',
-                color: 'var(--t-bg)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 800,
-                fontSize: 10,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '8px 0', cursor: 'pointer',
               }}
             >
-              {avatarLetter}
+              <div style={{
+                width: 26, height: 26, borderRadius: '50%',
+                border: '1.5px dashed var(--t-border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, color: 'var(--t-fg-3)',
+              }}>?</div>
             </div>
-            <span style={{ position: 'absolute', bottom: 8, right: 6 }}>
-              <HfDot color="var(--t-ok)" pulse />
-            </span>
-          </div>
+          ) : (
+            <button
+              onClick={() => setLoginOpen(true)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: 6, width: '100%', padding: '8px 10px', marginTop: 6,
+                background: 'transparent',
+                border: '1px dashed var(--t-border)',
+                borderRadius: 8, cursor: 'pointer',
+                fontSize: 12, color: 'var(--t-fg-3)',
+              }}
+            >
+              Sign In
+            </button>
+          )
         ) : (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '8px 10px',
-              marginTop: 6,
+          /* ── 已登录 ── */
+          collapsed ? (
+            <div
+              title={`${displayName} · ${subtitle}`}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '8px 0', cursor: 'pointer', position: 'relative',
+              }}
+            >
+              <div style={{
+                width: 26, height: 26, borderRadius: '50%',
+                background: 'var(--t-ok)', color: 'var(--t-bg)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 800, fontSize: 10,
+              }}>
+                {avatarLetter}
+              </div>
+              <span style={{ position: 'absolute', bottom: 8, right: 6 }}>
+                <HfDot color="var(--t-ok)" pulse />
+              </span>
+            </div>
+          ) : (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 10px', marginTop: 6,
               background: 'var(--t-panel-2)',
               border: '1px solid var(--t-border)',
-              borderRadius: 8,
-              cursor: 'pointer',
-            }}
-          >
-            <div
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: '50%',
-                background: 'var(--t-ok)',
-                color: 'var(--t-bg)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 800,
-                fontSize: 10,
-                flexShrink: 0,
-              }}
-            >
-              {avatarLetter}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 600 }}>{displayName}</div>
-              <div className="hf-meta" style={{ fontSize: 9 }}>
-                {subtitle}
+              borderRadius: 8, cursor: 'pointer',
+            }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: '50%',
+                background: 'var(--t-ok)', color: 'var(--t-bg)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 800, fontSize: 10, flexShrink: 0,
+              }}>
+                {avatarLetter}
               </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 600 }}>{displayName}</div>
+                <div className="hf-meta" style={{ fontSize: 9 }}>{subtitle}</div>
+              </div>
+              <HfDot color="var(--t-ok)" pulse />
             </div>
-            <HfDot color="var(--t-ok)" pulse />
-          </div>
+          )
         )}
       </div>
     </aside>
+
+    <WalletLoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+  </>
   );
 }
