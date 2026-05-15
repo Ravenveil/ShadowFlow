@@ -13,12 +13,13 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { openQuickSwitcher } from './QuickSwitcher';
-import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search, PanelLeftClose, PanelLeftOpen, Sparkles, Folder } from 'lucide-react';
+import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search, PanelLeftClose, PanelLeftOpen, Folder } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { HfDot } from './HfAtoms';
 import { useI18n } from '../../common/i18n';
 import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
 import { useAuth } from '../../core/auth/AuthContext';
+import type { UserProfile, AuthStatus } from '../../core/auth/AuthContext';
 import { WalletLoginModal } from './WalletLoginModal';
 
 export type HfSidebarActive =
@@ -27,7 +28,6 @@ export type HfSidebarActive =
   | 'teams'
   | 'agents'
   | 'templates'
-  | 'skill-studio'
   | 'projects'
   | 'settings';
 
@@ -46,11 +46,8 @@ const buildNavItems = (t: (key: string) => string): NavItem[] => [
   { k: 'teams',     Icon: Users,          label: t('shell.navTeams'),     hint: '⌘3', to: '/teams' },
   { k: 'agents',    Icon: Bot,            label: t('shell.navAgents'),    hint: '⌘4', to: '/agents' },
   { k: 'templates', Icon: LayoutTemplate, label: t('shell.navTemplates'), hint: '⌘5', to: '/templates' },
-  // Story 15.28 — Skill Studio top-level entry. Falls under main nav so users
-  // can reach `/run-session` from any logged-in screen.
-  { k: 'skill-studio', Icon: Sparkles,    label: t('skillStudio.entry.navLabel'), hint: '⌘6', to: '/run-session' },
   // Story 15.24 — Projects nav entry (Project + Conversation history page).
-  { k: 'projects',     Icon: Folder,      label: t('projects.navLabel'),         hint: '⌘7', to: '/projects' },
+  { k: 'projects',     Icon: Folder,      label: t('projects.navLabel'),         hint: '⌘6', to: '/projects' },
 ];
 
 interface HfSidebarProps {
@@ -84,28 +81,80 @@ const activeBar: CSSProperties = {
   borderRadius: 2,
 };
 
+// ── UserCard — live auth state ────────────────────────────────────────────────
+
+function avatarGlyph(user: UserProfile | null): string {
+  if (!user) return '?';
+  if (user.display_name) return user.display_name.charAt(0).toUpperCase();
+  if (user.type === 'guest') return 'G';
+  return user.address.slice(2, 4).toUpperCase();
+}
+
+function shortAddress(address: string): string {
+  if (address.startsWith('guest_')) return '访客模式';
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+interface UserCardProps {
+  user: UserProfile | null;
+  status: AuthStatus;
+  collapsed: boolean;
+  onOpen: () => void;
+}
+
+function UserCard({ user, status, collapsed, onOpen }: UserCardProps) {
+  const isLoading = status === 'loading';
+  const glyph = avatarGlyph(user);
+  const avatarBg = user?.type === 'wallet' ? 'var(--t-accent)' : 'var(--t-fg-4)';
+  const name = user?.display_name ?? (user?.type === 'guest' ? '访客' : (user ? shortAddress(user.address) : '未登录'));
+  const sub = user ? shortAddress(user.address) : '点击登录';
+
+  if (collapsed) {
+    return (
+      <div
+        title={user ? `${name} · ${sub}` : '点击登录'}
+        onClick={onOpen}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 0', cursor: 'pointer', position: 'relative' }}
+      >
+        <div style={{ width: 26, height: 26, borderRadius: '50%', background: avatarBg, color: 'var(--t-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 10, opacity: isLoading ? 0.5 : 1 }}>
+          {isLoading ? '…' : glyph}
+        </div>
+        {user && (
+          <span style={{ position: 'absolute', bottom: 8, right: 6 }}>
+            <HfDot color={user.type === 'wallet' ? 'var(--t-ok)' : 'var(--t-fg-4)'} pulse={user.type === 'wallet'} />
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={onOpen}
+      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', marginTop: 6, background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 8, cursor: 'pointer' }}
+    >
+      <div style={{ width: 24, height: 24, borderRadius: '50%', background: avatarBg, color: 'var(--t-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 10, flexShrink: 0, opacity: isLoading ? 0.5 : 1 }}>
+        {isLoading ? '…' : glyph}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isLoading ? '加载中…' : name}</div>
+        <div className="hf-meta" style={{ fontSize: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isLoading ? '' : sub}</div>
+      </div>
+      {user && <HfDot color={user.type === 'wallet' ? 'var(--t-ok)' : 'var(--t-fg-4)'} pulse={user.type === 'wallet'} />}
+    </div>
+  );
+}
+
 export function HfSidebar({ active = 'start' }: HfSidebarProps) {
   const { t } = useI18n();
   const NAV_ITEMS = useMemo(() => buildNavItems(t), [t]);
   const [collapsed, setCollapsed] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
   const { user, status } = useAuth();
-
-  const displayName = user?.display_name
-    || (user?.auth_type === 'guest' ? 'Guest' : null)
-    || (user?.address ? `${user.address.slice(0, 6)}…${user.address.slice(-4)}` : '');
-  const avatarLetter = user?.display_name?.[0]?.toUpperCase()
-    || (user?.auth_type === 'guest' ? 'G' : user?.address?.[2]?.toUpperCase() ?? '?');
-  const subtitle = user?.auth_type === 'guest'
-    ? 'Guest session'
-    : user?.address
-      ? `${user.address.slice(0, 6)}…${user.address.slice(-4)}`
-      : '';
 
   const W = collapsed ? 56 : 220;
 
   return (
-    <>
     <aside
       style={{
         width: W,
@@ -378,90 +427,15 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
           </Link>
         )}
 
-        {/* User card — 2 states: unauthenticated / authenticated */}
-        {status !== 'authenticated' ? (
-          /* ── 未登录 ── */
-          collapsed ? (
-            <div
-              title="Sign In"
-              onClick={() => setLoginOpen(true)}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: '8px 0', cursor: 'pointer',
-              }}
-            >
-              <div style={{
-                width: 26, height: 26, borderRadius: '50%',
-                border: '1.5px dashed var(--t-border)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, color: 'var(--t-fg-3)',
-              }}>?</div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setLoginOpen(true)}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                gap: 6, width: '100%', padding: '8px 10px', marginTop: 6,
-                background: 'transparent',
-                border: '1px dashed var(--t-border)',
-                borderRadius: 8, cursor: 'pointer',
-                fontSize: 12, color: 'var(--t-fg-3)',
-              }}
-            >
-              Sign In
-            </button>
-          )
-        ) : (
-          /* ── 已登录 ── */
-          collapsed ? (
-            <div
-              title={`${displayName} · ${subtitle}`}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: '8px 0', cursor: 'pointer', position: 'relative',
-              }}
-            >
-              <div style={{
-                width: 26, height: 26, borderRadius: '50%',
-                background: 'var(--t-ok)', color: 'var(--t-bg)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 800, fontSize: 10,
-              }}>
-                {avatarLetter}
-              </div>
-              <span style={{ position: 'absolute', bottom: 8, right: 6 }}>
-                <HfDot color="var(--t-ok)" pulse />
-              </span>
-            </div>
-          ) : (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '8px 10px', marginTop: 6,
-              background: 'var(--t-panel-2)',
-              border: '1px solid var(--t-border)',
-              borderRadius: 8, cursor: 'pointer',
-            }}>
-              <div style={{
-                width: 24, height: 24, borderRadius: '50%',
-                background: 'var(--t-ok)', color: 'var(--t-bg)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 800, fontSize: 10, flexShrink: 0,
-              }}>
-                {avatarLetter}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 600 }}>{displayName}</div>
-                <div className="hf-meta" style={{ fontSize: 9 }}>{subtitle}</div>
-              </div>
-              <HfDot color="var(--t-ok)" pulse />
-            </div>
-          )
-        )}
+        {/* User card */}
+        <UserCard
+          user={user}
+          status={status}
+          collapsed={collapsed}
+          onOpen={() => setShowLogin(true)}
+        />
+        {showLogin && <WalletLoginModal onClose={() => setShowLogin(false)} />}
       </div>
     </aside>
-
-    <WalletLoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
-  </>
   );
 }

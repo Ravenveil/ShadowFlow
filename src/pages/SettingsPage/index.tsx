@@ -34,6 +34,7 @@
  *   HfTopBar (50px crumbs)  +  240px settings nav  +  scrollable right pane.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Construction } from 'lucide-react';
 import { useI18n } from '../../common/i18n';
 import { ToolProvidersTab } from './ToolProvidersTab';
 import { AgentBackendSection } from '../../core/components/settings/AgentBackendSection';
@@ -53,6 +54,7 @@ import { ApiKeySettings } from '../../components/ApiKeySettings';
 import { GenerationSettings } from '../../components/GenerationSettings';
 import { CliDetectPanel } from '../../components/CliDetectPanel';
 import { AcpAgentsPanel } from '../../components/AcpAgentsPanel';
+import { MemorySection } from '../../core/components/settings/MemorySection';
 
 // ---------------------------------------------------------------------------
 // Section ids — 12 existing + 4 placeholders + 1 wallet (= 17)
@@ -68,10 +70,8 @@ type SectionId =
   | 'shortcuts'    // placeholder
   | 'language'
   // 集成
-  | 'skill-studio-key'         // Story 15.7 — Anthropic BYOK for Skill Studio runtime
-  | 'skill-studio-generation'  // Story 15.9 — model / max_tokens / temperature / defaults
-  | 'skill-studio-clis'        // Story 15.19 v2 — local AI CLIs auto-discovery
-  | 'skill-studio-acp'         // Story 15.23 — ACP/MCP remote agent discovery
+  | 'skill-studio-generation'  // 生成参数 — model / max_tokens / temperature / defaults
+  | 'skill-studio-acp'         // 远端 Agent — ACP/MCP remote agent discovery
   | 'agent-backend'
   | 'tool-providers'
   | 'connectors'
@@ -79,6 +79,8 @@ type SectionId =
   // 0G
   | 'wallet'       // backed by /api/wallet/*
   | 'onchain'      // placeholder
+  // 记忆
+  | 'memory-river'
   // 数据
   | 'notifications'
   | 'advanced'
@@ -118,11 +120,9 @@ const STATIC_NAV_GROUPS: NavGroup[] = [
   {
     group: 'Integrations',
     items: [
-      { id: 'skill-studio-key',        label: 'Skill Studio · API Key' },
-      { id: 'skill-studio-generation', label: 'Skill Studio · Generation' },
-      { id: 'skill-studio-clis',       label: 'Skill Studio · Local CLIs' },
-      { id: 'skill-studio-acp',        label: 'Skill Studio · Remote Agents (ACP/MCP)' },
       { id: 'agent-backend',           label: 'Models & Providers' },
+      { id: 'skill-studio-generation', label: 'Generation Settings' },
+      { id: 'skill-studio-acp',        label: 'Remote Agents (ACP/MCP)' },
       { id: 'tool-providers',          label: 'Tool Providers' },
       { id: 'connectors',              label: 'Connectors' },
       { id: 'mcp-integrations',        label: 'MCP Integrations' },
@@ -133,6 +133,12 @@ const STATIC_NAV_GROUPS: NavGroup[] = [
     items: [
       { id: 'wallet',  label: 'Wallet' },
       { id: 'onchain', label: 'On-chain', comingSoon: true },
+    ],
+  },
+  {
+    group: 'Memory',
+    items: [
+      { id: 'memory-river', label: 'River Memory' },
     ],
   },
   {
@@ -171,15 +177,9 @@ function buildNavGroups(t: (key: string) => string): NavGroup[] {
     {
       group: t('settings.groupIntegrations'),
       items: [
-        // Story 15.7 — i18n key not added (intentional: hardcoded label keeps blast radius minimal).
-        { id: 'skill-studio-key',        label: 'Skill Studio · API Key' },
-        // Story 15.9 — generation overrides; label hardcoded to mirror 15.7's pattern.
-        { id: 'skill-studio-generation', label: 'Skill Studio · Generation' },
-        // Story 15.19 v2 — local AI CLIs auto-discovery; hardcoded label.
-        { id: 'skill-studio-clis',       label: 'Skill Studio · Local CLIs' },
-        // Story 15.23 — ACP / MCP remote agents; hardcoded label.
-        { id: 'skill-studio-acp',        label: 'Skill Studio · Remote Agents (ACP/MCP)' },
         { id: 'agent-backend',           label: t('settings.navModels') },
+        { id: 'skill-studio-generation', label: t('settings.navGeneration') },
+        { id: 'skill-studio-acp',        label: t('settings.navRemoteAgents') },
         { id: 'tool-providers',          label: t('settings.navToolProviders') },
         { id: 'connectors',              label: t('settings.navConnectors') },
         { id: 'mcp-integrations',        label: t('settings.navMcp') },
@@ -190,6 +190,12 @@ function buildNavGroups(t: (key: string) => string): NavGroup[] {
       items: [
         { id: 'wallet',  label: t('settings.navWallet') },
         { id: 'onchain', label: t('settings.navOnchain'), comingSoon: true },
+      ],
+    },
+    {
+      group: t('settings.groupMemory'),
+      items: [
+        { id: 'memory-river', label: t('settings.navRiverMemory') },
       ],
     },
     {
@@ -253,7 +259,7 @@ function ComingSoonSection({ label }: { label: string }) {
           gap: 8,
         }}
       >
-        <div style={{ fontSize: 32 }}>🚧</div>
+        <Construction size={32} strokeWidth={1.25} color="var(--t-fg-4)" />
         <HfPill>● coming soon</HfPill>
       </div>
     </div>
@@ -475,22 +481,15 @@ export default function SettingsPage() {
           {activeSection === 'language'   && <LegacySectionWrap><LanguageSection /></LegacySectionWrap>}
 
           {/* 集成 */}
-          {activeSection === 'skill-studio-key' && (
+          {activeSection === 'agent-backend' && (
             <LegacySectionWrap>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <AgentBackendSection />
+              <div style={{ borderTop: '1px solid var(--t-border)', marginTop: 32, paddingTop: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
                   <div className="hf-label" style={{ color: 'var(--t-accent)' }}>
                     {t('skillStudio.byok.sectionEyebrow')}
                   </div>
-                  <div
-                    style={{
-                      fontSize: 24,
-                      fontWeight: 800,
-                      marginTop: 4,
-                      letterSpacing: '-.02em',
-                      color: 'var(--t-fg)',
-                    }}
-                  >
+                  <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, letterSpacing: '-.02em', color: 'var(--t-fg)' }}>
                     {t('skillStudio.byok.sectionTitle')}
                   </div>
                   <p style={{ fontSize: 13, color: 'var(--t-fg-3)', marginTop: 6 }}>
@@ -499,6 +498,9 @@ export default function SettingsPage() {
                 </div>
                 <ApiKeySettings />
               </div>
+              <div style={{ borderTop: '1px solid var(--t-border)', marginTop: 32, paddingTop: 24 }}>
+                <CliDetectPanel />
+              </div>
             </LegacySectionWrap>
           )}
           {activeSection === 'skill-studio-generation' && (
@@ -506,17 +508,11 @@ export default function SettingsPage() {
               <GenerationSettings />
             </LegacySectionWrap>
           )}
-          {activeSection === 'skill-studio-clis' && (
-            <LegacySectionWrap>
-              <CliDetectPanel />
-            </LegacySectionWrap>
-          )}
           {activeSection === 'skill-studio-acp' && (
             <LegacySectionWrap>
               <AcpAgentsPanel />
             </LegacySectionWrap>
           )}
-          {activeSection === 'agent-backend'     && <LegacySectionWrap><AgentBackendSection /></LegacySectionWrap>}
           {activeSection === 'tool-providers'    && <LegacySectionWrap><ToolProvidersTab /></LegacySectionWrap>}
           {activeSection === 'connectors'        && <LegacySectionWrap><ConnectorsSection /></LegacySectionWrap>}
           {activeSection === 'mcp-integrations'  && <LegacySectionWrap><McpIntegrationsSection /></LegacySectionWrap>}
@@ -524,6 +520,9 @@ export default function SettingsPage() {
           {/* 0G */}
           {activeSection === 'wallet'  && <WalletSection />}
           {activeSection === 'onchain' && <ComingSoonSection label={SECTION_LABEL.onchain} />}
+
+          {/* 记忆 */}
+          {activeSection === 'memory-river' && <LegacySectionWrap><MemorySection /></LegacySectionWrap>}
 
           {/* 数据 */}
           {activeSection === 'notifications'    && <LegacySectionWrap><NotificationsSection /></LegacySectionWrap>}

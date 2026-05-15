@@ -102,3 +102,25 @@ export async function deleteProject(pid: string): Promise<void> {
     throw new Error(`deleteProject failed: ${resp.status}`);
   }
 }
+
+export interface ArtifactRecord {
+  artifact_id: string;
+  project_id: string;
+  title: string;
+  file_type: string;
+  preview_url?: string | null;
+  download_url?: string | null;
+  generated_at: string;
+}
+
+export async function listProjectArtifacts(pid: string): Promise<ArtifactRecord[]> {
+  const resp = await fetch(
+    `${getApiBase()}/api/projects/${encodeURIComponent(pid)}/artifacts`,
+    { headers: { ...authHeaders() } },
+  );
+  if (!resp.ok) {
+    if (resp.status === 404) return [];
+    throw new Error(`listProjectArtifacts failed: ${resp.status}`);
+  }
+  return resp.json();
+}

@@ -27,12 +27,15 @@ import React, {
 import {
   type AuthUser,
   type AuthSession,
+  type UserProfile,
   guestLogin as apiGuestLogin,
   fetchNonce,
   buildSiweMessage,
   verifySignature,
   getMe,
 } from '../../api/auth';
+
+export type { UserProfile };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,9 +46,19 @@ export interface Signer {
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
+function toUserProfile(u: AuthUser): UserProfile {
+  return {
+    address: u.address,
+    did: u.did,
+    display_name: u.display_name,
+    bio: undefined,
+    type: u.auth_type,
+  };
+}
+
 export interface AuthContextValue {
   status: AuthStatus;
-  user: AuthUser | null;
+  user: UserProfile | null;
   token: string | null;
   /** Sign in as anonymous guest — no wallet needed. */
   guestLogin: () => Promise<void>;
@@ -67,7 +80,7 @@ const TOKEN_KEY = 'sf_auth_token';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     getMe(stored)
       .then((u) => {
-        setUser(u);
+        setUser(toUserProfile(u));
         setToken(stored);
         setStatus('authenticated');
       })
@@ -97,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   function applySession(session: AuthSession) {
     localStorage.setItem(TOKEN_KEY, session.token);
     setToken(session.token);
-    setUser(session.user);
+    setUser(toUserProfile(session.user));
     setStatus('authenticated');
     setError(null);
   }

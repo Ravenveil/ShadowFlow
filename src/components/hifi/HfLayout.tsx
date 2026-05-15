@@ -17,7 +17,7 @@ function pathToActive(pathname: string): HfSidebarActive {
   if (pathname.startsWith('/agents')) return 'agents';
   if (pathname.startsWith('/templates')) return 'templates';
   if (pathname.startsWith('/settings')) return 'settings';
-  if (pathname.startsWith('/run-session')) return 'skill-studio';
+  if (pathname.startsWith('/run-session')) return 'start';
   if (pathname.startsWith('/projects')) return 'projects';
   return 'start';
 }

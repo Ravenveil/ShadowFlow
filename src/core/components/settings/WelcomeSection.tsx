@@ -1,112 +1,288 @@
-import { Bot, Users, Link2, Wrench, Waves } from 'lucide-react';
+/**
+ * WelcomeSection — Settings › 账户 › 个人资料
+ *
+ * Shows real auth state: avatar, DID, display_name/bio/avatar_seed (editable).
+ * When not authenticated → prompt to login.
+ * Quick-start guide stays at the bottom for new users.
+ */
+import { useState } from 'react';
+import { Bot, Users, Link2, Wrench, Waves, Edit3, Check, X, LockKeyhole } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useAuth } from '../../auth/AuthContext';
+import { WalletLoginModal } from '../../../components/hifi/WalletLoginModal';
+import { updateProfile } from '../../../api/auth';
+import type { UserProfile } from '../../../api/auth';
 
-interface Step {
-  number: number;
-  title: string;
-  description: string;
-  action?: { label: string; sectionId: string };
-}
+// ── Quick-start data (unchanged) ─────────────────────────────────────────────
 
-const STEPS: Step[] = [
-  {
-    number: 1,
-    title: '选择执行后端',
-    description: '在「执行后端」中选择本机已安装的 CLI Agent（Claude Code、Codex 等），或配置 BYOK API Key 直接调用模型。',
-  },
-  {
-    number: 2,
-    title: '配置 Composio 连接器',
-    description: '在「Connectors」中输入 Composio API Key，即可让 Agent 访问 GitHub、Notion、Slack 等 250+ 工具。',
-  },
-  {
-    number: 3,
-    title: '注册 MCP 工具提供商',
-    description: '在「Tool Providers」中注册 MCP 服务端（stdio/http/sse），为 Agent 扩展自定义工具能力。',
-  },
-  {
-    number: 4,
-    title: '创建第一个 Agent',
-    description: '进入 Editor 页面，点击「+ Agent」开始创建 Agent，配置名称、能力和执行策略。',
-  },
-  {
-    number: 5,
-    title: '组建 Agent Team',
-    description: '在 Team 视图中将多个 Agent 编排成工作流，设置协作模式和 Policy Matrix。',
-  },
-];
-
-interface Feature {
-  Icon: LucideIcon;
-  title: string;
-  desc: string;
-}
-
+interface Feature { Icon: LucideIcon; title: string; desc: string }
 const FEATURES: Feature[] = [
-  { Icon: Bot,    title: 'Agent 工厂',        desc: '以「招人」思路创建 Agent，name + soul 即可上岗' },
-  { Icon: Users,  title: 'Team 协作',          desc: 'Policy Matrix 管理多 Agent 协作权限' },
-  { Icon: Link2,  title: 'ACP 原生',           desc: '基于 ACP 协议，兼容所有主流 CLI Agent' },
-  { Icon: Wrench, title: '工具集成',            desc: 'Composio + MCP 双轨，250+ 工具开箱即用' },
+  { Icon: Bot,    title: 'Agent 工厂',  desc: '以「招人」思路创建 Agent，name + soul 即可上岗' },
+  { Icon: Users,  title: 'Team 协作',   desc: 'Policy Matrix 管理多 Agent 协作权限' },
+  { Icon: Link2,  title: 'ACP 原生',    desc: '基于 ACP 协议，兼容所有主流 CLI Agent' },
+  { Icon: Wrench, title: '工具集成',    desc: 'Composio + MCP 双轨，250+ 工具开箱即用' },
 ];
 
-export function WelcomeSection() {
+// ── Profile editor ────────────────────────────────────────────────────────────
+
+interface ProfileFormProps {
+  user: UserProfile;
+  token: string;
+  onSaved: (updated: UserProfile) => void;
+}
+
+function ProfileForm({ user, token, onSaved }: ProfileFormProps) {
+  const [editing, setEditing] = useState(false);
+  const [displayName, setDisplayName] = useState(user.display_name ?? '');
+  const [bio, setBio] = useState(user.bio ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateProfile(token, {
+        display_name: displayName.trim() || undefined,
+        bio: bio.trim() || undefined,
+      });
+      onSaved(updated);
+      setEditing(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCancel() {
+    setDisplayName(user.display_name ?? '');
+    setBio(user.bio ?? '');
+    setEditing(false);
+    setError(null);
+  }
+
+  const glyph = user.display_name?.charAt(0).toUpperCase()
+    ?? (user.type === 'wallet' ? user.address.slice(2, 4).toUpperCase() : 'G');
+  const avatarBg = user.type === 'wallet' ? 'var(--t-accent)' : 'var(--t-fg-4)';
+
   return (
-    <div className="flex flex-col gap-8">
-      {/* Hero */}
-      <div className="relative rounded-[10px] border border-sf-border bg-sf-elev2 overflow-hidden p-5 pl-[22px]">
-        <div className="absolute inset-y-0 left-0 w-[3px] bg-sf-accent/70" />
-        <div className="flex items-center gap-3 mb-3">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-[9px] border border-sf-border bg-sf-elev3 text-sf-fg2">
-            <Waves size={18} strokeWidth={2} aria-hidden />
-          </span>
-          <div>
-            <h2 className="text-[17px] font-bold text-sf-fg1">欢迎使用 ShadowFlow</h2>
-            <p className="text-[11px] text-sf-fg4">Agent Team 的 VS Code · ACP 时代的工作流平台</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Avatar row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%',
+          background: avatarBg, color: 'var(--t-bg)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontWeight: 800, fontSize: 22, flexShrink: 0,
+        }}>
+          {glyph}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {editing ? (
+            <input
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              placeholder="显示名称"
+              maxLength={50}
+              style={{
+                width: '100%', padding: '6px 10px', borderRadius: 7,
+                border: '1px solid var(--t-accent)', background: 'var(--t-bg)',
+                color: 'var(--t-fg)', fontSize: 14, fontWeight: 600, outline: 'none',
+              }}
+            />
+          ) : (
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-fg)' }}>
+              {user.display_name || (user.type === 'guest' ? '访客' : user.address.slice(0, 6) + '…' + user.address.slice(-4))}
+            </div>
+          )}
+          <div style={{ fontSize: 10, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>
+            {user.type === 'wallet' ? '● 钱包账户' : '● 访客模式'}
           </div>
         </div>
-        <p className="text-[12px] text-sf-fg3 leading-relaxed">
-          ShadowFlow 让你像管理员工一样组建 AI Agent 团队。每个 Agent 有名字、有性格、有专属工具，协同完成复杂任务。
+        {user.type === 'wallet' && !editing && (
+          <button onClick={() => setEditing(true)} style={{ background: 'none', border: '1px solid var(--t-border)', borderRadius: 7, padding: '5px 9px', cursor: 'pointer', color: 'var(--t-fg-3)', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
+            <Edit3 size={12} strokeWidth={2} /> 编辑
+          </button>
+        )}
+        {editing && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={handleSave} disabled={saving} style={{ background: 'var(--t-accent)', border: 'none', borderRadius: 7, padding: '5px 9px', cursor: 'pointer', color: 'var(--t-accent-ink)', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
+              <Check size={12} strokeWidth={2.5} /> {saving ? '保存中…' : '保存'}
+            </button>
+            <button onClick={handleCancel} style={{ background: 'none', border: '1px solid var(--t-border)', borderRadius: 7, padding: '5px 9px', cursor: 'pointer', color: 'var(--t-fg-3)', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
+              <X size={12} strokeWidth={2.5} /> 取消
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Bio */}
+      {editing ? (
+        <textarea
+          value={bio}
+          onChange={e => setBio(e.target.value)}
+          placeholder="个人简介（选填）"
+          maxLength={200}
+          rows={2}
+          style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1px solid var(--t-accent)', background: 'var(--t-bg)', color: 'var(--t-fg)', fontSize: 12, resize: 'none', outline: 'none', fontFamily: 'inherit' }}
+        />
+      ) : (
+        user.bio && <p style={{ fontSize: 12, color: 'var(--t-fg-3)', margin: 0, lineHeight: 1.6 }}>{user.bio}</p>
+      )}
+
+      {error && <div style={{ fontSize: 11, color: 'var(--t-err)' }}>{error}</div>}
+    </div>
+  );
+}
+
+// ── DID + address info card ───────────────────────────────────────────────────
+
+function IdentityCard({ user }: { user: UserProfile }) {
+  const [copied, setCopied] = useState(false);
+
+  function copyAddress() {
+    if (user.type !== 'wallet') return;
+    navigator.clipboard?.writeText(user.address).catch(() => undefined);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  if (user.type === 'guest') {
+    return (
+      <div style={{ padding: '12px 14px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 10, fontSize: 12, color: 'var(--t-fg-4)', lineHeight: 1.6 }}>
+        访客模式下暂无链上身份。连接钱包后将自动生成 <code style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>did:ethr:16600:0x…</code> DID。
+      </div>
+    );
+  }
+
+  const rows: Array<{ label: string; value: string; mono?: boolean; copyable?: boolean }> = [
+    { label: 'DID',     value: user.did ?? '—',    mono: true },
+    { label: '地址',    value: user.address,        mono: true, copyable: true },
+    { label: '网络',    value: '0G Galileo Testnet · Chain 16600' },
+    { label: '账户类型', value: 'Ethereum · EIP-4361 SIWE' },
+  ];
+
+  return (
+    <div style={{ border: '1px solid var(--t-border)', borderRadius: 10, overflow: 'hidden' }}>
+      {rows.map((r, i) => (
+        <div key={r.label} style={{
+          display: 'grid', gridTemplateColumns: '90px 1fr auto',
+          padding: '9px 14px', alignItems: 'center', gap: 10,
+          borderTop: i > 0 ? '1px solid var(--t-border)' : 'none',
+          background: 'var(--t-panel)',
+        }}>
+          <span style={{ fontSize: 11, color: 'var(--t-fg-4)' }}>{r.label}</span>
+          <span style={{ fontSize: r.mono ? 10 : 12, fontFamily: r.mono ? 'var(--font-mono)' : 'inherit', color: 'var(--t-fg-2)', wordBreak: 'break-all' }}>
+            {r.value}
+          </span>
+          {r.copyable && (
+            <button onClick={copyAddress} style={{ background: 'none', border: '1px solid var(--t-border)', borderRadius: 5, padding: '2px 7px', cursor: 'pointer', fontSize: 10, color: copied ? 'var(--t-ok)' : 'var(--t-fg-4)', whiteSpace: 'nowrap' }}>
+              {copied ? '已复制' : '复制'}
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Main section ──────────────────────────────────────────────────────────────
+
+export function WelcomeSection() {
+  const { user, token, status, guestLogin } = useAuth();
+  const [showLogin, setShowLogin] = useState(false);
+
+  // Local copy of user for optimistic profile updates
+  const [localUser, setLocalUser] = useState<UserProfile | null>(null);
+  const displayUser = localUser ?? user;
+
+  const isLoading = status === 'loading';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 640 }}>
+      {/* ── Profile block ── */}
+      <div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: 'var(--t-accent)', marginBottom: 6 }}>
+          ACCOUNT · 个人资料
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--t-fg)', marginBottom: 4, letterSpacing: '-.02em' }}>
+          个人资料
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: 0 }}>
+          管理你的身份、链上 DID 和公开信息。
         </p>
       </div>
 
-      {/* Feature highlights */}
-      <div>
-        <p className="mb-3 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">核心能力</p>
-        <div className="grid grid-cols-2 gap-3">
+      {isLoading ? (
+        <div style={{ padding: '32px', textAlign: 'center', fontSize: 12, color: 'var(--t-fg-4)' }}>加载中…</div>
+      ) : !displayUser ? (
+        /* ── Not logged in ── */
+        <div style={{ padding: '24px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center', textAlign: 'center' }}>
+          <div style={{ display: 'inline-flex', padding: 12, borderRadius: 14, background: 'var(--t-panel)', border: '1px solid var(--t-border)' }}>
+            <LockKeyhole size={28} strokeWidth={1.5} color="var(--t-fg-4)" />
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)' }}>尚未登录</div>
+          <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: 0, maxWidth: 320 }}>
+            连接钱包获得链上 DID 身份，或以访客身份体验平台。
+          </p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => setShowLogin(true)} style={{ padding: '8px 18px', borderRadius: 8, background: 'var(--t-accent)', color: 'var(--t-accent-ink)', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+              连接钱包
+            </button>
+            <button onClick={() => void guestLogin()} style={{ padding: '8px 18px', borderRadius: 8, background: 'var(--t-panel-2)', color: 'var(--t-fg-2)', border: '1px solid var(--t-border)', cursor: 'pointer', fontSize: 13 }}>
+              访客模式
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* ── Authenticated ── */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Profile editor */}
+          <div style={{ padding: '16px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12 }}>
+            <ProfileForm
+              user={displayUser}
+              token={token ?? ''}
+              onSaved={setLocalUser}
+            />
+          </div>
+
+          {/* Identity card */}
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', fontWeight: 700, letterSpacing: '.06em', marginBottom: 8 }}>
+              链上身份 · ON-CHAIN IDENTITY
+            </div>
+            <IdentityCard user={displayUser} />
+          </div>
+        </div>
+      )}
+
+      {/* ── Quick-start guide (always shown) ── */}
+      <div style={{ borderTop: '1px solid var(--t-border)', paddingTop: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, border: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
+            <Waves size={14} strokeWidth={2} color="var(--t-fg-3)" />
+          </span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t-fg)' }}>快速上手</div>
+            <div style={{ fontSize: 10, color: 'var(--t-fg-5)' }}>Agent Team 的 VS Code · ACP 时代的工作流平台</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {FEATURES.map(f => (
-            <div key={f.title} className="rounded-[10px] border border-sf-border bg-sf-elev2 p-3.5">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sf-fg2"><f.Icon size={18} strokeWidth={2} aria-hidden /></span>
-                <span className="text-[13px] font-semibold text-sf-fg1">{f.title}</span>
+            <div key={f.title} style={{ padding: '12px 14px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <f.Icon size={14} strokeWidth={2} color="var(--t-fg-3)" />
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--t-fg)' }}>{f.title}</span>
               </div>
-              <p className="text-[11px] text-sf-fg4">{f.desc}</p>
+              <p style={{ fontSize: 11, color: 'var(--t-fg-4)', margin: 0, lineHeight: 1.5 }}>{f.desc}</p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Getting started steps */}
-      <div>
-        <p className="mb-3 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">快速上手</p>
-        <div className="flex flex-col gap-2">
-          {STEPS.map(step => (
-            <div key={step.number} className="flex gap-3 rounded-[10px] border border-sf-border bg-sf-elev2 p-3.5">
-              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-sf-accent/20 font-mono text-[11px] font-bold text-sf-accent-bright">
-                {step.number}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[13px] font-semibold text-sf-fg1">{step.title}</p>
-                <p className="mt-0.5 text-[11px] text-sf-fg4 leading-relaxed">{step.description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Footer note */}
-      <p className="text-center font-mono text-[10px] text-sf-fg5">
-        Built with Claude Code · Powered by Anthropic · ACP Protocol
-      </p>
+      {showLogin && <WalletLoginModal onClose={() => setShowLogin(false)} />}
     </div>
   );
 }

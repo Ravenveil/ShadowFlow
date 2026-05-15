@@ -17,7 +17,7 @@ import { X, Wallet, User } from 'lucide-react';
 import { useAuth } from '../../core/auth/AuthContext';
 
 interface WalletLoginModalProps {
-  open: boolean;
+  open?: boolean;
   onClose: () => void;
 }
 
@@ -33,7 +33,7 @@ export function WalletLoginModal({ open, onClose }: WalletLoginModalProps) {
   const [loading, setLoading] = useState<'guest' | 'wallet' | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  if (!open) return null;
+  if (open === false) return null;
 
   async function handleGuest() {
     setLocalError(null);

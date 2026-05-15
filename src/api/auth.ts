@@ -38,6 +38,14 @@ export interface AuthSession {
   user: AuthUser;
 }
 
+export interface UserProfile {
+  address: string;
+  did?: string;
+  display_name?: string | null;
+  bio?: string | null;
+  type: 'wallet' | 'guest';
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function base(): string {
@@ -134,4 +142,11 @@ export async function verifySignature(params: {
  */
 export async function getMe(token: string): Promise<AuthUser> {
   return get<AuthUser>('/api/auth/me', token);
+}
+
+export async function updateProfile(
+  token: string,
+  patch: { display_name?: string; bio?: string },
+): Promise<UserProfile> {
+  return post<UserProfile>('/api/auth/profile', patch, token);
 }
