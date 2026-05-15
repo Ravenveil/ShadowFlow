@@ -354,10 +354,7 @@ export const PetRail: React.FC = () => {
             style={{ cursor: 'inherit' }}
           >
             {builtinPet ? (
-              <div
-                className="flex h-20 w-20 items-center justify-center rounded-2xl text-[44px] leading-none"
-                style={{ backgroundColor: builtinPet.accent + '22' }}
-              >
+              <div className="flex h-20 w-20 items-center justify-center text-[44px] leading-none">
                 {builtinPet.glyph}
               </div>
             ) : pet ? (
