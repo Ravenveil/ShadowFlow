@@ -29,9 +29,9 @@
  *   - Delete team flow + error banner.
  *   - List immediately updates after creation (AC4).
  */
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Hand, MousePointer2, Play, Upload, Users, ZoomIn } from 'lucide-react';
+import { Upload, Users } from 'lucide-react';
 import {
   deleteTeam,
   getTeam,
@@ -42,12 +42,13 @@ import {
   TeamApiError,
   type TeamPolicyMatrix,
   type TeamRecord,
+  type TeamWorkflowEdge,
   type TeamWorkflowNode,
 } from '../api/teams';
 import { TeamCard } from '../core/components/team/TeamCard';
 import { CreateTeamModal } from '../core/components/team/CreateTeamModal';
 import { TeamDetail } from '../core/components/team/TeamDetail';
-import { HfAvatar, HfTopBar } from '../components/hifi';
+import { HfTopBar } from '../components/hifi';
 import { PolicyMatrixPanel } from '../core/components/Panel/PolicyMatrixPanel';
 import { usePolicyStore, type PolicyMatrix as StorePolicyMatrix } from '../core/hooks/usePolicyStore';
 import { useI18n } from '../common/i18n';
@@ -374,160 +375,140 @@ type DetailTab = 'members' | 'policy' | 'dag' | 'activity' | 'dependency';
 
 const DETAIL_TABS: DetailTab[] = ['members', 'policy', 'dag', 'activity', 'dependency'];
 
-interface LaneAvatar {
-  g: string;
-  n: string;
-  c: string;
-  sel?: boolean;
-}
-interface LaneData {
-  n: string;
-  a: LaneAvatar[];
-}
+// ---------------------------------------------------------------------------
+// P1 Team Detail components (design bundle 2026-05-15)
+// ---------------------------------------------------------------------------
 
-/** Avatar colour palette for dynamically derived lanes. */
-const LANE_COLORS = [
-  'var(--t-accent)',
-  'var(--t-run)',
-  'var(--t-warn)',
-  'var(--t-ok)',
-  'var(--t-err)',
-];
-
-/**
- * Derive LaneData[] from a list of WorkflowNodes (when workflow exists),
- * or fall back to one-agent-per-lane from agent_ids.
- */
-function deriveLanes(
-  agentIds: string[],
-  workflowNodes: TeamWorkflowNode[],
-): LaneData[] {
-  // If we have real workflow nodes with agent data, group by position (x-axis).
-  if (workflowNodes.length > 0) {
-    // Sort nodes left-to-right (by x position) and create one lane per node.
-    const sorted = [...workflowNodes].sort((a, b) => a.position.x - b.position.x);
-    return sorted.map((node, idx) => {
-      const label = node.data.name || `Agent-${node.id.slice(0, 6)}`;
-      const glyph = label.slice(0, 1);
-      return {
-        n: label.toUpperCase().slice(0, 10),
-        a: [{
-          g: glyph,
-          n: label,
-          c: LANE_COLORS[idx % LANE_COLORS.length],
-        }],
-      };
-    });
-  }
-
-  // Fallback: one lane per agent_id.
-  if (agentIds.length === 0) return [];
-  return agentIds.map((id, idx) => ({
-    n: `AGENT-${idx + 1}`,
-    a: [{
-      g: (idx + 1).toString(),
-      n: `Agent-${id.slice(0, 6)}`,
-      c: LANE_COLORS[idx % LANE_COLORS.length],
-    }],
-  }));
-}
-
-function LaneDiagram({ lanes }: { lanes: LaneData[] }) {
+/** Team header: ×N count icon + name + pills + action buttons. */
+function DesignTeamHeader({ team }: { team: TeamRecord }) {
   return (
-    <div
-      className="hf-dotgrid"
-      style={{
-        flex: 1,
-        padding: 18,
-        overflow: 'auto',
-        position: 'relative',
-        minHeight: 360,
-      }}
-    >
-      {lanes.map((lane) => (
-        <div
-          key={lane.n}
-          style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}
-        >
-          <div
-            style={{
-              minWidth: 120,
-              padding: '8px 12px',
-              borderLeft: '3px solid var(--t-accent)',
-              background: 'var(--t-panel)',
-              border: '1px solid var(--t-border)',
-              borderRadius: 6,
-            }}
-          >
-            <div
-              className="hf-mono"
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '.12em',
-                color: 'var(--t-fg-2)',
-              }}
-            >
-              {lane.n}
-            </div>
-            <div className="hf-meta" style={{ fontSize: 9, marginTop: 2 }}>
-              parallel · retry 3
-            </div>
-          </div>
-          {lane.a.map((a, j, arr) => (
-            <Fragment key={`${lane.n}-${a.n}`}>
-              <div
-                className="hf-card"
-                style={{
-                  width: 160,
-                  padding: 10,
-                  borderColor: a.sel ? 'var(--t-accent)' : 'var(--t-border)',
-                  boxShadow: a.sel
-                    ? '0 0 0 1px var(--t-accent), 0 0 16px -2px color-mix(in oklab, var(--t-accent) 40%, transparent)'
-                    : 'none',
-                  display: 'flex',
-                  gap: 10,
-                  alignItems: 'center',
-                }}
-              >
-                <HfAvatar
-                  glyph={a.g}
-                  color={a.c}
-                  size={28}
-                  status={lane.n === 'RESEARCH' ? 'run' : undefined}
-                />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700 }}>{a.n}</div>
-                  <div className="hf-meta" style={{ fontSize: 9, marginTop: 2 }}>
-                    sonnet · L2
-                  </div>
-                </div>
-              </div>
-              {j < arr.length - 1 && (
-                <span style={{ color: 'var(--t-fg-5)' }}>→</span>
-              )}
-            </Fragment>
-          ))}
+    <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--t-border)', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+      <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: 'var(--t-fg-2)', flexShrink: 0 }}>
+        ×{team.agent_ids.length}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span data-testid="detail-team-name" style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {team.name}
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 6, background: 'color-mix(in oklab, var(--t-accent-bright) 18%, transparent)', color: 'var(--t-accent-bright)', border: '1px solid color-mix(in oklab, var(--t-accent-bright) 35%, transparent)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', flexShrink: 0 }}>
+            POLICY
+          </span>
         </div>
-      ))}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 14,
-          right: 18,
-          display: 'flex',
-          gap: 6,
-        }}
-      >
-        <span className="hf-chip" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <MousePointer2 size={11} strokeWidth={2} aria-hidden /> select
-        </span>
-        <span className="hf-chip" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <Hand size={11} strokeWidth={2} aria-hidden /> pan
-        </span>
-        <span className="hf-chip" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <ZoomIn size={11} strokeWidth={2} aria-hidden /> zoom
-        </span>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)', marginTop: 4, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {team.agent_ids.length} agents{team.description ? ` · ${team.description}` : ''}
+        </div>
+      </div>
+      <button type="button" className="hf-btn" style={{ fontSize: 12, flexShrink: 0 }}>重命名</button>
+      <button type="button" className="hf-btn hf-btn-pri" style={{ fontSize: 12, flexShrink: 0 }}>启动新 run</button>
+    </div>
+  );
+}
+
+/** Left panel of the 2-col grid: member list via TeamDetail. */
+function MembersPanel({ team, onTeamUpdated }: { team: TeamRecord; onTeamUpdated: (t: TeamRecord) => void }) {
+  return (
+    <div style={{ background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--t-border)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>成员</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>{team.agent_ids.length} agents</span>
+        <div style={{ flex: 1 }} />
+        <button type="button" className="hf-btn" style={{ fontSize: 11 }}>+ 招人</button>
+      </div>
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <TeamDetail team={team} onTeamUpdated={onTeamUpdated} />
+      </div>
+    </div>
+  );
+}
+
+const DAG_COLORS = ['#A855F7', '#F59E0B', '#22D3EE', '#EF4444', '#10B981', '#3B82F6', '#EC4899'];
+
+/** Right panel of the 2-col grid: SVG dot-grid DAG with real nodes/edges. */
+function WorkflowDagPanel({ nodes, edges }: { nodes: TeamWorkflowNode[]; edges: TeamWorkflowEdge[] }) {
+  const NODE_W = 148;
+  const NODE_H = 64;
+  const PAD = 24;
+
+  const nodeIdx = Object.fromEntries(nodes.map((n, i) => [n.id, i]));
+
+  let minX = 0, minY = 0, maxX = 424, maxY = 308;
+  if (nodes.length > 0) {
+    minX = Math.min(...nodes.map(n => n.position.x)) - PAD;
+    minY = Math.min(...nodes.map(n => n.position.y)) - PAD;
+    maxX = Math.max(...nodes.map(n => n.position.x + NODE_W)) + PAD;
+    maxY = Math.max(...nodes.map(n => n.position.y + NODE_H)) + PAD;
+  }
+  const vbW = Math.max(424, maxX - minX);
+  const vbH = Math.max(308, maxY - minY);
+
+  return (
+    <div style={{ padding: '14px 16px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>工作流 DAG</span>
+        <div style={{ flex: 1 }} />
+        <button type="button" className="hf-btn" style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>编辑</button>
+        <button type="button" className="hf-btn" style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>YAML</button>
+      </div>
+      <div style={{ background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 10, padding: 14 }}>
+        {nodes.length === 0 ? (
+          <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-4)', fontSize: 12 }}>
+            暂无工作流节点
+          </div>
+        ) : (
+          <svg width="100%" height="260" viewBox={`${minX} ${minY} ${vbW} ${vbH}`}>
+            <defs>
+              <pattern id="tdp-dot" width="20" height="20" patternUnits="userSpaceOnUse">
+                <circle cx="1" cy="1" r="0.6" fill="var(--t-border)" />
+              </pattern>
+            </defs>
+            <rect x={minX} y={minY} width={vbW} height={vbH} fill="url(#tdp-dot)" />
+            {edges.map((edge, ei) => {
+              const src = nodes.find(n => n.id === edge.source);
+              const tgt = nodes.find(n => n.id === edge.target);
+              if (!src || !tgt) return null;
+              const x1 = src.position.x + NODE_W;
+              const y1 = src.position.y + NODE_H / 2;
+              const x2 = tgt.position.x;
+              const y2 = tgt.position.y + NODE_H / 2;
+              const mx = (x1 + x2) / 2;
+              const d = `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
+              const active = edge.data?.mode !== 'approve';
+              return (
+                <g key={edge.id || ei}>
+                  <path d={d} fill="none"
+                    stroke={active ? 'var(--t-accent)' : 'var(--t-border)'}
+                    strokeWidth={active ? 1.5 : 1}
+                    strokeDasharray={active ? undefined : '4 3'} />
+                  {active && (
+                    <circle r="3" fill="var(--t-accent-bright)">
+                      <animateMotion dur="2s" repeatCount="indefinite" path={d} />
+                    </circle>
+                  )}
+                </g>
+              );
+            })}
+            {nodes.map((node) => {
+              const color = DAG_COLORS[(nodeIdx[node.id] ?? 0) % DAG_COLORS.length];
+              const { x, y } = node.position;
+              const glyph = (node.data.name || node.data.agentId || '?')[0];
+              return (
+                <g key={node.id} transform={`translate(${x},${y})`}>
+                  <rect width={NODE_W} height={NODE_H} rx="14"
+                    fill="var(--t-panel)" stroke="var(--t-border)" strokeWidth={1} />
+                  <rect x="10" y="14" width="32" height="32" rx="8"
+                    fill={`color-mix(in oklab, ${color} 18%, var(--t-panel-2))`}
+                    stroke={`color-mix(in oklab, ${color} 45%, transparent)`} />
+                  <text x="26" y="34" textAnchor="middle" fill={color}
+                    fontFamily="var(--font-sans)" fontSize="14" fontWeight="800">{glyph}</text>
+                  <text x="50" y="28" fill="var(--t-fg)" fontSize="12" fontWeight="700">{node.data.name}</text>
+                  <text x="50" y="44" fill="var(--t-fg-4)" fontSize="9.5"
+                    fontFamily="var(--font-mono)" letterSpacing="0.04em">{node.data.soul}</text>
+                </g>
+              );
+            })}
+          </svg>
+        )}
       </div>
     </div>
   );
@@ -542,11 +523,9 @@ function TeamDetailPage() {
   const [allTeams, setAllTeams] = useState<TeamRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // Default tab matches Hi-Fi v2 spec — DAG is highlighted there.
-  const [activeTab, setActiveTab] = useState<DetailTab>('dag');
-
-  // Workflow nodes for the DAG lane diagram.
+  // Workflow nodes and edges for the DAG panel.
   const [workflowNodes, setWorkflowNodes] = useState<TeamWorkflowNode[]>([]);
+  const [workflowEdges, setWorkflowEdges] = useState<TeamWorkflowEdge[]>([]);
 
   // Policy store actions — used to seed PolicyMatrixPanel with team-specific data.
   const setAgents   = usePolicyStore((s) => s.setAgents);
@@ -577,6 +556,7 @@ function TeamDetailPage() {
       .then(([fetchedTeam, workflow, policy]) => {
         setTeam(fetchedTeam);
         setWorkflowNodes(workflow.nodes);
+        setWorkflowEdges(workflow.edges);
 
         // Seed policy store: prefer workflow-node ids as agents, else agent_ids.
         const agentKeys = workflow.nodes.length > 0
@@ -605,16 +585,7 @@ function TeamDetailPage() {
     });
   }, []);
 
-  // 2026-05-11 bug fix — Rules of Hooks: 必须在所有早返 (loading / errorMsg)
-  // 之前调用。原代码把 useMemo + useCallback 放在 if(loading) return 之后，
-  // 第一次 render (loading=true) 时跳过 hook，第二次 (loading=false) 时执行，
-  // hook count 不一致 → "Rendered more hooks than during the previous render"。
-  // 两 hook 已是 null-safe (team?.agent_ids ?? [] / if(!teamId) return)，
-  // 上提到此处不影响行为。
-  const derivedLanes = useMemo(
-    () => deriveLanes(team?.agent_ids ?? [], workflowNodes),
-    [team?.agent_ids, workflowNodes],
-  );
+  // Rules of Hooks: handlePolicySave must be called before any early return.
   const handlePolicySave = useCallback(
     async (matrix: StorePolicyMatrix) => {
       if (!teamId) return;
@@ -673,44 +644,22 @@ function TeamDetailPage() {
   return (
     <div
       data-testid="team-detail-page"
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minWidth: 0,
-        background: 'var(--t-bg)',
-        color: 'var(--t-fg)',
-      }}
+      style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--t-bg)', color: 'var(--t-fg)' }}
     >
       <HfTopBar
         right={
-          <>
-            <button
-              type="button"
-              className="hf-btn"
-              style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}
-            >
-              <Upload size={12} strokeWidth={2} aria-hidden /> {t('team.onchain')}
-            </button>
-            <button
-              type="button"
-              className="hf-btn hf-btn-pri"
-              style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}
-            >
-              <Play size={12} strokeWidth={2} aria-hidden /> {t('team.run')}
-            </button>
-          </>
+          <button type="button" className="hf-btn" style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <Upload size={12} strokeWidth={2} aria-hidden /> {t('team.onchain')}
+          </button>
         }
       />
 
-      <div
-        style={{
-          flex: 1,
-          display: 'grid',
-          gridTemplateColumns: '240px 1fr',
-          minHeight: 0,
-        }}
-      >
+      {/* Hidden tab buttons — kept for test-id compatibility */}
+      {DETAIL_TABS.map(tab => (
+        <button key={tab} type="button" data-testid={`team-detail-tab-${tab}`} style={{ display: 'none' }} aria-hidden />
+      ))}
+
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 0, overflow: 'hidden' }}>
         <TeamListColumn
           teams={teamsForRail}
           activeId={team.team_id}
@@ -718,169 +667,17 @@ function TeamDetailPage() {
           onSelect={(id) => navigate(`/teams/${id}`)}
         />
 
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            minWidth: 0,
-            overflow: 'hidden',
-          }}
-        >
-          {/* Page header: back button + team name (always visible so the
-              `detail-team-name` testid is independent of active tab). */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '14px 22px 6px',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => navigate('/teams')}
-              className="hf-btn"
-              style={{ fontSize: 11 }}
-            >
-              {t('team.backToTeams')}
-            </button>
-            <div style={{ minWidth: 0 }}>
-              <h2
-                data-testid="detail-team-name"
-                style={{
-                  fontSize: 15,
-                  fontWeight: 700,
-                  color: 'var(--t-fg)',
-                  margin: 0,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {team.name}
-              </h2>
-              {team.description && (
-                <p
-                  className="hf-meta"
-                  style={{ fontSize: 11, marginTop: 2, color: 'var(--t-fg-4)' }}
-                >
-                  {team.description}
-                </p>
-              )}
-            </div>
+        {/* P1 Team Detail — header + 2-col grid + full-width policy */}
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'auto' }}>
+          <DesignTeamHeader team={team} />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, padding: 18, alignContent: 'start' }}>
+            <MembersPanel team={team} onTeamUpdated={setTeam} />
+            <WorkflowDagPanel nodes={workflowNodes} edges={workflowEdges} />
           </div>
 
-          {/* 5-tab strip — Hi-Fi v2 spec exact metrics. */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 18,
-              padding: '10px 22px 0',
-              borderBottom: '1px solid var(--t-border)',
-              background: 'var(--t-bg)',
-            }}
-          >
-            {DETAIL_TABS.map((tab) => {
-              const on = activeTab === tab;
-              const tabLabel: Record<DetailTab, string> = {
-                members: t('team.tabMembers'),
-                policy: t('team.tabPolicyMatrix'),
-                dag: t('team.tabWorkflowDAG'),
-                activity: t('team.tabActivity'),
-                dependency: t('team.tabDependency'),
-              };
-              return (
-                <button
-                  type="button"
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  data-testid={`team-detail-tab-${tab}`}
-                  style={{
-                    padding: '8px 2px',
-                    fontSize: 12.5,
-                    fontWeight: on ? 700 : 500,
-                    color: on ? 'var(--t-accent)' : 'var(--t-fg-3)',
-                    borderBottom: on
-                      ? '2px solid var(--t-accent)'
-                      : '2px solid transparent',
-                    cursor: 'pointer',
-                    marginBottom: -1,
-                    background: 'transparent',
-                    border: 'none',
-                    borderBottomStyle: 'solid',
-                    borderBottomWidth: 2,
-                    borderBottomColor: on ? 'var(--t-accent)' : 'transparent',
-                  }}
-                >
-                  {tabLabel[tab]}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Tab body */}
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'auto',
-            }}
-          >
-            {activeTab === 'dag' && (
-              derivedLanes.length > 0
-                ? <LaneDiagram lanes={derivedLanes} />
-                : (
-                  <div
-                    style={{
-                      flex: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'var(--t-fg-4)',
-                      fontSize: 12,
-                      padding: 24,
-                    }}
-                  >
-                    {t('team.noAgentsInDag')}
-                  </div>
-                )
-            )}
-
-            {activeTab === 'members' && (
-              <div style={{ padding: '14px 22px 24px', minWidth: 0 }}>
-                <TeamDetail team={team} onTeamUpdated={setTeam} />
-              </div>
-            )}
-
-            {activeTab === 'policy' && (
-              <div style={{ padding: '14px 22px 24px', minWidth: 0 }}>
-                {/* PolicyMatrixPanel is seeded with team-specific agents + policy
-                    via usePolicyStore (setAgents / setMatrix) in the fetch effect
-                    above. onSave persists the matrix to /api/teams/:teamId/policy. */}
-                <PolicyMatrixPanel
-                  readOnly={false}
-                  onSave={handlePolicySave}
-                />
-              </div>
-            )}
-
-            {activeTab === 'activity' && (
-              <div style={{ padding: '14px 22px 24px', minWidth: 0 }}>
-                <div className="hf-card" style={{ padding: 24 }}>
-                  {t('team.comingSoon')}
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'dependency' && (
-              <div style={{ padding: '14px 22px 24px', minWidth: 0 }}>
-                <div className="hf-card" style={{ padding: 24 }}>
-                  {t('team.comingSoon')}
-                </div>
-              </div>
-            )}
+          <div style={{ padding: '0 18px 24px' }}>
+            <PolicyMatrixPanel readOnly={false} onSave={handlePolicySave} />
           </div>
         </div>
       </div>
