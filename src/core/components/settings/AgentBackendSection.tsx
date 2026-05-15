@@ -214,6 +214,9 @@ const FALLBACK_MODELS: ModelDef[] = [
   { id: 'gemini-2.0-flash',      name: 'Gemini 2.0 Flash',      provider: 'google'    },
   { id: 'deepseek-chat',         name: 'DeepSeek Chat',         provider: 'deepseek'  },
   { id: 'deepseek-reasoner',     name: 'DeepSeek Reasoner',     provider: 'deepseek'  },
+  { id: 'glm-4-flash',           name: 'GLM-4 Flash',           provider: 'zhipu'     },
+  { id: 'glm-4-plus',            name: 'GLM-4 Plus',            provider: 'zhipu'     },
+  { id: 'glm-4',                 name: 'GLM-4',                 provider: 'zhipu'     },
 ];
 
 interface ByokStatus {
@@ -222,6 +225,7 @@ interface ByokStatus {
     openai?: string | null;
     google?: string | null;
     deepseek?: string | null;
+    zhipu?: string | null;
     azure?: string | null;
   };
   baseUrls?: {
@@ -290,6 +294,7 @@ const BYOK_PROVIDERS = [
   { id: 'azure',     name: 'Azure OpenAI',  placeholder: 'Azure API key…',      baseUrl: '' },
   { id: 'google',    name: 'Google Gemini', placeholder: 'AIza…',              baseUrl: 'https://generativelanguage.googleapis.com' },
   { id: 'deepseek',  name: 'DeepSeek',      placeholder: 'sk-…',               baseUrl: 'https://api.deepseek.com/v1' },
+  { id: 'zhipu',     name: '智谱 GLM',      placeholder: 'xxxx.yyyyyy',        baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
   { id: 'ollama',    name: 'Ollama',        placeholder: '无需 API Key',        baseUrl: 'http://localhost:11434' },
 ] as const;
 
@@ -398,6 +403,7 @@ function ByokPanel() {
     if (activeProvider === 'openai' || activeProvider === 'azure') return m.provider === 'openai';
     if (activeProvider === 'google') return m.provider === 'google';
     if (activeProvider === 'deepseek') return m.provider === 'deepseek';
+    if (activeProvider === 'zhipu') return m.provider === 'zhipu';
     return true; // ollama: show all
   });
   // Fall back to all models if none match
@@ -714,7 +720,8 @@ export function AgentBackendSection() {
           {loading ? (
             <div className="flex flex-col gap-2">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-[62px] animate-pulse rounded-[10px] bg-sf-elev2" />
+                <div key={i} className="h-[62px] animate-pulse rounded-[10px]"
+                  style={{ background: 'var(--t-border-2)' }} />
               ))}
             </div>
           ) : error ? (

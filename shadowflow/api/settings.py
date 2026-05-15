@@ -66,30 +66,34 @@ _MEDIA_PROVIDERS = [
 ]
 
 _VALID_THEMES = {"dark", "light", "system"}
-_VALID_PROVIDERS = {"anthropic", "openai", "google", "deepseek", "azure"}
+_VALID_PROVIDERS = {"anthropic", "openai", "google", "deepseek", "azure", "zhipu"}
 _DEFAULT_MODEL = "claude-sonnet-4-6"
 
 BYOK_MODELS: List[Dict[str, Any]] = [
     # Anthropic
-    {"id": "claude-opus-4-7",          "name": "Claude Opus 4.7",       "provider": "anthropic"},
-    {"id": "claude-sonnet-4-6",        "name": "Claude Sonnet 4.6",     "provider": "anthropic"},
-    {"id": "claude-haiku-4-5",         "name": "Claude Haiku 4.5",      "provider": "anthropic"},
-    {"id": "claude-3-5-sonnet-20241022","name": "Claude 3.5 Sonnet",     "provider": "anthropic"},
+    {"id": "claude-opus-4-7",            "name": "Claude Opus 4.7",       "provider": "anthropic"},
+    {"id": "claude-sonnet-4-6",          "name": "Claude Sonnet 4.6",     "provider": "anthropic"},
+    {"id": "claude-haiku-4-5",           "name": "Claude Haiku 4.5",      "provider": "anthropic"},
+    {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet",     "provider": "anthropic"},
     # OpenAI
-    {"id": "gpt-4o",                   "name": "GPT-4o",                "provider": "openai"},
-    {"id": "gpt-4o-mini",              "name": "GPT-4o Mini",           "provider": "openai"},
-    {"id": "o3",                       "name": "o3",                    "provider": "openai"},
-    {"id": "o4-mini",                  "name": "o4-mini",               "provider": "openai"},
+    {"id": "gpt-4o",                     "name": "GPT-4o",                "provider": "openai"},
+    {"id": "gpt-4o-mini",                "name": "GPT-4o Mini",           "provider": "openai"},
+    {"id": "o3",                         "name": "o3",                    "provider": "openai"},
+    {"id": "o4-mini",                    "name": "o4-mini",               "provider": "openai"},
     # Google
-    {"id": "gemini-2.5-pro",           "name": "Gemini 2.5 Pro",        "provider": "google"},
-    {"id": "gemini-2.5-flash",         "name": "Gemini 2.5 Flash",      "provider": "google"},
-    {"id": "gemini-2.0-flash",         "name": "Gemini 2.0 Flash",      "provider": "google"},
+    {"id": "gemini-2.5-pro",             "name": "Gemini 2.5 Pro",        "provider": "google"},
+    {"id": "gemini-2.5-flash",           "name": "Gemini 2.5 Flash",      "provider": "google"},
+    {"id": "gemini-2.0-flash",           "name": "Gemini 2.0 Flash",      "provider": "google"},
     # DeepSeek
-    {"id": "deepseek-chat",            "name": "DeepSeek Chat",         "provider": "deepseek"},
-    {"id": "deepseek-reasoner",        "name": "DeepSeek Reasoner",     "provider": "deepseek"},
+    {"id": "deepseek-chat",              "name": "DeepSeek Chat",         "provider": "deepseek"},
+    {"id": "deepseek-reasoner",          "name": "DeepSeek Reasoner",     "provider": "deepseek"},
+    # Zhipu (智谱)
+    {"id": "glm-4-flash",                "name": "GLM-4 Flash",           "provider": "zhipu"},
+    {"id": "glm-4-plus",                 "name": "GLM-4 Plus",            "provider": "zhipu"},
+    {"id": "glm-4",                      "name": "GLM-4",                 "provider": "zhipu"},
     # Azure
-    {"id": "azure-gpt-4o",             "name": "Azure GPT-4o",          "provider": "azure"},
-    {"id": "azure-gpt-4o-mini",        "name": "Azure GPT-4o Mini",     "provider": "azure"},
+    {"id": "azure-gpt-4o",               "name": "Azure GPT-4o",          "provider": "azure"},
+    {"id": "azure-gpt-4o-mini",          "name": "Azure GPT-4o Mini",     "provider": "azure"},
 ]
 
 AGENT_DEFS: List[Dict[str, Any]] = [
