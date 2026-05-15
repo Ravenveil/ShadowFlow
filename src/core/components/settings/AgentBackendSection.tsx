@@ -76,7 +76,7 @@ const AGENT_AVATARS: Record<string, { emoji: string; color: string }> = {
 };
 
 async function fetchAgents(): Promise<AgentEntry[]> {
-  const res = await fetch(`${API_BASE}/api/settings/agents/detect`, { signal: AbortSignal.timeout(3000) });
+  const res = await fetch(`${API_BASE}/api/settings/agents/detect`, { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const j = await res.json();
   return Array.isArray(j.agents) ? j.agents : [];
