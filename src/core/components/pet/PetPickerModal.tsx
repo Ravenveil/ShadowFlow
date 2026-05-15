@@ -148,6 +148,11 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
   const [communityError, setCommunityError] = useState<string | null>(null);
   const [communityRootDir, setCommunityRootDir] = useState<string>('');
 
+  // Remote sync state (Supabase / j20.nz)
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ wrote: number; failed: number } | null>(null);
+  const [syncErrors, setSyncErrors] = useState<string[]>([]);
+
   // Custom pet
   const customPet = loadCustomPet();
 
@@ -169,6 +174,29 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
         setCommunityLoading(false);
       });
   }, []);
+
+  const handleRemoteSync = useCallback(async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    setSyncErrors([]);
+    try {
+      const res = await fetch(`${API_BASE}/api/settings/pets/sync?limit=24`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(30000),
+      });
+      const data = await res.json() as { wrote?: number; failed?: number; errors?: string[] };
+      setSyncResult({ wrote: data.wrote ?? 0, failed: data.failed ?? 0 });
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        setSyncErrors(data.errors);
+      }
+      // Refresh local list after sync
+      fetchCommunity();
+    } catch (e) {
+      setSyncErrors([e instanceof Error ? e.message : '同步失败']);
+    } finally {
+      setSyncing(false);
+    }
+  }, [fetchCommunity]);
 
   // Fetch when switching to community tab
   useEffect(() => {
@@ -248,28 +276,55 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
           {/* ── 社区 tab ── */}
           {tab === 'community' && (
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <div>
+              {/* Toolbar: 本地扫描路径 + 刷新 + 下载社区宠物 */}
+              <div className="flex items-start justify-between mb-3 gap-3">
+                <div className="min-w-0">
                   <p className="text-gray-400 text-xs">
-                    读取本地 hatch-pet 宠物包
+                    本地宠物目录
                     {communityRootDir && (
-                      <span className="text-gray-600 ml-1 font-mono text-[10px]">({communityRootDir})</span>
+                      <span className="text-gray-600 ml-1 font-mono text-[10px] break-all">({communityRootDir})</span>
                     )}
                   </p>
                   <p className="text-gray-600 text-[10px] mt-0.5">
-                    在 Open Design 下载的社区宠物也会在这里显示。
+                    Open Design 下载的宠物也会在这里显示。
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={fetchCommunity}
-                  disabled={communityLoading}
-                  className="flex items-center gap-1.5 rounded-lg border border-gray-700 px-2.5 py-1.5 text-[11px] text-gray-400 hover:text-gray-200 hover:border-gray-500 disabled:opacity-40 transition-colors"
-                >
-                  <IconRefresh size={12} spinning={communityLoading} />
-                  {communityLoading ? '扫描中…' : '刷新'}
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={fetchCommunity}
+                    disabled={communityLoading}
+                    className="flex items-center gap-1.5 rounded-lg border border-gray-700 px-2.5 py-1.5 text-[11px] text-gray-400 hover:text-gray-200 hover:border-gray-500 disabled:opacity-40 transition-colors"
+                  >
+                    <IconRefresh size={12} spinning={communityLoading} />
+                    {communityLoading ? '扫描…' : '刷新'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void handleRemoteSync(); }}
+                    disabled={syncing}
+                    className="flex items-center gap-1.5 rounded-lg border border-purple-700/60 bg-purple-900/20 px-2.5 py-1.5 text-[11px] text-purple-300 hover:bg-purple-900/40 hover:border-purple-500 disabled:opacity-40 transition-colors"
+                  >
+                    <IconRefresh size={12} spinning={syncing} />
+                    {syncing ? '下载中…' : '下载社区宠物'}
+                  </button>
+                </div>
               </div>
+
+              {/* Sync result */}
+              {syncResult && (
+                <div className="mb-3 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2 text-[11px] text-green-400">
+                  {syncResult.wrote > 0
+                    ? `✓ 新增 ${syncResult.wrote} 只宠物${syncResult.failed > 0 ? `，${syncResult.failed} 只失败` : ''}`
+                    : '无新宠物（已是最新）'}
+                </div>
+              )}
+              {syncErrors.length > 0 && (
+                <div className="mb-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-3 py-2 text-[10px] text-yellow-400/80">
+                  <p className="font-semibold mb-1">社区源部分不可用（不影响本地已有宠物）：</p>
+                  {syncErrors.map((e, i) => <p key={i} className="break-all">• {e}</p>)}
+                </div>
+              )}
 
               {communityLoading && (
                 <div className="text-center py-12 text-gray-400 text-sm">正在扫描本地宠物目录…</div>
@@ -279,9 +334,7 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
                 <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-400">
                   <p className="font-semibold mb-1">无法读取宠物目录</p>
                   <p className="text-red-400/70">{communityError}</p>
-                  <p className="mt-2 text-gray-500">
-                    请确认 ShadowFlow 后端正在运行（端口 8000）。
-                  </p>
+                  <p className="mt-2 text-gray-500">请确认 ShadowFlow 后端正在运行（端口 8000）。</p>
                 </div>
               )}
 
