@@ -580,6 +580,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
 @keyframes hf-pulse  { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 @keyframes hf-cursor { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes hf-dash   { to { stroke-dashoffset: -16; } }
+@keyframes pj-card-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ── Run Session animations ── */
 @keyframes rs-spin  { to { transform: rotate(360deg); } }
@@ -621,6 +622,28 @@ input, textarea, select { font-family: inherit; color: inherit; }
   flex: 1;
   height: 1px;
   background: var(--t-border);
+}
+
+/* cmp-btn — composer icon button (settings / attach / model) */
+.cmp-btn {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  color: var(--t-fg-4);
+  transition: background .12s, color .12s, border-color .12s;
+}
+.cmp-btn:hover {
+  background: var(--t-hover, var(--t-panel));
+  color: var(--t-fg);
+  border-color: var(--t-border);
 }
 
 /* cmp-chip — composer meta chip (model picker etc.) */

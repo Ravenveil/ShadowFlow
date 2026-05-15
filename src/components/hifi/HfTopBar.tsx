@@ -33,23 +33,26 @@ function tierColor(latency: number): string {
 }
 
 /**
- * Always-on chip showing 0G testnet connectivity + last ping latency.
- * Mock data for now — jitters ±20ms every 5s within 70-110ms range.
- * Click opens the 0G testnet block explorer in a new tab.
+ * Always-on chip showing API server connectivity + last ping latency.
+ * Measures real round-trip time to /health every 10s.
  */
 function NetworkLatencyChip() {
   const { t } = useI18n();
-  // TODO: replace with real GET /api/health.latency once endpoint exists
-  const [latency, setLatency] = useState(87);
+  const [latency, setLatency] = useState<number | null>(null);
   const [hover, setHover] = useState(false);
 
   useEffect(() => {
-    const id = window.setInterval(() => {
-      setLatency(() => {
-        const next = 70 + Math.floor(Math.random() * 41); // 70..110
-        return next;
-      });
-    }, 5000);
+    const ping = async () => {
+      const start = Date.now();
+      try {
+        await fetch('/health', { method: 'GET', cache: 'no-store' });
+        setLatency(Date.now() - start);
+      } catch {
+        setLatency(null);
+      }
+    };
+    ping();
+    const id = window.setInterval(ping, 10_000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -60,7 +63,7 @@ function NetworkLatencyChip() {
       rel="noopener noreferrer"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      title={t('shell.networkTitle', { latency })}
+      title={latency != null ? t('shell.networkTitle', { latency }) : '0G TESTNET · connecting…'}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -86,11 +89,11 @@ function NetworkLatencyChip() {
           width: 7,
           height: 7,
           borderRadius: '50%',
-          background: tierColor(latency),
+          background: latency != null ? tierColor(latency) : 'var(--t-fg-3)',
           animation: 'hf-pulse 1.4s ease-in-out infinite',
         }}
       />
-      <span>0G TESTNET · {latency}ms</span>
+      <span>0G TESTNET · {latency != null ? `${latency}ms` : '…'}</span>
     </a>
   );
 }
