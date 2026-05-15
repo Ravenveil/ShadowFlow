@@ -36,7 +36,7 @@ export interface CliDescriptor {
 }
 
 /**
- * 10 known AI CLIs (AC-2). Order matters for `cli:auto` — first detected wins.
+ * 19 known AI CLIs (AC-2). Order matters for `cli:auto` — first detected wins.
  */
 export const KNOWN_CLIS: CliDescriptor[] = [
   {
@@ -133,6 +133,72 @@ export const KNOWN_CLIS: CliDescriptor[] = [
     binary: 'windsurf',
     version_arg: '--version',
     install_cmd: '从 windsurf 官网下载',
+    stream_format: 'plain-line',
+  },
+  {
+    id: 'devin',
+    binary: 'devin',
+    version_arg: '--version',
+    install_cmd: 'npm i -g @cognition/devin',
+    stream_format: 'plain-line',
+  },
+  {
+    id: 'hermes',
+    binary: 'hermes',
+    version_arg: '--version',
+    install_cmd: '参见 hermes 官方文档',
+    stream_format: 'plain-line',
+  },
+  {
+    id: 'kimi',
+    binary: 'kimi',
+    version_arg: '--version',
+    needs_env: 'MOONSHOT_API_KEY',
+    install_cmd: 'npm i -g kimi-cli',
+    stream_format: 'plain-line',
+  },
+  {
+    id: 'qoder',
+    binary: 'qoder',
+    version_arg: '--version',
+    install_cmd: 'npm i -g qoder',
+    stream_format: 'plain-line',
+  },
+  {
+    id: 'pi',
+    binary: 'pi',
+    version_arg: '--version',
+    install_cmd: 'npm i -g pi-cli',
+    stream_format: 'plain-line',
+  },
+  {
+    id: 'kiro',
+    binary: 'kiro',
+    version_arg: '--version',
+    install_cmd: 'npm i -g @aws/kiro',
+    stream_format: 'plain-line',
+  },
+  {
+    id: 'kilo',
+    binary: 'kilo',
+    version_arg: '--version',
+    install_cmd: 'npm i -g kilo',
+    stream_format: 'plain-line',
+  },
+  {
+    id: 'vibe',
+    binary: 'vibe',
+    version_arg: '--version',
+    needs_env: 'MISTRAL_API_KEY',
+    install_cmd: 'npm i -g @mistralai/vibe-cli',
+    stream_format: 'plain-line',
+  },
+  {
+    id: 'deepseek-tui',
+    binary: 'deepseek',
+    version_arg: '--version',
+    needs_env: 'DEEPSEEK_API_KEY',
+    install_cmd: 'pip install deepseek-tui',
     stream_format: 'plain-line',
   },
 ];

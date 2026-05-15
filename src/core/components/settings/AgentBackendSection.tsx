@@ -45,43 +45,41 @@ interface AgentEntry {
   path: string | null;
 }
 
-const MOCK_AGENTS: AgentEntry[] = [
-  { id: 'claude',   name: 'Claude Code',  installed: true,  version: '2.1.129', path: '/usr/bin/claude' },
-  { id: 'codex',    name: 'Codex CLI',    installed: true,  version: '1.0.0',   path: '/usr/bin/codex' },
-  { id: 'gemini',   name: 'Gemini CLI',   installed: false, version: null,      path: null },
-  { id: 'opencode', name: 'OpenCode',     installed: false, version: null,      path: null },
-  { id: 'cursor',   name: 'Cursor Agent', installed: false, version: null,      path: null },
-  { id: 'hermes',   name: 'Hermes',       installed: false, version: null,      path: null },
-];
-
-// Emoji/color avatars per CLI brand
+// Emoji/color avatars per CLI brand — keys MUST match registry id exactly.
 const AGENT_AVATARS: Record<string, { emoji: string; color: string }> = {
-  claude:   { emoji: '🤖', color: '#D97706' },
-  codex:    { emoji: '⚡', color: '#3B82F6' },
-  gemini:   { emoji: '✨', color: '#0EA5E9' },
-  opencode: { emoji: '🔓', color: '#10B981' },
-  cursor:   { emoji: '🖱',  color: '#8B5CF6' },
-  hermes:   { emoji: '💬', color: '#EC4899' },
-  devin:    { emoji: '🤖', color: '#6366F1' },
-  kimi:     { emoji: '🌙', color: '#06B6D4' },
-  kiro:     { emoji: '⭕', color: '#F59E0B' },
-  kilo:     { emoji: '🔷', color: '#3B82F6' },
-  vibe:     { emoji: '🎵', color: '#EC4899' },
-  pi:       { emoji: 'π',  color: '#8B5CF6' },
-  deepseek: { emoji: '🔍', color: '#10B981' },
-  qwen:     { emoji: '🌐', color: '#F97316' },
-  copilot:  { emoji: '🪁', color: '#0078D4' },
+  // Core
+  claude:          { emoji: '🤖', color: '#D97706' },
+  codex:           { emoji: '⚡', color: '#3B82F6' },
+  gemini:          { emoji: '✨', color: '#0EA5E9' },
+  opencode:        { emoji: '🔓', color: '#10B981' },
+  // Cursor family
+  cursor:          { emoji: '🖱',  color: '#8B5CF6' },
+  'cursor-agent':  { emoji: '🖱',  color: '#7C3AED' },
+  // GitHub Copilot — registry id is 'gh-copilot'
+  'gh-copilot':    { emoji: '🪁', color: '#0078D4' },
+  // Qwen — registry id is 'qwen-coder'
+  'qwen-coder':    { emoji: '🌐', color: '#F97316' },
+  // DeepSeek — registry id is 'deepseek-tui'
+  'deepseek-tui':  { emoji: '🔍', color: '#10B981' },
+  // Others
+  cline:           { emoji: '⌨', color: '#6366F1' },
+  aider:           { emoji: '🔧', color: '#059669' },
+  'windsurf-cli':  { emoji: '🏄', color: '#06B6D4' },
+  hermes:          { emoji: '💬', color: '#EC4899' },
+  devin:           { emoji: '🤖', color: '#6366F1' },
+  kimi:            { emoji: '🌙', color: '#06B6D4' },
+  qoder:           { emoji: '⚙',  color: '#8B5CF6' },
+  pi:              { emoji: 'π',  color: '#8B5CF6' },
+  kiro:            { emoji: '⭕', color: '#F59E0B' },
+  kilo:            { emoji: '🔷', color: '#3B82F6' },
+  vibe:            { emoji: '🎵', color: '#EC4899' },
 };
 
 async function fetchAgents(): Promise<AgentEntry[]> {
-  try {
-    const res = await fetch(`${API_BASE}/api/settings/agents/detect`, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return MOCK_AGENTS;
-    const j = await res.json();
-    return Array.isArray(j.agents) ? j.agents : MOCK_AGENTS;
-  } catch {
-    return MOCK_AGENTS;
-  }
+  const res = await fetch(`${API_BASE}/api/settings/agents/detect`, { signal: AbortSignal.timeout(3000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const j = await res.json();
+  return Array.isArray(j.agents) ? j.agents : [];
 }
 
 async function fetchAgentSelection(): Promise<string | null> {
@@ -650,15 +648,26 @@ export function AgentBackendSection() {
   const [agents, setAgents] = useState<AgentEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string>(
     () => localStorage.getItem('sf.selectedAgent') ?? 'claude'
   );
 
   async function load() {
-    const [list, serverSelection] = await Promise.all([
-      fetchAgents(),
-      fetchAgentSelection(),
-    ]);
+    setError(null);
+    let list: AgentEntry[];
+    let serverSelection: string | null;
+    try {
+      [list, serverSelection] = await Promise.all([
+        fetchAgents(),
+        fetchAgentSelection(),
+      ]);
+    } catch {
+      setAgents([]);
+      setError('CLI 检测服务不可用，请确认后端已启动');
+      setLoading(false);
+      return;
+    }
     setAgents(list);
 
     // Use server selection if the agent is installed; else fall back to localStorage
@@ -696,6 +705,7 @@ export function AgentBackendSection() {
     const cliIds = new Set([
       'claude', 'codex', 'gh-copilot', 'cursor-agent', 'cursor',
       'gemini', 'qwen-coder', 'cline', 'aider', 'windsurf-cli',
+      'devin', 'hermes', 'kimi', 'qoder', 'pi', 'kiro', 'kilo', 'vibe', 'deepseek-tui',
     ]);
     const executor = cliIds.has(id) ? `cli:${id}` : 'anthropic-direct';
     localStorage.setItem('sf.defaultExecutor', executor);
@@ -742,6 +752,10 @@ export function AgentBackendSection() {
                 <div key={i} className="h-[62px] animate-pulse rounded-[10px] bg-sf-elev2" />
               ))}
             </div>
+          ) : error ? (
+            <p className="rounded-[8px] border border-sf-reject/30 bg-sf-reject/10 px-3 py-2 font-mono text-[11px] text-sf-reject">
+              {error}
+            </p>
           ) : (
             <div className="flex flex-col gap-2">
               {installed.map((a) => (
