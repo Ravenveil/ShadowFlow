@@ -14,9 +14,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Users, Hash, Lock, Bot, CalendarDays, FileText,
+  Users, Hash, Lock,
   CheckSquare, Search, MoreHorizontal, Send, Paperclip,
-  Smile, AtSign, Slash, ChevronDown, Pin, Sparkles, MessageSquare,
+  Smile, AtSign, Slash, ChevronDown, Pin, Sparkles,
 } from 'lucide-react';
 import { BreadcrumbBar } from '../core/components/inbox/BreadcrumbBar';
 import { GroupMetricsBar } from '../core/components/inbox/GroupMetricsBar';
@@ -76,31 +76,6 @@ function Av({ g, color, size = 32, sq }: { g: string; color: string; size?: numb
       border: `1px solid color-mix(in oklab, ${color} 45%, transparent)`,
       color, borderRadius: sq ? size * 0.22 : '50%',
     }}>{g}</span>
-  );
-}
-
-// ── Left icon rail (52px) ────────────────────────────────────────────────────
-function ChatRail({ msgBadge, taskBadge }: { msgBadge: number; taskBadge: number }) {
-  const rail = [
-    { k: 'msg',  ic: <MessageSquare size={16} strokeWidth={1.7}/>,  l: '消息',  badge: msgBadge  },
-    { k: 'task', ic: <CheckSquare size={16} strokeWidth={1.7}/>,   l: '任务',  badge: taskBadge },
-    { k: 'cal',  ic: <CalendarDays size={16} strokeWidth={1.7}/>,  l: '日历'                   },
-    { k: 'doc',  ic: <FileText size={16} strokeWidth={1.7}/>,      l: '文档'                   },
-    { k: 'bots', ic: <Bot size={16} strokeWidth={1.7}/>,           l: 'Agents'                 },
-  ];
-  return (
-    <div style={{ width: 52, background: T.p, borderRight: `1px solid ${T.bd2}`, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0 14px', gap: 2, flexShrink: 0 }}>
-      {rail.map((it, i) => (
-        <div key={it.k} title={it.l} className={`sf-chat-rail-item${i === 0 ? ' active' : ''}`}>
-          {it.ic}
-          <span style={{ fontSize: 9, fontWeight: 600 }}>{it.l}</span>
-          {it.badge ? (
-            <span style={{ position: 'absolute', top: 2, right: 4, minWidth: 14, height: 14, padding: '0 3px', borderRadius: 7, border: `1.5px solid ${T.p}`, background: T.err, color: 'white', fontFamily: T.mono, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{it.badge > 99 ? '99+' : it.badge}</span>
-          ) : null}
-        </div>
-      ))}
-      <div style={{ flex: 1 }}/>
-    </div>
   );
 }
 
@@ -234,18 +209,16 @@ function DmRow({ g, n, last, color, t, mention, run, unread, onClick }: {
   );
 }
 
-// ── Inbox panel (rail 52px + list 268px = 320px total) ───────────────────────
+// ── Inbox panel (268px) ───────────────────────────────────────────────────────
 interface InboxPanelProps {
   groups: GroupItem[];
   groupId?: string;
   agentDMs: Array<{ agentId: string; agentName: string; kind: string; status: string; unreadCount: number; lastMessage: string }>;
   onGroup: (id: string) => void;
   onDm: (id: string) => void;
-  msgBadge: number;
-  taskBadge: number;
 }
 
-function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm, msgBadge, taskBadge }: InboxPanelProps) {
+function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProps) {
   const [filter, setFilter] = useState<FilterKey>('all');
 
   function statusOf(g: GroupItem) {
@@ -265,12 +238,7 @@ function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm, msgBadge, taskBa
   const chips: Array<[string, FilterKey]> = [['全部', 'all'], ['未读', 'unread'], ['@我', 'mention'], ['Agent', 'agent']];
 
   return (
-    <div style={{ flexShrink: 0, borderRight: `1px solid ${T.bd}`, background: T.p, display: 'flex', flexDirection: 'row', minHeight: 0 }}>
-      {/* Icon rail (52px) — embedded inside inbox column */}
-      <ChatRail msgBadge={msgBadge} taskBadge={taskBadge}/>
-
-      {/* Conversation list (268px) */}
-      <div style={{ width: 268, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ width: 268, flexShrink: 0, borderRight: `1px solid ${T.bd}`, background: T.p, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <OrgSwitcher/>
 
       {/* Search */}
@@ -348,7 +316,6 @@ function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm, msgBadge, taskBa
             </div>
           </>
         )}
-      </div>
       </div>
     </div>
   );
@@ -630,9 +597,6 @@ export default function ChatPage() {
 
   const chatStream = useChatStream({ mode: 'group', targetId: groupId ?? null, sseChannel: 'workflow', runId: undefined });
 
-  // Badge counts computed from store
-  const msgBadge = groups.reduce((n, g) => n + g.unreadCount, 0) + agentDMs.reduce((n, d) => n + d.unreadCount, 0);
-  const taskBadge = groups.reduce((n, g) => n + (g.metrics?.pendingApprovalsCount ?? 0), 0);
 
   useEffect(() => {
     if (!group?.templateId) return;
@@ -675,9 +639,9 @@ export default function ChatPage() {
         <ChatBriefBoardToggle briefBoardAlias={briefBoardAlias} activeTab={activeTab} onChange={handleTabChange} pendingApprovalsCount={metrics.pendingApprovalsCount}/>
       </div>
 
-      {/* 3-column body: [rail+inbox] · main · drawer */}
+      {/* 3-column body: inbox · main · drawer */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <InboxPanel groups={groups} groupId={groupId} agentDMs={agentDMs} onGroup={id => navigate(`/chat/${id}`)} onDm={id => navigate(`/agent-dm/${id}`)} msgBadge={msgBadge} taskBadge={taskBadge}/>
+        <InboxPanel groups={groups} groupId={groupId} agentDMs={agentDMs} onGroup={id => navigate(`/chat/${id}`)} onDm={id => navigate(`/agent-dm/${id}`)}/>
 
         {/* ─ Center column ─ */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>

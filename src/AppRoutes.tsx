@@ -31,6 +31,7 @@ const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
 const RunSessionPage = lazy(() => import('./pages/RunSessionPage'));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
 const MemoryPage = lazy(() => import('./pages/MemoryPage'));
+const CalendarPage = lazy(() => import('./pages/CalendarPage'));
 const RunsListPage = lazy(() =>
   import('./pages/RunsPage').then((m) => ({ default: m.RunsListPage }))
 );
@@ -86,6 +87,7 @@ export function AppRoutes() {
             <Route path="/start" element={<StartPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/memory" element={<MemoryPage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/run-session/:sessionId" element={<RunSessionPage />} />
             <Route path="/run-session" element={<RunSessionPage />} />
           </Route>

@@ -13,7 +13,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { openQuickSwitcher } from './QuickSwitcher';
-import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search, PanelLeftClose, PanelLeftOpen, Folder } from 'lucide-react';
+import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search, PanelLeftClose, PanelLeftOpen, Folder, CalendarDays } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { HfDot } from './HfAtoms';
 import { useI18n } from '../../common/i18n';
@@ -28,6 +28,7 @@ export type HfSidebarActive =
   | 'teams'
   | 'agents'
   | 'templates'
+  | 'calendar'
   | 'projects'
   | 'settings';
 
@@ -46,8 +47,9 @@ const buildNavItems = (t: (key: string) => string): NavItem[] => [
   { k: 'teams',     Icon: Users,          label: t('shell.navTeams'),     hint: '⌘3', to: '/teams' },
   { k: 'agents',    Icon: Bot,            label: t('shell.navAgents'),    hint: '⌘4', to: '/agents' },
   { k: 'templates', Icon: LayoutTemplate, label: t('shell.navTemplates'), hint: '⌘5', to: '/templates' },
+  { k: 'calendar',  Icon: CalendarDays,  label: t('shell.navCalendar'),  hint: '⌘6', to: '/calendar' },
   // Story 15.24 — Projects nav entry (Project + Conversation history page).
-  { k: 'projects',     Icon: Folder,      label: t('projects.navLabel'),         hint: '⌘6', to: '/projects' },
+  { k: 'projects',  Icon: Folder,        label: t('projects.navLabel'),  hint: '⌘7', to: '/projects' },
 ];
 
 interface HfSidebarProps {
