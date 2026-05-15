@@ -365,13 +365,19 @@ export const PetSettings: React.FC = () => {
       </div>
 
       {/* Custom pet creation (collapsible) */}
-      <div className="mt-4 rounded-[12px] border border-sf-border bg-sf-panel overflow-hidden">
+      <div
+        className="mt-4 rounded-[12px] overflow-hidden"
+        style={{ border: '1px solid var(--t-border)', background: 'var(--t-panel-2)' }}
+      >
         <button
           type="button"
           onClick={() => setCustomExpanded((v) => !v)}
-          className="flex w-full items-center justify-between px-4 py-3 cursor-pointer hover:bg-sf-elev2 transition-colors"
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer',
+          }}
         >
-          <span className="text-[13px] font-semibold text-sf-fg1">自定义宠物</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-fg)' }}>自定义宠物</span>
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -379,16 +385,20 @@ export const PetSettings: React.FC = () => {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className={[
-              'h-4 w-4 text-sf-fg4 transition-transform duration-200',
-              customExpanded ? 'rotate-180' : '',
-            ].join(' ')}
+            style={{
+              width: 16, height: 16, color: 'var(--t-fg-4)',
+              transform: customExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 200ms',
+            }}
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </button>
         {customExpanded && (
-          <div className="border-t border-sf-border bg-sf-elev1 px-4 pb-4">
+          <div
+            className="px-4 pb-4"
+            style={{ borderTop: '1px solid var(--t-border)', background: 'var(--t-panel-3)' }}
+          >
             <CustomPetForm onApply={() => setCustomExpanded(false)} />
           </div>
         )}
