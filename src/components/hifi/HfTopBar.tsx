@@ -143,7 +143,7 @@ export function HfTopBar({ right, hideWorkspace }: HfTopBarProps) {
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        padding: '0 22px',
+        padding: '0 22px 0 8px',
         borderBottom: '1px solid var(--t-border)',
         background: 'var(--t-panel)',
       }}

@@ -34,7 +34,7 @@ export function WorkspaceSelector() {
   const getInit = (name: string) => { const a = Array.from(name); return a.length >= 2 ? a[0] + a[1] : (a[0] ?? '?'); };
   const current = workspaces.find((w) => w.workspace_id === currentId) ?? workspaces[0];
   const color   = current?.color || 'var(--t-accent)';
-  const init    = current ? getInit(current.name) : '?';
+  const init    = current ? getInit(current.name) : 'Sh';
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
@@ -58,10 +58,10 @@ export function WorkspaceSelector() {
         }}>{init}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {current?.name ?? '—'}
+            {current?.name ?? 'ShadowFlow'}
           </div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', marginTop: 1 }}>
-            {current ? `${current.agent_count} agents · ${current.team_count} teams` : ''}
+            {current ? `${current.agent_count} agents · ${current.team_count} teams` : 'Workspace'}
           </div>
         </div>
         <ChevronDown size={13} strokeWidth={2} style={{ color: 'var(--t-fg-4)', flexShrink: 0, transition: 'transform 150ms', transform: open ? 'rotate(180deg)' : 'none' }} />
