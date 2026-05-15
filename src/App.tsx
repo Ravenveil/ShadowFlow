@@ -1,4 +1,5 @@
 import { I18nProvider } from './common/i18n';
+import { AuthProvider } from './core/auth/AuthContext';
 import AppRoutes from './AppRoutes';
 
 export default function App() {
@@ -8,15 +9,17 @@ export default function App() {
   // Hi-Fi v2 pages set their own surface; this wrapper is the safety net.
   return (
     <I18nProvider>
-      <div
-        style={{
-          minHeight: '100vh',
-          background: 'var(--t-bg)',
-          color: 'var(--t-fg)',
-        }}
-      >
-        <AppRoutes />
-      </div>
+      <AuthProvider>
+        <div
+          style={{
+            minHeight: '100vh',
+            background: 'var(--t-bg)',
+            color: 'var(--t-fg)',
+          }}
+        >
+          <AppRoutes />
+        </div>
+      </AuthProvider>
     </I18nProvider>
   );
 }

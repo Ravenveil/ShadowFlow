@@ -73,3 +73,33 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 CREATE INDEX IF NOT EXISTS idx_runs_completed ON runs(completed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id, completed_at DESC);
+
+-- ── Auth tables (SIWE + guest session) ─────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS auth_nonces (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  address     TEXT NOT NULL,
+  nonce       TEXT NOT NULL UNIQUE,
+  used        INTEGER NOT NULL DEFAULT 0,   -- 0=unused 1=used
+  expires_at  TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_auth_nonces_nonce ON auth_nonces(nonce);
+
+CREATE TABLE IF NOT EXISTS auth_profiles (
+  address      TEXT PRIMARY KEY,
+  did          TEXT NOT NULL,
+  display_name TEXT,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_hash  TEXT NOT NULL UNIQUE,   -- sha256(raw_token) hex
+  address     TEXT NOT NULL,
+  auth_type   TEXT NOT NULL DEFAULT 'wallet',  -- 'wallet' | 'guest'
+  expires_at  TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token_hash);

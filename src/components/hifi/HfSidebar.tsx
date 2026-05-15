@@ -18,6 +18,7 @@ import type { LucideIcon } from 'lucide-react';
 import { HfDot } from './HfAtoms';
 import { useI18n } from '../../common/i18n';
 import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
+import { useAuth } from '../../core/auth/AuthContext';
 
 export type HfSidebarActive =
   | 'start'
@@ -86,6 +87,18 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
   const { t } = useI18n();
   const NAV_ITEMS = useMemo(() => buildNavItems(t), [t]);
   const [collapsed, setCollapsed] = useState(false);
+  const { user } = useAuth();
+
+  const displayName = user?.display_name
+    || (user?.auth_type === 'guest' ? 'Guest' : null)
+    || (user?.address ? `${user.address.slice(0, 6)}…${user.address.slice(-4)}` : '—');
+  const avatarLetter = user?.display_name?.[0]?.toUpperCase()
+    || (user?.auth_type === 'guest' ? 'G' : user?.address?.[2]?.toUpperCase() ?? '?');
+  const subtitle = user?.auth_type === 'guest'
+    ? 'Guest session'
+    : user?.address
+      ? `${user.address.slice(0, 6)}…${user.address.slice(-4)}`
+      : '';
 
   const W = collapsed ? 56 : 220;
 
@@ -365,7 +378,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
         {/* User card */}
         {collapsed ? (
           <div
-            title="张明 · 0x3f7a…bc91"
+            title={`${displayName} · ${subtitle}`}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -389,7 +402,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
                 fontSize: 10,
               }}
             >
-              张
+              {avatarLetter}
             </div>
             <span style={{ position: 'absolute', bottom: 8, right: 6 }}>
               <HfDot color="var(--t-ok)" pulse />
@@ -424,12 +437,12 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
                 flexShrink: 0,
               }}
             >
-              张
+              {avatarLetter}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 600 }}>张明</div>
+              <div style={{ fontSize: 11.5, fontWeight: 600 }}>{displayName}</div>
               <div className="hf-meta" style={{ fontSize: 9 }}>
-                0x3f7a…bc91
+                {subtitle}
               </div>
             </div>
             <HfDot color="var(--t-ok)" pulse />

@@ -26,6 +26,7 @@ import projectsRouter from './routes/projects';
 import conversationsRouter, {
   projectScopedConversationsRouter,
 } from './routes/conversations';
+import authRouter from './routes/auth';
 import { proxyFallback } from './proxy-fallback';
 import { initSqlite } from './storage/sqlite';
 import { reloadSkills } from './skills';
@@ -87,6 +88,8 @@ app.use('/api/cli', cliRouter);
 app.use('/api/acp', acpRouter);
 // Story 15.14 — POST /api/artifacts/lint
 app.use('/api/artifacts', artifactsRouter);
+// SIWE + guest authentication
+app.use('/api/auth', authRouter);
 // Story 15.16 — Project + Conversation persistence layer.
 app.use('/api/projects', projectsRouter);
 app.use('/api/projects', projectScopedConversationsRouter);
