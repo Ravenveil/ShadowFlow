@@ -122,6 +122,13 @@ export const KNOWN_CLIS: CliDescriptor[] = [
     stream_format: 'plain-line',
   },
   {
+    id: 'openclaw',
+    binary: 'openclaw',
+    version_arg: '--version',
+    install_cmd: 'npm i -g openclaw',
+    stream_format: 'plain-line',
+  },
+  {
     id: 'cursor',
     binary: 'cursor',
     version_arg: '--version',
