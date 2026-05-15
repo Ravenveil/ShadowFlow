@@ -526,7 +526,7 @@ function RecentRuns() {
                 key={run.run_id}
                 className="hf-card"
                 onClick={() => navigate(`/run-session/${run.session_id}?goal=${encodeURIComponent(run.goal ?? '')}`)}
-                style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer', position: 'relative' }}
+                style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer', position: 'relative', overflow: 'hidden', minWidth: 0 }}
                 title={run.goal}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, minWidth: 0 }}>
