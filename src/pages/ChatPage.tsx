@@ -645,7 +645,7 @@ export default function ChatPage() {
 
         {/* ─ Center column ─ */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <ConvHeader group={group} isRunning={isRunning} builderUrl={builderUrl} t={t}/>
+          {group && <ConvHeader group={group} isRunning={isRunning} builderUrl={builderUrl} t={t}/>}
           <PinnedBrief group={group}/>
 
           {/* Sub tabs (Chat / BriefBoard / Approvals) */}
