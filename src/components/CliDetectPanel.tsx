@@ -222,9 +222,72 @@ export function CliDetectPanel() {
                       env {it.needs_env} not set
                     </div>
                   )}
+                  {it.installed && it.capabilities && (() => {
+                    const enabledKeys = Object.entries(it.capabilities)
+                      .filter(([, v]) => v)
+                      .map(([k]) => k);
+                    if (enabledKeys.length === 0) return null;
+                    const visible = enabledKeys.slice(0, 3);
+                    const extra = enabledKeys.length - visible.length;
+                    return (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+                        {visible.map((cap) => (
+                          <span
+                            key={cap}
+                            style={{
+                              fontSize: 10,
+                              padding: '1px 5px',
+                              borderRadius: 4,
+                              border: '1px solid var(--t-border)',
+                              background: 'var(--t-panel-2, var(--t-panel))',
+                              color: 'var(--t-fg-3)',
+                              fontFamily: 'var(--font-mono, monospace)',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {cap}
+                          </span>
+                        ))}
+                        {extra > 0 && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              padding: '1px 5px',
+                              borderRadius: 4,
+                              border: '1px solid var(--t-border)',
+                              background: 'var(--t-panel-2, var(--t-panel))',
+                              color: 'var(--t-fg-4)',
+                              fontFamily: 'var(--font-mono, monospace)',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            +{extra} more
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'var(--font-mono, monospace)', fontSize: 11 }}>
                   {it.version ?? '—'}
+                  {it.installed && it.fallback_models && it.fallback_models.length > 0 && (
+                    <span
+                      style={{
+                        marginLeft: 6,
+                        fontSize: 10,
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        border: '1px solid var(--t-border)',
+                        background: 'var(--t-panel-2, var(--t-panel))',
+                        color: 'var(--t-fg-4)',
+                        fontFamily: 'var(--font-mono, monospace)',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={it.fallback_models.join(', ')}
+                    >
+                      {it.fallback_models.length} models
+                    </span>
+                  )}
                 </td>
                 <td
                   style={{
@@ -244,34 +307,48 @@ export function CliDetectPanel() {
                   {it.installed ? (
                     <span style={{ color: 'var(--t-fg-4)' }}>—</span>
                   ) : (
-                    <button
-                      type="button"
-                      data-testid={`cli-install-${it.id}`}
-                      onClick={() => void copyInstall(it)}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        fontSize: 11,
-                        padding: '4px 8px',
-                        borderRadius: 4,
-                        border: '1px solid var(--t-border)',
-                        background: 'transparent',
-                        color: 'var(--t-fg-2)',
-                        cursor: 'pointer',
-                        fontFamily: 'var(--font-mono, monospace)',
-                        maxWidth: 320,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={it.install_cmd}
-                    >
-                      <Copy size={10} />
-                      <span>
-                        {copiedId === it.id ? 'copied!' : copiedId === 'error' ? 'copy blocked' : it.install_cmd}
-                      </span>
-                    </button>
+                    <div>
+                      <button
+                        type="button"
+                        data-testid={`cli-install-${it.id}`}
+                        onClick={() => void copyInstall(it)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 11,
+                          padding: '4px 8px',
+                          borderRadius: 4,
+                          border: '1px solid var(--t-border)',
+                          background: 'transparent',
+                          color: 'var(--t-fg-2)',
+                          cursor: 'pointer',
+                          fontFamily: 'var(--font-mono, monospace)',
+                          maxWidth: 320,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={it.install_cmd}
+                      >
+                        <Copy size={10} />
+                        <span>
+                          {copiedId === it.id ? 'copied!' : copiedId === 'error' ? 'copy blocked' : it.install_cmd}
+                        </span>
+                      </button>
+                      {it.auth_hint && (
+                        <div
+                          style={{
+                            fontSize: 10,
+                            color: 'var(--t-fg-4)',
+                            fontStyle: 'italic',
+                            marginTop: 3,
+                          }}
+                        >
+                          {it.auth_hint}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </td>
               </tr>

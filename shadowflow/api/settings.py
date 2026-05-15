@@ -82,22 +82,102 @@ BYOK_MODELS: List[Dict[str, Any]] = [
 ]
 
 AGENT_DEFS: List[Dict[str, Any]] = [
-    {"id": "claude",   "name": "Claude Code",    "bin": "claude",       "fallback_bins": ["openclaude"]},
-    {"id": "codex",    "name": "Codex CLI",       "bin": "codex",        "fallback_bins": []},
-    {"id": "gemini",   "name": "Gemini CLI",      "bin": "gemini",       "fallback_bins": []},
-    {"id": "opencode",  "name": "OpenCode",          "bin": "opencode",     "fallback_bins": []},
-    {"id": "openclaw", "name": "OpenClaw",          "bin": "openclaw",     "fallback_bins": []},
-    {"id": "cursor",   "name": "Cursor Agent",    "bin": "cursor-agent", "fallback_bins": []},
-    {"id": "qwen",     "name": "Qwen Code",       "bin": "qwen",         "fallback_bins": []},
-    {"id": "copilot",  "name": "GitHub Copilot",  "bin": "copilot",      "fallback_bins": []},
-    {"id": "hermes",   "name": "Hermes",          "bin": "hermes",       "fallback_bins": []},
-    {"id": "devin",    "name": "Devin",           "bin": "devin",        "fallback_bins": []},
-    {"id": "kimi",     "name": "Kimi CLI",         "bin": "kimi",         "fallback_bins": []},
-    {"id": "kiro",     "name": "Kiro",             "bin": "kiro",         "fallback_bins": []},
-    {"id": "kilo",     "name": "Kilo",             "bin": "kilo",         "fallback_bins": []},
-    {"id": "vibe",     "name": "Vibe",             "bin": "vibe",         "fallback_bins": []},
-    {"id": "pi",       "name": "Pi",               "bin": "pi",           "fallback_bins": []},
-    {"id": "deepseek", "name": "DeepSeek Coder",   "bin": "deepseek",     "fallback_bins": []},
+    {
+        "id": "claude",   "name": "Claude Code",    "bin": "claude",
+        "fallback_bins": ["openclaude"],
+        "auth_hint": "Run `claude login`",
+        "fallback_models": ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"],
+    },
+    {
+        "id": "codex",    "name": "Codex CLI",       "bin": "codex",
+        "fallback_bins": [],
+        "auth_hint": "Set OPENAI_API_KEY env var",
+        "fallback_models": ["o4-mini", "o3", "gpt-4o"],
+    },
+    {
+        "id": "gemini",   "name": "Gemini CLI",      "bin": "gemini",
+        "fallback_bins": [],
+        "auth_hint": "Set GEMINI_API_KEY env var",
+        "fallback_models": ["gemini-2.5-pro", "gemini-2.0-flash"],
+    },
+    {
+        "id": "opencode",  "name": "OpenCode",       "bin": "opencode",
+        "fallback_bins": [],
+        "auth_hint": "See opencode docs",
+        "fallback_models": [],
+    },
+    {
+        "id": "openclaw", "name": "OpenClaw",         "bin": "openclaw",
+        "fallback_bins": [],
+        "auth_hint": "See openclaw docs",
+        "fallback_models": ["openclaw-default"],
+    },
+    {
+        "id": "cursor",   "name": "Cursor Agent",    "bin": "cursor-agent",
+        "fallback_bins": [],
+        "auth_hint": "Sign in via Cursor app",
+        "fallback_models": [],
+    },
+    {
+        "id": "qwen",     "name": "Qwen Code",       "bin": "qwen",
+        "fallback_bins": [],
+        "auth_hint": "Set DASHSCOPE_API_KEY env var",
+        "fallback_models": ["qwen-coder-32b"],
+    },
+    {
+        "id": "copilot",  "name": "GitHub Copilot",  "bin": "copilot",
+        "fallback_bins": [],
+        "auth_hint": "Run `gh auth login`",
+        "fallback_models": ["gpt-4o", "claude-sonnet-4-6"],
+    },
+    {
+        "id": "hermes",   "name": "Hermes",          "bin": "hermes",
+        "fallback_bins": [],
+        "auth_hint": "See hermes docs",
+        "fallback_models": [],
+    },
+    {
+        "id": "devin",    "name": "Devin",           "bin": "devin",
+        "fallback_bins": [],
+        "auth_hint": "Set DEVIN_API_KEY env var",
+        "fallback_models": [],
+    },
+    {
+        "id": "kimi",     "name": "Kimi CLI",        "bin": "kimi",
+        "fallback_bins": [],
+        "auth_hint": "Set MOONSHOT_API_KEY env var",
+        "fallback_models": ["kimi-latest"],
+    },
+    {
+        "id": "kiro",     "name": "Kiro",            "bin": "kiro",
+        "fallback_bins": [],
+        "auth_hint": "Sign in via kiro CLI",
+        "fallback_models": [],
+    },
+    {
+        "id": "kilo",     "name": "Kilo",            "bin": "kilo",
+        "fallback_bins": [],
+        "auth_hint": "See kilo docs",
+        "fallback_models": [],
+    },
+    {
+        "id": "vibe",     "name": "Vibe",            "bin": "vibe",
+        "fallback_bins": [],
+        "auth_hint": "Set MISTRAL_API_KEY env var",
+        "fallback_models": [],
+    },
+    {
+        "id": "pi",       "name": "Pi",              "bin": "pi",
+        "fallback_bins": [],
+        "auth_hint": "See pi docs",
+        "fallback_models": [],
+    },
+    {
+        "id": "deepseek", "name": "DeepSeek Coder",  "bin": "deepseek",
+        "fallback_bins": [],
+        "auth_hint": "Set DEEPSEEK_API_KEY env var",
+        "fallback_models": [],
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -118,13 +198,19 @@ def _detect_agents() -> List[Dict[str, Any]]:
         version: Optional[str] = None
         if path:
             try:
-                out = subprocess.run(
+                proc = subprocess.run(
                     [path, "--version"],
                     capture_output=True,
                     text=True,
                     timeout=3,
                 )
-                version = out.stdout.strip() or out.stderr.strip() or None
+                # Exit codes 126 (permission denied / not executable) and 127
+                # (command not found — ghost shim on PATH) mean the binary is
+                # effectively NOT installed even though `which` found a file.
+                if proc.returncode in (126, 127):
+                    path = None
+                else:
+                    version = proc.stdout.strip() or proc.stderr.strip() or None
             except Exception:
                 pass
         results.append(
@@ -134,6 +220,8 @@ def _detect_agents() -> List[Dict[str, Any]]:
                 "installed": bool(path),
                 "path": path,
                 "version": version,
+                "auth_hint": defn.get("auth_hint"),
+                "fallback_models": defn.get("fallback_models", []),
             }
         )
     return results

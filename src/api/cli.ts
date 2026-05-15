@@ -16,6 +16,9 @@ export interface DetectedCli {
   env_set: boolean;
   install_cmd: string;
   stream_format: string;
+  capabilities?: Record<string, boolean>;
+  fallback_models?: string[];
+  auth_hint?: string;
 }
 
 export interface DetectResponse {
