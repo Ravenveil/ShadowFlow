@@ -574,6 +574,125 @@ const SUGGESTIONS: Array<[string, string]> = [
   ['✦', '从零开始'],
 ];
 
+interface SkillPack {
+  id: string;
+  glyph: string;
+  name: string;
+  desc: string;
+  prompt: string;
+}
+
+const SKILL_PACKS: SkillPack[] = [
+  {
+    id: 'bmad',
+    glyph: '◈',
+    name: 'BMAD Method',
+    desc: '产品 · 架构 · 开发 · QA',
+    prompt: '使用 BMAD 方法组建全栈产品团队：产品经理（愿景/PRD）、架构师（系统设计）、全栈工程师（实现）、QA 工程师（测试与验收）',
+  },
+  {
+    id: 'gstack',
+    glyph: '⬡',
+    name: 'gSTACK',
+    desc: '调研 → 策略 → 执行',
+    prompt: '按 gSTACK 框架组建三段式工作流团队：研究员（信息收集与分析）、策略师（方案设计与评估）、执行者（任务落地与交付）',
+  },
+  {
+    id: 'consulting',
+    glyph: '◆',
+    name: '咨询铁三角',
+    desc: '研究 · 分析 · 策略',
+    prompt: '组建顾问式分析团队：市场调研员（数据收集）、商业分析师（洞察提炼）、战略顾问（建议生成与报告撰写）',
+  },
+  {
+    id: 'newsroom',
+    glyph: '◇',
+    name: '编辑部',
+    desc: '采集 · 编辑 · 发布',
+    prompt: '搭建内容生产团队：信息员（素材采集与事实核查）、内容编辑（润色与结构化）、审稿人（质量把关）、发布员（多渠道分发）',
+  },
+  {
+    id: 'startup',
+    glyph: '⬢',
+    name: '创业小分队',
+    desc: 'CEO · 产品 · 增长',
+    prompt: '组建精益创业团队：CEO 视角（战略与决策）、产品设计师（用户体验与原型）、全栈工程师（快速迭代）、增长黑客（获客与留存）',
+  },
+];
+
+interface SkillPackSectionProps {
+  onSelect: (pack: SkillPack) => void;
+}
+
+function SkillPackSection({ onSelect }: SkillPackSectionProps) {
+  const { t } = useI18n();
+  return (
+    <section style={{ width: '100%' }}>
+      <div className="hf-label" style={{ marginBottom: 10 }}>
+        {t('start.skillPacksLabel')}
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+          gap: 8,
+        }}
+      >
+        {SKILL_PACKS.map((pack) => (
+          <button
+            key={pack.id}
+            type="button"
+            onClick={() => onSelect(pack)}
+            className="hf-card"
+            data-testid={`skill-pack-${pack.id}`}
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+              padding: '12px 14px',
+              textAlign: 'left',
+              cursor: 'pointer',
+              background: 'var(--t-panel)',
+              color: 'var(--t-fg)',
+              fontFamily: 'inherit',
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                fontSize: 16,
+                color: 'var(--t-accent)',
+                lineHeight: 1,
+                marginTop: 1,
+                flexShrink: 0,
+              }}
+            >
+              {pack.glyph}
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--t-fg)' }}>
+                {pack.name}
+              </div>
+              <div
+                style={{
+                  marginTop: 2,
+                  fontSize: 10.5,
+                  color: 'var(--t-fg-4)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {pack.desc}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 type Mode = 'auto' | 'single' | 'team';
 
 // Attachments shown as chips between the textarea and the chip row.
@@ -729,6 +848,11 @@ export default function StartPage() {
       // Map suggestion to template gallery filtered by phrase
       navigate(`/templates?q=${encodeURIComponent(label)}`);
     }
+  }
+
+  function handleSkillPack(pack: SkillPack) {
+    setComposer(pack.prompt);
+    setMode('team');
   }
 
   return (
@@ -1394,74 +1518,8 @@ export default function StartPage() {
             </div>
           </div>
 
-          {/* Story 15.28 — Skill Studio top-level entry card. Placed below the
-              three primitive cards and above Recent drafts so it sits in the
-              user's natural reading flow. Visual reuses `hf-card` so it fits
-              the existing card system without redesign. */}
-          <section data-testid="primitive-card-skill-studio" style={{ width: '100%' }}>
-            <button
-              type="button"
-              onClick={() => navigate('/run-session')}
-              className="hf-card"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-                padding: 16,
-                width: '100%',
-                textAlign: 'left',
-                cursor: 'pointer',
-                background: 'var(--t-panel)',
-                color: 'var(--t-fg)',
-                border: '1px solid color-mix(in oklab, var(--t-accent) 35%, var(--t-border))',
-                fontFamily: 'inherit',
-              }}
-            >
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 10,
-                  background: 'var(--t-accent-tint)',
-                  color: 'var(--t-accent)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <Sparkles size={20} strokeWidth={2} aria-hidden />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-fg)' }}>
-                  {t('skillStudio.entry.startCardTitle')}
-                </div>
-                <div
-                  style={{
-                    marginTop: 4,
-                    fontSize: 12,
-                    lineHeight: 1.55,
-                    color: 'var(--t-fg-3)',
-                  }}
-                >
-                  {t('skillStudio.entry.startCardSubtitle')}
-                </div>
-              </div>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: 'var(--t-accent)',
-                  flexShrink: 0,
-                }}
-              >
-                {t('skillStudio.entry.openCta')}
-              </span>
-            </button>
-          </section>
+          {/* Skill Pack cards — select a team methodology to scaffold a team */}
+          <SkillPackSection onSelect={handleSkillPack} />
 
           {/* Recent drafts — preserved feature */}
           <RecentDrafts onNavigateCatalog={() => navigate('/catalog')} />

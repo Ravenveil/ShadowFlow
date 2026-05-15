@@ -76,6 +76,7 @@
   "start.createTeamDesc": "Assemble multiple AI roles into a collaborative team for complex tasks",
   "start.fromTemplate": "Start from Template",
   "start.fromTemplateDesc": "Quickly start with an existing Agent / Team template, then adjust as needed",
+  "start.skillPacksLabel": "Skill Pack · One-click Team Setup",
   "start.recentRunsLabel": "Resume · RECENT",
   "start.wizardTrigger": "Not sure which to pick? Let me help you decide →",
   "start.modeAuto": "Auto",

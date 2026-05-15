@@ -76,6 +76,7 @@
   "start.createTeamDesc": "把多个 AI 角色组成一个协作团队，分工完成复杂任务",
   "start.fromTemplate": "从模板开始",
   "start.fromTemplateDesc": "用现有 Agent / Team 模板快速起步，再按需调整",
+  "start.skillPacksLabel": "Skill Pack · 一键组建团队",
   "start.recentRunsLabel": "继续上一次 · RECENT",
   "start.wizardTrigger": "不确定选哪个？让我帮你决定 →",
   "start.modeAuto": "Auto",
