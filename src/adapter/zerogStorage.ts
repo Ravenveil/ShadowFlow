@@ -1,4 +1,4 @@
-import { ZgFile, Indexer } from '@0glabs/0g-ts-sdk';
+import { Blob as ZgBlob, Indexer } from '@0glabs/0g-ts-sdk';
 import { ethers } from 'ethers';
 import { useZerogSecretsStore } from '@/core/hooks/useZerogSecretsStore';
 
@@ -148,20 +148,24 @@ export async function uploadTrajectory(
   const signer = new ethers.Wallet(pk, provider);
   const indexer = new Indexer(STORAGE_INDEXER);
 
-  const blob = new Blob([bytes]);
-  const file = await ZgFile.fromBlob(blob);
-  try {
-    const [tree, treeErr] = await file.merkleTree();
-    if (treeErr || !tree) throw new Error(`Merkle tree generation failed: ${treeErr ?? 'no tree returned'}`);
+  // Browser context: use SDK's Blob class (accepts a browser File object).
+  // ZgFile is Node.js only (requires fs.FileHandle); ZgBlob wraps a browser File.
+  // Copy bytes to a fresh ArrayBuffer to avoid SharedArrayBuffer TS type narrowing issues.
+  const safeBuf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const nativeFile = new File([safeBuf], 'trajectory.json', { type: 'application/json' });
+  const file = new ZgBlob(nativeFile);
+  // ZgBlob does not have a close() method (no OS handle), so no finally-close needed.
+  const [tree, treeErr] = await file.merkleTree();
+  if (treeErr || !tree) throw new Error(`Merkle tree generation failed: ${treeErr ?? 'no tree returned'}`);
 
-    const rootHash = tree.rootHash();
-    if (!rootHash) throw new Error('Merkle tree returned empty root hash');
+  const rootHash = tree.rootHash();
+  if (!rootHash) throw new Error('Merkle tree returned empty root hash');
 
-    const [tx, uploadErr] = await indexer.upload(file, RPC_URL, signer);
-    if (uploadErr) throw new Error(`0G Storage upload failed: ${uploadErr.message}`);
+  // SDK Indexer uses ethers from its own dependency; cast to bypass esm/cjs Signer mismatch.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [uploadResult, uploadErr] = await indexer.upload(file, RPC_URL, signer as any);
+  if (uploadErr) throw new Error(`0G Storage upload failed: ${uploadErr.message}`);
 
-    return { cid: rootHash, txHash: String(tx) };
-  } finally {
-    await file.close();
-  }
+  // uploadResult has shape { txHash: string, rootHash: string }
+  return { cid: rootHash, txHash: uploadResult?.txHash ?? String(uploadResult) };
 }

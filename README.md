@@ -23,7 +23,7 @@ Building with AI agents today means writing brittle orchestration code from scra
 |---|---|
 | **0G Compute** | Provider #5 in the LLM fallback chain — routes inference to DeepSeek V3.1 / Qwen / Gemma via the 0G Compute Network broker SDK. Automatic `processResponse()` fee settlement after every inference call. |
 | **0G Storage** | Workflow trajectory archive — completed runs are uploaded to 0G Storage as Merkle-verified immutable audit logs. Frontend BYOK mode (browser uploads directly via 0G JS SDK) and backend proxy mode (`ZEROG_FRONTEND_DIRECT=false`). |
-| **0G Chain** | Wallet-based authentication — users connect their 0G Chain wallet; workspace identity and run ownership are tied to the on-chain address. |
+| **0G Chain** | Wallet-based identity layer (Phase 2) — wallet address captures on-chain ownership intent; full SIWE authentication ships in Phase 2. |
 
 > **Contracts**: ShadowFlow does not deploy custom smart contracts. It uses 0G's native ledger and wallet infrastructure directly.
 
@@ -110,7 +110,7 @@ Backend (FastAPI + Node.js)
 0G Network
   ├── 0G Storage  →  trajectory archive (Merkle-verified)
   ├── 0G Compute  →  LLM inference (Provider #5 — DeepSeek / Qwen / Gemma)
-  └── 0G Chain    →  wallet auth + on-chain identity
+  └── 0G Chain    →  wallet identity layer (Phase 2)
 ```
 
 **Two backends, one API surface:**
@@ -236,7 +236,7 @@ python scripts/check_contracts.py             # type drift
 |---|---|
 | **0G Compute** | Provider #5 接入去中心化 LLM 推理网络（DeepSeek V3.1 / Qwen / Gemma）；每次推理后自动调用 `processResponse()` 完成费用结算。 |
 | **0G Storage** | 工作流运行轨迹（trajectory）存档至 0G Storage，获得 Merkle 验证的不可篡改审计日志。支持浏览器 BYOK 直传模式（0G JS SDK）和后端代理模式（`ZEROG_FRONTEND_DIRECT=false`）。 |
-| **0G Chain** | 钱包身份认证——用户以 0G Chain 钱包地址登录，工作区与运行记录绑定链上身份。 |
+| **0G Chain** | 钱包身份层（Phase 2）——钱包地址捕获链上归属意向；完整 SIWE 认证将在 Phase 2 上线。 |
 
 > **合约地址**：ShadowFlow 不部署自定义智能合约，直接使用 0G 原生账本与钱包基础设施。
 
@@ -314,7 +314,7 @@ node.succeeded — content_draft (retry #1) ✓
 0G 网络
   ├── 0G Storage  →  trajectory 存档（Merkle 验证）
   ├── 0G Compute  →  LLM 推理（DeepSeek / Qwen / Gemma）
-  └── 0G Chain    →  钱包身份认证 + 链上 ID
+  └── 0G Chain    →  钱包身份层（Phase 2）
 ```
 
 ---

@@ -55,19 +55,49 @@ function CidCard({ cid }: { cid: EvidenceCid }) {
           </span>
           <h3 className="text-base font-semibold text-white/90 mt-0.5">{cid.templateName}</h3>
         </div>
-        <a
-          href={cid.explorerUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-medium transition-colors duration-150"
-          style={{
-            background: 'var(--t-accent)',
-            color: '#fff',
-          }}
-          aria-label={`在 0G Explorer 查看 CID ${cid.shortHash}`}
-        >
-          0G Explorer ↗
-        </a>
+        <div className="shrink-0 flex flex-col items-end gap-1">
+          {cid.isPlaceholder ? (
+            <span
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-medium cursor-not-allowed"
+              style={{
+                background: 'var(--t-fg-4)',
+                color: '#fff',
+                opacity: 0.5,
+              }}
+              title="演示数据 — 运行 node scripts/upload-evidence.mjs 获取真实 CID 后此按钮将激活"
+              aria-disabled="true"
+            >
+              0G Explorer ↗
+            </span>
+          ) : (
+            <a
+              href={cid.explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-medium transition-colors duration-150"
+              style={{
+                background: 'var(--t-accent)',
+                color: '#fff',
+              }}
+              title={`在 0G Storage Scan 查看 CID ${cid.shortHash}`}
+              aria-label={`在 0G Explorer 查看 CID ${cid.shortHash}`}
+            >
+              0G Explorer ↗
+            </a>
+          )}
+          {cid.isPlaceholder && (
+            <span
+              className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+              style={{
+                background: 'color-mix(in oklab, var(--status-warn) 15%, transparent)',
+                color: 'var(--status-warn)',
+                border: '1px solid color-mix(in oklab, var(--status-warn) 30%, transparent)',
+              }}
+            >
+              demo
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Description */}

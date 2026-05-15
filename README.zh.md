@@ -24,7 +24,7 @@
 |---|---|
 | **0G Compute** | Provider #5 接入去中心化 LLM 推理网络（DeepSeek V3.1 / Qwen / Gemma）；每次推理后自动调用 `processResponse()` 完成费用结算。 |
 | **0G Storage** | 工作流运行轨迹（trajectory）存档至 0G Storage，获得 Merkle 验证的不可篡改审计日志。支持浏览器 BYOK 直传模式（0G JS SDK）和后端代理模式（`ZEROG_FRONTEND_DIRECT=false`）。 |
-| **0G Chain** | 钱包身份认证——用户以 0G Chain 钱包地址登录，工作区与运行记录绑定链上身份。 |
+| **0G Chain** | 钱包身份层（Phase 2）——钱包地址捕获链上归属意向；完整 SIWE 认证将在 Phase 2 上线。 |
 
 > **合约地址**：ShadowFlow 不部署自定义智能合约，直接使用 0G 原生账本与钱包基础设施。
 
@@ -111,7 +111,7 @@ node.succeeded — content_draft (retry #1) ✓
 0G 网络
   ├── 0G Storage  →  trajectory 存档（Merkle 验证）
   ├── 0G Compute  →  LLM 推理（Provider #5：DeepSeek / Qwen / Gemma）
-  └── 0G Chain    →  钱包身份认证 + 链上 ID
+  └── 0G Chain    →  钱包身份层（Phase 2）
 ```
 
 **两个后端，一个 API 入口：**
