@@ -1439,24 +1439,69 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   const [selectedExecutor, setSelectedExecutor] = useState<string>(
     () => localStorage.getItem('sf.defaultExecutor') ?? '',
   );
-  const [pickerCliItems, setPickerCliItems] = useState<PickerCliItem[]>([]);
-  const [pickerApiItems, setPickerApiItems] = useState<PickerApiItem[]>([]);
+  // sessionStorage cache so the picker is instant across page navigations
+  // within a session — agents/detect spawns up to 16 CLI subprocesses each
+  // with a 3s timeout, which can take 10-15s on a cold open. We prefill
+  // from cache, render immediately, then silently refresh in the background.
+  const PICKER_CACHE_KEY = 'sf.modelPicker.cache.v1';
+  const PICKER_CACHE_TTL_MS = 60_000;
+  function loadCachedPicker(): { cli: PickerCliItem[]; api: PickerApiItem[]; ts: number } | null {
+    try {
+      const raw = sessionStorage.getItem(PICKER_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.ts !== 'number') return null;
+      if (Date.now() - parsed.ts > PICKER_CACHE_TTL_MS) return null;
+      return parsed;
+    } catch { return null; }
+  }
+  function saveCachedPicker(cli: PickerCliItem[], api: PickerApiItem[]) {
+    try {
+      sessionStorage.setItem(PICKER_CACHE_KEY, JSON.stringify({ cli, api, ts: Date.now() }));
+    } catch {/* sessionStorage may be full or disabled */}
+  }
+
+  const [pickerCliItems, setPickerCliItems] = useState<PickerCliItem[]>(
+    () => loadCachedPicker()?.cli ?? [],
+  );
+  const [pickerApiItems, setPickerApiItems] = useState<PickerApiItem[]>(
+    () => loadCachedPicker()?.api ?? [],
+  );
   const [pickerLoading, setPickerLoading] = useState(false);
   const modelBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Lazy-load CLI + BYOK lists the first time the picker opens, then keep them.
-  // Reloads on every open so newly-installed CLIs / newly-added API keys show
-  // up without a page refresh.
+  // Prewarm on mount — start the agents/detect + /byok requests immediately
+  // so by the time the user clicks the model icon, results are already in.
+  // Only shows the spinner if we have nothing cached.
   useEffect(() => {
-    if (!showModelPicker) return;
     const apiBase = import.meta.env.VITE_API_BASE ?? '';
-    setPickerLoading(true);
+    const hasCached = pickerCliItems.length > 0 || pickerApiItems.length > 0;
+    if (!hasCached) setPickerLoading(true);
     Promise.all([fetchPickerCliItems(apiBase), fetchPickerApiItems(apiBase)])
       .then(([cli, api]) => {
         setPickerCliItems(cli);
         setPickerApiItems(api);
+        saveCachedPicker(cli, api);
       })
       .finally(() => setPickerLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-refresh silently when picker opens (catches newly-installed CLIs /
+  // newly-added BYOK keys without blocking UI on the data we already have).
+  useEffect(() => {
+    if (!showModelPicker) return;
+    const apiBase = import.meta.env.VITE_API_BASE ?? '';
+    const hasData = pickerCliItems.length > 0 || pickerApiItems.length > 0;
+    if (!hasData) setPickerLoading(true);
+    Promise.all([fetchPickerCliItems(apiBase), fetchPickerApiItems(apiBase)])
+      .then(([cli, api]) => {
+        setPickerCliItems(cli);
+        setPickerApiItems(api);
+        saveCachedPicker(cli, api);
+      })
+      .finally(() => setPickerLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showModelPicker]);
 
   // 2026-05-11 Layer 1 — Claude Code-style chat fallback.
@@ -2222,30 +2267,52 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
               </button>
               {/* Model picker — click to open inline switcher */}
               <div style={{ position: 'relative' }} data-model-picker>
-                <button
-                  ref={modelBtnRef}
-                  type="button"
-                  title={(() => {
-                    if (selectedExecutor.startsWith('cli:')) {
-                      const id = selectedExecutor.slice(4);
-                      return `CLI · ${PICKER_CLI_META[id]?.name ?? id}`;
-                    }
-                    if (selectedExecutor.startsWith('byok:')) {
-                      const pid = selectedExecutor.slice(5);
-                      return `API · ${PICKER_PROVIDER_META[pid]?.name ?? pid} / ${selectedModel}`;
-                    }
-                    return `模型: ${selectedModel}`;
-                  })()}
-                  className="cmp-btn"
-                  onClick={() => setShowModelPicker(v => !v)}
-                  style={showModelPicker ? {
-                    background: 'var(--t-accent-tint)',
-                    borderColor: 'var(--t-accent)',
-                    color: 'var(--t-accent-bright)',
-                  } : undefined}
-                >
-                  <Cpu size={15} strokeWidth={1.8} />
-                </button>
+                {(() => {
+                  let label = '选择模型';
+                  let tooltip = '选择模型';
+                  if (selectedExecutor.startsWith('cli:')) {
+                    const id = selectedExecutor.slice(4);
+                    const name = PICKER_CLI_META[id]?.name ?? id;
+                    label = name;
+                    tooltip = `CLI · ${name}`;
+                  } else if (selectedExecutor.startsWith('byok:')) {
+                    const pid = selectedExecutor.slice(5);
+                    const provName = PICKER_PROVIDER_META[pid]?.name ?? pid;
+                    label = selectedModel || provName;
+                    tooltip = `API · ${provName} / ${selectedModel}`;
+                  } else if (selectedModel) {
+                    label = selectedModel;
+                    tooltip = `模型: ${selectedModel}`;
+                  }
+                  return (
+                    <button
+                      ref={modelBtnRef}
+                      type="button"
+                      title={tooltip}
+                      className="cmp-btn"
+                      onClick={() => setShowModelPicker(v => !v)}
+                      style={{
+                        ...(showModelPicker ? {
+                          background: 'var(--t-accent-tint)',
+                          borderColor: 'var(--t-accent)',
+                          color: 'var(--t-accent-bright)',
+                        } : {}),
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingLeft: 8,
+                        paddingRight: 10,
+                        width: 'auto',
+                        maxWidth: 200,
+                      }}
+                    >
+                      <Cpu size={15} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                        {label}
+                      </span>
+                    </button>
+                  );
+                })()}
                 {showModelPicker && (() => {
                   const renderItem = (it: PickerItem) => {
                     const active = it.kind === 'cli'
@@ -2342,27 +2409,41 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                   return (
                     <div style={{
                       position: 'absolute', bottom: 'calc(100% + 6px)', left: 0,
-                      minWidth: 260, maxHeight: 380, overflowY: 'auto', zIndex: 200,
+                      width: 520, maxHeight: 420, zIndex: 200,
                       background: 'var(--t-panel)',
                       border: '1px solid var(--t-border)',
                       borderRadius: 10,
                       boxShadow: '0 8px 24px -8px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.04)',
                       padding: '4px 0',
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: 0,
                     }}>
-                      {sectionLabel('CLI')}
-                      {pickerLoading && pickerCliItems.length === 0 ? (
-                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>检测中…</div>
-                      ) : pickerCliItems.length === 0
-                        ? emptyHint('未检测到已安装的 CLI · 去设置', '/settings#local-cli')
-                        : pickerCliItems.map(renderItem)
-                      }
-                      {sectionLabel('API')}
-                      {pickerLoading && pickerApiItems.length === 0 ? (
-                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>加载中…</div>
-                      ) : pickerApiItems.length === 0
-                        ? emptyHint('未配置 API Key · 去设置 BYOK', '/settings#byok')
-                        : pickerApiItems.map(renderItem)
-                      }
+                      {/* CLI column */}
+                      <div style={{
+                        maxHeight: 412, overflowY: 'auto',
+                        borderRight: '1px solid var(--t-border)',
+                      }}>
+                        {sectionLabel('CLI')}
+                        {pickerLoading && pickerCliItems.length === 0 ? (
+                          <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>检测中…</div>
+                        ) : pickerCliItems.length === 0
+                          ? emptyHint('未检测到已安装的 CLI · 去设置', '/settings#local-cli')
+                          : pickerCliItems.map(renderItem)
+                        }
+                      </div>
+                      {/* API column */}
+                      <div style={{
+                        maxHeight: 412, overflowY: 'auto',
+                      }}>
+                        {sectionLabel('API')}
+                        {pickerLoading && pickerApiItems.length === 0 ? (
+                          <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>加载中…</div>
+                        ) : pickerApiItems.length === 0
+                          ? emptyHint('未配置 API Key · 去设置 BYOK', '/settings#byok')
+                          : pickerApiItems.map(renderItem)
+                        }
+                      </div>
                     </div>
                   );
                 })()}
