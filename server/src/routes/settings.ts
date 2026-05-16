@@ -158,68 +158,79 @@ const PROVIDER_DEFAULT_BASE: Record<string, string> = {
   lmstudio:  'http://localhost:1234/v1',
 };
 
-/**
- * Path suffixes that should be auto-appended when the user provides a bare
- * origin (e.g. `https://api.openai.com` → `https://api.openai.com/v1`).
- * Mirrors Shadow's aiConfigStore.PROVIDER_BASE_RULES — this is what lets
- * Cherry Studio / Shadow gracefully accept either bare-origin or full-path
- * URLs from users.
- */
-const PROVIDER_BASE_SUFFIX: Record<string, string> = {
-  anthropic: '/v1',
-  openai:    '/v1',
-  google:    '/v1beta',
-  gemini:    '/v1beta',
-  deepseek:  '/v1',
-  qwen:      '/compatible-mode/v1',
-  zhipu:     '/api/paas/v4',
-  moonshot:  '/v1',
-  mistral:   '/v1',
-  groq:      '/openai/v1',
-  openrouter:'/api/v1',
-  ollama:    '',
-  lmstudio:  '/v1',
-};
-
 const PROVIDERS_NO_KEY = new Set(['ollama', 'lmstudio']);
 
 function stripTrailingSlash(s: string): string {
   return s.replace(/\/+$/, '');
 }
 
+function stripTrailingSharp(s: string): string {
+  return s.replace(/#$/, '');
+}
+
 /**
- * Normalize a user-provided base URL according to per-provider rules.
- *   - Bare origin (no path)        → append the standard suffix (`/v1`, `/v1beta`, ...)
- *   - Origin + non-trivial path    → respect what the user wrote (custom proxy / gateway)
- *   - Empty                        → fall back to PROVIDER_DEFAULT_BASE
- *   - Unparseable URL              → return trimmed input as-is
- * Ported from Shadow's normalizeProviderBaseUrl().
+ * Detect a trailing API-version segment in a URL path (`/v1`, `/v2beta`, ...).
+ * Mirrors Cherry Studio's hasAPIVersion — it inspects the URL's pathname for
+ * a /v<n>(alpha|beta)? segment so callers can decide whether to auto-append.
+ */
+function hasAPIVersion(host: string): boolean {
+  const VERSION_REGEX = /\/v\d+(?:alpha|beta)?(?:\/|$)/i;
+  try {
+    return VERSION_REGEX.test(new URL(host).pathname);
+  } catch {
+    return VERSION_REGEX.test(host);
+  }
+}
+
+/**
+ * Cherry Studio-style API host formatter.
+ *
+ *   - Empty / whitespace          → ''
+ *   - Trailing '#'                → strip the '#' and DO NOT append (escape hatch)
+ *   - supportApiVersion === false → return as-is, no version appended
+ *   - URL path already contains   → return as-is
+ *     a version segment (/v1, /v2beta, ...)
+ *   - Otherwise                   → append `/<apiVersion>` (default `v1`)
+ *
+ * The big win over a per-provider suffix table is that unknown providers
+ * (SiliconFlow, Together AI, custom gateways, ...) automatically get `/v1`
+ * appended too, instead of failing with HTTP 404 on `/models`.
+ */
+export function formatApiHost(
+  host: string | undefined | null,
+  supportApiVersion = true,
+  apiVersion = 'v1',
+): string {
+  const normalizedHost = stripTrailingSlash((host ?? '').trim());
+  if (!normalizedHost) return '';
+
+  const shouldAppend = !(
+    normalizedHost.endsWith('#') ||
+    !supportApiVersion ||
+    hasAPIVersion(normalizedHost)
+  );
+  return shouldAppend ? `${normalizedHost}/${apiVersion}` : stripTrailingSharp(normalizedHost);
+}
+
+/**
+ * Resolve the effective base URL for a probe request.
+ * Falls back to PROVIDER_DEFAULT_BASE when the user hasn't configured one.
  */
 export function normalizeProviderBaseUrl(providerId: string, rawBaseUrl?: string | null): string {
-  const fallback = PROVIDER_DEFAULT_BASE[providerId] ?? '';
-  const trimmed = rawBaseUrl?.trim();
-  if (!trimmed) return fallback;
-
-  // 'custom' provider: always respect user input verbatim
-  if (providerId === 'custom') return stripTrailingSlash(trimmed);
-
-  try {
-    const parsed = new URL(trimmed);
-    const suffix = PROVIDER_BASE_SUFFIX[providerId];
-    const normalizedPath = stripTrailingSlash(parsed.pathname);
-
-    if (suffix === undefined) {
-      return stripTrailingSlash(trimmed);
-    }
-    // Bare origin (no path or just '/') → auto-append suffix
-    if (!normalizedPath) {
-      return `${parsed.origin}${suffix}`;
-    }
-    // User provided a path → keep it (don't double-append)
-    return `${parsed.origin}${normalizedPath}${parsed.search}`;
-  } catch {
-    return stripTrailingSlash(trimmed);
+  const raw = rawBaseUrl?.trim() || PROVIDER_DEFAULT_BASE[providerId] || '';
+  if (!raw) return '';
+  // 'custom' provider: respect user input verbatim (no version inference)
+  if (providerId === 'custom') return stripTrailingSharp(stripTrailingSlash(raw));
+  // Gemini insists on /v1beta — handle via fetcher, just normalize trailing slash here
+  if (providerId === 'google' || providerId === 'gemini') {
+    return stripTrailingSharp(stripTrailingSlash(raw));
   }
+  // Ollama serves /api/tags at the root — also bypass version inference here
+  if (providerId === 'ollama') {
+    return stripTrailingSharp(stripTrailingSlash(raw));
+  }
+  // Everything else: Cherry Studio's universal /v1 inference
+  return formatApiHost(raw);
 }
 
 function buildRemoteModelsRequest(
@@ -233,32 +244,59 @@ function buildRemoteModelsRequest(
   if (providerId === 'anthropic') {
     headers['x-api-key'] = apiKey;
     headers['anthropic-version'] = '2023-06-01';
-    // effectiveBase already has /v1 from the suffix table
-    return { url: `${effectiveBase}/models?limit=1000`, headers, effectiveBase };
+    // Anthropic /models lives under /v1 — use formatApiHost to ensure it's there
+    const versionedBase = formatApiHost(effectiveBase);
+    return { url: `${versionedBase}/models?limit=1000`, headers, effectiveBase: versionedBase };
   }
 
   if (providerId === 'google' || providerId === 'gemini') {
+    // Gemini always uses /v1beta; strip any trailing /v1 or /v1beta the user
+    // may have entered, then re-append /v1beta canonically (Cherry's geminiFetcher logic).
+    const stripped = effectiveBase.replace(/\/v1(beta)?$/, '');
     return {
-      url: `${effectiveBase}/models?key=${encodeURIComponent(apiKey)}&pageSize=1000`,
+      url: `${stripped}/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=1000`,
       headers,
-      effectiveBase,
+      effectiveBase: stripped,
     };
   }
 
-  // Ollama native /api/tags lives at the root, not under /v1 — strip if present
+  // Ollama native /api/tags lives at the root. Mirror Cherry's ollamaFetcher:
+  // strip `/v1`, `/api`, `/chat` from the tail so a user-supplied
+  // `http://localhost:11434/v1` or `http://localhost:11434/api` both work.
   if (providerId === 'ollama') {
-    const root = stripTrailingSlash(effectiveBase.replace(/\/v1$/, ''));
+    const root = stripTrailingSlash(
+      effectiveBase
+        .replace(/\/v1$/, '')
+        .replace(/\/api$/, '')
+        .replace(/\/chat$/, ''),
+    );
     return { url: `${root}/api/tags`, headers, effectiveBase: root };
   }
 
-  // OpenAI-compatible default
+  // OpenAI-compatible default — effectiveBase already has /v1 thanks to formatApiHost
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
   return { url: `${effectiveBase}/models`, headers, effectiveBase };
 }
 
 interface RemoteModelDef { id: string; name: string; provider: string; }
 
+function dedupModels(items: RemoteModelDef[]): RemoteModelDef[] {
+  const seen = new Set<string>();
+  const out: RemoteModelDef[] = [];
+  for (const m of items) {
+    if (!m.id || seen.has(m.id)) continue;
+    seen.add(m.id);
+    out.push(m);
+  }
+  return out;
+}
+
 function parseRemoteModels(data: unknown, providerId: string): RemoteModelDef[] {
+  const raw = parseRemoteModelsRaw(data, providerId);
+  return dedupModels(raw);
+}
+
+function parseRemoteModelsRaw(data: unknown, providerId: string): RemoteModelDef[] {
   const out: RemoteModelDef[] = [];
   if (!data || typeof data !== 'object') return out;
   const obj = data as Record<string, unknown>;
