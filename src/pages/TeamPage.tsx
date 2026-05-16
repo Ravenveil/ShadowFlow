@@ -54,6 +54,7 @@ import { usePolicyStore, type PolicyMatrix as StorePolicyMatrix } from '../core/
 import { useI18n } from '../common/i18n';
 
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
+type FilterTab = 'official' | 'workspace';
 
 // ---------------------------------------------------------------------------
 // Shared TeamListColumn — 240 px team list column (used by both pages).
@@ -149,6 +150,7 @@ function TeamListPage() {
   const [showModal, setShowModal] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<FilterTab>('workspace');
 
   const fetchTeams = useCallback(async () => {
     setLoadStatus('loading');
@@ -158,7 +160,6 @@ function TeamListPage() {
       setTeams(data);
       setLoadStatus('success');
     } catch (err) {
-      /* TODO: i18n — error messages with status code interpolation */
       const msg = err instanceof TeamApiError
         ? `${t('team.loadError')}（${err.status}）`
         : t('team.loadError');
@@ -182,7 +183,6 @@ function TeamListPage() {
       await deleteTeam(teamId);
       setTeams((prev) => prev.filter((tm) => tm.team_id !== teamId));
     } catch (err) {
-      /* TODO: i18n — delete error messages with status code interpolation */
       const msg = err instanceof TeamApiError
         ? `${t('common.delete')} ${t('team.loadError')}（${err.status}）`
         : t('team.loadError');
@@ -192,168 +192,186 @@ function TeamListPage() {
     }
   }
 
+  const errBanner = (msg: string) => (
+    <div style={{
+      marginBottom: 16, padding: '8px 14px', borderRadius: 8, fontSize: 12,
+      border: '1px solid color-mix(in oklab, var(--t-err) 35%, transparent)',
+      background: 'color-mix(in oklab, var(--t-err) 10%, var(--t-panel))',
+      color: 'var(--t-err)',
+    }}>
+      {msg}
+    </div>
+  );
+
   return (
     <div
       data-testid="team-page"
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minWidth: 0,
-        background: 'var(--t-bg)',
-        color: 'var(--t-fg)',
-      }}
+      style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--t-bg)', color: 'var(--t-fg)' }}
     >
       <HfTopBar />
 
-      <div style={{ flex: 1, overflow: 'auto', padding: '20px 28px' }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
         <div style={{ maxWidth: 1080, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.015em' }}>Teams</span>
-            <span className="hf-meta" style={{ fontSize: 12 }}>{t('team.pageSubtitle')}</span>
+
+          {/* Page header */}
+          <div style={{ marginBottom: 24 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', margin: '0 0 4px' }}>
+              Teams
+            </h1>
+            <p className="hf-meta" style={{ fontSize: 12, margin: 0 }}>
+              {t('team.pageSubtitle')}
+            </p>
           </div>
 
           {/* Error banners */}
-          {errorMsg && (
-            <div
-              style={{
-                marginTop: 14,
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid color-mix(in oklab, var(--t-err) 35%, transparent)',
-                background: 'color-mix(in oklab, var(--t-err) 10%, var(--t-panel))',
-                color: 'var(--t-err)',
-                fontSize: 12,
-              }}
-            >
-              {errorMsg}
-            </div>
-          )}
-          {deleteError && (
-            <div
-              style={{
-                marginTop: 14,
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid color-mix(in oklab, var(--t-err) 35%, transparent)',
-                background: 'color-mix(in oklab, var(--t-err) 10%, var(--t-panel))',
-                color: 'var(--t-err)',
-                fontSize: 12,
-              }}
-            >
-              {deleteError}
-            </div>
-          )}
+          {errorMsg && errBanner(errorMsg)}
+          {deleteError && errBanner(deleteError)}
 
-          {/* Header bar — primary "+ 新建 Team" lives here too so the test
-              that looks for `new-team-btn` finds it. */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginTop: 18,
-              marginBottom: 14,
-            }}
-          >
-            <span className="hf-label">{t('team.workspaceLabel')} · {teams.length}</span>
+          {/* Tab bar + new team button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22 }}>
+            {/* Segmented tabs */}
+            <div style={{
+              display: 'flex', gap: 2,
+              background: 'var(--t-panel)', border: '1px solid var(--t-border)',
+              borderRadius: 10, padding: 3,
+            }}>
+              {(['official', 'workspace'] as FilterTab[]).map((tab) => {
+                const active = tab === activeTab;
+                const label = tab === 'official' ? '官方' : '工作区';
+                const count = tab === 'workspace' ? teams.length : 0;
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    style={{
+                      padding: '5px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
+                      border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                      background: active ? 'var(--t-panel-3)' : 'transparent',
+                      color: active ? 'var(--t-fg)' : 'var(--t-fg-4)',
+                      transition: 'background .12s, color .12s',
+                    }}
+                  >
+                    {label}
+                    {count > 0 && (
+                      <span style={{
+                        padding: '1px 5px', borderRadius: 5, fontSize: 10,
+                        fontFamily: 'var(--font-mono)', fontWeight: 700,
+                        background: active ? 'var(--t-accent-tint)' : 'var(--t-panel-2)',
+                        color: active ? 'var(--t-accent)' : 'var(--t-fg-5)',
+                        border: '1px solid var(--t-border)',
+                      }}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ flex: 1 }} />
+
+            {/* "+ 新建 Team" — always present for test-id compatibility */}
             <button
               type="button"
               onClick={() => setShowModal(true)}
-              className="hf-btn"
-              style={{ fontSize: 11 }}
+              className="hf-btn hf-btn-pri"
+              style={{ fontSize: 12 }}
               data-testid="new-team-btn"
             >
               {t('team.newTeam')}
             </button>
           </div>
 
-          {loadStatus === 'loading' && (
-            <p
-              data-testid="team-loading"
-              className="hf-meta"
-              style={{ padding: '60px 0', textAlign: 'center', fontSize: 12 }}
-            >
-              {t('team.loading')}
-            </p>
+          {/* Official tab: always empty / coming soon */}
+          {activeTab === 'official' && (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 8, padding: '72px 0', textAlign: 'center',
+            }}>
+              <div style={{
+                width: 52, height: 52, borderRadius: 14,
+                background: 'var(--t-panel)', border: '1px solid var(--t-border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Users size={26} strokeWidth={1.5} style={{ color: 'var(--t-fg-4)' }} aria-hidden />
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--t-fg-3)', margin: 0 }}>官方精选团队即将上线</p>
+              <p style={{ fontSize: 11, color: 'var(--t-fg-5)', margin: 0, fontFamily: 'var(--font-mono)' }}>
+                Coming soon
+              </p>
+            </div>
           )}
 
-          {loadStatus === 'success' && teams.length === 0 && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 14,
-                padding: '60px 0',
-                textAlign: 'center',
-              }}
-            >
-              <div
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 14,
-                  border: '1px solid var(--t-border)',
-                  background: 'var(--t-panel)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--t-accent)',
-                }}
-              >
-                <Users size={32} strokeWidth={2} aria-hidden />
-              </div>
-              <div>
-                <p style={{ fontSize: 13, color: 'var(--t-fg-2)', margin: 0 }}>
-                  {t('team.noTeamYet')}
-                </p>
+          {/* Workspace tab: loading / empty / list */}
+          {activeTab === 'workspace' && (
+            <>
+              {loadStatus === 'loading' && (
                 <p
+                  data-testid="team-loading"
+                  className="hf-meta"
+                  style={{ padding: '72px 0', textAlign: 'center', fontSize: 12 }}
+                >
+                  {t('team.loading')}
+                </p>
+              )}
+
+              {loadStatus === 'success' && teams.length === 0 && (
+                <div style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 14, padding: '72px 0', textAlign: 'center',
+                }}>
+                  <div style={{
+                    width: 56, height: 56, borderRadius: 14,
+                    background: 'var(--t-panel)', border: '1px solid var(--t-border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--t-accent)',
+                  }}>
+                    <Users size={30} strokeWidth={1.5} aria-hidden />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 13, color: 'var(--t-fg-2)', margin: '0 0 4px' }}>
+                      {t('team.noTeamYet')}
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: 0 }}>
+                      {t('team.newTeamHint')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(true)}
+                    data-testid="empty-new-team-btn"
+                    className="hf-btn hf-btn-pri"
+                    style={{ fontSize: 12 }}
+                  >
+                    {t('team.newTeam')}
+                  </button>
+                </div>
+              )}
+
+              {loadStatus === 'success' && teams.length > 0 && (
+                <div
+                  data-testid="team-list"
                   style={{
-                    marginTop: 4,
-                    fontSize: 12,
-                    color: 'var(--t-fg-4)',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
+                    gap: 14,
                   }}
                 >
-                  {t('team.newTeamHint')}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowModal(true)}
-                data-testid="empty-new-team-btn"
-                className="hf-btn hf-btn-pri"
-                style={{ fontSize: 12 }}
-              >
-                {t('team.newTeam')}
-              </button>
-            </div>
+                  {teams.map((team) => (
+                    <div
+                      key={team.team_id}
+                      style={{ opacity: deletingId === team.team_id ? 0.45 : 1, transition: 'opacity .15s' }}
+                      onClick={() => navigate(`/teams/${team.team_id}`)}
+                    >
+                      <TeamCard team={team} onDelete={handleDelete} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
-          {loadStatus === 'success' && teams.length > 0 && (
-            <div
-              data-testid="team-list"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                gap: 12,
-              }}
-            >
-              {teams.map((team) => (
-                <div
-                  key={team.team_id}
-                  style={{
-                    opacity: deletingId === team.team_id ? 0.5 : 1,
-                    transition: 'opacity .15s',
-                  }}
-                  onClick={() => navigate(`/teams/${team.team_id}`)}
-                >
-                  <TeamCard team={team} onDelete={handleDelete} />
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
