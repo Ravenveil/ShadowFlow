@@ -458,7 +458,18 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     return;
   }
 
-  const body = (req.body ?? {}) as { content?: unknown; goal?: unknown };
+  const body = (req.body ?? {}) as {
+    content?: unknown;
+    goal?: unknown;
+    // 2026-05-16 — follow-ups (incl. resend) may override the picker selection
+    // so users can fix a 401 by switching provider/model in the input bar.
+    // Undefined values inherit from source; explicit values replace.
+    model?: unknown;
+    provider?: unknown;
+    api_key?: unknown;
+    anthropic_key?: unknown;
+    executor?: unknown;
+  };
   // Accept either `content` (chat-style payload that the RunSessionPage send box
   // uses) or `goal` (mirrors POST /api/run-sessions). content wins when both
   // are present so the chat UX is unambiguous.
@@ -472,8 +483,16 @@ router.post('/:id/messages', (req: Request, res: Response) => {
   }
 
   const new_session_id = uuidv4();
+  const overrides: Partial<typeof source> = {};
+  if (typeof body.model === 'string' && body.model.length > 0) overrides.model = body.model;
+  if (typeof body.provider === 'string' && body.provider.length > 0) overrides.provider = body.provider as typeof source.provider;
+  if (typeof body.api_key === 'string') overrides.api_key = body.api_key;
+  if (typeof body.anthropic_key === 'string') overrides.anthropic_key = body.anthropic_key;
+  if (typeof body.executor === 'string') overrides.executor = body.executor;
+
   sessionStore.set(new_session_id, {
     ...source,
+    ...overrides,
     goal: content,
     // Reset created_at so the 1h-cleanup window restarts for the follow-up turn.
     created_at: Date.now(),
@@ -481,7 +500,8 @@ router.post('/:id/messages', (req: Request, res: Response) => {
 
   console.log(
     `[run-sessions] Follow-up message: source=${sourceId} → new=${new_session_id} ` +
-      `conversation=${source.conversation_id ?? '(none)'} content="${content.slice(0, 60)}"`,
+      `conversation=${source.conversation_id ?? '(none)'} content="${content.slice(0, 60)}"` +
+      ` overrides=${Object.keys(overrides).join(',') || '(none)'}`,
   );
 
   res.status(201).json({

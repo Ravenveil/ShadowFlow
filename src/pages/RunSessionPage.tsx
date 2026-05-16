@@ -1505,15 +1505,17 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   }, [showModelPicker]);
 
   // 2026-05-11 Layer 1 — Claude Code-style chat fallback.
-  // Requires actual chatReply text — bare `isComplete` no longer triggers,
-  // since hard CLI failures (e.g. claude exit 1, 403 auth) finish the session
-  // without any reply and would otherwise collapse the canvas, hiding the
-  // error events from the user (2026-05-16 regression fix).
+  // Requires actual chatReply text AND no error. The 5x-retry path stuffs
+  // repeated "Failed to authenticate..." into chatReply via daemon text
+  // events, so a bare chatReply check still triggers single-page mode.
+  // session.error gating keeps the canvas open whenever the run failed
+  // (2026-05-16 hardening — second pass after first fix proved insufficient).
   const isChatMode =
     session.chatReply.trim().length > 0 &&
     session.steps.length === 0 &&
     session.nodes.length === 0 &&
-    !session.blueprintFile;
+    !session.blueprintFile &&
+    !session.error;
 
   // Close model picker on outside click
   useEffect(() => {
@@ -1575,18 +1577,37 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   };
 
   // 2026-05-16: Resend the user's last goal as a fresh follow-up turn.
-  // Reuses the same POST /messages endpoint as handleSend; daemon forks a new
-  // run session and the URL navigation triggers the SSE re-subscribe.
+  // Reuses POST /messages; daemon forks a new run session and the URL change
+  // triggers SSE re-subscribe. The follow-up inherits source settings, so we
+  // must explicitly forward the user's CURRENT picker (model/provider/key)
+  // — otherwise a 401 on the original credential will repeat forever.
   const [resending, setResending] = useState(false);
   const handleResend = async (text: string) => {
     const content = text.trim();
     if (!content || resending) return;
     setResending(true);
     try {
+      const overrides: Record<string, string> = {};
+      if (selectedExecutor.startsWith('byok:')) {
+        const pid = selectedExecutor.slice(5);
+        overrides.provider = pid;
+        if (selectedModel) overrides.model = selectedModel;
+        const key = getStoredApiKey(pid as never);
+        if (key) overrides.api_key = key;
+      } else if (selectedExecutor.startsWith('cli:')) {
+        overrides.executor = selectedExecutor.slice(4);
+        if (selectedModel) overrides.model = selectedModel;
+      } else if (selectedModel) {
+        overrides.model = selectedModel;
+      }
+      // Anthropic Claude direct (Story 15.7) uses a dedicated key slot
+      const anthroKey = getStoredApiKey();
+      if (anthroKey) overrides.anthropic_key = anthroKey;
+
       const resp = await fetch(`/api/run-sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, ...overrides }),
       });
       if (!resp.ok) {
         console.warn(`[run-session] resend POST failed: HTTP ${resp.status}`);
@@ -3061,13 +3082,14 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   }, [session.isComplete, session.nodes.length]);
 
   // 2026-05-11 Layer 1 — chat-mode detection (mirrors LeftPanel).
-  // Requires actual chatReply text; failed sessions with no reply keep the
-  // two-column layout so the error surface stays visible (2026-05-16 fix).
+  // session.error gates chat mode so retry-error text accumulated in
+  // chatReply cannot collapse the canvas (2026-05-16 second-pass fix).
   const isChatMode =
     session.chatReply.trim().length > 0 &&
     session.steps.length === 0 &&
     session.nodes.length === 0 &&
-    !session.blueprintFile;
+    !session.blueprintFile &&
+    !session.error;
 
   function handleOpenEditor() {
     if (session.redirectUrl) {
