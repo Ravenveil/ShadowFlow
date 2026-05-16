@@ -440,34 +440,104 @@ const DETAIL_TABS: DetailTab[] = ['members', 'policy', 'dag', 'activity', 'depen
 // P1 Team Detail components (design bundle 2026-05-15)
 // ---------------------------------------------------------------------------
 
-/** Team header: ×N count icon + name + pills + action buttons. */
+/** Team header: ×N count icon + name + L2-STRICT pill + stats row + action buttons. */
 function DesignTeamHeader({ team }: { team: TeamRecord }) {
+  const createdDate = new Date(team.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   return (
     <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--t-border)', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
       <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: 'var(--t-fg-2)', flexShrink: 0 }}>
         ×{team.agent_ids.length}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span data-testid="detail-team-name" style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span data-testid="detail-team-name" style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--t-fg)' }}>
             {team.name}
           </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 6, background: 'color-mix(in oklab, var(--t-accent-bright) 18%, transparent)', color: 'var(--t-accent-bright)', border: '1px solid color-mix(in oklab, var(--t-accent-bright) 35%, transparent)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', flexShrink: 0 }}>
-            POLICY
+          <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 6, background: 'color-mix(in oklab, var(--status-warn) 18%, transparent)', color: 'var(--status-warn)', border: '1px solid color-mix(in oklab, var(--status-warn) 35%, transparent)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', flexShrink: 0 }}>
+            L2-STRICT
           </span>
         </div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)', marginTop: 4, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {team.agent_ids.length} agents{team.description ? ` · ${team.description}` : ''}
+        <div style={{ display: 'flex', gap: 14, marginTop: 5, fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>
+          <span>{team.workspace_id}</span>
+          <span>·</span>
+          <span>{team.agent_ids.length} agents</span>
+          <span>·</span>
+          <span>创建 {createdDate}</span>
         </div>
       </div>
       <button type="button" className="hf-btn" style={{ fontSize: 12, flexShrink: 0 }}>重命名</button>
-      <button type="button" className="hf-btn hf-btn-pri" style={{ fontSize: 12, flexShrink: 0 }}>启动新 run</button>
+      <button type="button" style={{ fontSize: 12, flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'var(--t-accent)', color: 'var(--t-accent-ink)', fontWeight: 700 }}>启动新 run</button>
     </div>
   );
 }
 
-/** Left panel of the 2-col grid: member list via TeamDetail. */
-function MembersPanel({ team, onTeamUpdated }: { team: TeamRecord; onTeamUpdated: (t: TeamRecord) => void }) {
+/** One agent row in the member panel — 5-col grid matching board-team.jsx MemberRow. */
+function DesignMemberRow({ agent, onRemove }: { agent: AgentRecord; onRemove?: (id: string) => void }) {
+  const color = agentColor(agent.name);
+  const glyph = (agent.name || '?')[0];
+  const level = agentLevel(agent.name);
+  const st = agentStatusInfo(agent.status);
+  return (
+    <div
+      className="group"
+      style={{ display: 'grid', gridTemplateColumns: '40px 1fr 68px 1fr 96px', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--t-border)' }}
+    >
+      {/* Avatar */}
+      <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, color, background: `color-mix(in oklab, ${color} 18%, var(--t-panel-2))`, border: `1px solid color-mix(in oklab, ${color} 45%, transparent)` }}>
+        {glyph}
+      </div>
+      {/* Name + soul role */}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{agent.name}</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{agent.soul.slice(0, 28).toUpperCase()}</div>
+      </div>
+      {/* Level pill */}
+      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '2px 8px', borderRadius: 6, background: `color-mix(in oklab, ${color} 18%, transparent)`, border: `1px solid color-mix(in oklab, ${color} 35%, transparent)`, color, fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600 }}>
+        {level}
+      </div>
+      {/* Source tag */}
+      <div>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, padding: '2px 6px', background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 4, color: 'var(--t-fg-4)' }}>
+          {agent.source}
+        </span>
+      </div>
+      {/* Status dot + label + remove button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end' }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: st.color, display: 'inline-block', animation: st.pulse ? 'sf-pulse 1.4s ease-in-out infinite' : 'none' }} />
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: st.color }}>{st.label}</span>
+        {onRemove && (
+          <button
+            type="button"
+            className="hidden group-hover:inline-block"
+            onClick={() => onRemove(agent.agent_id)}
+            data-testid={`btn-remove-${agent.agent_id}`}
+            style={{ marginLeft: 4, padding: '2px 7px', borderRadius: 5, fontSize: 10, border: 'none', cursor: 'pointer', background: 'color-mix(in oklab, var(--t-err) 12%, var(--t-panel))', color: 'var(--t-err)' }}
+          >
+            移除
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Left panel of the 2-col grid: loads agents and renders member rows. */
+function DesignMemberPanel({ team, onTeamUpdated }: { team: TeamRecord; onTeamUpdated: (t: TeamRecord) => void }) {
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  useEffect(() => { listAgents().then(setAgents).catch(() => {}); }, []);
+
+  const memberAgents = agents.filter((a) => team.agent_ids.includes(a.agent_id));
+
+  async function handleRemove(agentId: string) {
+    setRemoving(agentId);
+    try {
+      const updated = await patchTeam(team.team_id, { remove_agent_ids: [agentId] });
+      onTeamUpdated(updated);
+    } catch { /* swallow */ } finally { setRemoving(null); }
+  }
+
   return (
     <div style={{ background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--t-border)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
@@ -477,7 +547,17 @@ function MembersPanel({ team, onTeamUpdated }: { team: TeamRecord; onTeamUpdated
         <button type="button" className="hf-btn" style={{ fontSize: 11 }}>+ 招人</button>
       </div>
       <div style={{ flex: 1, overflow: 'auto' }}>
-        <TeamDetail team={team} onTeamUpdated={onTeamUpdated} />
+        {memberAgents.length === 0 ? (
+          <div style={{ padding: '32px 16px', textAlign: 'center', fontSize: 12, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)' }}>
+            暂无成员
+          </div>
+        ) : (
+          memberAgents.map((agent) => (
+            <div key={agent.agent_id} style={{ opacity: removing === agent.agent_id ? 0.4 : 1, transition: 'opacity .15s' }}>
+              <DesignMemberRow agent={agent} onRemove={handleRemove} />
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -570,6 +650,20 @@ function WorkflowDagPanel({ nodes, edges }: { nodes: TeamWorkflowNode[]; edges: 
             })}
           </svg>
         )}
+        {/* Status legend */}
+        <div style={{ display: 'flex', gap: 16, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--t-border)', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', flexWrap: 'wrap' }}>
+          {([
+            { color: 'var(--status-ok)',     label: '已完成',   pulse: false },
+            { color: 'var(--status-run)',    label: '进行中',   pulse: true  },
+            { color: 'var(--status-warn)',   label: '等待审批', pulse: false },
+            { color: 'var(--t-fg-5)',        label: `待启动 · ${nodes.length}`, pulse: false },
+          ] as const).map(({ color, label, pulse }) => (
+            <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0, animation: pulse ? 'sf-pulse 1.4s ease-in-out infinite' : 'none' }} />
+              {label}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -738,7 +832,7 @@ function TeamDetailPage() {
           <DesignTeamHeader team={team} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, padding: 18, alignContent: 'start' }}>
-            <MembersPanel team={team} onTeamUpdated={setTeam} />
+            <DesignMemberPanel team={team} onTeamUpdated={setTeam} />
             <WorkflowDagPanel nodes={workflowNodes} edges={workflowEdges} />
           </div>
 
