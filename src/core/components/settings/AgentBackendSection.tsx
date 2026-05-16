@@ -33,7 +33,7 @@ function IconRefreshCw({ spinning, cls }: { spinning?: boolean; cls?: string }) 
   );
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 
 // ---- Agent types ---------------------------------------------------------------
 
@@ -200,53 +200,77 @@ interface ModelDef {
   provider: string;
 }
 
-const FALLBACK_MODELS: ModelDef[] = [
-  { id: 'claude-opus-4-7',       name: 'Claude Opus 4.7',       provider: 'anthropic' },
-  { id: 'claude-sonnet-4-6',     name: 'Claude Sonnet 4.6',     provider: 'anthropic' },
-  { id: 'claude-haiku-4-5',      name: 'Claude Haiku 4.5',      provider: 'anthropic' },
-  { id: 'claude-3-5-sonnet',     name: 'Claude 3.5 Sonnet',     provider: 'anthropic' },
-  { id: 'gpt-4o',                name: 'GPT-4o',                provider: 'openai'    },
-  { id: 'gpt-4o-mini',           name: 'GPT-4o Mini',           provider: 'openai'    },
-  { id: 'o3',                    name: 'o3',                    provider: 'openai'    },
-  { id: 'o4-mini',               name: 'o4-mini',               provider: 'openai'    },
-  { id: 'gemini-2.5-pro',        name: 'Gemini 2.5 Pro',        provider: 'google'    },
-  { id: 'gemini-2.5-flash',      name: 'Gemini 2.5 Flash',      provider: 'google'    },
-  { id: 'gemini-2.0-flash',      name: 'Gemini 2.0 Flash',      provider: 'google'    },
-  { id: 'deepseek-chat',         name: 'DeepSeek Chat',         provider: 'deepseek'  },
-  { id: 'deepseek-reasoner',     name: 'DeepSeek Reasoner',     provider: 'deepseek'  },
-  { id: 'glm-4-flash',           name: 'GLM-4 Flash',           provider: 'zhipu'     },
-  { id: 'glm-4-plus',            name: 'GLM-4 Plus',            provider: 'zhipu'     },
-  { id: 'glm-4',                 name: 'GLM-4',                 provider: 'zhipu'     },
-];
-
-interface ByokStatus {
-  keys: {
-    anthropic?: string | null;
-    openai?: string | null;
-    google?: string | null;
-    deepseek?: string | null;
-    zhipu?: string | null;
-    azure?: string | null;
-  };
-  baseUrls?: {
-    azure?: string | null;
-  };
-  model: string;
+interface ByokProviderData {
+  apiKey: string;
+  baseUrl: string;
+  models: string[];
+  enabled: boolean;
 }
 
-async function fetchByok(): Promise<ByokStatus | null> {
+interface ByokStore {
+  providers: Record<string, ByokProviderData>;
+  defaultModel?: string | null;
+}
+
+const FALLBACK_MODELS: ModelDef[] = [
+  { id: 'claude-opus-4-7',    name: 'Claude Opus 4.7',    provider: 'anthropic' },
+  { id: 'claude-sonnet-4-6',  name: 'Claude Sonnet 4.6',  provider: 'anthropic' },
+  { id: 'claude-haiku-4-5',   name: 'Claude Haiku 4.5',   provider: 'anthropic' },
+  { id: 'claude-3-5-sonnet',  name: 'Claude 3.5 Sonnet',  provider: 'anthropic' },
+  { id: 'gpt-4o',             name: 'GPT-4o',             provider: 'openai'    },
+  { id: 'gpt-4o-mini',        name: 'GPT-4o Mini',        provider: 'openai'    },
+  { id: 'o3',                 name: 'o3',                 provider: 'openai'    },
+  { id: 'o4-mini',            name: 'o4-mini',            provider: 'openai'    },
+  { id: 'gemini-2.5-pro',     name: 'Gemini 2.5 Pro',     provider: 'gemini'    },
+  { id: 'gemini-2.5-flash',   name: 'Gemini 2.5 Flash',   provider: 'gemini'    },
+  { id: 'gemini-2.0-flash',   name: 'Gemini 2.0 Flash',   provider: 'gemini'    },
+  { id: 'deepseek-chat',      name: 'DeepSeek Chat',      provider: 'deepseek'  },
+  { id: 'deepseek-reasoner',  name: 'DeepSeek Reasoner',  provider: 'deepseek'  },
+  { id: 'glm-4-flash',        name: 'GLM-4 Flash',        provider: 'zhipu'     },
+  { id: 'glm-4-plus',         name: 'GLM-4 Plus',         provider: 'zhipu'     },
+  { id: 'glm-4',              name: 'GLM-4',              provider: 'zhipu'     },
+  { id: 'qwen3-max',          name: 'Qwen3 Max',          provider: 'qwen'      },
+  { id: 'qwen-plus-latest',   name: 'Qwen Plus',          provider: 'qwen'      },
+];
+
+interface ByokProviderDef {
+  id: string;
+  name: string;
+  placeholder: string;
+  defaultBaseUrl: string;
+  color: string;
+  letter: string;
+  noKey: boolean;
+}
+
+const BYOK_PROVIDERS: ByokProviderDef[] = [
+  { id: 'anthropic', name: 'Anthropic',      placeholder: 'sk-ant-…',    defaultBaseUrl: 'https://api.anthropic.com',                        color: '#D97706', letter: 'A',  noKey: false },
+  { id: 'openai',    name: 'OpenAI',         placeholder: 'sk-…',        defaultBaseUrl: 'https://api.openai.com/v1',                        color: '#10A37F', letter: 'O',  noKey: false },
+  { id: 'gemini',    name: 'Google Gemini',  placeholder: 'AIza…',       defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',  color: '#4285F4', letter: 'G',  noKey: false },
+  { id: 'deepseek',  name: 'DeepSeek',       placeholder: 'sk-…',        defaultBaseUrl: 'https://api.deepseek.com/v1',                      color: '#0A74DA', letter: 'DS', noKey: false },
+  { id: 'zhipu',     name: '智谱 GLM',       placeholder: 'xxxx.yyyyyy', defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',             color: '#6366F1', letter: 'ZP', noKey: false },
+  { id: 'qwen',      name: 'Qwen / 通义',   placeholder: 'sk-…',        defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', color: '#F97316', letter: 'Q',  noKey: false },
+  { id: 'moonshot',  name: 'Moonshot / Kimi',placeholder: 'sk-…',        defaultBaseUrl: 'https://api.moonshot.cn/v1',                       color: '#06B6D4', letter: 'MK', noKey: false },
+  { id: 'mistral',   name: 'Mistral',        placeholder: 'sk-…',        defaultBaseUrl: 'https://api.mistral.ai/v1',                        color: '#FF7000', letter: 'Mi', noKey: false },
+  { id: 'groq',      name: 'Groq',           placeholder: 'gsk_…',       defaultBaseUrl: 'https://api.groq.com/openai/v1',                   color: '#F43F5E', letter: 'Gr', noKey: false },
+  { id: 'azure',     name: 'Azure OpenAI',   placeholder: 'Azure key…',  defaultBaseUrl: '',                                                 color: '#0078D4', letter: 'Az', noKey: false },
+  { id: 'ollama',    name: 'Ollama',         placeholder: '',             defaultBaseUrl: 'http://localhost:11434',                           color: '#10B981', letter: 'Ol', noKey: true  },
+  { id: 'lmstudio',  name: 'LM Studio',      placeholder: '',             defaultBaseUrl: 'http://localhost:1234',                            color: '#8B5CF6', letter: 'LM', noKey: true  },
+];
+
+async function loadByokStore(): Promise<ByokStore> {
   try {
-    const res = await fetch(`${API_BASE}/api/settings/byok`, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return null;
+    const res = await fetch('/api/settings/byok', { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return { providers: {} };
     return await res.json();
   } catch {
-    return null;
+    return { providers: {} };
   }
 }
 
-async function fetchByokModels(): Promise<ModelDef[]> {
+async function loadByokModels(): Promise<ModelDef[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/settings/byok/models`, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch('/api/settings/byok/models', { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return FALLBACK_MODELS;
     const j = await res.json();
     const arr = j?.models ?? j;
@@ -256,26 +280,15 @@ async function fetchByokModels(): Promise<ModelDef[]> {
   }
 }
 
-async function saveByokKey(provider: string, apiKey: string, model: string): Promise<boolean> {
+async function saveByokProvider(
+  id: string,
+  payload: { apiKey?: string; baseUrl?: string; models?: string[]; enabled?: boolean },
+): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/settings/byok`, {
+    const res = await fetch(`/api/settings/byok/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, apiKey, model }),
-      signal: AbortSignal.timeout(5000),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-async function saveAzureByok(apiKey: string, baseUrl: string, model: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/settings/byok`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'azure', apiKey, model, baseUrl }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(5000),
     });
     return res.ok;
@@ -286,99 +299,86 @@ async function saveAzureByok(apiKey: string, baseUrl: string, model: string): Pr
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
-// ---- BYOK Provider definitions ----------------------------------------------
+// ---- Provider logo (letter-based, no emoji) ----------------------------------
 
-const BYOK_PROVIDERS = [
-  { id: 'anthropic', name: 'Anthropic',     placeholder: 'sk-ant-…',           baseUrl: 'https://api.anthropic.com' },
-  { id: 'openai',    name: 'OpenAI',        placeholder: 'sk-…',               baseUrl: 'https://api.openai.com/v1' },
-  { id: 'azure',     name: 'Azure OpenAI',  placeholder: 'Azure API key…',      baseUrl: '' },
-  { id: 'google',    name: 'Google Gemini', placeholder: 'AIza…',              baseUrl: 'https://generativelanguage.googleapis.com' },
-  { id: 'deepseek',  name: 'DeepSeek',      placeholder: 'sk-…',               baseUrl: 'https://api.deepseek.com/v1' },
-  { id: 'zhipu',     name: '智谱 GLM',      placeholder: 'xxxx.yyyyyy',        baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
-  { id: 'ollama',    name: 'Ollama',        placeholder: '无需 API Key',        baseUrl: 'http://localhost:11434' },
-] as const;
-
-type ProviderID = typeof BYOK_PROVIDERS[number]['id'];
-
-function maskKey(val: string | null | undefined): string | null {
-  if (!val) return null;
-  if (val.startsWith('*') || val.startsWith('•')) return val;
-  return `••••${val.slice(-4)}`;
+function ProviderLogo({ def, size = 32 }: { def: ByokProviderDef; size?: number }) {
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: Math.round(size * 0.28),
+        background: `${def.color}22`, color: def.color,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size * 0.34, fontWeight: 700, flexShrink: 0,
+        letterSpacing: def.letter.length > 1 ? '-0.03em' : undefined,
+        userSelect: 'none',
+      }}
+    >
+      {def.letter}
+    </div>
+  );
 }
 
-// ---- BYOK Panel (tabbed) ----------------------------------------------------
+// ---- BYOK Panel — Cherry Studio two-panel layout ----------------------------
 
 function ByokPanel() {
   const { language } = useI18n();
   const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
-  const [byokStatus, setByokStatus] = useState<ByokStatus | null>(null);
-  const [models, setModels] = useState<ModelDef[]>(FALLBACK_MODELS);
-  const [selectedModel, setSelectedModel] = useState<string>(
-    () => localStorage.getItem('sf.byokModel') ?? 'claude-sonnet-4-6'
-  );
-  const [activeProvider, setActiveProvider] = useState<ProviderID>('anthropic');
-  const [showKey, setShowKey] = useState(false);
+
+  const [store, setStore] = useState<ByokStore>({ providers: {} });
+  const [allModels, setAllModels] = useState<ModelDef[]>(FALLBACK_MODELS);
+  const [selectedId, setSelectedId] = useState('anthropic');
+
   const [keyInput, setKeyInput] = useState('');
   const [baseUrlInput, setBaseUrlInput] = useState('');
+  const [enabledModels, setEnabledModels] = useState<string[]>([]);
+  const [providerEnabled, setProviderEnabled] = useState(false);
+  const [showKey, setShowKey] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
 
   useEffect(() => {
-    fetchByokModels().then(setModels);
-    fetchByok().then((s) => {
-      if (!s) return;
-      setByokStatus(s);
-      if (s.model && !localStorage.getItem('sf.byokModel')) {
-        setSelectedModel(s.model);
-      }
+    Promise.all([loadByokStore(), loadByokModels()]).then(([s, m]) => {
+      setStore(s);
+      setAllModels(m);
     });
   }, []);
 
-  const provider = BYOK_PROVIDERS.find(p => p.id === activeProvider)!;
+  const selectedDef = BYOK_PROVIDERS.find(p => p.id === selectedId) ?? BYOK_PROVIDERS[0];
+  const savedState = store.providers[selectedId];
 
-  // Reset key input + baseUrl when switching provider tabs
   useEffect(() => {
+    const saved = store.providers[selectedId];
     setKeyInput('');
     setShowKey(false);
     setSaveState('idle');
     setTestState('idle');
-    if (activeProvider === 'azure') {
-      setBaseUrlInput(byokStatus?.baseUrls?.azure ?? '');
-    } else {
-      setBaseUrlInput(provider.baseUrl);
-    }
-  }, [activeProvider]); // eslint-disable-line react-hooks/exhaustive-deps
+    setBaseUrlInput(saved?.baseUrl || selectedDef.defaultBaseUrl);
+    setProviderEnabled(saved?.enabled ?? false);
+    const defaults = allModels.filter(m => m.provider === selectedId).map(m => m.id);
+    setEnabledModels(saved?.models?.length ? saved.models : defaults);
+  }, [selectedId, store]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep Azure base URL in sync when byokStatus loads
-  useEffect(() => {
-    if (activeProvider === 'azure' && byokStatus?.baseUrls?.azure) {
-      setBaseUrlInput(byokStatus.baseUrls.azure);
-    }
-  }, [byokStatus, activeProvider]);
+  const providerModels = allModels.filter(m => m.provider === selectedId);
+
+  function toggleModel(modelId: string) {
+    setEnabledModels(prev =>
+      prev.includes(modelId) ? prev.filter(m => m !== modelId) : [...prev, modelId]
+    );
+  }
 
   async function handleSave() {
-    if (activeProvider !== 'ollama' && !keyInput.trim()) return;
     setSaveState('saving');
-    let ok = false;
-    if (activeProvider === 'azure') {
-      ok = await saveAzureByok(keyInput.trim(), baseUrlInput.trim(), selectedModel);
-    } else if (activeProvider === 'ollama') {
-      // Ollama: just save empty key with base URL
-      ok = await saveAzureByok('', baseUrlInput.trim(), selectedModel);
-    } else {
-      ok = await saveByokKey(activeProvider, keyInput.trim(), selectedModel);
-    }
+    const payload: Parameters<typeof saveByokProvider>[1] = {
+      baseUrl: baseUrlInput.trim(),
+      models: enabledModels,
+      enabled: providerEnabled,
+    };
+    if (keyInput.trim()) payload.apiKey = keyInput.trim();
+    const ok = await saveByokProvider(selectedId, payload);
     if (ok) {
-      const maskedNew = keyInput ? `••••${keyInput.slice(-4)}` : null;
       setKeyInput('');
       setSaveState('saved');
-      setByokStatus(prev => ({
-        keys: { ...(prev?.keys ?? {}), [activeProvider]: maskedNew },
-        model: selectedModel,
-        baseUrls: activeProvider === 'azure' || activeProvider === 'ollama'
-          ? { ...(prev?.baseUrls ?? {}), [activeProvider]: baseUrlInput.trim() }
-          : prev?.baseUrls,
-      }));
+      loadByokStore().then(setStore);
       setTimeout(() => setSaveState('idle'), 3000);
     } else {
       setSaveState('error');
@@ -389,203 +389,198 @@ function ByokPanel() {
   async function handleTest() {
     setTestState('testing');
     try {
-      const res = await fetch(`${API_BASE}/api/settings/byok/models`, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch('/api/settings/byok/models', { signal: AbortSignal.timeout(5000) });
       setTestState(res.ok ? 'ok' : 'fail');
     } catch {
       setTestState('fail');
     }
-    setTimeout(() => setTestState('idle'), 3000);
+    setTimeout(() => setTestState('idle'), 4000);
   }
 
-  // Filtered models for active provider tab
-  const filteredModels = models.filter(m => {
-    if (activeProvider === 'anthropic') return m.provider === 'anthropic';
-    if (activeProvider === 'openai' || activeProvider === 'azure') return m.provider === 'openai';
-    if (activeProvider === 'google') return m.provider === 'google';
-    if (activeProvider === 'deepseek') return m.provider === 'deepseek';
-    if (activeProvider === 'zhipu') return m.provider === 'zhipu';
-    return true; // ollama: show all
-  });
-  // Fall back to all models if none match
-  const modelOptions = filteredModels.length > 0 ? filteredModels : models;
-
-  const currentMaskedKey = maskKey(byokStatus?.keys?.[activeProvider as keyof ByokStatus['keys']]);
+  const maskedKey = savedState?.apiKey ?? null;
+  const hasKey = Boolean(maskedKey && maskedKey.length > 0);
 
   return (
-    <div className="rounded-[10px] border border-sf-border bg-sf-elev2 p-4 flex flex-col gap-4">
-      {/* Header */}
-      <p className="text-[12px] font-semibold text-sf-fg2">{T('直接调用模型 API', 'Call model APIs directly')}</p>
+    <div className="rounded-[10px] border border-sf-border bg-sf-elev2 overflow-hidden flex" style={{ minHeight: 440 }}>
 
-      {/* Provider tabs */}
-      <div className="flex gap-1 flex-wrap">
+      {/* ── Left: Provider list ──────────────────────────────── */}
+      <div className="w-[168px] flex-shrink-0 border-r border-sf-border flex flex-col overflow-y-auto">
         {BYOK_PROVIDERS.map(p => {
-          const hasKey = Boolean(byokStatus?.keys?.[p.id as keyof ByokStatus['keys']]);
+          const saved = store.providers[p.id];
+          const active = saved?.enabled && (p.noKey || Boolean(saved?.apiKey));
+          const isSel = p.id === selectedId;
           return (
             <button
               key={p.id}
               type="button"
-              onClick={() => setActiveProvider(p.id)}
+              onClick={() => setSelectedId(p.id)}
               className={[
-                'px-3 py-1.5 rounded-[7px] text-[11px] font-semibold transition-colors flex items-center gap-1',
-                activeProvider === p.id
-                  ? 'bg-sf-accent text-white'
-                  : 'bg-sf-elev3 text-sf-fg4 hover:text-sf-fg2',
+                'flex items-center gap-2 px-2.5 py-2 text-left transition-colors border-b border-sf-border/30 last:border-0',
+                isSel ? 'bg-sf-accent/15' : 'hover:bg-sf-elev3',
               ].join(' ')}
             >
-              {p.name}
-              {hasKey && (
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-sf-ok" />
-              )}
+              <ProviderLogo def={p} size={26} />
+              <span className={['flex-1 min-w-0 text-[11px] font-semibold truncate', isSel ? 'text-sf-fg1' : 'text-sf-fg3'].join(' ')}>
+                {p.name}
+              </span>
+              {active && <span className="h-1.5 w-1.5 rounded-full bg-sf-ok flex-shrink-0" />}
             </button>
           );
         })}
       </div>
 
-      {/* Provider form */}
-      <div className="flex flex-col gap-3">
-        {/* Current key indicator */}
-        {currentMaskedKey && (
-          <div className="flex items-center gap-2 rounded-[7px] bg-sf-elev3 px-3 py-1.5">
-            <span className="font-mono text-[10px] text-sf-fg4">{T('当前 Key：', 'Current key:')}</span>
-            <span className="font-mono text-[10px] text-sf-fg2">{currentMaskedKey}</span>
-          </div>
-        )}
+      {/* ── Right: Config form ───────────────────────────────── */}
+      <div className="flex-1 flex flex-col gap-3.5 p-4 overflow-y-auto">
 
-        {/* API Key input */}
-        <div className="flex flex-col gap-1.5">
-          <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
-            API Key
-            {activeProvider === 'ollama' && (
-              <span className="ml-1 normal-case font-normal text-sf-fg5">
-                {T('（本地服务无需填写）', '(not required for local service)')}
-              </span>
+        {/* Provider header */}
+        <div className="flex items-center gap-3">
+          <ProviderLogo def={selectedDef} size={34} />
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-bold text-sf-fg1">{selectedDef.name}</div>
+            {selectedDef.defaultBaseUrl && (
+              <div className="font-mono text-[9px] text-sf-fg5 truncate">{selectedDef.defaultBaseUrl}</div>
             )}
-          </label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
+          </div>
+          {/* Enable toggle */}
+          <button
+            type="button"
+            onClick={() => setProviderEnabled(v => !v)}
+            title={providerEnabled ? T('点击禁用', 'Disable') : T('点击启用', 'Enable')}
+            className={[
+              'relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors',
+              providerEnabled ? 'bg-sf-ok' : 'bg-sf-elev3',
+            ].join(' ')}
+          >
+            <span className={[
+              'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+              providerEnabled ? 'translate-x-4' : 'translate-x-0',
+            ].join(' ')} />
+          </button>
+        </div>
+
+        {/* API Key */}
+        {!selectedDef.noKey && (
+          <div className="flex flex-col gap-1.5">
+            <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">API Key</label>
+            {hasKey && !keyInput && (
+              <div className="flex items-center gap-2 rounded-[7px] bg-sf-elev3 px-3 py-1.5">
+                <span className="font-mono text-[10px] text-sf-fg4">{T('当前：', 'Current:')}</span>
+                <span className="font-mono text-[10px] text-sf-fg2">{maskedKey}</span>
+              </div>
+            )}
+            <div className="relative">
               <input
                 type={showKey ? 'text' : 'password'}
                 value={keyInput}
                 onChange={e => setKeyInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSave()}
-                placeholder={activeProvider === 'ollama' ? T('无需 API Key', 'No API key needed') : provider.placeholder}
-                disabled={activeProvider === 'ollama'}
-                className="w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 pr-9 text-[12px] text-sf-fg1 placeholder:text-sf-fg5 focus:border-sf-accent focus:outline-none transition-colors disabled:opacity-40"
+                placeholder={hasKey ? T('输入新 Key 覆盖', 'Enter new key to replace') : selectedDef.placeholder}
+                className="w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 pr-9 text-[12px] text-sf-fg1 placeholder:text-sf-fg5 focus:border-sf-accent focus:outline-none transition-colors"
               />
-              {activeProvider !== 'ollama' && (
-                <button
-                  type="button"
-                  onClick={() => setShowKey(v => !v)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sf-fg5 hover:text-sf-fg2 transition-colors"
-                >
-                  {showKey ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-                      <line x1="1" y1="1" x2="23" y2="23"/>
-                    </svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                      <circle cx="12" cy="12" r="3"/>
-                    </svg>
-                  )}
-                </button>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={
-                (activeProvider !== 'ollama' && !keyInput.trim()) ||
-                saveState === 'saving'
-              }
-              className="flex-shrink-0 rounded-[8px] bg-sf-accent px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40 hover:bg-sf-accent-dim transition-colors"
-            >
-              {saveState === 'saving' ? '…' : T('保存', 'Save')}
-            </button>
-          </div>
-          {saveState === 'saved' && (
-            <p className="font-mono text-[11px] text-sf-ok">✓ {T('已保存', 'Saved')}</p>
-          )}
-          {saveState === 'error' && (
-            <p className="font-mono text-[11px] text-sf-reject">✕ {T('保存失败', 'Save failed')}</p>
-          )}
-        </div>
-
-        {/* Base URL — always visible for Ollama & Azure, hidden for others */}
-        {(activeProvider === 'ollama' || activeProvider === 'azure') && (
-          <div className="flex flex-col gap-1.5">
-            <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
-              Base URL
-            </label>
-            <input
-              type="text"
-              value={baseUrlInput}
-              onChange={e => setBaseUrlInput(e.target.value)}
-              placeholder={provider.baseUrl || 'https://…'}
-              className="w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 text-[12px] font-mono text-sf-fg1 placeholder:text-sf-fg5 focus:border-sf-accent focus:outline-none transition-colors"
-            />
-            <p className="font-mono text-[9px] text-sf-fg6">
-              {activeProvider === 'ollama'
-                ? T('默认 http://localhost:11434', 'Default: http://localhost:11434')
-                : T('Azure 资源端点，如 https://your-resource.openai.azure.com/', 'Azure resource endpoint')}
-            </p>
-          </div>
-        )}
-
-        {/* Model list */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
-              {T('模型', 'Models')}{' '}
-              <span className="normal-case font-normal text-sf-fg6">({modelOptions.length})</span>
-            </label>
-            <button
-              type="button"
-              onClick={() => fetchByokModels().then(setModels)}
-              className="flex items-center gap-1 rounded-[6px] border border-sf-border px-2 py-1 text-[10px] text-sf-fg4 hover:text-sf-fg1 hover:border-sf-fg5 transition-colors"
-            >
-              <IconRefreshCw cls="h-[9px] w-[9px]" />
-              {T('刷新列表', 'Refresh')}
-            </button>
-          </div>
-          <div
-            className="flex flex-col rounded-[8px] border border-sf-border overflow-hidden"
-            style={{ background: 'var(--t-panel)', maxHeight: 200, overflowY: 'auto' }}
-          >
-            {modelOptions.map((m) => (
               <button
-                key={m.id}
                 type="button"
-                onClick={() => {
-                  setSelectedModel(m.id);
-                  localStorage.setItem('sf.byokModel', m.id);
-                }}
-                className={[
-                  'flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors',
-                  'border-b border-sf-border/40 last:border-0',
-                  selectedModel === m.id ? 'bg-sf-accent/15' : 'hover:bg-sf-elev2',
-                ].join(' ')}
+                onClick={() => setShowKey(v => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sf-fg5 hover:text-sf-fg2 transition-colors"
               >
-                <div className="flex-1 min-w-0">
-                  <div className="text-[12px] font-medium text-sf-fg1 truncate">{m.name}</div>
-                  <div className="font-mono text-[9px] text-sf-fg5 truncate">{m.id}</div>
-                </div>
-                {selectedModel === m.id && (
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                    className="text-sf-accent flex-shrink-0 shrink-0">
-                    <polyline points="20 6 9 17 4 12" />
+                {showKey ? (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
                   </svg>
                 )}
               </button>
-            ))}
+            </div>
           </div>
+        )}
+
+        {/* Base URL */}
+        <div className="flex flex-col gap-1.5">
+          <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">Base URL</label>
+          <input
+            type="text"
+            value={baseUrlInput}
+            onChange={e => setBaseUrlInput(e.target.value)}
+            placeholder={selectedDef.defaultBaseUrl || 'http://localhost:…'}
+            className="w-full rounded-[7px] border border-sf-border bg-sf-elev1 px-3 py-2 font-mono text-[11px] text-sf-fg1 placeholder:text-sf-fg5 focus:border-sf-accent focus:outline-none transition-colors"
+          />
         </div>
 
-        {/* Test button */}
-        <div className="flex items-center gap-3">
+        {/* Local service hint */}
+        {selectedDef.noKey && (
+          <p className="font-mono text-[10px] text-sf-fg5">
+            {T('本地服务无需 API Key，启动后点保存即可。', 'No API key needed — just start the service and save.')}
+          </p>
+        )}
+
+        {/* Model list */}
+        {providerModels.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
+                {T('模型', 'Models')}{' '}
+                <span className="normal-case font-normal text-sf-fg6">({enabledModels.length}/{providerModels.length})</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const all = providerModels.map(m => m.id);
+                  setEnabledModels(all.every(id => enabledModels.includes(id)) ? [] : all);
+                }}
+                className="font-mono text-[9px] text-sf-fg5 hover:text-sf-fg2 transition-colors"
+              >
+                {T('全选/取消', 'All/None')}
+              </button>
+            </div>
+            <div className="flex flex-col rounded-[8px] border border-sf-border overflow-hidden" style={{ maxHeight: 168, overflowY: 'auto' }}>
+              {providerModels.map(m => {
+                const on = enabledModels.includes(m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => toggleModel(m.id)}
+                    className={[
+                      'flex items-center gap-2.5 px-3 py-2 text-left transition-colors border-b border-sf-border/30 last:border-0',
+                      on ? 'bg-sf-accent/10' : 'hover:bg-sf-elev3',
+                    ].join(' ')}
+                  >
+                    <div className={[
+                      'h-3.5 w-3.5 flex-shrink-0 rounded-[3px] border flex items-center justify-center transition-colors',
+                      on ? 'border-sf-accent bg-sf-accent' : 'border-sf-border',
+                    ].join(' ')}>
+                      {on && (
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] font-medium text-sf-fg1 truncate">{m.name}</div>
+                      <div className="font-mono text-[9px] text-sf-fg5 truncate">{m.id}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Status */}
+        {saveState === 'saved' && (
+          <p className="font-mono text-[11px] text-sf-ok">✓ {T('已保存', 'Saved')}</p>
+        )}
+        {saveState === 'error' && (
+          <p className="font-mono text-[11px] text-sf-reject">✕ {T('保存失败，请确认后端已启动', 'Save failed — check server')}</p>
+        )}
+
+        {/* Actions */}
+        <div className="mt-auto flex items-center gap-2 pt-3 border-t border-sf-border/40">
           <button
             type="button"
             onClick={handleTest}
@@ -597,14 +592,18 @@ function ByokPanel() {
                 <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
               </svg>
             )}
-            {T('测试连接', 'Test connection')}
+            {T('测试连接', 'Test')}
+            {testState === 'ok' && <span className="ml-1 text-sf-ok">✓</span>}
+            {testState === 'fail' && <span className="ml-1 text-sf-reject">✕</span>}
           </button>
-          {testState === 'ok' && (
-            <span className="font-mono text-[11px] text-sf-ok">✓ {T('连接正常', 'Connected')}</span>
-          )}
-          {testState === 'fail' && (
-            <span className="font-mono text-[11px] text-sf-reject">✕ {T('连接失败', 'Connection failed')}</span>
-          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saveState === 'saving'}
+            className="flex-1 rounded-[8px] bg-sf-accent px-4 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40 hover:bg-sf-accent-dim transition-colors"
+          >
+            {saveState === 'saving' ? '…' : T('保存配置', 'Save')}
+          </button>
         </div>
       </div>
     </div>
