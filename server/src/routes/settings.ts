@@ -43,11 +43,25 @@ router.get('/generation-overrides', (_req: Request, res: Response) => {
 
 // ── BYOK provider config (must be before generic /:key) ──────────────────────
 
+/**
+ * Endpoint protocol type (Cherry Studio-style).
+ * Determines which request shape / response parser we use when probing a
+ * provider's model catalog, independent of the provider id. A user-defined
+ * "custom" provider can pick any of these.
+ */
+export type EndpointType = 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'azure-openai';
+
+const VALID_ENDPOINT_TYPES: ReadonlySet<EndpointType> = new Set([
+  'openai', 'anthropic', 'gemini', 'ollama', 'azure-openai',
+] as const);
+
 interface ByokProviderData {
   apiKey: string;
   baseUrl: string;
   models: string[];
   enabled: boolean;
+  /** Override the endpoint protocol type (falls back to PROVIDER_DEFAULT_TYPE) */
+  type?: EndpointType;
   /** Model IDs last pulled from upstream /models (badge = ☁ remote) */
   syncedModels?: string[];
   /** Model IDs the user added manually that are NOT in syncedModels (badge = ✎ manual) */
@@ -119,6 +133,7 @@ router.get('/byok', (_req: Request, res: Response) => {
     masked[id] = {
       ...p,
       apiKey: maskApiKey(p.apiKey),
+      type: resolveEndpointType(id, p.type),
       syncedModels: Array.isArray(p.syncedModels) ? p.syncedModels : [],
       manualModels: Array.isArray(p.manualModels) ? p.manualModels : [],
     };
@@ -159,6 +174,48 @@ const PROVIDER_DEFAULT_BASE: Record<string, string> = {
 };
 
 const PROVIDERS_NO_KEY = new Set(['ollama', 'lmstudio']);
+
+/**
+ * Default endpoint type per known provider id. Anything not in this map
+ * defaults to 'openai' (covers SiliconFlow, Together, custom gateways, ...).
+ */
+const PROVIDER_DEFAULT_TYPE: Record<string, EndpointType> = {
+  anthropic:  'anthropic',
+  openai:     'openai',
+  google:     'gemini',
+  gemini:     'gemini',
+  deepseek:   'openai',
+  zhipu:      'openai',
+  qwen:       'openai',
+  moonshot:   'openai',
+  mistral:    'openai',
+  groq:       'openai',
+  openrouter: 'openai',
+  ollama:     'ollama',
+  lmstudio:   'openai',
+  azure:      'azure-openai',
+};
+
+function resolveEndpointType(providerId: string, override?: string): EndpointType {
+  if (override && VALID_ENDPOINT_TYPES.has(override as EndpointType)) {
+    return override as EndpointType;
+  }
+  return PROVIDER_DEFAULT_TYPE[providerId] ?? 'openai';
+}
+
+/**
+ * Parse a comma/newline-separated apiKey field into individual keys.
+ * Mirrors Cherry Studio's formatApiKeys + getApiKey split logic.
+ */
+function parseApiKeys(raw: string): string[] {
+  if (!raw) return [];
+  return raw
+    .replace(/，/g, ',')   // full-width comma (common when pasted from Chinese sources)
+    .replace(/\n/g, ',')   // newline → comma so users can paste multi-line
+    .split(',')
+    .map(k => k.trim())
+    .filter(k => k.length > 0);
+}
 
 function stripTrailingSlash(s: string): string {
   return s.replace(/\/+$/, '');
@@ -233,52 +290,167 @@ export function normalizeProviderBaseUrl(providerId: string, rawBaseUrl?: string
   return formatApiHost(raw);
 }
 
-function buildRemoteModelsRequest(
-  providerId: string,
-  apiKey: string,
-  baseUrl: string,
-): { url: string; headers: Record<string, string>; effectiveBase: string } {
-  const headers: Record<string, string> = { 'Accept': 'application/json' };
-  const effectiveBase = normalizeProviderBaseUrl(providerId, baseUrl);
+// ── Probe request builders (per endpoint type) ─────────────────────────────
 
-  if (providerId === 'anthropic') {
-    headers['x-api-key'] = apiKey;
-    headers['anthropic-version'] = '2023-06-01';
-    // Anthropic /models lives under /v1 — use formatApiHost to ensure it's there
-    const versionedBase = formatApiHost(effectiveBase);
-    return { url: `${versionedBase}/models?limit=1000`, headers, effectiveBase: versionedBase };
-  }
-
-  if (providerId === 'google' || providerId === 'gemini') {
-    // Gemini always uses /v1beta; strip any trailing /v1 or /v1beta the user
-    // may have entered, then re-append /v1beta canonically (Cherry's geminiFetcher logic).
-    const stripped = effectiveBase.replace(/\/v1(beta)?$/, '');
-    return {
-      url: `${stripped}/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=1000`,
-      headers,
-      effectiveBase: stripped,
-    };
-  }
-
-  // Ollama native /api/tags lives at the root. Mirror Cherry's ollamaFetcher:
-  // strip `/v1`, `/api`, `/chat` from the tail so a user-supplied
-  // `http://localhost:11434/v1` or `http://localhost:11434/api` both work.
-  if (providerId === 'ollama') {
-    const root = stripTrailingSlash(
-      effectiveBase
-        .replace(/\/v1$/, '')
-        .replace(/\/api$/, '')
-        .replace(/\/chat$/, ''),
-    );
-    return { url: `${root}/api/tags`, headers, effectiveBase: root };
-  }
-
-  // OpenAI-compatible default — effectiveBase already has /v1 thanks to formatApiHost
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-  return { url: `${effectiveBase}/models`, headers, effectiveBase };
+/**
+ * Default header bundle. Cherry Studio sends BOTH `Authorization: Bearer` and
+ * `X-Api-Key` so the request works against proxies / gateways that only check
+ * one of the two.
+ */
+function dualKeyHeaders(apiKey: string): Record<string, string> {
+  if (!apiKey) return {};
+  return { 'Authorization': `Bearer ${apiKey}`, 'X-Api-Key': apiKey };
 }
 
-interface RemoteModelDef { id: string; name: string; provider: string; }
+interface ProbeRequest { url: string; headers: Record<string, string>; effectiveBase: string; }
+
+function buildOpenAIProbe(apiKey: string, effectiveBase: string): ProbeRequest {
+  return {
+    url: `${effectiveBase}/models`,
+    headers: { 'Accept': 'application/json', ...dualKeyHeaders(apiKey) },
+    effectiveBase,
+  };
+}
+
+function buildAnthropicProbe(apiKey: string, effectiveBase: string): ProbeRequest {
+  // Anthropic /models lives under /v1 — formatApiHost guarantees it's there
+  const versionedBase = formatApiHost(effectiveBase);
+  return {
+    url: `${versionedBase}/models?limit=1000`,
+    headers: {
+      'Accept': 'application/json',
+      'x-api-key': apiKey,
+      'Authorization': `Bearer ${apiKey}`,
+      'anthropic-version': '2023-06-01',
+    },
+    effectiveBase: versionedBase,
+  };
+}
+
+function buildGeminiProbe(apiKey: string, effectiveBase: string): ProbeRequest {
+  // Gemini always uses /v1beta. Strip any trailing /v1 or /v1beta the user
+  // entered, then re-append canonically.
+  const stripped = effectiveBase.replace(/\/v1(beta)?$/, '');
+  return {
+    url: `${stripped}/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=1000`,
+    headers: { 'Accept': 'application/json' },
+    effectiveBase: stripped,
+  };
+}
+
+function buildOllamaProbe(apiKey: string, effectiveBase: string): ProbeRequest {
+  // /api/tags lives at the root. Strip /v1, /api, /chat tails so users can
+  // paste any of `http://host:11434`, `…/v1`, `…/api`, `…/chat`.
+  const root = stripTrailingSlash(
+    effectiveBase
+      .replace(/\/v1$/, '')
+      .replace(/\/api$/, '')
+      .replace(/\/chat$/, ''),
+  );
+  return {
+    url: `${root}/api/tags`,
+    headers: { 'Accept': 'application/json', ...dualKeyHeaders(apiKey) },
+    effectiveBase: root,
+  };
+}
+
+function buildProbeRequest(type: EndpointType, apiKey: string, effectiveBase: string): ProbeRequest {
+  switch (type) {
+    case 'anthropic':    return buildAnthropicProbe(apiKey, effectiveBase);
+    case 'gemini':       return buildGeminiProbe(apiKey, effectiveBase);
+    case 'ollama':       return buildOllamaProbe(apiKey, effectiveBase);
+    case 'azure-openai':
+    case 'openai':
+    default:             return buildOpenAIProbe(apiKey, effectiveBase);
+  }
+}
+
+// ── Response parsers (per endpoint type) ───────────────────────────────────
+
+/** Capability tags surfaced to the UI for badges & filtering */
+export type ModelCapability =
+  | 'vision'
+  | 'embedding'
+  | 'function_calling'
+  | 'reasoning'
+  | 'image_generation'
+  | 'audio'
+  | 'rerank'
+  | 'web_search';
+
+interface RemoteModelDef {
+  id: string;
+  name: string;
+  provider: string;
+  /** Family label for UI grouping (e.g. "GLM-4.5", "Claude 4", "GPT-5") */
+  group?: string;
+  /** Inferred capabilities — embedding / vision / reasoning / etc */
+  capabilities?: ModelCapability[];
+  owned_by?: string;
+  description?: string;
+}
+
+/** Pattern-based capability detection. Lossy but covers ~90% of major providers. */
+function inferCapabilities(id: string, raw?: Record<string, unknown>): ModelCapability[] {
+  const caps = new Set<ModelCapability>();
+  const lower = id.toLowerCase();
+
+  // Embedding (also accept explicit type from upstream)
+  if (
+    /embed|embedding|ada-002|text-embedding|bge|m3e|gte-|voyage-/i.test(lower) ||
+    (raw && typeof raw.type === 'string' && raw.type === 'embedding')
+  ) caps.add('embedding');
+
+  // Rerank
+  if (/rerank|reranker/i.test(lower)) caps.add('rerank');
+
+  // Image generation
+  if (/dall-?e|gpt-image|flux|stable-diffusion|sd-|midjourney|imagen/i.test(lower)) {
+    caps.add('image_generation');
+  }
+
+  // Audio / speech
+  if (/whisper|tts|audio|speech|voice/i.test(lower)) caps.add('audio');
+
+  // Vision (multimodal)
+  if (/vision|gpt-4o|gpt-4-turbo|gpt-5|claude-3|claude-4|claude-sonnet-4|claude-opus-4|claude-haiku-4|gemini|glm-4\.\d+v|glm-4v|qwen.*vl|qwen2\.5-vl|llava|pixtral/i.test(lower)) {
+    caps.add('vision');
+  }
+
+  // Reasoning ("thinking" models)
+  if (/^o\d|deepseek-reasoner|deepseek-r\d|gpt-5.*thinking|claude.*thinking|qwq|glm-zero/i.test(lower)) {
+    caps.add('reasoning');
+  }
+
+  // Function calling — most modern chat models support it; exclude embeddings/images/audio
+  if (
+    !caps.has('embedding') && !caps.has('image_generation') && !caps.has('audio') && !caps.has('rerank') &&
+    /gpt-4|gpt-3\.5-turbo-(0613|1106|0125)|gpt-5|gpt-4o|claude-3|claude-4|claude-sonnet|claude-opus|claude-haiku|deepseek-(chat|coder|v)|qwen|glm-4|kimi|moonshot|mistral-(small|medium|large)|codestral|gemini|llama-3|llama-4/i.test(lower)
+  ) caps.add('function_calling');
+
+  return Array.from(caps);
+}
+
+/**
+ * Infer the family/group label for UI grouping. Mirrors the way Cherry Studio
+ * groups models under headings like "GLM-4.5", "GLM-4.6V", "Embedding".
+ */
+function inferGroup(id: string, capabilities: ModelCapability[]): string {
+  if (capabilities.includes('embedding')) return 'Embedding';
+  if (capabilities.includes('rerank')) return 'Rerank';
+  if (capabilities.includes('image_generation')) return 'Image';
+  if (capabilities.includes('audio')) return 'Audio';
+
+  // OpenRouter-style vendor/model — take the vendor as the group
+  const slashIdx = id.indexOf('/');
+  if (slashIdx > 0) return id.slice(0, slashIdx);
+
+  // Extract <family>-<major>[.<minor>][letter] (e.g. glm-4.5v, claude-sonnet-4, gpt-4o, gemini-2.5)
+  const m = id.match(/^([a-z][a-z]+(?:-[a-z]+)*(?:-\d+(?:\.\d+)?[a-z]?)?)/i);
+  if (m) return m[1].toUpperCase();
+
+  return id.toUpperCase();
+}
 
 function dedupModels(items: RemoteModelDef[]): RemoteModelDef[] {
   const seen = new Set<string>();
@@ -291,68 +463,93 @@ function dedupModels(items: RemoteModelDef[]): RemoteModelDef[] {
   return out;
 }
 
-function parseRemoteModels(data: unknown, providerId: string): RemoteModelDef[] {
-  const raw = parseRemoteModelsRaw(data, providerId);
-  return dedupModels(raw);
+function annotateModel(base: RemoteModelDef, raw?: Record<string, unknown>): RemoteModelDef {
+  const capabilities = inferCapabilities(base.id, raw);
+  return {
+    ...base,
+    capabilities,
+    group: base.group ?? inferGroup(base.id, capabilities),
+  };
 }
 
-function parseRemoteModelsRaw(data: unknown, providerId: string): RemoteModelDef[] {
-  const out: RemoteModelDef[] = [];
-  if (!data || typeof data !== 'object') return out;
-  const obj = data as Record<string, unknown>;
+function parseOpenAIResponse(data: unknown, providerId: string): RemoteModelDef[] {
+  const obj = (data ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(obj.data)) return [];
+  return (obj.data as Array<Record<string, unknown>>)
+    .filter(m => typeof m.id === 'string' && (m.id as string).length > 0)
+    .map(m => annotateModel({
+      id: m.id as string,
+      name: m.id as string,
+      provider: providerId,
+      owned_by: typeof m.owned_by === 'string' ? m.owned_by : undefined,
+    }, m));
+}
 
-  // Anthropic /v1/models: { data: [{ id, display_name, type, created_at }] }
-  if (providerId === 'anthropic' && Array.isArray(obj.data)) {
-    for (const m of obj.data as Array<Record<string, unknown>>) {
-      const id = typeof m.id === 'string' ? m.id : '';
-      if (!id) continue;
-      out.push({
-        id,
-        name: typeof m.display_name === 'string' ? m.display_name : id,
-        provider: 'anthropic',
-      });
-    }
-    return out;
-  }
+function parseAnthropicResponse(data: unknown, providerId: string): RemoteModelDef[] {
+  const obj = (data ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(obj.data)) return [];
+  return (obj.data as Array<Record<string, unknown>>)
+    .filter(m => typeof m.id === 'string' && (m.id as string).length > 0)
+    .map(m => annotateModel({
+      id: m.id as string,
+      name: typeof m.display_name === 'string' ? m.display_name : (m.id as string),
+      provider: providerId,
+    }, m));
+}
 
-  // Gemini: { models: [{ name: "models/gemini-1.5-pro", displayName, supportedGenerationMethods }] }
-  if ((providerId === 'google' || providerId === 'gemini') && Array.isArray(obj.models)) {
-    for (const m of obj.models as Array<Record<string, unknown>>) {
-      const rawName = typeof m.name === 'string' ? m.name : '';
-      const id = rawName.replace(/^models\//, '');
-      if (!id) continue;
+function parseGeminiResponse(data: unknown, providerId: string): RemoteModelDef[] {
+  const obj = (data ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(obj.models)) return [];
+  return (obj.models as Array<Record<string, unknown>>)
+    .filter(m => typeof m.name === 'string' && (m.name as string).length > 0)
+    .filter(m => {
       const methods = Array.isArray(m.supportedGenerationMethods) ? m.supportedGenerationMethods : null;
-      if (methods && !methods.includes('generateContent')) continue;
-      out.push({
+      // Accept models that support generateContent OR embedContent (we want both)
+      return !methods || methods.includes('generateContent') || methods.includes('embedContent');
+    })
+    .map(m => {
+      const id = (m.name as string).replace(/^models\//, '');
+      const methods = Array.isArray(m.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
+      const base: RemoteModelDef = {
         id,
         name: typeof m.displayName === 'string' ? m.displayName : id,
-        provider: 'google',
-      });
-    }
-    return out;
-  }
+        provider: providerId,
+        description: typeof m.description === 'string' ? m.description : undefined,
+      };
+      const annotated = annotateModel(base, m);
+      // Gemini explicitly declares embedding support via supportedGenerationMethods
+      if (methods.includes('embedContent') && !annotated.capabilities?.includes('embedding')) {
+        annotated.capabilities = [...(annotated.capabilities ?? []), 'embedding'];
+        annotated.group = 'Embedding';
+      }
+      return annotated;
+    });
+}
 
-  // OpenAI-compatible: { data: [{ id }] }
-  if (Array.isArray(obj.data)) {
-    for (const m of obj.data as Array<Record<string, unknown>>) {
-      const id = typeof m.id === 'string' ? m.id : '';
-      if (!id) continue;
-      out.push({ id, name: id, provider: providerId });
-    }
-    return out;
-  }
+function parseOllamaResponse(data: unknown, providerId: string): RemoteModelDef[] {
+  const obj = (data ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(obj.models)) return [];
+  return (obj.models as Array<Record<string, unknown>>)
+    .filter(m => typeof m.name === 'string' && (m.name as string).length > 0)
+    .map(m => annotateModel({
+      id: m.name as string,
+      name: m.name as string,
+      provider: providerId,
+      owned_by: 'ollama',
+    }, m));
+}
 
-  // Ollama /api/tags: { models: [{ name, ... }] } — also accepted at /v1/models via OpenAI shim
-  if (Array.isArray(obj.models)) {
-    for (const m of obj.models as Array<Record<string, unknown>>) {
-      const id = typeof m.name === 'string' ? m.name : (typeof m.id === 'string' ? m.id : '');
-      if (!id) continue;
-      out.push({ id, name: id, provider: providerId });
-    }
-    return out;
+function parseProbeResponse(data: unknown, type: EndpointType, providerId: string): RemoteModelDef[] {
+  let parsed: RemoteModelDef[];
+  switch (type) {
+    case 'anthropic':    parsed = parseAnthropicResponse(data, providerId); break;
+    case 'gemini':       parsed = parseGeminiResponse(data, providerId); break;
+    case 'ollama':       parsed = parseOllamaResponse(data, providerId); break;
+    case 'azure-openai':
+    case 'openai':
+    default:             parsed = parseOpenAIResponse(data, providerId); break;
   }
-
-  return out;
+  return dedupModels(parsed);
 }
 
 router.get('/byok/:providerId/models/remote', async (req: Request, res: Response) => {
@@ -360,11 +557,11 @@ router.get('/byok/:providerId/models/remote', async (req: Request, res: Response
   const store = loadByok();
   const cfg = store.providers[providerId];
 
-  // Resolve apiKey + baseUrl: prefer saved config, fall back to defaults for keyless providers
-  const apiKey = cfg?.apiKey?.trim() ?? '';
+  const apiKeys = parseApiKeys(cfg?.apiKey ?? '');
   const baseUrl = (cfg?.baseUrl?.trim() || PROVIDER_DEFAULT_BASE[providerId] || '');
+  const type = resolveEndpointType(providerId, cfg?.type);
 
-  if (!PROVIDERS_NO_KEY.has(providerId) && !apiKey) {
+  if (!PROVIDERS_NO_KEY.has(providerId) && apiKeys.length === 0) {
     return res.status(400).json({
       error: { code: 'NOT_CONFIGURED', message: '该提供商尚未配置 API Key，无法拉取远端模型列表' },
     });
@@ -375,64 +572,95 @@ router.get('/byok/:providerId/models/remote', async (req: Request, res: Response
     });
   }
 
-  const { url, headers, effectiveBase } = buildRemoteModelsRequest(providerId, apiKey, baseUrl);
+  // Try keys in order. Failover ONLY on auth errors (401/403) or network
+  // errors — 404 etc. are deterministic per endpoint and won't be fixed by
+  // swapping keys.
+  const keysToTry = apiKeys.length > 0 ? apiKeys : [''];
+  type FetchResponse = globalThis.Response;
+  let upstream: FetchResponse | null = null;
+  let lastError: unknown = null;
+  let probeUrl = '';
+  let effectiveBase = '';
+  let keysAttempted = 0;
+  let keyIndexUsed = -1;
 
-  try {
-    const upstream = await fetch(url, {
-      headers,
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!upstream.ok) {
-      const body = await upstream.text().catch(() => '');
-      // 404 / 405 / 501 → provider doesn't expose a model catalog endpoint.
-      // Surface this distinctly so the UI can quietly fall back to the static
-      // catalog instead of yelling "failed".
-      const notSupported = upstream.status === 404 || upstream.status === 405 || upstream.status === 501;
-      const errCode = notSupported ? 'NO_REMOTE_CATALOG'
-                    : upstream.status === 401 || upstream.status === 403 ? 'UPSTREAM_AUTH'
-                    : 'UPSTREAM_ERROR';
-      return res.status(notSupported ? 200 : 502).json({
-        models: [],
-        count: 0,
-        source: notSupported ? 'unavailable' : 'error',
-        providerId,
-        error: {
-          code: errCode,
-          status: upstream.status,
-          message: notSupported
-            ? `${providerId} 未暴露模型列表接口（HTTP ${upstream.status}）`
-            : `${providerId} /models returned ${upstream.status}`,
-          detail: body.slice(0, 500),
-        },
+  for (let i = 0; i < keysToTry.length; i++) {
+    const key = keysToTry[i];
+    const probe = buildProbeRequest(type, key, normalizeProviderBaseUrl(providerId, baseUrl));
+    probeUrl = probe.url;
+    effectiveBase = probe.effectiveBase;
+    keysAttempted++;
+    try {
+      const resp = await fetch(probe.url, {
+        headers: probe.headers,
+        signal: AbortSignal.timeout(15000),
       });
+      // Auth failure with more keys available → try next
+      if ((resp.status === 401 || resp.status === 403) && i < keysToTry.length - 1) {
+        continue;
+      }
+      upstream = resp;
+      keyIndexUsed = i;
+      break;
+    } catch (err) {
+      lastError = err;
+      if (i < keysToTry.length - 1) continue;
     }
-    const data = await upstream.json();
-    const models = parseRemoteModels(data, providerId);
-    return res.json({
-      models,
-      count: models.length,
-      source: 'remote',
-      providerId,
-      effectiveBase,
-      endpoint: url.replace(/key=[^&]+/, 'key=***'),
-    });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+  }
+
+  if (!upstream) {
+    const message = lastError instanceof Error ? lastError.message : String(lastError);
     return res.status(502).json({
-      models: [],
-      count: 0,
-      source: 'error',
-      providerId,
+      models: [], count: 0, source: 'error', providerId,
+      keysAttempted,
       error: { code: 'UPSTREAM_UNREACHABLE', message },
     });
   }
+
+  if (!upstream.ok) {
+    const body = await upstream.text().catch(() => '');
+    const notSupported = upstream.status === 404 || upstream.status === 405 || upstream.status === 501;
+    const errCode = notSupported ? 'NO_REMOTE_CATALOG'
+                  : upstream.status === 401 || upstream.status === 403 ? 'UPSTREAM_AUTH'
+                  : 'UPSTREAM_ERROR';
+    return res.status(notSupported ? 200 : 502).json({
+      models: [], count: 0,
+      source: notSupported ? 'unavailable' : 'error',
+      providerId,
+      endpointType: type,
+      keysAttempted,
+      effectiveBase,
+      error: {
+        code: errCode,
+        status: upstream.status,
+        message: notSupported
+          ? `${providerId} 未暴露模型列表接口（HTTP ${upstream.status}）`
+          : `${providerId} /models returned ${upstream.status}`,
+        detail: body.slice(0, 500),
+      },
+    });
+  }
+
+  const data = await upstream.json();
+  const models = parseProbeResponse(data, type, providerId);
+  return res.json({
+    models,
+    count: models.length,
+    source: 'remote',
+    providerId,
+    endpointType: type,
+    effectiveBase,
+    keysAttempted,
+    keyIndexUsed,
+    endpoint: probeUrl.replace(/key=[^&]+/, 'key=***'),
+  });
 });
 
 // PUT /api/settings/byok/:providerId → save provider config
 router.put('/byok/:providerId', (req: Request, res: Response) => {
   const { providerId } = req.params;
   const {
-    apiKey, baseUrl, models, enabled,
+    apiKey, baseUrl, models, enabled, type,
     syncedModels, manualModels,
     defaultModel, temperature, routingPriority,
   } = (req.body ?? {}) as {
@@ -440,6 +668,7 @@ router.put('/byok/:providerId', (req: Request, res: Response) => {
     baseUrl?: string;
     models?: string[];
     enabled?: boolean;
+    type?: string;
     syncedModels?: string[];
     manualModels?: string[];
     defaultModel?: string;
@@ -463,6 +692,9 @@ router.put('/byok/:providerId', (req: Request, res: Response) => {
     baseUrl: normalizedBaseUrl,
     models: Array.isArray(models) ? models : existing.models,
     enabled: typeof enabled === 'boolean' ? enabled : existing.enabled,
+    type: typeof type === 'string' && VALID_ENDPOINT_TYPES.has(type as EndpointType)
+      ? (type as EndpointType)
+      : existing.type,
     syncedModels: Array.isArray(syncedModels) ? syncedModels : (existing.syncedModels ?? []),
     manualModels: Array.isArray(manualModels) ? manualModels : (existing.manualModels ?? []),
   };
