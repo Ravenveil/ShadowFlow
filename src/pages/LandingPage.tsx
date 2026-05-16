@@ -736,7 +736,7 @@ export default function LandingPage() {
               color: 'var(--t-fg)',
             }}
           >
-            {lang === 'EN' ? 'Try the Skill Studio (BYOK)' : '试试 Skill Studio (BYOK)'}
+            {lang === 'EN' ? 'Try the Skill Studio' : '试试 Skill Studio'}
           </h2>
           <p style={{ fontSize: 15, color: 'var(--t-fg-3)', margin: '0 auto 22px', maxWidth: 580 }}>
             {lang === 'EN'

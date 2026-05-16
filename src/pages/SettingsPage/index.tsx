@@ -121,7 +121,7 @@ const STATIC_NAV_GROUPS: NavGroup[] = [
     group: 'Integrations',
     items: [
       { id: 'local-cli',               label: 'Local CLI' },
-      { id: 'byok',                    label: 'BYOK · API Keys' },
+      { id: 'byok',                    label: 'API Keys' },
       { id: 'skill-studio-generation', label: 'Generation Settings' },
       { id: 'skill-studio-acp',        label: 'Remote Agents (ACP/MCP)' },
       { id: 'tool-providers',          label: 'Tool Providers' },

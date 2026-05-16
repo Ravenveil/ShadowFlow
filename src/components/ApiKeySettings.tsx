@@ -170,7 +170,7 @@ function ProviderKeyRow({ provider, onAnthropicChange, compact }: ProviderKeyRow
         <span>
           {provider === 'anthropic'
             ? t('skillStudio.byok.title')
-            : `${cfg.label} API Key (BYOK)`}
+            : `${cfg.label} API Key`}
         </span>
       </div>
 

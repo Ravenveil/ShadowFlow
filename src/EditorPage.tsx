@@ -1699,7 +1699,7 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
         </button>
         {/* P2-β fix: BYOK keys modal trigger (S1/AR44 — keys never leave browser) */}
         <button onClick={() => setShowSecrets(true)}
-          title={zh ? 'API 密钥管理 (BYOK)' : 'API Keys (BYOK)'}
+          title={zh ? 'API 密钥管理' : 'API Keys'}
           style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: V.mono, fontSize: 11, color: V.fg3, background: 'transparent', border: `1px solid ${V.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
           <Key size={12} strokeWidth={2} /> {zh ? '密钥' : 'Keys'}
         </button>
