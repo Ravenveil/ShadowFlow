@@ -436,6 +436,14 @@ input, textarea, select { font-family: inherit; color: inherit; }
   border-right-color: #ECECEC !important;
 }
 
+/* Hide scrollbars on settings panels but keep scrolling functional.
+   This kills the visible scrollbar strip that was reading as a
+   "thick cream/grey line" next to the divider. */
+.sf-settings-bg { scrollbar-width: none; -ms-overflow-style: none; }
+.sf-settings-bg::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.sf-settings-bg *::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.sf-settings-bg * { scrollbar-width: none; }
+
 [data-theme="day"] .bg-shadowflow-bg       { background-color: var(--t-bg) !important; }
 [data-theme="day"] .bg-shadowflow-surface  { background-color: var(--t-panel) !important; }
 [data-theme="day"] .bg-shadowflow-border   { background-color: var(--t-border) !important; }
