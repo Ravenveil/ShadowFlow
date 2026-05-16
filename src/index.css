@@ -137,6 +137,9 @@ input, textarea, select { font-family: inherit; color: inherit; }
   animation: sf-toast-in 200ms var(--ease-out) forwards;
 }
 
+/* Run-session resend button: hover-revealed on parent .group */
+.group:hover > .sf-resend-hover { opacity: 1 !important; }
+
 /* ============ Scrollbar ============ */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--bg); }

@@ -12,7 +12,7 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Check, Circle, Cpu, ExternalLink, Key, Paperclip, Settings } from 'lucide-react';
+import { Check, Circle, Cpu, ExternalLink, Key, Paperclip, RotateCcw, Settings } from 'lucide-react';
 import { useRunSession } from '../core/hooks/useRunSession';
 import type { RunSessionNode, RunSessionEdge, RunSessionStep } from '../core/hooks/useRunSession';
 import {
@@ -1529,6 +1529,36 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
     }
   };
 
+  // 2026-05-16: Resend the user's last goal as a fresh follow-up turn.
+  // Reuses the same POST /messages endpoint as handleSend; daemon forks a new
+  // run session and the URL navigation triggers the SSE re-subscribe.
+  const [resending, setResending] = useState(false);
+  const handleResend = async (text: string) => {
+    const content = text.trim();
+    if (!content || resending) return;
+    setResending(true);
+    try {
+      const resp = await fetch(`/api/run-sessions/${sessionId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      if (!resp.ok) {
+        console.warn(`[run-session] resend POST failed: HTTP ${resp.status}`);
+        return;
+      }
+      const data = (await resp.json()) as { session_id?: string };
+      if (data.session_id) {
+        const params = new URLSearchParams({ goal: content.slice(0, 200) });
+        navigate(`/run-session/${data.session_id}?${params.toString()}`);
+      }
+    } catch (err) {
+      console.warn('[run-session] resend error:', err);
+    } finally {
+      setResending(false);
+    }
+  };
+
   return (
     <aside
       style={{
@@ -1777,9 +1807,19 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
           </div>
         )}
 
-        {/* User goal bubble */}
+        {/* User goal bubble — hover reveals "重发" action. When the session
+            ended in error (e.g. claude exit 1 / 403), the resend button is
+            always visible so users don't need to discover it via hover. */}
         {goal && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div
+            className="group"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              gap: 4,
+            }}
+          >
             <div
               style={{
                 maxWidth: 340,
@@ -1794,6 +1834,42 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             >
               {goal}
             </div>
+            <button
+              type="button"
+              onClick={() => handleResend(goal)}
+              disabled={resending}
+              title="用同样的目标重新发起一次"
+              data-testid="rs-resend-goal"
+              className={session.error ? '' : 'sf-resend-hover'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                borderRadius: 6,
+                background: 'transparent',
+                border: '1px solid var(--t-border)',
+                color: 'var(--t-fg-4)',
+                fontSize: 11,
+                fontFamily: 'inherit',
+                cursor: resending ? 'wait' : 'pointer',
+                opacity: session.error ? 1 : 0,
+                transition: 'opacity .15s, color .15s, border-color .15s',
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.color = 'var(--t-fg)';
+                el.style.borderColor = 'var(--t-border-2)';
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.color = 'var(--t-fg-4)';
+                el.style.borderColor = 'var(--t-border)';
+              }}
+            >
+              <RotateCcw size={11} strokeWidth={2} aria-hidden />
+              {resending ? '重发中…' : '重发'}
+            </button>
           </div>
         )}
 
