@@ -38,6 +38,7 @@ import {
   getTeamPolicy,
   getTeamWorkflow,
   listTeams,
+  patchTeam,
   putTeamPolicy,
   TeamApiError,
   type TeamPolicyMatrix,
@@ -45,16 +46,33 @@ import {
   type TeamWorkflowEdge,
   type TeamWorkflowNode,
 } from '../api/teams';
+import { listAgents } from '../api/agents';
+import type { AgentRecord } from '../api/agents';
 import { TeamCard } from '../core/components/team/TeamCard';
 import { CreateTeamModal } from '../core/components/team/CreateTeamModal';
-import { TeamDetail } from '../core/components/team/TeamDetail';
 import { HfTopBar } from '../components/hifi';
 import { PolicyMatrixPanel } from '../core/components/Panel/PolicyMatrixPanel';
 import { usePolicyStore, type PolicyMatrix as StorePolicyMatrix } from '../core/hooks/usePolicyStore';
 import { useI18n } from '../common/i18n';
+import { useWorkspaceStore, selectCurrentWorkspace } from '../store/workspaceStore';
 
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
 type FilterTab = 'official' | 'workspace';
+
+// Agent avatar palette — deterministic from name charCode
+const AGENT_COLORS = ['#A855F7','#F59E0B','#22D3EE','#EF4444','#10B981','#3B82F6','#EC4899'];
+function agentColor(name: string): string {
+  return AGENT_COLORS[(name.charCodeAt(0)||0) % AGENT_COLORS.length];
+}
+function agentLevel(name: string): string {
+  return ['L1','L2','L3'][(name.charCodeAt(0)||0) % 3];
+}
+function agentStatusInfo(status: string): { label: string; color: string; pulse: boolean } {
+  if (status === 'running') return { label: '运行中',   color: 'var(--status-run)',    pulse: true  };
+  if (status === 'paused')  return { label: '等待审批', color: 'var(--status-warn)',   pulse: false };
+  if (status === 'error')   return { label: '错误',     color: 'var(--status-reject)', pulse: false };
+  return                           { label: '空闲',     color: 'var(--t-fg-5)',        pulse: false };
+}
 
 // ---------------------------------------------------------------------------
 // Shared TeamListColumn — 240 px team list column (used by both pages).
@@ -65,9 +83,10 @@ interface TeamListColumnProps {
   activeId?: string | null;
   onCreate: () => void;
   onSelect?: (teamId: string) => void;
+  wsName?: string;
 }
 
-function TeamListColumn({ teams, activeId, onCreate, onSelect }: TeamListColumnProps) {
+function TeamListColumn({ teams, activeId, onCreate, onSelect, wsName = 'ShadowFlow' }: TeamListColumnProps) {
   const { t } = useI18n();
   return (
     <div
@@ -98,8 +117,26 @@ function TeamListColumn({ teams, activeId, onCreate, onSelect }: TeamListColumnP
         </button>
       </div>
       {teams.length === 0 ? (
-        <div className="hf-meta" style={{ padding: '8px 10px' }}>
-          {t('team.noTeams')}
+        <div style={{
+          margin: '4px 0', padding: '8px 10px', borderRadius: 8,
+          background: 'var(--t-accent-tint)',
+          border: '1px solid color-mix(in oklab, var(--t-accent) 25%, transparent)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 900, fontSize: wsName.length > 2 ? 9 : 11,
+              background: 'var(--t-accent)', color: 'var(--t-bg)',
+              letterSpacing: '-0.03em',
+            }}>
+              {wsName.slice(0, 2)}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--t-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wsName}</div>
+              <div style={{ fontSize: 9.5, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)' }}>Default Workspace</div>
+            </div>
+          </div>
         </div>
       ) : (
         teams.map((t) => {
@@ -144,6 +181,10 @@ function TeamListPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
 
+  const currentId = useWorkspaceStore((s) => s.currentId);
+  const currentWs = useWorkspaceStore(selectCurrentWorkspace);
+  const wsName = currentWs?.name ?? 'ShadowFlow';
+
   const [teams, setTeams] = useState<TeamRecord[]>([]);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -156,7 +197,7 @@ function TeamListPage() {
     setLoadStatus('loading');
     setErrorMsg(null);
     try {
-      const data = await listTeams();
+      const data = await listTeams(currentId ?? undefined);
       setTeams(data);
       setLoadStatus('success');
     } catch (err) {
@@ -166,7 +207,7 @@ function TeamListPage() {
       setErrorMsg(msg);
       setLoadStatus('error');
     }
-  }, [t]);
+  }, [t, currentId]);
 
   useEffect(() => {
     fetchTeams();
@@ -323,15 +364,17 @@ function TeamListPage() {
                 }}>
                   <div style={{
                     width: 56, height: 56, borderRadius: 14,
-                    background: 'var(--t-panel)', border: '1px solid var(--t-border)',
+                    background: 'color-mix(in oklab, var(--t-accent) 15%, var(--t-panel))',
+                    border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--t-accent)',
+                    fontWeight: 900, fontSize: 18, color: 'var(--t-accent)',
+                    letterSpacing: '-0.03em',
                   }}>
-                    <Users size={30} strokeWidth={1.5} aria-hidden />
+                    {wsName.slice(0, 2)}
                   </div>
                   <div>
-                    <p style={{ fontSize: 13, color: 'var(--t-fg-2)', margin: '0 0 4px' }}>
-                      {t('team.noTeamYet')}
+                    <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--t-fg)', margin: '0 0 4px' }}>
+                      {wsName}
                     </p>
                     <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: 0 }}>
                       {t('team.newTeamHint')}
@@ -537,6 +580,10 @@ function TeamDetailPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
 
+  const currentId = useWorkspaceStore((s) => s.currentId);
+  const currentWs = useWorkspaceStore(selectCurrentWorkspace);
+  const wsName = currentWs?.name ?? 'ShadowFlow';
+
   const [team, setTeam] = useState<TeamRecord | null>(null);
   const [allTeams, setAllTeams] = useState<TeamRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -596,12 +643,12 @@ function TeamDetailPage() {
       .finally(() => setLoading(false));
   }, [teamId, t, resetPolicy, setAgents, setMatrix]);
 
-  // Fetch all teams for the left column rail — only once on mount, not per teamId change.
+  // Fetch all teams for the left column rail — re-fetch when workspace switches.
   useEffect(() => {
-    listTeams().then(setAllTeams).catch(() => {
+    listTeams(currentId ?? undefined).then(setAllTeams).catch(() => {
       /* fall back to single-team display */
     });
-  }, []);
+  }, [currentId]);
 
   // Rules of Hooks: handlePolicySave must be called before any early return.
   const handlePolicySave = useCallback(
@@ -681,6 +728,7 @@ function TeamDetailPage() {
         <TeamListColumn
           teams={teamsForRail}
           activeId={team.team_id}
+          wsName={wsName}
           onCreate={() => navigate('/teams')}
           onSelect={(id) => navigate(`/teams/${id}`)}
         />
