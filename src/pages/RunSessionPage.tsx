@@ -38,6 +38,124 @@ import { createGroup } from '../api/groupApi';
 import { CritiqueResult } from '../components/CritiqueResult';
 
 // ---------------------------------------------------------------------------
+// Model / Executor picker — CLI + API options pulled live from settings
+// ---------------------------------------------------------------------------
+//
+// One Cpu button → one dropdown, two segments:
+//   ─ CLI ─   installed local agents from /api/settings/agents/detect
+//   ─ API ─   enabled BYOK providers × their models from /api/settings/byok
+//
+// Selecting writes to localStorage so the existing _base.ts dispatch picks it
+// up next time getGenerationSettings() is called:
+//   CLI item  →  sf.defaultExecutor = `cli:<agentId>`
+//   API item  →  sf.defaultExecutor = `byok:<providerId>`,  sf.model = <modelId>
+
+const PICKER_CLI_META: Record<string, { name: string; tint: string; monogram: string }> = {
+  claude:         { name: 'Claude Code',    tint: '#D97706', monogram: 'CC' },
+  codex:          { name: 'Codex CLI',      tint: '#10B981', monogram: 'CX' },
+  gemini:         { name: 'Gemini CLI',     tint: '#4285F4', monogram: 'Gm' },
+  opencode:       { name: 'OpenCode',       tint: '#22C55E', monogram: 'OC' },
+  openclaw:       { name: 'OpenClaw',       tint: '#F97316', monogram: 'OW' },
+  cursor:         { name: 'Cursor Agent',   tint: '#8B5CF6', monogram: 'CU' },
+  'cursor-agent': { name: 'Cursor Agent',   tint: '#8B5CF6', monogram: 'CU' },
+  'qwen-coder':   { name: 'Qwen Code',      tint: '#A855F7', monogram: 'Qw' },
+  'gh-copilot':   { name: 'GitHub Copilot', tint: '#0078D4', monogram: 'GH' },
+  hermes:         { name: 'Hermes',         tint: '#EC4899', monogram: 'Hm' },
+  devin:          { name: 'Devin',          tint: '#6366F1', monogram: 'Dv' },
+  kimi:           { name: 'Kimi CLI',       tint: '#06B6D4', monogram: 'Km' },
+  kiro:           { name: 'Kiro',           tint: '#F59E0B', monogram: 'Kr' },
+  kilo:           { name: 'Kilo',           tint: '#3B82F6', monogram: 'Kl' },
+  vibe:           { name: 'Vibe',           tint: '#EC4899', monogram: 'Vb' },
+  'deepseek-tui': { name: 'DeepSeek TUI',   tint: '#3D8BFD', monogram: 'DS' },
+  qoder:          { name: 'Qoder CLI',      tint: '#8B5CF6', monogram: 'Qd' },
+  pi:             { name: 'Pi',             tint: '#A855F7', monogram: 'πi' },
+  aider:          { name: 'Aider',          tint: '#059669', monogram: 'Ai' },
+  cline:          { name: 'Cline',          tint: '#6366F1', monogram: 'Cl' },
+  'windsurf-cli': { name: 'Windsurf',       tint: '#06B6D4', monogram: 'Ws' },
+};
+
+const PICKER_PROVIDER_META: Record<string, { name: string; tint: string; monogram: string }> = {
+  anthropic: { name: 'Anthropic',       tint: '#D97706', monogram: 'A'  },
+  openai:    { name: 'OpenAI',          tint: '#10B981', monogram: 'O'  },
+  google:    { name: 'Google Gemini',   tint: '#4285F4', monogram: 'G'  },
+  deepseek:  { name: 'DeepSeek',        tint: '#3D8BFD', monogram: 'DS' },
+  zhipu:     { name: 'Zhipu GLM',       tint: '#7C3AED', monogram: 'ZP' },
+  qwen:      { name: 'Qwen',            tint: '#A855F7', monogram: 'Qw' },
+  moonshot:  { name: 'Moonshot · Kimi', tint: '#06B6D4', monogram: 'MK' },
+  mistral:   { name: 'Mistral',         tint: '#FB923C', monogram: 'Mi' },
+  groq:      { name: 'Groq',            tint: '#F97316', monogram: 'Gr' },
+  azure:     { name: 'Azure OpenAI',    tint: '#0078D4', monogram: 'Az' },
+  ollama:    { name: 'Ollama',          tint: '#A1A1AA', monogram: 'Ol' },
+  lmstudio:  { name: 'LM Studio',       tint: '#22C55E', monogram: 'LM' },
+};
+
+interface PickerCliItem {
+  kind: 'cli';
+  agentId: string;
+  name: string;
+  tint: string;
+  monogram: string;
+  version: string | null;
+}
+interface PickerApiItem {
+  kind: 'api';
+  providerId: string;
+  providerName: string;
+  tint: string;
+  monogram: string;
+  modelId: string;
+}
+type PickerItem = PickerCliItem | PickerApiItem;
+
+async function fetchPickerCliItems(apiBase: string): Promise<PickerCliItem[]> {
+  try {
+    const res = await fetch(`${apiBase}/api/settings/agents/detect`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+    const j = await res.json();
+    const agents = Array.isArray(j.agents) ? j.agents : [];
+    return agents
+      .filter((a: { installed?: boolean }) => a.installed === true)
+      .map((a: { id: string; name?: string; version?: string | null }) => {
+        const meta = PICKER_CLI_META[a.id] ?? { name: a.name ?? a.id, tint: '#71717A', monogram: a.id.slice(0, 2).toUpperCase() };
+        return { kind: 'cli' as const, agentId: a.id, name: meta.name, tint: meta.tint, monogram: meta.monogram, version: a.version ?? null };
+      });
+  } catch {
+    return [];
+  }
+}
+
+async function fetchPickerApiItems(apiBase: string): Promise<PickerApiItem[]> {
+  try {
+    const res = await fetch(`${apiBase}/api/settings/byok`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+    const j = await res.json();
+    const providers = (j && typeof j.providers === 'object') ? j.providers as Record<string, { enabled?: boolean; models?: string[]; apiKey?: string | null }> : {};
+    const out: PickerApiItem[] = [];
+    for (const [providerId, p] of Object.entries(providers)) {
+      // Only show providers that are enabled AND have at least one model.
+      // (Ollama/LMStudio don't need a key, so we don't gate on apiKey presence.)
+      if (!p.enabled) continue;
+      const models = Array.isArray(p.models) ? p.models : [];
+      if (models.length === 0) continue;
+      const meta = PICKER_PROVIDER_META[providerId] ?? { name: providerId, tint: '#71717A', monogram: providerId.slice(0, 2).toUpperCase() };
+      for (const modelId of models) {
+        out.push({
+          kind: 'api',
+          providerId,
+          providerName: meta.name,
+          tint: meta.tint,
+          monogram: meta.monogram,
+          modelId,
+        });
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Small spinner (inline div, no icon)
 // ---------------------------------------------------------------------------
 function InlineSpinner({ size = 10 }: { size?: number }) {
@@ -1318,7 +1436,28 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   const [selectedModel, setSelectedModel] = useState<string>(
     () => localStorage.getItem('sf.model') ?? 'claude-sonnet-4-6',
   );
+  const [selectedExecutor, setSelectedExecutor] = useState<string>(
+    () => localStorage.getItem('sf.defaultExecutor') ?? '',
+  );
+  const [pickerCliItems, setPickerCliItems] = useState<PickerCliItem[]>([]);
+  const [pickerApiItems, setPickerApiItems] = useState<PickerApiItem[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
   const modelBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Lazy-load CLI + BYOK lists the first time the picker opens, then keep them.
+  // Reloads on every open so newly-installed CLIs / newly-added API keys show
+  // up without a page refresh.
+  useEffect(() => {
+    if (!showModelPicker) return;
+    const apiBase = import.meta.env.VITE_API_BASE ?? '';
+    setPickerLoading(true);
+    Promise.all([fetchPickerCliItems(apiBase), fetchPickerApiItems(apiBase)])
+      .then(([cli, api]) => {
+        setPickerCliItems(cli);
+        setPickerApiItems(api);
+      })
+      .finally(() => setPickerLoading(false));
+  }, [showModelPicker]);
 
   // 2026-05-11 Layer 1 — Claude Code-style chat fallback.
   // Two triggers (both require "no canvas events seen"):
@@ -2012,7 +2151,17 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                 <button
                   ref={modelBtnRef}
                   type="button"
-                  title={`模型: ${selectedModel}`}
+                  title={(() => {
+                    if (selectedExecutor.startsWith('cli:')) {
+                      const id = selectedExecutor.slice(4);
+                      return `CLI · ${PICKER_CLI_META[id]?.name ?? id}`;
+                    }
+                    if (selectedExecutor.startsWith('byok:')) {
+                      const pid = selectedExecutor.slice(5);
+                      return `API · ${PICKER_PROVIDER_META[pid]?.name ?? pid} / ${selectedModel}`;
+                    }
+                    return `模型: ${selectedModel}`;
+                  })()}
                   className="cmp-btn"
                   onClick={() => setShowModelPicker(v => !v)}
                   style={showModelPicker ? {
@@ -2023,74 +2172,126 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                 >
                   <Cpu size={15} strokeWidth={1.8} />
                 </button>
-                {showModelPicker && (
-                  <div style={{
-                    position: 'absolute', bottom: 'calc(100% + 6px)', left: 0,
-                    minWidth: 220, zIndex: 200,
-                    background: 'var(--t-panel)',
-                    border: '1px solid var(--t-border)',
-                    borderRadius: 10,
-                    boxShadow: '0 8px 24px -8px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.04)',
-                    padding: '4px 0',
-                    overflow: 'hidden',
-                  }}>
+                {showModelPicker && (() => {
+                  const renderItem = (it: PickerItem) => {
+                    const active = it.kind === 'cli'
+                      ? selectedExecutor === `cli:${it.agentId}`
+                      : selectedExecutor === `byok:${it.providerId}` && selectedModel === it.modelId;
+                    const key = it.kind === 'cli' ? `cli:${it.agentId}` : `byok:${it.providerId}:${it.modelId}`;
+                    const title = it.kind === 'cli' ? it.name : it.modelId;
+                    const sub = it.kind === 'cli'
+                      ? (it.version ? it.version : 'CLI · installed')
+                      : it.providerName;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          if (it.kind === 'cli') {
+                            const ex = `cli:${it.agentId}`;
+                            localStorage.setItem('sf.defaultExecutor', ex);
+                            setSelectedExecutor(ex);
+                          } else {
+                            const ex = `byok:${it.providerId}`;
+                            localStorage.setItem('sf.defaultExecutor', ex);
+                            localStorage.setItem('sf.model', it.modelId);
+                            setSelectedExecutor(ex);
+                            setSelectedModel(it.modelId);
+                          }
+                          setShowModelPicker(false);
+                        }}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '7px 12px', border: 0, cursor: 'pointer',
+                          background: active ? 'var(--t-accent-tint)' : 'transparent',
+                          textAlign: 'left', transition: 'background .1s',
+                        }}
+                        onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--t-hover, var(--t-panel))'; }}
+                        onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                      >
+                        <span style={{
+                          width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+                          background: `color-mix(in oklab, ${it.tint} 14%, var(--t-panel))`,
+                          border: `1px solid color-mix(in oklab, ${it.tint} ${active ? 60 : 30}%, transparent)`,
+                          color: it.tint,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 8.5,
+                          letterSpacing: '-0.04em', userSelect: 'none',
+                        }}>{it.monogram}</span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{
+                            display: 'block',
+                            fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, fontWeight: 500,
+                            color: active ? 'var(--t-accent-bright)' : 'var(--t-fg)',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>{title}</span>
+                          <span style={{
+                            display: 'block',
+                            fontFamily: 'var(--font-mono, monospace)', fontSize: 9.5,
+                            color: 'var(--t-fg-4)', marginTop: 1,
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>{sub}</span>
+                        </span>
+                        {active && (
+                          <Check size={12} strokeWidth={2.5} style={{ color: 'var(--t-accent)', flexShrink: 0 }} />
+                        )}
+                      </button>
+                    );
+                  };
+                  const sectionLabel = (text: string) => (
                     <div style={{
-                      padding: '6px 12px 5px',
+                      padding: '8px 12px 4px',
                       fontFamily: 'var(--font-mono, monospace)',
                       fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase',
                       color: 'var(--t-fg-4)', fontWeight: 600,
+                    }}>{text}</div>
+                  );
+                  const emptyHint = (text: string, target: string) => (
+                    <button
+                      type="button"
+                      onClick={() => { navigate(target); setShowModelPicker(false); }}
+                      style={{
+                        width: '100%', textAlign: 'left',
+                        padding: '6px 12px 9px',
+                        background: 'transparent', border: 0, cursor: 'pointer',
+                        fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5,
+                        color: 'var(--t-fg-4)',
+                        display: 'flex', alignItems: 'center', gap: 6,
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t-accent-bright)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t-fg-4)'; }}
+                    >
+                      <span>{text}</span>
+                      <ExternalLink size={10} strokeWidth={1.8} />
+                    </button>
+                  );
+                  return (
+                    <div style={{
+                      position: 'absolute', bottom: 'calc(100% + 6px)', left: 0,
+                      minWidth: 260, maxHeight: 380, overflowY: 'auto', zIndex: 200,
+                      background: 'var(--t-panel)',
+                      border: '1px solid var(--t-border)',
+                      borderRadius: 10,
+                      boxShadow: '0 8px 24px -8px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.04)',
+                      padding: '4px 0',
                     }}>
-                      切换模型
+                      {sectionLabel('CLI')}
+                      {pickerLoading && pickerCliItems.length === 0 ? (
+                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>检测中…</div>
+                      ) : pickerCliItems.length === 0
+                        ? emptyHint('未检测到已安装的 CLI · 去设置', '/settings#local-cli')
+                        : pickerCliItems.map(renderItem)
+                      }
+                      {sectionLabel('API')}
+                      {pickerLoading && pickerApiItems.length === 0 ? (
+                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>加载中…</div>
+                      ) : pickerApiItems.length === 0
+                        ? emptyHint('未配置 API Key · 去设置 BYOK', '/settings#byok')
+                        : pickerApiItems.map(renderItem)
+                      }
                     </div>
-                    {([
-                      { value: 'claude-sonnet-4-6', short: 'Sonnet 4.6', sub: 'balanced · default' },
-                      { value: 'claude-opus-4',     short: 'Opus 4',     sub: 'powerful · slower' },
-                      { value: 'claude-haiku-4-5',  short: 'Haiku 4.5',  sub: 'fast · lightweight' },
-                    ] as const).map(m => {
-                      const active = selectedModel === m.value;
-                      return (
-                        <button
-                          key={m.value}
-                          type="button"
-                          onClick={() => {
-                            localStorage.setItem('sf.model', m.value);
-                            setSelectedModel(m.value);
-                            setShowModelPicker(false);
-                          }}
-                          style={{
-                            width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '7px 12px', border: 0, cursor: 'pointer',
-                            background: active ? 'var(--t-accent-tint)' : 'transparent',
-                            textAlign: 'left', transition: 'background .1s',
-                          }}
-                          onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--t-hover, var(--t-panel))'; }}
-                          onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                        >
-                          <span style={{
-                            width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                            background: active ? 'var(--t-accent)' : 'var(--t-border-2, var(--t-border))',
-                            boxShadow: active ? '0 0 6px rgba(168,85,247,.6)' : 'none',
-                          }} />
-                          <span style={{ flex: 1 }}>
-                            <span style={{
-                              display: 'block',
-                              fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, fontWeight: 500,
-                              color: active ? 'var(--t-accent-bright)' : 'var(--t-fg)',
-                            }}>{m.short}</span>
-                            <span style={{
-                              display: 'block',
-                              fontFamily: 'var(--font-mono, monospace)', fontSize: 9.5,
-                              color: 'var(--t-fg-4)', marginTop: 1,
-                            }}>{m.sub}</span>
-                          </span>
-                          {active && (
-                            <Check size={12} strokeWidth={2.5} style={{ color: 'var(--t-accent)', flexShrink: 0 }} />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
             {/* Right — send */}
