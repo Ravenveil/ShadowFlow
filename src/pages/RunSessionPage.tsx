@@ -22,6 +22,7 @@ import {
   LAST_SKILL_STORAGE,
   LAST_DS_STORAGE,
 } from '../api/_base';
+import type { ProviderId } from '../api/_base';
 import { ApiKeySettings } from '../components/ApiKeySettings';
 import { SettingsModal } from '../components/SettingsModal';
 import { useI18n } from '../common/i18n';
@@ -3278,6 +3279,16 @@ function PreparationPanel() {
         // user picked a BYOK provider like glm-5.1.
         executor: localStorage.getItem('sf.defaultExecutor') || undefined,
         model: localStorage.getItem('sf.model') || undefined,
+        // Derive `provider` from executor=byok:<provider> so the server
+        // pulls the right BYOK key from byok-config.json. Without this,
+        // server defaults validated_provider='anthropic' and grabs the
+        // wrong (or missing) key.
+        provider: (() => {
+          const ex = localStorage.getItem('sf.defaultExecutor') || '';
+          // Server validates the id against PROVIDER_IDS and returns 400 on
+          // unknown values; safe to widen the type here.
+          return ex.startsWith('byok:') ? (ex.slice(5) as ProviderId) : undefined;
+        })(),
       });
       const cid = resp.conversation_id ?? selectedConversationId;
       const qs = new URLSearchParams();

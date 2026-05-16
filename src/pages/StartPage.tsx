@@ -794,6 +794,13 @@ export default function StartPage() {
     // executor='cli:auto' (= claude) even when the picker shows glm-5.1.
     const executor = localStorage.getItem('sf.defaultExecutor') || undefined;
     const model = localStorage.getItem('sf.model') || undefined;
+    // For byok:<provider>, derive `provider` so the server can:
+    //   1. validate the provider id against PROVIDER_IDS
+    //   2. look up the right BYOK key (header → byok-config → env)
+    // Without `provider`, the server defaults validated_provider='anthropic'
+    // and pulls the wrong key out of byok-config.
+    const provider =
+      executor && executor.startsWith('byok:') ? executor.slice(5) : undefined;
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -806,6 +813,7 @@ export default function StartPage() {
           mode: mode !== 'auto' ? mode : undefined,
           executor,
           model,
+          provider,
         }),
       });
       if (resp.ok) {
@@ -863,17 +871,19 @@ export default function StartPage() {
 
   async function handleSkillPack(pack: SkillPack) {
     setSubmitting(true);
-    // Same as handleSubmit: forward executor/model so skill-pack one-clicks
-    // honor the user's model-picker selection instead of defaulting to claude.
+    // Same as handleSubmit: forward executor/model + derive provider for byok:*
+    // so the server can resolve the BYOK key from byok-config.json correctly.
     const executor = localStorage.getItem('sf.defaultExecutor') || undefined;
     const model = localStorage.getItem('sf.model') || undefined;
+    const provider =
+      executor && executor.startsWith('byok:') ? executor.slice(5) : undefined;
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (secrets.anthropic) headers['X-Anthropic-Key'] = secrets.anthropic;
       const resp = await fetch(`${getApiBase()}/api/run-sessions`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ goal: pack.prompt, mode: 'team', executor, model }),
+        body: JSON.stringify({ goal: pack.prompt, mode: 'team', executor, model, provider }),
       });
       if (resp.ok) {
         const data = (await resp.json()) as { session_id: string };
