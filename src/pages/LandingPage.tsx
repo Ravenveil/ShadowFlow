@@ -310,11 +310,15 @@ function HcMsg({ children, accent, reject, style }: { children: React.ReactNode;
 }
 
 // ============ Hero Canvas ============
+// Layout uses % coordinates (matching design: viewBox="0 0 100 100")
+// Nodes:  P(14,30)  L(38,26)  D(38,55)  W(60,70)  A(82,32)
 function HeroCanvas() {
   return (
     <div style={{ position: 'relative', aspectRatio: '1.02', background: `radial-gradient(ellipse at 50% 40%, rgba(168,85,247,.06), transparent 65%), var(--skin-panel)`, border: '1px solid var(--t-border)', borderRadius: 28, overflow: 'hidden', boxShadow: '0 40px 80px -20px rgba(0,0,0,.5), 0 0 0 1px var(--t-border), 0 0 120px -10px rgba(168,85,247,.2)' }}>
       <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle, var(--t-panel) 1px, transparent 1px)', backgroundSize: '22px 22px', opacity: .35 }} />
       <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 30% 20%, rgba(168,85,247,.2), transparent 50%)', pointerEvents: 'none' }} />
+
+      {/* Chrome */}
       <div style={{ position: 'absolute', top: 14, left: 14, right: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 5 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -326,45 +330,72 @@ function HeroCanvas() {
           <span>r2/3</span><span style={{ color: 'var(--t-fg-5)' }}>·</span><span>87ms SSE</span>
         </div>
       </div>
-      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} viewBox="0 0 480 490" preserveAspectRatio="none">
+
+      {/* SVG — viewBox 0 0 100 100 matches % node positions exactly */}
+      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} viewBox="0 0 100 100" preserveAspectRatio="none">
         <defs>
-          <marker id="H-ok"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#10B981" /></marker>
-          <marker id="H-run" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#A855F7" /></marker>
-          <marker id="H-rej" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#EF4444" /></marker>
+          <marker id="H-ok"  viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon points="0,0 10,5 0,10" fill="#10B981" /></marker>
+          <marker id="H-run" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon points="0,0 10,5 0,10" fill="#A855F7" /></marker>
+          <marker id="H-rej" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon points="0,0 10,5 0,10" fill="#EF4444" /></marker>
         </defs>
-        <path d="M 100,140 C 140,150 160,160 190,170" stroke="#10B981" strokeWidth="1.5" fill="none" markerEnd="url(#H-ok)" />
-        <path d="M 100,140 C 140,200 160,230 190,250" stroke="#10B981" strokeWidth="1.5" fill="none" markerEnd="url(#H-ok)" />
-        <path id="hf1" d="M 240,170 C 270,200 280,240 300,270" strokeWidth="2" fill="none" strokeDasharray="5 4" style={{ stroke: 'var(--t-accent)', animation: 'sf-dash-anim 1s linear infinite' }} markerEnd="url(#H-run)" />
-        <path id="hf2" d="M 240,270 C 270,260 280,275 300,280" strokeWidth="2" fill="none" strokeDasharray="5 4" style={{ stroke: 'var(--t-accent)', animation: 'sf-dash-anim 1s linear infinite' }} markerEnd="url(#H-run)" />
-        <path d="M 340,290 C 380,280 400,260 410,220" stroke="#EF4444" strokeWidth="2" fill="none" markerEnd="url(#H-rej)" />
-        <path d="M 400,180 C 420,130 360,120 330,260" stroke="#F59E0B" strokeWidth="1.5" strokeDasharray="3 3" fill="none" />
-        <circle r="2.5" fill="#D8B4FE"><animateMotion dur="1.6s" repeatCount="indefinite"><mpath href="#hf1" /></animateMotion></circle>
-        <circle r="2.5" fill="#D8B4FE"><animateMotion dur="1.6s" begin=".5s" repeatCount="indefinite"><mpath href="#hf1" /></animateMotion></circle>
-        <circle r="2.5" fill="#D8B4FE"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#hf2" /></animateMotion></circle>
+        {/* Planner → LitReviewer / DataScout */}
+        <path d="M 19,30 C 26,28 31,27 33,26.5" stroke="#10B981" strokeWidth="0.3" vectorEffect="non-scaling-stroke" fill="none" markerEnd="url(#H-ok)" />
+        <path d="M 19,32 C 26,42 31,50 33,54" stroke="#10B981" strokeWidth="0.3" vectorEffect="non-scaling-stroke" fill="none" markerEnd="url(#H-ok)" />
+        {/* LitReviewer + DataScout → SectionWriter (streaming) */}
+        <path id="hf1" d="M 43,28 C 52,40 56,55 56,66" stroke="#A855F7" strokeWidth="0.45" vectorEffect="non-scaling-stroke" fill="none" strokeDasharray="3 2.5" style={{ animation: 'sf-dash-anim 1s linear infinite' }} markerEnd="url(#H-run)" />
+        <path id="hf2" d="M 43,55 C 50,60 54,64 56,67" stroke="#A855F7" strokeWidth="0.45" vectorEffect="non-scaling-stroke" fill="none" strokeDasharray="3 2.5" style={{ animation: 'sf-dash-anim 1s linear infinite' }} markerEnd="url(#H-run)" />
+        {/* SectionWriter → Advisor (handoff thin) */}
+        <path d="M 65,67 C 73,55 78,45 80,38" stroke="#A855F7" strokeWidth="0.3" vectorEffect="non-scaling-stroke" fill="none" opacity=".5" strokeDasharray="2 2" />
+        {/* Advisor reject → SectionWriter */}
+        <path d="M 80,40 C 85,55 78,65 68,70" stroke="#EF4444" strokeWidth="0.5" vectorEffect="non-scaling-stroke" fill="none" markerEnd="url(#H-rej)" />
+        {/* Retry loop around Advisor */}
+        <path d="M 82,38 C 92,40 92,28 86,28" stroke="#F59E0B" strokeWidth="0.3" vectorEffect="non-scaling-stroke" strokeDasharray="1.5 1.5" fill="none" />
+        {/* Token particles */}
+        <circle r="0.6" fill="#D8B4FE"><animateMotion dur="1.6s" repeatCount="indefinite"><mpath href="#hf1" /></animateMotion></circle>
+        <circle r="0.6" fill="#D8B4FE"><animateMotion dur="1.6s" begin=".5s" repeatCount="indefinite"><mpath href="#hf1" /></animateMotion></circle>
+        <circle r="0.6" fill="#D8B4FE"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#hf2" /></animateMotion></circle>
       </svg>
-      <div style={{ position: 'absolute', top: 85, left: 160, width: 120, height: 220, border: '1.5px dashed rgba(168,85,247,.35)', borderRadius: 18, zIndex: 1, pointerEvents: 'none' }}>
+
+      {/* FAN-OUT group box — wraps LitReviewer + DataScout */}
+      <div style={{ position: 'absolute', top: '14%', left: '28%', width: '20%', height: '55%', border: '1.5px dashed rgba(168,85,247,.35)', borderRadius: 18, zIndex: 1, pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', top: -10, left: 16, background: 'var(--skin-panel)', padding: '2px 10px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-accent-bright)' }}>↯ fan-out</div>
       </div>
-      <Orb state="ok"  style={{ top: 112, left: 48 }}  glyph="P" badge="C"  badgeColor="#D97706" />
-      <OrbLabel label="Planner"       style={{ top: 174, left: 40,  width: 70 }} />
-      <Orb state="ok"  style={{ top: 140, left: 190 }} glyph="L" badge="0G" badgeColor="#6366F1" />
-      <OrbLabel label="LitReviewer"   style={{ top: 202, left: 180, width: 75 }} />
-      <Orb state="ok"  style={{ top: 240, left: 190 }} glyph="D" badge="C"  badgeColor="#D97706" />
-      <OrbLabel label="DataScout"     style={{ top: 302, left: 180, width: 75 }} />
-      <Orb state="run" style={{ top: 250, left: 300 }} glyph="W" badge="C"  badgeColor="#D97706" />
-      <OrbLabel label="SectionWriter" accent style={{ top: 316, left: 290, width: 80 }}>
+
+      {/* Planner — P(14%,30%) */}
+      <Orb state="ok"  style={{ top: '30%', left: '14%', transform: 'translate(-50%,-50%)' }} glyph="P" badge="C"  badgeColor="#D97706" />
+      <OrbLabel label="Planner"       style={{ top: 'calc(30% + 32px)', left: '14%', transform: 'translateX(-50%)', width: 70 }} />
+
+      {/* LitReviewer — L(38%,26%) */}
+      <Orb state="ok"  style={{ top: '26%', left: '38%', transform: 'translate(-50%,-50%)' }} glyph="L" badge="0G" badgeColor="#6366F1" />
+      <OrbLabel label="LitReviewer"   style={{ top: 'calc(26% + 32px)', left: '38%', transform: 'translateX(-50%)', width: 80 }} />
+
+      {/* DataScout — D(38%,55%) */}
+      <Orb state="ok"  style={{ top: '55%', left: '38%', transform: 'translate(-50%,-50%)' }} glyph="D" badge="C"  badgeColor="#D97706" />
+      <OrbLabel label="DataScout"     style={{ top: 'calc(55% + 32px)', left: '38%', transform: 'translateX(-50%)', width: 80 }} />
+
+      {/* SectionWriter — W(60%,70%) */}
+      <Orb state="run" style={{ top: '70%', left: '60%', transform: 'translate(-50%,-50%)' }} glyph="W" badge="C"  badgeColor="#D97706" />
+      <OrbLabel label="SectionWriter" accent style={{ top: 'calc(70% + 34px)', left: '60%', transform: 'translateX(-50%)', width: 100 }}>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--t-fg-4)', fontWeight: 600 }}>● r2/3 · 87ms</span>
       </OrbLabel>
-      <Orb state="rej" style={{ top: 160, left: 398 }} glyph="A" badge="C"  badgeColor="#D97706" />
-      <OrbLabel label="Advisor" style={{ top: 222, left: 385, width: 75 }} color="var(--status-reject)" />
-      <HcMsg accent style={{ top: 244, left: 246, animationDelay: '-.5s' }}>
+
+      {/* Advisor — A(82%,32%) */}
+      <Orb state="rej" style={{ top: '32%', left: '82%', transform: 'translate(-50%,-50%)' }} glyph="A" badge="C"  badgeColor="#D97706" />
+      <OrbLabel label="Advisor"       style={{ top: 'calc(32% + 32px)', left: '82%', transform: 'translateX(-50%)', width: 70 }} color="var(--status-reject)" />
+
+      {/* HANDOFF card — between D/W column */}
+      <HcMsg accent style={{ top: '48%', left: '49%', animationDelay: '-.5s' }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: 'var(--t-fg-4)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>→ handoff · streaming</div>
         "Methods §3.2 draft — 12 sources tagged…"
       </HcMsg>
-      <HcMsg reject style={{ top: 64, left: 290, animationDelay: '-1.5s' }}>
+
+      {/* REJECT card — top above Advisor */}
+      <HcMsg reject style={{ top: '8%', left: '56%', animationDelay: '-1.5s' }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: 'var(--status-reject)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>✗ advisor · reject</div>
         "Gap — no baseline comparison to Zhang (2021)."
       </HcMsg>
+
+      {/* Policy Matrix pulse bar */}
       <div style={{ position: 'absolute', bottom: 16, left: 16, right: 16, background: 'var(--t-panel)', border: '1px solid rgba(168,85,247,.3)', borderRadius: 12, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 6 }}>
         <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--t-accent-tint)', border: '1px solid rgba(168,85,247,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--t-accent-bright)', flexShrink: 0 }}>⊞</div>
         <div style={{ flex: 1 }}>
