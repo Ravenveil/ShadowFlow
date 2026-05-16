@@ -26,6 +26,7 @@ import { ApiKeySettings } from '../components/ApiKeySettings';
 import { SettingsModal } from '../components/SettingsModal';
 import { useI18n } from '../common/i18n';
 import { ArtifactPreview } from '../components/ArtifactPreview';
+import { CodeBlockToolbar, parseCodeFences } from '../components/CodeBlockToolbar';
 import { SkillPicker } from '../components/SkillPicker';
 import { DesignSystemPicker } from '../components/DesignSystemPicker';
 // Story 15.29 — Conversation linkage UI in PreparationPanel.
@@ -2289,7 +2290,20 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                 whiteSpace: 'pre-wrap',
               }}
             >
-              {session.chatReply}
+              {/* Render fenced ```code``` segments through the unified
+                  CodeBlockToolbar (Story: code-block toolbar). Plain-text
+                  runs preserve the existing pre-wrap whitespace. The fence
+                  parser is streaming-safe: an unterminated ``` opens a
+                  code segment with whatever text has arrived so far. */}
+              {parseCodeFences(session.chatReply).map((seg, i) =>
+                seg.kind === 'code' ? (
+                  <div key={i} style={{ margin: '6px 0' }}>
+                    <CodeBlockToolbar code={seg.value} lang={seg.lang} />
+                  </div>
+                ) : (
+                  <span key={i}>{seg.value}</span>
+                )
+              )}
               {!session.isComplete && (
                 <span
                   style={{
@@ -2380,24 +2394,29 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
               {card.title}
               {card.duration_ms ? ` · ${(card.duration_ms / 1000).toFixed(1)}s` : ''}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--t-fg-3)', lineHeight: 1.6 }}>
-              {card.body}
+            <div style={{ fontSize: 12, color: 'var(--t-fg-3)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+              {/* Rationale bodies sometimes embed ```yaml or ```ts snippets
+                  (DAG fragments, policy snippets). Route fences through the
+                  unified CodeBlockToolbar so users get copy/wrap/lines/fold;
+                  plain prose paragraphs render as before. */}
+              {parseCodeFences(card.body).map((seg, k) =>
+                seg.kind === 'code' ? (
+                  <div key={k} style={{ margin: '6px 0' }}>
+                    <CodeBlockToolbar code={seg.value} lang={seg.lang} />
+                  </div>
+                ) : (
+                  <span key={k}>{seg.value}</span>
+                )
+              )}
             </div>
           </div>
         ))}
 
-        {/* YAML real-time stream */}
+        {/* YAML real-time stream — now wrapped in CodeBlockToolbar to expose
+            copy / wrap / line-numbers / fold while preserving the original
+            "blueprint.yaml · N 行" caption above. */}
         {session.yamlLines.length > 0 && (
-          <div
-            style={{
-              background: 'var(--t-panel-2)',
-              border: '1px solid var(--t-border)',
-              borderRadius: 8,
-              padding: '8px 12px',
-              maxHeight: 160,
-              overflowY: 'auto',
-            }}
-          >
+          <div>
             <div
               style={{
                 fontSize: 10,
@@ -2408,18 +2427,12 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             >
               blueprint.yaml · {session.yamlLines.length} 行
             </div>
-            <pre
-              style={{
-                margin: 0,
-                fontSize: 11,
-                fontFamily: 'var(--font-mono, monospace)',
-                color: 'var(--t-accent-bright)',
-                lineHeight: 1.5,
-                whiteSpace: 'pre-wrap',
-              }}
-            >
-              {session.yamlLines.join('\n')}
-            </pre>
+            <CodeBlockToolbar
+              code={session.yamlLines.join('\n')}
+              lang="yaml"
+              showLineNumbers
+              maxBodyHeight={160}
+            />
           </div>
         )}
 
