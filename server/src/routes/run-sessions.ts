@@ -15,6 +15,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { runSkillAssembler } from '../assembler';
+import { classifyErrorCode } from '../lib/classify-error';
 import { saveRun, type ArtifactType } from '../storage/runs';
 import { getSetting } from '../storage/settings';
 import { SKILLS } from '../skills';
@@ -304,12 +305,30 @@ router.post('/', (req: Request, res: Response) => {
     validated_provider = candidate;
   }
 
-  // Pick the API key for the chosen provider only — we do NOT eagerly read
-  // all four headers (that would log all keys when DEBUG=1). Header wins
-  // over env so a hosted server with env-defaulted keys stays overridable.
+  // Pick the API key for the chosen provider, in priority order:
+  //   1. Per-request HTTP header (e.g. X-Zhipu-Key)        — overrides everything
+  //   2. ByokSection's saved key in settings/byok          — the "UI-configured" path
+  //   3. Per-provider env var (e.g. ZHIPU_API_KEY)         — last-resort default
+  //
+  // (2) is the critical fix for the "前端做了，后端没接上" class of bugs:
+  // ByokSection writes apiKey to byok-config.json via PUT /api/settings/byok,
+  // but until now run-sessions only read header + env, so configuring a
+  // Zhipu/DeepSeek/OpenAI key in Settings did absolutely nothing at runtime.
   const headerName = HEADER_BY_PROVIDER[validated_provider];
+  const byokStored = (() => {
+    try {
+      const cfg = getSetting('byok') as
+        | { providers?: Record<string, { apiKey?: string }> }
+        | undefined;
+      const k = cfg?.providers?.[validated_provider]?.apiKey;
+      return typeof k === 'string' && k.trim().length > 0 ? k.trim() : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
   const provider_api_key =
     (req.headers[headerName] as string | undefined) ||
+    byokStored ||
     process.env[PROVIDER_ENV_VAR[validated_provider]];
 
   // Back-compat field (still consumed by some legacy code paths). For the
@@ -530,10 +549,34 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.flushHeaders();
 
-  // Helper to write a named SSE event
+  // Helper to write a named SSE event. For `error` events we run the payload
+  // through classifyErrorCode() so the front-end always sees the 6-bucket UI
+  // code (auth / rate_limit / context_too_long / network / server / unknown)
+  // on `data.code`. The original fine-grained server code is preserved under
+  // `data.server_code` for logs/debugging without breaking existing readers
+  // that key off `code` (e.g. the BYOK banner regex).
   const sendEvent = (event: string, data: unknown) => {
     if (res.writableEnded) return;
-    const line = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    let payload: unknown = data;
+    if (event === 'error' && data && typeof data === 'object') {
+      const d = data as Record<string, unknown>;
+      const rawCode = typeof d.code === 'string' ? d.code : undefined;
+      const message = typeof d.message === 'string' ? d.message : undefined;
+      const stderrTail = typeof d.stderr_tail === 'string' ? d.stderr_tail : undefined;
+      const status = typeof d.status === 'number' ? d.status : undefined;
+      const uiCode = classifyErrorCode({
+        code: rawCode,
+        message,
+        stderr_tail: stderrTail,
+        status,
+      });
+      payload = {
+        ...d,
+        code: uiCode,
+        ...(rawCode && rawCode !== uiCode ? { server_code: rawCode } : {}),
+      };
+    }
+    const line = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
     res.write(line);
     if (typeof (res as unknown as { flush?: () => void }).flush === 'function') {
       (res as unknown as { flush: () => void }).flush();
@@ -705,7 +748,13 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       console.error(`[run-sessions] Stream error for session ${id}:`, err);
       sawError = true;
       if (!res.writableEnded) {
-        sendEvent('error', { message: 'Internal server error during assembly', session_id: id });
+        sendEvent('error', {
+          // sendEvent() runs classifyErrorCode() against this message; the
+          // regexes will sort 5xx / ECONNREFUSED / 401 surfacing in `err`.
+          code: 'INTERNAL_ERROR',
+          message: `Internal server error during assembly: ${(err as Error)?.message ?? String(err)}`,
+          session_id: id,
+        });
       }
     }
   } finally {

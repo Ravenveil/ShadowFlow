@@ -789,6 +789,12 @@ export default function StartPage() {
 
     setSubmitting(true);
 
+    // Forward the model-picker selection so the server uses the user's
+    // chosen executor/model. Without these, the server falls back to
+    // executor='cli:auto' (= claude) even when the picker shows glm-5.1.
+    const executor = localStorage.getItem('sf.defaultExecutor') || undefined;
+    const model = localStorage.getItem('sf.model') || undefined;
+
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (secrets.anthropic) headers['X-Anthropic-Key'] = secrets.anthropic;
@@ -798,6 +804,8 @@ export default function StartPage() {
         body: JSON.stringify({
           goal: text,
           mode: mode !== 'auto' ? mode : undefined,
+          executor,
+          model,
         }),
       });
       if (resp.ok) {
@@ -855,13 +863,17 @@ export default function StartPage() {
 
   async function handleSkillPack(pack: SkillPack) {
     setSubmitting(true);
+    // Same as handleSubmit: forward executor/model so skill-pack one-clicks
+    // honor the user's model-picker selection instead of defaulting to claude.
+    const executor = localStorage.getItem('sf.defaultExecutor') || undefined;
+    const model = localStorage.getItem('sf.model') || undefined;
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (secrets.anthropic) headers['X-Anthropic-Key'] = secrets.anthropic;
       const resp = await fetch(`${getApiBase()}/api/run-sessions`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ goal: pack.prompt, mode: 'team' }),
+        body: JSON.stringify({ goal: pack.prompt, mode: 'team', executor, model }),
       });
       if (resp.ok) {
         const data = (await resp.json()) as { session_id: string };

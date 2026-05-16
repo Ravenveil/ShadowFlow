@@ -12,9 +12,9 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { ArrowDown, Check, ChevronDown, ChevronRight, Circle, Cpu, ExternalLink, Key, Paperclip, RotateCcw, Settings } from 'lucide-react';
+import { AlertTriangle, ArrowDown, Check, ChevronDown, ChevronRight, Circle, Cpu, ExternalLink, Key, KeyRound, Paperclip, Plus, RotateCcw, ServerCrash, Settings, Timer, WifiOff } from 'lucide-react';
 import { useRunSession } from '../core/hooks/useRunSession';
-import type { RunSessionNode, RunSessionEdge, RunSessionStep } from '../core/hooks/useRunSession';
+import type { RunSessionNode, RunSessionEdge, RunSessionStep, SessionError } from '../core/hooks/useRunSession';
 import {
   getStoredApiKey,
   getStoredString,
@@ -3037,6 +3037,11 @@ function PreparationPanel() {
         // forward it through the URL so a future "back to prep" round-trip
         // auto-selects the same Conversation (AC8 step 3).
         conversation_id: selectedConversationId,
+        // Forward the user's model-picker selection — without these the
+        // server falls back to executor='cli:auto' (= claude) even when the
+        // user picked a BYOK provider like glm-5.1.
+        executor: localStorage.getItem('sf.defaultExecutor') || undefined,
+        model: localStorage.getItem('sf.model') || undefined,
       });
       const cid = resp.conversation_id ?? selectedConversationId;
       const qs = new URLSearchParams();
