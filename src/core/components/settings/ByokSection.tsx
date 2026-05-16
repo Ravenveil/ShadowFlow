@@ -91,6 +91,29 @@ async function loadModels(): Promise<ModelDef[]> {
   } catch { return FALLBACK_MODELS; }
 }
 
+interface RemoteModelsResult {
+  models: ModelDef[];
+  count: number;
+  error?: string;
+}
+
+async function loadRemoteModels(providerId: string): Promise<RemoteModelsResult> {
+  try {
+    const r = await fetch(`${API_BASE}/api/settings/byok/${providerId}/models/remote`, {
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => null);
+      return { models: [], count: 0, error: j?.error?.message ?? `HTTP ${r.status}` };
+    }
+    const j = await r.json();
+    const arr: ModelDef[] = Array.isArray(j?.models) ? j.models : [];
+    return { models: arr, count: arr.length };
+  } catch (err) {
+    return { models: [], count: 0, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 async function saveProvider(id: string, payload: Partial<ProviderData> & { defaultModel?: string; temperature?: number; routingPriority?: string }): Promise<boolean> {
   try {
     const r = await fetch(`${API_BASE}/api/settings/byok/${id}`, {
@@ -432,15 +455,21 @@ function ModelSelect({
 // ── Provider rail row ─────────────────────────────────────────────────────────
 
 function ProviderRow({
-  id, configured, enabled, modelCount, active, onClick,
-}: { id: string; configured: boolean; enabled: boolean; modelCount: number; active: boolean; onClick: () => void }) {
+  id, configured, enabled, modelCount, active, onClick, onToggleEnabled,
+}: {
+  id: string; configured: boolean; enabled: boolean; modelCount: number; active: boolean;
+  onClick: () => void;
+  onToggleEnabled?: (next: boolean) => void;
+}) {
   const { language } = useI18n();
   const T = (zh: string, en: string) => language === 'zh' ? zh : en;
   const m = PROVIDER_META[id] ?? { name: id, short: '' };
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
       style={{
         display: 'grid', gridTemplateColumns: '34px 1fr auto', gap: 10, alignItems: 'center',
         padding: '9px 10px', cursor: 'pointer', borderRadius: 9, width: '100%', textAlign: 'left',
@@ -448,6 +477,7 @@ function ProviderRow({
         border: active ? '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)' : '1px solid transparent',
         opacity: configured || active ? 1 : 0.75,
         transition: 'background .12s',
+        outline: 'none',
       }}
     >
       <ProviderLogo id={id} size={34} active={active} />
@@ -469,18 +499,31 @@ function ProviderRow({
         </div>
       </div>
       {configured ? (
-        <div style={{
-          width: 26, height: 15, borderRadius: 999, position: 'relative', flexShrink: 0,
-          background: enabled ? 'var(--t-accent)' : 'var(--t-border)', border: 'none',
-        }}>
-          <div style={{ position: 'absolute', top: 1, [enabled ? 'right' : 'left']: 1, width: 11, height: 11, borderRadius: '50%', background: enabled ? '#fff' : 'var(--t-fg-4)' }} />
-        </div>
+        <button
+          type="button"
+          aria-label={T(enabled ? '禁用' : '启用', enabled ? 'Disable' : 'Enable')}
+          aria-pressed={enabled}
+          onClick={(e) => { e.stopPropagation(); onToggleEnabled?.(!enabled); }}
+          style={{
+            width: 26, height: 15, borderRadius: 999, position: 'relative', flexShrink: 0,
+            background: enabled ? 'var(--t-accent)' : 'var(--t-border)',
+            border: 'none', padding: 0, cursor: 'pointer',
+            transition: 'background .15s',
+          }}
+        >
+          <div style={{
+            position: 'absolute', top: 1, [enabled ? 'right' : 'left']: 1,
+            width: 11, height: 11, borderRadius: '50%',
+            background: enabled ? '#fff' : 'var(--t-fg-4)',
+            transition: 'left .15s, right .15s',
+          }} />
+        </button>
       ) : (
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--t-fg-4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 5v14M5 12h14"/>
         </svg>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -558,14 +601,56 @@ export function ByokSection() {
     });
   }, []);
 
+  const [refreshNote, setRefreshNote] = useState<{ tone: 'ok' | 'warn' | 'err'; text: string } | null>(null);
+
   async function refreshModels() {
     setRefreshingModels(true);
+    setRefreshNote(null);
     try {
-      const m = await loadModels();
-      setAllModels(m);
+      const result = await loadRemoteModels(selectedId);
+      if (result.error) {
+        // Upstream failed → fall back to static catalog and toast the error
+        const fallback = await loadModels();
+        setAllModels(fallback);
+        setRefreshNote({
+          tone: 'err',
+          text: T(`远端拉取失败：${result.error}`, `Remote fetch failed: ${result.error}`),
+        });
+        return;
+      }
+      if (result.count === 0) {
+        setRefreshNote({
+          tone: 'warn',
+          text: T('远端响应正常，但未返回模型', 'Upstream returned 0 models'),
+        });
+        return;
+      }
+      // Replace just this provider's models in allModels (preserve other providers)
+      setAllModels(prev => {
+        const others = prev.filter(m => m.provider !== selectedId);
+        return [...others, ...result.models];
+      });
+      setRefreshNote({
+        tone: 'ok',
+        text: T(`已从远端拉取 ${result.count} 个模型`, `Pulled ${result.count} models from upstream`),
+      });
     } finally {
       setRefreshingModels(false);
+      setTimeout(() => setRefreshNote(null), 4000);
     }
+  }
+
+  async function toggleProviderEnabled(id: string, next: boolean) {
+    // Optimistically reflect in local store so the rail toggle moves immediately
+    setStore(prev => ({
+      ...prev,
+      providers: {
+        ...prev.providers,
+        [id]: { ...(prev.providers[id] ?? { apiKey: '', baseUrl: '', models: [], enabled: false }), enabled: next },
+      },
+    }));
+    await saveProvider(id, { enabled: next });
+    loadStore().then(setStore);
   }
 
   async function persistPref(patch: { defaultModel?: string; temperature?: number; routingPriority?: string }) {
@@ -739,6 +824,7 @@ export function ByokSection() {
               modelCount={(store.providers[id]?.models ?? []).length}
               active={selectedId === id}
               onClick={() => setSelectedId(id)}
+              onToggleEnabled={(next) => toggleProviderEnabled(id, next)}
             />
           ))}
           {availableIds.length > 0 && (
@@ -910,7 +996,7 @@ export function ByokSection() {
           {providerModels.length > 0 && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>
                     {T('模型', 'Models')}
                   </span>
@@ -921,6 +1007,23 @@ export function ByokSection() {
                   }}>
                     {T(`${enabledModels.length} / ${providerModels.length} 已启用`, `${enabledModels.length} / ${providerModels.length} enabled`)}
                   </span>
+                  {refreshNote && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 5,
+                      fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+                      background: refreshNote.tone === 'ok' ? 'var(--t-ok-tint)'
+                                : refreshNote.tone === 'err' ? 'color-mix(in oklab, var(--t-reject) 14%, transparent)'
+                                : 'color-mix(in oklab, var(--t-warn, #d97706) 14%, transparent)',
+                      border: `1px solid ${refreshNote.tone === 'ok' ? 'color-mix(in oklab, var(--t-ok) 35%, transparent)'
+                                          : refreshNote.tone === 'err' ? 'color-mix(in oklab, var(--t-reject) 35%, transparent)'
+                                          : 'color-mix(in oklab, var(--t-warn, #d97706) 35%, transparent)'}`,
+                      color: refreshNote.tone === 'ok' ? 'var(--t-ok)'
+                           : refreshNote.tone === 'err' ? 'var(--t-reject)'
+                           : 'var(--t-warn, #d97706)',
+                    }}>
+                      {refreshNote.text}
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 14 }}>
                   <button type="button" onClick={refreshModels} disabled={refreshingModels} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: refreshingModels ? 'wait' : 'pointer', opacity: refreshingModels ? 0.5 : 1 }}>
