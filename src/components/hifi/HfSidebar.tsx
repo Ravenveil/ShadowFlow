@@ -159,11 +159,11 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
 
   return (
     <aside
+      className="sf-settings-bg"
       style={{
         width: W,
         height: '100%',
         flexShrink: 0,
-        background: 'var(--t-panel)',
         borderRight: '1px solid var(--t-border)',
         display: 'flex',
         flexDirection: 'column',
