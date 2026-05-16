@@ -12,7 +12,7 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Check, Circle, Cpu, ExternalLink, Key, Paperclip, RotateCcw, Settings } from 'lucide-react';
+import { ArrowDown, Check, ChevronDown, ChevronRight, Circle, Cpu, ExternalLink, Key, Paperclip, RotateCcw, Settings } from 'lucide-react';
 import { useRunSession } from '../core/hooks/useRunSession';
 import type { RunSessionNode, RunSessionEdge, RunSessionStep } from '../core/hooks/useRunSession';
 import {
@@ -36,6 +36,8 @@ import { createTeam } from '../api/teams';
 import { createGroup } from '../api/groupApi';
 // Story 15.14 — 5+1 维质量自检雷达图（生成完后挂在右栏底部）
 import { CritiqueResult } from '../components/CritiqueResult';
+// 2026-05-16 — 24h input draft persistence (Cherry Studio `inputbar-draft` parity)
+import { saveDraft, loadDraft, clearDraft } from '../common/lib/draftCache';
 
 // ---------------------------------------------------------------------------
 // Model / Executor picker — CLI + API options pulled live from settings
@@ -1432,6 +1434,38 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [thinkExpanded, setThinkExpanded] = useState(false);
+  // Track thinking duration: start when thinkingMessage first appears,
+  // freeze when chatReply begins or thinkingMessage clears.
+  const thinkStartRef = useRef<number | null>(null);
+  const [thinkDurationMs, setThinkDurationMs] = useState<number | null>(null);
+  const thinkStreaming = Boolean(
+    session.thinkingMessage && session.chatReply.length === 0 && !session.isComplete,
+  );
+  useEffect(() => {
+    if (session.thinkingMessage && thinkStartRef.current === null) {
+      thinkStartRef.current = Date.now();
+      setThinkDurationMs(null);
+    }
+    // End condition: chatReply started or thinkingMessage cleared
+    if (thinkStartRef.current !== null && !thinkStreaming && thinkDurationMs === null) {
+      setThinkDurationMs(Date.now() - thinkStartRef.current);
+    }
+  }, [session.thinkingMessage, session.chatReply, session.isComplete, thinkStreaming, thinkDurationMs]);
+  const [thinkTick, setThinkTick] = useState(0);
+  useEffect(() => {
+    if (!thinkStreaming) return;
+    const id = window.setInterval(() => setThinkTick(t => t + 1), 200);
+    return () => window.clearInterval(id);
+  }, [thinkStreaming]);
+  void thinkTick;
+  function formatThinkDuration(ms: number): string {
+    const s = ms / 1000;
+    if (s < 60) return `${s.toFixed(1)}s`;
+    return `${(s / 60).toFixed(1)}m`;
+  }
+  const liveThinkMs =
+    thinkStreaming && thinkStartRef.current !== null ? Date.now() - thinkStartRef.current : null;
+  const [thinkTitleHover, setThinkTitleHover] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>(
     () => localStorage.getItem('sf.model') ?? 'claude-sonnet-4-6',
@@ -1528,6 +1562,62 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showModelPicker]);
+
+  // 2026-05-16 Scroll anchoring + Jump-to-latest pill.
+  // When the user scrolls up from the bottom of the stream area we mark
+  // `userScrolledAway` so the auto-scroll effect below stops fighting them.
+  // Once they get back within 10px of the bottom we re-arm auto-scroll.
+  const streamRef = useRef<HTMLDivElement | null>(null);
+  const [userScrolledAway, setUserScrolledAway] = useState(false);
+  useEffect(() => {
+    const el = streamRef.current;
+    if (!el) return;
+    const update = () => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom > 100) {
+        setUserScrolledAway((prev) => (prev ? prev : true));
+      } else if (distanceFromBottom < 10) {
+        setUserScrolledAway((prev) => (prev ? false : prev));
+      }
+    };
+    el.addEventListener('scroll', update, { passive: true });
+    el.addEventListener('wheel', update, { passive: true });
+    el.addEventListener('touchstart', update, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', update);
+      el.removeEventListener('wheel', update);
+      el.removeEventListener('touchstart', update);
+    };
+  }, []);
+
+  // Auto-scroll to bottom on new stream content — but only when the user
+  // hasn't scrolled away. Triggered by any of the things that drive the
+  // visible stream area (chatReply, steps, nodes, yaml lines, thinking).
+  useEffect(() => {
+    if (userScrolledAway) return;
+    const el = streamRef.current;
+    if (!el) return;
+    // Use rAF so the scroll happens after React commits the new content.
+    const id = requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [
+    userScrolledAway,
+    session.chatReply,
+    session.steps.length,
+    session.nodes.length,
+    session.yamlLines.length,
+    session.thinkingMessage,
+    session.tokenCount,
+  ]);
+
+  const jumpToLatest = () => {
+    const el = streamRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    setUserScrolledAway(false);
+  };
 
   const handleSend = async () => {
     const text = message.trim();
@@ -1744,8 +1834,12 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
         </button>
       </div>
 
-      {/* Stream area */}
+      {/* Stream area — wrapped in a relative container so the
+          jump-to-latest pill can float at the bottom-right without
+          scrolling away with the content. */}
+      <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex' }}>
       <div
+        ref={streamRef}
         style={{
           flex: 1,
           overflow: 'auto',
@@ -2111,10 +2205,9 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
           </div>
         )}
 
-        {/* Thinking bubble */}
+        {/* Thinking bubble — default collapsed (Cherry Studio style). */}
         {session.thinkingMessage && (
           <div
-            key={session.thinkingMessage}
             style={{
               borderRadius: 6,
               background: 'var(--t-bg)',
@@ -2125,6 +2218,8 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             <button
               type="button"
               onClick={() => setThinkExpanded(v => !v)}
+              onMouseEnter={() => setThinkTitleHover(true)}
+              onMouseLeave={() => setThinkTitleHover(false)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -2137,10 +2232,28 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                 textAlign: 'left',
               }}
             >
-              <InlineSpinner size={10} />
-              <span style={{ fontSize: 12, color: 'var(--t-fg-3)', fontWeight: 500 }}>思考中</span>
-              <span style={{ fontSize: 10, color: 'var(--t-fg-4)', flexShrink: 0, marginLeft: 'auto' }}>
-                {thinkExpanded ? '▼' : '▶'}
+              {thinkStreaming ? (
+                <InlineSpinner size={10} />
+              ) : (
+                <Check size={12} color="var(--t-fg-4)" strokeWidth={2.5} />
+              )}
+              <span style={{ fontSize: 12, color: 'var(--t-fg-3)', fontWeight: 500 }}>
+                {thinkStreaming
+                  ? `正在思考${liveThinkMs !== null ? ` · ${formatThinkDuration(liveThinkMs)}` : '…'}`
+                  : `已思考 ${thinkDurationMs !== null ? formatThinkDuration(thinkDurationMs) : ''}`}
+              </span>
+              <span
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                  marginLeft: 'auto',
+                  opacity: thinkTitleHover ? 1 : 0.45,
+                  color: 'var(--t-fg-4)',
+                  transition: 'opacity 120ms ease',
+                }}
+              >
+                {thinkExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </span>
             </button>
             {thinkExpanded && (
@@ -2150,6 +2263,9 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                   fontSize: 11,
                   color: 'var(--t-fg-3)',
                   lineHeight: 1.5,
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: 240,
+                  overflowY: 'auto',
                 }}
               >
                 {session.thinkingMessage}
@@ -2172,6 +2288,39 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             {session.isComplete ? '已完成' : '流式中'} · 已写入 {session.tokenCount.toLocaleString()} tokens
           </div>
         )}
+      </div>
+
+      {/* Jump-to-latest pill — appears when the user has scrolled away
+          from the bottom of the stream. Clicking it scrolls back and
+          re-arms the auto-scroll. */}
+      {userScrolledAway && (
+        <button
+          type="button"
+          onClick={jumpToLatest}
+          aria-label="Jump to latest"
+          title="Jump to latest"
+          className="sf-pulse"
+          style={{
+            position: 'absolute',
+            right: 16,
+            bottom: 14,
+            width: 34,
+            height: 34,
+            borderRadius: '50%',
+            background: 'var(--t-panel)',
+            border: '1px solid var(--t-border)',
+            color: 'var(--t-fg)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(0,0,0,.22), 0 1px 3px rgba(0,0,0,.18)',
+            zIndex: 5,
+          }}
+        >
+          <ArrowDown size={16} strokeWidth={2.2} aria-hidden />
+        </button>
+      )}
       </div>
 
       {/* Footer — Composer */}
