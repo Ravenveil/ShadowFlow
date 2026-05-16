@@ -1775,7 +1775,9 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
     session.steps.length === 0 &&
     session.nodes.length === 0 &&
     !session.blueprintFile &&
-    !session.error;
+    !session.error &&
+    !session.chatReply.includes('<sf:') &&
+    (session.outputType == null || session.outputType === 'chat');
 
   // Close model picker on outside click
   useEffect(() => {
@@ -3507,12 +3509,17 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   // 2026-05-11 Layer 1 — chat-mode detection (mirrors LeftPanel).
   // session.error gates chat mode so retry-error text accumulated in
   // chatReply cannot collapse the canvas (2026-05-16 second-pass fix).
+  // 2026-05-16 third-pass: also bail out if the stream is clearly emitting
+  // <sf:*> structured tags or outputType already classifies as non-chat —
+  // otherwise early raw-tag text collapses the canvas mid-build.
   const isChatMode =
     session.chatReply.trim().length > 0 &&
     session.steps.length === 0 &&
     session.nodes.length === 0 &&
     !session.blueprintFile &&
-    !session.error;
+    !session.error &&
+    !session.chatReply.includes('<sf:') &&
+    (session.outputType == null || session.outputType === 'chat');
 
   function handleOpenEditor() {
     if (session.redirectUrl) {
