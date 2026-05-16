@@ -295,7 +295,7 @@ function Orb({ state, style, glyph, badge, badgeColor }: { state: 'ok' | 'run' |
 
 function OrbLabel({ label, style, color, accent, children }: { label: string; style: React.CSSProperties; color?: string; accent?: boolean; children?: React.ReactNode }) {
   return (
-    <div style={{ position: 'absolute', fontFamily: 'var(--font-sans)', fontSize: 10, fontWeight: 700, color: color ?? (accent ? 'var(--t-accent-bright)' : 'var(--t-fg-2)'), letterSpacing: '-.01em', zIndex: 3, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, ...style }}>
+    <div style={{ position: 'absolute', fontFamily: 'var(--font-sans)', fontSize: 10, fontWeight: 700, color: color ?? (accent ? 'var(--t-accent-bright)' : 'var(--t-fg-2)'), letterSpacing: '-.01em', zIndex: 4, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, ...style }}>
       {label}{children}
     </div>
   );
@@ -303,7 +303,7 @@ function OrbLabel({ label, style, color, accent, children }: { label: string; st
 
 function HcMsg({ children, accent, reject, style }: { children: React.ReactNode; accent?: boolean; reject?: boolean; style?: React.CSSProperties }) {
   return (
-    <div style={{ position: 'absolute', background: reject ? 'var(--status-reject-tint)' : accent ? 'linear-gradient(180deg, rgba(168,85,247,.08), var(--t-panel))' : 'var(--t-panel)', border: `1px solid ${reject ? 'rgba(239,68,68,.35)' : accent ? 'rgba(168,85,247,.4)' : 'var(--t-border)'}`, borderRadius: 10, padding: '6px 10px', fontSize: 10.5, color: 'var(--t-fg-2)', maxWidth: 180, lineHeight: 1.35, zIndex: 4, animation: 'sf-float 4s ease-in-out infinite', ...style }}>
+    <div style={{ position: 'absolute', background: reject ? 'var(--status-reject-tint)' : accent ? 'linear-gradient(180deg, rgba(168,85,247,.08), var(--t-panel))' : 'var(--t-panel)', border: `1px solid ${reject ? 'rgba(239,68,68,.35)' : accent ? 'rgba(168,85,247,.4)' : 'var(--t-border)'}`, borderRadius: 10, padding: '6px 10px', fontSize: 10.5, color: 'var(--t-fg-2)', maxWidth: 180, lineHeight: 1.35, zIndex: 2, animation: 'sf-float 4s ease-in-out infinite', ...style }}>
       {children}
     </div>
   );
@@ -352,12 +352,12 @@ function HeroCanvas() {
       <Orb state="ok"  style={{ top: 240, left: 190 }} glyph="D" badge="C"  badgeColor="#D97706" />
       <OrbLabel label="DataScout"     style={{ top: 302, left: 180, width: 75 }} />
       <Orb state="run" style={{ top: 250, left: 300 }} glyph="W" badge="C"  badgeColor="#D97706" />
-      <OrbLabel label="SectionWriter" accent style={{ top: 312, left: 288, width: 80 }}>
+      <OrbLabel label="SectionWriter" accent style={{ top: 316, left: 290, width: 80 }}>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--t-fg-4)', fontWeight: 600 }}>● r2/3 · 87ms</span>
       </OrbLabel>
       <Orb state="rej" style={{ top: 160, left: 398 }} glyph="A" badge="C"  badgeColor="#D97706" />
       <OrbLabel label="Advisor" style={{ top: 222, left: 385, width: 75 }} color="var(--status-reject)" />
-      <HcMsg accent style={{ top: 210, left: 252, animationDelay: '-.5s' }}>
+      <HcMsg accent style={{ top: 244, left: 246, animationDelay: '-.5s' }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: 'var(--t-fg-4)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>→ handoff · streaming</div>
         "Methods §3.2 draft — 12 sources tagged…"
       </HcMsg>
