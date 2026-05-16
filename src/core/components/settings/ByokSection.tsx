@@ -22,21 +22,23 @@ interface ProviderMeta {
   defaultUrl: string;
   keyPlaceholder: string;
   noKey: boolean;
+  /** Cherry Studio-style "点击这里获取密钥" link target */
+  docsUrl?: string;
 }
 
 const PROVIDER_META: Record<string, ProviderMeta> = {
-  anthropic: { name: 'Anthropic',       monogram: 'A',  tint: '#D97706', short: 'Claude family',            defaultUrl: 'https://api.anthropic.com',                           keyPlaceholder: 'sk-ant-…',    noKey: false },
-  openai:    { name: 'OpenAI',          monogram: 'O',  tint: '#10B981', short: 'GPT family',                defaultUrl: 'https://api.openai.com/v1',                            keyPlaceholder: 'sk-…',        noKey: false },
-  google:    { name: 'Google Gemini',   monogram: 'G',  tint: '#4285F4', short: 'Gemini family',             defaultUrl: 'https://generativelanguage.googleapis.com/v1beta',     keyPlaceholder: 'AIza…',       noKey: false },
-  deepseek:  { name: 'DeepSeek',        monogram: 'DS', tint: '#3D8BFD', short: 'V3 / R1',                  defaultUrl: 'https://api.deepseek.com',                             keyPlaceholder: 'sk-…',        noKey: false },
-  zhipu:     { name: 'Zhipu GLM',       monogram: 'ZP', tint: '#7C3AED', short: 'GLM-4 family',             defaultUrl: 'https://open.bigmodel.cn/api/paas/v4',                 keyPlaceholder: 'xxxx.yyyyyy', noKey: false },
-  qwen:      { name: 'Qwen · Alibaba',  monogram: 'Qw', tint: '#A855F7', short: 'Alibaba Cloud Bailian',    defaultUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',    keyPlaceholder: 'sk-…',        noKey: false },
-  moonshot:  { name: 'Moonshot · Kimi', monogram: 'MK', tint: '#06B6D4', short: 'K2 / K1.5',               defaultUrl: 'https://api.moonshot.cn/v1',                           keyPlaceholder: 'sk-…',        noKey: false },
-  mistral:   { name: 'Mistral',         monogram: 'Mi', tint: '#FB923C', short: 'Large 2 · Codestral',      defaultUrl: 'https://api.mistral.ai/v1',                            keyPlaceholder: 'sk-…',        noKey: false },
-  groq:      { name: 'Groq',            monogram: 'Gr', tint: '#F97316', short: 'LPU inference',            defaultUrl: 'https://api.groq.com/openai/v1',                       keyPlaceholder: 'gsk_…',       noKey: false },
-  azure:     { name: 'Azure OpenAI',    monogram: 'Az', tint: '#0078D4', short: 'Enterprise',               defaultUrl: 'https://{deployment}.openai.azure.com',                keyPlaceholder: '…',           noKey: false },
-  ollama:    { name: 'Ollama',          monogram: 'Ol', tint: '#A1A1AA', short: 'Local',                    defaultUrl: 'http://localhost:11434/v1',                            keyPlaceholder: '',            noKey: true  },
-  lmstudio:  { name: 'LM Studio',       monogram: 'LM', tint: '#22C55E', short: 'Local',                    defaultUrl: 'http://localhost:1234/v1',                             keyPlaceholder: '',            noKey: true  },
+  anthropic: { name: 'Anthropic',       monogram: 'A',  tint: '#D97706', short: 'Claude family',            defaultUrl: 'https://api.anthropic.com',                           keyPlaceholder: 'sk-ant-…',    noKey: false, docsUrl: 'https://console.anthropic.com/settings/keys' },
+  openai:    { name: 'OpenAI',          monogram: 'O',  tint: '#10B981', short: 'GPT family',                defaultUrl: 'https://api.openai.com/v1',                            keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://platform.openai.com/api-keys' },
+  google:    { name: 'Google Gemini',   monogram: 'G',  tint: '#4285F4', short: 'Gemini family',             defaultUrl: 'https://generativelanguage.googleapis.com/v1beta',     keyPlaceholder: 'AIza…',       noKey: false, docsUrl: 'https://aistudio.google.com/app/apikey' },
+  deepseek:  { name: 'DeepSeek',        monogram: 'DS', tint: '#3D8BFD', short: 'V3 / R1',                  defaultUrl: 'https://api.deepseek.com',                             keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://platform.deepseek.com/api_keys' },
+  zhipu:     { name: 'Zhipu GLM',       monogram: 'ZP', tint: '#7C3AED', short: 'GLM-4 family',             defaultUrl: 'https://open.bigmodel.cn/api/paas/v4',                 keyPlaceholder: 'xxxx.yyyyyy', noKey: false, docsUrl: 'https://open.bigmodel.cn/usercenter/apikeys' },
+  qwen:      { name: 'Qwen · Alibaba',  monogram: 'Qw', tint: '#A855F7', short: 'Alibaba Cloud Bailian',    defaultUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',    keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://bailian.console.aliyun.com/?apiKey=1' },
+  moonshot:  { name: 'Moonshot · Kimi', monogram: 'MK', tint: '#06B6D4', short: 'K2 / K1.5',               defaultUrl: 'https://api.moonshot.cn/v1',                           keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://platform.moonshot.cn/console/api-keys' },
+  mistral:   { name: 'Mistral',         monogram: 'Mi', tint: '#FB923C', short: 'Large 2 · Codestral',      defaultUrl: 'https://api.mistral.ai/v1',                            keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://console.mistral.ai/api-keys/' },
+  groq:      { name: 'Groq',            monogram: 'Gr', tint: '#F97316', short: 'LPU inference',            defaultUrl: 'https://api.groq.com/openai/v1',                       keyPlaceholder: 'gsk_…',       noKey: false, docsUrl: 'https://console.groq.com/keys' },
+  azure:     { name: 'Azure OpenAI',    monogram: 'Az', tint: '#0078D4', short: 'Enterprise',               defaultUrl: 'https://{deployment}.openai.azure.com',                keyPlaceholder: '…',           noKey: false, docsUrl: 'https://learn.microsoft.com/en-us/azure/ai-services/openai/' },
+  ollama:    { name: 'Ollama',          monogram: 'Ol', tint: '#A1A1AA', short: 'Local',                    defaultUrl: 'http://localhost:11434/v1',                            keyPlaceholder: '',            noKey: true,  docsUrl: 'https://ollama.com' },
+  lmstudio:  { name: 'LM Studio',       monogram: 'LM', tint: '#22C55E', short: 'Local',                    defaultUrl: 'http://localhost:1234/v1',                             keyPlaceholder: '',            noKey: true,  docsUrl: 'https://lmstudio.ai' },
 };
 
 const PROVIDER_ORDER = ['anthropic','openai','google','deepseek','zhipu','qwen','moonshot','mistral','groq','azure','ollama','lmstudio'];
@@ -1120,134 +1122,192 @@ export function ByokSection() {
 
           {/* API Key + Base URL */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-            {/* API Key */}
+            {/* API Key — Cherry Studio style: single input. When key is saved,
+                value renders as ●●●●●●●●●●●●●●●●●cFH0 (real chars masked by
+                password type); focus auto-selects so any keystroke replaces it. */}
             {!selectedMeta.noKey && (
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>API KEY</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>{T('本地加密存储', 'Stored locally')}</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)', letterSpacing: '-0.005em' }}>
+                    {T('API 密钥', 'API Key')}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>
+                    {T('本地加密存储', 'Stored locally')}
+                  </span>
                 </div>
-                {hasKey && !keyInput && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 7, background: 'var(--t-bg)', marginBottom: 5 }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>{T('当前：', 'Current:')}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-2)' }}>{maskedKey}</span>
-                  </div>
-                )}
                 <div style={{ position: 'relative' }}>
                   <input
                     type={showKey ? 'text' : 'password'}
-                    value={keyInput}
-                    onChange={e => { setKeyInput(e.target.value); markDirty(); }}
+                    value={
+                      hasKey && !keyInput
+                        ? '•'.repeat(24) + (maskedKey.slice(-4) || '')
+                        : keyInput
+                    }
+                    onChange={e => {
+                      // Strip the fake mask dots if any survived (user replaces selected text)
+                      setKeyInput(e.target.value.replace(/•/g, ''));
+                      markDirty();
+                    }}
                     onKeyDown={e => e.key === 'Enter' && handleSave()}
-                    placeholder={hasKey ? T('输入新 Key 覆盖（多个用 , 分隔）', 'Enter new key (use , for multiple)') : selectedMeta.keyPlaceholder}
+                    onFocus={e => {
+                      e.target.style.borderColor = 'var(--t-accent)';
+                      // If we're showing the fake mask, select-all so first
+                      // keystroke replaces it cleanly.
+                      if (hasKey && !keyInput) {
+                        requestAnimationFrame(() => e.target.select());
+                      }
+                    }}
+                    onBlur={e => (e.target.style.borderColor = 'var(--t-border)')}
+                    placeholder={selectedMeta.keyPlaceholder}
                     style={{
-                      width: '100%', boxSizing: 'border-box', padding: '0 130px 0 12px', height: 36,
-                      background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
-                      fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--t-fg)',
+                      width: '100%', boxSizing: 'border-box',
+                      padding: '0 130px 0 14px', height: 40,
+                      background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 10,
+                      fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--t-fg)',
+                      letterSpacing: showKey ? 'normal' : '0.05em',
                       outline: 'none',
                     }}
-                    onFocus={e => (e.target.style.borderColor = 'var(--t-accent)')}
-                    onBlur={e => (e.target.style.borderColor = 'var(--t-border)')}
                   />
-                  <div style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 2, alignItems: 'center' }}>
-                    <button type="button" onClick={() => setShowKey(v => !v)} style={{ background: 'transparent', border: 'none', color: 'var(--t-fg-4)', cursor: 'pointer', padding: 4 }}>
+                  <div style={{
+                    position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                    display: 'flex', gap: 4, alignItems: 'center',
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowKey(v => !v)}
+                      title={showKey ? T('隐藏', 'Hide') : T('显示', 'Show')}
+                      style={{
+                        background: 'transparent', border: 'none',
+                        color: 'var(--t-fg-4)', cursor: 'pointer', padding: 4,
+                        display: 'flex', alignItems: 'center',
+                      }}
+                    >
                       {showKey ? (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M3 3l18 18"/><path d="M10.6 6.2A10 10 0 0 1 12 6c7 0 10 6 10 6a17 17 0 0 1-3.2 4M6.6 6.6A17 17 0 0 0 2 12s3 6 10 6c1.6 0 3-.3 4.2-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>
                         </svg>
                       ) : (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
                         </svg>
                       )}
                     </button>
-                    {/* Inline 检测 button — Cherry Studio style */}
+                    {/* 检测 button — Cherry Studio style, sans-serif */}
                     <button
                       type="button"
                       onClick={handleTest}
                       disabled={checkOverall === 'checking' || !hasKey}
                       style={{
-                        fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
-                        padding: '3px 9px', borderRadius: 5,
+                        fontSize: 12, fontWeight: 600,
+                        padding: '5px 12px', borderRadius: 7,
                         background: checkOverall === 'ok' ? 'var(--t-ok-tint)'
-                                   : checkOverall === 'failed' ? 'color-mix(in oklab, var(--t-reject) 14%, transparent)'
+                                   : checkOverall === 'failed' ? 'color-mix(in oklab, var(--t-reject) 12%, transparent)'
+                                   : checkOverall === 'unavailable' ? 'color-mix(in oklab, var(--t-warn, #d97706) 12%, transparent)'
                                    : 'var(--t-bg)',
                         border: `1px solid ${
                           checkOverall === 'ok' ? 'color-mix(in oklab, var(--t-ok) 40%, transparent)'
                           : checkOverall === 'failed' ? 'color-mix(in oklab, var(--t-reject) 40%, transparent)'
+                          : checkOverall === 'unavailable' ? 'color-mix(in oklab, var(--t-warn, #d97706) 40%, transparent)'
                           : 'var(--t-border)'}`,
                         color: checkOverall === 'ok' ? 'var(--t-ok)'
                               : checkOverall === 'failed' ? 'var(--t-reject)'
-                              : 'var(--t-fg-3)',
+                              : checkOverall === 'unavailable' ? 'var(--t-warn, #d97706)'
+                              : 'var(--t-fg-2)',
                         cursor: checkOverall === 'checking' || !hasKey ? 'not-allowed' : 'pointer',
                         opacity: !hasKey ? 0.5 : 1,
-                        marginLeft: 2,
                       }}
                       title={!hasKey ? T('需要先保存密钥', 'Save a key first') : T('检测密钥连通性', 'Check key connectivity')}
                     >
                       {checkOverall === 'checking' ? T('检测中…', 'Checking…')
                         : checkOverall === 'ok' ? T('通过 ✓', 'OK ✓')
                         : checkOverall === 'failed' ? T('失败 ✕', 'Failed ✕')
+                        : checkOverall === 'unavailable' ? T('不支持', 'Unsupported')
                         : T('检测', 'Check')}
                     </button>
                   </div>
                 </div>
-                {/* 多 key 提示 + 检测结果 */}
+                {/* Lower hints row: docs link (left) + multi-key hint (right) */}
                 <div style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  marginTop: 4, gap: 8, flexWrap: 'wrap',
+                  marginTop: 6, gap: 8, flexWrap: 'wrap',
                 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>
+                  {selectedMeta.docsUrl ? (
+                    <a
+                      href={selectedMeta.docsUrl}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{
+                        fontSize: 11, color: 'var(--t-accent)',
+                        textDecoration: 'none',
+                      }}
+                    >{T('点击这里获取密钥', 'Click here to get a key')}</a>
+                  ) : <span />}
+                  <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>
                     {T('多个密钥使用逗号分隔', 'Multiple keys: separate with ","')}
                   </span>
-                  {checkResults && checkResults.length > 0 && (
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {checkResults.map((r, i) => {
-                        const tint = r.status === 'ok' ? 'var(--t-ok)'
-                                   : r.status === 'unavailable' ? 'var(--t-warn, #d97706)'
-                                   : 'var(--t-reject)';
-                        return (
-                          <span
-                            key={i}
-                            title={r.error ?? `${r.statusCode ?? ''} ${r.latencyMs ?? '-'}ms`}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: 4,
-                              padding: '1px 6px', borderRadius: 4,
-                              background: `color-mix(in oklab, ${tint} 14%, transparent)`,
-                              border: `1px solid color-mix(in oklab, ${tint} 30%, transparent)`,
-                              color: tint, fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600,
-                            }}
-                          >
-                            <span>{r.keyTail}</span>
-                            <span>{r.status === 'ok' ? '✓' : r.status === 'unavailable' ? '?' : '✕'}</span>
-                            {typeof r.latencyMs === 'number' && r.status === 'ok' && (
-                              <span style={{ opacity: 0.7 }}>{r.latencyMs}ms</span>
-                            )}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
+                {/* Per-key check results strip */}
+                {checkResults && checkResults.length > 0 && (
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
+                    {checkResults.map((r, i) => {
+                      const tint = r.status === 'ok' ? 'var(--t-ok)'
+                                 : r.status === 'unavailable' ? 'var(--t-warn, #d97706)'
+                                 : 'var(--t-reject)';
+                      const errorShort = r.error
+                        ? r.error.length > 60 ? r.error.slice(0, 60) + '…' : r.error
+                        : '';
+                      return (
+                        <span
+                          key={i}
+                          title={r.error ?? `${r.statusCode ?? ''} ${r.latencyMs ?? '-'}ms`}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            padding: '3px 9px', borderRadius: 6,
+                            background: `color-mix(in oklab, ${tint} 12%, transparent)`,
+                            border: `1px solid color-mix(in oklab, ${tint} 30%, transparent)`,
+                            color: tint, fontSize: 11, fontWeight: 500,
+                          }}
+                        >
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>{r.keyTail}</span>
+                          <span style={{ fontWeight: 700 }}>
+                            {r.status === 'ok' ? '✓' : r.status === 'unavailable' ? '?' : '✕'}
+                          </span>
+                          {typeof r.latencyMs === 'number' && r.status === 'ok' && (
+                            <span style={{ opacity: 0.65, fontFamily: 'var(--font-mono)' }}>{r.latencyMs}ms</span>
+                          )}
+                          {r.status === 'failed' && r.statusCode && (
+                            <span style={{ opacity: 0.65, fontFamily: 'var(--font-mono)' }}>HTTP {r.statusCode}</span>
+                          )}
+                          {r.status === 'failed' && errorShort && (
+                            <span style={{ opacity: 0.8 }}>· {errorShort}</span>
+                          )}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
             {/* Base URL */}
             <div style={selectedMeta.noKey ? { gridColumn: '1 / -1' } : {}}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>BASE URL</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)', letterSpacing: '-0.005em' }}>
+                  {T('API 地址', 'API Address')}
+                </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>{T('代理 / 自定义网关可在此覆盖', 'Override for proxy / custom gateway')}</span>
+                  <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>
+                    {T('代理 / 自定义网关可在此覆盖', 'Override for proxy / custom gateway')}
+                  </span>
                   {baseUrlInput !== selectedMeta.defaultUrl && (
                     <button
                       type="button"
                       onClick={() => { setBaseUrlInput(selectedMeta.defaultUrl); markDirty(); }}
                       title={T('重置为默认地址', 'Reset to default')}
                       style={{
-                        fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600,
-                        padding: '1px 7px', borderRadius: 4,
+                        fontSize: 11, fontWeight: 500,
+                        padding: '2px 9px', borderRadius: 5,
                         background: 'transparent',
-                        border: '1px solid var(--t-border)',
+                        border: '1px solid color-mix(in oklab, var(--t-reject) 30%, transparent)',
                         color: 'var(--t-reject)', cursor: 'pointer',
                       }}
                     >
@@ -1262,17 +1322,21 @@ export function ByokSection() {
                 onChange={e => { setBaseUrlInput(e.target.value); markDirty(); }}
                 placeholder={selectedMeta.defaultUrl}
                 style={{
-                  width: '100%', boxSizing: 'border-box', padding: '0 12px', height: 36,
-                  background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
-                  fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--t-fg)',
+                  width: '100%', boxSizing: 'border-box', padding: '0 14px', height: 40,
+                  background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 10,
+                  fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--t-fg)',
                   outline: 'none',
                 }}
                 onFocus={e => (e.target.style.borderColor = 'var(--t-accent)')}
                 onBlur={e => (e.target.style.borderColor = 'var(--t-border)')}
               />
               {baseUrlInput && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-5)', marginTop: 4 }}>
-                  {T('预览', 'Preview')} · {baseUrlInput.replace(/\/$/, '')}/messages
+                <div style={{ fontSize: 11, color: 'var(--t-fg-5)', marginTop: 6, display: 'flex', gap: 6 }}>
+                  <span>{T('预览', 'Preview')}</span>
+                  <span style={{ color: 'var(--t-fg-5)' }}>·</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--t-fg-4)' }}>
+                    {baseUrlInput.replace(/\/$/, '')}/chat/completions
+                  </span>
                 </div>
               )}
             </div>
@@ -1281,9 +1345,9 @@ export function ByokSection() {
           {/* Models grid */}
           {providerModels.length > 0 && (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)', letterSpacing: '-0.005em' }}>
                     {T('模型', 'Models')}
                   </span>
                   <span style={{
