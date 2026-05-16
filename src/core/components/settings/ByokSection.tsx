@@ -6,6 +6,7 @@
  * Data: GET /api/settings/byok · GET /api/settings/byok/models · PUT/DELETE /api/settings/byok/:id
  */
 import { useEffect, useState } from 'react';
+import { useI18n } from '../../../common/i18n';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 
@@ -22,18 +23,18 @@ interface ProviderMeta {
 }
 
 const PROVIDER_META: Record<string, ProviderMeta> = {
-  anthropic: { name: 'Anthropic',      monogram: 'A',  tint: '#D97706', short: 'Claude family',      defaultUrl: 'https://api.anthropic.com',                           keyPlaceholder: 'sk-ant-…',    noKey: false },
-  openai:    { name: 'OpenAI',         monogram: 'O',  tint: '#10B981', short: 'GPT family',          defaultUrl: 'https://api.openai.com/v1',                            keyPlaceholder: 'sk-…',        noKey: false },
-  google:    { name: 'Google Gemini',  monogram: 'G',  tint: '#4285F4', short: 'Gemini family',       defaultUrl: 'https://generativelanguage.googleapis.com/v1beta',     keyPlaceholder: 'AIza…',       noKey: false },
-  deepseek:  { name: 'DeepSeek',       monogram: 'DS', tint: '#3D8BFD', short: 'V3 / R1',             defaultUrl: 'https://api.deepseek.com',                             keyPlaceholder: 'sk-…',        noKey: false },
-  zhipu:     { name: '智谱 GLM',        monogram: 'ZP', tint: '#7C3AED', short: 'GLM-4 family',        defaultUrl: 'https://open.bigmodel.cn/api/paas/v4',                 keyPlaceholder: 'xxxx.yyyyyy', noKey: false },
-  qwen:      { name: 'Qwen · 通义',    monogram: 'Qw', tint: '#A855F7', short: '阿里云百炼',           defaultUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',    keyPlaceholder: 'sk-…',        noKey: false },
-  moonshot:  { name: 'Moonshot · Kimi',monogram: 'MK', tint: '#06B6D4', short: 'K2 / K1.5',           defaultUrl: 'https://api.moonshot.cn/v1',                           keyPlaceholder: 'sk-…',        noKey: false },
-  mistral:   { name: 'Mistral',        monogram: 'Mi', tint: '#FB923C', short: 'Large 2 · Codestral', defaultUrl: 'https://api.mistral.ai/v1',                            keyPlaceholder: 'sk-…',        noKey: false },
-  groq:      { name: 'Groq',           monogram: 'Gr', tint: '#F97316', short: 'LPU inference',       defaultUrl: 'https://api.groq.com/openai/v1',                       keyPlaceholder: 'gsk_…',       noKey: false },
-  azure:     { name: 'Azure OpenAI',   monogram: 'Az', tint: '#0078D4', short: 'Enterprise',          defaultUrl: 'https://{deployment}.openai.azure.com',                keyPlaceholder: '…',           noKey: false },
-  ollama:    { name: 'Ollama',         monogram: 'Ol', tint: '#A1A1AA', short: 'Local',               defaultUrl: 'http://localhost:11434/v1',                            keyPlaceholder: '',            noKey: true  },
-  lmstudio:  { name: 'LM Studio',      monogram: 'LM', tint: '#22C55E', short: 'Local',               defaultUrl: 'http://localhost:1234/v1',                             keyPlaceholder: '',            noKey: true  },
+  anthropic: { name: 'Anthropic',       monogram: 'A',  tint: '#D97706', short: 'Claude family',            defaultUrl: 'https://api.anthropic.com',                           keyPlaceholder: 'sk-ant-…',    noKey: false },
+  openai:    { name: 'OpenAI',          monogram: 'O',  tint: '#10B981', short: 'GPT family',                defaultUrl: 'https://api.openai.com/v1',                            keyPlaceholder: 'sk-…',        noKey: false },
+  google:    { name: 'Google Gemini',   monogram: 'G',  tint: '#4285F4', short: 'Gemini family',             defaultUrl: 'https://generativelanguage.googleapis.com/v1beta',     keyPlaceholder: 'AIza…',       noKey: false },
+  deepseek:  { name: 'DeepSeek',        monogram: 'DS', tint: '#3D8BFD', short: 'V3 / R1',                  defaultUrl: 'https://api.deepseek.com',                             keyPlaceholder: 'sk-…',        noKey: false },
+  zhipu:     { name: 'Zhipu GLM',       monogram: 'ZP', tint: '#7C3AED', short: 'GLM-4 family',             defaultUrl: 'https://open.bigmodel.cn/api/paas/v4',                 keyPlaceholder: 'xxxx.yyyyyy', noKey: false },
+  qwen:      { name: 'Qwen · Alibaba',  monogram: 'Qw', tint: '#A855F7', short: 'Alibaba Cloud Bailian',    defaultUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',    keyPlaceholder: 'sk-…',        noKey: false },
+  moonshot:  { name: 'Moonshot · Kimi', monogram: 'MK', tint: '#06B6D4', short: 'K2 / K1.5',               defaultUrl: 'https://api.moonshot.cn/v1',                           keyPlaceholder: 'sk-…',        noKey: false },
+  mistral:   { name: 'Mistral',         monogram: 'Mi', tint: '#FB923C', short: 'Large 2 · Codestral',      defaultUrl: 'https://api.mistral.ai/v1',                            keyPlaceholder: 'sk-…',        noKey: false },
+  groq:      { name: 'Groq',            monogram: 'Gr', tint: '#F97316', short: 'LPU inference',            defaultUrl: 'https://api.groq.com/openai/v1',                       keyPlaceholder: 'gsk_…',       noKey: false },
+  azure:     { name: 'Azure OpenAI',    monogram: 'Az', tint: '#0078D4', short: 'Enterprise',               defaultUrl: 'https://{deployment}.openai.azure.com',                keyPlaceholder: '…',           noKey: false },
+  ollama:    { name: 'Ollama',          monogram: 'Ol', tint: '#A1A1AA', short: 'Local',                    defaultUrl: 'http://localhost:11434/v1',                            keyPlaceholder: '',            noKey: true  },
+  lmstudio:  { name: 'LM Studio',       monogram: 'LM', tint: '#22C55E', short: 'Local',                    defaultUrl: 'http://localhost:1234/v1',                             keyPlaceholder: '',            noKey: true  },
 };
 
 const PROVIDER_ORDER = ['anthropic','openai','google','deepseek','zhipu','qwen','moonshot','mistral','groq','azure','ollama','lmstudio'];
@@ -50,24 +51,24 @@ interface ByokStore {
 interface ModelDef { id: string; name: string; provider: string }
 
 const FALLBACK_MODELS: ModelDef[] = [
-  { id: 'claude-opus-4-7',    name: 'Claude Opus 4.7',    provider: 'anthropic' },
-  { id: 'claude-sonnet-4-6',  name: 'Claude Sonnet 4.6',  provider: 'anthropic' },
-  { id: 'claude-haiku-4-5',   name: 'Claude Haiku 4.5',   provider: 'anthropic' },
-  { id: 'claude-3-5-sonnet',  name: 'Claude 3.5 Sonnet',  provider: 'anthropic' },
-  { id: 'gpt-4o',             name: 'GPT-4o',             provider: 'openai'    },
-  { id: 'gpt-4o-mini',        name: 'GPT-4o Mini',        provider: 'openai'    },
-  { id: 'o3',                 name: 'o3',                 provider: 'openai'    },
-  { id: 'o4-mini',            name: 'o4-mini',            provider: 'openai'    },
-  { id: 'gemini-2.5-pro',     name: 'Gemini 2.5 Pro',     provider: 'google'    },
-  { id: 'gemini-2.5-flash',   name: 'Gemini 2.5 Flash',   provider: 'google'    },
-  { id: 'deepseek-chat',      name: 'DeepSeek Chat',      provider: 'deepseek'  },
-  { id: 'deepseek-reasoner',  name: 'DeepSeek Reasoner',  provider: 'deepseek'  },
-  { id: 'glm-4-flash',        name: 'GLM-4 Flash',        provider: 'zhipu'     },
-  { id: 'glm-4-plus',         name: 'GLM-4 Plus',         provider: 'zhipu'     },
-  { id: 'qwen3-max',          name: 'Qwen3 Max',          provider: 'qwen'      },
-  { id: 'qwen-plus-latest',   name: 'Qwen Plus',          provider: 'qwen'      },
-  { id: 'moonshot-v1-8k',     name: 'Moonshot v1 8k',     provider: 'moonshot'  },
-  { id: 'mistral-large-latest',name:'Mistral Large',      provider: 'mistral'   },
+  { id: 'claude-opus-4-7',     name: 'Claude Opus 4.7',    provider: 'anthropic' },
+  { id: 'claude-sonnet-4-6',   name: 'Claude Sonnet 4.6',  provider: 'anthropic' },
+  { id: 'claude-haiku-4-5',    name: 'Claude Haiku 4.5',   provider: 'anthropic' },
+  { id: 'claude-3-5-sonnet',   name: 'Claude 3.5 Sonnet',  provider: 'anthropic' },
+  { id: 'gpt-4o',              name: 'GPT-4o',             provider: 'openai'    },
+  { id: 'gpt-4o-mini',         name: 'GPT-4o Mini',        provider: 'openai'    },
+  { id: 'o3',                  name: 'o3',                 provider: 'openai'    },
+  { id: 'o4-mini',             name: 'o4-mini',            provider: 'openai'    },
+  { id: 'gemini-2.5-pro',      name: 'Gemini 2.5 Pro',     provider: 'google'    },
+  { id: 'gemini-2.5-flash',    name: 'Gemini 2.5 Flash',   provider: 'google'    },
+  { id: 'deepseek-chat',       name: 'DeepSeek Chat',      provider: 'deepseek'  },
+  { id: 'deepseek-reasoner',   name: 'DeepSeek Reasoner',  provider: 'deepseek'  },
+  { id: 'glm-4-flash',         name: 'GLM-4 Flash',        provider: 'zhipu'     },
+  { id: 'glm-4-plus',          name: 'GLM-4 Plus',         provider: 'zhipu'     },
+  { id: 'qwen3-max',           name: 'Qwen3 Max',          provider: 'qwen'      },
+  { id: 'qwen-plus-latest',    name: 'Qwen Plus',          provider: 'qwen'      },
+  { id: 'moonshot-v1-8k',      name: 'Moonshot v1 8k',     provider: 'moonshot'  },
+  { id: 'mistral-large-latest',name: 'Mistral Large',      provider: 'mistral'   },
 ];
 
 async function loadStore(): Promise<ByokStore> {
@@ -179,6 +180,8 @@ function ModelToken({ id, name, checked, onToggle }: { id: string; name: string;
 function ProviderRow({
   id, configured, enabled, modelCount, active, onClick,
 }: { id: string; configured: boolean; enabled: boolean; modelCount: number; active: boolean; onClick: () => void }) {
+  const { language } = useI18n();
+  const T = (zh: string, en: string) => language === 'zh' ? zh : en;
   const m = PROVIDER_META[id] ?? { name: id, short: '' };
   return (
     <button
@@ -202,14 +205,15 @@ function ProviderRow({
           {configured ? (
             <>
               <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--t-ok)', display: 'inline-block' }} />
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)' }}>{modelCount} 模型 · 已配置</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)' }}>
+                {T(`${modelCount} 模型 · 已配置`, `${modelCount} models · configured`)}
+              </span>
             </>
           ) : (
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-5)' }}>{m.short}</span>
           )}
         </div>
       </div>
-      {/* Toggle or plus */}
       {configured ? (
         <div style={{
           width: 26, height: 15, borderRadius: 999, position: 'relative', flexShrink: 0,
@@ -233,6 +237,9 @@ type TestState = 'idle' | 'testing' | 'ok' | 'fail';
 type FilterKey = 'all' | 'configured' | 'openai-compat' | 'local';
 
 export function ByokSection() {
+  const { language } = useI18n();
+  const T = (zh: string, en: string) => language === 'zh' ? zh : en;
+
   const [store, setStore]   = useState<ByokStore>({ providers: {} });
   const [allModels, setAllModels] = useState<ModelDef[]>(FALLBACK_MODELS);
   const [selectedId, setSelectedId] = useState('anthropic');
@@ -247,9 +254,9 @@ export function ByokSection() {
   });
 
   function addCustomProvider() {
-    const name = window.prompt('提供商名称（如：My Provider）');
+    const name = window.prompt(T('提供商名称（如：My Provider）', 'Provider name (e.g. My Provider)'));
     if (!name?.trim()) return;
-    const baseUrl = window.prompt('Base URL（OpenAI 兼容）', 'https://api.example.com/v1');
+    const baseUrl = window.prompt(T('Base URL（OpenAI 兼容）', 'Base URL (OpenAI-compatible)'), 'https://api.example.com/v1');
     if (!baseUrl?.trim()) return;
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'provider';
     const id = `custom-${slug}-${Date.now().toString(36).slice(-4)}`;
@@ -257,7 +264,7 @@ export function ByokSection() {
       name: name.trim(),
       monogram: name.trim().slice(0, 2).toUpperCase(),
       tint: '#71717A',
-      short: 'Custom · OpenAI 兼容',
+      short: T('Custom · OpenAI 兼容', 'Custom · OpenAI-compatible'),
       defaultUrl: baseUrl.trim(),
       keyPlaceholder: 'sk-...',
       noKey: false,
@@ -283,12 +290,10 @@ export function ByokSection() {
   const [testState,    setTestState]    = useState<TestState>('idle');
   const [isDirty,      setIsDirty]      = useState(false);
   const [refreshingModels, setRefreshingModels] = useState(false);
-  // Global generation prefs (persisted in ByokStore on backend)
   const [defaultModelId, setDefaultModelId] = useState<string>('');
   const [temperature,    setTemperature]    = useState<number>(0.2);
   const [routingPriority, setRoutingPriority] = useState<string>('fallback');
 
-  // Load store on mount
   useEffect(() => {
     Promise.all([loadStore(), loadModels()]).then(([s, m]) => {
       setStore(s);
@@ -310,8 +315,6 @@ export function ByokSection() {
   }
 
   async function persistPref(patch: { defaultModel?: string; temperature?: number; routingPriority?: string }) {
-    // PUT to current provider — backend stores temperature/routingPriority/defaultModel
-    // at the ByokStore level regardless of providerId, but provider must exist or be created.
     await saveProvider(selectedId, patch);
     loadStore().then(setStore);
   }
@@ -320,7 +323,6 @@ export function ByokSection() {
   const savedState    = store.providers[selectedId];
   const providerModels = allModels.filter(m => m.provider === selectedId);
 
-  // Sync form fields when provider changes
   useEffect(() => {
     const saved = store.providers[selectedId];
     setKeyInput('');
@@ -378,9 +380,15 @@ export function ByokSection() {
     setTimeout(() => setTestState('idle'), 4000);
   }
 
-  // Rail: filter + search providers
   const LOCAL_IDS = new Set(['ollama', 'lmstudio']);
   const OAI_COMPAT_IDS = new Set(['openai','deepseek','zhipu','qwen','moonshot','mistral','groq','azure','ollama','lmstudio']);
+
+  const RAIL_FILTERS: { key: FilterKey; label: string }[] = [
+    { key: 'all',          label: T('全部', 'All') },
+    { key: 'configured',   label: T('已配置', 'Configured') },
+    { key: 'openai-compat',label: 'OpenAI' },
+    { key: 'local',        label: T('本地', 'Local') },
+  ];
 
   const filteredProviders = PROVIDER_ORDER.filter(id => {
     const meta = PROVIDER_META[id];
@@ -402,13 +410,6 @@ export function ByokSection() {
   const isConfigured = hasKey || (selectedMeta.noKey && Boolean(savedState));
   const isVerified = savedState?.enabled;
 
-  const RAIL_FILTERS: { key: FilterKey; label: string }[] = [
-    { key: 'all',         label: '全部' },
-    { key: 'configured',  label: '已配置' },
-    { key: 'openai-compat', label: 'OpenAI 兼容' },
-    { key: 'local',       label: '本地' },
-  ];
-
   return (
     <div className="sf-settings-bg" style={{
       flex: '1 1 0', minHeight: 400,
@@ -419,7 +420,6 @@ export function ByokSection() {
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: '1px solid var(--t-border)' }}>
         {/* Rail header */}
         <div style={{ padding: '13px 13px 10px', borderBottom: '1px solid var(--t-border)' }}>
-          {/* Search */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
             background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
@@ -430,7 +430,7 @@ export function ByokSection() {
             <input
               value={railSearch}
               onChange={e => setRailSearch(e.target.value)}
-              placeholder="搜索提供商…"
+              placeholder={T('搜索提供商…', 'Search providers…')}
               style={{
                 flex: 1, background: 'transparent', border: 'none', outline: 'none',
                 fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)',
@@ -474,7 +474,7 @@ export function ByokSection() {
         <div style={{ flex: 1, overflow: 'auto', padding: '8px 8px 6px', display: 'flex', flexDirection: 'column', gap: 1 }}>
           {configuredIds.length > 0 && (
             <div style={{ padding: '4px 8px 6px', fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--t-fg-5)', textTransform: 'uppercase' }}>
-              已配置 · {configuredIds.length}
+              {T(`已配置 · ${configuredIds.length}`, `Configured · ${configuredIds.length}`)}
             </div>
           )}
           {configuredIds.map(id => (
@@ -489,7 +489,7 @@ export function ByokSection() {
           ))}
           {availableIds.length > 0 && (
             <div style={{ padding: '10px 8px 6px', fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--t-fg-5)', textTransform: 'uppercase' }}>
-              可用 · {availableIds.length}
+              {T(`可用 · ${availableIds.length}`, `Available · ${availableIds.length}`)}
             </div>
           )}
           {availableIds.map(id => (
@@ -510,7 +510,7 @@ export function ByokSection() {
             background: 'transparent', fontFamily: 'inherit',
           }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>自定义提供商…</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{T('自定义提供商…', 'Custom provider…')}</span>
           </button>
         </div>
       </div>
@@ -538,7 +538,7 @@ export function ByokSection() {
                   color: 'var(--t-accent)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
                 }}>
                   <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--t-accent)', animation: 'sf-pulse 1.4s ease-in-out infinite', display: 'inline-block' }} />
-                  当前已选
+                  {T('当前已选', 'Active')}
                 </span>
               )}
               {isVerified && (
@@ -548,18 +548,20 @@ export function ByokSection() {
                   color: 'var(--t-ok)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
                 }}>
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m4 12 5 5L20 6"/></svg>
-                  已验证
+                  {T('已验证', 'Verified')}
                 </span>
               )}
             </div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)' }}>
               {selectedMeta.short}
-              {savedState?.models?.length ? ` · ${savedState.models.length} 模型已启用` : ''}
+              {savedState?.models?.length ? T(` · ${savedState.models.length} 模型已启用`, ` · ${savedState.models.length} models enabled`) : ''}
             </div>
           </div>
           {/* Enable toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: 'var(--t-fg-3)' }}>启用</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: 'var(--t-fg-3)' }}>
+              {T('启用', 'Enable')}
+            </span>
             <Toggle on={provEnabled} onChange={v => { setProvEnabled(v); markDirty(); }} />
           </div>
         </div>
@@ -574,11 +576,11 @@ export function ByokSection() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>API KEY</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>本地加密存储</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>{T('本地加密存储', 'Stored locally')}</span>
                 </div>
                 {hasKey && !keyInput && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 7, background: 'var(--t-bg)', marginBottom: 5 }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>当前：</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>{T('当前：', 'Current:')}</span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-2)' }}>{maskedKey}</span>
                   </div>
                 )}
@@ -588,7 +590,7 @@ export function ByokSection() {
                     value={keyInput}
                     onChange={e => { setKeyInput(e.target.value); markDirty(); }}
                     onKeyDown={e => e.key === 'Enter' && handleSave()}
-                    placeholder={hasKey ? '输入新 Key 覆盖' : selectedMeta.keyPlaceholder}
+                    placeholder={hasKey ? T('输入新 Key 覆盖', 'Enter new key to replace') : selectedMeta.keyPlaceholder}
                     style={{
                       width: '100%', boxSizing: 'border-box', padding: '0 68px 0 12px', height: 36,
                       background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
@@ -626,7 +628,7 @@ export function ByokSection() {
             <div style={selectedMeta.noKey ? { gridColumn: '1 / -1' } : {}}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>BASE URL</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>代理 / 自定义网关可在此覆盖</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>{T('代理 / 自定义网关可在此覆盖', 'Override for proxy / custom gateway')}</span>
               </div>
               <input
                 type="text"
@@ -644,7 +646,7 @@ export function ByokSection() {
               />
               {baseUrlInput && (
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-5)', marginTop: 4 }}>
-                  预览 · {baseUrlInput.replace(/\/$/, '')}/messages
+                  {T('预览', 'Preview')} · {baseUrlInput.replace(/\/$/, '')}/messages
                 </div>
               )}
             </div>
@@ -655,21 +657,27 @@ export function ByokSection() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>模型 · Models</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>
+                    {T('模型', 'Models')}
+                  </span>
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 5,
                     background: 'var(--t-bg)', border: '1px solid var(--t-border)',
                     fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: 'var(--t-fg-3)',
                   }}>
-                    {enabledModels.length} / {providerModels.length} 已启用
+                    {T(`${enabledModels.length} / ${providerModels.length} 已启用`, `${enabledModels.length} / ${providerModels.length} enabled`)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 14 }}>
                   <button type="button" onClick={refreshModels} disabled={refreshingModels} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: refreshingModels ? 'wait' : 'pointer', opacity: refreshingModels ? 0.5 : 1 }}>
-                    {refreshingModels ? '↻ 拉取中…' : '↻ 拉取列表'}
+                    {refreshingModels ? T('↻ 拉取中…', '↻ Fetching…') : T('↻ 拉取列表', '↻ Refresh')}
                   </button>
-                  <button type="button" onClick={() => { setEnabledModels(providerModels.map(m => m.id)); markDirty(); }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>全选</button>
-                  <button type="button" onClick={() => { setEnabledModels([]); markDirty(); }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>取消</button>
+                  <button type="button" onClick={() => { setEnabledModels(providerModels.map(m => m.id)); markDirty(); }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                    {T('全选', 'All')}
+                  </button>
+                  <button type="button" onClick={() => { setEnabledModels([]); markDirty(); }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                    {T('取消', 'None')}
+                  </button>
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
@@ -687,7 +695,9 @@ export function ByokSection() {
           {/* Defaults row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>默认模型</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>
+                {T('默认模型', 'Default Model')}
+              </div>
               <select
                 value={defaultModelId || (enabledModels[0] ?? providerModels[0]?.id ?? '')}
                 onChange={(e) => { setDefaultModelId(e.target.value); persistPref({ defaultModel: e.target.value }); }}
@@ -697,14 +707,16 @@ export function ByokSection() {
                   fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)', cursor: 'pointer',
                 }}
               >
-                <option value="">(未选)</option>
+                <option value="">{T('(未选)', '(none)')}</option>
                 {allModels.map(m => (
                   <option key={m.id} value={m.id}>{m.name} · {m.id}</option>
                 ))}
               </select>
             </div>
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>温度 · Temp</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>
+                {T('温度', 'Temperature')}
+              </div>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 12, padding: '0 12px', height: 36, boxSizing: 'border-box',
                 background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
@@ -721,7 +733,9 @@ export function ByokSection() {
               </div>
             </div>
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>路由优先级</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>
+                {T('路由优先级', 'Routing Priority')}
+              </div>
               <select
                 value={routingPriority}
                 onChange={(e) => { setRoutingPriority(e.target.value); persistPref({ routingPriority: e.target.value }); }}
@@ -731,15 +745,15 @@ export function ByokSection() {
                   fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)', cursor: 'pointer',
                 }}
               >
-                <option value="fallback">P1 · 回退首选</option>
-                <option value="primary">P0 · 主选</option>
-                <option value="backup">P2 · 备份</option>
-                <option value="disabled">已禁用</option>
+                <option value="fallback">{T('P1 · 回退首选', 'P1 · Fallback')}</option>
+                <option value="primary">{T('P0 · 主选', 'P0 · Primary')}</option>
+                <option value="backup">{T('P2 · 备份', 'P2 · Backup')}</option>
+                <option value="disabled">{T('已禁用', 'Disabled')}</option>
               </select>
             </div>
           </div>
 
-          <div style={{ height: 16 }} /> {/* bottom breathing room */}
+          <div style={{ height: 16 }} />
         </div>
 
         {/* Footer */}
@@ -747,40 +761,45 @@ export function ByokSection() {
           padding: '12px 20px', borderTop: '1px solid var(--t-border)', flexShrink: 0,
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          {/* Test */}
           <button type="button" onClick={handleTest} disabled={testState === 'testing'} style={{
             display: 'flex', alignItems: 'center', gap: 6,
-            fontFamily: 'var(--font-mono)', fontSize: 11, color: testState === 'ok' ? 'var(--t-ok)' : testState === 'fail' ? 'var(--t-reject)' : 'var(--t-fg-3)',
-            background: 'transparent', border: '1px solid var(--t-border)', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', opacity: testState === 'testing' ? 0.5 : 1,
+            fontFamily: 'var(--font-mono)', fontSize: 11,
+            color: testState === 'ok' ? 'var(--t-ok)' : testState === 'fail' ? 'var(--t-reject)' : 'var(--t-fg-3)',
+            background: 'transparent', border: '1px solid var(--t-border)', borderRadius: 8, padding: '7px 12px', cursor: 'pointer',
+            opacity: testState === 'testing' ? 0.5 : 1,
           }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 3v6L4 19a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3L15 9V3"/><path d="M8 3h8M7 14h10"/>
             </svg>
-            {testState === 'testing' ? '测试中…' : testState === 'ok' ? '连接正常 ✓' : testState === 'fail' ? '连接失败 ✕' : '测试连接'}
+            {testState === 'testing' ? T('测试中…', 'Testing…')
+              : testState === 'ok'     ? T('连接正常 ✓', 'Connected ✓')
+              : testState === 'fail'   ? T('连接失败 ✕', 'Failed ✕')
+              : T('测试连接', 'Test Connection')}
           </button>
-          {/* Remove */}
           {hasKey && (
             <button type="button" onClick={handleRemove} style={{
               fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-reject)',
               background: 'transparent',
               border: '1px solid color-mix(in oklab, var(--t-reject) 30%, transparent)',
               borderRadius: 8, padding: '7px 12px', cursor: 'pointer',
-            }}>移除密钥</button>
+            }}>
+              {T('移除密钥', 'Remove Key')}
+            </button>
           )}
           <div style={{ flex: 1 }} />
-          {/* Unsaved indicator */}
           {isDirty && saveState === 'idle' && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>有未保存的更改 · ⌘S</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>
+              {T('有未保存的更改 · ⌘S', 'Unsaved changes · ⌘S')}
+            </span>
           )}
-          {saveState === 'saved'  && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-ok)' }}>✓ 已保存</span>}
-          {saveState === 'error'  && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-reject)' }}>✕ 保存失败</span>}
-          {/* Save */}
+          {saveState === 'saved' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-ok)' }}>✓ {T('已保存', 'Saved')}</span>}
+          {saveState === 'error' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-reject)' }}>✕ {T('保存失败', 'Save failed')}</span>}
           <button type="button" onClick={handleSave} disabled={saveState === 'saving'} style={{
             fontSize: 12.5, fontWeight: 700, color: 'var(--t-accent-ink)',
             background: 'var(--t-accent)', border: 'none', borderRadius: 8, padding: '8px 20px', cursor: 'pointer',
             opacity: saveState === 'saving' ? 0.5 : 1,
           }}>
-            {saveState === 'saving' ? '保存中…' : '保存配置'}
+            {saveState === 'saving' ? T('保存中…', 'Saving…') : T('保存配置', 'Save')}
           </button>
         </div>
       </div>

@@ -274,6 +274,8 @@
   "settings.navToolProviders": "工具提供商",
   "settings.navConnectors": "连接器",
   "settings.navMcp": "MCP 集成",
+  "settings.navLocalCli": "本机 CLI",
+  "settings.navByok": "BYOK · API Key",
   "settings.navGeneration": "生成参数",
   "settings.navRemoteAgents": "远端 Agent (ACP/MCP)",
   "settings.navRiverMemory": "河流记忆",

@@ -120,8 +120,8 @@ const STATIC_NAV_GROUPS: NavGroup[] = [
   {
     group: 'Integrations',
     items: [
-      { id: 'local-cli',               label: '本机 CLI' },
-      { id: 'byok',                    label: 'BYOK · API Key' },
+      { id: 'local-cli',               label: 'Local CLI' },
+      { id: 'byok',                    label: 'BYOK · API Keys' },
       { id: 'skill-studio-generation', label: 'Generation Settings' },
       { id: 'skill-studio-acp',        label: 'Remote Agents (ACP/MCP)' },
       { id: 'tool-providers',          label: 'Tool Providers' },
@@ -178,8 +178,8 @@ function buildNavGroups(t: (key: string) => string): NavGroup[] {
     {
       group: t('settings.groupIntegrations'),
       items: [
-        { id: 'local-cli',               label: '本机 CLI' },
-        { id: 'byok',                    label: 'BYOK · API Key' },
+        { id: 'local-cli',               label: t('settings.navLocalCli') },
+        { id: 'byok',                    label: t('settings.navByok') },
         { id: 'skill-studio-generation', label: t('settings.navGeneration') },
         { id: 'skill-studio-acp',        label: t('settings.navRemoteAgents') },
         { id: 'tool-providers',          label: t('settings.navToolProviders') },

@@ -274,6 +274,8 @@
   "settings.navToolProviders": "Tool Providers",
   "settings.navConnectors": "Connectors",
   "settings.navMcp": "MCP Integrations",
+  "settings.navLocalCli": "Local CLI",
+  "settings.navByok": "BYOK · API Keys",
   "settings.navGeneration": "Generation Settings",
   "settings.navRemoteAgents": "Remote Agents (ACP/MCP)",
   "settings.navRiverMemory": "River Memory",
