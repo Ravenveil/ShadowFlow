@@ -219,11 +219,8 @@ async def create_workspace(body: CreateWorkspaceRequest) -> Dict[str, Any]:
 
 @router.get("")
 async def list_workspaces() -> Dict[str, Any]:
-    """List all Workspaces. Auto-creates default if none exist (AC6)."""
+    """List all Workspaces. Returns empty list when none exist."""
     records = _list_workspaces_raw()
-    if not records:
-        default = _create_default_workspace()
-        records = [default]
     enriched = [_enrich(r) for r in records]
     return _envelope(enriched, total=len(enriched))
 
