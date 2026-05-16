@@ -275,7 +275,7 @@
   "settings.navConnectors": "连接器",
   "settings.navMcp": "MCP 集成",
   "settings.navLocalCli": "本机 CLI",
-  "settings.navByok": "BYOK · API Key",
+  "settings.navByok": "API 密钥 · BYOK",
   "settings.navGeneration": "生成参数",
   "settings.navRemoteAgents": "远端 Agent (ACP/MCP)",
   "settings.navRiverMemory": "河流记忆",
