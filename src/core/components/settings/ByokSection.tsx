@@ -204,6 +204,17 @@ function ProviderLogo({ id, size = 32, active = false }: { id: string; size?: nu
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
 
+function InlineDot({ tint }: { tint: string }) {
+  return (
+    <span style={{
+      width: 7, height: 7, borderRadius: '50%',
+      background: tint,
+      animation: 'sf-pulse 1.2s ease-in-out infinite',
+      display: 'inline-block', flexShrink: 0,
+    }} />
+  );
+}
+
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
@@ -702,7 +713,7 @@ export function ByokSection() {
   const [showKey,      setShowKey]      = useState(false);
   const [saveState,    setSaveState]    = useState<SaveState>('idle');
   const [testState,    setTestState]    = useState<TestState>('idle');
-  const [isDirty,      setIsDirty]      = useState(false);
+  const [, setIsDirty] = useState(false);  // retained as no-op setter for legacy markDirty callers
   const [refreshingModels, setRefreshingModels] = useState(false);
   const [defaultModelId, setDefaultModelId] = useState<string>('');
   const [temperature,    setTemperature]    = useState<number>(0.2);
@@ -849,33 +860,33 @@ export function ByokSection() {
     setEnabledModels(saved?.models?.length ? saved.models : defaults);
   }, [selectedId, store]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function markDirty() { setIsDirty(true); setSaveState('idle'); }
+  // Cherry Studio-style auto-save: every input/toggle flushes immediately to
+  // the backend. No "保存配置" button — markDirty/handleSave are kept only
+  // for backwards compat with code paths that still reference them.
+  function markDirty() { setSaveState('idle'); }
 
-  function toggleModel(modelId: string) {
-    setEnabledModels(prev => prev.includes(modelId) ? prev.filter(m => m !== modelId) : [...prev, modelId]);
-    markDirty();
-  }
-
-  async function handleSave() {
+  async function autoSave(patch: Partial<ProviderData>) {
     setSaveState('saving');
-    const payload: Partial<ProviderData> = {
-      baseUrl: baseUrlInput.trim(),
-      models:  enabledModels,
-      enabled: provEnabled,
-    };
-    if (keyInput.trim()) payload.apiKey = keyInput.trim();
-    const ok = await saveProvider(selectedId, payload);
+    const ok = await saveProvider(selectedId, patch);
     if (ok) {
-      setKeyInput('');
-      setIsDirty(false);
       setSaveState('saved');
       loadStore().then(setStore);
-      setTimeout(() => setSaveState('idle'), 3000);
+      setTimeout(() => setSaveState(s => s === 'saved' ? 'idle' : s), 1500);
     } else {
       setSaveState('error');
-      setTimeout(() => setSaveState('idle'), 3000);
+      setTimeout(() => setSaveState(s => s === 'error' ? 'idle' : s), 3000);
     }
+    return ok;
   }
+
+  async function toggleModel(modelId: string) {
+    const next = enabledModels.includes(modelId)
+      ? enabledModels.filter(m => m !== modelId)
+      : [...enabledModels, modelId];
+    setEnabledModels(next);
+    await autoSave({ models: next });
+  }
+
 
   async function handleRemove() {
     const ok = await deleteProvider(selectedId);
@@ -1113,7 +1124,7 @@ export function ByokSection() {
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: 'var(--t-fg-3)' }}>
               {T('启用', 'Enable')}
             </span>
-            <Toggle on={provEnabled} onChange={v => { setProvEnabled(v); markDirty(); }} />
+            <Toggle on={provEnabled} onChange={v => { setProvEnabled(v); autoSave({ enabled: v }); }} />
           </div>
         </div>
 
@@ -1148,7 +1159,12 @@ export function ByokSection() {
                       setKeyInput(e.target.value.replace(/•/g, ''));
                       markDirty();
                     }}
-                    onKeyDown={e => e.key === 'Enter' && handleSave()}
+                    onKeyDown={async e => {
+                      if (e.key === 'Enter' && keyInput.trim()) {
+                        const ok = await autoSave({ apiKey: keyInput.trim() });
+                        if (ok) setKeyInput('');
+                      }
+                    }}
                     onFocus={e => {
                       e.target.style.borderColor = 'var(--t-accent)';
                       // If we're showing the fake mask, select-all so first
@@ -1157,7 +1173,14 @@ export function ByokSection() {
                         requestAnimationFrame(() => e.target.select());
                       }
                     }}
-                    onBlur={e => (e.target.style.borderColor = 'var(--t-border)')}
+                    onBlur={async e => {
+                      e.target.style.borderColor = 'var(--t-border)';
+                      // Auto-save on blur if user typed a new key
+                      if (keyInput.trim()) {
+                        const ok = await autoSave({ apiKey: keyInput.trim() });
+                        if (ok) setKeyInput('');
+                      }
+                    }}
                     placeholder={selectedMeta.keyPlaceholder}
                     style={{
                       width: '100%', boxSizing: 'border-box',
@@ -1301,7 +1324,10 @@ export function ByokSection() {
                   {baseUrlInput !== selectedMeta.defaultUrl && (
                     <button
                       type="button"
-                      onClick={() => { setBaseUrlInput(selectedMeta.defaultUrl); markDirty(); }}
+                      onClick={async () => {
+                        setBaseUrlInput(selectedMeta.defaultUrl);
+                        await autoSave({ baseUrl: selectedMeta.defaultUrl });
+                      }}
                       title={T('重置为默认地址', 'Reset to default')}
                       style={{
                         fontSize: 11, fontWeight: 500,
@@ -1328,7 +1354,15 @@ export function ByokSection() {
                   outline: 'none',
                 }}
                 onFocus={e => (e.target.style.borderColor = 'var(--t-accent)')}
-                onBlur={e => (e.target.style.borderColor = 'var(--t-border)')}
+                onBlur={async e => {
+                  e.target.style.borderColor = 'var(--t-border)';
+                  // Auto-save baseUrl on blur if changed
+                  const trimmed = baseUrlInput.trim();
+                  const saved = savedState?.baseUrl ?? '';
+                  if (trimmed && trimmed !== saved) {
+                    await autoSave({ baseUrl: trimmed });
+                  }
+                }}
               />
               {baseUrlInput && (
                 <div style={{ fontSize: 11, color: 'var(--t-fg-5)', marginTop: 6, display: 'flex', gap: 6 }}>
@@ -1379,10 +1413,17 @@ export function ByokSection() {
                   <button type="button" onClick={refreshModels} disabled={refreshingModels} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: refreshingModels ? 'wait' : 'pointer', opacity: refreshingModels ? 0.5 : 1 }}>
                     {refreshingModels ? T('↻ 拉取中…', '↻ Fetching…') : T('↻ 拉取列表', '↻ Refresh')}
                   </button>
-                  <button type="button" onClick={() => { setEnabledModels(providerModels.map(m => m.id)); markDirty(); }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                  <button type="button" onClick={async () => {
+                    const all = providerModels.map(m => m.id);
+                    setEnabledModels(all);
+                    await autoSave({ models: all });
+                  }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                     {T('全选', 'All')}
                   </button>
-                  <button type="button" onClick={() => { setEnabledModels([]); markDirty(); }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                  <button type="button" onClick={async () => {
+                    setEnabledModels([]);
+                    await autoSave({ models: [] });
+                  }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                     {T('取消', 'None')}
                   </button>
                 </div>
@@ -1554,20 +1595,40 @@ export function ByokSection() {
             </button>
           )}
           <div style={{ flex: 1 }} />
-          {isDirty && saveState === 'idle' && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>
-              {T('有未保存的更改 · ⌘S', 'Unsaved changes · ⌘S')}
+          {/* Auto-save indicator — Cherry Studio is silent on idle, briefly
+              shows 保存中… / ✓ 已保存 / ✕ 保存失败 next to where the save
+              button used to be. No explicit save button. */}
+          {saveState === 'saving' && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 12, color: 'var(--t-fg-4)',
+            }}>
+              <InlineDot tint="var(--t-fg-4)" />
+              {T('保存中…', 'Saving…')}
             </span>
           )}
-          {saveState === 'saved' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-ok)' }}>✓ {T('已保存', 'Saved')}</span>}
-          {saveState === 'error' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-reject)' }}>✕ {T('保存失败', 'Save failed')}</span>}
-          <button type="button" onClick={handleSave} disabled={saveState === 'saving'} style={{
-            fontSize: 12.5, fontWeight: 700, color: 'var(--t-accent-ink)',
-            background: 'var(--t-accent)', border: 'none', borderRadius: 8, padding: '8px 20px', cursor: 'pointer',
-            opacity: saveState === 'saving' ? 0.5 : 1,
-          }}>
-            {saveState === 'saving' ? T('保存中…', 'Saving…') : T('保存配置', 'Save')}
-          </button>
+          {saveState === 'saved' && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 12, fontWeight: 600, color: 'var(--t-ok)',
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m4 12 5 5L20 6"/>
+              </svg>
+              {T('已自动保存', 'Auto-saved')}
+            </span>
+          )}
+          {saveState === 'error' && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 12, fontWeight: 600, color: 'var(--t-reject)',
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+              {T('保存失败 · 请重试', 'Save failed · retry')}
+            </span>
+          )}
         </div>
       </div>
     </div>
