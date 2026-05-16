@@ -333,7 +333,7 @@ export function LocalCLISection() {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: '1 1 0', minHeight: 400, boxSizing: 'border-box' }}>
+    <div className="sf-settings-bg" style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: '1 1 0', minHeight: 400, boxSizing: 'border-box' }}>
       {/* Full-height panel */}
       <div style={{
         flex: 1, minHeight: 0,

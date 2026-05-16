@@ -431,11 +431,11 @@ export default function SettingsPage() {
       >
         {/* ── 240px settings nav ── (hf-pages.jsx L340) */}
         <aside
+          className="sf-settings-bg"
           style={{
             borderRight: '1px solid var(--t-border)',  // L340
             padding: '14px 8px',                       // L340
             overflow: 'auto',
-            background: 'var(--t-panel)',              // L340
           }}
         >
           {/* Title block �?handoff L341-344 */}
@@ -466,10 +466,10 @@ export default function SettingsPage() {
 
         {/* ── Right content ── (hf-pages.jsx L357 padding 24px 32px) */}
         <div
+          className="sf-settings-bg"
           style={{
             padding: activeSection === 'local-cli' || activeSection === 'byok' ? 0 : '24px 32px',
             overflow: activeSection === 'local-cli' || activeSection === 'byok' ? 'hidden' : 'auto',
-            background: 'var(--t-bg)',
             display: 'flex',
             flexDirection: 'column',
           }}

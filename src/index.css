@@ -420,6 +420,10 @@ input, textarea, select { font-family: inherit; color: inherit; }
  * values.
  * ========================================================================= */
 
+/* Settings page bg — pure white in day mode (user request) */
+[data-theme="day"] .sf-settings-bg { background: #FFFFFF !important; }
+[data-theme="night"] .sf-settings-bg { background: var(--t-bg) !important; }
+
 [data-theme="day"] .bg-shadowflow-bg       { background-color: var(--t-bg) !important; }
 [data-theme="day"] .bg-shadowflow-surface  { background-color: var(--t-panel) !important; }
 [data-theme="day"] .bg-shadowflow-border   { background-color: var(--t-border) !important; }

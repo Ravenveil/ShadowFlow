@@ -41,7 +41,12 @@ const PROVIDER_ORDER = ['anthropic','openai','google','deepseek','zhipu','qwen',
 // ── API helpers ───────────────────────────────────────────────────────────────
 
 interface ProviderData { apiKey: string; baseUrl: string; models: string[]; enabled: boolean }
-interface ByokStore { providers: Record<string, ProviderData>; defaultModel?: string | null }
+interface ByokStore {
+  providers: Record<string, ProviderData>;
+  defaultModel?: string | null;
+  temperature?: number;
+  routingPriority?: string;
+}
 interface ModelDef { id: string; name: string; provider: string }
 
 const FALLBACK_MODELS: ModelDef[] = [
@@ -83,7 +88,7 @@ async function loadModels(): Promise<ModelDef[]> {
   } catch { return FALLBACK_MODELS; }
 }
 
-async function saveProvider(id: string, payload: Partial<ProviderData> & { defaultModel?: string }): Promise<boolean> {
+async function saveProvider(id: string, payload: Partial<ProviderData> & { defaultModel?: string; temperature?: number; routingPriority?: string }): Promise<boolean> {
   try {
     const r = await fetch(`${API_BASE}/api/settings/byok/${id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -277,14 +282,39 @@ export function ByokSection() {
   const [saveState,    setSaveState]    = useState<SaveState>('idle');
   const [testState,    setTestState]    = useState<TestState>('idle');
   const [isDirty,      setIsDirty]      = useState(false);
+  const [refreshingModels, setRefreshingModels] = useState(false);
+  // Global generation prefs (persisted in ByokStore on backend)
+  const [defaultModelId, setDefaultModelId] = useState<string>('');
+  const [temperature,    setTemperature]    = useState<number>(0.2);
+  const [routingPriority, setRoutingPriority] = useState<string>('fallback');
 
   // Load store on mount
   useEffect(() => {
     Promise.all([loadStore(), loadModels()]).then(([s, m]) => {
       setStore(s);
       setAllModels(m);
+      if (typeof s.temperature === 'number') setTemperature(s.temperature);
+      if (typeof s.routingPriority === 'string') setRoutingPriority(s.routingPriority);
+      if (typeof s.defaultModel === 'string' && s.defaultModel) setDefaultModelId(s.defaultModel);
     });
   }, []);
+
+  async function refreshModels() {
+    setRefreshingModels(true);
+    try {
+      const m = await loadModels();
+      setAllModels(m);
+    } finally {
+      setRefreshingModels(false);
+    }
+  }
+
+  async function persistPref(patch: { defaultModel?: string; temperature?: number; routingPriority?: string }) {
+    // PUT to current provider — backend stores temperature/routingPriority/defaultModel
+    // at the ByokStore level regardless of providerId, but provider must exist or be created.
+    await saveProvider(selectedId, patch);
+    loadStore().then(setStore);
+  }
 
   const selectedMeta  = PROVIDER_META[selectedId] ?? PROVIDER_META['anthropic'];
   const savedState    = store.providers[selectedId];
@@ -380,7 +410,7 @@ export function ByokSection() {
   ];
 
   return (
-    <div style={{
+    <div className="sf-settings-bg" style={{
       flex: '1 1 0', minHeight: 400,
       display: 'grid', gridTemplateColumns: '300px 1fr',
       overflow: 'hidden',
@@ -635,7 +665,9 @@ export function ByokSection() {
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 14 }}>
-                  <button type="button" style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>↻ 拉取列表</button>
+                  <button type="button" onClick={refreshModels} disabled={refreshingModels} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: refreshingModels ? 'wait' : 'pointer', opacity: refreshingModels ? 0.5 : 1 }}>
+                    {refreshingModels ? '↻ 拉取中…' : '↻ 拉取列表'}
+                  </button>
                   <button type="button" onClick={() => { setEnabledModels(providerModels.map(m => m.id)); markDirty(); }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>全选</button>
                   <button type="button" onClick={() => { setEnabledModels([]); markDirty(); }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>取消</button>
                 </div>
@@ -656,16 +688,20 @@ export function ByokSection() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
             <div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>默认模型</div>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', height: 36, boxSizing: 'border-box',
-                background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9, cursor: 'pointer',
-              }}>
-                <ProviderLogo id={selectedId} size={18} />
-                <span style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {enabledModels[0] ?? providerModels[0]?.id ?? '(未选)'}
-                </span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--t-fg-4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-              </div>
+              <select
+                value={defaultModelId || (enabledModels[0] ?? providerModels[0]?.id ?? '')}
+                onChange={(e) => { setDefaultModelId(e.target.value); persistPref({ defaultModel: e.target.value }); }}
+                style={{
+                  width: '100%', height: 36, boxSizing: 'border-box', padding: '0 12px',
+                  background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
+                  fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)', cursor: 'pointer',
+                }}
+              >
+                <option value="">(未选)</option>
+                {allModels.map(m => (
+                  <option key={m.id} value={m.id}>{m.name} · {m.id}</option>
+                ))}
+              </select>
             </div>
             <div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>温度 · Temp</div>
@@ -673,27 +709,33 @@ export function ByokSection() {
                 display: 'flex', alignItems: 'center', gap: 12, padding: '0 12px', height: 36, boxSizing: 'border-box',
                 background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
               }}>
-                <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'var(--t-border)', position: 'relative' }}>
-                  <div style={{ width: '20%', height: '100%', background: 'var(--t-accent)', borderRadius: 2 }} />
-                  <div style={{ position: 'absolute', left: '20%', top: '50%', transform: 'translate(-50%,-50%)', width: 13, height: 13, borderRadius: '50%', background: 'var(--t-accent)', border: '2px solid var(--t-bg)' }} />
-                </div>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)' }}>0.2</span>
+                <input
+                  type="range" min={0} max={2} step={0.1}
+                  value={temperature}
+                  onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                  onMouseUp={() => persistPref({ temperature })}
+                  onTouchEnd={() => persistPref({ temperature })}
+                  style={{ flex: 1, accentColor: 'var(--t-accent)' }}
+                />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)', minWidth: 24, textAlign: 'right' }}>{temperature.toFixed(1)}</span>
               </div>
             </div>
             <div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>路由优先级</div>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', height: 36, boxSizing: 'border-box',
-                background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9, cursor: 'pointer',
-              }}>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 5,
-                  background: 'var(--t-accent-tint)', border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)',
-                  color: 'var(--t-accent)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
-                }}>P1 · 回退首选</span>
-                <div style={{ flex: 1 }} />
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--t-fg-4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-              </div>
+              <select
+                value={routingPriority}
+                onChange={(e) => { setRoutingPriority(e.target.value); persistPref({ routingPriority: e.target.value }); }}
+                style={{
+                  width: '100%', height: 36, boxSizing: 'border-box', padding: '0 12px',
+                  background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
+                  fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)', cursor: 'pointer',
+                }}
+              >
+                <option value="fallback">P1 · 回退首选</option>
+                <option value="primary">P0 · 主选</option>
+                <option value="backup">P2 · 备份</option>
+                <option value="disabled">已禁用</option>
+              </select>
             </div>
           </div>
 
