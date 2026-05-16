@@ -139,6 +139,11 @@ input, textarea, select { font-family: inherit; color: inherit; }
 
 /* Run-session resend button: hover-revealed on parent .group */
 .group:hover > .sf-resend-hover { opacity: 1 !important; }
+/* Chat-bubble hover action row (Copy / Retry / placeholders).
+   Parent wraps bubble + .sf-msg-actions in a div.group; row fades in on
+   hover so the resting state stays minimal. */
+.sf-msg-actions { opacity: 0; transition: opacity .15s; }
+.group:hover > .sf-msg-actions { opacity: 1; }
 
 /* ============ Scrollbar ============ */
 ::-webkit-scrollbar { width: 8px; height: 8px; }

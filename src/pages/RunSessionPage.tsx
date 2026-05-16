@@ -40,6 +40,8 @@ import { CritiqueResult } from '../components/CritiqueResult';
 import InputTokenCount from '../components/InputTokenCount';
 // 2026-05-16 — 24h input draft persistence (Cherry Studio `inputbar-draft` parity)
 import { saveDraft, loadDraft, clearDraft } from '../common/lib/draftCache';
+// 2026-05-16 — hover action row (Copy / Retry / placeholders) under assistant bubbles.
+import { MessageActions } from '../components/MessageActions';
 
 // ---------------------------------------------------------------------------
 // Model / Executor picker — CLI + API options pulled live from settings
@@ -2262,7 +2264,15 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             的换行/空白（Claude 在结构化 <sf:*> 标签之间或正式内容前的换行
             铺垫），truthy 但视觉是空白竖条。trim 后非空才渲染气泡。*/}
         {session.chatReply && session.chatReply.trim().length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+          <div
+            className="group"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: 0,
+            }}
+          >
             <div
               style={{
                 maxWidth: 420,
@@ -2294,6 +2304,10 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                 />
               )}
             </div>
+            {/* Hover-revealed action row — Copy / (Retry) / placeholders.
+                Retry handler intentionally omitted here; a downstream task
+                will wire it to handleResend once the contract stabilizes. */}
+            <MessageActions text={session.chatReply} align="left" />
           </div>
         )}
 
