@@ -2668,6 +2668,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   const [zoom, setZoom] = useState(82);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [savedTeamId, setSavedTeamId] = useState<string | null>(null);
+  const [savedGroupId, setSavedGroupId] = useState<string | null>(null);
   const savedRef = useRef(false);
 
   // Auto-persist team + agents + chat group when blueprint run completes
@@ -2686,8 +2687,13 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
         );
         const agentIds = created.map(a => a.agent_id);
         const team = await createTeam({ name: teamName, description: goal, agent_ids: agentIds });
-        await createGroup({ templateId: '', groupTemplateId: '', name: teamName, agentIds: agentIds, memberEmails: [], policyMatrix: {} });
         setSavedTeamId(team.team_id);
+        try {
+          const grp = await createGroup({ templateId: '', groupTemplateId: '', name: teamName, agentIds: agentIds, memberEmails: [], policyMatrix: {} });
+          if (grp?.group_id) setSavedGroupId(grp.group_id);
+        } catch {
+          // groups endpoint may not be available — chat navigation falls back to /teams
+        }
       } catch (e) {
         console.warn('[RunSession] auto-save failed:', e);
       }
@@ -2717,8 +2723,8 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
       {savedTeamId && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, background: 'var(--t-ok)', color: '#fff', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', fontSize: 12.5, fontWeight: 600 }}>
           <span>✓ Team saved —</span>
-          <button type="button" onClick={() => onNavigate('/teams')} style={{ background: 'rgba(255,255,255,.25)', border: 'none', borderRadius: 5, color: '#fff', padding: '2px 10px', cursor: 'pointer', fontSize: 11.5, fontWeight: 700 }}>查看 Teams →</button>
-          <button type="button" onClick={() => onNavigate('/chat/default')} style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 5, color: '#fff', padding: '2px 10px', cursor: 'pointer', fontSize: 11.5 }}>Chat →</button>
+          <button type="button" onClick={() => onNavigate(savedTeamId ? `/teams/${savedTeamId}` : '/teams')} style={{ background: 'rgba(255,255,255,.25)', border: 'none', borderRadius: 5, color: '#fff', padding: '2px 10px', cursor: 'pointer', fontSize: 11.5, fontWeight: 700 }}>查看 Team →</button>
+          <button type="button" onClick={() => onNavigate(savedGroupId ? `/chat/${savedGroupId}` : '/chat')} style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 5, color: '#fff', padding: '2px 10px', cursor: 'pointer', fontSize: 11.5 }}>Chat →</button>
           <button type="button" onClick={() => onNavigate('/agents')} style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 5, color: '#fff', padding: '2px 10px', cursor: 'pointer', fontSize: 11.5 }}>Agents →</button>
           <button type="button" onClick={() => setSavedTeamId(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 14, opacity: .7 }}>✕</button>
         </div>

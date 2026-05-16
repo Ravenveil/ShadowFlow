@@ -101,6 +101,13 @@ app.use('/api/conversations', conversationsRouter);
 // otherwise /api/llm/* would be forwarded to Python instead of handled here.
 app.use('/api/llm', llmRouter);
 
+// Stub: /api/groups — chat group persistence (placeholder until full impl)
+app.post('/api/groups', (_req, res) => res.status(201).json({ group_id: `group-${Date.now()}`, created: true }));
+app.get('/api/groups', (_req, res) => res.json({ groups: [] }));
+app.get('/api/groups/:id', (req, res) => res.json({ group_id: req.params.id }));
+app.get('/api/groups/:id/messages', (_req, res) => res.json({ messages: [] }));
+app.post('/api/groups/:id/messages', (_req, res) => res.status(201).json({ message_id: `msg-${Date.now()}` }));
+
 // ── Fallback to Python FastAPI (default :8000) ────────────────────────────────
 // Single-port UX: any /api/* not matched by the 12 Node routers above is
 // transparently proxied to the Python backend. Mounted BEFORE the 404 catch-all

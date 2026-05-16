@@ -622,9 +622,10 @@ const SKILL_PACKS: SkillPack[] = [
 
 interface SkillPackSectionProps {
   onSelect: (pack: SkillPack) => void;
+  disabled?: boolean;
 }
 
-function SkillPackSection({ onSelect }: SkillPackSectionProps) {
+function SkillPackSection({ onSelect, disabled }: SkillPackSectionProps) {
   const { t } = useI18n();
   return (
     <section style={{ width: '100%' }}>
@@ -642,19 +643,21 @@ function SkillPackSection({ onSelect }: SkillPackSectionProps) {
           <button
             key={pack.id}
             type="button"
-            onClick={() => onSelect(pack)}
+            onClick={() => !disabled && onSelect(pack)}
             className="hf-card"
             data-testid={`skill-pack-${pack.id}`}
+            disabled={disabled}
             style={{
               display: 'flex',
               alignItems: 'flex-start',
               gap: 10,
               padding: '12px 14px',
               textAlign: 'left',
-              cursor: 'pointer',
+              cursor: disabled ? 'not-allowed' : 'pointer',
               background: 'var(--t-panel)',
               color: 'var(--t-fg)',
               fontFamily: 'inherit',
+              opacity: disabled ? 0.5 : 1,
             }}
           >
             <span
@@ -850,9 +853,27 @@ export default function StartPage() {
     }
   }
 
-  function handleSkillPack(pack: SkillPack) {
-    setComposer(pack.prompt);
-    setMode('team');
+  async function handleSkillPack(pack: SkillPack) {
+    setSubmitting(true);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (secrets.anthropic) headers['X-Anthropic-Key'] = secrets.anthropic;
+      const resp = await fetch(`${getApiBase()}/api/run-sessions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ goal: pack.prompt, mode: 'team' }),
+      });
+      if (resp.ok) {
+        const data = (await resp.json()) as { session_id: string };
+        navigate(`/run-session/${data.session_id}?goal=${encodeURIComponent(pack.prompt)}`);
+        return;
+      }
+    } catch {
+      // fall through
+    } finally {
+      setSubmitting(false);
+    }
+    navigate(`/builder?mode=team&goal=${encodeURIComponent(pack.prompt)}`);
   }
 
   return (
@@ -1519,7 +1540,7 @@ export default function StartPage() {
           </div>
 
           {/* Skill Pack cards — select a team methodology to scaffold a team */}
-          <SkillPackSection onSelect={handleSkillPack} />
+          <SkillPackSection onSelect={handleSkillPack} disabled={submitting} />
 
           {/* Recent drafts — preserved feature */}
           <RecentDrafts onNavigateCatalog={() => navigate('/catalog')} />
