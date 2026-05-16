@@ -119,18 +119,28 @@ function coerceProjectMeta(raw: unknown): Record<string, unknown> | undefined {
 }
 
 // ── Story 15.9 — generation override validators ──────────────────────────────
+//
+// 2026-05-16 — Removed the claude-only MODEL_ALLOWLIST. Previously this Set
+// of 3 ids silently dropped every non-Claude model the user picked, so a
+// BYOK selection like `glm-5.1` / `gpt-4o` / `deepseek-chat` was coerced to
+// undefined and the server fell back to the default Claude model — the
+// classic "frontend done, backend not wired up" failure mode. We now accept
+// any non-empty string and let the per-provider streamCompletion surface
+// MODEL_NOT_FOUND if the id is bogus.
 
-const MODEL_ALLOWLIST = new Set<string>([
-  'claude-sonnet-4-6',
-  'claude-opus-4',
-  'claude-haiku-4-5',
-]);
-
+const MODEL_MAX_LEN = 200;
 const MAX_TOKENS_MIN = 1024;
 const MAX_TOKENS_MAX = 32768;
 
 function coerceModel(raw: unknown): string | undefined {
-  return typeof raw === 'string' && MODEL_ALLOWLIST.has(raw) ? raw : undefined;
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.length > MODEL_MAX_LEN) return undefined;
+  // Reject suspicious patterns (whitespace mid-id, control chars) — anything
+  // that wouldn't be a legal LLM model identifier — to avoid downstream
+  // weirdness without enforcing a per-provider allowlist.
+  if (/[\s\x00-\x1f]/.test(trimmed)) return undefined;
+  return trimmed;
 }
 
 function coerceMaxTokens(raw: unknown): number | undefined {
@@ -278,15 +288,27 @@ router.post('/', (req: Request, res: Response) => {
   }
 
   // Story 15.18 — multi-provider BYOK header dispatch. Each provider has its
-  // own header (X-Anthropic-Key / X-OpenAI-Key / X-DeepSeek-Key / X-Zhipu-Key);
-  // express lower-cases keys. We coerce + validate `provider` first, then read
-  // the matching header, falling back to the per-provider env var. The
-  // `anthropic_key` field stays for back-compat (15.7 / 15.19 test paths).
+  // own header (X-Anthropic-Key / X-OpenAI-Key / X-DeepSeek-Key / X-Zhipu-Key
+  // / …); express lower-cases keys. We coerce + validate `provider` first,
+  // then read the matching header, falling back to the per-provider env var
+  // and the byok-config.json store. The `anthropic_key` field stays for
+  // back-compat (15.7 / 15.19 test paths).
+  //
+  // 2026-05-16: extended from 4 → 12 providers in lockstep with the BYOK UI.
   const HEADER_BY_PROVIDER: Record<ProviderId, string> = {
-    anthropic: 'x-anthropic-key',
-    openai: 'x-openai-key',
-    deepseek: 'x-deepseek-key',
-    zhipu: 'x-zhipu-key',
+    anthropic:  'x-anthropic-key',
+    openai:     'x-openai-key',
+    deepseek:   'x-deepseek-key',
+    zhipu:      'x-zhipu-key',
+    google:     'x-google-key',
+    qwen:       'x-qwen-key',
+    moonshot:   'x-moonshot-key',
+    mistral:    'x-mistral-key',
+    groq:       'x-groq-key',
+    openrouter: 'x-openrouter-key',
+    ollama:     'x-ollama-key',
+    lmstudio:   'x-lmstudio-key',
+    azure:      'x-azure-key',
   };
 
   // Story 15.18 — validate provider; reject unknown ids loudly with 400.
