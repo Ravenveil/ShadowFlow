@@ -3572,12 +3572,12 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
             <button
               type="button"
               onClick={() => onNavigate(savedGroupId ? `/chat/${savedGroupId}` : '/chat')}
-              style={{ background: 'var(--t-bg-2)', border: '1px solid var(--t-border)', borderRadius: 6, color: 'var(--t-fg)', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5 }}
+              style={{ background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 6, color: 'var(--t-fg)', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5 }}
             >Chat →</button>
             <button
               type="button"
               onClick={() => onNavigate('/agents')}
-              style={{ background: 'var(--t-bg-2)', border: '1px solid var(--t-border)', borderRadius: 6, color: 'var(--t-fg)', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5 }}
+              style={{ background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 6, color: 'var(--t-fg)', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5 }}
             >Agents →</button>
           </div>
         </div>

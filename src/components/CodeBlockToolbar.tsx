@@ -98,10 +98,10 @@ function ToolbarBtn({ label, active, onClick, children }: ToolbarBtnProps) {
         justifyContent: 'center',
         width: 22,
         height: 22,
-        background: active ? 'var(--t-accent-tint, rgba(168,85,247,.12))' : 'transparent',
+        background: active ? 'var(--t-accent-tint)' : 'transparent',
         border: 'none',
         borderRadius: 4,
-        color: active ? 'var(--t-accent-bright, #c4b5fd)' : 'var(--t-fg-4, #888)',
+        color: active ? 'var(--t-accent-bright)' : 'var(--t-fg-4)',
         cursor: 'pointer',
         padding: 0,
         lineHeight: 0,
@@ -152,11 +152,14 @@ export function CodeBlockToolbar({
   }, [code]);
 
   // Body inline style — collapsed adds a fixed height + fade mask.
+  // All colors via design tokens (var(--t-*)). No hardcoded fallbacks —
+  // those silently override day-mode and produce a dark block on a light
+  // page. The tokens are always defined; trust them.
   const bodyStyle: React.CSSProperties = {
     margin: 0,
     padding: numbered ? '8px 12px 8px 0' : '8px 12px',
-    background: 'var(--t-bg-2, #0d1117)',
-    color: 'var(--t-fg-2, #c9d1d9)',
+    background: 'var(--t-panel)',
+    color: 'var(--t-fg)',
     fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)',
     fontSize: 12,
     lineHeight: 1.55,
@@ -173,10 +176,10 @@ export function CodeBlockToolbar({
     <div
       className={className}
       style={{
-        border: '1px solid var(--t-border, #30363d)',
+        border: '1px solid var(--t-border)',
         borderRadius: 8,
         overflow: 'hidden',
-        background: 'var(--t-bg-2, #0d1117)',
+        background: 'var(--t-panel)',
       }}
     >
       {/* Toolbar */}
@@ -187,8 +190,8 @@ export function CodeBlockToolbar({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '0 8px',
-          background: 'var(--t-panel-2, #161b22)',
-          borderBottom: '1px solid var(--t-border, #30363d)',
+          background: 'var(--t-panel-2)',
+          borderBottom: '1px solid var(--t-border)',
         }}
       >
         <span
@@ -197,7 +200,7 @@ export function CodeBlockToolbar({
             fontSize: 10,
             textTransform: 'lowercase',
             letterSpacing: '.04em',
-            color: 'var(--t-fg-4, #8b949e)',
+            color: 'var(--t-fg-4)',
             userSelect: 'none',
           }}
         >
@@ -256,8 +259,8 @@ export function CodeBlockToolbar({
                     paddingRight: 8,
                     marginRight: 8,
                     textAlign: 'right',
-                    color: 'var(--t-fg-5, #484f58)',
-                    borderRight: '1px solid var(--t-border, #30363d)',
+                    color: 'var(--t-fg-5)',
+                    borderRight: '1px solid var(--t-border)',
                     userSelect: 'none',
                     flexShrink: 0,
                   }}
@@ -283,7 +286,7 @@ export function CodeBlockToolbar({
               bottom: 0,
               height: 28,
               background:
-                'linear-gradient(to bottom, transparent, var(--t-bg-2, #0d1117))',
+                'linear-gradient(to bottom, transparent, var(--t-panel))',
               pointerEvents: 'none',
             }}
           />
