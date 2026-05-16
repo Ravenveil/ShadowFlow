@@ -92,6 +92,34 @@ export async function* dispatchSkillRunner(
     return;
   }
 
+  // 3.5. byok:<provider> — front-end model picker writes
+  //      `sf.defaultExecutor = byok:<providerId>` whenever the user picks a
+  //      BYOK model. This route folds the byok:* family into the existing
+  //      anthropic-direct runner, which already dispatches to all 12+
+  //      providers via input.provider. Without this branch the dispatcher
+  //      would fall through to case 6 and emit EXECUTOR_UNKNOWN, breaking
+  //      the picker for every non-CLI selection.
+  if (exec.startsWith('byok:')) {
+    const providerId = exec.slice(5).trim();
+    if (!providerId) {
+      yield {
+        event: 'error',
+        data: {
+          code: 'EXECUTOR_UNKNOWN',
+          executor: exec,
+          message: 'byok: prefix requires a provider id (e.g. byok:zhipu)',
+        },
+      };
+      return;
+    }
+    // Re-route through anthropic-direct with provider override. The runner's
+    // `input.provider` already wins over its hard-coded 'anthropic' default
+    // (see anthropic.ts L60-64), and callProvider() yields PROVIDER_ERROR
+    // for unknown ids — no need to validate here.
+    yield* runAnthropicDirect({ ...input, provider: providerId });
+    return;
+  }
+
   // 4. acp:<target> — Story 15.23. Dispatcher only emits the error event when
   //    the target lookup itself is malformed; the runner is responsible for
   //    EXECUTOR_NOT_INSTALLED / ACP_UNREACHABLE on a per-call basis.
