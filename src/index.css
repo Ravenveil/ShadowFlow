@@ -420,18 +420,20 @@ input, textarea, select { font-family: inherit; color: inherit; }
  * values.
  * ========================================================================= */
 
-/* Settings page bg — pure white in day mode (user request) */
+/* Day mode: kill the warm cream paper bg entirely. Root + all settings
+   panels become pure white; only the 1px dividers remain. */
+[data-theme="day"] html        { background: #FFFFFF !important; }
+[data-theme="day"] .hf-root    { background: #FFFFFF !important; }
 [data-theme="day"] .sf-settings-bg { background: #FFFFFF !important; }
 [data-theme="night"] .sf-settings-bg { background: var(--t-bg) !important; }
 
-/* Settings page: soften dividers to neutral light grey in day mode so the
-   warm --t-border (#E8E6DC) doesn't read as a "cream strip" against pure
-   white panels. Targets every direct child border of the sf-settings-bg
-   container plus the in-section column dividers. */
-[data-theme="day"] .sf-settings-bg { border-right-color: #F0F0EF !important; }
+/* Soften dividers to neutral light grey in day mode so the warm
+   --t-border (#E8E6DC) doesn't read as a "cream strip" against the
+   pure white panels. */
+[data-theme="day"] .sf-settings-bg { border-right-color: #ECECEC !important; }
 [data-theme="day"] .sf-settings-bg [style*="borderRight"],
 [data-theme="day"] .sf-settings-bg [style*="border-right"] {
-  border-right-color: #F0F0EF !important;
+  border-right-color: #ECECEC !important;
 }
 
 [data-theme="day"] .bg-shadowflow-bg       { background-color: var(--t-bg) !important; }
