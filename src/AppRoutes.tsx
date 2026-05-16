@@ -20,8 +20,8 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
 const EvalsPage = lazy(() => import('./pages/EvalsPage'));
 const AgentPage = lazy(() => import('./pages/AgentPage'));
-const TeamListPage = lazy(() =>
-  import('./pages/TeamPage').then((m) => ({ default: m.TeamListPage }))
+const TeamsIndexPage = lazy(() =>
+  import('./pages/TeamPage').then((m) => ({ default: m.TeamsIndexPage }))
 );
 const TeamDetailPage = lazy(() =>
   import('./pages/TeamPage').then((m) => ({ default: m.TeamDetailPage }))
@@ -82,7 +82,7 @@ export function AppRoutes() {
             <Route path="/knowledge" element={<KnowledgePage />} />
             <Route path="/evals" element={<EvalsPage />} />
             <Route path="/agents" element={<AgentPage />} />
-            <Route path="/teams" element={<TeamListPage />} />
+            <Route path="/teams" element={<TeamsIndexPage />} />
             <Route path="/teams/:teamId" element={<TeamDetailPage />} />
             <Route path="/start" element={<StartPage />} />
             <Route path="/projects" element={<ProjectsPage />} />

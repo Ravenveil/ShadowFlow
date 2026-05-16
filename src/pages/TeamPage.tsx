@@ -669,6 +669,59 @@ function WorkflowDagPanel({ nodes, edges }: { nodes: TeamWorkflowNode[]; edges: 
   );
 }
 
+// ---------------------------------------------------------------------------
+// TeamsIndexPage — /teams  (redirects to first team; shows create prompt if empty)
+// ---------------------------------------------------------------------------
+
+function TeamsIndexPage() {
+  const navigate = useNavigate();
+  const currentId = useWorkspaceStore((s) => s.currentId);
+  const [noTeams, setNoTeams] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    listTeams(currentId ?? undefined)
+      .then((data) => {
+        if (data.length > 0) {
+          navigate(`/teams/${data[0].team_id}`, { replace: true });
+        } else {
+          setNoTeams(true);
+        }
+      })
+      .catch(() => setNoTeams(true));
+  }, [currentId, navigate]);
+
+  if (!noTeams) {
+    return <div style={{ flex: 1, background: 'var(--t-bg)' }} />;
+  }
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: 'var(--t-bg)', color: 'var(--t-fg)' }}>
+      <div style={{ fontSize: 15, fontWeight: 700 }}>还没有团队</div>
+      <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: 0, fontFamily: 'var(--font-mono)' }}>新建一个团队开始协作</p>
+      <button
+        type="button"
+        className="hf-btn hf-btn-pri"
+        style={{ fontSize: 12 }}
+        onClick={() => setShowModal(true)}
+        data-testid="empty-new-team-btn"
+      >
+        + 新建团队
+      </button>
+      {showModal && (
+        <CreateTeamModal
+          onCreated={(team) => navigate(`/teams/${team.team_id}`)}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TeamDetailPage — /teams/:teamId
+// ---------------------------------------------------------------------------
+
 function TeamDetailPage() {
   const { teamId } = useParams<{ teamId: string }>();
   const navigate = useNavigate();
@@ -677,6 +730,7 @@ function TeamDetailPage() {
   const currentId = useWorkspaceStore((s) => s.currentId);
   const currentWs = useWorkspaceStore(selectCurrentWorkspace);
   const wsName = currentWs?.name ?? 'ShadowFlow';
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const [team, setTeam] = useState<TeamRecord | null>(null);
   const [allTeams, setAllTeams] = useState<TeamRecord[]>([]);
@@ -823,7 +877,7 @@ function TeamDetailPage() {
           teams={teamsForRail}
           activeId={team.team_id}
           wsName={wsName}
-          onCreate={() => navigate('/teams')}
+          onCreate={() => setShowCreateModal(true)}
           onSelect={(id) => navigate(`/teams/${id}`)}
         />
 
@@ -841,6 +895,17 @@ function TeamDetailPage() {
           </div>
         </div>
       </div>
+
+      {showCreateModal && (
+        <CreateTeamModal
+          onCreated={(newTeam) => {
+            setAllTeams((prev) => [newTeam, ...prev]);
+            setShowCreateModal(false);
+            navigate(`/teams/${newTeam.team_id}`);
+          }}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -849,5 +914,5 @@ function TeamDetailPage() {
 // Exports
 // ---------------------------------------------------------------------------
 
-export { TeamListPage, TeamDetailPage };
-export default TeamListPage;
+export { TeamsIndexPage, TeamListPage, TeamDetailPage };
+export default TeamsIndexPage;
