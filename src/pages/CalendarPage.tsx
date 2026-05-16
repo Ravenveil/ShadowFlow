@@ -642,6 +642,31 @@ function MiniMonth({ year, month, eventsByDate, onNav }: {
   );
 }
 
+/* ── Sidebar helpers ────────────────────────────────────────────────────── */
+
+function cronShort(c: string): string {
+  if (!c || c === 'ad-hoc') return 'ad-hoc';
+  if (c === '0 8 * * 1-5')  return 'Mon-Fri 08';
+  if (c === '0 9 * * 1-5')  return 'Mon-Fri 09';
+  if (c === '0 14 * * 5')   return 'Fri 14';
+  if (c === '0 13 * * *')   return 'daily 13';
+  if (c === '0 18 * * 0')   return 'Sun 18';
+  const p = c.split(/\s+/);
+  if (p.length >= 2) {
+    const h = p[1] !== '*' ? `${p[1]}:${p[0].padStart(2,'0')}` : '';
+    const dow = p[4] !== '*' ? ` DOW${p[4]}` : '';
+    return `${h}${dow}`.trim() || c;
+  }
+  return c;
+}
+
+function fmtRelative(ms: number): string {
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return `+${m}min`;
+  const h = Math.floor(m / 60);
+  return `+${h}h${m % 60 > 0 ? String(m % 60) + 'm' : ''}`;
+}
+
 /* ── Sidebar ────────────────────────────────────────────────────────────── */
 
 function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, onNewPlan, onNav }: {
@@ -654,11 +679,12 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
   onNav: (delta: number) => void;
 }) {
   const [nlText, setNlText] = useState('');
+  const [cidText, setCidText] = useState('');
 
   // Find next upcoming schedule
   const nextSchedule = useMemo(() => {
     const now = new Date();
-    let nearest: { sc: Schedule; name: string; slot: string; timeStr: string } | null = null;
+    let nearest: { sc: Schedule; name: string; slot: string; timeStr: string; diff: number } | null = null;
     let minDiff = Infinity;
     for (const sc of schedules) {
       if (sc.next_run_time) {
@@ -671,6 +697,7 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
             name: groupNames.get(sc.group_id) ?? sc.group_id,
             slot: slotOf.get(sc.group_id) ?? 'a',
             timeStr: d.toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' }),
+            diff,
           };
         }
       }
@@ -697,12 +724,13 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
   }, [schedules, groupNames, slotOf]);
 
   return (
-    <div style={{
-      width:260, flexShrink:0, display:'flex', flexDirection:'column',
-      background:'var(--t-panel)', borderRight:'1px solid var(--t-border)', minHeight:0,
+    <div className="cal-noscroll" style={{
+      width:272, flexShrink:0, display:'flex', flexDirection:'column',
+      background:'var(--t-panel)', borderRight:'1px solid var(--t-border)',
+      minHeight:0, overflow:'auto',
     }}>
       {/* NL quick-add */}
-      <div style={{ padding:12 }}>
+      <div style={{ padding:12, flexShrink:0 }}>
         <div style={{
           padding:'10px 12px', background:'var(--t-panel-2)',
           border:'1px solid var(--t-border)', borderRadius:10,
@@ -728,18 +756,29 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
             }}
           />
           {groupEntries.length > 0 && (
-            <select
-              onChange={e => { if (e.target.value) { onNewPlan(e.target.value); e.target.value=''; } }}
-              defaultValue=""
-              style={{
-                padding:'4px 8px', borderRadius:6, border:'1px solid var(--t-border)',
-                background:'var(--t-panel)', color:'var(--t-fg-3)', fontSize:11,
-                fontFamily:'var(--font-sans)', cursor:'pointer',
-              }}>
-              <option value="">↵ 选择团队确认</option>
-              {groupEntries.map(([gid, g]) => <option key={gid} value={gid}>{g.name}</option>)}
-            </select>
+            <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+              {groupEntries.slice(0, 3).map(([, g]) => (
+                <span key={g.name} style={{
+                  padding:'2px 7px', borderRadius:5, fontSize:10, fontWeight:600,
+                  background: SLOT_TINT[g.slot], color: SLOT_COLOR[g.slot],
+                  border:`1px solid ${SLOT_STROKE[g.slot]}`, cursor:'pointer',
+                  fontFamily:'var(--font-mono)',
+                }}>→ {g.name}</span>
+              ))}
+              <span style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'var(--t-fg-4)', padding:'2px 5px' }}>等待确认 ↵</span>
+            </div>
           )}
+          <select
+            onChange={e => { if (e.target.value) { onNewPlan(e.target.value); e.target.value=''; } }}
+            defaultValue=""
+            style={{
+              padding:'4px 8px', borderRadius:6, border:'1px solid var(--t-border)',
+              background:'var(--t-panel)', color:'var(--t-fg-3)', fontSize:11,
+              fontFamily:'var(--font-sans)', cursor:'pointer',
+            }}>
+            <option value="">↵ 选择团队确认创建</option>
+            {groupEntries.map(([gid, g]) => <option key={gid} value={gid}>{g.name}</option>)}
+          </select>
         </div>
       </div>
 
@@ -747,61 +786,109 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
       <MiniMonth year={year} month={month} eventsByDate={eventsByDate} onNav={onNav}/>
       <div style={{ height:1, background:'var(--t-border)', margin:'0 12px' }}/>
 
-      {/* Team calendars */}
-      {groupEntries.length > 0 && (
-        <>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px 4px' }}>
-            <span className="cal-label" style={{ fontSize:9 }}>我的日历</span>
-            <span className="cal-meta" style={{ fontSize:9 }}>{groupEntries.length} 个</span>
+      {/* ── 我的日历 ── */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px 4px', flexShrink:0 }}>
+        <span className="cal-label" style={{ fontSize:9 }}>我的日历</span>
+        <span className="cal-meta" style={{ fontSize:9 }}>{groupEntries.length} 个</span>
+      </div>
+      <div style={{ padding:'0 6px', flexShrink:0 }}>
+        {groupEntries.length === 0 ? (
+          <div style={{ padding:'8px 10px', fontSize:11, color:'var(--t-fg-5)', fontFamily:'var(--font-mono)', letterSpacing:'.04em' }}>
+            在 Team 聊天页添加 Schedule…
           </div>
-          <div style={{ padding:'0 6px' }}>
-            {groupEntries.map(([gid, g]) => (
-              <div key={gid} style={{ display:'flex', alignItems:'center', gap:9, padding:'6px 10px', borderRadius:7, cursor:'pointer' }}
-                onClick={() => onNewPlan(gid)}>
-                <span style={{
-                  width:13, height:13, borderRadius:3,
-                  background: SLOT_COLOR[g.slot], border:`1px solid ${SLOT_COLOR[g.slot]}`,
-                  display:'flex', alignItems:'center', justifyContent:'center',
-                  fontSize:9, color:'#fff', fontWeight:800,
-                }}>✓</span>
-                <CalAvatar glyph={g.name[0] ?? '?'} slot={g.slot} size={18}/>
-                <span style={{ fontSize:11.5, fontWeight:500, color:'var(--t-fg-2)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                  {g.name}
-                </span>
-                <span className="cal-meta" style={{ fontSize:9, flexShrink:0 }}>{g.count} 计划</span>
-              </div>
-            ))}
-            <button type="button" onClick={() => groupEntries.length > 0 && onNewPlan(groupEntries[0][0])}
-              style={{
-                margin:'4px 10px', padding:'6px 10px', borderRadius:7, width:'calc(100% - 20px)',
-                border:'1px dashed var(--t-border-2)', color:'var(--t-fg-4)', fontSize:11,
-                fontFamily:'var(--font-mono)', letterSpacing:'.04em', cursor:'pointer', background:'transparent',
-              }}>+ 新建定时计划</button>
-          </div>
-          <div style={{ flex:1, minHeight:10 }}/>
-        </>
-      )}
-
-      {groupEntries.length === 0 && (
-        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'20px 16px', gap:10 }}>
-          <span style={{ fontSize:28 }}>📅</span>
-          <p style={{ margin:0, fontSize:12, color:'var(--t-fg-4)', textAlign:'center', lineHeight:1.5 }}>
-            暂无定时计划<br/>
-            <span style={{ fontSize:11, color:'var(--t-fg-5)' }}>在 Team 聊天页添加 Schedule</span>
-          </p>
-        </div>
-      )}
-
-      {/* Next trigger flash card */}
-      {nextSchedule && (
-        <div style={{ margin:'0 12px 12px', padding:11, borderRadius:10, background:'var(--t-panel-2)', border:'1px solid var(--t-border)' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:7 }}>
-            <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--t-ok)', animation:'cal-blink 1.6s infinite', flexShrink:0 }}/>
-            <span className="cal-label" style={{ fontSize:8.5 }}>下一次触发</span>
-            <span className="cal-meta" style={{ marginLeft:'auto', fontSize:8.5 }}>
-              {nextSchedule.timeStr}
+        ) : groupEntries.map(([gid, g]) => (
+          <div key={gid}
+            onClick={() => onNewPlan(gid)}
+            style={{ display:'flex', alignItems:'center', gap:9, padding:'6px 10px', borderRadius:7, cursor:'pointer' }}>
+            <span style={{
+              width:13, height:13, borderRadius:3, flexShrink:0,
+              background: SLOT_COLOR[g.slot], border:`1px solid ${SLOT_COLOR[g.slot]}`,
+              display:'flex', alignItems:'center', justifyContent:'center',
+              fontSize:9, color:'#fff', fontWeight:800,
+            }}>✓</span>
+            <CalAvatar glyph={g.name[0] ?? '?'} slot={g.slot} size={18}/>
+            <span style={{ fontSize:11.5, fontWeight:500, color:'var(--t-fg-2)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {g.name}
             </span>
+            <span className="cal-meta" style={{ fontSize:9, flexShrink:0, color:'var(--t-fg-5)' }}>{cronShort(g.cron)}</span>
           </div>
+        ))}
+        <button type="button"
+          onClick={() => groupEntries.length > 0 ? onNewPlan(groupEntries[0][0]) : undefined}
+          style={{
+            margin:'4px 10px', padding:'6px 10px', borderRadius:7, width:'calc(100% - 20px)',
+            border:'1px dashed var(--t-border-2)', color:'var(--t-fg-4)', fontSize:11,
+            fontFamily:'var(--font-mono)', letterSpacing:'.04em', cursor:'pointer', background:'transparent',
+          }}>+ 新建定时计划</button>
+      </div>
+
+      {/* ── 订阅 · 0G CID ── */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px 4px', marginTop:8, flexShrink:0 }}>
+        <span className="cal-label" style={{ fontSize:9 }}>订阅 · 0G CID</span>
+        <span className="cal-meta" style={{ fontSize:9 }}>2 个</span>
+      </div>
+      <div style={{ padding:'0 6px', flexShrink:0 }}>
+        {[
+          { glyph:'0G', name:'0G Testnet Epoch',   cid:'0xa3…f912' },
+          { glyph:'社', name:'社区 · NeurIPS 周历', cid:'cid://…rev3' },
+        ].map((s, i) => (
+          <div key={i} style={{ display:'flex', alignItems:'center', gap:9, padding:'6px 10px', borderRadius:7, cursor:'pointer' }}>
+            <span style={{
+              width:13, height:13, borderRadius:3, flexShrink:0,
+              background:'var(--t-panel-2)', border:'1px solid var(--t-border-2)',
+            }}/>
+            <div style={{
+              width:18, height:18, borderRadius:5, background:'var(--t-panel-2)',
+              border:'1px solid var(--t-border)', display:'flex', alignItems:'center', justifyContent:'center',
+              fontSize:9, fontWeight:700, color:'var(--t-fg-3)', flexShrink:0,
+            }}>{s.glyph}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:11.5, fontWeight:500, color:'var(--t-fg-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {s.name}
+              </div>
+              <div className="cal-meta" style={{ fontSize:9, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'var(--t-fg-5)' }}>
+                {s.cid}
+              </div>
+            </div>
+            <span style={{ color:'var(--t-fg-5)', fontSize:11, flexShrink:0 }}>↗</span>
+          </div>
+        ))}
+        {/* CID paste input */}
+        <div style={{ margin:'4px 10px 4px', display:'flex', gap:6 }}>
+          <input
+            value={cidText} onChange={e => setCidText(e.target.value)}
+            placeholder="粘贴 CID 订阅团队日程"
+            style={{
+              flex:1, padding:'6px 9px', borderRadius:7,
+              border:'1px dashed var(--t-border-2)', background:'transparent',
+              color:'var(--t-fg-3)', fontSize:11, fontFamily:'var(--font-mono)',
+              letterSpacing:'.04em', outline:'none',
+            }}
+          />
+          {cidText && (
+            <button type="button" onClick={() => setCidText('')} style={{
+              padding:'0 10px', borderRadius:7, background:'var(--t-accent)', color:'var(--t-accent-ink)',
+              fontSize:11, fontWeight:700, cursor:'pointer', border:'none',
+            }}>订阅</button>
+          )}
+        </div>
+      </div>
+
+      {/* spacer */}
+      <div style={{ flex:1, minHeight:12 }}/>
+
+      {/* ── 下一次触发 ── */}
+      <div style={{ margin:'0 12px 12px', padding:11, borderRadius:10, background:'var(--t-panel-2)', border:'1px solid var(--t-border)', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:7 }}>
+          <span style={{ width:6, height:6, borderRadius:'50%', background: nextSchedule ? 'var(--t-run)' : 'var(--t-fg-6)', animation: nextSchedule ? 'cal-blink 1.6s infinite' : 'none', flexShrink:0 }}/>
+          <span className="cal-label" style={{ fontSize:8.5 }}>下一次触发</span>
+          {nextSchedule && (
+            <span className="cal-meta" style={{ marginLeft:'auto', fontSize:8.5, color:'var(--t-fg-3)' }}>
+              {fmtRelative(nextSchedule.diff)}
+            </span>
+          )}
+        </div>
+        {nextSchedule ? (
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             <CalAvatar glyph={nextSchedule.name[0] ?? '?'} slot={nextSchedule.slot} size={24}/>
             <div style={{ flex:1, minWidth:0 }}>
@@ -811,8 +898,12 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
               <div className="cal-meta" style={{ fontSize:9 }}>{nextSchedule.sc.cron_expression}</div>
             </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="cal-meta" style={{ fontSize:10, color:'var(--t-fg-5)', textAlign:'center', padding:'4px 0' }}>
+            暂无计划触发
+          </div>
+        )}
+      </div>
     </div>
   );
 }
