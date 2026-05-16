@@ -3,7 +3,6 @@
  * Design: shadowflow/project/fb-tab-chat.jsx + FB-HiFi.css
  *
  * Live wiring:
- *  - OrgSwitcher → listWorkspaces() API
  *  - Filter chips → real group/DM filtering from useInboxStore
  *  - ChatRail badges → computed from store unread counts
  *  - ChatDrawer Thread → fetchRecentMessages(groupId)
@@ -16,7 +15,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Users, Hash, Lock,
   CheckSquare, Search, MoreHorizontal, Send, Paperclip,
-  Smile, AtSign, Slash, ChevronDown, Pin, Sparkles,
+  Smile, AtSign, Slash, Pin, Sparkles,
 } from 'lucide-react';
 import { BreadcrumbBar } from '../core/components/inbox/BreadcrumbBar';
 import { GroupMetricsBar } from '../core/components/inbox/GroupMetricsBar';
@@ -29,7 +28,6 @@ import { listSchedules, type Schedule } from '../api/schedules';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { getTemplate } from '../api/templates';
 import { buildChatBuilderUrl } from '../core/utils/builderNavigation';
-import { listWorkspaces, type WorkspaceSummary } from '../api/workspaces';
 import { fetchRecentMessages } from '../api/groupApi';
 import type { GroupItem, GroupMetrics, Message } from '../common/types/inbox';
 import { useI18n } from '../common/i18n';
@@ -76,84 +74,6 @@ function Av({ g, color, size = 32, sq }: { g: string; color: string; size?: numb
       border: `1px solid color-mix(in oklab, ${color} 45%, transparent)`,
       color, borderRadius: sq ? size * 0.22 : '50%',
     }}>{g}</span>
-  );
-}
-
-// ── OrgSwitcher (钉钉-style, API-connected) ──────────────────────────────────
-function OrgSwitcher() {
-  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
-  const [active, setActive] = useState<WorkspaceSummary | null>(null);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    listWorkspaces().then(wss => {
-      setWorkspaces(wss);
-      if (wss.length > 0) setActive(wss[0]);
-    }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  const initials = (name: string) => name.slice(0, 2);
-  const wsName = active?.name ?? 'ShadowFlow';
-  const wsInit = initials(wsName);
-
-  return (
-    <div ref={ref} style={{ position: 'relative', padding: '8px 8px 4px' }}>
-      <div
-        onClick={() => setOpen(o => !o)}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 9px', borderRadius: 8, background: T.p2, border: `1px solid ${T.bd}`, cursor: 'pointer' }}
-      >
-        <span style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: wsInit.length > 1 ? 10 : 13, background: active?.color ? `color-mix(in oklab, ${active.color} 22%, ${T.p2})` : `color-mix(in oklab, ${T.ac} 22%, ${T.p2})`, border: `1px solid color-mix(in oklab, ${active?.color ?? T.ac} 50%, transparent)`, color: active?.color ?? T.acB, letterSpacing: '-0.03em' }}>{wsInit}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: T.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{wsName}</div>
-          <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg4, marginTop: 1 }}>
-            {active ? `${active.agent_count} agents · ${active.team_count} teams` : 'Workspace'}
-          </div>
-        </div>
-        <ChevronDown size={13} strokeWidth={2} style={{ color: T.fg4, flexShrink: 0, transition: 'transform 150ms', transform: open ? 'rotate(180deg)' : 'none' }}/>
-      </div>
-
-      {open && (
-        <div style={{ position: 'absolute', top: 54, left: 8, right: 8, zIndex: 50, background: T.p, border: `1px solid ${T.bd}`, borderRadius: 10, boxShadow: T.pop, padding: 5 }}>
-          {workspaces.length === 0 ? (
-            <div style={{ padding: '10px 8px', fontFamily: T.mono, fontSize: 10, color: T.fg4 }}>暂无 Workspace</div>
-          ) : workspaces.map(ws => {
-            const on = ws.workspace_id === active?.workspace_id;
-            return (
-              <div key={ws.workspace_id} className={`sf-org-row${on ? ' active' : ''}`} onClick={() => { setActive(ws); setOpen(false); }}>
-                <span style={{ width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 10, background: `color-mix(in oklab, ${ws.color} 18%, ${T.p2})`, border: `1px solid color-mix(in oklab, ${ws.color} 45%, transparent)`, color: ws.color, flexShrink: 0 }}>{initials(ws.name)}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: on ? 700 : 600, color: T.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ws.name}</div>
-                  <div style={{ fontFamily: T.mono, fontSize: 9, color: T.fg5, marginTop: 1 }}>{ws.agent_count} agents · {ws.team_count} teams</div>
-                </div>
-                {on && <span style={{ color: T.ac, fontSize: 12 }}>✓</span>}
-              </div>
-            );
-          })}
-          <div style={{ height: 1, background: T.bd, margin: '4px 4px' }}/>
-          <div className="sf-org-row" style={{ opacity: 0.75 }}>
-            <span style={{ width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.p2, border: `1px dashed ${T.bd2}`, color: T.fg4, flexShrink: 0 }}>+</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: T.fg2 }}>创建 / 加入 Workspace</div>
-              <div style={{ fontFamily: T.mono, fontSize: 9, color: T.fg4, marginTop: 1 }}>0G CID 导入 · 或粘贴邀请</div>
-            </div>
-          </div>
-          <div style={{ padding: '4px 7px 2px', display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontFamily: T.mono, fontSize: 9, color: T.fg5 }}>⌘⇧O 切换</span>
-            <span style={{ fontFamily: T.mono, fontSize: 9, color: T.fg5 }}>{workspaces.length} / 10 seats</span>
-          </div>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -239,8 +159,6 @@ function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProp
 
   return (
     <div style={{ width: 268, flexShrink: 0, borderRight: `1px solid ${T.bd}`, background: T.p, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <OrgSwitcher/>
-
       {/* Search */}
       <div style={{ padding: '0 8px 6px' }}>
         <div style={{ height: 30, padding: '0 10px', borderRadius: 7, background: T.p2, border: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', gap: 8, cursor: 'text' }}>
