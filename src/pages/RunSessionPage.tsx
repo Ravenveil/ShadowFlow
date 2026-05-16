@@ -1425,7 +1425,13 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   // 2026-05-11 Story 15.30 follow-up: handleSend 现在派生新 run session 后需要
   // navigate 到新 URL，让 useRunSession hook 自动 teardown + 重订阅新 SSE 流。
   const navigate = useNavigate();
-  const [message, setMessage] = useState('');
+  // 2026-05-16 — Draft persistence. Scope by sessionId; fall back to
+  // ?conversation_id= (multi-turn continuation) then a 'global' bucket so
+  // the prep page also benefits during back-nav. Empty / refresh / accidental
+  // session switch no longer wipes whatever the user just typed.
+  const [searchParamsForDraft] = useSearchParams();
+  const draftKey = sessionId || searchParamsForDraft.get('conversation_id') || 'global';
+  const [message, setMessage] = useState<string>(() => loadDraft(draftKey));
   // Story 15.7: re-render whenever the stored API key changes (save / clear).
   const [apiKey, setApiKey] = useState<string | null>(() => getStoredApiKey());
   const [showKeyEditor, setShowKeyEditor] = useState(false);
@@ -1473,6 +1479,17 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   const [selectedExecutor, setSelectedExecutor] = useState<string>(
     () => localStorage.getItem('sf.defaultExecutor') ?? '',
   );
+
+  // 2026-05-16 — Debounced draft autosave (300ms). Empty `message` clears the
+  // entry inside saveDraft, so the localStorage row goes away cleanly when
+  // the user wipes the box without sending.
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      saveDraft(draftKey, message);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [draftKey, message]);
+
   // sessionStorage cache so the picker is instant across page navigations
   // within a session — agents/detect spawns up to 16 CLI subprocesses each
   // with a 3s timeout, which can take 10-15s on a cold open. We prefill
@@ -1655,6 +1672,11 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
         setMessage(text);
         return;
       }
+      // 2026-05-16 — Send succeeded: drop the 24h draft so a refresh on
+      // the new run-session URL doesn't repopulate the box with what we
+      // just sent. Debounce can't race because we cleared the message
+      // before the await above.
+      clearDraft(draftKey);
       const data = (await resp.json()) as { session_id?: string };
       if (data.session_id) {
         const params = new URLSearchParams({ goal: fullContent.slice(0, 200) });
