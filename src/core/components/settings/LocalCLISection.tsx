@@ -337,9 +337,6 @@ export function LocalCLISection() {
       {/* Full-height panel */}
       <div style={{
         flex: 1, minHeight: 0,
-        background: 'var(--t-panel, var(--t-bg))',
-        border: '1px solid var(--t-border)',
-        borderRadius: 16,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         {/* Toolbar */}
@@ -401,7 +398,7 @@ export function LocalCLISection() {
         {/* Body */}
         <div style={{ flex: 1, overflow: 'auto', padding: '18px 20px' }}>
           {loading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
               {[1,2,3,4].map(i => (
                 <div key={i} style={{ height: 160, borderRadius: 14, background: 'var(--t-border)', animation: 'pulse 2s cubic-bezier(.4,0,.6,1) infinite' }} />
               ))}
@@ -416,7 +413,7 @@ export function LocalCLISection() {
               {installed.length > 0 && (
                 <>
                   <SectionDivider label="已安装 · Installed" count={installed.length} right="排序 · 安装状态 ↓" />
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, marginBottom: 24 }}>
                     {installed.map(a => (
                       <CLICardLarge
                         key={a.id}
@@ -442,7 +439,7 @@ export function LocalCLISection() {
                     <div style={{ flex: 1, height: 1, background: 'var(--t-border)' }} />
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', cursor: 'pointer', whiteSpace: 'nowrap' }}>查看安装指南 ↗</span>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
                     {notInstalled.map(a => {
                       const m = CLI_META[a.id] ?? { name: a.name, short: '', tint: '#71717A' };
                       return (

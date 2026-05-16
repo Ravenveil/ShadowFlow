@@ -1,0 +1,21 @@
+[sqlite] db loaded at D:\VScode\TotalProject\ShadowFlow\server\.shadowflow\app.sqlite
+[index] static /projects → D:\VScode\TotalProject\ShadowFlow\server\.shadowflow\projects
+[skill-loader] loaded 3 skill(s) from D:\VScode\TotalProject\ShadowFlow\server\.shadowflow\skills
+[index] skill-loader: 3 loaded, 0 error(s)
+[design-system-loader] loaded 4 design system(s) from D:\VScode\TotalProject\ShadowFlow\server\.shadowflow\design-systems
+[design-system-loader] override hardcoded DS: material
+[design-system-loader] override hardcoded DS: none
+[design-system-loader] override hardcoded DS: shadcn
+[design-system-loader] override hardcoded DS: tailwind
+[index] design-system-loader: 4 loaded, 0 error(s), override: material, none, shadcn, tailwind
+
+╔══════════════════════════════════════════════════════╗
+║          ShadowFlow API Server — Port 8002          ║
+╚══════════════════════════════════════════════════════╝
+  Mode     : BYOK (user-supplied key)
+  CORS     : http://localhost:3007
+  Health   : http://localhost:8002/health
+  Sessions : http://localhost:8002/api/run-sessions
+
+[index] acp-detector: 0/2 agent(s) installed
+[index] cli-detector: 3/20 CLI(s) detected — claude, gh-copilot, openclaw

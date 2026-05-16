@@ -52,6 +52,8 @@ interface ByokProviderData {
 interface ByokStore {
   providers: Record<string, ByokProviderData>;
   defaultModel?: string;
+  temperature?: number;
+  routingPriority?: string;
 }
 
 const BYOK_KEY = 'byok';
@@ -87,14 +89,19 @@ function maskApiKey(key: string): string {
   return `••••${key.slice(-4)}`;
 }
 
-// GET /api/settings/byok → { providers: {..., apiKey: masked}, defaultModel }
+// GET /api/settings/byok → { providers: {..., apiKey: masked}, defaultModel, temperature, routingPriority }
 router.get('/byok', (_req: Request, res: Response) => {
   const store = loadByok();
   const masked: Record<string, ByokProviderData> = {};
   for (const [id, p] of Object.entries(store.providers)) {
     masked[id] = { ...p, apiKey: maskApiKey(p.apiKey) };
   }
-  res.json({ providers: masked, defaultModel: store.defaultModel ?? null });
+  res.json({
+    providers: masked,
+    defaultModel: store.defaultModel ?? null,
+    temperature: typeof store.temperature === 'number' ? store.temperature : 0.2,
+    routingPriority: store.routingPriority ?? 'fallback',
+  });
 });
 
 // GET /api/settings/byok/models → { models: ModelDef[] }
@@ -105,12 +112,14 @@ router.get('/byok/models', (_req: Request, res: Response) => {
 // PUT /api/settings/byok/:providerId → save provider config
 router.put('/byok/:providerId', (req: Request, res: Response) => {
   const { providerId } = req.params;
-  const { apiKey, baseUrl, models, enabled, defaultModel } = (req.body ?? {}) as {
+  const { apiKey, baseUrl, models, enabled, defaultModel, temperature, routingPriority } = (req.body ?? {}) as {
     apiKey?: string;
     baseUrl?: string;
     models?: string[];
     enabled?: boolean;
     defaultModel?: string;
+    temperature?: number;
+    routingPriority?: string;
   };
 
   const store = loadByok();
@@ -127,6 +136,12 @@ router.put('/byok/:providerId', (req: Request, res: Response) => {
 
   if (typeof defaultModel === 'string') {
     store.defaultModel = defaultModel;
+  }
+  if (typeof temperature === 'number' && temperature >= 0 && temperature <= 2) {
+    store.temperature = temperature;
+  }
+  if (typeof routingPriority === 'string') {
+    store.routingPriority = routingPriority;
   }
 
   try {

@@ -233,6 +233,40 @@ export function ByokSection() {
   const [selectedId, setSelectedId] = useState('anthropic');
   const [railSearch, setRailSearch] = useState('');
   const [railFilter, setRailFilter] = useState<FilterKey>('all');
+  const [customIds, setCustomIds] = useState<string[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('sf.byok.custom-meta') || '{}');
+      Object.assign(PROVIDER_META, stored);
+      return Object.keys(stored);
+    } catch { return []; }
+  });
+
+  function addCustomProvider() {
+    const name = window.prompt('提供商名称（如：My Provider）');
+    if (!name?.trim()) return;
+    const baseUrl = window.prompt('Base URL（OpenAI 兼容）', 'https://api.example.com/v1');
+    if (!baseUrl?.trim()) return;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'provider';
+    const id = `custom-${slug}-${Date.now().toString(36).slice(-4)}`;
+    const meta: ProviderMeta = {
+      name: name.trim(),
+      monogram: name.trim().slice(0, 2).toUpperCase(),
+      tint: '#71717A',
+      short: 'Custom · OpenAI 兼容',
+      defaultUrl: baseUrl.trim(),
+      keyPlaceholder: 'sk-...',
+      noKey: false,
+    };
+    PROVIDER_META[id] = meta;
+    const next = [...customIds, id];
+    setCustomIds(next);
+    try {
+      const map: Record<string, ProviderMeta> = {};
+      next.forEach(i => { map[i] = PROVIDER_META[i]; });
+      localStorage.setItem('sf.byok.custom-meta', JSON.stringify(map));
+    } catch {}
+    setSelectedId(id);
+  }
 
   // Detail form state
   const [keyInput,     setKeyInput]     = useState('');
@@ -349,9 +383,7 @@ export function ByokSection() {
     <div style={{
       flex: '1 1 0', minHeight: 400,
       display: 'grid', gridTemplateColumns: '300px 1fr',
-      background: 'var(--t-panel, var(--t-bg))',
-      border: '1px solid var(--t-border)',
-      borderRadius: 16, overflow: 'hidden',
+      overflow: 'hidden',
     }}>
       {/* ── Provider rail ────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: '1px solid var(--t-border)' }}>
@@ -442,13 +474,14 @@ export function ByokSection() {
 
         {/* Rail footer */}
         <div style={{ padding: '8px 10px', borderTop: '1px solid var(--t-border)' }}>
-          <div style={{
-            padding: '8px 10px', borderRadius: 9, border: '1px dashed var(--t-border)',
+          <button type="button" onClick={addCustomProvider} style={{
+            width: '100%', padding: '8px 10px', borderRadius: 9, border: '1px dashed var(--t-border)',
             display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: 'var(--t-fg-4)',
+            background: 'transparent', fontFamily: 'inherit',
           }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>自定义提供商…</span>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -607,7 +640,7 @@ export function ByokSection() {
                   <button type="button" onClick={() => { setEnabledModels([]); markDirty(); }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>取消</button>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
                 {providerModels.map(m => (
                   <ModelToken
                     key={m.id} id={m.id} name={m.name}

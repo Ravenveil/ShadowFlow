@@ -467,7 +467,7 @@ export default function SettingsPage() {
         {/* ── Right content ── (hf-pages.jsx L357 padding 24px 32px) */}
         <div
           style={{
-            padding: activeSection === 'local-cli' || activeSection === 'byok' ? '24px' : '24px 32px',
+            padding: activeSection === 'local-cli' || activeSection === 'byok' ? 0 : '24px 32px',
             overflow: activeSection === 'local-cli' || activeSection === 'byok' ? 'hidden' : 'auto',
             background: 'var(--t-bg)',
             display: 'flex',

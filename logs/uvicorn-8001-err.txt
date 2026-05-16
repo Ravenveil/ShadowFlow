@@ -1,0 +1,8 @@
+INFO:     Will watch for changes in these directories: ['D:\\VScode\\TotalProject\\ShadowFlow']
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [41880] using StatReload
+INFO:     Started server process [2864]
+INFO:     Waiting for application startup.
+ShadowFlow starting without server-side keys: ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY. UI will prompt the user to paste keys into localStorage (BYOK).
+ShadowFlow: agent 'hermes' unavailable ('hermes' not found in PATH). Templates using this provider will degrade to fallback executor.
+INFO:     Application startup complete.
