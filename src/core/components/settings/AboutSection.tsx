@@ -1,45 +1,135 @@
-import React from 'react';
+/**
+ * AboutSection → AccountSection
+ * Shows current user profile, auth status, and basic app info.
+ */
+import { useAuth } from '../../auth/AuthContext';
 import { useI18n } from '../../../common/i18n';
+import { WalletLoginModal } from '../../../components/hifi/WalletLoginModal';
+import { useState } from 'react';
+
+function Avatar({ name, address, size = 64 }: { name?: string | null; address?: string | null; size?: number }) {
+  const initials = name
+    ? name.slice(0, 2).toUpperCase()
+    : address
+      ? address.slice(2, 4).toUpperCase()
+      : 'SF';
+  const hue = address
+    ? parseInt(address.slice(2, 6), 16) % 360
+    : 260;
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: size * 0.28,
+        background: `hsl(${hue} 65% 22%)`,
+        color: `hsl(${hue} 80% 75%)`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size * 0.36, fontWeight: 700, flexShrink: 0,
+        letterSpacing: '-0.03em', userSelect: 'none',
+        border: `2px solid hsl(${hue} 50% 30%)`,
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
+
+function maskAddress(addr: string): string {
+  if (addr.length < 12) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
 
 export function AboutSection() {
   const { language } = useI18n();
   const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
+  const { status, user, logout } = useAuth();
+  const [loginOpen, setLoginOpen] = useState(false);
 
-  const INFO_ROWS: Array<{ label: string; value: string }> = [
-    { label: T('版本', 'Version'),    value: '1.0.0' },
-    { label: T('运行时', 'Runtime'),  value: 'React 18 + FastAPI' },
-    { label: T('协议', 'Protocol'),   value: 'ACP / MCP' },
-  ];
+  const isGuest = user?.type === 'guest' || (!user?.address && status === 'authenticated');
+  const displayName = user?.display_name || (isGuest ? T('访客', 'Guest') : T('未登录', 'Not signed in'));
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-[18px] font-bold text-sf-fg1">{T('关于', 'About')}</h2>
-        <p className="mt-1 text-[12px] text-sf-fg4">{T('应用信息与版本', 'Application info and version')}</p>
-      </div>
-
-      <div className="rounded-[12px] border border-sf-border bg-sf-elev2 p-6 flex flex-col items-center gap-2 text-center">
-        <div className="text-[36px] leading-none">🌊</div>
-        <h3 className="mt-2 text-[20px] font-bold text-sf-fg1">ShadowFlow</h3>
-        <span className="rounded-[6px] bg-sf-elev3 px-2.5 py-1 font-mono text-[11px] text-sf-fg4">
-          v1.0.0
-        </span>
+        <h2 className="text-[18px] font-bold text-sf-fg1">{T('账户', 'Account')}</h2>
         <p className="mt-1 text-[12px] text-sf-fg4">
-          {T(
-            'Agent Team 的 VS Code · ACP 时代的工作流平台',
-            'The VS Code for Agent Teams · A workflow platform for the ACP era',
-          )}
+          {T('当前会话与身份信息', 'Current session and identity')}
         </p>
       </div>
 
+      {/* Profile card */}
+      <div className="rounded-[12px] border border-sf-border bg-sf-elev2 p-5 flex items-center gap-4">
+        <Avatar name={user?.display_name} address={user?.address} size={60} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[16px] font-bold text-sf-fg1 truncate">{displayName}</span>
+            {status === 'authenticated' && (
+              <span className={[
+                'rounded-[5px] px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.08em]',
+                isGuest
+                  ? 'bg-sf-elev3 text-sf-fg4'
+                  : 'bg-sf-ok/15 text-sf-ok',
+              ].join(' ')}>
+                {isGuest ? T('访客', 'Guest') : T('钱包', 'Wallet')}
+              </span>
+            )}
+            {status === 'loading' && (
+              <span className="rounded-[5px] bg-sf-elev3 px-2 py-0.5 font-mono text-[10px] text-sf-fg5">
+                {T('加载中…', 'Loading…')}
+              </span>
+            )}
+            {status === 'unauthenticated' && (
+              <span className="rounded-[5px] bg-sf-reject/15 px-2 py-0.5 font-mono text-[10px] font-bold text-sf-reject">
+                {T('未登录', 'Signed out')}
+              </span>
+            )}
+          </div>
+          {user?.address && (
+            <p className="mt-1 font-mono text-[11px] text-sf-fg4 truncate">
+              {maskAddress(user.address)}
+            </p>
+          )}
+          {user?.did && (
+            <p className="mt-0.5 font-mono text-[10px] text-sf-fg5 truncate">{user.did}</p>
+          )}
+          {status === 'unauthenticated' && (
+            <p className="mt-1 text-[12px] text-sf-fg5">
+              {T('登录后可保存配置、发布 Team', 'Sign in to save settings and publish Teams')}
+            </p>
+          )}
+        </div>
+
+        {/* Action button */}
+        <div className="flex-shrink-0">
+          {status === 'authenticated' ? (
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-[8px] border border-sf-border px-4 py-2 text-[12px] font-semibold text-sf-fg3 hover:border-sf-reject/50 hover:text-sf-reject transition-colors"
+            >
+              {T('退出', 'Sign out')}
+            </button>
+          ) : status === 'unauthenticated' ? (
+            <button
+              type="button"
+              onClick={() => setLoginOpen(true)}
+              className="rounded-[8px] bg-sf-accent px-4 py-2 text-[12px] font-semibold text-white hover:bg-sf-accent-dim transition-colors"
+            >
+              {T('登录', 'Sign in')}
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {/* App info rows */}
       <div className="rounded-[10px] border border-sf-border bg-sf-elev2 overflow-hidden">
-        {INFO_ROWS.map(({ label, value }, i) => (
+        {[
+          [T('版本', 'Version'),  'v1.0.0'],
+          [T('运行时', 'Runtime'), 'React 18 + Node 20'],
+          [T('协议', 'Protocol'),  'ACP / MCP'],
+        ].map(([label, value], i, arr) => (
           <div
             key={label}
-            className={[
-              'flex items-center justify-between px-4 py-3',
-              i < INFO_ROWS.length - 1 ? 'border-b border-sf-border' : '',
-            ].join(' ')}
+            className={['flex items-center justify-between px-4 py-3', i < arr.length - 1 ? 'border-b border-sf-border' : ''].join(' ')}
           >
             <span className="text-[12px] text-sf-fg4">{label}</span>
             <span className="font-mono text-[12px] text-sf-fg2">{value}</span>
@@ -47,35 +137,11 @@ export function AboutSection() {
         ))}
       </div>
 
-      <div className="flex gap-3">
-        <a
-          href="#"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex flex-1 items-center justify-center gap-2 rounded-[8px] border border-sf-border bg-sf-elev2 px-4 py-2.5 text-[12px] font-medium text-sf-fg3 hover:border-sf-fg5 hover:text-sf-fg1 transition-colors"
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor" className="h-[14px] w-[14px]">
-            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
-          </svg>
-          GitHub
-        </a>
-        <a
-          href="#"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex flex-1 items-center justify-center gap-2 rounded-[8px] border border-sf-border bg-sf-elev2 px-4 py-2.5 text-[12px] font-medium text-sf-fg3 hover:border-sf-fg5 hover:text-sf-fg1 transition-colors"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-[14px] w-[14px]">
-            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-          </svg>
-          Docs
-        </a>
-      </div>
-
       <p className="text-center font-mono text-[10px] text-sf-fg6">
-        {T('由 Claude Code 构建 · 由 Anthropic 提供支持', 'Built with Claude Code · Powered by Anthropic')}
+        {T('由 Claude Code 构建 · Anthropic 提供支持', 'Built with Claude Code · Powered by Anthropic')}
       </p>
+
+      <WalletLoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </div>
   );
 }

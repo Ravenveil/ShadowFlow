@@ -1,29 +1,29 @@
 /**
- * SettingsPage — Hi-Fi v2 redesign · opendesign 1:1 migration
+ * SettingsPage �?Hi-Fi v2 redesign · opendesign 1:1 migration
  *
- * Visual blueprint: `_handoff_tmp/shadowflow/project/hf-pages.jsx` → HfSettings
+ * Visual blueprint: `_handoff_tmp/shadowflow/project/hf-pages.jsx` �?HfSettings
  * (lines 326-419). 2-column layout: 240px left rail of categories grouped by
  * section header (账户 / 外观 / 集成 / 0G / 数据), right scrollable detail
  * pane that swaps based on the selected category.
  *
  * Tokens used (from `colors_and_type.css` + `hf-shared.jsx` HF_THEME_CSS):
  *   --t-bg / --t-panel / --t-fg / --t-fg-2..5 / --t-border / --t-accent /
- *   --t-accent-tint / --t-accent-ink     — all theme-aware (day + night).
+ *   --t-accent-tint / --t-accent-ink     �?all theme-aware (day + night).
  *
  * Concrete handoff references:
- *   • L339-356  — outer 2-col grid + 240px nav with `borderRight: 1px solid
+ *   �?L339-356  �?outer 2-col grid + 240px nav with `borderRight: 1px solid
  *                 var(--t-border)` and `background: var(--t-panel)`.
- *   • L341-344  — title block (`Settings` 16px/800 + `设置 · ⌘ ,` meta).
- *   • L347      — group label (`hf-label`, padding `4px 12px 5px`).
- *   • L348-353  — nav item: 7px/12px padding, 6px radius, 12.5px font, weight
+ *   �?L341-344  �?title block (`Settings` 16px/800 + `设置 · �?,` meta).
+ *   �?L347      �?group label (`hf-label`, padding `4px 12px 5px`).
+ *   �?L348-353  �?nav item: 7px/12px padding, 6px radius, 12.5px font, weight
  *                 700 when active, 500 otherwise. Active = `--t-accent-tint`
  *                 background + 3px purple bar at `left:-8` (16px tall).
- *   • L357      — right pane padding `24px 32px`.
+ *   �?L357      �?right pane padding `24px 32px`.
  *
- * Preservation rule (CLAUDE.md "只能加，不能删"): all 12 existing settings
+ * Preservation rule (CLAUDE.md "只能加，不能�?): all 12 existing settings
  * sub-components are kept as-is and routed under the 5 spec groups. We add
  * 4 placeholder entries (billing / shortcuts / on-chain / workspace) where
- * the spec asks for them — those render <ComingSoonSection/>. Default active
+ * the spec asks for them �?those render <ComingSoonSection/>. Default active
  * section is `wallet` to match the spec's centered Wallet content.
  *
  * Active selection persists to `window.location.hash` (e.g. `#wallet`) so
@@ -37,7 +37,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Construction } from 'lucide-react';
 import { useI18n } from '../../common/i18n';
 import { ToolProvidersTab } from './ToolProvidersTab';
-import { AgentBackendSection } from '../../core/components/settings/AgentBackendSection';
+import { LocalCLISection } from '../../core/components/settings/LocalCLISection';
+import { ByokSection } from '../../core/components/settings/ByokSection';
 import { ConnectorsSection } from '../../core/components/settings/ConnectorsSection';
 import { AppearanceSection } from '../../core/components/settings/AppearanceSection';
 import { LanguageSection } from '../../core/components/settings/LanguageSection';
@@ -55,22 +56,23 @@ import { AcpAgentsPanel } from '../../components/AcpAgentsPanel';
 import { MemorySection } from '../../core/components/settings/MemorySection';
 
 // ---------------------------------------------------------------------------
-// Section ids — 12 existing + 4 placeholders + 1 wallet (= 17)
+// Section ids �?12 existing + 4 placeholders + 1 wallet (= 17)
 // ---------------------------------------------------------------------------
 
 type SectionId =
   // 账户
-  | 'welcome'      // existing — used as Profile entry
-  | 'about'        // existing — used as Account entry
+  | 'welcome'      // existing �?used as Profile entry
+  | 'about'        // existing �?used as Account entry
   | 'billing'      // placeholder
   // 外观
   | 'appearance'
   | 'shortcuts'    // placeholder
   | 'language'
   // 集成
-  | 'skill-studio-generation'  // 生成参数 — model / max_tokens / temperature / defaults
-  | 'skill-studio-acp'         // 远端 Agent — ACP/MCP remote agent discovery
-  | 'agent-backend'
+  | 'skill-studio-generation'  // 生成参数 �?model / max_tokens / temperature / defaults
+  | 'skill-studio-acp'         // 远端 Agent �?ACP/MCP remote agent discovery
+  | 'local-cli'
+  | 'byok'
   | 'tool-providers'
   | 'connectors'
   | 'mcp-integrations'
@@ -258,14 +260,14 @@ function ComingSoonSection({ label }: { label: string }) {
         }}
       >
         <Construction size={32} strokeWidth={1.25} color="var(--t-fg-4)" />
-        <HfPill>● coming soon</HfPill>
+        <HfPill>�?coming soon</HfPill>
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Section wrapper — keeps existing Tailwind / `sf-*` token components
+// Section wrapper �?keeps existing Tailwind / `sf-*` token components
 // embedded inside the new Hi-Fi v2 pane while the redesign rolls out across
 // sub-sections incrementally.
 // ---------------------------------------------------------------------------
@@ -275,7 +277,7 @@ function LegacySectionWrap({ children }: { children: ReactNode }) {
 }
 
 // ---------------------------------------------------------------------------
-// Nav button — hover state + active 3px purple bar (handoff hf-pages.jsx L350)
+// Nav button �?hover state + active 3px purple bar (handoff hf-pages.jsx L350)
 // ---------------------------------------------------------------------------
 
 interface NavButtonProps {
@@ -288,9 +290,9 @@ function NavButton({ item, active, onSelect }: NavButtonProps) {
   const [hover, setHover] = useState(false);
 
   // Background + label color logic mirrors hf-pages.jsx L349:
-  // active  → tint background, accent-tinted label
-  // hover   → subtle elevation (panel-2)
-  // default → transparent / fg-2 label
+  // active  �?tint background, accent-tinted label
+  // hover   �?subtle elevation (panel-2)
+  // default �?transparent / fg-2 label
   const bg = active
     ? 'var(--t-accent-tint)'
     : hover
@@ -325,7 +327,7 @@ function NavButton({ item, active, onSelect }: NavButtonProps) {
         transition: 'background 120ms ease-out, color 120ms ease-out',
       }}
     >
-      {/* 3px purple active bar — handoff L350 (left:-8, w:3, h:16) */}
+      {/* 3px purple active bar �?handoff L350 (left:-8, w:3, h:16) */}
       {active && (
         <span
           style={{
@@ -391,7 +393,7 @@ export default function SettingsPage() {
     return readHashSection() ?? DEFAULT_SECTION;
   });
 
-  // Sync hash → state when user uses browser back/forward.
+  // Sync hash �?state when user uses browser back/forward.
   useEffect(() => {
     function onHash() {
       const next = readHashSection();
@@ -401,7 +403,7 @@ export default function SettingsPage() {
     return () => window.removeEventListener('hashchange', onHash);
   }, [activeSection]);
 
-  // Sync state → hash (only when changed by user; avoids writing on initial
+  // Sync state �?hash (only when changed by user; avoids writing on initial
   // load if the hash already matches).
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -421,7 +423,7 @@ export default function SettingsPage() {
         style={{
           flex: 1,
           display: 'grid',
-          gridTemplateColumns: '240px 1fr',  // L339 — 240px nav + 1fr detail
+          gridTemplateColumns: '240px 1fr',  // L339 �?240px nav + 1fr detail
           minHeight: 0,
         }}
       >
@@ -434,7 +436,7 @@ export default function SettingsPage() {
             background: 'var(--t-panel)',              // L340
           }}
         >
-          {/* Title block — handoff L341-344 */}
+          {/* Title block �?handoff L341-344 */}
           <div style={{ padding: '4px 12px 12px' }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--t-fg)' }}>
               {t('settings.title')}
@@ -444,7 +446,7 @@ export default function SettingsPage() {
 
           {NAV_GROUPS.map((g) => (
             <div key={g.group} style={{ marginBottom: 10 }}>
-              {/* Group label — handoff L347 */}
+              {/* Group label �?handoff L347 */}
               <div className="hf-label" style={{ padding: '4px 12px 5px' }}>
                 {g.group}
               </div>
