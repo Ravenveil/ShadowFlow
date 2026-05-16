@@ -4,6 +4,8 @@ import { listSchedules, deleteSchedule, type Schedule } from '../api/schedules';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { ScheduleDrawer, describeSchedule } from '../components/briefboard/ScheduleDrawer';
 import { useWorkspaceStore } from '../store/workspaceStore';
+// @ts-ignore — lunar-javascript is a CJS module without typings
+import { Solar } from 'lunar-javascript';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -69,6 +71,39 @@ function cronMatchDay(cron: string, dow: number): boolean {
 function fmt2(n: number) { return String(n).padStart(2, '0'); }
 function fmtHM(h: number, m: number) { return `${fmt2(h)}:${fmt2(m)}`; }
 function isoDate(y: number, mo: number, d: number) { return `${y}-${fmt2(mo + 1)}-${fmt2(d)}`; }
+
+/* ── Lunar calendar helpers ─────────────────────────────────────────────── */
+
+const LUNAR_DAY_NAMES = [
+  '初一','初二','初三','初四','初五','初六','初七','初八','初九','初十',
+  '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十',
+  '廿一','廿二','廿三','廿四','廿五','廿六','廿七','廿八','廿九','三十',
+];
+
+function lunarLabel(year: number, month: number, day: number): string {
+  try {
+    const solar = Solar.fromYmd(year, month + 1, day);
+    const lunar = solar.getLunar();
+    const jieqi: string = lunar.getJieQi();
+    if (jieqi) return jieqi;
+    return LUNAR_DAY_NAMES[(lunar.getDay() as number) - 1] ?? '';
+  } catch {
+    return '';
+  }
+}
+
+// China public holidays — '休' = holiday, '班' = makeup workday
+const HOLIDAYS_CN: Record<string, '休' | '班'> = {
+  '2026-01-01':'休',
+  '2026-01-28':'休','2026-01-29':'休','2026-01-30':'休','2026-01-31':'休',
+  '2026-02-01':'休','2026-02-02':'休','2026-02-03':'休',
+  '2026-04-05':'休',
+  '2026-05-01':'休','2026-05-02':'休','2026-05-03':'休','2026-05-04':'休','2026-05-05':'休',
+  '2026-05-09':'班',
+  '2026-06-19':'休',
+  '2026-10-01':'休','2026-10-02':'休','2026-10-03':'休','2026-10-04':'休',
+  '2026-10-05':'休','2026-10-06':'休','2026-10-07':'休',
+};
 
 /* ── Event builder ──────────────────────────────────────────────────────── */
 
@@ -138,15 +173,22 @@ function buildEvents(
 
 /* ── Month grid builder ─────────────────────────────────────────────────── */
 
-function buildGrid(year: number, month: number) {
+type GridCell = { day: number; inMonth: boolean; iso?: string; weekend: boolean; lunar?: string; holiday?: '休' | '班' };
+
+function buildGrid(year: number, month: number): GridCell[] {
   const startDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const prevDays = new Date(year, month, 0).getDate();
-  const cells: { day: number; inMonth: boolean; iso?: string; weekend: boolean }[] = [];
+  const cells: GridCell[] = [];
   for (let i = startDow - 1; i >= 0; i--) cells.push({ day: prevDays - i, inMonth: false, weekend: false });
   for (let d = 1; d <= daysInMonth; d++) {
     const dow = new Date(year, month, d).getDay();
-    cells.push({ day: d, inMonth: true, iso: isoDate(year, month, d), weekend: dow === 0 || dow === 6 });
+    const iso = isoDate(year, month, d);
+    cells.push({
+      day: d, inMonth: true, iso, weekend: dow === 0 || dow === 6,
+      lunar: lunarLabel(year, month, d),
+      holiday: HOLIDAYS_CN[iso],
+    });
   }
   let t = 1;
   while (cells.length % 7 !== 0 || cells.length < 35) { cells.push({ day: t++, inMonth: false, weekend: false }); if (cells.length >= 42) break; }
@@ -224,7 +266,7 @@ function CalAvatar({ glyph, slot, size = 22 }: { glyph: string; slot: string; si
 
 function EventBar({ ev, onSelect }: { ev: CalEvent; onSelect: (e: CalEvent) => void }) {
   const c = SLOT_COLOR[ev.slot]; const ti = SLOT_TINT[ev.slot]; const st = SLOT_STROKE[ev.slot];
-  const isRun = ev.status === 'run', isErr = ev.status === 'err', isPending = ev.status === 'pending';
+  const isRun = ev.status === 'run', isErr = ev.status === 'err', isWarn = ev.status === 'warn', isPending = ev.status === 'pending';
   return (
     <div className="cal-ev"
       onClick={(e) => { e.stopPropagation(); onSelect(ev); }}
@@ -252,6 +294,7 @@ function EventBar({ ev, onSelect }: { ev: CalEvent; onSelect: (e: CalEvent) => v
         flex:1, minWidth:0, color: isRun ? '#fff' : 'var(--cal-fg1)',
       }}>{ev.title}</span>
       {isRun && <span style={{ fontFamily:'var(--font-mono)', fontSize:7.5, fontWeight:800, color:'#fff', letterSpacing:'.1em' }}>LIVE</span>}
+      {isWarn && <span style={{ fontFamily:'var(--font-mono)', fontSize:8.5, fontWeight:800, color:'var(--t-warn)', letterSpacing:'.04em', flexShrink:0 }}>↻2/3</span>}
       {isErr && <span style={{ fontFamily:'var(--font-mono)', fontSize:8, fontWeight:800, color:'var(--t-err)', flexShrink:0 }}>ERR</span>}
     </div>
   );
@@ -300,22 +343,38 @@ function MonthView({ year, month, eventsByDate, onEventClick }: {
                 display:'flex', flexDirection:'column', gap:3, cursor:'default',
                 transition:'background 120ms',
               }}>
-              {/* date number */}
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:2 }}>
-                {isToday ? (
-                  <span style={{
-                    minWidth:22, height:22, padding:'0 6px', borderRadius:11,
-                    background:'var(--t-accent)', color:'var(--t-accent-ink)',
-                    display:'inline-flex', alignItems:'center', justifyContent:'center',
-                    fontWeight:800, fontSize:12, fontFamily:'var(--font-mono)',
-                  }}>{cell.day}</span>
-                ) : (
-                  <span style={{
-                    fontWeight: !cell.inMonth ? 400 : 700, fontSize:13,
-                    color: !cell.inMonth ? 'var(--cal-out)' : cell.weekend ? 'var(--cal-wkend)' : 'var(--cal-fg0)',
-                    fontFamily:'var(--font-mono)',
-                  }}>{cell.day}</span>
-                )}
+              {/* date number + lunar + holiday */}
+              <div style={{ display:'flex', alignItems:'baseline', gap:5, justifyContent:'space-between', marginBottom:2 }}>
+                <div style={{ display:'flex', alignItems:'baseline', gap:4 }}>
+                  {isToday ? (
+                    <span style={{
+                      minWidth:22, height:22, padding:'0 6px', borderRadius:11,
+                      background:'var(--t-accent)', color:'var(--t-accent-ink)',
+                      display:'inline-flex', alignItems:'center', justifyContent:'center',
+                      fontWeight:800, fontSize:12, fontFamily:'var(--font-mono)',
+                    }}>{cell.day}</span>
+                  ) : (
+                    <span style={{
+                      fontWeight: !cell.inMonth ? 400 : 700, fontSize:13,
+                      color: !cell.inMonth ? 'var(--cal-out)' : cell.weekend ? 'var(--cal-wkend)' : 'var(--cal-fg0)',
+                      fontFamily:'var(--font-mono)',
+                    }}>{cell.day}</span>
+                  )}
+                  {cell.inMonth && cell.lunar && (
+                    <span style={{ fontSize:9.5, color:'var(--t-fg-4)', fontWeight:500 }}>{cell.lunar}</span>
+                  )}
+                  {cell.holiday && (
+                    <span style={{
+                      fontSize:8.5, padding:'1px 4px', borderRadius:3, lineHeight:1.2,
+                      background: cell.holiday === '休'
+                        ? 'color-mix(in oklab,var(--t-ok) 14%,transparent)'
+                        : 'color-mix(in oklab,var(--t-warn) 14%,transparent)',
+                      color: cell.holiday === '休' ? 'var(--t-ok)' : 'var(--t-warn)',
+                      border: `1px solid ${cell.holiday === '休' ? 'color-mix(in oklab,var(--t-ok) 30%,transparent)' : 'color-mix(in oklab,var(--t-warn) 30%,transparent)'}`,
+                      fontWeight:700, fontFamily:'var(--font-mono)',
+                    }}>{cell.holiday}</span>
+                  )}
+                </div>
                 {isToday && <span className="cal-label" style={{ fontSize:8, color:'var(--t-accent-bright)', letterSpacing:'.1em' }}>TODAY</span>}
               </div>
               {/* events */}
@@ -415,6 +474,30 @@ function WeekView({ year, month, eventsByDate, onEventClick }: {
                 <span style={{ fontSize:11, fontWeight:600, color: isToday ? 'var(--t-accent-bright)' : wkend ? 'var(--cal-wkend)' : 'var(--t-fg-3)' }}>{DOW_ZH[d.dow]}</span>
                 <span className="cal-meta" style={{ fontSize:9 }}>{evCount} 计划</span>
               </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* all-day row */}
+      <div style={{ display:'grid', gridTemplateColumns:'54px repeat(7,1fr)', borderBottom:'1px solid var(--t-border)', minHeight:30, background:'var(--t-bg)', flexShrink:0 }}>
+        <div style={{ padding:'6px 8px', borderRight:'1px solid var(--t-border)', display:'flex', alignItems:'center', justifyContent:'flex-end' }}>
+          <span className="cal-label" style={{ fontSize:8.5 }}>全天</span>
+        </div>
+        {weekDays.map((d, i) => {
+          const isToday = d.iso === todayIso;
+          const holiday = HOLIDAYS_CN[d.iso];
+          return (
+            <div key={d.iso} style={{ padding:'5px 7px', borderRight: i<6 ? '1px solid var(--t-border)' : 'none', display:'flex', alignItems:'center', gap:4,
+              background: isToday ? 'color-mix(in oklab,var(--t-accent) 3%,var(--t-bg))' : 'var(--t-bg)' }}>
+              {holiday && (
+                <span style={{
+                  fontSize:9.5, padding:'2px 6px', borderRadius:4, fontFamily:'var(--font-mono)', fontWeight:700,
+                  background: holiday === '休' ? 'color-mix(in oklab,var(--t-ok) 14%,transparent)' : 'color-mix(in oklab,var(--t-warn) 14%,transparent)',
+                  color: holiday === '休' ? 'var(--t-ok)' : 'var(--t-warn)',
+                  border: `1px solid ${holiday === '休' ? 'color-mix(in oklab,var(--t-ok) 30%,transparent)' : 'color-mix(in oklab,var(--t-warn) 30%,transparent)'}`,
+                }}>{holiday === '休' ? '假期' : '补班'}</span>
+              )}
             </div>
           );
         })}
@@ -530,36 +613,54 @@ function AgendaView({ year, month, eventsByDate, onEventClick }: {
                   </div>
                 ) : evs.map(ev => {
                   const c = SLOT_COLOR[ev.slot];
+                  const isRun = ev.status === 'run', isWarn = ev.status === 'warn';
+                  const endMin = ev.startH * 60 + ev.startM + ev.durMin;
                   return (
                     <div key={ev.id} className="cal-agenda-row cal-ev"
                       onClick={() => onEventClick(ev)}
                       style={{
-                        display:'grid', gridTemplateColumns:'70px 26px 1fr auto auto',
-                        alignItems:'center', gap:12, padding:'9px 12px',
-                        background:'var(--t-panel)',
-                        border:`1px solid ${ev.status==='run' ? 'color-mix(in oklab,var(--t-accent) 40%,transparent)' : 'var(--t-border)'}`,
+                        display:'grid', gridTemplateColumns:'78px 28px 1fr auto auto',
+                        alignItems:'center', gap:14, padding:'8px 12px',
+                        background: isRun
+                          ? 'color-mix(in oklab,var(--t-accent) 6%,var(--t-panel))'
+                          : 'var(--t-panel)',
+                        border:`1px solid ${isRun ? 'color-mix(in oklab,var(--t-accent) 40%,transparent)' : 'var(--t-border)'}`,
                         borderLeft:`3px solid ${c}`, borderRadius:8,
-                        opacity: d.isPast ? 0.65 : 1, cursor:'pointer',
+                        opacity: d.isPast ? 0.6 : 1, cursor:'pointer',
                         transition:'background 120ms',
                       }}>
-                      <div style={{ display:'flex', flexDirection:'column', lineHeight:1.2 }}>
-                        <span style={{ fontFamily:'var(--font-mono)', fontSize:13, fontWeight:700, color:'var(--cal-fg0)' }}>
+                      {/* time */}
+                      <div style={{ display:'flex', flexDirection:'column', lineHeight:1.15 }}>
+                        <span style={{ fontFamily:'var(--font-mono)', fontSize:13, fontWeight:700, color: isRun ? 'var(--t-accent-bright)' : 'var(--cal-fg0)' }}>
                           {fmtHM(ev.startH, ev.startM)}
                         </span>
-                        <span className="cal-meta" style={{ fontSize:9 }}>→ {fmtHM(ev.startH, ev.startM + ev.durMin)}</span>
+                        <span className="cal-meta" style={{ fontSize:9.5 }}>→ {fmt2(Math.floor(endMin/60))}:{fmt2(endMin%60)}</span>
                       </div>
-                      <CalAvatar glyph={ev.glyph} slot={ev.slot} size={24}/>
+                      {/* avatar with ring on running */}
+                      <div style={{
+                        width:28, height:28, borderRadius:28*0.3,
+                        background: SLOT_TINT[ev.slot],
+                        border:`1px solid ${SLOT_STROKE[ev.slot]}`,
+                        color: c, display:'flex', alignItems:'center', justifyContent:'center',
+                        fontWeight:800, fontSize:13, flexShrink:0,
+                        boxShadow: isRun ? `0 0 0 2px color-mix(in oklab,${c} 25%,transparent)` : 'none',
+                      }}>{ev.glyph}</div>
+                      {/* title + meta */}
                       <div style={{ minWidth:0 }}>
                         <div style={{
                           fontSize:13, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
-                          color:'var(--cal-fg0)',
+                          color: d.isPast && ev.status==='ok' ? 'var(--t-fg-3)' : 'var(--cal-fg0)',
                           textDecoration: d.isPast && ev.status==='ok' ? 'line-through' : 'none',
                           textDecorationColor:'var(--t-fg-5)',
                         }}>{ev.title}</div>
-                        <div className="cal-meta" style={{ fontSize:9.5, display:'flex', gap:6, marginTop:2 }}>
-                          <span>{ev.groupName}</span>
+                        <div className="cal-meta" style={{ fontSize:9.5, display:'flex', gap:6, marginTop:2, flexWrap:'nowrap', overflow:'hidden' }}>
+                          <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.groupName}</span>
                           <span>·</span>
-                          <span style={{ fontFamily:'var(--font-mono)', fontSize:9 }}>{ev.cronExpr}</span>
+                          <span style={{ fontFamily:'var(--font-mono)', fontSize:9, flexShrink:0 }}>{cronShort(ev.cronExpr)}</span>
+                          {ev.runId && <>
+                            <span>·</span>
+                            <span style={{ color:'var(--t-fg-5)', fontFamily:'var(--font-mono)', fontSize:9, flexShrink:0 }}>{ev.runId.slice(-12)}</span>
+                          </>}
                         </div>
                       </div>
                       {/* status chip */}
@@ -567,9 +668,29 @@ function AgendaView({ year, month, eventsByDate, onEventClick }: {
                         display:'inline-flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:6,
                         background: STATUS_TINT[ev.status], color: STATUS_COLOR[ev.status],
                         border:`1px solid color-mix(in oklab,${STATUS_COLOR[ev.status]} 30%,transparent)`,
-                        fontFamily:'var(--font-mono)', fontSize:9.5, fontWeight:700, letterSpacing:'.04em',
+                        fontFamily:'var(--font-mono)', fontSize:9.5, fontWeight:700, letterSpacing:'.04em', flexShrink:0,
                       }}>{STATUS_LABEL[ev.status]}</span>
-                      <ArrowUpRight size={13} style={{ color:'var(--t-fg-5)', flexShrink:0 }}/>
+                      {/* action */}
+                      <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
+                        {isRun && (
+                          <span style={{
+                            display:'inline-flex', alignItems:'center', gap:3, padding:'2px 7px', borderRadius:5,
+                            background:'var(--t-accent-tint)', color:'var(--t-accent-bright)',
+                            border:'1px solid color-mix(in oklab,var(--t-accent) 40%,transparent)',
+                            fontFamily:'var(--font-mono)', fontSize:9.5, fontWeight:700,
+                          }}>▶ LIVE</span>
+                        )}
+                        {isWarn && (
+                          <span style={{
+                            display:'inline-flex', alignItems:'center', gap:3, padding:'2px 7px', borderRadius:5,
+                            background:'color-mix(in oklab,var(--t-warn) 12%,transparent)',
+                            color:'var(--t-warn)',
+                            border:'1px solid color-mix(in oklab,var(--t-warn) 35%,transparent)',
+                            fontFamily:'var(--font-mono)', fontSize:9.5, fontWeight:700,
+                          }}>↻ retry 2/3</span>
+                        )}
+                        <ArrowUpRight size={12} style={{ color:'var(--t-fg-5)', flexShrink:0 }}/>
+                      </div>
                     </div>
                   );
                 })}
