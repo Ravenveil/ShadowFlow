@@ -14,6 +14,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { openQuickSwitcher } from './QuickSwitcher';
 import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search, PanelLeftClose, PanelLeftOpen, Folder, CalendarDays } from 'lucide-react';
+import { WorkspaceSelector } from '../workspace/WorkspaceStrip';
 import type { LucideIcon } from 'lucide-react';
 import { HfDot } from './HfAtoms';
 import { useI18n } from '../../common/i18n';
@@ -171,35 +172,19 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
         overflow: 'hidden',
       }}
     >
-      {/* Brand bar + collapse toggle */}
+      {/* Workspace switcher + collapse toggle */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          padding: collapsed ? '10px 4px' : '10px 12px',
+          gap: 6,
+          padding: collapsed ? '8px 6px' : '8px 10px',
           marginBottom: 8,
-          justifyContent: collapsed ? 'center' : 'flex-start',
         }}
       >
-        {!collapsed && (
-          <>
-            <span style={{ fontSize: 13, color: 'var(--t-accent)', flexShrink: 0 }}>✦</span>
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '0.14em',
-                color: 'var(--t-fg-2)',
-                flex: 1,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              SHADOWFLOW
-            </span>
-          </>
-        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <WorkspaceSelector collapsed={collapsed} />
+        </div>
         <button
           onClick={() => setCollapsed(c => !c)}
           title={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}

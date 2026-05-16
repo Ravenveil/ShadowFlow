@@ -134,7 +134,7 @@ interface HfTopBarProps {
   hideWorkspace?: boolean;
 }
 
-export function HfTopBar({ right, hideWorkspace }: HfTopBarProps) {
+export function HfTopBar({ right, hideWorkspace = true }: HfTopBarProps) {
   return (
     <header
       style={{
