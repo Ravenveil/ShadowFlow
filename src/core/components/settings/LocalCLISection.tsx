@@ -59,8 +59,9 @@ interface AgentEntry {
   installHint?: string | null;
 }
 
-async function fetchAgents(): Promise<AgentEntry[]> {
-  const res = await fetch(`${API_BASE}/api/settings/agents/detect`, { signal: AbortSignal.timeout(10000) });
+async function fetchAgents(force: boolean = false): Promise<AgentEntry[]> {
+  const url = `${API_BASE}/api/settings/agents/detect${force ? '?force=1' : ''}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const j = await res.json();
   return Array.isArray(j.agents) ? j.agents : [];
@@ -263,11 +264,11 @@ export function LocalCLISection() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [search, setSearch] = useState('');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force: boolean = false) => {
     setScanning(true);
     setError(null);
     try {
-      const [list, sel] = await Promise.all([fetchAgents(), fetchSelection()]);
+      const [list, sel] = await Promise.all([fetchAgents(force), fetchSelection()]);
       const apiById = new Map(list.map(a => [a.id, a]));
       const merged: AgentEntry[] = Object.keys(CLI_META).map(id => {
         const fromApi = apiById.get(id);
@@ -396,10 +397,10 @@ export function LocalCLISection() {
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '1px 5px', border: '1px solid var(--t-border)', borderRadius: 4, color: 'var(--t-fg-3)', background: 'var(--t-bg)' }}>/</span>
             )}
           </div>
-          {/* Rescan */}
+          {/* Rescan — force=true bypasses the server-side 60s detect cache */}
           <button
             type="button"
-            onClick={() => load()}
+            onClick={() => load(true)}
             disabled={scanning}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,

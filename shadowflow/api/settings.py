@@ -279,13 +279,35 @@ def _probe_one(defn: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _detect_agents() -> List[Dict[str, Any]]:
+# Module-level cache: detect once, hold for TTL seconds. The result rarely
+# changes within a session (the user would have to install a new CLI), so
+# re-running 16 subprocesses on every picker open is pure waste.
+import time as _time
+_DETECT_CACHE: Dict[str, Any] = {"ts": 0.0, "result": None}
+_DETECT_CACHE_TTL_S = 60.0
+
+
+def _detect_agents(force: bool = False) -> List[Dict[str, Any]]:
+    # Serve from cache if fresh enough
+    now = _time.monotonic()
+    cached = _DETECT_CACHE.get("result")
+    if (
+        not force
+        and cached is not None
+        and (now - _DETECT_CACHE["ts"]) < _DETECT_CACHE_TTL_S
+    ):
+        return cached
+
     # Fan out probes in parallel so total latency is ~max(per-CLI) instead of
     # sum(per-CLI). With ~22 entries and a 1.5 s per-probe timeout, the worst
     # case drops from ~33 s sequential to ~1.5 s.
     workers = min(16, max(4, len(AGENT_DEFS)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        return list(pool.map(_probe_one, AGENT_DEFS))
+        result = list(pool.map(_probe_one, AGENT_DEFS))
+
+    _DETECT_CACHE["ts"] = now
+    _DETECT_CACHE["result"] = result
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -528,11 +550,22 @@ class MediaWriteRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.get("/agents/detect")
-async def detect_agents() -> Dict[str, Any]:
-    """Scan PATH for known agent CLIs and return install status."""
+async def detect_agents(force: bool = False) -> Dict[str, Any]:
+    """Scan PATH for known agent CLIs and return install status.
+
+    Results are cached in-process for 60 s (see _DETECT_CACHE). Pass
+    ?force=1 to bypass the cache — used by the Settings "重新扫描" button
+    when the user installs a new CLI and wants the change reflected without
+    waiting for the TTL to expire.
+    """
     import asyncio
-    agents = await asyncio.to_thread(_detect_agents)
-    return {"agents": agents}
+    agents = await asyncio.to_thread(_detect_agents, force)
+    cached = not force and _DETECT_CACHE.get("result") is not None
+    return {
+        "agents": agents,
+        "cached": cached,
+        "ttl_s": _DETECT_CACHE_TTL_S,
+    }
 
 
 @router.get("/connectors/composio")
