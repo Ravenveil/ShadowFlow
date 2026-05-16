@@ -270,11 +270,24 @@ router.get('/byok/:providerId/models/remote', async (req: Request, res: Response
     });
     if (!upstream.ok) {
       const body = await upstream.text().catch(() => '');
-      return res.status(502).json({
+      // 404 / 405 / 501 → provider doesn't expose a model catalog endpoint.
+      // Surface this distinctly so the UI can quietly fall back to the static
+      // catalog instead of yelling "failed".
+      const notSupported = upstream.status === 404 || upstream.status === 405 || upstream.status === 501;
+      const errCode = notSupported ? 'NO_REMOTE_CATALOG'
+                    : upstream.status === 401 || upstream.status === 403 ? 'UPSTREAM_AUTH'
+                    : 'UPSTREAM_ERROR';
+      return res.status(notSupported ? 200 : 502).json({
+        models: [],
+        count: 0,
+        source: notSupported ? 'unavailable' : 'error',
+        providerId,
         error: {
-          code: 'UPSTREAM_ERROR',
+          code: errCode,
           status: upstream.status,
-          message: `${providerId} /models returned ${upstream.status}`,
+          message: notSupported
+            ? `${providerId} 未暴露模型列表接口（HTTP ${upstream.status}）`
+            : `${providerId} /models returned ${upstream.status}`,
           detail: body.slice(0, 500),
         },
       });
@@ -291,6 +304,10 @@ router.get('/byok/:providerId/models/remote', async (req: Request, res: Response
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return res.status(502).json({
+      models: [],
+      count: 0,
+      source: 'error',
+      providerId,
       error: { code: 'UPSTREAM_UNREACHABLE', message },
     });
   }

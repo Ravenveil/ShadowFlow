@@ -94,7 +94,10 @@ async function loadModels(): Promise<ModelDef[]> {
 interface RemoteModelsResult {
   models: ModelDef[];
   count: number;
-  error?: string;
+  /** 'remote' = live fetch ok, 'unavailable' = provider has no /models endpoint, 'error' = upstream failure */
+  source: 'remote' | 'unavailable' | 'error';
+  errorCode?: string;
+  errorMessage?: string;
 }
 
 async function loadRemoteModels(providerId: string): Promise<RemoteModelsResult> {
@@ -102,15 +105,29 @@ async function loadRemoteModels(providerId: string): Promise<RemoteModelsResult>
     const r = await fetch(`${API_BASE}/api/settings/byok/${providerId}/models/remote`, {
       signal: AbortSignal.timeout(20000),
     });
-    if (!r.ok) {
-      const j = await r.json().catch(() => null);
-      return { models: [], count: 0, error: j?.error?.message ?? `HTTP ${r.status}` };
-    }
-    const j = await r.json();
+    const j = await r.json().catch(() => null);
     const arr: ModelDef[] = Array.isArray(j?.models) ? j.models : [];
-    return { models: arr, count: arr.length };
+    if (!r.ok) {
+      return {
+        models: arr, count: arr.length, source: 'error',
+        errorCode: j?.error?.code,
+        errorMessage: j?.error?.message ?? `HTTP ${r.status}`,
+      };
+    }
+    // 200 with explicit source='unavailable' → provider has no remote catalog endpoint
+    if (j?.source === 'unavailable') {
+      return {
+        models: arr, count: arr.length, source: 'unavailable',
+        errorCode: j?.error?.code,
+        errorMessage: j?.error?.message,
+      };
+    }
+    return { models: arr, count: arr.length, source: 'remote' };
   } catch (err) {
-    return { models: [], count: 0, error: err instanceof Error ? err.message : String(err) };
+    return {
+      models: [], count: 0, source: 'error',
+      errorMessage: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
@@ -608,16 +625,34 @@ export function ByokSection() {
     setRefreshNote(null);
     try {
       const result = await loadRemoteModels(selectedId);
-      if (result.error) {
-        // Upstream failed → fall back to static catalog and toast the error
+
+      // Provider doesn't expose a remote model catalog (e.g. Zhipu's paas/v4)
+      // → quietly fall back to the static catalog and surface a neutral hint.
+      if (result.source === 'unavailable') {
         const fallback = await loadModels();
         setAllModels(fallback);
         setRefreshNote({
-          tone: 'err',
-          text: T(`远端拉取失败：${result.error}`, `Remote fetch failed: ${result.error}`),
+          tone: 'warn',
+          text: T(
+            '该提供商未提供模型列表接口，已使用本地目录',
+            'Provider has no model catalog endpoint; using local catalog',
+          ),
         });
         return;
       }
+
+      // Genuine upstream failure (network / auth / 5xx)
+      if (result.source === 'error') {
+        const fallback = await loadModels();
+        setAllModels(fallback);
+        const msg = result.errorCode === 'UPSTREAM_AUTH'
+          ? T('鉴权失败，请检查 API Key', 'Auth failed — check API key')
+          : T(`远端拉取失败：${result.errorMessage}`, `Remote fetch failed: ${result.errorMessage}`);
+        setRefreshNote({ tone: 'err', text: msg });
+        return;
+      }
+
+      // result.source === 'remote'
       if (result.count === 0) {
         setRefreshNote({
           tone: 'warn',
@@ -625,6 +660,7 @@ export function ByokSection() {
         });
         return;
       }
+
       // Replace just this provider's models in allModels (preserve other providers)
       setAllModels(prev => {
         const others = prev.filter(m => m.provider !== selectedId);
