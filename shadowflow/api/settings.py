@@ -29,8 +29,15 @@ import re
 import shutil
 import subprocess
 import stat
+import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# Windows: suppress the briefly-flashing console window when probing each CLI.
+_SUBPROCESS_KWARGS: Dict[str, Any] = {}
+if sys.platform == "win32":
+    _SUBPROCESS_KWARGS["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
@@ -235,45 +242,50 @@ def _resolve_on_path(bin_name: str) -> Optional[str]:
     return shutil.which(bin_name)
 
 
+def _probe_one(defn: Dict[str, Any]) -> Dict[str, Any]:
+    path = _resolve_on_path(defn["bin"])
+    for fb in defn.get("fallback_bins", []):
+        if not path:
+            path = _resolve_on_path(fb)
+    version: Optional[str] = None
+    if path:
+        try:
+            proc = subprocess.run(
+                [path, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=1.5,
+                **_SUBPROCESS_KWARGS,
+            )
+            # Exit codes 126 (permission denied / not executable) and 127
+            # (command not found — ghost shim on PATH) mean the binary is
+            # effectively NOT installed even though `which` found a file.
+            if proc.returncode in (126, 127):
+                path = None
+            else:
+                version = proc.stdout.strip() or proc.stderr.strip() or None
+        except Exception:
+            pass
+    return {
+        "id": defn["id"],
+        "name": defn["name"],
+        "installed": bool(path),
+        "path": path,
+        "version": version,
+        "auth_hint": defn.get("auth_hint"),
+        "install_hint": defn.get("install_hint"),
+        "docs_url": defn.get("docs_url"),
+        "fallback_models": defn.get("fallback_models", []),
+    }
+
+
 def _detect_agents() -> List[Dict[str, Any]]:
-    results = []
-    for defn in AGENT_DEFS:
-        path = _resolve_on_path(defn["bin"])
-        for fb in defn.get("fallback_bins", []):
-            if not path:
-                path = _resolve_on_path(fb)
-        version: Optional[str] = None
-        if path:
-            try:
-                proc = subprocess.run(
-                    [path, "--version"],
-                    capture_output=True,
-                    text=True,
-                    timeout=3,
-                )
-                # Exit codes 126 (permission denied / not executable) and 127
-                # (command not found — ghost shim on PATH) mean the binary is
-                # effectively NOT installed even though `which` found a file.
-                if proc.returncode in (126, 127):
-                    path = None
-                else:
-                    version = proc.stdout.strip() or proc.stderr.strip() or None
-            except Exception:
-                pass
-        results.append(
-            {
-                "id": defn["id"],
-                "name": defn["name"],
-                "installed": bool(path),
-                "path": path,
-                "version": version,
-                "auth_hint": defn.get("auth_hint"),
-                "install_hint": defn.get("install_hint"),
-                "docs_url": defn.get("docs_url"),
-                "fallback_models": defn.get("fallback_models", []),
-            }
-        )
-    return results
+    # Fan out probes in parallel so total latency is ~max(per-CLI) instead of
+    # sum(per-CLI). With ~22 entries and a 1.5 s per-probe timeout, the worst
+    # case drops from ~33 s sequential to ~1.5 s.
+    workers = min(16, max(4, len(AGENT_DEFS)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(_probe_one, AGENT_DEFS))
 
 
 # ---------------------------------------------------------------------------
@@ -518,7 +530,8 @@ class MediaWriteRequest(BaseModel):
 @router.get("/agents/detect")
 async def detect_agents() -> Dict[str, Any]:
     """Scan PATH for known agent CLIs and return install status."""
-    agents = _detect_agents()
+    import asyncio
+    agents = await asyncio.to_thread(_detect_agents)
     return {"agents": agents}
 
 

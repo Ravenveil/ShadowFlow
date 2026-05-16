@@ -238,31 +238,49 @@ function SectionDivider({ label, count, right }: { label: string; count: number;
 
 type FilterKey = 'all' | 'installed' | 'notinstalled' | 'anthropic' | 'openai' | 'google' | 'cn';
 
+// Build the full grid synchronously from CLI_META so cards appear instantly
+// on mount — the network scan only flips install state, never the shape.
+function buildPlaceholderAgents(): AgentEntry[] {
+  return Object.entries(CLI_META).map(([id, meta]) => ({
+    id,
+    name: meta.name,
+    installed: false,
+    version: null,
+    path: null,
+    docsUrl: meta.docsUrl ?? null,
+  }));
+}
+
 export function LocalCLISection() {
-  const [agents, setAgents] = useState<AgentEntry[]>([]);
+  // Initial state holds every known CLI brand as "not installed" — the grid
+  // renders on first paint, no skeleton wait. The detect scan below merges in
+  // real install status when it returns.
+  const [agents, setAgents] = useState<AgentEntry[]>(buildPlaceholderAgents);
   const [selectedId, setSelectedId] = useState<string>(() => localStorage.getItem('sf.selectedAgent') ?? 'claude');
-  const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
+  const [scanning, setScanning] = useState(true);  // first paint = a scan is already running
+  const [scanned, setScanned] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [search, setSearch] = useState('');
 
-  const load = useCallback(async (rescan = false) => {
-    if (rescan) setScanning(true);
-    else setLoading(true);
+  const load = useCallback(async () => {
+    setScanning(true);
     setError(null);
     try {
       const [list, sel] = await Promise.all([fetchAgents(), fetchSelection()]);
-      // Merge API data with any known CLI brands not returned by the API
-      const apiIds = new Set(list.map(a => a.id));
-      const localBrands = Object.keys(CLI_META).filter(id => !apiIds.has(id));
-      const merged: AgentEntry[] = [
-        ...list,
-        ...localBrands.map(id => ({
+      const apiById = new Map(list.map(a => [a.id, a]));
+      const merged: AgentEntry[] = Object.keys(CLI_META).map(id => {
+        const fromApi = apiById.get(id);
+        if (fromApi) return fromApi;
+        return {
           id, name: CLI_META[id].name, installed: false,
           version: null, path: null, docsUrl: CLI_META[id].docsUrl ?? null,
-        })),
-      ];
+        };
+      });
+      // Surface any API-only ids the local registry doesn't know about
+      for (const a of list) {
+        if (!CLI_META[a.id]) merged.push(a);
+      }
       setAgents(merged);
       if (sel && merged.some(a => a.id === sel && a.installed)) {
         setSelectedId(sel);
@@ -271,8 +289,8 @@ export function LocalCLISection() {
     } catch {
       setError('CLI 检测服务不可用，请确认后端已启动');
     } finally {
-      setLoading(false);
       setScanning(false);
+      setScanned(true);
     }
   }, []);
 
@@ -381,29 +399,23 @@ export function LocalCLISection() {
           {/* Rescan */}
           <button
             type="button"
-            onClick={() => load(true)}
-            disabled={scanning || loading}
+            onClick={() => load()}
+            disabled={scanning}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: 'var(--t-fg-3)',
               background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9, padding: '7px 12px', cursor: 'pointer',
-              opacity: scanning || loading ? 0.5 : 1,
+              opacity: scanning ? 0.5 : 1,
             }}
           >
             <RefreshCw size={12} style={{ animation: scanning ? 'spin 1s linear infinite' : 'none' }} />
-            {scanning ? '扫描中…' : '重新扫描'}
+            {scanning ? (scanned ? '扫描中…' : '检测中…') : '重新扫描'}
           </button>
         </div>
 
         {/* Body */}
         <div style={{ flex: 1, overflow: 'auto', padding: '18px 20px' }}>
-          {loading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
-              {[1,2,3,4].map(i => (
-                <div key={i} style={{ height: 160, borderRadius: 14, background: 'var(--t-border)', animation: 'pulse 2s cubic-bezier(.4,0,.6,1) infinite' }} />
-              ))}
-            </div>
-          ) : error ? (
+          {error ? (
             <div style={{ padding: '12px 16px', borderRadius: 10, background: 'color-mix(in oklab, var(--t-reject) 10%, transparent)', border: '1px solid color-mix(in oklab, var(--t-reject) 30%, transparent)', color: 'var(--t-reject)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
               {error}
             </div>
