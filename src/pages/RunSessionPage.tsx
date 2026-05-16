@@ -1409,6 +1409,209 @@ const toolbarBtn: React.CSSProperties = {
 };
 
 // ---------------------------------------------------------------------------
+// Error banner — classified by ErrorCode with a tailored CTA per bucket.
+// ---------------------------------------------------------------------------
+//
+// Replaces the legacy "uniform red strip + regex sniff for API key" banner.
+// Each bucket renders the same shell (color-coded border + lucide icon +
+// title + message) and a single primary CTA tuned to the failure mode:
+//
+//   auth             → KeyRound      "配置 API Key"  → setShowKeyEditor(true)
+//   rate_limit       → Timer         "稍后重试"      → 30s countdown then "重发"
+//   context_too_long → Plus          "新建会话"      → onNewSession()
+//   network          → WifiOff       "重发"          → onResend()
+//   server / unknown → ServerCrash   "重发"          → onResend()
+//
+// Color tokens follow the spec: `auth/rate_limit` warm (--t-warn); the rest
+// red (--t-err). 5x retry stacking is collapsed into the `occurrences`
+// counter on SessionError (see useRunSession.ERROR reducer).
+
+interface ErrorBannerProps {
+  error: SessionError;
+  resending: boolean;
+  onResend: () => void;
+  onConfigureKey: () => void;
+  onNewSession: () => void;
+}
+
+function ErrorBanner({ error, resending, onResend, onConfigureKey, onNewSession }: ErrorBannerProps) {
+  // 30s rate-limit countdown. Restarts when a NEW rate_limit error arrives
+  // (occurrences increment) so back-to-back 429s reset the timer instead of
+  // letting the user spam-click while still throttled.
+  const [cooldown, setCooldown] = useState<number>(error.code === 'rate_limit' ? 30 : 0);
+  useEffect(() => {
+    if (error.code !== 'rate_limit') {
+      setCooldown(0);
+      return;
+    }
+    setCooldown(30);
+    const handle = setInterval(() => {
+      setCooldown((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => clearInterval(handle);
+  }, [error.code, error.occurrences]);
+
+  // 'auth' and 'rate_limit' are recoverable user-actionable conditions —
+  // warm yellow. The rest are red.
+  const isWarn = error.code === 'auth' || error.code === 'rate_limit';
+  const tone = isWarn ? 'var(--t-warn)' : 'var(--t-err)';
+  const bg = isWarn ? 'rgba(245,158,11,.08)' : 'rgba(239,68,68,.08)';
+  const border = isWarn ? 'rgba(245,158,11,.35)' : 'rgba(239,68,68,.3)';
+
+  // Per-bucket metadata. `defaultHint` is rendered when SessionError.hint is
+  // empty; the server may override by passing a `hint` field on the error
+  // event.
+  const meta: Record<SessionError['code'], { title: string; defaultHint?: string; Icon: typeof AlertTriangle }> = {
+    auth: {
+      title: '认证失败',
+      defaultHint: 'API Key 无效或已过期。请在设置中重新填入。',
+      Icon: KeyRound,
+    },
+    rate_limit: {
+      title: '速率限制',
+      defaultHint: '请求过于频繁，已达 provider 限额。',
+      Icon: Timer,
+    },
+    context_too_long: {
+      title: '上下文超长',
+      defaultHint: '当前会话累计上下文超过模型上限，新建会话以重置。',
+      Icon: AlertTriangle,
+    },
+    network: {
+      title: '网络异常',
+      defaultHint: '无法连接到服务，请检查网络后重试。',
+      Icon: WifiOff,
+    },
+    server: {
+      title: '服务暂时不可用',
+      defaultHint: '上游服务报错，请稍后重试。',
+      Icon: ServerCrash,
+    },
+    unknown: {
+      title: '运行失败',
+      Icon: AlertTriangle,
+    },
+  };
+
+  const { title, defaultHint, Icon } = meta[error.code];
+
+  // Repeated retry suffix: "（已重试 N 次）" once occurrences > 1. The
+  // banner replaces (rather than stacks) so the screen stays calm even
+  // when a 429 storm happens.
+  const occSuffix = error.occurrences > 1 ? `（已重试 ${error.occurrences} 次）` : '';
+  const hint = error.hint ?? defaultHint;
+
+  // Primary CTA — one per bucket. We keep "重发" as a secondary action on
+  // auth so users can manually retry after fixing the cause.
+  const primary = (() => {
+    switch (error.code) {
+      case 'auth':
+        return { Icon: KeyRound, label: '配置 API Key', onClick: onConfigureKey, disabled: false };
+      case 'rate_limit':
+        return {
+          Icon: cooldown > 0 ? Timer : RotateCcw,
+          label: cooldown > 0 ? `稍后重试 (${cooldown}s)` : '重发',
+          onClick: onResend,
+          disabled: cooldown > 0 || resending,
+        };
+      case 'context_too_long':
+        return { Icon: Plus, label: '新建会话', onClick: onNewSession, disabled: false };
+      case 'network':
+      case 'server':
+      case 'unknown':
+      default:
+        return { Icon: RotateCcw, label: '重发', onClick: onResend, disabled: resending };
+    }
+  })();
+
+  // For warn-tone buckets we still offer "重发" as a secondary text button.
+  const showSecondaryResend = error.code === 'auth';
+
+  return (
+    <div
+      data-testid="rs-error-banner"
+      data-error-code={error.code}
+      role="alert"
+      style={{
+        background: bg,
+        border: `1px solid ${border}`,
+        borderRadius: 8,
+        padding: '10px 12px',
+        fontSize: 12,
+        color: tone,
+        display: 'flex',
+        gap: 10,
+        alignItems: 'flex-start',
+      }}
+    >
+      <Icon size={14} strokeWidth={2} aria-hidden style={{ marginTop: 1, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0, lineHeight: 1.5 }}>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>
+          {title}
+          {occSuffix && (
+            <span style={{ fontWeight: 400, opacity: 0.7, marginLeft: 6 }}>{occSuffix}</span>
+          )}
+        </div>
+        <div style={{ color: 'var(--t-fg-3)', wordBreak: 'break-word' }}>{error.message}</div>
+        {hint && (
+          <div style={{ marginTop: 4, fontSize: 11, color: 'var(--t-fg-4)' }}>{hint}</div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={primary.onClick}
+            disabled={primary.disabled}
+            data-testid="rs-error-banner-cta"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '4px 10px',
+              borderRadius: 6,
+              background: tone,
+              border: `1px solid ${tone}`,
+              color: '#fff',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              cursor: primary.disabled ? 'not-allowed' : 'pointer',
+              opacity: primary.disabled ? 0.6 : 1,
+            }}
+          >
+            <primary.Icon size={11} strokeWidth={2} aria-hidden />
+            {primary.label}
+          </button>
+          {showSecondaryResend && (
+            <button
+              type="button"
+              onClick={onResend}
+              disabled={resending}
+              data-testid="rs-error-banner-resend"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 10px',
+                borderRadius: 6,
+                background: 'transparent',
+                border: '1px solid var(--t-border)',
+                color: 'var(--t-fg-3)',
+                fontSize: 11,
+                fontFamily: 'inherit',
+                cursor: resending ? 'wait' : 'pointer',
+                opacity: resending ? 0.6 : 1,
+              }}
+            >
+              <RotateCcw size={11} strokeWidth={2} aria-hidden />
+              重发
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Left panel
 // ---------------------------------------------------------------------------
 interface LeftPanelProps {
@@ -1938,42 +2141,19 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
           />
         ) : null}
 
-        {/* Error banner */}
+        {/* Error banner — classified by ErrorCode, routes to the right CTA.
+            AC3 / 2026-05-16: legacy regex sniff replaced by ErrorBanner which
+            forks on session.error.code (server-classified + client fallback).
+            New session navigates to /start so the user can pick a fresh skill /
+            conversation rather than reusing the failed one. */}
         {session.error && (
-          <div
-            style={{
-              background: 'rgba(239,68,68,.08)',
-              border: '1px solid rgba(239,68,68,.3)',
-              borderRadius: 8,
-              padding: '8px 12px',
-              fontSize: 12,
-              color: 'var(--t-err)',
-            }}
-          >
-            {/* AC3: NO_API_KEY surfaces here via session.error (server emits error event with code). */}
-            {session.error}
-            {(/no.?api.?key|anthropic.*key|sk-ant-/i.test(session.error) && !apiKey) && (
-              <>
-                {' '}
-                <button
-                  type="button"
-                  onClick={() => setShowKeyEditor(true)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'inherit',
-                    textDecoration: 'underline',
-                    cursor: 'pointer',
-                    padding: 0,
-                    fontFamily: 'inherit',
-                    fontSize: 12,
-                  }}
-                >
-                  配置 API Key
-                </button>
-              </>
-            )}
-          </div>
+          <ErrorBanner
+            error={session.error}
+            resending={resending}
+            onResend={() => handleResend(goal)}
+            onConfigureKey={() => setShowKeyEditor(true)}
+            onNewSession={() => navigate('/start')}
+          />
         )}
 
         {/* Retrying indicator */}

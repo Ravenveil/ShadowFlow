@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef } from 'react';
 import { subscribeRunSession } from '../../api/runSessions';
 import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent } from '../../api/runSessions';
+import { classifyClientError, isErrorCode } from '../errors/classifyError';
 
 export interface RunSessionNode {
   id: string;
@@ -27,6 +28,36 @@ export interface RunSessionStep {
 export type RunSessionPanel = 'canvas' | 'preview';
 export type ArtifactType = 'yaml' | 'html' | 'markdown';
 
+/**
+ * 2026-05-16 — error-banner classification.
+ *
+ * The daemon classifies every SSE `error` event into one of these 6 buckets
+ * (see server/src/lib/classify-error.ts). The RunSessionPage banner forks on
+ * `code` to pick a title + CTA (e.g. auth → "配置 API Key", rate_limit →
+ * "稍后重试" countdown). 'unknown' is the explicit fallback; callers must
+ * still surface the message even when the classifier can't pick a bucket.
+ */
+export type ErrorCode =
+  | 'auth'
+  | 'rate_limit'
+  | 'context_too_long'
+  | 'network'
+  | 'server'
+  | 'unknown';
+
+export interface SessionError {
+  code: ErrorCode;
+  message: string;
+  /** Optional inline hint shown under the message (smaller font). */
+  hint?: string;
+  /**
+   * Number of consecutive error events received for this session. The banner
+   * suffixes the message with "（已重试 N 次）" once this exceeds 1 so 5x
+   * retries no longer stack the same red text 5 times.
+   */
+  occurrences: number;
+}
+
 export interface RunSessionState {
   outputType: string | null;
   mode: string | null;
@@ -47,7 +78,7 @@ export interface RunSessionState {
   rationaleCards: Array<{ title: string; body: string; duration_ms?: number }>;
   yamlLines: string[];
   activeSubsteps: Array<{ parent_step: string; name: string; elapsed_ms?: number }>;
-  error: string | null;
+  error: SessionError | null;
   retrying: boolean;
   retryAttempt: number;
   retryDelayMs: number;
@@ -79,7 +110,7 @@ type Action =
   | { type: 'RATIONALE'; payload: RationaleEvent }
   | { type: 'YAML_LINE'; payload: YamlLineEvent }
   | { type: 'SUBSTEP'; payload: SubstepEvent }
-  | { type: 'ERROR'; message: string }
+  | { type: 'ERROR'; message: string; code?: string; hint?: string }
   | { type: 'RETRYING'; attempt: number; delayMs: number }
   | { type: 'CRITIQUE_PROGRESS'; payload: CritiqueProgressEvent }
   | { type: 'CRITIQUE_RESULT'; payload: CritiqueResultEvent }
@@ -149,8 +180,22 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
           action.payload,
         ],
       };
-    case 'ERROR':
-      return { ...state, error: action.message, retrying: false, thinkingMessage: null };
+    case 'ERROR': {
+      // Prefer server-classified code (`subscribeRunSession` forwards it via
+      // onServerError); fall back to client-side regex sweep on the message
+      // when the server didn't send a recognized bucket. Increments
+      // `occurrences` so repeated retries show "（已重试 N 次）" instead of
+      // stacking the same banner — see RunSessionPage banner suffix.
+      const code = isErrorCode(action.code) ? action.code : classifyClientError(action.message);
+      const prev = state.error;
+      const next = {
+        code,
+        message: action.message,
+        hint: action.hint,
+        occurrences: prev ? prev.occurrences + 1 : 1,
+      };
+      return { ...state, error: next, retrying: false, thinkingMessage: null };
+    }
     case 'RETRYING':
       return { ...state, retrying: true, retryAttempt: action.attempt, retryDelayMs: action.delayMs, error: null };
     case 'CRITIQUE_PROGRESS':
@@ -200,8 +245,13 @@ export function useRunSession(sessionId: string): RunSessionState {
       onCritiqueResult:   (d) => dispatch({ type: 'CRITIQUE_RESULT', payload: d }),
       onText:          (d) => dispatch({ type: 'TEXT', payload: d }),
       onRetrying:      (attempt, delayMs) => dispatch({ type: 'RETRYING', attempt, delayMs }),
-      onError:         () => dispatch({ type: 'ERROR', message: 'SSE 连接失败，已达最大重试次数' }),
-      onServerError:   (message) => dispatch({ type: 'ERROR', message }),
+      // EventSource gave up retrying — pure network bucket so the UI can
+      // surface a "重发" CTA instead of "配置 API Key".
+      onError:         () => dispatch({ type: 'ERROR', message: 'SSE 连接失败，已达最大重试次数', code: 'network' }),
+      // Server-classified events: subscribeRunSession parses `data.code` and
+      // forwards it here. We pass it through as-is; reducer falls back to
+      // client-side regex when the server omits / mis-codes the bucket.
+      onServerError:   (message, code) => dispatch({ type: 'ERROR', message, code }),
     });
     return cleanup;
   }, [sessionId]);
@@ -210,7 +260,9 @@ export function useRunSession(sessionId: string): RunSessionState {
   useEffect(() => {
     if (!sessionId) return;
     watchdogRef.current = setTimeout(() => {
-      dispatch({ type: 'ERROR', message: 'Session 超时（3 分钟），请重试' });
+      // Watchdog timeout — server stalled, classify as network-bucket so the
+      // banner CTA is "重发" rather than "配置 API Key".
+      dispatch({ type: 'ERROR', message: 'Session 超时（3 分钟），请重试', code: 'network' });
     }, 3 * 60 * 1000);
     return () => {
       if (watchdogRef.current) clearTimeout(watchdogRef.current);
