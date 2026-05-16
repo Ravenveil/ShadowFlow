@@ -48,6 +48,10 @@ interface ByokProviderData {
   baseUrl: string;
   models: string[];
   enabled: boolean;
+  /** Model IDs last pulled from upstream /models (badge = ☁ remote) */
+  syncedModels?: string[];
+  /** Model IDs the user added manually that are NOT in syncedModels (badge = ✎ manual) */
+  manualModels?: string[];
 }
 
 interface ByokStore {
@@ -112,7 +116,12 @@ router.get('/byok', (_req: Request, res: Response) => {
   const store = loadByok();
   const masked: Record<string, ByokProviderData> = {};
   for (const [id, p] of Object.entries(store.providers)) {
-    masked[id] = { ...p, apiKey: maskApiKey(p.apiKey) };
+    masked[id] = {
+      ...p,
+      apiKey: maskApiKey(p.apiKey),
+      syncedModels: Array.isArray(p.syncedModels) ? p.syncedModels : [],
+      manualModels: Array.isArray(p.manualModels) ? p.manualModels : [],
+    };
   }
   res.json({
     providers: masked,
@@ -144,8 +153,32 @@ const PROVIDER_DEFAULT_BASE: Record<string, string> = {
   moonshot:  'https://api.moonshot.cn/v1',
   mistral:   'https://api.mistral.ai/v1',
   groq:      'https://api.groq.com/openai/v1',
-  ollama:    'http://localhost:11434/v1',
+  openrouter:'https://openrouter.ai/api/v1',
+  ollama:    'http://localhost:11434',
   lmstudio:  'http://localhost:1234/v1',
+};
+
+/**
+ * Path suffixes that should be auto-appended when the user provides a bare
+ * origin (e.g. `https://api.openai.com` → `https://api.openai.com/v1`).
+ * Mirrors Shadow's aiConfigStore.PROVIDER_BASE_RULES — this is what lets
+ * Cherry Studio / Shadow gracefully accept either bare-origin or full-path
+ * URLs from users.
+ */
+const PROVIDER_BASE_SUFFIX: Record<string, string> = {
+  anthropic: '/v1',
+  openai:    '/v1',
+  google:    '/v1beta',
+  gemini:    '/v1beta',
+  deepseek:  '/v1',
+  qwen:      '/compatible-mode/v1',
+  zhipu:     '/api/paas/v4',
+  moonshot:  '/v1',
+  mistral:   '/v1',
+  groq:      '/openai/v1',
+  openrouter:'/api/v1',
+  ollama:    '',
+  lmstudio:  '/v1',
 };
 
 const PROVIDERS_NO_KEY = new Set(['ollama', 'lmstudio']);
@@ -154,30 +187,73 @@ function stripTrailingSlash(s: string): string {
   return s.replace(/\/+$/, '');
 }
 
+/**
+ * Normalize a user-provided base URL according to per-provider rules.
+ *   - Bare origin (no path)        → append the standard suffix (`/v1`, `/v1beta`, ...)
+ *   - Origin + non-trivial path    → respect what the user wrote (custom proxy / gateway)
+ *   - Empty                        → fall back to PROVIDER_DEFAULT_BASE
+ *   - Unparseable URL              → return trimmed input as-is
+ * Ported from Shadow's normalizeProviderBaseUrl().
+ */
+export function normalizeProviderBaseUrl(providerId: string, rawBaseUrl?: string | null): string {
+  const fallback = PROVIDER_DEFAULT_BASE[providerId] ?? '';
+  const trimmed = rawBaseUrl?.trim();
+  if (!trimmed) return fallback;
+
+  // 'custom' provider: always respect user input verbatim
+  if (providerId === 'custom') return stripTrailingSlash(trimmed);
+
+  try {
+    const parsed = new URL(trimmed);
+    const suffix = PROVIDER_BASE_SUFFIX[providerId];
+    const normalizedPath = stripTrailingSlash(parsed.pathname);
+
+    if (suffix === undefined) {
+      return stripTrailingSlash(trimmed);
+    }
+    // Bare origin (no path or just '/') → auto-append suffix
+    if (!normalizedPath) {
+      return `${parsed.origin}${suffix}`;
+    }
+    // User provided a path → keep it (don't double-append)
+    return `${parsed.origin}${normalizedPath}${parsed.search}`;
+  } catch {
+    return stripTrailingSlash(trimmed);
+  }
+}
+
 function buildRemoteModelsRequest(
   providerId: string,
   apiKey: string,
   baseUrl: string,
-): { url: string; headers: Record<string, string> } {
+): { url: string; headers: Record<string, string>; effectiveBase: string } {
   const headers: Record<string, string> = { 'Accept': 'application/json' };
-  const base = stripTrailingSlash(baseUrl || PROVIDER_DEFAULT_BASE[providerId] || '');
+  const effectiveBase = normalizeProviderBaseUrl(providerId, baseUrl);
 
   if (providerId === 'anthropic') {
     headers['x-api-key'] = apiKey;
     headers['anthropic-version'] = '2023-06-01';
-    return { url: `${base.replace(/\/v1$/, '')}/v1/models?limit=1000`, headers };
+    // effectiveBase already has /v1 from the suffix table
+    return { url: `${effectiveBase}/models?limit=1000`, headers, effectiveBase };
   }
 
   if (providerId === 'google' || providerId === 'gemini') {
     return {
-      url: `${base}/models?key=${encodeURIComponent(apiKey)}&pageSize=1000`,
+      url: `${effectiveBase}/models?key=${encodeURIComponent(apiKey)}&pageSize=1000`,
       headers,
+      effectiveBase,
     };
+  }
+
+  // Ollama native /api/tags lives at the root, not under /v1 — strip if present
+  if (providerId === 'ollama') {
+    const root = stripTrailingSlash(effectiveBase.replace(/\/v1$/, ''));
+    return { url: `${root}/api/tags`, headers, effectiveBase: root };
   }
 
   // OpenAI-compatible default
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-  return { url: `${base}/models`, headers };
+  return { url: `${effectiveBase}/models`, headers, effectiveBase };
 }
 
 interface RemoteModelDef { id: string; name: string; provider: string; }
@@ -261,7 +337,7 @@ router.get('/byok/:providerId/models/remote', async (req: Request, res: Response
     });
   }
 
-  const { url, headers } = buildRemoteModelsRequest(providerId, apiKey, baseUrl);
+  const { url, headers, effectiveBase } = buildRemoteModelsRequest(providerId, apiKey, baseUrl);
 
   try {
     const upstream = await fetch(url, {
@@ -299,6 +375,7 @@ router.get('/byok/:providerId/models/remote', async (req: Request, res: Response
       count: models.length,
       source: 'remote',
       providerId,
+      effectiveBase,
       endpoint: url.replace(/key=[^&]+/, 'key=***'),
     });
   } catch (err: unknown) {
@@ -316,11 +393,17 @@ router.get('/byok/:providerId/models/remote', async (req: Request, res: Response
 // PUT /api/settings/byok/:providerId → save provider config
 router.put('/byok/:providerId', (req: Request, res: Response) => {
   const { providerId } = req.params;
-  const { apiKey, baseUrl, models, enabled, defaultModel, temperature, routingPriority } = (req.body ?? {}) as {
+  const {
+    apiKey, baseUrl, models, enabled,
+    syncedModels, manualModels,
+    defaultModel, temperature, routingPriority,
+  } = (req.body ?? {}) as {
     apiKey?: string;
     baseUrl?: string;
     models?: string[];
     enabled?: boolean;
+    syncedModels?: string[];
+    manualModels?: string[];
     defaultModel?: string;
     temperature?: number;
     routingPriority?: string;
@@ -331,11 +414,19 @@ router.put('/byok/:providerId', (req: Request, res: Response) => {
     apiKey: '', baseUrl: '', models: [], enabled: false,
   };
 
+  // Auto-normalize baseUrl on save so the persisted form is always probe-ready
+  const rawBaseUrl = typeof baseUrl === 'string' ? baseUrl.trim() : existing.baseUrl;
+  const normalizedBaseUrl = rawBaseUrl
+    ? normalizeProviderBaseUrl(providerId, rawBaseUrl)
+    : existing.baseUrl;
+
   store.providers[providerId] = {
     apiKey: typeof apiKey === 'string' && apiKey.trim().length > 0 ? apiKey.trim() : existing.apiKey,
-    baseUrl: typeof baseUrl === 'string' ? baseUrl.trim() : existing.baseUrl,
+    baseUrl: normalizedBaseUrl,
     models: Array.isArray(models) ? models : existing.models,
     enabled: typeof enabled === 'boolean' ? enabled : existing.enabled,
+    syncedModels: Array.isArray(syncedModels) ? syncedModels : (existing.syncedModels ?? []),
+    manualModels: Array.isArray(manualModels) ? manualModels : (existing.manualModels ?? []),
   };
 
   if (typeof defaultModel === 'string') {

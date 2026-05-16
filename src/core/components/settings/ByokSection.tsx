@@ -43,7 +43,16 @@ const PROVIDER_ORDER = ['anthropic','openai','google','deepseek','zhipu','qwen',
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
-interface ProviderData { apiKey: string; baseUrl: string; models: string[]; enabled: boolean }
+interface ProviderData {
+  apiKey: string;
+  baseUrl: string;
+  models: string[];
+  enabled: boolean;
+  /** Model IDs last pulled from upstream /models */
+  syncedModels?: string[];
+  /** Model IDs the user added manually (not present in last sync) */
+  manualModels?: string[];
+}
 interface ByokStore {
   providers: Record<string, ProviderData>;
   defaultModel?: string | null;
@@ -96,6 +105,8 @@ interface RemoteModelsResult {
   count: number;
   /** 'remote' = live fetch ok, 'unavailable' = provider has no /models endpoint, 'error' = upstream failure */
   source: 'remote' | 'unavailable' | 'error';
+  /** Normalized base URL returned by the backend (after applying provider suffix rules) */
+  effectiveBase?: string;
   errorCode?: string;
   errorMessage?: string;
 }
@@ -107,9 +118,10 @@ async function loadRemoteModels(providerId: string): Promise<RemoteModelsResult>
     });
     const j = await r.json().catch(() => null);
     const arr: ModelDef[] = Array.isArray(j?.models) ? j.models : [];
+    const effectiveBase = typeof j?.effectiveBase === 'string' ? j.effectiveBase : undefined;
     if (!r.ok) {
       return {
-        models: arr, count: arr.length, source: 'error',
+        models: arr, count: arr.length, source: 'error', effectiveBase,
         errorCode: j?.error?.code,
         errorMessage: j?.error?.message ?? `HTTP ${r.status}`,
       };
@@ -117,12 +129,12 @@ async function loadRemoteModels(providerId: string): Promise<RemoteModelsResult>
     // 200 with explicit source='unavailable' → provider has no remote catalog endpoint
     if (j?.source === 'unavailable') {
       return {
-        models: arr, count: arr.length, source: 'unavailable',
+        models: arr, count: arr.length, source: 'unavailable', effectiveBase,
         errorCode: j?.error?.code,
         errorMessage: j?.error?.message,
       };
     }
-    return { models: arr, count: arr.length, source: 'remote' };
+    return { models: arr, count: arr.length, source: 'remote', effectiveBase };
   } catch (err) {
     return {
       models: [], count: 0, source: 'error',
@@ -191,7 +203,29 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
 
 // ── Model token ───────────────────────────────────────────────────────────────
 
-function ModelToken({ id, name, checked, onToggle }: { id: string; name: string; checked: boolean; onToggle: () => void }) {
+type ModelSource = 'synced' | 'manual' | 'fallback';
+
+function SourceBadge({ source }: { source: ModelSource }) {
+  const map: Record<ModelSource, { label: string; tint: string }> = {
+    synced:   { label: '远端', tint: 'var(--t-accent)' },
+    manual:   { label: '本地', tint: 'var(--t-warn, #d97706)' },
+    fallback: { label: '内置', tint: 'var(--t-fg-5)' },
+  };
+  const m = map[source];
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', flexShrink: 0,
+      padding: '1px 5px', borderRadius: 3,
+      background: `color-mix(in oklab, ${m.tint} 14%, transparent)`,
+      border: `1px solid color-mix(in oklab, ${m.tint} 30%, transparent)`,
+      color: m.tint,
+      fontFamily: 'var(--font-mono)', fontSize: 8.5, fontWeight: 700,
+      letterSpacing: '0.06em',
+    }}>{m.label}</span>
+  );
+}
+
+function ModelToken({ id, name, checked, source, onToggle }: { id: string; name: string; checked: boolean; source: ModelSource; onToggle: () => void }) {
   return (
     <label onClick={onToggle} style={{
       display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px',
@@ -210,7 +244,10 @@ function ModelToken({ id, name, checked, onToggle }: { id: string; name: string;
         </svg>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--t-fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--t-fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+          <SourceBadge source={source} />
+        </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{id}</div>
       </div>
     </label>
@@ -661,14 +698,52 @@ export function ByokSection() {
         return;
       }
 
-      // Replace just this provider's models in allModels (preserve other providers)
+      // Merge synced (remote) + manual (locally added) + static fallback for this provider
+      const syncedIds = new Set(result.models.map(m => m.id));
+      const existing = store.providers[selectedId];
+      // Anything we had before that the remote no longer returns → reclassify as manual
+      const prevModelIds = existing?.models ?? [];
+      const prevManual = existing?.manualModels ?? [];
+      const newManual = Array.from(new Set([
+        ...prevManual,
+        ...prevModelIds.filter(id => !syncedIds.has(id)),
+      ]));
+
+      // Build manual ModelDef entries (use existing names from allModels/FALLBACK if available)
+      const knownById = new Map<string, ModelDef>();
+      for (const m of [...allModels, ...FALLBACK_MODELS]) knownById.set(m.id, m);
+      const manualDefs: ModelDef[] = newManual.map(id => knownById.get(id) ?? {
+        id, name: id, provider: selectedId,
+      });
+
       setAllModels(prev => {
         const others = prev.filter(m => m.provider !== selectedId);
-        return [...others, ...result.models];
+        // Remote entries first (so the menu groups them at the top), then manual-only
+        const remoteIds = new Set(result.models.map(m => m.id));
+        const manualOnly = manualDefs.filter(m => !remoteIds.has(m.id));
+        return [...others, ...result.models, ...manualOnly];
       });
+
+      // Persist: syncedModels = remote IDs, manualModels = leftover, baseUrl = effectiveBase
+      const persistedSynced = Array.from(syncedIds);
+      const persistPatch: Partial<ProviderData> = {
+        syncedModels: persistedSynced,
+        manualModels: newManual,
+      };
+      if (result.effectiveBase && result.effectiveBase !== existing?.baseUrl) {
+        persistPatch.baseUrl = result.effectiveBase;
+        setBaseUrlInput(result.effectiveBase);
+      }
+      await saveProvider(selectedId, persistPatch);
+      loadStore().then(setStore);
+
       setRefreshNote({
         tone: 'ok',
-        text: T(`已从远端拉取 ${result.count} 个模型`, `Pulled ${result.count} models from upstream`),
+        text: newManual.length > 0
+          ? T(`已同步 ${result.count} 个远端模型，保留 ${newManual.length} 个本地补录`,
+              `Synced ${result.count} remote, kept ${newManual.length} local`)
+          : T(`已从远端拉取 ${result.count} 个模型`,
+              `Pulled ${result.count} models from upstream`),
       });
     } finally {
       setRefreshingModels(false);
@@ -1073,14 +1148,22 @@ export function ByokSection() {
                   </button>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
-                {providerModels.map(m => (
-                  <ModelToken
-                    key={m.id} id={m.id} name={m.name}
-                    checked={enabledModels.includes(m.id)}
-                    onToggle={() => toggleModel(m.id)}
-                  />
-                ))}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                {providerModels.map(m => {
+                  const synced = savedState?.syncedModels ?? [];
+                  const manual = savedState?.manualModels ?? [];
+                  const source: ModelSource =
+                    synced.includes(m.id) ? 'synced'
+                    : manual.includes(m.id) ? 'manual'
+                    : 'fallback';
+                  return (
+                    <ModelToken
+                      key={m.id} id={m.id} name={m.name} source={source}
+                      checked={enabledModels.includes(m.id)}
+                      onToggle={() => toggleModel(m.id)}
+                    />
+                  );
+                })}
               </div>
             </div>
           )}
