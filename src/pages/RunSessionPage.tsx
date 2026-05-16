@@ -2690,7 +2690,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
         setSavedTeamId(team.team_id);
         try {
           const grp = await createGroup({ templateId: '', groupTemplateId: '', name: teamName, agentIds: agentIds, memberEmails: [], policyMatrix: {} });
-          if (grp?.group_id) setSavedGroupId(grp.group_id);
+          if (grp?.groupId) setSavedGroupId(grp.groupId);
         } catch {
           // groups endpoint may not be available — chat navigation falls back to /teams
         }

@@ -47,6 +47,18 @@ export const proxyFallback = createProxyMiddleware({
   // are defined under the full `/api/...` path, so we re-prepend `/api` here.
   pathRewrite: (path) => `/api${path}`,
   on: {
+    proxyReq: (proxyReq, req) => {
+      // express.json() consumes the body stream before we reach this middleware.
+      // Re-inject the parsed body so Python receives it.
+      const body = (req as any).body;
+      if (body && Object.keys(body).length > 0) {
+        const raw = JSON.stringify(body);
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Content-Length', Buffer.byteLength(raw));
+        proxyReq.write(raw);
+        proxyReq.end();
+      }
+    },
     error: (err, _req, res) => {
       // Python backend down → respond 503 with structured JSON.
       // `res` may be a Node ServerResponse (http) OR an Express Response
