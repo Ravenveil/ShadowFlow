@@ -1,5 +1,5 @@
-import { useEffect, useReducer, useRef } from 'react';
-import { subscribeRunSession } from '../../api/runSessions';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { subscribeRunSession, abortRunSession } from '../../api/runSessions';
 import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent } from '../../api/runSessions';
 import { classifyClientError, isErrorCode } from '../errors/classifyError';
 
@@ -114,7 +114,11 @@ type Action =
   | { type: 'RETRYING'; attempt: number; delayMs: number }
   | { type: 'CRITIQUE_PROGRESS'; payload: CritiqueProgressEvent }
   | { type: 'CRITIQUE_RESULT'; payload: CritiqueResultEvent }
-  | { type: 'TEXT'; payload: TextEvent };
+  | { type: 'TEXT'; payload: TextEvent }
+  // 2026-05-16 — user pressed Stop. Mark stream terminated locally and
+  // append "（用户已停止）" to the chat reply so the UI shows a clear marker
+  // even if the LLM was mid-sentence.
+  | { type: 'ABORT' };
 
 function reducer(state: RunSessionState, action: Action): RunSessionState {
   switch (action.type) {
@@ -209,12 +213,46 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
         thinkingMessage: null,
         tokenCount: state.tokenCount + Math.ceil(action.payload.text.length / 4),
       };
+    case 'ABORT': {
+      // Avoid appending the marker twice if the user clicks Stop twice in
+      // quick succession before isStreaming flips.
+      const marker = '（用户已停止）';
+      const suffix = state.chatReply.endsWith(marker)
+        ? ''
+        : (state.chatReply.length > 0 && !state.chatReply.endsWith('\n') ? '\n' : '') + marker;
+      return {
+        ...state,
+        isComplete: true,
+        thinkingMessage: null,
+        retrying: false,
+        chatReply: state.chatReply + suffix,
+      };
+    }
     default:
       return state;
   }
 }
 
-export function useRunSession(sessionId: string): RunSessionState {
+// Public return shape — state fields plus stream controls. Existing call
+// sites destructure `session.xxx`, so all RunSessionState fields stay on
+// the top level for back-compat.
+export interface UseRunSessionReturn extends RunSessionState {
+  /**
+   * True iff the SSE connection is active and the session has not yet
+   * completed (no `complete` event, no error, no user abort). Used by the
+   * input composer to swap Send → Stop.
+   */
+  isStreaming: boolean;
+  /**
+   * Tear down the local EventSource immediately, dispatch ABORT to mark
+   * `isComplete=true` + append "（用户已停止）" to chatReply, and fire a
+   * best-effort POST /api/run-sessions/:id/abort so the server can drop
+   * its session record + cancel the upstream LLM call.
+   */
+  abort: () => void;
+}
+
+export function useRunSession(sessionId: string): UseRunSessionReturn {
   const [state, dispatch] = useReducer(reducer, {
     outputType: null, mode: null, confidence: 0,
     steps: INITIAL_STEPS, nodes: [], edges: [],
@@ -228,16 +266,25 @@ export function useRunSession(sessionId: string): RunSessionState {
   });
 
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cleanup fn returned by subscribeRunSession — calling it tears down the
+  // EventSource. Held in a ref so `abort()` can invoke it imperatively
+  // without re-running the subscribe effect.
+  const cleanupRef = useRef<(() => void) | null>(null);
+  // Tracks whether the underlying EventSource is still alive. Flips false
+  // on cleanup, abort, complete, error, or server error. Combined with
+  // !isComplete to form the public `isStreaming` flag.
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
+    setConnected(true);
     const cleanup = subscribeRunSession(sessionId, {
       onClassify:  (d) => dispatch({ type: 'CLASSIFY', payload: d }),
       onAssemble:  (d) => dispatch({ type: 'ASSEMBLE', payload: d }),
       onNode:      (d) => dispatch({ type: 'NODE', payload: d }),
       onEdge:      (d) => dispatch({ type: 'EDGE', payload: d }),
       onBlueprint: (d) => dispatch({ type: 'BLUEPRINT', payload: d }),
-      onComplete:  (d) => dispatch({ type: 'COMPLETE', payload: d }),
+      onComplete:  (d) => { dispatch({ type: 'COMPLETE', payload: d }); setConnected(false); },
       onRationale: (d) => dispatch({ type: 'RATIONALE', payload: d }),
       onYamlLine:  (d) => dispatch({ type: 'YAML_LINE', payload: d }),
       onSubstep:   (d) => dispatch({ type: 'SUBSTEP', payload: d }),
@@ -246,14 +293,20 @@ export function useRunSession(sessionId: string): RunSessionState {
       onText:          (d) => dispatch({ type: 'TEXT', payload: d }),
       onRetrying:      (attempt, delayMs) => dispatch({ type: 'RETRYING', attempt, delayMs }),
       // EventSource gave up retrying — pure network bucket so the UI can
-      // surface a "重发" CTA instead of "配置 API Key".
-      onError:         () => dispatch({ type: 'ERROR', message: 'SSE 连接失败，已达最大重试次数', code: 'network' }),
+      // surface a "重发" CTA instead of "配置 API Key". setConnected(false)
+      // flips session.isStreaming off so the composer reverts Stop → Send.
+      onError:         () => { dispatch({ type: 'ERROR', message: 'SSE 连接失败，已达最大重试次数', code: 'network' }); setConnected(false); },
       // Server-classified events: subscribeRunSession parses `data.code` and
       // forwards it here. We pass it through as-is; reducer falls back to
       // client-side regex when the server omits / mis-codes the bucket.
-      onServerError:   (message, code) => dispatch({ type: 'ERROR', message, code }),
+      onServerError:   (message, code) => { dispatch({ type: 'ERROR', message, code }); setConnected(false); },
     });
-    return cleanup;
+    cleanupRef.current = cleanup;
+    return () => {
+      cleanup();
+      cleanupRef.current = null;
+      setConnected(false);
+    };
   }, [sessionId]);
 
   // 3 分钟 watchdog — session 超时自动标 error
@@ -276,5 +329,25 @@ export function useRunSession(sessionId: string): RunSessionState {
     }
   }, [state.isComplete]);
 
-  return state;
+  const abort = useCallback(() => {
+    // Idempotent: subsequent clicks after isComplete=true are no-ops at the
+    // reducer level (ABORT just re-marks isComplete=true and the marker is
+    // de-duplicated by suffix check). Still tear down EventSource and fire
+    // the daemon POST defensively.
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+    setConnected(false);
+    dispatch({ type: 'ABORT' });
+    if (sessionId) {
+      // Best-effort — daemon may not have the route or may have already
+      // dropped the session. Errors are swallowed so the UX stays smooth.
+      abortRunSession(sessionId).catch((err) => {
+        console.warn('[useRunSession] daemon abort POST failed (non-fatal):', err);
+      });
+    }
+  }, [sessionId]);
+
+  const isStreaming = connected && !state.isComplete && state.error == null;
+
+  return { ...state, isStreaming, abort };
 }

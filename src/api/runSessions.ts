@@ -208,6 +208,24 @@ export async function createRunSession(
   return resp.json();
 }
 
+/**
+ * 2026-05-16 — Tell the daemon to abort an in-flight run session. Best-effort:
+ * a 404 (session already torn down) or network failure is non-fatal — the
+ * front-end has already closed its EventSource locally. Returns true when the
+ * server confirmed the abort, false otherwise.
+ */
+export async function abortRunSession(sessionId: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`${getApiBase()}/api/run-sessions/${sessionId}/abort`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function subscribeRunSession(
   sessionId: string,
   handlers: {

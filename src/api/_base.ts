@@ -61,29 +61,71 @@ export function getApiBase(): string {
 // Default-provider slot:    sf_default_provider (string)
 // ---------------------------------------------------------------------------
 
-export type ProviderId = 'anthropic' | 'openai' | 'deepseek' | 'zhipu';
+// 2026-05-16 — Expanded 4 → 12 to match BYOK UI. Server's ProviderId union
+// in llm-providers/types.ts is the source of truth; this list mirrors it.
+export type ProviderId =
+  | 'anthropic'
+  | 'openai'
+  | 'deepseek'
+  | 'zhipu'
+  | 'google'
+  | 'qwen'
+  | 'moonshot'
+  | 'mistral'
+  | 'groq'
+  | 'openrouter'
+  | 'ollama'
+  | 'lmstudio'
+  | 'azure';
 
 export const PROVIDER_IDS: readonly ProviderId[] = [
   'anthropic',
   'openai',
   'deepseek',
   'zhipu',
+  'google',
+  'qwen',
+  'moonshot',
+  'mistral',
+  'groq',
+  'openrouter',
+  'ollama',
+  'lmstudio',
+  'azure',
 ];
 
 /** localStorage slot for each provider's BYOK key. */
 export const KEY_STORAGE: Record<ProviderId, string> = {
-  anthropic: 'sf_anthropic_key',
-  openai: 'sf_openai_key',
-  deepseek: 'sf_deepseek_key',
-  zhipu: 'sf_zhipu_key',
+  anthropic:  'sf_anthropic_key',
+  openai:     'sf_openai_key',
+  deepseek:   'sf_deepseek_key',
+  zhipu:      'sf_zhipu_key',
+  google:     'sf_google_key',
+  qwen:       'sf_qwen_key',
+  moonshot:   'sf_moonshot_key',
+  mistral:    'sf_mistral_key',
+  groq:       'sf_groq_key',
+  openrouter: 'sf_openrouter_key',
+  ollama:     'sf_ollama_key',
+  lmstudio:   'sf_lmstudio_key',
+  azure:      'sf_azure_key',
 };
 
 /** Header name sent on RunSession requests for each provider. */
 export const HEADER_NAME: Record<ProviderId, string> = {
-  anthropic: 'X-Anthropic-Key',
-  openai: 'X-OpenAI-Key',
-  deepseek: 'X-DeepSeek-Key',
-  zhipu: 'X-Zhipu-Key',
+  anthropic:  'X-Anthropic-Key',
+  openai:     'X-OpenAI-Key',
+  deepseek:   'X-DeepSeek-Key',
+  zhipu:      'X-Zhipu-Key',
+  google:     'X-Google-Key',
+  qwen:       'X-Qwen-Key',
+  moonshot:   'X-Moonshot-Key',
+  mistral:    'X-Mistral-Key',
+  groq:       'X-Groq-Key',
+  openrouter: 'X-OpenRouter-Key',
+  ollama:     'X-Ollama-Key',
+  lmstudio:   'X-LMStudio-Key',
+  azure:      'X-Azure-Key',
 };
 
 /** localStorage key for the user's default-provider radio choice. */

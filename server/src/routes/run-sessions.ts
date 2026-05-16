@@ -228,6 +228,16 @@ function renderConversationHistoryBlock(
 // In-memory session store (session_id → options)
 const sessionStore = new Map<string, SessionRecord>();
 
+// 2026-05-16 — Active stream registry. Lets POST /api/run-sessions/:id/abort
+// reach into the currently-open SSE handler and trigger its AbortController
+// (cancels the upstream LLM call) + end the response. Entries are added on
+// stream open and removed in the finally{} block.
+interface ActiveStream {
+  abort: AbortController;
+  res: Response;
+}
+const activeStreams = new Map<string, ActiveStream>();
+
 const VALID_ARTIFACT_TYPES: ReadonlyArray<ArtifactType> = ['yaml', 'html', 'markdown'];
 
 function coerceArtifactType(raw: unknown): ArtifactType | null {
@@ -614,6 +624,9 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     }
   });
 
+  // 2026-05-16 — Publish this stream so POST /:id/abort can find it.
+  activeStreams.set(id, { abort: abortController, res });
+
   // Send a heartbeat comment to confirm connection
   res.write(': connected\n\n');
 
@@ -856,6 +869,8 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     if (!res.writableEnded) {
       res.end();
     }
+    // 2026-05-16 — drop from active registry whatever the exit reason.
+    activeStreams.delete(id);
     console.log(`[run-sessions] Stream ended for session ${id}`);
 
     // Persist run record — only when the stream actually terminated (not when
@@ -928,6 +943,57 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       }
     }
   }
+});
+
+// ── POST /api/run-sessions/:id/abort ─────────────────────────────────────────
+//
+// 2026-05-16 — User pressed "Stop" in the run-session composer. Cancel the
+// upstream LLM call via the per-stream AbortController, write a final SSE
+// 'aborted' event so any still-connected client sees a reason, and drop the
+// session from the in-memory store so subsequent GET /stream calls 404.
+//
+// Behavior:
+//   - active stream exists      → abort + close + 204
+//   - session exists, no stream → drop from store + 204
+//   - nothing found             → 404 (lets the front-end know it was a no-op
+//                                 BUT useRunSession.abort already updated UI
+//                                 so this is purely informational)
+//
+// Always idempotent: a second POST after the first succeeds returns 404 and
+// the UI shrugs it off.
+router.post('/:id/abort', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const stream = activeStreams.get(id);
+  const session = sessionStore.get(id);
+
+  if (!stream && !session) {
+    res.status(404).json({
+      error: { code: 'SESSION_NOT_FOUND', message: `Run session ${id} not found` },
+    });
+    return;
+  }
+
+  if (stream) {
+    console.log(`[run-sessions] client requested abort for session ${id}`);
+    if (!stream.abort.signal.aborted) stream.abort.abort();
+    // Best-effort: write a final aborted event so any other listeners on the
+    // same EventSource can react. The for-await loop in the stream handler
+    // already breaks on `signal.aborted`, then the finally{} block runs
+    // res.end() + activeStreams.delete().
+    try {
+      if (!stream.res.writableEnded) {
+        const line = `event: aborted\ndata: ${JSON.stringify({ session_id: id, reason: 'user_requested' })}\n\n`;
+        stream.res.write(line);
+      }
+    } catch (e) {
+      // SSE write race with res.end() — non-fatal.
+      console.warn(`[run-sessions] aborted-event write failed for ${id}:`, e);
+    }
+  }
+
+  // Drop the session record so a stale client cannot reconnect.
+  sessionStore.delete(id);
+  res.status(204).end();
 });
 
 export default router;

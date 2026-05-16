@@ -5,12 +5,26 @@
  * `AsyncGenerator<ProviderChunk>` shape regardless of provider. Unknown
  * provider ids surface as a `PROVIDER_ERROR` chunk (NEVER throws) so callers
  * can stay symmetric.
+ *
+ * 2026-05-16: expanded from 4 → 12 providers (anthropic + openai-compat
+ * factory generating 10 OpenAI-shape providers + google stub).
  */
 
 import { anthropicProvider } from './anthropic';
-import { openaiProvider } from './openai';
-import { deepseekProvider } from './deepseek';
-import { zhipuProvider } from './zhipu';
+import { googleProvider } from './google';
+import {
+  azureProviderInstance,
+  deepseekProviderInstance,
+  groqProviderInstance,
+  lmstudioProviderInstance,
+  mistralProviderInstance,
+  moonshotProviderInstance,
+  ollamaProviderInstance,
+  openaiProviderInstance,
+  openrouterProviderInstance,
+  qwenProviderInstance,
+  zhipuProviderInstance,
+} from './openai-compat-instances';
 import {
   isProviderId,
   type LLMProvider,
@@ -30,14 +44,24 @@ export {
   PROVIDER_ENV_VAR,
   PROVIDER_IDS,
   PROVIDER_LABEL,
+  PROVIDERS_NO_KEY,
   isProviderId,
 } from './types';
 
 const PROVIDERS: Record<ProviderId, LLMProvider> = {
-  anthropic: anthropicProvider,
-  openai: openaiProvider,
-  deepseek: deepseekProvider,
-  zhipu: zhipuProvider,
+  anthropic:  anthropicProvider,
+  openai:     openaiProviderInstance,
+  deepseek:   deepseekProviderInstance,
+  zhipu:      zhipuProviderInstance,
+  google:     googleProvider,
+  qwen:       qwenProviderInstance,
+  moonshot:   moonshotProviderInstance,
+  mistral:    mistralProviderInstance,
+  groq:       groqProviderInstance,
+  openrouter: openrouterProviderInstance,
+  ollama:     ollamaProviderInstance,
+  lmstudio:   lmstudioProviderInstance,
+  azure:      azureProviderInstance,
 };
 
 export function getProvider(id: ProviderId): LLMProvider {

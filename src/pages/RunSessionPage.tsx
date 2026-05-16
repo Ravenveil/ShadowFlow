@@ -12,7 +12,7 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowDown, Check, ChevronDown, ChevronRight, Circle, Cpu, ExternalLink, Key, KeyRound, Paperclip, Plus, RotateCcw, ServerCrash, Settings, Timer, WifiOff } from 'lucide-react';
+import { AlertTriangle, ArrowDown, Check, ChevronDown, ChevronRight, Circle, Cpu, ExternalLink, Key, KeyRound, Paperclip, Plus, RotateCcw, ServerCrash, Settings, Square, Timer, WifiOff } from 'lucide-react';
 import { useRunSession } from '../core/hooks/useRunSession';
 import type { RunSessionNode, RunSessionEdge, RunSessionStep, SessionError } from '../core/hooks/useRunSession';
 import {
@@ -2850,28 +2850,50 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                 })()}
               </div>
             </div>
-            {/* Right — live token estimate + send */}
+            {/* Right — live token estimate + send / stop. While
+                session.isStreaming is true (SSE live + not yet complete) we
+                swap the send button for a Stop button so the user can cancel
+                a wrong / runaway run. Stop uses red-500 hue (NOT --t-accent)
+                so it reads as "cancel" rather than "primary action". */}
             {/* 2026-05-11 Story 15.30 follow-up: send 按钮仅依赖 input 非空 — 不
                 看 session.isComplete (multi-turn 后续轮次允许发送)。*/}
-            {/* 2026-05-16: InputTokenCount sits to the left of send so users can
-                gauge submission size in real time (chars/4 estimate). */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <InputTokenCount text={message} attachedFiles={attachedFiles} />
-              <button
-                type="button"
-                onClick={handleSend}
-                disabled={!message.trim() && attachedFiles.length === 0}
-                style={{
-                  width: 32, height: 28,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'var(--t-accent)', border: '1px solid var(--t-accent)', borderRadius: 8,
-                  cursor: (!message.trim() && attachedFiles.length === 0) ? 'not-allowed' : 'pointer',
-                  color: 'var(--t-accent-ink)',
-                  opacity: (!message.trim() && attachedFiles.length === 0) ? 0.4 : 1,
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-              </button>
+              {session.isStreaming ? (
+                <button
+                  type="button"
+                  title="停止生成"
+                  onClick={() => session.abort()}
+                  style={{
+                    width: 32, height: 28,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(239, 68, 68, 0.14)',
+                    border: '1px solid rgba(239, 68, 68, 0.55)',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    color: 'rgb(248, 113, 113)',
+                    transition: 'background .12s, border-color .12s',
+                  }}
+                >
+                  <Square size={12} strokeWidth={2.5} fill="currentColor" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={!message.trim() && attachedFiles.length === 0}
+                  style={{
+                    width: 32, height: 28,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'var(--t-accent)', border: '1px solid var(--t-accent)', borderRadius: 8,
+                    cursor: (!message.trim() && attachedFiles.length === 0) ? 'not-allowed' : 'pointer',
+                    color: 'var(--t-accent-ink)',
+                    opacity: (!message.trim() && attachedFiles.length === 0) ? 0.4 : 1,
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </button>
+              )}
             </div>
           </div>
         </div>
