@@ -77,42 +77,116 @@ interface ByokStore {
 
 const BYOK_KEY = 'byok';
 
+/**
+ * Built-in model catalog (Cherry Studio-style SYSTEM_MODELS).
+ *
+ * For providers whose upstream doesn't expose GET /models (most notably
+ * Zhipu paas/v4, plus older Anthropic / Azure / DeepSeek beta endpoints),
+ * this is the ONLY way users get a populated grid — same trick Cherry
+ * Studio / Shadow use. Numbers here roughly match Cherry's default.ts as
+ * of 2026; remote /models pull augments this list when supported.
+ */
 const BYOK_MODELS = [
-  // Anthropic
-  { id: 'claude-opus-4-7',       name: 'Claude Opus 4.7',       provider: 'anthropic' },
-  { id: 'claude-sonnet-4-6',     name: 'Claude Sonnet 4.6',     provider: 'anthropic' },
-  { id: 'claude-haiku-4-5',      name: 'Claude Haiku 4.5',      provider: 'anthropic' },
-  { id: 'claude-3-5-sonnet',     name: 'Claude 3.5 Sonnet',     provider: 'anthropic' },
-  // OpenAI
-  { id: 'gpt-4o',                name: 'GPT-4o',                provider: 'openai'    },
-  { id: 'gpt-4o-mini',           name: 'GPT-4o Mini',           provider: 'openai'    },
-  { id: 'o3',                    name: 'o3',                    provider: 'openai'    },
-  { id: 'o4-mini',               name: 'o4-mini',               provider: 'openai'    },
-  // Google Gemini (frontend provider id is `google`)
-  { id: 'gemini-2.5-pro',        name: 'Gemini 2.5 Pro',        provider: 'google'    },
-  { id: 'gemini-2.5-flash',      name: 'Gemini 2.5 Flash',      provider: 'google'    },
-  { id: 'gemini-2.0-flash',      name: 'Gemini 2.0 Flash',      provider: 'google'    },
-  // DeepSeek
-  { id: 'deepseek-chat',         name: 'DeepSeek Chat',         provider: 'deepseek'  },
-  { id: 'deepseek-reasoner',     name: 'DeepSeek Reasoner',     provider: 'deepseek'  },
-  // Zhipu
-  { id: 'glm-4-flash',           name: 'GLM-4 Flash',           provider: 'zhipu'     },
-  { id: 'glm-4-plus',            name: 'GLM-4 Plus',            provider: 'zhipu'     },
-  { id: 'glm-4',                 name: 'GLM-4',                 provider: 'zhipu'     },
-  // Qwen
-  { id: 'qwen3-max',             name: 'Qwen3 Max',             provider: 'qwen'      },
-  { id: 'qwen-plus-latest',      name: 'Qwen Plus',             provider: 'qwen'      },
-  { id: 'qwen3-coder-plus',      name: 'Qwen3 Coder Plus',      provider: 'qwen'      },
-  // Moonshot
-  { id: 'moonshot-v1-8k',        name: 'Moonshot v1 8k',        provider: 'moonshot'  },
-  { id: 'moonshot-v1-32k',       name: 'Moonshot v1 32k',       provider: 'moonshot'  },
-  { id: 'moonshot-v1-128k',      name: 'Moonshot v1 128k',      provider: 'moonshot'  },
-  // Mistral
-  { id: 'mistral-large-latest',  name: 'Mistral Large',         provider: 'mistral'   },
-  { id: 'codestral-latest',      name: 'Codestral',             provider: 'mistral'   },
-  // Groq
-  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B',       provider: 'groq'      },
-  { id: 'mixtral-8x7b-32768',    name: 'Mixtral 8x7B',          provider: 'groq'      },
+  // ── Anthropic (no /v1/models on most accounts before 2024-10) ──
+  { id: 'claude-opus-4-7',           name: 'Claude Opus 4.7',     provider: 'anthropic', group: 'Claude 4.7' },
+  { id: 'claude-opus-4-6',           name: 'Claude Opus 4.6',     provider: 'anthropic', group: 'Claude 4.6' },
+  { id: 'claude-sonnet-4-6',         name: 'Claude Sonnet 4.6',   provider: 'anthropic', group: 'Claude 4.6' },
+  { id: 'claude-sonnet-4-5',         name: 'Claude Sonnet 4.5',   provider: 'anthropic', group: 'Claude 4.5' },
+  { id: 'claude-haiku-4-5',          name: 'Claude Haiku 4.5',    provider: 'anthropic', group: 'Claude 4.5' },
+  { id: 'claude-3-5-sonnet-20241022',name: 'Claude 3.5 Sonnet',   provider: 'anthropic', group: 'Claude 3.5' },
+  { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku',    provider: 'anthropic', group: 'Claude 3.5' },
+
+  // ── OpenAI (GPT family + image + audio + embedding) ──
+  { id: 'gpt-5.2',                   name: 'GPT-5.2',             provider: 'openai',    group: 'GPT-5.2' },
+  { id: 'gpt-5.2-pro',               name: 'GPT-5.2 Pro',         provider: 'openai',    group: 'GPT-5.2' },
+  { id: 'gpt-5',                     name: 'GPT-5',               provider: 'openai',    group: 'GPT-5' },
+  { id: 'gpt-5-pro',                 name: 'GPT-5 Pro',           provider: 'openai',    group: 'GPT-5' },
+  { id: 'gpt-5-chat',                name: 'GPT-5 Chat',          provider: 'openai',    group: 'GPT-5' },
+  { id: 'gpt-5-mini',                name: 'GPT-5 Mini',          provider: 'openai',    group: 'GPT-5' },
+  { id: 'gpt-5-nano',                name: 'GPT-5 Nano',          provider: 'openai',    group: 'GPT-5' },
+  { id: 'gpt-4.1',                   name: 'GPT-4.1',             provider: 'openai',    group: 'GPT-4.1' },
+  { id: 'gpt-4.1-mini',              name: 'GPT-4.1 Mini',        provider: 'openai',    group: 'GPT-4.1' },
+  { id: 'gpt-4o',                    name: 'GPT-4o',              provider: 'openai',    group: 'GPT-4o' },
+  { id: 'gpt-4o-mini',               name: 'GPT-4o Mini',         provider: 'openai',    group: 'GPT-4o' },
+  { id: 'o3',                        name: 'o3',                  provider: 'openai',    group: 'o-series' },
+  { id: 'o3-mini',                   name: 'o3-mini',             provider: 'openai',    group: 'o-series' },
+  { id: 'o4-mini',                   name: 'o4-mini',             provider: 'openai',    group: 'o-series' },
+  { id: 'gpt-image-1',               name: 'GPT Image 1',         provider: 'openai',    group: 'Image' },
+  { id: 'text-embedding-3-large',    name: 'Text Embedding 3 Large', provider: 'openai', group: 'Embedding' },
+  { id: 'text-embedding-3-small',    name: 'Text Embedding 3 Small', provider: 'openai', group: 'Embedding' },
+  { id: 'whisper-1',                 name: 'Whisper',             provider: 'openai',    group: 'Audio' },
+
+  // ── Google Gemini (frontend provider id: 'google') ──
+  { id: 'gemini-3-pro-preview',      name: 'Gemini 3 Pro Preview', provider: 'google',  group: 'Gemini 3' },
+  { id: 'gemini-2.5-pro',            name: 'Gemini 2.5 Pro',      provider: 'google',    group: 'Gemini 2.5' },
+  { id: 'gemini-2.5-flash',          name: 'Gemini 2.5 Flash',    provider: 'google',    group: 'Gemini 2.5' },
+  { id: 'gemini-2.5-flash-lite',     name: 'Gemini 2.5 Flash Lite', provider: 'google',  group: 'Gemini 2.5' },
+  { id: 'gemini-2.5-flash-image-preview', name: 'Gemini 2.5 Flash Image', provider: 'google', group: 'Gemini 2.5' },
+  { id: 'gemini-2.0-flash',          name: 'Gemini 2.0 Flash',    provider: 'google',    group: 'Gemini 2.0' },
+  { id: 'text-embedding-004',        name: 'Text Embedding 004',  provider: 'google',    group: 'Embedding' },
+
+  // ── DeepSeek ──
+  { id: 'deepseek-chat',             name: 'DeepSeek Chat (V3)',  provider: 'deepseek',  group: 'DeepSeek-V3' },
+  { id: 'deepseek-reasoner',         name: 'DeepSeek Reasoner (R1)', provider: 'deepseek', group: 'DeepSeek-R1' },
+  { id: 'deepseek-v3.2',             name: 'DeepSeek V3.2',       provider: 'deepseek',  group: 'DeepSeek-V3' },
+  { id: 'deepseek-coder',            name: 'DeepSeek Coder',      provider: 'deepseek',  group: 'DeepSeek-Coder' },
+
+  // ── Zhipu GLM (Cherry's full SYSTEM_MODELS.zhipu — 14 entries) ──
+  { id: 'glm-5',                     name: 'GLM-5',               provider: 'zhipu',     group: 'GLM-5' },
+  { id: 'glm-4.7',                   name: 'GLM-4.7',             provider: 'zhipu',     group: 'GLM-4.7' },
+  { id: 'glm-4.7-flash',             name: 'GLM-4.7 Flash',       provider: 'zhipu',     group: 'GLM-4.7' },
+  { id: 'glm-4.6',                   name: 'GLM-4.6',             provider: 'zhipu',     group: 'GLM-4.6' },
+  { id: 'glm-4.6v',                  name: 'GLM-4.6V',            provider: 'zhipu',     group: 'GLM-4.6V' },
+  { id: 'glm-4.6v-flash',            name: 'GLM-4.6V-Flash',      provider: 'zhipu',     group: 'GLM-4.6V' },
+  { id: 'glm-4.6v-flashx',           name: 'GLM-4.6V-FlashX',     provider: 'zhipu',     group: 'GLM-4.6V' },
+  { id: 'glm-4.5',                   name: 'GLM-4.5',             provider: 'zhipu',     group: 'GLM-4.5' },
+  { id: 'glm-4.5-air',               name: 'GLM-4.5-Air',         provider: 'zhipu',     group: 'GLM-4.5' },
+  { id: 'glm-4.5-airx',              name: 'GLM-4.5-AirX',        provider: 'zhipu',     group: 'GLM-4.5' },
+  { id: 'glm-4.5-flash',             name: 'GLM-4.5-Flash',       provider: 'zhipu',     group: 'GLM-4.5' },
+  { id: 'glm-4.5v',                  name: 'GLM-4.5V',            provider: 'zhipu',     group: 'GLM-4.5V' },
+  { id: 'glm-4-flash',               name: 'GLM-4-Flash',         provider: 'zhipu',     group: 'GLM-4' },
+  { id: 'glm-4-plus',                name: 'GLM-4-Plus',          provider: 'zhipu',     group: 'GLM-4' },
+  { id: 'glm-4',                     name: 'GLM-4',               provider: 'zhipu',     group: 'GLM-4' },
+  { id: 'embedding-3',               name: 'Embedding-3',         provider: 'zhipu',     group: 'Embedding' },
+  { id: 'cogview-4',                 name: 'CogView-4',           provider: 'zhipu',     group: 'Image' },
+
+  // ── Qwen / Alibaba Bailian ──
+  { id: 'qwen3-max',                 name: 'Qwen3 Max',           provider: 'qwen',      group: 'Qwen3' },
+  { id: 'qwen3-plus',                name: 'Qwen3 Plus',          provider: 'qwen',      group: 'Qwen3' },
+  { id: 'qwen-plus-latest',          name: 'Qwen Plus',           provider: 'qwen',      group: 'Qwen' },
+  { id: 'qwen-turbo-latest',         name: 'Qwen Turbo',          provider: 'qwen',      group: 'Qwen' },
+  { id: 'qwen3-coder-plus',          name: 'Qwen3 Coder Plus',    provider: 'qwen',      group: 'Qwen-Coder' },
+  { id: 'qwen3-coder-flash',         name: 'Qwen3 Coder Flash',   provider: 'qwen',      group: 'Qwen-Coder' },
+  { id: 'qwen-vl-max',               name: 'Qwen-VL Max',         provider: 'qwen',      group: 'Qwen-VL' },
+  { id: 'qwen2.5-vl-72b-instruct',   name: 'Qwen2.5 VL 72B',      provider: 'qwen',      group: 'Qwen-VL' },
+  { id: 'text-embedding-v3',         name: 'Text Embedding v3',   provider: 'qwen',      group: 'Embedding' },
+
+  // ── Moonshot Kimi ──
+  { id: 'kimi-k2-thinking-turbo',    name: 'Kimi K2 Thinking Turbo', provider: 'moonshot', group: 'Kimi K2 Thinking' },
+  { id: 'kimi-k2-thinking',          name: 'Kimi K2 Thinking',    provider: 'moonshot',  group: 'Kimi K2 Thinking' },
+  { id: 'kimi-k2-turbo-preview',     name: 'Kimi K2 Turbo Preview', provider: 'moonshot', group: 'Kimi K2' },
+  { id: 'kimi-k2-0905-preview',      name: 'Kimi K2 0905 Preview', provider: 'moonshot', group: 'Kimi K2' },
+  { id: 'moonshot-v1-auto',          name: 'Moonshot v1 Auto',    provider: 'moonshot',  group: 'Moonshot v1' },
+  { id: 'moonshot-v1-128k',          name: 'Moonshot v1 128k',    provider: 'moonshot',  group: 'Moonshot v1' },
+  { id: 'moonshot-v1-32k',           name: 'Moonshot v1 32k',     provider: 'moonshot',  group: 'Moonshot v1' },
+  { id: 'moonshot-v1-8k',            name: 'Moonshot v1 8k',      provider: 'moonshot',  group: 'Moonshot v1' },
+
+  // ── Mistral ──
+  { id: 'mistral-large-latest',      name: 'Mistral Large',       provider: 'mistral',   group: 'Mistral Chat' },
+  { id: 'mistral-medium-latest',     name: 'Mistral Medium',      provider: 'mistral',   group: 'Mistral Chat' },
+  { id: 'mistral-small-latest',      name: 'Mistral Small',       provider: 'mistral',   group: 'Mistral Chat' },
+  { id: 'codestral-latest',          name: 'Codestral',           provider: 'mistral',   group: 'Mistral Code' },
+  { id: 'pixtral-large-latest',      name: 'Pixtral Large',       provider: 'mistral',   group: 'Pixtral' },
+  { id: 'open-mistral-nemo',         name: 'Mistral Nemo',        provider: 'mistral',   group: 'Mistral Chat' },
+  { id: 'mistral-embed',             name: 'Mistral Embedding',   provider: 'mistral',   group: 'Embedding' },
+
+  // ── Groq ──
+  { id: 'llama-3.3-70b-versatile',   name: 'Llama 3.3 70B',       provider: 'groq',      group: 'Llama3' },
+  { id: 'llama-3.1-8b-instant',      name: 'Llama 3.1 8B Instant', provider: 'groq',     group: 'Llama3' },
+  { id: 'mixtral-8x7b-32768',        name: 'Mixtral 8x7B',        provider: 'groq',      group: 'Mixtral' },
+  { id: 'mistral-saba-24b',          name: 'Mistral Saba 24B',    provider: 'groq',      group: 'Mistral' },
+  { id: 'gemma2-9b-it',              name: 'Gemma2 9B',           provider: 'groq',      group: 'Gemma' },
+  { id: 'qwen-qwq-32b',              name: 'Qwen QwQ 32B',        provider: 'groq',      group: 'Qwen' },
 ];
 
 function loadByok(): ByokStore {
