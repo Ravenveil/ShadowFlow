@@ -16,7 +16,8 @@ import { AboutSection } from '../core/components/settings/AboutSection';
 import { AppearanceSection } from '../core/components/settings/AppearanceSection';
 import { ConnectorsSection } from '../core/components/settings/ConnectorsSection';
 import { McpIntegrationsSection } from '../core/components/settings/McpIntegrationsSection';
-import { AgentBackendSection } from '../core/components/settings/AgentBackendSection';
+import { LocalCLISection } from '../core/components/settings/LocalCLISection';
+import { ByokSection } from '../core/components/settings/ByokSection';
 import { ZerogStorageSection } from '../core/components/settings/ZerogStorageSection';
 import { MemorySection } from '../core/components/settings/MemorySection';
 
@@ -30,11 +31,13 @@ type TabId =
   | 'apikeys'
   | 'generation'
   | 'remoteagents'
-  | 'agentbackend'
+  | 'localcli'
+  | 'byok'
   | 'toolproviders'
   | 'connectors'
   | 'mcp'
   | 'zerog'
+  | 'onchain'
   | 'memory';
 
 interface NavItem { id: TabId; label: string; soon?: boolean }
@@ -42,34 +45,43 @@ interface NavGroup { label: string; items: NavItem[] }
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Account',
+    label: '账户',
     items: [
-      { id: 'welcome',    label: 'Profile · Quick Start' },
-      { id: 'about',      label: 'Account · About' },
-      { id: 'billing',    label: 'Billing', soon: true },
+      { id: 'welcome', label: '个人资料 · 快速上手' },
+      { id: 'about',   label: '账户 · 关于' },
+      { id: 'billing', label: '账单', soon: true },
     ],
   },
   {
-    label: 'Appearance',
-    items: [{ id: 'appearance', label: 'Appearance' }],
-  },
-  {
-    label: 'Memory',
+    label: '外观',
     items: [
-      { id: 'memory', label: 'River Memory' },
+      { id: 'appearance', label: '外观' },
     ],
   },
   {
-    label: 'Integrations',
+    label: '集成',
     items: [
+      { id: 'localcli',     label: '本机 CLI' },
+      { id: 'byok',         label: 'BYOK · API Key' },
       { id: 'apikeys',      label: 'Skill Studio API Key' },
-      { id: 'generation',   label: 'Generation' },
-      { id: 'remoteagents', label: 'Remote Agents' },
-      { id: 'agentbackend', label: 'Models & Providers' },
-      { id: 'toolproviders',label: 'Tool Providers', soon: true },
-      { id: 'connectors',   label: 'Connectors' },
-      { id: 'mcp',          label: 'MCP Integrations' },
-      { id: 'zerog',        label: '0G Storage Key' },
+      { id: 'generation',   label: '生成参数' },
+      { id: 'remoteagents', label: '远端 Agent' },
+      { id: 'toolproviders',label: '工具提供商', soon: true },
+      { id: 'connectors',   label: '连接器' },
+      { id: 'mcp',          label: 'MCP 集成' },
+    ],
+  },
+  {
+    label: '0G',
+    items: [
+      { id: 'zerog',   label: '钱包 · 0G Storage' },
+      { id: 'onchain', label: '链上', soon: true },
+    ],
+  },
+  {
+    label: '记忆',
+    items: [
+      { id: 'memory', label: '河流记忆' },
     ],
   },
 ];
@@ -87,16 +99,18 @@ function TabContent({ tab }: { tab: TabId }) {
   switch (tab) {
     case 'welcome':      return <WelcomeSection />;
     case 'about':        return <AboutSection />;
-    case 'billing':      return <ComingSoon label="Billing" />;
+    case 'billing':      return <ComingSoon label="账单" />;
     case 'appearance':   return <AppearanceSection />;
+    case 'localcli':     return <LocalCLISection />;
+    case 'byok':         return <ByokSection />;
     case 'apikeys':      return <ApiKeySettings />;
     case 'generation':   return <GenerationSettings />;
     case 'remoteagents': return <AcpAgentsPanel />;
-    case 'agentbackend': return <AgentBackendSection />;
-    case 'toolproviders':return <ComingSoon label="Tool Providers" />;
+    case 'toolproviders':return <ComingSoon label="工具提供商" />;
     case 'connectors':   return <ConnectorsSection />;
     case 'mcp':          return <McpIntegrationsSection />;
     case 'zerog':        return <ZerogStorageSection />;
+    case 'onchain':      return <ComingSoon label="链上" />;
     case 'memory':       return <MemorySection />;
   }
 }
