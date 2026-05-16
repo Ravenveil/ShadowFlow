@@ -155,7 +155,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
   const [showLogin, setShowLogin] = useState(false);
   const { user, status } = useAuth();
 
-  const W = collapsed ? 56 : 260;
+  const W = collapsed ? 68 : 260;
 
   return (
     <aside
