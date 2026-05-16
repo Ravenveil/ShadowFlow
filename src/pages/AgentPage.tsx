@@ -26,6 +26,7 @@ import type { AgentRecord } from '../api/agents';
 import { BlueprintModal } from '../components/agents/BlueprintModal';
 import { HfTopBar, HfAvatar, HfPill } from '../components/hifi';
 import { useI18n } from '../common/i18n';
+import { useWorkspaceStore } from '../store/workspaceStore';
 
 // ---------------------------------------------------------------------------
 // Types & helpers
@@ -95,6 +96,7 @@ export function AgentPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { t } = useI18n();
+  const currentId = useWorkspaceStore((s) => s.currentId);
 
   // Data
   const [agents, setAgents] = useState<AgentRecord[]>([]);
@@ -133,7 +135,7 @@ export function AgentPage() {
     setLoadStatus('loading');
     setErrorMsg(null);
     try {
-      const data = await listAgents();
+      const data = await listAgents(currentId ?? undefined);
       setAgents(data);
       setLoadStatus('success');
     } catch (err) {
@@ -144,7 +146,7 @@ export function AgentPage() {
       setErrorMsg(msg);
       setLoadStatus('error');
     }
-  }, []);
+  }, [currentId]);
 
   useEffect(() => {
     fetchAgents();

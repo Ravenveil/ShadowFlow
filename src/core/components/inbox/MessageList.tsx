@@ -7,6 +7,7 @@ import { CreateGroupDialog } from './CreateGroupDialog';
 import { InboxEmptyState } from './InboxEmptyState';
 import { useDebounce } from '../../../common/hooks/useDebounce';
 import { useI18n } from '../../../common/i18n';
+import { useWorkspaceStore } from '../../../store/workspaceStore';
 
 type TabKey = 'all' | 'dm' | 'team' | 'unread';
 
@@ -26,13 +27,14 @@ export function MessageList() {
   const navigate = useNavigate();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { groups, agentDMs, loading, fetchInbox, selectedGroupId, selectGroup } = useInboxStore();
+  const currentId = useWorkspaceStore((s) => s.currentId);
   const debouncedSearchText = useDebounce(searchText, 300);
   const effectiveSearchText = searchText.trim() ? debouncedSearchText : '';
   const normalizedKeyword = effectiveSearchText.trim().toLowerCase();
 
   useEffect(() => {
-    fetchInbox(PLACEHOLDER_TEMPLATE_ID);
-  }, [fetchInbox]);
+    fetchInbox(PLACEHOLDER_TEMPLATE_ID, currentId);
+  }, [fetchInbox, currentId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

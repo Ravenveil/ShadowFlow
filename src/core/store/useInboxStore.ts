@@ -18,10 +18,11 @@ interface InboxState {
   loading: boolean;
   error: string | null;
   currentTemplateId: string | null;
+  currentWorkspaceId: string | null;
   selectedGroupId: string | null;
   recentMessages: Record<string, Message[]>;
 
-  fetchInbox: (templateId: string) => Promise<void>;
+  fetchInbox: (templateId: string, workspaceId?: string | null) => Promise<void>;
   updateGroupStatus: (groupId: string, partial: Partial<GroupItem>) => void;
   updateGroupMetrics: (groupId: string, partial: Partial<GroupMetrics>) => void;
   updateActiveRuns: (groupId: string, delta: number) => void;
@@ -37,14 +38,18 @@ export const useInboxStore = create<InboxState>((set, get) => ({
   loading: false,
   error: null,
   currentTemplateId: null,
+  currentWorkspaceId: null,
   selectedGroupId: null,
   recentMessages: {},
 
-  fetchInbox: async (templateId: string) => {
-    if (get().currentTemplateId === templateId && get().groups.length > 0) return;
-    set({ loading: true, error: null, currentTemplateId: templateId });
+  fetchInbox: async (templateId: string, workspaceId?: string | null) => {
+    const s = get();
+    // Re-fetch when template OR workspace changes; skip only if both match and data exists
+    if (s.currentTemplateId === templateId && s.currentWorkspaceId === (workspaceId ?? null) && s.groups.length > 0) return;
+    set({ loading: true, error: null, currentTemplateId: templateId, currentWorkspaceId: workspaceId ?? null, groups: [], agentDMs: [] });
     try {
-      const res = await fetch(`${getApiBase()}/api/templates/${encodeURIComponent(templateId)}/inbox`);
+      const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+      const res = await fetch(`${getApiBase()}/api/templates/${encodeURIComponent(templateId)}/inbox${qs}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json: InboxResponse = await res.json();
       set({

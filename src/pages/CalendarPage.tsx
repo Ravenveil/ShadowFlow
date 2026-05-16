@@ -3,6 +3,7 @@ import { CalendarDays, Plus, Trash2, CheckCircle, XCircle, Clock, RefreshCw } fr
 import { listSchedules, deleteSchedule, type Schedule } from '../api/schedules';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { ScheduleDrawer, describeSchedule } from '../components/briefboard/ScheduleDrawer';
+import { useWorkspaceStore } from '../store/workspaceStore';
 
 const T = {
   bg:  'var(--t-bg)',
@@ -48,6 +49,7 @@ interface GroupSchedule {
 
 export default function CalendarPage() {
   const groups = useInboxStore(s => s.groups);
+  const currentId = useWorkspaceStore((s) => s.currentId);
   const [data, setData] = useState<GroupSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +91,7 @@ export default function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [groups]);
+  }, [groups, currentId]);
 
   useEffect(() => { void load(); }, [load]);
 

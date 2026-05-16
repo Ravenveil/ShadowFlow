@@ -47,6 +47,7 @@ import {
 } from '../api/projects';
 import { listSkills, type SkillInfo } from '../api/skills';
 import { useI18n } from '../common/i18n';
+import { useWorkspaceStore } from '../store/workspaceStore';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1428,6 +1429,7 @@ function EmptyPane() {
 // ---------------------------------------------------------------------------
 
 export default function ProjectsPage() {
+  const currentId = useWorkspaceStore((s) => s.currentId);
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(readInitialId);
@@ -1437,6 +1439,7 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     listProjects()
       .then((list) => {
         if (!cancelled) setProjects(list);
@@ -1450,7 +1453,7 @@ export default function ProjectsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentId]);
 
   useEffect(() => {
     if (!selectedId) {
