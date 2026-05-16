@@ -36,6 +36,8 @@ import { createTeam } from '../api/teams';
 import { createGroup } from '../api/groupApi';
 // Story 15.14 — 5+1 维质量自检雷达图（生成完后挂在右栏底部）
 import { CritiqueResult } from '../components/CritiqueResult';
+// 2026-05-16 — live token count in composer bar (Cherry Studio TokenCount parity)
+import InputTokenCount from '../components/InputTokenCount';
 // 2026-05-16 — 24h input draft persistence (Cherry Studio `inputbar-draft` parity)
 import { saveDraft, loadDraft, clearDraft } from '../common/lib/draftCache';
 
@@ -2821,24 +2823,29 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                 })()}
               </div>
             </div>
-            {/* Right — send */}
+            {/* Right — live token estimate + send */}
             {/* 2026-05-11 Story 15.30 follow-up: send 按钮仅依赖 input 非空 — 不
                 看 session.isComplete (multi-turn 后续轮次允许发送)。*/}
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={!message.trim() && attachedFiles.length === 0}
-              style={{
-                width: 32, height: 28,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                background: 'var(--t-accent)', border: '1px solid var(--t-accent)', borderRadius: 8,
-                cursor: (!message.trim() && attachedFiles.length === 0) ? 'not-allowed' : 'pointer',
-                color: 'var(--t-accent-ink)',
-                opacity: (!message.trim() && attachedFiles.length === 0) ? 0.4 : 1,
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-            </button>
+            {/* 2026-05-16: InputTokenCount sits to the left of send so users can
+                gauge submission size in real time (chars/4 estimate). */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <InputTokenCount text={message} attachedFiles={attachedFiles} />
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!message.trim() && attachedFiles.length === 0}
+                style={{
+                  width: 32, height: 28,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'var(--t-accent)', border: '1px solid var(--t-accent)', borderRadius: 8,
+                  cursor: (!message.trim() && attachedFiles.length === 0) ? 'not-allowed' : 'pointer',
+                  color: 'var(--t-accent-ink)',
+                  opacity: (!message.trim() && attachedFiles.length === 0) ? 0.4 : 1,
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>
           </div>
         </div>
 
