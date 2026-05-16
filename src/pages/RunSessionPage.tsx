@@ -2372,6 +2372,10 @@ const KEYFRAMES = `
   50% { opacity: 0.45; }
 }
 @keyframes rs-dash { to { stroke-dashoffset: -20; } }
+@keyframes rs-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 /* spinning conic-gradient border overlay for the S mark */
 .rs-mark::after {
   content: '';
@@ -2922,12 +2926,53 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
     <>
       <InjectKeyframes />
       {savedTeamId && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, background: 'var(--t-ok)', color: '#fff', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', fontSize: 12.5, fontWeight: 600 }}>
-          <span>✓ Team saved —</span>
-          <button type="button" onClick={() => onNavigate(savedTeamId ? `/teams/${savedTeamId}` : '/teams')} style={{ background: 'rgba(255,255,255,.25)', border: 'none', borderRadius: 5, color: '#fff', padding: '2px 10px', cursor: 'pointer', fontSize: 11.5, fontWeight: 700 }}>查看 Team →</button>
-          <button type="button" onClick={() => onNavigate(savedGroupId ? `/chat/${savedGroupId}` : '/chat')} style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 5, color: '#fff', padding: '2px 10px', cursor: 'pointer', fontSize: 11.5 }}>Chat →</button>
-          <button type="button" onClick={() => onNavigate('/agents')} style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 5, color: '#fff', padding: '2px 10px', cursor: 'pointer', fontSize: 11.5 }}>Agents →</button>
-          <button type="button" onClick={() => setSavedTeamId(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 14, opacity: .7 }}>✕</button>
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            zIndex: 9999,
+            background: 'var(--t-panel)',
+            border: '1px solid var(--t-border)',
+            borderLeft: '3px solid var(--t-ok)',
+            borderRadius: 10,
+            boxShadow: '0 8px 24px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.08)',
+            padding: '10px 12px 10px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            minWidth: 240,
+            maxWidth: 320,
+            animation: 'rs-toast-in .18s ease-out',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Check size={14} strokeWidth={2.2} color="var(--t-ok)" />
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--t-fg)' }}>Team saved</span>
+            <button
+              type="button"
+              onClick={() => setSavedTeamId(null)}
+              title="关闭"
+              style={{ marginLeft: 'auto', width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 0, borderRadius: 5, color: 'var(--t-fg-4)', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
+            >×</button>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => onNavigate(savedTeamId ? `/teams/${savedTeamId}` : '/teams')}
+              style={{ background: 'var(--t-ok)', border: 'none', borderRadius: 6, color: '#fff', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, fontWeight: 600 }}
+            >查看 Team →</button>
+            <button
+              type="button"
+              onClick={() => onNavigate(savedGroupId ? `/chat/${savedGroupId}` : '/chat')}
+              style={{ background: 'var(--t-bg-2)', border: '1px solid var(--t-border)', borderRadius: 6, color: 'var(--t-fg)', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5 }}
+            >Chat →</button>
+            <button
+              type="button"
+              onClick={() => onNavigate('/agents')}
+              style={{ background: 'var(--t-bg-2)', border: '1px solid var(--t-border)', borderRadius: 6, color: 'var(--t-fg)', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5 }}
+            >Agents →</button>
+          </div>
         </div>
       )}
       <div
