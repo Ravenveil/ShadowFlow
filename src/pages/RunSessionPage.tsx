@@ -1460,14 +1460,12 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   }, [showModelPicker]);
 
   // 2026-05-11 Layer 1 — Claude Code-style chat fallback.
-  // Two triggers (both require "no canvas events seen"):
-  //  (1) LLM is plain-text-replying (chatReply has content) → chat mode.
-  //  (2) Run completed with NO canvas events at all → also chat mode. Covers
-  //      the case where Claude CLI exited silently; route now synthesises a
-  //      fallback text, but the panel state should collapse either way so
-  //      the user sees only the chat surface + input box.
+  // Requires actual chatReply text — bare `isComplete` no longer triggers,
+  // since hard CLI failures (e.g. claude exit 1, 403 auth) finish the session
+  // without any reply and would otherwise collapse the canvas, hiding the
+  // error events from the user (2026-05-16 regression fix).
   const isChatMode =
-    (session.chatReply.length > 0 || session.isComplete) &&
+    session.chatReply.trim().length > 0 &&
     session.steps.length === 0 &&
     session.nodes.length === 0 &&
     !session.blueprintFile;
@@ -2906,10 +2904,10 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   }, [session.isComplete, session.nodes.length]);
 
   // 2026-05-11 Layer 1 — chat-mode detection (mirrors LeftPanel).
-  // Triggers when no canvas events at all AND either text streamed in OR
-  // the run completed silently. Collapses the right canvas panel.
+  // Requires actual chatReply text; failed sessions with no reply keep the
+  // two-column layout so the error surface stays visible (2026-05-16 fix).
   const isChatMode =
-    (session.chatReply.length > 0 || session.isComplete) &&
+    session.chatReply.trim().length > 0 &&
     session.steps.length === 0 &&
     session.nodes.length === 0 &&
     !session.blueprintFile;
