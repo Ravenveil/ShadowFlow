@@ -5,8 +5,10 @@
  * Layout: 300px provider rail | 1fr detail panel (no tab strip)
  * Data: GET /api/settings/byok · GET /api/settings/byok/models · PUT/DELETE /api/settings/byok/:id
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../common/i18n';
+
+const RECOMMENDED_TEMP = 0.2;
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 
@@ -172,6 +174,258 @@ function ModelToken({ id, name, checked, onToggle }: { id: string; name: string;
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{id}</div>
       </div>
     </label>
+  );
+}
+
+// ── Custom Select (flat) ──────────────────────────────────────────────────────
+
+interface SelectOption { value: string; label: string; hint?: string }
+
+function CustomSelect({
+  value, onChange, options, ariaLabel,
+}: { value: string; onChange: (v: string) => void; options: SelectOption[]; ariaLabel?: string }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onEsc(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false); }
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [open]);
+
+  const current = options.find(o => o.value === value);
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%', height: 36, boxSizing: 'border-box',
+          padding: '0 10px 0 12px',
+          background: 'var(--t-bg)',
+          border: `1px solid ${open ? 'var(--t-accent)' : 'var(--t-border)'}`,
+          borderRadius: 9,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)',
+          cursor: 'pointer', textAlign: 'left',
+          transition: 'border-color .12s',
+        }}
+      >
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {current?.label ?? value}
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--t-fg-4)"
+             strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+             style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }}>
+          <path d="m6 9 6 6 6-6"/>
+        </svg>
+      </button>
+      {open && (
+        <div role="listbox" style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+          background: 'var(--t-panel, var(--t-bg))',
+          border: '1px solid var(--t-border)',
+          borderRadius: 9,
+          padding: 4,
+          boxShadow: '0 12px 32px rgba(0,0,0,.25), 0 2px 8px rgba(0,0,0,.15)',
+          zIndex: 100,
+          maxHeight: 280, overflow: 'auto',
+        }}>
+          {options.map(opt => {
+            const sel = opt.value === value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="option"
+                aria-selected={sel}
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                style={{
+                  width: '100%', textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 10px',
+                  background: sel ? 'var(--t-accent-tint)' : 'transparent',
+                  border: 'none', borderRadius: 6,
+                  cursor: 'pointer',
+                  color: sel ? 'var(--t-accent)' : 'var(--t-fg-2)',
+                  fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: sel ? 700 : 500,
+                  transition: 'background .1s',
+                }}
+                onMouseEnter={e => { if (!sel) (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-bg)'; }}
+                onMouseLeave={e => { if (!sel) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+              >
+                <span style={{ width: 12, flexShrink: 0, color: 'var(--t-accent)' }}>
+                  {sel && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m4 12 5 5L20 6"/>
+                    </svg>
+                  )}
+                </span>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opt.label}</span>
+                {opt.hint && (
+                  <span style={{ fontSize: 9.5, color: sel ? 'var(--t-accent)' : 'var(--t-fg-5)', flexShrink: 0, opacity: sel ? 0.7 : 1 }}>{opt.hint}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Custom Select (grouped by provider) ───────────────────────────────────────
+
+function ModelSelect({
+  value, onChange, models, placeholder,
+}: { value: string; onChange: (v: string) => void; models: ModelDef[]; placeholder: string }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onEsc(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false); }
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [open]);
+
+  const grouped = useMemo(() => {
+    const map: Record<string, ModelDef[]> = {};
+    for (const m of models) {
+      (map[m.provider] ??= []).push(m);
+    }
+    return map;
+  }, [models]);
+
+  const current = models.find(m => m.id === value);
+  const currentMeta = current ? PROVIDER_META[current.provider] : undefined;
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%', height: 36, boxSizing: 'border-box',
+          padding: '0 10px 0 10px',
+          background: 'var(--t-bg)',
+          border: `1px solid ${open ? 'var(--t-accent)' : 'var(--t-border)'}`,
+          borderRadius: 9,
+          display: 'flex', alignItems: 'center', gap: 8,
+          cursor: 'pointer', textAlign: 'left',
+          transition: 'border-color .12s',
+        }}
+      >
+        {current ? (
+          <>
+            <ProviderLogo id={current.provider} size={20} active={true} />
+            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5, fontWeight: 600, color: 'var(--t-fg-2)' }}>
+              {current.name}
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-5)', flexShrink: 0 }}>
+              {currentMeta?.name ?? current.provider}
+            </span>
+          </>
+        ) : (
+          <span style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-5)' }}>
+            {placeholder}
+          </span>
+        )}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--t-fg-4)"
+             strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+             style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }}>
+          <path d="m6 9 6 6 6-6"/>
+        </svg>
+      </button>
+      {open && (
+        <div role="listbox" style={{
+          position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, right: 0,
+          background: 'var(--t-panel, var(--t-bg))',
+          border: '1px solid var(--t-border)',
+          borderRadius: 9,
+          padding: 4,
+          boxShadow: '0 -12px 32px rgba(0,0,0,.25), 0 -2px 8px rgba(0,0,0,.15)',
+          zIndex: 100,
+          maxHeight: 320, overflow: 'auto',
+        }}>
+          {Object.entries(grouped).map(([providerId, list]) => {
+            const meta = PROVIDER_META[providerId];
+            return (
+              <div key={providerId}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 10px 4px',
+                  fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700,
+                  letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-5)',
+                }}>
+                  <ProviderLogo id={providerId} size={14} />
+                  <span>{meta?.name ?? providerId}</span>
+                </div>
+                {list.map(m => {
+                  const sel = m.id === value;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      role="option"
+                      aria-selected={sel}
+                      onClick={() => { onChange(m.id); setOpen(false); }}
+                      style={{
+                        width: '100%', textAlign: 'left',
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '7px 10px 7px 22px',
+                        background: sel ? 'var(--t-accent-tint)' : 'transparent',
+                        border: 'none', borderRadius: 6,
+                        cursor: 'pointer',
+                        color: sel ? 'var(--t-accent)' : 'var(--t-fg-2)',
+                        transition: 'background .1s',
+                      }}
+                      onMouseEnter={e => { if (!sel) (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-bg)'; }}
+                      onMouseLeave={e => { if (!sel) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                    >
+                      <span style={{ width: 12, flexShrink: 0, color: 'var(--t-accent)' }}>
+                        {sel && (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m4 12 5 5L20 6"/>
+                          </svg>
+                        )}
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: sel ? 700 : 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {m.name}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: sel ? 'var(--t-accent)' : 'var(--t-fg-5)', opacity: sel ? 0.7 : 1, flexShrink: 0 }}>
+                        {m.id}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -693,34 +947,47 @@ export function ByokSection() {
           )}
 
           {/* Defaults row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 14 }}>
             <div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>
                 {T('默认模型', 'Default Model')}
               </div>
-              <select
+              <ModelSelect
                 value={defaultModelId || (enabledModels[0] ?? providerModels[0]?.id ?? '')}
-                onChange={(e) => { setDefaultModelId(e.target.value); persistPref({ defaultModel: e.target.value }); }}
-                style={{
-                  width: '100%', height: 36, boxSizing: 'border-box', padding: '0 12px',
-                  background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
-                  fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)', cursor: 'pointer',
-                }}
-              >
-                <option value="">{T('(未选)', '(none)')}</option>
-                {allModels.map(m => (
-                  <option key={m.id} value={m.id}>{m.name} · {m.id}</option>
-                ))}
-              </select>
+                onChange={(v) => { setDefaultModelId(v); persistPref({ defaultModel: v }); }}
+                models={allModels}
+                placeholder={T('(未选)', '(none)')}
+              />
             </div>
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>
-                {T('温度', 'Temperature')}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>
+                  {T('温度', 'Temperature')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setTemperature(RECOMMENDED_TEMP); persistPref({ temperature: RECOMMENDED_TEMP }); }}
+                  title={T('点击重置为建议值', 'Click to reset to suggested value')}
+                  style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 9.5,
+                    color: Math.abs(temperature - RECOMMENDED_TEMP) < 0.01 ? 'var(--t-accent)' : 'var(--t-fg-5)',
+                    background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  {T('建议', 'Suggested')} {RECOMMENDED_TEMP.toFixed(1)} ↺
+                </button>
               </div>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 12, padding: '0 12px', height: 36, boxSizing: 'border-box',
-                background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
+                background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9, position: 'relative',
               }}>
+                {/* Suggested-value tick mark under the track */}
+                <div style={{
+                  position: 'absolute', pointerEvents: 'none',
+                  left: `calc(12px + (100% - 24px - 36px) * ${RECOMMENDED_TEMP / 2})`,
+                  bottom: 4, width: 2, height: 4, borderRadius: 1,
+                  background: 'color-mix(in oklab, var(--t-accent) 60%, transparent)',
+                }} />
                 <input
                   type="range" min={0} max={2} step={0.1}
                   value={temperature}
@@ -729,27 +996,28 @@ export function ByokSection() {
                   onTouchEnd={() => persistPref({ temperature })}
                   style={{ flex: 1, accentColor: 'var(--t-accent)' }}
                 />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)', minWidth: 24, textAlign: 'right' }}>{temperature.toFixed(1)}</span>
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
+                  color: Math.abs(temperature - RECOMMENDED_TEMP) < 0.01 ? 'var(--t-accent)' : 'var(--t-fg-2)',
+                  minWidth: 24, textAlign: 'right',
+                }}>{temperature.toFixed(1)}</span>
               </div>
             </div>
             <div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-fg-4)', marginBottom: 6 }}>
                 {T('路由优先级', 'Routing Priority')}
               </div>
-              <select
+              <CustomSelect
                 value={routingPriority}
-                onChange={(e) => { setRoutingPriority(e.target.value); persistPref({ routingPriority: e.target.value }); }}
-                style={{
-                  width: '100%', height: 36, boxSizing: 'border-box', padding: '0 12px',
-                  background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
-                  fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-2)', cursor: 'pointer',
-                }}
-              >
-                <option value="fallback">{T('P1 · 回退首选', 'P1 · Fallback')}</option>
-                <option value="primary">{T('P0 · 主选', 'P0 · Primary')}</option>
-                <option value="backup">{T('P2 · 备份', 'P2 · Backup')}</option>
-                <option value="disabled">{T('已禁用', 'Disabled')}</option>
-              </select>
+                onChange={(v) => { setRoutingPriority(v); persistPref({ routingPriority: v }); }}
+                ariaLabel={T('路由优先级', 'Routing Priority')}
+                options={[
+                  { value: 'fallback', label: T('回退首选', 'Fallback'), hint: 'P1' },
+                  { value: 'primary',  label: T('主选', 'Primary'),     hint: 'P0' },
+                  { value: 'backup',   label: T('备份', 'Backup'),      hint: 'P2' },
+                  { value: 'disabled', label: T('已禁用', 'Disabled'),  hint: '—'  },
+                ]}
+              />
             </div>
           </div>
 
