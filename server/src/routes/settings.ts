@@ -656,6 +656,105 @@ router.get('/byok/:providerId/models/remote', async (req: Request, res: Response
   });
 });
 
+// POST /api/settings/byok/:providerId/check
+//   Cherry Studio-style health check: probe each configured API key in
+//   parallel, report per-key {status, latency, error}. The probe uses the
+//   same /models endpoint as the catalog refresh — cheaper than chat, and
+//   for providers without /models we degrade to "endpoint reachable, key
+//   format accepted" rather than a hard failure.
+router.post('/byok/:providerId/check', async (req: Request, res: Response) => {
+  const { providerId } = req.params;
+  const store = loadByok();
+  const cfg = store.providers[providerId];
+
+  const apiKeys = parseApiKeys(cfg?.apiKey ?? '');
+  const baseUrl = (cfg?.baseUrl?.trim() || PROVIDER_DEFAULT_BASE[providerId] || '');
+  const type = resolveEndpointType(providerId, cfg?.type);
+
+  if (!PROVIDERS_NO_KEY.has(providerId) && apiKeys.length === 0) {
+    return res.status(400).json({
+      error: { code: 'NOT_CONFIGURED', message: '该提供商尚未配置 API Key' },
+    });
+  }
+
+  const effectiveBase = normalizeProviderBaseUrl(providerId, baseUrl);
+  const keysToCheck = apiKeys.length > 0 ? apiKeys : [''];
+
+  type KeyStatus = 'ok' | 'failed' | 'unavailable';
+  interface KeyResult {
+    keyTail: string;
+    status: KeyStatus;
+    latencyMs?: number;
+    statusCode?: number;
+    error?: string;
+  }
+
+  const results: KeyResult[] = await Promise.all(
+    keysToCheck.map(async (key): Promise<KeyResult> => {
+      const keyTail = key ? `••••${key.slice(-4)}` : '(none)';
+      const probe = buildProbeRequest(type, key, effectiveBase);
+      const startTime = Date.now();
+      try {
+        const resp = await fetch(probe.url, {
+          headers: probe.headers,
+          signal: AbortSignal.timeout(15000),
+        });
+        const latencyMs = Date.now() - startTime;
+        if (resp.ok) {
+          return { keyTail, status: 'ok', latencyMs, statusCode: resp.status };
+        }
+        // Provider doesn't expose /models — endpoint reachable but we can't
+        // tell whether the key is valid. Mark as "unavailable" rather than
+        // failed so the UI surfaces it neutrally.
+        if (resp.status === 404 || resp.status === 405 || resp.status === 501) {
+          return {
+            keyTail,
+            status: 'unavailable',
+            latencyMs,
+            statusCode: resp.status,
+            error: '该提供商不提供 /models 端点；连接已建立但无法验证密钥',
+          };
+        }
+        const body = await resp.text().catch(() => '');
+        return {
+          keyTail,
+          status: 'failed',
+          latencyMs,
+          statusCode: resp.status,
+          error: resp.status === 401 || resp.status === 403
+            ? '鉴权失败（可能是密钥错误或额度耗尽）'
+            : `HTTP ${resp.status} ${body.slice(0, 200)}`.trim(),
+        };
+      } catch (err) {
+        return {
+          keyTail,
+          status: 'failed',
+          latencyMs: Date.now() - startTime,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }),
+  );
+
+  // Aggregate: ALL ok → ok; any failed → failed; only unavailable → unavailable
+  const okCount = results.filter(r => r.status === 'ok').length;
+  const failedCount = results.filter(r => r.status === 'failed').length;
+  const overall: KeyStatus = failedCount > 0
+    ? 'failed'
+    : okCount > 0
+      ? 'ok'
+      : 'unavailable';
+
+  return res.json({
+    providerId,
+    endpointType: type,
+    keysChecked: keysToCheck.length,
+    overall,
+    results,
+    effectiveBase,
+  });
+});
+
 // PUT /api/settings/byok/:providerId → save provider config
 router.put('/byok/:providerId', (req: Request, res: Response) => {
   const { providerId } = req.params;

@@ -59,7 +59,27 @@ interface ByokStore {
   temperature?: number;
   routingPriority?: string;
 }
-interface ModelDef { id: string; name: string; provider: string }
+type ModelCapability =
+  | 'vision'
+  | 'embedding'
+  | 'function_calling'
+  | 'reasoning'
+  | 'image_generation'
+  | 'audio'
+  | 'rerank'
+  | 'web_search';
+
+interface ModelDef {
+  id: string;
+  name: string;
+  provider: string;
+  /** Family label for UI grouping (e.g. "GLM-4.5", "Claude 4", "GPT-5", "Embedding") */
+  group?: string;
+  /** Inferred capabilities for badges + filtering */
+  capabilities?: ModelCapability[];
+  owned_by?: string;
+  description?: string;
+}
 
 const FALLBACK_MODELS: ModelDef[] = [
   { id: 'claude-opus-4-7',     name: 'Claude Opus 4.7',    provider: 'anthropic' },
@@ -225,7 +245,47 @@ function SourceBadge({ source }: { source: ModelSource }) {
   );
 }
 
-function ModelToken({ id, name, checked, source, onToggle }: { id: string; name: string; checked: boolean; source: ModelSource; onToggle: () => void }) {
+const CAPABILITY_META: Record<ModelCapability, { glyph: string; label: string; tint: string }> = {
+  vision:           { glyph: '👁', label: '视觉',  tint: '#8b5cf6' },
+  embedding:        { glyph: '⊚', label: '嵌入',  tint: '#d97706' },
+  function_calling: { glyph: 'ƒ', label: '函数',  tint: '#10b981' },
+  reasoning:        { glyph: '∴', label: '推理',  tint: '#3b82f6' },
+  image_generation: { glyph: '◧', label: '绘图',  tint: '#ec4899' },
+  audio:            { glyph: '♪', label: '音频',  tint: '#06b6d4' },
+  rerank:           { glyph: '⇅', label: '重排',  tint: '#a855f7' },
+  web_search:       { glyph: '⌕', label: '搜索',  tint: '#0ea5e9' },
+};
+
+function CapabilityBadges({ caps }: { caps?: ModelCapability[] }) {
+  if (!caps || caps.length === 0) return null;
+  return (
+    <span style={{ display: 'inline-flex', gap: 3, flexShrink: 0 }}>
+      {caps.map(c => {
+        const m = CAPABILITY_META[c];
+        if (!m) return null;
+        return (
+          <span
+            key={c}
+            title={m.label}
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 14, height: 14, borderRadius: 3,
+              background: `color-mix(in oklab, ${m.tint} 16%, transparent)`,
+              border: `1px solid color-mix(in oklab, ${m.tint} 32%, transparent)`,
+              color: m.tint,
+              fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, lineHeight: 1,
+            }}
+          >{m.glyph}</span>
+        );
+      })}
+    </span>
+  );
+}
+
+function ModelToken({ id, name, checked, source, capabilities, onToggle }: {
+  id: string; name: string; checked: boolean; source: ModelSource;
+  capabilities?: ModelCapability[]; onToggle: () => void;
+}) {
   return (
     <label onClick={onToggle} style={{
       display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px',
@@ -246,6 +306,7 @@ function ModelToken({ id, name, checked, source, onToggle }: { id: string; name:
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
           <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--t-fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+          <CapabilityBadges caps={capabilities} />
           <SourceBadge source={source} />
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{id}</div>
@@ -821,13 +882,50 @@ export function ByokSection() {
     }
   }
 
+  interface KeyCheckResult {
+    keyTail: string;
+    status: 'ok' | 'failed' | 'unavailable';
+    latencyMs?: number;
+    statusCode?: number;
+    error?: string;
+  }
+  const [checkResults, setCheckResults] = useState<KeyCheckResult[] | null>(null);
+  const [checkOverall, setCheckOverall] = useState<'idle' | 'checking' | 'ok' | 'failed' | 'unavailable'>('idle');
+
   async function handleTest() {
     setTestState('testing');
+    setCheckOverall('checking');
+    setCheckResults(null);
     try {
-      const r = await fetch(`${API_BASE}/api/settings/byok/models`, { signal: AbortSignal.timeout(5000) });
-      setTestState(r.ok ? 'ok' : 'fail');
-    } catch { setTestState('fail'); }
-    setTimeout(() => setTestState('idle'), 4000);
+      const r = await fetch(`${API_BASE}/api/settings/byok/${selectedId}/check`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(30000),
+      });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) {
+        setTestState('fail');
+        setCheckOverall('failed');
+        setCheckResults([{
+          keyTail: '(error)',
+          status: 'failed',
+          error: j?.error?.message ?? `HTTP ${r.status}`,
+        }]);
+      } else {
+        const overall = j?.overall as 'ok' | 'failed' | 'unavailable';
+        setCheckOverall(overall);
+        setCheckResults(Array.isArray(j?.results) ? j.results : []);
+        setTestState(overall === 'ok' ? 'ok' : overall === 'unavailable' ? 'ok' : 'fail');
+      }
+    } catch (err) {
+      setTestState('fail');
+      setCheckOverall('failed');
+      setCheckResults([{
+        keyTail: '(network)',
+        status: 'failed',
+        error: err instanceof Error ? err.message : String(err),
+      }]);
+    }
+    setTimeout(() => setTestState('idle'), 6000);
   }
 
   const LOCAL_IDS = new Set(['ollama', 'lmstudio']);
@@ -1041,9 +1139,9 @@ export function ByokSection() {
                     value={keyInput}
                     onChange={e => { setKeyInput(e.target.value); markDirty(); }}
                     onKeyDown={e => e.key === 'Enter' && handleSave()}
-                    placeholder={hasKey ? T('输入新 Key 覆盖', 'Enter new key to replace') : selectedMeta.keyPlaceholder}
+                    placeholder={hasKey ? T('输入新 Key 覆盖（多个用 , 分隔）', 'Enter new key (use , for multiple)') : selectedMeta.keyPlaceholder}
                     style={{
-                      width: '100%', boxSizing: 'border-box', padding: '0 68px 0 12px', height: 36,
+                      width: '100%', boxSizing: 'border-box', padding: '0 130px 0 12px', height: 36,
                       background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 9,
                       fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--t-fg)',
                       outline: 'none',
@@ -1051,7 +1149,7 @@ export function ByokSection() {
                     onFocus={e => (e.target.style.borderColor = 'var(--t-accent)')}
                     onBlur={e => (e.target.style.borderColor = 'var(--t-border)')}
                   />
-                  <div style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 2 }}>
+                  <div style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 2, alignItems: 'center' }}>
                     <button type="button" onClick={() => setShowKey(v => !v)} style={{ background: 'transparent', border: 'none', color: 'var(--t-fg-4)', cursor: 'pointer', padding: 4 }}>
                       {showKey ? (
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1063,14 +1161,73 @@ export function ByokSection() {
                         </svg>
                       )}
                     </button>
-                    {keyInput && (
-                      <button type="button" onClick={() => { navigator.clipboard.writeText(keyInput); }} style={{ background: 'transparent', border: 'none', color: 'var(--t-fg-4)', cursor: 'pointer', padding: 4 }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>
-                        </svg>
-                      </button>
-                    )}
+                    {/* Inline 检测 button — Cherry Studio style */}
+                    <button
+                      type="button"
+                      onClick={handleTest}
+                      disabled={checkOverall === 'checking' || !hasKey}
+                      style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+                        padding: '3px 9px', borderRadius: 5,
+                        background: checkOverall === 'ok' ? 'var(--t-ok-tint)'
+                                   : checkOverall === 'failed' ? 'color-mix(in oklab, var(--t-reject) 14%, transparent)'
+                                   : 'var(--t-bg)',
+                        border: `1px solid ${
+                          checkOverall === 'ok' ? 'color-mix(in oklab, var(--t-ok) 40%, transparent)'
+                          : checkOverall === 'failed' ? 'color-mix(in oklab, var(--t-reject) 40%, transparent)'
+                          : 'var(--t-border)'}`,
+                        color: checkOverall === 'ok' ? 'var(--t-ok)'
+                              : checkOverall === 'failed' ? 'var(--t-reject)'
+                              : 'var(--t-fg-3)',
+                        cursor: checkOverall === 'checking' || !hasKey ? 'not-allowed' : 'pointer',
+                        opacity: !hasKey ? 0.5 : 1,
+                        marginLeft: 2,
+                      }}
+                      title={!hasKey ? T('需要先保存密钥', 'Save a key first') : T('检测密钥连通性', 'Check key connectivity')}
+                    >
+                      {checkOverall === 'checking' ? T('检测中…', 'Checking…')
+                        : checkOverall === 'ok' ? T('通过 ✓', 'OK ✓')
+                        : checkOverall === 'failed' ? T('失败 ✕', 'Failed ✕')
+                        : T('检测', 'Check')}
+                    </button>
                   </div>
+                </div>
+                {/* 多 key 提示 + 检测结果 */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  marginTop: 4, gap: 8, flexWrap: 'wrap',
+                }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>
+                    {T('多个密钥使用逗号分隔', 'Multiple keys: separate with ","')}
+                  </span>
+                  {checkResults && checkResults.length > 0 && (
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {checkResults.map((r, i) => {
+                        const tint = r.status === 'ok' ? 'var(--t-ok)'
+                                   : r.status === 'unavailable' ? 'var(--t-warn, #d97706)'
+                                   : 'var(--t-reject)';
+                        return (
+                          <span
+                            key={i}
+                            title={r.error ?? `${r.statusCode ?? ''} ${r.latencyMs ?? '-'}ms`}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              padding: '1px 6px', borderRadius: 4,
+                              background: `color-mix(in oklab, ${tint} 14%, transparent)`,
+                              border: `1px solid color-mix(in oklab, ${tint} 30%, transparent)`,
+                              color: tint, fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600,
+                            }}
+                          >
+                            <span>{r.keyTail}</span>
+                            <span>{r.status === 'ok' ? '✓' : r.status === 'unavailable' ? '?' : '✕'}</span>
+                            {typeof r.latencyMs === 'number' && r.status === 'ok' && (
+                              <span style={{ opacity: 0.7 }}>{r.latencyMs}ms</span>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1079,7 +1236,25 @@ export function ByokSection() {
             <div style={selectedMeta.noKey ? { gridColumn: '1 / -1' } : {}}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-fg-4)' }}>BASE URL</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>{T('代理 / 自定义网关可在此覆盖', 'Override for proxy / custom gateway')}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-5)' }}>{T('代理 / 自定义网关可在此覆盖', 'Override for proxy / custom gateway')}</span>
+                  {baseUrlInput !== selectedMeta.defaultUrl && (
+                    <button
+                      type="button"
+                      onClick={() => { setBaseUrlInput(selectedMeta.defaultUrl); markDirty(); }}
+                      title={T('重置为默认地址', 'Reset to default')}
+                      style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600,
+                        padding: '1px 7px', borderRadius: 4,
+                        background: 'transparent',
+                        border: '1px solid var(--t-border)',
+                        color: 'var(--t-reject)', cursor: 'pointer',
+                      }}
+                    >
+                      {T('重置', 'Reset')}
+                    </button>
+                  )}
+                </div>
               </div>
               <input
                 type="text"
@@ -1148,23 +1323,61 @@ export function ByokSection() {
                   </button>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
-                {providerModels.map(m => {
-                  const synced = savedState?.syncedModels ?? [];
-                  const manual = savedState?.manualModels ?? [];
-                  const source: ModelSource =
-                    synced.includes(m.id) ? 'synced'
-                    : manual.includes(m.id) ? 'manual'
-                    : 'fallback';
+              {(() => {
+                // Group models by their `group` field (family label) — Cherry Studio
+                // does this so users see "GLM-4.5", "GLM-4.6V", "Embedding" headings
+                // instead of a flat 80-row list. Models without a group fall under '其他'.
+                const grouped = new Map<string, ModelDef[]>();
+                for (const m of providerModels) {
+                  const key = m.group || '其他';
+                  const arr = grouped.get(key) ?? [];
+                  arr.push(m);
+                  grouped.set(key, arr);
+                }
+                // Stable ordering: Embedding / Rerank / Image / Audio last, families A-Z
+                const SPECIAL_ORDER = ['Embedding', 'Rerank', 'Image', 'Audio', '其他'];
+                const families = [...grouped.keys()]
+                  .filter(g => !SPECIAL_ORDER.includes(g))
+                  .sort((a, b) => a.localeCompare(b));
+                const groups = [...families, ...SPECIAL_ORDER.filter(g => grouped.has(g))];
+
+                const synced = savedState?.syncedModels ?? [];
+                const manual = savedState?.manualModels ?? [];
+
+                return groups.map(groupName => {
+                  const list = grouped.get(groupName)!;
                   return (
-                    <ModelToken
-                      key={m.id} id={m.id} name={m.name} source={source}
-                      checked={enabledModels.includes(m.id)}
-                      onToggle={() => toggleModel(m.id)}
-                    />
+                    <div key={groupName} style={{ marginBottom: 12 }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '6px 0 4px',
+                        fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
+                        letterSpacing: '0.08em', color: 'var(--t-fg-3)',
+                      }}>
+                        <span>{groupName}</span>
+                        <span style={{ color: 'var(--t-fg-5)', fontWeight: 500 }}>·</span>
+                        <span style={{ color: 'var(--t-fg-5)', fontWeight: 500 }}>{list.length}</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                        {list.map(m => {
+                          const source: ModelSource =
+                            synced.includes(m.id) ? 'synced'
+                            : manual.includes(m.id) ? 'manual'
+                            : 'fallback';
+                          return (
+                            <ModelToken
+                              key={m.id} id={m.id} name={m.name} source={source}
+                              capabilities={m.capabilities}
+                              checked={enabledModels.includes(m.id)}
+                              onToggle={() => toggleModel(m.id)}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
-                })}
-              </div>
+                });
+              })()}
             </div>
           )}
 
