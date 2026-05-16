@@ -15,6 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import { Router, Request, Response } from 'express';
 import { SKILLS, HARDCODED_SKILLS, reloadSkills } from '../skills';
+import { ingestSkill, listInstalled, parseSource } from '../skill-ingest';
 
 const router = Router();
 
@@ -194,6 +195,107 @@ ${yaml}
     const msg = (err as Error).message ?? String(err);
     console.error('[skills:save] write failed:', err);
     res.status(500).json({ error: { code: 'WRITE_FAILED', message: msg } });
+  }
+});
+
+/**
+ * POST /api/skills/ingest — fetch + probe + register a user-supplied skill.
+ *
+ * Body:
+ *   { source: string, forced_id?: string }
+ *
+ * source is a URL (github repo / raw markdown / arbitrary http link) or
+ * pasted markdown text. The handler clones / downloads it into a cache
+ * directory, probes the structure schema-lessly, then materializes it under
+ * .shadowflow/skills/<id>/references/ so the existing side-files loader picks
+ * it up on the next run-session.
+ *
+ * Returns 201 on first install, 200 on re-install (same source string).
+ */
+router.post('/ingest', async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { source?: unknown; forced_id?: unknown };
+  const source = typeof body.source === 'string' ? body.source.trim() : '';
+  if (!source) {
+    res.status(400).json({
+      error: { code: 'INVALID_SOURCE', message: 'source must be a non-empty string (URL or pasted text)' },
+    });
+    return;
+  }
+  if (source.length > 200_000) {
+    res.status(400).json({
+      error: { code: 'SOURCE_TOO_LARGE', message: 'source string capped at 200KB' },
+    });
+    return;
+  }
+  const forcedId =
+    typeof body.forced_id === 'string' && body.forced_id.trim().length > 0
+      ? body.forced_id.trim()
+      : undefined;
+  if (forcedId && !VALID_SKILL_ID_RE.test(forcedId)) {
+    res.status(400).json({
+      error: { code: 'INVALID_FORCED_ID', message: 'forced_id must match /^[a-z0-9][a-z0-9_-]{0,63}$/i' },
+    });
+    return;
+  }
+
+  try {
+    const result = await ingestSkill(source, forcedId);
+    // Refresh the SKILLS registry so the new skill is usable immediately.
+    try { reloadSkills(); } catch (err) {
+      console.warn('[skills:ingest] reloadSkills() after register failed:', err);
+    }
+    res.status(result.is_new ? 201 : 200).json({
+      data: {
+        skill_id: result.id,
+        name: result.name,
+        is_new: result.is_new,
+        source_label: result.source_label,
+        counts: result.probe.counts,
+        truncated: result.probe.truncated,
+      },
+    });
+  } catch (err) {
+    const msg = (err as Error).message ?? String(err);
+    console.error('[skills:ingest] failed:', err);
+    res.status(502).json({ error: { code: 'INGEST_FAILED', message: msg } });
+  }
+});
+
+/**
+ * GET /api/skills/installed — list user-ingested skills (for the @skill picker).
+ *
+ * Read straight from .shadowflow/skills/.installed.json. Hardcoded skills are
+ * NOT included here — those come from GET /api/skills.
+ */
+router.get('/installed', (_req: Request, res: Response) => {
+  const items = listInstalled();
+  res.json({ data: items });
+});
+
+/**
+ * POST /api/skills/preview — parse a candidate source (URL or text) without
+ * touching the filesystem. Used by the chat-input URL chip to ask "what does
+ * this look like?" before the user clicks 装.
+ */
+router.post('/preview', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { source?: unknown };
+  const source = typeof body.source === 'string' ? body.source.trim() : '';
+  if (!source) {
+    res.status(400).json({ error: { code: 'INVALID_SOURCE', message: 'source required' } });
+    return;
+  }
+  try {
+    const parsed = parseSource(source);
+    res.json({
+      data: {
+        kind: parsed.kind,
+        inferred_name: parsed.inferred_name,
+        subpath: parsed.subpath,
+      },
+    });
+  } catch (err) {
+    const msg = (err as Error).message ?? String(err);
+    res.status(400).json({ error: { code: 'INVALID_SOURCE', message: msg } });
   }
 });
 

@@ -297,6 +297,24 @@ router.post('/', (req: Request, res: Response) => {
     return;
   }
 
+  // Inline `@skill:<id>` token support (Story 16.x). Lets the user write
+  //   `@skill:bmad-method 帮我做电商系统`
+  // and have the server pull bmad-method out of the user library without the
+  // client needing to manage state. The explicit `skill_name` body param wins
+  // when both are present.
+  let goal_text = goal.trim();
+  let inline_skill_token: string | undefined;
+  const skillTokenRe = /@skill[:\s]+([a-z0-9][a-z0-9_-]{0,63})/i;
+  const m = goal_text.match(skillTokenRe);
+  if (m) {
+    inline_skill_token = m[1].toLowerCase();
+    goal_text = goal_text.replace(skillTokenRe, '').replace(/\s{2,}/g, ' ').trim();
+    if (!goal_text) {
+      // user typed only "@skill:foo" without a goal — fall back to a generic prompt
+      goal_text = '用这个 skill 帮我开始一项任务。';
+    }
+  }
+
   // Story 15.18 — multi-provider BYOK header dispatch. Each provider has its
   // own header (X-Anthropic-Key / X-OpenAI-Key / X-DeepSeek-Key / X-Zhipu-Key
   // / …); express lower-cases keys. We coerce + validate `provider` first,
@@ -383,9 +401,17 @@ router.post('/', (req: Request, res: Response) => {
   // skill_name 时显式回退到 'agent-team-blueprint'（默认）— 与 DS 注入链路保持
   // 一致，避免 SKILLS[skill_name] = undefined 时 DS injection 静默丢失。
   // OpenDesign 模式：skill resolve 时显式校验 + 默认 fallback。
-  const validated_skill =
-    typeof skill_name === 'string' && SKILLS[skill_name]
+  //
+  // Story 16.x — explicit body param wins; inline @skill: token is the fallback.
+  // Both must still resolve against the live SKILLS registry (populated by
+  // hardcoded + FS + user-ingested skills via reloadSkills()).
+  const skill_candidate =
+    typeof skill_name === 'string' && skill_name
       ? skill_name
+      : inline_skill_token;
+  const validated_skill =
+    skill_candidate && SKILLS[skill_candidate]
+      ? skill_candidate
       : 'agent-team-blueprint';
 
   // Story 15.9 — validate and store generation overrides. Each helper returns
@@ -443,7 +469,7 @@ router.post('/', (req: Request, res: Response) => {
 
   const session_id = uuidv4();
   sessionStore.set(session_id, {
-    goal: goal.trim(),
+    goal: goal_text,
     skill_name: validated_skill,
     output_hint,
     workspace_id,

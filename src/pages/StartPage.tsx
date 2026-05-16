@@ -48,6 +48,9 @@ import type { CatalogAppSummary } from '../common/types/catalog';
 import { GoalClarityWizard } from '../core/components/builder/GoalClarityWizard';
 import { HfTopBar } from '../components/hifi';
 import { useI18n } from '../common/i18n';
+import { SkillUrlChip } from '../components/SkillUrlChip';
+import { SkillPickerModal } from '../components/SkillPickerModal';
+import { extractSkillUrl, type SkillIngestSummary } from '../api/skillIngest';
 
 // ---------------------------------------------------------------------------
 // Recent drafts helpers
@@ -716,6 +719,13 @@ export default function StartPage() {
   const { secrets } = useSecretsStore();
   const [showWizard, setShowWizard] = useState(false);
   const [composer, setComposer] = useState('');
+  // Skill-URL detection state. When the composer contains a github / raw-md
+  // URL, we surface a chip offering to install it as a skill before submission.
+  // dismissedUrls accumulates URLs the user explicitly said "no" to so we don't
+  // re-prompt every keystroke.
+  const [dismissedUrls, setDismissedUrls] = useState<Set<string>>(() => new Set());
+  const [pendingSkill, setPendingSkill] = useState<SkillIngestSummary | null>(null);
+  const [skillPickerOpen, setSkillPickerOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [knowledge, setKnowledge] = useState<string[]>([]); // selected pack IDs
   const [knowledgePacks, setKnowledgePacks] = useState<KnowledgePack[] | null>(null);
@@ -814,6 +824,10 @@ export default function StartPage() {
           executor,
           model,
           provider,
+          // Story 16.x — when the user accepted the URL chip, forward the
+          // ingested skill id so the server uses it instead of the default
+          // 'agent-team-blueprint' template.
+          skill_name: pendingSkill?.skill_id,
         }),
       });
       if (resp.ok) {
@@ -969,6 +983,48 @@ export default function StartPage() {
               padding: '14px 16px 12px',
             }}
           >
+            {(() => {
+              if (pendingSkill) {
+                return (
+                  <div
+                    className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-3 py-2 mb-2 text-sm"
+                    data-testid="skill-ready-chip"
+                  >
+                    <span className="text-green-300 font-medium">✓ {pendingSkill.name} 已装</span>
+                    <span className="text-xs text-zinc-400 truncate flex-1">
+                      {Object.entries(pendingSkill.counts)
+                        .filter(([, n]) => n > 0)
+                        .map(([k, n]) => `${k}=${n}`)
+                        .join(', ') || 'empty'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPendingSkill(null)}
+                      className="text-xs text-zinc-400 hover:text-zinc-200"
+                    >
+                      取消
+                    </button>
+                  </div>
+                );
+              }
+              const url = extractSkillUrl(composer);
+              if (!url || dismissedUrls.has(url)) return null;
+              return (
+                <div className="mb-2">
+                  <SkillUrlChip
+                    url={url}
+                    onInstalled={(skill) => setPendingSkill(skill)}
+                    onDismiss={() =>
+                      setDismissedUrls((prev) => {
+                        const next = new Set(prev);
+                        next.add(url);
+                        return next;
+                      })
+                    }
+                  />
+                </div>
+              );
+            })()}
             <textarea
               value={composer}
               onChange={(e) => setComposer(e.target.value)}
@@ -1166,7 +1222,7 @@ export default function StartPage() {
                           testId: 'start-chip-import-skill',
                           onClick: () => {
                             setAddOpen(false);
-                            notImpl(t('start.importSkill'));
+                            setSkillPickerOpen(true);
                           },
                           accent: true,
                         },
@@ -1590,6 +1646,11 @@ export default function StartPage() {
           {showWizard && <GoalClarityWizard onSkip={() => setShowWizard(false)} />}
         </div>
       </div>
+      <SkillPickerModal
+        open={skillPickerOpen}
+        onClose={() => setSkillPickerOpen(false)}
+        onPicked={(skill) => setPendingSkill(skill)}
+      />
     </div>
   );
 }
