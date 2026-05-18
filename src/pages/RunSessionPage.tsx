@@ -2814,7 +2814,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                   return (
                     <div style={{
                       position: 'absolute', bottom: 'calc(100% + 6px)', left: 0,
-                      width: 360, maxHeight: 460, zIndex: 200,
+                      width: 260, maxHeight: 460, zIndex: 200,
                       background: 'var(--t-panel)',
                       border: '1px solid var(--t-border)',
                       borderRadius: 10,
