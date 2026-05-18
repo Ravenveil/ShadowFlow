@@ -375,7 +375,7 @@
   "projects.tabSettings": "Settings",
   "projects.artifactsEmpty": "No artifacts yet",
   "projects.artifactsEmptyDesc": "Start a chat to generate HTML, Markdown, PDF and other artifacts — they'll be archived here automatically.",
-  "projects.artifactsEmptyCta": "Go to chat",
+  "projects.artifactsEmptyCta": "Go to chat →",
   "projects.artifactCountUnit": " artifacts",
   "projects.filterNoResults": "No results for the current filter",
   "projects.filterAll": "All",

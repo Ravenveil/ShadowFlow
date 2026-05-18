@@ -12,7 +12,7 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowDown, Check, ChevronDown, ChevronRight, Circle, Cpu, ExternalLink, Key, KeyRound, Paperclip, Plus, RotateCcw, ServerCrash, Settings, Square, Timer, WifiOff } from 'lucide-react';
+import { AlertTriangle, ArrowDown, Check, Circle, Cpu, ExternalLink, Key, KeyRound, Paperclip, Plus, RotateCcw, ServerCrash, Settings, Square, Timer, WifiOff } from 'lucide-react';
 import { useRunSession } from '../core/hooks/useRunSession';
 import type { RunSessionNode, RunSessionEdge, RunSessionStep, SessionError } from '../core/hooks/useRunSession';
 import {
@@ -44,6 +44,17 @@ import InputTokenCount from '../components/InputTokenCount';
 import { saveDraft, loadDraft, clearDraft } from '../common/lib/draftCache';
 // 2026-05-16 — hover action row (Copy / Retry / placeholders) under assistant bubbles.
 import { MessageActions } from '../components/MessageActions';
+// 2026-05-18 agent-0 — right-pane tab shell + follow-mode chip + 4 stub panels.
+// The stubs are placeholders that agent-1/2/3 will replace with real
+// implementations (each replacement keeps the same default-export signature).
+import { RightPaneTabs, type TabId } from '../components/run-session/RightPaneTabs';
+import { FollowChip } from '../components/run-session/FollowChip';
+import { useFollowMode } from '../core/hooks/useFollowMode';
+import OverviewPanelStub from '../components/run-session/OverviewPanelStub';
+import TeamPanel from '../components/run-session/TeamPanel';
+import AgentPanel from '../components/run-session/AgentPanel';
+import PreviewPanelStub from '../components/run-session/PreviewPanelStub';
+import ThinkCard from '../components/run-session/ThinkCard';
 
 // ---------------------------------------------------------------------------
 // Model / Executor picker — CLI + API options pulled live from settings
@@ -946,6 +957,14 @@ interface RightPanelProps {
   sessionId: string;
 }
 
+// 2026-05-18 agent-0 — RightPanel is the legacy right-pane implementation
+// kept in the module after we swapped the runtime render to
+// RunSessionRightPane. It is intentionally unused at runtime (no JSX call
+// site). We preserve it so reverting the right-pane shell is a one-line
+// change and so any test fixture that imported its internals keeps
+// building. The @ts-expect-error pragma tells TS strict mode the
+// no-unused-locals violation is intentional.
+// @ts-expect-error TS6133 — kept intentionally unused; see comment above.
 function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId, onSelectNode, sessionId }: RightPanelProps) {
   const filename = session.blueprintFile ?? 'untitled.yml';
   const [rightTab, setRightTab] = useState<RightTab>('overview');
@@ -1648,9 +1667,10 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [thinkExpanded, setThinkExpanded] = useState(false);
-  // Track thinking duration: start when thinkingMessage first appears,
-  // freeze when chatReply begins or thinkingMessage clears.
+  // 2026-05-18 (agent-4) — thinkExpanded / thinkTitleHover moved into the
+  // ThinkCard component itself. We keep the duration tracker here because
+  // it depends on session-level state (chatReply / isComplete) that the
+  // card shouldn't observe directly.
   const thinkStartRef = useRef<number | null>(null);
   const [thinkDurationMs, setThinkDurationMs] = useState<number | null>(null);
   const thinkStreaming = Boolean(
@@ -1666,6 +1686,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
       setThinkDurationMs(Date.now() - thinkStartRef.current);
     }
   }, [session.thinkingMessage, session.chatReply, session.isComplete, thinkStreaming, thinkDurationMs]);
+  // Tick at 5Hz so the live elapsed-ms display refreshes while streaming.
   const [thinkTick, setThinkTick] = useState(0);
   useEffect(() => {
     if (!thinkStreaming) return;
@@ -1673,14 +1694,8 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
     return () => window.clearInterval(id);
   }, [thinkStreaming]);
   void thinkTick;
-  function formatThinkDuration(ms: number): string {
-    const s = ms / 1000;
-    if (s < 60) return `${s.toFixed(1)}s`;
-    return `${(s / 60).toFixed(1)}m`;
-  }
   const liveThinkMs =
     thinkStreaming && thinkStartRef.current !== null ? Date.now() - thinkStartRef.current : null;
-  const [thinkTitleHover, setThinkTitleHover] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>(
     () => localStorage.getItem('sf.model') ?? 'claude-sonnet-4-6',
@@ -2439,74 +2454,16 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
           </div>
         )}
 
-        {/* Thinking bubble — default collapsed (Cherry Studio style). */}
-        {session.thinkingMessage && (
-          <div
-            style={{
-              borderRadius: 6,
-              background: 'var(--t-bg)',
-              borderLeft: '2px solid #3B82F6',
-              overflow: 'hidden',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setThinkExpanded(v => !v)}
-              onMouseEnter={() => setThinkTitleHover(true)}
-              onMouseLeave={() => setThinkTitleHover(false)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                width: '100%',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '8px 12px',
-                textAlign: 'left',
-              }}
-            >
-              {thinkStreaming ? (
-                <InlineSpinner size={10} />
-              ) : (
-                <Check size={12} color="var(--t-fg-4)" strokeWidth={2.5} />
-              )}
-              <span style={{ fontSize: 12, color: 'var(--t-fg-3)', fontWeight: 500 }}>
-                {thinkStreaming
-                  ? `正在思考${liveThinkMs !== null ? ` · ${formatThinkDuration(liveThinkMs)}` : '…'}`
-                  : `已思考 ${thinkDurationMs !== null ? formatThinkDuration(thinkDurationMs) : ''}`}
-              </span>
-              <span
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexShrink: 0,
-                  marginLeft: 'auto',
-                  opacity: thinkTitleHover ? 1 : 0.45,
-                  color: 'var(--t-fg-4)',
-                  transition: 'opacity 120ms ease',
-                }}
-              >
-                {thinkExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </span>
-            </button>
-            {thinkExpanded && (
-              <div
-                style={{
-                  padding: '4px 12px 10px 12px',
-                  fontSize: 11,
-                  color: 'var(--t-fg-3)',
-                  lineHeight: 1.5,
-                  whiteSpace: 'pre-wrap',
-                  maxHeight: 240,
-                  overflowY: 'auto',
-                }}
-              >
-                {session.thinkingMessage}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Thinking card — 2026-05-18 (agent-4) extracted from inline render
+            into <ThinkCard> component (设计点 6). Mid-state spinner, folded
+            preview, and expanded reasoning view all live there. */}
+        <ThinkCard
+          thinkingMessage={session.thinkingMessage}
+          isStreaming={thinkStreaming}
+          liveThinkMs={liveThinkMs}
+          thinkDurationMs={thinkDurationMs}
+          tokenCount={session.tokenCount}
+        />
 
         {/* Token counter divider */}
         {session.tokenCount > 0 && (
@@ -3456,6 +3413,132 @@ export default function RunSessionPage() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 2026-05-18 agent-0 — RunSessionRightPane
+// ---------------------------------------------------------------------------
+//
+// Thin shell that composes:
+//   - useFollowMode → tab routing based on the live step stream
+//   - FollowChip    → "实时跟随" / "返回跟随" toggle
+//   - RightPaneTabs → 4 tab buttons + content area
+//   - Four panel stubs (Overview / Team / Agent / Preview) — agent-1/2/3
+//     will replace the stubs with real implementations.
+//   - Bottom dock with a single primary "去聊天 →" CTA per design spec.
+//
+// Important: this component does NOT mock data. The stubs render text
+// placeholders; the real session data is consumed inside each stub's
+// replacement via useRunSession() when those land.
+interface RunSessionRightPaneProps {
+  session: ReturnType<typeof useRunSession>;
+  sessionId: string;
+  onNavigate: ReturnType<typeof useNavigate>;
+  /** Chat group id created when the blueprint run completed. When present
+   *  the "去聊天" CTA navigates to /chat/<id>; otherwise it falls back to
+   *  /chat with a console placeholder. */
+  chatGroupId: string | null;
+}
+
+function RunSessionRightPane({ session, sessionId: _sessionId, onNavigate, chatGroupId }: RunSessionRightPaneProps) {
+  const { t } = useI18n();
+  const {
+    activeTab,
+    setActiveTab,
+    followMode,
+    toggleFollow,
+    followedTab,
+    currentStepLabel,
+  } = useFollowMode({ steps: session.steps });
+
+  // Tab click → lock follow mode (matches design-spec behavior). Internal
+  // auto-follow effect in useFollowMode keeps the default unlocked path.
+  const handleTabChange = (next: TabId) => setActiveTab(next, { lock: true });
+
+  // "去聊天 →" — jump to this run's chat conversation. When the run
+  // completed and auto-persist successfully created a chat group, we
+  // navigate straight to /chat/<groupId>. Otherwise fall back to /chat
+  // and log a TODO so the missing wiring is easy to find.
+  const handleGoToChat = () => {
+    if (chatGroupId) {
+      onNavigate(`/chat/${chatGroupId}`);
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.log('[RunSessionRightPane] TODO: chat group not yet linked for this run — falling back to /chat');
+    onNavigate('/chat');
+  };
+
+  const panels: Record<TabId, React.ReactNode> = {
+    overview: <OverviewPanelStub />,
+    team: <TeamPanel session={session} />,
+    agent: <AgentPanel session={session} />,
+    preview: <PreviewPanelStub />,
+  };
+
+  return (
+    <section
+      style={{
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--t-bg)',
+        overflow: 'hidden',
+        height: '100%',
+      }}
+    >
+      <RightPaneTabs
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        followChip={
+          <FollowChip
+            mode={followMode}
+            currentStepLabel={currentStepLabel}
+            onToggle={toggleFollow}
+          />
+        }
+        followedTab={followedTab}
+        panels={panels}
+      />
+
+      {/* Right-bottom dock — single primary CTA. Anchored absolute so the
+          stub panels (and their eventual replacements) keep their natural
+          height and the dock floats above them. */}
+      <div
+        style={{
+          position: 'absolute',
+          right: 20,
+          bottom: 20,
+          zIndex: 5,
+          display: 'flex',
+          gap: 8,
+        }}
+      >
+        <button
+          type="button"
+          onClick={handleGoToChat}
+          data-testid="run-session-go-to-chat"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '8px 14px',
+            borderRadius: 8,
+            background: 'var(--t-accent)',
+            color: 'var(--t-accent-ink, #fff)',
+            border: 'none',
+            fontSize: 12.5,
+            fontWeight: 600,
+            cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(0,0,0,.22)',
+            fontFamily: 'inherit',
+          }}
+        >
+          {t('projects.artifactsEmptyCta')}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 interface RunSessionLiveViewProps {
   sessionId: string;
   goal: string;
@@ -3466,8 +3549,13 @@ interface RunSessionLiveViewProps {
 function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessionLiveViewProps) {
   const session = useRunSession(sessionId);
   const [collapsed, setCollapsed] = useState(false);
-  const [zoom, setZoom] = useState(82);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  // 2026-05-18 agent-0 — zoom + selectedNodeId state kept for the legacy
+  // RightPanel implementation (still in file for now) so future refactors
+  // that re-introduce the canvas don't need to re-add state plumbing.
+  // The new RunSessionRightPane does not read these.
+  const [zoom, _setZoom] = useState(82);
+  const [selectedNodeId, _setSelectedNodeId] = useState<string | null>(null);
+  void zoom; void selectedNodeId;
   const [savedTeamId, setSavedTeamId] = useState<string | null>(null);
   const [savedGroupId, setSavedGroupId] = useState<string | null>(null);
   const savedRef = useRef(false);
@@ -3516,7 +3604,12 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
     !session.chatReply.includes('<sf:') &&
     (session.outputType == null || session.outputType === 'chat');
 
-  function handleOpenEditor() {
+  // 2026-05-18 agent-0 — handleOpenEditor previously wired the "在 Editor
+  // 中打开" button in the legacy RightPanel toolbar. The new toolbar has
+  // a single "去聊天 →" dock instead. Kept so re-introducing an Editor
+  // entry point is a one-line revert away.
+  // @ts-expect-error TS6133 — kept intentionally unused; see comment above.
+  function _handleOpenEditor() {
     if (session.redirectUrl) {
       onNavigate(session.redirectUrl);
     } else {
@@ -3602,14 +3695,15 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           onCollapse={() => setCollapsed((v) => !v)}
         />
         {!isChatMode && (
-          <RightPanel
+          // 2026-05-18 agent-0 — new right pane shell. Replaces <RightPanel>
+          // which is kept in the module for now (unused) so other stories /
+          // tests that import internal helpers (toolbarBtn, etc.) keep
+          // building. agent-1/2/3 will fill the four stub panels.
+          <RunSessionRightPane
             session={session}
-            onOpenEditor={handleOpenEditor}
-            zoom={zoom}
-            onZoomChange={setZoom}
-            selectedNodeId={selectedNodeId}
-            onSelectNode={setSelectedNodeId}
             sessionId={sessionId}
+            onNavigate={onNavigate}
+            chatGroupId={savedGroupId}
           />
         )}
       </div>

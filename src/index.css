@@ -261,6 +261,12 @@ input, textarea, select { font-family: inherit; color: inherit; }
 @keyframes sf-dash-anim { to { stroke-dashoffset: -12; } }
 @keyframes sf-edge-flow { to { stroke-dashoffset: -100; } }
 @keyframes sf-blink     { 50% { opacity: 0; } }
+/* 2026-05-18 (agent-4) — promoted from agent-1/agent-2 local <style> injections
+ * to permanent global keyframes so 4 degraded animations (ID-mark rotating ring,
+ * persona caret blink, slot running spinner, Tools ADDING spinner) get the
+ * same definition + no runtime DOM injection on mount. */
+@keyframes sf-spin      { to { transform: rotate(360deg); } }
+@keyframes sf-cur       { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
 
 /* ReactFlow overrides */
 .react-flow            { background: var(--bg) !important; }

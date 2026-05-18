@@ -375,7 +375,7 @@
   "projects.tabSettings": "项目设置",
   "projects.artifactsEmpty": "暂无 Artifacts",
   "projects.artifactsEmptyDesc": "开启一段对话，生成的 HTML / Markdown / PDF 等文件将自动归档到这里。",
-  "projects.artifactsEmptyCta": "去聊天",
+  "projects.artifactsEmptyCta": "去聊天 →",
   "projects.artifactCountUnit": " 个文件",
   "projects.filterNoResults": "当前过滤条件下无结果",
   "projects.filterAll": "全部",
