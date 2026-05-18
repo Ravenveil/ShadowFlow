@@ -98,11 +98,70 @@ agent、可以是 5 个串行 agent——按任务真实需要来，不强加协
 
 <sf:step name="规划 Agent 结构" status="running"/>
 <!-- 按需要输出 1..N 个 node。type 可以全是 "agent"，也可以有 coordinator。
-     skill 怎么定义就怎么输出，不要套固定模板。 -->
-<sf:node id="..." type="agent|coordinator" title="..." sub="..." chips="..." avatar_char="..."/>
+     skill 怎么定义就怎么输出，不要套固定模板。
+
+     每个 <sf:node> 除了基础 id/type/title/sub/chips/avatar_char，
+     还**应该**带上以下 4 个可选属性，供 AgentPanel 渲染配置卡片：
+       model           — 单一模型 id，如 "claude-sonnet-4-6" / "gpt-5" / "gemini-2-flash"
+       memory          — 单一记忆策略，如 "vector+scratch" / "short-term" / "long-term"
+       tools_picked    — 逗号分隔 tool id 列表（已选），如 "web_search,code_interpreter"
+       tools_candidate — 逗号分隔 tool id 候选池，如 "image_gen,sql_runner"
+     title / role / chips 用中文，但 model / tool id / memory 关键字用英文小写蛇形。
+
+     persona（agent 的 system prompt 摘要）如果较短可直接作为 persona="..." 属性；
+     如果是多行 system prompt，紧接 <sf:node> 后另起一对 <sf:agent-persona>：
+       <sf:agent-persona node_id="...">
+       多行 system prompt 内容，中文，可换行。
+       </sf:agent-persona>
+-->
+<sf:node id="..." type="agent|coordinator" title="..." sub="..." chips="..."
+         avatar_char="..." model="..." memory="..."
+         tools_picked="..." tools_candidate="..."/>
+<sf:agent-persona node_id="...">
+你是 XX 专家，负责 XX。决策时优先 XX，避免 XX。输出格式 XX。
+</sf:agent-persona>
 <!-- edge 也按需要——单 agent 可以没 edge，多 agent 按真实依赖关系画 -->
 <sf:edge from="..." to="..."/>
 <sf:step name="规划 Agent 结构" status="done" elapsed_ms="..."/>
+
+<!-- 完整示例（BMAD 4 角全栈团队）：
+<sf:node id="pm" type="coordinator" title="产品经理" sub="规划与对齐"
+         chips="claude-sonnet-4-6,需求拆解,优先级"
+         avatar_char="产" model="claude-sonnet-4-6" memory="vector+scratch"
+         tools_picked="web_search,doc_writer"
+         tools_candidate="jira,figma_reader"/>
+<sf:agent-persona node_id="pm">
+你是资深产品经理，擅长把模糊需求拆成可执行 epic。输出顺序：1) 目标 2) 用户场景 3) 验收标准。
+</sf:agent-persona>
+<sf:node id="arch" type="agent" title="架构师" sub="技术方案"
+         chips="claude-sonnet-4-6,系统设计,选型"
+         avatar_char="架" model="claude-sonnet-4-6" memory="vector+scratch"
+         tools_picked="code_reader,web_search"
+         tools_candidate="sql_runner,diagram_gen"/>
+<sf:agent-persona node_id="arch">
+你是后端架构师，输出技术方案前必须列出至少 2 个备选方案及取舍。
+</sf:agent-persona>
+<sf:node id="dev" type="agent" title="全栈开发" sub="编码与测试"
+         chips="claude-haiku-4,TS,React"
+         avatar_char="开" model="claude-haiku-4" memory="short-term"
+         tools_picked="code_interpreter,file_writer"
+         tools_candidate="docker_runner,npm_runner"/>
+<sf:agent-persona node_id="dev">
+你是全栈工程师。先看代码上下文再动手；每个改动配最小测试。
+</sf:agent-persona>
+<sf:node id="qa" type="agent" title="测试工程师" sub="回归与验证"
+         chips="claude-haiku-4,QA,回归"
+         avatar_char="测" model="claude-haiku-4" memory="short-term"
+         tools_picked="browser,curl"
+         tools_candidate="screenshot,lighthouse"/>
+<sf:agent-persona node_id="qa">
+你是 QA。每个验收标准给出最小复现步骤；通过/失败用一句话总结。
+</sf:agent-persona>
+<sf:edge from="pm" to="arch"/>
+<sf:edge from="arch" to="dev"/>
+<sf:edge from="dev" to="qa"/>
+-->
+
 
 <sf:step name="生成 YAML Blueprint" status="running"/>
 <artifact type="yaml" filename="team_blueprint.yml">
@@ -134,7 +193,10 @@ edges:
 2. 进入组装阶段后每个 step 必须有 running 和 done 两条事件。
 3. 不要用 markdown 代码块包裹（不要 \`\`\`yaml）。
 4. agent title / role / chips 用中文。
-5. **没说要团队就别造团队**，"hi" 回 "你好" 就行。`;
+5. **没说要团队就别造团队**，"hi" 回 "你好" 就行。
+6. model / tool id / memory 关键字用英文小写蛇形（如 \`web_search\`, \`vector+scratch\`）。
+7. 每个 <sf:node> 至少给出 model + tools_picked + persona（属性或子标签）三项，
+   memory 与 tools_candidate 可省略。属性缺失不会报错，但前端会显示「未指定」。`;
 
 const WEB_PROTOTYPE_PROMPT = `你是网页原型生成器。根据用户描述，生成一个完整的现代化 HTML 页面。
 

@@ -97,6 +97,26 @@ export interface NodeEvent {
   chips: string[];
   status: NodeStatus;
   avatar_char?: string;
+  // 2026-05-18 agent-B extension — fields for AgentPanel 5-slot rendering.
+  // All optional; legacy events / minimal skills omit them and the panel
+  // falls back to chips-derived values.
+  model?: string;
+  memory?: string;
+  tools_picked?: string[];
+  tools_candidate?: string[];
+  /** Short single-line persona. Multi-line personas arrive via AgentPersonaEvent. */
+  persona?: string;
+}
+
+/**
+ * 2026-05-18 — emitted when the assembler streams a multi-line system prompt
+ * for an agent. The front-end merges `persona` onto the node matching
+ * `node_id`. Order is not guaranteed (persona may arrive before or after
+ * its node event); the panel must reconcile by id.
+ */
+export interface AgentPersonaEvent {
+  node_id: string;
+  persona: string;
 }
 
 export interface EdgeEvent {
@@ -241,6 +261,8 @@ export function subscribeRunSession(
     onCritiqueProgress?: (data: CritiqueProgressEvent) => void;
     onCritiqueResult?: (data: CritiqueResultEvent) => void;
     onText?: (data: TextEvent) => void;
+    /** 2026-05-18 agent-B extension — multi-line persona for an agent node. */
+    onAgentPersona?: (data: AgentPersonaEvent) => void;
     onRetrying?: (attempt: number, delayMs: number) => void;
     onError?: (err: Event) => void;
     onServerError?: (message: string, code?: string) => void;
@@ -289,6 +311,8 @@ export function subscribeRunSession(
     es.addEventListener('critique-result',   (e) => { const d = parse(e as MessageEvent); if (d) handlers.onCritiqueResult?.(d); });
     // 2026-05-11 Layer 1 — Claude Code-style chat fallback
     es.addEventListener('text',      (e) => { const d = parse(e as MessageEvent); if (d) handlers.onText?.(d); });
+    // 2026-05-18 agent-B — multi-line persona block paired with a node.
+    es.addEventListener('agent-persona', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onAgentPersona?.(d); });
     es.addEventListener('error',     (e) => {
       const d = parse(e as MessageEvent);
       if (d?.message) {

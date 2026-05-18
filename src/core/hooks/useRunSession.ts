@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { subscribeRunSession, abortRunSession } from '../../api/runSessions';
-import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent } from '../../api/runSessions';
+import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent, AgentPersonaEvent } from '../../api/runSessions';
 import { classifyClientError, isErrorCode } from '../errors/classifyError';
 
 export interface RunSessionNode {
@@ -11,7 +11,21 @@ export interface RunSessionNode {
   chips: string[];
   status: 'building' | 'ready' | 'pending';
   avatarChar: string;
+  // 2026-05-18 agent-B extension — fields backing AgentPanel 5-slot UI
+  // (Identity / Persona / Model / Tools / Memory). All optional; AgentPanel
+  // falls back to chips-derived values when these are absent:
+  //   - model: chips regex /claude|gpt|gemini|deepseek|qwen/i
+  //   - toolsPicked: chips minus the matched model chip
+  //   - memory / persona: literal placeholder text in the panel
+  model?: string;
+  memory?: string;
+  toolsPicked?: string[];
+  toolsCandidate?: string[];
+  persona?: string;
 }
+
+// Re-export so panel components don't need a second import path.
+export type { AgentPersonaEvent };
 
 export interface RunSessionEdge {
   from: string;
@@ -115,6 +129,7 @@ type Action =
   | { type: 'CRITIQUE_PROGRESS'; payload: CritiqueProgressEvent }
   | { type: 'CRITIQUE_RESULT'; payload: CritiqueResultEvent }
   | { type: 'TEXT'; payload: TextEvent }
+  | { type: 'AGENT_PERSONA'; payload: AgentPersonaEvent }
   // 2026-05-16 — user pressed Stop. Mark stream terminated locally and
   // append "（用户已停止）" to the chat reply so the UI shows a clear marker
   // even if the LLM was mid-sentence.
@@ -142,14 +157,45 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       return { ...state, steps, thinkingMessage: thinking };
     }
     case 'NODE': {
-      const { node_id, type, title, sub, chips, status, avatar_char } = action.payload;
+      const { node_id, type, title, sub, chips, status, avatar_char, model, memory, tools_picked, tools_candidate, persona } = action.payload;
       const avatarChar = avatar_char ?? title.charAt(0);
       const existing = state.nodes.findIndex(n => n.id === node_id);
-      const node: RunSessionNode = { id: node_id, type, title, sub, chips, status, avatarChar };
+      // 2026-05-18 agent-B — preserve any persona already merged via an earlier
+      // AGENT_PERSONA event (server emits node + persona in any order).
+      const prevPersona = existing >= 0 ? state.nodes[existing].persona : undefined;
+      const node: RunSessionNode = {
+        id: node_id, type, title, sub, chips, status, avatarChar,
+        model, memory,
+        toolsPicked: tools_picked,
+        toolsCandidate: tools_candidate,
+        persona: persona ?? prevPersona,
+      };
       const nodes = existing >= 0
         ? state.nodes.map((n, i) => i === existing ? node : n)
         : [...state.nodes, node];
       return { ...state, nodes };
+    }
+    case 'AGENT_PERSONA': {
+      // 2026-05-18 agent-B — multi-line persona arrived for an agent node.
+      // Merge by node_id. If the node hasn't been seen yet (persona arrived
+      // first), stash a placeholder node so the persona isn't lost — it will
+      // be fleshed out when the matching NODE event arrives. The placeholder
+      // uses minimal data (title=id) so any premature render shows the id
+      // rather than blank fields.
+      const { node_id, persona } = action.payload;
+      const idx = state.nodes.findIndex(n => n.id === node_id);
+      if (idx === -1) {
+        const placeholder: RunSessionNode = {
+          id: node_id, type: 'agent', title: node_id, sub: '', chips: [],
+          status: 'building', avatarChar: node_id.charAt(0) || '?',
+          persona,
+        };
+        return { ...state, nodes: [...state.nodes, placeholder] };
+      }
+      return {
+        ...state,
+        nodes: state.nodes.map((n, i) => i === idx ? { ...n, persona } : n),
+      };
     }
     case 'EDGE': {
       const edges = [...state.edges.filter(e => !(e.from === action.payload.from && e.to === action.payload.to)), action.payload];
@@ -291,6 +337,7 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
       onCritiqueProgress: (d) => dispatch({ type: 'CRITIQUE_PROGRESS', payload: d }),
       onCritiqueResult:   (d) => dispatch({ type: 'CRITIQUE_RESULT', payload: d }),
       onText:          (d) => dispatch({ type: 'TEXT', payload: d }),
+      onAgentPersona:  (d) => dispatch({ type: 'AGENT_PERSONA', payload: d }),
       onRetrying:      (attempt, delayMs) => dispatch({ type: 'RETRYING', attempt, delayMs }),
       // EventSource gave up retrying — pure network bucket so the UI can
       // surface a "重发" CTA instead of "配置 API Key". setConnected(false)

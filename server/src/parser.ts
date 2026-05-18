@@ -82,8 +82,17 @@ export function parseAndExtract(
   });
 
   // sf:node  (self-closing)
+  //
+  // 2026-05-18 — agent-B extension. AgentPanel needs to render 5 slots
+  // (Identity / Persona / Model / Tools / Memory). The LLM may now emit
+  // optional `model`, `memory`, `tools_picked`, `tools_candidate` attributes
+  // alongside the legacy `chips`. All new fields are optional — old skills
+  // that only emit chips still parse cleanly, and the front-end falls back
+  // to chips-derived values when the new fields are absent.
   buffer = buffer.replace(/<sf:node\s+((?:[^>"']|"[^"]*"|'[^']*')+?)\/>/g, (_match, attrs: string) => {
     const a = parseAttrs(attrs);
+    const splitCsv = (s: string | undefined): string[] =>
+      (s ?? '').split(',').map(x => x.trim()).filter(Boolean);
     events.push({
       event: 'node',
       data: {
@@ -91,13 +100,43 @@ export function parseAndExtract(
         type: (a.type as 'coordinator' | 'agent') ?? 'agent',
         title: a.title ?? '',
         sub: a.sub ?? '',
-        chips: (a.chips ?? '').split(',').map(s => s.trim()).filter(Boolean),
+        chips: splitCsv(a.chips),
         status: 'building',
         avatar_char: a.avatar_char ?? (a.title ? a.title.charAt(0) : '?'),
+        // Optional extension fields (undefined when LLM omits them so the
+        // front-end can detect missing-data and run its fallback path).
+        model: a.model || undefined,
+        memory: a.memory || undefined,
+        tools_picked: a.tools_picked ? splitCsv(a.tools_picked) : undefined,
+        tools_candidate: a.tools_candidate ? splitCsv(a.tools_candidate) : undefined,
+        persona: a.persona || undefined,
       },
     });
     return '';
   });
+
+  // sf:agent-persona  (paired tag, body is multi-line system-prompt text)
+  //
+  // 2026-05-18 — emitted by the assembler when the agent's persona/system
+  // prompt is too long to fit in an attribute. Body is taken verbatim
+  // (trimmed) and routed to the front-end via a dedicated `agent-persona`
+  // event keyed by `node_id` so the AgentPanel can merge it onto the
+  // matching node. Order is not guaranteed — the panel must tolerate
+  // persona arriving before or after the node it belongs to.
+  buffer = buffer.replace(
+    /<sf:agent-persona\s+((?:[^>"']|"[^"]*"|'[^']*')+?)>([\s\S]*?)<\/sf:agent-persona>/g,
+    (_match, attrs: string, body: string) => {
+      const a = parseAttrs(attrs);
+      events.push({
+        event: 'agent-persona',
+        data: {
+          node_id: a.node_id ?? '',
+          persona: body.trim(),
+        },
+      });
+      return '';
+    },
+  );
 
   // sf:edge  (self-closing)
   buffer = buffer.replace(/<sf:edge\s+((?:[^>"']|"[^"]*"|'[^']*')+?)\/>/g, (_match, attrs: string) => {
