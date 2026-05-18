@@ -2814,41 +2814,35 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                   return (
                     <div style={{
                       position: 'absolute', bottom: 'calc(100% + 6px)', left: 0,
-                      width: 640, maxHeight: 420, zIndex: 200,
+                      width: 360, maxHeight: 460, zIndex: 200,
                       background: 'var(--t-panel)',
                       border: '1px solid var(--t-border)',
                       borderRadius: 10,
                       boxShadow: '0 8px 24px -8px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.04)',
                       padding: '4px 0',
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: 0,
+                      overflowY: 'auto',
                     }}>
-                      {/* CLI column */}
+                      {/* CLI section */}
+                      {sectionLabel('CLI')}
+                      {pickerLoading && pickerCliItems.length === 0 ? (
+                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>检测中…</div>
+                      ) : pickerCliItems.length === 0
+                        ? emptyHint('未检测到已安装的 CLI · 去设置', '/settings#local-cli')
+                        : pickerCliItems.map(renderItem)
+                      }
+                      {/* Divider between sections */}
                       <div style={{
-                        maxHeight: 412, overflowY: 'auto',
-                        borderRight: '1px solid var(--t-border)',
-                      }}>
-                        {sectionLabel('CLI')}
-                        {pickerLoading && pickerCliItems.length === 0 ? (
-                          <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>检测中…</div>
-                        ) : pickerCliItems.length === 0
-                          ? emptyHint('未检测到已安装的 CLI · 去设置', '/settings#local-cli')
-                          : pickerCliItems.map(renderItem)
-                        }
-                      </div>
-                      {/* API column */}
-                      <div style={{
-                        maxHeight: 412, overflowY: 'auto',
-                      }}>
-                        {sectionLabel('API')}
-                        {pickerLoading && pickerApiItems.length === 0 ? (
-                          <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>加载中…</div>
-                        ) : pickerApiItems.length === 0
-                          ? emptyHint('未配置 API Key · 去设置 BYOK', '/settings#byok')
-                          : pickerApiItems.map(renderItem)
-                        }
-                      </div>
+                        margin: '4px 0',
+                        borderTop: '1px solid var(--t-border)',
+                      }} />
+                      {/* API section */}
+                      {sectionLabel('API')}
+                      {pickerLoading && pickerApiItems.length === 0 ? (
+                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>加载中…</div>
+                      ) : pickerApiItems.length === 0
+                        ? emptyHint('未配置 API Key · 去设置 BYOK', '/settings#byok')
+                        : pickerApiItems.map(renderItem)
+                      }
                     </div>
                   );
                 })()}
