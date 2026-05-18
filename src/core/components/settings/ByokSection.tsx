@@ -1215,11 +1215,18 @@ export function ByokSection() {
                         </svg>
                       )}
                     </button>
-                    {/* 检测 button — Cherry Studio style, sans-serif */}
+                    {/* 检测 button — Cherry Studio style, sans-serif.
+                        2026-05-18: gate on `hasKey || keyInput.trim()` so the
+                        button stays clickable even when the daemon's
+                        `apiKey` field comes back as a masked string the
+                        client can't decrypt, OR when the user just typed a
+                        key but autosave hasn't fired yet. handleTest itself
+                        falls back to the live input when savedState is
+                        empty. */}
                     <button
                       type="button"
                       onClick={handleTest}
-                      disabled={checkOverall === 'checking' || !hasKey}
+                      disabled={checkOverall === 'checking' || (!hasKey && !keyInput.trim())}
                       style={{
                         fontSize: 12, fontWeight: 600,
                         padding: '5px 12px', borderRadius: 7,
@@ -1236,10 +1243,10 @@ export function ByokSection() {
                               : checkOverall === 'failed' ? 'var(--t-reject)'
                               : checkOverall === 'unavailable' ? 'var(--t-warn, #d97706)'
                               : 'var(--t-fg-2)',
-                        cursor: checkOverall === 'checking' || !hasKey ? 'not-allowed' : 'pointer',
-                        opacity: !hasKey ? 0.5 : 1,
+                        cursor: checkOverall === 'checking' || (!hasKey && !keyInput.trim()) ? 'not-allowed' : 'pointer',
+                        opacity: (!hasKey && !keyInput.trim()) ? 0.5 : 1,
                       }}
-                      title={!hasKey ? T('需要先保存密钥', 'Save a key first') : T('检测密钥连通性', 'Check key connectivity')}
+                      title={(!hasKey && !keyInput.trim()) ? T('需要先输入或保存密钥', 'Enter or save a key first') : T('检测密钥连通性', 'Check key connectivity')}
                     >
                       {checkOverall === 'checking' ? T('检测中…', 'Checking…')
                         : checkOverall === 'ok' ? T('通过 ✓', 'OK ✓')
