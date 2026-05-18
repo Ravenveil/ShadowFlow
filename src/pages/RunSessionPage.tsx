@@ -2731,6 +2731,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                       <button
                         key={key}
                         type="button"
+                        title={it.kind === 'cli' ? `${title} · ${sub}` : `${title} — ${sub}`}
                         onClick={() => {
                           if (it.kind === 'cli') {
                             const ex = `cli:${it.agentId}`;
@@ -2813,7 +2814,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                   return (
                     <div style={{
                       position: 'absolute', bottom: 'calc(100% + 6px)', left: 0,
-                      width: 520, maxHeight: 420, zIndex: 200,
+                      width: 640, maxHeight: 420, zIndex: 200,
                       background: 'var(--t-panel)',
                       border: '1px solid var(--t-border)',
                       borderRadius: 10,
