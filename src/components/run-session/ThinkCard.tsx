@@ -48,6 +48,49 @@ export interface ThinkCardProps {
   tokenCount?: number;
   /** Initial folded state (default true). */
   defaultExpanded?: boolean;
+  /**
+   * S3.3 — when both `sessionId` and `stepKey` are provided, the card persists
+   * its expanded/collapsed state to localStorage under
+   * `sf:think:<sessionId>:<stepKey>:expanded`. New sessions default to folded
+   * (no key in storage → false). Omit either prop to keep the legacy in-memory
+   * behaviour (handy for stateless usages like Storybook).
+   */
+  sessionId?: string;
+  stepKey?: string;
+}
+
+const THINK_STORAGE_PREFIX = 'sf:think:';
+function thinkStorageKey(sessionId?: string, stepKey?: string): string | null {
+  if (!sessionId || !stepKey) return null;
+  return `${THINK_STORAGE_PREFIX}${sessionId}:${stepKey}:expanded`;
+}
+function readPersistedExpanded(
+  sessionId: string | undefined,
+  stepKey: string | undefined,
+  fallback: boolean,
+): boolean {
+  const key = thinkStorageKey(sessionId, stepKey);
+  if (!key) return fallback;
+  try {
+    const v = window.localStorage.getItem(key);
+    if (v == null) return fallback;
+    return v === '1';
+  } catch {
+    return fallback;
+  }
+}
+function writePersistedExpanded(
+  sessionId: string | undefined,
+  stepKey: string | undefined,
+  expanded: boolean,
+): void {
+  const key = thinkStorageKey(sessionId, stepKey);
+  if (!key) return;
+  try {
+    window.localStorage.setItem(key, expanded ? '1' : '0');
+  } catch {
+    // Quota / private mode — fall back to in-memory only.
+  }
 }
 
 const InlineSpinner: React.FC<{ size?: number }> = ({ size = 10 }) => (
@@ -91,8 +134,31 @@ export const ThinkCard: React.FC<ThinkCardProps> = ({
   thinkDurationMs,
   tokenCount = 0,
   defaultExpanded = false,
+  sessionId,
+  stepKey,
 }) => {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  // S3.3 — seed expanded from localStorage when (sessionId+stepKey) provided.
+  // Fall back to `defaultExpanded` otherwise so callers without persistence
+  // keep the original prop-driven default.
+  const [expanded, setExpandedRaw] = useState<boolean>(() =>
+    readPersistedExpanded(sessionId, stepKey, defaultExpanded),
+  );
+  // If sessionId/stepKey change at runtime (rare — usually constant per
+  // card), re-seed from storage so the new key's stored preference wins
+  // over whatever was loaded for the old one.
+  useEffect(() => {
+    setExpandedRaw(readPersistedExpanded(sessionId, stepKey, defaultExpanded));
+    // We intentionally exclude defaultExpanded so resetting it after mount
+    // doesn't clobber the user's persisted choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, stepKey]);
+  const setExpanded = (updater: boolean | ((prev: boolean) => boolean)) => {
+    setExpandedRaw((prev) => {
+      const next = typeof updater === 'function' ? (updater as (p: boolean) => boolean)(prev) : updater;
+      writePersistedExpanded(sessionId, stepKey, next);
+      return next;
+    });
+  };
   const [titleHover, setTitleHover] = useState(false);
   // Fallback timestamp for the legacy single-string thinkingMessage path.
   const fallbackTsRef = useRef<string>(formatNowTimestamp());
