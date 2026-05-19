@@ -20,6 +20,8 @@
  * caller writes the file to .shadowflow/projects/<session_id>/<filename>.
  */
 
+import type { OutputKind } from './lib/contracts';
+
 export interface SseEvent {
   event: string;
   data: unknown;
@@ -30,6 +32,43 @@ export type ArtifactCallback = (
   content: string,
   type: string,
 ) => void;
+
+// ─── S2.2 step-gating state ──────────────────────────────────────────────────
+//
+// The parser is called incrementally per text chunk, so it can't keep state
+// in a local. We track the *currently open* step (running but not yet done)
+// per sessionId in this module-level map. When the matching `done` event
+// arrives, we check whether the contracted output_kind ever appeared during
+// that step's window; if not, we synthesize an `error` event with code
+// STEP_NO_OUTPUT so the front-end can offer a step-level retry (S4.1).
+//
+// Memory: one entry per active session; cleared on `sf:complete` and (for
+// safety) when a new `running` step replaces the previous one without an
+// explicit `done`. No TTL — bounded by run lifetime + the session-store cleanup.
+
+interface StepGateState {
+  step_index: number;
+  step_name: string;
+  output_kind: OutputKind;
+  /** Set true the first time we see an event matching `output_kind`. */
+  produced: boolean;
+}
+
+const stepGate = new Map<string, StepGateState>();
+// Independent counter per session — `step_index` is positional (0-based by
+// order of `running` events) because the LLM's <sf:step> tags do not carry
+// a numeric index. This matches step-store.ts's <n>.json filenames.
+const stepCounter = new Map<string, number>();
+
+function isOutputKind(s: string | undefined): s is OutputKind {
+  return s === 'nodes' || s === 'edges' || s === 'yaml' || s === 'classify' || s === 'none';
+}
+
+/** Force-clear all parser state for a session (called by step-store on session end). */
+export function resetParserState(sessionId: string): void {
+  stepGate.delete(sessionId);
+  stepCounter.delete(sessionId);
+}
 
 // ─── attribute parsing ───────────────────────────────────────────────────────
 
@@ -52,6 +91,15 @@ export function parseAndExtract(
 ): { buffer: string; events: SseEvent[] } {
   const events: SseEvent[] = [];
 
+  // S2.2 — mark the currently-open step's gate as having produced its expected
+  // output_kind. Defined at the top so all tag handlers below can call it.
+  const markProduced = (kind: OutputKind): void => {
+    const gate = stepGate.get(sessionId);
+    if (gate && gate.output_kind === kind) {
+      gate.produced = true;
+    }
+  };
+
   // sf:classify  (self-closing, no children)
   buffer = buffer.replace(/<sf:classify\s+((?:[^>"']|"[^"]*"|'[^']*')+?)\/>/g, (_match, attrs: string) => {
     const a = parseAttrs(attrs);
@@ -64,20 +112,80 @@ export function parseAndExtract(
         complexity: parseInt(a.complexity ?? '2', 10),
       },
     });
+    markProduced('classify');
     return '';
   });
 
   // sf:step  (self-closing)
+  //
+  // S2.2 — output_kind gating. When `status="running"` we open a gate entry
+  // for this session/step. When `status="done"` we close it; if the declared
+  // output_kind != 'none' but the gate never saw a matching artifact event,
+  // we emit a STEP_NO_OUTPUT error frame *in addition to* the normal
+  // assemble:done event so the front-end can react (S4.1 step retry).
   buffer = buffer.replace(/<sf:step\s+((?:[^>"']|"[^"]*"|'[^']*')+?)\/>/g, (_match, attrs: string) => {
     const a = parseAttrs(attrs);
+    const stepName = a.name ?? '';
+    const status = a.status ?? 'running';
+    const declared = a.output_kind;
+    // Default to 'none' when unspecified (back-compat: skills that haven't been
+    // migrated to S2.1 still parse cleanly, they just lose the gating benefit).
+    const outputKind: OutputKind = isOutputKind(declared) ? declared : 'none';
+
+    // Step index is positional — incremented once per 'running' event.
+    let stepIndex: number;
+    if (status === 'running') {
+      const prev = stepCounter.get(sessionId);
+      stepIndex = prev === undefined ? 0 : prev + 1;
+      stepCounter.set(sessionId, stepIndex);
+      // If a previous step never closed, drop it silently — the LLM moved on
+      // without emitting `done`, and the new `running` is the source of truth.
+      stepGate.set(sessionId, {
+        step_index: stepIndex,
+        step_name: stepName,
+        output_kind: outputKind,
+        produced: false,
+      });
+    } else {
+      // For 'done' / 'failed' the index is whatever is currently open (or the
+      // last counter value if the LLM emitted 'done' without a matching 'running').
+      stepIndex = stepCounter.get(sessionId) ?? 0;
+    }
+
     events.push({
       event: 'assemble',
       data: {
-        step: a.name ?? '',
-        status: a.status ?? 'running',
+        step: stepName,
+        step_index: stepIndex,
+        output_kind: outputKind,
+        status,
         elapsed_ms: a.elapsed_ms ? parseInt(a.elapsed_ms, 10) : null,
       },
     });
+
+    // Gate close on done — emit STEP_NO_OUTPUT if a non-'none' kind never produced.
+    if (status === 'done') {
+      const gate = stepGate.get(sessionId);
+      if (
+        gate &&
+        gate.step_name === stepName &&
+        gate.output_kind !== 'none' &&
+        !gate.produced
+      ) {
+        events.push({
+          event: 'error',
+          data: {
+            code: 'STEP_NO_OUTPUT',
+            message:
+              `Step "${stepName}" 声明 output_kind="${gate.output_kind}" 但本步未产出对应内容。`,
+            step_index: gate.step_index,
+            step_name: stepName,
+            expected: gate.output_kind,
+          },
+        });
+      }
+      stepGate.delete(sessionId);
+    }
     return '';
   });
 
@@ -112,6 +220,7 @@ export function parseAndExtract(
         persona: a.persona || undefined,
       },
     });
+    markProduced('nodes');
     return '';
   });
 
@@ -138,6 +247,27 @@ export function parseAndExtract(
     },
   );
 
+  // sf:thinking  (paired tag, body is the LLM's chain-of-thought for the
+  // current step). Emitted as a streaming-friendly chunk via the dedicated
+  // `thinking-chunk` event so the front-end can accumulate a real reasoning
+  // log in ThinkCard (设计点 6 / design-v1 §4.3). May appear between steps,
+  // multiple times per session. No attrs required; `step` attribute optional
+  // for future per-step grouping.
+  buffer = buffer.replace(
+    /<sf:thinking(\s+(?:[^>"']|"[^"]*"|'[^']*')*?)?>([\s\S]*?)<\/sf:thinking>/g,
+    (_match, attrs: string | undefined, body: string) => {
+      const a = parseAttrs(attrs ?? '');
+      events.push({
+        event: 'thinking-chunk',
+        data: {
+          step: a.step ?? null,
+          text: body.trim(),
+        },
+      });
+      return '';
+    },
+  );
+
   // sf:edge  (self-closing)
   buffer = buffer.replace(/<sf:edge\s+((?:[^>"']|"[^"]*"|'[^']*')+?)\/>/g, (_match, attrs: string) => {
     const a = parseAttrs(attrs);
@@ -149,6 +279,7 @@ export function parseAndExtract(
         status: 'active',
       },
     });
+    markProduced('edges');
     return '';
   });
 
@@ -196,6 +327,7 @@ export function parseAndExtract(
           data: { line, total_lines: lines.length },
         });
       });
+      markProduced('yaml');
     }
 
     return '';
@@ -227,6 +359,7 @@ export function parseAndExtract(
         redirect: a.redirect ?? `/editor?session=${sessionId}`,
       },
     });
+    resetParserState(sessionId);
     return '';
   });
 
@@ -260,12 +393,31 @@ export function parseAndExtract(
   return { buffer, events };
 }
 
-// Find the earliest position where the buffer starts a potentially-incomplete
-// known tag (`<sf:` or `<artifact`). Returns -1 if no such prefix exists.
+// Find the earliest position where the buffer contains a potentially-incomplete
+// known tag. Two cases:
+//   (1) full prefix already in buffer: `<sf:` or `<artifact`
+//   (2) buffer ends mid-prefix: `…<`, `…<s`, `…<sf`, `…<a`, `…<artifa` etc.
+//       Without (2), streamed LLM output that splits `<sf:step …/>` into
+//       per-token chunks (`<sf`, `:`, `step`, ` name`, …) escapes the parser
+//       and gets emitted as raw `text` events — bug observed 2026-05-18.
+// Returns -1 if no such prefix exists.
 function findPartialTagStart(buf: string): number {
   const a = buf.indexOf('<sf:');
   const b = buf.indexOf('<artifact');
-  if (a === -1) return b;
-  if (b === -1) return a;
-  return Math.min(a, b);
+  let known = -1;
+  if (a !== -1 && b !== -1) known = Math.min(a, b);
+  else if (a !== -1) known = a;
+  else if (b !== -1) known = b;
+
+  // Tail prefix: `<` followed by chars that could still grow into `<sf:…` or
+  // `<artifact…`. We hold back from the `<` even if it's a literal `<5` math
+  // expression — minor cost (text emit delayed until next chunk) for a major
+  // correctness win.
+  const tailMatch = buf.match(/<[a-zA-Z][a-zA-Z0-9:_-]*$/);
+  const tail = tailMatch ? buf.length - tailMatch[0].length : -1;
+  // Bare trailing `<` (no chars after) is also a potential partial tag start.
+  const bareLt = buf.endsWith('<') ? buf.length - 1 : -1;
+
+  const candidates = [known, tail, bareLt].filter(x => x !== -1);
+  return candidates.length === 0 ? -1 : Math.min(...candidates);
 }
