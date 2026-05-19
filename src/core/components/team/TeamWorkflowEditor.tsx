@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import ReactFlow, {
+import {
   addEdge,
-  Background,
-  Controls,
   Handle,
   Position,
+  ReactFlowProvider,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -17,6 +16,7 @@ import 'reactflow/dist/style.css';
 import type { AgentRecord } from '../../../api/agents';
 import type { TeamRecord, TeamWorkflowEdge, TeamWorkflowNode } from '../../../api/teams';
 import { getTeamWorkflow, putTeamWorkflow } from '../../../api/teams';
+import SfReactFlowBase from '../Canvas/SfReactFlowBase';
 
 interface AgentTaskNodeData {
   agentId: string;
@@ -44,7 +44,7 @@ interface TeamWorkflowEditorProps {
   agents: AgentRecord[];
 }
 
-export function TeamWorkflowEditor({ team, agents }: TeamWorkflowEditorProps) {
+function TeamWorkflowEditorInner({ team, agents }: TeamWorkflowEditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<AgentTaskNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [saving, setSaving] = useState(false);
@@ -180,9 +180,9 @@ export function TeamWorkflowEditor({ team, agents }: TeamWorkflowEditorProps) {
         )}
       </div>
 
-      {/* ReactFlow 画布 */}
+      {/* ReactFlow 画布 — uses shared SfReactFlowBase shell */}
       <div className="relative flex-1 overflow-hidden rounded border border-shadowflow-border">
-        <ReactFlow
+        <SfReactFlowBase
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
@@ -192,25 +192,31 @@ export function TeamWorkflowEditor({ team, agents }: TeamWorkflowEditorProps) {
           onDrop={onDrop}
           onDragOver={onDragOver}
           nodeTypes={NODE_TYPES}
-          fitView
-          style={{ background: 'transparent' }}
-        >
-          <Background color="rgba(255,255,255,0.05)" gap={20} />
-          <Controls
-            style={{ background: 'rgba(15,15,17,0.9)', border: '1px solid rgba(255,255,255,0.1)' }}
-          />
-        </ReactFlow>
+          withProvider={false}
+          showMiniMap
+        />
 
         {/* 保存按钮 */}
         <button
           onClick={handleSave}
           disabled={saving}
-          className="absolute bottom-3 right-3 rounded border border-white/20 bg-white/5 px-3 py-1.5 text-[12px] text-white/70 hover:bg-white/10 disabled:opacity-40"
+          className="absolute bottom-3 right-3 z-10 rounded border border-white/20 bg-white/5 px-3 py-1.5 text-[12px] text-white/70 hover:bg-white/10 disabled:opacity-40"
           data-testid="btn-save-workflow"
         >
           {saving ? '保存中…' : saved ? '已保存 ✓' : '保存工作流'}
         </button>
       </div>
     </div>
+  );
+}
+
+export function TeamWorkflowEditor(props: TeamWorkflowEditorProps) {
+  // Wrap in ReactFlowProvider so useReactFlow() inside Inner works. The
+  // SfReactFlowBase has its own provider too but we need this outer one
+  // for the screenToFlowPosition call in onDrop.
+  return (
+    <ReactFlowProvider>
+      <TeamWorkflowEditorInner {...props} />
+    </ReactFlowProvider>
   );
 }

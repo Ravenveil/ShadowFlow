@@ -2,15 +2,11 @@
 // 工作流画布组件 - 基于 ReactFlow 的主画布
 // ============================================================================
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import ReactFlow, {
+import React, { useCallback, useMemo, useState } from 'react';
+import {
   Node,
   Edge,
-  Controls,
-  Background,
-  MiniMap,
   Panel,
-  BackgroundVariant,
   ConnectionMode,
   MarkerType,
   ReactFlowProvider,
@@ -23,6 +19,7 @@ import { SfNode } from '../Node/SfNode';
 import { ApprovalGateNode } from '../Node/ApprovalGateNode';
 import { BarrierNode } from '../Node/BarrierNode';
 import { clsx } from 'clsx';
+import SfReactFlowBase from './SfReactFlowBase';
 
 import 'reactflow/dist/style.css';
 
@@ -221,13 +218,13 @@ function WorkflowCanvasInner({ edgeType }: { edgeType?: SfEdgeType }) {
 
   return (
     <div className="flex-1 relative h-full w-full overflow-hidden">
-      <ReactFlow
+      <SfReactFlowBase
         nodes={reactFlowNodes}
         edges={reactFlowEdges}
         nodeTypes={nodeTypes}
         connectionMode={ConnectionMode.Loose}
-        onNodesChange={() => {}} // 由我们的 store 管理
-        onEdgesChange={() => {}} // 由我们的 store 管理
+        onNodesChange={() => {}} // store-managed
+        onEdgesChange={() => {}} // store-managed
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
@@ -236,40 +233,13 @@ function WorkflowCanvasInner({ edgeType }: { edgeType?: SfEdgeType }) {
         onDrop={onDrop}
         onNodesDelete={onNodesDelete}
         onEdgesDelete={onEdgesDelete}
-        fitView
-        onContextMenu={(e) => e.preventDefault()}
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.1}
-        maxZoom={2}
-        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-        deleteKeyCode={null}
-        panOnScroll={true}
-        panOnDrag={true}
-        nodesDraggable={true}
-        onlyRenderVisibleElements={true}
+        showMiniMap={workflow.ui.miniMapOpen}
+        miniMapNodeColor={(node) => {
+          const nodeData = node.data as { color?: string } | undefined;
+          return nodeData?.color || '#52525B';
+        }}
+        withProvider={false}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={24}
-          size={1.5}
-          color="#3F3F46"
-        />
-
-        <Controls
-          style={{ background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 8 }}
-        />
-
-        {workflow.ui.miniMapOpen && (
-          <MiniMap
-            style={{ background: 'var(--t-panel)', border: '1px solid var(--t-border)' }}
-            nodeColor={(node) => {
-              const nodeData = node.data as any;
-              return nodeData?.color || '#52525B';
-            }}
-            maskColor="rgba(0,0,0,0.4)"
-          />
-        )}
-
         {/* 运行进度 */}
         {workflow.isRunning && (
           <Panel position="top-right" className="bg-white shadow-lg rounded-lg p-4">
@@ -307,7 +277,7 @@ function WorkflowCanvasInner({ edgeType }: { edgeType?: SfEdgeType }) {
             onClose={() => setContextMenu(null)}
           />
         )}
-      </ReactFlow>
+      </SfReactFlowBase>
     </div>
   );
 }

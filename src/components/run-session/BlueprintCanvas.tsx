@@ -1,39 +1,31 @@
 /**
  * BlueprintCanvas — Team tab DAG visualisation.
  *
- * Renders the live RunSession blueprint on a real react-flow canvas:
- *   - one custom AgentBlueprintNode per RunSessionNode (avatar + title + status)
- *   - bezier edges with sf-pulse on active edges
- *   - dotted grid Background, Controls (zoom/fit), MiniMap
- *   - pan with mouse drag, zoom with wheel/pinch, fitView on first layout
+ * Built on top of the shared SfReactFlowBase shell — only the live-mode
+ * specifics live here:
+ *   - custom AgentBlueprintNode (avatar + title + status dot, accent border)
+ *   - column-based seed layout (longest-path-from-root) for newly-arrived
+ *     SSE nodes; existing nodes' positions are preserved across re-renders
+ *     so the user can freely drag without being undone by streaming updates
+ *   - spotlight: when an agent flips to status='building', the canvas
+ *     gently pans to it so the user always sees the active worker
+ *   - bottom-left chip showing NODES / EDGES / STATUS counts
  *
- * Layout: deterministic column layout (longest path from root) seeded into
- * react-flow on first appearance of each node. Once seeded, the user is free
- * to drag nodes around — we never overwrite existing positions, only append
- * positions for newly-arrived streaming nodes. This is the same pattern
- * TeamWorkflowEditor uses.
- *
- * Empty state: nodes.length === 0 renders a centred idle pulse + caption,
- * preserving the dotted grid (no react-flow needed).
+ * Empty state: nodes.length === 0 renders an idle pulse with dotted-grid
+ * background, no react-flow needed.
  */
 import React, { useEffect, useMemo, useRef } from 'react';
-import ReactFlow, {
-  Background,
-  BackgroundVariant,
-  Controls,
-  MiniMap,
-  ReactFlowProvider,
+import {
   Handle,
   Position,
   useEdgesState,
   useNodesState,
-  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
   type NodeTypes,
 } from 'reactflow';
-import 'reactflow/dist/style.css';
+import SfReactFlowBase from '../../core/components/Canvas/SfReactFlowBase';
 import type { RunSessionNode, RunSessionEdge } from '../../core/hooks/useRunSession';
 
 export interface BlueprintCanvasProps {
@@ -41,18 +33,11 @@ export interface BlueprintCanvasProps {
   edges: RunSessionEdge[];
 }
 
-// Layout constants — kept consistent with the previous hand-rolled version
-// so visual proportions don't shift.
 const NODE_W = 168;
 const NODE_H = 78;
 const COL_GAP = 96;
 const ROW_GAP = 28;
 
-// PolicyMatrixMini (262px wide) floats top-right inside TeamPanel. Reserve
-// inset so fitView doesn't park nodes underneath the HUD.
-const FIT_VIEW_PADDING = 0.18;
-
-/** Status → ring/dot/label colors (CSS-var driven, conservative fallbacks). */
 function statusVisual(status: RunSessionNode['status']): { ring: string; dot: string; label: string } {
   switch (status) {
     case 'building':
@@ -64,10 +49,6 @@ function statusVisual(status: RunSessionNode['status']): { ring: string; dot: st
       return { ring: 'var(--t-border, #27272A)', dot: 'var(--t-fg-4, #737373)', label: 'PENDING' };
   }
 }
-
-// ---------------------------------------------------------------------------
-// Custom node — matches the previous BlueprintCanvas card style 1:1
-// ---------------------------------------------------------------------------
 
 interface AgentBlueprintNodeData {
   node: RunSessionNode;
@@ -166,10 +147,6 @@ function AgentBlueprintNode({ data, selected }: NodeProps<AgentBlueprintNodeData
 
 const NODE_TYPES: NodeTypes = { agentBlueprint: AgentBlueprintNode };
 
-// ---------------------------------------------------------------------------
-// Column layout — longest-path-from-root so coordinators land left
-// ---------------------------------------------------------------------------
-
 function computeColumns(nodes: RunSessionNode[], edges: RunSessionEdge[]): Map<string, number> {
   const incoming: Record<string, string[]> = {};
   const outgoing: Record<string, string[]> = {};
@@ -232,29 +209,18 @@ function seedPositions(
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// Inner canvas (needs to live inside <ReactFlowProvider/>)
-// ---------------------------------------------------------------------------
-
-interface BlueprintCanvasInnerProps extends BlueprintCanvasProps {}
-
-function BlueprintCanvasInner({ nodes, edges }: BlueprintCanvasInnerProps) {
+function BlueprintCanvasInner({ nodes, edges }: BlueprintCanvasProps) {
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState<AgentBlueprintNodeData>([]);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState([]);
-  const { fitView } = useReactFlow();
   const seededRef = useRef<Set<string>>(new Set());
-  const lastNodeCountRef = useRef(0);
 
-  // Sync incoming session.nodes → react-flow nodes, preserving existing
-  // positions when user has dragged. Only NEW node IDs get seeded positions.
   useEffect(() => {
     const layout = seedPositions(nodes, edges);
     setRfNodes((prev) => {
       const prevById = new Map(prev.map((n) => [n.id, n] as const));
-      const next: Node<AgentBlueprintNodeData>[] = nodes.map((n) => {
+      return nodes.map<Node<AgentBlueprintNodeData>>((n) => {
         const existing = prevById.get(n.id);
         if (existing) {
-          // Keep its position; refresh data so status changes re-render.
           return { ...existing, data: { node: n } };
         }
         seededRef.current.add(n.id);
@@ -264,15 +230,12 @@ function BlueprintCanvasInner({ nodes, edges }: BlueprintCanvasInnerProps) {
           type: 'agentBlueprint',
           position: pos,
           data: { node: n },
-          // Make every node draggable (default true, set explicit for clarity).
           draggable: true,
         };
       });
-      return next;
     });
   }, [nodes, edges, setRfNodes]);
 
-  // Edges — recompute on every change (cheap; visual props depend on status).
   useEffect(() => {
     const next: Edge[] = edges.map((e, i) => {
       const active = e.status === 'active';
@@ -293,93 +256,42 @@ function BlueprintCanvasInner({ nodes, edges }: BlueprintCanvasInnerProps) {
     setRfEdges(next);
   }, [edges, setRfEdges]);
 
-  // Fit view whenever node count grows (new agent arrives via SSE) — but only
-  // grow-fits. If user has manually zoomed and no new nodes have appeared,
-  // we leave their view alone.
-  useEffect(() => {
-    if (rfNodes.length > lastNodeCountRef.current && rfNodes.length > 0) {
-      lastNodeCountRef.current = rfNodes.length;
-      // Defer until after react-flow has measured nodes.
-      requestAnimationFrame(() => {
-        fitView({ padding: FIT_VIEW_PADDING, duration: 320 });
-      });
-    }
-  }, [rfNodes.length, fitView]);
+  // Spotlight the latest agent that just started building. We track which
+  // building-id we last centred on so spotlighting only fires on transition,
+  // not on every re-render.
+  const lastSpotlightRef = useRef<string | null>(null);
+  const spotlightNodeId = useMemo(() => {
+    const building = nodes.find((n) => n.status === 'building');
+    if (!building) return null;
+    if (lastSpotlightRef.current === building.id) return null;
+    lastSpotlightRef.current = building.id;
+    return building.id;
+  }, [nodes]);
 
-  const proOptions = useMemo(() => ({ hideAttribution: true }), []);
+  const miniMapNodeColor = (n: Node) => {
+    const d = (n.data as AgentBlueprintNodeData | undefined)?.node;
+    if (!d) return 'var(--t-fg-4, #737373)';
+    return statusVisual(d.status).dot;
+  };
 
   return (
-    <ReactFlow
+    <SfReactFlowBase
       nodes={rfNodes}
       edges={rfEdges}
+      nodeTypes={NODE_TYPES}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
-      nodeTypes={NODE_TYPES}
-      proOptions={proOptions}
-      fitView
-      fitViewOptions={{ padding: FIT_VIEW_PADDING }}
-      minZoom={0.25}
-      maxZoom={2}
-      panOnDrag
-      panOnScroll={false}
-      zoomOnScroll
-      zoomOnPinch
-      zoomOnDoubleClick={false}
+      fitViewOnNodeCountGrow
+      spotlightNodeId={spotlightNodeId}
+      miniMapNodeColor={miniMapNodeColor}
       nodesConnectable={false}
-      elementsSelectable
-      selectNodesOnDrag={false}
-      // Subtle inertia-free pan feels closer to Figma than react-flow's default.
-      panOnScrollSpeed={0.5}
-      style={{
-        width: '100%',
-        height: '100%',
-        background: 'var(--t-bg, #0a0a0a)',
-      }}
-    >
-      <Background
-        variant={BackgroundVariant.Dots}
-        gap={24}
-        size={1}
-        color="var(--t-border-subtle, rgba(255,255,255,.06))"
-      />
-      <Controls
-        showInteractive={false}
-        position="bottom-right"
-        style={{
-          background: 'var(--t-bg-elev-2, #141414)',
-          border: '1px solid var(--t-border, #27272A)',
-          borderRadius: 7,
-        }}
-      />
-      <MiniMap
-        pannable
-        zoomable
-        position="bottom-left"
-        maskColor="rgba(0,0,0,0.55)"
-        style={{
-          background: 'var(--t-bg-elev-2, #141414)',
-          border: '1px solid var(--t-border, #27272A)',
-          borderRadius: 7,
-          width: 160,
-          height: 96,
-        }}
-        nodeColor={(n) => {
-          const d = (n.data as AgentBlueprintNodeData | undefined)?.node;
-          if (!d) return 'var(--t-fg-4, #737373)';
-          return statusVisual(d.status).dot;
-        }}
-      />
-    </ReactFlow>
+      // Live mode — no provider override (base provides one)
+      withProvider
+    />
   );
 }
 
-// ---------------------------------------------------------------------------
-// Public wrapper — handles empty state, then mounts the provider
-// ---------------------------------------------------------------------------
-
 const BlueprintCanvas: React.FC<BlueprintCanvasProps> = ({ nodes, edges }) => {
-  // Status summary for footer bar (kept from the old version so the chip
-  // continues to read NODES n · EDGES m · STATUS … underneath the canvas).
   const statusCounts = useMemo(() => {
     let building = 0;
     let ready = 0;
@@ -441,9 +353,7 @@ const BlueprintCanvas: React.FC<BlueprintCanvasProps> = ({ nodes, edges }) => {
         overflow: 'hidden',
       }}
     >
-      <ReactFlowProvider>
-        <BlueprintCanvasInner nodes={nodes} edges={edges} />
-      </ReactFlowProvider>
+      <BlueprintCanvasInner nodes={nodes} edges={edges} />
 
       {/* Bottom status bar — pinned over the canvas, doesn't intercept pan */}
       <div
