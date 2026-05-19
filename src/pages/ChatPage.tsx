@@ -30,6 +30,7 @@ import { getTemplate } from '../api/templates';
 import { buildChatBuilderUrl } from '../core/utils/builderNavigation';
 import { fetchRecentMessages } from '../api/groupApi';
 import PythonBackendBanner from '../components/PythonBackendBanner';
+import { useWorkspaceStore } from '../store/workspaceStore';
 import type { GroupItem, GroupMetrics, Message } from '../common/types/inbox';
 import { useI18n } from '../common/i18n';
 import { ChatStream } from '../core/components/chat/ChatStream';
@@ -500,6 +501,16 @@ export default function ChatPage() {
   const navigate = useNavigate();
   const groups = useInboxStore(s => s.groups);
   const agentDMs = useInboxStore(s => s.agentDMs);
+  const fetchWorkspaceInbox = useInboxStore(s => s.fetchWorkspaceInbox);
+  const currentWorkspaceId = useWorkspaceStore(s => s.currentId);
+  // Workspace-driven inbox fetch — pulls groups created by run-session
+  // auto-save and any other ad-hoc groups so they appear in the rail.
+  // Previously /chat only saw template-roster groups, leaving the rail
+  // empty for runs that didn't go through a template.
+  useEffect(() => {
+    void fetchWorkspaceInbox(currentWorkspaceId);
+  }, [currentWorkspaceId, fetchWorkspaceInbox]);
+
   const group = groups.find(g => g.id === groupId);
   const groupName = group?.name ?? groupId ?? '';
   const metrics = group?.metrics ?? DEFAULT_METRICS;

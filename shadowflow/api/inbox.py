@@ -1,11 +1,23 @@
-"""Inbox API — Story 7.2 (AC5).
+"""Inbox API — Story 7.2 (AC5) + workspace-driven aggregator (2026-05-19).
 
 GET /api/templates/{template_id}/inbox
   Returns groups (from group_roster) and agent_dms (from agent_roster) aggregated
   from the template spec + live run state.  P95 ≤ 200ms on mock data.
 
+GET /api/inbox?workspace_id=…
+  Returns groups created via /api/groups (file-backed in .shadowflow/groups/)
+  filtered by workspace. This is the path used by /chat when no template
+  context is active — i.e. for groups created by run-session auto-save.
+
 GET /api/templates
   Returns a lightweight list of all available templates for the switcher.
+
+History
+-------
+2026-05-19 — Added /api/inbox endpoint. Previously the chat page only knew
+how to fetch groups from a template's `group_roster`, so groups created
+ad-hoc from run-session never appeared in /chat. The new endpoint reads
+directly from the groups storage layer added in Step 4.
 """
 
 from __future__ import annotations
@@ -15,7 +27,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 router = APIRouter()
@@ -149,6 +161,63 @@ async def get_inbox(template_id: str) -> InboxResponse:
     return InboxResponse(
         data=inbox_data,
         meta={"trace_id": uuid4().hex, "timestamp": datetime.now(timezone.utc).isoformat()},
+    )
+
+
+@router.get("/api/inbox", response_model=InboxResponse)
+async def get_workspace_inbox(
+    workspace_id: Optional[str] = Query(default=None),
+) -> InboxResponse:
+    """Workspace-driven inbox: list groups from .shadowflow/groups/*.json.
+
+    Replaces the template-roster path for ad-hoc groups (e.g. those created
+    by run-session auto-save). Falls back to empty result when the groups
+    directory is missing or contains no matching records.
+    """
+    from shadowflow.api.groups import list_groups  # local import avoids cycles
+
+    records = list_groups(workspace_id)
+    groups: List[GroupItem] = []
+    for rec in records:
+        try:
+            # Last activity = last message timestamp if any, else created_at
+            messages = rec.get("messages", []) or []
+            last_msg = messages[-1] if messages else None
+            last_activity = (
+                (last_msg.get("timestamp") if isinstance(last_msg, dict) else None)
+                or rec.get("created_at")
+                or datetime.now(timezone.utc).isoformat()
+            )
+            last_message_preview = (
+                last_msg.get("content", "")[:140] if isinstance(last_msg, dict) else ""
+            )
+            groups.append(
+                GroupItem(
+                    id=rec.get("group_id", ""),
+                    name=rec.get("name", ""),
+                    templateId=rec.get("template_id", "") or "",
+                    status="idle",
+                    unreadCount=0,
+                    pendingApprovalsCount=0,
+                    lastMessage=last_message_preview,
+                    lastActivityAt=last_activity,
+                    metrics={"members": len(rec.get("agent_ids", []) or []),
+                             "activeRuns": 0,
+                             "pendingApprovalsCount": 0,
+                             "costToday": 0},
+                )
+            )
+        except Exception:
+            # Defensive: skip a malformed record rather than 500 the whole list
+            continue
+
+    return InboxResponse(
+        data=InboxData(groups=groups, agent_dms=[]),
+        meta={
+            "trace_id": uuid4().hex,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": "workspace-groups",
+        },
     )
 
 

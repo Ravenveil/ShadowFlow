@@ -23,6 +23,12 @@ interface InboxState {
   recentMessages: Record<string, Message[]>;
 
   fetchInbox: (templateId: string, workspaceId?: string | null) => Promise<void>;
+  /**
+   * Workspace-driven inbox fetch — for groups created outside any template
+   * (e.g. run-session auto-save). Hits `/api/inbox?workspace_id=...` which
+   * reads from .shadowflow/groups/*.json directly. See shadowflow/api/inbox.py.
+   */
+  fetchWorkspaceInbox: (workspaceId: string | null) => Promise<void>;
   updateGroupStatus: (groupId: string, partial: Partial<GroupItem>) => void;
   updateGroupMetrics: (groupId: string, partial: Partial<GroupMetrics>) => void;
   updateActiveRuns: (groupId: string, delta: number) => void;
@@ -50,6 +56,40 @@ export const useInboxStore = create<InboxState>((set, get) => ({
     try {
       const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
       const res = await fetch(`${getApiBase()}/api/templates/${encodeURIComponent(templateId)}/inbox${qs}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json: InboxResponse = await res.json();
+      set({
+        groups: json.data.groups,
+        agentDMs: json.data.agent_dms,
+        loading: false,
+      });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : 'Unknown error' });
+    }
+  },
+
+  fetchWorkspaceInbox: async (workspaceId: string | null) => {
+    const s = get();
+    // Treat workspace-mode as templateId=null. Skip refetch if we're already
+    // populated for this workspace.
+    if (
+      s.currentTemplateId === null &&
+      s.currentWorkspaceId === (workspaceId ?? null) &&
+      s.groups.length > 0
+    ) {
+      return;
+    }
+    set({
+      loading: true,
+      error: null,
+      currentTemplateId: null,
+      currentWorkspaceId: workspaceId ?? null,
+      groups: [],
+      agentDMs: [],
+    });
+    try {
+      const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+      const res = await fetch(`${getApiBase()}/api/inbox${qs}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json: InboxResponse = await res.json();
       set({
