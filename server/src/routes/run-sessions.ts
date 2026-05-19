@@ -44,6 +44,12 @@ import { getOrCreateProject } from '../storage/projects';
 // hot reload + crash; sensitive fields persisted under .shadowflow/ (gitignored,
 // same trust boundary as settings.json).
 import { createSessionStore } from '../lib/session-store';
+// S1.2 (intent-workflow-design-v1 §4.1) — TS-side intent classifier. Runs in
+// the SSE handler before the assembler kicks off so the front-end gets a
+// `classify` frame within ~1ms of stream open (LLM's own <sf:classify .../>
+// arrives many seconds later, after parser extraction). Two frames coexist;
+// front-end may diff them for consistency (S5.2 future story).
+import { classifyTS } from '../lib/intent-router';
 
 const router = Router();
 
@@ -688,6 +694,26 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   res.write(': connected\n\n');
 
   console.log(`[run-sessions] Starting SSE stream for session ${id} skill=${session.skill_name}`);
+
+  // S1.2 — TS-side classify frame. Synchronous keyword classifier; runs in ~µs
+  // so we can emit it right after the connection handshake, parallel to the
+  // LLM warming up. LLM will later emit its own <sf:classify .../> via the
+  // parser (which doesn't set a `source` attr — front-end treats unset as
+  // 'llm'). Two frames coexist so the UI can surface a divergence warning.
+  try {
+    const tsClassify = classifyTS(session.goal);
+    sendEvent('classify', {
+      output_type: tsClassify.kind === 'task' ? 'workflow' : tsClassify.kind,
+      mode: 'team',
+      confidence: tsClassify.confidence,
+      complexity: 2,
+      source: 'ts',
+      reasons: tsClassify.reasons,
+    });
+  } catch (e) {
+    // Never let a classifier bug kill the run — log + skip.
+    console.error(`[run-sessions] classifyTS failed for session ${id}:`, e);
+  }
 
   // Story 15.8 — capture run outcome for persistence after generator drains.
   let artifactInfo: {
