@@ -30,8 +30,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
 
 export interface ThinkCardProps {
-  /** Raw thinking text accumulated from <sf:think> SSE frames. */
+  /** Fallback single-string thinking message (legacy / placeholder path). */
   thinkingMessage: string | null;
+  /**
+   * 2026-05-19 — structured reasoning stream. When non-empty, takes priority
+   * over `thinkingMessage` and renders one timestamped row per chunk (设计点
+   * 6 "3 行带时间戳的 reasoning 流").
+   */
+  thinkingStream?: Array<{ ts: string; step: string | null; text: string }>;
   /** True while the stream is still producing thinking content. */
   isStreaming: boolean;
   /** Live elapsed ms while streaming (null otherwise). */
@@ -79,6 +85,7 @@ function formatNowTimestamp(): string {
 
 export const ThinkCard: React.FC<ThinkCardProps> = ({
   thinkingMessage,
+  thinkingStream,
   isStreaming,
   liveThinkMs,
   thinkDurationMs,
@@ -87,20 +94,21 @@ export const ThinkCard: React.FC<ThinkCardProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [titleHover, setTitleHover] = useState(false);
-  // Capture a stable "now" timestamp on first mount, refreshed when
-  // streaming completes (so expanded view shows the finalization time).
-  const timestampRef = useRef<string>(formatNowTimestamp());
+  // Fallback timestamp for the legacy single-string thinkingMessage path.
+  const fallbackTsRef = useRef<string>(formatNowTimestamp());
   useEffect(() => {
-    if (!isStreaming) {
-      timestampRef.current = formatNowTimestamp();
-    }
+    if (!isStreaming) fallbackTsRef.current = formatNowTimestamp();
   }, [isStreaming]);
 
-  if (!thinkingMessage) return null;
+  const hasStream = Array.isArray(thinkingStream) && thinkingStream.length > 0;
+  if (!hasStream && !thinkingMessage) return null;
 
-  // Folded summary: first non-empty line clipped to a sane length.
-  const firstLine =
-    thinkingMessage.split('\n').find((l) => l.trim().length > 0) ?? '';
+  // Folded summary: latest stream entry's first line, else fall back to
+  // thinkingMessage's first line.
+  const latestText = hasStream
+    ? thinkingStream![thinkingStream!.length - 1].text
+    : (thinkingMessage ?? '');
+  const firstLine = latestText.split('\n').find((l) => l.trim().length > 0) ?? '';
   const folded = firstLine.length > 64 ? `${firstLine.slice(0, 64)}…` : firstLine;
 
   const statusLabel = isStreaming
@@ -196,25 +204,77 @@ export const ThinkCard: React.FC<ThinkCardProps> = ({
             fontSize: 11,
             color: 'var(--t-fg-3, var(--fg-3))',
             lineHeight: 1.55,
-            maxHeight: 240,
+            maxHeight: 280,
             overflowY: 'auto',
           }}
         >
-          {/* Single timestamp marker until §4.3 lands per-line timestamps. */}
-          <div
-            style={{
-              fontFamily: 'var(--font-mono, monospace)',
-              fontSize: 9.5,
-              color: 'var(--t-fg-5, var(--fg-5))',
-              letterSpacing: '0.08em',
-              marginBottom: 6,
-            }}
-          >
-            {timestampRef.current}
-          </div>
-          <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {thinkingMessage}
-          </div>
+          {hasStream ? (
+            // Per-row timestamped reasoning stream (design-spec "3 行带时间戳的 reasoning 流")
+            thinkingStream!.map((row, i) => (
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  gap: 10,
+                  marginBottom: i === thinkingStream!.length - 1 ? 0 : 8,
+                  paddingBottom: i === thinkingStream!.length - 1 ? 0 : 8,
+                  borderBottom:
+                    i === thinkingStream!.length - 1
+                      ? 'none'
+                      : '1px dashed var(--t-border, var(--border))',
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono, monospace)',
+                    fontSize: 9.5,
+                    color: 'var(--t-fg-5, var(--fg-5))',
+                    letterSpacing: '0.08em',
+                    flexShrink: 0,
+                    minWidth: 56,
+                  }}
+                >
+                  {row.ts}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {row.step && (
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono, monospace)',
+                        fontSize: 9.5,
+                        color: 'var(--t-accent, #A855F7)',
+                        marginBottom: 2,
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      [{row.step}]
+                    </div>
+                  )}
+                  <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {row.text}
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            // Legacy single-string fallback (no <sf:thinking> emitted yet).
+            <>
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono, monospace)',
+                  fontSize: 9.5,
+                  color: 'var(--t-fg-5, var(--fg-5))',
+                  letterSpacing: '0.08em',
+                  marginBottom: 6,
+                }}
+              >
+                {fallbackTsRef.current}
+              </div>
+              <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {thinkingMessage}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

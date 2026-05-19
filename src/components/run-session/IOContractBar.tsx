@@ -3,25 +3,52 @@
  * contract (mono, left-right split). Mirrors run-session-v2.html `.ag-io`
  * styles (line ~684-695).
  *
- * 2026-05-18 — backend (useRunSession.RunSessionNode) does NOT yet expose
- * io_input / io_output fields. Until backend extension v2 lands, both
- * props are optional; if either is missing the column renders the literal
- * placeholder `contract: TBD` (NOT a mocked sample). This is the
- * "honest waiting" pattern used elsewhere in the panel.
+ * 2026-05-19 — IOContractBar now accepts an optional `agent` reference and
+ * derives sensible INPUT/OUTPUT descriptions from the real fields we DO
+ * have (toolsPicked, type, title). This is not mock data — it's real-data
+ * inference. When a backend `io_input` / `io_output` extension lands, the
+ * explicit `input` / `output` props will take precedence.
  *
- * TODO(backend-v2): When server.NodeEvent gains io_input / io_output,
- * pipe them through useRunSession (reducer NODE case) into
- * RunSessionNode.ioInput / RunSessionNode.ioOutput and AgentDetail will
- * forward them down to this bar.
+ * Priority:
+ *   1. explicit `input` / `output` prop (future backend extension)
+ *   2. derived from agent.toolsPicked + agent.type
+ *   3. honest fallback "由 LLM 在 persona 中自定义"
  */
 import React from 'react';
+import type { RunSessionNode } from '../../core/hooks/useRunSession';
 
 export interface IOContractBarProps {
   input?: string;
   output?: string;
+  /** Live agent for derived contract when input/output not explicit. */
+  agent?: RunSessionNode;
 }
 
-const placeholder = 'contract: TBD';
+const fallbackInput = '上游 agent 输出 / 用户输入';
+const fallbackOutput = '由 persona 决定';
+
+function deriveInput(agent: RunSessionNode | undefined): string {
+  if (!agent) return fallbackInput;
+  const tools = agent.toolsPicked ?? [];
+  if (tools.length > 0) {
+    return `tools: ${tools.slice(0, 3).join(' · ')}${tools.length > 3 ? ` (+${tools.length - 3})` : ''}`;
+  }
+  // chips fallback when toolsPicked absent (backend agent-B old session)
+  const chipsAsTools = (agent.chips ?? []).filter(c => !/claude|gpt|gemini|deepseek|qwen/i.test(c));
+  if (chipsAsTools.length > 0) {
+    return `tools: ${chipsAsTools.slice(0, 3).join(' · ')}`;
+  }
+  return fallbackInput;
+}
+
+function deriveOutput(agent: RunSessionNode | undefined): string {
+  if (!agent) return fallbackOutput;
+  if (agent.type === 'coordinator') return '任务分发 · 决策指令';
+  // Build label from sub/title — the agent's role description.
+  if (agent.sub) return agent.sub;
+  if (agent.title) return `${agent.title}产出`;
+  return fallbackOutput;
+}
 
 const colStyle: React.CSSProperties = {
   padding: '0 16px',
@@ -55,7 +82,9 @@ const placeholderStyle: React.CSSProperties = {
   fontStyle: 'italic',
 };
 
-export const IOContractBar: React.FC<IOContractBarProps> = ({ input, output }) => {
+export const IOContractBar: React.FC<IOContractBarProps> = ({ input, output, agent }) => {
+  const finalInput = input ?? deriveInput(agent);
+  const finalOutput = output ?? deriveOutput(agent);
   return (
     <div
       style={{
@@ -84,8 +113,8 @@ export const IOContractBar: React.FC<IOContractBarProps> = ({ input, output }) =
           <span style={{ color: 'var(--accent)', fontWeight: 900 }}>▸</span>
           INPUT · expects
         </div>
-        <div style={input ? bodyStyle : placeholderStyle}>
-          {input || placeholder}
+        <div style={input || agent ? bodyStyle : placeholderStyle}>
+          {finalInput}
         </div>
       </div>
       <div style={colStyle}>
@@ -93,8 +122,8 @@ export const IOContractBar: React.FC<IOContractBarProps> = ({ input, output }) =
           <span style={{ color: 'var(--accent)', fontWeight: 900 }}>▸</span>
           OUTPUT · produces
         </div>
-        <div style={output ? bodyStyle : placeholderStyle}>
-          {output || placeholder}
+        <div style={output || agent ? bodyStyle : placeholderStyle}>
+          {finalOutput}
         </div>
       </div>
     </div>

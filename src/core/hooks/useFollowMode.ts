@@ -27,11 +27,16 @@ import type { RunSessionStep } from './useRunSession';
  * tab-neutral). Step matching is exact-string (the assembler emits
  * stable zh-CN labels).
  */
+// Keys MUST match the exact `name` strings emitted by skills.ts AGENT_TEAM_
+// BLUEPRINT_PROMPT (see `<sf:step name="…"/>` instructions). Mismatch =
+// followedTab returns null and the chip silently stops routing — observed
+// 2026-05-18 when this table had stale "挑选 Team 蓝图" / "配置 Agent 角色"
+// labels that the LLM never actually emits.
 const STEP_TO_TAB: Record<string, TabId> = {
   '分析目标需求': 'overview',
-  '挑选 Team 蓝图': 'team',
+  '规划 Agent 结构': 'team',
   '生成 YAML Blueprint': 'preview',
-  '配置 Agent 角色': 'agent',
+  '创建 Agent 节点': 'agent',
   '配置 Team Workflow': 'team',
 };
 
@@ -48,6 +53,18 @@ export interface UseFollowModeOptions {
   initialTab?: TabId;
   /** Initial follow mode when the hook mounts. Defaults to 'auto'. */
   initialMode?: FollowMode;
+  /**
+   * Optional substep stream (from useRunSession.activeSubsteps). When the
+   * current step has substeps, the chip tooltip surfaces the latest one
+   * (e.g. "配置 Agent · reader · tools 4/8" per design-spec).
+   */
+  activeSubsteps?: Array<{ parent_step: string; name: string; elapsed_ms?: number }>;
+  /**
+   * Optional node list (from useRunSession.nodes). When the current step
+   * is an agent-config step, the tooltip surfaces the currently-building
+   * agent's title for extra context.
+   */
+  nodes?: Array<{ title: string; status?: string }>;
 }
 
 export interface UseFollowModeReturn {
@@ -96,6 +113,8 @@ export function useFollowMode({
   steps,
   initialTab = 'overview',
   initialMode = 'auto',
+  activeSubsteps,
+  nodes,
 }: UseFollowModeOptions): UseFollowModeReturn {
   const [activeTab, setActiveTabState] = useState<TabId>(initialTab);
   const [followMode, setFollowMode] = useState<FollowMode>(initialMode);
@@ -114,8 +133,37 @@ export function useFollowMode({
 
   const currentStepLabel = useMemo(() => {
     if (!currentStep) return undefined;
-    return `${currentStep.name} · ${currentStep.status}`;
-  }, [currentStep]);
+    // Design-spec tooltip format: "配置 Agent · reader · tools 4/8".
+    // Layer 1: step name. Layer 2: building agent title (when relevant).
+    // Layer 3: latest substep name (e.g. "tools 4/8").
+    const parts: string[] = [currentStep.name];
+    if (nodes && currentStep.name === '创建 Agent 节点') {
+      const building = nodes.find(n => n.status === 'building');
+      if (building?.title) parts.push(building.title);
+    }
+    if (activeSubsteps && activeSubsteps.length > 0) {
+      const latest = activeSubsteps.filter(s => s.parent_step === currentStep.name).pop();
+      if (latest) parts.push(latest.name);
+    }
+    parts.push(currentStep.status);
+    return parts.join(' · ');
+  }, [currentStep, activeSubsteps, nodes]);
+
+  // First-followed effect — when followedTab transitions from null to a
+  // real tab for the first time, snap activeTab to it (regardless of mode).
+  // This implements the design-spec rule: "默认落在被跟随的 tab（通常是
+  // Agent）". Without this, the user starts on `initialTab='overview'` and
+  // only sees Agent/Team via auto-follow after the matching step arrives —
+  // which on a fast session might be the only chance to see Overview.
+  const firstFollowedSeenRef = useRef(false);
+  useEffect(() => {
+    if (firstFollowedSeenRef.current) return;
+    if (followedTab) {
+      firstFollowedSeenRef.current = true;
+      // Only auto-snap if user hasn't locked manually yet.
+      if (followMode === 'auto') setActiveTabState(followedTab);
+    }
+  }, [followedTab, followMode]);
 
   // Auto-follow effect — only runs when mode === 'auto'. When followedTab
   // changes to a non-null value we mirror it into activeTab. We do NOT

@@ -125,13 +125,14 @@ function deriveSlots(agent: RunSessionNode, tools: ToolLists): SlotData[] {
     ];
   }
 
-  // pending — all dashed
+  // pending — all dashed + body 文字按设计稿改为「— 待配置」（design line 1183-1187）
+  const TBD = '— 待配置';
   return [
-    slot('Identity', '命名 · 形象', `${agent.title} · ${agent.avatarChar}`, 'pending'),
-    slot('Persona', '角色性格', personaText, 'pending'),
-    slot('Model', '模型 · 参数', modelText, 'pending'),
-    slot('Tools', '工具集', toolsBody, 'pending'),
-    slot('Memory', '记忆 · Knowledge', memoryText, 'pending'),
+    slot('Identity', '命名 · 形象', TBD, 'pending'),
+    slot('Persona', '角色性格', TBD, 'pending'),
+    slot('Model', '模型 · 参数', TBD, 'pending'),
+    slot('Tools', '工具集', TBD, 'pending'),
+    slot('Memory', '记忆 · Knowledge', TBD, 'pending'),
   ];
 }
 
@@ -421,18 +422,86 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ agent }) => {
         })}
       </div>
 
-      {/* Persona prompt */}
-      <PersonaPromptCard
-        persona={agent.persona}
-        agentStatus={agent.status}
-        agentLabel={agent.id}
-      />
+      {/* Placeholder CTA — design `.ag-empty` block (line 1191-1195).
+          Shown ONLY when this agent slot is fully pending: no persona, no
+          tools, no model. Surfaces "尚未配置 / 配置 Agent →" so the user
+          knows they hit a not-yet-built agent. */}
+      {agent.status === 'pending' && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: '28px 22px',
+            borderRadius: 14,
+            border: '1.5px dashed var(--border)',
+            background: 'var(--bg-elev-1)',
+            display: 'grid',
+            placeItems: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 700,
+              color: 'var(--fg-2)',
+              marginBottom: 6,
+              letterSpacing: '-0.01em',
+            }}
+          >
+            尚未配置
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: 'var(--fg-4)',
+              maxWidth: 360,
+              lineHeight: 1.5,
+              marginBottom: 16,
+            }}
+          >
+            该 Agent 还未启用 —— 完成 5 步流水线（Identity → Persona → Model → Tools → Memory）即可让它加入团队，并出现在 workflow DAG 与权责矩阵中。
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              // eslint-disable-next-line no-console
+              console.log('[AgentDetail] TODO: trigger 配置 Agent for', agent.id);
+            }}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: '1px solid var(--accent)',
+              background: 'var(--accent-tint, transparent)',
+              color: 'var(--accent)',
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            配置 Agent →
+          </button>
+        </div>
+      )}
 
-      {/* Tools grid */}
-      <ToolsGrid picked={tools.picked} candidate={tools.candidate} />
+      {/* Below-fold extras only render when this agent has real data. */}
+      {agent.status !== 'pending' && (
+        <>
+          {/* Persona prompt */}
+          <PersonaPromptCard
+            persona={agent.persona}
+            agentStatus={agent.status}
+            agentLabel={agent.id}
+          />
 
-      {/* I/O contract — input/output omitted until backend extension v2 */}
-      <IOContractBar />
+          {/* Tools grid */}
+          <ToolsGrid picked={tools.picked} candidate={tools.candidate} />
+
+          {/* I/O contract — derives INPUT/OUTPUT from agent.toolsPicked/sub/type
+              when backend doesn't ship explicit io_input/io_output yet. */}
+          <IOContractBar agent={agent} />
+        </>
+      )}
     </div>
   );
 };

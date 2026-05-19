@@ -50,10 +50,10 @@ import { MessageActions } from '../components/MessageActions';
 import { RightPaneTabs, type TabId } from '../components/run-session/RightPaneTabs';
 import { FollowChip } from '../components/run-session/FollowChip';
 import { useFollowMode } from '../core/hooks/useFollowMode';
-import OverviewPanelStub from '../components/run-session/OverviewPanelStub';
+import OverviewPanel from '../components/run-session/OverviewPanel';
 import TeamPanel from '../components/run-session/TeamPanel';
 import AgentPanel from '../components/run-session/AgentPanel';
-import PreviewPanelStub from '../components/run-session/PreviewPanelStub';
+import PreviewPanel from '../components/run-session/PreviewPanel';
 import ThinkCard from '../components/run-session/ThinkCard';
 
 // ---------------------------------------------------------------------------
@@ -2459,6 +2459,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             preview, and expanded reasoning view all live there. */}
         <ThinkCard
           thinkingMessage={session.thinkingMessage}
+          thinkingStream={session.thinkingStream}
           isStreaming={thinkStreaming}
           liveThinkMs={liveThinkMs}
           thinkDurationMs={thinkDurationMs}
@@ -3438,7 +3439,7 @@ interface RunSessionRightPaneProps {
   chatGroupId: string | null;
 }
 
-function RunSessionRightPane({ session, sessionId: _sessionId, onNavigate, chatGroupId }: RunSessionRightPaneProps) {
+function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: RunSessionRightPaneProps) {
   const { t } = useI18n();
   const {
     activeTab,
@@ -3447,7 +3448,17 @@ function RunSessionRightPane({ session, sessionId: _sessionId, onNavigate, chatG
     toggleFollow,
     followedTab,
     currentStepLabel,
-  } = useFollowMode({ steps: session.steps });
+  } = useFollowMode({
+    steps: session.steps,
+    activeSubsteps: session.activeSubsteps,
+    nodes: session.nodes,
+  });
+
+  // Task spec Item 8 — Header content for the right-pane toolbar:
+  // run id (truncated mono) + status pill (构建中 / 已完成 / 出错).
+  const runTitle = `run_${sessionId.slice(0, 8)}`;
+  const runStatus: 'building' | 'done' | 'error' =
+    session.error != null ? 'error' : session.isComplete ? 'done' : 'building';
 
   // Tab click → lock follow mode (matches design-spec behavior). Internal
   // auto-follow effect in useFollowMode keeps the default unlocked path.
@@ -3468,10 +3479,21 @@ function RunSessionRightPane({ session, sessionId: _sessionId, onNavigate, chatG
   };
 
   const panels: Record<TabId, React.ReactNode> = {
-    overview: <OverviewPanelStub />,
+    overview: (
+      <OverviewPanel
+        session={session}
+        onSelectAgent={() => setActiveTab('agent', { lock: true })}
+        onOpenEditor={() => onNavigate(`/editor?session=${sessionId}`)}
+      />
+    ),
     team: <TeamPanel session={session} />,
     agent: <AgentPanel session={session} />,
-    preview: <PreviewPanelStub />,
+    preview: (
+      <PreviewPanel
+        session={session}
+        onOpenEditor={() => onNavigate(`/editor?session=${sessionId}`)}
+      />
+    ),
   };
 
   return (
@@ -3497,6 +3519,12 @@ function RunSessionRightPane({ session, sessionId: _sessionId, onNavigate, chatG
         }
         followedTab={followedTab}
         panels={panels}
+        runTitle={runTitle}
+        runStatus={runStatus}
+        tabCounts={{
+          team: session.nodes.length,
+          agent: session.nodes.length,
+        }}
       />
 
       {/* Right-bottom dock — single primary CTA. Anchored absolute so the

@@ -18,6 +18,8 @@ import React from 'react';
 
 export type TabId = 'overview' | 'team' | 'agent' | 'preview';
 
+export type RunPillStatus = 'building' | 'done' | 'error';
+
 export interface RightPaneTabsProps {
   /** Currently visible tab. */
   activeTab: TabId;
@@ -37,7 +39,27 @@ export interface RightPaneTabsProps {
   /** Panel renderers — one per tab. Required so the shell knows what to
    *  draw inside the content area for each tab. */
   panels: Record<TabId, React.ReactNode>;
+  /** Run title shown in the toolbar between the chip and the tab buttons
+   *  (e.g. "run_54cc04ef-…"). Truncated with ellipsis when narrow. */
+  runTitle?: string;
+  /** Status pill shown next to the run title. */
+  runStatus?: RunPillStatus;
+  /** Optional per-tab count badge (mirrors design `<span class="ct">N</span>`).
+   *  Renders only when the value is > 0. */
+  tabCounts?: Partial<Record<TabId, number>>;
 }
+
+const PILL_TEXT: Record<RunPillStatus, string> = {
+  building: '构建中',
+  done: '已完成',
+  error: '出错',
+};
+
+const PILL_BG: Record<RunPillStatus, string> = {
+  building: 'var(--t-accent)',
+  done: 'var(--t-ok, #16a34a)',
+  error: 'var(--t-warn, #dc2626)',
+};
 
 const TAB_DEFS: { key: TabId; label: string }[] = [
   { key: 'overview', label: 'Overview' },
@@ -52,6 +74,9 @@ export function RightPaneTabs({
   followChip,
   followedTab,
   panels,
+  runTitle,
+  runStatus,
+  tabCounts,
 }: RightPaneTabsProps) {
   return (
     <section
@@ -79,6 +104,58 @@ export function RightPaneTabs({
       >
         {followChip && <div style={{ display: 'flex', alignItems: 'center' }}>{followChip}</div>}
 
+        {/* Run title + status pill — task spec Item 8. Centered/left-grouped
+            between the chip and the tab strip. Truncates with ellipsis so a
+            long run id never pushes the tabs off-screen. */}
+        {(runTitle || runStatus) && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              minWidth: 0,
+              overflow: 'hidden',
+            }}
+          >
+            {runTitle && (
+              <span
+                title={runTitle}
+                style={{
+                  fontFamily: 'var(--t-mono, ui-monospace, "SF Mono", Menlo, monospace)',
+                  fontSize: 11.5,
+                  color: 'var(--t-fg-3)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: 220,
+                }}
+              >
+                {runTitle}
+              </span>
+            )}
+            {runStatus && (
+              <span
+                data-status={runStatus}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  height: 20,
+                  padding: '0 8px',
+                  borderRadius: 10,
+                  background: PILL_BG[runStatus],
+                  color: 'var(--t-accent-ink, #fff)',
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  letterSpacing: '.02em',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {PILL_TEXT[runStatus]}
+              </span>
+            )}
+          </div>
+        )}
+
         <div
           role="tablist"
           aria-label="Run session right pane tabs"
@@ -92,6 +169,7 @@ export function RightPaneTabs({
           {TAB_DEFS.map(({ key, label }) => {
             const isActive = activeTab === key;
             const isFollowed = followedTab === key;
+            const count = tabCounts?.[key];
             return (
               <button
                 key={key}
@@ -105,6 +183,7 @@ export function RightPaneTabs({
                   position: 'relative',
                   display: 'inline-flex',
                   alignItems: 'center',
+                  gap: 5,
                   height: 28,
                   padding: '0 12px',
                   borderRadius: 6,
@@ -120,6 +199,28 @@ export function RightPaneTabs({
                 }}
               >
                 {label}
+                {typeof count === 'number' && count > 0 && (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minWidth: 16,
+                      height: 14,
+                      padding: '0 5px',
+                      borderRadius: 7,
+                      background: isActive
+                        ? 'var(--t-accent-tint, rgba(168,85,247,.14))'
+                        : 'var(--t-panel-3, var(--bg-elev-3))',
+                      color: isActive ? 'var(--t-accent, #A855F7)' : 'var(--t-fg-4)',
+                      fontFamily: 'var(--font-mono, monospace)',
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {count}
+                  </span>
+                )}
                 {isFollowed && (
                   <span
                     aria-hidden

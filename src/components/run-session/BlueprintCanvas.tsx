@@ -31,6 +31,10 @@ const COL_GAP = 96;
 const ROW_GAP = 28;
 const MARGIN_X = 60;
 const MARGIN_Y = 56;
+// PolicyMatrixMini is 262px wide and floats at right:16. We reserve this much
+// padding on the right of the canvas so the DAG never collides with the
+// HUD card when content is centered. 262 (card) + 16 (right gap) + 24 (air).
+const RACI_SAFE_AREA = 302;
 
 interface PositionedNode {
   node: RunSessionNode;
@@ -238,8 +242,28 @@ const BlueprintCanvas: React.FC<BlueprintCanvasProps> = ({ nodes, edges }) => {
         }}
       />
 
+      {/* Centering wrapper. flex-center the DAG within the visible canvas
+          minus the RACI-card safe area on the right. When content exceeds
+          available width (many nodes / narrow viewport), the section's
+          overflow:auto kicks in for horizontal scroll — the DAG stays
+          intact, never hides behind the HUD. */}
+      <div
+        style={{
+          position: 'relative',
+          minWidth: '100%',
+          minHeight: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingLeft: 32,
+          paddingRight: RACI_SAFE_AREA,
+          paddingTop: 32,
+          paddingBottom: 32,
+          boxSizing: 'border-box',
+        }}
+      >
       {/* scroll viewport content */}
-      <div style={{ position: 'relative', width: contentW, height: contentH }}>
+      <div style={{ position: 'relative', width: contentW, height: contentH, flexShrink: 0 }}>
         {/* SVG layer — edges. Sits behind nodes (z-index 1). */}
         <svg
           width={contentW}
@@ -428,6 +452,7 @@ const BlueprintCanvas: React.FC<BlueprintCanvasProps> = ({ nodes, edges }) => {
           );
         })}
       </div>
+      </div>{/* end centering wrapper */}
 
       {/* Bottom status bar — fixed within the canvas, not in scroll content */}
       <div

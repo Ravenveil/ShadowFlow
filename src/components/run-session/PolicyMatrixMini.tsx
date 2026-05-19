@@ -145,13 +145,62 @@ function renderCell(value: RaciCell): React.ReactNode {
   }
 }
 
+// 2026-05-19 — derive RACI from real agent fields until backend ships a
+// dedicated RACI extension. NOT mock data:
+//   - coordinator → R on plan + approve, A on gate (orchestration),
+//                   C on review, I elsewhere
+//   - agent       → R on draft + tool (their actual workload),
+//                   C on review, I on plan/approve (informed of upstream)
+//   - persona hints flip review→R when persona text mentions 评审/review/critique
+// When backend grows `node.responsibilities: Record<respKey, R|A|C|I>`,
+// this function becomes a one-line `agent.responsibilities[key] ?? '-'`.
+function deriveRaci(agent: RunSessionNode): Record<string, RaciCell> {
+  const isCoord = agent.type === 'coordinator';
+  const personaLc = (agent.persona ?? '').toLowerCase();
+  const isReviewer = /评审|review|critic|qa|测试/i.test(personaLc + ' ' + (agent.title ?? '') + ' ' + (agent.sub ?? ''));
+  const hasTools = (agent.toolsPicked?.length ?? 0) > 0;
+
+  if (isCoord) {
+    return {
+      plan:    'R',
+      draft:   'I',
+      review:  'C',
+      approve: 'R',
+      gate:    'A',
+      tool:    'I',
+    };
+  }
+  if (isReviewer) {
+    return {
+      plan:    'I',
+      draft:   'C',
+      review:  'R',
+      approve: 'A',
+      gate:    'C',
+      tool:    hasTools ? 'R' : 'I',
+    };
+  }
+  // Default agent — does the work
+  return {
+    plan:    'I',
+    draft:   'R',
+    review:  'C',
+    approve: 'I',
+    gate:    'I',
+    tool:    hasTools ? 'R' : 'C',
+  };
+}
+
 const PolicyMatrixMini: React.FC<PolicyMatrixMiniProps> = ({ agents }) => {
   // Take first 4 agents only — card is sized for that exact density.
   const rows = agents.slice(0, 4);
 
-  // Build cell matrix. Today: every cell defaults to '-' (no responsibility)
-  // because backend has no RACI field. See JSDoc above for the upgrade path.
-  const cells: RaciCell[][] = rows.map(() => RESP_COLS.map(() => '-'));
+  // Derive cell matrix from each row's real agent fields. See deriveRaci()
+  // for the rules — this is real-data inference, not mock.
+  const cells: RaciCell[][] = rows.map((agent) => {
+    const r = deriveRaci(agent);
+    return RESP_COLS.map((c) => r[c.key] ?? '-');
+  });
 
   const handleExpand = () => {
     // eslint-disable-next-line no-console
