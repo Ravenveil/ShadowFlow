@@ -14,7 +14,9 @@ const ImportPage = lazy(() => import('./pages/ImportPage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
 const ChatPage = lazy(() => import('./pages/ChatPage'));
 const AgentDMPage = lazy(() => import('./pages/AgentDMPage'));
-const BuilderPage = lazy(() => import('./pages/BuilderPage'));
+// BuilderPage is intentionally NOT routed — /builder is hard-redirected to
+// /start below. The page file is kept on disk for now but no longer
+// reachable through navigation.
 const CatalogPage = lazy(() => import('./pages/CatalogPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
@@ -76,7 +78,8 @@ export function AppRoutes() {
             <Route path="/runs/:runId" element={<RunDetailPage />} />
             <Route path="/chat/:groupId" element={<ChatPage />} />
             <Route path="/agent-dm/:agentId" element={<AgentDMPage />} />
-            <Route path="/builder" element={<BuilderPage />} />
+            <Route path="/builder" element={<Navigate to="/start" replace />} />
+            <Route path="/builder/*" element={<Navigate to="/start" replace />} />
             <Route path="/catalog" element={<CatalogPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/knowledge" element={<KnowledgePage />} />
