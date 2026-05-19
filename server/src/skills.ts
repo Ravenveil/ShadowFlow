@@ -93,10 +93,30 @@ agent、可以是 5 个串行 agent——按任务真实需要来，不强加协
 
 <sf:classify output_type="answer|report|review|workflow" mode="single|team" confidence="0.0-1.0" complexity="1-5"/>
 
-<sf:step name="分析目标需求" status="running"/>
-<sf:step name="分析目标需求" status="done" elapsed_ms="..."/>
+<!-- S2.1 (intent-workflow-design-v1 §4.2) — 每个 <sf:step> 必须带 output_kind 属性。
+     合法值：nodes | edges | yaml | classify | none。
+     声明后 parser 在 step done 时会校验对应产物是否真出现；缺产物 → emit
+     STEP_NO_OUTPUT 错误帧，便于前端就地 retry。output_kind 在 running 和 done
+     两条 step 帧上都要写一致的值。 -->
 
-<sf:step name="规划 Agent 结构" status="running"/>
+<sf:step name="分析目标需求" output_kind="none" status="running"/>
+<!-- 在每个 step 的 running 和 done 之间，**强烈鼓励**输出 1-3 段简短中文思考过程，
+     用 <sf:thinking> 配对标签包裹。这是给用户看的"思考折叠卡"内容，所以不是
+     冗长的内部独白，而是有信息密度的关键决策（"用户场景里的 PM 偏重..."、
+     "考虑过让 PM 兼任 PO 但拆成两角更清晰..."）。每段 < 100 字。
+     如果某 step 真的没有非平凡的思考可写，直接跳过 <sf:thinking>（不要硬凑）。
+-->
+<sf:thinking step="分析目标需求">
+用户给的目标是"BMAD 方法 4 角"，明确点名了 PM/架构/全栈/QA，所以 team 模式 + 4 节点。
+BMAD 强调"分析-设计-开发-测试"线性闭环，所以 edge 走串行而非分叉。
+</sf:thinking>
+<sf:step name="分析目标需求" output_kind="none" status="done" elapsed_ms="..."/>
+
+<sf:step name="规划 Agent 结构" output_kind="nodes" status="running"/>
+<sf:thinking step="规划 Agent 结构">
+PM 当 coordinator（用户先对接的角色），其余 3 个 agent。模型选 sonnet 因为推理更稳。
+工具集按 BMAD 阶段差异化：PM 需 web_search + doc_writer，dev 需 code_interpreter。
+</sf:thinking>
 <!-- 按需要输出 1..N 个 node。type 可以全是 "agent"，也可以有 coordinator。
      skill 怎么定义就怎么输出，不要套固定模板。
 
@@ -122,7 +142,7 @@ agent、可以是 5 个串行 agent——按任务真实需要来，不强加协
 </sf:agent-persona>
 <!-- edge 也按需要——单 agent 可以没 edge，多 agent 按真实依赖关系画 -->
 <sf:edge from="..." to="..."/>
-<sf:step name="规划 Agent 结构" status="done" elapsed_ms="..."/>
+<sf:step name="规划 Agent 结构" output_kind="nodes" status="done" elapsed_ms="..."/>
 
 <!-- 完整示例（BMAD 4 角全栈团队）：
 <sf:node id="pm" type="coordinator" title="产品经理" sub="规划与对齐"
@@ -163,7 +183,7 @@ agent、可以是 5 个串行 agent——按任务真实需要来，不强加协
 -->
 
 
-<sf:step name="生成 YAML Blueprint" status="running"/>
+<sf:step name="生成 YAML Blueprint" output_kind="yaml" status="running"/>
 <artifact type="yaml" filename="team_blueprint.yml">
 name: <team name>
 version: "1.0"
@@ -176,13 +196,13 @@ agents:
 edges:
   - {from: ..., to: ...}    # 没 edge 就给空数组 []
 </artifact>
-<sf:step name="生成 YAML Blueprint" status="done" elapsed_ms="..."/>
+<sf:step name="生成 YAML Blueprint" output_kind="yaml" status="done" elapsed_ms="..."/>
 
-<sf:step name="创建 Agent 节点" status="running"/>
-<sf:step name="创建 Agent 节点" status="done" elapsed_ms="..."/>
+<sf:step name="创建 Agent 节点" output_kind="none" status="running"/>
+<sf:step name="创建 Agent 节点" output_kind="none" status="done" elapsed_ms="..."/>
 
-<sf:step name="配置 Team Workflow" status="running"/>
-<sf:step name="配置 Team Workflow" status="done" elapsed_ms="..."/>
+<sf:step name="配置 Team Workflow" output_kind="edges" status="running"/>
+<sf:step name="配置 Team Workflow" output_kind="edges" status="done" elapsed_ms="..."/>
 
 <sf:complete redirect="/editor"/>
 
@@ -190,7 +210,8 @@ edges:
 硬性规则
 ═══════════════════════════════════════════════════════════════
 1. 闲聊 / 模糊需求阶段绝对不输出 <sf:*> 或 <artifact>，纯中文自然语言。
-2. 进入组装阶段后每个 step 必须有 running 和 done 两条事件。
+2. 进入组装阶段后每个 step 必须有 running 和 done 两条事件；每个 <sf:step> 必须带
+   output_kind 属性（nodes|edges|yaml|classify|none），running 和 done 的值要一致。
 3. 不要用 markdown 代码块包裹（不要 \`\`\`yaml）。
 4. agent title / role / chips 用中文。
 5. **没说要团队就别造团队**，"hi" 回 "你好" 就行。
