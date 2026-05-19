@@ -39,6 +39,11 @@ import {
   getRecentMessages,
 } from '../storage/conversations';
 import { getOrCreateProject } from '../storage/projects';
+// 2026-05-19 — Cherry Studio parity: replace in-memory Map with a JSON-file
+// backed store so backend restarts no longer wipe live sessions. Survives
+// hot reload + crash; sensitive fields persisted under .shadowflow/ (gitignored,
+// same trust boundary as settings.json).
+import { createSessionStore } from '../lib/session-store';
 
 const router = Router();
 
@@ -225,8 +230,12 @@ function renderConversationHistoryBlock(
   ].join('\n');
 }
 
-// In-memory session store (session_id → options)
-const sessionStore = new Map<string, SessionRecord>();
+// Persistent session store — drop-in replacement for `new Map<>()` with
+// JSON-file persistence. Hydrated at module load (fire-and-forget; reads
+// before hydration completes simply miss until the file lands, which is
+// fine because in normal flows POST creates the session before any GET).
+const sessionStore = createSessionStore<SessionRecord>();
+void sessionStore.loadAll();
 
 // 2026-05-16 — Active stream registry. Lets POST /api/run-sessions/:id/abort
 // reach into the currently-open SSE handler and trigger its AbortController
@@ -643,7 +652,29 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
 
   // Wire client disconnect → AbortController → Claude stream cancellation.
   const abortController = new AbortController();
+
+  // S0.1 (intent-workflow-design-v1 §4.0) — periodic SSE heartbeat. Without
+  // this, idle Vite/nginx proxies cut the connection after ~30s of silence
+  // (Claude "thinking" + long YAML emit easily exceed this), the front-end
+  // hits the "已达最大重试次数" alert and the run looks broken. We write a
+  // comment frame (`: heartbeat\n\n`) every 15s — comment frames per SSE
+  // spec are ignored by EventSource but reset proxy timers. cleared on
+  // req close so we never write after res.end().
+  const HEARTBEAT_MS = 15_000;
+  const heartbeatTimer = setInterval(() => {
+    if (res.writableEnded) {
+      clearInterval(heartbeatTimer);
+      return;
+    }
+    try {
+      res.write(': heartbeat\n\n');
+    } catch {
+      clearInterval(heartbeatTimer);
+    }
+  }, HEARTBEAT_MS);
+
   req.on('close', () => {
+    clearInterval(heartbeatTimer);
     if (!abortController.signal.aborted) {
       console.log(`[run-sessions] client disconnected, aborting session ${id}`);
       abortController.abort();
@@ -892,6 +923,10 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       }
     }
 
+    // S0.1 — ensure heartbeat stops whatever the exit path (success, error,
+    // abort). req.on('close') already clears it on client disconnect but we
+    // also exit via the for-await / catch paths.
+    clearInterval(heartbeatTimer);
     if (!res.writableEnded) {
       res.end();
     }
