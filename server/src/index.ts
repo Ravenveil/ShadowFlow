@@ -101,12 +101,13 @@ app.use('/api/conversations', conversationsRouter);
 // otherwise /api/llm/* would be forwarded to Python instead of handled here.
 app.use('/api/llm', llmRouter);
 
-// Stub: /api/groups — chat group persistence (placeholder until full impl)
-app.post('/api/groups', (_req, res) => res.status(201).json({ group_id: `group-${Date.now()}`, created: true }));
-app.get('/api/groups', (_req, res) => res.json({ groups: [] }));
-app.get('/api/groups/:id', (req, res) => res.json({ group_id: req.params.id }));
-app.get('/api/groups/:id/messages', (_req, res) => res.json({ messages: [] }));
-app.post('/api/groups/:id/messages', (_req, res) => res.status(201).json({ message_id: `msg-${Date.now()}` }));
+// /api/groups — formerly a placeholder stub that returned synthetic IDs and
+// empty arrays. Removed 2026-05-19 so groups requests fall through to the
+// Python FastAPI backend (shadowflow/api/groups.py), which persists groups
+// + messages under .shadowflow/groups/*.json. The stub was masking real
+// data: `createGroup` succeeded with a fake id, but the group never existed
+// in any storage so `/chat` always rendered "暂无群组". See Step 4 of the
+// data-vertical plan.
 
 // ── Fallback to Python FastAPI (default :8000) ────────────────────────────────
 // Single-port UX: any /api/* not matched by the 12 Node routers above is
