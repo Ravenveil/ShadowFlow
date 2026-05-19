@@ -34,7 +34,7 @@ import { DesignSystemPicker } from '../components/DesignSystemPicker';
 import { ConversationPicker } from '../components/ConversationPicker';
 import { createRunSession } from '../api/runSessions';
 import { quickCreateAgent } from '../api/agents';
-import { createTeam } from '../api/teams';
+import { createTeam, putTeamWorkflow, type TeamWorkflowNode, type TeamWorkflowEdge } from '../api/teams';
 import { createGroup } from '../api/groupApi';
 import PythonBackendBanner from '../components/PythonBackendBanner';
 import { useWorkspaceStore } from '../store/workspaceStore';
@@ -3713,8 +3713,36 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
     inFlightRef.current = true;
 
     const agentNodes = session.nodes.filter((n) => n.type === 'agent');
-    const coordinator = session.nodes.find((n) => n.type === 'coordinator');
-    const teamName = coordinator?.title ?? goal.slice(0, 40) ?? 'AI Team';
+
+    // 2026-05-19 — team name comes from the LLM-generated blueprint YAML
+    // header (e.g. `name: "BMAD 全流程团队"`), NOT from the coordinator
+    // agent's title. Before this fix the team was named after the
+    // coordinator agent ("产品经理") which is nonsensical — that's a member
+    // name, not a team name. The LLM is asked to think about and write
+    // a team name in the YAML; we should honor it.
+    //
+    // Fallback chain:
+    //   1. `name:` field at the top of blueprintYaml (LLM's choice)
+    //   2. The user's goal text, trimmed (only if it's not a raw skill
+    //      reference like "Skill: ...")
+    //   3. Generic "AI 团队 · YYYY-MM-DD" so it's always something
+    //      meaningful that the user can rename later
+    function extractYamlTeamName(yaml: string | null): string | null {
+      if (!yaml) return null;
+      // Match leading `name:` line, tolerating optional quotes and trailing comments.
+      const m = yaml.match(/^\s*name\s*:\s*["']?([^"'\n#]+?)["']?\s*(?:#.*)?$/m);
+      const name = m ? m[1].trim() : '';
+      return name || null;
+    }
+    const yamlTeamName = extractYamlTeamName(session.blueprintYaml);
+    const trimmedGoal = goal.trim();
+    const goalLooksLikeSkillRef =
+      /^(skill\s*:|\/?\.?claude\/skills\/|skill_)/i.test(trimmedGoal);
+    const fallbackName =
+      yamlTeamName ??
+      (trimmedGoal && !goalLooksLikeSkillRef ? trimmedGoal.slice(0, 40) : null) ??
+      `AI 团队 · ${new Date().toISOString().slice(0, 10)}`;
+    const teamName = fallbackName;
     const wsId = currentWorkspaceId ?? undefined;
 
     setSaveState('saving');
@@ -3739,6 +3767,96 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           workspace_id: wsId,
         });
         setSavedTeamId(team.team_id);
+
+        // 2026-05-19 — persist the blueprint DAG as the team's workflow so
+        // /teams/:id renders nodes + edges instead of "暂无工作流节点". Build
+        // a session-node-id → real-agent-id map, then translate blueprint
+        // nodes/edges into TeamWorkflow shape. Failure here doesn't fail the
+        // whole save — the team itself is already persisted.
+        try {
+          const nodeIdToAgentId = new Map<string, string>();
+          agentNodes.forEach((n, i) => {
+            const aid = created[i]?.agent_id;
+            if (aid) nodeIdToAgentId.set(n.id, aid);
+          });
+
+          // Simple column-based seed layout — mirrors BlueprintCanvas so the
+          // /teams/:id DAG opens with a reasonable initial arrangement. Real
+          // editor positions take over once the user drags.
+          const NODE_W = 168;
+          const NODE_H = 78;
+          const COL_GAP = 96;
+          const ROW_GAP = 28;
+          const incoming: Record<string, number> = {};
+          session.nodes.forEach(n => { incoming[n.id] = 0; });
+          session.edges.forEach(e => {
+            if (incoming[e.to] != null) incoming[e.to]++;
+          });
+          // BFS to assign columns (longest path from root).
+          const col = new Map<string, number>();
+          const queue: string[] = [];
+          session.nodes.forEach(n => {
+            if ((incoming[n.id] ?? 0) === 0) { col.set(n.id, 0); queue.push(n.id); }
+          });
+          let guard = session.nodes.length * 4 + 8;
+          while (queue.length && guard-- > 0) {
+            const id = queue.shift()!;
+            const c = col.get(id) ?? 0;
+            session.edges.forEach(e => {
+              if (e.from === id) {
+                const prev = col.get(e.to);
+                if (prev === undefined || prev < c + 1) {
+                  col.set(e.to, c + 1);
+                  queue.push(e.to);
+                }
+              }
+            });
+          }
+          // Bucket by column to compute row index.
+          const rowCounter: Record<number, number> = {};
+          const positions = new Map<string, { x: number; y: number }>();
+          session.nodes.forEach(n => {
+            const c = col.get(n.id) ?? 0;
+            const r = rowCounter[c] ?? 0;
+            rowCounter[c] = r + 1;
+            positions.set(n.id, {
+              x: c * (NODE_W + COL_GAP),
+              y: r * (NODE_H + ROW_GAP),
+            });
+          });
+
+          const workflowNodes: TeamWorkflowNode[] = session.nodes.map(n => {
+            const aid = nodeIdToAgentId.get(n.id) ?? '';
+            return {
+              id: n.id,
+              type: 'agentTask',
+              position: positions.get(n.id) ?? { x: 0, y: 0 },
+              data: {
+                agentId: aid,
+                name: n.title,
+                soul: n.sub || n.title,
+              },
+            };
+          });
+
+          const workflowEdges: TeamWorkflowEdge[] = session.edges.map((e, i) => ({
+            id: `edge-${i}-${e.from}-${e.to}`,
+            source: e.from,
+            target: e.to,
+            data: { mode: 'direct' },
+          }));
+
+          await putTeamWorkflow(team.team_id, {
+            nodes: workflowNodes,
+            edges: workflowEdges,
+          });
+        } catch (wfErr) {
+          // Don't fail the whole save on workflow persistence error. Team
+          // record itself is already in place; user can manually rebuild
+          // the DAG in the editor.
+          console.warn('[RunSession] putTeamWorkflow failed:', wfErr);
+        }
+
         try {
           const grp = await createGroup({
             templateId: '',
