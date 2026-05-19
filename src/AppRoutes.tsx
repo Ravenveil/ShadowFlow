@@ -76,6 +76,11 @@ export function AppRoutes() {
             <Route path="/editor/:templateId" element={<EditorPage />} />
             <Route path="/runs" element={<RunsListPage />} />
             <Route path="/runs/:runId" element={<RunDetailPage />} />
+            {/* /chat without a groupId renders ChatPage's empty state, so the
+                sidebar can safely link here when no real groups exist yet.
+                Replaces hardcoded `/chat/default` which POSTed to a fake
+                group_id and 404'd the message persistence. */}
+            <Route path="/chat" element={<ChatPage />} />
             <Route path="/chat/:groupId" element={<ChatPage />} />
             <Route path="/agent-dm/:agentId" element={<AgentDMPage />} />
             <Route path="/builder" element={<Navigate to="/start" replace />} />

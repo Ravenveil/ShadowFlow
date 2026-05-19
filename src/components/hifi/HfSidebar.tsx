@@ -43,12 +43,13 @@ interface NavItem {
   badge?: number;
 }
 
-const buildNavItems = (t: (key: string) => string, chatBadge: number): NavItem[] => [
+const buildNavItems = (t: (key: string) => string, chatBadge: number, chatTo: string): NavItem[] => [
   { k: 'start',     Icon: Home,           label: t('shell.navStart'),     hint: '⌘1', to: '/start' },
-  // 2026-05-19 — Chat badge now reflects real unread count from useInboxStore
-  // (sum of unreadCount across all groups). Previously hardcoded as 3 which
-  // misled users into thinking there were 3 unread when /chat was empty.
-  { k: 'chat',      Icon: MessageCircle,  label: t('shell.navChat'),      hint: '⌘2', to: '/chat/default', badge: chatBadge > 0 ? chatBadge : undefined },
+  // 2026-05-19 — Chat link target is now data-driven (first real group_id),
+  // not the hardcoded "/chat/default" that pointed at a non-existent group
+  // and caused POST /api/groups/default/messages 404 → messages disappear
+  // on refresh. Badge reflects real unread count from useInboxStore.
+  { k: 'chat',      Icon: MessageCircle,  label: t('shell.navChat'),      hint: '⌘2', to: chatTo, badge: chatBadge > 0 ? chatBadge : undefined },
   { k: 'teams',     Icon: Users,          label: t('shell.navTeams'),     hint: '⌘3', to: '/teams' },
   { k: 'agents',    Icon: Bot,            label: t('shell.navAgents'),    hint: '⌘4', to: '/agents' },
   { k: 'templates', Icon: LayoutTemplate, label: t('shell.navTemplates'), hint: '⌘5', to: '/templates' },
@@ -158,7 +159,13 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
   const chatUnread = useInboxStore((s) =>
     s.groups.reduce((acc, g) => acc + (g.unreadCount ?? 0), 0),
   );
-  const NAV_ITEMS = useMemo(() => buildNavItems(t, chatUnread), [t, chatUnread]);
+  // First available real group_id for the chat link target. When the inbox
+  // hasn't been populated yet (or user has no groups), fall back to plain
+  // /chat so ChatPage renders its empty state instead of trying to POST
+  // to a non-existent group_id.
+  const firstGroupId = useInboxStore((s) => s.groups[0]?.id);
+  const chatTo = firstGroupId ? `/chat/${firstGroupId}` : '/chat';
+  const NAV_ITEMS = useMemo(() => buildNavItems(t, chatUnread, chatTo), [t, chatUnread, chatTo]);
   const [collapsed, setCollapsed] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const { user, status } = useAuth();

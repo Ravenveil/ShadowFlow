@@ -547,15 +547,26 @@ export default function ChatPage() {
     if (tab === 'chat') requestAnimationFrame(() => { if (chatScrollRef.current) chatScrollRef.current.scrollTop = savedScrollTop.current; });
   }
 
+  // 2026-05-19 — guard against sending to a non-existent group. Previously
+  // the sidebar linked to /chat/default which isn't a real group_id, so
+  // POST /api/groups/default/messages returned 404 and the message vanished
+  // on refresh. Now we refuse to send when (a) no groupId in URL, or (b)
+  // the groupId doesn't match any real group in the inbox.
+  const groupExists = groupId ? groups.some(g => g.id === groupId) : false;
   const handleSend = useCallback(async () => {
     const text = composer.trim();
     if (!text || chatStream.loading) return;
+    if (!groupExists) {
+      // Soft error — UI input stays so the user can copy out their text.
+      console.warn('[ChatPage] no real group selected; refusing to send');
+      return;
+    }
     setComposer('');
     try {
       await chatStream.send(text);
       requestAnimationFrame(() => { if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight; });
     } catch (err) { console.warn('[ChatPage] send failed:', err); }
-  }, [composer, chatStream]);
+  }, [composer, chatStream, groupExists]);
 
   const builderUrl = buildChatBuilderUrl({ chatId: groupId ?? '', goalText: groupName });
   const isRunning = group?.status === 'running' || (group?.metrics?.activeRuns ?? 0) > 0;

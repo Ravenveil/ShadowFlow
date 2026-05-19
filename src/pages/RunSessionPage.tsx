@@ -3692,8 +3692,22 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
 
   // Auto-persist team + agents + chat group when blueprint run completes.
   // Reruns when saveState flips back to 'idle' (i.e. user pressed retry).
+  //
+  // 2026-05-19 — trigger criterion broadened. Previously: `isComplete &&
+  // nodes.length > 0`. But the reducer sets `isComplete=true` ONLY on the
+  // server's COMPLETE event; if the run errors mid-stream (e.g. critique
+  // pass throws, SSE drops after blueprint), `isComplete` stays false
+  // forever and auto-save never fires — even though all 6 agents and the
+  // YAML blueprint were already streamed and persisted server-side.
+  //
+  // New criterion: persist whenever the blueprint is "settled" — either
+  // the stream completed normally OR errored after we already have agents.
+  // The blueprint data lives client-side in `session.nodes` regardless of
+  // whether the trailing critique pass succeeded.
+  const blueprintSettled =
+    session.nodes.length > 0 && (session.isComplete || session.error != null);
   useEffect(() => {
-    if (!session.isComplete || session.nodes.length === 0) return;
+    if (!blueprintSettled) return;
     if (saveState === 'saving' || saveState === 'ok') return;
     if (inFlightRef.current) return;
     inFlightRef.current = true;
@@ -3760,7 +3774,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
         inFlightRef.current = false;
       }
     })();
-  }, [session.isComplete, session.nodes.length, saveState, currentWorkspaceId, goal]);
+  }, [blueprintSettled, saveState, currentWorkspaceId, goal]);
 
   // 2026-05-11 Layer 1 — chat-mode detection (mirrors LeftPanel).
   // session.error gates chat mode so retry-error text accumulated in
