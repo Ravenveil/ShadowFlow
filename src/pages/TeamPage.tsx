@@ -753,9 +753,10 @@ function TeamDetailPage() {
   const [workflowEdges, setWorkflowEdges] = useState<TeamWorkflowEdge[]>([]);
 
   // Policy store actions — used to seed PolicyMatrixPanel with team-specific data.
-  const setAgents   = usePolicyStore((s) => s.setAgents);
-  const setMatrix   = usePolicyStore((s) => s.setMatrix);
-  const resetPolicy = usePolicyStore((s) => s.reset);
+  const setAgents      = usePolicyStore((s) => s.setAgents);
+  const setAgentLabels = usePolicyStore((s) => s.setAgentLabels);
+  const setMatrix      = usePolicyStore((s) => s.setMatrix);
+  const resetPolicy    = usePolicyStore((s) => s.reset);
 
   // Track the teamId for which policy was loaded to avoid redundant resets.
   const policyLoadedForRef = useRef<string | null>(null);
@@ -791,6 +792,39 @@ function TeamDetailPage() {
         if (agentKeys.length > 0) {
           setAgents(agentKeys);
         }
+
+        // 2026-05-19 — push id → human-readable label map so the PolicyMatrix
+        // headers render "产品经理" / "业务分析师" instead of raw UUIDs.
+        // Source 1 (best): workflow.nodes' embedded `data.name` (set when
+        //   blueprint was auto-saved). Both agentId and node.id are mapped
+        //   to handle either matrix key.
+        // Source 2 (fallback): listAgents lookup for any remaining ids
+        //   without a label (e.g. legacy teams whose workflow predates the
+        //   data.name field). Fire-and-forget; UI updates when ready.
+        const labels: Record<string, string> = {};
+        for (const n of workflow.nodes) {
+          if (n.data?.name) {
+            if (n.data.agentId) labels[n.data.agentId] = n.data.name;
+            labels[n.id] = n.data.name;
+          }
+        }
+        if (Object.keys(labels).length > 0) setAgentLabels(labels);
+
+        const missingIds = agentKeys.filter((id) => !labels[id]);
+        if (missingIds.length > 0) {
+          listAgents()
+            .then((all) => {
+              const extra: Record<string, string> = {};
+              for (const a of all) {
+                if (missingIds.includes(a.agent_id) && a.name) {
+                  extra[a.agent_id] = a.name;
+                }
+              }
+              if (Object.keys(extra).length > 0) setAgentLabels(extra);
+            })
+            .catch(() => { /* labels stay as ids; non-fatal */ });
+        }
+
         if (Object.keys(policy).length > 0) {
           setMatrix(policy as StorePolicyMatrix, agentKeys.length > 0 ? agentKeys : undefined);
         }
@@ -801,7 +835,7 @@ function TeamDetailPage() {
         setErrorMsg(err instanceof TeamApiError ? `${t('team.loadError')}（${err.status}）` : t('team.loadError'));
       })
       .finally(() => setLoading(false));
-  }, [teamId, t, resetPolicy, setAgents, setMatrix]);
+  }, [teamId, t, resetPolicy, setAgents, setAgentLabels, setMatrix]);
 
   // Fetch all teams for the left column rail — re-fetch when workspace switches.
   useEffect(() => {

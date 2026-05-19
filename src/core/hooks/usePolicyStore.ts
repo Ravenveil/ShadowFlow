@@ -22,6 +22,13 @@ interface PolicyState {
   savedMatrix: PolicyMatrix;
   /** Story 4.5: list of agents that index matrix rows/cols. */
   agents: string[];
+  /**
+   * 2026-05-19 — id → human-readable label map. Matrix keys stay as IDs
+   * (stable, unique), but the panel renders these labels instead. Falls
+   * back to the id itself when an entry is missing. Lets us show
+   * "产品经理" / "业务分析师" in the matrix while persisting agent_id UUIDs.
+   */
+  agentLabels: Record<string, string>;
 
   addRule: (rule: PolicyRule) => void;
   removeRule: (sender: string, receiver: string) => void;
@@ -32,6 +39,7 @@ interface PolicyState {
 
   // Story 4.5 matrix actions
   setAgents: (agents: string[]) => void;
+  setAgentLabels: (labels: Record<string, string>) => void;
   setCell: (sender: string, receiver: string, state: CellState) => void;
   cycleCell: (sender: string, receiver: string) => void;
   setMatrix: (matrix: PolicyMatrix, agents?: string[]) => void;
@@ -81,6 +89,7 @@ export const usePolicyStore = create<PolicyState>((set, get) => ({
   matrix: {},
   savedMatrix: {},
   agents: [],
+  agentLabels: {},
 
   // P12: Replace existing rule for same (sender, receiver) — no duplicate pairs
   addRule: (rule) =>
@@ -97,7 +106,7 @@ export const usePolicyStore = create<PolicyState>((set, get) => ({
   reset: () => {
     // P11: Cancel any pending highlight timer on reset
     if (_highlightTimer) { clearTimeout(_highlightTimer); _highlightTimer = null; }
-    set({ rules: [], highlightedCell: null, matrix: {}, savedMatrix: {}, agents: [] });
+    set({ rules: [], highlightedCell: null, matrix: {}, savedMatrix: {}, agents: [], agentLabels: {} });
   },
 
   // P11: Cancel previous timer before setting a new highlight (prevents race + unmount leak)
@@ -132,6 +141,9 @@ export const usePolicyStore = create<PolicyState>((set, get) => ({
       }
       return { agents: uniq, matrix, savedMatrix };
     }),
+
+  setAgentLabels: (labels) =>
+    set((s) => ({ agentLabels: { ...s.agentLabels, ...labels } })),
 
   // P14: Only update if sender and receiver are in the known agents list
   setCell: (sender, receiver, state) =>

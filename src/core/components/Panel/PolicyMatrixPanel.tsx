@@ -47,6 +47,11 @@ export function PolicyMatrixPanel({
   readOnly = false,
 }: PolicyMatrixPanelProps): JSX.Element {
   const agents         = usePolicyStore((s) => s.agents);
+  const agentLabels    = usePolicyStore((s) => s.agentLabels);
+  // Helper: matrix keys remain stable IDs; row/col headers render human
+  // labels when available. Falls back to the first 6 chars of the id so
+  // the header doesn't sprawl when the LLM never gave it a name.
+  const labelFor = (id: string) => agentLabels[id] || (id.length > 8 ? `${id.slice(0, 6)}…` : id);
   const matrix         = usePolicyStore((s) => s.matrix);
   const savedMatrix    = usePolicyStore((s) => s.savedMatrix);   // P2
   const highlightedCell = usePolicyStore((s) => s.highlightedCell); // P3
@@ -234,9 +239,10 @@ export function PolicyMatrixPanel({
                 {rows.map((r) => (
                   <th
                     key={`col-${r}`}
+                    title={r}
                     style={{ padding: 4, textAlign: 'center', color: 'var(--t-fg-3)', fontWeight: 600 }}
                   >
-                    {r}
+                    {labelFor(r)}
                   </th>
                 ))}
               </tr>
@@ -244,8 +250,11 @@ export function PolicyMatrixPanel({
             <tbody>
               {rows.map((sender) => (
                 <tr key={`row-${sender}`}>
-                  <th style={{ padding: 4, textAlign: 'left', color: 'var(--t-fg-3)', fontWeight: 600 }}>
-                    {sender}
+                  <th
+                    title={sender}
+                    style={{ padding: 4, textAlign: 'left', color: 'var(--t-fg-3)', fontWeight: 600 }}
+                  >
+                    {labelFor(sender)}
                   </th>
                   {rows.map((receiver) => {
                     const state: CellState = matrix[sender]?.[receiver] ?? 'permit';
