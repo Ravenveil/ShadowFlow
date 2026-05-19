@@ -37,6 +37,7 @@ import { quickCreateAgent } from '../api/agents';
 import { createTeam } from '../api/teams';
 import { createGroup } from '../api/groupApi';
 import PythonBackendBanner from '../components/PythonBackendBanner';
+import { useWorkspaceStore } from '../store/workspaceStore';
 // Story 15.14 — 5+1 维质量自检雷达图（生成完后挂在右栏底部）
 import { CritiqueResult } from '../components/CritiqueResult';
 // 2026-05-16 — live token count in composer bar (Cherry Studio TokenCount parity)
@@ -3674,36 +3675,92 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   void zoom; void selectedNodeId;
   const [savedTeamId, setSavedTeamId] = useState<string | null>(null);
   const [savedGroupId, setSavedGroupId] = useState<string | null>(null);
-  const savedRef = useRef(false);
+  // Auto-save state machine — replaces the old one-shot `savedRef`. The
+  // boolean ref couldn't distinguish "saved" from "failed", so a Python
+  // backend coming back up couldn't retry. Now `failed` is recoverable:
+  // user clicks the chip's 重新保存 button → setSaveState('idle') → effect
+  // fires again. `inFlightRef` prevents the effect from double-firing while
+  // an async run is mid-flight.
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'ok' | 'failed'>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
+  // Read currentWorkspaceId so persisted agents/teams/groups belong to the
+  // user's currently selected workspace — otherwise they'd land in the
+  // default bucket and `/teams` (which filters by workspace) would still
+  // show "还没有团队" even though save succeeded.
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentId);
 
-  // Auto-persist team + agents + chat group when blueprint run completes
+  // Auto-persist team + agents + chat group when blueprint run completes.
+  // Reruns when saveState flips back to 'idle' (i.e. user pressed retry).
   useEffect(() => {
-    if (!session.isComplete || session.nodes.length === 0 || savedRef.current) return;
-    savedRef.current = true;
+    if (!session.isComplete || session.nodes.length === 0) return;
+    if (saveState === 'saving' || saveState === 'ok') return;
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
 
-    const agentNodes = session.nodes.filter(n => n.type === 'agent');
-    const coordinator = session.nodes.find(n => n.type === 'coordinator');
+    const agentNodes = session.nodes.filter((n) => n.type === 'agent');
+    const coordinator = session.nodes.find((n) => n.type === 'coordinator');
     const teamName = coordinator?.title ?? goal.slice(0, 40) ?? 'AI Team';
+    const wsId = currentWorkspaceId ?? undefined;
+
+    setSaveState('saving');
+    setSaveError(null);
 
     (async () => {
       try {
         const created = await Promise.all(
-          agentNodes.map(n => quickCreateAgent({ name: n.title, soul: n.sub || n.title }))
+          agentNodes.map((n) =>
+            quickCreateAgent({
+              name: n.title,
+              soul: n.sub || n.title,
+              workspace_id: wsId,
+            }),
+          ),
         );
-        const agentIds = created.map(a => a.agent_id);
-        const team = await createTeam({ name: teamName, description: goal, agent_ids: agentIds });
+        const agentIds = created.map((a) => a.agent_id);
+        const team = await createTeam({
+          name: teamName,
+          description: goal,
+          agent_ids: agentIds,
+          workspace_id: wsId,
+        });
         setSavedTeamId(team.team_id);
         try {
-          const grp = await createGroup({ templateId: '', groupTemplateId: '', name: teamName, agentIds: agentIds, memberEmails: [], policyMatrix: {} });
+          const grp = await createGroup({
+            templateId: '',
+            groupTemplateId: '',
+            name: teamName,
+            agentIds,
+            memberEmails: [],
+            policyMatrix: {},
+            workspaceId: wsId,
+            teamId: team.team_id,
+          });
           if (grp?.groupId) setSavedGroupId(grp.groupId);
         } catch {
-          // groups endpoint may not be available — chat navigation falls back to /teams
+          // groups endpoint may not be available yet (Python may not have
+          // groups storage wired); chat navigation falls back to /teams.
+          // Don't fail the whole save just because group creation failed.
         }
-      } catch (e) {
+        setSaveState('ok');
+      } catch (e: unknown) {
+        // Translate known error codes to friendly Chinese messages so the
+        // status chip can show something actionable instead of raw stack.
+        const code = (e as { code?: string })?.code ?? '';
+        let msg = e instanceof Error ? e.message : String(e);
+        if (code === 'PYTHON_BACKEND_UNAVAILABLE') {
+          msg = 'Python 后端未启动 — Team 无法持久化';
+        } else if (code.startsWith('HTTP_')) {
+          msg = `服务器返回 ${code.replace('HTTP_', '')} — ${msg}`;
+        }
         console.warn('[RunSession] auto-save failed:', e);
+        setSaveError(msg);
+        setSaveState('failed');
+      } finally {
+        inFlightRef.current = false;
       }
     })();
-  }, [session.isComplete, session.nodes.length]);
+  }, [session.isComplete, session.nodes.length, saveState, currentWorkspaceId, goal]);
 
   // 2026-05-11 Layer 1 — chat-mode detection (mirrors LeftPanel).
   // session.error gates chat mode so retry-error text accumulated in
@@ -3733,11 +3790,92 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
     }
   }
 
+  // Auto-save status chip — sits inline at the top of the page so the user
+  // always knows whether the team was persisted. Failure state surfaces a
+  // retry button that flips saveState back to 'idle' to re-run the effect.
+  const autoSaveChip =
+    saveState === 'idle' ? null : (
+      <div
+        data-testid={`run-session-save-${saveState}`}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '4px 10px',
+          borderRadius: 6,
+          fontSize: 11.5,
+          fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+          letterSpacing: '0.02em',
+          background:
+            saveState === 'failed'
+              ? 'rgba(220, 38, 38, 0.10)'
+              : saveState === 'ok'
+                ? 'rgba(52, 211, 153, 0.10)'
+                : 'var(--t-bg-elev-2, #141414)',
+          border: `1px solid ${
+            saveState === 'failed'
+              ? 'rgba(220, 38, 38, 0.35)'
+              : saveState === 'ok'
+                ? 'rgba(52, 211, 153, 0.35)'
+                : 'var(--t-border, #27272A)'
+          }`,
+          color:
+            saveState === 'failed'
+              ? '#ef4444'
+              : saveState === 'ok'
+                ? '#34d399'
+                : 'var(--t-fg-3, #A1A1AA)',
+        }}
+      >
+        {saveState === 'saving' && (
+          <>
+            <span
+              aria-hidden
+              className="sf-pulse"
+              style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--t-fg-4)' }}
+            />
+            <span>持久化中…</span>
+          </>
+        )}
+        {saveState === 'ok' && (
+          <>
+            <Check size={12} strokeWidth={2.4} />
+            <span>Team 已保存</span>
+          </>
+        )}
+        {saveState === 'failed' && (
+          <>
+            <AlertTriangle size={12} strokeWidth={2.2} />
+            <span>持久化失败{saveError ? ` · ${saveError}` : ''}</span>
+            <button
+              type="button"
+              onClick={() => setSaveState('idle')}
+              data-testid="run-session-save-retry"
+              style={{
+                marginLeft: 6,
+                padding: '1px 8px',
+                borderRadius: 4,
+                background: 'var(--t-bg-elev-2)',
+                border: '1px solid var(--t-border)',
+                color: 'var(--t-fg-1)',
+                fontSize: 11,
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+              }}
+            >
+              重新保存
+            </button>
+          </>
+        )}
+      </div>
+    );
+
   return (
     <>
       <InjectKeyframes />
-      <div style={{ padding: '8px 16px 0' }}>
+      <div style={{ padding: '8px 16px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
         <PythonBackendBanner />
+        {autoSaveChip && <div>{autoSaveChip}</div>}
       </div>
       {savedTeamId && (
         <div

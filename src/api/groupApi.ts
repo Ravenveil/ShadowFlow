@@ -51,6 +51,12 @@ export interface CreateGroupRequest {
   agentIds: string[];
   memberEmails: string[];
   policyMatrix: Record<string, unknown>;
+  /** Optional — when set, group is tagged to this workspace so it shows up in
+   *  /chat for that workspace. Wired in Step 4 of the data-vertical plan. */
+  workspaceId?: string;
+  /** Optional — link this group to the team it was created alongside.
+   *  Lets /teams/:id and /chat/:groupId cross-reference. Wired in Step 4. */
+  teamId?: string;
 }
 
 export interface GroupCreatedResponse {
@@ -74,6 +80,8 @@ export async function createGroup(
       agent_ids: data.agentIds,
       member_emails: data.memberEmails,
       policy_matrix: data.policyMatrix,
+      workspace_id: data.workspaceId,
+      team_id: data.teamId,
     }),
   });
 
