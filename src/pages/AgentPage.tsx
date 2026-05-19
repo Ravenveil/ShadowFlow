@@ -8,7 +8,9 @@
  *   - 「自建」高级模式仍可通过 BlueprintModal 导入 (?import=...) 触发
  *   - 空状态引导
  *   - 删除错误提示
- *   - Card click → /agent-dm/:agentId（按计划接入）；旧 /builder?agent_id 回退
+ *   - Card click 已撤销（2026-05-19）：员工卡不再整体可点击；hover 时露出
+ *     "Use in Skill Studio" 和 "删除" 两个动作按钮，保留按 agent 进 Skill Studio
+ *     的入口，但移除"点卡片 → /agent-dm 单聊页"这条强跳路径。
  *
  * 视觉来源：/tmp/shadowflow-handoff/shadowflow/project/hf-pages.jsx HfAgents
  *   1fr 左 grid (人才库 + 3-col cards) + 320px 右 Quick Hire 面板
@@ -431,7 +433,6 @@ export function AgentPage() {
                   agent={agent}
                   isDeleting={deletingId === agent.agent_id}
                   onDelete={handleDelete}
-                  onOpen={() => navigate(`/agent-dm/${agent.agent_id}`)}
                 />
               ))}
             </div>
@@ -696,10 +697,9 @@ interface AgentTileProps {
   agent: AgentRecord;
   isDeleting: boolean;
   onDelete: (id: string) => void;
-  onOpen: () => void;
 }
 
-function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
+function AgentTile({ agent, isDeleting, onDelete }: AgentTileProps) {
   const [hover, setHover] = useState(false);
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -737,15 +737,6 @@ function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       className="hf-card"
@@ -753,7 +744,7 @@ function AgentTile({ agent, isDeleting, onDelete, onOpen }: AgentTileProps) {
       style={{
         position: 'relative',
         padding: 14,
-        cursor: 'pointer',
+        cursor: 'default',
         opacity: isDeleting ? 0.4 : 1,
         pointerEvents: isDeleting ? 'none' : 'auto',
         borderColor: hover ? 'color-mix(in oklab, var(--t-accent) 50%, var(--t-border))' : 'var(--t-border)',
