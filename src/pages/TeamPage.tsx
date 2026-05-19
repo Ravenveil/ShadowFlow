@@ -55,6 +55,7 @@ import { PolicyMatrixPanel } from '../core/components/Panel/PolicyMatrixPanel';
 import { usePolicyStore, type PolicyMatrix as StorePolicyMatrix } from '../core/hooks/usePolicyStore';
 import { useI18n } from '../common/i18n';
 import { useWorkspaceStore, selectCurrentWorkspace } from '../store/workspaceStore';
+import PythonBackendBanner from '../components/PythonBackendBanner';
 
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
 type FilterTab = 'official' | 'workspace';
@@ -692,28 +693,39 @@ function TeamsIndexPage() {
   }, [currentId, navigate]);
 
   if (!noTeams) {
-    return <div style={{ flex: 1, background: 'var(--t-bg)' }} />;
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--t-bg)' }}>
+        <div style={{ padding: '12px 16px 0' }}>
+          <PythonBackendBanner />
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: 'var(--t-bg)', color: 'var(--t-fg)' }}>
-      <div style={{ fontSize: 15, fontWeight: 700 }}>还没有团队</div>
-      <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: 0, fontFamily: 'var(--font-mono)' }}>新建一个团队开始协作</p>
-      <button
-        type="button"
-        className="hf-btn hf-btn-pri"
-        style={{ fontSize: 12 }}
-        onClick={() => setShowModal(true)}
-        data-testid="empty-new-team-btn"
-      >
-        + 新建团队
-      </button>
-      {showModal && (
-        <CreateTeamModal
-          onCreated={(team) => navigate(`/teams/${team.team_id}`)}
-          onClose={() => setShowModal(false)}
-        />
-      )}
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--t-bg)', color: 'var(--t-fg)' }}>
+      <div style={{ padding: '12px 16px 0' }}>
+        <PythonBackendBanner />
+      </div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>还没有团队</div>
+        <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: 0, fontFamily: 'var(--font-mono)' }}>新建一个团队开始协作</p>
+        <button
+          type="button"
+          className="hf-btn hf-btn-pri"
+          style={{ fontSize: 12 }}
+          onClick={() => setShowModal(true)}
+          data-testid="empty-new-team-btn"
+        >
+          + 新建团队
+        </button>
+        {showModal && (
+          <CreateTeamModal
+            onCreated={(team) => navigate(`/teams/${team.team_id}`)}
+            onClose={() => setShowModal(false)}
+          />
+        )}
+      </div>
     </div>
   );
 }

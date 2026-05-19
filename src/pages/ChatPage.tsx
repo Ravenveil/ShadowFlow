@@ -29,6 +29,7 @@ import { useInboxStore } from '../core/store/useInboxStore';
 import { getTemplate } from '../api/templates';
 import { buildChatBuilderUrl } from '../core/utils/builderNavigation';
 import { fetchRecentMessages } from '../api/groupApi';
+import PythonBackendBanner from '../components/PythonBackendBanner';
 import type { GroupItem, GroupMetrics, Message } from '../common/types/inbox';
 import { useI18n } from '../common/i18n';
 import { ChatStream } from '../core/components/chat/ChatStream';
@@ -555,6 +556,10 @@ export default function ChatPage() {
         <BreadcrumbBar label={groupName}/>
         <GroupMetricsBar metrics={metrics}/>
         <ChatBriefBoardToggle briefBoardAlias={briefBoardAlias} activeTab={activeTab} onChange={handleTabChange} pendingApprovalsCount={metrics.pendingApprovalsCount}/>
+      </div>
+
+      <div style={{ padding: '12px 16px 0' }}>
+        <PythonBackendBanner />
       </div>
 
       {/* 3-column body: inbox · main · drawer */}

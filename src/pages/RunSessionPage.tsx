@@ -36,6 +36,7 @@ import { createRunSession } from '../api/runSessions';
 import { quickCreateAgent } from '../api/agents';
 import { createTeam } from '../api/teams';
 import { createGroup } from '../api/groupApi';
+import PythonBackendBanner from '../components/PythonBackendBanner';
 // Story 15.14 — 5+1 维质量自检雷达图（生成完后挂在右栏底部）
 import { CritiqueResult } from '../components/CritiqueResult';
 // 2026-05-16 — live token count in composer bar (Cherry Studio TokenCount parity)
@@ -3735,6 +3736,9 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   return (
     <>
       <InjectKeyframes />
+      <div style={{ padding: '8px 16px 0' }}>
+        <PythonBackendBanner />
+      </div>
       {savedTeamId && (
         <div
           style={{

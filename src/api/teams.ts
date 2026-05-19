@@ -5,6 +5,7 @@
  */
 
 import { getApiBase } from './_base';
+import { markPythonDown, markPythonUp } from '../core/hooks/usePythonBackendStatus';
 const API_BASE_URL = getApiBase();
 
 export class TeamApiError extends Error {
@@ -32,7 +33,11 @@ function _extractErrorCode(detail: unknown): string {
 }
 
 async function _handleResponse<T>(res: Response): Promise<T> {
-  if (res.ok) return res.json() as Promise<T>;
+  if (res.ok) {
+    // Reaching Python successfully → flip the global banner off if it was on.
+    markPythonUp();
+    return res.json() as Promise<T>;
+  }
   const body = await res.text();
   let detail: unknown = body;
   try {
@@ -40,7 +45,22 @@ async function _handleResponse<T>(res: Response): Promise<T> {
   } catch {
     // keep raw
   }
-  throw new TeamApiError(res.status, detail, _extractErrorCode(detail));
+  const code = _extractErrorCode(detail);
+  // 503 + PYTHON_BACKEND_UNAVAILABLE → push status to the global banner so
+  // every page mounting <PythonBackendBanner /> shows it without waiting for
+  // its 20s poll.
+  if (res.status === 503 && code === 'PYTHON_BACKEND_UNAVAILABLE') {
+    const errInner =
+      detail && typeof detail === 'object' && 'error' in (detail as Record<string, unknown>)
+        ? ((detail as Record<string, unknown>).error as { code?: string; message?: string; hint?: string })
+        : undefined;
+    markPythonDown({
+      code: errInner?.code ?? 'PYTHON_BACKEND_UNAVAILABLE',
+      message: errInner?.message ?? 'Python backend not reachable',
+      hint: errInner?.hint,
+    });
+  }
+  throw new TeamApiError(res.status, detail, code);
 }
 
 interface Envelope<T> {

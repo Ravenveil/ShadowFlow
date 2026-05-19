@@ -2,6 +2,35 @@
 
 import type { Message } from '../common/types/inbox';
 import { getApiBase } from './_base';
+import { markPythonDown, markPythonUp } from '../core/hooks/usePythonBackendStatus';
+
+/**
+ * Shared response check — when the Python backend is down, Express's
+ * proxy-fallback returns 503 with `{error:{code:'PYTHON_BACKEND_UNAVAILABLE',...}}`.
+ * Push that to the global status hook so every banner mount reflects it
+ * immediately rather than waiting for the 20s poll.
+ */
+async function _checkPythonStatus(res: Response): Promise<void> {
+  if (res.ok) {
+    markPythonUp();
+    return;
+  }
+  if (res.status === 503) {
+    try {
+      const cloned = res.clone();
+      const body = (await cloned.json()) as { error?: { code?: string; message?: string; hint?: string } };
+      if (body.error?.code === 'PYTHON_BACKEND_UNAVAILABLE') {
+        markPythonDown({
+          code: body.error.code,
+          message: body.error.message ?? 'Python backend not reachable',
+          hint: body.error.hint,
+        });
+      }
+    } catch {
+      // body wasn't JSON — leave status unchanged
+    }
+  }
+}
 
 export interface BriefBoardEntry {
   agent_name: string;
@@ -47,6 +76,8 @@ export async function createGroup(
       policy_matrix: data.policyMatrix,
     }),
   });
+
+  await _checkPythonStatus(res);
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
