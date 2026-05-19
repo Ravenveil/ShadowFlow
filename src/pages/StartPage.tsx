@@ -591,35 +591,16 @@ const SKILL_PACKS: SkillPack[] = [
     glyph: '◈',
     name: 'BMAD Method',
     desc: '产品 · 架构 · 开发 · QA',
-    prompt: '使用 BMAD 方法组建全栈产品团队：产品经理（愿景/PRD）、架构师（系统设计）、全栈工程师（实现）、QA 工程师（测试与验收）',
+    prompt:
+      'Skill: .claude/skills/bmad-agent-*（含 pm / architect / dev / ux-designer / analyst / tech-writer 等多个 agent skill 目录，以及 bmad-brainstorming、bmad-create-story、bmad-dev-story 等流程 skill）。\n\n请先读取这些 skill 目录下的 SKILL.md，理解 BMAD 方法包含哪些角色与工作流，然后据此自主组建一个智能体团队（自行决定纳入哪些角色、命名、职责分工与协作顺序），并初始化对应的工作流。不需要照搬清单，让团队结构贴合 BMAD 实际定义。',
   },
   {
     id: 'gstack',
     glyph: '⬡',
     name: 'gSTACK',
     desc: '调研 → 策略 → 执行',
-    prompt: '按 gSTACK 框架组建三段式工作流团队：研究员（信息收集与分析）、策略师（方案设计与评估）、执行者（任务落地与交付）',
-  },
-  {
-    id: 'consulting',
-    glyph: '◆',
-    name: '咨询铁三角',
-    desc: '研究 · 分析 · 策略',
-    prompt: '组建顾问式分析团队：市场调研员（数据收集）、商业分析师（洞察提炼）、战略顾问（建议生成与报告撰写）',
-  },
-  {
-    id: 'newsroom',
-    glyph: '◇',
-    name: '编辑部',
-    desc: '采集 · 编辑 · 发布',
-    prompt: '搭建内容生产团队：信息员（素材采集与事实核查）、内容编辑（润色与结构化）、审稿人（质量把关）、发布员（多渠道分发）',
-  },
-  {
-    id: 'startup',
-    glyph: '⬢',
-    name: '创业小分队',
-    desc: 'CEO · 产品 · 增长',
-    prompt: '组建精益创业团队：CEO 视角（战略与决策）、产品设计师（用户体验与原型）、全栈工程师（快速迭代）、增长黑客（获客与留存）',
+    prompt:
+      'Skill: ~/.claude/skills/gstack/（含 commit / ship / qa / review / investigate / plan-eng-review / design-review 等 skill，以及 ETHOS.md / AGENTS.md 全局规则）。\n\n请先读取该 skill 目录及其子 skill 的 SKILL.md，理解 gSTACK 的调研 → 策略 → 执行三段式哲学和具体 skill 触发条件，然后据此自主组建一个智能体团队（自行决定角色、分工与触发时机），并初始化对应的工作流。让团队结构忠实反映 gSTACK 的实际能力组合。',
   },
 ];
 
@@ -732,6 +713,7 @@ export default function StartPage() {
   const [knowledgePacksLoading, setKnowledgePacksLoading] = useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('auto');
   const [modeOpen, setModeOpen] = useState(false);
   const modeRef = useRef<HTMLDivElement | null>(null);
@@ -835,19 +817,17 @@ export default function StartPage() {
         navigate(`/run-session/${data.session_id}?goal=${encodeURIComponent(text)}`);
         return;
       }
-    } catch {
-      // fall through to original behavior
+      const body = await resp.text().catch(() => '');
+      setSubmitError(
+        `创建 run-session 失败（HTTP ${resp.status}）。请检查后端 server 是否在运行（默认 :8002），或在「设置 → BYOK」配置 API Key。${body ? ` 详情：${body.slice(0, 200)}` : ''}`,
+      );
+    } catch (err) {
+      setSubmitError(
+        `无法连接后端 server。请确认 server 已启动（默认 :8002）并刷新页面。${err instanceof Error ? ` 错误：${err.message}` : ''}`,
+      );
     } finally {
       setSubmitting(false);
     }
-
-    // Fallback: original behavior
-    const params = new URLSearchParams();
-    // 'auto' lets the backend decide single vs team based on goal complexity.
-    params.set('mode', mode);
-    if (text) params.set('goal', text);
-    if (knowledge.length > 0) params.set('knowledge', knowledge.join(','));
-    navigate(`/builder?${params.toString()}`);
   }
 
   function handleComposerKey(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -876,7 +856,9 @@ export default function StartPage() {
 
   function handleSuggestion(label: string) {
     if (label.startsWith('从零开始')) {
-      navigate('/builder?mode=team');
+      // /builder route has been retired — keep the user on /start. The composer
+      // textarea is right below; surfaces the action without an extra page.
+      setSubmitError(null);
     } else {
       // Map suggestion to template gallery filtered by phrase
       navigate(`/templates?q=${encodeURIComponent(label)}`);
@@ -904,12 +886,17 @@ export default function StartPage() {
         navigate(`/run-session/${data.session_id}?goal=${encodeURIComponent(pack.prompt)}`);
         return;
       }
-    } catch {
-      // fall through
+      const body = await resp.text().catch(() => '');
+      setSubmitError(
+        `Skill Pack「${pack.name}」启动失败（HTTP ${resp.status}）。请确认后端 server 已启动（默认 :8002），或在「设置 → BYOK」配置 API Key。${body ? ` 详情：${body.slice(0, 200)}` : ''}`,
+      );
+    } catch (err) {
+      setSubmitError(
+        `无法连接后端 server，Skill Pack「${pack.name}」未能启动。请确认 server 已启动（默认 :8002）。${err instanceof Error ? ` 错误：${err.message}` : ''}`,
+      );
     } finally {
       setSubmitting(false);
     }
-    navigate(`/builder?mode=team&goal=${encodeURIComponent(pack.prompt)}`);
   }
 
   return (
@@ -1616,6 +1603,43 @@ export default function StartPage() {
               />
             </div>
           </div>
+
+          {submitError && (
+            <div
+              role="alert"
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: 'var(--t-danger-tint, rgba(220, 53, 69, .12))',
+                border: '1px solid var(--t-danger, #dc3545)',
+                color: 'var(--t-danger-fg, #dc3545)',
+                fontSize: 12.5,
+                lineHeight: 1.55,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+              }}
+            >
+              <span style={{ flex: 1 }}>{submitError}</span>
+              <button
+                type="button"
+                onClick={() => setSubmitError(null)}
+                aria-label="关闭"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontSize: 16,
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+          )}
 
           {/* Skill Pack cards — select a team methodology to scaffold a team */}
           <SkillPackSection onSelect={handleSkillPack} disabled={submitting} />
