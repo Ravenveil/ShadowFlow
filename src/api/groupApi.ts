@@ -119,7 +119,38 @@ export async function fetchRecentMessages(
   limit = 3
 ): Promise<Message[]> {
   const res = await fetch(`${getApiBase()}/api/groups/${groupId}/messages?limit=${limit}`);
+  await _checkPythonStatus(res);
   if (!res.ok) return [];
   const json = await res.json();
   return (json.messages ?? []) as Message[];
+}
+
+/**
+ * Append a user message to a group's persistent message log.
+ *
+ * Hits POST /api/groups/{groupId}/messages on the Python backend (added in
+ * Step 4 of the data-vertical plan). This is what makes chat persistence
+ * actually work: previously useChatStream POSTed to /api/chat/sessions/...
+ * which had no backend, so messages vanished on refresh.
+ */
+export async function postGroupMessage(
+  groupId: string,
+  content: string,
+  options?: { senderName?: string; senderKind?: 'user' | 'agent' | 'system' },
+): Promise<Message> {
+  const res = await fetch(`${getApiBase()}/api/groups/${groupId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content,
+      sender_name: options?.senderName ?? 'user',
+      sender_kind: options?.senderKind ?? 'user',
+    }),
+  });
+  await _checkPythonStatus(res);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail));
+  }
+  return (await res.json()) as Message;
 }

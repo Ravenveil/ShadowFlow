@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { chatCompletion } from '../../api/chat';
-import { fetchRecentMessages } from '../../api/groupApi';
+import { fetchRecentMessages, postGroupMessage } from '../../api/groupApi';
 import { startSseClient, type SseClientHandle } from '../../api/sseClient';
 import type { Message as InboxMessage } from '../../common/types/inbox';
 import type { ChatMessage } from '../components/chat/ChatStream';
@@ -319,41 +319,50 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
 
       try {
         if (mode === 'group') {
-          // Try the session-message endpoint first. The MVP backend may map
-          // group_id 1:1 to session_id; if not, we fall back to BYOK.
-          const base = (await import('../../api/_base')).getApiBase();
-          const res = await fetch(
-            `${base}/api/chat/sessions/${encodeURIComponent(targetId)}/messages`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ content: text }),
-            }
+          // 2026-05-19 — primary persistence path: POST to the group's
+          // message log on the Python backend so the message survives
+          // page reload. Previously this hit /api/chat/sessions/... which
+          // had no backend, so chat history died on refresh.
+          await postGroupMessage(targetId, text, { senderName: 'user', senderKind: 'user' });
+          // Mark the optimistic bubble as delivered.
+          setMessages((prev) =>
+            prev.map((m) => (m.id === optimisticId ? { ...m, status: 'delivered' as const } : m)),
           );
-          if (!res.ok) {
-            throw new Error(`POST /chat/sessions failed: ${res.status}`);
-          }
-          const turn = (await res.json()) as BackendChatTurnResult;
-          const assistant = backendMsgToChat(
-            turn.assistant_message,
-            `assist-${Date.now()}`
-          );
-          if (assistant) {
-            setMessages((prev) => [
-              ...prev.map((m) => (m.id === optimisticId ? { ...m, status: 'delivered' as const } : m)),
-              assistant,
-            ]);
-          } else if (turn.response_text) {
-            // Some backends only fill response_text — synthesize a bubble
-            setMessages((prev) => [
-              ...prev.map((m) => (m.id === optimisticId ? { ...m, status: 'delivered' as const } : m)),
+          // Best-effort: still try the legacy chat-sessions endpoint so any
+          // agent-side auto-reply infrastructure that depends on it still
+          // fires. Failure here is non-fatal — persistence already happened.
+          try {
+            const base = (await import('../../api/_base')).getApiBase();
+            const res = await fetch(
+              `${base}/api/chat/sessions/${encodeURIComponent(targetId)}/messages`,
               {
-                id: `assist-${Date.now()}`,
-                role: 'agent',
-                content: turn.response_text!,
-                timestamp: new Date().toISOString(),
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: text }),
               },
-            ]);
+            );
+            if (res.ok) {
+              const turn = (await res.json()) as BackendChatTurnResult;
+              const assistant = backendMsgToChat(
+                turn.assistant_message,
+                `assist-${Date.now()}`,
+              );
+              if (assistant) {
+                setMessages((prev) => [...prev, assistant]);
+              } else if (turn.response_text) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `assist-${Date.now()}`,
+                    role: 'agent',
+                    content: turn.response_text!,
+                    timestamp: new Date().toISOString(),
+                  },
+                ]);
+              }
+            }
+          } catch {
+            // Legacy endpoint absent — that's fine; we still persisted.
           }
           return;
         }
