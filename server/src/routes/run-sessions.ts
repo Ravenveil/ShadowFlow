@@ -1149,6 +1149,73 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   }
 });
 
+// ── POST /api/run-sessions/:id/steps/:n/retry ────────────────────────────────
+//
+// S4.1 (intent-workflow-design-v1 §4.5) — step-level retry.
+//
+// Spec-compliant v2 would replay 0..n-1 produced artifacts into a fresh LLM
+// call and restart from step n. MVP-fallback shipped here:
+//   - drop step n..N from on-disk + in-memory state
+//   - signal any active SSE stream via a `retry-pending` event
+//   - return 202 with {strategy:'full_rerun', kept_steps, cleared_steps}
+//
+// The front-end is expected to open a new run (createRunSession) for the
+// rerun; we do NOT auto-start it server-side so the endpoint stays
+// idempotent and trivial to reason about. Future v2 will keep 0..n-1 and
+// resume from n without dropping context.
+router.post('/:id/steps/:n/retry', (req: Request, res: Response) => {
+  const { id, n } = req.params;
+  const session = sessionStore.get(id);
+  if (!session) {
+    res.status(404).json({
+      error: { code: 'SESSION_NOT_FOUND', message: `Run session ${id} not found` },
+    });
+    return;
+  }
+  const stepN = Number.parseInt(n, 10);
+  if (!Number.isInteger(stepN) || stepN < 0 || stepN > 99) {
+    res.status(400).json({
+      error: { code: 'INVALID_STEP_INDEX', message: `step index ${n} out of range 0..99` },
+    });
+    return;
+  }
+
+  const all = stepStoreSingleton.list(id);
+  const cleared = all.filter((s) => s.step_index >= stepN).map((s) => s.step_index);
+  const kept = all.filter((s) => s.step_index < stepN).map((s) => s.step_index);
+
+  // Drop ALL on-disk state for this session — the in-memory list rebuilds on
+  // the next run. step-store.clear() removes <session_id>/steps/.
+  stepStoreSingleton.clear(id);
+
+  const stream = activeStreams.get(id);
+  if (stream && !stream.res.writableEnded) {
+    try {
+      const line = `event: retry-pending\ndata: ${JSON.stringify({
+        session_id: id,
+        from_step: stepN,
+        cleared_steps: cleared,
+        strategy: 'full_rerun',
+      })}\n\n`;
+      stream.res.write(line);
+    } catch (e) {
+      console.warn(`[run-sessions] retry-pending emit failed for ${id}:`, e);
+    }
+  }
+
+  console.log(
+    `[run-sessions] retry requested session=${id} from_step=${stepN} cleared=${cleared.join(',') || '(none)'}`,
+  );
+
+  res.status(202).json({
+    session_id: id,
+    strategy: 'full_rerun',
+    from_step: stepN,
+    cleared_steps: cleared,
+    kept_steps: kept,
+  });
+});
+
 // ── POST /api/run-sessions/:id/abort ─────────────────────────────────────────
 //
 // 2026-05-16 — User pressed "Stop" in the run-session composer. Cancel the
