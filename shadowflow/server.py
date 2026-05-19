@@ -192,7 +192,6 @@ from shadowflow.api import teams as _teams_api
 from shadowflow.api import registry as _registry_api
 from shadowflow.api import acp_server as _acp_server_api
 from shadowflow.api import sessions as _sessions_api
-from shadowflow.api import run_session as _run_session_api
 from shadowflow.api import workspaces as _workspaces_api
 from shadowflow.api import chat as _chat_api
 from shadowflow.api import a2a_bridge as _a2a_bridge_api
@@ -232,7 +231,6 @@ app.include_router(_agents_api.router)
 app.include_router(_teams_api.router)
 app.include_router(_acp_server_api.router)
 app.include_router(_sessions_api.router)
-app.include_router(_run_session_api.router)
 app.include_router(_workspaces_api.router)
 app.include_router(_chat_api.router)
 # A2A bridge — only mounted when A2A_BRIDGE_ENABLED=true
