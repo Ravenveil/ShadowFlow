@@ -7,11 +7,13 @@
  *               dropdown opens via portal to the right of the icon.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Users } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { CreateWorkspaceModal } from './CreateWorkspaceModal';
 import type { WorkspaceSummary } from '../../api/workspaces';
+import { listTeams, type TeamRecord } from '../../api/teams';
 
 interface WorkspaceSelectorProps {
   collapsed?: boolean;
@@ -22,10 +24,25 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
   const currentId  = useWorkspaceStore((s) => s.currentId);
   const switchTo   = useWorkspaceStore((s) => s.switchTo);
   const fetchWs    = useWorkspaceStore((s) => s.fetchWorkspaces);
+  const navigate   = useNavigate();
 
   const [open, setOpen]           = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  // Teams in the current workspace — lazy loaded when dropdown opens so we
+  // don't pay the Python round-trip for users who never open the switcher.
+  const [teams, setTeams] = useState<TeamRecord[]>([]);
+  const [teamsLoaded, setTeamsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    setTeamsLoaded(false);
+    listTeams(currentId ?? undefined)
+      .then((data) => { if (alive) { setTeams(data); setTeamsLoaded(true); } })
+      .catch(() => { if (alive) { setTeams([]); setTeamsLoaded(true); } });
+    return () => { alive = false; };
+  }, [open, currentId]);
 
   const wrapRef    = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -114,7 +131,66 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
         </div>
       )}
 
-      <div style={{ borderTop: '1px solid var(--t-border)', marginTop: 2, paddingTop: 4 }}>
+      {/* Teams in this workspace — appears below the workspace list so users
+          can jump directly to a team they just created (e.g. via run-session
+          auto-save). Lazy loaded on dropdown open. */}
+      <div style={{ borderTop: '1px solid var(--t-border)', marginTop: 4, paddingTop: 6 }}>
+        <div style={{ padding: '0 8px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Users size={11} strokeWidth={2} aria-hidden style={{ color: 'var(--t-fg-4)' }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Teams · {teamsLoaded ? teams.length : '…'}
+          </span>
+        </div>
+        {teamsLoaded && teams.length === 0 && (
+          <div style={{ padding: '6px 10px', fontSize: 11, color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono)' }}>
+            还没有 team
+          </div>
+        )}
+        {teams.slice(0, 8).map((tm) => (
+          <button
+            key={tm.team_id}
+            type="button"
+            onClick={() => { setOpen(false); navigate(`/teams/${tm.team_id}`); }}
+            data-testid={`workspace-dropdown-team-${tm.team_id}`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '5px 8px', borderRadius: 6, cursor: 'pointer',
+              border: '1px solid transparent', background: 'transparent',
+              width: '100%', textAlign: 'left', color: 'var(--t-fg-2)', fontSize: 12,
+            }}
+          >
+            <span style={{
+              width: 22, height: 22, borderRadius: 5, flexShrink: 0,
+              background: 'var(--t-panel-2)',
+              border: '1px solid var(--t-border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--t-fg-3)', fontSize: 9, fontWeight: 700,
+              fontFamily: 'var(--font-mono)',
+            }}>
+              {tm.agent_ids?.length ?? 0}
+            </span>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {tm.name}
+            </span>
+          </button>
+        ))}
+        {teams.length > 8 && (
+          <button
+            type="button"
+            onClick={() => { setOpen(false); navigate('/teams'); }}
+            style={{
+              display: 'block', width: '100%', textAlign: 'center',
+              padding: '4px 8px', fontSize: 10.5, color: 'var(--t-fg-4)',
+              fontFamily: 'var(--font-mono)', background: 'transparent',
+              border: 'none', cursor: 'pointer',
+            }}
+          >
+            查看全部 {teams.length} →
+          </button>
+        )}
+      </div>
+
+      <div style={{ borderTop: '1px solid var(--t-border)', marginTop: 4, paddingTop: 4 }}>
         <button
           type="button"
           onClick={() => { setOpen(false); setShowCreate(true); }}

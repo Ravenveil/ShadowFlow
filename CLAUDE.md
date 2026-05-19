@@ -61,3 +61,16 @@ Key routing rules:
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
+
+## 双后端架构（必读）
+
+ShadowFlow 同时跑两个后端：
+- **Node Express** (`server/src/`, port 8002) — run-sessions、agents、SQLite
+- **Python FastAPI** (`shadowflow/api/`, port 8000) — teams、groups、inbox、workflows、JSON 文件
+
+Express 的 `proxy-fallback` 中间件把未命中的 `/api/*` 转给 Python。Python 没启时，
+所有 teams/groups/chat 数据都拿 503，前端有红色 banner 提示。
+
+**遇到 "/teams 显示无数据" / "/chat 暂无群组" 等症状先看：**
+- 详细架构图 + 故障排查矩阵：`docs/architecture/dual-backend.md`
+- 后端状态前端 hook：`src/core/hooks/usePythonBackendStatus.ts`

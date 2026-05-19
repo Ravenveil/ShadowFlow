@@ -87,12 +87,24 @@ def _load_team(team_id: str) -> Optional[Dict[str, Any]]:
 
 
 def _list_teams(workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List team records, optionally filtered by workspace_id.
+
+    Records without an explicit `workspace_id` field (legacy data created
+    before the workspace concept landed) match ANY filter so they don't
+    vanish during migration. Only records that explicitly belong to a
+    DIFFERENT workspace are filtered out.
+    """
     d = _teams_dir()
     records = []
     for p in sorted(d.glob("*.json")):
         try:
             rec = json.loads(p.read_text(encoding="utf-8"))
-            if workspace_id is None or rec.get("workspace_id") == workspace_id:
+            if workspace_id is None:
+                records.append(rec)
+                continue
+            rec_ws = rec.get("workspace_id")
+            # Legacy records (no workspace_id) → treat as wildcard.
+            if not rec_ws or rec_ws == workspace_id:
                 records.append(rec)
         except (json.JSONDecodeError, OSError):
             pass

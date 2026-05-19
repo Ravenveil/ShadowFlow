@@ -22,6 +22,7 @@ import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
 import { useAuth } from '../../core/auth/AuthContext';
 import type { UserProfile, AuthStatus } from '../../core/auth/AuthContext';
 import { WalletLoginModal } from './WalletLoginModal';
+import { useInboxStore } from '../../core/store/useInboxStore';
 
 export type HfSidebarActive =
   | 'start'
@@ -42,9 +43,12 @@ interface NavItem {
   badge?: number;
 }
 
-const buildNavItems = (t: (key: string) => string): NavItem[] => [
+const buildNavItems = (t: (key: string) => string, chatBadge: number): NavItem[] => [
   { k: 'start',     Icon: Home,           label: t('shell.navStart'),     hint: '⌘1', to: '/start' },
-  { k: 'chat',      Icon: MessageCircle,  label: t('shell.navChat'),      hint: '⌘2', to: '/chat/default', badge: 3 },
+  // 2026-05-19 — Chat badge now reflects real unread count from useInboxStore
+  // (sum of unreadCount across all groups). Previously hardcoded as 3 which
+  // misled users into thinking there were 3 unread when /chat was empty.
+  { k: 'chat',      Icon: MessageCircle,  label: t('shell.navChat'),      hint: '⌘2', to: '/chat/default', badge: chatBadge > 0 ? chatBadge : undefined },
   { k: 'teams',     Icon: Users,          label: t('shell.navTeams'),     hint: '⌘3', to: '/teams' },
   { k: 'agents',    Icon: Bot,            label: t('shell.navAgents'),    hint: '⌘4', to: '/agents' },
   { k: 'templates', Icon: LayoutTemplate, label: t('shell.navTemplates'), hint: '⌘5', to: '/templates' },
@@ -150,7 +154,11 @@ function UserCard({ user, status, collapsed, onOpen }: UserCardProps) {
 
 export function HfSidebar({ active = 'start' }: HfSidebarProps) {
   const { t } = useI18n();
-  const NAV_ITEMS = useMemo(() => buildNavItems(t), [t]);
+  // Real unread count for the chat badge — sum of unreadCount across groups.
+  const chatUnread = useInboxStore((s) =>
+    s.groups.reduce((acc, g) => acc + (g.unreadCount ?? 0), 0),
+  );
+  const NAV_ITEMS = useMemo(() => buildNavItems(t, chatUnread), [t, chatUnread]);
   const [collapsed, setCollapsed] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const { user, status } = useAuth();
