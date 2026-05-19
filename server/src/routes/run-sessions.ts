@@ -1216,6 +1216,64 @@ router.post('/:id/steps/:n/retry', (req: Request, res: Response) => {
   });
 });
 
+// ── POST /api/run-sessions/:id/resume ────────────────────────────────────────
+//
+// S4.2 (intent-workflow-design-v1 §4.5) — resume from the last completed step.
+// MVP-fallback shape mirrors S4.1: identify the next step we'd run, signal an
+// active stream via `resume-pending`, return 202. If every persisted step is
+// already `done` AND no active stream exists, return 410 Gone (session is
+// already complete — there's nothing to resume).
+router.post('/:id/resume', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const session = sessionStore.get(id);
+  if (!session) {
+    res.status(404).json({
+      error: { code: 'SESSION_NOT_FOUND', message: `Run session ${id} not found` },
+    });
+    return;
+  }
+
+  const all = stepStoreSingleton.list(id);
+  const lastDone = [...all].reverse().find((s) => s.status === 'done');
+  const resumeFrom = lastDone ? lastDone.step_index + 1 : 0;
+
+  const stream = activeStreams.get(id);
+  const allDone = all.length > 0 && all.every((s) => s.status === 'done');
+  if (allDone && !stream) {
+    res.status(410).json({
+      error: {
+        code: 'SESSION_COMPLETE',
+        message: `Run session ${id} has already completed (last done step ${lastDone?.step_index ?? '?'}).`,
+      },
+    });
+    return;
+  }
+
+  console.log(
+    `[run-sessions] resume requested session=${id} from_step=${resumeFrom} (last_done=${lastDone?.step_index ?? 'none'})`,
+  );
+
+  if (stream && !stream.res.writableEnded) {
+    try {
+      const line = `event: resume-pending\ndata: ${JSON.stringify({
+        session_id: id,
+        from_step: resumeFrom,
+        strategy: 'full_rerun',
+      })}\n\n`;
+      stream.res.write(line);
+    } catch (e) {
+      console.warn(`[run-sessions] resume-pending emit failed for ${id}:`, e);
+    }
+  }
+
+  res.status(202).json({
+    session_id: id,
+    strategy: 'full_rerun',
+    from_step: resumeFrom,
+    kept_steps: all.filter((s) => s.step_index < resumeFrom).map((s) => s.step_index),
+  });
+});
+
 // ── POST /api/run-sessions/:id/abort ─────────────────────────────────────────
 //
 // 2026-05-16 — User pressed "Stop" in the run-session composer. Cancel the
