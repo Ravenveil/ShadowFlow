@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { subscribeRunSession, abortRunSession } from '../../api/runSessions';
-import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent, AgentPersonaEvent } from '../../api/runSessions';
+import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent, AgentPersonaEvent, StepArtifact, StepArtifactEvent } from '../../api/runSessions';
 import { classifyClientError, isErrorCode } from '../errors/classifyError';
 
 export interface RunSessionNode {
@@ -35,7 +35,10 @@ export interface RunSessionEdge {
 
 export interface RunSessionStep {
   name: string;
-  status: 'pending' | 'running' | 'done';
+  // Stream B / S0.3 — added 'failed' so StepList can render a red dot + retry
+  // affordance. Existing producers (server `assemble` event) still only emit
+  // pending|running|done, so this is additive and back-compat.
+  status: 'pending' | 'running' | 'done' | 'failed';
   elapsed?: string;
 }
 
@@ -89,6 +92,11 @@ export interface RunSessionState {
   isComplete: boolean;
   redirectUrl: string | null;
   thinkingMessage: string | null;
+  // 2026-05-19 — real LLM reasoning stream, accumulated from <sf:thinking>
+  // SSE 'thinking-chunk' events. Each entry preserves its own timestamp
+  // and originating step header so ThinkCard can render the design-spec
+  // "3 行带时间戳的 reasoning 流" instead of a single timestamp + blob.
+  thinkingStream: Array<{ ts: string; step: string | null; text: string }>;
   rationaleCards: Array<{ title: string; body: string; duration_ms?: number }>;
   yamlLines: string[];
   activeSubsteps: Array<{ parent_step: string; name: string; elapsed_ms?: number }>;
@@ -103,6 +111,11 @@ export interface RunSessionState {
   // LLM decides the goal is trivial (e.g. "hi") it streams natural language
   // here instead of <sf:*> tags, and RunSessionPage renders a chat bubble.
   chatReply: string;
+  // Stream B / S2.4 — per-step artifacts indexed by step_index. Populated by
+  // SSE 'step-artifact' events as steps finish; StepArtifactDrawer reads
+  // synchronously to avoid a REST round-trip on open. Drawer falls back to
+  // GET /steps/:n if the cached entry is missing (page reload mid-session).
+  stepArtifacts: Record<number, StepArtifact>;
 }
 
 // 2026-05-11 UX fix — steps are now driven entirely by `<sf:step>` events
@@ -130,6 +143,8 @@ type Action =
   | { type: 'CRITIQUE_RESULT'; payload: CritiqueResultEvent }
   | { type: 'TEXT'; payload: TextEvent }
   | { type: 'AGENT_PERSONA'; payload: AgentPersonaEvent }
+  | { type: 'THINKING_CHUNK'; payload: { step: string | null; text: string } }
+  | { type: 'STEP_ARTIFACT'; payload: StepArtifactEvent }
   // 2026-05-16 — user pressed Stop. Mark stream terminated locally and
   // append "（用户已停止）" to the chat reply so the UI shows a clear marker
   // even if the LLM was mid-sentence.
@@ -195,6 +210,42 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       return {
         ...state,
         nodes: state.nodes.map((n, i) => i === idx ? { ...n, persona } : n),
+      };
+    }
+    case 'STEP_ARTIFACT': {
+      // Stream B / S2.4 — server pushed a step's persisted output. Merge by
+      // step_index. step_name + status default to whatever the matching
+      // RunSessionStep already has (or empty / 'done' if we haven't seen
+      // the corresponding `assemble` event yet — order isn't guaranteed).
+      const ev = action.payload;
+      const matchingStep = state.steps[ev.step_index];
+      const merged: StepArtifact = {
+        session_id: '',
+        step_index: ev.step_index,
+        step_name: ev.step_name ?? matchingStep?.name ?? `step-${ev.step_index}`,
+        output_kind: ev.output_kind,
+        payload: ev.payload,
+        started_at: new Date().toISOString(),
+        finished_at: new Date().toISOString(),
+        status: ev.status ?? 'done',
+      };
+      return {
+        ...state,
+        stepArtifacts: { ...state.stepArtifacts, [ev.step_index]: merged },
+      };
+    }
+    case 'THINKING_CHUNK': {
+      // 2026-05-19 — append a timestamped reasoning entry. Each <sf:thinking>
+      // block becomes one row in ThinkCard expanded view (设计点 6 要求"3
+      // 行带时间戳的 reasoning 流"). step attribute preserved as section
+      // header per row.
+      const { step, text } = action.payload;
+      if (!text) return state;
+      const d = new Date();
+      const ts = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+      return {
+        ...state,
+        thinkingStream: [...state.thinkingStream, { ts, step, text }],
       };
     }
     case 'EDGE': {
@@ -305,10 +356,12 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     blueprintFile: null, blueprintYaml: null,
     artifactUrl: null, artifactType: 'yaml', activePanel: 'canvas',
     tokenCount: 0, isComplete: false, redirectUrl: null, thinkingMessage: null,
+    thinkingStream: [],
     rationaleCards: [], yamlLines: [], activeSubsteps: [],
     error: null, retrying: false, retryAttempt: 0, retryDelayMs: 0,
     critiqueResult: null, critiqueProgress: null,
     chatReply: '',
+    stepArtifacts: {},
   });
 
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -338,6 +391,10 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
       onCritiqueResult:   (d) => dispatch({ type: 'CRITIQUE_RESULT', payload: d }),
       onText:          (d) => dispatch({ type: 'TEXT', payload: d }),
       onAgentPersona:  (d) => dispatch({ type: 'AGENT_PERSONA', payload: d }),
+      onThinkingChunk: (d) => dispatch({ type: 'THINKING_CHUNK', payload: d }),
+      // Stream B / S2.4 — server pushed a step's persisted output. Mirror into
+      // state.stepArtifacts so the drawer can render immediately on open.
+      onStepArtifact:  (d) => dispatch({ type: 'STEP_ARTIFACT', payload: d }),
       onRetrying:      (attempt, delayMs) => dispatch({ type: 'RETRYING', attempt, delayMs }),
       // EventSource gave up retrying — pure network bucket so the UI can
       // surface a "重发" CTA instead of "配置 API Key". setConnected(false)

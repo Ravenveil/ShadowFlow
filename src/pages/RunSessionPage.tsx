@@ -55,6 +55,9 @@ import TeamPanel from '../components/run-session/TeamPanel';
 import AgentPanel from '../components/run-session/AgentPanel';
 import PreviewPanel from '../components/run-session/PreviewPanel';
 import ThinkCard from '../components/run-session/ThinkCard';
+import StepList, { type StepRow } from '../components/run-session/StepList';
+import StepArtifactDrawer from '../components/run-session/StepArtifactDrawer';
+import { retryStep as retryStepApi } from '../api/runSessions';
 
 // ---------------------------------------------------------------------------
 // Model / Executor picker — CLI + API options pulled live from settings
@@ -255,11 +258,15 @@ function StepIcon({ status }: { status: RunSessionStep['status'] }) {
 // ---------------------------------------------------------------------------
 // Progress steps card
 // ---------------------------------------------------------------------------
+// S0.3 (2026-05-19) — superseded by <StepList>. Kept in the module so the
+// original markup is one rebase away should the new component need a quick
+// rollback (CLAUDE.md "UI 保护规则: 只能加, 不能删"). Suppress unused warning.
 interface ProgressStepsProps {
   steps: RunSessionStep[];
   activeSubsteps: Array<{ parent_step: string; name: string; elapsed_ms?: number }>;
 }
 
+// @ts-expect-error TS6133 — retained for revert path; see comment above.
 function ProgressSteps({ steps, activeSubsteps }: ProgressStepsProps) {
   return (
     <div
@@ -1667,6 +1674,12 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showSettings, setShowSettings] = useState(false);
+  // S2.4 + S4.3 — step artifact drawer state. `drawerStep === null` keeps the
+  // drawer closed; clicking "查看产出" in <StepList> sets it to the step
+  // index. Toast strings live alongside so the retry handler can surface
+  // 404 (endpoint missing) feedback without throwing.
+  const [drawerStep, setDrawerStep] = useState<number | null>(null);
+  const [retryToast, setRetryToast] = useState<string | null>(null);
   // 2026-05-18 (agent-4) — thinkExpanded / thinkTitleHover moved into the
   // ThinkCard component itself. We keep the duration tracker here because
   // it depends on session-level state (chatReply / isComplete) that the
@@ -1964,6 +1977,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   };
 
   return (
+    <>
     <aside
       style={{
         display: 'flex',
@@ -2365,9 +2379,42 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             Layer 1: also suppressed in chat mode (no `<sf:step>` will ever
             arrive when LLM is plain-text-replying). */}
         {!isChatMode && session.steps.length > 0 ? (
-          <ProgressSteps
-            steps={session.steps}
-            activeSubsteps={session.activeSubsteps}
+          // S0.3 — StepList component replaces inline ProgressSteps render.
+          // The ProgressSteps function (defined above) is kept in the module
+          // for back-compat / quick revert. Rows now expose "查看产出" +
+          // "重跑" inline actions wired to drawerStep + retryStepApi.
+          // (activeSubsteps render is dropped here; the substep rows lived
+          // inside ProgressSteps as nested children — when those land in the
+          // new design they should be added as a `substeps` prop to StepRow.)
+          <StepList
+            steps={session.steps.map<StepRow>((s, i) => {
+              // Parse "12.3s" / "234ms" back into raw ms when possible. The
+              // reducer formats elapsed_ms into a display string before we
+              // see it; StepList prefers raw ms so formatting stays uniform.
+              let elapsedMs: number | null = null;
+              if (s.elapsed) {
+                const m = /^(\d+(?:\.\d+)?)(ms|s|m)?$/i.exec(s.elapsed.trim());
+                if (m) {
+                  const v = parseFloat(m[1]);
+                  const unit = (m[2] ?? 's').toLowerCase();
+                  elapsedMs = unit === 'ms' ? v : unit === 'm' ? v * 60_000 : v * 1000;
+                }
+              }
+              return {
+                index: i,
+                name: s.name,
+                status: s.status,
+                elapsedMs,
+                hasArtifact: session.stepArtifacts?.[i] != null,
+              };
+            })}
+            onStepView={(idx) => setDrawerStep(idx)}
+            onStepRetry={async (idx) => {
+              const accepted = await retryStepApi(sessionId, idx);
+              setRetryToast(accepted ? '重跑请求已发送' : '该端点尚未实现');
+              setTimeout(() => setRetryToast(null), 2400);
+              return accepted;
+            }}
           />
         ) : (!isChatMode && !session.isComplete && !session.error) && (
           <div
@@ -2464,6 +2511,12 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
           liveThinkMs={liveThinkMs}
           thinkDurationMs={thinkDurationMs}
           tokenCount={session.tokenCount}
+          // S3.3 — persist folded/expanded per (sessionId, step). Uses a
+          // synthetic "main" stepKey because there is currently only one
+          // ThinkCard per run; if multiple cards land later (e.g. per-step
+          // reasoning), pass each card's step name as stepKey.
+          sessionId={sessionId}
+          stepKey="main"
         />
 
         {/* Token counter divider */}
@@ -2879,6 +2932,40 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
         </div>
       </div>
     </aside>
+    {/* S2.4 — slide-out drawer rendered as a sibling so it can overlay the
+        full viewport regardless of the LeftPanel column width. */}
+    <StepArtifactDrawer
+      sessionId={sessionId}
+      step={drawerStep}
+      stepName={drawerStep != null ? session.steps[drawerStep]?.name : undefined}
+      cached={drawerStep != null ? session.stepArtifacts?.[drawerStep] ?? null : null}
+      onClose={() => setDrawerStep(null)}
+    />
+    {/* S4.3 — transient toast for retry-step accept / not-implemented. */}
+    {retryToast && (
+      <div
+        role="status"
+        aria-live="polite"
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 9999,
+          padding: '8px 14px',
+          borderRadius: 8,
+          background: 'var(--t-panel)',
+          border: '1px solid var(--t-border)',
+          color: 'var(--t-fg)',
+          fontSize: 12.5,
+          boxShadow: '0 8px 24px rgba(0,0,0,.24)',
+          animation: 'rs-fade-in 140ms ease',
+        }}
+      >
+        {retryToast}
+      </div>
+    )}
+    </>
   );
 }
 

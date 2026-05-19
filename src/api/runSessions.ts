@@ -202,6 +202,39 @@ export interface CritiqueProgressEvent {
   message?: string;
 }
 
+// ── Step artifact (S0/S2/S4 — intent-workflow design v1) ──────────────────────
+// Each pipeline step can persist its tangible output as a "StepArtifact". The
+// drawer (StepArtifactDrawer) renders the payload differently per `output_kind`
+// so users can drill into intermediate state without leaving the run view.
+// SSE event `step-artifact` arrives once the backend finishes writing the
+// payload to disk; REST endpoints GET /steps/:n + POST /steps/:n/retry round
+// out the contract. The backend may not have these landed yet; the front-end
+// degrades gracefully on 404 (drawer shows "尚未落盘").
+
+export type OutputKind = 'nodes' | 'edges' | 'yaml' | 'classify' | 'none';
+
+export interface StepArtifact {
+  session_id: string;
+  step_index: number;
+  step_name: string;
+  output_kind: OutputKind;
+  payload: unknown;
+  started_at: string;
+  finished_at: string | null;
+  status: 'running' | 'done' | 'failed';
+  error?: string;
+}
+
+/** SSE `step-artifact` event payload — partial fields, merged into client state. */
+export interface StepArtifactEvent {
+  step_index: number;
+  output_kind: OutputKind;
+  payload: unknown;
+  /** Optional metadata server may include (status / name) — merged opportunistically. */
+  step_name?: string;
+  status?: 'running' | 'done' | 'failed';
+}
+
 export async function createRunSession(
   req: RunSessionCreateRequest,
 ): Promise<RunSessionCreateResponse> {
@@ -234,6 +267,54 @@ export async function createRunSession(
  * front-end has already closed its EventSource locally. Returns true when the
  * server confirmed the abort, false otherwise.
  */
+/**
+ * GET /api/run-sessions/:id/steps/:n
+ * Returns the persisted artifact for a single step. Throws on non-2xx so the
+ * caller (StepArtifactDrawer) can differentiate 404 ("尚未落盘") from real
+ * network errors. The thrown Error carries `(err as any).status` so the
+ * drawer can branch without parsing the message.
+ */
+export async function fetchStepArtifact(
+  sessionId: string,
+  stepIndex: number,
+): Promise<StepArtifact> {
+  const resp = await fetch(
+    `${getApiBase()}/api/run-sessions/${sessionId}/steps/${stepIndex}`,
+    { headers: { ...authHeaders() } },
+  );
+  if (!resp.ok) {
+    const err = new Error(`fetchStepArtifact failed: ${resp.status}`) as Error & { status: number };
+    err.status = resp.status;
+    throw err;
+  }
+  return resp.json();
+}
+
+/**
+ * POST /api/run-sessions/:id/steps/:n/retry
+ * Asks the backend to re-execute a single step. Returns true when the request
+ * was accepted; false (and no throw) when the endpoint is missing (404 / 405)
+ * so the retry button can degrade to a "未实现" toast rather than a crash.
+ */
+export async function retryStep(
+  sessionId: string,
+  stepIndex: number,
+): Promise<boolean> {
+  try {
+    const resp = await fetch(
+      `${getApiBase()}/api/run-sessions/${sessionId}/steps/${stepIndex}/retry`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      },
+    );
+    if (resp.status === 404 || resp.status === 405) return false;
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function abortRunSession(sessionId: string): Promise<boolean> {
   try {
     const resp = await fetch(`${getApiBase()}/api/run-sessions/${sessionId}/abort`, {
@@ -263,6 +344,10 @@ export function subscribeRunSession(
     onText?: (data: TextEvent) => void;
     /** 2026-05-18 agent-B extension — multi-line persona for an agent node. */
     onAgentPersona?: (data: AgentPersonaEvent) => void;
+    /** 2026-05-19 — real LLM reasoning chunk inside `<sf:thinking>` block. */
+    onThinkingChunk?: (data: { step: string | null; text: string }) => void;
+    /** Stream B / S2.4 — step artifact persisted by the backend after a step finishes. */
+    onStepArtifact?: (data: StepArtifactEvent) => void;
     onRetrying?: (attempt: number, delayMs: number) => void;
     onError?: (err: Event) => void;
     onServerError?: (message: string, code?: string) => void;
@@ -313,6 +398,13 @@ export function subscribeRunSession(
     es.addEventListener('text',      (e) => { const d = parse(e as MessageEvent); if (d) handlers.onText?.(d); });
     // 2026-05-18 agent-B — multi-line persona block paired with a node.
     es.addEventListener('agent-persona', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onAgentPersona?.(d); });
+    // 2026-05-19 — <sf:thinking> chain-of-thought chunk.
+    es.addEventListener('thinking-chunk', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onThinkingChunk?.(d); });
+    // Stream B / S2.4 — per-step artifact persisted to disk by the backend.
+    // Frontend mirrors into useRunSession.stepArtifacts for instant render
+    // when the user opens the drawer. Safe to fire before the REST endpoint
+    // exists: the listener simply never triggers.
+    es.addEventListener('step-artifact', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onStepArtifact?.(d); });
     es.addEventListener('error',     (e) => {
       const d = parse(e as MessageEvent);
       if (d?.message) {
@@ -331,10 +423,41 @@ export function subscribeRunSession(
         if (!serverTerminated && !cancelled) handlers.onError?.(err);
         return;
       }
-      const delay = baseDelay * Math.pow(2, retryCount);
-      retryCount++;
-      handlers.onRetrying?.(retryCount, delay);
-      retryTimer = setTimeout(connect, delay);
+      // 2026-05-19 fix: backend 重启后内存 sessionStore 丢失 → /stream
+      // 返回 404 JSON `{"error":"Session X not found"}`，不是 SSE。
+      // EventSource 拿到非 200 直接关闭 + onerror，没有 `error` SSE 帧，
+      // 所以 serverTerminated 不会被标。我们靠 fetch HEAD/GET probe 探
+      // status code：404 / 410 立刻终止 + 通知用户 session 已过期，不
+      // 浪费 5 次指数退避在一个永久不存在的资源上。
+      fetch(`${getApiBase()}/api/run-sessions/${sessionId}/stream`, {
+        method: 'GET',
+        headers: { Accept: 'text/event-stream', ...authHeaders() },
+      })
+        .then((resp) => {
+          if ((resp.status === 404 || resp.status === 410) && !cancelled) {
+            serverTerminated = true;
+            handlers.onServerError?.(
+              `Session 不存在或已过期（${resp.status}）。Backend 重启后内存 session 会丢失，请回起点新建。`,
+              'SESSION_NOT_FOUND',
+            );
+            return;
+          }
+          // 非 4xx terminal — 走正常退避重试。
+          if (!cancelled) {
+            const delay = baseDelay * Math.pow(2, retryCount);
+            retryCount++;
+            handlers.onRetrying?.(retryCount, delay);
+            retryTimer = setTimeout(connect, delay);
+          }
+        })
+        .catch(() => {
+          // probe 本身失败（真网络问题），按原计划退避重试。
+          if (cancelled) return;
+          const delay = baseDelay * Math.pow(2, retryCount);
+          retryCount++;
+          handlers.onRetrying?.(retryCount, delay);
+          retryTimer = setTimeout(connect, delay);
+        });
     };
   }
 
