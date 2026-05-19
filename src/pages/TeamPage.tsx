@@ -31,7 +31,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Upload, Users } from 'lucide-react';
+import { Upload, Users, Trash2 } from 'lucide-react';
 import {
   deleteTeam,
   getTeam,
@@ -76,6 +76,97 @@ function agentStatusInfo(status: string): { label: string; color: string; pulse:
 }
 
 // ---------------------------------------------------------------------------
+// TeamRow — one team card with hover-visible delete affordance.
+// Kept as a separate component (not nested <button>) so the trash button is
+// a real sibling — clicking it doesn't bubble into the row's onSelect, and
+// nested <button> within <button> (invalid HTML) is avoided.
+// ---------------------------------------------------------------------------
+
+interface TeamRowProps {
+  team: TeamRecord;
+  active: boolean;
+  onSelect?: (teamId: string) => void;
+  onDelete?: (teamId: string, teamName: string) => void | Promise<void>;
+}
+
+function TeamRow({ team, active, onSelect, onDelete }: TeamRowProps) {
+  const [hover, setHover] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <div
+      className="hf-card"
+      data-testid={`team-list-row-${team.team_id}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect?.(team.team_id)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect?.(team.team_id); }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => { setHover(false); setConfirming(false); }}
+      style={{
+        position: 'relative',
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: '10px 12px',
+        marginBottom: 6,
+        cursor: 'pointer',
+        borderColor: active ? 'var(--t-accent)' : 'var(--t-border)',
+        background: active ? 'var(--t-accent-tint)' : 'var(--t-panel)',
+        color: 'var(--t-fg)',
+      }}
+    >
+      <div style={{ fontSize: 12.5, fontWeight: 700, paddingRight: 22 }}>{team.name}</div>
+      <div className="hf-meta" style={{ fontSize: 10, marginTop: 3 }}>
+        {team.agent_ids.length} agents
+        {team.description ? ` · ${team.description.slice(0, 24)}` : ''}
+      </div>
+
+      {/* Hover-visible delete affordance. Two-step confirm to prevent fat-finger
+          loss — first click flips the icon red; second click executes. */}
+      {onDelete && (hover || confirming) && (
+        <button
+          type="button"
+          data-testid={`team-list-row-${team.team_id}-delete`}
+          title={confirming ? '再次点击确认删除' : '删除团队'}
+          aria-label={`删除团队 ${team.name}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!confirming) {
+              setConfirming(true);
+              return;
+            }
+            setConfirming(false);
+            void onDelete(team.team_id, team.name);
+          }}
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 22,
+            height: 22,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: confirming
+              ? 'rgba(220, 38, 38, 0.18)'
+              : 'transparent',
+            border: confirming
+              ? '1px solid rgba(220, 38, 38, 0.4)'
+              : '1px solid transparent',
+            borderRadius: 5,
+            color: confirming ? '#ef4444' : 'var(--t-fg-4)',
+            cursor: 'pointer',
+            padding: 0,
+          }}
+        >
+          <Trash2 size={12} strokeWidth={2} aria-hidden />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Shared TeamListColumn — 240 px team list column (used by both pages).
 // ---------------------------------------------------------------------------
 
@@ -84,10 +175,11 @@ interface TeamListColumnProps {
   activeId?: string | null;
   onCreate: () => void;
   onSelect?: (teamId: string) => void;
+  onDelete?: (teamId: string, teamName: string) => void | Promise<void>;
   wsName?: string;
 }
 
-function TeamListColumn({ teams, activeId, onCreate, onSelect, wsName = 'ShadowFlow' }: TeamListColumnProps) {
+function TeamListColumn({ teams, activeId, onCreate, onSelect, onDelete, wsName = 'ShadowFlow' }: TeamListColumnProps) {
   const { t } = useI18n();
   return (
     <div
@@ -140,33 +232,16 @@ function TeamListColumn({ teams, activeId, onCreate, onSelect, wsName = 'ShadowF
           </div>
         </div>
       ) : (
-        teams.map((t) => {
-          const on = t.team_id === activeId;
+        teams.map((tm) => {
+          const on = tm.team_id === activeId;
           return (
-            <button
-              key={t.team_id}
-              type="button"
-              onClick={() => onSelect?.(t.team_id)}
-              className="hf-card"
-              data-testid={`team-list-row-${t.team_id}`}
-              style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                padding: '10px 12px',
-                marginBottom: 6,
-                cursor: 'pointer',
-                borderColor: on ? 'var(--t-accent)' : 'var(--t-border)',
-                background: on ? 'var(--t-accent-tint)' : 'var(--t-panel)',
-                color: 'var(--t-fg)',
-              }}
-            >
-              <div style={{ fontSize: 12.5, fontWeight: 700 }}>{t.name}</div>
-              <div className="hf-meta" style={{ fontSize: 10, marginTop: 3 }}>
-                {t.agent_ids.length} agents
-                {t.description ? ` · ${t.description.slice(0, 24)}` : ''}
-              </div>
-            </button>
+            <TeamRow
+              key={tm.team_id}
+              team={tm}
+              active={on}
+              onSelect={onSelect}
+              onDelete={onDelete}
+            />
           );
         })
       )}
@@ -925,6 +1000,29 @@ function TeamDetailPage() {
           wsName={wsName}
           onCreate={() => setShowCreateModal(true)}
           onSelect={(id) => navigate(`/teams/${id}`)}
+          onDelete={async (deletedId, deletedName) => {
+            // Best-effort delete: remove from local list first for snappy UX,
+            // then call backend. On failure restore the list.
+            const snapshot = allTeams;
+            setAllTeams((prev) => prev.filter((x) => x.team_id !== deletedId));
+            try {
+              await deleteTeam(deletedId);
+              // If we deleted the team we're currently viewing, jump to /teams
+              // (TeamsIndexPage will redirect to the first remaining team, or
+              // show the empty state).
+              if (deletedId === team.team_id) {
+                navigate('/teams', { replace: true });
+              }
+            } catch (err) {
+              console.warn(`[TeamDetail] deleteTeam ${deletedName} failed:`, err);
+              setAllTeams(snapshot);
+              setErrorMsg(
+                err instanceof TeamApiError
+                  ? `${t('team.deleteError') ?? '删除团队失败'}（${err.status}）`
+                  : (t('team.deleteError') ?? '删除团队失败'),
+              );
+            }
+          }}
         />
 
         {/* P1 Team Detail — header + 2-col grid + full-width policy */}
