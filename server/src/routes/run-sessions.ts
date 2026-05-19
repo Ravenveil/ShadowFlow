@@ -50,6 +50,12 @@ import { createSessionStore } from '../lib/session-store';
 // arrives many seconds later, after parser extraction). Two frames coexist;
 // front-end may diff them for consistency (S5.2 future story).
 import { classifyTS } from '../lib/intent-router';
+// S2.3 (intent-workflow-design-v1 §4.4) — step artifact persistence + per-step
+// SSE frame. Parser fires node/edge/blueprint between `assemble:running` and
+// `assemble:done`; we collect them per open step, then on `done` package a
+// StepArtifact → stepStore.put() + emit `step-artifact` for the front-end.
+import { createStepStore } from '../lib/step-store';
+import type { OutputKind, StepArtifact } from '../lib/contracts';
 
 const router = Router();
 
@@ -242,6 +248,11 @@ function renderConversationHistoryBlock(
 // fine because in normal flows POST creates the session before any GET).
 const sessionStore = createSessionStore<SessionRecord>();
 void sessionStore.loadAll();
+
+// S2.3 — module-level singleton. One bucket per session; cleanup happens
+// alongside sessionStore's 1h TTL sweep (clear() on session delete is
+// effectively handled by the step-store's idempotent disk-removal).
+const stepStoreSingleton = createStepStore();
 
 // 2026-05-16 — Active stream registry. Lets POST /api/run-sessions/:id/abort
 // reach into the currently-open SSE handler and trigger its AbortController
@@ -715,6 +726,23 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     console.error(`[run-sessions] classifyTS failed for session ${id}:`, e);
   }
 
+  // S2.3 — per-step accumulator. Parser brackets each step with `assemble`
+  // running/done; node/edge/blueprint/classify events arriving between them
+  // belong to the currently-open step. On `done` we package a StepArtifact
+  // and persist via stepStoreSingleton.put() + emit `step-artifact`.
+  interface OpenStep {
+    step_index: number;
+    step_name: string;
+    output_kind: OutputKind;
+    started_at: string;
+    nodes: unknown[];
+    edges: unknown[];
+    yaml?: { filename: string; content: string };
+    classify?: unknown;
+  }
+  const openSteps = new Map<number, OpenStep>();
+  let currentStepIndex: number | null = null;
+
   // Story 15.8 — capture run outcome for persistence after generator drains.
   let artifactInfo: {
     type: ArtifactType | null;
@@ -823,6 +851,95 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       if (res.writableEnded || abortController.signal.aborted) break;
       sendEvent(event, data);
       console.log(`[run-sessions] → event:${event}`, JSON.stringify(data).slice(0, 80));
+
+      // ── S2.3 — per-step payload accumulation ────────────────────────────
+      // `assemble:running` opens a step; `node`/`edge`/`blueprint`/`classify`
+      // events inside the bracket attach to it; `assemble:done` closes it,
+      // builds a StepArtifact, persists, and emits `step-artifact`.
+      if (event === 'assemble' && data && typeof data === 'object') {
+        const d = data as {
+          status?: string;
+          step?: string;
+          step_index?: number;
+          output_kind?: OutputKind;
+        };
+        const sIdx = typeof d.step_index === 'number' ? d.step_index : null;
+        if (d.status === 'running' && sIdx !== null) {
+          // Drop any silently-orphaned previous open step for this index.
+          openSteps.set(sIdx, {
+            step_index: sIdx,
+            step_name: d.step ?? '',
+            output_kind: (d.output_kind ?? 'none') as OutputKind,
+            started_at: new Date().toISOString(),
+            nodes: [],
+            edges: [],
+          });
+          currentStepIndex = sIdx;
+        } else if ((d.status === 'done' || d.status === 'failed') && sIdx !== null) {
+          const open = openSteps.get(sIdx);
+          if (open) {
+            let payload: unknown = null;
+            if (open.output_kind === 'nodes') payload = open.nodes;
+            else if (open.output_kind === 'edges') payload = open.edges;
+            else if (open.output_kind === 'yaml') payload = open.yaml ?? null;
+            else if (open.output_kind === 'classify') payload = open.classify ?? null;
+
+            // "No mock" — only emit step-artifact when there's real content
+            // (or the step is intentionally 'none' with no observable output).
+            // The disk record still lands so retry/resume sees the step ran.
+            const hasContent =
+              (Array.isArray(payload) && payload.length > 0) ||
+              (payload !== null && !Array.isArray(payload));
+
+            const artifact: StepArtifact = {
+              session_id: id,
+              step_index: open.step_index,
+              step_name: open.step_name,
+              output_kind: open.output_kind,
+              payload,
+              started_at: open.started_at,
+              finished_at: new Date().toISOString(),
+              status: d.status === 'failed' ? 'failed' : 'done',
+            };
+            try {
+              stepStoreSingleton.put(id, open.step_index, artifact);
+            } catch (e) {
+              console.error(`[run-sessions] stepStore.put failed:`, e);
+            }
+            if (hasContent || open.output_kind === 'none') {
+              sendEvent('step-artifact', {
+                step_index: open.step_index,
+                step_name: open.step_name,
+                output_kind: open.output_kind,
+                payload,
+              });
+            }
+            openSteps.delete(sIdx);
+          }
+          if (currentStepIndex === sIdx) currentStepIndex = null;
+        }
+      } else if (event === 'node' && currentStepIndex !== null) {
+        const open = openSteps.get(currentStepIndex);
+        if (open) open.nodes.push(data);
+      } else if (event === 'edge' && currentStepIndex !== null) {
+        const open = openSteps.get(currentStepIndex);
+        if (open) open.edges.push(data);
+      } else if (event === 'blueprint' && currentStepIndex !== null && data && typeof data === 'object') {
+        const open = openSteps.get(currentStepIndex);
+        if (open) {
+          const d = data as { yaml?: unknown; filename?: unknown };
+          open.yaml = {
+            filename: typeof d.filename === 'string' ? d.filename : 'output.yml',
+            content: typeof d.yaml === 'string' ? d.yaml : '',
+          };
+        }
+      } else if (event === 'classify' && currentStepIndex !== null) {
+        // Only LLM-emitted classify lands here — the TS-side classify above
+        // fires before any step is open (currentStepIndex === null) so it
+        // never pollutes step payload.
+        const open = openSteps.get(currentStepIndex);
+        if (open) open.classify = data;
+      }
 
       // Capture latest artifact info (last blueprint wins — usually only one).
       if (event === 'blueprint' && data && typeof data === 'object') {
