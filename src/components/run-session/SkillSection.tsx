@@ -24,7 +24,17 @@
 import React from 'react';
 import { Pencil, FileText, Box, Wrench, Database } from 'lucide-react';
 
-export type SectionStatus = 'cached' | 'loading' | 'waiting' | 'pending' | 'idle';
+/**
+ * S10 (skill-team-conversion-design-v1.md §5 S10) — section pill 状态.
+ *
+ *   cached    green  — yaml 锚段原文，LLM 未改写（cached=true）
+ *   generated yellow — yaml 有 source 但 LLM 自适应改写（cached=false）
+ *   loading   purple — 正在 streaming（substep status=running）
+ *   waiting   gray   — agent 还在 building 但本 slot 没开始 streaming
+ *   pending   gray   — agent 全局 pending（未启用）
+ *   idle      muted  — 兜底，无信号
+ */
+export type SectionStatus = 'cached' | 'generated' | 'loading' | 'waiting' | 'pending' | 'idle';
 
 export interface SkillSectionProps {
   /** DOM id used by useFollowMode.currentAnchor for scrollIntoView. */
@@ -48,6 +58,7 @@ export interface SkillSectionProps {
 
 const STATUS_LABEL: Record<SectionStatus, string> = {
   cached: 'cached',
+  generated: 'generated',
   loading: 'loading',
   waiting: 'waiting',
   pending: 'pending',
@@ -55,7 +66,8 @@ const STATUS_LABEL: Record<SectionStatus, string> = {
 };
 
 const STATUS_COLOR: Record<SectionStatus, string> = {
-  cached: 'var(--t-status-ok, #16a34a)',
+  cached: 'var(--t-status-ok, #16a34a)',       // green — yaml verbatim
+  generated: 'var(--t-status-warn, #ca8a04)',  // yellow — LLM-adapted from yaml
   loading: 'var(--t-accent, #A855F7)',
   waiting: 'var(--t-fg-4, var(--fg-4))',
   pending: 'var(--t-fg-4, var(--fg-4))',

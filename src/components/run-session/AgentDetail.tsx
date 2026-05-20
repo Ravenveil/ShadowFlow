@@ -448,7 +448,13 @@ function pickSectionStatus(agent: RunSessionNode, slot: 'persona' | 'model' | 't
   const substep = agent.substeps?.find((s) => s.name === slot);
   if (substep) {
     if (substep.status === 'running') return 'loading';
-    if (substep.status === 'done') return substep.cached ? 'cached' : 'idle';
+    if (substep.status === 'done') {
+      // S10 — cached=true → 'cached' (green); cached=false 但有 source →
+      // 'generated' (yellow, LLM adapted from yaml); 无 source → 'idle'.
+      if (substep.cached === true) return 'cached';
+      if (substep.source) return 'generated';
+      return 'idle';
+    }
     return 'pending';
   }
   // No substep frame seen — agent.status decides
