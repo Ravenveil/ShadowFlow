@@ -56,6 +56,11 @@ import { classifyTS } from '../lib/intent-router';
 // StepArtifact → stepStore.put() + emit `step-artifact` for the front-end.
 import { createStepStore } from '../lib/step-store';
 import type { OutputKind, StepArtifact } from '../lib/contracts';
+// S6.3 — skill-team synthesizer. When the active skill ships a structured
+// team.skill.yaml we bypass the LLM entirely and stream the design straight
+// from disk. Deterministic, free, and perfectly matches the v3 stacked
+// AgentDetail because every byte already lives in the skill files.
+import type { TeamDef, SkillSlot } from '../lib/skill-types';
 
 const router = Router();
 
@@ -826,26 +831,39 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   });
 
   try {
-    const generator = runSkillAssembler({
-      goal: session.goal,
-      skill_name: session.skill_name,
-      session_id: id,
-      anthropic_key: session.anthropic_key,
-      signal: abortController.signal,
-      system_prompt: compose.prompt,
-      // Story 15.9 — forward sanitized generation overrides. assembler.ts
-      // applies env/default fallbacks when each is undefined.
-      model: session.model,
-      max_tokens: session.max_tokens,
-      temperature: session.temperature,
-      // Story 15.19 v2 — forward executor; assembler defaults to skill.executor
-      // → 'anthropic-direct' when undefined, preserving back-compat.
-      executor: session.executor,
-      // Story 15.18 — provider + api_key forwarded; default executor runner
-      // dispatches into llm-providers/. CLI / ACP runners ignore them.
-      provider: session.provider,
-      api_key: session.api_key,
-    });
+    // S6.3 — when the active skill ships a structured team.skill.yaml,
+    // synthesize the run from disk instead of asking the LLM to invent
+    // agents. Deterministic, zero token cost, matches the v3 stacked design
+    // exactly because every byte (persona / model / tools / memory / io)
+    // lives in the skill file already.
+    const teamSpec = skillForPrompt?.team;
+    const generator = teamSpec
+      ? synthesizeTeamRun(teamSpec, id, abortController.signal)
+      : runSkillAssembler({
+          goal: session.goal,
+          skill_name: session.skill_name,
+          session_id: id,
+          anthropic_key: session.anthropic_key,
+          signal: abortController.signal,
+          system_prompt: compose.prompt,
+          // Story 15.9 — forward sanitized generation overrides. assembler.ts
+          // applies env/default fallbacks when each is undefined.
+          model: session.model,
+          max_tokens: session.max_tokens,
+          temperature: session.temperature,
+          // Story 15.19 v2 — forward executor; assembler defaults to skill.executor
+          // → 'anthropic-direct' when undefined, preserving back-compat.
+          executor: session.executor,
+          // Story 15.18 — provider + api_key forwarded; default executor runner
+          // dispatches into llm-providers/. CLI / ACP runners ignore them.
+          provider: session.provider,
+          api_key: session.api_key,
+        });
+    if (teamSpec) {
+      console.log(
+        `[run-sessions] synthesizing team run for skill=${session.skill_name} (${teamSpec.agents.length} agent(s), no LLM)`,
+      );
+    }
 
     for await (const { event, data } of generator) {
       if (res.writableEnded || abortController.signal.aborted) break;
@@ -1324,5 +1342,254 @@ router.post('/:id/abort', (req: Request, res: Response) => {
   sessionStore.delete(id);
   res.status(204).end();
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// S6.3 — Skill team synthesizer
+//
+// When a skill ships a structured `team.skill.yaml`, we don't need the LLM.
+// Persona, model params, tools, memory, IO contracts — everything lives in
+// the skill files already. We replay them as an SSE event stream identical
+// in shape to what `runSkillAssembler` would produce, so the existing
+// step-artifact accumulation logic (S2.3) downstream works unchanged.
+//
+// Why a synthesizer instead of letting the LLM read team.skill.yaml? Three
+// reasons: (1) determinism — same input always produces the same UI;
+// (2) zero token cost — substantial for paying users; (3) provenance —
+// the front-end can claim "from reader.skill.yaml#persona" and mean it,
+// because the byte arrived from disk, not from a model that might have
+// paraphrased.
+//
+// Goal is intentionally absent from the synthesized run; skill-backed teams
+// are by definition pre-designed. The goal still appears in `compose` /
+// session metadata for later inspection, and a future "validation"
+// pre-pass could add an optional LLM thinking-step before this generator
+// fires. Out of scope for S6.x.
+// ────────────────────────────────────────────────────────────────────────────
+
+async function pace(ms: number, signal: AbortSignal): Promise<void> {
+  // Light per-event delay so the front-end sees a "streaming" feel instead
+  // of one synchronous flush. Returns immediately on abort.
+  await new Promise<void>((resolve) => {
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => {
+      clearTimeout(t);
+      resolve();
+    }, { once: true });
+  });
+}
+
+function synthesizeYaml(team: TeamDef): string {
+  const lines: string[] = [];
+  lines.push(`# auto-generated by ShadowFlow · team.skill.yaml`);
+  lines.push(`team: ${team.name}`);
+  lines.push(`mode: ${team.mode ?? 'serial'}`);
+  if (team.policy) lines.push(`policy: ${team.policy}`);
+  if (typeof team.retry === 'number') lines.push(`retry: ${team.retry}`);
+  lines.push(`agents:`);
+  for (const a of team.agents) {
+    lines.push(`  - id: ${a.id}`);
+    lines.push(`    title: ${a.title}`);
+    lines.push(`    type: ${a.type ?? 'agent'}`);
+    lines.push(`    model: ${a.model.id}`);
+    lines.push(`    tools:`);
+    for (const t of a.tools.picked) {
+      lines.push(`      - ${t}`);
+    }
+    if (a.memory) lines.push(`    memory: ${a.memory}`);
+  }
+  if (team.edges.length > 0) {
+    lines.push(`edges:`);
+    for (const e of team.edges) {
+      lines.push(`  - { from: ${e.from}, to: ${e.to} }`);
+    }
+  } else {
+    lines.push(`edges: []`);
+  }
+  return lines.join('\n');
+}
+
+/** Build the per-substep source ref used by SSE + the front-end provenance label. */
+function substepSource(agent: TeamDef['agents'][number], substep: string): { source: string; tokens: number } {
+  // identity is a synthetic slot (no skill anchor) — borrow team.skill.yaml provenance.
+  if (substep === 'identity') {
+    return { source: `team.skill.yaml#agents.${agent.id}`, tokens: Math.ceil((agent.title.length + (agent.sub?.length ?? 0)) / 4) };
+  }
+  const key = substep as SkillSlot;
+  const anchor = agent.anchors[key];
+  if (!anchor) return { source: `${agent.source_file}#${substep}`, tokens: 0 };
+  return { source: anchor.ref, tokens: anchor.tokens };
+}
+
+async function* synthesizeTeamRun(
+  team: TeamDef,
+  sessionId: string,
+  signal: AbortSignal,
+): AsyncGenerator<{ event: string; data: unknown }> {
+  const SUBSTEPS = ['identity', 'persona', 'model', 'tools', 'memory'] as const;
+  // Pacing — small per-event delay so SSE feels streamed rather than flushed
+  // all at once. Total run ~3-5s for a 4-agent team, comparable to a fast LLM
+  // call without burning a single token.
+  const DELAY_EVENT = 30;
+  const DELAY_SUBSTEP = 80;
+  const DELAY_STEP = 200;
+
+  yield {
+    event: 'classify',
+    data: {
+      output_type: 'workflow',
+      mode: 'team',
+      confidence: 0.98,
+      complexity: Math.min(5, Math.max(1, team.agents.length)),
+      source: 'skill-team',
+    },
+  };
+  await pace(DELAY_EVENT, signal);
+
+  // Step 0 — 分析目标需求
+  yield { event: 'assemble', data: { step: '分析目标需求', step_index: 0, output_kind: 'none', status: 'running', elapsed_ms: null } };
+  await pace(DELAY_STEP, signal);
+  yield {
+    event: 'thinking-chunk',
+    data: {
+      step: '分析目标需求',
+      text: `命中 skill team "${team.name}" — 从 team.skill.yaml 直接派生 ${team.agents.length} 个 agent，跳过 LLM 生成。`,
+    },
+  };
+  await pace(DELAY_EVENT, signal);
+  yield { event: 'assemble', data: { step: '分析目标需求', step_index: 0, output_kind: 'none', status: 'done', elapsed_ms: DELAY_STEP } };
+
+  // Step 1 — 挑选 Team 蓝图
+  yield { event: 'assemble', data: { step: '挑选 Team 蓝图', step_index: 1, output_kind: 'none', status: 'running', elapsed_ms: null } };
+  await pace(DELAY_STEP, signal);
+  yield {
+    event: 'thinking-chunk',
+    data: {
+      step: '挑选 Team 蓝图',
+      text: `mode=${team.mode ?? 'serial'} · policy=${team.policy ?? 'strict'} · retry=${team.retry ?? 3} · edges=${team.edges.length}`,
+    },
+  };
+  await pace(DELAY_EVENT, signal);
+  yield { event: 'assemble', data: { step: '挑选 Team 蓝图', step_index: 1, output_kind: 'none', status: 'done', elapsed_ms: DELAY_STEP } };
+
+  // Step 2 — 配置 Agent 角色 (the big one — emits nodes + 5 substeps each + persona)
+  yield { event: 'assemble', data: { step: '配置 Agent 角色', step_index: 2, output_kind: 'nodes', status: 'running', elapsed_ms: null } };
+  let agentStepElapsed = 0;
+  for (const agent of team.agents) {
+    if (signal.aborted) return;
+    // Emit node first so the front-end has a target for the substeps.
+    yield {
+      event: 'node',
+      data: {
+        node_id: agent.id,
+        type: agent.type ?? 'agent',
+        title: agent.title,
+        sub: agent.sub ?? '',
+        chips: [agent.model.id, ...agent.tools.picked.slice(0, 2)].filter(Boolean),
+        status: 'building',
+        avatar_char: agent.avatar_char ?? agent.title.charAt(0),
+        model: agent.model.id,
+        memory: agent.memory,
+        tools_picked: agent.tools.picked,
+        tools_candidate: agent.tools.candidate,
+        persona: agent.persona.split('\n').find((l: string) => l.trim().length > 0)?.slice(0, 80),
+        skill_ref: agent.source_file,
+        temperature: agent.model.temperature,
+        max_tokens: agent.model.max_tokens,
+        context_window: agent.model.context_window,
+        io_input: agent.io?.inputs?.expects ?? undefined,
+        io_output: agent.io?.outputs?.produces ?? undefined,
+      },
+    };
+    await pace(DELAY_EVENT, signal);
+
+    // Persona body comes as a paired tag with provenance.
+    yield {
+      event: 'agent-persona',
+      data: {
+        node_id: agent.id,
+        persona: agent.persona,
+        source: agent.anchors.persona.ref,
+        tokens: agent.anchors.persona.tokens,
+        cached: true,
+      },
+    };
+    await pace(DELAY_EVENT, signal);
+
+    // 5 substeps per agent. Each fires running → done with paced delay so the
+    // front-end's auto-follow has time to anchor-scroll.
+    for (const substep of SUBSTEPS) {
+      if (signal.aborted) return;
+      const { source, tokens } = substepSource(agent, substep);
+      yield {
+        event: 'agent-substep',
+        data: {
+          node_id: agent.id,
+          substep,
+          status: 'running',
+          elapsed_ms: null,
+          source,
+          tokens,
+          cached: true,
+        },
+      };
+      await pace(DELAY_SUBSTEP, signal);
+      yield {
+        event: 'agent-substep',
+        data: {
+          node_id: agent.id,
+          substep,
+          status: 'done',
+          elapsed_ms: DELAY_SUBSTEP,
+          source,
+          tokens,
+          cached: true,
+        },
+      };
+      agentStepElapsed += DELAY_SUBSTEP * 2;
+    }
+  }
+  yield { event: 'assemble', data: { step: '配置 Agent 角色', step_index: 2, output_kind: 'nodes', status: 'done', elapsed_ms: agentStepElapsed } };
+
+  // Step 3 — 生成 YAML Blueprint
+  yield { event: 'assemble', data: { step: '生成 YAML Blueprint', step_index: 3, output_kind: 'yaml', status: 'running', elapsed_ms: null } };
+  await pace(DELAY_STEP, signal);
+  const yamlText = synthesizeYaml(team);
+  const yamlFilename = `${team.name.replace(/\./g, '-')}.yml`;
+  yield {
+    event: 'blueprint',
+    data: {
+      yaml: yamlText,
+      filename: yamlFilename,
+      artifact_type: 'yaml',
+      artifact_url: `/projects/${sessionId}/${yamlFilename}`,
+    },
+  };
+  const yamlLines = yamlText.split('\n');
+  for (const line of yamlLines) {
+    if (signal.aborted) return;
+    yield { event: 'yaml-line', data: { line, total_lines: yamlLines.length } };
+    await pace(20, signal);
+  }
+  yield { event: 'assemble', data: { step: '生成 YAML Blueprint', step_index: 3, output_kind: 'yaml', status: 'done', elapsed_ms: DELAY_STEP + yamlLines.length * 20 } };
+
+  // Step 4 — 配置 Team Workflow (edges)
+  yield { event: 'assemble', data: { step: '配置 Team Workflow', step_index: 4, output_kind: 'edges', status: 'running', elapsed_ms: null } };
+  await pace(DELAY_STEP, signal);
+  for (const edge of team.edges) {
+    if (signal.aborted) return;
+    yield { event: 'edge', data: { from: edge.from, to: edge.to, status: 'active' } };
+    await pace(DELAY_EVENT, signal);
+  }
+  yield { event: 'assemble', data: { step: '配置 Team Workflow', step_index: 4, output_kind: 'edges', status: 'done', elapsed_ms: DELAY_STEP + team.edges.length * DELAY_EVENT } };
+
+  yield {
+    event: 'complete',
+    data: {
+      session_id: sessionId,
+      run_id: `run-${sessionId.slice(0, 8)}`,
+      redirect: `/editor?session=${sessionId}`,
+    },
+  };
+}
 
 export default router;

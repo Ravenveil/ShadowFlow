@@ -201,6 +201,16 @@ export function parseAndExtract(
     const a = parseAttrs(attrs);
     const splitCsv = (s: string | undefined): string[] =>
       (s ?? '').split(',').map(x => x.trim()).filter(Boolean);
+    // S6.2 — io_input / io_output may be JSON strings; tolerate raw text
+    // when LLM forgets to escape, fall back to the raw string.
+    const parseMaybeJson = (s: string | undefined): unknown => {
+      if (!s) return undefined;
+      try {
+        return JSON.parse(s);
+      } catch {
+        return s;
+      }
+    };
     events.push({
       event: 'node',
       data: {
@@ -218,6 +228,13 @@ export function parseAndExtract(
         tools_picked: a.tools_picked ? splitCsv(a.tools_picked) : undefined,
         tools_candidate: a.tools_candidate ? splitCsv(a.tools_candidate) : undefined,
         persona: a.persona || undefined,
+        // S6.2 — v3 stacked design extensions
+        skill_ref: a.skill_ref || undefined,
+        temperature: a.temperature ? parseFloat(a.temperature) : undefined,
+        max_tokens: a.max_tokens ? parseInt(a.max_tokens, 10) : undefined,
+        context_window: a.context_window ? parseInt(a.context_window, 10) : undefined,
+        io_input: parseMaybeJson(a.io_input),
+        io_output: parseMaybeJson(a.io_output),
       },
     });
     markProduced('nodes');
@@ -232,6 +249,10 @@ export function parseAndExtract(
   // event keyed by `node_id` so the AgentPanel can merge it onto the
   // matching node. Order is not guaranteed — the panel must tolerate
   // persona arriving before or after the node it belongs to.
+  //
+  // 2026-05-20 (S6.2) — optional provenance attrs (`source`, `tokens`,
+  // `cached`) so the v3 stacked AgentDetail can render
+  // "from reader.skill.yaml#persona 632 tokens · cached".
   buffer = buffer.replace(
     /<sf:agent-persona\s+((?:[^>"']|"[^"]*"|'[^']*')+?)>([\s\S]*?)<\/sf:agent-persona>/g,
     (_match, attrs: string, body: string) => {
@@ -241,11 +262,43 @@ export function parseAndExtract(
         data: {
           node_id: a.node_id ?? '',
           persona: body.trim(),
+          source: a.source || undefined,
+          tokens: a.tokens ? parseInt(a.tokens, 10) : undefined,
+          cached: a.cached === 'true' ? true : a.cached === 'false' ? false : undefined,
         },
       });
       return '';
     },
   );
+
+  // sf:agent-substep  (self-closing) — S6.2
+  //
+  // Granular per-agent substep progress for the v3 stacked AgentDetail. The
+  // left-pane StepList expands this into tree rows ("reader · identity +
+  // persona / reader · model / reader · tools"); the right pane uses the
+  // `substep` value to anchor-scroll to the matching section (persona /
+  // model / tools / memory).
+  //
+  //   substep ∈ identity | persona | model | tools | memory | io
+  //
+  // Provenance attrs `source` / `tokens` / `cached` mirror sf:agent-persona
+  // so each section header can show "from <skill>.yaml#<slot> NNN tokens".
+  buffer = buffer.replace(/<sf:agent-substep\s+((?:[^>"']|"[^"]*"|'[^']*')+?)\/>/g, (_match, attrs: string) => {
+    const a = parseAttrs(attrs);
+    events.push({
+      event: 'agent-substep',
+      data: {
+        node_id: a.node_id ?? '',
+        substep: a.substep ?? '',
+        status: a.status ?? 'running',
+        elapsed_ms: a.elapsed_ms ? parseInt(a.elapsed_ms, 10) : null,
+        source: a.source || undefined,
+        tokens: a.tokens ? parseInt(a.tokens, 10) : undefined,
+        cached: a.cached === 'true' ? true : a.cached === 'false' ? false : undefined,
+      },
+    });
+    return '';
+  });
 
   // sf:thinking  (paired tag, body is the LLM's chain-of-thought for the
   // current step). Emitted as a streaming-friendly chunk via the dedicated
