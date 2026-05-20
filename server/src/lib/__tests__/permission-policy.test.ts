@@ -127,6 +127,28 @@ function check(label: string, expected: unknown, actual: unknown) {
   check('fromAllowedTools empty: mode = deny', 'deny', p.modeFor('anything'));
 }
 
+// ── 6.5 v3 placeholder: authorize accepts optional _input arg ───────────────
+// P1 review fix: signature reserves a second arg for the future 'prompt' mode.
+// Today the arg is ignored; passing it must not change the outcome.
+{
+  const p = PermissionPolicy.fromAllowedTools(['bash']);
+  check(
+    'authorize: passing _input does not change allow outcome',
+    { allow: true },
+    p.authorize('bash', 'rm -rf /'),
+  );
+  check(
+    'authorize: passing _input does not change deny outcome',
+    { deny: "tool 'rm' denied by permission policy" },
+    p.authorize('rm', '{}'),
+  );
+  check(
+    'authorize: no second arg still works (back-compat)',
+    { allow: true },
+    p.authorize('bash'),
+  );
+}
+
 // ── 7. Discriminated-union narrowing ─────────────────────────────────────────
 {
   const p = PermissionPolicy.fromAllowedTools(['bash']);

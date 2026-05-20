@@ -66,6 +66,15 @@ export class ToolRegistry {
    * Add or overwrite a spec. Re-registering the same name keeps its original
    * position in the iteration order — useful for "conditional shadows base"
    * without reshuffling the LLM-visible tool list.
+   *
+   * **Last-write-wins semantics**: when an existing name is re-registered,
+   * every field of the new spec replaces the old one in place — including
+   * `description`, `input_schema`, AND `source`. So a conditional spec
+   * registered after a base spec with the same name will end up with
+   * `source: 'conditional'` (and the old base description is lost). This is
+   * intentional: it lets a per-skill tool fully shadow a base tool without
+   * leaking dual entries into `toAnthropicTools()`. Callers that need to
+   * preserve the original should query `get(name)` before re-registering.
    */
   register(spec: ToolSpec): void {
     if (!this.specs.has(spec.name)) this.order.push(spec.name);

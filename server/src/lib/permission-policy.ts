@@ -54,8 +54,14 @@ export class PermissionPolicy {
    * we never block on an external prompter, so the answer is always immediate.
    * Deny reason is suitable for echoing back into the LLM's `tool_result`
    * block with `is_error: true`.
+   *
+   * @param _input  serialized tool input (currently unused; v3 placeholder).
+   *                Prefixed with underscore to mark it as reserved for the
+   *                future `'prompt'` mode where the prompter needs to see
+   *                concrete input before approving. Keeping the slot in the
+   *                signature now means call sites won't churn when v3 lands.
    */
-  authorize(toolName: string): PermissionOutcome {
+  authorize(toolName: string, _input?: string): PermissionOutcome {
     if (this.modeFor(toolName) === 'allow') return { allow: true };
     return { deny: `tool '${toolName}' denied by permission policy` };
   }
@@ -66,6 +72,13 @@ export class PermissionPolicy {
    * frontmatter — pass the parsed list straight in.
    *
    * Empty list → deny-everything policy (useful for "no tools" skills).
+   *
+   * **Case sensitivity contract**: matching is exact. Callers are responsible
+   * for passing tool names byte-identical to whatever `authorize()` will see
+   * at runtime (which is the literal frontmatter `allowed-tools` entry, e.g.
+   * `Bash` not `bash`). We deliberately do not normalize case here — SKILL.md
+   * frontmatter is the source of truth and silent case-folding would mask
+   * authoring typos.
    */
   static fromAllowedTools(allowedTools: readonly string[]): PermissionPolicy {
     return new PermissionPolicy(

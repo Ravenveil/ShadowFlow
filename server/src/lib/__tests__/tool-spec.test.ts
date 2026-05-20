@@ -158,5 +158,18 @@ const skillAnchor: ToolSpec = {
   );
 }
 
+// ── 8. Last-write-wins includes the `source` field ───────────────────────────
+// P1 review fix: JSDoc on register() now states that re-registering replaces
+// every field including `source`. Lock that semantics down with a test so a
+// future "merge instead of replace" refactor breaks loudly.
+{
+  const r = new ToolRegistry([bash]);  // bash starts as source: 'base'
+  const shadowed: ToolSpec = { ...bash, source: 'conditional', description: 'per-skill override' };
+  r.register(shadowed);
+  check('last-write-wins: source overwritten to conditional', 'conditional', r.get('bash')?.source);
+  check('last-write-wins: description overwritten', 'per-skill override', r.get('bash')?.description);
+  check('last-write-wins: still single entry, position kept', ['bash'], r.list().map((s) => s.name));
+}
+
 console.log(`\n${pass} pass, ${fail} fail`);
 if (fail > 0) process.exit(1);
