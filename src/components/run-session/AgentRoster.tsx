@@ -1,66 +1,49 @@
 /**
- * AgentRoster — horizontal, scroll-snapping rail of agent avatars rendered
- * at the top of the right-pane Agent tab.
+ * AgentRoster — compact horizontal rail matching v3 `.ag-sw` design
+ * (run-session-v3.html lines ~543-620 and agent-section-card-redesign).
  *
- * Visual spec (negotiated with agent-1):
- *   ● Container ~80px tall: 48 avatar + 12 gap + 12 title + vertical padding
- *   ● Each chip is a 48×48 rounded square with the agent's `avatarChar`,
- *     plus the (truncated) title under it in 12px.
- *   ● Status ring around the avatar:
- *       'running' → spinning accent arc (sf-spin keyframe, 1.2s linear)
- *       'ready' / 'done' → 6px green dot pinned top-right (status-ok)
- *       'pending'        → dashed gray ring + reduced opacity
- *       other / undefined → faint solid gray ring
- *   ● Selected chip gets a 2px accent ring around the whole 48×48 frame.
- *   ● `scrollIntoView({ inline: 'center', behavior: 'smooth' })` is called
- *     on the chip matching `selectedId` whenever it changes — useEffect
- *     keyed on selectedId + a per-chip ref map.
- *   ● Right edge fades out via `mask-image` so chips beyond the viewport
- *     hint at overflow without a scrollbar.
- *   ● When `agents.length > 6`, a `[+N ▾]` overflow button trails the rail
- *     (N = agents.length - 5) and invokes `onOpenPicker()` when clicked.
+ * 2026-05-20 — visual rewrite per user feedback (the previous version had
+ * 48×48 squared chips with full Chinese names underneath, which doesn't
+ * match the v3 design): each agent is now a 30×30 rounded-square mini
+ * avatar showing ONE letter, status dot top-right, label moves to a
+ * native tooltip. Selected avatar uses an accent tint + accent border.
  *
- * This component is presentational only — selection state lives in the
- * parent (agent-1's AgentPanel). The roster keeps no internal state.
+ * Status data-state map (kept from previous build, just rewired to v3
+ * styling — the parent contract didn't change):
+ *   building → 'running'   accent dot + halo ring
+ *   ready    → 'ok'        green dot top-right
+ *   pending  → 'pending'   dashed border + 0.55 opacity
+ *   other    → 'idle'      faint, 0.42 opacity
  *
- * 2026-05-18 (agent-4) — sf-spin is now permanently defined in src/index.css
- * along with sf-pulse / sf-cur. The previous runtime <style> injection
- * (`ensureKeyframes`) has been removed.
+ * `selectedId` is scrolled into the rail's center via scrollIntoView
+ * whenever it changes (preserved behavior, useful for keyboard nav).
+ *
+ * The `[+N ▾]` overflow chip is preserved — clicking still fires
+ * `onOpenPicker`, so the existing AgentPickerModal (⌘K) handles search +
+ * navigation. Only the rail visuals changed.
  */
 import React, { useEffect, useRef } from 'react';
 import type { RunSessionNode } from '../../core/hooks/useRunSession';
 
 export interface AgentRosterProps {
-  /** Full agent list, in display order. */
   agents: RunSessionNode[];
-  /** Currently-selected agent id; chip gets the accent ring. */
   selectedId: string;
-  /** Fires when the user clicks any agent chip. */
   onSelect: (id: string) => void;
-  /** Fires when the user clicks the `[+N ▾]` overflow chip. */
   onOpenPicker: () => void;
 }
 
 type ChipState = 'running' | 'ok' | 'pending' | 'idle';
+
 function deriveChipState(node: RunSessionNode): ChipState {
-  // RunSessionNode.status is currently 'building' | 'ready' | 'pending'.
-  // We treat 'building' as visually-running so the spinner is honest about
-  // "this agent is mid-configuration", and 'ready' as the green-dot done
-  // state. Anything else falls through to 'idle' (faint gray ring).
   switch (node.status) {
-    case 'building':
-      return 'running';
-    case 'ready':
-      return 'ok';
-    case 'pending':
-      return 'pending';
-    default:
-      return 'idle';
+    case 'building': return 'running';
+    case 'ready':    return 'ok';
+    case 'pending':  return 'pending';
+    default:         return 'idle';
   }
 }
 
-const AVATAR_SIZE = 48;
-const VISIBLE_BEFORE_OVERFLOW = 6;
+const VISIBLE_BEFORE_OVERFLOW = 8;
 
 export const AgentRoster: React.FC<AgentRosterProps> = ({
   agents,
@@ -68,20 +51,15 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
   onSelect,
   onOpenPicker,
 }) => {
-  // Map id → chip DOM ref so we can scrollIntoView on selection change.
   const chipRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
 
   useEffect(() => {
     if (!selectedId) return;
-    const node = chipRefs.current.get(selectedId);
-    if (node && typeof node.scrollIntoView === 'function') {
-      // Wrapped in try because jsdom (vitest) doesn't implement smooth
-      // scrolling and may throw on the options arg in older shims.
+    const el = chipRefs.current.get(selectedId);
+    if (el && typeof el.scrollIntoView === 'function') {
       try {
-        node.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
-      } catch {
-        // no-op
-      }
+        el.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+      } catch { /* jsdom shim noop */ }
     }
   }, [selectedId]);
 
@@ -95,39 +73,17 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
       style={{
         position: 'relative',
         display: 'flex',
-        alignItems: 'flex-start',
-        gap: 8,
-        height: 80,
-        padding: '6px 4px',
+        alignItems: 'center',
+        gap: 6,
+        padding: '6px 14px 6px 14px',
         width: '100%',
         boxSizing: 'border-box',
+        borderBottom: '1px solid var(--t-border)',
       }}
     >
-      <div
-        // Horizontally-scrolling rail. Scrollbar is hidden via the inline
-        // ::-webkit-scrollbar trick on a child <style> would be heavy —
-        // instead we lean on `scrollbarWidth: 'none'` (FF) + the mask-image
-        // edge fade to imply scroll affordance without chrome.
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 10,
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          flex: 1,
-          minWidth: 0,
-          scrollSnapType: 'x mandatory',
-          scrollBehavior: 'smooth',
-          // FF: hide scrollbar
-          scrollbarWidth: 'none',
-          // Edge fade so chips spilling out hint at overflow.
-          maskImage:
-            'linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%)',
-          WebkitMaskImage:
-            'linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%)',
-          paddingRight: 12,
-        }}
-      >
+      <style>{rosterStyles}</style>
+
+      <div className="sf-roster-rail">
         {agents.map((agent) => {
           const state = deriveChipState(agent);
           const isSelected = agent.id === selectedId;
@@ -135,123 +91,14 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
             <button
               key={agent.id}
               type="button"
-              ref={(el) => {
-                chipRefs.current.set(agent.id, el);
-              }}
+              ref={(el) => { chipRefs.current.set(agent.id, el); }}
               onClick={() => onSelect(agent.id)}
-              title={`${agent.title}${agent.sub ? ` · ${agent.sub}` : ''}`}
-              data-state={state}
+              title={`${agent.title}${agent.sub ? ` · ${agent.sub}` : ''} · ${state}`}
+              data-st={state}
               data-selected={isSelected ? '1' : '0'}
-              style={{
-                flex: '0 0 auto',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 8,
-                padding: 0,
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                scrollSnapAlign: 'center',
-                width: 60,
-                color: 'var(--t-fg-2, #E4E4E7)',
-                fontFamily: 'inherit',
-              }}
+              className={`sf-roster-av ${isSelected ? 'on' : ''}`}
             >
-              <span
-                aria-hidden
-                style={{
-                  position: 'relative',
-                  width: AVATAR_SIZE,
-                  height: AVATAR_SIZE,
-                  borderRadius: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: isSelected
-                    ? 'var(--t-accent-tint, rgba(168,85,247,.14))'
-                    : 'var(--t-bg-elev-2, #141414)',
-                  border: `2px solid ${
-                    isSelected
-                      ? 'var(--t-accent, #A855F7)'
-                      : 'var(--t-border, #27272A)'
-                  }`,
-                  color: isSelected
-                    ? 'var(--t-accent-bright, #D8B4FE)'
-                    : 'var(--t-fg-2, #E4E4E7)',
-                  fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-                  fontWeight: 700,
-                  fontSize: 18,
-                  letterSpacing: '-0.01em',
-                  opacity: state === 'idle' ? 0.55 : state === 'pending' ? 0.7 : 1,
-                  transition:
-                    'background 140ms ease, border-color 140ms ease, color 140ms ease, opacity 140ms ease',
-                }}
-              >
-                {agent.avatarChar || agent.title.charAt(0) || '?'}
-                {/* running: spinning accent arc */}
-                {state === 'running' && (
-                  <span
-                    aria-hidden
-                    style={{
-                      position: 'absolute',
-                      inset: -4,
-                      borderRadius: 14,
-                      border: '2px solid transparent',
-                      borderTopColor: 'var(--t-accent, #A855F7)',
-                      borderRightColor: 'var(--t-accent, #A855F7)',
-                      animation: 'sf-spin 1.2s linear infinite',
-                      pointerEvents: 'none',
-                    }}
-                  />
-                )}
-                {/* ok: green dot top-right */}
-                {state === 'ok' && (
-                  <span
-                    aria-hidden
-                    style={{
-                      position: 'absolute',
-                      top: -2,
-                      right: -2,
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: 'var(--status-ok, #10B981)',
-                      boxShadow: '0 0 0 2px var(--t-bg, #0A0A0A)',
-                    }}
-                  />
-                )}
-                {/* pending: dashed gray ring overlay */}
-                {state === 'pending' && !isSelected && (
-                  <span
-                    aria-hidden
-                    style={{
-                      position: 'absolute',
-                      inset: -3,
-                      borderRadius: 13,
-                      border: '1.5px dashed var(--t-border-2, #3F3F46)',
-                      pointerEvents: 'none',
-                    }}
-                  />
-                )}
-              </span>
-              <span
-                style={{
-                  fontSize: 12,
-                  lineHeight: 1.2,
-                  maxWidth: 60,
-                  textAlign: 'center',
-                  color: isSelected
-                    ? 'var(--t-fg, #FAFAFA)'
-                    : 'var(--t-fg-3, #A1A1AA)',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  fontWeight: isSelected ? 600 : 500,
-                }}
-              >
-                {agent.title}
-              </span>
+              {agent.avatarChar || agent.title.charAt(0) || '?'}
             </button>
           );
         })}
@@ -261,35 +108,105 @@ export const AgentRoster: React.FC<AgentRosterProps> = ({
         <button
           type="button"
           onClick={onOpenPicker}
-          title="查看全部 agent（⌘K）"
+          title="查看全部 agent · ⌘K"
           data-testid="agent-roster-overflow"
-          style={{
-            flex: '0 0 auto',
-            alignSelf: 'flex-start',
-            marginTop: 8,
-            height: AVATAR_SIZE,
-            padding: '0 12px',
-            borderRadius: 12,
-            border: '1px dashed var(--t-border-2, #3F3F46)',
-            background: 'transparent',
-            color: 'var(--t-fg-3, #A1A1AA)',
-            fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            transition:
-              'color 140ms ease, border-color 140ms ease, background 140ms ease',
-          }}
+          className="sf-roster-more"
         >
-          <span>+{overflowCount}</span>
-          <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span>
+          +{overflowCount}
+          <span className="chev">▾</span>
         </button>
       )}
     </div>
   );
 };
+
+/* prettier-ignore */
+const rosterStyles = `
+.sf-roster-rail {
+  display: flex; gap: 6px; align-items: center;
+  overflow-x: auto; scroll-behavior: smooth; scroll-snap-type: x proximity;
+  scrollbar-width: none; -ms-overflow-style: none;
+  padding: 3px 14px 3px 3px;
+  flex: 1; min-width: 0;
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 18px), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 18px), transparent 100%);
+}
+.sf-roster-rail::-webkit-scrollbar { display: none; }
+
+.sf-roster-av {
+  position: relative; flex: 0 0 auto;
+  width: 30px; height: 30px; border-radius: 9px;
+  background: var(--t-panel-2); border: 1.5px solid var(--t-border);
+  color: var(--t-fg-3);
+  font-family: var(--font-mono, ui-monospace, monospace); font-weight: 700; font-size: 11px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  scroll-snap-align: start;
+  transition: background .14s, border-color .14s, color .14s, transform .12s;
+  padding: 0;
+}
+.sf-roster-av:hover {
+  background: var(--t-panel-3);
+  color: var(--t-fg);
+  transform: translateY(-1px);
+}
+.sf-roster-av:active { transform: scale(.92); }
+.sf-roster-av.on {
+  background: var(--t-accent-tint);
+  border-color: var(--t-accent);
+  color: var(--t-accent-bright);
+}
+
+/* status: running → accent dot + halo */
+.sf-roster-av[data-st="running"]::before {
+  content: ""; position: absolute; right: -2px; top: -2px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--t-accent);
+  box-shadow: 0 0 0 2px var(--t-panel);
+  z-index: 2;
+}
+.sf-roster-av[data-st="running"]::after {
+  content: ""; position: absolute; right: -2px; top: -2px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--t-accent); pointer-events: none;
+  transform-origin: center;
+  animation: sfRosterHalo 1.6s ease-out infinite;
+}
+@keyframes sfRosterHalo {
+  0%   { opacity: .55; transform: scale(1); }
+  100% { opacity: 0;   transform: scale(3.2); }
+}
+
+/* status: ok → green dot */
+.sf-roster-av[data-st="ok"]::before {
+  content: ""; position: absolute; right: -2px; top: -2px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--t-ok);
+  box-shadow: 0 0 0 2px var(--t-panel);
+}
+
+/* status: pending / idle */
+.sf-roster-av[data-st="pending"] { opacity: .55; border-style: dashed; }
+.sf-roster-av[data-st="idle"]    { opacity: .42; }
+.sf-roster-av[data-st="idle"]:hover { opacity: .85; }
+
+.sf-roster-more {
+  flex: 0 0 auto;
+  height: 30px; padding: 0 10px; border-radius: 9px;
+  border: 1px dashed var(--t-border);
+  background: transparent;
+  color: var(--t-fg-4);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px;
+  transition: color .14s, border-color .14s, background .14s;
+}
+.sf-roster-more:hover {
+  color: var(--t-fg);
+  border-color: var(--t-fg-4);
+  background: var(--t-panel-2);
+}
+.sf-roster-more .chev { font-size: 8px; opacity: .7; }
+`;
 
 export default AgentRoster;
