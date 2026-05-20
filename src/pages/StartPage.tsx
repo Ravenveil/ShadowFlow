@@ -797,6 +797,28 @@ export default function StartPage() {
     const text = composer.trim();
     if (!text) return;
 
+    // S11 fix — auto-resolve skill_name from `@<skill-id>` goal token when
+    // pendingSkill is null. CommandMenu sets pendingSkill on explicit pick,
+    // but a user who types `@paper-review …` and skips the menu (or hits the
+    // first letters wrong) would otherwise fall back to the default skill.
+    let resolvedSkillName = pendingSkill?.skill_id;
+    if (!resolvedSkillName && installedSkills && installedSkills.length > 0) {
+      const m = text.match(/^@([a-z0-9_-]+)(?:\s|$)/i);
+      if (m) {
+        const guess = m[1].toLowerCase();
+        const hit = installedSkills.find((s) => s.id.toLowerCase() === guess);
+        if (hit) {
+          resolvedSkillName = hit.id;
+          console.log(`[StartPage] auto-resolved skill_name from goal token: @${hit.id}`);
+        }
+      }
+    }
+    if (!resolvedSkillName) {
+      console.log(`[StartPage] no skill resolved — backend will default to agent-team-blueprint`);
+    } else {
+      console.log(`[StartPage] POST with skill_name=${resolvedSkillName}`);
+    }
+
     setSubmitting(true);
 
     // Forward the model-picker selection so the server uses the user's
@@ -827,7 +849,7 @@ export default function StartPage() {
           // Story 16.x — when the user accepted the URL chip, forward the
           // ingested skill id so the server uses it instead of the default
           // 'agent-team-blueprint' template.
-          skill_name: pendingSkill?.skill_id,
+          skill_name: resolvedSkillName,
         }),
       });
       if (resp.ok) {

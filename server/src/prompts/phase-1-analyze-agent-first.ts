@@ -33,11 +33,32 @@ export const PHASE_1_ANALYZE_AGENT_FIRST = `# Phase 1 · 分析目标 (Agent-fir
 完成 phase 1 后**直接进入 phase 2**（配置 Agent 角色）—— 不要 emit "挑选
 Team 蓝图" 这个 step；这条流没有"挑选"，是"创造"。
 
-## 输入信息不足时的处理
+## 输入信息不足时的处理 — 用 \`<sf:question-form>\` 不用 markdown
 
 如果 goal 模糊（比如"帮我做个东西"），phase 1 \`<sf:thinking>\` 里写明缺什么，
-然后发自然语言追问 1-2 个具体问题，再 emit \`<sf:complete/>\`。
-不要瞎猜进入 phase 2 烧 token。
+**不要**用 markdown 文字追问。**必须** emit \`<sf:question-form>\` XML 标签：
+
+\`\`\`xml
+<sf:question-form id="clarify" title="补充信息 30 秒">
+{
+  "description": "再确认一下方向我就开工",
+  "questions": [
+    { "id": "output", "label": "你想交付什么？", "type": "radio", "required": true,
+      "options": ["写个 prototype", "出技术方案", "做研究 / 综述", "其他"] },
+    { "id": "scope", "label": "大致工作量", "type": "radio",
+      "options": ["半小时（小改）", "半天（一个功能）", "几天（完整 feature）"] },
+    { "id": "tech", "label": "技术栈 / 约束", "type": "text",
+      "placeholder": "如：React + Tailwind，或留空让我决定" }
+  ]
+}
+</sf:question-form>
+\`\`\`
+
+发完 form 后 emit \`<sf:complete/>\`（不带 redirect），等用户提交答案后会启动
+新的 follow-up turn 继续 phase 1 → 2 → 3。
+
+**严禁**用 markdown 文字问问题，前端模态框不会弹出，用户感知是聊天对话被
+打断。
 
 ## Agent-first 流的 agent 命名约定
 
@@ -46,12 +67,51 @@ Team 蓝图" 这个 step；这条流没有"挑选"，是"创造"。
 - \`title\`: 2-6 个中文字，如 "论文深读" / "Review 撰写"
 - \`type\`: 第一个 agent 是 \`coordinator\`（即便 goal 没明说），其余是 \`agent\`
 
-## get_skill_anchor 的退化
+## get_skill_anchor 的退化 — Agent-first 流必须自己写内容
 
-Agent-first 流没有 skill yaml 锚段，phase 2 里 \`get_skill_anchor\` 调用会失败。
-此时你应当：
-- persona / memory body 由你自己写一段中文（每条 < 80 字），phase 2 里把
-  \`persona_cached: false\` / \`persona_source: ""\` 显式标出 —— 前端会渲染
-  "generated 黄色" pill 而不是 "cached 绿色"，让用户知道这是 LLM 自创内容。
-- model_id 默认填 "claude-sonnet-4-6"；tools_picked 留空数组（用户回头再选）。
+Agent-first 流**没有** skill yaml 锚段，phase 2 里 \`get_skill_anchor\` 调用会
+失败。此时你**必须**亲自写 agent 的 persona / memory / tools，**不要留空字符串
+让前端显示"未设置"**：
+
+### persona body（核心，前端 SkillSection 渲染的就是这）
+
+**最小 80 字、最长 200 字中文**，内容包含：
+1. 这个 agent 是干什么的（一句话）
+2. 输入是什么（user 给它什么）
+3. 输出是什么（它产出什么形态的东西）
+4. 1-2 条 constraint（必做 / 不做）
+
+示例（论文评审 agent，约 120 字）：
+\`\`\`
+你是 论文深读 Agent。
+你接收 paper_url / arxiv_id，输出结构化摘要 + 引用清单。
+- constraints
+- 只读论文文本，不做主观评价
+- 每个 section 单独摘录，保留原文页码
+- 引用必须含 DOI 或 arXiv-id
+\`\`\`
+
+**严禁**：把 \`persona\` 字段填成 \`"REVIEW_COORDINATOR.PERSONA"\` 这种**锚段引用名**
+或空字符串 \`""\`。前端会渲染空白 SkillSection，用户以为 agent 没配置好。
+
+### memory body
+
+中文一句话，描述记忆策略，如 \`"short-term · scratch.run"\` 或 \`"vector+scratch"\`。
+**不能为空**。
+
+### model_id / tools_picked / temperature
+
+- \`model_id\` 默认 \`"claude-sonnet-4-6"\`（除非用户在 goal 明示其他模型）
+- \`tools_picked\` 从下列里挑 3-5 个合理工具：\`web_search\` / \`code_interpreter\`
+  / \`file_writer\` / \`pdf_extract\` / \`doc_writer\` / \`bash\` / \`grep\` 等。**不能空**。
+- \`temperature\` 默认 0.2（推理稳）
+
+### register_agent 入参标记位
+
+- \`persona_cached: false\` — 因为是 LLM 自写不是 yaml 锚段
+- \`persona_source: ""\` — 没有锚段
+- \`persona_tokens: <persona body 长度 / 4>\` 估算
+
+前端会渲染 "generated 黄色" pill 让用户知道这是 LLM 自创（与 team-first 的
+"cached 绿色" 区分）。
 `;

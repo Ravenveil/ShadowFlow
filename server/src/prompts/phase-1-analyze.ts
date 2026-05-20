@@ -47,9 +47,41 @@ paper-review 团队 vs goal="煮咖啡"），phase 1 结束时**不要**进入 p
 改为发一段中文自然语言回复，告诉用户"这个 skill 不适合该 goal，建议换 skill
 或换 goal"，然后 emit \`<sf:complete/>\`（不带 redirect）。
 
-## 输入信息不足时的处理
+## 输入信息不足时的处理 — 用 \`<sf:question-form>\` 不用 markdown
 
 如果 goal 模糊（比如"帮我做个东西"），phase 1 \`<sf:thinking>\` 里写明缺什么，
-但仍然继续走完 phase 1（让用户看到"在分析"），然后发自然语言追问 1-2 个具体问题，
-再 emit \`<sf:complete/>\`。不要瞎猜进入 phase 2 烧 token。
+**不要**用 markdown 文字追问。**必须** emit \`<sf:question-form>\` XML 标签
+让前端弹出结构化表单。然后 emit \`<sf:complete/>\` 结束 phase 1。
+
+标签格式（attrs + JSON body）:
+
+\`\`\`xml
+<sf:question-form id="clarify" title="补充信息 30 秒">
+{
+  "description": "我需要确认两点再开工",
+  "questions": [
+    {
+      "id": "target",
+      "label": "你想对论文做什么？",
+      "type": "radio",
+      "options": ["快速速读 / 摘要", "深度评审（找问题）", "翻译", "复现实验"],
+      "required": true
+    },
+    {
+      "id": "paper",
+      "label": "有具体论文吗？粘 URL 或 arXiv id",
+      "type": "text",
+      "placeholder": "https://arxiv.org/abs/2024.xxxxx",
+      "required": false
+    }
+  ]
+}
+</sf:question-form>
+\`\`\`
+
+支持的 \`type\`：\`radio\`（单选）/ \`checkbox\`（多选，可加 \`maxSelections\`）/ \`text\`（自由文本）。
+\`options\` 用于 radio + checkbox。\`required: true\` 的题用户必须答。
+
+**严禁**：在 phase 1 用 markdown 列表问 "1. 你想做什么？ 2. 论文 URL?" —— 前端
+看不见结构化数据，模态框不会弹出，用户体验会断裂。
 `;
