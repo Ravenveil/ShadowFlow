@@ -48,6 +48,17 @@ export interface SkillDefinition {
    * the SSE stream can inject directly instead of asking the LLM to invent.
    */
   team?: import('./lib/skill-types').TeamDef;
+  /**
+   * S6 (skill-team-conversion-design-v1.md §5 line 875) — list of tool names
+   * the skill allows the LLM to invoke. Sourced from SKILL.md frontmatter
+   * `allowed-tools: [...]` and fed into `PermissionPolicy.fromAllowedTools`.
+   * Empty / undefined → deny-everything policy (only system_prompt-driven
+   * skills with no tool calls work, e.g. the legacy web-prototype / report).
+   *
+   * Case sensitivity is contract: entries must byte-match the ToolSpec.name
+   * the executor registers at runtime (see PermissionPolicy JSDoc).
+   */
+  allowed_tools?: string[];
 }
 
 // ─── system_prompt strings (Story 15.2 / AC5) ────────────────────────────────

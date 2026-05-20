@@ -329,6 +329,96 @@ body
   );
 })();
 
+// ─── Test 11 (S6): allowed-tools frontmatter parsing ────────────────────────
+
+(function testAllowedToolsParsing() {
+  console.log('\n[11] S6: allowed-tools frontmatter → SkillDefinition.allowed_tools');
+  const root = makeTmpSkillsRoot();
+  try {
+    // Skill with allowed-tools list
+    writeSkill(
+      root,
+      'team-skill',
+      `---
+name: Team Skill
+description: team-backed skill with tool grants
+allowed-tools:
+  - list_team_agents
+  - get_skill_anchor
+  - register_agent
+  - register_edge
+---
+body
+`,
+    );
+    // Skill without allowed-tools
+    writeSkill(
+      root,
+      'no-tools-skill',
+      `---
+name: No Tools
+description: no allowed-tools key at all
+---
+body
+`,
+    );
+    // Skill with mixed types in allowed-tools (numbers ignored, strings kept)
+    writeSkill(
+      root,
+      'mixed-tools',
+      `---
+name: Mixed
+description: bad entries should be filtered out
+allowed-tools:
+  - valid_tool
+  - 42
+  - ""
+  - another_valid
+---
+body
+`,
+    );
+
+    const result = loadFsSkills([], root);
+    const teamSkill = result.loaded['team-skill'];
+    check('S6: team-skill loaded', !!teamSkill);
+    check(
+      'S6: allowed_tools is array',
+      Array.isArray(teamSkill?.allowed_tools),
+    );
+    check('S6: allowed_tools length = 4', teamSkill?.allowed_tools?.length === 4);
+    check(
+      'S6: allowed_tools includes list_team_agents',
+      teamSkill?.allowed_tools?.includes('list_team_agents') === true,
+    );
+    check(
+      'S6: allowed_tools includes register_edge',
+      teamSkill?.allowed_tools?.includes('register_edge') === true,
+    );
+
+    const noTools = result.loaded['no-tools-skill'];
+    check('S6: no-tools-skill loaded', !!noTools);
+    check(
+      'S6: missing allowed-tools → allowed_tools undefined',
+      noTools?.allowed_tools === undefined,
+    );
+
+    const mixed = result.loaded['mixed-tools'];
+    check('S6: mixed-tools loaded', !!mixed);
+    check(
+      'S6: numeric / empty-string entries filtered out',
+      mixed?.allowed_tools?.length === 2,
+    );
+    check(
+      'S6: only valid string entries kept',
+      JSON.stringify(mixed?.allowed_tools?.sort()) ===
+        JSON.stringify(['another_valid', 'valid_tool']),
+    );
+  } finally {
+    rmrf(root);
+  }
+})();
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 console.log('\n────────────────────────────────────────');

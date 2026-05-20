@@ -18,6 +18,15 @@ import { parseAndExtract, type SseEvent as ParserSseEvent } from './parser';
 // preserves the existing in-line Claude SDK path; cli:* / cli:auto / acp:*
 // routes are delegated to the dispatcher.
 import { dispatchSkillRunner } from './skill-runners';
+// S6 (skill-team-conversion-design-v1.md §5 line 806-815) — team-backed
+// skills now drive a multi-turn ConversationRuntime instead of the legacy
+// single-call dispatcher. We gate on `skill.team` presence so non-team
+// skills (web-prototype, report, agent-team-blueprint legacy) keep working.
+import { ConversationRuntime } from './lib/conversation-runtime';
+import { AnthropicApiClient } from './lib/api-clients/anthropic-api-client';
+import { SkillAnchorToolExecutor } from './lib/tools/skill-anchor-executor';
+import { PermissionPolicy } from './lib/permission-policy';
+import type { ConversationMessage } from './lib/conversation-types';
 
 export type OutputType = 'answer' | 'report' | 'review' | 'workflow';
 export type SessionMode = 'single' | 'team';
@@ -376,6 +385,28 @@ export async function* runSkillAssembler(
   // Project directory for artifact persistence (under cwd, e.g. server/)
   const projectDir = path.join(process.cwd(), '.shadowflow', 'projects', session_id);
 
+  // S6 — team-backed skills go through ConversationRuntime so the LLM gets
+  // tool_use access to the skill-anchor tools (list_team_agents / get_skill_anchor /
+  // register_agent / register_edge). Non-team skills (web-prototype / report /
+  // legacy agent-team-blueprint) keep using the legacy dispatcher path that
+  // calls the provider once and pipes text-delta through parser.ts.
+  //
+  // Provider scope: today only the Anthropic provider supports the multi-turn
+  // tool_use shape we need; GLM / OpenAI variants ship in later Stories. So
+  // we route ONLY when the resolved provider is 'anthropic'. Any other
+  // provider falls back to the legacy path with a console warning.
+  if (skill.team) {
+    const provider = opts.provider ?? 'anthropic';
+    if (provider === 'anthropic') {
+      yield* runTeamBackedSkill(opts, skill, effectiveSystemPrompt, projectDir);
+      return;
+    }
+    console.warn(
+      `[skill-assembler] team-backed skill "${skill_name}" with provider=${provider} ` +
+        `is not yet supported by ConversationRuntime; falling back to legacy single-call path.`,
+    );
+  }
+
   // Story 15.19 v2 — executor resolution priority: opts > skill > default.
   // 2026-05-11 Story 15.30: default 'cli:auto' (OpenDesign 模式) — dispatcher
   // 内部找不到 CLI 时优雅 fallback 到 anthropic-direct，仍兼容 BYOK 流程。
@@ -409,6 +440,168 @@ export async function* runSkillAssembler(
     },
     { name: skill_name, executor: skill.executor },
   );
+}
+
+// ─── S6: team-backed skill multi-turn driver ──────────────────────────────────
+
+/**
+ * Drive a team-backed skill via ConversationRuntime. Sets up:
+ *
+ *   - AnthropicApiClient (BYOK key + model + max_tokens from opts)
+ *   - SkillAnchorToolExecutor (wraps the 4 S4 tools)
+ *   - PermissionPolicy from SKILL.md frontmatter `allowed-tools: [...]`
+ *   - Fresh RuntimeSession (ephemeral; messages live for one runTurn() only)
+ *
+ * Then pumps the runtime's SSE generator downstream. Text events get piped
+ * through parseAndExtract so the LLM's <sf:thinking> / <sf:step> /
+ * <sf:agent-substep> / <sf:complete> / <artifact> tags still produce the
+ * same downstream SSE shape the front-end expects. Tool-side-effect SSE
+ * frames (event: 'node' / 'edge') yielded by the runtime pass through
+ * directly.
+ *
+ * Artifacts: persisted under `projectDir` via the same callback the legacy
+ * path uses, so artifact-saved events fire identically.
+ */
+async function* runTeamBackedSkill(
+  opts: SkillAssemblerOptions,
+  skill: import('./skills').SkillDefinition,
+  systemPrompt: string,
+  projectDir: string,
+): AsyncGenerator<ParserSseEvent> {
+  const { goal, skill_name, session_id, anthropic_key, signal } = opts;
+
+  // Resolve API key: opts.api_key (BYOK header) > legacy anthropic_key > env.
+  const apiKey =
+    opts.api_key ??
+    anthropic_key ??
+    process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    yield {
+      event: 'error',
+      data: {
+        message: '未配置 Anthropic API Key。请在设置 → API 密钥 (BYOK) 中填入 sk-ant-... 密钥。',
+        code: 'NO_API_KEY',
+      },
+    };
+    return;
+  }
+
+  // Ensure project dir exists for artifact callback.
+  try {
+    fs.mkdirSync(projectDir, { recursive: true });
+  } catch (err) {
+    yield {
+      event: 'error',
+      data: {
+        message: `无法创建产物目录: ${(err as Error).message}`,
+        code: 'PROJECT_DIR_FAILED',
+      },
+    };
+    return;
+  }
+
+  const artifactCallback = (filename: string, content: string, _type: string): void => {
+    const safeName = path.basename(filename);
+    const filePath = path.join(projectDir, safeName);
+    fs.writeFileSync(filePath, content, 'utf-8');
+    console.log(
+      `[skill-assembler:team] artifact written: ${filePath} (${content.length} bytes)`,
+    );
+  };
+
+  const apiClient = new AnthropicApiClient({
+    apiKey,
+    model: opts.model,
+    max_tokens: opts.max_tokens,
+    temperature: opts.temperature,
+  });
+
+  // Skill id == directory name == SKILLS registry key. We use skill_name
+  // verbatim because the S4 tools read `skill_id` from LLM input — context
+  // here is informational only.
+  const toolExecutor = new SkillAnchorToolExecutor({
+    skill_id: skill_name,
+    sessionId: session_id,
+  });
+
+  // PermissionPolicy: skill.allowed_tools comes from SKILL.md frontmatter
+  // `allowed-tools: [...]`. Empty / undefined → deny-everything, which
+  // means a team-backed skill that forgot to declare allowed-tools will
+  // see every tool_use bounce back as `tool denied` — exactly the failure
+  // mode we want surfaced (vs silently allowing).
+  const allowed = skill.allowed_tools ?? [];
+  const permission = PermissionPolicy.fromAllowedTools(allowed);
+  if (allowed.length === 0) {
+    console.warn(
+      `[skill-assembler:team] skill "${skill_name}" has no allowed-tools frontmatter; ` +
+        `all tool_use calls will be denied.`,
+    );
+  }
+
+  // Ephemeral session — ConversationRuntime mutates messages in place but
+  // we never persist this back. (Future story: hand the SessionRecord from
+  // session-store here so SSE reconnect can replay history. Out of S6 scope.)
+  const session: { id: string; messages: ConversationMessage[] } = {
+    id: session_id,
+    messages: [],
+  };
+
+  const runtime = new ConversationRuntime(
+    session,
+    apiClient,
+    toolExecutor,
+    permission,
+    systemPrompt,
+  );
+
+  // The runtime owns the abort signal. If the caller didn't pass one we
+  // synthesize a never-aborting one to keep the type tight.
+  const effectiveSignal = signal ?? new AbortController().signal;
+
+  // Per-turn buffer for piping text-delta events through parseAndExtract.
+  // The parser is stateful via session_id (step gating etc.) and expects to
+  // see chunks accumulate into <sf:...> tags it can match.
+  let textBuf = '';
+
+  console.log(
+    `[skill-assembler:team] session=${session_id} skill=${skill_name}` +
+      ` allowed_tools=[${allowed.join(',')}]` +
+      ` model=${opts.model ?? '(default)'}`,
+  );
+
+  for await (const sseEvent of runtime.runTurn(goal, effectiveSignal)) {
+    if (sseEvent.event === 'text') {
+      // Pipe text through parser so <sf:*> + <artifact> still extract.
+      const data = sseEvent.data as { text: string };
+      textBuf += data.text;
+      const { buffer: remaining, events } = parseAndExtract(
+        textBuf,
+        session_id,
+        artifactCallback,
+      );
+      textBuf = remaining;
+      for (const e of events) yield e;
+    } else if (
+      sseEvent.event === 'complete' ||
+      sseEvent.event === 'aborted' ||
+      sseEvent.event === 'error'
+    ) {
+      // Final flush — pump any remaining text through parser one last time
+      // before yielding the terminal event so trailing <sf:complete /> still
+      // emits its 'complete' SSE.
+      if (textBuf.trim().length > 0) {
+        const { events } = parseAndExtract(textBuf, session_id, artifactCallback);
+        for (const e of events) yield e;
+        textBuf = '';
+      }
+      yield sseEvent;
+    } else {
+      // Tool side-effect (event: 'node' / 'edge') or any other custom event
+      // from a future tool. Pass through verbatim — these are the SSE frames
+      // the front-end's RunSessionPage listens for.
+      yield sseEvent;
+    }
+  }
 }
 
 // Re-export the legacy direct-Anthropic helpers in case any internal code

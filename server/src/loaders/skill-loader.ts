@@ -198,6 +198,17 @@ function scanOneDir(
         ? fm.executor.trim()
         : undefined;
 
+    // S6 (skill-team-conversion-design-v1.md §5 line 875) — parse
+    // `allowed-tools: [list_team_agents, ...]` frontmatter into string[].
+    // Skip anything non-string (gray-matter parses YAML into JS values, so
+    // a quoted entry comes through as string; bare numbers / objects are
+    // silently dropped). Case is preserved verbatim — matching policy is
+    // exact (see PermissionPolicy JSDoc).
+    const rawAllowed = (fm as Record<string, unknown>)['allowed-tools'];
+    const allowed_tools = Array.isArray(rawAllowed)
+      ? rawAllowed.filter((t): t is string => typeof t === 'string' && t.length > 0)
+      : undefined;
+
     const skill: SkillDefinition = {
       name: String(fm.name).trim(),
       description: String(fm.description).trim(),
@@ -209,6 +220,7 @@ function scanOneDir(
       example_prompt: typeof fm.example_prompt === 'string' ? fm.example_prompt : '',
       system_prompt: parsed.content ?? '',
       executor,
+      allowed_tools,
     };
 
     // S6.0 + S0.5 — attach the structured team. Two paths:

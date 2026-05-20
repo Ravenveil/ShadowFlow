@@ -14,8 +14,8 @@
  *   1. list_team_agents(skill_id)        → summary of all member agents
  *   2. get_skill_anchor(skill_id, agent_id, slot)
  *                                        → { ref, tokens, body } verbatim
- *   3. register_agent(node spec)         → ack + sf:node sse-equivalent event
- *   4. register_edge(from, to, ...)      → ack + sf:edge sse-equivalent event
+ *   3. register_agent(node spec)         → ack + `event: 'node'` sse frame
+ *   4. register_edge(from, to, ...)      → ack + `event: 'edge'` sse frame
  *
  * Side-effects discipline
  * ────────────────────────
@@ -373,9 +373,13 @@ async function execRegisterAgent(input: unknown): Promise<ToolExecutionResult> {
     },
   };
 
+  // 2026-05-20 (S6 contract fix): emit `event: 'node'` to match parser.ts
+  // baseline + frontend `src/api/runSessions.ts` listener. The prior
+  // 'sf-node' name was inconsistent with the parser's <sf:node> → 'node'
+  // mapping and would have orphaned tool-emitted nodes from the UI graph.
   return {
     output: { ok: true, node_id: input.node_id },
-    sseEvents: [{ event: 'sf-node', data: nodeData }],
+    sseEvents: [{ event: 'node', data: nodeData }],
   };
 }
 
@@ -407,9 +411,11 @@ async function execRegisterEdge(input: unknown): Promise<ToolExecutionResult> {
     max_retries: typeof input.max_retries === 'number' ? input.max_retries : undefined,
   };
 
+  // 2026-05-20 (S6 contract fix): emit `event: 'edge'` to match parser.ts
+  // + frontend listener; see register_agent for the rationale.
   return {
     output: { ok: true },
-    sseEvents: [{ event: 'sf-edge', data: edgeData }],
+    sseEvents: [{ event: 'edge', data: edgeData }],
   };
 }
 

@@ -294,7 +294,7 @@ async function main(): Promise<void> {
       'register_agent: happy emits sseEvents',
       Array.isArray(r.sseEvents) && r.sseEvents!.length === 1,
     );
-    check('register_agent: sseEvent event name', 'sf-node', r.sseEvents![0].event);
+    check('register_agent: sseEvent event name', 'node', r.sseEvents![0].event);
     const evData = r.sseEvents![0].data as {
       node_id: string;
       title: string;
@@ -361,7 +361,7 @@ async function main(): Promise<void> {
       'register_edge: happy sseEvents',
       Array.isArray(r.sseEvents) && r.sseEvents!.length === 1,
     );
-    check('register_edge: sseEvent event name', 'sf-edge', r.sseEvents![0].event);
+    check('register_edge: sseEvent event name', 'edge', r.sseEvents![0].event);
     const ev = r.sseEvents![0].data as { from: string; to: string; kind: string };
     check('register_edge: default kind = sequential', 'sequential', ev.kind);
     check('register_edge: from echoed', 'coord', ev.from);
