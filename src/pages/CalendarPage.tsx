@@ -943,55 +943,74 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
           }}>+ 新建定时计划</button>
       </div>
 
-      {/* ── 订阅 · 0G CID ── */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px 4px', marginTop:8, flexShrink:0 }}>
-        <span className="cal-label" style={{ fontSize:9 }}>订阅 · 0G CID</span>
-        <span className="cal-meta" style={{ fontSize:9 }}>2 个</span>
-      </div>
-      <div style={{ padding:'0 6px', flexShrink:0 }}>
-        {[
-          { glyph:'0G', name:'0G Testnet Epoch',   cid:'0xa3…f912' },
-          { glyph:'社', name:'社区 · NeurIPS 周历', cid:'cid://…rev3' },
-        ].map((s, i) => (
-          <div key={i} style={{ display:'flex', alignItems:'center', gap:9, padding:'6px 10px', borderRadius:7, cursor:'pointer' }}>
-            <span style={{
-              width:13, height:13, borderRadius:3, flexShrink:0,
-              background:'var(--t-panel-2)', border:'1px solid var(--t-border-2)',
-            }}/>
-            <div style={{
-              width:18, height:18, borderRadius:5, background:'var(--t-panel-2)',
-              border:'1px solid var(--t-border)', display:'flex', alignItems:'center', justifyContent:'center',
-              fontSize:9, fontWeight:700, color:'var(--t-fg-3)', flexShrink:0,
-            }}>{s.glyph}</div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:11.5, fontWeight:500, color:'var(--t-fg-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                {s.name}
+      {/*
+        ── 订阅 · 0G CID ──
+        2026-05-20: 此区块前后端均未接入（无 /api/subscriptions、无 client API
+        模块、两个示例订阅项为 hardcode 数组、订阅按钮只清空输入框）。按
+        CLAUDE.md "只能加不能删" 规则保留 DOM 结构，但整体加 WIP 锁：
+          - opacity 降到 .45 + pointerEvents:'none'  → 视觉提示+禁用交互
+          - 右上角加 "未接入" 角标
+          - 输入框/按钮 disabled
+        待后端实装 0G 订阅接口后移除这层 wrapper。
+      */}
+      <div style={{ position:'relative', opacity:.45, pointerEvents:'none', flexShrink:0 }} aria-disabled="true">
+        <div style={{
+          position:'absolute', top:10, right:14, zIndex:2,
+          padding:'1px 6px', borderRadius:4,
+          background:'var(--t-panel-2)', border:'1px solid var(--t-border)',
+          fontSize:8.5, fontFamily:'var(--font-mono)', letterSpacing:'.06em',
+          color:'var(--t-fg-4)', textTransform:'uppercase', pointerEvents:'none',
+        }}>WIP · 未接入</div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px 4px', marginTop:8 }}>
+          <span className="cal-label" style={{ fontSize:9 }}>订阅 · 0G CID</span>
+          <span className="cal-meta" style={{ fontSize:9 }}>2 个</span>
+        </div>
+        <div style={{ padding:'0 6px' }}>
+          {[
+            { glyph:'0G', name:'0G Testnet Epoch',   cid:'0xa3…f912' },
+            { glyph:'社', name:'社区 · NeurIPS 周历', cid:'cid://…rev3' },
+          ].map((s, i) => (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:9, padding:'6px 10px', borderRadius:7, cursor:'not-allowed' }}>
+              <span style={{
+                width:13, height:13, borderRadius:3, flexShrink:0,
+                background:'var(--t-panel-2)', border:'1px solid var(--t-border-2)',
+              }}/>
+              <div style={{
+                width:18, height:18, borderRadius:5, background:'var(--t-panel-2)',
+                border:'1px solid var(--t-border)', display:'flex', alignItems:'center', justifyContent:'center',
+                fontSize:9, fontWeight:700, color:'var(--t-fg-3)', flexShrink:0,
+              }}>{s.glyph}</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:11.5, fontWeight:500, color:'var(--t-fg-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {s.name}
+                </div>
+                <div className="cal-meta" style={{ fontSize:9, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'var(--t-fg-5)' }}>
+                  {s.cid}
+                </div>
               </div>
-              <div className="cal-meta" style={{ fontSize:9, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'var(--t-fg-5)' }}>
-                {s.cid}
-              </div>
+              <span style={{ color:'var(--t-fg-5)', fontSize:11, flexShrink:0 }}>↗</span>
             </div>
-            <span style={{ color:'var(--t-fg-5)', fontSize:11, flexShrink:0 }}>↗</span>
+          ))}
+          {/* CID paste input — disabled until backend lands */}
+          <div style={{ margin:'4px 10px 4px', display:'flex', gap:6 }}>
+            <input
+              disabled
+              value={cidText} onChange={e => setCidText(e.target.value)}
+              placeholder="粘贴 CID 订阅团队日程（未接入）"
+              style={{
+                flex:1, padding:'6px 9px', borderRadius:7,
+                border:'1px dashed var(--t-border-2)', background:'transparent',
+                color:'var(--t-fg-3)', fontSize:11, fontFamily:'var(--font-mono)',
+                letterSpacing:'.04em', outline:'none', cursor:'not-allowed',
+              }}
+            />
+            {cidText && (
+              <button type="button" disabled onClick={() => setCidText('')} style={{
+                padding:'0 10px', borderRadius:7, background:'var(--t-accent)', color:'var(--t-accent-ink)',
+                fontSize:11, fontWeight:700, cursor:'not-allowed', border:'none',
+              }}>订阅</button>
+            )}
           </div>
-        ))}
-        {/* CID paste input */}
-        <div style={{ margin:'4px 10px 4px', display:'flex', gap:6 }}>
-          <input
-            value={cidText} onChange={e => setCidText(e.target.value)}
-            placeholder="粘贴 CID 订阅团队日程"
-            style={{
-              flex:1, padding:'6px 9px', borderRadius:7,
-              border:'1px dashed var(--t-border-2)', background:'transparent',
-              color:'var(--t-fg-3)', fontSize:11, fontFamily:'var(--font-mono)',
-              letterSpacing:'.04em', outline:'none',
-            }}
-          />
-          {cidText && (
-            <button type="button" onClick={() => setCidText('')} style={{
-              padding:'0 10px', borderRadius:7, background:'var(--t-accent)', color:'var(--t-accent-ink)',
-              fontSize:11, fontWeight:700, cursor:'pointer', border:'none',
-            }}>订阅</button>
-          )}
         </div>
       </div>
 
