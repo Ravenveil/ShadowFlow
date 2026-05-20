@@ -154,6 +154,12 @@ export interface RunSessionState {
    * null when no substep is running.
    */
   activeAgentSubstep: { node_id: string; name: AgentSubstepName } | null;
+  /**
+   * S12 — pending `<sf:question-form>` block from the LLM. When non-null,
+   * RunSessionPage renders QuestionFormModal. Cleared when the user submits
+   * (handled by parent: POST follow-up message + reducer dispatches CLEAR).
+   */
+  pendingQuestionForm: { id: string; title: string; body: unknown } | null;
 }
 
 // 2026-05-11 UX fix — steps are now driven entirely by `<sf:step>` events
@@ -195,6 +201,8 @@ type Action =
         cached?: boolean;
       };
     }
+  | { type: 'QUESTION_FORM'; payload: { id: string; title: string; body: unknown } }
+  | { type: 'QUESTION_FORM_CLEAR' }
   // 2026-05-16 — user pressed Stop. Mark stream terminated locally and
   // append "（用户已停止）" to the chat reply so the UI shows a clear marker
   // even if the LLM was mid-sentence.
@@ -341,6 +349,16 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
         activeAgentSubstep: nextActive,
       };
     }
+    case 'QUESTION_FORM': {
+      // S12 — LLM emit `<sf:question-form>`. Modal will block UI until
+      // the user submits answers (POSTed as a follow-up message in the
+      // /messages endpoint, which kicks off a new run-session inheriting
+      // this conversation_id).
+      return { ...state, pendingQuestionForm: action.payload };
+    }
+    case 'QUESTION_FORM_CLEAR': {
+      return { ...state, pendingQuestionForm: null };
+    }
     case 'STEP_ARTIFACT': {
       // Stream B / S2.4 — server pushed a step's persisted output. Merge by
       // step_index. step_name + status default to whatever the matching
@@ -470,6 +488,11 @@ export interface UseRunSessionReturn extends RunSessionState {
    */
   isStreaming: boolean;
   /**
+   * S12 — dismiss the pendingQuestionForm modal. Called by RunSessionPage
+   * after the user submits answers (POST follow-up message + navigate).
+   */
+  dispatchClearQuestionForm: () => void;
+  /**
    * Tear down the local EventSource immediately, dispatch ABORT to mark
    * `isComplete=true` + append "（用户已停止）" to chatReply, and fire a
    * best-effort POST /api/run-sessions/:id/abort so the server can drop
@@ -492,6 +515,7 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     chatReply: '',
     stepArtifacts: {},
     activeAgentSubstep: null,
+    pendingQuestionForm: null,
   });
 
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -527,6 +551,8 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
       onStepArtifact:  (d) => dispatch({ type: 'STEP_ARTIFACT', payload: d }),
       // S6.5 — granular substep frame from synthesizeTeamRun / future LLM emits.
       onAgentSubstep:  (d) => dispatch({ type: 'AGENT_SUBSTEP', payload: d }),
+      // S12 — LLM emit `<sf:question-form>` for clarification.
+      onQuestionForm:  (d) => dispatch({ type: 'QUESTION_FORM', payload: d }),
       onRetrying:      (attempt, delayMs) => dispatch({ type: 'RETRYING', attempt, delayMs }),
       // EventSource gave up retrying — pure network bucket so the UI can
       // surface a "重发" CTA instead of "配置 API Key". setConnected(false)
@@ -585,5 +611,11 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
 
   const isStreaming = connected && !state.isComplete && state.error == null;
 
-  return { ...state, isStreaming, abort };
+  // S12 — expose a callback so RunSessionPage can dismiss the
+  // pendingQuestionForm modal after submission.
+  const dispatchClearQuestionForm = useCallback(() => {
+    dispatch({ type: 'QUESTION_FORM_CLEAR' });
+  }, []);
+
+  return { ...state, isStreaming, abort, dispatchClearQuestionForm };
 }

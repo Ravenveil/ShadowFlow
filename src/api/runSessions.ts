@@ -358,6 +358,8 @@ export function subscribeRunSession(
       tokens?: number;
       cached?: boolean;
     }) => void;
+    /** S12 — `<sf:question-form>` interactive form. body is parsed JSON. */
+    onQuestionForm?: (data: { id: string; title: string; body: unknown }) => void;
     onRetrying?: (attempt: number, delayMs: number) => void;
     onError?: (err: Event) => void;
     onServerError?: (message: string, code?: string) => void;
@@ -419,6 +421,8 @@ export function subscribeRunSession(
     // Drives both the left-pane substep tree under "配置 Agent 角色" and the
     // right-pane anchor-scroll to the matching SkillSection.
     es.addEventListener('agent-substep', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onAgentSubstep?.(d); });
+    // S12 — `<sf:question-form>` interactive clarify modal.
+    es.addEventListener('question-form', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onQuestionForm?.(d); });
     es.addEventListener('error',     (e) => {
       const d = parse(e as MessageEvent);
       if (d?.message) {

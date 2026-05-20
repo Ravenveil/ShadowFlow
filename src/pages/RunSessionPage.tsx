@@ -59,6 +59,8 @@ import PreviewPanel from '../components/run-session/PreviewPanel';
 import ThinkCard from '../components/run-session/ThinkCard';
 import StepList, { type StepRow } from '../components/run-session/StepList';
 import StepArtifactDrawer from '../components/run-session/StepArtifactDrawer';
+import QuestionFormModal from '../components/run-session/QuestionFormModal';
+import { getApiBase } from '../api/_base';
 import { retryStep as retryStepApi } from '../api/runSessions';
 
 // ---------------------------------------------------------------------------
@@ -2968,6 +2970,39 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
       cached={drawerStep != null ? session.stepArtifacts?.[drawerStep] ?? null : null}
       onClose={() => setDrawerStep(null)}
     />
+    {/* S12 — `<sf:question-form>` modal. Pops up when LLM needs clarification.
+        Submitting POSTs answers as JSON content to /messages → new run-session
+        inheriting the conversation_id (existing follow-up flow). */}
+    {session.pendingQuestionForm && (
+      <QuestionFormModal
+        open={true}
+        formId={session.pendingQuestionForm.id}
+        title={session.pendingQuestionForm.title}
+        body={session.pendingQuestionForm.body}
+        onCancel={() => session.dispatchClearQuestionForm?.()}
+        onSubmit={async (jsonContent) => {
+          try {
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            const resp = await fetch(`${getApiBase()}/api/run-sessions/${sessionId}/messages`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ content: jsonContent }),
+            });
+            if (resp.ok) {
+              const data = (await resp.json()) as { session_id: string };
+              session.dispatchClearQuestionForm?.();
+              navigate(`/run-session/${data.session_id}`);
+            } else {
+              setRetryToast('提交失败：' + resp.status);
+              setTimeout(() => setRetryToast(null), 2400);
+            }
+          } catch (err) {
+            setRetryToast('网络错误：' + (err as Error).message);
+            setTimeout(() => setRetryToast(null), 2400);
+          }
+        }}
+      />
+    )}
     {/* S4.3 — transient toast for retry-step accept / not-implemented. */}
     {retryToast && (
       <div

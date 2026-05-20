@@ -321,6 +321,40 @@ export function parseAndExtract(
     },
   );
 
+  // sf:question-form  (paired tag, body is JSON) — S12
+  //
+  // LLM emits this during Phase 1 when the user goal is too ambiguous to
+  // proceed. Body is a JSON object matching the FormSchema in
+  // src/components/run-session/QuestionFormModal.tsx (id / title /
+  // description / questions: [{id, label, type, options?, required?}]).
+  // Front-end renders an interactive modal; user fills in answers and
+  // POSTs to /api/run-sessions/:id/messages as a follow-up turn carrying
+  // the JSON answers, which the LLM consumes on the next iteration.
+  //
+  // Borrowed from open-design `<question-form>` pattern (apps/daemon/src/
+  // prompts/discovery.ts). See design-doc S12.
+  buffer = buffer.replace(
+    /<sf:question-form\s+((?:[^>"']|"[^"]*"|'[^']*')+?)>([\s\S]*?)<\/sf:question-form>/g,
+    (_match, attrs: string, body: string) => {
+      const a = parseAttrs(attrs);
+      let parsedBody: unknown;
+      try {
+        parsedBody = JSON.parse(body.trim());
+      } catch (err) {
+        parsedBody = { __parse_error: (err as Error).message, raw: body.trim() };
+      }
+      events.push({
+        event: 'question-form',
+        data: {
+          id: a.id ?? 'unknown',
+          title: a.title ?? '',
+          body: parsedBody,
+        },
+      });
+      return '';
+    },
+  );
+
   // sf:edge  (self-closing)
   buffer = buffer.replace(/<sf:edge\s+((?:[^>"']|"[^"]*"|'[^']*')+?)\/>/g, (_match, attrs: string) => {
     const a = parseAttrs(attrs);
