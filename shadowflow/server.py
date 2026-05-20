@@ -322,9 +322,11 @@ async def _check_agent_binaries() -> None:
 async def _start_scheduler() -> None:
     """Start APScheduler BackgroundScheduler and re-register any persisted schedules (14.2)."""
     try:
+        from datetime import datetime, timezone
         from shadowflow.services.scheduler import start_scheduler
         from shadowflow.api.schedules import _list_schedules, _schedule_job
         from apscheduler.triggers.cron import CronTrigger
+        from apscheduler.triggers.date import DateTrigger
     except ImportError:
         logger.warning("scheduler: APScheduler not installed — schedule feature disabled. Run: pip install 'APScheduler>=3.10,<4'")
         return
@@ -332,14 +334,27 @@ async def _start_scheduler() -> None:
     scheduler = start_scheduler()
     app.state.scheduler = scheduler
 
-    # Re-register persisted schedules after server restart
+    # Re-register persisted schedules after server restart. Branches:
+    #   - cron_expression set  → CronTrigger (recurring)
+    #   - start_at set         → DateTrigger (one-shot); skip if already past
+    now = datetime.now(timezone.utc)
     for record in _list_schedules():
+        sid = record.get("schedule_id")
         try:
-            trigger = CronTrigger.from_crontab(record["cron_expression"])
-            sid = record["schedule_id"]
+            if record.get("cron_expression"):
+                trigger = CronTrigger.from_crontab(record["cron_expression"])
+            elif record.get("start_at"):
+                run_date = datetime.fromisoformat(record["start_at"])
+                if run_date.tzinfo is None:
+                    run_date = run_date.replace(tzinfo=timezone.utc)
+                if run_date < now or record.get("completed"):
+                    continue   # one-shot already fired or in the past — leave as history
+                trigger = DateTrigger(run_date=run_date)
+            else:
+                continue
             scheduler.add_job(_schedule_job, trigger=trigger, id=sid, args=[sid], replace_existing=True)
         except Exception as exc:
-            logger.warning("scheduler: could not re-register schedule %s: %s", record.get("schedule_id"), exc)
+            logger.warning("scheduler: could not re-register schedule %s: %s", sid, exc)
 
 
 @app.on_event("shutdown")
