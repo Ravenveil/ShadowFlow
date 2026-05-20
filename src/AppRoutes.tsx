@@ -97,7 +97,11 @@ export function AppRoutes() {
             <Route path="/memory" element={<MemoryPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/run-session/:sessionId" element={<RunSessionPage />} />
-            <Route path="/run-session" element={<RunSessionPage />} />
+            {/* 2026-05-20 — no-arg /run-session 旧入口下架（用户截图反馈）。
+                新入口在 /start，那里是带 Skill Pack + Goal 输入的精修页。
+                历史 RunSessionPage 的「启动新 Run Session」UI 被这条 redirect 隐藏，
+                源文件仍保留只是不再可达，避免误删的副作用（UI 保护规则）。 */}
+            <Route path="/run-session" element={<Navigate to="/start" replace />} />
           </Route>
           {/* ── FB-HiFi Workspace (standalone chrome, no AppLayout) ── */}
           <Route path="/workspace" element={<WorkspacePage />} />
