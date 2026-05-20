@@ -38,6 +38,7 @@ import type { ConversationMessage, TokenUsage } from '../conversation-types';
 import { toAnthropicMessages } from '../anthropic-block-adapter';
 import type { ToolSpec } from '../tool-spec';
 import { DEFAULT_MODELS } from '../../llm-providers/types';
+import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../prompt-assembly';
 
 /**
  * Options for constructing the client. The runtime calls `stream()` per turn;
