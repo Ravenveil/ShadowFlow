@@ -58,12 +58,18 @@ _data/
 # Ignore everything in .shadowflow/ (sessions, projects, settings.json, credentials)
 # EXCEPT source-tracked declarative data:
 #   - skills/ : skill packs (S6.4)
-#   - agents/ : global agent library (S0.5)
-#   - teams/  : global team library with DAG layout (S0.5)
+#   - agents/*.agent.yaml : global agent library (S0.5) — yaml only, NOT
+#     sqlite-exported agent-*.json / selection.*.tmp / etc.
+#   - teams/*.team.yaml   : global team library with DAG layout (S0.5) — same
 .shadowflow/*
 !.shadowflow/skills
 !.shadowflow/agents
 !.shadowflow/teams
+# Inside agents/ and teams/, only yaml is tracked. Runtime state stays ignored.
+.shadowflow/agents/*
+!.shadowflow/agents/*.agent.yaml
+.shadowflow/teams/*
+!.shadowflow/teams/*.team.yaml
 
 # Documentation / design files (not source code)
 docs/
