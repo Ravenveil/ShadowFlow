@@ -1504,12 +1504,17 @@ export default function CalendarPage() {
             </div>
           )}
           {!loading && !error && (() => {
-            // Inline creator binding shared by all 3 views. group_id falls
-            // back to the first inbox group — same hack used by the existing
-            // sidebar "+ 新建定时计划" button (CalendarPage.tsx:1319 above).
-            // TODO: replace with a proper active-group resolver once the
-            // workspace store exposes a primary group per workspace.
-            const fallbackGroupId = groups[0]?.id ?? null;
+            // Inline creator binding shared by all 3 views.
+            //
+            // group_id resolution (most-specific → fallback):
+            //   1. The first inbox group (matches sidebar +新建定时计划 behavior)
+            //   2. Current workspace id (one calendar bucket per workspace)
+            //   3. Constant "calendar-default" so the inline UX still works on
+            //      a fresh install with no chat groups + no workspace
+            // The MVP "one schedule per group_id" constraint has been lifted,
+            // so reusing workspace id is safe.
+            const fallbackGroupId: string =
+              groups[0]?.id ?? currentId ?? 'calendar-default';
             const creator: CreatorBinding = {
               creating,
               onStartCreate: (startAt, viewSrc) => setCreating({ startAt, viewSrc }),
