@@ -1,21 +1,25 @@
-"""Schedules API tests — Story 14.2 AC3/AC4.
+"""Schedules API tests — Story 14.2 AC3/AC4 + iCal-style oneshot upgrade.
 
 Covers:
-  - POST /schedules creates a schedule (201)
+  - POST /schedules creates a recurring (cron) schedule (201)
+  - POST /schedules creates a one-shot (start_at) schedule (201)
   - GET /schedules returns list
   - GET /schedules?group_id filters correctly
   - DELETE /schedules/{id} removes schedule (204)
   - GET /schedules/{id}/runs returns run history
   - 422 on invalid cron expression
   - 422 on task_description > 500 chars
-  - 409 on duplicate group_id schedule
+  - 422 on start_at in the past
+  - 422 when neither cron_expression nor start_at supplied
   - 404 on unknown schedule_id in DELETE
+  - Multiple schedules per group_id are allowed (iCal-style)
   - Scheduler startup/shutdown hooks via app startup
 """
 
 from __future__ import annotations
 
 import shutil
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -41,11 +45,24 @@ def _clean_schedules(tmp_path, monkeypatch):
 
 
 def _create(group_id="grp-test", cron="0 8 * * *", agent_id="agent-1", desc="Daily brief"):
-    return client.post("/schedules", json={
+    return client.post("/api/schedules", json={
         "group_id": group_id,
         "cron_expression": cron,
         "agent_id": agent_id,
         "task_description": desc,
+    })
+
+
+def _create_oneshot(group_id="grp-once", agent_id="agent-1", desc="One-shot task",
+                    delta_min=60, duration_min=30):
+    """Create a one-shot schedule that fires `delta_min` from now."""
+    start_at = datetime.now(timezone.utc) + timedelta(minutes=delta_min)
+    return client.post("/api/schedules", json={
+        "group_id": group_id,
+        "start_at": start_at.isoformat(),
+        "agent_id": agent_id,
+        "task_description": desc,
+        "duration_min": duration_min,
     })
 
 
@@ -72,7 +89,7 @@ def test_create_schedule_stores_task_description():
 
 
 def test_create_schedule_invalid_cron_returns_422():
-    res = client.post("/schedules", json={
+    res = client.post("/api/schedules", json={
         "group_id": "grp-bad",
         "cron_expression": "* * * *",  # only 4 fields — invalid
         "agent_id": "a1",
@@ -85,7 +102,7 @@ def test_create_schedule_invalid_cron_returns_422():
 
 
 def test_create_schedule_task_description_too_long_returns_422():
-    res = client.post("/schedules", json={
+    res = client.post("/api/schedules", json={
         "group_id": "grp-long",
         "cron_expression": "0 8 * * *",
         "agent_id": "a1",
@@ -94,14 +111,58 @@ def test_create_schedule_task_description_too_long_returns_422():
     assert res.status_code == 422
 
 
-def test_create_schedule_duplicate_group_id_returns_409():
-    _create(group_id="grp-dup")
-    res = _create(group_id="grp-dup")
-    assert res.status_code == 409
-    detail = res.json()["detail"]
-    assert detail["error"] == "schedule_exists"
-    assert "existing_id" in detail
-    assert "hint" in detail
+def test_create_schedule_allows_multiple_per_group():
+    # iCal-style: a group can host multiple events. The MVP 1-per-group
+    # constraint has been lifted; both creates should return 201.
+    r1 = _create(group_id="grp-multi")
+    r2 = _create(group_id="grp-multi", cron="0 9 * * *", desc="Second event")
+    assert r1.status_code == 201
+    assert r2.status_code == 201
+    list_res = client.get("/api/schedules?group_id=grp-multi")
+    assert list_res.status_code == 200
+    assert len(list_res.json()["data"]) == 2
+
+
+def test_create_oneshot_schedule_returns_201():
+    res = _create_oneshot(group_id="grp-once")
+    assert res.status_code == 201
+    data = res.json()["data"]
+    assert data["group_id"] == "grp-once"
+    assert data["start_at"] is not None
+    assert data["cron_expression"] is None
+    assert data["duration_min"] == 30
+    assert data["completed"] is False
+
+
+def test_create_oneshot_in_past_returns_422():
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    res = client.post("/api/schedules", json={
+        "group_id": "grp-past",
+        "start_at": past.isoformat(),
+        "task_description": "Too late",
+    })
+    assert res.status_code == 422
+    assert res.json()["detail"]["error"] == "start_at_in_past"
+
+
+def test_create_schedule_requires_trigger_returns_422():
+    # Neither cron_expression nor start_at supplied → Pydantic validator rejects
+    res = client.post("/api/schedules", json={
+        "group_id": "grp-empty",
+        "task_description": "No trigger",
+    })
+    assert res.status_code == 422
+
+
+def test_create_schedule_agent_id_optional():
+    # agent_id is now optional — events without an assigned agent are allowed
+    res = client.post("/api/schedules", json={
+        "group_id": "grp-noagent",
+        "cron_expression": "0 8 * * *",
+        "task_description": "No agent",
+    })
+    assert res.status_code == 201
+    assert res.json()["data"]["agent_id"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +172,7 @@ def test_create_schedule_duplicate_group_id_returns_409():
 def test_list_schedules_returns_all():
     _create(group_id="grp-a")
     _create(group_id="grp-b")
-    res = client.get("/schedules")
+    res = client.get("/api/schedules")
     assert res.status_code == 200
     data = res.json()["data"]
     ids = {r["group_id"] for r in data}
@@ -121,7 +182,7 @@ def test_list_schedules_returns_all():
 def test_list_schedules_filtered_by_group_id():
     _create(group_id="grp-x")
     _create(group_id="grp-y")
-    res = client.get("/schedules?group_id=grp-x")
+    res = client.get("/api/schedules?group_id=grp-x")
     assert res.status_code == 200
     data = res.json()["data"]
     assert len(data) == 1
@@ -129,7 +190,7 @@ def test_list_schedules_filtered_by_group_id():
 
 
 def test_list_schedules_empty():
-    res = client.get("/schedules")
+    res = client.get("/api/schedules")
     assert res.status_code == 200
     assert res.json()["data"] == []
 
@@ -141,16 +202,16 @@ def test_list_schedules_empty():
 def test_delete_schedule_returns_204():
     created = _create().json()["data"]
     sid = created["schedule_id"]
-    res = client.delete(f"/schedules/{sid}")
+    res = client.delete(f"/api/schedules/{sid}")
     assert res.status_code == 204
     # Verify gone
-    res2 = client.get("/schedules")
+    res2 = client.get("/api/schedules")
     ids = [r["schedule_id"] for r in res2.json()["data"]]
     assert sid not in ids
 
 
 def test_delete_schedule_not_found_returns_404():
-    res = client.delete("/schedules/nonexistent-id-99")
+    res = client.delete("/api/schedules/nonexistent-id-99")
     assert res.status_code == 404
 
 
@@ -161,11 +222,11 @@ def test_delete_schedule_not_found_returns_404():
 def test_get_runs_empty_for_new_schedule():
     created = _create().json()["data"]
     sid = created["schedule_id"]
-    res = client.get(f"/schedules/{sid}/runs")
+    res = client.get(f"/api/schedules/{sid}/runs")
     assert res.status_code == 200
     assert res.json()["data"] == []
 
 
 def test_get_runs_not_found_returns_404():
-    res = client.get("/schedules/no-such-id/runs")
+    res = client.get("/api/schedules/no-such-id/runs")
     assert res.status_code == 404
