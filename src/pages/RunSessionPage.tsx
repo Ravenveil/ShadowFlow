@@ -2402,12 +2402,41 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                   elapsedMs = unit === 'ms' ? v : unit === 'm' ? v * 60_000 : v * 1000;
                 }
               }
+              // S6.8 — flatten agent substeps under the "配置 Agent 角色"
+              // parent step. Same-substep running+done pair collapses to a
+              // single row (the reducer merges them in place by name).
+              let substeps: StepRow['substeps'] = undefined;
+              if (s.name === '配置 Agent 角色') {
+                substeps = [];
+                for (const node of session.nodes) {
+                  if (!node.substeps || node.substeps.length === 0) {
+                    // Agent emitted via NODE but no substep frames yet — show a
+                    // single "pending" row so users see the agent is queued.
+                    substeps.push({
+                      label: `${node.title} · pending`,
+                      status: 'pending',
+                      elapsedMs: null,
+                    });
+                    continue;
+                  }
+                  for (const sub of node.substeps) {
+                    // Merge identity + persona into one label per v3 screenshot.
+                    const labelSlot = sub.name === 'identity' ? 'identity + persona' : sub.name;
+                    substeps.push({
+                      label: `${node.title} · ${labelSlot}`,
+                      status: sub.status === 'failed' ? 'failed' : sub.status,
+                      elapsedMs: sub.elapsedMs,
+                    });
+                  }
+                }
+              }
               return {
                 index: i,
                 name: s.name,
                 status: s.status,
                 elapsedMs,
                 hasArtifact: session.stepArtifacts?.[i] != null,
+                substeps,
               };
             })}
             onStepView={(idx) => setDrawerStep(idx)}

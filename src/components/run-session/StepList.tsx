@@ -19,6 +19,13 @@
 import React, { useState } from 'react';
 import { Check, Eye, RotateCcw, AlertTriangle } from 'lucide-react';
 
+export interface StepSubstepRow {
+  /** e.g. "reader · identity + persona" — left column display text. */
+  label: string;
+  status: 'pending' | 'running' | 'done' | 'failed';
+  elapsedMs: number | null;
+}
+
 export interface StepRow {
   index: number;
   name: string;
@@ -26,6 +33,13 @@ export interface StepRow {
   elapsedMs: number | null;
   /** When true, the row shows a "查看产出 ▸" button that opens the drawer. */
   hasArtifact: boolean;
+  /**
+   * S6.8 — tree-expanded substep rows beneath the parent step. Drives the
+   * v3 design's `配置 Agent 角色 → reader · identity + persona / reader ·
+   * model / reader · tools` indented list. When present and non-empty the
+   * parent row auto-expands.
+   */
+  substeps?: StepSubstepRow[];
 }
 
 export interface StepListProps {
@@ -279,6 +293,74 @@ const StepList: React.FC<StepListProps> = ({ steps, onStepView, onStepRetry }) =
                 onStepRetry={onStepRetry}
               />
             </div>
+            {/* S6.8 — substep tree (indented child rows). Auto-expanded
+                when non-empty; no collapse toggle in MVP because the parent
+                row is usually the one currently running. */}
+            {step.substeps && step.substeps.length > 0 && (
+              <div
+                style={{
+                  paddingLeft: 30,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                  marginTop: -2,
+                  marginBottom: 4,
+                }}
+              >
+                {step.substeps.map((sub, i) => (
+                  <div
+                    key={`${sub.label}-${i}`}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '14px 1fr auto',
+                      gap: 8,
+                      alignItems: 'center',
+                      padding: '3px 0',
+                      fontSize: 11.5,
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 14,
+                        height: 14,
+                      }}
+                    >
+                      {sub.status === 'done' ? (
+                        <Check size={11} color="var(--t-ok, #10B981)" strokeWidth={2.5} />
+                      ) : sub.status === 'failed' ? (
+                        <AlertTriangle size={11} color="var(--t-err, #EF4444)" />
+                      ) : (
+                        <span aria-hidden style={dotStyle(sub.status)} />
+                      )}
+                    </span>
+                    <span
+                      style={{
+                        color: sub.status === 'pending' ? 'var(--t-fg-4)' : 'var(--t-fg-2)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={sub.label}
+                    >
+                      {sub.label}
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono, monospace)',
+                        fontSize: 9.5,
+                        color: 'var(--t-fg-4)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {formatElapsed(sub.elapsedMs, sub.status)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       })}
