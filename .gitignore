@@ -55,7 +55,10 @@ playwright-report/
 # Runtime state — encrypted tool credentials, catalog snapshots, workflow runs
 # (must never be committed; per code-review-2026-04-27 H4)
 _data/
-.shadowflow/
+# Ignore everything in .shadowflow/ (sessions, projects, settings.json, credentials)
+# EXCEPT the skills/ bundle, which is source-tracked declarative data (S6.4).
+.shadowflow/*
+!.shadowflow/skills
 
 # Documentation / design files (not source code)
 docs/
