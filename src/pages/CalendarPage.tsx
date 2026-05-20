@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, X, ChevronLeft, ChevronRight, ArrowUpRight, Trash2 } from 'lucide-react';
+import { RefreshCw, X, ChevronLeft, ChevronRight, ArrowUpRight, Trash2, Plus } from 'lucide-react';
 import { listSchedules, deleteSchedule, type Schedule } from '../api/schedules';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { ScheduleDrawer, describeSchedule } from '../components/briefboard/ScheduleDrawer';
+import { InlineEventCreator } from '../components/calendar/InlineEventCreator';
 import { useWorkspaceStore } from '../store/workspaceStore';
 // @ts-ignore — lunar-javascript is a CJS module without typings
 import { Solar } from 'lunar-javascript';
@@ -20,13 +21,29 @@ interface CalEvent {
   glyph: string;
   slot: string;
   title: string;
-  cronExpr: string;
+  /** Null for one-shot events. cronShort() handles null gracefully. */
+  cronExpr: string | null;
   date: string;
   startH: number;
   startM: number;
   durMin: number;
   status: EvStatus;
   runId?: string;
+}
+
+/**
+ * Inline event creator binding — threaded into MonthView / WeekView /
+ * AgendaView. `creating` is the currently-open creator (one at a time across
+ * the page). `groupId === null` disables creation entirely (no team in
+ * workspace yet); cells render with cursor:not-allowed and ignore clicks.
+ */
+interface CreatorBinding {
+  creating: { startAt: Date; viewSrc: ViewMode } | null;
+  onStartCreate: (startAt: Date, viewSrc: ViewMode) => void;
+  onCancelCreate: () => void;
+  onCreated: () => void;
+  groupId: string | null;
+  workspaceId?: string;
 }
 
 /* ── Constants ──────────────────────────────────────────────────────────── */
@@ -126,6 +143,38 @@ function buildEvents(
     const gName = groupNames.get(sc.group_id) ?? sc.group_id;
     const slot  = slotOf.get(sc.group_id) ?? 'a';
     const glyph = gName.trim()[0] ?? '?';
+
+    // One-shot branch — MUST come before the cronHM check, otherwise events
+    // without a cron_expression get dropped silently (start_at events look
+    // like "invalid cron" to cronHM and the `if (!hm) continue` swallowed
+    // them in the original code).
+    if (sc.start_at) {
+      const dt = new Date(sc.start_at);
+      if (dt.getFullYear() !== year || dt.getMonth() !== month) continue;
+      const iso = isoDate(year, month, dt.getDate());
+      const status: EvStatus = sc.completed
+        ? 'ok'
+        : (dt < now ? 'warn' : 'pending');
+      add(iso, {
+        id: `${sc.schedule_id}-once`,
+        scheduleId: sc.schedule_id,
+        groupId: sc.group_id,
+        groupName: gName,
+        glyph,
+        slot,
+        title: sc.task_description || '(无标题)',
+        cronExpr: null,
+        date: iso,
+        startH: dt.getHours(),
+        startM: dt.getMinutes(),
+        durMin: sc.duration_min ?? 30,
+        status,
+      });
+      continue;
+    }
+
+    // Recurring (cron) branch — existing logic.
+    if (!sc.cron_expression) continue;
     const hm    = cronHM(sc.cron_expression);
     if (!hm) continue;
 
@@ -162,7 +211,7 @@ function buildEvents(
         date: iso,
         startH: hm.h,
         startM: hm.m,
-        durMin: 30,
+        durMin: sc.duration_min ?? 30,
         status,
         runId: run?.run_id,
       });
@@ -302,10 +351,11 @@ function EventBar({ ev, onSelect }: { ev: CalEvent; onSelect: (e: CalEvent) => v
 
 /* ── Month view ─────────────────────────────────────────────────────────── */
 
-function MonthView({ year, month, eventsByDate, onEventClick }: {
+function MonthView({ year, month, eventsByDate, onEventClick, creator }: {
   year: number; month: number;
   eventsByDate: Map<string, CalEvent[]>;
   onEventClick: (e: CalEvent) => void;
+  creator?: CreatorBinding;
 }) {
   const cells = useMemo(() => buildGrid(year, month), [year, month]);
   const today = new Date();
@@ -333,14 +383,31 @@ function MonthView({ year, month, eventsByDate, onEventClick }: {
           const overflow = evs.length - visible.length;
           const isToday = cell.inMonth && cell.iso === `${today.getFullYear()}-${fmt2(today.getMonth()+1)}-${fmt2(today.getDate())}`;
           const col = i % 7;
+          const cellDate = cell.inMonth && cell.iso ? new Date(year, month, cell.day) : null;
+          const canCreate = !!creator && !!creator.groupId && !!cellDate;
+          const isCreating =
+            canCreate &&
+            creator?.creating?.viewSrc === 'month' &&
+            cellDate != null &&
+            creator.creating.startAt.getFullYear() === year &&
+            creator.creating.startAt.getMonth() === month &&
+            creator.creating.startAt.getDate() === cellDate.getDate();
           return (
             <div key={i} className="cal-cell"
+              onClick={() => {
+                if (!canCreate || !cellDate) return;
+                // Default to 09:00 on the clicked cell's date for month view.
+                const at = new Date(cellDate);
+                at.setHours(9, 0, 0, 0);
+                creator!.onStartCreate(at, 'month');
+              }}
               style={{
                 padding:'7px 7px 5px', minWidth:0,
                 borderRight: col < 6 ? '1px solid var(--t-border)' : 'none',
                 borderBottom: i < cells.length - 7 ? '1px solid var(--t-border)' : 'none',
                 background: isToday ? 'color-mix(in oklab, var(--t-accent) 5%, var(--t-bg))' : 'var(--t-bg)',
-                display:'flex', flexDirection:'column', gap:3, cursor:'default',
+                display:'flex', flexDirection:'column', gap:3,
+                cursor: canCreate ? 'cell' : 'default',
                 transition:'background 120ms',
               }}>
               {/* date number + lunar + holiday */}
@@ -377,6 +444,17 @@ function MonthView({ year, month, eventsByDate, onEventClick }: {
                 </div>
                 {isToday && <span className="cal-label" style={{ fontSize:8, color:'var(--t-accent-bright)', letterSpacing:'.1em' }}>TODAY</span>}
               </div>
+              {/* inline creator (month view: one-line input) */}
+              {isCreating && creator && creator.groupId && (
+                <InlineEventCreator
+                  variant="month"
+                  startAt={creator.creating!.startAt}
+                  groupId={creator.groupId}
+                  workspaceId={creator.workspaceId}
+                  onCreated={creator.onCreated}
+                  onCancel={creator.onCancelCreate}
+                />
+              )}
               {/* events */}
               <div style={{ display:'flex', flexDirection:'column', gap:2.5, minWidth:0 }}>
                 {visible.map(ev => <EventBar key={ev.id} ev={ev} onSelect={onEventClick}/>)}
@@ -438,10 +516,11 @@ function WeekEventBlock({ ev, pxPerHour, startH, onSelect }: {
 
 /* ── Week view ──────────────────────────────────────────────────────────── */
 
-function WeekView({ year, month, eventsByDate, onEventClick }: {
+function WeekView({ year, month, eventsByDate, onEventClick, creator }: {
   year: number; month: number;
   eventsByDate: Map<string, CalEvent[]>;
   onEventClick: (e: CalEvent) => void;
+  creator?: CreatorBinding;
 }) {
   const weekDays = useMemo(() => getWeekDays(year, month), [year, month]);
   const START_H = 6, END_H = 23, PX = 56;
@@ -520,11 +599,38 @@ function WeekView({ year, month, eventsByDate, onEventClick }: {
           {weekDays.map((d, di) => {
             const evs = eventsByDate.get(d.iso) ?? [];
             const isToday = d.iso === todayIso;
+            const colDate = new Date(year, month, d.day);
+            const canCreate = !!creator && !!creator.groupId;
+            const isCreatingHere =
+              canCreate &&
+              creator?.creating?.viewSrc === 'week' &&
+              creator.creating.startAt.getFullYear() === colDate.getFullYear() &&
+              creator.creating.startAt.getMonth() === colDate.getMonth() &&
+              creator.creating.startAt.getDate() === colDate.getDate();
+            const creatingTop = isCreatingHere
+              ? ((creator!.creating!.startAt.getHours() + creator!.creating!.startAt.getMinutes() / 60) - START_H) * PX
+              : 0;
             return (
-              <div key={d.iso} style={{
+              <div key={d.iso}
+                onClick={(e) => {
+                  if (!canCreate) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const yOffset = e.clientY - rect.top;
+                  const totalMinutes = (yOffset / PX) * 60;
+                  // Snap to 15-min slots so users don't end up with 09:23 events.
+                  const snapped = Math.max(0, Math.round(totalMinutes / 15) * 15);
+                  const h = START_H + Math.floor(snapped / 60);
+                  const m = snapped % 60;
+                  if (h > END_H) return;
+                  const at = new Date(colDate);
+                  at.setHours(h, m, 0, 0);
+                  creator!.onStartCreate(at, 'week');
+                }}
+                style={{
                 position:'relative',
                 borderRight: di<6 ? '1px solid var(--t-border)' : 'none',
                 background: isToday ? 'color-mix(in oklab, var(--t-accent) 4%, var(--t-bg))' : 'var(--t-bg)',
+                cursor: canCreate ? 'cell' : 'default',
               }}>
                 {hours.map(h => (
                   <div key={h} style={{ height:PX, borderBottom:'1px solid var(--t-border)', position:'relative' }}>
@@ -532,6 +638,18 @@ function WeekView({ year, month, eventsByDate, onEventClick }: {
                   </div>
                 ))}
                 {evs.map(ev => <WeekEventBlock key={ev.id} ev={ev} pxPerHour={PX} startH={START_H} onSelect={onEventClick}/>)}
+                {isCreatingHere && creator && creator.groupId && (
+                  <div style={{ position:'absolute', left:5, right:5, top: creatingTop, zIndex:6 }}>
+                    <InlineEventCreator
+                      variant="week"
+                      startAt={creator.creating!.startAt}
+                      groupId={creator.groupId}
+                      workspaceId={creator.workspaceId}
+                      onCreated={creator.onCreated}
+                      onCancel={creator.onCancelCreate}
+                    />
+                  </div>
+                )}
                 {/* now-line */}
                 {isToday && nowTop >= 0 && (
                   <div style={{ position:'absolute', left:-4, right:0, top:nowTop, zIndex:5, pointerEvents:'none' }}>
@@ -558,10 +676,11 @@ function WeekView({ year, month, eventsByDate, onEventClick }: {
 
 /* ── Agenda view ────────────────────────────────────────────────────────── */
 
-function AgendaView({ year, month, eventsByDate, onEventClick }: {
+function AgendaView({ year, month, eventsByDate, onEventClick, creator }: {
   year: number; month: number;
   eventsByDate: Map<string, CalEvent[]>;
   onEventClick: (e: CalEvent) => void;
+  creator?: CreatorBinding;
 }) {
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${fmt2(today.getMonth()+1)}-${fmt2(today.getDate())}`;
@@ -579,6 +698,14 @@ function AgendaView({ year, month, eventsByDate, onEventClick }: {
       <div style={{ display:'grid', gridTemplateColumns:'72px 1fr', padding:'8px 0' }}>
         {days.map((d, di) => {
           const evs = eventsByDate.get(d.iso) ?? [];
+          const dayDate = new Date(parseInt(d.iso.slice(0,4)), parseInt(d.iso.slice(5,7))-1, parseInt(d.iso.slice(8,10)));
+          const canCreate = !!creator && !!creator.groupId;
+          const isCreatingHere =
+            canCreate &&
+            creator?.creating?.viewSrc === 'agenda' &&
+            creator.creating.startAt.getFullYear() === dayDate.getFullYear() &&
+            creator.creating.startAt.getMonth() === dayDate.getMonth() &&
+            creator.creating.startAt.getDate() === dayDate.getDate();
           return (
             <div key={d.iso} style={{ display:'contents' }}>
               {/* Day rail */}
@@ -598,6 +725,23 @@ function AgendaView({ year, month, eventsByDate, onEventClick }: {
                 </div>
                 {d.isToday && <div style={{ marginTop:4, fontSize:11, fontWeight:600, color:'var(--t-accent-bright)' }}>今天</div>}
                 <div className="cal-meta" style={{ marginTop:6, fontSize:9 }}>{evs.length} 计划</div>
+                {canCreate && !d.isPast && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const at = new Date(dayDate);
+                      at.setHours(9, 0, 0, 0);
+                      creator!.onStartCreate(at, 'agenda');
+                    }}
+                    style={{
+                      marginTop: 8, padding: '4px 8px', display:'inline-flex', alignItems:'center', gap:4,
+                      background:'var(--t-panel-2)', border:'1px solid var(--t-border)', borderRadius:5,
+                      color:'var(--t-fg-3)', fontSize:10.5, cursor:'pointer', fontFamily:'var(--font-mono)',
+                    }}
+                  >
+                    <Plus size={10} strokeWidth={2.2} /> 添加
+                  </button>
+                )}
               </div>
 
               {/* Events */}
@@ -607,9 +751,19 @@ function AgendaView({ year, month, eventsByDate, onEventClick }: {
                 background: d.isToday ? 'color-mix(in oklab, var(--t-accent) 3%, var(--t-bg))' : 'var(--t-bg)',
                 display:'flex', flexDirection:'column', gap:6,
               }}>
-                {evs.length === 0 ? (
+                {isCreatingHere && creator && creator.groupId && (
+                  <InlineEventCreator
+                    variant="agenda"
+                    startAt={creator.creating!.startAt}
+                    groupId={creator.groupId}
+                    workspaceId={creator.workspaceId}
+                    onCreated={creator.onCreated}
+                    onCancel={creator.onCancelCreate}
+                  />
+                )}
+                {evs.length === 0 && !isCreatingHere ? (
                   <div style={{ padding:'10px 12px', fontSize:11.5, color:'var(--t-fg-5)', fontFamily:'var(--font-mono)', letterSpacing:'.04em' }}>
-                    无计划 · ⌘N 新建
+                    无计划 · 点左侧「添加」新建
                   </div>
                 ) : evs.map(ev => {
                   const c = SLOT_COLOR[ev.slot];
@@ -765,7 +919,10 @@ function MiniMonth({ year, month, eventsByDate, onNav }: {
 
 /* ── Sidebar helpers ────────────────────────────────────────────────────── */
 
-function cronShort(c: string): string {
+function cronShort(c: string | null | undefined): string {
+  // Null cron = one-shot event. Label distinctly so the day list/agenda
+  // does not show stale recurring metadata.
+  if (c == null) return '一次性';
   if (!c || c === 'ad-hoc') return 'ad-hoc';
   if (c === '0 8 * * 1-5')  return 'Mon-Fri 08';
   if (c === '0 9 * * 1-5')  return 'Mon-Fri 09';
@@ -826,9 +983,10 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
     return nearest;
   }, [schedules, groupNames, slotOf]);
 
-  // Groups with their schedules
+  // Groups with their schedules. cron is "first-found" — known cosmetic
+  // limitation since 1-per-group was lifted (see plan: known limitations).
   const groupEntries = useMemo(() => {
-    const seen = new Map<string, { name: string; slot: string; count: number; cron: string }>();
+    const seen = new Map<string, { name: string; slot: string; count: number; cron: string | null }>();
     for (const sc of schedules) {
       if (!seen.has(sc.group_id)) {
         seen.set(sc.group_id, {
@@ -1035,7 +1193,7 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
               <div style={{ fontSize:12, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                 {nextSchedule.name}
               </div>
-              <div className="cal-meta" style={{ fontSize:9 }}>{nextSchedule.sc.cron_expression}</div>
+              <div className="cal-meta" style={{ fontSize:9 }}>{nextSchedule.sc.cron_expression ?? '一次性'}</div>
             </div>
           </div>
         ) : (
@@ -1174,7 +1332,7 @@ function EventDetailPanel({ event, schedule, onClose, onDelete }: {
         <section>
           <div className="cal-label" style={{ fontSize:9, marginBottom:8 }}>Schedule</div>
           <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-            <KV k="cron" v={event.cronExpr}/>
+            <KV k="cron" v={event.cronExpr ?? '一次性 · 仅触发 1 次'}/>
             <KV k="下次触发" v={schedule?.next_run_time ? new Date(schedule.next_run_time).toLocaleString('zh-CN') : '—'}/>
             <KV k="时区" v="Asia/Shanghai · GMT+8"/>
             {schedule && <KV k="任务" v={describeSchedule(schedule)}/>}
@@ -1248,6 +1406,8 @@ export default function CalendarPage() {
   const [drawerGroupId, setDrawerGroupId] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  // Inline event creator — one open at a time across all 3 views.
+  const [creating, setCreating] = useState<{ startAt: Date; viewSrc: ViewMode } | null>(null);
 
   const groups    = useInboxStore(s => s.groups);
   const currentId = useWorkspaceStore(s => s.currentId);
@@ -1343,15 +1503,25 @@ export default function CalendarPage() {
               {error}
             </div>
           )}
-          {!loading && !error && view === 'month' && (
-            <MonthView year={year} month={month} eventsByDate={eventsByDate} onEventClick={setSelectedEvent}/>
-          )}
-          {!loading && !error && view === 'week' && (
-            <WeekView year={year} month={month} eventsByDate={eventsByDate} onEventClick={setSelectedEvent}/>
-          )}
-          {!loading && !error && view === 'agenda' && (
-            <AgendaView year={year} month={month} eventsByDate={eventsByDate} onEventClick={setSelectedEvent}/>
-          )}
+          {!loading && !error && (() => {
+            // Inline creator binding shared by all 3 views. group_id falls
+            // back to the first inbox group — same hack used by the existing
+            // sidebar "+ 新建定时计划" button (CalendarPage.tsx:1319 above).
+            // TODO: replace with a proper active-group resolver once the
+            // workspace store exposes a primary group per workspace.
+            const fallbackGroupId = groups[0]?.id ?? null;
+            const creator: CreatorBinding = {
+              creating,
+              onStartCreate: (startAt, viewSrc) => setCreating({ startAt, viewSrc }),
+              onCancelCreate: () => setCreating(null),
+              onCreated: () => { setCreating(null); void load(); },
+              groupId: fallbackGroupId,
+              workspaceId: currentId ?? undefined,
+            };
+            if (view === 'month') return <MonthView year={year} month={month} eventsByDate={eventsByDate} onEventClick={setSelectedEvent} creator={creator}/>;
+            if (view === 'week')  return <WeekView year={year} month={month} eventsByDate={eventsByDate} onEventClick={setSelectedEvent} creator={creator}/>;
+            return <AgendaView year={year} month={month} eventsByDate={eventsByDate} onEventClick={setSelectedEvent} creator={creator}/>;
+          })()}
         </div>
 
         {/* event detail */}
