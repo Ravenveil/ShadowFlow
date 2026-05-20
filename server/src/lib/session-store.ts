@@ -56,7 +56,25 @@ export interface PersistentSessionStore<T> {
   loadAll(): Promise<void>;
 }
 
-export function createSessionStore<T extends object>(): PersistentSessionStore<T> {
+/**
+ * Options for createSessionStore.
+ *
+ * `migrate` runs on every JSON record read from disk in loadAll(). Use it to
+ * normalize old on-disk shapes into the current T. Return the (possibly
+ * mutated) object; throw or return undefined to skip that record.
+ *
+ * S1 (D8, skill-team-conversion-design-v1.md §6) — SessionRecord gained
+ * `messages: ConversationMessage[]` + `version: 1`. Sessions written before
+ * S1 lack both fields; we inject `messages = []` and bump `version` 0 → 1 so
+ * downstream code (ConversationRuntime, history replay) can assume the shape.
+ */
+export interface SessionStoreOptions<T> {
+  migrate?: (raw: unknown) => T | undefined;
+}
+
+export function createSessionStore<T extends object>(
+  opts: SessionStoreOptions<T> = {},
+): PersistentSessionStore<T> {
   const mem = new Map<string, T>();
 
   function sessionPath(id: string): string {
@@ -124,7 +142,12 @@ export function createSessionStore<T extends object>(): PersistentSessionStore<T
         if (!/^[A-Za-z0-9_-]+$/.test(id)) continue;
         try {
           const text = await fs.readFile(path.join(SESSIONS_DIR, f), 'utf8');
-          const parsed = JSON.parse(text) as T;
+          const raw = JSON.parse(text) as unknown;
+          // Run migrator first so old shapes get normalized before they enter
+          // the typed memory map. A migrator that returns undefined means the
+          // record is intentionally dropped (e.g. unrecoverable schema).
+          const parsed = opts.migrate ? opts.migrate(raw) : (raw as T);
+          if (parsed === undefined) continue;
           mem.set(id, parsed);
           loaded += 1;
         } catch (err) {

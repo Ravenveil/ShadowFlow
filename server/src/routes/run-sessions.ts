@@ -44,6 +44,13 @@ import { getOrCreateProject } from '../storage/projects';
 // hot reload + crash; sensitive fields persisted under .shadowflow/ (gitignored,
 // same trust boundary as settings.json).
 import { createSessionStore } from '../lib/session-store';
+// S1 (skill-team-conversion-design-v1.md §5) — ContentBlock + ConversationMessage
+// data model; SessionRecord now carries `messages` so the future
+// ConversationRuntime (S5) can replay multi-turn history across SSE reconnects.
+import {
+  SESSION_SCHEMA_VERSION,
+  type ConversationMessage,
+} from '../lib/conversation-types';
 // S1.2 (intent-workflow-design-v1 §4.1) — TS-side intent classifier. Runs in
 // the SSE handler before the assembler kicks off so the front-end gets a
 // `classify` frame within ~1ms of stream open (LLM's own <sf:classify .../>
@@ -105,6 +112,19 @@ interface SessionRecord {
    * true to preserve current behavior).
    */
   auto_critique?: boolean;
+  /**
+   * S1 (skill-team-conversion-design-v1.md §5 / D8) — session schema version.
+   * 0 / missing  → pre-S1, no `messages` field on disk.
+   * 1            → current; SessionRecord guarantees `messages: ConversationMessage[]`.
+   * Migrator in createSessionStore() below normalizes 0 → 1 on load.
+   */
+  version?: number;
+  /**
+   * S1 — multi-turn conversation history. ContentBlock-shaped, mirrors
+   * Anthropic Messages API. Populated by ConversationRuntime (S5) once it
+   * lands; for now writers may leave it empty.
+   */
+  messages?: ConversationMessage[];
   created_at: number;
 }
 
@@ -251,7 +271,22 @@ function renderConversationHistoryBlock(
 // JSON-file persistence. Hydrated at module load (fire-and-forget; reads
 // before hydration completes simply miss until the file lands, which is
 // fine because in normal flows POST creates the session before any GET).
-const sessionStore = createSessionStore<SessionRecord>();
+// S1 (D8) — migrator runs on every record read from disk in loadAll(). Old
+// records (pre-S1) lack `messages` + `version`; we inject `messages: []` and
+// bump version to the current schema. We're defensive about the raw shape:
+// anything not a plain object is dropped (warning logged by the caller).
+const sessionStore = createSessionStore<SessionRecord>({
+  migrate: (raw): SessionRecord | undefined => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+    const rec = raw as Partial<SessionRecord> & Record<string, unknown>;
+    // Only the two new fields are touched; everything else round-trips as-is.
+    if (!Array.isArray(rec.messages)) rec.messages = [];
+    if (typeof rec.version !== 'number' || rec.version < SESSION_SCHEMA_VERSION) {
+      rec.version = SESSION_SCHEMA_VERSION;
+    }
+    return rec as SessionRecord;
+  },
+});
 void sessionStore.loadAll();
 
 // S2.3 — module-level singleton. One bucket per session; cleanup happens
