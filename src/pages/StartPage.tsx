@@ -890,15 +890,20 @@ export default function StartPage() {
       const skillId = item.id.slice('skill:'.length);
       const insert = `${mode}${skillId} `;
       setComposer(before + insert + after);
+      // Pull the display name + counts from installedSkills so the toast
+      // and pendingSkill carry the human-readable "论文评审团队" instead
+      // of the bare id token "@paper-review".
+      const skill = installedSkills?.find((s) => s.id === skillId);
+      const displayName = skill?.name ?? skillId;
       setPendingSkill({
         skill_id: skillId,
-        name: item.title,
+        name: displayName,
         is_new: false,
-        source_label: item.subtitle ?? 'builtin',
-        counts: {},
+        source_label: skill?.source ?? 'builtin',
+        counts: skill?.counts ?? {},
         truncated: false,
       });
-      setToast(`已物化 Skill 包: ${item.title}`);
+      setToast(`已物化 Skill 包: ${displayName}`);
       setTimeout(() => {
         const el = composerRef.current;
         if (el) {
@@ -955,7 +960,13 @@ export default function StartPage() {
   // commands. The `skill:` id prefix lets handleCommandPick dispatch.
   const commandMenuItems: CommandMenuItem[] = useMemo(() => {
     if (!commandMenu) return [];
-    const skillItems: CommandMenuItem[] = (installedSkills ?? []).map((s) => {
+    // Stable alphabetical order by display name so the menu doesn't shuffle
+    // between renders (and so `paper-review` lands ahead of `bmad` by
+    // localeCompare, matching docs).
+    const sortedSkills = [...(installedSkills ?? [])].sort((a, b) =>
+      a.name.localeCompare(b.name, 'zh-CN'),
+    );
+    const skillItems: CommandMenuItem[] = sortedSkills.map((s) => {
       const counts = s.counts as Record<string, number | undefined>;
       const agents = counts.agents;
       const edges = counts.edges;
