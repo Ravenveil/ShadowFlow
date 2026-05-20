@@ -488,7 +488,9 @@ export default function LandingPage() {
 
   const toggleLang = () => setLang((l) => (l === 'EN' ? 'CN' : 'EN'));
   const openEditor = () => navigate('/start');
-  const pickTemplate = (alias: string) => navigate(`/editor/${alias}`);
+  // 2026-05-20 — /editor 已下架；落地页模板卡跳 /start 而不是旧 editor 路径。
+  // 模板内容在 /start 的 Skill Pack 区域统一展示。
+  const pickTemplate = (_alias: string) => navigate('/start');
   const goImport = () => {
     const cid = cidRef.current?.value?.trim();
     if (cid) navigate(`/import?cid=${encodeURIComponent(cid)}`);
@@ -529,15 +531,16 @@ export default function LandingPage() {
                 {item}
               </a>
             ))}
+            {/* 2026-05-20 — /catalog 已下架；nav 链接改为 /agents（Agent 一等公民页）。 */}
             <a
-              href="/catalog"
-              onClick={(e) => { e.preventDefault(); navigate('/catalog'); }}
+              href="/agents"
+              onClick={(e) => { e.preventDefault(); navigate('/agents'); }}
               style={{ fontSize: 13, fontWeight: 500, color: 'var(--t-accent-bright)', textDecoration: 'none', cursor: 'pointer' }}
               onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--t-fg)')}
               onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--t-accent-bright)')}
-              data-testid="landing-nav-catalog"
+              data-testid="landing-nav-agents"
             >
-              {lang === 'EN' ? 'Catalog' : 'Agent 目录'}
+              {lang === 'EN' ? 'Agents' : 'Agent 列表'}
             </a>
           </nav>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -696,7 +699,8 @@ export default function LandingPage() {
               </div>
               <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 36, fontWeight: 900, letterSpacing: '-.02em', margin: 0 }}>{t.tplH2}</h2>
             </div>
-            <button className="sf-btn sf-btn-ghost" onClick={() => navigate('/templates')}>{t.tplViewAll}</button>
+            {/* 2026-05-20 — /templates 已下架；View All 跳 /start。 */}
+            <button className="sf-btn sf-btn-ghost" onClick={() => navigate('/start')}>{t.tplViewAll}</button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
             {t.templates.map(({ alias, title, cjk, desc }) => (

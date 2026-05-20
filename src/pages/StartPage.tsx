@@ -613,7 +613,7 @@ interface SkillPackSectionProps {
 function SkillPackSection({ onSelect, disabled }: SkillPackSectionProps) {
   const { t } = useI18n();
   return (
-    <section style={{ width: '100%' }}>
+    <section style={{ width: '100%' }} data-section="skill-pack">
       <div className="hf-label" style={{ marginBottom: 10 }}>
         {t('start.skillPacksLabel')}
       </div>
@@ -1758,26 +1758,35 @@ export default function StartPage() {
                 gap: 12,
               }}
             >
+              {/* 2026-05-20 — 三张 PrimitiveCard 跳转目标重定。
+                  /builder 已 redirect 到 /start（旧 Builder 流程作废），原本
+                  在这里点"创建 Agent / 创建 Team / 从模板"会回旋回当前页。
+                  新方向：Agent / Team 卡片直接到列表页（Quick Hire / Team 组装
+                  在那里）；模板卡片滚到下面 Skill Pack 区。 */}
               <PrimitiveCard
                 testId="primitive-card-agent"
                 glyph="◉"
                 title={t('start.createAgent')}
                 description={t('start.createAgentDesc')}
-                onClick={() => navigate('/builder?mode=single')}
+                onClick={() => navigate('/agents')}
               />
               <PrimitiveCard
                 testId="primitive-card-team"
                 glyph="⊞"
                 title={t('start.createTeam')}
                 description={t('start.createTeamDesc')}
-                onClick={() => navigate('/builder?mode=team')}
+                onClick={() => navigate('/teams')}
               />
               <PrimitiveCard
                 testId="primitive-card-templates"
                 glyph="◆"
                 title={t('start.fromTemplate')}
                 description={t('start.fromTemplateDesc')}
-                onClick={() => navigate('/templates')}
+                onClick={() => {
+                  document
+                    .querySelector('[data-section="skill-pack"]')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
               />
             </div>
           </div>
@@ -1823,7 +1832,10 @@ export default function StartPage() {
           <SkillPackSection onSelect={handleSkillPack} disabled={submitting} />
 
           {/* Recent drafts — preserved feature */}
-          <RecentDrafts onNavigateCatalog={() => navigate('/catalog')} />
+          {/* 2026-05-20 — RecentDrafts 原本跳 /catalog（已下架的 published Agents
+              库），现在统一跳 /agents（Agent 列表 = Agent 一等公民页）。
+              prop 名 onNavigateCatalog 保留不动避免到处改类型 + 测试。 */}
+          <RecentDrafts onNavigateCatalog={() => navigate('/agents')} />
 
           {/* GoalClarityWizard trigger — preserved feature */}
           {!showWizard && (

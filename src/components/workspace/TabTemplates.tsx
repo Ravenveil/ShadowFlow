@@ -252,12 +252,13 @@ export function TabTemplates({ onNavigateToTeams }: TabTemplatesProps = {}) {
           <button className="fb-btn fb-btn-ghost" style={{ flex: 1, display: 'flex', gap: 5, alignItems: 'center', justifyContent: 'center', fontSize: 12 }} onClick={() => setDagPreviewOpen(true)}>
             <span style={{ width: 13, height: 13, display: 'flex' }}>{FBIcons.dag}</span> 看 DAG
           </button>
+          {/* 2026-05-20 — /editor 已下架；按钮改名为"开始这个模板"，跳 /start。 */}
           <button
             className="fb-btn fb-btn-ghost"
             style={{ flex: 1, display: 'flex', gap: 5, alignItems: 'center', justifyContent: 'center', fontSize: 12 }}
-            onClick={() => navigate('/editor/academic-paper')}
+            onClick={() => navigate('/start')}
           >
-            在编辑器中打开
+            开始这个模板
           </button>
           <button className="fb-btn fb-btn-primary" style={{ flex: 1, display: 'flex', gap: 5, alignItems: 'center', justifyContent: 'center', fontSize: 12 }} onClick={handleFork}>
             fork 到 Teams <span style={{ width: 13, height: 13, display: 'flex' }}>{FBIcons.arrow}</span>

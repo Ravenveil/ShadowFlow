@@ -13,7 +13,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { openQuickSwitcher } from './QuickSwitcher';
-import { Home, MessageCircle, Users, Bot, LayoutTemplate, Search, PanelLeftClose, PanelLeftOpen, Folder, CalendarDays } from 'lucide-react';
+import { Home, MessageCircle, Users, Bot, Search, PanelLeftClose, PanelLeftOpen, Folder, CalendarDays } from 'lucide-react';
 import { WorkspaceSelector } from '../workspace/WorkspaceStrip';
 import type { LucideIcon } from 'lucide-react';
 import { HfDot } from './HfAtoms';
@@ -52,7 +52,9 @@ const buildNavItems = (t: (key: string) => string, chatBadge: number, chatTo: st
   { k: 'chat',      Icon: MessageCircle,  label: t('shell.navChat'),      hint: '⌘2', to: chatTo, badge: chatBadge > 0 ? chatBadge : undefined },
   { k: 'teams',     Icon: Users,          label: t('shell.navTeams'),     hint: '⌘3', to: '/teams' },
   { k: 'agents',    Icon: Bot,            label: t('shell.navAgents'),    hint: '⌘4', to: '/agents' },
-  { k: 'templates', Icon: LayoutTemplate, label: t('shell.navTemplates'), hint: '⌘5', to: '/templates' },
+  // 2026-05-20 — "模板" 入口下架。旧 /templates 跳 /editor:alias 走的是已删的
+  // Skill Studio 编辑器；Skill Pack 时代的库放在 /start。⌘5 编号空出来留给
+  // 后续新的一等公民页面（projects 仍是 ⌘7 以保持肌肉记忆）。
   { k: 'calendar',  Icon: CalendarDays,  label: t('shell.navCalendar'),  hint: '⌘6', to: '/calendar' },
   // Story 15.24 — Projects nav entry (Project + Conversation history page).
   { k: 'projects',  Icon: Folder,        label: t('projects.navLabel'),  hint: '⌘7', to: '/projects' },

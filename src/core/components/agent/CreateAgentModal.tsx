@@ -57,8 +57,10 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
   }
 
   function handleAdvancedCreate() {
+    // 2026-05-20 — /builder 已下架，"高级创建"统一回到 /start
+    // 让用户通过 Skill Pack 起一个含目标 Agent 的完整团队流。
     onClose();
-    navigate('/builder');
+    navigate('/start');
   }
 
   function handleOverlayClick(e: React.MouseEvent) {

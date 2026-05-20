@@ -8,8 +8,8 @@ import { HfLayout } from './components/hifi/HfLayout';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const InboxPage = lazy(() => import('./pages/InboxPage'));
-const EditorPage = lazy(() => import('./pages/EditorPage'));
-const TemplatesPage = lazy(() => import('./pages/TemplatesPage'));
+// 2026-05-20 — EditorPage / TemplatesPage / CatalogPage 模块不再被 lazy import
+// （路由全部 redirect 到 /start 或 /agents）。源文件保留，等后续 audit 决定彻删时机。
 const ImportPage = lazy(() => import('./pages/ImportPage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
 const ChatPage = lazy(() => import('./pages/ChatPage'));
@@ -17,7 +17,6 @@ const AgentDMPage = lazy(() => import('./pages/AgentDMPage'));
 // BuilderPage is intentionally NOT routed — /builder is hard-redirected to
 // /start below. The page file is kept on disk for now but no longer
 // reachable through navigation.
-const CatalogPage = lazy(() => import('./pages/CatalogPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
 const EvalsPage = lazy(() => import('./pages/EvalsPage'));
@@ -70,10 +69,13 @@ export function AppRoutes() {
           {/* ── Application pages (Hi-Fi v2 chrome: HfLayout sidebar shell) ── */}
           <Route element={<HfLayout />}>
             <Route path="/inbox" element={<InboxPage />} />
-            <Route path="/templates" element={<TemplatesPage />} />
+            {/* 2026-05-20 — /templates /editor /catalog 全部下架。Skill Pack
+                时代统一从 /start 进入；旧 TemplatesPage / EditorPage / CatalogPage
+                组件文件保留只是不再可达，避免误删的副作用（UI 保护规则）。 */}
+            <Route path="/templates" element={<Navigate to="/start" replace />} />
             <Route path="/import" element={<ImportPage />} />
-            <Route path="/editor" element={<EditorPage />} />
-            <Route path="/editor/:templateId" element={<EditorPage />} />
+            <Route path="/editor" element={<Navigate to="/start" replace />} />
+            <Route path="/editor/:templateId" element={<Navigate to="/start" replace />} />
             <Route path="/runs" element={<RunsListPage />} />
             <Route path="/runs/:runId" element={<RunDetailPage />} />
             {/* /chat without a groupId renders ChatPage's empty state, so the
@@ -85,7 +87,7 @@ export function AppRoutes() {
             <Route path="/agent-dm/:agentId" element={<AgentDMPage />} />
             <Route path="/builder" element={<Navigate to="/start" replace />} />
             <Route path="/builder/*" element={<Navigate to="/start" replace />} />
-            <Route path="/catalog" element={<CatalogPage />} />
+            <Route path="/catalog" element={<Navigate to="/agents" replace />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/knowledge" element={<KnowledgePage />} />
             <Route path="/evals" element={<EvalsPage />} />

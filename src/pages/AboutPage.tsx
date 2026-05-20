@@ -360,12 +360,13 @@ export default function AboutPage() {
               ))}
             </nav>
 
+            {/* 2026-05-20 — /editor 已下架；CTA 改为跳 /start（Skill Pack 起手）。 */}
             <button
-              onClick={() => navigate('/editor')}
+              onClick={() => navigate('/start')}
               className="shrink-0 px-3 py-1 rounded-pill text-xs font-medium transition-colors duration-150"
               style={{ background: 'var(--t-accent)', color: 'var(--t-accent-ink)' }}
             >
-              ▶ 打开编辑器
+              ▶ 开始
             </button>
           </div>
         </header>
@@ -490,20 +491,21 @@ export default function AboutPage() {
             <h2 className="text-2xl font-bold text-white/90 mb-6">
               60 秒内跑一个真实 Agent 团队。
             </h2>
+            {/* 2026-05-20 — /editor /templates 均已下架；两个 CTA 都跳 /start。 */}
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
-                onClick={() => navigate('/editor')}
+                onClick={() => navigate('/start')}
                 className="px-6 py-2.5 rounded-pill text-sm font-semibold transition-colors duration-150"
                 style={{ background: 'var(--t-accent)', color: 'var(--t-accent-ink)' }}
               >
-                ▶ 打开编辑器
+                ▶ 开始
               </button>
               <button
-                onClick={() => navigate('/templates')}
+                onClick={() => navigate('/start')}
                 className="px-6 py-2.5 rounded-pill text-sm font-medium border transition-colors duration-150"
                 style={{ borderColor: 'var(--t-border)', color: 'var(--t-fg-2)' }}
               >
-                浏览 6 个种子模板
+                浏览 Skill Pack
               </button>
             </div>
           </div>
