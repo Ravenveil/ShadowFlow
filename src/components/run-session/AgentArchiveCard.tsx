@@ -26,6 +26,13 @@ type SecState = 'done' | 'run' | 'pending';
 
 export interface AgentArchiveCardProps {
   agent: RunSessionNode;
+  /** Full agent list for the inline mini-roster on the right of the identity bar.
+   *  When undefined or length<=1, no roster is rendered. */
+  agents?: RunSessionNode[];
+  /** Selected id, used to highlight one chip. Defaults to agent.id. */
+  selectedId?: string;
+  onSelectAgent?: (id: string) => void;
+  onOpenPicker?: () => void;
 }
 
 const MODEL_RE = /claude|gpt|gemini|deepseek|qwen/i;
@@ -131,7 +138,13 @@ function highlightPersona(text: string): React.ReactNode {
   });
 }
 
-export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({ agent }) => {
+export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({
+  agent,
+  agents,
+  selectedId,
+  onSelectAgent,
+  onOpenPicker,
+}) => {
   const tools = deriveToolLists(agent);
   const modelText = agent.model ?? findModelChip(agent.chips) ?? '未指定';
 
@@ -184,6 +197,16 @@ export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({ agent }) => 
           >
             {pill.text}
           </span>
+          {/* Inline mini-roster — v3 .ag-sw 设计：和 identity 行同行右侧。
+              过去这个 roster 是 AgentPanel 上面单独一行，跟设计稿不一致，已并到 ar-meta。 */}
+          {agents && agents.length > 1 && (
+            <InlineRoster
+              agents={agents}
+              selectedId={selectedId ?? agent.id}
+              onSelect={onSelectAgent}
+              onOpenPicker={onOpenPicker}
+            />
+          )}
         </div>
 
         {/* ── 01 角色 ─────────────────────────────────────────────── */}
@@ -302,6 +325,51 @@ export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({ agent }) => 
   );
 };
 
+/** Mini avatar rail rendered inline in ar-meta — mirrors v3 `.ag-sw`. */
+const InlineRoster: React.FC<{
+  agents: RunSessionNode[];
+  selectedId: string;
+  onSelect?: (id: string) => void;
+  onOpenPicker?: () => void;
+}> = ({ agents, selectedId, onSelect, onOpenPicker }) => {
+  const VISIBLE = 7;
+  const overflow = agents.length > VISIBLE ? agents.length - (VISIBLE - 1) : 0;
+  const visible = overflow > 0 ? agents.slice(0, VISIBLE - 1) : agents;
+  return (
+    <div className="aac-sw">
+      <div className="aac-sw-rail">
+        {visible.map((a) => {
+          const st = a.status === 'building' ? 'running' : a.status === 'ready' ? 'ok' : a.status === 'pending' ? 'pending' : 'idle';
+          const on = a.id === selectedId;
+          return (
+            <button
+              key={a.id}
+              type="button"
+              className={`aac-sw-av ${on ? 'on' : ''}`}
+              data-st={st}
+              title={`${a.title}${a.sub ? ` · ${a.sub}` : ''} · ${st}`}
+              onClick={() => onSelect?.(a.id)}
+            >
+              {a.avatarChar || a.title.charAt(0) || '?'}
+            </button>
+          );
+        })}
+      </div>
+      {overflow > 0 && onOpenPicker && (
+        <button
+          type="button"
+          className="aac-sw-more"
+          onClick={onOpenPicker}
+          title="查看全部 agent · ⌘K"
+        >
+          +{overflow}
+          <span className="chev">▾</span>
+        </button>
+      )}
+    </div>
+  );
+};
+
 const ModelCell: React.FC<{ label: string; value: string; highlight?: boolean }> = ({
   label,
   value,
@@ -370,17 +438,19 @@ const aacStyles = `
 
 .aac-meta {
   display: flex; align-items: center; gap: 10px;
-  padding: 14px 24px;
+  padding: 14px 20px;
   background: var(--t-panel-2);
   border-bottom: 1px solid var(--t-border);
+  flex-wrap: wrap;
 }
 .aac-av {
-  width: 24px; height: 24px; border-radius: 6px;
+  width: 32px; height: 32px; border-radius: 8px;
   background: var(--t-accent); color: var(--t-accent-ink);
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono, monospace); font-size: 11px; font-weight: 800;
+  font-family: var(--font-mono, monospace); font-size: 14px; font-weight: 800;
+  flex: none;
 }
-.aac-nm { font-size: 13px; font-weight: 600; letter-spacing: -.005em; color: var(--t-fg); }
+.aac-nm { font-size: 14px; font-weight: 700; letter-spacing: -.005em; color: var(--t-fg); }
 .aac-sub, .aac-stp { font-family: var(--font-mono, monospace); font-size: 10.5px; color: var(--t-fg-4); }
 .aac-pill {
   margin-left: auto;
@@ -388,6 +458,7 @@ const aacStyles = `
   letter-spacing: .12em; text-transform: uppercase;
   padding: 3px 10px; border-radius: 4px;
   display: inline-flex; align-items: center; gap: 6px;
+  flex: none;
 }
 .aac-pill::before {
   content: ''; width: 5px; height: 5px; border-radius: 50%;
@@ -395,6 +466,86 @@ const aacStyles = `
 }
 .aac-pill.pulse::before { animation: aacPulse 1.4s ease-in-out infinite; }
 @keyframes aacPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.7); } }
+
+/* Inline mini-roster (v3 .ag-sw) — sits to the right of the pill */
+.aac-sw {
+  position: relative; display: flex; align-items: center; gap: 6px;
+  max-width: 260px; flex: none;
+}
+.aac-sw-rail {
+  display: flex; gap: 5px; align-items: center;
+  overflow-x: auto; scroll-behavior: smooth;
+  scrollbar-width: none; -ms-overflow-style: none;
+  padding: 3px 12px 3px 3px;
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%);
+}
+.aac-sw-rail::-webkit-scrollbar { display: none; }
+.aac-sw-av {
+  position: relative; flex: 0 0 auto;
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--t-panel); border: 1.5px solid var(--t-border);
+  color: var(--t-fg-3);
+  font-family: var(--font-mono, monospace); font-weight: 700; font-size: 10.5px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .14s, border-color .14s, color .14s, transform .12s;
+  padding: 0;
+}
+.aac-sw-av:hover {
+  background: var(--t-panel-3);
+  color: var(--t-fg);
+  transform: translateY(-1px);
+}
+.aac-sw-av:active { transform: scale(.92); }
+.aac-sw-av.on {
+  background: var(--t-accent-tint);
+  border-color: var(--t-accent);
+  color: var(--t-accent-bright);
+}
+.aac-sw-av[data-st="running"]::before {
+  content: ""; position: absolute; right: -2px; top: -2px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--t-accent);
+  box-shadow: 0 0 0 2px var(--t-panel-2);
+  z-index: 2;
+}
+.aac-sw-av[data-st="running"]::after {
+  content: ""; position: absolute; right: -2px; top: -2px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--t-accent); pointer-events: none;
+  animation: aacSwHalo 1.6s ease-out infinite;
+}
+@keyframes aacSwHalo {
+  0%   { opacity: .55; transform: scale(1); }
+  100% { opacity: 0;   transform: scale(3.2); }
+}
+.aac-sw-av[data-st="ok"]::before {
+  content: ""; position: absolute; right: -2px; top: -2px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--t-ok);
+  box-shadow: 0 0 0 2px var(--t-panel-2);
+}
+.aac-sw-av[data-st="pending"] { opacity: .55; border-style: dashed; }
+.aac-sw-av[data-st="idle"]    { opacity: .42; }
+
+.aac-sw-more {
+  flex: 0 0 auto;
+  height: 28px; padding: 0 9px; border-radius: 8px;
+  border: 1px dashed var(--t-border);
+  background: transparent;
+  color: var(--t-fg-4);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px;
+  transition: color .14s, border-color .14s, background .14s;
+}
+.aac-sw-more:hover {
+  color: var(--t-fg);
+  border-color: var(--t-fg-4);
+  background: var(--t-panel);
+}
+.aac-sw-more .chev { font-size: 8px; opacity: .7; }
 
 .aac-sec { position: relative; padding: 22px 24px 24px; }
 .aac-sec + .aac-sec { border-top: 1px solid var(--t-border); }

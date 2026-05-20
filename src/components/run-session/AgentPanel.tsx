@@ -87,21 +87,29 @@ const AgentPanel: React.FC<AgentPanelProps> = ({ session }) => {
         <AgentEmptyState />
       ) : (
         <>
-          <AgentRoster
-            agents={agents}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onOpenPicker={() => setPickerOpen(true)}
-          />
+          {/* 2026-05-20 — AgentRoster 不再单独渲染一行。v3 设计稿把 mini-roster
+              内嵌到 ar-meta（identity 行）右侧，AgentArchiveCard 现在直接消费
+              agents/selectedId/onSelectAgent/onOpenPicker，渲染同一行的 .aac-sw。
+              旧 AgentRoster 组件文件保留（UI 保护规则：只删入口不删文件）。 */}
           {selectedAgent ? (
-            // 2026-05-20 — v3 archive-card replaces the bordered SkillSection
-            // stack for the default render path. AgentDetail is preserved
-            // (not deleted, per "UI 保护规则: 只能加不能删") for an A/B toggle
-            // and for the pending-agent CTA branch which still lives there.
             selectedAgent.status === 'pending' ? (
-              <AgentDetail agent={selectedAgent} />
+              <>
+                <AgentRoster
+                  agents={agents}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onOpenPicker={() => setPickerOpen(true)}
+                />
+                <AgentDetail agent={selectedAgent} />
+              </>
             ) : (
-              <AgentArchiveCard agent={selectedAgent} />
+              <AgentArchiveCard
+                agent={selectedAgent}
+                agents={agents}
+                selectedId={selectedId}
+                onSelectAgent={setSelectedId}
+                onOpenPicker={() => setPickerOpen(true)}
+              />
             )
           ) : (
             <AgentEmptyState />
