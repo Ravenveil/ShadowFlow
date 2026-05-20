@@ -741,11 +741,13 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ====== Story 15.28 — Skill Studio secondary CTA ======
+        {/* ====== Story 15.28 — Skill Pack secondary CTA ======
+            2026-05-20 — "Skill Studio" 概念已下线，统一改用 "Skill Pack"；
+            CTA 跳转入口同步由 /run-session 切到 /start（Skill Pack 选择页）。
             Placed above the main CTA Band so visitors see the BYOK pitch
             before the GitHub one. All existing sections are preserved. */}
         <section
-          data-testid="landing-skill-studio-cta"
+          data-testid="landing-skill-pack-cta"
           style={{
             position: 'relative',
             maxWidth: 1100,
@@ -767,20 +769,20 @@ export default function LandingPage() {
               color: 'var(--t-fg)',
             }}
           >
-            {lang === 'EN' ? 'Try the Skill Studio' : '试试 Skill Studio'}
+            {lang === 'EN' ? 'Pick a Skill Pack' : '挑一个 Skill Pack'}
           </h2>
           <p style={{ fontSize: 15, color: 'var(--t-fg-3)', margin: '0 auto 22px', maxWidth: 580 }}>
             {lang === 'EN'
-              ? 'No signup required — bring your own API key and generate HTML / YAML / Markdown artifacts.'
-              : '无需注册，自带 API Key 即可生成 HTML / YAML / Markdown 三类 artifact。'}
+              ? 'No signup required — bring your own API key, pick a Skill Pack, and ship an AI team in minutes.'
+              : '无需注册，自带 API Key，挑一个 Skill Pack，几分钟就能拉起一个 AI 团队。'}
           </p>
           <button
             type="button"
-            onClick={() => navigate('/run-session')}
+            onClick={() => navigate('/start')}
             className="sf-btn sf-btn-primary"
             style={{ height: 46, padding: '0 26px', fontSize: 14 }}
           >
-            {lang === 'EN' ? 'Try Skill Studio →' : '试试 Skill Studio →'}
+            {lang === 'EN' ? 'Browse Skill Packs →' : '查看 Skill Pack →'}
           </button>
         </section>
 
