@@ -903,7 +903,7 @@ export default function StartPage() {
         counts: skill?.counts ?? {},
         truncated: false,
       });
-      setToast(`已物化 Skill 包: ${displayName}`);
+      setToast(`已选 Skill: ${displayName}`);
       setTimeout(() => {
         const el = composerRef.current;
         if (el) {
@@ -977,8 +977,8 @@ export default function StartPage() {
       return {
         id: `skill:${s.id}`,
         title: `${commandMenu.mode}${s.id}`,
-        subtitle: `${s.name}${detail ? ` · ${detail}` : ''} · 物化为 team`,
-        hint: 'skill pack',
+        subtitle: `${s.name}${detail ? ` · ${detail}` : ''}`,
+        hint: 'skill',
       };
     });
     if (commandMenu.mode === '@') {
