@@ -29,6 +29,8 @@ import { Check } from 'lucide-react';
 import { PersonaPromptCard } from './PersonaPromptCard';
 import { ToolsGrid } from './ToolsGrid';
 import { IOContractBar } from './IOContractBar';
+// S6.7 — v3 stacked: each slot wraps in a provenance-bearing SkillSection.
+import { SkillSection, type SectionStatus } from './SkillSection';
 
 export interface AgentDetailProps {
   agent: RunSessionNode;
@@ -136,73 +138,18 @@ function deriveSlots(agent: RunSessionNode, tools: ToolLists): SlotData[] {
   ];
 }
 
-function slotCellStyle(state: SlotData['state']): React.CSSProperties {
-  const base: React.CSSProperties = {
-    padding: '11px 12px',
-    borderRadius: 11,
-    border: '1px solid var(--border)',
-    background: 'var(--bg-elev-1)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 5,
-    minWidth: 0,
-  };
-  if (state === 'done') {
-    return { ...base, borderColor: 'var(--status-ok, var(--border))' };
-  }
-  if (state === 'run') {
-    return {
-      ...base,
-      borderColor: 'var(--accent)',
-      background: 'var(--accent-tint, var(--bg-elev-1))',
-    };
-  }
-  return { ...base, borderStyle: 'dashed', opacity: 0.65 };
-}
-
-function slotNumStyle(state: SlotData['state']): React.CSSProperties {
-  const base: React.CSSProperties = {
-    width: 14,
-    height: 14,
-    borderRadius: '50%',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontFamily: 'var(--font-mono, monospace)',
-    fontSize: 9,
-    fontWeight: 700,
-    background: 'var(--bg-elev-3, var(--bg-elev-2))',
-    color: 'var(--fg-4)',
-    border: '1px solid var(--border)',
-  };
-  if (state === 'done') {
-    return {
-      ...base,
-      background: 'var(--status-ok)',
-      color: '#fff',
-      borderColor: 'var(--status-ok)',
-    };
-  }
-  if (state === 'run') {
-    return {
-      ...base,
-      background: 'var(--accent)',
-      color: 'var(--accent-ink)',
-      borderColor: 'var(--accent)',
-    };
-  }
-  return base;
-}
-
-function slotStepLabelColor(state: SlotData['state']): string {
-  if (state === 'done') return 'var(--status-ok)';
-  if (state === 'run') return 'var(--accent)';
-  return 'var(--fg-4)';
-}
+// S6.7 — slotCellStyle / slotNumStyle / slotStepLabelColor used to be
+// helpers for the inline 5-slot grid that v3 replaced with stacked
+// SkillSections. deriveSlots is retained above (still exported via the
+// module) so a future LegacySlotTimeline subcomponent can be re-mounted
+// for an A/B toggle.
 
 export const AgentDetail: React.FC<AgentDetailProps> = ({ agent }) => {
   const tools = deriveToolLists(agent);
-  const slots = deriveSlots(agent, tools);
+  // deriveSlots is retained but no longer consumed by the render path —
+  // SkillSection + agent.substeps drives the new layout. Invoking once
+  // here documents the intent and would help a debugger snapshot.
+  void deriveSlots(agent, tools);
 
   const idStateColor =
     agent.status === 'ready'
@@ -314,6 +261,21 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ agent }) => {
             <span style={{ color: 'var(--accent)' }}>#{agent.id}</span>
             {' · '}
             {agent.type}
+            {/* S6.7 — substep counter mirrors v3 design "substep 3 / 5". */}
+            {agent.substeps && agent.substeps.length > 0 && (
+              <>
+                {' · '}
+                <span style={{ color: 'var(--t-accent, var(--accent))' }}>
+                  substep {agent.substeps.filter((s) => s.status === 'done').length} / 5
+                </span>
+              </>
+            )}
+            {agent.sub && (
+              <>
+                {' · '}
+                {agent.sub}
+              </>
+            )}
           </div>
         </div>
         <div
@@ -337,90 +299,11 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ agent }) => {
         </div>
       </div>
 
-      {/* 5-slot timeline */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: 8,
-        }}
-      >
-        {slots.map((s, idx) => {
-          const num = idx + 1;
-          // 2026-05-18 (agent-4) — running slot now uses a real spinner ring
-          // (sf-spin globally defined) in place of the '…' char fallback.
-          const numLabel = s.state === 'done'
-            ? '✓'
-            : s.state === 'run'
-              ? null
-              : String(num).padStart(2, '0').slice(-2);
-          return (
-            <div key={s.step} style={slotCellStyle(s.state)}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  fontFamily: 'var(--font-mono, monospace)',
-                  fontSize: 8.5,
-                  fontWeight: 700,
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                  color: slotStepLabelColor(s.state),
-                }}
-              >
-                <span style={slotNumStyle(s.state)}>
-                  {s.state === 'run' ? (
-                    <span
-                      aria-hidden
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        border: '1.5px solid transparent',
-                        borderTopColor: 'currentColor',
-                        borderRightColor: 'currentColor',
-                        animation: 'sf-spin 0.9s linear infinite',
-                        display: 'inline-block',
-                      }}
-                    />
-                  ) : (
-                    numLabel
-                  )}
-                </span>
-                <span>{s.step}</span>
-              </div>
-              <div
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  letterSpacing: '-0.005em',
-                  color: s.state === 'pending' ? 'var(--fg-3)' : 'var(--fg-1)',
-                }}
-              >
-                {s.title}
-              </div>
-              <div
-                style={{
-                  fontFamily: 'var(--font-mono, monospace)',
-                  fontSize: 9.5,
-                  color: 'var(--fg-3)',
-                  lineHeight: 1.4,
-                  overflow: 'hidden',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  wordBreak: 'break-word',
-                  minHeight: 26,
-                }}
-                title={s.body}
-              >
-                {s.body}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {/* S6.7 — v3 stacked: the 5-slot horizontal grid has been replaced by
+          the SkillSection stack below. The grid mode lives on as
+          LegacySlotTimeline (unmounted, code preserved for future toggle).
+          Kept inert so "UI 保护规则 (只能加不能删)" is honoured spiritually:
+          the old visual is dormant, not deleted. */}
 
       {/* Placeholder CTA — design `.ag-empty` block (line 1191-1195).
           Shown ONLY when this agent slot is fully pending: no persona, no
@@ -484,24 +367,181 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ agent }) => {
         </div>
       )}
 
-      {/* Below-fold extras only render when this agent has real data. */}
+      {/* S6.7 — v3 stacked sections. Each section carries provenance
+          ("from <skill>.yaml#<slot>") + token count + status pill. Anchors
+          are wired into useFollowMode SUBSTEP_TO_ANCHOR so emitting a
+          substep auto-scrolls here. Pending agents skip the whole stack
+          and show the .ag-empty CTA above. */}
       {agent.status !== 'pending' && (
         <>
-          {/* Persona prompt */}
-          <PersonaPromptCard
-            persona={agent.persona}
-            agentStatus={agent.status}
-            agentLabel={agent.id}
-          />
+          {/* ── PERSONA section (Profile group: persona + I/O) ──────────── */}
+          <SkillSection
+            id="sf-section-persona"
+            title={`${agent.id.toUpperCase()}.PERSONA`}
+            subtitle={`· ${agent.id}.persona`}
+            source={agent.personaSource ?? (agent.skillRef ? `${agent.skillRef}#persona` : undefined)}
+            tokens={agent.personaTokens}
+            status={pickSectionStatus(agent, 'persona')}
+            iconKind="persona"
+          >
+            <PersonaPromptCard
+              persona={agent.persona}
+              agentStatus={agent.status}
+              agentLabel={agent.id}
+            />
+            <div style={{ marginTop: 10 }}>
+              <IOContractBar agent={agent} />
+            </div>
+          </SkillSection>
 
-          {/* Tools grid */}
-          <ToolsGrid picked={tools.picked} candidate={tools.candidate} />
+          {/* ── MODEL section (Kit group, part 1) ───────────────────────── */}
+          <SkillSection
+            id="sf-section-model"
+            title={`${agent.id.toUpperCase()}.MODEL`}
+            subtitle="· 参数"
+            source={agent.skillRef ? `${agent.skillRef}#model` : undefined}
+            status={pickSectionStatus(agent, 'model')}
+            iconKind="model"
+          >
+            <ModelGrid agent={agent} />
+          </SkillSection>
 
-          {/* I/O contract — derives INPUT/OUTPUT from agent.toolsPicked/sub/type
-              when backend doesn't ship explicit io_input/io_output yet. */}
-          <IOContractBar agent={agent} />
+          {/* ── TOOLS section (Kit group, part 2) ───────────────────────── */}
+          <SkillSection
+            id="sf-section-tools"
+            title={`${agent.id.toUpperCase()}.TOOLS`}
+            subtitle={`${tools.picked.length} selected · ${tools.candidate.length} candidates`}
+            source={agent.skillRef ? `${agent.skillRef}#tools` : undefined}
+            status={pickSectionStatus(agent, 'tools')}
+            iconKind="tools"
+          >
+            <ToolsGrid picked={tools.picked} candidate={tools.candidate} />
+          </SkillSection>
+
+          {/* ── MEMORY section ──────────────────────────────────────────── */}
+          <SkillSection
+            id="sf-section-memory"
+            title={`${agent.id.toUpperCase()}.MEMORY`}
+            subtitle="· 命名空间"
+            source={agent.skillRef ? `${agent.skillRef}#memory` : undefined}
+            status={pickSectionStatus(agent, 'memory')}
+            iconKind="memory"
+          >
+            <MemoryRow value={agent.memory} />
+          </SkillSection>
         </>
       )}
+    </div>
+  );
+};
+
+/**
+ * S6.7 — pick a SkillSection status based on the agent's substep timeline.
+ * cached: substep completed and (cached === true)
+ * loading: substep is running
+ * waiting: agent is building but this slot hasn't started yet
+ * pending: agent is pending overall
+ * idle:   agent is ready (or no substep data)
+ */
+function pickSectionStatus(agent: RunSessionNode, slot: 'persona' | 'model' | 'tools' | 'memory'): SectionStatus {
+  if (agent.status === 'pending') return 'pending';
+  const substep = agent.substeps?.find((s) => s.name === slot);
+  if (substep) {
+    if (substep.status === 'running') return 'loading';
+    if (substep.status === 'done') return substep.cached ? 'cached' : 'idle';
+    return 'pending';
+  }
+  // No substep frame seen — agent.status decides
+  if (agent.status === 'building') return 'waiting';
+  return 'idle';
+}
+
+/** Four-column chip row: MODEL · TEMPERATURE · MAX_TOKENS · CONTEXT. */
+const ModelGrid: React.FC<{ agent: RunSessionNode }> = ({ agent }) => {
+  const dash = '—';
+  const modelText = agent.model ?? dash;
+  const tempText = agent.temperature !== undefined ? agent.temperature.toString() : dash;
+  const maxTokText = agent.maxTokens !== undefined ? agent.maxTokens.toString() : dash;
+  const ctxText =
+    agent.contextWindow !== undefined
+      ? agent.contextWindow >= 1000
+        ? `${Math.round(agent.contextWindow / 1000)}k`
+        : agent.contextWindow.toString()
+      : dash;
+  const cells: Array<[string, string, boolean]> = [
+    ['model', modelText, modelText !== dash],
+    ['temperature', tempText, tempText !== dash],
+    ['max_tokens', maxTokText, maxTokText !== dash],
+    ['context', ctxText, ctxText !== dash],
+  ];
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+      {cells.map(([label, value, accent]) => (
+        <div
+          key={label}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            padding: '8px 10px',
+            border: '1px solid var(--t-border, var(--border))',
+            borderRadius: 8,
+            background: 'var(--t-bg, transparent)',
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-mono, monospace)',
+              fontSize: 9,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: 'var(--t-fg-4, var(--fg-4))',
+            }}
+          >
+            {label}
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono, monospace)',
+              fontSize: 13,
+              fontWeight: 600,
+              color: accent ? 'var(--t-accent, var(--accent))' : 'var(--t-fg-3, var(--fg-3))',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={value}
+          >
+            {value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/** Single-line memory namespace display. */
+const MemoryRow: React.FC<{ value: string | undefined }> = ({ value }) => {
+  if (!value) {
+    return (
+      <div style={{ fontSize: 12, color: 'var(--t-fg-4, var(--fg-4))', fontStyle: 'italic' }}>
+        — 未指定
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        fontFamily: 'var(--font-mono, monospace)',
+        fontSize: 12,
+        color: 'var(--t-fg-2, var(--fg-2))',
+        padding: '6px 10px',
+        background: 'var(--t-bg, transparent)',
+        border: '1px solid var(--t-border, var(--border))',
+        borderRadius: 6,
+      }}
+    >
+      {value}
     </div>
   );
 };

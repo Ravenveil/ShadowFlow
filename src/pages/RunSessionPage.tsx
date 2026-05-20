@@ -3537,11 +3537,27 @@ function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: Ru
     toggleFollow,
     followedTab,
     currentStepLabel,
+    currentAnchor,
   } = useFollowMode({
     steps: session.steps,
     activeSubsteps: session.activeSubsteps,
     nodes: session.nodes,
+    // S6.6 — feed the v3 stacked substep into the follow hook so AgentDetail
+    // can scroll its matching SkillSection into view as substeps stream.
+    activeAgentSubstep: session.activeAgentSubstep,
   });
+
+  // S6.6 — anchor-scroll effect. When useFollowMode picks an anchor (e.g.
+  // sf-section-model on a model substep), scroll it into view. Smooth
+  // scroll keeps the user's mental focus continuous. Only fires while the
+  // user is on the Agent tab; jumping while they manually browse Overview
+  // would be jarring.
+  React.useEffect(() => {
+    if (!currentAnchor) return;
+    if (activeTab !== 'agent') return;
+    const el = document.getElementById(currentAnchor);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [currentAnchor, activeTab]);
 
   // Task spec Item 8 — Header content for the right-pane toolbar:
   // run id (truncated mono) + status pill (构建中 / 已完成 / 出错).
