@@ -15,7 +15,7 @@
  *    "describe a goal" naturally lands in the team builder — matching the
  *    spec's "✦ 生成 team" CTA.
  */
-import React, { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import React, { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
@@ -50,7 +50,8 @@ import { HfTopBar } from '../components/hifi';
 import { useI18n } from '../common/i18n';
 import { SkillUrlChip } from '../components/SkillUrlChip';
 import { SkillPickerModal } from '../components/SkillPickerModal';
-import { extractSkillUrl, type SkillIngestSummary } from '../api/skillIngest';
+import { extractSkillUrl, listInstalledSkills, type SkillIngestSummary, type InstalledSkill } from '../api/skillIngest';
+import { CommandMenu, detectTrigger, type CommandMenuItem } from '../components/composer/CommandMenu';
 
 // ---------------------------------------------------------------------------
 // Recent drafts helpers
@@ -707,6 +708,23 @@ export default function StartPage() {
   const [dismissedUrls, setDismissedUrls] = useState<Set<string>>(() => new Set());
   const [pendingSkill, setPendingSkill] = useState<SkillIngestSummary | null>(null);
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
+  // ── Claude-Code-style / + @ inline command menu ──────────────────────────
+  // 2026-05-20 — replaces the SkillPickerModal as the primary way to attach
+  // a skill: type `@paper-review` or `@bmad` in the composer, hit ↵, done.
+  // The modal stays accessible via "+ Add ▾ → 导入 Skill" for URL ingest.
+  const [installedSkills, setInstalledSkills] = useState<InstalledSkill[] | null>(null);
+  const [commandMenu, setCommandMenu] = useState<{ mode: '@' | '/'; query: string; start: number; end: number } | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  // Lazy-load installed skills the first time either trigger opens — both
+  // `@` and `/` list the same skill set as "skill-pack → agent/team物化"
+  // entries, just sorted differently per the user's mental model.
+  useEffect(() => {
+    if (commandMenu && installedSkills === null) {
+      listInstalledSkills()
+        .then((items) => setInstalledSkills(items))
+        .catch(() => setInstalledSkills([]));
+    }
+  }, [commandMenu, installedSkills]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [knowledge, setKnowledge] = useState<string[]>([]); // selected pack IDs
   const [knowledgePacks, setKnowledgePacks] = useState<KnowledgePack[] | null>(null);
@@ -831,11 +849,141 @@ export default function StartPage() {
   }
 
   function handleComposerKey(e: KeyboardEvent<HTMLTextAreaElement>) {
+    // When the command menu is open, ↑↓↵ esc are owned by CommandMenu's
+    // global keydown listener — don't double-submit on ↵.
+    if (commandMenu && (e.key === 'Enter' || e.key === 'Escape' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Tab')) {
+      return;
+    }
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       handleSubmit();
     }
   }
+
+  // 2026-05-20 — composer onChange runs detectTrigger on the current
+  // textarea + caret. When a `/` or `@` token is active the menu opens
+  // with the live query. When the user types past a whitespace or
+  // backspaces the trigger char away, the menu closes.
+  function handleComposerChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const next = e.target.value;
+    setComposer(next);
+    const caret = e.target.selectionStart ?? next.length;
+    const trigger = detectTrigger(next, caret);
+    if (trigger) {
+      setCommandMenu(trigger);
+    } else if (commandMenu) {
+      setCommandMenu(null);
+    }
+  }
+
+  // Selection: replace [start, end) with the chosen token + side-effect.
+  function handleCommandPick(item: CommandMenuItem) {
+    if (!commandMenu) return;
+    const { mode, start, end } = commandMenu;
+    const before = composer.slice(0, start);
+    const after = composer.slice(end);
+    // ── Skill items (id starts with 'skill:') — materialise the skill pack
+    //    into agents/team. Same behaviour whether picked via @ or /. The
+    //    inserted token uses the original trigger char so the user can see
+    //    in the prompt which path they took.
+    if (item.id.startsWith('skill:')) {
+      const skillId = item.id.slice('skill:'.length);
+      const insert = `${mode}${skillId} `;
+      setComposer(before + insert + after);
+      setPendingSkill({
+        skill_id: skillId,
+        name: item.title,
+        is_new: false,
+        source_label: item.subtitle ?? 'builtin',
+        counts: {},
+        truncated: false,
+      });
+      setToast(`已物化 Skill 包: ${item.title}`);
+      setTimeout(() => {
+        const el = composerRef.current;
+        if (el) {
+          const pos = start + insert.length;
+          el.focus();
+          el.setSelectionRange(pos, pos);
+        }
+      }, 0);
+    } else {
+      // Built-in slash command — replace the typed `/<query>` with nothing
+      // and run the action.
+      setComposer(before + after);
+      handleSlashCommand(item.id);
+    }
+    setCommandMenu(null);
+  }
+
+  function handleSlashCommand(id: string) {
+    switch (id) {
+      case 'clear':
+        setComposer('');
+        setPendingSkill(null);
+        setAttachments([]);
+        setKnowledge([]);
+        setToast('已清空');
+        break;
+      case 'skill':
+        setSkillPickerOpen(true);
+        break;
+      case 'help':
+        setToast('快捷键: ⌘↵ 发送 · @ 提及 Skill · / 命令');
+        break;
+      case 'inspect':
+        navigate('/runs');
+        break;
+      case 'reload':
+        // Hit POST /api/skills/reload so the server rescans the FS.
+        fetch(`${getApiBase()}/api/skills/reload`, { method: 'POST' })
+          .then((r) => r.json())
+          .then((data: { reloaded?: number }) => {
+            setInstalledSkills(null);
+            setToast(`已重新加载 ${data.reloaded ?? '?'} 个 skill`);
+          })
+          .catch(() => setToast('reload 失败'));
+        break;
+      default:
+        setToast(`/${id} 未实现`);
+    }
+  }
+
+  // Compose menu items based on mode. Both modes surface skills as the
+  // primary way to attach a skill pack (which the server then materialises
+  // into a team via synthesizeTeamRun). `/` additionally shows built-in
+  // commands. The `skill:` id prefix lets handleCommandPick dispatch.
+  const commandMenuItems: CommandMenuItem[] = useMemo(() => {
+    if (!commandMenu) return [];
+    const skillItems: CommandMenuItem[] = (installedSkills ?? []).map((s) => {
+      const counts = s.counts as Record<string, number | undefined>;
+      const agents = counts.agents;
+      const edges = counts.edges;
+      const detail =
+        typeof agents === 'number'
+          ? `${agents} agent${typeof edges === 'number' ? ` · ${edges} edge` : ''}`
+          : Object.entries(s.counts).map(([k, v]) => `${k}=${v}`).join(' · ');
+      return {
+        id: `skill:${s.id}`,
+        title: `${commandMenu.mode}${s.id}`,
+        subtitle: `${s.name}${detail ? ` · ${detail}` : ''} · 物化为 team`,
+        hint: 'skill pack',
+      };
+    });
+    if (commandMenu.mode === '@') {
+      // Mention mode — skills only.
+      return skillItems;
+    }
+    // Slash mode — built-in commands first, then the same skill set.
+    const builtin: CommandMenuItem[] = [
+      { id: 'clear', title: '/clear', subtitle: '清空 composer + 已选 skill / 附件', hint: 'command' },
+      { id: 'skill', title: '/skill', subtitle: '打开 Skill picker（URL 导入）', hint: 'command' },
+      { id: 'reload', title: '/reload', subtitle: '后端重新扫描 .shadowflow/skills/', hint: 'command' },
+      { id: 'inspect', title: '/inspect', subtitle: '跳转到 Runs 历史页', hint: 'command' },
+      { id: 'help', title: '/help', subtitle: '快捷键提示', hint: 'command' },
+    ];
+    return [...builtin, ...skillItems];
+  }, [commandMenu, installedSkills]);
 
   function toggleKnowledgePack(packId: string) {
     setKnowledge((prev) =>
@@ -1012,25 +1160,44 @@ export default function StartPage() {
                 </div>
               );
             })()}
-            <textarea
-              value={composer}
-              onChange={(e) => setComposer(e.target.value)}
-              onKeyDown={handleComposerKey}
-              placeholder={t('start.composerPlaceholder')}
-              data-testid="start-composer"
-              style={{
-                width: '100%',
-                minHeight: 88,
-                resize: 'vertical',
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                fontFamily: 'inherit',
-                fontSize: 15,
-                lineHeight: 1.6,
-                color: 'var(--t-fg)',
-              }}
-            />
+            <div style={{ position: 'relative' }}>
+              <textarea
+                ref={composerRef}
+                value={composer}
+                onChange={handleComposerChange}
+                onKeyDown={handleComposerKey}
+                onSelect={(e) => {
+                  // Re-detect trigger on caret moves (arrow keys / clicks)
+                  // — otherwise the menu would stay closed if the user
+                  // navigates back into a `@xxx` token already in the text.
+                  const el = e.target as HTMLTextAreaElement;
+                  const trigger = detectTrigger(el.value, el.selectionStart ?? 0);
+                  setCommandMenu(trigger);
+                }}
+                placeholder={t('start.composerPlaceholder') + ' · 试试 @ 提及 Skill 或 / 命令'}
+                data-testid="start-composer"
+                style={{
+                  width: '100%',
+                  minHeight: 88,
+                  resize: 'vertical',
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                  fontSize: 15,
+                  lineHeight: 1.6,
+                  color: 'var(--t-fg)',
+                }}
+              />
+              <CommandMenu
+                open={commandMenu !== null}
+                mode={commandMenu?.mode ?? '@'}
+                query={commandMenu?.query ?? ''}
+                items={commandMenuItems}
+                onSelect={handleCommandPick}
+                onClose={() => setCommandMenu(null)}
+              />
+            </div>
 
             {/* Attached chips — only renders when attachments exist */}
             {attachments.length > 0 && (
