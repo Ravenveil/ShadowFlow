@@ -186,16 +186,33 @@ export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({
       <style>{aacStyles}</style>
 
       <div className="aac-card" data-id-state={arIdState(agent)}>
-        {/* ar-meta — single quiet identity strip. data-state drives WAITING / RUNNING / READY skin */}
+        {/* ar-meta — single quiet identity strip. data-state drives WAITING / RUNNING / READY skin.
+            2026-05-20 — 调整文案层级匹配 v3 设计稿：
+            主名 (.aac-nm) = agent.title （Coordinator / Reader）
+            副名 (.aac-sub) = skillRef + substep + 角色 sub-id（paper.coord.v1 · 5/5 配置完成 · orchestrator） */}
         <div className="aac-meta" data-state={arIdState(agent)}>
           <span className="aac-av">{agent.avatarChar || agent.title.charAt(0) || '?'}</span>
-          <span className="aac-nm">{skillRef}</span>
-          <span className="aac-sub">· {agent.title}</span>
-          {agent.substeps && agent.substeps.length > 0 && (
-            <span className="aac-stp">
-              · substep {agent.substeps.filter((s) => s.status === 'done').length} / 5
-            </span>
-          )}
+          <div className="aac-meta-tx">
+            <div className="aac-nm">{agent.title}</div>
+            <div className="aac-sub">
+              <span className="aac-sub-ref">{skillRef}</span>
+              {agent.substeps && agent.substeps.length > 0 && (
+                <>
+                  <span> · </span>
+                  <span className="aac-stp">
+                    {agent.substeps.filter((s) => s.status === 'done').length} / 5{' '}
+                    {arIdState(agent) === 'ok' ? '配置完成' : '配置中'}
+                  </span>
+                </>
+              )}
+              {agent.type && (
+                <>
+                  <span> · </span>
+                  <span>{agent.type === 'coordinator' ? 'orchestrator' : agent.type}</span>
+                </>
+              )}
+            </div>
+          </div>
           <span className={`aac-pill ${pill.pulse ? 'pulse' : ''}`}>
             {pill.text}
           </span>
@@ -448,17 +465,26 @@ const aacStyles = `
 }
 .aac-av {
   position: relative;
-  width: 32px; height: 32px; border-radius: 8px;
+  width: 40px; height: 40px; border-radius: 10px;
   background: var(--t-accent-tint);
   border: 1.5px solid var(--t-accent);
   color: var(--t-accent);
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono, monospace); font-size: 14px; font-weight: 800;
+  font-family: var(--font-mono, monospace); font-size: 18px; font-weight: 800;
+  letter-spacing: -.03em;
   flex: none;
   transition: background .14s, border-color .14s, color .14s;
 }
-.aac-nm { font-size: 14px; font-weight: 700; letter-spacing: -.005em; color: var(--t-fg); }
-.aac-sub, .aac-stp { font-family: var(--font-mono, monospace); font-size: 10.5px; color: var(--t-fg-4); }
+.aac-meta-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.aac-nm { font-size: 17px; font-weight: 700; letter-spacing: -.01em; color: var(--t-fg); }
+.aac-sub {
+  font-family: var(--font-mono, monospace); font-size: 10.5px; color: var(--t-fg-4);
+  display: flex; align-items: center; flex-wrap: wrap;
+}
+.aac-sub-ref { color: var(--t-fg-3); }
+.aac-stp { color: var(--t-accent); }
+.aac-meta[data-state="ok"] .aac-stp { color: var(--t-ok); }
+.aac-meta[data-state="waiting"] .aac-stp { color: var(--t-fg-5); }
 .aac-pill {
   margin-left: auto;
   font-family: var(--font-mono, monospace); font-size: 9.5px; font-weight: 700;
@@ -485,17 +511,8 @@ const aacStyles = `
   border-color: var(--t-accent);
   color: var(--t-accent);
 }
-.aac-meta[data-state="running"] .aac-av::after {
-  content: ''; position: absolute; inset: -5px; border-radius: 11px;
-  pointer-events: none;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--t-accent) 32%, transparent),
-              0 0 16px 2px color-mix(in oklab, var(--t-accent) 22%, transparent);
-  animation: aacBreath 2.4s ease-in-out infinite;
-}
-@keyframes aacBreath {
-  0%, 100% { opacity: .55; }
-  50%      { opacity: 1; }
-}
+/* 2026-05-20 — 光波/呼吸光晕已按用户反馈移除（mini roster + 大头像均
+   不要 ::after 扩散动效）。仅保留状态色 + 边框区分。 */
 .aac-meta[data-state="running"] .aac-pill {
   color: var(--t-accent);
   background: var(--t-accent-tint);
@@ -542,10 +559,10 @@ const aacStyles = `
 .aac-sw-rail::-webkit-scrollbar { display: none; }
 .aac-sw-av {
   position: relative; flex: 0 0 auto;
-  width: 28px; height: 28px; border-radius: 8px;
+  width: 30px; height: 30px; border-radius: 9px;
   background: var(--t-panel); border: 1.5px solid var(--t-border);
   color: var(--t-fg-3);
-  font-family: var(--font-mono, monospace); font-weight: 700; font-size: 10.5px;
+  font-family: var(--font-mono, monospace); font-weight: 700; font-size: 11px;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: background .14s, border-color .14s, color .14s, transform .12s;
@@ -569,16 +586,8 @@ const aacStyles = `
   box-shadow: 0 0 0 2px var(--t-panel-2);
   z-index: 2;
 }
-.aac-sw-av[data-st="running"]::after {
-  content: ""; position: absolute; right: -2px; top: -2px;
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--t-accent); pointer-events: none;
-  animation: aacSwHalo 1.6s ease-out infinite;
-}
-@keyframes aacSwHalo {
-  0%   { opacity: .55; transform: scale(1); }
-  100% { opacity: 0;   transform: scale(3.2); }
-}
+/* 2026-05-20 — 设计稿反馈：mini roster 头像不要扩散光晕动效，
+   保留静态状态点就够；删 ::after aacSwHalo 动画。 */
 .aac-sw-av[data-st="ok"]::before {
   content: ""; position: absolute; right: -2px; top: -2px;
   width: 7px; height: 7px; border-radius: 50%;
