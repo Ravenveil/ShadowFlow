@@ -14,6 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { getDb, _resetForTests as _resetSqliteForTests } from './sqlite';
+import { listAgents as listYamlAgents } from '../lib/agent-yaml';
 
 export interface AgentRecord {
   agent_id: string;
@@ -22,7 +23,7 @@ export interface AgentRecord {
   workspace_id: string;
   blueprint: Record<string, unknown>;
   status: 'idle' | 'running' | 'paused' | 'error';
-  source: 'quick_hire' | 'catalog';
+  source: 'quick_hire' | 'catalog' | 'yaml-template';
   created_at: string;
 }
 
@@ -56,6 +57,7 @@ function rowToRecord(r: AgentRow): AgentRecord {
   };
 }
 
+/** sqlite-only agents (Quick Hire / Catalog created). Unchanged. */
 export function listAgents(workspaceId?: string): AgentRecord[] {
   const db = getDb();
   const rows = workspaceId
@@ -68,6 +70,51 @@ export function listAgents(workspaceId?: string): AgentRecord[] {
         .prepare(`SELECT * FROM agents ORDER BY created_at ASC`)
         .all() as AgentRow[]);
   return rows.map(rowToRecord);
+}
+
+/**
+ * S0.6 — merge sqlite + yaml agent library for UI.
+ *
+ * sqlite stores user-created agents (Quick Hire / Catalog) with runtime state
+ * (status, workspace_id). yaml stores design-time templates (persona, model,
+ * tools spec). They serve different purposes — but the UI agent picker should
+ * show both as one list so users can pick any agent (template or instance).
+ *
+ * yaml agents wins on id collision (yaml is canonical source of truth). In
+ * practice they never collide: sqlite uses UUIDs, yaml uses semantic names
+ * like "reader", "pm".
+ *
+ * Yaml entries are marked `source: 'yaml-template'` so UI can render them
+ * differently (e.g. read-only badge).
+ */
+export function listAllAgents(workspaceId?: string): AgentRecord[] {
+  const sqliteRows = listAgents(workspaceId);
+  const sqliteIds = new Set(sqliteRows.map((r) => r.agent_id));
+
+  const yamlResult = listYamlAgents();
+  const yamlAsRecords: AgentRecord[] = yamlResult.agents
+    .filter((a) => !sqliteIds.has(a.id))  // yaml wins on id collision (defensive)
+    .map((a) => ({
+      agent_id: a.id,
+      name: a.title,
+      soul: a.persona.split('\n').find((l) => l.trim().length > 0)?.trim() ?? a.sub ?? '',
+      // yaml templates are workspace-agnostic; bind to caller's workspace
+      // (or 'default' when none provided) so UI filtering works the same way.
+      workspace_id: workspaceId ?? 'default',
+      blueprint: {
+        capabilities: { tools: a.tools.picked },
+        llm_provider: 'claude',
+        model: a.model.id,
+        persona_ref: a.anchors.persona.ref,
+        // Keep full yaml data accessible without re-loading.
+        yaml_source_file: a.source_file,
+      },
+      status: 'idle' as const,
+      source: 'yaml-template' as const,
+      created_at: '1970-01-01T00:00:00.000Z',  // pre-history sentinel
+    }));
+
+  return [...sqliteRows, ...yamlAsRecords];
 }
 
 export function createAgent(

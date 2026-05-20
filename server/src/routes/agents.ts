@@ -7,14 +7,19 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { listAgents, createAgent, deleteAgent } from '../storage/agents';
+import { listAgents, listAllAgents, createAgent, deleteAgent } from '../storage/agents';
 
 const router = Router();
 
 router.get('/', (req: Request, res: Response) => {
   const workspaceId =
     typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
-  res.json({ data: listAgents(workspaceId), meta: {} });
+  // S0.6 — merged view: sqlite (Quick Hire/Catalog) + yaml templates from
+  // .shadowflow/agents/*.agent.yaml. ?source=sqlite returns only sqlite rows
+  // for back-compat with internal callers that care about workspace state.
+  const sourceFilter = req.query.source;
+  const data = sourceFilter === 'sqlite' ? listAgents(workspaceId) : listAllAgents(workspaceId);
+  res.json({ data, meta: {} });
 });
 
 router.post('/', (req: Request, res: Response) => {
