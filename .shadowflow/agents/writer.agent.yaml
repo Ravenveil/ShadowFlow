@@ -1,8 +1,10 @@
 id: writer
+version: 1
 title: Writer
 sub: review-author
 avatar_char: W
 type: agent
+tags: [writing, markdown, bibtex]
 persona: |
   # writer.persona
   你是 review 撰写 Agent。

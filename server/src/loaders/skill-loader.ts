@@ -19,7 +19,8 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import type { SkillDefinition, SkillMode, PreviewType } from '../skills';
-import { loadTeam } from '../lib/skill-yaml';
+import { loadTeam as loadLegacyTeam } from '../lib/skill-yaml';
+import { loadTeam as loadGlobalTeam } from '../lib/team-yaml';
 
 const DEFAULT_SKILLS_DIR = path.join(process.cwd(), '.shadowflow', 'skills');
 // S6.4 — when the Node server is launched from the `server/` subdir
@@ -210,20 +211,47 @@ function scanOneDir(
       executor,
     };
 
-    // S6.0 — opportunistically attach the structured team (if the skill ships one).
-    // Per-skill load failures are non-fatal: we keep the skill itself loaded with
-    // its system_prompt path intact so older flows continue to work.
+    // S6.0 + S0.5 — attach the structured team. Two paths:
+    //   1. NEW (S0.5): SKILL.md frontmatter has `team_ref: <team-id>` →
+    //      resolve via `.shadowflow/teams/<team-id>.team.yaml` (global lib)
+    //   2. LEGACY (S6.0): skill dir has `team.skill.yaml` → resolve locally
+    //
+    // Path 1 wins when both are present. Per-skill load failures are non-fatal:
+    // the skill itself stays loaded so older system_prompt flows still work.
     try {
-      const teamResult = loadTeam(path.join(skillsDir, id));
-      if (teamResult.team) {
-        skill.team = teamResult.team;
-      }
-      for (const e of teamResult.errors) {
-        errors.push({ id, message: `team.skill.yaml: ${e}` });
-        console.warn(`[skill-loader] ${id} team load: ${e}`);
+      const teamRef = typeof fm.team_ref === 'string' ? fm.team_ref.trim() : '';
+      if (teamRef) {
+        // S0.5 path
+        const result = loadGlobalTeam(teamRef);
+        if (result.team) {
+          // Convert TeamDefV1 → legacy TeamDef shape expected by SkillDefinition.team
+          skill.team = {
+            name: result.team.name,
+            mode: result.team.mode,
+            policy: result.team.policy,
+            retry: result.team.retry,
+            agents: result.resolvedAgents,
+            edges: result.team.edges_v1.map(e => ({ from: e.from, to: e.to })),
+            loaded_at: result.team.loaded_at,
+            source_dir: result.team.source_dir,
+          };
+        }
+        for (const e of result.errors) {
+          errors.push({ id, message: `team_ref(${teamRef}): ${e}` });
+          console.warn(`[skill-loader] ${id} team_ref(${teamRef}): ${e}`);
+        }
+      } else {
+        // Legacy path
+        const teamResult = loadLegacyTeam(path.join(skillsDir, id));
+        if (teamResult.team) {
+          skill.team = teamResult.team;
+        }
+        for (const e of teamResult.errors) {
+          errors.push({ id, message: `team.skill.yaml: ${e}` });
+          console.warn(`[skill-loader] ${id} team load: ${e}`);
+        }
       }
     } catch (err) {
-      // skill-yaml itself shouldn't throw, but defend anyway
       console.warn(`[skill-loader] ${id} team load threw: ${(err as Error).message}`);
     }
 

@@ -56,9 +56,14 @@ playwright-report/
 # (must never be committed; per code-review-2026-04-27 H4)
 _data/
 # Ignore everything in .shadowflow/ (sessions, projects, settings.json, credentials)
-# EXCEPT the skills/ bundle, which is source-tracked declarative data (S6.4).
+# EXCEPT source-tracked declarative data:
+#   - skills/ : skill packs (S6.4)
+#   - agents/ : global agent library (S0.5)
+#   - teams/  : global team library with DAG layout (S0.5)
 .shadowflow/*
 !.shadowflow/skills
+!.shadowflow/agents
+!.shadowflow/teams
 
 # Documentation / design files (not source code)
 docs/
