@@ -11,9 +11,17 @@ export interface ScheduleRun {
 export interface Schedule {
   schedule_id: string;
   group_id: string;
-  cron_expression: string;
-  agent_id: string;
+  /** Null for one-shot events; required for recurring schedules. */
+  cron_expression: string | null;
+  /** ISO datetime for one-shot events; null for cron-only recurring. */
+  start_at: string | null;
+  /** Optional — null when no agent is assigned (event acts as a reminder). */
+  agent_id: string | null;
   task_description: string;
+  /** Event duration in minutes (default 30). */
+  duration_min: number;
+  /** True after a one-shot has fired. Recurring schedules stay false. */
+  completed?: boolean;
   created_at: string;
   next_run_time: string | null;
   runs: ScheduleRun[];
@@ -37,12 +45,19 @@ async function _handle<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function createSchedule(body: {
+export interface CreateScheduleBody {
   group_id: string;
-  cron_expression: string;
-  agent_id: string;
-  task_description: string;
-}): Promise<{ data: Schedule; meta: Record<string, unknown> }> {
+  /** Set EITHER cron_expression (recurring) OR start_at (one-shot). */
+  cron_expression?: string | null;
+  start_at?: string | null;        // ISO datetime
+  agent_id?: string | null;
+  task_description?: string;
+  duration_min?: number;            // default 30 on backend
+}
+
+export async function createSchedule(
+  body: CreateScheduleBody,
+): Promise<{ data: Schedule; meta: Record<string, unknown> }> {
   const res = await fetch(`${BASE}/api/schedules`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

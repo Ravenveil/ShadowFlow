@@ -30,6 +30,18 @@ function buildCron(mode: FreqMode, time: string, weekday: string, custom: string
 }
 
 function describeSchedule(schedule: Schedule): string {
+  // One-shot events have no cron_expression. Render the start_at instead so
+  // EventDetailPanel and sidebar do not crash on .trim() of null.
+  if (!schedule.cron_expression) {
+    if (schedule.start_at) {
+      const d = new Date(schedule.start_at);
+      const stamp = d.toLocaleString('zh-CN', {
+        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+      });
+      return `一次性 · ${stamp}`;
+    }
+    return '一次性 ✓';
+  }
   const expr = schedule.cron_expression;
   const parts = expr.trim().split(/\s+/);
   if (parts.length === 5) {
@@ -79,17 +91,22 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
       const found = res.data[0] ?? null;
       setExisting(found);
       if (found) {
-        setAgentId(found.agent_id);
+        setAgentId(found.agent_id ?? '');
         setDescription(found.task_description);
-        // parse cron back to form state
-        const parts = found.cron_expression.trim().split(/\s+/);
-        if (parts.length === 5) {
-          const [min, hour, , , dow] = parts;
-          setTime(`${hour.padStart(2, '0')}:${min.padStart(2, '0')}`);
-          if (dow === '*') { setMode('daily'); }
-          else { setMode('weekly'); setWeekday(dow); }
-        } else {
-          setMode('custom'); setCustom(found.cron_expression);
+        // Parse cron back to form state. One-shot schedules (cron_expression
+        // null + start_at set) can't round-trip through this drawer; drop
+        // back to the default daily picker so the user can promote the
+        // event to recurring instead of crashing on a null .trim().
+        if (found.cron_expression) {
+          const parts = found.cron_expression.trim().split(/\s+/);
+          if (parts.length === 5) {
+            const [min, hour, , , dow] = parts;
+            setTime(`${hour.padStart(2, '0')}:${min.padStart(2, '0')}`);
+            if (dow === '*') { setMode('daily'); }
+            else { setMode('weekly'); setWeekday(dow); }
+          } else {
+            setMode('custom'); setCustom(found.cron_expression);
+          }
         }
       }
     } catch { /* ignore */ }
