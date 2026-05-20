@@ -295,22 +295,61 @@ async function main(): Promise<void> {
       Array.isArray(r.sseEvents) && r.sseEvents!.length === 1,
     );
     check('register_agent: sseEvent event name', 'node', r.sseEvents![0].event);
+    // S7 (2026-05-20): nodeData is now FLAT to match frontend NodeEvent. The
+    // pre-S7 nested `{model: {id, ...}, persona: {body, ...}}` shape would
+    // have orphaned tool-emitted nodes from the UI graph reducer.
     const evData = r.sseEvents![0].data as {
       node_id: string;
+      type: 'agent' | 'coordinator';
       title: string;
-      persona: { body: string; source: string };
+      sub: string;
+      chips: string[];
+      status: string;
+      avatar_char: string;
+      model: string;
+      temperature?: number;
+      tools_picked: string[];
+      tools_candidate?: string[];
+      persona: string;
+      persona_source: string;
+      persona_tokens: number;
+      persona_cached: boolean;
+      memory?: string;
     };
     check('register_agent: sse data node_id', 'reader', evData.node_id);
+    check('register_agent: sse data type echoed', 'agent', evData.type);
+    check('register_agent: sse data title echoed', 'Reader', evData.title);
+    // Flat fields (S7 P0 fix):
     check(
-      'register_agent: sse data persona body echoed',
+      'register_agent: flat persona body echoed',
       '# reader.persona\n你是 ...',
-      evData.persona.body,
+      evData.persona,
     );
     check(
-      'register_agent: sse data persona source echoed',
+      'register_agent: flat persona_source echoed',
       'reader.agent.yaml#persona',
-      evData.persona.source,
+      evData.persona_source,
     );
+    check('register_agent: flat persona_tokens echoed', 142, evData.persona_tokens);
+    check('register_agent: flat persona_cached echoed', false, evData.persona_cached);
+    check('register_agent: flat model (= model_id)', 'claude-sonnet-4', evData.model);
+    check('register_agent: flat temperature echoed', 0.2, evData.temperature);
+    check(
+      'register_agent: flat tools_picked echoed',
+      ['pdf_extract', 'arxiv_search'],
+      evData.tools_picked,
+    );
+    check(
+      'register_agent: flat tools_candidate echoed',
+      ['google_scholar'],
+      evData.tools_candidate,
+    );
+    check('register_agent: flat memory echoed', 'papers.vec', evData.memory);
+    // Defaults for optional new fields:
+    check('register_agent: default status = ready', 'ready', evData.status);
+    check('register_agent: default avatar_char = title[0]', 'R', evData.avatar_char);
+    check('register_agent: default sub = ""', '', evData.sub);
+    check('register_agent: default chips = []', [], evData.chips);
 
     // missing required field
     const r2 = await skillAnchorExecutors.register_agent({
@@ -350,6 +389,66 @@ async function main(): Promise<void> {
       persona_cached: 1,
     });
     check('register_agent: persona_cached not boolean → isError', true, r7.isError);
+
+    // ── S7 new optional fields (sub / chips / avatar_char / status / skill_ref)
+    const richInput = {
+      ...validInput,
+      sub: '论文阅读专家',
+      chips: ['claude-sonnet-4', 'pdf', 'arxiv'],
+      avatar_char: '读',
+      status: 'building' as const,
+      skill_ref: 'paper-review.team.yaml#members.reader',
+    };
+    const r8 = await skillAnchorExecutors.register_agent(richInput);
+    checkTruthy('register_agent: rich-shape happy emits sseEvents', r8.sseEvents?.length === 1);
+    const ev8 = r8.sseEvents![0].data as {
+      sub: string;
+      chips: string[];
+      avatar_char: string;
+      status: string;
+      skill_ref: string;
+    };
+    check('register_agent: sub echoed', '论文阅读专家', ev8.sub);
+    check('register_agent: chips echoed', ['claude-sonnet-4', 'pdf', 'arxiv'], ev8.chips);
+    check('register_agent: avatar_char echoed', '读', ev8.avatar_char);
+    check('register_agent: status echoed (building)', 'building', ev8.status);
+    check(
+      'register_agent: skill_ref echoed',
+      'paper-review.team.yaml#members.reader',
+      ev8.skill_ref,
+    );
+
+    // bad sub type
+    const r9 = await skillAnchorExecutors.register_agent({ ...validInput, sub: 42 });
+    check('register_agent: sub non-string → isError', true, r9.isError);
+
+    // bad chips type (not array)
+    const r10 = await skillAnchorExecutors.register_agent({
+      ...validInput,
+      chips: 'not-array',
+    });
+    check('register_agent: chips not array → isError', true, r10.isError);
+
+    // bad chips type (array of non-string)
+    const r11 = await skillAnchorExecutors.register_agent({
+      ...validInput,
+      chips: ['ok', 42],
+    });
+    check('register_agent: chips mixed-type → isError', true, r11.isError);
+
+    // bad status enum
+    const r12 = await skillAnchorExecutors.register_agent({
+      ...validInput,
+      status: 'idle',
+    });
+    check('register_agent: status not in enum → isError', true, r12.isError);
+
+    // bad avatar_char type
+    const r13 = await skillAnchorExecutors.register_agent({
+      ...validInput,
+      avatar_char: 42,
+    });
+    check('register_agent: avatar_char non-string → isError', true, r13.isError);
   }
 
   // ── register_edge ───────────────────────────────────────────────────────────

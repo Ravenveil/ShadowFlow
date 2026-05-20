@@ -71,6 +71,12 @@ function clearEnv(): void {
  * Install a monkey-patched Anthropic SDK stream that yields the scripted
  * events. Returns a restore function and an `inspect` ref capturing the
  * SDK call arguments for assertion.
+ *
+ * S6-review P1 #1 (2026-05-20): the client no longer calls
+ * `stream.finalMessage()` — stop_reason is now sourced from the scripted
+ * `message_delta.delta.stop_reason` field directly. The `finalMessage`
+ * shim is left in place defensively so any future code path that DOES
+ * await it gets the same value; today it's unused.
  */
 function patchSdk(scriptedEvents: any[], finalMessageStopReason: string = 'end_turn'): {
   restore: () => void;
@@ -88,6 +94,9 @@ function patchSdk(scriptedEvents: any[], finalMessageStopReason: string = 'end_t
       for (const ev of scriptedEvents) yield ev;
     })();
     (it as any).abort = () => {};
+    // Vestigial — client no longer reads this. Kept for defensive parity
+    // with the SDK helper interface; safe to delete once we're confident
+    // no future caller resurrects finalMessage().
     (it as any).finalMessage = async () => ({ stop_reason: finalMessageStopReason });
     return it;
   };
@@ -141,7 +150,8 @@ async function testTextDelta(): Promise<void> {
     { type: 'message_start', message: { usage: { input_tokens: 10 } } },
     { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'hello ' } },
     { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'world' } },
-    { type: 'message_delta', usage: { output_tokens: 5 } },
+    // S6-review P1 #1: stop_reason now sourced from message_delta.delta
+    { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 5 } },
     { type: 'message_stop' },
   ]);
   try {
@@ -169,7 +179,7 @@ async function testTextDelta(): Promise<void> {
     const stop = events.find((e) => e.kind === 'message_stop');
     checkTruthy('message_stop emitted', stop !== undefined);
     check(
-      'message_stop carries stop_reason',
+      'message_stop carries stop_reason from message_delta.delta.stop_reason',
       'end_turn',
       (stop as { stop_reason: string }).stop_reason,
     );
@@ -198,6 +208,8 @@ async function testToolUseStream(): Promise<void> {
       delta: { type: 'input_json_delta', partial_json: 'paper-review"}' },
     },
     { type: 'content_block_stop', index: 0 },
+    // S6-review P1 #1: stop_reason on message_delta.delta
+    { type: 'message_delta', delta: { stop_reason: 'tool_use' } },
     { type: 'message_stop' },
   ], 'tool_use');
   try {
@@ -402,6 +414,83 @@ async function testEnvKey(): Promise<void> {
   }
 }
 
+async function testStopReasonFromMessageDelta(): Promise<void> {
+  console.log('\n[anthropic-api-client] S6-review P1 #1: stop_reason sourced from message_delta.delta');
+  // Critical regression test: prior implementation awaited
+  // `stream.finalMessage()` to obtain stop_reason, which was both an extra
+  // round-trip and brittle on aborted streams. The new code reads it from
+  // `message_delta.delta.stop_reason` directly (per Anthropic Messages API
+  // canonical source).
+  const { restore } = patchSdk(
+    [
+      { type: 'message_start', message: { usage: { input_tokens: 1 } } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'done' } },
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'max_tokens' },
+        usage: { output_tokens: 100 },
+      },
+      { type: 'message_stop' },
+    ],
+    // finalMessage stub returns 'end_turn' to PROVE the client is NOT
+    // reading from finalMessage anymore. If it were, this test would
+    // fail with stop_reason='end_turn' instead of 'max_tokens'.
+    'end_turn',
+  );
+  try {
+    const client = new AnthropicApiClient({ apiKey: 'sk-ant-test' });
+    const events = await collect(
+      client.stream({
+        system_prompt: '',
+        messages: [],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    const stop = events.find((e) => e.kind === 'message_stop');
+    check(
+      'stop_reason captured from message_delta.delta (NOT finalMessage)',
+      'max_tokens',
+      (stop as { stop_reason: string }).stop_reason,
+    );
+  } finally {
+    restore();
+  }
+}
+
+async function testStopReasonFallbackWhenAbsent(): Promise<void> {
+  console.log('\n[anthropic-api-client] S6-review P1 #1: stop_reason falls back to "unknown" when delta missing');
+  // SDK might emit message_stop without a preceding message_delta carrying
+  // stop_reason (e.g. mid-aborted streams). Client should default to
+  // 'unknown' rather than throw.
+  const { restore } = patchSdk(
+    [
+      { type: 'message_start', message: { usage: { input_tokens: 1 } } },
+      { type: 'message_stop' },
+    ],
+    'IGNORED-finalMessage-stub',
+  );
+  try {
+    const client = new AnthropicApiClient({ apiKey: 'sk-ant-test' });
+    const events = await collect(
+      client.stream({
+        system_prompt: '',
+        messages: [],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    const stop = events.find((e) => e.kind === 'message_stop');
+    check(
+      'stop_reason defaults to "unknown" when message_delta absent',
+      'unknown',
+      (stop as { stop_reason: string }).stop_reason,
+    );
+  } finally {
+    restore();
+  }
+}
+
 async function main(): Promise<void> {
   await testNoApiKey();
   await testTextDelta();
@@ -411,6 +500,8 @@ async function main(): Promise<void> {
   await testSdkCallShape();
   await testNoToolsWhenEmpty();
   await testEnvKey();
+  await testStopReasonFromMessageDelta();
+  await testStopReasonFallbackWhenAbsent();
 
   console.log(`\n${pass} pass, ${fail} fail`);
   if (fail > 0) process.exit(1);

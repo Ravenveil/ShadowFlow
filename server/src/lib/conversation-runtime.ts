@@ -128,8 +128,10 @@ export interface ApiClient {
  *   - `output` is fed back to the LLM verbatim as the tool_result content.
  *     Non-strings get JSON.stringify'd before push.
  *   - `sseEvents` is the side-channel (D4) — runtime yields each entry
- *     downstream so the wire SSE keeps existing event names (sf-node /
- *     sf-edge / ...).
+ *     downstream so the wire SSE keeps existing event names (node / edge /
+ *     ...). [S6 contract: parser.ts maps <sf:node>→'node' and <sf:edge>→
+ *     'edge'; tool side-effects must use the same SSE event names — see
+ *     skill-anchors.ts register_agent / register_edge.]
  *   - `isError` flips the tool_result's `is_error` flag so the LLM can
  *     distinguish success from failure.
  */

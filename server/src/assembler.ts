@@ -108,22 +108,24 @@ function buildBlueprintYaml(
 
 // ─── Step sequence emitter ─────────────────────────────────────────────────────
 
+// 2026-05-20 — Step labels 对齐 v3 设计稿。原 6 个 step 合并到 5 个，与
+// routes/run-sessions.ts:synthesizeTeamRun 一致：
+//   分析目标需求 / 挑选 Team 蓝图 / 配置 Agent 角色 / 设置工具集 / Policy 协作规则
+// 「完成」step 改为隐式（complete 事件本身就是终态信号，不再当 step 显示）。
 const STEP_NAMES = [
   '分析目标需求',
-  '规划 Agent 角色结构',
-  '生成 YAML Blueprint',
-  '创建 Agent 节点',
-  '配置 Team Workflow',
-  '完成 — 跳转 Editor',
+  '挑选 Team 蓝图',
+  '配置 Agent 角色',
+  '设置工具集',
+  'Policy 协作规则',
 ];
 
 const STEP_DELAYS: [number, number][] = [
   [600, 200],   // 分析目标需求
-  [800, 300],   // 规划 Agent 角色结构
-  [700, 200],   // 生成 YAML Blueprint
-  [500, 150],   // 创建 Agent 节点
-  [600, 200],   // 配置 Team Workflow
-  [300, 100],   // 完成
+  [800, 300],   // 挑选 Team 蓝图
+  [700, 200],   // 配置 Agent 角色 (subseps 流式覆盖 base 延时)
+  [500, 150],   // 设置工具集
+  [600, 200],   // Policy 协作规则
 ];
 
 // ─── Main async generator ──────────────────────────────────────────────────────
@@ -217,24 +219,14 @@ Rules:
     data: { output_type: outputType, mode, confidence, complexity },
   };
 
-  // ── Step 2: 规划 Agent 角色结构 ──
+  // 2026-05-20 — reorder + relabel 对齐 v3 设计稿 5-step 流程。
+  // ── Step 2: 挑选 Team 蓝图 ──
   yield { event: 'assemble', data: { step: STEP_NAMES[1], status: 'running' } };
   await sleep(jitter(STEP_DELAYS[1][0], STEP_DELAYS[1][1]));
   yield { event: 'assemble', data: { step: STEP_NAMES[1], status: 'done', elapsed_ms: Date.now() - startMs } };
 
-  // ── Step 3: 生成 YAML Blueprint ──
+  // ── Step 3: 配置 Agent 角色 (emit nodes — substeps 由 LLM 流式产生时叠加) ──
   yield { event: 'assemble', data: { step: STEP_NAMES[2], status: 'running' } };
-  await sleep(jitter(STEP_DELAYS[2][0], STEP_DELAYS[2][1]));
-
-  const blueprintYaml = buildBlueprintYaml(session_id, goal, outputType, mode, agents);
-  const blueprintFilename = `blueprint-${session_id.slice(0, 8)}.yaml`;
-
-  yield { event: 'blueprint', data: { yaml: blueprintYaml, filename: blueprintFilename } };
-  yield { event: 'assemble', data: { step: STEP_NAMES[2], status: 'done', elapsed_ms: Date.now() - startMs } };
-
-  // ── Step 4: 创建 Agent 节点 ──
-  yield { event: 'assemble', data: { step: STEP_NAMES[3], status: 'running' } };
-
   // Emit nodes with staggered delays
   for (const agent of agents) {
     await sleep(jitter(350, 100));
@@ -251,7 +243,6 @@ Rules:
       },
     };
   }
-
   // Mark nodes as ready
   await sleep(jitter(400, 150));
   for (const agent of agents) {
@@ -268,13 +259,19 @@ Rules:
       },
     };
   }
+  yield { event: 'assemble', data: { step: STEP_NAMES[2], status: 'done', elapsed_ms: Date.now() - startMs } };
 
+  // ── Step 4: 设置工具集 (emit YAML blueprint — YAML 自带 tools 列) ──
+  yield { event: 'assemble', data: { step: STEP_NAMES[3], status: 'running' } };
+  await sleep(jitter(STEP_DELAYS[3][0], STEP_DELAYS[3][1]));
+  const blueprintYaml = buildBlueprintYaml(session_id, goal, outputType, mode, agents);
+  const blueprintFilename = `blueprint-${session_id.slice(0, 8)}.yaml`;
+  yield { event: 'blueprint', data: { yaml: blueprintYaml, filename: blueprintFilename } };
   yield { event: 'assemble', data: { step: STEP_NAMES[3], status: 'done', elapsed_ms: Date.now() - startMs } };
 
-  // ── Step 5: 配置 Team Workflow ──
+  // ── Step 5: Policy 协作规则 (emit edges + policy summary) ──
   yield { event: 'assemble', data: { step: STEP_NAMES[4], status: 'running' } };
   await sleep(jitter(STEP_DELAYS[4][0], STEP_DELAYS[4][1]));
-
   // Emit edges from coordinator to each agent
   if (agents.length > 1) {
     const coordinator = agents[0];
@@ -286,13 +283,7 @@ Rules:
       };
     }
   }
-
   yield { event: 'assemble', data: { step: STEP_NAMES[4], status: 'done', elapsed_ms: Date.now() - startMs } };
-
-  // ── Step 6: 完成 ──
-  yield { event: 'assemble', data: { step: STEP_NAMES[5], status: 'running' } };
-  await sleep(jitter(STEP_DELAYS[5][0], STEP_DELAYS[5][1]));
-  yield { event: 'assemble', data: { step: STEP_NAMES[5], status: 'done', elapsed_ms: Date.now() - startMs } };
 
   // ── Complete event ──
   yield {
@@ -525,18 +516,34 @@ async function* runTeamBackedSkill(
   });
 
   // PermissionPolicy: skill.allowed_tools comes from SKILL.md frontmatter
-  // `allowed-tools: [...]`. Empty / undefined → deny-everything, which
-  // means a team-backed skill that forgot to declare allowed-tools will
-  // see every tool_use bounce back as `tool denied` — exactly the failure
-  // mode we want surfaced (vs silently allowing).
+  // `allowed-tools: [...]`. For team-backed skills this MUST be populated —
+  // the assembler relies on 4 SkillAnchorTool calls (list_team_agents /
+  // get_skill_anchor / register_agent / register_edge) and an empty
+  // allowed-tools list deny-everything would let the LLM burn up to 50
+  // iterations on tool calls that all get rejected.
+  //
+  // S6-review P1 #3 (2026-05-20): the prior code merely console.warn'd here
+  // and let the run continue, which produced a confusing 50-iter timeout
+  // with no actionable diagnostic. Now we fail fast with a structured
+  // 'error' SSE so the frontend can surface "missing allowed-tools" to the
+  // user directly.
   const allowed = skill.allowed_tools ?? [];
-  const permission = PermissionPolicy.fromAllowedTools(allowed);
   if (allowed.length === 0) {
-    console.warn(
-      `[skill-assembler:team] skill "${skill_name}" has no allowed-tools frontmatter; ` +
-        `all tool_use calls will be denied.`,
-    );
+    yield {
+      event: 'error',
+      data: {
+        code: 'NO_ALLOWED_TOOLS',
+        message:
+          `Team-backed skill "${skill_name}" is missing 'allowed-tools' in SKILL.md ` +
+          `frontmatter — all tool_use calls would be denied and the assembler would ` +
+          `fail with max_iter reached. Add 'allowed-tools: [list_team_agents, ` +
+          `get_skill_anchor, register_agent, register_edge]' to the skill frontmatter ` +
+          `and retry.`,
+      },
+    };
+    return;
   }
+  const permission = PermissionPolicy.fromAllowedTools(allowed);
 
   // Ephemeral session — ConversationRuntime mutates messages in place but
   // we never persist this back. (Future story: hand the SessionRecord from

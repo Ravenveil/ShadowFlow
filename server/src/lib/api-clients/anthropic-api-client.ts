@@ -148,6 +148,13 @@ export class AnthropicApiClient implements ApiClient {
     }
     const pending = new Map<number, PendingToolUse>();
 
+    // S6-review P1 #1 (2026-05-20): cache stop_reason from message_delta.
+    // Per Anthropic SDK + Messages API contract `RawMessageDeltaEvent.delta.
+    // stop_reason` is the canonical source — message_stop carries no field of
+    // its own and the prior `await stream.finalMessage()` round-trip was both
+    // unnecessary and prone to swallowing errors on aborted streams.
+    let cachedStopReason: string = 'unknown';
+
     // Bridge AbortSignal → SDK. The SDK accepts a signal in the request
     // options. Once aborted, the for-await on stream() throws AbortError.
     let stream: ReturnType<Anthropic['messages']['stream']>;
@@ -226,24 +233,20 @@ export class AnthropicApiClient implements ApiClient {
       } else if (ev.type === 'message_delta') {
         const u = extractUsage((ev as { usage?: unknown }).usage);
         if (u) yield { kind: 'usage', usage: u };
-        // Some SDK versions emit stop_reason on message_delta.delta;
-        // we surface it on message_stop instead since that's where Anthropic
-        // canonicalizes turn termination.
-      } else if (ev.type === 'message_stop') {
-        // The SDK doesn't always emit stop_reason on message_stop directly;
-        // it usually lives on the prior message_delta.delta.stop_reason.
-        // Pull from the finalMessage if available; runtime treats anything
-        // other than 'end_turn' / 'tool_use' as a normal termination too.
-        // We capture from the stream's finalMessage via the SDK helper.
-        try {
-          const fm = await stream.finalMessage();
-          yield {
-            kind: 'message_stop',
-            stop_reason: typeof fm.stop_reason === 'string' ? fm.stop_reason : 'unknown',
-          };
-        } catch {
-          yield { kind: 'message_stop', stop_reason: 'unknown' };
+        // S6-review P1 #1: cache stop_reason here — this is the SDK's
+        // canonical carrier per Messages API spec. message_stop downstream
+        // emits the cached value.
+        const delta = (ev as { delta?: { stop_reason?: unknown } }).delta;
+        if (delta && typeof delta.stop_reason === 'string') {
+          cachedStopReason = delta.stop_reason;
         }
+      } else if (ev.type === 'message_stop') {
+        // S6-review P1 #1 (2026-05-20): emit cached stop_reason from
+        // message_delta. Avoids the prior `await stream.finalMessage()`
+        // round-trip (extra await on a generator iter that may have been
+        // aborted; the SDK helper sometimes throws on aborted streams,
+        // forcing us into a catch that lost the real signal).
+        yield { kind: 'message_stop', stop_reason: cachedStopReason };
       }
     }
   }

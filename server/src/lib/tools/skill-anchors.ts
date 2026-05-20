@@ -137,25 +137,40 @@ export const skillAnchorTools: ToolSpec[] = [
   {
     name: 'register_agent',
     description:
-      'Register one assembled agent into the team blueprint. The runtime turns this into a <sf:node>-equivalent ' +
-      'SSE frame downstream. Pass persona / model / tools you previously fetched via get_skill_anchor.',
+      'Register one assembled agent into the team blueprint. The runtime emits the result as ' +
+      'SSE `event: "node"` matching the frontend NodeEvent interface (src/api/runSessions.ts). ' +
+      'Pass persona / model / tools you previously fetched via get_skill_anchor verbatim.',
     input_schema: {
       type: 'object',
       properties: {
+        // Identity (matches NodeEvent base shape)
         node_id: { type: 'string' },
         title: { type: 'string' },
         type: { type: 'string', enum: ['agent', 'coordinator'] },
+        sub: { type: 'string', description: 'Sub-title (副标题, e.g. 角色定位).' },
+        chips: { type: 'array', items: { type: 'string' }, description: 'UI tag chips (3-5 个中文标签).' },
+        avatar_char: { type: 'string', description: 'Single character avatar (default = title[0]).' },
+        status: {
+          type: 'string',
+          enum: ['building', 'ready', 'pending'],
+          description: 'NodeStatus — defaults to "ready" if omitted.',
+        },
+        // Model (flattened: model.id → model, model.temperature → temperature, ...)
         model_id: { type: 'string' },
         model_temperature: { type: 'number' },
         model_max_tokens: { type: 'number' },
         model_context_window: { type: 'number' },
+        // Tools (flattened: tools.picked → tools_picked, tools.candidate → tools_candidate)
         tools_picked: { type: 'array', items: { type: 'string' } },
         tools_candidate: { type: 'array', items: { type: 'string' } },
+        // Persona (flattened: persona.body → persona, persona.source → persona_source, ...)
         persona: { type: 'string' },
         persona_source: { type: 'string', description: 'e.g. "reader.agent.yaml#persona"' },
         persona_tokens: { type: 'number' },
         persona_cached: { type: 'boolean' },
         memory: { type: 'string' },
+        // S6.5 stacked extras (v3)
+        skill_ref: { type: 'string', description: 'e.g. "paper-review.team.yaml#members.reader"' },
         io_input: {},
         io_output: {},
       },
@@ -177,7 +192,8 @@ export const skillAnchorTools: ToolSpec[] = [
   {
     name: 'register_edge',
     description:
-      'Register one edge in the team DAG. The runtime turns this into a <sf:edge>-equivalent SSE frame.',
+      'Register one edge in the team DAG. The runtime emits the result as SSE `event: "edge"` ' +
+      'matching the frontend EdgeEvent interface (src/api/runSessions.ts).',
     input_schema: {
       type: 'object',
       properties: {
@@ -342,41 +358,79 @@ async function execRegisterAgent(input: unknown): Promise<ToolExecutionResult> {
     return errResult('register_agent: persona_cached must be a boolean');
   }
 
-  // sf:node-equivalent payload — runtime emits this downstream as the
-  // structured side-effect. Shape matches the existing `<sf:node>` schema in
-  // parser.ts so S5 can wrap it 1:1.
+  // New (S7) optional fields — validate when present.
+  if (input.sub !== undefined && typeof input.sub !== 'string') {
+    return errResult('register_agent: sub must be a string when provided');
+  }
+  if (
+    input.chips !== undefined &&
+    (!Array.isArray(input.chips) || !input.chips.every((c) => typeof c === 'string'))
+  ) {
+    return errResult('register_agent: chips must be string[] when provided');
+  }
+  if (input.avatar_char !== undefined && typeof input.avatar_char !== 'string') {
+    return errResult('register_agent: avatar_char must be a string when provided');
+  }
+  const VALID_STATUS = ['building', 'ready', 'pending'] as const;
+  if (
+    input.status !== undefined &&
+    (typeof input.status !== 'string' ||
+      !(VALID_STATUS as readonly string[]).includes(input.status))
+  ) {
+    return errResult(
+      `register_agent: status must be one of ${VALID_STATUS.join('|')} when provided`,
+    );
+  }
+  if (input.skill_ref !== undefined && typeof input.skill_ref !== 'string') {
+    return errResult('register_agent: skill_ref must be a string when provided');
+  }
+
+  // S7 (skill-team-conversion-design-v1.md §5 + S6 review P0 #1):
+  // Emit a FLAT payload that matches the frontend NodeEvent interface in
+  // `src/api/runSessions.ts` (read by useRunSession.ts NODE reducer). The
+  // previous nested `{model: {id, ...}, tools: {picked, candidate}, persona: {body, ...}}`
+  // shape would have orphaned tool-emitted nodes from the UI graph — the
+  // frontend reducer reads `p.model` / `p.tools_picked` / `p.persona` as
+  // scalars, not objects. See useRunSession.ts:233 destructure.
   const nodeData = {
+    // Identity
     node_id: input.node_id,
-    title: input.title,
     type: input.type,
-    model: {
-      id: input.model_id,
-      temperature: typeof input.model_temperature === 'number' ? input.model_temperature : undefined,
-      max_tokens: typeof input.model_max_tokens === 'number' ? input.model_max_tokens : undefined,
-      context_window:
-        typeof input.model_context_window === 'number' ? input.model_context_window : undefined,
-    },
-    tools: {
-      picked: input.tools_picked,
-      candidate: Array.isArray(input.tools_candidate) ? input.tools_candidate : [],
-    },
-    persona: {
-      body: input.persona,
-      source: input.persona_source,
-      tokens: input.persona_tokens,
-      cached: input.persona_cached,
-    },
+    title: input.title,
+    sub: typeof input.sub === 'string' ? input.sub : '',
+    chips: Array.isArray(input.chips) ? input.chips : [],
+    status: typeof input.status === 'string' ? input.status : 'ready',
+    avatar_char:
+      typeof input.avatar_char === 'string' && input.avatar_char.length > 0
+        ? input.avatar_char
+        : (input.title as string).charAt(0) || '?',
+    // Model (flat)
+    model: input.model_id as string,
+    temperature: typeof input.model_temperature === 'number' ? input.model_temperature : undefined,
+    max_tokens: typeof input.model_max_tokens === 'number' ? input.model_max_tokens : undefined,
+    context_window:
+      typeof input.model_context_window === 'number' ? input.model_context_window : undefined,
+    // Tools (flat)
+    tools_picked: input.tools_picked as string[],
+    tools_candidate: Array.isArray(input.tools_candidate)
+      ? (input.tools_candidate as string[])
+      : undefined,
+    // Persona (flat) — single string body + S6.5 v3 stacked extras for the
+    // SkillSection provenance pill (source / tokens / cached).
+    persona: input.persona as string,
+    persona_source: input.persona_source as string,
+    persona_tokens: input.persona_tokens as number,
+    persona_cached: input.persona_cached as boolean,
+    // Memory (flat string per frontend NodeEvent.memory)
     memory: typeof input.memory === 'string' ? input.memory : undefined,
-    io: {
-      input: input.io_input,
-      output: input.io_output,
-    },
+    // S6.5 stacked extras
+    skill_ref: typeof input.skill_ref === 'string' ? input.skill_ref : undefined,
+    io_input: input.io_input,
+    io_output: input.io_output,
   };
 
   // 2026-05-20 (S6 contract fix): emit `event: 'node'` to match parser.ts
-  // baseline + frontend `src/api/runSessions.ts` listener. The prior
-  // 'sf-node' name was inconsistent with the parser's <sf:node> → 'node'
-  // mapping and would have orphaned tool-emitted nodes from the UI graph.
+  // baseline + frontend `src/api/runSessions.ts` listener.
   return {
     output: { ok: true, node_id: input.node_id },
     sseEvents: [{ event: 'node', data: nodeData }],
@@ -403,9 +457,14 @@ async function execRegisterEdge(input: unknown): Promise<ToolExecutionResult> {
     return errResult('register_edge: max_retries must be a number when provided');
   }
 
+  // S7 (2026-05-20): include `status: 'active'` so the payload matches the
+  // frontend EdgeEvent contract (src/api/runSessions.ts:122-126) verbatim.
+  // parser.ts <sf:edge> handler already emits this same default; keep both
+  // code paths in lock-step.
   const edgeData = {
     from: input.from,
     to: input.to,
+    status: 'active',
     kind: (input.kind as EdgeKindIn | undefined) ?? 'sequential',
     condition: typeof input.condition === 'string' ? input.condition : undefined,
     max_retries: typeof input.max_retries === 'number' ? input.max_retries : undefined,

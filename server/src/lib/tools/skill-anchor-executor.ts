@@ -9,6 +9,12 @@
  * `.execute(name, input)`. This adapter just bridges the two without changing
  * any executor behavior.
  *
+ * SSE side-effect names (S6 contract):
+ *   register_agent → `event: 'node'`   (NOT 'sf-node')
+ *   register_edge  → `event: 'edge'`   (NOT 'sf-edge')
+ * Matches parser.ts <sf:node>→'node' / <sf:edge>→'edge' mapping + frontend
+ * NodeEvent / EdgeEvent listeners in src/api/runSessions.ts.
+ *
  * Context note (skill_id / sessionId):
  *   S4 executors are pure — they read `skill_id` / `agent_id` / `slot` straight
  *   from the LLM-supplied `input` JSON (e.g. `list_team_agents({skill_id})`).

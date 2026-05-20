@@ -21,6 +21,7 @@ import { getSetting } from '../storage/settings';
 import { SKILLS } from '../skills';
 import { DESIGN_SYSTEMS } from '../design-systems';
 import { composeSystemPrompt, type LayerToggles } from '../prompt-assembly';
+import { composeMultiTurnPrompt } from '../prompts';
 import { loadSkillSideFiles } from '../loaders/skill-side-files';
 import {
   PROVIDER_ENV_VAR,
@@ -873,6 +874,23 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     // docs/design/skill-team-conversion-design-v1.md §G "ShadowFlow 路径选择"。
     const teamSpec = skillForPrompt?.team;
     const wantSyntheticFallback = req.query.fallback === 'synthetic';
+
+    // 2026-05-20 — Team-first vs Agent-first prompt 分流
+    // teamSpec 存在（Skill Pack 有团队蓝图，如 BMAD/gSTACK）→ team-first，
+    //   LLM 先 emit "挑选 Team 蓝图" 再 "配置 Agent 角色"。
+    // teamSpec 不存在（裸 agent-team-blueprint，用户自由 chat）→ agent-first，
+    //   LLM 跳过 "挑选 Team 蓝图"，直接从 goal 推导 agent 名单。
+    // 注意：当前 system_prompt 已 layer-composed，含 team-first phase-1。
+    // agent-first 时需要把 phase-1 重组，所以 reassemble。
+    let effectiveSystemPrompt = compose.prompt;
+    if (!teamSpec && skillForPrompt?.system_prompt === composeMultiTurnPrompt('team-first')) {
+      // 通用 agent-team-blueprint skill + 无 team yaml → agent-first 流
+      effectiveSystemPrompt = compose.prompt.replace(
+        composeMultiTurnPrompt('team-first'),
+        composeMultiTurnPrompt('agent-first'),
+      );
+      console.log(`[run-sessions] no teamSpec → agent-first prompt flow`);
+    }
     const generator = teamSpec && wantSyntheticFallback
       ? synthesizeTeamRun(teamSpec, id, abortController.signal)
       : runSkillAssembler({
@@ -881,7 +899,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           session_id: id,
           anthropic_key: session.anthropic_key,
           signal: abortController.signal,
-          system_prompt: compose.prompt,
+          system_prompt: effectiveSystemPrompt,
           // Story 15.9 — forward sanitized generation overrides. assembler.ts
           // applies env/default fallbacks when each is undefined.
           model: session.model,
@@ -1590,8 +1608,13 @@ async function* synthesizeTeamRun(
   }
   yield { event: 'assemble', data: { step: '配置 Agent 角色', step_index: 2, output_kind: 'nodes', status: 'done', elapsed_ms: agentStepElapsed } };
 
-  // Step 3 — 生成 YAML Blueprint
-  yield { event: 'assemble', data: { step: '生成 YAML Blueprint', step_index: 3, output_kind: 'yaml', status: 'running', elapsed_ms: null } };
+  // 2026-05-20 — 对齐 v3 设计稿 step 4-5：「设置工具集」+「Policy 协作规则」。
+  // Step 3 = 设置工具集（这里 emit YAML blueprint，因为 YAML 已经含 tools 列）。
+  // Step 4 = Policy 协作规则（emit edges + team.policy/mode/retry 摘要）。
+  // 旧 "生成 YAML Blueprint" / "配置 Team Workflow" 是实现细节，不再做可见 step label。
+
+  // Step 3 — 设置工具集 (carries YAML blueprint emission)
+  yield { event: 'assemble', data: { step: '设置工具集', step_index: 3, output_kind: 'yaml', status: 'running', elapsed_ms: null } };
   await pace(DELAY_STEP, signal);
   const yamlText = synthesizeYaml(team);
   const yamlFilename = `${team.name.replace(/\./g, '-')}.yml`;
@@ -1610,17 +1633,27 @@ async function* synthesizeTeamRun(
     yield { event: 'yaml-line', data: { line, total_lines: yamlLines.length } };
     await pace(20, signal);
   }
-  yield { event: 'assemble', data: { step: '生成 YAML Blueprint', step_index: 3, output_kind: 'yaml', status: 'done', elapsed_ms: DELAY_STEP + yamlLines.length * 20 } };
+  yield { event: 'assemble', data: { step: '设置工具集', step_index: 3, output_kind: 'yaml', status: 'done', elapsed_ms: DELAY_STEP + yamlLines.length * 20 } };
 
-  // Step 4 — 配置 Team Workflow (edges)
-  yield { event: 'assemble', data: { step: '配置 Team Workflow', step_index: 4, output_kind: 'edges', status: 'running', elapsed_ms: null } };
+  // Step 4 — Policy 协作规则 (edges + policy summary)
+  yield { event: 'assemble', data: { step: 'Policy 协作规则', step_index: 4, output_kind: 'edges', status: 'running', elapsed_ms: null } };
   await pace(DELAY_STEP, signal);
+  // policy summary text event so the UI can show "mode=serial · policy=strict · retry=3" in left pane
+  yield {
+    event: 'policy',
+    data: {
+      mode: team.mode ?? 'serial',
+      policy: team.policy ?? 'strict',
+      retry: team.retry ?? 3,
+      edge_count: team.edges.length,
+    },
+  };
   for (const edge of team.edges) {
     if (signal.aborted) return;
     yield { event: 'edge', data: { from: edge.from, to: edge.to, status: 'active' } };
     await pace(DELAY_EVENT, signal);
   }
-  yield { event: 'assemble', data: { step: '配置 Team Workflow', step_index: 4, output_kind: 'edges', status: 'done', elapsed_ms: DELAY_STEP + team.edges.length * DELAY_EVENT } };
+  yield { event: 'assemble', data: { step: 'Policy 协作规则', step_index: 4, output_kind: 'edges', status: 'done', elapsed_ms: DELAY_STEP + team.edges.length * DELAY_EVENT } };
 
   yield {
     event: 'complete',
