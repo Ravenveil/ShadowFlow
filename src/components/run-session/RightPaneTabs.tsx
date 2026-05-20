@@ -23,43 +23,31 @@ export type RunPillStatus = 'building' | 'done' | 'error';
 export interface RightPaneTabsProps {
   /** Currently visible tab. */
   activeTab: TabId;
-  /** Fired when the user clicks a tab button. Parent decides whether the
-   *  click also flips follow mode to 'locked' (typically yes — see
-   *  useFollowMode.setActiveTab). */
   onTabChange: (tab: TabId) => void;
-  /** Optional follow chip rendered at the left of the toolbar. Pass
-   *  <FollowChip ... /> from useFollowMode. */
+  /** Optional follow chip rendered at the left of the toolbar. */
   followChip?: React.ReactNode;
-  /**
-   * Which tab the live run step is currently mapped to. The matching tab
-   * button shows a pulsing dot in its top-right corner. Pass null when
-   * follow mode is locked or no step maps to a tab.
-   */
   followedTab?: TabId | null;
-  /** Panel renderers — one per tab. Required so the shell knows what to
-   *  draw inside the content area for each tab. */
   panels: Record<TabId, React.ReactNode>;
-  /** Run title shown in the toolbar between the chip and the tab buttons
-   *  (e.g. "run_54cc04ef-…"). Truncated with ellipsis when narrow. */
+  /** 2026-05-20 — runTitle / runStatus 字段保留但不再在 toolbar 渲染。
+   *  v3 设计稿把 run id + 状态 pill 放在左 pane 的 Run Session header，
+   *  右 pane toolbar 只放 follow chip + tabs + Blueprint。
+   *  保留 prop 名兼容现有 RunSessionPage 调用，避免回归 props 删除。 */
   runTitle?: string;
-  /** Status pill shown next to the run title. */
   runStatus?: RunPillStatus;
-  /** Optional per-tab count badge (mirrors design `<span class="ct">N</span>`).
-   *  Renders only when the value is > 0. */
   tabCounts?: Partial<Record<TabId, number>>;
+  /** v3 toolbar 右端的 Blueprint file tag — 显示当前 run 产出的 artifact 文件名。 */
+  blueprintFilename?: string | null;
 }
 
-const PILL_TEXT: Record<RunPillStatus, string> = {
+// PILL_TEXT / PILL_BG retained for back-compat in case another caller imports
+// the same status semantics; not used in the new underline-style toolbar.
+// (Kept un-exported & unused-tolerant via `void` reference below.)
+const _PILL_TEXT: Record<RunPillStatus, string> = {
   building: '构建中',
   done: '已完成',
   error: '出错',
 };
-
-const PILL_BG: Record<RunPillStatus, string> = {
-  building: 'var(--t-accent)',
-  done: 'var(--t-ok, #16a34a)',
-  error: 'var(--t-warn, #dc2626)',
-};
+void _PILL_TEXT;
 
 const TAB_DEFS: { key: TabId; label: string }[] = [
   { key: 'overview', label: 'Overview' },
@@ -74,10 +62,14 @@ export function RightPaneTabs({
   followChip,
   followedTab,
   panels,
-  runTitle,
-  runStatus,
+  runTitle: _runTitle,
+  runStatus: _runStatus,
   tabCounts,
+  blueprintFilename,
 }: RightPaneTabsProps) {
+  // 2026-05-20 — runTitle / runStatus 不再渲染（v3 设计稿把它们放在左 pane header）。
+  // 显式 void 标记给 lint/读代码的人看，避免被当成 bug 删掉。
+  void _runTitle; void _runStatus;
   return (
     <section
       style={{
@@ -88,84 +80,13 @@ export function RightPaneTabs({
         height: '100%',
       }}
     >
-      {/* Toolbar — left: follow chip, right: tab button group */}
-      <div
-        className="rs-pane-tabs-toolbar"
-        style={{
-          height: 44,
-          background: 'var(--t-panel)',
-          borderBottom: '1px solid var(--t-border)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '0 14px',
-          flexShrink: 0,
-        }}
-      >
-        {followChip && <div style={{ display: 'flex', alignItems: 'center' }}>{followChip}</div>}
+      {/* Toolbar — v3 design: [follow chip] [sep] [tabs underline] [...] [Blueprint] */}
+      <style>{toolbarStyles}</style>
+      <div className="rs-toolbar">
+        {followChip && <div className="rs-toolbar-l">{followChip}</div>}
+        <div className="rs-toolbar-sep" />
 
-        {/* Run title + status pill — task spec Item 8. Centered/left-grouped
-            between the chip and the tab strip. Truncates with ellipsis so a
-            long run id never pushes the tabs off-screen. */}
-        {(runTitle || runStatus) && (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              minWidth: 0,
-              overflow: 'hidden',
-            }}
-          >
-            {runTitle && (
-              <span
-                title={runTitle}
-                style={{
-                  fontFamily: 'var(--t-mono, ui-monospace, "SF Mono", Menlo, monospace)',
-                  fontSize: 11.5,
-                  color: 'var(--t-fg-3)',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  maxWidth: 220,
-                }}
-              >
-                {runTitle}
-              </span>
-            )}
-            {runStatus && (
-              <span
-                data-status={runStatus}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  height: 20,
-                  padding: '0 8px',
-                  borderRadius: 10,
-                  background: PILL_BG[runStatus],
-                  color: 'var(--t-accent-ink, #fff)',
-                  fontSize: 10.5,
-                  fontWeight: 600,
-                  letterSpacing: '.02em',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {PILL_TEXT[runStatus]}
-              </span>
-            )}
-          </div>
-        )}
-
-        <div
-          role="tablist"
-          aria-label="Run session right pane tabs"
-          style={{
-            marginLeft: 'auto',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 2,
-          }}
-        >
+        <div role="tablist" aria-label="Run session right pane tabs" className="rs-tabs">
           {TAB_DEFS.map(({ key, label }) => {
             const isActive = activeTab === key;
             const isFollowed = followedTab === key;
@@ -178,70 +99,25 @@ export function RightPaneTabs({
                 aria-selected={isActive}
                 data-tab={key}
                 data-followed={isFollowed ? '1' : undefined}
+                className={`rs-tab ${isActive ? 'on' : ''}`}
                 onClick={() => onTabChange(key)}
-                style={{
-                  position: 'relative',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  height: 28,
-                  padding: '0 12px',
-                  borderRadius: 6,
-                  background: isActive ? 'var(--t-bg)' : 'transparent',
-                  border: `1px solid ${isActive ? 'var(--t-border)' : 'transparent'}`,
-                  color: isActive ? 'var(--t-fg)' : 'var(--t-fg-3)',
-                  fontFamily: 'inherit',
-                  fontSize: 11.5,
-                  fontWeight: isActive ? 600 : 500,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'background 120ms ease, color 120ms ease, border-color 120ms ease',
-                }}
               >
                 {label}
                 {typeof count === 'number' && count > 0 && (
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: 16,
-                      height: 14,
-                      padding: '0 5px',
-                      borderRadius: 7,
-                      background: isActive
-                        ? 'var(--t-accent-tint, rgba(168,85,247,.14))'
-                        : 'var(--t-panel-3, var(--bg-elev-3))',
-                      color: isActive ? 'var(--t-accent, #A855F7)' : 'var(--t-fg-4)',
-                      fontFamily: 'var(--font-mono, monospace)',
-                      fontSize: 9.5,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {count}
-                  </span>
+                  <span className="rs-tab-ct">{count}</span>
                 )}
-                {isFollowed && (
-                  <span
-                    aria-hidden
-                    style={{
-                      position: 'absolute',
-                      top: 3,
-                      right: 4,
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
-                      background: 'currentColor',
-                      color: 'var(--t-accent)',
-                      boxShadow: '0 0 0 2px var(--t-panel)',
-                      animation: 'sf-pulse 1.4s ease-in-out infinite',
-                    }}
-                  />
-                )}
+                {isFollowed && <span aria-hidden className="rs-tab-dot" />}
               </button>
             );
           })}
         </div>
+
+        {blueprintFilename && (
+          <div className="rs-toolbar-r" title={blueprintFilename}>
+            <span className="rs-bp-lbl">Blueprint</span>
+            <span className="rs-bp-id">{blueprintFilename}</span>
+          </div>
+        )}
       </div>
 
       {/* Content area — only the active panel is rendered (no display:none
@@ -272,5 +148,80 @@ export function RightPaneTabs({
     </section>
   );
 }
+
+/* prettier-ignore */
+const toolbarStyles = `
+.rs-toolbar {
+  display: flex; align-items: stretch;
+  height: 44px;
+  background: var(--t-panel);
+  border-bottom: 1px solid var(--t-border);
+  padding: 0 14px;
+  flex-shrink: 0;
+}
+.rs-toolbar-l { display: flex; align-items: center; padding-right: 10px; }
+.rs-toolbar-sep {
+  width: 1px; align-self: center; height: 18px;
+  background: var(--t-border);
+  margin: 0 6px 0 4px;
+}
+.rs-tabs { display: inline-flex; align-items: stretch; gap: 0; }
+.rs-tab {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 44px; padding: 0 14px;
+  border: none; background: none; cursor: pointer;
+  font-family: inherit; font-size: 11.5px;
+  color: var(--t-fg-4);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color .12s ease, border-color .12s ease;
+}
+.rs-tab:hover:not(.on) { color: var(--t-fg-2); }
+.rs-tab.on { color: var(--t-fg); border-bottom-color: var(--t-accent); font-weight: 600; }
+.rs-tab-ct {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9px;
+  padding: 1px 5px; border-radius: 4px;
+  background: var(--t-panel-3, var(--t-bg-elev-3));
+  color: var(--t-fg-4);
+}
+.rs-tab.on .rs-tab-ct {
+  background: var(--t-accent-tint);
+  color: var(--t-accent);
+}
+.rs-tab-dot {
+  position: absolute; top: 6px; right: 6px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--t-accent);
+  box-shadow: 0 0 0 2px var(--t-panel);
+  animation: sf-pulse 1.4s ease-in-out infinite;
+}
+
+.rs-toolbar-r {
+  margin-left: auto;
+  align-self: center;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 6px;
+  background: var(--t-panel-2);
+  border: 1px solid var(--t-border);
+  font-size: 10.5px;
+  max-width: 280px;
+  min-width: 0;
+}
+.rs-bp-lbl {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--t-fg-4);
+  flex: none;
+}
+.rs-bp-id {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px; color: var(--t-fg-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
+`;
 
 export default RightPaneTabs;

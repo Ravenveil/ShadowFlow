@@ -3655,6 +3655,7 @@ function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: Ru
           team: session.nodes.length,
           agent: session.nodes.length,
         }}
+        blueprintFilename={session.blueprintFile}
       />
 
       {/* Right-bottom dock — single primary CTA. Anchored absolute so the
