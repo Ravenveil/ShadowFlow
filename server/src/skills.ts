@@ -42,6 +42,12 @@ export interface SkillDefinition {
   system_prompt: string;
   /** Story 15.19 v2: optional executor selector. */
   executor?: SkillExecutor;
+  /**
+   * S6.0: optional structured team definition loaded from `<skill>/team.skill.yaml`.
+   * Present when the skill ships pre-baked agent specs (persona/model/tools/memory/io)
+   * the SSE stream can inject directly instead of asking the LLM to invent.
+   */
+  team?: import('./lib/skill-types').TeamDef;
 }
 
 // ─── system_prompt strings (Story 15.2 / AC5) ────────────────────────────────

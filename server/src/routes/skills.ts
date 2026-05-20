@@ -16,6 +16,8 @@ import path from 'path';
 import { Router, Request, Response } from 'express';
 import { SKILLS, HARDCODED_SKILLS, reloadSkills } from '../skills';
 import { ingestSkill, listInstalled, parseSource } from '../skill-ingest';
+import { getAgent, getAnchorBody } from '../lib/skill-yaml';
+import type { SkillSlot } from '../lib/skill-types';
 
 const router = Router();
 
@@ -36,8 +38,84 @@ router.get('/', (_req: Request, res: Response) => {
     scenario: skill.scenario,
     fidelity: skill.fidelity,
     example_prompt: skill.example_prompt,
+    has_team: !!skill.team,
   }));
   res.json(list);
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// S6.1 — Skill team probe endpoints.
+//
+// Two reads only — provenance lookup for the right-pane "from <skill>.yaml#..."
+// labels and the editor surface. No writes; editing is deferred.
+// ───────────────────────────────────────────────────────────────────────────
+
+const VALID_AGENT_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
+const VALID_SLOTS: ReadonlySet<SkillSlot> = new Set([
+  'persona',
+  'model',
+  'tools',
+  'memory',
+  'io',
+]);
+
+router.get('/:skillId/team', (req: Request, res: Response) => {
+  const skillId = req.params.skillId;
+  if (!VALID_SKILL_ID_RE.test(skillId)) {
+    res.status(400).json({ error: 'invalid skillId' });
+    return;
+  }
+  const skill = SKILLS[skillId];
+  if (!skill) {
+    res.status(404).json({ error: 'skill not found' });
+    return;
+  }
+  if (!skill.team) {
+    res.status(404).json({ error: 'skill has no team.skill.yaml' });
+    return;
+  }
+  // Strip absolute filesystem paths from the response so we don't leak
+  // server-local directory layout to the browser.
+  const { source_dir, ...safe } = skill.team;
+  res.json(safe);
+});
+
+router.get('/:skillId/agents/:agentId/:slot', (req: Request, res: Response) => {
+  const { skillId, agentId, slot } = req.params as {
+    skillId: string;
+    agentId: string;
+    slot: string;
+  };
+  if (!VALID_SKILL_ID_RE.test(skillId) || !VALID_AGENT_ID_RE.test(agentId)) {
+    res.status(400).json({ error: 'invalid id' });
+    return;
+  }
+  if (!VALID_SLOTS.has(slot as SkillSlot)) {
+    res.status(400).json({ error: 'invalid slot' });
+    return;
+  }
+  const skill = SKILLS[skillId];
+  if (!skill || !skill.team) {
+    res.status(404).json({ error: 'skill or team not found' });
+    return;
+  }
+  const agent = getAgent(skill.team, agentId);
+  if (!agent) {
+    res.status(404).json({ error: 'agent not found in team' });
+    return;
+  }
+  const anchor = agent.anchors[slot as SkillSlot];
+  const body = getAnchorBody(skill.team, agentId, slot as SkillSlot);
+  if (!body) {
+    res.status(404).json({ error: 'anchor body unavailable' });
+    return;
+  }
+  res.json({
+    ref: anchor.ref,
+    tokens: anchor.tokens,
+    cached: anchor.cached,
+    body: body.body,
+  });
 });
 
 /**

@@ -19,6 +19,7 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import type { SkillDefinition, SkillMode, PreviewType } from '../skills';
+import { loadTeam } from '../lib/skill-yaml';
 
 const DEFAULT_SKILLS_DIR = path.join(process.cwd(), '.shadowflow', 'skills');
 
@@ -172,6 +173,23 @@ export function loadFsSkills(
       system_prompt: parsed.content ?? '',
       executor,
     };
+
+    // S6.0 — opportunistically attach the structured team (if the skill ships one).
+    // Per-skill load failures are non-fatal: we keep the skill itself loaded with
+    // its system_prompt path intact so older flows continue to work.
+    try {
+      const teamResult = loadTeam(path.join(skillsDir, id));
+      if (teamResult.team) {
+        skill.team = teamResult.team;
+      }
+      for (const e of teamResult.errors) {
+        errors.push({ id, message: `team.skill.yaml: ${e}` });
+        console.warn(`[skill-loader] ${id} team load: ${e}`);
+      }
+    } catch (err) {
+      // skill-yaml itself shouldn't throw, but defend anyway
+      console.warn(`[skill-loader] ${id} team load threw: ${(err as Error).message}`);
+    }
 
     if (hardcodedIds.includes(id)) {
       overrides.push(id);
