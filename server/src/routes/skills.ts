@@ -347,7 +347,25 @@ router.post('/ingest', async (req: Request, res: Response) => {
  */
 router.get('/installed', (_req: Request, res: Response) => {
   const items = listInstalled();
-  res.json({ data: items });
+  // S6 — also surface team-backed FS skills (paper-review, bmad, …) in the
+  // picker so users can pick the v3 synthesizer path. Hardcoded skills and
+  // FS skills without a team are intentionally excluded — they go through
+  // the LLM assembler and are reachable via the templates flow.
+  const teamSkills = Object.entries(SKILLS)
+    .filter(([, s]) => !!s.team)
+    .map(([skill_id, s]) => ({
+      id: skill_id,
+      name: s.name,
+      source: 'builtin',
+      source_hash: '',
+      installed_at: '',
+      counts: { agents: s.team!.agents.length, edges: s.team!.edges.length },
+    }));
+  // Local-installed entries win on id collision so user-edited skills keep
+  // overriding the bundled demo.
+  const seen = new Set(items.map((x) => x.id));
+  const merged = [...items, ...teamSkills.filter((t) => !seen.has(t.id))];
+  res.json({ data: merged });
 });
 
 /**

@@ -207,8 +207,12 @@ edges:
 <sf:step name="创建 Agent 节点" output_kind="none" status="running"/>
 <sf:step name="创建 Agent 节点" output_kind="none" status="done" elapsed_ms="..."/>
 
-<sf:step name="配置 Team Workflow" output_kind="edges" status="running"/>
-<sf:step name="配置 Team Workflow" output_kind="edges" status="done" elapsed_ms="..."/>
+<!-- 2026-05-20 (S6 fix) — step 5 was previously output_kind="edges" but edges
+     are emitted INSIDE step 2 (规划 Agent 结构) per the example above, so
+     the gate would fire STEP_NO_OUTPUT every time. Step 5 is a no-op
+     announcement of "wiring complete"; leave output_kind="none". -->
+<sf:step name="配置 Team Workflow" output_kind="none" status="running"/>
+<sf:step name="配置 Team Workflow" output_kind="none" status="done" elapsed_ms="..."/>
 
 <sf:complete redirect="/editor"/>
 
