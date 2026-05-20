@@ -22,6 +22,14 @@ import type { SkillDefinition, SkillMode, PreviewType } from '../skills';
 import { loadTeam } from '../lib/skill-yaml';
 
 const DEFAULT_SKILLS_DIR = path.join(process.cwd(), '.shadowflow', 'skills');
+// S6.4 — when the Node server is launched from the `server/` subdir
+// (`npm run dev:server`), `process.cwd()` resolves to that subdir, so
+// `.shadowflow/skills` lands at `server/.shadowflow/skills`. The
+// source-tracked demo bundles live at the project root's `.shadowflow/skills`
+// instead. We scan both locations and merge — local (server-rooted) entries
+// override root entries when both exist with the same id, so the existing
+// runtime-state convention (editor-export-demo etc.) keeps working.
+const ROOT_SKILLS_DIR = path.join(process.cwd(), '..', '.shadowflow', 'skills');
 
 export interface SkillLoadResult {
   loaded: Record<string, SkillDefinition>;
@@ -45,21 +53,49 @@ const VALID_PREVIEW_TYPES: ReadonlySet<PreviewType> = new Set(['yaml', 'html', '
 /**
  * Scan `.shadowflow/skills/` for SKILL.md files and parse them.
  *
+ * Two-dir scan strategy (S6.4): we scan the project root's
+ * `.shadowflow/skills/` first (where the source-tracked demo bundles live)
+ * and then the server-local `.shadowflow/skills/` (runtime user content +
+ * legacy test skills), merging the results. Local entries win on id
+ * collision so the long-standing `editor-export-demo` etc. keep their
+ * existing behaviour.
+ *
  * @param hardcodedIds  ids of built-in skills (used to flag overrides)
- * @param skillsDirOverride  test-only: redirect the scan target
+ * @param skillsDirOverride  test-only: redirect the scan target. When set,
+ *                           only this single dir is scanned (no merging).
  */
 export function loadFsSkills(
   hardcodedIds: ReadonlyArray<string> = [],
   skillsDirOverride?: string,
 ): SkillLoadResult {
-  const skillsDir = skillsDirOverride ?? DEFAULT_SKILLS_DIR;
   const loaded: Record<string, SkillDefinition> = {};
   const errors: Array<{ id: string; message: string }> = [];
   const overrides: string[] = [];
 
-  if (!fs.existsSync(skillsDir)) {
+  const dirs = skillsDirOverride
+    ? [skillsDirOverride]
+    : [ROOT_SKILLS_DIR, DEFAULT_SKILLS_DIR].filter(fs.existsSync);
+
+  if (dirs.length === 0) {
     return { loaded, errors, overrides };
   }
+  // Inline the single-dir scan body via a labelled loop so we can re-run
+  // for each candidate dir while keeping the existing per-file error /
+  // override book-keeping logic untouched.
+  for (const skillsDir of dirs) {
+    scanOneDir(skillsDir, hardcodedIds, loaded, errors, overrides);
+  }
+  return { loaded, errors, overrides };
+}
+
+function scanOneDir(
+  skillsDir: string,
+  hardcodedIds: ReadonlyArray<string>,
+  loaded: Record<string, SkillDefinition>,
+  errors: Array<{ id: string; message: string }>,
+  overrides: string[],
+): void {
+  if (!fs.existsSync(skillsDir)) return;
 
   let entries: fs.Dirent[];
   try {
@@ -68,7 +104,7 @@ export function loadFsSkills(
     const msg = `cannot read skills dir: ${(err as Error).message}`;
     errors.push({ id: '<root>', message: msg });
     console.warn(`[skill-loader] ${msg}`);
-    return { loaded, errors, overrides };
+    return;
   }
 
   // P1-2: cap iterations even if directory has 10k+ entries.
@@ -205,6 +241,4 @@ export function loadFsSkills(
   for (const id of overrides) {
     console.log(`[skill-loader] override hardcoded skill: ${id}`);
   }
-
-  return { loaded, errors, overrides };
 }
