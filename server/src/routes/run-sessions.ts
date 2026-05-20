@@ -831,13 +831,14 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   });
 
   try {
-    // S6.3 — when the active skill ships a structured team.skill.yaml,
-    // synthesize the run from disk instead of asking the LLM to invent
-    // agents. Deterministic, zero token cost, matches the v3 stacked design
-    // exactly because every byte (persona / model / tools / memory / io)
-    // lives in the skill file already.
+    // S0 (2026-05-20) — synthesizeTeamRun 不再默认触发。skill 即使带 team.skill.yaml
+    // 也走 runSkillAssembler 真 LLM 路径。原写死回放路径降级为 opt-in fallback:
+    //   GET /api/run-sessions/:id/stream?fallback=synthetic
+    // 仅在 BYOK key 配置错 / 离线 demo / LLM 不可用兜底时使用。设计稿见
+    // docs/design/skill-team-conversion-design-v1.md §G "ShadowFlow 路径选择"。
     const teamSpec = skillForPrompt?.team;
-    const generator = teamSpec
+    const wantSyntheticFallback = req.query.fallback === 'synthetic';
+    const generator = teamSpec && wantSyntheticFallback
       ? synthesizeTeamRun(teamSpec, id, abortController.signal)
       : runSkillAssembler({
           goal: session.goal,
@@ -859,9 +860,13 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           provider: session.provider,
           api_key: session.api_key,
         });
-    if (teamSpec) {
+    if (teamSpec && wantSyntheticFallback) {
       console.log(
-        `[run-sessions] synthesizing team run for skill=${session.skill_name} (${teamSpec.agents.length} agent(s), no LLM)`,
+        `[run-sessions] explicit synthetic fallback for skill=${session.skill_name} (${teamSpec.agents.length} agent(s), no LLM)`,
+      );
+    } else if (teamSpec) {
+      console.log(
+        `[run-sessions] skill=${session.skill_name} has team yaml (${teamSpec.agents.length} agent(s)) but routing to LLM assembler (S0 default).`,
       );
     }
 

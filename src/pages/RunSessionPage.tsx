@@ -2405,20 +2405,16 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
               // S6.8 — flatten agent substeps under the "配置 Agent 角色"
               // parent step. Same-substep running+done pair collapses to a
               // single row (the reducer merges them in place by name).
+              //
+              // S0 (2026-05-20) — 前端不再为缺 substep 的 node 补 pending placeholder。
+              // 后端不 emit = 前端不显示。缺帧 = 后端 bug，暴露不掩盖。设计稿
+              // docs/design/skill-team-conversion-design-v1.md §4.5 + S7.4.5
+              // "前端不要 mock，必须是后端真实 SSE 传入"。
               let substeps: StepRow['substeps'] = undefined;
               if (s.name === '配置 Agent 角色') {
                 substeps = [];
                 for (const node of session.nodes) {
-                  if (!node.substeps || node.substeps.length === 0) {
-                    // Agent emitted via NODE but no substep frames yet — show a
-                    // single "pending" row so users see the agent is queued.
-                    substeps.push({
-                      label: `${node.title} · pending`,
-                      status: 'pending',
-                      elapsedMs: null,
-                    });
-                    continue;
-                  }
+                  if (!node.substeps || node.substeps.length === 0) continue;
                   for (const sub of node.substeps) {
                     // Merge identity + persona into one label per v3 screenshot.
                     const labelSlot = sub.name === 'identity' ? 'identity + persona' : sub.name;
