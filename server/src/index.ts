@@ -10,6 +10,7 @@ import fs from 'fs';
 import runSessionsRouter from './routes/run-sessions';
 import runsRouter from './routes/runs';
 import agentsRouter from './routes/agents';
+import teamsRouter from './routes/teams';
 import skillsRouter from './routes/skills';
 import designSystemsRouter from './routes/design-systems';
 import exportRouter from './routes/export';
@@ -78,6 +79,10 @@ initSqlite();
 app.use('/api/run-sessions', runSessionsRouter);
 app.use('/api/runs', runsRouter);
 app.use('/api/agents', agentsRouter);
+// S0.7 — Team DAG endpoints (yaml-backed). Mounted before proxyFallback so
+// /:id/dag and /:id/dag/validate hit Node; non-matching /api/teams paths
+// (root list, create, etc.) fall through to Python via proxyFallback.
+app.use('/api/teams', teamsRouter);
 app.use('/api/skills', skillsRouter);
 app.use('/api/design-systems', designSystemsRouter);
 app.use('/api/export', exportRouter);

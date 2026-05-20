@@ -13,14 +13,25 @@ members:
   - critic
   - writer
 edges:
-  - { from: coord, to: reader, kind: sequential }
-  - { from: reader, to: critic, kind: sequential }
-  - { from: critic, to: writer, kind: conditional, condition: 'approved' }
-  - { from: critic, to: reader, kind: conditional, condition: 'retry', max_retries: 3 }
+  - from: coord
+    to: reader
+    kind: sequential
+  - from: reader
+    to: critic
+    kind: sequential
+  - from: critic
+    to: writer
+    kind: conditional
+    condition: approved
+  - from: critic
+    to: reader
+    kind: conditional
+    condition: retry
+    max_retries: 3
 dag_layout:
   mode: auto
   nodes: []
   viewport:
-    zoom: 1.0
+    zoom: 1
     pan_x: 0
     pan_y: 0
