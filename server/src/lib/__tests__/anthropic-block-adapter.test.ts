@@ -225,6 +225,146 @@ function check(label: string, expected: unknown, actual: unknown) {
   );
 }
 
+// ── 5b. toAnthropicMessages — fold consecutive tool messages (S5 P0 #1) ──────
+// Anthropic API requires strict user/assistant alternation. The runtime emits
+// one `role: 'tool'` message per tool_use block, so a turn with 2 tools
+// produces 2 adjacent tool messages — these MUST collapse into 1 wire user
+// envelope with multiple tool_result blocks, otherwise the API returns 422.
+{
+  const messages: ConversationMessage[] = [
+    {
+      role: 'assistant',
+      blocks: [
+        { kind: 'tool_use', id: 'a', name: 'echo', input: { i: 1 } },
+        { kind: 'tool_use', id: 'b', name: 'add', input: { x: 2, y: 3 } },
+      ],
+    },
+    {
+      role: 'tool',
+      blocks: [
+        {
+          kind: 'tool_result',
+          tool_use_id: 'a',
+          tool_name: 'echo',
+          output: 'echoed',
+          is_error: false,
+        },
+      ],
+    },
+    {
+      role: 'tool',
+      blocks: [
+        {
+          kind: 'tool_result',
+          tool_use_id: 'b',
+          tool_name: 'add',
+          output: '5',
+          is_error: false,
+        },
+      ],
+    },
+  ];
+  const wire = toAnthropicMessages(messages);
+  check(
+    'toAnthropicMessages: 2 consecutive tool msgs fold into 1 wire user with 2 tool_result blocks',
+    [
+      {
+        role: 'assistant',
+        content: [
+          { type: 'tool_use', id: 'a', name: 'echo', input: { i: 1 } },
+          { type: 'tool_use', id: 'b', name: 'add', input: { x: 2, y: 3 } },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'a', content: 'echoed', is_error: false },
+          { type: 'tool_result', tool_use_id: 'b', content: '5', is_error: false },
+        ],
+      },
+    ],
+    wire,
+  );
+  check('toAnthropicMessages: fold collapses to 2 wire entries', 2, wire.length);
+}
+
+// Boundary: a real user(text) followed by tool(result) MUST NOT merge.
+// In practice the runtime never produces this sequence (user→assistant→tool),
+// but if it ever did, silently merging would corrupt history. We keep them
+// separate so the resulting 422 from Anthropic is a loud, debuggable failure
+// rather than a confusing data-loss bug.
+{
+  const messages: ConversationMessage[] = [
+    { role: 'user', blocks: [{ kind: 'text', text: 'hi' }] },
+    {
+      role: 'tool',
+      blocks: [
+        {
+          kind: 'tool_result',
+          tool_use_id: 'tu1',
+          tool_name: 'echo',
+          output: 'pong',
+          is_error: false,
+        },
+      ],
+    },
+  ];
+  const wire = toAnthropicMessages(messages);
+  check(
+    'toAnthropicMessages: user(text) + tool(result) stay as 2 wire messages (no false-positive merge)',
+    [
+      { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+      {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'tu1', content: 'pong', is_error: false },
+        ],
+      },
+    ],
+    wire,
+  );
+  check('toAnthropicMessages: boundary preserved as 2 wire entries', 2, wire.length);
+}
+
+// Boundary: tool → assistant → tool resets the fold state — second tool block
+// after an assistant turn must NOT merge with the earlier folded tool entry.
+{
+  const messages: ConversationMessage[] = [
+    {
+      role: 'tool',
+      blocks: [
+        {
+          kind: 'tool_result',
+          tool_use_id: 'a',
+          tool_name: 'echo',
+          output: '1',
+          is_error: false,
+        },
+      ],
+    },
+    { role: 'assistant', blocks: [{ kind: 'text', text: 'thinking' }] },
+    {
+      role: 'tool',
+      blocks: [
+        {
+          kind: 'tool_result',
+          tool_use_id: 'b',
+          tool_name: 'add',
+          output: '2',
+          is_error: false,
+        },
+      ],
+    },
+  ];
+  const wire = toAnthropicMessages(messages);
+  check(
+    'toAnthropicMessages: assistant between two tool runs resets fold (3 wire entries)',
+    3,
+    wire.length,
+  );
+  check('toAnthropicMessages: post-assistant tool is fresh user entry', 1, wire[2].content.length);
+}
+
 // ── 6. Exhaustiveness: switch covers every ContentBlock variant ──────────────
 // Compile-time check via inline self-test: if a future variant is added to
 // ContentBlock without updating toAnthropicBlock, the build will break. At

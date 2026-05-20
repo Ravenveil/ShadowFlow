@@ -686,6 +686,48 @@ async function main(): Promise<void> {
     );
   }
 
+  // ─── N. Abort payload carries cumulative usage (S5 P1 #4) ────────────────
+  // The 'aborted' SSE must report any tokens spent before cancellation so
+  // upstream billing / quotas can record partial-turn cost.
+  {
+    console.log('\n[N] abort yields usage in payload');
+    const ac = new AbortController();
+    const api = new FakeApiClient([
+      [
+        { kind: 'usage', usage: { input_tokens: 7, output_tokens: 3 } },
+        { kind: 'tool_use', id: 'a', name: 'echo', input: {} },
+        { kind: 'message_stop', stop_reason: 'tool_use' },
+      ],
+      // turn 2 won't run because we abort during tool execution.
+      [{ kind: 'message_stop', stop_reason: 'end_turn' }],
+    ]);
+    const tools = new FakeToolExecutor(SPECS, {
+      echo: async () => {
+        ac.abort();
+        return { output: 'ok' };
+      },
+    });
+    const session = newSession();
+    const rt = new ConversationRuntime(
+      session,
+      api,
+      tools,
+      new PermissionPolicy('allow'),
+      'SYS',
+    );
+    const events = await drain(rt.runTurn('go', ac.signal));
+    const abortedEv = events.find((e) => e.event === 'aborted');
+    check('N: aborted event present', true, abortedEv !== undefined);
+    const data = abortedEv!.data as {
+      session_id: string;
+      iterations: number;
+      usage: { input_tokens: number; output_tokens: number };
+    };
+    check('N: usage.input_tokens in abort payload', 7, data.usage.input_tokens);
+    check('N: usage.output_tokens in abort payload', 3, data.usage.output_tokens);
+    check('N: session_id preserved', 'sess-test', data.session_id);
+  }
+
   console.log(`\n${pass} pass, ${fail} fail`);
   if (fail > 0) process.exit(1);
 }

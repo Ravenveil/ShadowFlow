@@ -271,7 +271,12 @@ export class ConversationRuntime {
       // Check abort at the TOP of each iteration so we don't start a new
       // LLM call after the user aborted between turns.
       if (signal.aborted) {
-        yield { event: 'aborted', data: { session_id: this.session.id, iterations } };
+        // S5 P1 #4 (Checker review): include cumulative usage in abort payload
+        // so upstream can record partial-turn token spend even on cancellation.
+        yield {
+          event: 'aborted',
+          data: { session_id: this.session.id, iterations, usage: totalUsage },
+        };
         return;
       }
       iterations += 1;
@@ -365,7 +370,11 @@ export class ConversationRuntime {
       //    handles role-folding at the wire boundary.
       for (const t of pendingTools) {
         if (signal.aborted) {
-          yield { event: 'aborted', data: { session_id: this.session.id, iterations } };
+          // S5 P1 #4: include cumulative usage in abort payload (see top-of-loop note).
+          yield {
+            event: 'aborted',
+            data: { session_id: this.session.id, iterations, usage: totalUsage },
+          };
           return;
         }
 

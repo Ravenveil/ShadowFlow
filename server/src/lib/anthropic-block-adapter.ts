@@ -84,6 +84,13 @@ export function toAnthropicBlock(b: ContentBlock): AnthropicBlock {
  *
  * For ToolResult.is_error: wire field is optional (`undefined` means "not
  * error"). Internally we keep it as a required boolean, so undefined → false.
+ *
+ * Note (S5 P0 #2 — Checker review): in the S5/S6 flow this `tool_result`
+ * branch is never reached — wire never delivers tool_result to us.
+ * ContentRuntime constructs tool_result blocks directly (with `tool_name`
+ * enriched from the matching pending tool_use). This branch exists for
+ * protocol completeness only (round-trip tests, future provider adapters
+ * that might echo tool_result blocks back in a different shape).
  */
 export function fromAnthropicBlock(b: AnthropicBlock): ContentBlock {
   switch (b.type) {
@@ -92,6 +99,8 @@ export function fromAnthropicBlock(b: AnthropicBlock): ContentBlock {
     case 'tool_use':
       return { kind: 'tool_use', id: b.id, name: b.name, input: b.input };
     case 'tool_result':
+      // See JSDoc: dead branch in S5/S6 production flow. Kept for protocol
+      // completeness only — do NOT throw, callers may exercise it from tests.
       return {
         kind: 'tool_result',
         tool_use_id: b.tool_use_id,
@@ -119,15 +128,55 @@ export interface AnthropicMessage {
  * `messages` field shape.
  *
  *   - `role: 'tool'` is folded into `role: 'user'` per Anthropic convention.
+ *   - **Consecutive `role: 'tool'` messages are MERGED** into a single wire
+ *     `role: 'user'` envelope (Anthropic Messages API §contract requires
+ *     strict user/assistant alternation; two adjacent `role: 'user'`
+ *     messages → HTTP 422). ConversationRuntime emits one tool message per
+ *     tool_use block (for fine-grained debug / replay), so this fold is what
+ *     keeps the wire shape legal when an assistant turn dispatched multiple
+ *     tool_uses in one shot. Boundary protection: a "real" `role: 'user'`
+ *     message followed by `role: 'tool'` does NOT merge — those are two
+ *     genuinely distinct turns and the API accepts them as text-user then
+ *     tool-result-user only if separated by an assistant turn. (Today the
+ *     runtime never produces user→tool adjacent without an assistant
+ *     between, but we preserve them as separate wire entries so the bug
+ *     surfaces as a clean 422 instead of silently corrupting history.)
  *   - `role: 'system'` passes through; callers are responsible for ensuring
  *     system messages live in the top-level `system` field instead (Anthropic
  *     API requires that) — we don't filter here, that's policy not data.
  *   - `usage` is dropped (request-side messages don't carry usage; usage only
  *     comes back on the assistant turn's stream).
+ *
+ * S5 P0 #1 fix (Checker review): previously this function used `.map`, which
+ * produced two adjacent `role: 'user'` wire envelopes when the runtime
+ * dispatched ≥2 tools in one turn (e.g. 4-agent skill C scenario echo + add).
+ * The reduce-based fold below merges only **tool→tool runs**, never
+ * user→tool, to keep the boundary safe.
  */
 export function toAnthropicMessages(messages: ConversationMessage[]): AnthropicMessage[] {
-  return messages.map((m) => ({
-    role: m.role === 'tool' ? 'user' : m.role,
-    content: m.blocks.map(toAnthropicBlock),
-  }));
+  const out: AnthropicMessage[] = [];
+  // Track whether the LAST pushed entry came from a `role: 'tool'` internal
+  // message — that is the only case where we're allowed to extend it in place
+  // with subsequent tool_result blocks. A user-text message that happens to
+  // map to `role: 'user'` must NOT be merged with a following tool message.
+  let lastWasFoldedTool = false;
+
+  for (const m of messages) {
+    const wireBlocks = m.blocks.map(toAnthropicBlock);
+
+    if (m.role === 'tool') {
+      if (lastWasFoldedTool && out.length > 0) {
+        // Extend the previous folded-tool wire envelope in place.
+        out[out.length - 1].content.push(...wireBlocks);
+      } else {
+        out.push({ role: 'user', content: wireBlocks });
+        lastWasFoldedTool = true;
+      }
+    } else {
+      out.push({ role: m.role, content: wireBlocks });
+      lastWasFoldedTool = false;
+    }
+  }
+
+  return out;
 }
