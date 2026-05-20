@@ -79,14 +79,19 @@ function formatStatus(state: SecState, elapsedMs?: number | null): string {
   return 'pending';
 }
 
-function arMetaPill(agent: RunSessionNode): { text: string; bg: string; color: string; pulse: boolean } {
-  if (agent.status === 'ready') {
-    return { text: 'READY', bg: 'var(--t-ok-tint, rgba(16,185,129,.14))', color: 'var(--t-ok)', pulse: false };
-  }
-  if (agent.status === 'building') {
-    return { text: 'RUNNING', bg: 'var(--t-accent-tint)', color: 'var(--t-accent)', pulse: true };
-  }
-  return { text: 'PENDING', bg: 'var(--t-panel-2)', color: 'var(--t-fg-4)', pulse: false };
+type IdState = 'ok' | 'running' | 'waiting';
+
+function arIdState(agent: RunSessionNode): IdState {
+  if (agent.status === 'ready') return 'ok';
+  if (agent.status === 'building') return 'running';
+  return 'waiting';
+}
+
+function arMetaPill(agent: RunSessionNode): { text: string; pulse: boolean } {
+  const st = arIdState(agent);
+  if (st === 'ok') return { text: 'READY', pulse: false };
+  if (st === 'running') return { text: 'RUNNING', pulse: true };
+  return { text: 'WAITING', pulse: false };
 }
 
 /** Tiny highlighter: comment lines + keyword: + "quoted" strings. */
@@ -180,9 +185,9 @@ export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({
     >
       <style>{aacStyles}</style>
 
-      <div className="aac-card">
-        {/* ar-meta — single quiet identity strip */}
-        <div className="aac-meta">
+      <div className="aac-card" data-id-state={arIdState(agent)}>
+        {/* ar-meta — single quiet identity strip. data-state drives WAITING / RUNNING / READY skin */}
+        <div className="aac-meta" data-state={arIdState(agent)}>
           <span className="aac-av">{agent.avatarChar || agent.title.charAt(0) || '?'}</span>
           <span className="aac-nm">{skillRef}</span>
           <span className="aac-sub">· {agent.title}</span>
@@ -191,10 +196,7 @@ export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({
               · substep {agent.substeps.filter((s) => s.status === 'done').length} / 5
             </span>
           )}
-          <span
-            className={`aac-pill ${pill.pulse ? 'pulse' : ''}`}
-            style={{ background: pill.bg, color: pill.color }}
-          >
+          <span className={`aac-pill ${pill.pulse ? 'pulse' : ''}`}>
             {pill.text}
           </span>
           {/* Inline mini-roster — v3 .ag-sw 设计：和 identity 行同行右侧。
@@ -442,13 +444,18 @@ const aacStyles = `
   background: var(--t-panel-2);
   border-bottom: 1px solid var(--t-border);
   flex-wrap: wrap;
+  position: relative;
 }
 .aac-av {
+  position: relative;
   width: 32px; height: 32px; border-radius: 8px;
-  background: var(--t-accent); color: var(--t-accent-ink);
+  background: var(--t-accent-tint);
+  border: 1.5px solid var(--t-accent);
+  color: var(--t-accent);
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-mono, monospace); font-size: 14px; font-weight: 800;
   flex: none;
+  transition: background .14s, border-color .14s, color .14s;
 }
 .aac-nm { font-size: 14px; font-weight: 700; letter-spacing: -.005em; color: var(--t-fg); }
 .aac-sub, .aac-stp { font-family: var(--font-mono, monospace); font-size: 10.5px; color: var(--t-fg-4); }
@@ -456,9 +463,11 @@ const aacStyles = `
   margin-left: auto;
   font-family: var(--font-mono, monospace); font-size: 9.5px; font-weight: 700;
   letter-spacing: .12em; text-transform: uppercase;
-  padding: 3px 10px; border-radius: 4px;
+  padding: 3px 10px; border-radius: 999px;
   display: inline-flex; align-items: center; gap: 6px;
   flex: none;
+  border: 1px solid currentColor;
+  background: var(--t-panel);
 }
 .aac-pill::before {
   content: ''; width: 5px; height: 5px; border-radius: 50%;
@@ -466,6 +475,56 @@ const aacStyles = `
 }
 .aac-pill.pulse::before { animation: aacPulse 1.4s ease-in-out infinite; }
 @keyframes aacPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.7); } }
+
+/* ── ar-meta 三态 ─────────────────────────────────────────────────
+   data-state="running" → 当前正在配置的 agent；accent 色 + 大头像呼吸光晕
+   data-state="ok"      → 已配置完成；绿色 READY pill + 绿头像
+   data-state="waiting" → 还在队列等待；灰色 dashed WAITING pill + 静默头像 */
+.aac-meta[data-state="running"] .aac-av {
+  background: var(--t-accent-tint);
+  border-color: var(--t-accent);
+  color: var(--t-accent);
+}
+.aac-meta[data-state="running"] .aac-av::after {
+  content: ''; position: absolute; inset: -5px; border-radius: 11px;
+  pointer-events: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--t-accent) 32%, transparent),
+              0 0 16px 2px color-mix(in oklab, var(--t-accent) 22%, transparent);
+  animation: aacBreath 2.4s ease-in-out infinite;
+}
+@keyframes aacBreath {
+  0%, 100% { opacity: .55; }
+  50%      { opacity: 1; }
+}
+.aac-meta[data-state="running"] .aac-pill {
+  color: var(--t-accent);
+  background: var(--t-accent-tint);
+  border-color: var(--t-accent);
+}
+
+.aac-meta[data-state="ok"] .aac-av {
+  background: color-mix(in oklab, var(--t-ok) 14%, transparent);
+  border-color: var(--t-ok);
+  color: var(--t-ok);
+}
+.aac-meta[data-state="ok"] .aac-pill {
+  color: var(--t-ok);
+  background: color-mix(in oklab, var(--t-ok) 12%, transparent);
+  border-color: var(--t-ok);
+}
+
+.aac-meta[data-state="waiting"] .aac-av {
+  background: var(--t-panel);
+  border-color: var(--t-border-2);
+  border-style: dashed;
+  color: var(--t-fg-4);
+}
+.aac-meta[data-state="waiting"] .aac-pill {
+  color: var(--t-fg-4);
+  background: var(--t-panel);
+  border-color: var(--t-border-2);
+  border-style: dashed;
+}
 
 /* Inline mini-roster (v3 .ag-sw) — sits to the right of the pill */
 .aac-sw {

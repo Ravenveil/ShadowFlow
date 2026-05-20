@@ -27,9 +27,10 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import type { UseRunSessionReturn } from '../../core/hooks/useRunSession';
-import { AgentRoster } from './AgentRoster';
+// 2026-05-20 — AgentRoster + AgentDetail 仍在 ./AgentRoster.tsx /
+// ./AgentDetail.tsx 保留，但在主渲染路径上已被 AgentArchiveCard 接管。
+// 留作 git history 跟踪，不再 import 避免 tsc TS6133。
 import { AgentPickerModal } from './AgentPickerModal';
-import AgentDetail from './AgentDetail';
 import AgentArchiveCard from './AgentArchiveCard';
 import AgentEmptyState from './AgentEmptyState';
 import { useCommandK } from '../../core/hooks/useCommandK';
@@ -92,25 +93,16 @@ const AgentPanel: React.FC<AgentPanelProps> = ({ session }) => {
               agents/selectedId/onSelectAgent/onOpenPicker，渲染同一行的 .aac-sw。
               旧 AgentRoster 组件文件保留（UI 保护规则：只删入口不删文件）。 */}
           {selectedAgent ? (
-            selectedAgent.status === 'pending' ? (
-              <>
-                <AgentRoster
-                  agents={agents}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                  onOpenPicker={() => setPickerOpen(true)}
-                />
-                <AgentDetail agent={selectedAgent} />
-              </>
-            ) : (
-              <AgentArchiveCard
-                agent={selectedAgent}
-                agents={agents}
-                selectedId={selectedId}
-                onSelectAgent={setSelectedId}
-                onOpenPicker={() => setPickerOpen(true)}
-              />
-            )
+            // 2026-05-20 — pending agents 也走 AgentArchiveCard，由 data-state="waiting"
+            // 渲染同一布局；不再 fork 到旧 AgentDetail。原 AgentDetail 仅作为 dead-code
+            // 备份保留，可在 git history 找回。
+            <AgentArchiveCard
+              agent={selectedAgent}
+              agents={agents}
+              selectedId={selectedId}
+              onSelectAgent={setSelectedId}
+              onOpenPicker={() => setPickerOpen(true)}
+            />
           ) : (
             <AgentEmptyState />
           )}
