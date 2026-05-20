@@ -3,6 +3,24 @@ import { subscribeRunSession, abortRunSession } from '../../api/runSessions';
 import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent, AgentPersonaEvent, StepArtifact, StepArtifactEvent } from '../../api/runSessions';
 import { classifyClientError, isErrorCode } from '../errors/classifyError';
 
+/**
+ * 2026-05-20 (S6.5) — Substep tracks a single slot's progress for the v3
+ * stacked AgentDetail. SSE 'agent-substep' frames append here; the panel
+ * uses (a) the running entry to anchor-scroll the right pane and (b) the
+ * full list to render the left-pane substep tree under "配置 Agent 角色".
+ */
+export type AgentSubstepName = 'identity' | 'persona' | 'model' | 'tools' | 'memory' | 'io';
+export interface RunSessionSubstep {
+  name: AgentSubstepName;
+  status: 'running' | 'done' | 'failed';
+  elapsedMs: number | null;
+  source?: string;       // e.g. "reader.skill.yaml#persona"
+  tokens?: number;
+  cached?: boolean;
+  /** ms-since-epoch the running event arrived. Used by StepList to sort. */
+  startedAt: number;
+}
+
 export interface RunSessionNode {
   id: string;
   type: 'coordinator' | 'agent';
@@ -22,6 +40,20 @@ export interface RunSessionNode {
   toolsPicked?: string[];
   toolsCandidate?: string[];
   persona?: string;
+  // 2026-05-20 (S6.5) — v3 stacked extras. All optional; when missing the
+  // SkillSection falls back to "未指定" / "由 persona 决定" / "—".
+  skillRef?: string;
+  personaSource?: string;
+  personaTokens?: number;
+  personaCached?: boolean;
+  temperature?: number;
+  maxTokens?: number;
+  contextWindow?: number;
+  /** From `<sf:node io_input="...">` — JSON.parsed object, or raw string fallback. */
+  ioInput?: unknown;
+  ioOutput?: unknown;
+  /** Per-substep progress timeline (appended by AGENT_SUBSTEP). */
+  substeps?: RunSessionSubstep[];
 }
 
 // Re-export so panel components don't need a second import path.
@@ -116,6 +148,12 @@ export interface RunSessionState {
   // synchronously to avoid a REST round-trip on open. Drawer falls back to
   // GET /steps/:n if the cached entry is missing (page reload mid-session).
   stepArtifacts: Record<number, StepArtifact>;
+  /**
+   * 2026-05-20 (S6.5) — currently-running substep ({node_id, name}) used by
+   * useFollowMode to anchor-scroll the right pane to the matching section.
+   * null when no substep is running.
+   */
+  activeAgentSubstep: { node_id: string; name: AgentSubstepName } | null;
 }
 
 // 2026-05-11 UX fix — steps are now driven entirely by `<sf:step>` events
@@ -145,6 +183,18 @@ type Action =
   | { type: 'AGENT_PERSONA'; payload: AgentPersonaEvent }
   | { type: 'THINKING_CHUNK'; payload: { step: string | null; text: string } }
   | { type: 'STEP_ARTIFACT'; payload: StepArtifactEvent }
+  | {
+      type: 'AGENT_SUBSTEP';
+      payload: {
+        node_id: string;
+        substep: string;
+        status: 'running' | 'done' | 'failed';
+        elapsed_ms: number | null;
+        source?: string;
+        tokens?: number;
+        cached?: boolean;
+      };
+    }
   // 2026-05-16 — user pressed Stop. Mark stream terminated locally and
   // append "（用户已停止）" to the chat reply so the UI shows a clear marker
   // even if the LLM was mid-sentence.
@@ -172,18 +222,38 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       return { ...state, steps, thinkingMessage: thinking };
     }
     case 'NODE': {
-      const { node_id, type, title, sub, chips, status, avatar_char, model, memory, tools_picked, tools_candidate, persona } = action.payload;
+      const p = action.payload as NodeEvent & {
+        skill_ref?: string;
+        temperature?: number;
+        max_tokens?: number;
+        context_window?: number;
+        io_input?: unknown;
+        io_output?: unknown;
+      };
+      const { node_id, type, title, sub, chips, status, avatar_char, model, memory, tools_picked, tools_candidate, persona } = p;
       const avatarChar = avatar_char ?? title.charAt(0);
       const existing = state.nodes.findIndex(n => n.id === node_id);
-      // 2026-05-18 agent-B — preserve any persona already merged via an earlier
-      // AGENT_PERSONA event (server emits node + persona in any order).
-      const prevPersona = existing >= 0 ? state.nodes[existing].persona : undefined;
+      // 2026-05-18 agent-B — preserve any persona / S6.5 provenance / substeps
+      // already merged via earlier AGENT_PERSONA or AGENT_SUBSTEP events
+      // (server emits these in any order).
+      const prev = existing >= 0 ? state.nodes[existing] : undefined;
       const node: RunSessionNode = {
         id: node_id, type, title, sub, chips, status, avatarChar,
         model, memory,
         toolsPicked: tools_picked,
         toolsCandidate: tools_candidate,
-        persona: persona ?? prevPersona,
+        persona: persona ?? prev?.persona,
+        // S6.5 — v3 stacked extras
+        skillRef: p.skill_ref ?? prev?.skillRef,
+        personaSource: prev?.personaSource,
+        personaTokens: prev?.personaTokens,
+        personaCached: prev?.personaCached,
+        temperature: p.temperature ?? prev?.temperature,
+        maxTokens: p.max_tokens ?? prev?.maxTokens,
+        contextWindow: p.context_window ?? prev?.contextWindow,
+        ioInput: p.io_input ?? prev?.ioInput,
+        ioOutput: p.io_output ?? prev?.ioOutput,
+        substeps: prev?.substeps,
       };
       const nodes = existing >= 0
         ? state.nodes.map((n, i) => i === existing ? node : n)
@@ -197,19 +267,78 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       // be fleshed out when the matching NODE event arrives. The placeholder
       // uses minimal data (title=id) so any premature render shows the id
       // rather than blank fields.
-      const { node_id, persona } = action.payload;
+      // 2026-05-20 (S6.5) — also captures source / tokens / cached so the
+      // v3 stacked PERSONA section can display "from <skill>.yaml#persona NNN
+      // tokens · cached".
+      const p = action.payload as AgentPersonaEvent & { source?: string; tokens?: number; cached?: boolean };
+      const { node_id, persona } = p;
       const idx = state.nodes.findIndex(n => n.id === node_id);
       if (idx === -1) {
         const placeholder: RunSessionNode = {
           id: node_id, type: 'agent', title: node_id, sub: '', chips: [],
           status: 'building', avatarChar: node_id.charAt(0) || '?',
           persona,
+          personaSource: p.source,
+          personaTokens: p.tokens,
+          personaCached: p.cached,
         };
         return { ...state, nodes: [...state.nodes, placeholder] };
       }
       return {
         ...state,
-        nodes: state.nodes.map((n, i) => i === idx ? { ...n, persona } : n),
+        nodes: state.nodes.map((n, i) => i === idx ? {
+          ...n,
+          persona,
+          personaSource: p.source ?? n.personaSource,
+          personaTokens: p.tokens ?? n.personaTokens,
+          personaCached: p.cached ?? n.personaCached,
+        } : n),
+      };
+    }
+    case 'AGENT_SUBSTEP': {
+      // S6.5 — push a substep entry onto the matching node. On 'running' the
+      // entry is appended and activeAgentSubstep flips to it (drives anchor
+      // follow). On 'done'/'failed' we update the existing entry in place
+      // and clear activeAgentSubstep iff it's the one that just finished.
+      const p = action.payload;
+      const subName = p.substep as AgentSubstepName;
+      const nodeIdx = state.nodes.findIndex(n => n.id === p.node_id);
+      const nextActive: RunSessionState['activeAgentSubstep'] =
+        p.status === 'running'
+          ? { node_id: p.node_id, name: subName }
+          : state.activeAgentSubstep && state.activeAgentSubstep.node_id === p.node_id && state.activeAgentSubstep.name === subName
+            ? null
+            : state.activeAgentSubstep;
+      const newEntry: RunSessionSubstep = {
+        name: subName,
+        status: p.status,
+        elapsedMs: p.elapsed_ms,
+        source: p.source,
+        tokens: p.tokens,
+        cached: p.cached,
+        startedAt: Date.now(),
+      };
+      // Node not yet seen — stash a placeholder carrying just this substep.
+      if (nodeIdx === -1) {
+        const placeholder: RunSessionNode = {
+          id: p.node_id, type: 'agent', title: p.node_id, sub: '', chips: [],
+          status: 'building', avatarChar: p.node_id.charAt(0) || '?',
+          substeps: [newEntry],
+        };
+        return { ...state, nodes: [...state.nodes, placeholder], activeAgentSubstep: nextActive };
+      }
+      const existing = state.nodes[nodeIdx];
+      const existingSubsteps = existing.substeps ?? [];
+      // Same-substep duplicate (running → done): replace in place; otherwise append.
+      const subIdx = existingSubsteps.findIndex(s => s.name === subName);
+      const mergedSubsteps =
+        subIdx === -1
+          ? [...existingSubsteps, newEntry]
+          : existingSubsteps.map((s, i) => (i === subIdx ? { ...s, ...newEntry, startedAt: s.startedAt } : s));
+      return {
+        ...state,
+        nodes: state.nodes.map((n, i) => (i === nodeIdx ? { ...n, substeps: mergedSubsteps } : n)),
+        activeAgentSubstep: nextActive,
       };
     }
     case 'STEP_ARTIFACT': {
@@ -362,6 +491,7 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     critiqueResult: null, critiqueProgress: null,
     chatReply: '',
     stepArtifacts: {},
+    activeAgentSubstep: null,
   });
 
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -395,6 +525,8 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
       // Stream B / S2.4 — server pushed a step's persisted output. Mirror into
       // state.stepArtifacts so the drawer can render immediately on open.
       onStepArtifact:  (d) => dispatch({ type: 'STEP_ARTIFACT', payload: d }),
+      // S6.5 — granular substep frame from synthesizeTeamRun / future LLM emits.
+      onAgentSubstep:  (d) => dispatch({ type: 'AGENT_SUBSTEP', payload: d }),
       onRetrying:      (attempt, delayMs) => dispatch({ type: 'RETRYING', attempt, delayMs }),
       // EventSource gave up retrying — pure network bucket so the UI can
       // surface a "重发" CTA instead of "配置 API Key". setConnected(false)

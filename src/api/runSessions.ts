@@ -348,6 +348,16 @@ export function subscribeRunSession(
     onThinkingChunk?: (data: { step: string | null; text: string }) => void;
     /** Stream B / S2.4 — step artifact persisted by the backend after a step finishes. */
     onStepArtifact?: (data: StepArtifactEvent) => void;
+    /** S6.5 — v3 stacked: granular per-agent substep progress (identity/persona/model/tools/memory). */
+    onAgentSubstep?: (data: {
+      node_id: string;
+      substep: string;
+      status: 'running' | 'done' | 'failed';
+      elapsed_ms: number | null;
+      source?: string;
+      tokens?: number;
+      cached?: boolean;
+    }) => void;
     onRetrying?: (attempt: number, delayMs: number) => void;
     onError?: (err: Event) => void;
     onServerError?: (message: string, code?: string) => void;
@@ -405,6 +415,10 @@ export function subscribeRunSession(
     // when the user opens the drawer. Safe to fire before the REST endpoint
     // exists: the listener simply never triggers.
     es.addEventListener('step-artifact', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onStepArtifact?.(d); });
+    // S6.5 — v3 stacked: per-agent substep (identity / persona / model / tools / memory).
+    // Drives both the left-pane substep tree under "配置 Agent 角色" and the
+    // right-pane anchor-scroll to the matching SkillSection.
+    es.addEventListener('agent-substep', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onAgentSubstep?.(d); });
     es.addEventListener('error',     (e) => {
       const d = parse(e as MessageEvent);
       if (d?.message) {

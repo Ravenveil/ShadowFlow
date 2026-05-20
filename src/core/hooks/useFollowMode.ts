@@ -34,10 +34,29 @@ import type { RunSessionStep } from './useRunSession';
 // labels that the LLM never actually emits.
 const STEP_TO_TAB: Record<string, TabId> = {
   '分析目标需求': 'overview',
+  // Legacy LLM-driven prompt step names
   '规划 Agent 结构': 'team',
-  '生成 YAML Blueprint': 'preview',
   '创建 Agent 节点': 'agent',
+  // S6.6 — synthesizeTeamRun step names (team-backed skills)
+  '挑选 Team 蓝图': 'team',
+  '配置 Agent 角色': 'agent',
+  '生成 YAML Blueprint': 'preview',
   '配置 Team Workflow': 'team',
+};
+
+/**
+ * S6.6 — substep → DOM anchor id used by AgentDetail's auto scroll.
+ * Identity is merged into the Persona section (v3 design: Profile group
+ * combines identity + persona + I/O). model/tools/memory each get their
+ * own section.
+ */
+const SUBSTEP_TO_ANCHOR: Record<string, string> = {
+  identity: 'sf-section-persona',
+  persona: 'sf-section-persona',
+  model: 'sf-section-model',
+  tools: 'sf-section-tools',
+  memory: 'sf-section-memory',
+  io: 'sf-section-persona',
 };
 
 export type FollowMode = 'auto' | 'locked';
@@ -65,6 +84,13 @@ export interface UseFollowModeOptions {
    * agent's title for extra context.
    */
   nodes?: Array<{ title: string; status?: string }>;
+  /**
+   * S6.6 — currently-running agent substep (from useRunSession.activeAgentSubstep).
+   * Drives AgentDetail's anchor scroll: when this transitions to a new
+   * (node_id, name) pair we return the matching anchor id via currentAnchor.
+   * Null when no substep is running.
+   */
+  activeAgentSubstep?: { node_id: string; name: string } | null;
 }
 
 export interface UseFollowModeReturn {
@@ -94,6 +120,12 @@ export interface UseFollowModeReturn {
    * step is in flight.
    */
   currentStepLabel: string | undefined;
+  /**
+   * S6.6 — DOM anchor id matching the currently-running agent substep, or
+   * null when no substep is running. AgentDetail's useEffect watches this
+   * and calls `document.getElementById(currentAnchor)?.scrollIntoView()`.
+   */
+  currentAnchor: string | null;
 }
 
 /**
@@ -115,6 +147,7 @@ export function useFollowMode({
   initialMode = 'auto',
   activeSubsteps,
   nodes,
+  activeAgentSubstep,
 }: UseFollowModeOptions): UseFollowModeReturn {
   const [activeTab, setActiveTabState] = useState<TabId>(initialTab);
   const [followMode, setFollowMode] = useState<FollowMode>(initialMode);
@@ -204,6 +237,14 @@ export function useFollowMode({
     setFollowMode((m) => (m === 'auto' ? 'locked' : 'auto'));
   }, []);
 
+  // S6.6 — anchor follow: pick the matching DOM id when a substep is running.
+  // Null when no substep is in flight, which AgentDetail interprets as
+  // "don't scroll anywhere" (preserves whatever the user manually scrolled to).
+  const currentAnchor: string | null = useMemo(() => {
+    if (!activeAgentSubstep) return null;
+    return SUBSTEP_TO_ANCHOR[activeAgentSubstep.name] ?? null;
+  }, [activeAgentSubstep]);
+
   return {
     activeTab,
     setActiveTab,
@@ -211,6 +252,7 @@ export function useFollowMode({
     toggleFollow,
     followedTab,
     currentStepLabel,
+    currentAnchor,
   };
 }
 
