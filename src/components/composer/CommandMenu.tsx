@@ -126,16 +126,20 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       data-mode={mode}
       role="listbox"
       style={{
+        // 2026-05-20 — anchor BELOW the textarea, not above. StartPage's
+        // composer sits near the page top, so opening upward overflowed the
+        // hero heading. Opening downward also matches the conventional
+        // autocomplete direction users expect.
         position: 'absolute',
-        bottom: 'calc(100% + 8px)',
+        top: 'calc(100% + 8px)',
         left: 0,
         right: 0,
         maxWidth: 460,
-        maxHeight: 280,
+        maxHeight: 320,
         background: 'var(--t-panel)',
         border: '1px solid var(--t-border)',
         borderRadius: 10,
-        boxShadow: '0 12px 32px -10px rgba(0,0,0,.35)',
+        boxShadow: '0 14px 36px -10px rgba(0,0,0,.35)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
