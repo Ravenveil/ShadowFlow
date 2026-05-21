@@ -70,18 +70,36 @@ interface ScriptedSubprocess {
   child: any;
   stdinWrites: string[];
   receivedSignals: string[];
+  stdoutEncodings: string[];
+  stderrEncodings: string[];
   finish: (code: number, signal?: NodeJS.Signals | null) => void;
   pushStdoutChunks: (chunks: Array<string | Buffer>) => Promise<void>;
   pushStderr: (text: string) => void;
   triggerError: (err: NodeJS.ErrnoException) => void;
 }
 
-function makeFakeChild(): ScriptedSubprocess {
+function makeFakeChild(): ScriptedSubprocess & {
+  stdoutEncodings: string[];
+  stderrEncodings: string[];
+} {
   const ee = new EventEmitter() as any;
   const stdinWrites: string[] = [];
   const receivedSignals: string[] = [];
+  const stdoutEncodings: string[] = [];
+  const stderrEncodings: string[] = [];
   const stdout = new Readable({ read() {} });
   const stderr = new Readable({ read() {} });
+  // Spy on setEncoding so tests can assert the P1-2 fix (utf8 boundary safety).
+  const origStdoutSetEncoding = stdout.setEncoding.bind(stdout);
+  stdout.setEncoding = ((enc: BufferEncoding) => {
+    stdoutEncodings.push(String(enc));
+    return origStdoutSetEncoding(enc);
+  }) as typeof stdout.setEncoding;
+  const origStderrSetEncoding = stderr.setEncoding.bind(stderr);
+  stderr.setEncoding = ((enc: BufferEncoding) => {
+    stderrEncodings.push(String(enc));
+    return origStderrSetEncoding(enc);
+  }) as typeof stderr.setEncoding;
   const stdin = new Writable({
     write(chunk, _enc, cb) {
       stdinWrites.push(chunk.toString('utf8'));
@@ -111,6 +129,8 @@ function makeFakeChild(): ScriptedSubprocess {
     child: ee,
     stdinWrites,
     receivedSignals,
+    stdoutEncodings,
+    stderrEncodings,
     finish: (code, signal = null) => {
       stdout.push(null);
       stderr.push(null);
@@ -634,6 +654,98 @@ async function testSpawnEnoent(): Promise<void> {
   );
 }
 
+// ─── S14.2 follow-up P1 regression tests ──────────────────────────────────
+
+async function testAbortListenerCleanedOnThrow(): Promise<void> {
+  console.log('\n[codex-cli] P1-1: abort listener removed on throw path (non-zero exit)');
+  let sub!: ScriptedSubprocess;
+  const { spawnFn } = makeSpawnFn(() => {
+    sub = makeFakeChild();
+    return sub;
+  });
+  // Spy AbortSignal: track add/removeEventListener calls for 'abort'.
+  const ac = new AbortController();
+  const realSignal = ac.signal;
+  const added: Array<(...a: unknown[]) => void> = [];
+  const removed: Array<(...a: unknown[]) => void> = [];
+  const spySignal = new Proxy(realSignal, {
+    get(target, prop, receiver) {
+      if (prop === 'addEventListener') {
+        return (type: string, listener: (...a: unknown[]) => void, opts?: unknown) => {
+          if (type === 'abort') added.push(listener);
+          return (target.addEventListener as any).call(target, type, listener, opts);
+        };
+      }
+      if (prop === 'removeEventListener') {
+        return (type: string, listener: (...a: unknown[]) => void, opts?: unknown) => {
+          if (type === 'abort') removed.push(listener);
+          return (target.removeEventListener as any).call(target, type, listener, opts);
+        };
+      }
+      const v = Reflect.get(target, prop, receiver);
+      return typeof v === 'function' ? v.bind(target) : v;
+    },
+  }) as AbortSignal;
+  const client = new CodexCliApiClient({ binPath: 'codex', spawnFn });
+  const eventsP = collect(
+    client.stream({
+      system_prompt: '',
+      messages: [],
+      tools: [],
+      signal: spySignal,
+    }),
+  );
+  await new Promise((r) => setImmediate(r));
+  sub.pushStderr('boom\n');
+  sub.finish(1);
+  let threw = false;
+  try {
+    await eventsP;
+  } catch {
+    threw = true;
+  }
+  checkTruthy('non-zero exit threw', threw);
+  check('addEventListener(abort) called once', 1, added.length);
+  checkTruthy(
+    `removeEventListener(abort) called for same fn (added=${added.length}, removed=${removed.length})`,
+    removed.length >= 1 && added[0] === removed[0],
+  );
+}
+
+async function testStdoutEncodingUtf8(): Promise<void> {
+  console.log('\n[codex-cli] P1-2: child.stdout/stderr.setEncoding("utf8") called');
+  let sub!: ScriptedSubprocess;
+  const { spawnFn } = makeSpawnFn(() => {
+    sub = makeFakeChild();
+    return sub;
+  });
+  const client = new CodexCliApiClient({ binPath: 'codex', spawnFn });
+  const eventsP = collect(
+    client.stream({
+      system_prompt: '',
+      messages: [],
+      tools: [],
+      signal: new AbortController().signal,
+    }),
+  );
+  await new Promise((r) => setImmediate(r));
+  await sub.pushStdoutChunks([
+    JSON.stringify({ type: 'response.output_text.delta', delta: '你好' }) + '\n',
+    JSON.stringify({ type: 'response.completed', response: { status: 'completed' } }) + '\n',
+  ]);
+  sub.finish(0);
+  await eventsP.catch(() => {});
+
+  checkTruthy(
+    `stdout.setEncoding('utf8') called (encs=${JSON.stringify(sub.stdoutEncodings)})`,
+    sub.stdoutEncodings.includes('utf8'),
+  );
+  checkTruthy(
+    `stderr.setEncoding('utf8') called (encs=${JSON.stringify(sub.stderrEncodings)})`,
+    sub.stderrEncodings.includes('utf8'),
+  );
+}
+
 async function main(): Promise<void> {
   await testTextDeltaStringForm();
   await testTextDeltaNestedForm();
@@ -646,6 +758,8 @@ async function main(): Promise<void> {
   await testMidChunkLineSplit();
   await testStdinReceivesPrompt();
   await testSpawnEnoent();
+  await testAbortListenerCleanedOnThrow();
+  await testStdoutEncodingUtf8();
 
   console.log(`\n${pass} pass, ${fail} fail`);
   if (fail > 0) process.exit(1);

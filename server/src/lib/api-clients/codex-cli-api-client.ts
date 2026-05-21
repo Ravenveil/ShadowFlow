@@ -280,9 +280,16 @@ export class CodexCliApiClient implements ApiClient {
       );
     }
 
+    // P1-2: Use Node's StringDecoder via setEncoding so multi-byte UTF-8
+    // sequences (中文 / emoji) that span chunk boundaries are decoded safely
+    // instead of producing `�` (`�`) replacements from a naïve
+    // Buffer#toString('utf8') on a half-character slice.
+    child.stdout?.setEncoding('utf8');
+    child.stderr?.setEncoding('utf8');
+
     let stderrBuf = '';
-    child.stderr.on('data', (c: Buffer) => {
-      stderrBuf += c.toString('utf8');
+    child.stderr.on('data', (c: string) => {
+      stderrBuf += c;
       if (stderrBuf.length > 256 * 1024) stderrBuf = stderrBuf.slice(-128 * 1024);
     });
 
@@ -443,72 +450,83 @@ export class CodexCliApiClient implements ApiClient {
       // intentionally ignored — they carry no state we need.
     };
 
+    // P1-1: wrap the entire body in try/finally so that the abort listener is
+    // removed on every exit path — non-zero exit, response.failed, spawnError,
+    // parse errors, normal completion. The previous code only released the
+    // listener on the happy path, which leaked listeners across turns when
+    // ConversationRuntime reuses the same AbortSignal (stale listeners can
+    // also fire and disrupt a later turn).
     try {
-      for await (const chunk of child.stdout as AsyncIterable<Buffer>) {
-        if (args.signal.aborted) {
-          onAbort();
-          return;
+      try {
+        // stdout is now string-mode (setEncoding('utf8') above), so chunks
+        // are already decoded — no chunk.toString('utf8') needed.
+        for await (const chunk of child.stdout as AsyncIterable<string>) {
+          if (args.signal.aborted) {
+            onAbort();
+            return;
+          }
+          lineBuf += chunk;
+          if (lineBuf.length > MAX_LINE_BUF) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[CodexCliApiClient] lineBuf > ${MAX_LINE_BUF}B without newline — resyncing`,
+            );
+            const lastNl = lineBuf.lastIndexOf('\n');
+            lineBuf = lastNl >= 0 ? lineBuf.slice(lastNl + 1) : lineBuf.slice(-1);
+          }
+          const lines = lineBuf.split('\n');
+          lineBuf = lines.pop() ?? '';
+          for (const ln of lines) {
+            for (const ev of processLine(ln)) yield ev;
+          }
         }
-        lineBuf += chunk.toString('utf8');
-        if (lineBuf.length > MAX_LINE_BUF) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            `[CodexCliApiClient] lineBuf > ${MAX_LINE_BUF}B without newline — resyncing`,
+        if (lineBuf.trim().length > 0) {
+          for (const ev of processLine(lineBuf)) yield ev;
+          lineBuf = '';
+        }
+      } catch (err) {
+        if (args.signal.aborted) return;
+        throw err instanceof Error ? err : new Error(String(err));
+      }
+
+      await exitPromise;
+
+      if (spawnError) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const code = (spawnError as any).code;
+        if (code === 'ENOENT') {
+          throw new Error(
+            `codex CLI not found (${binPath}). Install: npm i -g @openai/codex, then set OPENAI_API_KEY env.`,
           );
-          const lastNl = lineBuf.lastIndexOf('\n');
-          lineBuf = lastNl >= 0 ? lineBuf.slice(lastNl + 1) : lineBuf.slice(-1);
         }
-        const lines = lineBuf.split('\n');
-        lineBuf = lines.pop() ?? '';
-        for (const ln of lines) {
-          for (const ev of processLine(ln)) yield ev;
-        }
+        throw spawnError;
       }
-      if (lineBuf.trim().length > 0) {
-        for (const ev of processLine(lineBuf)) yield ev;
-        lineBuf = '';
-      }
-    } catch (err) {
-      if (args.signal.aborted) return;
-      throw err instanceof Error ? err : new Error(String(err));
-    }
 
-    await exitPromise;
-    args.signal.removeEventListener('abort', onAbort);
-
-    if (spawnError) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const code = (spawnError as any).code;
-      if (code === 'ENOENT') {
+      if (exitCode !== null && exitCode !== 0) {
+        const tail = stderrBuf.slice(-2048);
         throw new Error(
-          `codex CLI not found (${binPath}). Install: npm i -g @openai/codex, then set OPENAI_API_KEY env.`,
+          `codex CLI exited with code ${exitCode}${exitSignal ? ` (signal=${exitSignal})` : ''}: ${tail || '(no stderr)'}`,
         );
       }
-      throw spawnError;
-    }
 
-    if (exitCode !== null && exitCode !== 0) {
-      const tail = stderrBuf.slice(-2048);
-      throw new Error(
-        `codex CLI exited with code ${exitCode}${exitSignal ? ` (signal=${exitSignal})` : ''}: ${tail || '(no stderr)'}`,
-      );
-    }
+      if (responseFailedMsg) {
+        throw new Error(`codex response.failed: ${responseFailedMsg}`);
+      }
 
-    if (responseFailedMsg) {
-      throw new Error(`codex response.failed: ${responseFailedMsg}`);
-    }
-
-    // Emit deferred usage + message_stop in order. usage first so the runtime
-    // accumulates before the stop event in the same way openai-compat does.
-    if (responseUsage) {
-      yield { kind: 'usage', usage: responseUsage };
-    }
-    if (!messageStopEmitted) {
-      yield {
-        kind: 'message_stop',
-        stop_reason: normalizeResponseStatus(responseStatus, hadToolUse),
-      };
-      messageStopEmitted = true;
+      // Emit deferred usage + message_stop in order. usage first so the runtime
+      // accumulates before the stop event in the same way openai-compat does.
+      if (responseUsage) {
+        yield { kind: 'usage', usage: responseUsage };
+      }
+      if (!messageStopEmitted) {
+        yield {
+          kind: 'message_stop',
+          stop_reason: normalizeResponseStatus(responseStatus, hadToolUse),
+        };
+        messageStopEmitted = true;
+      }
+    } finally {
+      args.signal.removeEventListener('abort', onAbort);
     }
   }
 }
