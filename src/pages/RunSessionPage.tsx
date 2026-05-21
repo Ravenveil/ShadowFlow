@@ -58,6 +58,7 @@ import AgentPanel from '../components/run-session/AgentPanel';
 import PreviewPanel from '../components/run-session/PreviewPanel';
 import ThinkCard from '../components/run-session/ThinkCard';
 import StepList, { type StepRow } from '../components/run-session/StepList';
+import { Timeline } from '../components/run-session/timeline/Timeline';
 import StepArtifactDrawer from '../components/run-session/StepArtifactDrawer';
 import QuestionFormModal from '../components/run-session/QuestionFormModal';
 import { getApiBase } from '../api/_base';
@@ -1686,6 +1687,17 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   // 404 (endpoint missing) feedback without throwing.
   const [drawerStep, setDrawerStep] = useState<number | null>(null);
   const [retryToast, setRetryToast] = useState<string | null>(null);
+  // S6.10-C — Timeline left-pane feature flag. Default on (matches v8 design).
+  // Set `sf.legacyLeftPane=1` in localStorage to fall back to the pre-S6.10
+  // StepList + goal-bubble stack. Checker (#38) verifies incremental emit
+  // behavior under the default-on path.
+  const useTimeline = (() => {
+    try {
+      return localStorage.getItem('sf.legacyLeftPane') !== '1';
+    } catch {
+      return true;
+    }
+  })();
   // 2026-05-18 (agent-4) — thinkExpanded / thinkTitleHover moved into the
   // ThinkCard component itself. We keep the duration tracker here because
   // it depends on session-level state (chatReply / isComplete) that the
@@ -2212,6 +2224,18 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
           </div>
         )}
 
+        {/* S6.10-C — new Timeline (Trae-style incremental message stream).
+            Renders by default; legacy block below is kept as opt-in fallback
+            via localStorage `sf.legacyLeftPane=1`. */}
+        {useTimeline && (
+          <Timeline messages={session.messages} />
+        )}
+
+        {/* ─── Legacy left-pane stack (pre-S6.10) ─────────────────────────
+            Wrapped in `!useTimeline` so the new Timeline owns the visual
+            during incremental rollout. Toggle back via localStorage. */}
+        {!useTimeline && (
+          <>
         {/* User goal bubble — hover reveals "重发" action. When the session
             ended in error (e.g. claude exit 1 / 403), the resend button is
             always visible so users don't need to discover it via hover. */}
@@ -2563,6 +2587,8 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
           >
             {session.isComplete ? '已完成' : '流式中'} · 已写入 {session.tokenCount.toLocaleString()} tokens
           </div>
+        )}
+          </>
         )}
       </div>
 
