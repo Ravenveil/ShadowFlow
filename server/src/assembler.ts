@@ -31,6 +31,13 @@ import { AnthropicApiClient } from './lib/api-clients/anthropic-api-client';
 // can't route fall back to the legacy single-call path.
 import { OpenAiCompatApiClient } from './lib/api-clients/openai-compat-api-client';
 import { GoogleApiClient } from './lib/api-clients/google-api-client';
+// S14.2 (2026-05-21) — extend v2 path to 2 CLI executors via subprocess-based
+// ApiClient adapters. With these two the total coverage goes from 13 → 15
+// providers; users who picked executor=cli:claude / cli:codex in BYOK get the
+// same multi-turn tool_use loop as the direct-API path. See header docstring
+// in each file for the experimental status of codex.
+import { ClaudeCodeCliApiClient } from './lib/api-clients/claude-code-cli-api-client';
+import { CodexCliApiClient } from './lib/api-clients/codex-cli-api-client';
 import type { ApiClient } from './lib/conversation-runtime';
 import { SkillAnchorToolExecutor } from './lib/tools/skill-anchor-executor';
 import { PermissionPolicy } from './lib/permission-policy';
@@ -443,18 +450,20 @@ export async function* runSkillAssembler(
   );
 }
 
-// ─── S14.1 (2026-05-21): provider → ApiClient factory ─────────────────────
+// ─── S14.1 / S14.2 (2026-05-21): provider → ApiClient factory ─────────────
 
 /**
  * Build an ApiClient for the given provider. Returns null for unknown providers
  * so the caller can fall back to the legacy single-call path.
  *
- * Coverage:
- *   anthropic                                     → AnthropicApiClient
- *   google                                        → GoogleApiClient
- *   openai / deepseek / zhipu / qwen / moonshot   → OpenAiCompatApiClient
- *   mistral / groq / openrouter / ollama /        → OpenAiCompatApiClient
- *   lmstudio                                      → OpenAiCompatApiClient
+ * Coverage (15 providers, S14.1 → S14.2):
+ *   anthropic                                       → AnthropicApiClient
+ *   google                                          → GoogleApiClient
+ *   openai / deepseek / zhipu / qwen / moonshot     → OpenAiCompatApiClient
+ *   mistral / groq / openrouter / ollama /          → OpenAiCompatApiClient
+ *   lmstudio                                        → OpenAiCompatApiClient
+ *   claude-code-cli                                 → ClaudeCodeCliApiClient (S14.2)
+ *   codex-cli                                       → CodexCliApiClient (S14.2, experimental)
  *
  * Azure is DELIBERATELY excluded (returns null → legacy fallback) until BYOK
  * UI gains a per-key `azure_deployment_url` field. Without it, an empty
@@ -465,6 +474,15 @@ export async function* runSkillAssembler(
  * the OpenAI SDK can't be told to swap. See Checker S14.1 P0-1.
  *
  * The ollama / lmstudio cases tolerate empty apiKey (local runtimes).
+ *
+ * CLI provider notes (S14.2):
+ *   - `claude-code-cli` spawns the official `claude` binary (auth via
+ *     `claude login`; ANTHROPIC_API_KEY env as fallback).
+ *   - `codex-cli` spawns the OpenAI `codex` binary (auth via OPENAI_API_KEY).
+ *   - The BYOK `apiKey` arg is forwarded as an env-var fallback to the child
+ *     process but most users will have already authenticated the CLI itself,
+ *     in which case `apiKey` can be empty.
+ *   - Both CLI clients support cancellation via SIGTERM on AbortSignal.
  */
 function buildApiClient(
   provider: string,
@@ -474,10 +492,27 @@ function buildApiClient(
   temperature: number | undefined,
 ): ApiClient | null {
   if (provider === 'anthropic') {
+    console.log(`[buildApiClient] provider=anthropic model=${model ?? 'default'}`);
     return new AnthropicApiClient({ apiKey, model, max_tokens, temperature });
   }
   if (provider === 'google') {
+    console.log(`[buildApiClient] provider=google model=${model ?? 'default'}`);
     return new GoogleApiClient({ apiKey, model, max_tokens, temperature });
+  }
+  // S14.2: CLI executors. `temperature` not forwarded — the CLIs don't expose
+  // a flag for it; the kwarg is preserved on the signature for parity but
+  // dropped here so the unused-arg lint doesn't flag (intentional).
+  if (provider === 'claude-code-cli') {
+    console.log(`[buildApiClient] provider=claude-code-cli model=${model ?? 'default'}`);
+    void temperature;
+    return new ClaudeCodeCliApiClient({ apiKey, model, max_tokens });
+  }
+  if (provider === 'codex-cli') {
+    console.log(
+      `[buildApiClient] provider=codex-cli (experimental) model=${model ?? 'default'}`,
+    );
+    void temperature;
+    return new CodexCliApiClient({ apiKey, model, max_tokens });
   }
   // Azure intentionally absent — see header docstring (Checker S14.1 P0-1).
   const OPENAI_COMPAT_PROVIDERS = new Set([
@@ -493,6 +528,7 @@ function buildApiClient(
     'lmstudio',
   ]);
   if (OPENAI_COMPAT_PROVIDERS.has(provider)) {
+    console.log(`[buildApiClient] provider=${provider} (openai-compat) model=${model ?? 'default'}`);
     return new OpenAiCompatApiClient({
       providerId: provider,
       apiKey,
