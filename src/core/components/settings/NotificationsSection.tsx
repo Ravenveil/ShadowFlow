@@ -12,6 +12,7 @@
  * Sound selections are persisted alongside the enabled flag.
  */
 import React, { useState, useEffect } from 'react';
+import { useI18n } from '../../../common/i18n';
 
 // ---- Sound types & options --------------------------------------------------
 
@@ -203,6 +204,7 @@ interface SoundSelectRowProps<T extends string> {
 }
 
 function SoundSelectRow<T extends string>({ label, value, options, onChange }: SoundSelectRowProps<T>) {
+  const { t } = useI18n();
   return (
     <div className="flex items-center gap-3">
       <span className="w-16 shrink-0 text-[12px] text-sf-fg3">{label}</span>
@@ -221,9 +223,9 @@ function SoundSelectRow<T extends string>({ label, value, options, onChange }: S
         type="button"
         onClick={() => playSound(value as unknown as SuccessSoundId | FailureSoundId)}
         className="shrink-0 rounded-[7px] border border-sf-border bg-transparent px-3 py-2 text-[12px] text-sf-fg3 hover:border-sf-fg5 hover:text-sf-fg1 transition-colors"
-        title="试听"
+        title={t('settings.notifications.preview')}
       >
-        试听 ▶
+        {t('settings.notifications.previewPlaying')}
       </button>
     </div>
   );
@@ -232,6 +234,7 @@ function SoundSelectRow<T extends string>({ label, value, options, onChange }: S
 // ---- Main section -----------------------------------------------------------
 
 export function NotificationsSection() {
+  const { t } = useI18n();
   const [config, setConfig] = useState<NotificationsConfig>(loadConfig);
   const [permDeniedWarning, setPermDeniedWarning] = useState(false);
 
@@ -281,8 +284,8 @@ export function NotificationsSection() {
     <div className="flex flex-col gap-6">
       {/* Section header */}
       <div>
-        <h2 className="text-[18px] font-bold text-sf-fg1">通知设置</h2>
-        <p className="mt-1 text-[12px] text-sf-fg4">管理 ShadowFlow 的提醒方式。</p>
+        <h2 className="text-[18px] font-bold text-sf-fg1">{t('settings.notifications.heading')}</h2>
+        <p className="mt-1 text-[12px] text-sf-fg4">{t('settings.notifications.subhead')}</p>
       </div>
 
       {/* Settings card */}
@@ -291,11 +294,11 @@ export function NotificationsSection() {
         {/* Sound notifications */}
         <div className="flex flex-col gap-3">
           <p className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
-            声音通知
+            {t('settings.notifications.soundTitle')}
           </p>
           <div className="flex items-center gap-3">
             <Toggle checked={config.soundEnabled} onChange={handleSoundToggle} />
-            <span className="text-[12px] text-sf-fg2">任务完成时播放提示音</span>
+            <span className="text-[12px] text-sf-fg2">{t('settings.notifications.soundHint')}</span>
           </div>
 
           {/* Sound selectors — only shown when sound is enabled */}
@@ -323,17 +326,17 @@ export function NotificationsSection() {
         {/* Desktop notifications */}
         <div className="flex flex-col gap-3">
           <p className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
-            桌面通知
+            {t('settings.notifications.desktopTitle')}
           </p>
           <div className="flex items-center gap-3">
             <Toggle checked={config.desktopEnabled} onChange={handleDesktopToggle} />
-            <span className="text-[12px] text-sf-fg2">在系统通知栏显示消息</span>
+            <span className="text-[12px] text-sf-fg2">{t('settings.notifications.desktopHint')}</span>
           </div>
 
           {/* Permission denied warning */}
           {permDeniedWarning && (
             <p className="rounded-[7px] border border-sf-reject/30 bg-sf-reject/10 px-3 py-2 text-[11px] text-sf-reject">
-              浏览器已拒绝权限，请在地址栏手动开启
+              {t('settings.notifications.desktopDenied')}
             </p>
           )}
 
@@ -344,7 +347,7 @@ export function NotificationsSection() {
               onClick={handleTestNotification}
               className="self-start rounded-[7px] border border-sf-border bg-transparent px-3 py-1.5 text-[12px] text-sf-fg3 hover:border-sf-fg5 hover:text-sf-fg1 transition-colors"
             >
-              发送测试通知
+              {t('settings.notifications.testButton')}
             </button>
           )}
         </div>
@@ -352,7 +355,7 @@ export function NotificationsSection() {
 
       {/* Info note */}
       <p className="text-[11px] text-sf-fg5">
-        桌面通知需要系统权限。关闭浏览器后通知仍可送达。
+        {t('settings.notifications.footnote')}
       </p>
     </div>
   );

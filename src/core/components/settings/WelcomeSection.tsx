@@ -12,6 +12,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { WalletLoginModal } from '../../../components/hifi/WalletLoginModal';
 import { updateProfile } from '../../../api/auth';
 import type { UserProfile } from '../../../api/auth';
+import { useI18n } from '../../../common/i18n';
 
 // ── Quick-start data (unchanged) ─────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ interface ProfileFormProps {
 }
 
 function ProfileForm({ user, token, onSaved }: ProfileFormProps) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(user.display_name ?? '');
   const [bio, setBio] = useState(user.bio ?? '');
@@ -83,7 +85,7 @@ function ProfileForm({ user, token, onSaved }: ProfileFormProps) {
             <input
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
-              placeholder="显示名称"
+              placeholder={t('settings.profile.displayNamePlaceholder')}
               maxLength={50}
               style={{
                 width: '100%', padding: '6px 10px', borderRadius: 7,
@@ -93,25 +95,25 @@ function ProfileForm({ user, token, onSaved }: ProfileFormProps) {
             />
           ) : (
             <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-fg)' }}>
-              {user.display_name || (user.type === 'guest' ? '访客' : user.address.slice(0, 6) + '…' + user.address.slice(-4))}
+              {user.display_name || (user.type === 'guest' ? t('settings.profile.guestName') : user.address.slice(0, 6) + '…' + user.address.slice(-4))}
             </div>
           )}
           <div style={{ fontSize: 10, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>
-            {user.type === 'wallet' ? '● 钱包账户' : '● 访客模式'}
+            {user.type === 'wallet' ? t('settings.profile.walletBadge') : t('settings.profile.guestBadge')}
           </div>
         </div>
         {user.type === 'wallet' && !editing && (
           <button onClick={() => setEditing(true)} style={{ background: 'none', border: '1px solid var(--t-border)', borderRadius: 7, padding: '5px 9px', cursor: 'pointer', color: 'var(--t-fg-3)', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
-            <Edit3 size={12} strokeWidth={2} /> 编辑
+            <Edit3 size={12} strokeWidth={2} /> {t('common.edit')}
           </button>
         )}
         {editing && (
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={handleSave} disabled={saving} style={{ background: 'var(--t-accent)', border: 'none', borderRadius: 7, padding: '5px 9px', cursor: 'pointer', color: 'var(--t-accent-ink)', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
-              <Check size={12} strokeWidth={2.5} /> {saving ? '保存中…' : '保存'}
+              <Check size={12} strokeWidth={2.5} /> {saving ? t('settings.profile.saving') : t('common.save')}
             </button>
             <button onClick={handleCancel} style={{ background: 'none', border: '1px solid var(--t-border)', borderRadius: 7, padding: '5px 9px', cursor: 'pointer', color: 'var(--t-fg-3)', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
-              <X size={12} strokeWidth={2.5} /> 取消
+              <X size={12} strokeWidth={2.5} /> {t('common.cancel')}
             </button>
           </div>
         )}
@@ -122,7 +124,7 @@ function ProfileForm({ user, token, onSaved }: ProfileFormProps) {
         <textarea
           value={bio}
           onChange={e => setBio(e.target.value)}
-          placeholder="个人简介（选填）"
+          placeholder={t('settings.profile.bioPlaceholder')}
           maxLength={200}
           rows={2}
           style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1px solid var(--t-accent)', background: 'var(--t-bg)', color: 'var(--t-fg)', fontSize: 12, resize: 'none', outline: 'none', fontFamily: 'inherit' }}
@@ -139,6 +141,7 @@ function ProfileForm({ user, token, onSaved }: ProfileFormProps) {
 // ── DID + address info card ───────────────────────────────────────────────────
 
 function IdentityCard({ user }: { user: UserProfile }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   function copyAddress() {
@@ -151,16 +154,16 @@ function IdentityCard({ user }: { user: UserProfile }) {
   if (user.type === 'guest') {
     return (
       <div style={{ padding: '12px 14px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 10, fontSize: 12, color: 'var(--t-fg-4)', lineHeight: 1.6 }}>
-        访客模式下暂无链上身份。连接钱包后将自动生成 <code style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>did:ethr:16600:0x…</code> DID。
+        {t('settings.profile.guestNoOnchain')} <code style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>did:ethr:16600:0x…</code> DID.
       </div>
     );
   }
 
   const rows: Array<{ label: string; value: string; mono?: boolean; copyable?: boolean }> = [
-    { label: 'DID',     value: user.did ?? '—',    mono: true },
-    { label: '地址',    value: user.address,        mono: true, copyable: true },
-    { label: '网络',    value: '0G Galileo Testnet · Chain 16600' },
-    { label: '账户类型', value: 'Ethereum · EIP-4361 SIWE' },
+    { label: 'DID',                          value: user.did ?? '—',                 mono: true },
+    { label: t('settings.profile.fieldAddress'),  value: user.address,               mono: true, copyable: true },
+    { label: t('settings.profile.fieldNetwork'),  value: '0G Galileo Testnet · Chain 16600' },
+    { label: t('settings.profile.fieldAccountType'), value: 'Ethereum · EIP-4361 SIWE' },
   ];
 
   return (
@@ -178,7 +181,7 @@ function IdentityCard({ user }: { user: UserProfile }) {
           </span>
           {r.copyable && (
             <button onClick={copyAddress} style={{ background: 'none', border: '1px solid var(--t-border)', borderRadius: 5, padding: '2px 7px', cursor: 'pointer', fontSize: 10, color: copied ? 'var(--t-ok)' : 'var(--t-fg-4)', whiteSpace: 'nowrap' }}>
-              {copied ? '已复制' : '复制'}
+              {copied ? t('common.copied') : t('common.copy')}
             </button>
           )}
         </div>
@@ -190,6 +193,7 @@ function IdentityCard({ user }: { user: UserProfile }) {
 // ── Main section ──────────────────────────────────────────────────────────────
 
 export function WelcomeSection() {
+  const { t } = useI18n();
   const { user, token, status, guestLogin } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
 
@@ -204,34 +208,34 @@ export function WelcomeSection() {
       {/* ── Profile block ── */}
       <div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: 'var(--t-accent)', marginBottom: 6 }}>
-          ACCOUNT · 个人资料
+          ACCOUNT · {t('settings.profile.heading')}
         </div>
         <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--t-fg)', marginBottom: 4, letterSpacing: '-.02em' }}>
-          个人资料
+          {t('settings.profile.heading')}
         </div>
         <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: 0 }}>
-          管理你的身份、链上 DID 和公开信息。
+          {t('settings.profile.subhead')}
         </p>
       </div>
 
       {isLoading ? (
-        <div style={{ padding: '32px', textAlign: 'center', fontSize: 12, color: 'var(--t-fg-4)' }}>加载中…</div>
+        <div style={{ padding: '32px', textAlign: 'center', fontSize: 12, color: 'var(--t-fg-4)' }}>{t('common.loading')}</div>
       ) : !displayUser ? (
         /* ── Not logged in ── */
         <div style={{ padding: '24px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center', textAlign: 'center' }}>
           <div style={{ display: 'inline-flex', padding: 12, borderRadius: 14, background: 'var(--t-panel)', border: '1px solid var(--t-border)' }}>
             <LockKeyhole size={28} strokeWidth={1.5} color="var(--t-fg-4)" />
           </div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)' }}>尚未登录</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)' }}>{t('settings.profile.notLoggedIn')}</div>
           <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: 0, maxWidth: 320 }}>
-            连接钱包获得链上 DID 身份，或以访客身份体验平台。
+            {t('settings.profile.notLoggedInHint')}
           </p>
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={() => setShowLogin(true)} style={{ padding: '8px 18px', borderRadius: 8, background: 'var(--t-accent)', color: 'var(--t-accent-ink)', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-              连接钱包
+              {t('settings.profile.connectWallet')}
             </button>
             <button onClick={() => void guestLogin()} style={{ padding: '8px 18px', borderRadius: 8, background: 'var(--t-panel-2)', color: 'var(--t-fg-2)', border: '1px solid var(--t-border)', cursor: 'pointer', fontSize: 13 }}>
-              访客模式
+              {t('settings.profile.guestMode')}
             </button>
           </div>
         </div>
@@ -250,7 +254,7 @@ export function WelcomeSection() {
           {/* Identity card */}
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', fontWeight: 700, letterSpacing: '.06em', marginBottom: 8 }}>
-              链上身份 · ON-CHAIN IDENTITY
+              {t('settings.profile.onChainIdentity')} · ON-CHAIN IDENTITY
             </div>
             <IdentityCard user={displayUser} />
           </div>
@@ -264,8 +268,8 @@ export function WelcomeSection() {
             <Waves size={14} strokeWidth={2} color="var(--t-fg-3)" />
           </span>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t-fg)' }}>快速上手</div>
-            <div style={{ fontSize: 10, color: 'var(--t-fg-5)' }}>Agent Team 的 VS Code · ACP 时代的工作流平台</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t-fg)' }}>{t('settings.profile.quickStart')}</div>
+            <div style={{ fontSize: 10, color: 'var(--t-fg-5)' }}>{t('settings.profile.tagline')}</div>
           </div>
         </div>
 

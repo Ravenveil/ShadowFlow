@@ -21,6 +21,7 @@
  */
 import React from 'react';
 import type { RunSessionNode, RunSessionSubstep } from '../../core/hooks/useRunSession';
+import { useI18n } from '../../common/i18n';
 
 type SecState = 'done' | 'run' | 'pending';
 
@@ -150,8 +151,9 @@ export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({
   onSelectAgent,
   onOpenPicker,
 }) => {
+  const { t } = useI18n();
   const tools = deriveToolLists(agent);
-  const modelText = agent.model ?? findModelChip(agent.chips) ?? '未指定';
+  const modelText = agent.model ?? findModelChip(agent.chips) ?? t('runSession.archive.unspecifiedShort');
 
   const personaState = pickSecState(agent, ['identity', 'persona', 'io']);
   const kitState = pickSecState(agent, ['model', 'tools']);
@@ -236,7 +238,7 @@ export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({
               <span className="aac-dot" />
               <span>{formatStatus(personaState, personaElapsed)}</span>
             </span>
-            <span className="aac-title">角色</span>
+            <span className="aac-title">{t('runSession.archive.secRole')}</span>
             <span className="aac-src">from {personaSrc}</span>
           </div>
 
@@ -272,12 +274,12 @@ export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({
               <span className="aac-dot" />
               <span>{formatStatus(kitState, modelElapsed)}</span>
             </span>
-            <span className="aac-title">模型 · 工具</span>
+            <span className="aac-title">{t('runSession.archive.secModelTools')}</span>
             <span className="aac-src">from {modelSrc}</span>
           </div>
 
           <div className="aac-model">
-            <ModelCell label="model" value={modelText} highlight={modelText !== '未指定'} />
+            <ModelCell label="model" value={modelText} highlight={modelText !== t('runSession.archive.unspecifiedShort')} />
             <ModelCell label="temperature" value={fmt(agent.temperature)} />
             <ModelCell label="max_tokens" value={fmt(agent.maxTokens)} />
             <ModelCell label="context" value={formatContext(agent.contextWindow)} />
@@ -290,11 +292,11 @@ export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({
               Tools <b>{tools.picked.length}</b> selected · <b>{tools.candidate.length}</b> candidates
             </span>
             <span className="aac-tools-hint">
-              {tools.candidate.length > 0 ? '点击候选加入 · 拖拽排序' : '已配置全部工具'}
+              {tools.candidate.length > 0 ? t('runSession.archive.toolsHintPick') : t('runSession.archive.toolsHintAllSet')}
             </span>
           </div>
           {tools.picked.length + tools.candidate.length === 0 ? (
-            <div className="aac-tools-empty">未指定工具</div>
+            <div className="aac-tools-empty">{t('runSession.archive.toolsNone')}</div>
           ) : (
             <div className="aac-tools">
               {tools.picked.map((name) => (
@@ -321,12 +323,12 @@ export const AgentArchiveCard: React.FC<AgentArchiveCardProps> = ({
               <span className="aac-dot" />
               <span>{formatStatus(memoryState, memoryElapsed)}</span>
             </span>
-            <span className="aac-title">记忆</span>
+            <span className="aac-title">{t('runSession.archive.secMemory')}</span>
             <span className="aac-src">from {memorySrc}</span>
           </div>
 
           {memoryRows.length === 0 ? (
-            <div className="aac-mem-empty">— 未指定</div>
+            <div className="aac-mem-empty">{t('runSession.archive.memoryNone')}</div>
           ) : (
             <div className="aac-mem">
               {memoryRows.map((row, i) => (
@@ -379,7 +381,7 @@ const InlineRoster: React.FC<{
           type="button"
           className="aac-sw-more"
           onClick={onOpenPicker}
-          title="查看全部 agent · ⌘K"
+          title={t('runSession.archive.viewAllAgents')}
         >
           +{overflow}
           <span className="chev">▾</span>

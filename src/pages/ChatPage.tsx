@@ -141,6 +141,7 @@ interface InboxPanelProps {
 }
 
 function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProps) {
+  const { t } = useI18n();
   const [filter, setFilter] = useState<FilterKey>('all');
 
   function statusOf(g: GroupItem) {
@@ -157,7 +158,12 @@ function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProp
     ? agentDMs.filter(d => d.unreadCount > 0)
     : agentDMs;
 
-  const chips: Array<[string, FilterKey]> = [['全部', 'all'], ['未读', 'unread'], ['@我', 'mention'], ['Agent', 'agent']];
+  const chips: Array<[string, FilterKey]> = [
+    [t('chat.filterAll'), 'all'],
+    [t('chat.filterUnread'), 'unread'],
+    [t('chat.filterMention'), 'mention'],
+    [t('chat.filterAgent'), 'agent'],
+  ];
 
   return (
     <div style={{ width: 268, flexShrink: 0, borderRight: `1px solid ${T.bd}`, background: T.p, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -165,7 +171,7 @@ function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProp
       <div style={{ padding: '0 8px 6px' }}>
         <div style={{ height: 30, padding: '0 10px', borderRadius: 7, background: T.p2, border: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', gap: 8, cursor: 'text' }}>
           <Search size={13} strokeWidth={1.7} style={{ color: T.fg4, flexShrink: 0 }}/>
-          <span style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fg4 }}>搜索 / 跳转</span>
+          <span style={{ fontFamily: T.mono, fontSize: 11.5, color: T.fg4 }}>{t('chat.searchJump')}</span>
           <span style={{ marginLeft: 'auto', fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>⌘F</span>
         </div>
       </div>
@@ -184,7 +190,7 @@ function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProp
       <div style={{ flex: 1, overflow: 'auto', padding: '0 2px' }}>
         {/* Groups */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 3px' }}>
-          <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.fg5, letterSpacing: '0.06em' }}>群组 · 频道</span>
+          <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.fg5, letterSpacing: '0.06em' }}>{t('chat.sectionGroups')}</span>
           <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>{visibleGroups.length}</span>
         </div>
         <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column' }}>
@@ -193,8 +199,8 @@ function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProp
               <div style={{ width: 32, height: 32, borderRadius: 9, background: T.bg, border: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fg5 }}>
                 <Users size={15} strokeWidth={1.7}/>
               </div>
-              <p style={{ margin: 0, fontSize: 11, color: T.fg5, lineHeight: 1.5 }}>
-                {filter !== 'all' ? '无匹配群组' : '暂无群组\n创建 Team 后即可群聊'}
+              <p style={{ margin: 0, fontSize: 11, color: T.fg5, lineHeight: 1.5, whiteSpace: 'pre-line' }}>
+                {filter !== 'all' ? t('chat.noMatchedGroups') : t('chat.emptyGroups')}
               </p>
             </div>
           ) : visibleGroups.map(gr => {
@@ -218,7 +224,7 @@ function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProp
         {visibleDMs.length > 0 && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 3px' }}>
-              <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.fg5, letterSpacing: '0.06em' }}>直接对话 · DM</span>
+              <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.fg5, letterSpacing: '0.06em' }}>{t('chat.sectionDMs')}</span>
               <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>{visibleDMs.length}</span>
             </div>
             <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column' }}>
@@ -242,7 +248,7 @@ function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProp
 }
 
 // ── Conversation header ───────────────────────────────────────────────────────
-function ConvHeader({ group, isRunning, builderUrl, t }: { group?: GroupItem; isRunning: boolean; builderUrl: string; t: (k: string) => string }) {
+function ConvHeader({ group, isRunning, builderUrl, t }: { group?: GroupItem; isRunning: boolean; builderUrl: string; t: (k: string, opts?: Record<string, unknown>) => string }) {
   const members = group?.metrics?.members ?? 0;
   const runCount = group?.metrics?.activeRuns ?? 0;
 
@@ -254,9 +260,9 @@ function ConvHeader({ group, isRunning, builderUrl, t }: { group?: GroupItem; is
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: T.fg }}>{group?.name ?? '选择 Team'}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: T.fg }}>{group?.name ?? t('chat.selectTeam')}</span>
           {group && <>
-            <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fg5 }}>· {members} 人</span>
+            <span style={{ fontFamily: T.mono, fontSize: 10, color: T.fg5 }}>· {t('chat.memberCount', { count: members })}</span>
             {isRunning && (
               <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.08em', padding: '2px 8px', borderRadius: 999, background: `color-mix(in oklab, ${T.run} 14%, transparent)`, color: T.run, border: `1px solid color-mix(in oklab, ${T.run} 40%, transparent)`, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.run, animation: 'hf-pulse 1.4s ease-in-out infinite' }}/>
@@ -289,6 +295,7 @@ function ConvHeader({ group, isRunning, builderUrl, t }: { group?: GroupItem; is
 
 // ── Pinned Brief ─────────────────────────────────────────────────────────────
 function PinnedBrief({ group }: { group?: GroupItem }) {
+  const { t } = useI18n();
   if (!group) return null;
   const runCount = group.metrics?.activeRuns ?? 0;
   return (
@@ -297,15 +304,15 @@ function PinnedBrief({ group }: { group?: GroupItem }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.acB, letterSpacing: '0.08em' }}>BRIEF · run #{runCount > 0 ? String(runCount).padStart(3, '0') : '---'}</span>
-          <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>· 置顶</span>
+          <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>· {t('chat.brief.pinned')}</span>
         </div>
         <div style={{ fontSize: 11.5, color: T.fg3, marginTop: 2, lineHeight: 1.45 }}>
-          <b style={{ color: T.fg2 }}>目标</b>&nbsp;{group.name} ·
-          <b style={{ color: T.fg2, marginLeft: 6 }}>Gate</b>&nbsp;Policy Matrix L2 ·
-          <b style={{ color: T.fg2, marginLeft: 6 }}>状态</b>&nbsp;{group.status === 'running' ? '运行中' : group.status === 'pending_approval' ? '等待审批' : '空闲'}
+          <b style={{ color: T.fg2 }}>{t('chat.brief.goal')}</b>&nbsp;{group.name} ·
+          <b style={{ color: T.fg2, marginLeft: 6 }}>{t('chat.brief.gate')}</b>&nbsp;Policy Matrix L2 ·
+          <b style={{ color: T.fg2, marginLeft: 6 }}>{t('chat.brief.status')}</b>&nbsp;{group.status === 'running' ? t('chat.brief.statusRunning') : group.status === 'pending_approval' ? t('chat.brief.statusPending') : t('chat.brief.statusIdle')}
         </div>
       </div>
-      <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg4, cursor: 'pointer', flexShrink: 0 }}>展开 ▾</span>
+      <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg4, cursor: 'pointer', flexShrink: 0 }}>{t('chat.brief.expand')}</span>
     </div>
   );
 }
@@ -379,7 +386,7 @@ function RichComposer({ value, onChange, onSend, onRunSkill, loading, t }: Compo
         />
         {/* Footer */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px 6px', borderTop: `1px solid ${T.bd}`, background: T.p }}>
-          <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>⏎ 发送 · ⇧⏎ 换行 · / 命令</span>
+          <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5 }}>{t('chat.composerHint')}</span>
           <div style={{ display: 'flex', gap: 6 }}>
             <button type="button" disabled={!value.trim()} onClick={onRunSkill} data-testid="chat-run-skill-button"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 9px', borderRadius: 6, border: `1px solid ${T.bd}`, background: 'transparent', color: value.trim() ? T.fg3 : T.fg5, cursor: value.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
@@ -400,10 +407,20 @@ function RichComposer({ value, onChange, onSend, onRunSkill, loading, t }: Compo
 
 // ── Right drawer: Thread / 任务 / 文档 / Brief ────────────────────────────────
 function ChatDrawer({ groupId, group, metrics }: { groupId?: string; group?: GroupItem; metrics: GroupMetrics }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<DrawerTab>('Thread');
   const [threads, setThreads] = useState<Message[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
+  // Tab IDs stay constants (used as state values); rendered labels are i18n'd.
   const tabs: DrawerTab[] = ['Thread', '任务', '文档', 'Brief'];
+  const tabLabel = (tb: DrawerTab) => {
+    switch (tb) {
+      case 'Thread': return t('chat.tabThread');
+      case '任务':   return t('chat.tabTasks');
+      case '文档':   return t('chat.tabDocs');
+      case 'Brief':  return t('chat.tabBrief');
+    }
+  };
 
   useEffect(() => {
     if (!groupId || tab !== 'Thread') return;
@@ -421,7 +438,7 @@ function ChatDrawer({ groupId, group, metrics }: { groupId?: string; group?: Gro
         {tabs.map(tb => (
           <button key={tb} type="button" onClick={() => setTab(tb)}
             style={{ padding: '10px 10px', fontSize: 11.5, fontWeight: tab === tb ? 700 : 600, color: tab === tb ? T.fg : T.fg4, borderBottom: `2px solid ${tab === tb ? T.ac : 'transparent'}`, cursor: 'pointer', background: 'transparent', border: 'none', borderRadius: 0, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5, transition: 'color 120ms' }}>
-            {tb}
+            {tabLabel(tb)}
             {tb === '任务' && metrics.pendingApprovalsCount > 0 && (
               <span style={{ fontFamily: T.mono, fontSize: 9, color: T.fg4, padding: '0 5px', background: T.p2, borderRadius: 8, border: `1px solid ${T.bd}` }}>{metrics.pendingApprovalsCount}</span>
             )}
@@ -436,13 +453,13 @@ function ChatDrawer({ groupId, group, metrics }: { groupId?: string; group?: Gro
         {tab === 'Thread' && (
           <div style={{ padding: 14 }}>
             <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5, marginBottom: 10, letterSpacing: '0.04em' }}>
-              {groupId ? `${group?.name ?? ''} · 最新消息` : '请先选择 Team'}
+              {groupId ? `${group?.name ?? ''} · ${t('chat.threadHeaderRecent')}` : t('chat.pickTeamFirst')}
             </div>
             {threadsLoading && (
-              <div style={{ fontFamily: T.mono, fontSize: 10, color: T.fg5, textAlign: 'center', padding: '20px 0' }}>加载中…</div>
+              <div style={{ fontFamily: T.mono, fontSize: 10, color: T.fg5, textAlign: 'center', padding: '20px 0' }}>{t('common.loading')}</div>
             )}
             {!threadsLoading && groupId && threads.length === 0 && (
-              <div style={{ fontFamily: T.mono, fontSize: 10, color: T.fg5, textAlign: 'center', padding: '20px 0' }}>暂无消息记录</div>
+              <div style={{ fontFamily: T.mono, fontSize: 10, color: T.fg5, textAlign: 'center', padding: '20px 0' }}>{t('chat.noMessages')}</div>
             )}
             {!threadsLoading && threads.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -471,7 +488,7 @@ function ChatDrawer({ groupId, group, metrics }: { groupId?: string; group?: Gro
         {tab === '任务' && (
           <div style={{ padding: 14 }}>
             <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.fg5, marginBottom: 10, letterSpacing: '0.04em' }}>
-              {groupId ? '待审批 · Approval Queue' : '请先选择 Team'}
+              {groupId ? t('chat.approvalQueueHeader') : t('chat.pickTeamFirst')}
             </div>
             {groupId ? <ApprovalGatePanel groupId={groupId}/> : null}
           </div>
@@ -487,7 +504,7 @@ function ChatDrawer({ groupId, group, metrics }: { groupId?: string; group?: Gro
         {/* 文档 tab */}
         {tab === '文档' && (
           <div style={{ padding: 14, fontFamily: T.mono, fontSize: 10, color: T.fg5, textAlign: 'center', paddingTop: 30 }}>
-            暂无关联文档
+            {t('chat.noLinkedDocs')}
           </div>
         )}
       </div>
@@ -650,8 +667,8 @@ export default function ChatPage() {
                             <Users size={22} strokeWidth={1.4}/>
                           </div>
                           <div style={{ textAlign: 'center' }}>
-                            <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: T.fg3 }}>从左侧选择一个 Team</p>
-                            <p style={{ margin: 0, fontSize: 11, color: T.fg5, lineHeight: 1.6 }}>选择后即可查看对话和工作流详情</p>
+                            <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: T.fg3 }}>{t('chat.emptyPickTeamTitle')}</p>
+                            <p style={{ margin: 0, fontSize: 11, color: T.fg5, lineHeight: 1.6 }}>{t('chat.emptyPickTeamHint')}</p>
                           </div>
                         </>
                       ) : (
