@@ -182,13 +182,16 @@ export function InlineEventCreator({
       style={{
         position: 'relative',
         display: 'flex',
-        alignItems: 'center',
-        gap: 8,
+        flexDirection: 'column',
+        gap: 6,
         // Notion Calendar style: the box reads as a deeper, more saturated
-        // slot inside the cell — not a floating popover. So the background
-        // is "current bg + a few % fg" and the border is the regular cell
-        // border, no accent glow.
-        padding: isCompact ? '8px 10px' : '10px 12px',
+        // slot inside the cell — not a floating popover. The cell sets
+        // display:flex column on its content, so `flex:1` here makes the
+        // creator claim the remaining cell height (below the date header,
+        // above the events list).
+        flex: isCompact ? 1 : undefined,
+        minHeight: isCompact ? 80 : variant === 'week' ? 60 : 56,
+        padding: '8px 10px',
         background: 'color-mix(in oklab, var(--t-fg) 6%, var(--t-bg))',
         border: '1px solid var(--t-border)',
         borderRadius: 8,
@@ -216,7 +219,7 @@ export function InlineEventCreator({
           flex: 1,
           minWidth: 0,
           padding: 0,
-          fontSize: isCompact ? 13 : 13.5,
+          fontSize: 11.5,
           fontWeight: 600,
           lineHeight: 1.4,
           color: 'var(--cal-fg0, var(--t-fg))',
@@ -225,36 +228,56 @@ export function InlineEventCreator({
           outline: 'none',
         }}
       />
-      {submitting && (
-        <Loader2
-          size={14}
-          strokeWidth={2}
-          style={{ animation: 'cal-spin 1s linear infinite', color: 'var(--t-accent)' }}
-        />
-      )}
-      {!submitting && (
-        <button
-          type="button"
-          onClick={onCancel}
-          aria-label="取消"
+      {/* footer row: hint on the left, cancel button on the right */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 6,
+          marginTop: 'auto',
+        }}
+      >
+        <span
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 22,
-            height: 22,
-            padding: 0,
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--t-fg-4)',
-            cursor: 'pointer',
-            borderRadius: 5,
-            flexShrink: 0,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            color: 'var(--t-fg-5)',
+            letterSpacing: '.05em',
           }}
         >
-          <X size={13} strokeWidth={2} />
-        </button>
-      )}
+          {submitting ? '创建中…' : pickedAgentId ? '↵ 创建' : '@ 指派 · ↵ 创建'}
+        </span>
+        {submitting ? (
+          <Loader2
+            size={12}
+            strokeWidth={2}
+            style={{ animation: 'cal-spin 1s linear infinite', color: 'var(--t-accent)' }}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="取消"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 18,
+              height: 18,
+              padding: 0,
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--t-fg-4)',
+              cursor: 'pointer',
+              borderRadius: 4,
+              flexShrink: 0,
+            }}
+          >
+            <X size={11} strokeWidth={2} />
+          </button>
+        )}
+      </div>
       {/* Error banner (inline below the input) */}
       {error && (
         <div
