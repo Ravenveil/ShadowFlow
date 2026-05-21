@@ -183,12 +183,20 @@ export function InlineEventCreator({
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
-        gap: 6,
-        padding: isCompact ? '3px 6px' : '5px 8px',
-        background: 'var(--t-panel)',
-        border: '1px solid var(--t-accent)',
-        borderRadius: 6,
-        boxShadow: '0 4px 14px -6px color-mix(in oklab, var(--t-accent) 60%, transparent)',
+        gap: 8,
+        // Notion Calendar style: the box reads as a deeper, more saturated
+        // slot inside the cell — not a floating popover. So the background
+        // is "current bg + a few % fg" and the border is the regular cell
+        // border, no accent glow.
+        padding: isCompact ? '8px 10px' : '10px 12px',
+        background: 'color-mix(in oklab, var(--t-fg) 6%, var(--t-bg))',
+        border: '1px solid var(--t-border)',
+        borderRadius: 8,
+        boxShadow:
+          'inset 0 0 0 1px color-mix(in oklab, var(--t-fg) 4%, transparent)',
+        // A subtle 2px accent stripe on the left signals "this is a new event
+        // taking shape" without screaming.
+        borderLeft: '2px solid var(--t-accent)',
         zIndex: 30,
       }}
     >
@@ -207,9 +215,10 @@ export function InlineEventCreator({
         style={{
           flex: 1,
           minWidth: 0,
-          padding: isCompact ? '2px 4px' : '4px 6px',
-          fontSize: isCompact ? 11.5 : 12.5,
+          padding: 0,
+          fontSize: isCompact ? 13 : 13.5,
           fontWeight: 600,
+          lineHeight: 1.4,
           color: 'var(--cal-fg0, var(--t-fg))',
           background: 'transparent',
           border: 'none',
@@ -218,7 +227,7 @@ export function InlineEventCreator({
       />
       {submitting && (
         <Loader2
-          size={12}
+          size={14}
           strokeWidth={2}
           style={{ animation: 'cal-spin 1s linear infinite', color: 'var(--t-accent)' }}
         />
@@ -232,17 +241,18 @@ export function InlineEventCreator({
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 18,
-            height: 18,
+            width: 22,
+            height: 22,
             padding: 0,
             background: 'transparent',
             border: 'none',
             color: 'var(--t-fg-4)',
             cursor: 'pointer',
-            borderRadius: 4,
+            borderRadius: 5,
+            flexShrink: 0,
           }}
         >
-          <X size={11} strokeWidth={2} />
+          <X size={13} strokeWidth={2} />
         </button>
       )}
       {/* Error banner (inline below the input) */}
