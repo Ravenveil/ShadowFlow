@@ -1,0 +1,530 @@
+/* ─────────────────────────────────────────────────────────────────────────
+ * Timeline · S6.10-B
+ * Visual contract: docs/design/platform-v5/run-session-v8.html (lines
+ * 119-200, 1300-1499 for .tl-* / .diff-* / .statusline / .msg-foot).
+ *
+ * All colors via existing design tokens declared in src/index.css
+ * (--bg, --fg-1..5, --accent, --accent-bright, --accent-tint, --accent-ink,
+ *  --border, --border-strong, --border-subtle, --status-ok, --status-run,
+ *  --status-err, --status-ok-tint, --status-run-tint, --bg-elev-1, --font-mono).
+ * Same tokens are re-bound under the light skin (src/index.css line ~327+) so
+ * this stylesheet works for both themes without duplication.
+ *
+ * Three local @keyframes — slide-in / fade-in for new-message entry, pulse
+ * for streaming indicators. Spin/cur/breath are reused from global sf-*.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/* container ── scrolls the whole stream */
+.container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 16px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.container::-webkit-scrollbar { width: 3px; }
+.container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+
+/* item wrapper ── separates each timeline message + drives slide-in */
+.item {
+  padding: 11px 0;
+  position: relative;
+  animation: tl-slide-in 200ms ease-out;
+}
+.item + .item { border-top: 1px solid var(--border-subtle); }
+
+@keyframes tl-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tl-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes tl-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .35; }
+}
+
+/* ── user · ❯ prefix ───────────────────────────────────────── */
+.user {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--fg-1);
+  font-weight: 500;
+}
+.userCaret {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  flex-shrink: 0;
+  user-select: none;
+}
+.userText { padding-top: 1px; }
+.userText b { color: var(--accent-bright); font-weight: 500; }
+
+/* ── thinking · pre-answer cloud ───────────────────────────── */
+.thinking { display: flex; flex-direction: column; gap: 9px; }
+.thinkingHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--fg-3);
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+.thinkingGlyph {
+  width: 15px;
+  height: 15px;
+  color: var(--accent-bright);
+  flex-shrink: 0;
+  animation: sf-pulse 2.4s ease-in-out infinite;
+}
+.thinkingLab {
+  color: var(--fg-2);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  letter-spacing: -.005em;
+  font-size: 11.5px;
+}
+.thinkingLab b {
+  color: var(--fg-1);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 0 1px;
+}
+.thinkingNum { color: var(--fg-4); font-size: 10.5px; }
+.thinkingNum b { color: var(--fg-2); font-weight: 600; }
+.thinkingSep { color: var(--fg-5); }
+.thinkingChev {
+  color: var(--fg-4);
+  font-size: 9px;
+  margin-left: auto;
+  transition: transform .15s;
+  font-family: var(--font-mono);
+}
+.thinkingChevOpen { transform: rotate(90deg); }
+.thinkingBody {
+  padding: 4px 0 0 21px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--fg-3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: tl-fade-in 160ms ease-out;
+}
+.thinkingBody p { margin: 0; }
+
+/* streaming loader · only while status='streaming' */
+.thinkingLoader {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: sf-spin .7s linear infinite;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* ── assistant meta · model pill + identity ────────────────── */
+.meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  letter-spacing: .01em;
+  flex-wrap: wrap;
+}
+.metaWho {
+  color: var(--fg-2);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: -.005em;
+}
+.metaDot {
+  width: 2.5px;
+  height: 2.5px;
+  background: var(--fg-5);
+  border-radius: 50%;
+  display: inline-block;
+}
+.modelPill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  line-height: 1;
+}
+.modelBrand {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--fg-1);
+  font-weight: 600;
+  letter-spacing: -.005em;
+}
+.modelSep {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+}
+.modelVer {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-3);
+}
+
+/* ── rationale · accent recess ─────────────────────────────── */
+.reason {
+  border-radius: 10px;
+  padding: 10px 14px 11px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--fg-1);
+  border: 1px solid var(--accent);
+  border-color: color-mix(in oklch, var(--accent) 30%, transparent);
+  background: color-mix(in oklch, var(--accent) 10%, transparent);
+  margin-bottom: 4px;
+}
+.reasonPre {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-bright);
+  font-weight: 600;
+  letter-spacing: .04em;
+  display: block;
+  margin-bottom: 3px;
+}
+.reasonList {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  line-height: 1.7;
+}
+.reasonList li { margin-bottom: 2px; }
+.reasonList li::marker { color: var(--accent-bright); }
+
+/* ── tool call chip + echo line ────────────────────────────── */
+.tool {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg-3);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.toolLead {
+  color: var(--fg-4);
+  font-size: 11px;
+  user-select: none;
+}
+.toolName { color: var(--fg-1); font-weight: 600; }
+.toolArgs { color: var(--fg-3); }
+.toolLink {
+  color: var(--accent-bright);
+  text-decoration: none;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.toolLink:hover { color: var(--accent); }
+
+.echo {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-4);
+  padding: 4px 0 0 14px;
+  line-height: 1.65;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.echoGlyph { color: var(--fg-5); user-select: none; font-size: 11px; }
+.echoBody { flex: 1; color: var(--fg-3); }
+
+/* ── step panel ────────────────────────────────────────────── */
+.panel {
+  background: var(--bg-elev-1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 2px 0 0;
+}
+.panelHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--fg-3);
+  background: transparent;
+  border: none;
+  padding: 0;
+  width: 100%;
+}
+.panelChev {
+  color: var(--fg-4);
+  font-size: 9px;
+  transition: transform .15s;
+}
+.panelChevOpen { transform: rotate(90deg); }
+.panelName { color: var(--fg-2); }
+.panelCt {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--fg-4);
+  margin-left: auto;
+  text-transform: none;
+}
+.panelCt b { color: var(--accent-bright); font-weight: 600; }
+
+.steps { display: flex; flex-direction: column; gap: 0; padding-top: 6px; }
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+.stepIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--fg-4);
+}
+.stepIconDone {
+  background: var(--status-ok-tint);
+  border-color: var(--status-ok);
+  color: var(--status-ok);
+}
+.stepIconRun {
+  background: var(--status-run-tint);
+  border-color: var(--status-run);
+  position: relative;
+}
+.stepSpinner {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--status-run);
+  border-top-color: transparent;
+  animation: sf-spin .8s linear infinite;
+  display: block;
+}
+.stepName { color: var(--fg-3); }
+.stepNameRun { color: var(--fg-1); font-weight: 500; }
+.stepTime {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+}
+.stepTimeRun { color: var(--status-run); }
+
+.substeps {
+  padding: 3px 0 3px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sub {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--fg-4);
+  padding: 2px 0;
+}
+.subDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fg-5);
+  flex-shrink: 0;
+}
+.subDotDone { background: var(--status-ok); }
+.subDotRun {
+  background: var(--status-run);
+  animation: tl-pulse 1.4s ease-in-out infinite;
+}
+.subName { color: var(--fg-3); }
+.subNameRun { color: var(--fg-1); }
+.subNameDone { color: var(--fg-2); }
+.subTime {
+  margin-left: auto;
+  font-size: 9.5px;
+  color: var(--fg-5);
+}
+
+/* ── diff panel ────────────────────────────────────────────── */
+.diff {
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.7;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.diffHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--bg-elev-1);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 10px;
+  color: var(--fg-4);
+  letter-spacing: .04em;
+}
+.diffFile {
+  color: var(--fg-1);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0;
+}
+.diffStats { margin-left: auto; font-size: 10px; }
+.diffAdd { color: var(--status-ok); }
+.diffDel { color: var(--status-err); }
+.diffBody { padding: 6px 0; }
+.diffLine {
+  display: flex;
+  padding: 0 10px;
+  align-items: baseline;
+  gap: 8px;
+  animation: tl-fade-in 120ms ease-out;
+}
+.diffLineAdd { background: color-mix(in oklch, var(--status-ok) 8%, transparent); }
+.diffLineDel { background: color-mix(in oklch, var(--status-err) 7%, transparent); }
+.diffGut {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  width: 28px;
+  flex-shrink: 0;
+  text-align: right;
+  user-select: none;
+}
+.diffMark {
+  width: 10px;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+.diffMarkAdd { color: var(--status-ok); }
+.diffMarkDel { color: var(--status-err); }
+.diffCode { color: var(--fg-2); white-space: pre; }
+
+/* ── msg-foot · end-of-turn summary ────────────────────────── */
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  padding: 6px 0 0;
+  margin-top: 8px;
+  border-top: 1px dashed var(--border-subtle);
+  letter-spacing: .01em;
+}
+.footStatus {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-ok);
+  flex-shrink: 0;
+}
+.footStatusRun {
+  background: var(--status-run);
+  animation: tl-pulse 1.4s ease-in-out infinite;
+}
+.footLab {
+  color: var(--fg-2);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  letter-spacing: -.005em;
+}
+.footSep { color: var(--fg-5); padding: 0 1px; }
+.footNum { color: var(--fg-3); }
+.footNum b { color: var(--fg-2); font-weight: 600; }
+
+/* ── status line · sticky always-on (rendered outside container) ─── */
+.statusLine {
+  padding: 6px 16px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-5);
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  background: var(--bg);
+  letter-spacing: .01em;
+}
+.statusGlyph {
+  color: var(--accent-bright);
+  animation: sf-pulse 1.6s ease-in-out infinite;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.statusVerb {
+  color: var(--fg-2);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: -.005em;
+}
+.statusNum { color: var(--fg-3); }
+.statusNum b { color: var(--fg-1); font-weight: 600; }
+.statusSep { color: var(--fg-5); }
+
+/* ── section label · small UPPERCASE rail ───────────────────── */
+.secLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  opacity: .85;
+  margin: 8px 0 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

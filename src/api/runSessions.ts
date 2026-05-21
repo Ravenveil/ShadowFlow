@@ -360,6 +360,18 @@ export function subscribeRunSession(
     }) => void;
     /** S12 — `<sf:question-form>` interactive form. body is parsed JSON. */
     onQuestionForm?: (data: { id: string; title: string; body: unknown }) => void;
+    /**
+     * S6.10-B — new typed TimelineMessage arrived. Front-end appends to
+     * `messages` state. Payload shape is defined in the front-end mirror
+     * `src/components/run-session/timeline/types.ts` (synced from server
+     * `lib/contracts.ts`).
+     */
+    onMessage?: (data: import('../components/run-session/timeline/types').TimelineMessage) => void;
+    /**
+     * S6.10-B — patch mutates an existing TimelineMessage by id (step_panel
+     * grows, thinking body streams, diff lines append, msg_foot timer ticks).
+     */
+    onMessagePatch?: (data: import('../components/run-session/timeline/types').MessagePatch) => void;
     onRetrying?: (attempt: number, delayMs: number) => void;
     onError?: (err: Event) => void;
     onServerError?: (message: string, code?: string) => void;
@@ -423,6 +435,10 @@ export function subscribeRunSession(
     es.addEventListener('agent-substep', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onAgentSubstep?.(d); });
     // S12 — `<sf:question-form>` interactive clarify modal.
     es.addEventListener('question-form', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onQuestionForm?.(d); });
+    // S6.10-B — TimelineMessage stream (new). Parallel to all legacy events
+    // above; back-end emits both during the transition.
+    es.addEventListener('message',       (e) => { const d = parse(e as MessageEvent); if (d) handlers.onMessage?.(d); });
+    es.addEventListener('message-patch', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onMessagePatch?.(d); });
     es.addEventListener('error',     (e) => {
       const d = parse(e as MessageEvent);
       if (d?.message) {

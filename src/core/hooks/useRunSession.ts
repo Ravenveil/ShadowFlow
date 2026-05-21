@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { subscribeRunSession, abortRunSession } from '../../api/runSessions';
 import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent, AgentPersonaEvent, StepArtifact, StepArtifactEvent } from '../../api/runSessions';
+import type { TimelineMessage, MessagePatch } from '../../components/run-session/timeline/types';
+import { applyPatch } from '../../components/run-session/timeline/types';
 import { classifyClientError, isErrorCode } from '../errors/classifyError';
 
 /**
@@ -160,6 +162,17 @@ export interface RunSessionState {
    * (handled by parent: POST follow-up message + reducer dispatches CLEAR).
    */
   pendingQuestionForm: { id: string; title: string; body: unknown } | null;
+  /**
+   * S6.10-B — typed TimelineMessage stream. Single ordered array driving the
+   * new left-pane Timeline component. SSE `message` events append; SSE
+   * `message-patch` events mutate by id (see applyPatch in
+   * src/components/run-session/timeline/types.ts).
+   *
+   * Coexists with legacy slot-state (nodes / edges / steps / yamlLines /
+   * thinkingStream / …) during the S6.10 transition. Glue Story #37 will
+   * eventually retire the legacy slots; for now everything stays.
+   */
+  messages: TimelineMessage[];
 }
 
 // 2026-05-11 UX fix — steps are now driven entirely by `<sf:step>` events
@@ -203,6 +216,10 @@ type Action =
     }
   | { type: 'QUESTION_FORM'; payload: { id: string; title: string; body: unknown } }
   | { type: 'QUESTION_FORM_CLEAR' }
+  // S6.10-B — TimelineMessage stream events. MESSAGE appends; MESSAGE_PATCH
+  // mutates by id via the pure applyPatch helper.
+  | { type: 'MESSAGE'; payload: TimelineMessage }
+  | { type: 'MESSAGE_PATCH'; payload: MessagePatch }
   // 2026-05-16 — user pressed Stop. Mark stream terminated locally and
   // append "（用户已停止）" to the chat reply so the UI shows a clear marker
   // even if the LLM was mid-sentence.
@@ -457,6 +474,37 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
         thinkingMessage: null,
         tokenCount: state.tokenCount + Math.ceil(action.payload.text.length / 4),
       };
+    case 'MESSAGE': {
+      // S6.10-B — append a new TimelineMessage. Idempotent on id (re-delivery
+      // during reconnect: if the same id already exists we overwrite it in
+      // place rather than appending a dupe). Server emits monotonically; this
+      // is just a defensive guard.
+      const incoming = action.payload;
+      const existingIdx = state.messages.findIndex((m) => m.id === incoming.id);
+      if (existingIdx >= 0) {
+        return {
+          ...state,
+          messages: state.messages.map((m, i) =>
+            i === existingIdx ? incoming : m,
+          ),
+        };
+      }
+      return { ...state, messages: [...state.messages, incoming] };
+    }
+    case 'MESSAGE_PATCH': {
+      // S6.10-B — mutate the matching message by id via applyPatch. If no
+      // match (out-of-order delivery, possible during reconnect), we drop
+      // the patch silently — the server will resend the full message later.
+      const patch = action.payload;
+      const idx = state.messages.findIndex((m) => m.id === patch.id);
+      if (idx === -1) return state;
+      return {
+        ...state,
+        messages: state.messages.map((m, i) =>
+          i === idx ? applyPatch(m, patch) : m,
+        ),
+      };
+    }
     case 'ABORT': {
       // Avoid appending the marker twice if the user clicks Stop twice in
       // quick succession before isStreaming flips.
@@ -516,6 +564,7 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     stepArtifacts: {},
     activeAgentSubstep: null,
     pendingQuestionForm: null,
+    messages: [],
   });
 
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
