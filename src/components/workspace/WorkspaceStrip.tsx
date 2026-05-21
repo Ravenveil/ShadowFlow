@@ -14,12 +14,14 @@ import { useWorkspaceStore } from '../../store/workspaceStore';
 import { CreateWorkspaceModal } from './CreateWorkspaceModal';
 import type { WorkspaceSummary } from '../../api/workspaces';
 import { listTeams, type TeamRecord } from '../../api/teams';
+import { useI18n } from '../../common/i18n';
 
 interface WorkspaceSelectorProps {
   collapsed?: boolean;
 }
 
 export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
+  const { t } = useI18n();
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const currentId  = useWorkspaceStore((s) => s.currentId);
   const switchTo   = useWorkspaceStore((s) => s.switchTo);
@@ -143,7 +145,7 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
         </div>
         {teamsLoaded && teams.length === 0 && (
           <div style={{ padding: '6px 10px', fontSize: 11, color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono)' }}>
-            还没有 team
+            {t('workspace.noTeams')}
           </div>
         )}
         {teams.slice(0, 8).map((tm) => (
@@ -185,7 +187,7 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
               border: 'none', cursor: 'pointer',
             }}
           >
-            查看全部 {teams.length} →
+            {t('workspace.viewAll')} {teams.length} →
           </button>
         )}
       </div>
@@ -207,7 +209,7 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 14, flexShrink: 0, color: 'var(--t-fg-5)',
           }}>+</span>
-          新建 Workspace
+          {t('workspace.createWorkspace')}
         </button>
       </div>
     </div>

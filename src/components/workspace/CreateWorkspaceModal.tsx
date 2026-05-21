@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createWorkspace, WorkspaceSummary } from '../../api/workspaces';
+import { useI18n } from '../../common/i18n';
 
 const PRESET_COLORS = [
   { hex: '#6366f1', label: '紫色' },
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function CreateWorkspaceModal({ onClose, onCreated }: Props) {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [color, setColor] = useState(PRESET_COLORS[0].hex);
   const [submitting, setSubmitting] = useState(false);
@@ -46,7 +48,7 @@ export function CreateWorkspaceModal({ onClose, onCreated }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
-      setError('请输入 Workspace 名称');
+      setError(t('workspace.errorEmptyName'));
       return;
     }
     setSubmitting(true);
@@ -55,7 +57,7 @@ export function CreateWorkspaceModal({ onClose, onCreated }: Props) {
       const ws = await createWorkspace({ name: name.trim(), color });
       onCreated(ws);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '创建失败，请重试');
+      setError(err instanceof Error ? err.message : t('workspace.errorCreateFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -71,20 +73,20 @@ export function CreateWorkspaceModal({ onClose, onCreated }: Props) {
       data-testid="create-workspace-modal"
     >
       <div className="w-full max-w-sm rounded-xl border border-shadowflow-border bg-shadowflow-surface p-6 shadow-2xl">
-        <h2 className="mb-4 text-[15px] font-semibold text-white/90">新建 Workspace</h2>
+        <h2 className="mb-4 text-[15px] font-semibold text-white/90">{t('workspace.createWorkspace')}</h2>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Name input */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] uppercase tracking-wider text-white/40">
-              名称
+              {t('workspace.fieldName')}
             </label>
             <input
               ref={inputRef}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="我的工作区"
+              placeholder={t('workspace.namePlaceholder')}
               maxLength={120}
               className="w-full rounded-lg border border-shadowflow-border bg-shadowflow-bg px-3 py-2 text-[13px] text-white/90 placeholder:text-white/20 focus:border-white/20 focus:outline-none"
               data-testid="ws-name-input"
@@ -94,7 +96,7 @@ export function CreateWorkspaceModal({ onClose, onCreated }: Props) {
           {/* Color picker */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] uppercase tracking-wider text-white/40">
-              颜色
+              {t('workspace.fieldColor')}
             </label>
             <div className="flex gap-2">
               {PRESET_COLORS.map((c) => (
@@ -130,7 +132,7 @@ export function CreateWorkspaceModal({ onClose, onCreated }: Props) {
               disabled={submitting}
               className="rounded-lg px-4 py-1.5 text-[12px] text-white/50 hover:bg-white/5 hover:text-white/70 disabled:opacity-50"
             >
-              取消
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
@@ -138,7 +140,7 @@ export function CreateWorkspaceModal({ onClose, onCreated }: Props) {
               className="rounded-lg bg-[#6366f1] px-4 py-1.5 text-[12px] font-medium text-white hover:bg-[#4f46e5] disabled:cursor-not-allowed disabled:opacity-40"
               data-testid="btn-create-workspace-submit"
             >
-              {submitting ? '创建中…' : '创建'}
+              {submitting ? t('workspace.creating') : t('common.create')}
             </button>
           </div>
         </form>

@@ -1,9 +1,12 @@
+import { useI18n } from '../../../common/i18n';
+
 interface InboxEmptyStateProps {
   keyword?: string;
   onCreateGroup: () => void;
 }
 
 export function InboxEmptyState({ keyword, onCreateGroup }: InboxEmptyStateProps) {
+  const { t } = useI18n();
   const trimmedKeyword = keyword?.trim() ?? '';
 
   return (
@@ -21,16 +24,18 @@ export function InboxEmptyState({ keyword, onCreateGroup }: InboxEmptyStateProps
         <circle cx="11" cy="11" r="7" />
         <path d="m20 20-3.5-3.5" />
       </svg>
-      <h3 className="mt-4 text-sm font-medium text-white/70">没有匹配的会话</h3>
+      <h3 className="mt-4 text-sm font-medium text-white/70">{t('inbox.empty.noMatch')}</h3>
       <p className="mt-2 text-sm text-white/50">
-        {trimmedKeyword ? `未找到 '${trimmedKeyword}'` : '还没有会话'}
+        {trimmedKeyword
+          ? t('inbox.empty.notFound', { keyword: trimmedKeyword })
+          : t('inbox.empty.noConversations')}
       </p>
       <button
         type="button"
         onClick={onCreateGroup}
         className="mt-4 text-sm font-medium text-[#A78BFA] transition hover:text-[#C4B5FD]"
       >
-        + 新群聊
+        {t('inbox.empty.newGroup')}
       </button>
     </div>
   );

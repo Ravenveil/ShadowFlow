@@ -29,6 +29,7 @@ import {
 } from '../composer/CommandMenu';
 import { listAgents, type AgentRecord } from '../../api/agents';
 import { createSchedule, ScheduleApiError } from '../../api/schedules';
+import { useI18n } from '../../common/i18n';
 
 export interface InlineEventCreatorProps {
   /** When the new event should fire (start_at). Derived from the clicked cell/slot. */
@@ -66,6 +67,7 @@ export function InlineEventCreator({
   onCancel,
   variant = 'month',
 }: InlineEventCreatorProps) {
+  const { t } = useI18n();
   const [title, setTitle] = useState('');
   const [caret, setCaret] = useState(0);
   const [agents, setAgents] = useState<AgentRecord[]>([]);
@@ -131,7 +133,7 @@ export function InlineEventCreator({
     // Strip the @<name> token so task_description is the actual task text.
     const desc = title.replace(/(^|\s)@\S+(\s|$)/g, ' ').trim();
     if (!desc) {
-      setError('请输入事件标题');
+      setError(t('calendar.inlineErrorEmptyTitle'));
       return;
     }
     setError(null);
@@ -148,9 +150,9 @@ export function InlineEventCreator({
       onCreated();
     } catch (e) {
       if (e instanceof ScheduleApiError) {
-        setError(`创建失败：HTTP ${e.status}`);
+        setError(t('calendar.inlineErrorHttp', { status: e.status }));
       } else {
-        setError(e instanceof Error ? e.message : '创建失败');
+        setError(e instanceof Error ? e.message : t('calendar.inlineErrorGeneric'));
       }
       setSubmitting(false);
     }
@@ -172,8 +174,8 @@ export function InlineEventCreator({
 
   const isCompact = variant === 'month';
   const placeholder = pickedAgentId
-    ? '继续输入或回车创建…'
-    : '输入标题，@ 指派智能体…';
+    ? t('calendar.inlinePlaceholderPicked')
+    : t('calendar.inlinePlaceholderEmpty');
 
   return (
     <div
@@ -246,7 +248,11 @@ export function InlineEventCreator({
             letterSpacing: '.05em',
           }}
         >
-          {submitting ? '创建中…' : pickedAgentId ? '↵ 创建' : '@ 指派 · ↵ 创建'}
+          {submitting
+            ? t('calendar.inlineCreating')
+            : pickedAgentId
+            ? t('calendar.inlineHintWithAgent')
+            : t('calendar.inlineHintEmpty')}
         </span>
         {submitting ? (
           <Loader2
@@ -258,7 +264,7 @@ export function InlineEventCreator({
           <button
             type="button"
             onClick={onCancel}
-            aria-label="取消"
+            aria-label={t('common.cancel')}
             style={{
               display: 'inline-flex',
               alignItems: 'center',

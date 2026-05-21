@@ -5,6 +5,7 @@ import { useInboxStore } from '../core/store/useInboxStore';
 import { ScheduleDrawer, describeSchedule } from '../components/briefboard/ScheduleDrawer';
 import { InlineEventCreator } from '../components/calendar/InlineEventCreator';
 import { useWorkspaceStore } from '../store/workspaceStore';
+import { useI18n } from '../common/i18n';
 // @ts-ignore — lunar-javascript is a CJS module without typings
 import { Solar } from 'lunar-javascript';
 
@@ -682,6 +683,7 @@ function AgendaView({ year, month, eventsByDate, onEventClick, creator }: {
   onEventClick: (e: CalEvent) => void;
   creator?: CreatorBinding;
 }) {
+  const { t } = useI18n();
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${fmt2(today.getMonth()+1)}-${fmt2(today.getDate())}`;
 
@@ -723,8 +725,8 @@ function AgendaView({ year, month, eventsByDate, onEventClick, creator }: {
                 <div className="cal-label" style={{ fontSize:9, letterSpacing:'.1em', color: d.isToday ? 'var(--t-accent-bright)' : 'var(--t-fg-4)' }}>
                   {fmt2(month+1)}月 · {DOW_ZH[d.dow]}
                 </div>
-                {d.isToday && <div style={{ marginTop:4, fontSize:11, fontWeight:600, color:'var(--t-accent-bright)' }}>今天</div>}
-                <div className="cal-meta" style={{ marginTop:6, fontSize:9 }}>{evs.length} 计划</div>
+                {d.isToday && <div style={{ marginTop:4, fontSize:11, fontWeight:600, color:'var(--t-accent-bright)' }}>{t('calendar.today')}</div>}
+                <div className="cal-meta" style={{ marginTop:6, fontSize:9 }}>{t('calendar.eventCount', { count: evs.length })}</div>
                 {canCreate && !d.isPast && (
                   <button
                     type="button"
@@ -739,7 +741,7 @@ function AgendaView({ year, month, eventsByDate, onEventClick, creator }: {
                       color:'var(--t-fg-3)', fontSize:10.5, cursor:'pointer', fontFamily:'var(--font-mono)',
                     }}
                   >
-                    <Plus size={10} strokeWidth={2.2} /> 添加
+                    <Plus size={10} strokeWidth={2.2} /> {t('calendar.addEvent')}
                   </button>
                 )}
               </div>
@@ -763,7 +765,7 @@ function AgendaView({ year, month, eventsByDate, onEventClick, creator }: {
                 )}
                 {evs.length === 0 && !isCreatingHere ? (
                   <div style={{ padding:'10px 12px', fontSize:11.5, color:'var(--t-fg-5)', fontFamily:'var(--font-mono)', letterSpacing:'.04em' }}>
-                    无计划 · 点左侧「添加」新建
+                    {t('calendar.emptyDay')}
                   </div>
                 ) : evs.map(ev => {
                   const c = SLOT_COLOR[ev.slot];
@@ -956,6 +958,7 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
   onNewPlan: (gid: string) => void;
   onNav: (delta: number) => void;
 }) {
+  const { t } = useI18n();
   const [nlText, setNlText] = useState('');
   const [cidText, setCidText] = useState('');
 
@@ -1021,12 +1024,12 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
               color:'var(--t-accent-bright)', display:'flex', alignItems:'center', justifyContent:'center',
               fontSize:11, fontWeight:800, border:'1px solid color-mix(in oklab,var(--t-accent) 40%,transparent)',
             }}>✦</span>
-            <span style={{ fontSize:12, fontWeight:600, color:'var(--cal-fg0)' }}>一句话约计划</span>
+            <span style={{ fontSize:12, fontWeight:600, color:'var(--cal-fg0)' }}>{t('calendar.quickAddTitle')}</span>
             <span className="cal-meta" style={{ marginLeft:'auto', fontSize:9 }}>⌘N</span>
           </div>
           <input
             value={nlText} onChange={e => setNlText(e.target.value)}
-            placeholder="每个工作日 09:00 让 Team 跑任务…"
+            placeholder={t('calendar.quickAddPlaceholder')}
             style={{
               padding:'7px 9px', borderRadius:7,
               background:'var(--t-bg)', border:'1px solid var(--t-border)',
@@ -1055,7 +1058,7 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
               background:'var(--t-panel)', color:'var(--t-fg-3)', fontSize:11,
               fontFamily:'var(--font-sans)', cursor:'pointer',
             }}>
-            <option value="">↵ 选择团队确认创建</option>
+            <option value="">{t('calendar.quickAddSelectTeam')}</option>
             {groupEntries.map(([gid, g]) => <option key={gid} value={gid}>{g.name}</option>)}
           </select>
         </div>
@@ -1067,13 +1070,13 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
 
       {/* ── 我的日历 ── */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px 4px', flexShrink:0 }}>
-        <span className="cal-label" style={{ fontSize:9 }}>我的日历</span>
-        <span className="cal-meta" style={{ fontSize:9 }}>{groupEntries.length} 个</span>
+        <span className="cal-label" style={{ fontSize:9 }}>{t('calendar.myCalendar')}</span>
+        <span className="cal-meta" style={{ fontSize:9 }}>{groupEntries.length}</span>
       </div>
       <div style={{ padding:'0 6px', flexShrink:0 }}>
         {groupEntries.length === 0 ? (
           <div style={{ padding:'8px 10px', fontSize:11, color:'var(--t-fg-5)', fontFamily:'var(--font-mono)', letterSpacing:'.04em' }}>
-            在 Team 聊天页添加 Schedule…
+            {t('calendar.addInChat')}
           </div>
         ) : groupEntries.map(([gid, g]) => (
           <div key={gid}
@@ -1098,7 +1101,7 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
             margin:'4px 10px', padding:'6px 10px', borderRadius:7, width:'calc(100% - 20px)',
             border:'1px dashed var(--t-border-2)', color:'var(--t-fg-4)', fontSize:11,
             fontFamily:'var(--font-mono)', letterSpacing:'.04em', cursor:'pointer', background:'transparent',
-          }}>+ 新建定时计划</button>
+          }}>{t('calendar.newPlanFull')}</button>
       </div>
 
       {/*
@@ -1118,10 +1121,10 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
           background:'var(--t-panel-2)', border:'1px solid var(--t-border)',
           fontSize:8.5, fontFamily:'var(--font-mono)', letterSpacing:'.06em',
           color:'var(--t-fg-4)', textTransform:'uppercase', pointerEvents:'none',
-        }}>WIP · 未接入</div>
+        }}>{t('calendar.wipNotConnected')}</div>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px 4px', marginTop:8 }}>
-          <span className="cal-label" style={{ fontSize:9 }}>订阅 · 0G CID</span>
-          <span className="cal-meta" style={{ fontSize:9 }}>2 个</span>
+          <span className="cal-label" style={{ fontSize:9 }}>{t('calendar.subscribeCID')}</span>
+          <span className="cal-meta" style={{ fontSize:9 }}>2</span>
         </div>
         <div style={{ padding:'0 6px' }}>
           {[
@@ -1154,7 +1157,7 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
             <input
               disabled
               value={cidText} onChange={e => setCidText(e.target.value)}
-              placeholder="粘贴 CID 订阅团队日程（未接入）"
+              placeholder={t('calendar.subscribePlaceholder')}
               style={{
                 flex:1, padding:'6px 9px', borderRadius:7,
                 border:'1px dashed var(--t-border-2)', background:'transparent',
@@ -1166,7 +1169,7 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
               <button type="button" disabled onClick={() => setCidText('')} style={{
                 padding:'0 10px', borderRadius:7, background:'var(--t-accent)', color:'var(--t-accent-ink)',
                 fontSize:11, fontWeight:700, cursor:'not-allowed', border:'none',
-              }}>订阅</button>
+              }}>{t('calendar.subscribeBtn')}</button>
             )}
           </div>
         </div>
@@ -1179,7 +1182,7 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
       <div style={{ margin:'0 12px 12px', padding:11, borderRadius:10, background:'var(--t-panel-2)', border:'1px solid var(--t-border)', flexShrink:0 }}>
         <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:7 }}>
           <span style={{ width:6, height:6, borderRadius:'50%', background: nextSchedule ? 'var(--t-run)' : 'var(--t-fg-6)', animation: nextSchedule ? 'cal-blink 1.6s infinite' : 'none', flexShrink:0 }}/>
-          <span className="cal-label" style={{ fontSize:8.5 }}>下一次触发</span>
+          <span className="cal-label" style={{ fontSize:8.5 }}>{t('calendar.nextTrigger')}</span>
           {nextSchedule && (
             <span className="cal-meta" style={{ marginLeft:'auto', fontSize:8.5, color:'var(--t-fg-3)' }}>
               {fmtRelative(nextSchedule.diff)}
@@ -1198,7 +1201,7 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
           </div>
         ) : (
           <div className="cal-meta" style={{ fontSize:10, color:'var(--t-fg-5)', textAlign:'center', padding:'4px 0' }}>
-            暂无计划触发
+            {t('calendar.noTrigger')}
           </div>
         )}
       </div>
@@ -1215,8 +1218,9 @@ function CalToolbar({ view, onViewChange, year, month, onNav, onToday, onRefresh
   total: number; completed: number; warnCount: number;
   onNewPlan: () => void;
 }) {
+  const { t } = useI18n();
   const VIEWS: { id: ViewMode; label: string }[] = [
-    { id:'month', label:'月' }, { id:'week', label:'周' }, { id:'agenda', label:'列表' },
+    { id:'month', label: t('calendar.viewMonth') }, { id:'week', label: t('calendar.viewWeek') }, { id:'agenda', label: t('calendar.viewAgenda') },
   ];
   return (
     <div style={{
@@ -1226,7 +1230,7 @@ function CalToolbar({ view, onViewChange, year, month, onNav, onToday, onRefresh
       <button type="button" onClick={onToday} style={{
         height:28, padding:'0 12px', borderRadius:7, border:'1px solid var(--t-border)',
         background:'var(--t-panel-2)', color:'var(--cal-fg0)', fontSize:12, fontWeight:600, cursor:'pointer',
-      }}>今天</button>
+      }}>{t('calendar.today')}</button>
       <div style={{ display:'flex', gap:2 }}>
         {([-1,1] as const).map(d => (
           <button key={d} type="button" onClick={() => onNav(d)} style={{
@@ -1241,9 +1245,9 @@ function CalToolbar({ view, onViewChange, year, month, onNav, onToday, onRefresh
       <div style={{ flex:1 }}/>
       {/* metrics */}
       <div style={{ display:'flex', alignItems:'center', gap:16, marginRight:8 }}>
-        <Metric label="已计划" value={String(total)} hint="本月"/>
-        <Metric label="已完成" value={String(completed)} hint="本月" color="var(--t-ok)"/>
-        {warnCount > 0 && <Metric label="失败" value={String(warnCount)} hint="本月" color="var(--t-err)"/>}
+        <Metric label={t('calendar.metricLabelPlanned')} value={String(total)} hint={t('calendar.metricThisMonth')}/>
+        <Metric label={t('calendar.metricLabelCompleted')} value={String(completed)} hint={t('calendar.metricThisMonth')} color="var(--t-ok)"/>
+        {warnCount > 0 && <Metric label={t('calendar.metricLabelFailed')} value={String(warnCount)} hint={t('calendar.metricThisMonth')} color="var(--t-err)"/>}
       </div>
       {/* view switcher */}
       <div style={{ display:'flex', padding:2, borderRadius:8, background:'var(--t-panel-2)', border:'1px solid var(--t-border)' }}>
@@ -1265,7 +1269,7 @@ function CalToolbar({ view, onViewChange, year, month, onNav, onToday, onRefresh
         fontSize:12.5, fontWeight:700, cursor:'pointer', border:'none',
         display:'inline-flex', alignItems:'center', gap:5,
       }}>
-        <span style={{ fontSize:14 }}>+</span> 新建计划
+        <span style={{ fontSize:14 }}>+</span> {t('calendar.newPlan')}
       </button>
     </div>
   );
@@ -1291,6 +1295,7 @@ function EventDetailPanel({ event, schedule, onClose, onDelete }: {
   onClose: () => void;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const c = SLOT_COLOR[event.slot];
   const recentRuns = schedule?.runs?.slice(-5).reverse() ?? [];
   return (
@@ -1306,7 +1311,7 @@ function EventDetailPanel({ event, schedule, onClose, onDelete }: {
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
           <CalAvatar glyph={event.glyph} slot={event.slot} size={24}/>
           <span style={{ fontSize:13, fontWeight:700, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{event.groupName}</span>
-          <button type="button" onClick={() => onDelete(event.scheduleId)} title="删除计划"
+          <button type="button" onClick={() => onDelete(event.scheduleId)} title={t('calendar.deletePlan')}
             style={{ width:26, height:26, borderRadius:6, border:'none', background:'transparent', color:'var(--t-fg-5)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <Trash2 size={13} strokeWidth={1.7}/>
           </button>
@@ -1332,10 +1337,10 @@ function EventDetailPanel({ event, schedule, onClose, onDelete }: {
         <section>
           <div className="cal-label" style={{ fontSize:9, marginBottom:8 }}>Schedule</div>
           <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-            <KV k="cron" v={event.cronExpr ?? '一次性 · 仅触发 1 次'}/>
-            <KV k="下次触发" v={schedule?.next_run_time ? new Date(schedule.next_run_time).toLocaleString('zh-CN') : '—'}/>
-            <KV k="时区" v="Asia/Shanghai · GMT+8"/>
-            {schedule && <KV k="任务" v={describeSchedule(schedule)}/>}
+            <KV k={t('calendar.kvCron')} v={event.cronExpr ?? t('calendar.oneshotKvLabel')}/>
+            <KV k={t('calendar.kvNextRun')} v={schedule?.next_run_time ? new Date(schedule.next_run_time).toLocaleString('zh-CN') : '—'}/>
+            <KV k={t('calendar.kvTimezone')} v="Asia/Shanghai · GMT+8"/>
+            {schedule && <KV k={t('calendar.kvTask')} v={describeSchedule(schedule)}/>}
           </div>
         </section>
 
@@ -1343,8 +1348,8 @@ function EventDetailPanel({ event, schedule, onClose, onDelete }: {
         {recentRuns.length > 0 && (
           <section>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-              <span className="cal-label" style={{ fontSize:9 }}>执行记录</span>
-              <span className="cal-meta" style={{ fontSize:9 }}>最近 {recentRuns.length} 次</span>
+              <span className="cal-label" style={{ fontSize:9 }}>{t('calendar.runHistory')}</span>
+              <span className="cal-meta" style={{ fontSize:9 }}>{t('calendar.runHistoryRecent', { count: recentRuns.length })}</span>
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
               {recentRuns.map((r, i) => (
@@ -1374,11 +1379,11 @@ function EventDetailPanel({ event, schedule, onClose, onDelete }: {
         <button type="button" style={{
           flex:1, height:34, borderRadius:7, background:'var(--t-accent)', color:'var(--t-accent-ink)',
           fontSize:12.5, fontWeight:700, cursor:'pointer', border:'none',
-        }}>▶ 立即触发</button>
+        }}>{t('calendar.triggerNow')}</button>
         <button type="button" onClick={onClose} style={{
           height:34, padding:'0 12px', borderRadius:7, border:'1px solid var(--t-border)',
           background:'var(--t-panel-2)', color:'var(--t-fg-3)', fontSize:12, fontWeight:600, cursor:'pointer',
-        }}>关闭</button>
+        }}>{t('common.close')}</button>
       </div>
     </div>
   );
@@ -1396,6 +1401,7 @@ function KV({ k, v }: { k: string; v: string }) {
 /* ── Main page ──────────────────────────────────────────────────────────── */
 
 export default function CalendarPage() {
+  const { t } = useI18n();
   const today = new Date();
   const [view, setView]   = useState<ViewMode>('month');
   const [year, setYear]   = useState(today.getFullYear());
@@ -1495,7 +1501,7 @@ export default function CalendarPage() {
           {loading && (
             <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:10, color:'var(--t-fg-4)' }}>
               <RefreshCw size={16} strokeWidth={1.7} style={{ animation:'cal-spin 1s linear infinite' }}/>
-              <span style={{ fontFamily:'var(--font-mono)', fontSize:12 }}>加载中…</span>
+              <span style={{ fontFamily:'var(--font-mono)', fontSize:12 }}>{t('common.loading')}</span>
             </div>
           )}
           {!loading && error && (
@@ -1551,7 +1557,7 @@ export default function CalendarPage() {
 
       {deleting && (
         <div style={{ position:'fixed', bottom:20, right:20, zIndex:600, padding:'10px 16px', borderRadius:8, background:'var(--t-panel)', border:'1px solid var(--t-border)', fontSize:12, color:'var(--t-fg-3)', display:'flex', alignItems:'center', gap:8 }}>
-          <RefreshCw size={12} style={{ animation:'cal-spin 1s linear infinite' }}/> 删除中…
+          <RefreshCw size={12} style={{ animation:'cal-spin 1s linear infinite' }}/> {t('calendar.deleting')}
         </div>
       )}
 
