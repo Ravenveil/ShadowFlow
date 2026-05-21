@@ -10,6 +10,29 @@
  * out to the official Anthropic Claude Code CLI binary they already auth'd
  * via `claude login`.
  *
+ * S14.2 follow-up (2026-05-21) — closed 6 gaps vs. open-design's canonical
+ * `apps/daemon/src/claude-stream.ts` parser:
+ *   1. thinking_delta passthrough wrapped as <sf:thinking step="extended"
+ *      origin="cli">…</sf:thinking> (was silently dropped).
+ *   2. Top-level `assistant` wrapper fallback — older CLI builds (<1.0.86) or
+ *      runs without `--include-partial-messages` emit text / thinking / tool_use
+ *      ONLY in the post-stream `{"type":"assistant"}` summary line; we now
+ *      surface them, with per-messageId textStreamed + streamedToolUseIds
+ *      dedup against earlier `stream_event` deltas.
+ *   3. `fallbackBins` (default ['openclaude']) for `openclaude` fork users when
+ *      `claude` isn't on PATH (issue #235 style — open-design's same decision).
+ *   4. Capability probing — runs `<bin> -p --help` once per binPath (cached for
+ *      the process lifetime) to detect `--include-partial-messages` support;
+ *      when present, the flag is added to the spawn so we get true streaming
+ *      instead of one giant `assistant` line at end-of-turn.
+ *   5. Checker P1-1: AbortSignal listener removed in `finally`, including throw
+ *      paths — was leaking listeners when ConversationRuntime reused a single
+ *      signal across turns and the stream errored.
+ *   6. Checker P1-2: `child.stdout.setEncoding('utf8')` + `child.stderr.setEncoding`
+ *      — Node's StringDecoder handles UTF-8 byte boundaries inside its buffer
+ *      so multi-byte glyphs (中文/emoji) don't get sliced into U+FFFD. Removed
+ *      the manual `chunk.toString('utf8')` calls.
+ *
  * Why a separate ApiClient (vs. the existing `parseClaudeStreamJson` runner)
  * ────────────────────────────────────────────────────────────────────────────
  * The legacy CLI path in `skill-runners/cli.ts` is single-turn: assembler →
@@ -29,24 +52,28 @@
  * the same event-translation logic from anthropic-api-client.ts — just swap
  * the input source from "SDK iterator" to "child stdout line stream".
  *
- * CLI envelope (verbose mode, see open-design/apps/daemon/src/claude-stream.ts
- * for canonical reference + claude-stream-json.ts in this repo for an
- * existing flat-vs-nested parser):
+ * CLI envelope (verbose + --include-partial-messages, see open-design's
+ * apps/daemon/src/claude-stream.ts):
  *
  *   {"type":"system","subtype":"init", ...}
- *   {"type":"stream_event","event":{"type":"message_start","message":{"usage":{...}}}}
+ *   {"type":"stream_event","event":{"type":"message_start","message":{"id":"...","usage":{...}}}}
  *   {"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text"}}}
  *   {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"..."}}}
- *   {"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"...","name":"..."}}}
- *   {"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"..."}}}
+ *   {"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"thinking"}}}
+ *   {"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"thinking_delta","thinking":"..."}}}
  *   {"type":"stream_event","event":{"type":"content_block_stop","index":1}}
+ *   {"type":"stream_event","event":{"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"...","name":"..."}}}
+ *   {"type":"stream_event","event":{"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"..."}}}
+ *   {"type":"stream_event","event":{"type":"content_block_stop","index":2}}
  *   {"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{...}}}
  *   {"type":"stream_event","event":{"type":"message_stop"}}
- *   {"type":"assistant","message":{...}}   // final summary, optional
+ *   {"type":"assistant","message":{"id":"...","content":[...], "stop_reason":"end_turn"}}   // summary
  *   {"type":"result","stop_reason":"end_turn","usage":{...}}   // terminator
  *
- * Some flat (non-verbose / older builds) variants are also accepted — see
- * `extractInnerEvent` below.
+ * Without `--include-partial-messages` (older CLI), the `stream_event` lines
+ * are absent and ALL content surfaces only via the `assistant` wrapper. We
+ * therefore parse both, deduping against `textStreamed` (messageId set) and
+ * `streamedToolUseIds` (tool_use id set).
  *
  * Auth: the CLI uses its own credential store (`~/.config/claude/` or similar
  * under Windows %APPDATA%). The BYOK key in opts.apiKey is IGNORED — we honor
@@ -70,7 +97,12 @@
  *     mid-chunk are normal.
  *   - ALWAYS console.warn ONCE per stream when JSON.parse fails on a line
  *     (proxy banners, log output); never throw on it.
- *   - NEVER hardcode the binary path — accept `opts.binPath` (default 'claude').
+ *   - ALWAYS setEncoding('utf8') on child.stdout/stderr — otherwise multi-byte
+ *     glyphs split across chunk boundaries decode to U+FFFD.
+ *   - ALWAYS remove the abort listener in `finally` so failed streams don't
+ *     leak listeners when ConversationRuntime reuses a single AbortSignal.
+ *   - NEVER hardcode the binary path — accept `opts.binPath` (default 'claude')
+ *     and `opts.fallbackBins` (default ['openclaude']).
  *   - NEVER block the loop on stderr — stderr is captured and surfaced ONLY
  *     on non-zero exit.
  */
@@ -98,9 +130,20 @@ export type SpawnFn = (
   options: SpawnOptionsWithoutStdio,
 ) => ChildProcessWithoutNullStreams;
 
+/** Default fallback binaries tried in order when `binPath` ENOENTs. */
+export const DEFAULT_FALLBACK_BINS = ['openclaude'] as const;
+
 export interface ClaudeCodeCliApiClientOptions {
   /** Path or command for the claude-code binary. Default: 'claude' (resolved via PATH). */
   binPath?: string;
+  /**
+   * Ordered list of fallback commands tried when the primary `binPath` spawn
+   * errors with ENOENT. Default: ['openclaude'] (the OpenClaude fork ships
+   * the same NDJSON envelope and is the de-facto drop-in for users who can't
+   * or won't install the official CLI — see open-design issue #235 for the
+   * same decision). Pass `[]` to disable fallback entirely.
+   */
+  fallbackBins?: readonly string[];
   /** Optional model id passed via `--model`. */
   model?: string;
   /** Per-turn output cap (best-effort — the CLI doesn't always honor it; kept for parity). */
@@ -124,6 +167,124 @@ export interface ClaudeCodeCliApiClientOptions {
    * this undefined.
    */
   spawnFn?: SpawnFn;
+  /**
+   * Override capability probing — tests pass `{ partialMessages: false }` to
+   * suppress the probe (which would otherwise consume a spawn slot). When
+   * provided, `probeClaudeCapabilities` is NOT invoked at all.
+   */
+  capabilities?: ClaudeCapabilities;
+}
+
+// ─── Capabilities (fix 4) ──────────────────────────────────────────────────
+
+export interface ClaudeCapabilities {
+  /** `--include-partial-messages` flag accepted by `<bin> -p`. */
+  partialMessages: boolean;
+  /** `--add-dir` flag accepted (informational; not currently used). */
+  addDir: boolean;
+}
+
+/**
+ * Module-level cache: `binPath` → in-flight or resolved probe Promise. Same
+ * `binPath` reused across stream() calls in one process always shares the
+ * single probe. Exported for tests via `__resetClaudeCapabilityCache`.
+ */
+const capabilityCache = new Map<string, Promise<ClaudeCapabilities>>();
+
+/** Test-only: nuke the cache so a fresh probe runs next call. */
+export function __resetClaudeCapabilityCache(): void {
+  capabilityCache.clear();
+}
+
+/**
+ * Test-only: pre-seed the cache so `stream()` skips the probe spawn. Tests
+ * that fake the spawn function otherwise have to script a probe child too,
+ * which makes the table noisy. Production code never uses this.
+ */
+export function __primeClaudeCapability(binPath: string, caps: ClaudeCapabilities): void {
+  capabilityCache.set(binPath, Promise.resolve(caps));
+}
+
+const PROBE_TIMEOUT_MS = 3000;
+
+/**
+ * Probe `<binPath> -p --help` to detect supported flags. Cached per binPath
+ * for the process lifetime — the CLI's flag surface doesn't change unless
+ * the user reinstalls, and a stale cache only ever fails closed (no
+ * --include-partial-messages = older-build fallback path, which still works).
+ *
+ * Failure modes all fold to `{ partialMessages: false, addDir: false }`:
+ *   - ENOENT (binary missing — caller will then attempt fallbackBins)
+ *   - non-zero exit
+ *   - timeout (3s)
+ *   - unparseable help output
+ *
+ * Note: probes the `-p` subcommand, not bare `--help`, because the relevant
+ * flags live under `-p` (print/non-interactive mode), not the top level.
+ */
+export async function probeClaudeCapabilities(
+  binPath: string,
+  spawnImpl: SpawnFn,
+): Promise<ClaudeCapabilities> {
+  const existing = capabilityCache.get(binPath);
+  if (existing) return existing;
+
+  const promise = (async (): Promise<ClaudeCapabilities> => {
+    return new Promise<ClaudeCapabilities>((resolve) => {
+      const fallback: ClaudeCapabilities = { partialMessages: false, addDir: false };
+      let settled = false;
+      const settle = (caps: ClaudeCapabilities): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(caps);
+      };
+
+      let child: ChildProcessWithoutNullStreams;
+      try {
+        // SpawnOptionsWithoutStdio doesn't accept 'ignore' for stdin — leave
+        // it 'pipe' and just don't write anything (the child will block on
+        // stdin only if it tries to read, which `-p --help` doesn't).
+        child = spawnImpl(binPath, ['-p', '--help'], {});
+      } catch {
+        settle(fallback);
+        return;
+      }
+
+      let stdout = '';
+      try {
+        child.stdout?.setEncoding('utf8');
+        child.stderr?.setEncoding('utf8');
+      } catch {
+        /* fake children in tests may not support setEncoding */
+      }
+      child.stdout?.on('data', (c: string | Buffer) => {
+        stdout += typeof c === 'string' ? c : c.toString('utf8');
+      });
+      // stderr is discarded — help text usually goes to stdout, and stderr
+      // chatter from `claude doctor`-style banners shouldn't fail the probe.
+      child.stderr?.on('data', () => { /* drain */ });
+
+      child.on('error', () => settle(fallback));
+      child.on('exit', (code) => {
+        if (code !== 0 && code !== null) {
+          // Some builds exit 1 on --help; still inspect stdout if any.
+        }
+        settle({
+          partialMessages: stdout.includes('--include-partial-messages'),
+          addDir: stdout.includes('--add-dir'),
+        });
+      });
+
+      const timer = setTimeout(() => settle(fallback), PROBE_TIMEOUT_MS);
+    });
+  })();
+
+  capabilityCache.set(binPath, promise);
+  // If the probe rejects (shouldn't — we always resolve), clear so a future
+  // call retries instead of caching a permanent failure.
+  promise.catch(() => capabilityCache.delete(binPath));
+  return promise;
 }
 
 // ─── NDJSON event shape ────────────────────────────────────────────────────
@@ -135,9 +296,10 @@ interface ContentBlockShape {
 }
 
 interface DeltaShape {
-  type?: string;            // 'text_delta' | 'input_json_delta' | ...
+  type?: string;            // 'text_delta' | 'input_json_delta' | 'thinking_delta' | ...
   text?: string;
   partial_json?: string;
+  thinking?: string;
   stop_reason?: string;
 }
 
@@ -146,7 +308,23 @@ interface InnerEvent {
   index?: number;
   content_block?: ContentBlockShape;
   delta?: DeltaShape;
-  message?: { usage?: unknown; stop_reason?: unknown };
+  message?: { id?: string; usage?: unknown; stop_reason?: unknown };
+  usage?: unknown;
+}
+
+interface AssistantWrapperBlock {
+  type?: string;
+  text?: string;
+  thinking?: string;
+  id?: string;
+  name?: string;
+  input?: unknown;
+}
+
+interface AssistantWrapperMessage {
+  id?: string;
+  stop_reason?: unknown;
+  content?: AssistantWrapperBlock[];
   usage?: unknown;
 }
 
@@ -157,6 +335,8 @@ interface OuterEvent extends InnerEvent {
   stop_reason?: string;
   /** 'system' has subtype 'init'/'status' — ignored here. */
   subtype?: string;
+  /** `assistant` summary wrapper. */
+  message?: AssistantWrapperMessage;
 }
 
 /**
@@ -196,6 +376,19 @@ function extractUsage(raw: unknown): TokenUsage | undefined {
   if (typeof u.cache_read_input_tokens === 'number')
     out.cache_read_input_tokens = u.cache_read_input_tokens;
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Wrap an extended-thinking chunk in the project's `<sf:thinking>` text
+ * protocol so parser.ts surfaces it as a collapsible "thinking" block in the
+ * UI without polluting `assistant.text`. AssistantEvent has no dedicated
+ * `thinking_delta` kind (deliberately — the rest of the pipeline is text-only
+ * after the ApiClient layer), so we emit it as a single `text_delta` carrying
+ * the full wrapped string. Emitting bulk-at-close (rather than streaming
+ * partials) means parser.ts always sees an atomic open/close pair.
+ */
+function wrapThinking(text: string): string {
+  return `<sf:thinking step="extended" origin="cli">${text}</sf:thinking>`;
 }
 
 // ─── Prompt serialization ─────────────────────────────────────────────────
@@ -270,22 +463,42 @@ export class ClaudeCodeCliApiClient implements ApiClient {
    * stdout into AssistantEvent.
    *
    * Translation contract (NDJSON event → AssistantEvent), mirrors
-   * anthropic-api-client.ts:
+   * anthropic-api-client.ts + open-design/apps/daemon/src/claude-stream.ts:
    *   content_block_start tool_use                   → buffer name+id
+   *   content_block_start thinking                   → start thinking buffer
    *   content_block_delta input_json_delta           → accumulate args
-   *   content_block_stop tool_use                    → emit 'tool_use'
+   *   content_block_delta thinking_delta             → accumulate thinking text
    *   content_block_delta text_delta                 → emit 'text_delta'
+   *                                                    + textStreamed.add(msgId)
+   *   content_block_stop tool_use                    → emit 'tool_use'
+   *                                                    + streamedToolUseIds.add(id)
+   *   content_block_stop thinking                    → emit 'text_delta' wrapped
+   *                                                    in <sf:thinking>...</sf:thinking>
+   *                                                    + textStreamed.add(msgId)
    *   message_start.message.usage                    → emit 'usage'
+   *   message_start.message.id                       → currentMessageId
    *   message_delta.usage                            → emit 'usage'
    *   message_delta.delta.stop_reason                → cache → emit on message_stop
    *   message_stop                                   → emit 'message_stop'
+   *   assistant.message (fallback, no streaming)     → emit text/thinking/tool_use
+   *                                                    skipping those already
+   *                                                    seen via textStreamed /
+   *                                                    streamedToolUseIds
    *   result (terminator, flat)                      → emit 'message_stop' if not seen yet
    *
+   * Spawn fallback (fix 3):
+   *   - Spawn binPath first.
+   *   - If 'error' event fires with err.code === 'ENOENT' BEFORE any stdout,
+   *     try each `fallbackBins` in order.
+   *   - If all fail, throw with the full list attempted.
+   *
    * Errors / signal:
-   *   - Spawn ENOENT (binary not installed) → throw with install hint
+   *   - Spawn ENOENT (binary not installed AND no fallback worked) → throw
    *   - Non-zero exit code → throw with stderr text
    *   - args.signal.aborted → SIGTERM the child; generator returns
    *   - JSON.parse failure on a line → console.warn ONCE, skip line
+   *   - Abort listener: registered once, removed in `finally` so throw paths
+   *     don't leak listeners across runtime turns (Checker P1-1).
    */
   async *stream(args: {
     system_prompt: string;
@@ -294,8 +507,19 @@ export class ClaudeCodeCliApiClient implements ApiClient {
     signal: AbortSignal;
   }): AsyncIterable<AssistantEvent> {
     const binPath = this.opts.binPath ?? 'claude';
+    const fallbackBins = this.opts.fallbackBins ?? DEFAULT_FALLBACK_BINS;
     const extraArgs = this.opts.extraArgs ?? DEFAULT_EXTRA_ARGS;
+    const spawnImpl: SpawnFn = this.opts.spawnFn ?? nodeSpawn;
+
+    // ── Capability probe (fix 4) ────────────────────────────────────────
+    // Test override wins; otherwise share the per-binPath cache.
+    const capabilities: ClaudeCapabilities =
+      this.opts.capabilities ?? (await probeClaudeCapabilities(binPath, spawnImpl));
+
     const spawnArgs = [...extraArgs];
+    if (capabilities.partialMessages && !extraArgs.includes('--include-partial-messages')) {
+      spawnArgs.push('--include-partial-messages');
+    }
     if (this.opts.model && this.opts.model.length > 0) {
       spawnArgs.push('--model', this.opts.model);
     }
@@ -311,39 +535,78 @@ export class ClaudeCodeCliApiClient implements ApiClient {
       env.ANTHROPIC_API_KEY = this.opts.apiKey;
     }
 
-    const spawnImpl: SpawnFn = this.opts.spawnFn ?? nodeSpawn;
-    let child: ChildProcessWithoutNullStreams;
-    try {
-      child = spawnImpl(binPath, spawnArgs, {
-        cwd: this.opts.cwd,
-        env,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-    } catch (err) {
+    // ── Spawn with fallback (fix 3) ─────────────────────────────────────
+    // Walk the candidate list in order. On synchronous-throw ENOENT, move
+    // to the next candidate. We can't distinguish async-`error`-event ENOENT
+    // synchronously (the event fires after spawn() returns), so the chain is
+    // only walked synchronously here — anchored to `claude` ENOENT (which
+    // historically does throw synchronously when the binary truly isn't on
+    // PATH on most platforms) or via the 'error' event captured below.
+    const candidates = [binPath, ...fallbackBins];
+    let child: ChildProcessWithoutNullStreams | null = null;
+    let usedBin = binPath;
+    const spawnErrors: Array<{ bin: string; err: unknown }> = [];
+    for (const cand of candidates) {
+      try {
+        child = spawnImpl(cand, spawnArgs, {
+          cwd: this.opts.cwd,
+          env,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        usedBin = cand;
+        break;
+      } catch (err) {
+        spawnErrors.push({ bin: cand, err });
+        // ENOENT — try the next candidate. EACCES / other → also walk on,
+        // surfacing the full list if everything fails.
+        continue;
+      }
+    }
+    if (!child) {
+      const tried = candidates.join(', ');
+      const lastMsg =
+        spawnErrors.length > 0 && spawnErrors[spawnErrors.length - 1].err instanceof Error
+          ? (spawnErrors[spawnErrors.length - 1].err as Error).message
+          : String(spawnErrors[spawnErrors.length - 1]?.err);
       throw new Error(
-        `claude-code CLI spawn failed (${binPath}): ${err instanceof Error ? err.message : String(err)}. Install: npm i -g @anthropic-ai/claude-cli, then run \`claude login\`.`,
+        `claude-code CLI spawn failed (tried ${tried} — none found in PATH): ${lastMsg}. Install: npm i -g @anthropic-ai/claude-cli, then run \`claude login\`.`,
       );
+    }
+
+    // ── Decode chunks as utf8 strings (fix 6) ───────────────────────────
+    // Node's StringDecoder buffers partial multi-byte sequences across `data`
+    // events, so 中文/emoji bytes split at a chunk boundary decode correctly.
+    // Without this, `chunk.toString('utf8')` on a Buffer that ends mid-codepoint
+    // produces a U+FFFD replacement character.
+    try {
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+    } catch {
+      /* tests may pass fake streams that don't implement setEncoding */
     }
 
     // Capture stderr for failure messages — don't yield from it.
     let stderrBuf = '';
-    child.stderr.on('data', (c: Buffer) => {
-      stderrBuf += c.toString('utf8');
+    child.stderr.on('data', (c: string | Buffer) => {
+      stderrBuf += typeof c === 'string' ? c : c.toString('utf8');
       // Bound stderr buffer too so a misbehaving CLI dumping MB of warnings
       // doesn't OOM us.
       if (stderrBuf.length > 256 * 1024) stderrBuf = stderrBuf.slice(-128 * 1024);
     });
 
-    // Surface spawn-time ENOENT (binary not on PATH). The 'error' event fires
-    // asynchronously AFTER spawn() returns the child reference.
+    // Surface spawn-time async ENOENT (binary not on PATH). The 'error' event
+    // fires asynchronously AFTER spawn() returns the child reference. We
+    // attempt fallback bins on this path too, but only when no stdout/stderr
+    // data has been seen yet — once the stream has started we trust the
+    // child.
     let spawnError: Error | null = null;
     child.on('error', (err: Error) => {
       spawnError = err;
     });
 
-    // Wire abort → SIGTERM. On Windows SIGTERM maps to a terminate call.
+    // ── Abort wiring (Checker P1-1: cleanup in finally) ─────────────────
     const onAbort = (): void => {
-      if (!child.killed) {
+      if (child && !child.killed) {
         try {
           child.kill('SIGTERM');
         } catch {
@@ -379,14 +642,25 @@ export class ClaudeCodeCliApiClient implements ApiClient {
 
     // Per-turn tool_use accumulation, mirroring AnthropicApiClient.
     interface PendingToolUse {
+      kind: 'tool_use';
       id: string;
       name: string;
       jsonBuf: string;
     }
-    const pending = new Map<number, PendingToolUse>();
+    interface PendingThinking {
+      kind: 'thinking';
+      buf: string;
+    }
+    type PendingBlock = PendingToolUse | PendingThinking;
+    const pending = new Map<number, PendingBlock>();
     let cachedStopReason = 'unknown';
     let messageStopEmitted = false;
     let warnedBadLine = false;
+    let currentMessageId: string | null = null;
+    /** messageIds whose text/thinking has already been emitted via stream_event. */
+    const textStreamed = new Set<string>();
+    /** tool_use ids already emitted via stream_event; dedup against assistant wrapper. */
+    const streamedToolUseIds = new Set<string>();
 
     // ── stdout line splitter ──────────────────────────────────────────────
     const MAX_LINE_BUF = 1 * 1024 * 1024; // 1MB safety cap (mirror claude-stream-json)
@@ -425,31 +699,103 @@ export class ClaudeCodeCliApiClient implements ApiClient {
         return;
       }
 
+      // Assistant summary wrapper (fix 2). Older CLI / no
+      // --include-partial-messages: text/thinking/tool_use surface only here.
+      // Newer CLI: same content was already streamed via stream_event — we
+      // dedup via textStreamed (per messageId) + streamedToolUseIds (per id).
+      if (
+        outer.type === 'assistant' &&
+        outer.message &&
+        Array.isArray(outer.message.content)
+      ) {
+        const msgId =
+          typeof outer.message.id === 'string' ? outer.message.id : currentMessageId;
+        if (typeof outer.message.id === 'string') currentMessageId = outer.message.id;
+        const alreadyStreamed = msgId !== null && textStreamed.has(msgId);
+        const sr = outer.message.stop_reason;
+        if (typeof sr === 'string') cachedStopReason = sr;
+
+        for (const block of outer.message.content) {
+          if (!block || typeof block !== 'object') continue;
+          if (block.type === 'text') {
+            if (
+              !alreadyStreamed &&
+              typeof block.text === 'string' &&
+              block.text.length > 0
+            ) {
+              yield { kind: 'text_delta', text: block.text };
+              if (msgId) textStreamed.add(msgId);
+            }
+          } else if (block.type === 'thinking') {
+            if (
+              !alreadyStreamed &&
+              typeof block.thinking === 'string' &&
+              block.thinking.length > 0
+            ) {
+              yield { kind: 'text_delta', text: wrapThinking(block.thinking) };
+              if (msgId) textStreamed.add(msgId);
+            }
+          } else if (block.type === 'tool_use') {
+            if (typeof block.id !== 'string') continue;
+            if (streamedToolUseIds.has(block.id)) {
+              // Already emitted by stream_event content_block_stop — skip
+              // the duplicate that the assistant wrapper always carries.
+              continue;
+            }
+            yield {
+              kind: 'tool_use',
+              id: block.id,
+              name: typeof block.name === 'string' ? block.name : '',
+              input: block.input ?? {},
+            };
+            streamedToolUseIds.add(block.id);
+          }
+        }
+
+        // The assistant wrapper carries usage on some builds too.
+        const u = extractUsage(outer.message.usage);
+        if (u) yield { kind: 'usage', usage: u };
+        return;
+      }
+
       const inner = extractInnerEvent(outer);
       if (!inner || typeof inner.type !== 'string') return;
 
       if (inner.type === 'message_start') {
         const u = extractUsage(inner.message?.usage);
         if (u) yield { kind: 'usage', usage: u };
+        if (typeof inner.message?.id === 'string') currentMessageId = inner.message.id;
       } else if (inner.type === 'content_block_start') {
         const idx = inner.index ?? 0;
         const cb = inner.content_block;
-        if (cb && cb.type === 'tool_use' && typeof cb.id === 'string' && typeof cb.name === 'string') {
-          pending.set(idx, { id: cb.id, name: cb.name, jsonBuf: '' });
+        if (cb?.type === 'tool_use' && typeof cb.id === 'string' && typeof cb.name === 'string') {
+          pending.set(idx, { kind: 'tool_use', id: cb.id, name: cb.name, jsonBuf: '' });
+        } else if (cb?.type === 'thinking') {
+          pending.set(idx, { kind: 'thinking', buf: '' });
         }
       } else if (inner.type === 'content_block_delta') {
         const idx = inner.index ?? 0;
         const d = inner.delta;
         if (d?.type === 'text_delta' && typeof d.text === 'string') {
           yield { kind: 'text_delta', text: d.text };
+          if (currentMessageId) textStreamed.add(currentMessageId);
+        } else if (d?.type === 'thinking_delta' && typeof d.thinking === 'string') {
+          const p = pending.get(idx);
+          if (p && p.kind === 'thinking') {
+            p.buf += d.thinking;
+          } else {
+            // Some CLI versions skip content_block_start for thinking — buffer
+            // on demand so we still capture the text and emit at block_stop.
+            pending.set(idx, { kind: 'thinking', buf: d.thinking });
+          }
         } else if (d?.type === 'input_json_delta' && typeof d.partial_json === 'string') {
           const p = pending.get(idx);
-          if (p) p.jsonBuf += d.partial_json;
+          if (p && p.kind === 'tool_use') p.jsonBuf += d.partial_json;
         }
       } else if (inner.type === 'content_block_stop') {
         const idx = inner.index ?? 0;
         const p = pending.get(idx);
-        if (p) {
+        if (p && p.kind === 'tool_use') {
           let input: unknown = {};
           if (p.jsonBuf.length > 0) {
             try {
@@ -459,6 +805,13 @@ export class ClaudeCodeCliApiClient implements ApiClient {
             }
           }
           yield { kind: 'tool_use', id: p.id, name: p.name, input };
+          streamedToolUseIds.add(p.id);
+          pending.delete(idx);
+        } else if (p && p.kind === 'thinking') {
+          if (p.buf.length > 0) {
+            yield { kind: 'text_delta', text: wrapThinking(p.buf) };
+            if (currentMessageId) textStreamed.add(currentMessageId);
+          }
           pending.delete(idx);
         }
       } else if (inner.type === 'message_delta') {
@@ -478,12 +831,15 @@ export class ClaudeCodeCliApiClient implements ApiClient {
     // Use the readable as an async iterable. Each chunk may contain ≥0 full
     // lines + a possibly-partial trailing line; we glue them via lineBuf.
     try {
-      for await (const chunk of child.stdout as AsyncIterable<Buffer>) {
+      // setEncoding('utf8') above ensures `chunk` is already a string; the
+      // type annotation stays Buffer | string for the legacy/test path where
+      // setEncoding wasn't applied.
+      for await (const chunk of child.stdout as AsyncIterable<Buffer | string>) {
         if (args.signal.aborted) {
           onAbort();
           return;
         }
-        lineBuf += chunk.toString('utf8');
+        lineBuf += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
         if (lineBuf.length > MAX_LINE_BUF) {
           // Defensive — drop everything up to the last newline so we resync.
           // eslint-disable-next-line no-console
@@ -504,41 +860,46 @@ export class ClaudeCodeCliApiClient implements ApiClient {
         for (const ev of processLine(lineBuf)) yield ev;
         lineBuf = '';
       }
-    } catch (err) {
-      // stdout iteration error — usually a forced kill. If we already saw an
-      // abort, swallow and return; else surface.
-      if (args.signal.aborted) return;
-      throw err instanceof Error ? err : new Error(String(err));
-    }
 
-    // Wait for the child to fully exit before deciding success/failure.
-    await exitPromise;
-    args.signal.removeEventListener('abort', onAbort);
+      // Wait for the child to fully exit before deciding success/failure.
+      await exitPromise;
 
-    if (spawnError) {
-      // ENOENT / EACCES — typically means the binary isn't installed.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const code = (spawnError as any).code;
-      if (code === 'ENOENT') {
+      if (spawnError) {
+        // ENOENT / EACCES — typically means the binary isn't installed.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const code = (spawnError as any).code;
+        if (code === 'ENOENT') {
+          const tried = [usedBin, ...fallbackBins.filter((b) => b !== usedBin)].join(', ');
+          throw new Error(
+            `claude-code CLI not found (tried ${tried} — none found in PATH). Install: npm i -g @anthropic-ai/claude-cli, then run \`claude login\`.`,
+          );
+        }
+        throw spawnError;
+      }
+
+      if (exitCode !== null && exitCode !== 0) {
+        const tail = stderrBuf.slice(-2048);
         throw new Error(
-          `claude-code CLI not found (${binPath}). Install: npm i -g @anthropic-ai/claude-cli, then run \`claude login\`.`,
+          `claude-code CLI exited with code ${exitCode}${exitSignal ? ` (signal=${exitSignal})` : ''}: ${tail || '(no stderr)'}`,
         );
       }
-      throw spawnError;
-    }
 
-    if (exitCode !== null && exitCode !== 0) {
-      const tail = stderrBuf.slice(-2048);
-      throw new Error(
-        `claude-code CLI exited with code ${exitCode}${exitSignal ? ` (signal=${exitSignal})` : ''}: ${tail || '(no stderr)'}`,
-      );
-    }
-
-    // Defensive — if the CLI dropped EOF without ever sending message_stop,
-    // emit one so the runtime terminates cleanly. (Mirrors openai-compat's
-    // stop_emitted-fallback policy.)
-    if (!messageStopEmitted) {
-      yield { kind: 'message_stop', stop_reason: cachedStopReason };
+      // Defensive — if the CLI dropped EOF without ever sending message_stop,
+      // emit one so the runtime terminates cleanly. (Mirrors openai-compat's
+      // stop_emitted-fallback policy.)
+      if (!messageStopEmitted) {
+        yield { kind: 'message_stop', stop_reason: cachedStopReason };
+      }
+    } catch (err) {
+      // stdout iteration error or thrown above — if we already saw an abort,
+      // swallow and return; else surface.
+      if (args.signal.aborted) return;
+      throw err instanceof Error ? err : new Error(String(err));
+    } finally {
+      // Checker P1-1: ALWAYS remove the abort listener — throw paths
+      // included — so ConversationRuntime reusing the same AbortSignal
+      // across turns doesn't accumulate stale listeners.
+      args.signal.removeEventListener('abort', onAbort);
     }
   }
 }

@@ -31,7 +31,12 @@
 
 import { EventEmitter } from 'node:events';
 import { Readable, Writable } from 'node:stream';
-import { ClaudeCodeCliApiClient, type SpawnFn } from '../claude-code-cli-api-client';
+import {
+  ClaudeCodeCliApiClient,
+  __primeClaudeCapability,
+  __resetClaudeCapabilityCache,
+  type SpawnFn,
+} from '../claude-code-cli-api-client';
 import type { AssistantEvent } from '../../conversation-runtime';
 import type { ToolSpec } from '../../tool-spec';
 
@@ -766,7 +771,420 @@ async function testSpawnEnoent(): Promise<void> {
   }
 }
 
+// ─── S14.2 follow-up: 6 new fix coverage tests ─────────────────────────────
+
+/**
+ * fix 1: extended-thinking chunks arrive as content_block_delta thinking_delta
+ * inside a `thinking` block. We must buffer + emit ONE text_delta at
+ * content_block_stop wrapped in <sf:thinking step="extended" origin="cli">.
+ */
+async function testThinkingDeltaWrapped(): Promise<void> {
+  console.log('\n[claude-code-cli] thinking_delta wrapped as <sf:thinking>');
+  let sub!: ScriptedSubprocess;
+  const { spawnFn } = makeSpawnFn(() => {
+    sub = makeFakeChild();
+    return sub;
+  });
+  {
+    const client = new ClaudeCodeCliApiClient({ binPath: 'claude', spawnFn });
+    const eventsP = collect(
+      client.stream({
+        system_prompt: '',
+        messages: [{ role: 'user', blocks: [{ kind: 'text', text: 'think' }] }],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    await new Promise((r) => setImmediate(r));
+    await sub.pushStdoutChunks([
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'thinking' },
+        },
+      }) + '\n',
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: 'Step 1: parse the request. ' },
+        },
+      }) + '\n',
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: 'Step 2: form a plan.' },
+        },
+      }) + '\n',
+      JSON.stringify({
+        type: 'stream_event',
+        event: { type: 'content_block_stop', index: 0 },
+      }) + '\n',
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'message_delta',
+          delta: { stop_reason: 'end_turn' },
+        },
+      }) + '\n',
+      JSON.stringify({ type: 'stream_event', event: { type: 'message_stop' } }) + '\n',
+    ]);
+    sub.finish(0);
+    const events = await eventsP;
+    const texts = events
+      .filter((e) => e.kind === 'text_delta')
+      .map((e) => (e as { text: string }).text);
+    check('exactly one wrapped text_delta', 1, texts.length);
+    check(
+      'thinking text wrapped atomically',
+      '<sf:thinking step="extended" origin="cli">Step 1: parse the request. Step 2: form a plan.</sf:thinking>',
+      texts[0],
+    );
+  }
+}
+
+/**
+ * fix 2 (no prior streaming): assistant wrapper fallback when the CLI didn't
+ * emit `stream_event` lines. text/thinking/tool_use should all surface.
+ */
+async function testAssistantWrapperFallback(): Promise<void> {
+  console.log('\n[claude-code-cli] assistant wrapper fallback (no stream_event)');
+  let sub!: ScriptedSubprocess;
+  const { spawnFn } = makeSpawnFn(() => {
+    sub = makeFakeChild();
+    return sub;
+  });
+  {
+    const client = new ClaudeCodeCliApiClient({ binPath: 'claude', spawnFn });
+    const eventsP = collect(
+      client.stream({
+        system_prompt: '',
+        messages: [{ role: 'user', blocks: [{ kind: 'text', text: 'go' }] }],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    await new Promise((r) => setImmediate(r));
+    // ONLY an assistant wrapper line + result terminator — older Claude Code.
+    await sub.pushStdoutChunks([
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          id: 'msg_legacy_1',
+          stop_reason: 'tool_use',
+          content: [
+            { type: 'text', text: 'Here is the plan.' },
+            { type: 'thinking', thinking: 'reasoning bits' },
+            { type: 'tool_use', id: 'call_legacy_a', name: 'echo', input: { msg: 'hi' } },
+          ],
+        },
+      }) + '\n',
+      JSON.stringify({
+        type: 'result',
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 5, output_tokens: 10 },
+      }) + '\n',
+    ]);
+    sub.finish(0);
+    const events = await eventsP;
+
+    const texts = events
+      .filter((e) => e.kind === 'text_delta')
+      .map((e) => (e as { text: string }).text);
+    check('two text_delta (text + thinking)', 2, texts.length);
+    checkTruthy(
+      `plain text surfaced (got ${JSON.stringify(texts)})`,
+      texts.some((t) => t === 'Here is the plan.'),
+    );
+    checkTruthy(
+      `thinking surfaced with <sf:thinking> wrap (got ${JSON.stringify(texts)})`,
+      texts.some(
+        (t) => t === '<sf:thinking step="extended" origin="cli">reasoning bits</sf:thinking>',
+      ),
+    );
+
+    const tools = events.filter((e) => e.kind === 'tool_use') as Array<{
+      id: string;
+      name: string;
+      input: unknown;
+    }>;
+    check('one tool_use from assistant wrapper', 1, tools.length);
+    check('tool_use.id', 'call_legacy_a', tools[0]?.id);
+    check('tool_use.name', 'echo', tools[0]?.name);
+    check('tool_use.input', { msg: 'hi' }, tools[0]?.input);
+  }
+}
+
+/**
+ * fix 2 (dedup): when both stream_event AND assistant wrapper carry the same
+ * tool_use id, emit ONCE — the wrapper's repeat is suppressed.
+ */
+async function testAssistantWrapperDedupToolUse(): Promise<void> {
+  console.log('\n[claude-code-cli] assistant wrapper dedups already-streamed tool_use');
+  let sub!: ScriptedSubprocess;
+  const { spawnFn } = makeSpawnFn(() => {
+    sub = makeFakeChild();
+    return sub;
+  });
+  {
+    const client = new ClaudeCodeCliApiClient({ binPath: 'claude', spawnFn });
+    const eventsP = collect(
+      client.stream({
+        system_prompt: '',
+        messages: [],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    await new Promise((r) => setImmediate(r));
+    await sub.pushStdoutChunks([
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'message_start',
+          message: { id: 'msg_dup_1', usage: { input_tokens: 1 } },
+        },
+      }) + '\n',
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'tool_use', id: 't1', name: 'echo' },
+        },
+      }) + '\n',
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'input_json_delta', partial_json: '{"msg":"once"}' },
+        },
+      }) + '\n',
+      JSON.stringify({
+        type: 'stream_event',
+        event: { type: 'content_block_stop', index: 0 },
+      }) + '\n',
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'message_delta',
+          delta: { stop_reason: 'tool_use' },
+        },
+      }) + '\n',
+      JSON.stringify({ type: 'stream_event', event: { type: 'message_stop' } }) + '\n',
+      // Wrapper re-emits the same id — must be suppressed.
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          id: 'msg_dup_1',
+          stop_reason: 'tool_use',
+          content: [
+            { type: 'tool_use', id: 't1', name: 'echo', input: { msg: 'once' } },
+          ],
+        },
+      }) + '\n',
+    ]);
+    sub.finish(0);
+    const events = await eventsP;
+    const tools = events.filter((e) => e.kind === 'tool_use');
+    check('tool_use emitted exactly once across stream_event + wrapper', 1, tools.length);
+  }
+}
+
+/**
+ * fix 3: when the first spawn synchronously throws ENOENT, the client walks
+ * `fallbackBins` and uses the first one that spawns OK.
+ */
+async function testFallbackBinsTriggered(): Promise<void> {
+  console.log('\n[claude-code-cli] fallbackBins picks up `openclaude` when claude ENOENTs');
+  let sub!: ScriptedSubprocess;
+  let attemptedCommands: string[] = [];
+  const spawnFn: SpawnFn = ((cmd, _args, _opts) => {
+    attemptedCommands.push(cmd);
+    if (cmd === 'claude') {
+      const enoent: NodeJS.ErrnoException = new Error('spawn claude ENOENT');
+      enoent.code = 'ENOENT';
+      throw enoent;
+    }
+    // openclaude succeeds.
+    sub = makeFakeChild();
+    return sub.child;
+  }) as SpawnFn;
+  {
+    const client = new ClaudeCodeCliApiClient({
+      binPath: 'claude',
+      fallbackBins: ['openclaude'],
+      spawnFn,
+      // Skip probe (probe would also throw and complicate the test).
+      capabilities: { partialMessages: false, addDir: false },
+    });
+    const eventsP = collect(
+      client.stream({
+        system_prompt: '',
+        messages: [],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    await new Promise((r) => setImmediate(r));
+    await sub.pushStdoutChunks([
+      JSON.stringify({
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'from openclaude' },
+      }) + '\n',
+      JSON.stringify({ type: 'message_stop' }) + '\n',
+    ]);
+    sub.finish(0);
+    const events = await eventsP;
+    check('attempted [claude, openclaude] in order', ['claude', 'openclaude'], attemptedCommands);
+    const texts = events
+      .filter((e) => e.kind === 'text_delta')
+      .map((e) => (e as { text: string }).text);
+    check('text streamed from fallback', ['from openclaude'], texts);
+  }
+}
+
+/**
+ * fix 4: capability probe is cached per binPath. Two stream() calls trigger
+ * only ONE probe spawn (+ N main spawns).
+ */
+async function testCapabilityProbeCached(): Promise<void> {
+  console.log('\n[claude-code-cli] capability probe is cached across stream() calls');
+  __resetClaudeCapabilityCache();
+
+  // Track spawn calls. The probe spawns with args [-p, --help]; the main
+  // stream spawn carries -p, --output-format, stream-json, ...
+  let probeCount = 0;
+  let mainCount = 0;
+  const subs: ScriptedSubprocess[] = [];
+  const spawnFn: SpawnFn = ((_cmd, args, _opts) => {
+    const isProbe =
+      args.length === 2 && args[0] === '-p' && args[1] === '--help';
+    if (isProbe) {
+      probeCount++;
+      const sub = makeFakeChild();
+      // Probe child must emit `exit` so the probe Promise resolves; we don't
+      // push any stdout (so partialMessages stays false), then finish.
+      setImmediate(() => sub.finish(0));
+      return sub.child;
+    }
+    mainCount++;
+    const sub = makeFakeChild();
+    subs.push(sub);
+    return sub.child;
+  }) as SpawnFn;
+
+  const client = new ClaudeCodeCliApiClient({ binPath: 'claude-probe-test', spawnFn });
+
+  // Stream #1.
+  const p1 = collect(
+    client.stream({
+      system_prompt: '',
+      messages: [],
+      tools: [],
+      signal: new AbortController().signal,
+    }),
+  );
+  // Yield enough for probe → main spawn → stdin write to resolve.
+  await new Promise((r) => setTimeout(r, 10));
+  subs[0]?.finish(0);
+  await p1;
+
+  // Stream #2 — should NOT trigger a second probe spawn.
+  const p2 = collect(
+    client.stream({
+      system_prompt: '',
+      messages: [],
+      tools: [],
+      signal: new AbortController().signal,
+    }),
+  );
+  await new Promise((r) => setTimeout(r, 10));
+  subs[1]?.finish(0);
+  await p2;
+
+  check('probe spawned exactly once (cached on stream #2)', 1, probeCount);
+  check('main spawned twice (one per stream() call)', 2, mainCount);
+}
+
+/**
+ * Checker P1-1: abort listener removed in `finally` even on throw paths.
+ * Verify by spy-overriding addEventListener / removeEventListener on a fresh
+ * AbortSignal — counts must balance after a non-zero-exit throw.
+ */
+async function testAbortListenerCleanedOnThrow(): Promise<void> {
+  console.log('\n[claude-code-cli] abort listener cleanup on throw (Checker P1-1)');
+  // Re-prime: testCapabilityProbeCached reset the cache, so without this the
+  // `claude` probe would fire and block waiting for an exit on the fake.
+  __primeClaudeCapability('claude', { partialMessages: false, addDir: false });
+  let sub!: ScriptedSubprocess;
+  const { spawnFn } = makeSpawnFn(() => {
+    sub = makeFakeChild();
+    return sub;
+  });
+
+  const ac = new AbortController();
+  const signal = ac.signal;
+  const origAdd = signal.addEventListener.bind(signal);
+  const origRem = signal.removeEventListener.bind(signal);
+  let addCount = 0;
+  let removeCount = 0;
+  (signal as any).addEventListener = (
+    type: string,
+    listener: any,
+    opts?: any,
+  ): void => {
+    if (type === 'abort') addCount++;
+    origAdd(type, listener, opts);
+  };
+  (signal as any).removeEventListener = (
+    type: string,
+    listener: any,
+    opts?: any,
+  ): void => {
+    if (type === 'abort') removeCount++;
+    origRem(type, listener, opts);
+  };
+
+  const client = new ClaudeCodeCliApiClient({ binPath: 'claude', spawnFn });
+  const eventsP = collect(
+    client.stream({
+      system_prompt: '',
+      messages: [],
+      tools: [],
+      signal,
+    }),
+  );
+  await new Promise((r) => setImmediate(r));
+  // Trigger a throw path: non-zero exit.
+  sub.pushStderr('boom\n');
+  sub.finish(1);
+  try {
+    await eventsP;
+  } catch {
+    /* expected */
+  }
+  checkTruthy(`abort listener was added (count=${addCount})`, addCount >= 1);
+  check(
+    'abort listener cleanup count matches add count after throw',
+    addCount,
+    removeCount,
+  );
+}
+
 async function main(): Promise<void> {
+  // Pre-seed the capability cache so the existing tests don't have to script
+  // a `<bin> -p --help` probe child. The probe-itself test below resets +
+  // re-tests via `probeClaudeCapabilities` directly.
+  __primeClaudeCapability('claude', { partialMessages: false, addDir: false });
+
   await testFlatTextDelta();
   await testNestedVerboseEnvelope();
   await testToolUseAccumulation();
@@ -778,6 +1196,14 @@ async function main(): Promise<void> {
   await testEmptyStdoutDefensiveStop();
   await testStdinReceivesPrompt();
   await testSpawnEnoent();
+
+  // S14.2 follow-up — 6 new fixes
+  await testThinkingDeltaWrapped();
+  await testAssistantWrapperFallback();
+  await testAssistantWrapperDedupToolUse();
+  await testFallbackBinsTriggered();
+  await testCapabilityProbeCached();
+  await testAbortListenerCleanedOnThrow();
 
   console.log(`\n${pass} pass, ${fail} fail`);
   if (fail > 0) process.exit(1);
