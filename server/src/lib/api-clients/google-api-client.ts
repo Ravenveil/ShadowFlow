@@ -308,7 +308,10 @@ export class GoogleApiClient implements ApiClient {
     let finishReason: string | undefined;
     let hadToolCall = false;
     let toolCallIdx = 0;
-    let stopEmitted = false;
+    // Coalesce usageMetadata across chunks: Gemini sends it on the final
+    // chunk but a few proxies sprinkle partials mid-stream. Take the last
+    // observed value so the runtime's addUsage() doesn't double-count.
+    let lastUsage: TokenUsage | undefined;
 
     try {
       for await (const chunkRaw of result.stream) {
@@ -343,19 +346,23 @@ export class GoogleApiClient implements ApiClient {
         if (candidate?.finishReason) finishReason = candidate.finishReason;
 
         const usage = extractUsage(chunk.usageMetadata);
-        if (usage) yield { kind: 'usage', usage };
+        if (usage) lastUsage = usage;
       }
     } catch (err) {
-      // Re-throw — runtime decides whether to surface as 'error' SSE.
+      // Re-throw — runtime decides whether to surface as 'error' SSE. We do
+      // NOT emit message_stop here; emitting after an error would tell the
+      // runtime the turn ended cleanly and the error event would race the
+      // stop event in the consumer.
       throw err instanceof Error ? err : new Error(String(err));
-    } finally {
-      if (!stopEmitted) {
-        yield {
-          kind: 'message_stop',
-          stop_reason: normalizeFinishReason(finishReason, hadToolCall),
-        };
-        stopEmitted = true;
-      }
     }
+
+    // Successful stream end. Emit usage (if any) BEFORE message_stop so the
+    // runtime's totalUsage is updated before it attaches usage to the
+    // assistant message.
+    if (lastUsage) yield { kind: 'usage', usage: lastUsage };
+    yield {
+      kind: 'message_stop',
+      stop_reason: normalizeFinishReason(finishReason, hadToolCall),
+    };
   }
 }

@@ -668,6 +668,149 @@ async function testToOpenAiMessagesPure(): Promise<void> {
   );
 }
 
+/**
+ * Regression: some compat proxies (older zhipu/qwen) omit the `id` field on
+ * tool_call deltas entirely. Client must synthesize an `oc_<idx>_<ts36>` id
+ * so the runtime can still round-trip the tool_result, and warn once.
+ */
+async function testToolCallIdFallback(): Promise<void> {
+  console.log('\n[openai-compat-api-client] tool_call id fallback synthesis (Checker S14.1 P0-2)');
+  // No `id` field on any tool_call delta — proxy quirk.
+  const { restore } = patchSdk([
+    {
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                type: 'function',
+                function: { name: 'echo', arguments: '{"msg":"hi"}' },
+              },
+            ],
+          },
+        },
+      ],
+    },
+    { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+  ]);
+  const origWarn = console.warn;
+  let warnCount = 0;
+  let warnedMessage = '';
+  console.warn = (...a: unknown[]): void => {
+    warnCount++;
+    warnedMessage = String(a[0] ?? '');
+  };
+  try {
+    const client = new OpenAiCompatApiClient({
+      providerId: 'zhipu',
+      apiKey: 'sk-z',
+    });
+    const events = await collect(
+      client.stream({
+        system_prompt: '',
+        messages: [{ role: 'user', blocks: [{ kind: 'text', text: 'go' }] }],
+        tools: [ECHO_TOOL],
+        signal: new AbortController().signal,
+      }),
+    );
+    const toolUse = events.find((e) => e.kind === 'tool_use') as
+      | { id: string; name: string; input: { msg: string } }
+      | undefined;
+    checkTruthy('tool_use emitted', toolUse);
+    checkTruthy(
+      `id synthesized starts with 'oc_0_' (got '${toolUse?.id}')`,
+      toolUse?.id?.startsWith('oc_0_'),
+    );
+    check('tool_use name preserved', 'echo', toolUse?.name);
+    check('tool_use input parsed', { msg: 'hi' }, toolUse?.input);
+    check('console.warn called exactly once', 1, warnCount);
+    checkTruthy(
+      `warn message mentions synthesizing (got '${warnedMessage}')`,
+      warnedMessage.includes('synthesizing'),
+    );
+  } finally {
+    console.warn = origWarn;
+    restore();
+  }
+}
+
+/**
+ * Regression: usage emitted exactly once (at message_stop time), even when
+ * multiple chunks carry partial usage. Prevents runtime's addUsage from
+ * double-counting via the trail-of-partial-usage proxy pattern.
+ */
+async function testUsageEmitOnce(): Promise<void> {
+  console.log('\n[openai-compat-api-client] usage coalesced to single emit (Checker S14.1 P1)');
+  const { restore } = patchSdk([
+    { choices: [{ delta: { content: 'a' } }], usage: { prompt_tokens: 10 } },
+    {
+      choices: [{ delta: {}, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 10, completion_tokens: 5 },
+    },
+  ]);
+  try {
+    const client = new OpenAiCompatApiClient({
+      providerId: 'zhipu',
+      apiKey: 'sk-z',
+    });
+    const events = await collect(
+      client.stream({
+        system_prompt: '',
+        messages: [{ role: 'user', blocks: [{ kind: 'text', text: 'go' }] }],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    const usages = events.filter((e) => e.kind === 'usage') as Array<{
+      usage: { input_tokens?: number; output_tokens?: number };
+    }>;
+    check('usage emitted exactly once', 1, usages.length);
+    check('usage uses LAST observed value (output_tokens=5)', 5, usages[0]?.usage.output_tokens);
+    // message_stop must come AFTER the single usage emit.
+    const usageIdx = events.findIndex((e) => e.kind === 'usage');
+    const stopIdx = events.findIndex((e) => e.kind === 'message_stop');
+    checkTruthy('usage emitted before message_stop', usageIdx < stopIdx && usageIdx >= 0);
+  } finally {
+    restore();
+  }
+}
+
+/**
+ * Regression: constructing the client with providerId='azure' and no
+ * explicit baseURL must throw at stream() — NOT silently route to OpenAI.
+ * (Checker S14.1 P0-1: assembler already excludes azure from dispatch, but
+ * defending the client itself in case someone constructs it directly.)
+ */
+async function testAzureBaseUrlMissing(): Promise<void> {
+  console.log('\n[openai-compat-api-client] azure with no baseURL throws (Checker S14.1 P0-1)');
+  // Don't patch the SDK — we expect the throw before any SDK call.
+  const client = new OpenAiCompatApiClient({
+    providerId: 'azure',
+    apiKey: 'sk-azure',
+  });
+  let threw = false;
+  let msg = '';
+  try {
+    await collect(
+      client.stream({
+        system_prompt: '',
+        messages: [{ role: 'user', blocks: [{ kind: 'text', text: 'x' }] }],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+  } catch (e) {
+    threw = true;
+    msg = e instanceof Error ? e.message : String(e);
+  }
+  checkTruthy('azure with no baseURL throws', threw);
+  checkTruthy(
+    `error mentions baseURL + azure (got '${msg}')`,
+    msg.includes('baseURL') && msg.includes('azure'),
+  );
+}
+
 async function main(): Promise<void> {
   await testTextDelta_zhipu();
   await testTextDelta_openai();
@@ -682,6 +825,9 @@ async function main(): Promise<void> {
   await testOllamaNoKey();
   await testNoToolsOmitted();
   await testToOpenAiMessagesPure();
+  await testToolCallIdFallback();
+  await testUsageEmitOnce();
+  await testAzureBaseUrlMissing();
 
   console.log(`\n${pass} pass, ${fail} fail`);
   if (fail > 0) process.exit(1);

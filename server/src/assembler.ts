@@ -454,12 +454,17 @@ export async function* runSkillAssembler(
  *   google                                        → GoogleApiClient
  *   openai / deepseek / zhipu / qwen / moonshot   → OpenAiCompatApiClient
  *   mistral / groq / openrouter / ollama /        → OpenAiCompatApiClient
- *   lmstudio / azure                              → OpenAiCompatApiClient
+ *   lmstudio                                      → OpenAiCompatApiClient
  *
- * The ollama / lmstudio cases tolerate empty apiKey (local runtimes). Azure
- * users MUST supply baseURL via a future BYOK enhancement — for now we just
- * pass providerId='azure' through and the OpenAiCompatApiClient will use
- * whatever default it has (empty for azure, so the SDK error is loud).
+ * Azure is DELIBERATELY excluded (returns null → legacy fallback) until BYOK
+ * UI gains a per-key `azure_deployment_url` field. Without it, an empty
+ * baseURL silently routes the request body (system prompt + tools + history)
+ * to the public OpenAI endpoint, which is a data-exfiltration regression
+ * compared to the legacy `openai-compat-factory.ts` that throws on empty
+ * baseURL. Plus Azure auth uses an `api-key` header instead of Bearer, which
+ * the OpenAI SDK can't be told to swap. See Checker S14.1 P0-1.
+ *
+ * The ollama / lmstudio cases tolerate empty apiKey (local runtimes).
  */
 function buildApiClient(
   provider: string,
@@ -474,6 +479,7 @@ function buildApiClient(
   if (provider === 'google') {
     return new GoogleApiClient({ apiKey, model, max_tokens, temperature });
   }
+  // Azure intentionally absent — see header docstring (Checker S14.1 P0-1).
   const OPENAI_COMPAT_PROVIDERS = new Set([
     'openai',
     'deepseek',
@@ -485,7 +491,6 @@ function buildApiClient(
     'openrouter',
     'ollama',
     'lmstudio',
-    'azure',
   ]);
   if (OPENAI_COMPAT_PROVIDERS.has(provider)) {
     return new OpenAiCompatApiClient({

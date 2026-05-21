@@ -86,8 +86,10 @@ const PROVIDER_BASE_URLS: Record<string, string> = {
   openrouter: 'https://openrouter.ai/api/v1',
   ollama: 'http://localhost:11434/v1',
   lmstudio: 'http://localhost:1234/v1',
-  // azure has no default — caller must pass baseURL (deployment-name URL).
-  azure: '',
+  // azure is deliberately omitted — see assembler.buildApiClient docstring
+  // (Checker S14.1 P0-1). If anyone constructs this client directly with
+  // providerId='azure' and no explicit baseURL, resolveBaseURL() throws so
+  // the request body never leaves the machine.
 };
 
 /** Providers that allow an empty api_key (local runtimes). Mirror of
@@ -293,11 +295,20 @@ export class OpenAiCompatApiClient implements ApiClient {
    * Priority:
    *   1. opts.baseURL (explicit override)
    *   2. PROVIDER_BASE_URLS[providerId]
-   *   3. empty string → SDK uses its OpenAI default (only safe for providerId='openai')
+   *
+   * Throws if neither is set. We DO NOT fall back to an empty string — the
+   * OpenAI SDK silently routes an absent baseURL to https://api.openai.com/v1,
+   * which would leak the full request body (system prompt + tools + history)
+   * to OpenAI when the caller intended a different provider. Loud failure is
+   * the only safe option.
    */
   private resolveBaseURL(): string {
     if (this.opts.baseURL && this.opts.baseURL.length > 0) return this.opts.baseURL;
-    return PROVIDER_BASE_URLS[this.opts.providerId] ?? '';
+    const fromTable = PROVIDER_BASE_URLS[this.opts.providerId];
+    if (fromTable && fromTable.length > 0) return fromTable;
+    throw new Error(
+      `OpenAiCompatApiClient: no baseURL configured for provider '${this.opts.providerId}' — pass opts.baseURL or use a registered provider id`,
+    );
   }
 
   private resolveModel(): string {
@@ -373,6 +384,14 @@ export class OpenAiCompatApiClient implements ApiClient {
     // Track whether we've emitted message_stop already (defensive: some
     // proxies emit a redundant empty chunk after the finish_reason chunk).
     let stopEmitted = false;
+    // Some compat providers ignore stream_options.include_usage and never
+    // send a usage chunk; some send a partial usage mid-stream. We accept
+    // only the LAST usage value seen and emit it exactly once at message_stop
+    // time, so the runtime doesn't double-count via addUsage().
+    let lastUsage: TokenUsage | undefined;
+    // Once we've warned about a synthesized tool_call id we don't keep
+    // spamming the log on every subsequent tool call in this stream.
+    let warnedSyntheticId = false;
 
     // OpenAI SDK's `create()` is overloaded by `stream: boolean` literal —
     // TS can't always pick the streaming overload when other fields use loose
@@ -402,6 +421,55 @@ export class OpenAiCompatApiClient implements ApiClient {
     } catch (err) {
       throw err instanceof Error ? err : new Error(String(err));
     }
+
+    /**
+     * Flush pending tool_calls in ascending index order, then emit usage (if
+     * any was observed) and message_stop. Used both on finish_reason and on
+     * stream-end-without-finish-reason fallback paths.
+     *
+     * tool_call id: OpenAI normally sends `id` on the first delta of each
+     * tool_call. Some proxies (older zhipu/qwen) omit it entirely; in that
+     * case we synthesize one of the form `oc_<idx>_<ts36>` so the runtime
+     * can still round-trip the tool_result. We warn once per stream so the
+     * proxy quirk is visible without flooding logs.
+     */
+    const flush = async function* (
+      this: void,
+    ): AsyncGenerator<AssistantEvent> {
+      const indexes = Array.from(pendingByIndex.keys()).sort((a, b) => a - b);
+      for (const idx of indexes) {
+        const p = pendingByIndex.get(idx)!;
+        let input: unknown = {};
+        if (p.argsBuf.length > 0) {
+          try {
+            input = JSON.parse(p.argsBuf);
+          } catch {
+            input = { __parse_error: true, raw: p.argsBuf };
+          }
+        }
+        let id = p.id;
+        if (id.length === 0) {
+          id = `oc_${idx}_${Date.now().toString(36)}`;
+          if (!warnedSyntheticId) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[OpenAiCompatApiClient] provider omitted tool_call id, synthesizing '${id}' for index=${idx} name='${p.name}'`,
+            );
+            warnedSyntheticId = true;
+          }
+        }
+        yield { kind: 'tool_use', id, name: p.name, input };
+      }
+      pendingByIndex.clear();
+      if (lastUsage) {
+        yield { kind: 'usage', usage: lastUsage };
+        lastUsage = undefined;
+      }
+      yield {
+        kind: 'message_stop',
+        stop_reason: normalizeFinishReason(finishReason),
+      };
+    };
 
     for await (const chunkRaw of stream) {
       if (args.signal.aborted) return;
@@ -455,71 +523,30 @@ export class OpenAiCompatApiClient implements ApiClient {
         finishReason = choice.finish_reason;
       }
 
-      // 3) usage — usually in the last chunk after finish_reason. We emit it
-      //    BEFORE the message_stop so the runtime's totalUsage already
-      //    includes this turn when it attaches usage to the assistant msg.
+      // 3) usage — providers send this either in the final chunk after
+      //    finish_reason (per spec) or sprinkled mid-stream (some proxies).
+      //    We accept the LAST value and emit it once inside flush(); this
+      //    avoids the runtime's addUsage() double-counting when multiple
+      //    usage chunks arrive.
       const usage = extractUsage(chunk.usage);
-      if (usage) yield { kind: 'usage', usage };
+      if (usage) lastUsage = usage;
 
       // 4) If finish_reason was set in this chunk and there's no more
-      //    expected payload (we'll exit the for-await on the next iteration
-      //    anyway since OpenAI ends the stream after the finish chunk),
-      //    flush pending tool_calls + emit message_stop.
+      //    expected payload, flush pending tool_calls + emit message_stop.
       //    Why flush only once finish_reason is observed: tool_calls deltas
       //    can keep arriving until the finish chunk, so flushing earlier
       //    risks emitting a half-assembled tool_use.
       if (choice?.finish_reason && !stopEmitted) {
-        // Emit tool_use events in ascending index order.
-        const indexes = Array.from(pendingByIndex.keys()).sort((a, b) => a - b);
-        for (const idx of indexes) {
-          const p = pendingByIndex.get(idx)!;
-          let input: unknown = {};
-          if (p.argsBuf.length > 0) {
-            try {
-              input = JSON.parse(p.argsBuf);
-            } catch {
-              input = { __parse_error: true, raw: p.argsBuf };
-            }
-          }
-          yield {
-            kind: 'tool_use',
-            id: p.id,
-            name: p.name,
-            input,
-          };
-        }
-        pendingByIndex.clear();
-        yield {
-          kind: 'message_stop',
-          stop_reason: normalizeFinishReason(finishReason),
-        };
+        yield* flush();
         stopEmitted = true;
       }
     }
 
     // Stream ended without a finish_reason chunk (edge case: some compat
-    // proxies cut off early). Emit message_stop defensively so the runtime
-    // still terminates cleanly.
+    // proxies cut off early). flush() still emits message_stop with
+    // finishReason='unknown' so the runtime terminates cleanly.
     if (!stopEmitted) {
-      // Flush any pending tool_calls so we don't silently drop them.
-      const indexes = Array.from(pendingByIndex.keys()).sort((a, b) => a - b);
-      for (const idx of indexes) {
-        const p = pendingByIndex.get(idx)!;
-        let input: unknown = {};
-        if (p.argsBuf.length > 0) {
-          try {
-            input = JSON.parse(p.argsBuf);
-          } catch {
-            input = { __parse_error: true, raw: p.argsBuf };
-          }
-        }
-        yield { kind: 'tool_use', id: p.id, name: p.name, input };
-      }
-      pendingByIndex.clear();
-      yield {
-        kind: 'message_stop',
-        stop_reason: normalizeFinishReason(finishReason),
-      };
+      yield* flush();
     }
   }
 }
