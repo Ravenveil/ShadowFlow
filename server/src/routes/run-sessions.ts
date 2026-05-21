@@ -64,6 +64,11 @@ import { classifyTS } from '../lib/intent-router';
 // StepArtifact → stepStore.put() + emit `step-artifact` for the front-end.
 import { createStepStore } from '../lib/step-store';
 import type { OutputKind, StepArtifact } from '../lib/contracts';
+// S6.10-A — Trae/Codex-style timeline projection. Runs in parallel with the
+// legacy fine-grained event stream; emits `message` + `message-patch` SSE
+// frames that the front-end can subscribe to incrementally. Legacy events are
+// preserved unchanged so existing consumers keep working.
+import { createTimelineProjector } from '../lib/timeline-projector';
 // S6.3 — skill-team synthesizer. When the active skill ships a structured
 // team.skill.yaml we bypass the LLM entirely and stream the design straight
 // from disk. Deterministic, free, and perfectly matches the v3 stacked
@@ -923,10 +928,80 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       );
     }
 
+    // ── S6.10-A — TimelineMessage projector ──────────────────────────────
+    // Derive Trae/Codex-style ordered timeline (user_turn → assistant_meta →
+    // step_panel/thinking/diff_panel/msg_foot) from the legacy fine-grained
+    // event stream. Emits `message` + `message-patch` SSE frames in addition
+    // to the legacy events. Legacy stream is untouched — front-end can
+    // subscribe to either or both during migration. See lib/timeline-projector.ts.
+    const projector = createTimelineProjector();
+    const flushProjector = (emit: {
+      messages: import('../lib/contracts').TimelineMessage[];
+      patches: import('../lib/contracts').MessagePatch[];
+    }) => {
+      for (const m of emit.messages) sendEvent('message', m);
+      for (const p of emit.patches) sendEvent('message-patch', p);
+    };
+    // Open the turn — anchor it to the human-typed goal so user_turn appears
+    // as the first timeline row.
+    flushProjector(projector.onUserMessage(session.goal));
+
     for await (const { event, data } of generator) {
       if (res.writableEnded || abortController.signal.aborted) break;
       sendEvent(event, data);
       console.log(`[run-sessions] → event:${event}`, JSON.stringify(data).slice(0, 80));
+
+      // ── S6.10-A — fan out into TimelineMessage / MessagePatch ─────────
+      // Each legacy event drives the projector (lib/timeline-projector.ts),
+      // which returns 0+ new messages and 0+ patches. Forward them as
+      // dedicated SSE frames so the next-gen front-end can render a single
+      // ordered list keyed by message id. Wrapped in try so a projector
+      // bug never blocks legacy event forwarding.
+      try {
+        if (event === 'classify' && data && typeof data === 'object') {
+          flushProjector(projector.onClassify(data as Record<string, unknown>));
+        } else if (event === 'assemble' && data && typeof data === 'object') {
+          const d = data as {
+            status?: string;
+            step?: string;
+            step_index?: number;
+            elapsed_ms?: number | null;
+          };
+          if (d.status === 'running' && typeof d.step_index === 'number') {
+            flushProjector(projector.onAssembleStart(d.step_index, d.step ?? ''));
+          } else if (d.status === 'done' && typeof d.step_index === 'number') {
+            flushProjector(projector.onAssembleDone(d.step_index, d.elapsed_ms ?? 0));
+          }
+        } else if (event === 'agent-substep' && data && typeof data === 'object') {
+          const d = data as {
+            node_id?: string;
+            substep?: string;
+            status?: string;
+            elapsed_ms?: number | null;
+          };
+          if (d.node_id && d.substep) {
+            if (d.status === 'running') flushProjector(projector.onAgentSubstepStart(d.node_id, d.substep));
+            else if (d.status === 'done') flushProjector(projector.onAgentSubstepDone(d.node_id, d.substep, d.elapsed_ms ?? 0));
+          }
+        } else if (event === 'thinking-chunk' && data && typeof data === 'object') {
+          const d = data as { text?: string };
+          if (typeof d.text === 'string') flushProjector(projector.onThinkingChunk(d.text));
+        } else if (event === 'blueprint' && data && typeof data === 'object') {
+          const d = data as { filename?: string; yaml?: string };
+          flushProjector(projector.onBlueprint({ filename: d.filename, yaml: d.yaml }));
+        } else if (event === 'yaml-line' && data && typeof data === 'object') {
+          const d = data as { line?: string };
+          if (typeof d.line === 'string') flushProjector(projector.onYamlLine(d.line));
+        } else if (event === 'text' && data && typeof data === 'object') {
+          const d = data as { text?: string };
+          if (typeof d.text === 'string') flushProjector(projector.onText(d.text));
+        } else if (event === 'complete') {
+          flushProjector(projector.onComplete());
+        }
+      } catch (projectorErr) {
+        // Projector failures are non-fatal — legacy event already sent.
+        console.error(`[run-sessions] timeline-projector error on event=${event}:`, projectorErr);
+      }
 
       // ── S2.3 — per-step payload accumulation ────────────────────────────
       // `assemble:running` opens a step; `node`/`edge`/`blueprint`/`classify`
