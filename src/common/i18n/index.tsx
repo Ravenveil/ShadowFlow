@@ -9,6 +9,17 @@ export type Language = 'en' | 'zh';
 
 const STORAGE_KEY = 'sf_language';
 
+function detectLanguage(): Language {
+  // Prefer the navigator hint when the user has never picked manually.
+  // navigator.language is "zh-CN" / "zh-TW" / etc on Chinese browsers; we
+  // only branch on the primary tag.
+  try {
+    const nav = (navigator?.language || '').toLowerCase();
+    if (nav.startsWith('zh')) return 'zh';
+  } catch {}
+  return 'zh';   // Project default — primary audience is zh; en is opt-in
+}
+
 function getStoredLanguage(defaultLanguage: Language): Language {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -25,7 +36,7 @@ if (!i18n.isInitialized) {
         en: { translation: enResources },
         zh: { translation: zhResources },
       },
-      lng: getStoredLanguage('en'),
+      lng: getStoredLanguage(detectLanguage()),
       fallbackLng: 'en',
       interpolation: { escapeValue: false },
       returnNull: false,
@@ -48,7 +59,7 @@ interface I18nProviderProps {
   language?: Language;
 }
 
-export function I18nProvider({ children, defaultLanguage = 'en', language: controlledLanguage }: I18nProviderProps) {
+export function I18nProvider({ children, defaultLanguage = 'zh', language: controlledLanguage }: I18nProviderProps) {
   const { t: tFn, i18n: i18nInstance } = useTranslation();
   const language = (i18nInstance.language as Language) || getStoredLanguage(defaultLanguage);
 
