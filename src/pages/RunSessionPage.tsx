@@ -977,6 +977,7 @@ interface RightPanelProps {
 // no-unused-locals violation is intentional.
 // @ts-expect-error TS6133 — kept intentionally unused; see comment above.
 function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId, onSelectNode, sessionId }: RightPanelProps) {
+  const { t } = useI18n();
   const filename = session.blueprintFile ?? 'untitled.yml';
   const [rightTab, setRightTab] = useState<RightTab>('overview');
   const agents = session.nodes.filter(n => n.type === 'agent');
@@ -1098,7 +1099,7 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
         {!session.isComplete && (
           <span className="rs-tag" style={{ marginLeft: 10, alignSelf: 'center', flexShrink: 0 }}>
             <span className="rs-tag-dot" />
-            构建中…
+            {t('runSession.canvasBuilding')}
           </span>
         )}
 
@@ -1107,7 +1108,7 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
           <button type="button" title="Fit to screen" style={toolbarIconBtn}>⊡</button>
           <button type="button" title="Toggle split" style={toolbarIconBtn}>⇄</button>
           <div style={{ width: 1, height: 16, background: 'var(--t-border)' }} />
-          <button type="button" style={{ ...toolbarBtn, color: 'var(--t-fg-3)' }}>查看 YAML</button>
+          <button type="button" style={{ ...toolbarBtn, color: 'var(--t-fg-3)' }}>{t('runSession.viewYaml')}</button>
           <button
             type="button"
             onClick={session.isComplete ? onOpenEditor : undefined}
@@ -1120,7 +1121,7 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
               cursor: session.isComplete ? 'pointer' : 'not-allowed',
             }}
           >
-            在 Editor 中打开
+            {t('runSession.openInEditor')}
             <ExternalLink size={11} strokeWidth={2} style={{ marginLeft: 4 }} />
           </button>
         </div>
@@ -1157,7 +1158,7 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           {agents.length === 0 ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-4)', fontSize: 12 }}>
-              等待 Agent 初始化…
+              {t('runSession.awaitingAgentInit')}
             </div>
           ) : (
             <>
@@ -1212,7 +1213,7 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
                       </div>
                       <span className="rs-tag" style={{ flexShrink: 0 }}>
                         <span className="rs-tag-dot" />
-                        {isReady ? '就绪' : '构建中…'}
+                        {isReady ? t('runSession.nodeReady') : t('runSession.canvasBuilding')}
                       </span>
                     </div>
 
@@ -1471,6 +1472,7 @@ interface ErrorBannerProps {
 }
 
 function ErrorBanner({ error, resending, onResend, onConfigureKey, onNewSession }: ErrorBannerProps) {
+  const { t } = useI18n();
   // 30s rate-limit countdown. Restarts when a NEW rate_limit error arrives
   // (occurrences increment) so back-to-back 429s reset the timer instead of
   // letting the user spam-click while still throttled.
@@ -1638,7 +1640,7 @@ function ErrorBanner({ error, resending, onResend, onConfigureKey, onNewSession 
               }}
             >
               <RotateCcw size={11} strokeWidth={2} aria-hidden />
-              重发
+              {t('common.resend')}
             </button>
           )}
         </div>
@@ -2206,7 +2208,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
               fontFamily: 'var(--font-mono, monospace)',
             }}
           >
-            重连中… 第 {session.retryAttempt} 次
+            {t('runSession.reconnecting')} {session.retryAttempt}
           </div>
         )}
 
@@ -2241,7 +2243,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
               type="button"
               onClick={() => handleResend(goal)}
               disabled={resending}
-              title="用同样的目标重新发起一次"
+              title={t('runSession.restartWithSameGoal')}
               data-testid="rs-resend-goal"
               className={session.error ? '' : 'sf-resend-hover'}
               style={{
@@ -2460,7 +2462,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             }}
           >
             <InlineSpinner size={10} />
-            <span>等待 LLM 开始…</span>
+            <span>{t('runSession.awaitingLLM')}</span>
           </div>
         )}
 
@@ -2687,7 +2689,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
               {/* Settings — toggles inline popup */}
               <button
                 type="button"
-                title="会话设置"
+                title={t('runSession.sessionSettings')}
                 onClick={() => setShowSettings(v => !v)}
                 style={{
                   width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -2703,7 +2705,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
               {/* Attach */}
               <button
                 type="button"
-                title="附件"
+                title={t('common.attachments')}
                 onClick={() => fileInputRef.current?.click()}
                 style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: attachedFiles.length > 0 ? 'var(--t-accent-tint)' : 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', color: attachedFiles.length > 0 ? 'var(--t-accent-bright)' : 'var(--t-fg-4)' }}
               >
@@ -2865,7 +2867,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                       {/* CLI section */}
                       {sectionLabel('CLI')}
                       {pickerLoading && pickerCliItems.length === 0 ? (
-                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>检测中…</div>
+                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>{t('common.detecting')}</div>
                       ) : pickerCliItems.length === 0
                         ? emptyHint('未检测到已安装的 CLI · 去设置', '/settings#local-cli')
                         : pickerCliItems.map(renderItem)
@@ -2878,7 +2880,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                       {/* API section */}
                       {sectionLabel('API')}
                       {pickerLoading && pickerApiItems.length === 0 ? (
-                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>加载中…</div>
+                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>{t('common.loading')}</div>
                       ) : pickerApiItems.length === 0
                         ? emptyHint('未配置 API Key · 去设置 BYOK', '/settings#byok')
                         : pickerApiItems.map(renderItem)
@@ -2900,7 +2902,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
               {session.isStreaming ? (
                 <button
                   type="button"
-                  title="停止生成"
+                  title={t('runSession.stopGeneration')}
                   onClick={() => session.abort()}
                   style={{
                     width: 32, height: 28,
@@ -2951,13 +2953,13 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
           }}
         >
           <kbd style={kbdStyle}>{kbdSendCmd()}</kbd>
-          <span>发送</span>
+          <span>{t('common.send')}</span>
           <span style={{ opacity: 0.4, padding: '0 2px' }}>·</span>
           <kbd style={kbdStyle}>Esc</kbd>
-          <span>取消</span>
+          <span>{t('common.cancel')}</span>
           <span style={{ opacity: 0.4, padding: '0 2px' }}>·</span>
           <kbd style={kbdStyle}>📎</kbd>
-          <span>附件</span>
+          <span>{t('common.attachments')}</span>
         </div>
       </div>
     </aside>
@@ -3318,6 +3320,7 @@ function InjectKeyframes() {
 // Preparation panel — Story 15.4 (rendered when no :sessionId in URL)
 // ---------------------------------------------------------------------------
 function PreparationPanel() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // Story 15.9 — restore last user choice from localStorage. SettingsPage's
@@ -3428,10 +3431,10 @@ function PreparationPanel() {
       >
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>
-            启动新 Run Session
+            {t('runSession.startNewSession')}
           </h1>
           <p style={{ marginTop: 6, marginBottom: 0, fontSize: 13, color: 'var(--t-fg-3)' }}>
-            选择执行 Skill 并描述你的目标，系统会用对应的专业角色规划执行。
+            {t('runSession.startHint')}
           </p>
         </div>
 
@@ -3446,7 +3449,7 @@ function PreparationPanel() {
 
         <div>
           <h3 style={{ fontSize: 12, color: 'var(--t-fg-3)', margin: '0 0 12px', fontWeight: 500 }}>
-            选择执行 Skill
+            {t('runSession.pickSkill')}
           </h3>
           <SkillPicker value={skillId} onChange={setSkillId} />
         </div>
@@ -3455,7 +3458,7 @@ function PreparationPanel() {
         {skillSupportsDS && (
           <div data-testid="design-system-section">
             <h3 style={{ fontSize: 12, color: 'var(--t-fg-3)', margin: '0 0 8px', fontWeight: 500 }}>
-              Design System（可选）
+              {t('runSession.designSystemOptional')}
             </h3>
             <DesignSystemPicker value={dsId} onChange={setDsId} skillId={skillId} />
           </div>
@@ -3463,12 +3466,12 @@ function PreparationPanel() {
 
         <div>
           <h3 style={{ fontSize: 12, color: 'var(--t-fg-3)', margin: '0 0 8px', fontWeight: 500 }}>
-            描述你的目标
+            {t('runSession.describeGoal')}
           </h3>
           <textarea
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
-            placeholder="帮我设计一个 SaaS 产品的落地页…"
+            placeholder={t('runSession.goalPlaceholder')}
             data-testid="run-session-goal"
             style={{
               width: '100%',
@@ -3741,6 +3744,7 @@ interface RunSessionLiveViewProps {
 }
 
 function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessionLiveViewProps) {
+  const { t } = useI18n();
   const session = useRunSession(sessionId);
   const [collapsed, setCollapsed] = useState(false);
   // 2026-05-18 agent-0 — zoom + selectedNodeId state kept for the legacy
@@ -4043,19 +4047,19 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
               className="sf-pulse"
               style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--t-fg-4)' }}
             />
-            <span>持久化中…</span>
+            <span>{t('runSession.persisting')}</span>
           </>
         )}
         {saveState === 'ok' && (
           <>
             <Check size={12} strokeWidth={2.4} />
-            <span>Team 已保存</span>
+            <span>{t('runSession.teamSaved')}</span>
           </>
         )}
         {saveState === 'failed' && (
           <>
             <AlertTriangle size={12} strokeWidth={2.2} />
-            <span>持久化失败{saveError ? ` · ${saveError}` : ''}</span>
+            <span>{t('runSession.persistFailed')}{saveError ? ` · ${saveError}` : ''}</span>
             <button
               type="button"
               onClick={() => setSaveState('idle')}
@@ -4072,7 +4076,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
                 cursor: 'pointer',
               }}
             >
-              重新保存
+              {t('runSession.resave')}
             </button>
           </>
         )}
@@ -4113,7 +4117,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
             <button
               type="button"
               onClick={() => setSavedTeamId(null)}
-              title="关闭"
+              title={t('common.close')}
               style={{ marginLeft: 'auto', width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 0, borderRadius: 5, color: 'var(--t-fg-4)', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
             >×</button>
           </div>
@@ -4122,17 +4126,17 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
               type="button"
               onClick={() => onNavigate(savedTeamId ? `/teams/${savedTeamId}` : '/teams')}
               style={{ background: 'var(--t-ok)', border: 'none', borderRadius: 6, color: '#fff', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, fontWeight: 600 }}
-            >查看 Team →</button>
+            >{t('runSession.viewTeam')}</button>
             <button
               type="button"
               onClick={() => onNavigate(savedGroupId ? `/chat/${savedGroupId}` : '/chat')}
               style={{ background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 6, color: 'var(--t-fg)', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5 }}
-            >Chat →</button>
+            >{t('runSession.gotoChat')}</button>
             <button
               type="button"
               onClick={() => onNavigate('/agents')}
               style={{ background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 6, color: 'var(--t-fg)', padding: '4px 10px', cursor: 'pointer', fontSize: 11.5 }}
-            >Agents →</button>
+            >{t('runSession.gotoAgents')}</button>
           </div>
         </div>
       )}

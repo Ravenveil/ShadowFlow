@@ -562,6 +562,7 @@
   "runSession.archive.viewAllAgents": "查看全部 agent · ⌘K",
 
   "runSession.canvasBuilding": "构建中…",
+  "runSession.nodeReady": "就绪",
   "runSession.viewYaml": "查看 YAML",
   "runSession.openInEditor": "在 Editor 中打开",
   "runSession.awaitingAgentInit": "等待 Agent 初始化…",

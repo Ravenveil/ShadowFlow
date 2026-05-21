@@ -353,6 +353,7 @@ const InlineRoster: React.FC<{
   onSelect?: (id: string) => void;
   onOpenPicker?: () => void;
 }> = ({ agents, selectedId, onSelect, onOpenPicker }) => {
+  const { t } = useI18n();
   const VISIBLE = 7;
   const overflow = agents.length > VISIBLE ? agents.length - (VISIBLE - 1) : 0;
   const visible = overflow > 0 ? agents.slice(0, VISIBLE - 1) : agents;

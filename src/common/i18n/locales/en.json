@@ -562,6 +562,7 @@
   "runSession.archive.viewAllAgents": "View all agents · ⌘K",
 
   "runSession.canvasBuilding": "Building…",
+  "runSession.nodeReady": "Ready",
   "runSession.viewYaml": "View YAML",
   "runSession.openInEditor": "Open in Editor",
   "runSession.awaitingAgentInit": "Waiting for Agent to initialize…",
