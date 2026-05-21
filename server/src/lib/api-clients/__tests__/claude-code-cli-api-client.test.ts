@@ -1179,6 +1179,97 @@ async function testAbortListenerCleanedOnThrow(): Promise<void> {
   );
 }
 
+// ─── S14.3: CLI-only telemetry (cost_usd / duration_ms / ttft_ms) ──────────
+
+/**
+ * The `result` terminator carries `total_cost_usd` + `duration_ms` alongside
+ * the usual usage payload. They must be folded into the TokenUsage we yield
+ * (not silently dropped) so the runtime can accumulate them per session.
+ */
+async function testCostDurationFromResult(): Promise<void> {
+  console.log('\n[claude-code-cli] result.total_cost_usd + duration_ms folded into usage');
+  let sub!: ScriptedSubprocess;
+  const { spawnFn } = makeSpawnFn(() => {
+    sub = makeFakeChild();
+    return sub;
+  });
+  {
+    const client = new ClaudeCodeCliApiClient({ binPath: 'claude', spawnFn });
+    const eventsP = collect(
+      client.stream({
+        system_prompt: '',
+        messages: [],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    await new Promise((r) => setImmediate(r));
+    await sub.pushStdoutChunks([
+      JSON.stringify({
+        type: 'result',
+        stop_reason: 'end_turn',
+        total_cost_usd: 0.0042,
+        duration_ms: 1234,
+        usage: { input_tokens: 100, output_tokens: 50 },
+      }) + '\n',
+    ]);
+    sub.finish(0);
+    const events = await eventsP;
+    const usages = events.filter((e) => e.kind === 'usage') as Array<{ usage: any }>;
+    checkTruthy('result-driven usage emitted', usages.length > 0);
+    const u = usages[usages.length - 1].usage;
+    check('result.total_cost_usd folded as cost_usd', 0.0042, u.cost_usd);
+    check('result.duration_ms folded as duration_ms', 1234, u.duration_ms);
+    check('result usage.input_tokens preserved', 100, u.input_tokens);
+    check('result usage.output_tokens preserved', 50, u.output_tokens);
+  }
+}
+
+/**
+ * Verbose `stream_event.message_start` carries `ttft_ms` on the inner event
+ * envelope itself (not inside `message.usage`). We must lift it into the
+ * TokenUsage payload so it survives the usage channel.
+ */
+async function testTtftFromMessageStart(): Promise<void> {
+  console.log('\n[claude-code-cli] stream_event.message_start.ttft_ms folded into usage');
+  let sub!: ScriptedSubprocess;
+  const { spawnFn } = makeSpawnFn(() => {
+    sub = makeFakeChild();
+    return sub;
+  });
+  {
+    const client = new ClaudeCodeCliApiClient({ binPath: 'claude', spawnFn });
+    const eventsP = collect(
+      client.stream({
+        system_prompt: '',
+        messages: [],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    await new Promise((r) => setImmediate(r));
+    await sub.pushStdoutChunks([
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'message_start',
+          ttft_ms: 87,
+          message: { id: 'msg_1', usage: { input_tokens: 100, output_tokens: 1 } },
+        },
+      }) + '\n',
+      JSON.stringify({ type: 'stream_event', event: { type: 'message_stop' } }) + '\n',
+    ]);
+    sub.finish(0);
+    const events = await eventsP;
+    const usages = events.filter((e) => e.kind === 'usage') as Array<{ usage: any }>;
+    checkTruthy('message_start usage emitted', usages.length > 0);
+    const u = usages[0].usage;
+    check('message_start.ttft_ms folded as ttft_ms', 87, u.ttft_ms);
+    check('message_start usage.input_tokens preserved', 100, u.input_tokens);
+    check('message_start usage.output_tokens preserved', 1, u.output_tokens);
+  }
+}
+
 async function main(): Promise<void> {
   // Pre-seed the capability cache so the existing tests don't have to script
   // a `<bin> -p --help` probe child. The probe-itself test below resets +
@@ -1204,6 +1295,10 @@ async function main(): Promise<void> {
   await testFallbackBinsTriggered();
   await testCapabilityProbeCached();
   await testAbortListenerCleanedOnThrow();
+
+  // S14.3 — CLI-only telemetry surfacing
+  await testCostDurationFromResult();
+  await testTtftFromMessageStart();
 
   console.log(`\n${pass} pass, ${fail} fail`);
   if (fail > 0) process.exit(1);

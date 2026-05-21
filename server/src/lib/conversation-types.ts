@@ -29,12 +29,24 @@
  *
  * All fields optional so partial usage payloads (e.g. GLM provider that only
  * reports output_tokens) round-trip cleanly through JSON without spurious 0s.
+ *
+ * CLI-only telemetry (cost_usd / duration_ms / ttft_ms) is populated solely
+ * by the Claude Code CLI ApiClient — the Anthropic direct SDK does not
+ * surface per-turn cost, and other providers (openai-compat / google / codex)
+ * leave these fields `undefined`. Front-end / wire layer must treat them as
+ * optional best-effort BYOK observability, not invariants.
  */
 export interface TokenUsage {
   input_tokens?: number;
   output_tokens?: number;
   cache_creation_input_tokens?: number;
   cache_read_input_tokens?: number;
+  /** CLI-only: per-turn cost in USD. From Claude Code CLI `result` event `total_cost_usd`. */
+  cost_usd?: number;
+  /** CLI-only: per-turn wall-clock in ms. From Claude Code CLI `result` event `duration_ms`. */
+  duration_ms?: number;
+  /** CLI-only: time to first token in ms. From Claude Code CLI `stream_event.message_start.ttft_ms`. */
+  ttft_ms?: number;
 }
 
 /**

@@ -310,6 +310,8 @@ interface InnerEvent {
   delta?: DeltaShape;
   message?: { id?: string; usage?: unknown; stop_reason?: unknown };
   usage?: unknown;
+  /** CLI-only: time-to-first-token in ms, present on `message_start` envelopes. */
+  ttft_ms?: number;
 }
 
 interface AssistantWrapperBlock {
@@ -337,6 +339,10 @@ interface OuterEvent extends InnerEvent {
   subtype?: string;
   /** `assistant` summary wrapper. */
   message?: AssistantWrapperMessage;
+  /** CLI-only: per-turn total cost in USD, present on the `result` terminator. */
+  total_cost_usd?: number;
+  /** CLI-only: per-turn wall-clock in ms, present on the `result` terminator. */
+  duration_ms?: number;
 }
 
 /**
@@ -688,9 +694,15 @@ export class ClaudeCodeCliApiClient implements ApiClient {
       }
 
       // Terminator: `result` (flat) carries the final stop_reason + usage.
+      // CLI-only telemetry: `total_cost_usd` (per-turn $ cost) and
+      // `duration_ms` (per-turn wall-clock) live on the outer result event,
+      // not inside usage. We fold them into the TokenUsage payload so
+      // downstream (ConversationRuntime.addUsage) accumulates them.
       if (outer.type === 'result') {
-        const usage = extractUsage(outer.usage);
-        if (usage) yield { kind: 'usage', usage };
+        const usage: TokenUsage = extractUsage(outer.usage) ?? {};
+        if (typeof outer.total_cost_usd === 'number') usage.cost_usd = outer.total_cost_usd;
+        if (typeof outer.duration_ms === 'number') usage.duration_ms = outer.duration_ms;
+        if (Object.keys(usage).length > 0) yield { kind: 'usage', usage };
         const sr = typeof outer.stop_reason === 'string' ? outer.stop_reason : cachedStopReason;
         if (!messageStopEmitted) {
           yield { kind: 'message_stop', stop_reason: sr };
@@ -762,8 +774,13 @@ export class ClaudeCodeCliApiClient implements ApiClient {
       if (!inner || typeof inner.type !== 'string') return;
 
       if (inner.type === 'message_start') {
-        const u = extractUsage(inner.message?.usage);
-        if (u) yield { kind: 'usage', usage: u };
+        // CLI-only telemetry: `ttft_ms` (time-to-first-token) is attached to
+        // the stream_event.message_start envelope itself, NOT to message.usage.
+        // Merge it into the TokenUsage object so it flows through the usage
+        // channel alongside the rest of the per-turn telemetry.
+        const u: TokenUsage = extractUsage(inner.message?.usage) ?? {};
+        if (typeof inner.ttft_ms === 'number') u.ttft_ms = inner.ttft_ms;
+        if (Object.keys(u).length > 0) yield { kind: 'usage', usage: u };
         if (typeof inner.message?.id === 'string') currentMessageId = inner.message.id;
       } else if (inner.type === 'content_block_start') {
         const idx = inner.index ?? 0;

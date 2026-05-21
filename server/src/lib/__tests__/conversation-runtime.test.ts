@@ -25,7 +25,7 @@
  *   M.  text_delta before tool_use → ordered (text block then tool_use block)
  */
 
-import { ConversationRuntime } from '../conversation-runtime';
+import { ConversationRuntime, addUsage } from '../conversation-runtime';
 import type {
   ApiClient,
   AssistantEvent,
@@ -726,6 +726,41 @@ async function main(): Promise<void> {
     check('N: usage.input_tokens in abort payload', 7, data.usage.input_tokens);
     check('N: usage.output_tokens in abort payload', 3, data.usage.output_tokens);
     check('N: session_id preserved', 'sess-test', data.session_id);
+  }
+
+  // ─── O. addUsage — CLI telemetry semantics ────────────────────────────────
+  {
+    console.log('\n[O] addUsage: cost/duration SUM, ttft last-write');
+
+    // Two-sided sum: cost_usd / duration_ms add up, input_tokens stays sum,
+    // ttft_ms takes the b side (last-write).
+    const merged = addUsage(
+      { input_tokens: 10, cost_usd: 0.01, duration_ms: 100, ttft_ms: 50 },
+      { input_tokens: 5, cost_usd: 0.02, duration_ms: 200, ttft_ms: 30 },
+    );
+    check('O: input_tokens sums', 15, merged.input_tokens);
+    // Floating-point — round to 4 decimals to dodge 0.030000000000000002.
+    check('O: cost_usd sums', '0.0300', merged.cost_usd!.toFixed(4));
+    check('O: duration_ms sums', 300, merged.duration_ms);
+    check('O: ttft_ms last-write (b wins)', 30, merged.ttft_ms);
+
+    // b-only: a missing, b provides → result is b's value.
+    const bOnly = addUsage({}, { ttft_ms: 100 });
+    check('O: ttft_ms b-only', 100, bOnly.ttft_ms);
+
+    // a-only: b missing, a provides → result is a's value (fallback).
+    const aOnly = addUsage({ ttft_ms: 200 }, {});
+    check('O: ttft_ms a-only fallback', 200, aOnly.ttft_ms);
+
+    // Both undefined: CLI-only fields stay undefined, NOT 0. This prevents
+    // non-CLI providers from accumulating phantom zeros across turns.
+    const empty = addUsage({}, {});
+    check('O: cost_usd undefined when both empty', undefined, empty.cost_usd);
+    check('O: duration_ms undefined when both empty', undefined, empty.duration_ms);
+    check('O: ttft_ms undefined when both empty', undefined, empty.ttft_ms);
+    // The non-CLI fields still default to 0 (sum semantics unchanged).
+    check('O: input_tokens 0 when both empty', 0, empty.input_tokens);
+    check('O: output_tokens 0 when both empty', 0, empty.output_tokens);
   }
 
   console.log(`\n${pass} pass, ${fail} fail`);

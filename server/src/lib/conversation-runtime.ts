@@ -183,8 +183,18 @@ export interface RuntimeSession {
  * Sum two TokenUsage snapshots, treating `undefined` fields as 0 so partial
  * provider payloads (e.g. GLM only reports output_tokens) compose cleanly.
  * Returns a fresh object — does not mutate args.
+ *
+ * CLI-only fields (cost_usd / duration_ms / ttft_ms) have special semantics:
+ *   - cost_usd / duration_ms: SUM (total cost / total wall-clock across turns
+ *     is meaningful). Result stays `undefined` if both sides are `undefined`
+ *     so providers that never emit these don't accumulate spurious 0s.
+ *   - ttft_ms: LAST-WRITE (b.ttft_ms ?? a.ttft_ms). Time-to-first-token is a
+ *     per-turn latency — summing across turns makes no sense. We keep the
+ *     most recent non-undefined value so the UI can show "this turn's TTFT".
  */
-function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
+export function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
+  const sumOrUndef = (x?: number, y?: number): number | undefined =>
+    x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0);
   return {
     input_tokens: (a.input_tokens ?? 0) + (b.input_tokens ?? 0),
     output_tokens: (a.output_tokens ?? 0) + (b.output_tokens ?? 0),
@@ -192,6 +202,9 @@ function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
       (a.cache_creation_input_tokens ?? 0) + (b.cache_creation_input_tokens ?? 0),
     cache_read_input_tokens:
       (a.cache_read_input_tokens ?? 0) + (b.cache_read_input_tokens ?? 0),
+    cost_usd: sumOrUndef(a.cost_usd, b.cost_usd),
+    duration_ms: sumOrUndef(a.duration_ms, b.duration_ms),
+    ttft_ms: b.ttft_ms ?? a.ttft_ms,
   };
 }
 
