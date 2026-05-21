@@ -24,6 +24,14 @@ import { dispatchSkillRunner } from './skill-runners';
 // skills (web-prototype, report, agent-team-blueprint legacy) keep working.
 import { ConversationRuntime } from './lib/conversation-runtime';
 import { AnthropicApiClient } from './lib/api-clients/anthropic-api-client';
+// S14.1 (2026-05-21) — extend multi-turn v2 path to 12+ providers via two
+// additional ApiClient adapters. OpenAI-compat covers openai / deepseek /
+// zhipu / qwen / moonshot / mistral / groq / openrouter / ollama / lmstudio /
+// azure; google sits alongside (own /v1beta protocol). Only providers we
+// can't route fall back to the legacy single-call path.
+import { OpenAiCompatApiClient } from './lib/api-clients/openai-compat-api-client';
+import { GoogleApiClient } from './lib/api-clients/google-api-client';
+import type { ApiClient } from './lib/conversation-runtime';
 import { SkillAnchorToolExecutor } from './lib/tools/skill-anchor-executor';
 import { PermissionPolicy } from './lib/permission-policy';
 import type { ConversationMessage } from './lib/conversation-types';
@@ -382,19 +390,21 @@ export async function* runSkillAssembler(
   // legacy agent-team-blueprint) keep using the legacy dispatcher path that
   // calls the provider once and pipes text-delta through parser.ts.
   //
-  // Provider scope: today only the Anthropic provider supports the multi-turn
-  // tool_use shape we need; GLM / OpenAI variants ship in later Stories. So
-  // we route ONLY when the resolved provider is 'anthropic'. Any other
-  // provider falls back to the legacy path with a console warning.
+  // S14.1 (2026-05-21): provider scope extended from anthropic-only to the
+  // full 13-provider matrix. buildApiClient() returns null only for unknown
+  // providers — those still fall back to the legacy single-call path with a
+  // console warning so the failure mode is loud, not silent.
   if (skill.team) {
     const provider = opts.provider ?? 'anthropic';
-    if (provider === 'anthropic') {
-      yield* runTeamBackedSkill(opts, skill, effectiveSystemPrompt, projectDir);
+    const apiKey = opts.api_key ?? anthropic_key;
+    const apiClient = buildApiClient(provider, apiKey, opts.model, opts.max_tokens, opts.temperature);
+    if (apiClient) {
+      yield* runTeamBackedSkill(opts, skill, effectiveSystemPrompt, projectDir, apiClient);
       return;
     }
     console.warn(
       `[skill-assembler] team-backed skill "${skill_name}" with provider=${provider} ` +
-        `is not yet supported by ConversationRuntime; falling back to legacy single-call path.`,
+        `has no ApiClient adapter; falling back to legacy single-call path.`,
     );
   }
 
@@ -433,12 +443,68 @@ export async function* runSkillAssembler(
   );
 }
 
+// ─── S14.1 (2026-05-21): provider → ApiClient factory ─────────────────────
+
+/**
+ * Build an ApiClient for the given provider. Returns null for unknown providers
+ * so the caller can fall back to the legacy single-call path.
+ *
+ * Coverage:
+ *   anthropic                                     → AnthropicApiClient
+ *   google                                        → GoogleApiClient
+ *   openai / deepseek / zhipu / qwen / moonshot   → OpenAiCompatApiClient
+ *   mistral / groq / openrouter / ollama /        → OpenAiCompatApiClient
+ *   lmstudio / azure                              → OpenAiCompatApiClient
+ *
+ * The ollama / lmstudio cases tolerate empty apiKey (local runtimes). Azure
+ * users MUST supply baseURL via a future BYOK enhancement — for now we just
+ * pass providerId='azure' through and the OpenAiCompatApiClient will use
+ * whatever default it has (empty for azure, so the SDK error is loud).
+ */
+function buildApiClient(
+  provider: string,
+  apiKey: string | undefined,
+  model: string | undefined,
+  max_tokens: number | undefined,
+  temperature: number | undefined,
+): ApiClient | null {
+  if (provider === 'anthropic') {
+    return new AnthropicApiClient({ apiKey, model, max_tokens, temperature });
+  }
+  if (provider === 'google') {
+    return new GoogleApiClient({ apiKey, model, max_tokens, temperature });
+  }
+  const OPENAI_COMPAT_PROVIDERS = new Set([
+    'openai',
+    'deepseek',
+    'zhipu',
+    'qwen',
+    'moonshot',
+    'mistral',
+    'groq',
+    'openrouter',
+    'ollama',
+    'lmstudio',
+    'azure',
+  ]);
+  if (OPENAI_COMPAT_PROVIDERS.has(provider)) {
+    return new OpenAiCompatApiClient({
+      providerId: provider,
+      apiKey,
+      model,
+      max_tokens,
+      temperature,
+    });
+  }
+  return null;
+}
+
 // ─── S6: team-backed skill multi-turn driver ──────────────────────────────────
 
 /**
  * Drive a team-backed skill via ConversationRuntime. Sets up:
  *
- *   - AnthropicApiClient (BYOK key + model + max_tokens from opts)
+ *   - ApiClient (provider-specific; see buildApiClient — S14.1)
  *   - SkillAnchorToolExecutor (wraps the 4 S4 tools)
  *   - PermissionPolicy from SKILL.md frontmatter `allowed-tools: [...]`
  *   - Fresh RuntimeSession (ephemeral; messages live for one runTurn() only)
@@ -458,24 +524,9 @@ async function* runTeamBackedSkill(
   skill: import('./skills').SkillDefinition,
   systemPrompt: string,
   projectDir: string,
+  apiClient: ApiClient,
 ): AsyncGenerator<ParserSseEvent> {
-  const { goal, skill_name, session_id, anthropic_key, signal } = opts;
-
-  // Resolve API key: opts.api_key (BYOK header) > legacy anthropic_key > env.
-  const apiKey =
-    opts.api_key ??
-    anthropic_key ??
-    process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    yield {
-      event: 'error',
-      data: {
-        message: '未配置 Anthropic API Key。请在设置 → API 密钥 (BYOK) 中填入 sk-ant-... 密钥。',
-        code: 'NO_API_KEY',
-      },
-    };
-    return;
-  }
+  const { goal, skill_name, session_id, signal } = opts;
 
   // Ensure project dir exists for artifact callback.
   try {
@@ -499,13 +550,6 @@ async function* runTeamBackedSkill(
       `[skill-assembler:team] artifact written: ${filePath} (${content.length} bytes)`,
     );
   };
-
-  const apiClient = new AnthropicApiClient({
-    apiKey,
-    model: opts.model,
-    max_tokens: opts.max_tokens,
-    temperature: opts.temperature,
-  });
 
   // Skill id == directory name == SKILLS registry key. We use skill_name
   // verbatim because the S4 tools read `skill_id` from LLM input — context
