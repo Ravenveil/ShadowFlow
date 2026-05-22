@@ -10,7 +10,7 @@
  * sees no difference between executors.
  */
 
-import type { SseEvent } from '../parser';
+import type { SseEvent } from '../../parser';
 
 /**
  * Inputs every runner accepts. The runner decides what to do with each field;

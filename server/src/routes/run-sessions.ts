@@ -28,7 +28,7 @@ import {
   PROVIDER_IDS,
   isProviderId,
   type ProviderId,
-} from '../llm-providers';
+} from '../transport/api-clients';
 // Story 15.14 — auto-critique pass after artifact-saved.
 import { runCritique } from '../critic';
 // Story 15.29 — multi-turn conversation glue: validate / auto-create

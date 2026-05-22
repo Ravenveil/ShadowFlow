@@ -29,7 +29,7 @@ function check(label: string, cond: boolean, detail?: unknown) {
   else { fail++; console.log(`  FAIL  ${label}`); if (detail !== undefined) console.log('        detail:', detail); }
 }
 
-const MOCK_ACP = path.resolve(__dirname, '..', 'skill-runners', '__fixtures__', '__mock_acp_server.js');
+const MOCK_ACP = path.resolve(__dirname, '..', 'transport', 'spawners', '__fixtures__', '__mock_acp_server.js');
 
 async function main() {
   // ─── 1. FrameDecoder unit (pure framing) ─────────────────────────────────

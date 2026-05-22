@@ -37,7 +37,7 @@ import type {
 import type { ConversationMessage, TokenUsage } from '../conversation-types';
 import { toAnthropicMessages } from '../anthropic-block-adapter';
 import type { ToolSpec } from '../tool-spec';
-import { DEFAULT_MODELS } from '../../llm-providers/types';
+import { DEFAULT_MODELS } from '../../transport/api-clients/types';
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../prompt-assembly';
 
 /**

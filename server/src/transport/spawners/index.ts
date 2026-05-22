@@ -19,7 +19,7 @@
  *   anything else                    → EXECUTOR_UNKNOWN error.
  */
 
-import { detectAll } from '../cli-detector';
+import { detectAll } from '../../cli-detector';
 import { runAnthropicDirect } from './anthropic';
 import { runCliSpawn } from './cli';
 import { runAcpExecutor } from './acp';

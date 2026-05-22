@@ -21,13 +21,13 @@
 
 import fs from 'fs';
 import path from 'path';
-import { parseAndExtract, type SseEvent } from '../parser';
+import { parseAndExtract, type SseEvent } from '../../parser';
 import {
   callProvider,
   isProviderId,
   PROVIDER_LABEL,
   type ProviderId,
-} from '../llm-providers';
+} from '../api-clients';
 import type { RunnerInput } from './types';
 
 export async function* runAnthropicDirect(input: RunnerInput): AsyncGenerator<SseEvent> {

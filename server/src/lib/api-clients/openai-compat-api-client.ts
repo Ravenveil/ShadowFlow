@@ -62,7 +62,7 @@ import type {
   TokenUsage,
 } from '../conversation-types';
 import type { ToolSpec } from '../tool-spec';
-import { DEFAULT_MODELS } from '../../llm-providers/types';
+import { DEFAULT_MODELS } from '../../transport/api-clients/types';
 
 /**
  * Provider id → default baseURL. Sourced from

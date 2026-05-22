@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runAcpExecutor } from './acp';
-import { __resetAcpDetectCacheForTest, detectAcpAgents } from '../acp-detector';
+import { __resetAcpDetectCacheForTest, detectAcpAgents } from '../../acp-detector';
 import type { RunnerInput } from './types';
 
 let pass = 0;

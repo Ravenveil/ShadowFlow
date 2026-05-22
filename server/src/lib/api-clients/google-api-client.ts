@@ -51,7 +51,7 @@ import type {
   TokenUsage,
 } from '../conversation-types';
 import type { ToolSpec } from '../tool-spec';
-import { DEFAULT_MODELS } from '../../llm-providers/types';
+import { DEFAULT_MODELS } from '../../transport/api-clients/types';
 
 export interface GoogleApiClientOptions {
   /** BYOK key. If absent and env GOOGLE_API_KEY also empty, stream() throws. */

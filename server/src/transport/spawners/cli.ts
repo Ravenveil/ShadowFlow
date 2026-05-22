@@ -14,9 +14,9 @@
 import { spawn } from 'node:child_process';
 import fs from 'fs';
 import path from 'path';
-import { findCli } from '../cli-registry';
-import { dispatchParser, type CliStreamArtifactCb } from '../parsers/cli-streams';
-import type { SseEvent } from '../parser';
+import { findCli } from '../../cli-registry';
+import { dispatchParser, type CliStreamArtifactCb } from '../../parsers/cli-streams';
+import type { SseEvent } from '../../parser';
 import type { RunnerInput } from './types';
 
 /**

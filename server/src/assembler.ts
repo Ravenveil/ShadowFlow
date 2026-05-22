@@ -17,7 +17,7 @@ import { parseAndExtract, type SseEvent as ParserSseEvent } from './parser';
 // Story 15.19 v2 — executor dispatcher. Default 'anthropic-direct' route
 // preserves the existing in-line Claude SDK path; cli:* / cli:auto / acp:*
 // routes are delegated to the dispatcher.
-import { dispatchSkillRunner } from './skill-runners';
+import { dispatchSkillRunner } from './transport/spawners';
 // S6 (skill-team-conversion-design-v1.md §5 line 806-815) — team-backed
 // skills now drive a multi-turn ConversationRuntime instead of the legacy
 // single-call dispatcher. We gate on `skill.team` presence so non-team

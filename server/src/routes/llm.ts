@@ -39,7 +39,7 @@ import {
   isProviderId,
   type ProviderChunk,
   type ProviderId,
-} from '../llm-providers';
+} from '../transport/api-clients';
 
 const router = Router();
 
