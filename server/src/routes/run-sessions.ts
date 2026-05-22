@@ -383,17 +383,26 @@ router.post('/', (req: Request, res: Response) => {
   // specific target — a particular command inside a plugin). Skill-loader
   // registers commands/X.md as keys of the form `<id>:<X>` so SKILLS lookup
   // downstream just works.
-  const slashCmdRe = /\/([a-z0-9][a-z0-9_-]{0,63}):([a-z0-9][a-z0-9_-]{0,63})/i;
+  //
+  // /review hardenings (2026-05-22):
+  //   - Anchor at start-of-string or whitespace (NOT mid-URL) so a goal like
+  //     "https://api.example.com/foo:bar" doesn't get parsed as a slash cmd.
+  //     (finding A4)
+  //   - Do NOT lowercase the captured token. canonical-id.ts preserves
+  //     case, and SKILLS keys are case-sensitive (`BMAD-METHOD:prfaq` !=
+  //     `bmad-method:prfaq`). (finding #1 / A3)
+  const slashCmdRe = /(?:^|\s)\/([a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}):([a-zA-Z0-9][a-zA-Z0-9_-]{0,63})(?=\s|$)/;
   const sm = goal_text.match(slashCmdRe);
   if (sm) {
-    inline_skill_token = `${sm[1].toLowerCase()}:${sm[2].toLowerCase()}`;
+    inline_skill_token = `${sm[1]}:${sm[2]}`;
     goal_text = goal_text.replace(slashCmdRe, '').replace(/\s{2,}/g, ' ').trim();
     if (!goal_text) goal_text = '执行该 skill 命令。';
   } else {
-    const skillTokenRe = /@skill[:\s]+([a-z0-9][a-z0-9_-]{0,63})/i;
+    // @skill:<id> — also case-sensitive so `@skill:BMAD-METHOD` resolves.
+    const skillTokenRe = /@skill[:\s]+([a-zA-Z0-9][a-zA-Z0-9_.-]{0,63})/;
     const m = goal_text.match(skillTokenRe);
     if (m) {
-      inline_skill_token = m[1].toLowerCase();
+      inline_skill_token = m[1];
       goal_text = goal_text.replace(skillTokenRe, '').replace(/\s{2,}/g, ' ').trim();
       if (!goal_text) {
         // user typed only "@skill:foo" without a goal — fall back to a generic prompt
