@@ -258,3 +258,146 @@ ShadowFlow 在 Orchestration 层比 OpenDesign 重，这是 ShadowFlow 的产品
 1. **CliCallable history 处理**：CLI 子进程是 stateless 单轮，多轮 history 怎么注入？合并到 system prompt？目前没定。
 2. **C2a 下的 SSE 事件顺序**：daemon 直接 emit `<sf:agent-substep>` 时，per-agent 单轮 LLM call 还在跑——事件流的 interleaving 怎么排？需要时序图，留给 Phase 2 design doc。
 3. **Codex CLI streaming format**：Codex 输出不像 Claude Code 是 stream-json，delta 解析要单独适配（已有 `server/src/parsers/cli-streams/codex-stream-json.ts`，但精度有限）。
+
+---
+
+## Phase 2 Eng Review · 决策记录（2026-05-22）
+
+> 走 `/plan-eng-review`，14 轮 AUQ 把 Phase 2 的范围、抽象、错误模型、测试政策、性能 SLO 全部锁定。本节是 Phase 2 实施的**契约**。
+
+### 1. 决策表
+
+| 编号 | 决策 | 含义 |
+|---|---|---|
+| **A1** | `LlmCallable.turn()` 返回 `AsyncGenerator<TurnChunk>` 统一流式 | Codex CLI 路径作为单 chunk yield（伪流）；前端打字机效果保住 |
+| **A2** | C2a 用 artifact 文件 handoff（非 message log） | agent 间通信走文件系统，不依赖多轮 history；CLI 子进程的文件能力天然契合 |
+| **A3** | **统一 BOTH** ApiClient 和 CLI 路径用 daemon-led DAG + artifact handoff | 废 `runTeamBackedSkill` 内的 LLM tool_use 多轮路径。BMAD 在 BYOK 行为变为与 CLI 一致 |
+| **A4** | Phase 2 实现完整 DAG：拓扑并行 + conditional 边 + per-node retry | `team.yaml` 三种 edge kind 都生效。SSE chunk 加 `node_id` 字段（parser.ts 改造） |
+| **A4b** | conditional 评估器用 `expr-eval` JS 表达式（GH Actions/n8n/LangGraph 主流） | 需要 sandbox 安全 review；`workflow/condition.ts` 内部抽象成 `evaluate(condition, ctx) => boolean` |
+| **A5** | M2 目录重组：`llm-providers/` 和 `skill-runners/` 全部并入 `transport/` | `skill-runners/index.ts` 瘦身为 `transport/dispatcher.ts` 单一 factory |
+| **A6** | O1 统一路径：non-team skill 也走 `LlmCallable.turn()` 一次 | 所有 skill 通过 transport 抽象。`dispatchSkillRunner` 改名为 `resolveCallable()` |
+| **CL3 / E3** | 错误传播混合：调用阶段 throw typed exception，stream 中 yield error chunk | `LlmCallError` 类型 + `retry.ts` 在 throw 上 retry；前端在 error chunk 上展示不 hard-break SSE |
+| **C1** | Cancellation：单 AbortSignal 全程透传 entry → scheduler → callable.turn() → 底层 | UI 节点级 cancel 是未来功能，接口不破坏 |
+| **T1** | 测试用真实 API（不 mock） | CI 需 ANTHROPIC/OPENAI/ZHIPU/Claude Code CLI/Codex CLI auth；预算需单独评估 |
+| **S3** | 性能 regression gate：BMAD 13-agent wall-clock 不慢于 today ±20% | E2E 测试含 perf 基线；实施前先采样 today 平均 |
+
+### 2. Phase 2 文件清单（~20 文件）
+
+**新增（transport/）** ：
+```
+transport/LlmCallable.ts                ← 接口 + TurnChunk 类型 + capabilities
+transport/ApiClientCallable.ts          ← 包装 13 个 provider 的 ApiClient
+transport/CliCallable.ts                ← Claude Code CLI + Codex CLI 两 variant
+transport/AcpCallable.ts                ← 包装现有 ACP
+transport/McpCallable.ts                ← 包装现有 MCP
+transport/dispatcher.ts                 ← resolveCallable(executor) factory（替代 skill-runners/index.ts）
+```
+
+**新增（workflow/）** ：
+```
+workflow/scheduler.ts                   ← 拓扑并行 DAG runner（Kahn 算法 + Promise.all 同层）
+workflow/executor.ts                    ← 节点执行（artifact 写盘 + workspace 传递 + SSE 事件）
+workflow/condition.ts                   ← expr-eval evaluator
+workflow/retry.ts                       ← per-node max_retries + exponential backoff
+workflow/observer.ts                    ← node 生命周期事件（含 node_id）
+workflow/types.ts                       ← RunResult / NodeStatus / TurnChunk (import TeamDefV1，不重复定义)
+```
+
+**移动（git mv，diff 主要是路径）** ：
+```
+llm-providers/*                  → transport/api-clients/
+skill-runners/cli.ts             → transport/cli-spawner.ts
+skill-runners/acp.ts             → transport/acp-spawner.ts
+skill-runners/mcp.ts             → transport/mcp-spawner.ts
+skill-runners/cli.test.ts        → transport/cli-callable.test.ts（同时改写视角）
+```
+
+**修改** ：
+```
+assembler.ts                            ← team-backed 分支换为 workflow.scheduler.run()；non-team 分支换为 callable.turn()
+parser.ts                                ← SSE chunk events 加 node_id 字段
+prompts/phase-2-agent.ts                 ← 删 tool_use 词汇，改 artifact handoff 描述
+prompts/phase-3-team.ts                  ← 同上
+.shadowflow/skills/bmad/SKILL.md         ← 删 4 SkillAnchorTool 引用
+.shadowflow/skills/paper-review/SKILL.md ← 同上
+src/api/runSessions.ts                   ← chunk events 按 node_id 路由
+src/core/hooks/useRunSession.ts          ← per-node buffer
+lib/conversation-runtime.ts              ← 废 LLM tool_use 路径或大幅瘦身
+```
+
+**删除（条件：grep 后无 skill 使用）** ：
+```
+lib/tools/skill-anchor-executor.ts      ← daemon-emit 取代 LLM 调用
+（skill-anchors.ts 保留 schema 定义，未来 skill 可显式启用）
+```
+
+### 3. Acceptance Criteria
+
+- [ ] BMAD 在 `cli:claude` picker 下端到端跑通 13 agent，产出 artifact 落盘
+- [ ] BMAD 在 `byok:zhipu` picker 下行为与今天等价（容忍 daemon-emit vs tool_use 的 `<sf:agent-substep>` 来源差异，artifact 内容一致）
+- [ ] `team.yaml` parallel 边触发并发 LLM call，SSE chunk 按 node_id 在 UI 正确分发
+- [ ] `team.yaml` conditional 边 `output.includes("approved")` 评估正确
+- [ ] 用户 mid-stream Cancel：CLI 子进程在 1s 内 SIGTERM；HTTP 在 SDK abort 内完成
+- [ ] Phase 2 性能 ≤ today × 1.2（regression gate）
+- [ ] E2E 真 API 测试 main push 跑（PR 测试 mock 也可，但 main 必须 T1）
+- [ ] doc ASCII 图全部更新（本 doc + `borrowed-from-opendesign.md` §5 加注 "已实施"）
+
+### 4. NOT in scope（明确推后）
+
+- **Phase 3 · localStorage discriminated union**：原 doc line 191-202 已写，仍推后
+- **节点级 cancel**：UI 层未来加，当前 C1 单 signal 全程 cancel
+- **Conditional 升级到自实现 mini-DSL**：第一版 expr-eval 够用
+- **sub-workflow / checkpoint / resume**：DAG 引擎演化方向，Phase 5+ 单独立项
+- **分布式执行**：worker pool / 跨机调度，超出 Phase 2
+- **Provider 行为差异统一**：13 个 provider 的 stream 格式归一在 `transport/api-clients/` 内部，本 plan 不深挖
+
+### 5. What already exists（不重复造）
+
+- `team.yaml v1` schema 已有 `EdgeKind = 'sequential' | 'parallel' | 'conditional'`、`max_retries`、`timeout_per_step_ms`、`condition`、`dag_layout` —— Phase 2 调度器**直接消费**，不重定义
+- `artifactCallback`（`assembler.ts:586-589`）已经写盘到 `projectDir/.shadowflow/projects/<session_id>/` —— Phase 2 复用，传递为 workspace
+- `<sf:agent-substep node_id="..." substep="..."/>` 协议已有 node_id（`parser.ts:286`） —— 前端 `src/api/runSessions.ts:448` 已按 node_id 路由，DAG 并发只是让事件流"多发起来"
+- 15 个 ApiClient 已实现（`assembler.ts:487-541`）—— Phase 2 仅包装为 ApiClientCallable
+- ACP / MCP runner 已实现（`skill-runners/{acp,mcp}.ts`，Story 15.23）—— Phase 2 仅包装
+
+### 6. TODOS（Phase 2 之外）
+
+| TODO | 触发条件 |
+|---|---|
+| 节点级 cancel UI + scheduler 子 signal 派生 | UI 需求出现时 |
+| Conditional evaluator 升级 mini-DSL 或 LangGraph-style typed expressions | expr-eval 安全性/表达力撞瓶颈时 |
+| sub-workflow 组合（team A 引用 team B） | 第二个复杂 team-skill 出现时 |
+| Phase 3 discriminated union localStorage 重构 | Phase 2 稳定后单独 PR |
+| Checkpoint / resume（断点续跑） | 长 workflow 用户撞掉线场景时 |
+| Codex stream 解析精度优化（`parsers/cli-streams/codex-stream-json.ts`） | 用户在 Codex 路径下抱怨"打字机效果断断续续"时 |
+
+### 7. Risk / Failure modes
+
+| 风险 | 触发条件 | 缓解 |
+|---|---|---|
+| BMAD 在 BYOK 下产出质量退化 | daemon-emit 取代 tool_use 后，LLM 在 "我是 agent X，读 brief.md 写 architecture.md" prompt 下产出不如 tool_use 路径下 | EVAL 测试套件：golden output 比对 |
+| CLI 子进程 OOM / hang | 长 prompt + 大 history 灌进 system prompt | per-node `timeout_per_step_ms` + AbortSignal SIGTERM |
+| Provider rate limit 在并行层撞墙 | DAG 同层 N 个节点都用 anthropic | retry.ts 识别 429 + retry-after，未来加 token-bucket 限流 |
+| expr-eval sandbox 逃逸 | 恶意 team.yaml | expr-eval 不支持 `Function`/`eval` 字面量，但仍需安全 review；`condition` 字段只接受 team.yaml owner 的输入（不接受运行时用户输入） |
+| 真 API CI 抽风导致 main red | Anthropic / OpenAI 抽风时 nightly job 失败 | nightly 失败不阻塞 PR；连续 3 次失败才告警 |
+
+### 8. Open question 答复
+
+回应原 doc 的 3 个"待解决问题"：
+
+| 原 question | Phase 2 答复 |
+|---|---|
+| #1 CliCallable history 处理 | 不存在了——artifact handoff 取代 history。CliCallable.turn() 接受 history 字段为兼容性预留，但 ShadowFlow 内部 history: [] |
+| #2 C2a SSE 事件顺序 | 拓扑并行下交织：每个 chunk 带 node_id，前端按 id 分发到对应 AgentDetail panel |
+| #3 Codex CLI streaming | 接受为限制：CliCallable for Codex 把整段输出当 single text-delta chunk yield；用户体验上 Codex 路径"打字机效果"会"砰"出来 |
+
+### 9. Completion summary
+
+- Step 0 Scope Challenge：scope 从原 doc 描述（"5 个 Callable + 一个 if 改造"）扩展为 **Transport 层 + DAG 引擎平台能力**（用户战略调整：从 BMAD-shaped 到通用 platform）
+- Architecture Review：6 个核心决策（A1-A6）+ 2 个 CL（CL3 错误模型 / C1 cancel）+ 6 项 CL 实施清单
+- Code Quality Review：2 个 trade-off 决策（错误模型、cancel 粒度）+ 6 项实施前 grep
+- Test Review：40+ GAP 已列；测试政策 T1 真实 API
+- Performance Review：S3 regression gate 作为 acceptance criteria
+- 实施前 grep 任务：
+  - `list_team_agents | register_agent` —— 验证 4 个 SkillAnchorTool 是否还有 skill 显式使用
+  - `dispatchSkillRunner` —— 验证 5 处调用点全部迁移
+  - `ApiClient` 类型引用 —— 验证 runTeamBackedSkill 签名变更影响
