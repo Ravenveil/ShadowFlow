@@ -2,19 +2,19 @@
  * prompts/index.ts — multi-turn skill-assembler prompt composer.
  *
  * S7 (skill-team-conversion-design-v1.md §5 line 815-855, D3 decision).
+ * Phase 2 (2026-05-22): switched from LLM tool_use orchestration to
+ * daemon-led DAG + artifact handoff. Team blueprint is pre-built by daemon
+ * from team.yaml; LLM emits status frames only.
  *
- * Replaces the legacy single-XML-template `AGENT_TEAM_BLUEPRINT_PROMPT` in
- * skills.ts. The new prompt:
- *   1. Establishes the assembler identity + the 4 tools the LLM has access to
+ * The new prompt:
+ *   1. Establishes the assembler identity (LLM as one agent in a daemon-led team)
  *   2. Hard-codes "引用 vs 创造" discipline (persona/model/tools/memory come
- *      from get_skill_anchor verbatim, NOT from LLM imagination)
+ *      from team.yaml verbatim, NOT from LLM imagination)
  *   3. Concatenates the 3 phase modules in fixed order
  *
  * Why three phase files (vs one big string):
- *   - Each phase has independent rules + tool-call discipline; splitting them
+ *   - Each phase has independent rules + frame discipline; splitting them
  *     prevents accidental cross-contamination at edit time
- *   - Matches open-design `apps/daemon/src/prompts/` modularity that was the
- *     D3 reference architecture
  *   - The composer is a pure function so unit tests can assert ordering /
  *     header presence without scraping a 200-line literal
  */
@@ -38,45 +38,28 @@ export type PromptFlow = 'team-first' | 'agent-first';
  * the top so the LLM enters phase 1 with the full ground rules in working
  * memory.
  */
-const ASSEMBLER_HEADER = `你是 ShadowFlow 的团队组装器。你的工作是把一个 skill 包（teamʼs members + 每个 agent 的 yaml 定义）按用户 goal 组装成一个可运行的 Team。
+const ASSEMBLER_HEADER = `你是 ShadowFlow 的团队组装器。Phase 2 (2026-05-22) 起：daemon 已经从 team.yaml
+预先建好 Team 蓝图与 DAG，你的工作不是用 tool 调用去注册 agent/edge，而是
+**沿着已经存在的蓝图发出状态帧 + 思考帧**，让用户在 UI 上看到组装过程。
 
 ═══════════════════════════════════════════════════════════════
-你可以使用以下 4 个工具
+你扮演什么角色
 ═══════════════════════════════════════════════════════════════
 
-1. \`list_team_agents({skill_id})\`
-   → 返回该 skill 团队的候选 agent 列表，每个含 id/title/type/persona_tokens/model_id/picked_tool_count
-   → 用法：phase 1 开头调一次，了解谁可以上岗
-
-2. \`get_skill_anchor({skill_id, agent_id, slot})\`
-   → slot ∈ {persona, model, tools, memory, io}
-   → 返回 \`{ref, tokens, body}\`，body 是 yaml 锚段的字节级原文
-   → 用法：phase 2 里为每个 agent 的每个 slot 各调一次
-
-3. \`register_agent({...扁平字段})\`
-   → 把一个 agent 加入 team blueprint，后端同步 emit SSE \`event: 'node'\`
-   → 用法：phase 2 里每个 agent 走完 memory substep 后调一次
-
-4. \`register_edge({from, to, kind?, condition?, max_retries?})\`
-   → 在 team DAG 里加一条边，后端同步 emit SSE \`event: 'edge'\`
-   → 用法：phase 3 里每条边调一次
+- daemon 已经按 team.yaml 把 nodes + edges 写好并发出 SSE 事件
+- 你只需 emit \`<sf:thinking>\` / \`<sf:step>\` / \`<sf:agent-substep>\` / \`<sf:complete>\` 这些
+  状态帧让前端能渲染 UI；agent 间产物交接走文件系统，不走对话历史
+- **不要**调用 \`list_team_agents\` / \`get_skill_anchor\` / \`register_agent\` /
+  \`register_edge\` 之类的工具——这些工具已不再注入 LLM tool_use；它们的 schema
+  保留在 lib/tools/skill-anchors.ts 仅供未来 LLM-driven 显式装配模式使用
 
 ═══════════════════════════════════════════════════════════════
 引用纪律（★ 最重要的硬性约束）
 ═══════════════════════════════════════════════════════════════
 
-persona / model / tools / memory 这四类内容**绝对不允许** LLM 自己造或者 paraphrase。
-
-唯一合法的来源是 \`get_skill_anchor\` 的 \`body\` 字段返回值。
-
-- 不要翻译（英文 yaml 就保持英文）
-- 不要 trim 空白
-- 不要"优化措辞"
-- 不要凭借自己对 agent 角色的理解补充内容
-
-只要你照原样搬运，前端的 SkillSection 会显示「cached 绿色 pill」，证明
-"这个 agent 的 persona 来自 yaml 没被改写"。任何一个字节的偏差都会让 pill
-变成"generated 黄色"，对用户来说就是品质降级。
+persona / model / tools / memory / io 这五类内容由 team.yaml 字节级权威，
+**绝对不允许** LLM 自己造或 paraphrase。在 \`<sf:thinking>\` 中描述时也保持原意，
+不要"优化措辞"或翻译。
 
 ═══════════════════════════════════════════════════════════════
 三相位顺序（不可乱、不可跳）

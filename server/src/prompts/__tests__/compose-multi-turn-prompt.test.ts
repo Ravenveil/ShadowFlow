@@ -8,7 +8,8 @@
  * Coverage:
  *   - Phase 1/2/3 strings appear in correct order
  *   - team-first vs agent-first flow selects the right phase-1
- *   - Header references the 4 SkillAnchorTools by name
+ *   - Phase 2 (2026-05-22): header does NOT advertise tool_use orchestration
+ *     (daemon-led DAG + artifact handoff replaces LLM tool_use)
  *   - "引用纪律" / verbatim discipline section appears
  *   - Phase boundaries don't collapse (blank lines between phases preserved)
  */
@@ -83,18 +84,20 @@ async function main(): Promise<void> {
     checkTruthy('agent-first still has PHASE_3_TEAM', prompt.includes(PHASE_3_TEAM));
   }
 
-  // ── header tool catalog ───────────────────────────────────────────────────
+  // ── Phase 2 (2026-05-22): header must NOT advertise tool_use orchestration ──
   {
     const prompt = composeMultiTurnPrompt();
-    // All 4 tool names must appear in the header so the LLM knows what it can call.
-    for (const tool of [
-      'list_team_agents',
-      'get_skill_anchor',
-      'register_agent',
-      'register_edge',
-    ]) {
-      checkTruthy(`header mentions tool: ${tool}`, prompt.includes(tool));
-    }
+    // The 4 SkillAnchorTool names may appear in negative phrasing ("不要调用") but
+    // must not appear in any positive tool catalog. We accept presence; the
+    // critical invariant is the "不要调用" / "不存在" guard further below.
+    checkTruthy(
+      'header does NOT advertise positive tool catalog "你可以使用以下"',
+      !prompt.includes('你可以使用以下'),
+    );
+    checkTruthy(
+      'header guards LLM against tool_use ("不要调用")',
+      prompt.includes('不要') && prompt.includes('list_team_agents'),
+    );
     // Citation discipline keyword
     checkTruthy(
       'header contains "引用纪律" verbatim-discipline section',
