@@ -398,7 +398,20 @@ export function subscribeRunSession(
 
   function connect() {
     if (cancelled) return;
-    es = new EventSource(`${getApiBase()}/api/run-sessions/${sessionId}/stream`);
+    // S6.10-C test aid — forward `fallback=synthetic` to the SSE stream so
+    // the deterministic synthesizeTeamRun path can drive the new Timeline
+    // without requiring an LLM key. Enable via either:
+    //   • URL query:    /run-session/<id>?fallback=synthetic
+    //   • localStorage: sf.syntheticFallback=1
+    let streamUrl = `${getApiBase()}/api/run-sessions/${sessionId}/stream`;
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get('fallback');
+      const fromLs = localStorage.getItem('sf.syntheticFallback');
+      if (fromUrl === 'synthetic' || fromLs === '1') {
+        streamUrl += '?fallback=synthetic';
+      }
+    } catch { /* ssr / sandbox — ignore */ }
+    es = new EventSource(streamUrl);
 
     es.addEventListener('classify',  (e) => { const d = parse(e as MessageEvent); if (d) handlers.onClassify?.(d); });
     es.addEventListener('assemble',  (e) => { const d = parse(e as MessageEvent); if (d) handlers.onAssemble?.(d); });
