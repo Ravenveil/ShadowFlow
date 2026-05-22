@@ -583,7 +583,14 @@ interface SkillPack {
   glyph: string;
   name: string;
   desc: string;
-  prompt: string;
+  /** 真实 GitHub 仓库 URL。点击安装时由 daemon clone 到 .shadowflow/skills/<id>/,
+   *  注册后真实 skill 内容（SKILL.md / 角色定义 / 子命令）由 skill registry 接管。 */
+  source: {
+    url: string;
+    ref?: string;
+    path?: string;
+  };
+  homepage?: string;
 }
 
 const SKILL_PACKS: SkillPack[] = [
@@ -591,17 +598,23 @@ const SKILL_PACKS: SkillPack[] = [
     id: 'bmad',
     glyph: '◈',
     name: 'BMAD Method',
-    desc: '产品 · 架构 · 开发 · QA',
-    prompt:
-      'Skill: .claude/skills/bmad-agent-*（含 pm / architect / dev / ux-designer / analyst / tech-writer 等多个 agent skill 目录，以及 bmad-brainstorming、bmad-create-story、bmad-dev-story 等流程 skill）。\n\n请先读取这些 skill 目录下的 SKILL.md，理解 BMAD 方法包含哪些角色与工作流，然后据此自主组建一个智能体团队（自行决定纳入哪些角色、命名、职责分工与协作顺序），并初始化对应的工作流。不需要照搬清单，让团队结构贴合 BMAD 实际定义。',
+    desc: 'Build, Measure, Architect, Deploy · 完整研发方法论',
+    source: {
+      url: 'https://github.com/bmadcode/BMAD-METHOD',
+      ref: 'main',
+    },
+    homepage: 'https://github.com/bmadcode/BMAD-METHOD',
   },
   {
     id: 'gstack',
     glyph: '⬡',
     name: 'gSTACK',
-    desc: '调研 → 策略 → 执行',
-    prompt:
-      'Skill: ~/.claude/skills/gstack/（含 commit / ship / qa / review / investigate / plan-eng-review / design-review 等 skill，以及 ETHOS.md / AGENTS.md 全局规则）。\n\n请先读取该 skill 目录及其子 skill 的 SKILL.md，理解 gSTACK 的调研 → 策略 → 执行三段式哲学和具体 skill 触发条件，然后据此自主组建一个智能体团队（自行决定角色、分工与触发时机），并初始化对应的工作流。让团队结构忠实反映 gSTACK 的实际能力组合。',
+    desc: 'Garry Tan 的 AI 研发工作流 · 调研→策略→执行',
+    source: {
+      url: 'https://github.com/garrytan/gstack',
+      ref: 'main',
+    },
+    homepage: 'https://github.com/garrytan/gstack',
   },
 ];
 
@@ -672,6 +685,20 @@ function SkillPackSection({ onSelect, disabled }: SkillPackSectionProps) {
                 }}
               >
                 {pack.desc}
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 9.5,
+                  fontFamily: 'var(--font-mono, monospace)',
+                  color: 'var(--t-fg-5)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+                title={pack.source.url}
+              >
+                {pack.source.url.replace(/^https?:\/\/(www\.)?github\.com\//, 'github.com/')}
               </div>
             </div>
           </button>
@@ -1048,23 +1075,45 @@ export default function StartPage() {
 
   async function handleSkillPack(pack: SkillPack) {
     setSubmitting(true);
-    // Same as handleSubmit: forward executor/model + derive provider for byok:*
-    // so the server can resolve the BYOK key from byok-config.json correctly.
     const executor = localStorage.getItem('sf.defaultExecutor') || undefined;
     const model = localStorage.getItem('sf.model') || undefined;
     const provider =
       executor && executor.startsWith('byok:') ? executor.slice(5) : undefined;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (secrets.anthropic) headers['X-Anthropic-Key'] = secrets.anthropic;
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (secrets.anthropic) headers['X-Anthropic-Key'] = secrets.anthropic;
+      // Step 1 — install skill from the real GitHub URL via the existing
+      // skill-ingest pipeline (server/src/skill-ingest/*). The daemon clones
+      // pack.source.url into .shadowflow/skills/<id>/ and registers it. Re-runs
+      // are idempotent: same URL → same cache → same skill id.
+      const installResp = await fetch(`${getApiBase()}/api/skills`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ source: pack.source.url, forced_id: pack.id }),
+      });
+      if (!installResp.ok) {
+        const body = await installResp.text().catch(() => '');
+        setSubmitError(
+          `Skill Pack「${pack.name}」安装失败（HTTP ${installResp.status}）。源地址 ${pack.source.url}。${body ? ` 详情：${body.slice(0, 200)}` : ''}`,
+        );
+        return;
+      }
+      const installData = (await installResp.json()) as { id?: string; name?: string };
+      const skill_id = installData.id ?? pack.id;
+
+      // Step 2 — launch a run session using the freshly installed skill_id.
+      // The user goal is generic ("帮我用 <skill> 开始工作")—the real BMAD
+      // / gstack content lives inside the cloned repo's SKILL.md and is read
+      // by skill-loader.ts on register, not invented from a frontend prompt.
+      const goal = `请使用刚安装的 ${pack.name} skill 开始协作。我的需求稍后会补充——先帮我把团队结构和工作流准备好。`;
       const resp = await fetch(`${getApiBase()}/api/run-sessions`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ goal: pack.prompt, mode: 'team', executor, model, provider }),
+        body: JSON.stringify({ goal, skill_name: skill_id, mode: 'team', executor, model, provider }),
       });
       if (resp.ok) {
         const data = (await resp.json()) as { session_id: string };
-        navigate(`/run-session/${data.session_id}?goal=${encodeURIComponent(pack.prompt)}`);
+        navigate(`/run-session/${data.session_id}?goal=${encodeURIComponent(goal)}`);
         return;
       }
       const body = await resp.text().catch(() => '');
