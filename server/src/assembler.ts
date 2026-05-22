@@ -7,6 +7,18 @@
  * Story 15.2 — added `runSkillAssembler` async generator that drives Claude
  * streaming + parser.ts to emit SSE events from skill system_prompt + goal.
  * The legacy `runAssembler` is preserved unchanged for backward compatibility.
+ *
+ * Phase 2 (2026-05-22) — Orchestration ⊥ Transport refactor:
+ *   - team-backed skills go through `workflow/scheduler.runDag()` + artifact
+ *     handoff (decision A3 daemon-led DAG, A2 artifact handoff).
+ *   - non-team skills go through `LlmCallable.turn()` once (decision A6 O1).
+ *   - All execution flows through a single `resolveCallable()` factory in
+ *     `transport/dispatcher.ts`; assembler.ts no longer knows about provider
+ *     routing tables or LLM tool_use loops.
+ *   - Removes `buildApiClient()` (now inside `transport/ApiClientCallable.ts`)
+ *     and `runTeamBackedSkill()` (replaced by `workflow/scheduler.runDag()`).
+ *
+ * See `docs/architecture/orchestration-transport.md` §"Phase 2 Eng Review · 决策记录".
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -14,34 +26,14 @@ import fs from 'fs';
 import path from 'path';
 import { SKILLS } from './skills';
 import { parseAndExtract, type SseEvent as ParserSseEvent } from './parser';
-// Story 15.19 v2 — executor dispatcher. Default 'anthropic-direct' route
-// preserves the existing in-line Claude SDK path; cli:* / cli:auto / acp:*
-// routes are delegated to the dispatcher.
-import { dispatchSkillRunner } from './transport/spawners';
-// S6 (skill-team-conversion-design-v1.md §5 line 806-815) — team-backed
-// skills now drive a multi-turn ConversationRuntime instead of the legacy
-// single-call dispatcher. We gate on `skill.team` presence so non-team
-// skills (web-prototype, report, agent-team-blueprint legacy) keep working.
-import { ConversationRuntime } from './lib/conversation-runtime';
-import { AnthropicApiClient } from './lib/api-clients/anthropic-api-client';
-// S14.1 (2026-05-21) — extend multi-turn v2 path to 12+ providers via two
-// additional ApiClient adapters. OpenAI-compat covers openai / deepseek /
-// zhipu / qwen / moonshot / mistral / groq / openrouter / ollama / lmstudio /
-// azure; google sits alongside (own /v1beta protocol). Only providers we
-// can't route fall back to the legacy single-call path.
-import { OpenAiCompatApiClient } from './lib/api-clients/openai-compat-api-client';
-import { GoogleApiClient } from './lib/api-clients/google-api-client';
-// S14.2 (2026-05-21) — extend v2 path to 2 CLI executors via subprocess-based
-// ApiClient adapters. With these two the total coverage goes from 13 → 15
-// providers; users who picked executor=cli:claude / cli:codex in BYOK get the
-// same multi-turn tool_use loop as the direct-API path. See header docstring
-// in each file for the experimental status of codex.
-import { ClaudeCodeCliApiClient } from './lib/api-clients/claude-code-cli-api-client';
-import { CodexCliApiClient } from './lib/api-clients/codex-cli-api-client';
-import type { ApiClient } from './lib/conversation-runtime';
-import { SkillAnchorToolExecutor } from './lib/tools/skill-anchor-executor';
-import { PermissionPolicy } from './lib/permission-policy';
-import type { ConversationMessage } from './lib/conversation-types';
+// Phase 2 A6 — single transport entry point. Replaces dispatchSkillRunner +
+// buildApiClient. The factory returns a LlmCallable, and Orchestration drives
+// it through `turn()` (non-team) or `workflow/scheduler.runDag()` (team).
+import { resolveCallable } from './transport/dispatcher';
+import { runDag } from './workflow/scheduler';
+import type { TurnChunk } from './workflow/types';
+import type { TeamDef } from './lib/skill-types';
+import type { TeamDefV1 } from './lib/team-yaml';
 
 export type OutputType = 'answer' | 'report' | 'review' | 'workflow';
 export type SessionMode = 'single' | 'team';
@@ -327,10 +319,10 @@ export interface SkillAssemblerOptions {
   system_prompt?: string;
   /**
    * Story 15.9 — generation overrides (UI → POST /api/run-sessions →
-   * sessionStore → here). Resolution priority at the Anthropic SDK boundary:
+   * sessionStore → here). Resolution priority at the LlmCallable boundary:
    *   model:       opts.model ?? env(SHADOWFLOW_DEFAULT_MODEL) ?? 'claude-sonnet-4-6'
    *   max_tokens:  opts.max_tokens ?? 8192
-   *   temperature: opts.temperature ?? (Anthropic SDK default — field omitted)
+   *   temperature: opts.temperature ?? (SDK default — field omitted)
    *
    * Note: env-locked model still wins by design — when SHADOWFLOW_DEFAULT_MODEL
    * is set the SettingsPage shows a "locked by env" hint so users know the
@@ -340,18 +332,18 @@ export interface SkillAssemblerOptions {
   max_tokens?: number;
   temperature?: number;
   /**
-   * Story 15.19 v2 — executor selector. Resolution priority:
+   * Phase 2 (2026-05-22) — executor selector. Resolution priority:
    *   opts.executor > skill.executor > 'anthropic-direct'
-   * The dispatcher validates the value (cli:auto / cli:<id> / acp:* / etc.)
-   * and emits structured error events for unknown / missing CLIs without
-   * silently downgrading.
+   * The transport dispatcher (`resolveCallable`) validates the value
+   * (cli:<id> / acp:<id> / mcp:<spec> / byok:<provider> / anthropic-direct)
+   * and throws `LlmCallError` for unknown / missing executors — no silent
+   * downgrading.
    */
   executor?: string;
   /**
-   * Story 15.18 — provider selector for the default executor. Forwarded to
-   * `skill-runners/anthropic.ts` which dispatches into `llm-providers/`.
-   * Resolution: opts.provider > 'anthropic' (only consulted by the default
-   * executor; cli:* / acp:* runners ignore it).
+   * Story 15.18 — provider selector. Forwarded into the `byok:<provider>` form
+   * of the executor string when both `opts.executor` is absent and the user
+   * picked a non-anthropic provider via the BYOK picker.
    */
   provider?: string;
   /**
@@ -362,9 +354,13 @@ export interface SkillAssemblerOptions {
 }
 
 /**
- * runSkillAssembler — drives Claude streaming with a skill's system_prompt,
+ * runSkillAssembler — drives an LLM transport with a skill's system_prompt,
  * extracts <sf:*> + <artifact> tags via parser.ts, persists artifacts to disk
  * under .shadowflow/projects/<session_id>/, and yields SSE events.
+ *
+ * Phase 2 (2026-05-22): single LlmCallable entry point.
+ *   - team-backed skills → `workflow/scheduler.runDag()` + artifact handoff
+ *   - non-team skills    → `callable.turn()` once
  *
  * The caller is responsible for forwarding yielded events to the SSE response.
  */
@@ -390,186 +386,6 @@ export async function* runSkillAssembler(
 
   // Project directory for artifact persistence (under cwd, e.g. server/)
   const projectDir = path.join(process.cwd(), '.shadowflow', 'projects', session_id);
-
-  // S6 — team-backed skills go through ConversationRuntime so the LLM gets
-  // tool_use access to the skill-anchor tools (list_team_agents / get_skill_anchor /
-  // register_agent / register_edge). Non-team skills (web-prototype / report /
-  // legacy agent-team-blueprint) keep using the legacy dispatcher path that
-  // calls the provider once and pipes text-delta through parser.ts.
-  //
-  // S14.1 (2026-05-21): provider scope extended from anthropic-only to the
-  // full 13-provider matrix. buildApiClient() returns null only for unknown
-  // providers — those still fall back to the legacy single-call path with a
-  // console warning so the failure mode is loud, not silent.
-  if (skill.team) {
-    const provider = opts.provider ?? 'anthropic';
-    const apiKey = opts.api_key ?? anthropic_key;
-    const apiClient = buildApiClient(provider, apiKey, opts.model, opts.max_tokens, opts.temperature);
-    if (apiClient) {
-      yield* runTeamBackedSkill(opts, skill, effectiveSystemPrompt, projectDir, apiClient);
-      return;
-    }
-    console.warn(
-      `[skill-assembler] team-backed skill "${skill_name}" with provider=${provider} ` +
-        `has no ApiClient adapter; falling back to legacy single-call path.`,
-    );
-  }
-
-  // Story 15.19 v2 — executor resolution priority: opts > skill > default.
-  // 2026-05-11 Story 15.30: default 'cli:auto' (OpenDesign 模式) — dispatcher
-  // 内部找不到 CLI 时优雅 fallback 到 anthropic-direct，仍兼容 BYOK 流程。
-  const executor = opts.executor ?? skill.executor ?? 'cli:auto';
-
-  console.log(
-    `[skill-assembler] session=${session_id} executor=${executor}` +
-      ` skill=${skill_name}`,
-  );
-
-  // Delegate to the dispatcher for ALL executors. The dispatcher routes
-  // 'anthropic-direct' back to a runner that mirrors the historical inline
-  // Claude SDK path (skill-runners/anthropic.ts), so behavior is unchanged.
-  yield* dispatchSkillRunner(
-    executor,
-    {
-      system_prompt: effectiveSystemPrompt,
-      prompt: goal,
-      session_id,
-      cwd: projectDir,
-      signal,
-      anthropic_key,
-      // Story 15.18 — provider + api_key forwarded to the default executor
-      // runner which dispatches to llm-providers/. cli:* / acp:* runners
-      // ignore these fields.
-      provider: opts.provider,
-      api_key: opts.api_key,
-      model: opts.model,
-      max_tokens: opts.max_tokens,
-      temperature: opts.temperature,
-    },
-    { name: skill_name, executor: skill.executor },
-  );
-}
-
-// ─── S14.1 / S14.2 (2026-05-21): provider → ApiClient factory ─────────────
-
-/**
- * Build an ApiClient for the given provider. Returns null for unknown providers
- * so the caller can fall back to the legacy single-call path.
- *
- * Coverage (15 providers, S14.1 → S14.2):
- *   anthropic                                       → AnthropicApiClient
- *   google                                          → GoogleApiClient
- *   openai / deepseek / zhipu / qwen / moonshot     → OpenAiCompatApiClient
- *   mistral / groq / openrouter / ollama /          → OpenAiCompatApiClient
- *   lmstudio                                        → OpenAiCompatApiClient
- *   claude-code-cli                                 → ClaudeCodeCliApiClient (S14.2)
- *   codex-cli                                       → CodexCliApiClient (S14.2, experimental)
- *
- * Azure is DELIBERATELY excluded (returns null → legacy fallback) until BYOK
- * UI gains a per-key `azure_deployment_url` field. Without it, an empty
- * baseURL silently routes the request body (system prompt + tools + history)
- * to the public OpenAI endpoint, which is a data-exfiltration regression
- * compared to the legacy `openai-compat-factory.ts` that throws on empty
- * baseURL. Plus Azure auth uses an `api-key` header instead of Bearer, which
- * the OpenAI SDK can't be told to swap. See Checker S14.1 P0-1.
- *
- * The ollama / lmstudio cases tolerate empty apiKey (local runtimes).
- *
- * CLI provider notes (S14.2):
- *   - `claude-code-cli` spawns the official `claude` binary (auth via
- *     `claude login`; ANTHROPIC_API_KEY env as fallback).
- *   - `codex-cli` spawns the OpenAI `codex` binary (auth via OPENAI_API_KEY).
- *   - The BYOK `apiKey` arg is forwarded as an env-var fallback to the child
- *     process but most users will have already authenticated the CLI itself,
- *     in which case `apiKey` can be empty.
- *   - Both CLI clients support cancellation via SIGTERM on AbortSignal.
- */
-function buildApiClient(
-  provider: string,
-  apiKey: string | undefined,
-  model: string | undefined,
-  max_tokens: number | undefined,
-  temperature: number | undefined,
-): ApiClient | null {
-  if (provider === 'anthropic') {
-    console.log(`[buildApiClient] provider=anthropic model=${model ?? 'default'}`);
-    return new AnthropicApiClient({ apiKey, model, max_tokens, temperature });
-  }
-  if (provider === 'google') {
-    console.log(`[buildApiClient] provider=google model=${model ?? 'default'}`);
-    return new GoogleApiClient({ apiKey, model, max_tokens, temperature });
-  }
-  // S14.2: CLI executors. `temperature` not forwarded — the CLIs don't expose
-  // a flag for it; the kwarg is preserved on the signature for parity but
-  // dropped here so the unused-arg lint doesn't flag (intentional).
-  if (provider === 'claude-code-cli') {
-    console.log(`[buildApiClient] provider=claude-code-cli model=${model ?? 'default'}`);
-    void temperature;
-    return new ClaudeCodeCliApiClient({ apiKey, model, max_tokens });
-  }
-  if (provider === 'codex-cli') {
-    console.log(
-      `[buildApiClient] provider=codex-cli (experimental) model=${model ?? 'default'}`,
-    );
-    void temperature;
-    return new CodexCliApiClient({ apiKey, model, max_tokens });
-  }
-  // Azure intentionally absent — see header docstring (Checker S14.1 P0-1).
-  const OPENAI_COMPAT_PROVIDERS = new Set([
-    'openai',
-    'deepseek',
-    'zhipu',
-    'qwen',
-    'moonshot',
-    'mistral',
-    'groq',
-    'openrouter',
-    'ollama',
-    'lmstudio',
-  ]);
-  if (OPENAI_COMPAT_PROVIDERS.has(provider)) {
-    console.log(`[buildApiClient] provider=${provider} (openai-compat) model=${model ?? 'default'}`);
-    return new OpenAiCompatApiClient({
-      providerId: provider,
-      apiKey,
-      model,
-      max_tokens,
-      temperature,
-    });
-  }
-  return null;
-}
-
-// ─── S6: team-backed skill multi-turn driver ──────────────────────────────────
-
-/**
- * Drive a team-backed skill via ConversationRuntime. Sets up:
- *
- *   - ApiClient (provider-specific; see buildApiClient — S14.1)
- *   - SkillAnchorToolExecutor (wraps the 4 S4 tools)
- *   - PermissionPolicy from SKILL.md frontmatter `allowed-tools: [...]`
- *   - Fresh RuntimeSession (ephemeral; messages live for one runTurn() only)
- *
- * Then pumps the runtime's SSE generator downstream. Text events get piped
- * through parseAndExtract so the LLM's <sf:thinking> / <sf:step> /
- * <sf:agent-substep> / <sf:complete> / <artifact> tags still produce the
- * same downstream SSE shape the front-end expects. Tool-side-effect SSE
- * frames (event: 'node' / 'edge') yielded by the runtime pass through
- * directly.
- *
- * Artifacts: persisted under `projectDir` via the same callback the legacy
- * path uses, so artifact-saved events fire identically.
- */
-async function* runTeamBackedSkill(
-  opts: SkillAssemblerOptions,
-  skill: import('./skills').SkillDefinition,
-  systemPrompt: string,
-  projectDir: string,
-  apiClient: ApiClient,
-): AsyncGenerator<ParserSseEvent> {
-  const { goal, skill_name, session_id, signal } = opts;
-
-  // Ensure project dir exists for artifact callback.
   try {
     fs.mkdirSync(projectDir, { recursive: true });
   } catch (err) {
@@ -583,123 +399,203 @@ async function* runTeamBackedSkill(
     return;
   }
 
+  // Phase 2 A6 — executor resolution priority: opts > skill > default.
+  //  - If opts.executor is set, use it verbatim (UI picker explicit choice).
+  //  - Else if opts.provider is set and != 'anthropic', synthesise byok:<provider>.
+  //  - Else fall back to skill.executor or 'anthropic-direct'.
+  const executor =
+    opts.executor ??
+    (opts.provider && opts.provider !== 'anthropic'
+      ? `byok:${opts.provider}`
+      : skill.executor ?? 'anthropic-direct');
+
+  const apiKey = opts.api_key ?? anthropic_key;
+  const effectiveSignal = signal ?? new AbortController().signal;
+
+  console.log(
+    `[skill-assembler] session=${session_id} executor=${executor}` +
+      ` skill=${skill_name} team=${skill.team ? 'yes' : 'no'}`,
+  );
+
+  // Resolve transport once. `resolveCallable` throws `LlmCallError` on unknown
+  // executor strings — we surface that as an `error` SSE so the front-end can
+  // show the structured failure without hard-breaking the stream.
+  let callable;
+  try {
+    callable = resolveCallable(executor, {
+      apiKey,
+      model: opts.model,
+      maxTokens: opts.max_tokens,
+      temperature: opts.temperature,
+      sessionId: session_id,
+      workspace: projectDir,
+    });
+  } catch (err) {
+    yield {
+      event: 'error',
+      data: {
+        message: (err as Error).message,
+        code: 'EXECUTOR_UNKNOWN',
+        executor,
+      },
+    };
+    return;
+  }
+
+  // Artifact callback — used by `parseAndExtract` when an `<artifact>` tag
+  // closes. Mirrors the legacy single-call path so the front-end's artifact
+  // saved events fire identically.
   const artifactCallback = (filename: string, content: string, _type: string): void => {
     const safeName = path.basename(filename);
     const filePath = path.join(projectDir, safeName);
     fs.writeFileSync(filePath, content, 'utf-8');
     console.log(
-      `[skill-assembler:team] artifact written: ${filePath} (${content.length} bytes)`,
+      `[skill-assembler] artifact written: ${filePath} (${content.length} bytes)`,
     );
   };
 
-  // Skill id == directory name == SKILLS registry key. We use skill_name
-  // verbatim because the S4 tools read `skill_id` from LLM input — context
-  // here is informational only.
-  const toolExecutor = new SkillAnchorToolExecutor({
-    skill_id: skill_name,
-    sessionId: session_id,
-  });
-
-  // PermissionPolicy: skill.allowed_tools comes from SKILL.md frontmatter
-  // `allowed-tools: [...]`. For team-backed skills this MUST be populated —
-  // the assembler relies on 4 SkillAnchorTool calls (list_team_agents /
-  // get_skill_anchor / register_agent / register_edge) and an empty
-  // allowed-tools list deny-everything would let the LLM burn up to 50
-  // iterations on tool calls that all get rejected.
-  //
-  // S6-review P1 #3 (2026-05-20): the prior code merely console.warn'd here
-  // and let the run continue, which produced a confusing 50-iter timeout
-  // with no actionable diagnostic. Now we fail fast with a structured
-  // 'error' SSE so the frontend can surface "missing allowed-tools" to the
-  // user directly.
-  const allowed = skill.allowed_tools ?? [];
-  if (allowed.length === 0) {
-    yield {
-      event: 'error',
-      data: {
-        code: 'NO_ALLOWED_TOOLS',
-        message:
-          `Team-backed skill "${skill_name}" is missing 'allowed-tools' in SKILL.md ` +
-          `frontmatter — all tool_use calls would be denied and the assembler would ` +
-          `fail with max_iter reached. Add 'allowed-tools: [list_team_agents, ` +
-          `get_skill_anchor, register_agent, register_edge]' to the skill frontmatter ` +
-          `and retry.`,
-      },
-    };
+  // Branch 1 — team-backed skills go through the DAG scheduler with artifact
+  // handoff between agents (Phase 2 decisions A3 / A2). Transport-agnostic.
+  if (skill.team) {
+    const teamV1 = toTeamDefV1(skill.team);
+    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal);
+    yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
     return;
   }
-  const permission = PermissionPolicy.fromAllowedTools(allowed);
 
-  // Ephemeral session — ConversationRuntime mutates messages in place but
-  // we never persist this back. (Future story: hand the SessionRecord from
-  // session-store here so SSE reconnect can replay history. Out of S6 scope.)
-  const session: { id: string; messages: ConversationMessage[] } = {
-    id: session_id,
-    messages: [],
+  // Branch 2 — non-team skill: single LlmCallable.turn() (Phase 2 decision A6).
+  const chunkStream = callable.turn({
+    system: effectiveSystemPrompt,
+    prompt: goal,
+    history: [],
+    workspace: projectDir,
+    signal: effectiveSignal,
+    model: opts.model,
+    maxTokens: opts.max_tokens,
+    temperature: opts.temperature,
+  });
+  yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
+}
+
+// ─── Helpers (Phase 2) ────────────────────────────────────────────────────────
+
+/**
+ * Convert a legacy `TeamDef` (the shape `SkillDefinition.team` carries) into a
+ * `TeamDefV1` that `workflow/scheduler.runDag()` consumes. Synthesises the v1
+ * fields (`members_ids`, `edges_v1`, `policy_obj`) from the legacy fields so
+ * skills using the older `team.skill.yaml` schema can still run on the new DAG
+ * engine. Skills loaded via the S0.5 `team_ref` path get the same V1 fields
+ * via `team-yaml.ts:loadGlobalTeam`, but the v1 fields are dropped in
+ * `skill-loader.ts:240` to fit the legacy `TeamDef` shape — we re-synthesise
+ * them here from the same legacy fields, keeping behaviour identical.
+ */
+function toTeamDefV1(team: TeamDef): TeamDefV1 {
+  return {
+    ...team,
+    team_id: team.name,
+    version: 1,
+    description: undefined,
+    policy_obj: {
+      retry: team.retry ?? 3,
+    },
+    members_ids: team.agents.map((a) => a.id),
+    // Legacy edges have no `kind` — default to sequential so the scheduler's
+    // Kahn-layered topology drives each agent after its parent completes.
+    edges_v1: team.edges.map((e) => ({
+      from: e.from,
+      to: e.to,
+      kind: 'sequential' as const,
+    })),
   };
+}
 
-  const runtime = new ConversationRuntime(
-    session,
-    apiClient,
-    toolExecutor,
-    permission,
-    systemPrompt,
-  );
-
-  // The runtime owns the abort signal. If the caller didn't pass one we
-  // synthesize a never-aborting one to keep the type tight.
-  const effectiveSignal = signal ?? new AbortController().signal;
-
-  // Per-turn buffer for piping text-delta events through parseAndExtract.
-  // The parser is stateful via session_id (step gating etc.) and expects to
-  // see chunks accumulate into <sf:...> tags it can match.
+/**
+ * Convert a `TurnChunk` stream from `LlmCallable.turn()` or `runDag()` into
+ * the SSE event shape `parser.ts` already produces. Text-delta chunks are
+ * piped through `parseAndExtract` so `<sf:*>` + `<artifact>` tags still
+ * extract correctly (the parser is stateful per session_id and can interleave
+ * text events with structured SSE frames).
+ *
+ * Non-text chunks (`error`, `done`, `usage`, `tool-use`) are translated:
+ *   - error  → `event: 'error'` with kind/message
+ *   - done   → flush parser buffer; do not emit a terminal event (the
+ *              orchestration layer's natural end-of-stream is the signal)
+ *   - usage  → `event: 'usage'` so the upstream SSE handler can accumulate
+ *   - tool-use → dropped (O1 path: LLM does not host tool_use; daemon-led
+ *                DAG already emits structured SSE frames via parser tags)
+ */
+async function* pipeChunksToSse(
+  chunks: AsyncGenerator<TurnChunk> | AsyncIterable<TurnChunk>,
+  session_id: string,
+  artifactCallback: (filename: string, content: string, type: string) => void,
+): AsyncGenerator<ParserSseEvent> {
   let textBuf = '';
 
-  console.log(
-    `[skill-assembler:team] session=${session_id} skill=${skill_name}` +
-      ` allowed_tools=[${allowed.join(',')}]` +
-      ` model=${opts.model ?? '(default)'}`,
-  );
-
-  for await (const sseEvent of runtime.runTurn(goal, effectiveSignal)) {
-    if (sseEvent.event === 'text') {
-      // Pipe text through parser so <sf:*> + <artifact> still extract.
-      const data = sseEvent.data as { text: string };
-      textBuf += data.text;
+  for await (const chunk of chunks) {
+    if (chunk.type === 'text-delta') {
+      textBuf += chunk.value;
       const { buffer: remaining, events } = parseAndExtract(
         textBuf,
         session_id,
         artifactCallback,
       );
       textBuf = remaining;
-      for (const e of events) yield e;
-    } else if (
-      sseEvent.event === 'complete' ||
-      sseEvent.event === 'aborted' ||
-      sseEvent.event === 'error'
-    ) {
-      // Final flush — pump any remaining text through parser one last time
-      // before yielding the terminal event so trailing <sf:complete /> still
-      // emits its 'complete' SSE.
+      for (const e of events) {
+        // Phase 2 chunk shape carries node_id; stamp it on `text` events so
+        // the front-end's per-node panel routing (parser.ts:286 contract)
+        // can light up the right AgentDetail surface.
+        if (chunk.node_id && e.event === 'text') {
+          const d = e.data as { text: string; node_id?: string };
+          yield { event: e.event, data: { ...d, node_id: chunk.node_id } };
+        } else {
+          yield e;
+        }
+      }
+    } else if (chunk.type === 'error') {
+      // Final flush of any pending text before yielding the error frame.
       if (textBuf.trim().length > 0) {
         const { events } = parseAndExtract(textBuf, session_id, artifactCallback);
         for (const e of events) yield e;
         textBuf = '';
       }
-      yield sseEvent;
-    } else {
-      // Tool side-effect (event: 'node' / 'edge') or any other custom event
-      // from a future tool. Pass through verbatim — these are the SSE frames
-      // the front-end's RunSessionPage listens for.
-      yield sseEvent;
+      yield {
+        event: 'error',
+        data: {
+          message: chunk.error.message,
+          code: chunk.error.kind,
+          node_id: chunk.node_id,
+        },
+      };
+    } else if (chunk.type === 'done') {
+      // Per-node `done`. Flush any residual text buffered for this node.
+      // We don't emit a terminal SSE here — the scheduler emits one `done`
+      // per node and the natural end-of-stream is the orchestration signal.
+      if (textBuf.trim().length > 0) {
+        const { events } = parseAndExtract(textBuf, session_id, artifactCallback);
+        for (const e of events) yield e;
+        textBuf = '';
+      }
+    } else if (chunk.type === 'usage') {
+      yield {
+        event: 'usage',
+        data: { ...chunk.usage, node_id: chunk.node_id },
+      };
     }
+    // chunk.type === 'tool-use' is intentionally dropped — Phase 2 decision A3
+    // (daemon-led DAG) means orchestration emits structured SSE via `<sf:*>`
+    // tags in the LLM's text, not via host tool_use loops.
+  }
+
+  // Final flush after the upstream stream ends naturally.
+  if (textBuf.trim().length > 0) {
+    const { events } = parseAndExtract(textBuf, session_id, artifactCallback);
+    for (const e of events) yield e;
   }
 }
 
-// Re-export the legacy direct-Anthropic helpers in case any internal code
-// imported them — none currently do, but keeping the symbols available
-// avoids surprise at refactor time. (Anthropic / fs / path / parseAndExtract
-// are still used by some legacy code paths above.)
+// Re-export legacy direct-Anthropic helpers in case any internal code imported
+// them — none currently do, but keeping the symbols available avoids surprise
+// at refactor time.
 void Anthropic;
 void fs;
 void path;
