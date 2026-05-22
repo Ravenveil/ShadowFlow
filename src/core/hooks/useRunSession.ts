@@ -109,6 +109,35 @@ export interface SessionError {
   occurrences: number;
 }
 
+/**
+ * Phase 2 (A4/CL8) — per-DAG-node chunk buffer.
+ *
+ * When the backend scheduler runs a parallel DAG (workflow/scheduler.ts), the
+ * `text` / `thinking-chunk` / `assemble` / `question-form` SSE events carry
+ * an optional `node_id` identifying which agent emitted them. Without
+ * per-node buffering the chunks from parallel agents would interleave into
+ * one global chatReply string and become unreadable.
+ *
+ * useRunSession maintains a `perNodeChunks: Record<node_id, NodeChunkBuffer>`
+ * so AgentDetail panels can subscribe via getNodeChunks(nodeId) and render
+ * each agent's stream in its own panel. Events WITHOUT node_id continue to
+ * flow into the global `chatReply` / `thinkingStream` / `steps` /
+ * `pendingQuestionForm` slots (full backward compatibility — every existing
+ * single-agent skill keeps working).
+ */
+export interface NodeChunkBuffer {
+  /** Concatenated `text` deltas for this node — drives the per-agent reply bubble. */
+  text: string;
+  /** Reasoning rows from `<sf:thinking>` blocks scoped to this node. */
+  thinking: Array<{ ts: string; step: string | null; text: string }>;
+  /** Per-node step list driven by `<sf:step>` events (status + elapsed). */
+  steps: RunSessionStep[];
+  /** Per-node substep timeline (mirror of nodes[i].substeps for convenience). */
+  substeps: RunSessionSubstep[];
+  /** Pending clarify form for this node, if any. */
+  pendingQuestionForm: { id: string; title: string; body: unknown } | null;
+}
+
 export interface RunSessionState {
   outputType: string | null;
   mode: string | null;
@@ -173,6 +202,19 @@ export interface RunSessionState {
    * eventually retire the legacy slots; for now everything stays.
    */
   messages: TimelineMessage[];
+  /**
+   * Phase 2 (A4/CL8) — per-node chunk buffers keyed by node_id. Populated
+   * only when the corresponding SSE event carries a `node_id` field
+   * (DAG-scheduled multi-agent runs). Legacy events without `node_id`
+   * route to the global chatReply / steps / thinkingStream / etc., so the
+   * existing single-agent UI is byte-equivalent to before.
+   *
+   * Consume via the public `getNodeChunks(nodeId)` API exposed on the
+   * useRunSession() return value — never read this map directly so the
+   * helper can supply an empty-buffer default for nodes that haven't
+   * produced a chunk yet (avoids null-checks at every call site).
+   */
+  perNodeChunks: Record<string, NodeChunkBuffer>;
 }
 
 // 2026-05-11 UX fix — steps are now driven entirely by `<sf:step>` events
@@ -183,6 +225,11 @@ export interface RunSessionState {
 // returned anything. Now the panel shows "等待开始…" until the first
 // running step arrives, then appends each step as it appears.
 const INITIAL_STEPS: RunSessionStep[] = [];
+
+// Phase 2 (A4/CL8) — payload types extended with optional node_id so the
+// reducer can pivot between per-node buffers and the global stream. These
+// shapes are runtime-compatible with the original ClassifyEvent /
+// AssembleEvent / TextEvent / AgentPersonaEvent (extra optional field).
 
 type Action =
   | { type: 'CLASSIFY'; payload: ClassifyEvent }
@@ -200,7 +247,7 @@ type Action =
   | { type: 'CRITIQUE_RESULT'; payload: CritiqueResultEvent }
   | { type: 'TEXT'; payload: TextEvent }
   | { type: 'AGENT_PERSONA'; payload: AgentPersonaEvent }
-  | { type: 'THINKING_CHUNK'; payload: { step: string | null; text: string } }
+  | { type: 'THINKING_CHUNK'; payload: { step: string | null; text: string; node_id?: string } }
   | { type: 'STEP_ARTIFACT'; payload: StepArtifactEvent }
   | {
       type: 'AGENT_SUBSTEP';
@@ -214,7 +261,7 @@ type Action =
         cached?: boolean;
       };
     }
-  | { type: 'QUESTION_FORM'; payload: { id: string; title: string; body: unknown } }
+  | { type: 'QUESTION_FORM'; payload: { id: string; title: string; body: unknown; node_id?: string } }
   | { type: 'QUESTION_FORM_CLEAR' }
   // S6.10-B — TimelineMessage stream events. MESSAGE appends; MESSAGE_PATCH
   // mutates by id via the pure applyPatch helper.
@@ -225,26 +272,71 @@ type Action =
   // even if the LLM was mid-sentence.
   | { type: 'ABORT' };
 
+/**
+ * Phase 2 (A4/CL8) — produce a fresh per-node buffer. Kept separate from the
+ * reducer body so node-aware action handlers can call it inline without
+ * repeating field defaults.
+ */
+function emptyNodeBuffer(): NodeChunkBuffer {
+  return {
+    text: '',
+    thinking: [],
+    steps: [],
+    substeps: [],
+    pendingQuestionForm: null,
+  };
+}
+
+/**
+ * Phase 2 (A4/CL8) — immutably patch the per-node buffer for `nodeId` using
+ * a transform function. Returns a NEW perNodeChunks object so React re-renders
+ * the consumer panel. When `nodeId` is falsy (legacy events without a DAG
+ * scheduler) the caller MUST NOT invoke this helper — they should fall
+ * through to the global-stream branch instead.
+ */
+function patchNodeBuffer(
+  perNodeChunks: Record<string, NodeChunkBuffer>,
+  nodeId: string,
+  transform: (buf: NodeChunkBuffer) => NodeChunkBuffer,
+): Record<string, NodeChunkBuffer> {
+  const existing = perNodeChunks[nodeId] ?? emptyNodeBuffer();
+  return { ...perNodeChunks, [nodeId]: transform(existing) };
+}
+
 function reducer(state: RunSessionState, action: Action): RunSessionState {
   switch (action.type) {
     case 'CLASSIFY':
       return { ...state, outputType: action.payload.output_type, mode: action.payload.mode, confidence: action.payload.confidence };
     case 'ASSEMBLE': {
-      const { step, status, elapsed_ms } = action.payload;
+      const { step, status, elapsed_ms, node_id } = action.payload;
       // 2026-05-11 UX fix — append step if first time seen, otherwise update
       // in place. Eliminates the "6 pending placeholders" pre-render. Each
       // step now appears only when the assembler announces it.
       const elapsedFmt = elapsed_ms ? `${(elapsed_ms / 1000).toFixed(1)}s` : undefined;
-      const existingIdx = state.steps.findIndex(s => s.name === step);
-      const steps: RunSessionStep[] = existingIdx === -1
-        ? [...state.steps, { name: step, status, elapsed: elapsedFmt }]
-        : state.steps.map((s, i) =>
-            i === existingIdx
-              ? { ...s, status, elapsed: elapsedFmt ?? s.elapsed }
-              : s,
-          );
+      const mergeStep = (list: RunSessionStep[]): RunSessionStep[] => {
+        const idx = list.findIndex(s => s.name === step);
+        return idx === -1
+          ? [...list, { name: step, status, elapsed: elapsedFmt }]
+          : list.map((s, i) =>
+              i === idx
+                ? { ...s, status, elapsed: elapsedFmt ?? s.elapsed }
+                : s,
+            );
+      };
+      const steps = mergeStep(state.steps);
       const thinking = status === 'running' ? `正在执行：${step}…` : null;
-      return { ...state, steps, thinkingMessage: thinking };
+      // Phase 2 (A4/CL8) — mirror into per-node buffer when the DAG
+      // scheduler scoped this step to a node. We still update the global
+      // `steps` slot so legacy renderers (StepList / Timeline) keep their
+      // unified view; perNodeChunks just gives parallel AgentDetail panels
+      // their own slice.
+      const perNodeChunks = node_id
+        ? patchNodeBuffer(state.perNodeChunks, node_id, (buf) => ({
+            ...buf,
+            steps: mergeStep(buf.steps),
+          }))
+        : state.perNodeChunks;
+      return { ...state, steps, thinkingMessage: thinking, perNodeChunks };
     }
     case 'NODE': {
       const p = action.payload as NodeEvent & {
@@ -343,6 +435,27 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
         cached: p.cached,
         startedAt: Date.now(),
       };
+      // Phase 2 (A4/CL8) — also mirror substeps onto the per-node buffer so
+      // a future AgentDetail panel subscribing via getNodeChunks(node_id) can
+      // render the substep list without traversing the full nodes[] array.
+      // Implementation: reuse the same merge logic on buf.substeps.
+      const mirrorIntoBuffer = (
+        existingSubsteps: RunSessionSubstep[],
+      ): RunSessionSubstep[] => {
+        const subIdx = existingSubsteps.findIndex((s) => s.name === subName);
+        return subIdx === -1
+          ? [...existingSubsteps, newEntry]
+          : existingSubsteps.map((s, i) =>
+              i === subIdx ? { ...s, ...newEntry, startedAt: s.startedAt } : s,
+            );
+      };
+      const perNodeChunks = p.node_id
+        ? patchNodeBuffer(state.perNodeChunks, p.node_id, (buf) => ({
+            ...buf,
+            substeps: mirrorIntoBuffer(buf.substeps),
+          }))
+        : state.perNodeChunks;
+
       // Node not yet seen — stash a placeholder carrying just this substep.
       if (nodeIdx === -1) {
         const placeholder: RunSessionNode = {
@@ -350,20 +463,22 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
           status: 'building', avatarChar: p.node_id.charAt(0) || '?',
           substeps: [newEntry],
         };
-        return { ...state, nodes: [...state.nodes, placeholder], activeAgentSubstep: nextActive };
+        return {
+          ...state,
+          nodes: [...state.nodes, placeholder],
+          activeAgentSubstep: nextActive,
+          perNodeChunks,
+        };
       }
       const existing = state.nodes[nodeIdx];
       const existingSubsteps = existing.substeps ?? [];
       // Same-substep duplicate (running → done): replace in place; otherwise append.
-      const subIdx = existingSubsteps.findIndex(s => s.name === subName);
-      const mergedSubsteps =
-        subIdx === -1
-          ? [...existingSubsteps, newEntry]
-          : existingSubsteps.map((s, i) => (i === subIdx ? { ...s, ...newEntry, startedAt: s.startedAt } : s));
+      const mergedSubsteps = mirrorIntoBuffer(existingSubsteps);
       return {
         ...state,
         nodes: state.nodes.map((n, i) => (i === nodeIdx ? { ...n, substeps: mergedSubsteps } : n)),
         activeAgentSubstep: nextActive,
+        perNodeChunks,
       };
     }
     case 'QUESTION_FORM': {
@@ -371,10 +486,35 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       // the user submits answers (POSTed as a follow-up message in the
       // /messages endpoint, which kicks off a new run-session inheriting
       // this conversation_id).
-      return { ...state, pendingQuestionForm: action.payload };
+      //
+      // Phase 2 (A4/CL8) — also stash on the per-node buffer when scoped to
+      // a DAG node, so individual AgentDetail panels can display
+      // "waiting on clarification" without consulting the global modal.
+      // The global pendingQuestionForm slot is still set so RunSessionPage's
+      // single modal continues to render — node-aware UI is an enhancement
+      // layered on top, not a replacement.
+      const payload = action.payload;
+      // Reducer payload type already includes optional node_id (Phase 2).
+      const { node_id, ...form } = payload;
+      const perNodeChunks = node_id
+        ? patchNodeBuffer(state.perNodeChunks, node_id, (buf) => ({
+            ...buf,
+            pendingQuestionForm: form,
+          }))
+        : state.perNodeChunks;
+      return { ...state, pendingQuestionForm: form, perNodeChunks };
     }
     case 'QUESTION_FORM_CLEAR': {
-      return { ...state, pendingQuestionForm: null };
+      // Clear both the global modal and every per-node copy — the user has
+      // answered the active question so all panels should stop showing the
+      // "waiting on clarification" hint.
+      const perNodeChunks = Object.fromEntries(
+        Object.entries(state.perNodeChunks).map(([id, buf]) => [
+          id,
+          { ...buf, pendingQuestionForm: null },
+        ]),
+      );
+      return { ...state, pendingQuestionForm: null, perNodeChunks };
     }
     case 'STEP_ARTIFACT': {
       // Stream B / S2.4 — server pushed a step's persisted output. Merge by
@@ -403,13 +543,25 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       // block becomes one row in ThinkCard expanded view (设计点 6 要求"3
       // 行带时间戳的 reasoning 流"). step attribute preserved as section
       // header per row.
-      const { step, text } = action.payload;
+      const { step, text, node_id } = action.payload;
       if (!text) return state;
       const d = new Date();
       const ts = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+      const entry = { ts, step, text };
+      // Phase 2 (A4/CL8) — DAG-scoped thinking goes into the per-node buffer
+      // so parallel agents don't pollute each other's reasoning log. The
+      // global thinkingStream stays populated for the unified ThinkCard
+      // panel (chronological merge of all agents' thoughts).
+      const perNodeChunks = node_id
+        ? patchNodeBuffer(state.perNodeChunks, node_id, (buf) => ({
+            ...buf,
+            thinking: [...buf.thinking, entry],
+          }))
+        : state.perNodeChunks;
       return {
         ...state,
-        thinkingStream: [...state.thinkingStream, { ts, step, text }],
+        thinkingStream: [...state.thinkingStream, entry],
+        perNodeChunks,
       };
     }
     case 'EDGE': {
@@ -467,13 +619,28 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       return { ...state, critiqueProgress: action.payload };
     case 'CRITIQUE_RESULT':
       return { ...state, critiqueResult: action.payload, critiqueProgress: null };
-    case 'TEXT':
+    case 'TEXT': {
+      // Phase 2 (A4/CL8) — when the chunk came from a DAG-scheduled node,
+      // route the text-delta into per-node buffer instead of the global
+      // chatReply. Without this, parallel agents would interleave into one
+      // unreadable bubble. Token count + thinkingMessage clear stay global
+      // so the header indicator still tracks total throughput.
+      const { text, node_id } = action.payload;
+      const tokenCount = state.tokenCount + Math.ceil(text.length / 4);
+      if (node_id) {
+        const perNodeChunks = patchNodeBuffer(state.perNodeChunks, node_id, (buf) => ({
+          ...buf,
+          text: buf.text + text,
+        }));
+        return { ...state, perNodeChunks, thinkingMessage: null, tokenCount };
+      }
       return {
         ...state,
-        chatReply: state.chatReply + action.payload.text,
+        chatReply: state.chatReply + text,
         thinkingMessage: null,
-        tokenCount: state.tokenCount + Math.ceil(action.payload.text.length / 4),
+        tokenCount,
       };
+    }
     case 'MESSAGE': {
       // S6.10-B — append a new TimelineMessage. Idempotent on id (re-delivery
       // during reconnect: if the same id already exists we overwrite it in
@@ -547,6 +714,18 @@ export interface UseRunSessionReturn extends RunSessionState {
    * its session record + cancel the upstream LLM call.
    */
   abort: () => void;
+  /**
+   * Phase 2 (A4/CL8) — return the per-node chunk buffer for `nodeId`.
+   *
+   * AgentDetail / parallel panels subscribe via this helper. Always returns
+   * a stable empty buffer when the node hasn't produced anything yet so
+   * callers can render skeleton state without null-checks. The returned
+   * object is the same reference React saw on the last reducer transition,
+   * so naive `prev === next` comparisons in useEffect deps work — but
+   * components that derive cheaper state from the buffer should still
+   * memoize since text/thinking arrays grow over time.
+   */
+  getNodeChunks: (nodeId: string) => NodeChunkBuffer;
 }
 
 export function useRunSession(sessionId: string): UseRunSessionReturn {
@@ -565,6 +744,7 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     activeAgentSubstep: null,
     pendingQuestionForm: null,
     messages: [],
+    perNodeChunks: {},
   });
 
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -671,5 +851,30 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     dispatch({ type: 'QUESTION_FORM_CLEAR' });
   }, []);
 
-  return { ...state, isStreaming, abort, dispatchClearQuestionForm };
+  // Phase 2 (A4/CL8) — stable empty-buffer fallback so callers don't get
+  // a fresh object identity every render for nodes the backend hasn't
+  // emitted into yet. Defined inside the hook so it closes over the
+  // current perNodeChunks via state, but the fallback itself is hoisted
+  // to module scope (EMPTY_BUFFER) for referential stability.
+  const getNodeChunks = useCallback(
+    (nodeId: string): NodeChunkBuffer => state.perNodeChunks[nodeId] ?? EMPTY_BUFFER,
+    [state.perNodeChunks],
+  );
+
+  return { ...state, isStreaming, abort, dispatchClearQuestionForm, getNodeChunks };
 }
+
+/**
+ * Phase 2 (A4/CL8) — referentially-stable empty per-node buffer for
+ * `getNodeChunks` when the requested nodeId has no data yet. Hoisted to
+ * module scope so the same `{}` reference is returned every call — lets
+ * downstream useEffect / useMemo deps stay stable until the node actually
+ * produces a chunk.
+ */
+const EMPTY_BUFFER: NodeChunkBuffer = Object.freeze({
+  text: '',
+  thinking: [],
+  steps: [],
+  substeps: [],
+  pendingQuestionForm: null,
+}) as NodeChunkBuffer;

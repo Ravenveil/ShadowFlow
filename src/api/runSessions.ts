@@ -87,6 +87,12 @@ export interface AssembleEvent {
   step: string;
   status: StepStatus;
   elapsed_ms?: number;
+  /**
+   * Phase 2 A4 — parser.ts attaches the current DAG node id when the
+   * orchestrator schedules a multi-agent workflow, so parallel-DAG steps
+   * can be routed per-node in the front-end. Omitted on legacy callers.
+   */
+  node_id?: string;
 }
 
 export interface NodeEvent {
@@ -163,9 +169,17 @@ export interface SubstepEvent {
  * in plain natural language, server-side parser emits incremental `text`
  * events. Front-end accumulates these into a chat bubble instead of
  * rendering the canvas / step list.
+ *
+ * Phase 2 (A4/CL8) — server-side parser (parser.ts) now attaches an optional
+ * `node_id` field when the orchestration layer (DAG scheduler) is executing
+ * a specific workflow node. Front-end uses it to route chunks to the matching
+ * AgentDetail panel. Absent on legacy single-agent runs — falls back to the
+ * global chat stream so all pre-existing skills keep working unchanged.
  */
 export interface TextEvent {
   text: string;
+  /** Phase 2 A4 — present iff the chunk came from a DAG-scheduled node. */
+  node_id?: string;
 }
 
 // ── Story 15.14 — Critique events ─────────────────────────────────────────────
@@ -344,8 +358,13 @@ export function subscribeRunSession(
     onText?: (data: TextEvent) => void;
     /** 2026-05-18 agent-B extension — multi-line persona for an agent node. */
     onAgentPersona?: (data: AgentPersonaEvent) => void;
-    /** 2026-05-19 — real LLM reasoning chunk inside `<sf:thinking>` block. */
-    onThinkingChunk?: (data: { step: string | null; text: string }) => void;
+    /**
+     * 2026-05-19 — real LLM reasoning chunk inside `<sf:thinking>` block.
+     * Phase 2 A4 — carries optional `node_id` when emitted from a
+     * DAG-scheduled node so the front-end can route to the matching
+     * AgentDetail panel.
+     */
+    onThinkingChunk?: (data: { step: string | null; text: string; node_id?: string }) => void;
     /** Stream B / S2.4 — step artifact persisted by the backend after a step finishes. */
     onStepArtifact?: (data: StepArtifactEvent) => void;
     /** S6.5 — v3 stacked: granular per-agent substep progress (identity/persona/model/tools/memory). */
@@ -358,8 +377,12 @@ export function subscribeRunSession(
       tokens?: number;
       cached?: boolean;
     }) => void;
-    /** S12 — `<sf:question-form>` interactive form. body is parsed JSON. */
-    onQuestionForm?: (data: { id: string; title: string; body: unknown }) => void;
+    /**
+     * S12 — `<sf:question-form>` interactive form. body is parsed JSON.
+     * Phase 2 A4 — carries optional `node_id` when a DAG node raises a
+     * clarification, so the form can be attributed to that agent panel.
+     */
+    onQuestionForm?: (data: { id: string; title: string; body: unknown; node_id?: string }) => void;
     /**
      * S6.10-B — new typed TimelineMessage arrived. Front-end appends to
      * `messages` state. Payload shape is defined in the front-end mirror
