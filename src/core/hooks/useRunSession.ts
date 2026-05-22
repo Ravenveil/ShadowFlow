@@ -602,6 +602,11 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
       onAgentSubstep:  (d) => dispatch({ type: 'AGENT_SUBSTEP', payload: d }),
       // S12 — LLM emit `<sf:question-form>` for clarification.
       onQuestionForm:  (d) => dispatch({ type: 'QUESTION_FORM', payload: d }),
+      // S6.10-B — Trae-style timeline message stream. MESSAGE appends; the
+      // reducer keeps existing legacy slot state intact so both renderers
+      // coexist during the transition.
+      onMessage:       (d) => dispatch({ type: 'MESSAGE', payload: d }),
+      onMessagePatch:  (d) => dispatch({ type: 'MESSAGE_PATCH', payload: d }),
       onRetrying:      (attempt, delayMs) => dispatch({ type: 'RETRYING', attempt, delayMs }),
       // EventSource gave up retrying — pure network bucket so the UI can
       // surface a "重发" CTA instead of "配置 API Key". setConnected(false)
