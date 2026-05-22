@@ -41,57 +41,21 @@
  */
 
 import type { ConversationMessage } from '../lib/conversation-types';
+import type { TurnChunk as _TurnChunk } from '../workflow/types';
 
-// ─── Placeholder types ────────────────────────────────────────────────────────
+// ─── Canonical types from workflow/types (Lane 1) ─────────────────────────────
 //
-// `TurnChunk` and `LlmCallError` are the formal property of `workflow/types.ts`
-// (Lane 1 of Phase 2 implementation). Until that file lands, we declare minimal
-// placeholders here so `tsc --noEmit` succeeds on this file in isolation. When
-// Lane 1 lands, delete these placeholders and switch to:
-//
-//   import type { TurnChunk, LlmCallError } from '../workflow/types';
-//
-// The placeholder shapes below are deliberately minimal — Lane 1 will widen
-// them (adding more chunk variants, structured error metadata, etc.).
+// `TurnChunk` and `LlmCallError` are owned by `workflow/types.ts` (Phase 2
+// decisions A1 / CL3 / E3). This file re-exports them so callers that only
+// import the Transport contract still see one stable surface.
 
-/**
- * @placeholder Replace with `../workflow/types` import when Lane 1 lands.
- *
- * Discriminated union of stream events one `turn()` can yield. Mirrors the
- * existing `<sf:agent-substep node_id="..."/>` + Anthropic block-delta protocol
- * the parser already understands (see `parser.ts:286`).
- */
-export type TurnChunk =
-  | { kind: 'text-delta'; text: string; nodeId?: string }
-  | { kind: 'tool-use'; toolName: string; input: unknown; nodeId?: string }
-  | { kind: 'tool-result'; toolUseId: string; output: string; isError: boolean; nodeId?: string }
-  | { kind: 'usage'; inputTokens?: number; outputTokens?: number; nodeId?: string }
-  | { kind: 'error'; message: string; cause?: unknown; nodeId?: string }
-  | { kind: 'done'; nodeId?: string };
-
-/**
- * @placeholder Replace with `../workflow/types` import when Lane 1 lands.
- *
- * Typed exception thrown BEFORE the first chunk yields. `retry.ts` inspects
- * `code` to decide retry policy (e.g., `rate-limit` → backoff; `auth` → fail
- * fast; `executor-not-found` → fail fast).
- */
-export class LlmCallError extends Error {
-  constructor(
-    message: string,
-    public readonly code:
-      | 'auth'
-      | 'rate-limit'
-      | 'executor-not-found'
-      | 'spawn-failed'
-      | 'invalid-input'
-      | 'unknown',
-    public readonly cause?: unknown,
-  ) {
-    super(message);
-    this.name = 'LlmCallError';
-  }
-}
+export { LlmCallError } from '../workflow/types';
+export type {
+  TurnChunk,
+  LlmCallErrorKind,
+  ToolUsePayload,
+  UsagePayload,
+} from '../workflow/types';
 
 // ─── Public interface ─────────────────────────────────────────────────────────
 
@@ -171,5 +135,5 @@ export interface LlmCallable {
    * abort via `input.signal` — leaving it dangling will leak subprocesses /
    * SDK streams.
    */
-  turn(input: LlmCallableTurnInput): AsyncGenerator<TurnChunk>;
+  turn(input: LlmCallableTurnInput): AsyncGenerator<_TurnChunk>;
 }

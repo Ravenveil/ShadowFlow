@@ -16,7 +16,7 @@
  */
 
 import type { LlmCallable } from './LlmCallable';
-import { LlmCallError } from './LlmCallable';
+import { LlmCallError } from '../workflow/types';
 
 /**
  * Executor string grammar.
@@ -69,7 +69,7 @@ export function resolveCallable(
   opts: ResolveOptions,
 ): LlmCallable {
   throw new LlmCallError(
+    'provider-error',
     `resolveCallable(${executor}): not yet implemented — Lane 2 work`,
-    'executor-not-found',
   );
 }

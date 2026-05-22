@@ -170,18 +170,18 @@ export async function executeNode(
       signal,
     });
 
-    // The Transport-layer `LlmCallable.ts` currently exports a *placeholder*
-    // `TurnChunk` (file-header comment marks it as such, to be replaced by
-    // `workflow/types`'s canonical version). To compile cleanly against the
-    // placeholder while preserving the canonical contract internally, we
-    // accept each chunk as `unknown` and re-narrow against our own shape.
-    for await (const raw of stream as AsyncIterable<unknown>) {
+    // `LlmCallable.turn()` now yields canonical `TurnChunk` (post-Lane 1
+    // placeholder removal). We still re-stamp `node_id` here because a
+    // callable unaware of the surrounding DAG is allowed to yield bare
+    // chunks; the scheduler/executor is the authoritative source of node_id
+    // on the SSE wire (parser.ts:286 contract).
+    for await (const raw of stream) {
       // Cascade abort: stop forwarding chunks once cancelled. The underlying
       // callable should be honouring `signal` too and will end the stream
       // shortly after.
       if (signal.aborted) break;
 
-      const stamped = { ...(raw as object), node_id: node.id } as TurnChunk;
+      const stamped: TurnChunk = { ...raw, node_id: node.id };
       observer.onNodeChunk(node.id, stamped);
 
       if (stamped.type === 'text-delta') {
