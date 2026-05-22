@@ -805,14 +805,17 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     };
   }, [sessionId]);
 
-  // 3 分钟 watchdog — session 超时自动标 error
+  // 15 分钟 watchdog — session 超时自动标 error
+  // Phase 2 (2026-05-22): 从 3min 提升到 15min。BMAD 等多 agent DAG
+  // workflow 端到端要跑 5-10min，3min 会截断 multi-agent 阶段（见
+  // docs/architecture/phase-2-e2e-report.md P1-01）。
   useEffect(() => {
     if (!sessionId) return;
     watchdogRef.current = setTimeout(() => {
       // Watchdog timeout — server stalled, classify as network-bucket so the
       // banner CTA is "重发" rather than "配置 API Key".
-      dispatch({ type: 'ERROR', message: 'Session 超时（3 分钟），请重试', code: 'network' });
-    }, 3 * 60 * 1000);
+      dispatch({ type: 'ERROR', message: 'Session 超时（15 分钟），请重试', code: 'network' });
+    }, 15 * 60 * 1000);
     return () => {
       if (watchdogRef.current) clearTimeout(watchdogRef.current);
     };
