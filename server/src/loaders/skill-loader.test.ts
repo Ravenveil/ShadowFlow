@@ -419,6 +419,130 @@ body
   }
 })();
 
+// ─── Test 12 (W2): commands/*.md → `<id>:<cmd>` skill entries ───────────────
+
+(function testSlashCommands() {
+  console.log('\n[12] W2: commands/*.md → `<id>:<cmd>` skill entries');
+  const root = makeTmpSkillsRoot();
+  try {
+    // Parent skill with two sub-commands; commands have hyphen-form frontmatter
+    // matching real Claude Code plugin commands (allowed-tools, description,
+    // disable-model-invocation).
+    const skillDir = path.join(root, 'bmad');
+    fs.mkdirSync(path.join(skillDir, 'commands'), { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, 'SKILL.md'),
+      `---
+name: BMAD
+description: BMAD-METHOD bundle
+---
+parent skill body
+`,
+      'utf-8',
+    );
+    fs.writeFileSync(
+      path.join(skillDir, 'commands', 'prfaq.md'),
+      `---
+allowed-tools: Bash(gh issue view:*), Bash(gh pr view:*)
+description: Generate a PRFAQ
+disable-model-invocation: false
+---
+You are a PRFAQ writer. Output sections.
+`,
+      'utf-8',
+    );
+    fs.writeFileSync(
+      path.join(skillDir, 'commands', 'create-prd.md'),
+      `---
+description: Create a PRD
+disable-model-invocation: true
+---
+You are a PRD writer.
+`,
+      'utf-8',
+    );
+    // .md file with no frontmatter description should fall back to first line
+    fs.writeFileSync(
+      path.join(skillDir, 'commands', 'no-fm.md'),
+      `Fallback description line\n\nBody continues here.\n`,
+      'utf-8',
+    );
+
+    const result = loadFsSkills([], root);
+    check('W2: parent skill loaded', !!result.loaded.bmad);
+    check('W2: bmad:prfaq registered', !!result.loaded['bmad:prfaq']);
+    check('W2: bmad:create-prd registered', !!result.loaded['bmad:create-prd']);
+    check('W2: bmad:no-fm registered', !!result.loaded['bmad:no-fm']);
+    check(
+      'W2: prfaq description parsed',
+      result.loaded['bmad:prfaq']?.description === 'Generate a PRFAQ',
+    );
+    check(
+      'W2: prfaq system_prompt = body',
+      result.loaded['bmad:prfaq']?.system_prompt?.includes('PRFAQ writer') === true,
+    );
+    check(
+      'W2: prfaq allowed_tools parsed (CSV string)',
+      Array.isArray(result.loaded['bmad:prfaq']?.allowed_tools) &&
+        result.loaded['bmad:prfaq']!.allowed_tools!.length === 2 &&
+        result.loaded['bmad:prfaq']!.allowed_tools![0] === 'Bash(gh issue view:*)',
+    );
+    check(
+      'W2: prfaq disable_model_invocation = false → undefined',
+      result.loaded['bmad:prfaq']?.disable_model_invocation === undefined,
+    );
+    check(
+      'W2: create-prd disable_model_invocation = true',
+      result.loaded['bmad:create-prd']?.disable_model_invocation === true,
+    );
+    check(
+      'W2: no-fm description falls back to first body line',
+      result.loaded['bmad:no-fm']?.description === 'Fallback description line',
+    );
+    check(
+      "W2: command-skill mode = 'prototype'",
+      result.loaded['bmad:prfaq']?.mode === 'prototype',
+    );
+    check(
+      'W2: command-skill team undefined',
+      result.loaded['bmad:prfaq']?.team === undefined,
+    );
+    check(
+      'W2: command-skill executor undefined',
+      result.loaded['bmad:prfaq']?.executor === undefined,
+    );
+  } finally {
+    rmrf(root);
+  }
+})();
+
+// ─── Test 13 (W2): missing commands/ dir → only parent skill loads ──────────
+
+(function testNoCommandsDir() {
+  console.log('\n[13] W2: skill without commands/ subdir still loads cleanly');
+  const root = makeTmpSkillsRoot();
+  try {
+    writeSkill(
+      root,
+      'plain',
+      `---
+name: Plain
+description: no commands
+---
+body
+`,
+    );
+    const result = loadFsSkills([], root);
+    check('W2: plain loaded', !!result.loaded.plain);
+    check(
+      'W2: no <id>:<cmd> entries created',
+      !Object.keys(result.loaded).some(k => k.startsWith('plain:')),
+    );
+  } finally {
+    rmrf(root);
+  }
+})();
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 console.log('\n────────────────────────────────────────');

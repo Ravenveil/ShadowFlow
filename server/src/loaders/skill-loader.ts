@@ -271,6 +271,147 @@ function scanOneDir(
       overrides.push(id);
     }
     loaded[id] = skill;
+
+    // W2 (Lane B) — mirror Claude Code v2.1.88 plugin `/<id>:<cmd>` syntax.
+    // If the skill bundle has a `commands/` subdir, register each
+    // `commands/<X>.md` as a sibling skill keyed `<id>:<X>` so the run-sessions
+    // dispatcher can look it up via the same SKILLS registry. These entries
+    // are intentionally simple (mode=prototype, no team, no executor) —
+    // matching the Claude Code plugin command model where the .md body is
+    // the prompt and frontmatter declares allowed-tools.
+    const cmdsDir = path.join(skillsDir, id, 'commands');
+    if (fs.existsSync(cmdsDir)) {
+      let cmdEntries: fs.Dirent[];
+      try {
+        cmdEntries = fs.readdirSync(cmdsDir, { withFileTypes: true });
+      } catch (err) {
+        errors.push({
+          id,
+          message: `cannot read commands dir: ${(err as Error).message}`,
+        });
+        cmdEntries = [];
+      }
+      if (cmdEntries.length > MAX_ENTRIES) {
+        console.warn(
+          `[skill-loader] ${cmdEntries.length} commands in ${cmdsDir} — capped at ${MAX_ENTRIES}`,
+        );
+        cmdEntries = cmdEntries.slice(0, MAX_ENTRIES);
+      }
+      for (const cmdEntry of cmdEntries) {
+        if (!cmdEntry.isFile()) continue;
+        if (!cmdEntry.name.endsWith('.md')) continue;
+        const cmdName = cmdEntry.name.slice(0, -3); // strip .md
+        if (!VALID_SKILL_ID_RE.test(cmdName)) {
+          errors.push({
+            id: `${id}:${cmdName}`,
+            message: `invalid command name "${cmdName}" (must match ${VALID_SKILL_ID_RE})`,
+          });
+          continue;
+        }
+        const cmdKey = `${id}:${cmdName}`;
+        const cmdPath = path.join(cmdsDir, cmdEntry.name);
+        let cmdRaw: string;
+        try {
+          cmdRaw = fs.readFileSync(cmdPath, 'utf-8');
+        } catch (err) {
+          errors.push({
+            id: cmdKey,
+            message: `read failed: ${(err as Error).message}`,
+          });
+          continue;
+        }
+        if (!cmdRaw.trim()) {
+          errors.push({ id: cmdKey, message: 'empty command .md' });
+          continue;
+        }
+        let cmdParsed: matter.GrayMatterFile<string>;
+        try {
+          cmdParsed = matter(cmdRaw);
+        } catch (err) {
+          errors.push({
+            id: cmdKey,
+            message: `invalid frontmatter: ${(err as Error).message}`,
+          });
+          continue;
+        }
+        const cmdFm = (cmdParsed.data ?? {}) as Record<string, unknown>;
+
+        // description: prefer frontmatter `description`, else fall back to the
+        // first non-blank line of the body. Claude Code requires description
+        // in plugin commands; we soften it to never-throw to keep parity with
+        // SKILL.md scanning behaviour (skip + warn).
+        let cmdDescription =
+          typeof cmdFm.description === 'string' && cmdFm.description.trim()
+            ? cmdFm.description.trim()
+            : '';
+        if (!cmdDescription) {
+          const firstLine = (cmdParsed.content ?? '')
+            .split('\n')
+            .map(l => l.trim())
+            .find(l => l.length > 0);
+          if (firstLine) cmdDescription = firstLine.slice(0, 200);
+        }
+        if (!cmdDescription) {
+          errors.push({
+            id: cmdKey,
+            message: 'missing description (frontmatter or body)',
+          });
+          continue;
+        }
+
+        // allowed-tools: Claude Code uses HYPHEN ("allowed-tools"); we also
+        // accept "allowed_tools" for parity with our own SKILL.md convention.
+        // Two shapes in the wild:
+        //   - YAML list:  allowed-tools: [Bash, Read]
+        //   - CSV string: allowed-tools: Bash(gh issue view:*), Bash(gh pr view:*)
+        // Both produce a string[] of trimmed non-empty entries.
+        const rawCmdAllowed =
+          (cmdFm as Record<string, unknown>)['allowed-tools'] ??
+          (cmdFm as Record<string, unknown>)['allowed_tools'];
+        let cmdAllowedTools: string[] | undefined;
+        if (Array.isArray(rawCmdAllowed)) {
+          cmdAllowedTools = rawCmdAllowed
+            .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+            .map(t => t.trim());
+        } else if (typeof rawCmdAllowed === 'string' && rawCmdAllowed.trim()) {
+          cmdAllowedTools = rawCmdAllowed
+            .split(',')
+            .map(t => t.trim())
+            .filter(t => t.length > 0);
+        }
+
+        // disable-model-invocation: Claude Code hyphen form; accept underscore
+        // for parity. Coerce truthy YAML scalars (true / "true") to boolean.
+        const rawDisable =
+          (cmdFm as Record<string, unknown>)['disable-model-invocation'] ??
+          (cmdFm as Record<string, unknown>)['disable_model_invocation'];
+        const disableModelInvocation =
+          rawDisable === true ||
+          (typeof rawDisable === 'string' && rawDisable.trim().toLowerCase() === 'true');
+
+        const cmdSkill: SkillDefinition = {
+          name: cmdKey,
+          description: cmdDescription,
+          mode: 'prototype',
+          preview_type: 'html',
+          platform: typeof cmdFm.platform === 'string' ? cmdFm.platform : 'web',
+          scenario: typeof cmdFm.scenario === 'string' ? cmdFm.scenario : '',
+          fidelity: typeof cmdFm.fidelity === 'string' ? cmdFm.fidelity : 'high',
+          example_prompt:
+            typeof cmdFm.example_prompt === 'string' ? cmdFm.example_prompt : '',
+          system_prompt: cmdParsed.content ?? '',
+          allowed_tools: cmdAllowedTools,
+          disable_model_invocation: disableModelInvocation || undefined,
+          // executor + team intentionally undefined: command-skills are simple
+          // prompt-only entries; dispatcher falls back to default executor.
+        };
+
+        if (hardcodedIds.includes(cmdKey)) {
+          overrides.push(cmdKey);
+        }
+        loaded[cmdKey] = cmdSkill;
+      }
+    }
   }
 
   if (Object.keys(loaded).length > 0) {

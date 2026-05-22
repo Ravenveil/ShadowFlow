@@ -377,14 +377,28 @@ router.post('/', (req: Request, res: Response) => {
   // when both are present.
   let goal_text = goal.trim();
   let inline_skill_token: string | undefined;
-  const skillTokenRe = /@skill[:\s]+([a-z0-9][a-z0-9_-]{0,63})/i;
-  const m = goal_text.match(skillTokenRe);
-  if (m) {
-    inline_skill_token = m[1].toLowerCase();
-    goal_text = goal_text.replace(skillTokenRe, '').replace(/\s{2,}/g, ' ').trim();
-    if (!goal_text) {
-      // user typed only "@skill:foo" without a goal — fall back to a generic prompt
-      goal_text = '用这个 skill 帮我开始一项任务。';
+
+  // W2 (Lane B) — Claude Code v2.1.88-style `/<id>:<cmd>` slash. Parsed BEFORE
+  // `@skill:<id>` so that when both are present the slash wins (it's the more
+  // specific target — a particular command inside a plugin). Skill-loader
+  // registers commands/X.md as keys of the form `<id>:<X>` so SKILLS lookup
+  // downstream just works.
+  const slashCmdRe = /\/([a-z0-9][a-z0-9_-]{0,63}):([a-z0-9][a-z0-9_-]{0,63})/i;
+  const sm = goal_text.match(slashCmdRe);
+  if (sm) {
+    inline_skill_token = `${sm[1].toLowerCase()}:${sm[2].toLowerCase()}`;
+    goal_text = goal_text.replace(slashCmdRe, '').replace(/\s{2,}/g, ' ').trim();
+    if (!goal_text) goal_text = '执行该 skill 命令。';
+  } else {
+    const skillTokenRe = /@skill[:\s]+([a-z0-9][a-z0-9_-]{0,63})/i;
+    const m = goal_text.match(skillTokenRe);
+    if (m) {
+      inline_skill_token = m[1].toLowerCase();
+      goal_text = goal_text.replace(skillTokenRe, '').replace(/\s{2,}/g, ' ').trim();
+      if (!goal_text) {
+        // user typed only "@skill:foo" without a goal — fall back to a generic prompt
+        goal_text = '用这个 skill 帮我开始一项任务。';
+      }
     }
   }
 
@@ -891,7 +905,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     // yaml from the global library as the default rehearsal script.
     if (wantSyntheticFallback && !teamSpec) {
       try {
-        const result = loadGlobalTeam('bmad');
+        const result = loadGlobalTeam('BMAD-METHOD');
         if (result.team) {
           teamSpec = {
             name: result.team.name,

@@ -17,6 +17,7 @@ import fs from 'fs';
 import path from 'path';
 import type { FetchResult } from './fetch';
 import type { ProbeResult } from './probe';
+import { canonicalIdFromUrl } from './canonical-id';
 
 const SKILLS_ROOT = path.join(process.cwd(), '.shadowflow', 'skills');
 const REGISTRY_FILE = path.join(SKILLS_ROOT, '.installed.json');
@@ -95,7 +96,14 @@ function copyReferences(srcDir: string, dstDir: string, subpath?: string): void 
 export interface RegisterOptions {
   fetched: FetchResult;
   probe: ProbeResult;
-  /** override the default inferred id (e.g. user-supplied name) */
+  /**
+   * @deprecated Canonical ids should be derived from the source URL via
+   * `canonicalIdFromUrl()` (see canonical-id.ts). Letting callers force an id
+   * is what caused the same GitHub repo to be installed under two different
+   * ids (e.g. 'bmad' vs 'bmad-method'), poisoning the skill cache and
+   * breaking team-yaml `team_ref` resolution. Kept for backward compat
+   * with pasted-text installs that have no URL slug to derive from.
+   */
   forced_id?: string;
 }
 
@@ -114,7 +122,21 @@ export interface RegisterResult {
  */
 export function registerSkill(opts: RegisterOptions): RegisterResult {
   const { fetched, probe, forced_id } = opts;
-  const id = resolveId(forced_id ?? fetched.inferred_name, fetched.source_hash);
+  // Canonical id strategy:
+  //   - URL-backed sources (git-repo / raw-file) ALWAYS derive id from the
+  //     source URL via canonicalIdFromUrl(), case-preserved. This is the
+  //     post-W1 contract — see canonical-id.ts header for rationale.
+  //   - pasted-text has no URL slug, so fall through to forced_id /
+  //     slugified inferred_name (legacy path).
+  //   - `forced_id` is kept solely for the pasted-text branch and any
+  //     legacy callers that haven't been migrated; new code MUST NOT pass it
+  //     for URL sources.
+  let id: string;
+  if (fetched.kind === 'git-repo' || fetched.kind === 'raw-file') {
+    id = canonicalIdFromUrl(fetched.source_label);
+  } else {
+    id = resolveId(forced_id ?? fetched.inferred_name, fetched.source_hash);
+  }
   const skillDir = path.join(SKILLS_ROOT, id);
   const refDir = path.join(skillDir, 'references');
 

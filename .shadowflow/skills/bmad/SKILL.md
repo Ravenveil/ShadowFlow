@@ -6,7 +6,7 @@ preview_type: yaml
 platform: web
 scenario: software
 fidelity: high
-team_ref: bmad
+team_ref: BMAD-METHOD
 example_prompt: "用 BMAD 4 角搭一个用户登录功能的研发团队"
 allowed-tools:
   - list_team_agents
@@ -17,7 +17,7 @@ allowed-tools:
 
 # BMAD 四角全栈团队 Skill
 
-本 skill 是一个 **Team Blueprint**——通过 `team_ref: bmad` 引用全局 team 库（`.shadowflow/teams/bmad.team.yaml`），agent 内容来自全局 agent 库（`.shadowflow/agents/{pm,arch,dev,qa}.agent.yaml`）。
+本 skill 是一个 **Team Blueprint**——通过 `team_ref: BMAD-METHOD` 引用全局 team 库（`.shadowflow/teams/BMAD-METHOD.team.yaml`），agent 内容来自全局 agent 库（`.shadowflow/agents/{pm,arch,dev,qa}.agent.yaml`）。
 
 BMAD 是经典软件研发四角组合：PM 定需求 → Architect 出方案 → Dev 写代码 → QA 验质量，配合 `qa → dev (bug_found, max_retries:3)` 的回路。
 

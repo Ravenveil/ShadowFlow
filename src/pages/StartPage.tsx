@@ -51,6 +51,7 @@ import { useI18n } from '../common/i18n';
 import { SkillUrlChip } from '../components/SkillUrlChip';
 import { SkillPickerModal } from '../components/SkillPickerModal';
 import { extractSkillUrl, listInstalledSkills, type SkillIngestSummary, type InstalledSkill } from '../api/skillIngest';
+import { listSkills, type SkillInfo } from '../api/skills';
 import { CommandMenu, detectTrigger, type CommandMenuItem } from '../components/composer/CommandMenu';
 
 // ---------------------------------------------------------------------------
@@ -579,12 +580,13 @@ const SUGGESTIONS: Array<[string, string]> = [
 ];
 
 interface SkillPack {
-  id: string;
   glyph: string;
   name: string;
   desc: string;
   /** 真实 GitHub 仓库 URL。点击安装时由 daemon clone 到 .shadowflow/skills/<id>/,
-   *  注册后真实 skill 内容（SKILL.md / 角色定义 / 子命令）由 skill registry 接管。 */
+   *  注册后真实 skill 内容（SKILL.md / 角色定义 / 子命令）由 skill registry 接管。
+   *  canonical id 由 server 端从 URL slug 派生（OpenDesign 风格），前端不再
+   *  携带 forced_id —— 详见 docs/architecture/orchestration-transport.md。 */
   source: {
     url: string;
     ref?: string;
@@ -593,9 +595,14 @@ interface SkillPack {
   homepage?: string;
 }
 
+/** Stable React key + data-testid 友好的本地 slug。仅用于前端 DOM，不参与
+ *  后端 skill 注册（后端会用自己派生的 canonical id）。 */
+function packSlug(pack: SkillPack): string {
+  return pack.name.toLowerCase().replace(/\s+/g, '-');
+}
+
 const SKILL_PACKS: SkillPack[] = [
   {
-    id: 'bmad',
     glyph: '◈',
     name: 'BMAD Method',
     desc: 'Build, Measure, Architect, Deploy · 完整研发方法论',
@@ -606,7 +613,6 @@ const SKILL_PACKS: SkillPack[] = [
     homepage: 'https://github.com/bmadcode/BMAD-METHOD',
   },
   {
-    id: 'gstack',
     glyph: '⬡',
     name: 'gSTACK',
     desc: 'Garry Tan 的 AI 研发工作流 · 调研→策略→执行',
@@ -637,13 +643,15 @@ function SkillPackSection({ onSelect, disabled }: SkillPackSectionProps) {
           gap: 8,
         }}
       >
-        {SKILL_PACKS.map((pack) => (
+        {SKILL_PACKS.map((pack) => {
+          const slug = packSlug(pack);
+          return (
           <button
-            key={pack.id}
+            key={slug}
             type="button"
             onClick={() => !disabled && onSelect(pack)}
             className="hf-card"
-            data-testid={`skill-pack-${pack.id}`}
+            data-testid={`skill-pack-${slug}`}
             disabled={disabled}
             style={{
               display: 'flex',
@@ -702,7 +710,8 @@ function SkillPackSection({ onSelect, disabled }: SkillPackSectionProps) {
               </div>
             </div>
           </button>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -740,6 +749,11 @@ export default function StartPage() {
   // a skill: type `@paper-review` or `@bmad` in the composer, hit ↵, done.
   // The modal stays accessible via "+ Add ▾ → 导入 Skill" for URL ingest.
   const [installedSkills, setInstalledSkills] = useState<InstalledSkill[] | null>(null);
+  // W2 (2026-05-22) — separately pull GET /api/skills which (post Lane B)
+  // includes `<id>:<cmd>` sub-command entries with `description` text. Used
+  // by `/` mode to mirror Claude Code's `/<id>:<cmd>` slash command list.
+  // /api/skills/installed lacks `description`, so we keep both sources.
+  const [catalogSkills, setCatalogSkills] = useState<SkillInfo[] | null>(null);
   const [commandMenu, setCommandMenu] = useState<{ mode: '@' | '/'; query: string; start: number; end: number } | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   // Lazy-load installed skills the first time either trigger opens — both
@@ -751,7 +765,12 @@ export default function StartPage() {
         .then((items) => setInstalledSkills(items))
         .catch(() => setInstalledSkills([]));
     }
-  }, [commandMenu, installedSkills]);
+    if (commandMenu && commandMenu.mode === '/' && catalogSkills === null) {
+      listSkills()
+        .then((items) => setCatalogSkills(items))
+        .catch(() => setCatalogSkills([]));
+    }
+  }, [commandMenu, installedSkills, catalogSkills]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [knowledge, setKnowledge] = useState<string[]>([]); // selected pack IDs
   const [knowledgePacks, setKnowledgePacks] = useState<KnowledgePack[] | null>(null);
@@ -1006,7 +1025,9 @@ export default function StartPage() {
   // Compose menu items based on mode. Both modes surface skills as the
   // primary way to attach a skill pack (which the server then materialises
   // into a team via synthesizeTeamRun). `/` additionally shows built-in
-  // commands. The `skill:` id prefix lets handleCommandPick dispatch.
+  // commands plus `<id>:<cmd>` sub-commands (W2, mirrors Claude Code's
+  // `/<plugin>:<command>` slash menu). The `skill:` id prefix lets
+  // handleCommandPick dispatch.
   const commandMenuItems: CommandMenuItem[] = useMemo(() => {
     if (!commandMenu) return [];
     // Stable alphabetical order by display name so the menu doesn't shuffle
@@ -1031,10 +1052,24 @@ export default function StartPage() {
       };
     });
     if (commandMenu.mode === '@') {
-      // Mention mode — skills only.
+      // Mention mode — skills only (no sub-commands; @ targets top-level
+      // skill packs that materialise into teams).
       return skillItems;
     }
-    // Slash mode — built-in commands first, then the same skill set.
+    // Slash mode — built-in commands first, then sub-commands harvested
+    // from /api/skills (entries whose skill_id contains `:`), then the
+    // installed top-level skill set. Lane B (skill-loader) registers each
+    // `<skill>/commands/*.md` file as its own SKILL with key `<id>:<cmd>`,
+    // and the router resolves `/<id>:<cmd>` tokens.
+    const subCommandItems: CommandMenuItem[] = (catalogSkills ?? [])
+      .filter((s) => s.skill_id.includes(':'))
+      .sort((a, b) => a.skill_id.localeCompare(b.skill_id, 'en'))
+      .map((s) => ({
+        id: `skill:${s.skill_id}`,
+        title: `/${s.skill_id}`,
+        subtitle: s.description || s.name,
+        hint: 'command',
+      }));
     const builtin: CommandMenuItem[] = [
       { id: 'clear', title: '/clear', subtitle: '清空 composer + 已选 skill / 附件', hint: 'command' },
       { id: 'skill', title: '/skill', subtitle: '打开 Skill picker（URL 导入）', hint: 'command' },
@@ -1042,8 +1077,8 @@ export default function StartPage() {
       { id: 'inspect', title: '/inspect', subtitle: '跳转到 Runs 历史页', hint: 'command' },
       { id: 'help', title: '/help', subtitle: '快捷键提示', hint: 'command' },
     ];
-    return [...builtin, ...skillItems];
-  }, [commandMenu, installedSkills]);
+    return [...builtin, ...subCommandItems, ...skillItems];
+  }, [commandMenu, installedSkills, catalogSkills]);
 
   function toggleKnowledgePack(packId: string) {
     setKnowledge((prev) =>
@@ -1086,10 +1121,15 @@ export default function StartPage() {
       // skill-ingest pipeline (server/src/skill-ingest/*). The daemon clones
       // pack.source.url into .shadowflow/skills/<id>/ and registers it. Re-runs
       // are idempotent: same URL → same cache → same skill id.
-      const installResp = await fetch(`${getApiBase()}/api/skills`, {
+      // W1 (2026-05-22) — drop forced_id. Server derives canonical id from
+      // the URL slug (OpenDesign-style), so any UI-side id would just race
+      // the real one. installResp.id below is authoritative.
+      // Real endpoint is POST /api/skills/ingest (see server/src/routes/skills.ts:293)
+      // — POST /api/skills doesn't exist and proxy-fallback would forward to Python:8000.
+      const installResp = await fetch(`${getApiBase()}/api/skills/ingest`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ source: pack.source.url, forced_id: pack.id }),
+        body: JSON.stringify({ source: pack.source.url }),
       });
       if (!installResp.ok) {
         const body = await installResp.text().catch(() => '');
@@ -1098,8 +1138,15 @@ export default function StartPage() {
         );
         return;
       }
-      const installData = (await installResp.json()) as { id?: string; name?: string };
-      const skill_id = installData.id ?? pack.id;
+      // Response shape from POST /api/skills/ingest:
+      //   { data: { skill_id, name, is_new, probe, source_label, source_hash, prompt_block } }
+      // (see server/src/routes/skills.ts:325)
+      const installData = (await installResp.json()) as {
+        data?: { skill_id?: string; name?: string };
+      };
+      // Fallback to local slug only when server response is missing id —
+      // shouldn't happen post-W1 but keeps the launch flow resilient.
+      const skill_id = installData.data?.skill_id ?? packSlug(pack);
 
       // Step 2 — launch a run session using the freshly installed skill_id.
       // The user goal is generic ("帮我用 <skill> 开始工作")—the real BMAD

@@ -63,6 +63,14 @@ export interface SkillDefinition {
    * the executor registers at runtime (see PermissionPolicy JSDoc).
    */
   allowed_tools?: string[];
+  /**
+   * W2 (Lane B, /<id>:<cmd> slash commands) — mirrors Claude Code v2.1.88
+   * `disable-model-invocation` plugin frontmatter flag. When true, the skill
+   * may NOT be invoked by the LLM via tool-use; it can only be triggered by
+   * an explicit user `/<id>:<cmd>` slash. Today we just persist the flag —
+   * enforcement is deferred until the dispatcher learns about it.
+   */
+  disable_model_invocation?: boolean;
 }
 
 // ─── system_prompt strings (Story 15.2 / AC5) ────────────────────────────────
