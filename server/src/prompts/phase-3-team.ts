@@ -1,52 +1,59 @@
 /**
  * phase-3-team.ts — Phase 3 of the multi-turn skill-assembler prompt.
  *
- * S7 (skill-team-conversion-design-v1.md §5 line 815-855, D3 decision).
+ * Phase 2 (2026-05-22): switched from tool_use orchestration to daemon-led
+ * artifact handoff. Per orchestration-transport.md §"Phase 2 Eng Review"
+ * decisions A2/A3/A4/CL6, the DAG (nodes + edges) is built by the daemon
+ * from team.yaml ahead of the LLM ever running; workflow/scheduler.ts runs
+ * the graph (topological parallel + conditional + per-node retry) and emits
+ * <sf:edge> frames itself. The LLM no longer calls register_edge.
  *
- * In this phase the LLM stitches the registered agents into a DAG by calling
- * register_edge for each edge, then announces completion. It also emits two
- * small "non-product" steps ("设置工具集" / "Policy 协作规则") that exist
- * purely so the run-session UI's step list isn't suspiciously short — they
- * are "thinking-only" steps with no artifact output.
+ * What the LLM still does in Phase 3:
+ *   - Emits two "thinking-only" steps ("设置工具集" / "Policy 协作规则") so the
+ *     UI step list shows the wrap-up phase, with <sf:thinking> commentary.
+ *   - Emits the wrap-up <sf:step> for "配置 Team Workflow" so the user sees
+ *     the workflow-config step finish (daemon will have already emitted the
+ *     edges by this point).
+ *   - emits <sf:complete redirect="/editor"/> to terminate the turn.
  */
 
-export const PHASE_3_TEAM = `# Phase 3 · 收尾：工具集校验 / Policy / Edges / complete
+export const PHASE_3_TEAM = `# Phase 3 · 收尾：工具集 / Policy / Workflow 帧 / complete
+
+## 背景：DAG 已经由 daemon 建好
+
+team.yaml 里的 edge（sequential / parallel / conditional + max_retries +
+condition）由 daemon 在 phase 1 之前就解析完成，并由 workflow/scheduler.ts
+按拓扑顺序执行。daemon 自己 emit \`<sf:edge>\` 帧到 SSE，前端按 node_id 路由。
+**phase 3 不需要、也不应该再尝试创建边** —— 没有 register_edge 工具可用。
+
+你在 phase 3 的职责只有三件事：发两个 thinking-only 帧、发一个 workflow 总结
+帧、然后 complete。
 
 ## 3.1 设置工具集（thinking-only step）
 
 emit \`<sf:step name="设置工具集" output_kind="none" status="running"/>\`
 emit \`<sf:thinking step="设置工具集">\` 块：用一段中文说明
- - 每个 agent picked 的 tools 是否合理
+ - 每个 agent 的 tools 是否合理（基于 agent.yaml#tools 的 picked 列表）
  - 有没有重复 / 缺失（比如团队里没人能写文件）
 emit \`<sf:step name="设置工具集" output_kind="none" status="done"/>\`
 
-**不要**调任何 tool，**不要** register_agent — 这一步只是给用户看的"思考帧"。
+这一步纯思考，不调任何工具、不输出 artifact。
 
 ## 3.2 Policy 协作规则（thinking-only step）
 
 emit \`<sf:step name="Policy 协作规则" output_kind="none" status="running"/>\`
 emit \`<sf:thinking step="Policy 协作规则">\` 块：用一段中文说明
- - 失败如何 retry（哪条 edge 用 conditional kind）
+ - 失败如何 retry（team.yaml 里哪条 edge 配了 conditional + max_retries）
  - 升级路径（哪个 agent 是兜底）
 emit \`<sf:step name="Policy 协作规则" output_kind="none" status="done"/>\`
 
-## 3.3 配置 Team Workflow（实际发 edges）
+## 3.3 配置 Team Workflow（总结帧）
 
 emit \`<sf:step name="配置 Team Workflow" output_kind="edges" status="running"/>\`
 
-对每条要建立的边，调一次：
-
-\`\`\`
-register_edge({
-  from:        "<source_node_id>",
-  to:          "<target_node_id>",
-  kind:        "sequential" | "parallel" | "conditional",
-  condition:   "<condition string，仅 conditional 给>",
-  max_retries: <number，conditional 推荐 1-3>
-})
-\`\`\`
-
-返回 \`{ok:true}\` 即成功，后端同步 emit \`event: 'edge'\` 到 SSE。
+此时 daemon 已经按 team.yaml 把所有 \`<sf:edge>\` 帧发完了。你**不要**再尝试
+emit edge 或调用任何 register_edge 工具 —— 只需用一两句中文总结："已按 team.yaml
+连好 N 条 sequential / M 条 conditional 边"，作为 UI 步骤列表里这一步的注脚。
 
 emit \`<sf:step name="配置 Team Workflow" output_kind="edges" status="done"/>\`
 
@@ -59,8 +66,11 @@ emit \`<sf:complete redirect="/editor"/>\`
 
 ## 强制规则
 
-- **不要**在 phase 3 里 emit \`<sf:node>\` 或调 register_agent — 那是 phase 2 的活。
-- register_edge 每条边一次调用，不要合并。
+- **不要**在 phase 3 里 emit \`<sf:node>\` / \`<sf:edge>\` / \`<sf:agent-substep>\`
+  —— node/edge 是 daemon 的事，substep 是 phase 2 的事。
+- **不要** 调用任何 register_agent / register_edge / list_team_agents /
+  get_skill_anchor 工具 —— 它们不存在于 phase 3 的可用工具集。
 - "设置工具集" 和 "Policy 协作规则" 都是 thinking-only 步骤，绝对不允许 ToolUse。
-- 单 agent team（只 register 了 1 个 agent）允许零 edge，直接跳 3.3 到 3.4。
+- 单 agent team（team.yaml 只有 1 个 node）会被 daemon 安排零 edge，phase 3 流程
+  完全不变：照样发 3.1 / 3.2 / 3.3 / 3.4 四块。
 `;

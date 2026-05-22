@@ -84,12 +84,39 @@ function parseAttrs(attrStr: string): Record<string, string> {
 
 // ─── main parser ─────────────────────────────────────────────────────────────
 
+/**
+ * Parse a buffer of streamed LLM text and extract ShadowFlow control tags.
+ *
+ * @param buffer            Accumulated text-delta buffer (caller maintains).
+ * @param sessionId         Session id (used for per-session step-gating state).
+ * @param artifactCallback  Fired synchronously when an <artifact> block closes.
+ * @param currentNodeId     Phase 2 eng-review A4: optional id of the workflow
+ *                          node currently producing chunks. When the orchestration
+ *                          layer (workflow scheduler / DAG runner) supplies this,
+ *                          the parser attaches it as `node_id` on chunk-class
+ *                          events (text/assemble/agent-substep/question-form/
+ *                          thinking-chunk) so the front-end can route concurrent
+ *                          chunks from a parallel-DAG to the right AgentDetail
+ *                          panel. When undefined the field is omitted, keeping
+ *                          legacy single-agent callers byte-equivalent (full
+ *                          backward compatibility).
+ */
 export function parseAndExtract(
   buffer: string,
   sessionId: string,
   artifactCallback: ArtifactCallback,
+  currentNodeId?: string,
 ): { buffer: string; events: SseEvent[] } {
   const events: SseEvent[] = [];
+
+  // Phase 2 A4 helper — return a spread of `{ node_id }` only when the caller
+  // supplied a non-empty currentNodeId. We deliberately *omit* the key entirely
+  // (rather than emit `node_id: undefined`) so JSON.stringify output stays
+  // identical to the pre-Phase-2 contract for legacy callers, and any
+  // downstream schema validation that uses `hasOwnProperty`/strict equality
+  // does not see an extra key.
+  const nodeIdField = (): { node_id?: string } =>
+    currentNodeId ? { node_id: currentNodeId } : {};
 
   // S2.2 — mark the currently-open step's gate as having produced its expected
   // output_kind. Defined at the top so all tag handlers below can call it.
@@ -160,6 +187,7 @@ export function parseAndExtract(
         output_kind: outputKind,
         status,
         elapsed_ms: a.elapsed_ms ? parseInt(a.elapsed_ms, 10) : null,
+        ...nodeIdField(),
       },
     });
 
@@ -285,10 +313,16 @@ export function parseAndExtract(
   // so each section header can show "from <skill>.yaml#<slot> NNN tokens".
   buffer = buffer.replace(/<sf:agent-substep\s+((?:[^>"']|"[^"]*"|'[^']*')+?)\/>/g, (_match, attrs: string) => {
     const a = parseAttrs(attrs);
+    // Phase 2 A4 — agent-substep ALREADY carries node_id from the LLM-emitted
+    // tag attribute (the parser was extended for this in 2026-05-20 S6.2). The
+    // tag's attribute remains the authoritative source. We fall back to the
+    // currentNodeId supplied by the orchestrator only when the LLM omits the
+    // attribute, so a parallel-DAG node that emits an unscoped <sf:agent-substep/>
+    // still gets routed to the right AgentDetail panel.
     events.push({
       event: 'agent-substep',
       data: {
-        node_id: a.node_id ?? '',
+        node_id: a.node_id || currentNodeId || '',
         substep: a.substep ?? '',
         status: a.status ?? 'running',
         elapsed_ms: a.elapsed_ms ? parseInt(a.elapsed_ms, 10) : null,
@@ -315,6 +349,7 @@ export function parseAndExtract(
         data: {
           step: a.step ?? null,
           text: body.trim(),
+          ...nodeIdField(),
         },
       });
       return '';
@@ -349,6 +384,7 @@ export function parseAndExtract(
           id: a.id ?? 'unknown',
           title: a.title ?? '',
           body: parsedBody,
+          ...nodeIdField(),
         },
       });
       return '';
@@ -473,7 +509,7 @@ export function parseAndExtract(
   const partialTagIdx = findPartialTagStart(buffer);
   const safeText = partialTagIdx === -1 ? buffer : buffer.slice(0, partialTagIdx);
   if (safeText.length > 0) {
-    events.push({ event: 'text', data: { text: safeText } });
+    events.push({ event: 'text', data: { text: safeText, ...nodeIdField() } });
     buffer = partialTagIdx === -1 ? '' : buffer.slice(partialTagIdx);
   }
 

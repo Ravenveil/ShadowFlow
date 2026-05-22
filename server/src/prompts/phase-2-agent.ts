@@ -1,34 +1,46 @@
 /**
  * phase-2-agent.ts — Phase 2 of the multi-turn skill-assembler prompt.
  *
- * S7 (skill-team-conversion-design-v1.md §5 line 815-855, D3 decision).
+ * Phase 2 (2026-05-22): switched from tool_use orchestration to daemon-led
+ * artifact handoff. Per orchestration-transport.md §"Phase 2 Eng Review"
+ * decisions A2/A3/CL6, the daemon now drives team execution: it pre-loads
+ * team.yaml + agent.yaml from disk, builds the DAG with workflow/scheduler.ts,
+ * and emits node/edge SSE events itself. The LLM is no longer asked to call
+ * list_team_agents / get_skill_anchor / register_agent / register_edge.
  *
- * In this phase the LLM, for each agent it decided to hire in phase 1, walks
- * 5 substeps (identity / persona / model / tools / memory). Each substep:
- *   - emits a running <sf:agent-substep>
- *   - calls get_skill_anchor (for persona/model/tools/memory)
- *   - calls register_agent on the LAST substep of each agent
- *     (or splits — see "register_agent timing" below)
- *   - emits a done <sf:agent-substep>
+ * What the LLM still does in Phase 2:
+ *   - Acts as the agent the daemon has scheduled (system prompt = that agent's
+ *     persona, from agent.yaml#persona, fed verbatim by the daemon).
+ *   - Emits <sf:agent-substep> tags to express running/done state for the
+ *     5 substeps (identity / persona / model / tools / memory). These are
+ *     pure event tags — they no longer carry "look at what tool I just
+ *     called" semantics.
+ *   - Reads its upstream artifact (e.g. docs/brief.md) and writes its own
+ *     artifact (e.g. docs/architecture.md) for the next agent in the DAG.
  *
- * Crucial invariant (§4.3 引用 vs 创造):
- *   - persona / model / tools / memory bodies fed into register_agent MUST
- *     come byte-for-byte from get_skill_anchor's `body` field. Do NOT
- *     paraphrase. Do NOT trim whitespace. Do NOT translate.
- *   - The frontend SkillSection renders a "cached 绿" pill when the body
- *     matches the yaml verbatim; paraphrasing breaks that pill.
+ * What the daemon does ahead of Phase 2:
+ *   - Emits the <sf:node>/<sf:edge> blueprint frames for every agent in the
+ *     selected subset, so the UI already shows the team graph before the
+ *     LLM produces a single token.
  */
 
-export const PHASE_2_AGENT = `# Phase 2 · 为每个选中的 Agent 配置 5 个 substep
+export const PHASE_2_AGENT = `# Phase 2 · 为每个选中的 Agent 推进 5 个 substep
+
+## 背景：daemon 已经建好图
+
+到 phase 2 时，daemon 已经从 team.yaml + agent.yaml 解析出全部启用的 agent，
+并预先 emit 了 \`<sf:node>\` / \`<sf:edge>\` 蓝图帧。前端左侧节点列表已经渲染。
+**你不需要、也不应该再尝试注册 agent 或边** —— 那是 daemon 的事。
+
+你在 phase 2 的职责只有一件事：作为 daemon 调度到你的那个 agent，按 5 个
+substep 顺序 emit 状态帧，并按 system prompt 完成产出。
 
 ## 总框架
 
 emit \`<sf:step name="配置 Agent 角色" output_kind="nodes" status="running"/>\`
 
-然后**对每个 phase 1 选中的 agent**（在 list_team_agents 返回里）做这 5 个 substep。
-未选中（决定不上岗的）agent，发一条 \`<sf:agent-substep node_id="..." substep="identity"
-status="pending"/>\` 让左侧步骤列表显示灰色「等候」，但**不调用任何 tool、不
-register_agent**。
+然后**对你被调度执行的那个 agent**，按顺序 emit 5 个 substep。
+未被调度到的 agent 由 daemon 自己 emit pending 状态，无需你处理。
 
 最后 emit \`<sf:step name="配置 Agent 角色" output_kind="nodes" status="done"/>\`.
 
@@ -36,65 +48,47 @@ register_agent**。
 
 按顺序、不可跳：identity → persona → model → tools → memory.
 
-每个 substep：
+每个 substep 的形态：
 
 \`\`\`
-<sf:agent-substep node_id="<agent_id>" substep="<slot>" status="running"/>
-ToolUse get_skill_anchor({skill_id, agent_id, slot: "<slot>"})    # identity 不调
-... (running tool_result)
-<sf:agent-substep node_id="<agent_id>" substep="<slot>" status="done"
-   source="<ref>" tokens="<n>" cached="true"/>
+<sf:agent-substep node_id="<your_agent_id>" substep="<slot>" status="running"/>
+... (你的内容输出 / 思考过程)
+<sf:agent-substep node_id="<your_agent_id>" substep="<slot>" status="done"
+   source="<agent>.agent.yaml#<slot>" tokens="<n>" cached="true"/>
 \`\`\`
 
-### identity substep（无 tool）
-identity 只是占位 — 标记"开始配置该 agent"。emit running, 然后立刻 emit done
-（无 source/tokens）。
+\`source\` / \`tokens\` / \`cached\` 字段的值由 daemon 在你的 system prompt 上下文里
+告诉你（agent.yaml 解析后的元数据），原样回填即可。
+
+### identity substep
+identity 只是占位 — 标记"我开始作为这个 agent 工作"。emit running, 然后立刻
+emit done（无 source/tokens/cached）。
 
 ### persona / model / tools / memory substep
-ToolUse \`get_skill_anchor({skill_id: "<skill>", agent_id: "<id>", slot: "<slot>"})\`，
-拿到 \`{ref, tokens, body}\`。把 \`ref\` 放到 substep done 帧的 \`source\` 属性，
-\`tokens\` 放到 \`tokens\`，\`cached\` 标 \`"true"\`。
+这 4 个 substep 对应你身份的 4 个切面。emit running → 简短表达"我读到了我的
+persona / model / tools / memory 配置" → emit done，把 daemon 在 context 里
+提供的 \`ref\` / \`tokens\` 元数据原样填进 done 帧的属性。
 
-## register_agent 的调用时机
+## artifact handoff（这才是 phase 2 的核心产出）
 
-每个 agent 走完 memory substep 后（即所有 4 个有 tool 的 slot 都拿到 body 了），
-调用 **一次** \`register_agent({...})\`，把刚刚 fetch 到的 4 个 body 原样塞进入参：
+你的 system prompt 会告诉你：
+- 你的上游 agent 把成果写在哪个文件（例：\`docs/brief.md\`）
+- 你需要把自己的产出写到哪个文件（例：\`docs/architecture.md\`）
 
-\`\`\`
-register_agent({
-  node_id:           <agent.id>,
-  title:             <agent.title>,          # 从 list_team_agents 返回
-  type:              "agent" | "coordinator",
-  sub:               <agent.sub or "">,      # 副标题
-  chips:             ["<model>", "<role>", ...],   # 3-5 个中文标签
-  avatar_char:       <title 首字>,
-  status:            "ready",
-  model_id:          <从 model body JSON 里读出的 id>,
-  model_temperature: <model.temperature 若有>,
-  model_max_tokens:  <model.max_tokens 若有>,
-  model_context_window: <model.context_window 若有>,
-  tools_picked:      <tools body JSON 里的 picked 数组>,
-  tools_candidate:   <tools body JSON 里的 candidate 数组 — 可省>,
-  persona:           <persona body —— 原样字符串，verbatim>,
-  persona_source:    <persona 的 ref>,
-  persona_tokens:    <persona 的 tokens>,
-  persona_cached:    true,
-  memory:            <memory body —— 原样字符串>,
-  io_input:          <可省 — 后续 io substep 才填>,
-  io_output:         <可省>
-})
-\`\`\`
-
-返回 \`{ok:true, node_id}\` 即成功；后端会同步 emit \`event: 'node'\` 到 SSE，
-前端 \`<RunSessionPage>\` 渲染该节点。
+读上游文件 → 按 persona 工作 → 写下游文件。下一层节点的 LLM 会在新一轮 turn
+里读你刚写的文件，daemon 用 DAG scheduler 串起整条流水线。
 
 ## 强制规则
 
-- **不要**在 phase 2 里 emit \`<sf:node>\` / \`<sf:edge>\` / \`<sf:agent-persona>\`
-  这些标签 —— register_agent tool 已经替你完成了 emit。
-- **不要** paraphrase persona/memory body。LLM 只是搬运工，不是改写工。
-- 4 个 slot 顺序固定（persona → model → tools → memory），每个 slot
-  都要单独一次 get_skill_anchor 调用，不要合并。
-- substep done 帧的 \`source\` 必须是 get_skill_anchor 返回的 \`ref\` 原样
-  （例: "reader.agent.yaml#persona"）。
+- **不要** emit \`<sf:node>\` / \`<sf:edge>\` / \`<sf:agent-persona>\` 这些建图帧。
+  daemon 已经发完了，重复 emit 会导致前端节点重复渲染。
+- **不要** 尝试调用任何 register_agent / register_edge / list_team_agents /
+  get_skill_anchor 工具 —— 它们不存在于 phase 2 的可用工具集。
+- 5 个 substep 顺序固定（identity → persona → model → tools → memory），
+  每个 substep 都要单独 emit running + done 一对帧。
+- substep done 帧的 \`source\` / \`tokens\` / \`cached\` 必须与 daemon 在你 context
+  里提供的 anchor 元数据一致（例: \`source="reader.agent.yaml#persona"\`），
+  不要瞎编。
+- 产出物（artifact 文件）必须严格写到 system prompt 指定的路径；DAG scheduler
+  靠这个路径把成果传给下游节点。
 `;

@@ -214,6 +214,123 @@ version: "1.0"
   check('artifact written', captured.length === 1 && captured[0].filename === 'team_blueprint.yml');
 })();
 
+// ─── Test 11: Phase 2 A4 — node_id on chunk events when supplied ────────────
+//
+// Topological parallel DAG emits multiple agents' chunks concurrently. The
+// front-end needs `node_id` on every chunk to route to the right AgentDetail
+// panel. parseAndExtract() now accepts an optional `currentNodeId` 4th arg
+// which it stamps onto text / assemble / thinking-chunk / question-form
+// events. agent-substep already carries the LLM-emitted node_id but falls
+// back to currentNodeId when the tag attribute is empty.
+
+(function testNodeIdPropagation() {
+  console.log('\n[11] Phase 2 A4 — currentNodeId propagated to chunk events');
+  const input = `
+<sf:step name="规划" status="running" output_kind="none"/>
+<sf:thinking>思考中</sf:thinking>
+<sf:question-form id="q1" title="确认范围">{"questions":[]}</sf:question-form>
+plain natural-language reply
+<sf:agent-substep substep="persona" status="running"/>
+`;
+  const { events } = parseAndExtract(input, 'sess-11', noopArtifact, 'agent-reader');
+
+  const txt = findEvent(events, 'text');
+  check('text event carries node_id=agent-reader',
+    (txt?.data as Record<string, unknown>)?.node_id === 'agent-reader',
+    { data: txt?.data });
+
+  const asm = findEvent(events, 'assemble');
+  check('assemble event carries node_id=agent-reader',
+    (asm?.data as Record<string, unknown>)?.node_id === 'agent-reader',
+    { data: asm?.data });
+
+  const think = findEvent(events, 'thinking-chunk');
+  check('thinking-chunk carries node_id=agent-reader',
+    (think?.data as Record<string, unknown>)?.node_id === 'agent-reader',
+    { data: think?.data });
+
+  const q = findEvent(events, 'question-form');
+  check('question-form carries node_id=agent-reader',
+    (q?.data as Record<string, unknown>)?.node_id === 'agent-reader',
+    { data: q?.data });
+
+  const sub = findEvent(events, 'agent-substep');
+  check('agent-substep (no tag attr) falls back to currentNodeId',
+    (sub?.data as Record<string, unknown>)?.node_id === 'agent-reader',
+    { data: sub?.data });
+})();
+
+// ─── Test 12: undefined currentNodeId → no node_id key (backward compat) ────
+
+(function testNodeIdBackwardCompat() {
+  console.log('\n[12] Phase 2 A4 — undefined nodeId → events omit node_id (legacy)');
+  const input = `
+<sf:step name="规划" status="running" output_kind="none"/>
+<sf:thinking>思考中</sf:thinking>
+plain reply
+`;
+  const { events } = parseAndExtract(input, 'sess-12', noopArtifact);
+
+  const txt = findEvent(events, 'text');
+  const txtData = txt?.data as Record<string, unknown>;
+  check('text event has no node_id key when caller omits',
+    !('node_id' in (txtData ?? {})),
+    { data: txtData });
+
+  const asm = findEvent(events, 'assemble');
+  const asmData = asm?.data as Record<string, unknown>;
+  check('assemble has no node_id key when caller omits',
+    !('node_id' in (asmData ?? {})),
+    { data: asmData });
+
+  const think = findEvent(events, 'thinking-chunk');
+  const thinkData = think?.data as Record<string, unknown>;
+  check('thinking-chunk has no node_id key when caller omits',
+    !('node_id' in (thinkData ?? {})),
+    { data: thinkData });
+})();
+
+// ─── Test 13: agent-substep tag attribute wins over currentNodeId ───────────
+//
+// When the LLM explicitly emits <sf:agent-substep node_id="X"/> the tag's
+// attribute is authoritative — orchestrator's currentNodeId must NOT
+// override it. This matters when an orchestrator multiplexes multiple
+// agents and the LLM voluntarily tags chunks with the precise node.
+
+(function testAgentSubstepTagWins() {
+  console.log('\n[13] agent-substep tag attribute wins over currentNodeId');
+  const input = '<sf:agent-substep node_id="agent-reviewer" substep="model" status="done"/>';
+  const { events } = parseAndExtract(input, 'sess-13', noopArtifact, 'agent-router');
+  const sub = findEvent(events, 'agent-substep');
+  check('tag attr node_id=agent-reviewer (not agent-router)',
+    (sub?.data as Record<string, unknown>)?.node_id === 'agent-reviewer',
+    { data: sub?.data });
+})();
+
+// ─── Test 14: separate parse calls with different node ids don't bleed ──────
+
+(function testNoBleedAcrossCalls() {
+  console.log('\n[14] separate parse calls with different nodeIds — no state bleed');
+  // Two distinct parser invocations representing two parallel-DAG nodes
+  // emitting chunks concurrently. Each call carries its own currentNodeId;
+  // the chunks must be tagged accordingly. The parser is per-session-stateful
+  // but the node_id MUST NOT persist across calls.
+  const r1 = parseAndExtract('alpha reply', 'sess-14', noopArtifact, 'agent-A');
+  const r2 = parseAndExtract('beta reply', 'sess-14', noopArtifact, 'agent-B');
+  const r3 = parseAndExtract('gamma reply', 'sess-14', noopArtifact); // no nodeId
+
+  const t1 = findEvent(r1.events, 'text');
+  const t2 = findEvent(r2.events, 'text');
+  const t3 = findEvent(r3.events, 'text');
+  check('call1 text → node_id=agent-A',
+    (t1?.data as Record<string, unknown>)?.node_id === 'agent-A');
+  check('call2 text → node_id=agent-B',
+    (t2?.data as Record<string, unknown>)?.node_id === 'agent-B');
+  check('call3 text (no nodeId arg) → no node_id key',
+    !('node_id' in ((t3?.data as Record<string, unknown>) ?? {})),
+    { data: t3?.data });
+})();
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 console.log('\n────────────────────────────────────────');
