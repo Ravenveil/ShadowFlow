@@ -23,6 +23,7 @@ import {
   LAST_DS_STORAGE,
 } from '../api/_base';
 import type { ProviderId } from '../api/_base';
+import { buildPickerOverrides } from '../common/lib/pickerOverrides';
 import { ApiKeySettings } from '../components/ApiKeySettings';
 import { SettingsModal } from '../components/SettingsModal';
 import { useI18n } from '../common/i18n';
@@ -1919,10 +1920,11 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
     setMessage('');
     setAttachedFiles([]);
     try {
+      const overrides = buildPickerOverrides(selectedExecutor, selectedModel);
       const resp = await fetch(`/api/run-sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: fullContent }),
+        body: JSON.stringify({ content: fullContent, ...overrides }),
       });
       if (!resp.ok) {
         console.warn(`[run-session] follow-up POST failed: HTTP ${resp.status}`);
@@ -1956,22 +1958,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
     if (!content || resending) return;
     setResending(true);
     try {
-      const overrides: Record<string, string> = {};
-      if (selectedExecutor.startsWith('byok:')) {
-        const pid = selectedExecutor.slice(5);
-        overrides.provider = pid;
-        if (selectedModel) overrides.model = selectedModel;
-        const key = getStoredApiKey(pid as never);
-        if (key) overrides.api_key = key;
-      } else if (selectedExecutor.startsWith('cli:')) {
-        overrides.executor = selectedExecutor.slice(4);
-        if (selectedModel) overrides.model = selectedModel;
-      } else if (selectedModel) {
-        overrides.model = selectedModel;
-      }
-      // Anthropic Claude direct (Story 15.7) uses a dedicated key slot
-      const anthroKey = getStoredApiKey();
-      if (anthroKey) overrides.anthropic_key = anthroKey;
+      const overrides = buildPickerOverrides(selectedExecutor, selectedModel);
 
       const resp = await fetch(`/api/run-sessions/${sessionId}/messages`, {
         method: 'POST',
@@ -3011,10 +2998,14 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
         onSubmit={async (jsonContent) => {
           try {
             const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            const overrides = buildPickerOverrides(
+              localStorage.getItem('sf.defaultExecutor') ?? '',
+              localStorage.getItem('sf.model') ?? '',
+            );
             const resp = await fetch(`${getApiBase()}/api/run-sessions/${sessionId}/messages`, {
               method: 'POST',
               headers,
-              body: JSON.stringify({ content: jsonContent }),
+              body: JSON.stringify({ content: jsonContent, ...overrides }),
             });
             if (resp.ok) {
               const data = (await resp.json()) as { session_id: string };
