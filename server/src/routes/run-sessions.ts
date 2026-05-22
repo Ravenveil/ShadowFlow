@@ -58,6 +58,7 @@ import {
 // arrives many seconds later, after parser extraction). Two frames coexist;
 // front-end may diff them for consistency (S5.2 future story).
 import { classifyTS } from '../lib/intent-router';
+import { loadTeam as loadGlobalTeam } from '../lib/team-yaml';
 // S2.3 (intent-workflow-design-v1 §4.4) — step artifact persistence + per-step
 // SSE frame. Parser fires node/edge/blueprint between `assemble:running` and
 // `assemble:done`; we collect them per open step, then on `done` package a
@@ -877,8 +878,37 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     //   GET /api/run-sessions/:id/stream?fallback=synthetic
     // 仅在 BYOK key 配置错 / 离线 demo / LLM 不可用兜底时使用。设计稿见
     // docs/design/skill-team-conversion-design-v1.md §G "ShadowFlow 路径选择"。
-    const teamSpec = skillForPrompt?.team;
+    let teamSpec = skillForPrompt?.team;
     const wantSyntheticFallback = req.query.fallback === 'synthetic';
+
+    // S6.10-D demo aid — `?fallback=synthetic` + no teamSpec is the common
+    // case for users who didn't pick a Team Skill (the default
+    // `agent-team-blueprint` has no team_ref). Without a fallback team the
+    // synthetic path is unreachable, the assembler runs for real, and a
+    // missing API key returns 4 meta events then closes — the front-end then
+    // burns retries reconnecting to the same dead session. To make the
+    // demo URL trick `?fallback=synthetic` always work, load the BMAD team
+    // yaml from the global library as the default rehearsal script.
+    if (wantSyntheticFallback && !teamSpec) {
+      try {
+        const result = loadGlobalTeam('bmad');
+        if (result.team) {
+          teamSpec = {
+            name: result.team.name,
+            mode: result.team.mode,
+            policy: result.team.policy,
+            retry: result.team.retry,
+            agents: result.resolvedAgents,
+            edges: result.team.edges_v1.map(e => ({ from: e.from, to: e.to })),
+            loaded_at: result.team.loaded_at,
+            source_dir: result.team.source_dir,
+          };
+          console.log(`[run-sessions] fallback=synthetic + no teamSpec → loaded BMAD demo team`);
+        }
+      } catch (err) {
+        console.warn(`[run-sessions] fallback=synthetic BMAD demo team load failed:`, err);
+      }
+    }
 
     // 2026-05-20 — Team-first vs Agent-first prompt 分流
     // teamSpec 存在（Skill Pack 有团队蓝图，如 BMAD/gSTACK）→ team-first，
