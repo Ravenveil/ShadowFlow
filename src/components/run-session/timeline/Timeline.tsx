@@ -20,6 +20,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { TimelineMessage } from './types';
 import { MessageRegistry } from './MessageRegistry';
 import { StatusLine } from './messages/StatusLine';
+import { TopStatusBar } from './TopStatusBar';
 import styles from './timeline.module.css';
 
 export interface TimelineProps {
@@ -35,6 +36,25 @@ export interface TimelineProps {
    * status line in its own slot outside the Timeline tree.
    */
   renderStatusLine?: boolean;
+  /**
+   * Round 2 (2026-05-24) — top status bar (wall-clock + cost chip).
+   * When true and `startedAt` is provided, renders v8 .app-pill + .app-run-meta
+   * (line 1545-1547) above the scrolling stream. Default false to avoid
+   * surprising existing callers — RunSessionPage opts in.
+   */
+  renderTopBar?: boolean;
+  startedAt?: number;
+  isComplete?: boolean;
+  hasError?: boolean;
+  finalElapsedMs?: number;
+  costCny?: number;
+  /**
+   * Round 2 (2026-05-24) — user message hover-retry. When provided, each
+   * `user_turn` row gets a RotateCcw button (opacity:0 default, fades in
+   * on hover) wired to onUserRetry(text).
+   */
+  onUserRetry?: (text: string) => void;
+  resending?: boolean;
 }
 
 const STICK_THRESHOLD_PX = 100;
@@ -43,6 +63,14 @@ export const Timeline = memo(function Timeline({
   messages,
   className,
   renderStatusLine = true,
+  renderTopBar = false,
+  startedAt,
+  isComplete = false,
+  hasError = false,
+  finalElapsedMs,
+  costCny,
+  onUserRetry,
+  resending = false,
 }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Tracks whether the user is "stuck" to the bottom (default true). Flips
@@ -94,12 +122,37 @@ export const Timeline = memo(function Timeline({
     ? `${styles.container} ${className}`
     : styles.container;
 
+  // Derive a sane startedAt if caller didn't pass one — use the earliest
+  // message's `ts`. Falls back to undefined when no messages yet (TopStatusBar
+  // renders `—`).
+  const derivedStartedAt = startedAt ?? (messages.length > 0
+    ? messages.reduce((min, m) => (m.ts < min ? m.ts : min), messages[0]!.ts)
+    : undefined);
+
+  const topBarState: 'running' | 'done' | 'error' = hasError
+    ? 'error'
+    : isComplete
+      ? 'done'
+      : 'running';
+
   return (
     <>
+      {renderTopBar && (
+        <TopStatusBar
+          startedAt={derivedStartedAt}
+          state={topBarState}
+          finalElapsedMs={finalElapsedMs}
+          costCny={costCny}
+        />
+      )}
       <div className={containerClass} ref={containerRef}>
         {streamMessages.map((m) => (
           <div key={m.id} className={styles.item} data-kind={m.kind}>
-            <MessageRegistry msg={m} />
+            <MessageRegistry
+              msg={m}
+              onUserRetry={onUserRetry}
+              resending={resending}
+            />
           </div>
         ))}
       </div>

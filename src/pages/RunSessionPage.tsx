@@ -2215,7 +2215,14 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             Renders by default; legacy block below is kept as opt-in fallback
             via localStorage `sf.legacyLeftPane=1`. */}
         {useTimeline && (
-          <Timeline messages={session.messages} />
+          <Timeline
+            messages={session.messages}
+            renderTopBar
+            isComplete={session.isComplete}
+            hasError={Boolean(session.error)}
+            onUserRetry={handleResend}
+            resending={resending}
+          />
         )}
 
         {/* ─── Legacy left-pane stack (pre-S6.10) ─────────────────────────
