@@ -44,6 +44,8 @@ export interface DiffLine {
   no: number;
   mark: '+' | '-' | ' ';
   code: string;
+  /** P2-4 — when true, render a blinking caret at end of line (v8 .cur). */
+  cursor?: boolean;
 }
 
 export type TimelineMessage =

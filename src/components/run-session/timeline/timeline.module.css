@@ -302,6 +302,10 @@
 }
 .echoGlyph { color: var(--fg-5); user-select: none; font-size: 11px; }
 .echoBody { flex: 1; color: var(--fg-3); }
+.echoAdd  { color: var(--status-ok); font-weight: 600; }
+.echoDel  { color: var(--status-err); font-weight: 600; }
+.echoFile { color: var(--fg-1); font-weight: 600; }
+.echoNum  { color: var(--fg-2); font-weight: 600; font-family: var(--font-mono); }
 
 /* ── step panel ────────────────────────────────────────────── */
 .panel {
@@ -488,6 +492,16 @@
 .diffMarkAdd { color: var(--status-ok); }
 .diffMarkDel { color: var(--status-err); }
 .diffCode { color: var(--fg-2); white-space: pre; }
+.diffCaret {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  background: var(--accent-bright);
+  margin-left: 2px;
+  vertical-align: -2px;
+  animation: tl-pulse 1.05s ease-in-out infinite;
+  border-radius: 1px;
+}
 
 /* ── msg-foot · end-of-turn summary ────────────────────────── */
 .foot {

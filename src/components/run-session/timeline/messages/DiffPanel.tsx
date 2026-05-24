@@ -39,7 +39,10 @@ export const DiffPanel = memo(function DiffPanel({ msg }: Props) {
           <div key={`${i}-${line.no}`} className={lineClass(line.mark)}>
             <span className={styles.diffGut}>{line.no}</span>
             <span className={markClass(line.mark)}>{line.mark}</span>
-            <span className={styles.diffCode}>{line.code}</span>
+            <span className={styles.diffCode}>
+              {line.code}
+              {line.cursor && <span className={styles.diffCaret} aria-hidden />}
+            </span>
           </div>
         ))}
       </div>

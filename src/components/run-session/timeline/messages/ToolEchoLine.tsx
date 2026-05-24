@@ -26,15 +26,71 @@ function stripToolXml(raw: string): string {
   return out;
 }
 
+/**
+ * P1-1 audit recommendation — until server emits structured segments, fake
+ * diff-stat / file / number highlighting client-side via regex. Matches:
+ *   +12 lines / -3 lines      → .echoAdd / .echoDel
+ *   files like foo.ts:42      → .echoFile
+ *   bare integers 632t / 12.4s → .echoNum
+ * Non-matching slices fall through as plain text.
+ */
+type Seg = { kind: 'text' | 'add' | 'del' | 'file' | 'num'; text: string };
+
+const HIGHLIGHT_RE =
+  /([+-]\d+(?:\s*(?:lines?|行))?)|([\w./-]+\.(?:ts|tsx|js|jsx|json|yaml|yml|md|py|css|html|sh|toml)(?::\d+)?)|(\b\d+(?:\.\d+)?(?:s|ms|t|k|kb|mb)\b)/gi;
+
+function segmentBody(raw: string): Seg[] {
+  const segs: Seg[] = [];
+  let lastIdx = 0;
+  for (const m of raw.matchAll(HIGHLIGHT_RE)) {
+    const start = m.index ?? 0;
+    if (start > lastIdx) {
+      segs.push({ kind: 'text', text: raw.slice(lastIdx, start) });
+    }
+    if (m[1] !== undefined) {
+      segs.push({
+        kind: m[1].trim().startsWith('+') ? 'add' : 'del',
+        text: m[1],
+      });
+    } else if (m[2] !== undefined) {
+      segs.push({ kind: 'file', text: m[2] });
+    } else if (m[3] !== undefined) {
+      segs.push({ kind: 'num', text: m[3] });
+    }
+    lastIdx = start + m[0].length;
+  }
+  if (lastIdx < raw.length) segs.push({ kind: 'text', text: raw.slice(lastIdx) });
+  return segs;
+}
+
+const segClass: Record<Seg['kind'], string> = {
+  text: '',
+  add: styles.echoAdd,
+  del: styles.echoDel,
+  file: styles.echoFile,
+  num: styles.echoNum,
+};
+
 export const ToolEchoLine = memo(function ToolEchoLine({ msg }: Props) {
-  const clean = useMemo(() => stripToolXml(msg.body), [msg.body]);
-  if (!clean.trim()) return null;
+  const segs = useMemo(() => segmentBody(stripToolXml(msg.body)), [msg.body]);
+  if (segs.length === 0) return null;
+  if (segs.every((s) => !s.text.trim())) return null;
   return (
     <div className={styles.echo}>
       <span className={styles.echoGlyph} aria-hidden>
         ⎿
       </span>
-      <span className={styles.echoBody}>{clean}</span>
+      <span className={styles.echoBody}>
+        {segs.map((s, i) =>
+          s.kind === 'text' ? (
+            <span key={i}>{s.text}</span>
+          ) : (
+            <span key={i} className={segClass[s.kind]}>
+              {s.text}
+            </span>
+          ),
+        )}
+      </span>
     </div>
   );
 });
