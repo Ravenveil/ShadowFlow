@@ -792,3 +792,189 @@
 .tool:hover .toolName { color: var(--accent-bright); }
 .tool:hover .toolLead { color: var(--accent); }
 
+/* ── Round 2.5 · markdown-extracted row chips ────────────────────────
+ *
+ * Shared chip base used by BashChip / CodeBlockRow / BashInline. All
+ * chips are flat — radius 6px, 1px border, no large accent background.
+ * Visual ref: TRAE timeline screenshots + OpenDesign chat panel pattern
+ * in docs/round2/round2-spec-2026-05-24.md ("OpenDesign UI 证据"). */
+.textStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bashChip,
+.codeBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elev-1);
+  overflow: hidden;
+  transition: border-color .18s ease, background .18s ease;
+  animation: tl-fade-in 140ms ease-out;
+}
+.bashChip:hover,
+.codeBlock:hover {
+  border-color: var(--border);
+}
+.chipHeader {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  background: transparent;
+  min-height: 26px;
+}
+.chipLead {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11.5px;
+  flex-shrink: 0;
+  user-select: none;
+}
+.chipKind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-2);
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: lowercase;
+  padding: 1px 5px;
+  background: var(--bg-elev-2, var(--bg));
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.chipTitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-1);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chipBadge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: lowercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.chipBadge[data-status="done"] {
+  color: var(--status-ok);
+  background: var(--status-ok-tint);
+}
+.chipBadge[data-status="info"] {
+  color: var(--fg-3);
+  background: var(--bg-elev-2, var(--bg));
+  border: 1px solid var(--border-subtle);
+}
+.chipBadge[data-status="error"] {
+  color: var(--status-err);
+  background: color-mix(in oklch, var(--status-err) 10%, transparent);
+}
+.chipToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+  flex-shrink: 0;
+}
+.chipToggle:hover {
+  color: var(--accent-bright);
+  border-color: color-mix(in oklch, var(--accent) 40%, transparent);
+}
+.chipChev {
+  font-size: 9px;
+  transition: transform .18s cubic-bezier(.4,0,.2,1);
+  font-family: var(--font-mono);
+}
+.chipChevOpen { transform: rotate(90deg); }
+.chipExpanded {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--fg-2);
+  background: var(--bg);
+  border-top: 1px solid var(--border-subtle);
+  padding: 8px 10px;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+  animation: tl-fade-in 160ms ease-out;
+}
+
+/* inline highlights inside TextRow — diff markers and file paths get a
+ * subtle mono treatment but stay inline with the surrounding prose */
+.textPath {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-2);
+  background: var(--bg-elev-1);
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+}
+.textDiffMark {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--status-ok);
+  font-weight: 600;
+}
+
+/* ── Round 2.5 · flatten .reason (no big bubble) ─────────────────────
+ *
+ * Auditor flagged DoD-5 PARTIAL because .reason had border-radius:10px
+ * + accent background — looked like a chat bubble. Round 2.5 changes
+ * it to a flat row with a 3px accent gutter on the left, matching the
+ * `.echo` / `.tool` flat aesthetic and the v8 "section + recess" pattern. */
+.reasonFlat {
+  border-radius: 4px;
+  padding: 6px 12px 8px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--fg-1);
+  border: none;
+  background: transparent;
+  border-left: 3px solid var(--accent);
+  margin-bottom: 2px;
+}
+.reasonFlat .reasonPre {
+  color: var(--accent-bright);
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 0;
+  background: transparent;
+}
+.reasonFlat .reasonList {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  line-height: 1.7;
+}
+.reasonFlat .reasonList li { margin-bottom: 2px; }
+.reasonFlat .reasonList li::marker { color: var(--accent-bright); }
+
