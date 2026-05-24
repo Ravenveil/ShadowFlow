@@ -124,6 +124,30 @@ describe('extractRows', () => {
     expect(rows3[0]?.kind).toBe('bash-chip');
   });
 
+  it('extracts `## heading` lines as section-header rows', () => {
+    const body = [
+      'intro paragraph',
+      '',
+      '## 步骤一',
+      '',
+      'do this thing',
+      '',
+      '### 子步骤',
+      '',
+      'detail',
+    ].join('\n');
+    const rows = extractRows(body);
+    expect(rows.map((r) => r.kind)).toEqual([
+      'text',
+      'section-header',
+      'text',
+      'section-header',
+      'text',
+    ]);
+    expect((rows[1] as { title: string }).title).toBe('步骤一');
+    expect((rows[3] as { title: string }).title).toBe('子步骤');
+  });
+
   it('extracts label from `title="..."` info string on bash fence', () => {
     const body = '```bash title="Run server"\nnpm start\n```';
     const rows = extractRows(body);

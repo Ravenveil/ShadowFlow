@@ -21,7 +21,14 @@ export type MessageKind =
   | 'step_panel'
   | 'diff_panel'
   | 'msg_foot'
-  | 'status_line';
+  | 'status_line'
+  /**
+   * Round 2.5 — section divider row (e.g. "Builder", "思考过程",
+   * "工作 · 白名单运行"). Standalone foldable header without inline
+   * children; subsequent messages live under it visually. Currently
+   * only emitted by FE-side extractors; server can emit later.
+   */
+  | 'section_header';
 
 export interface TimelineMessageBase {
   /** ULID-ish stable id. React key + patch target. */
@@ -104,6 +111,14 @@ export type TimelineMessage =
       verb: string;
       elapsed_s: number;
       tools_running: number;
+    })
+  | (TimelineMessageBase & {
+      kind: 'section_header';
+      title: string;
+      /** Optional trailing meta (e.g. "5 steps · 5.4s"). */
+      meta?: string;
+      /** Default true; FE persists toggle state per id. */
+      default_open?: boolean;
     });
 
 export type MessagePatch =

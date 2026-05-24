@@ -28,8 +28,13 @@ interface Props {
   meta?: string;
   /** Initial open state — defaults true (TRAE shows sections expanded). */
   defaultOpen?: boolean;
-  /** Children rendered indented under the header when open. */
-  children: ReactNode;
+  /**
+   * Children rendered indented under the header when open. Optional —
+   * when omitted the SectionHeader renders as a standalone divider row
+   * (still toggles the chev), used by the MessageRegistry `section_header`
+   * kind which is a single TimelineMessage without inline children.
+   */
+  children?: ReactNode;
 }
 
 export const SectionHeader = memo(function SectionHeader({
@@ -59,7 +64,7 @@ export const SectionHeader = memo(function SectionHeader({
         <span className={styles.sectionLabel}>{label}</span>
         {meta && <span className={styles.sectionMeta}>{meta}</span>}
       </button>
-      {open && <div className={styles.sectionBody}>{children}</div>}
+      {open && children && <div className={styles.sectionBody}>{children}</div>}
     </div>
   );
 });

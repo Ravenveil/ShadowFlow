@@ -27,6 +27,7 @@ import { BashChip } from './rows/BashChip';
 import { BashInline } from './rows/BashInline';
 import { CodeBlockRow } from './rows/CodeBlockRow';
 import { TextRow } from './rows/TextRow';
+import { SectionHeader } from './SectionHeader';
 
 interface Props {
   msg: Extract<TimelineMessage, { kind: 'assistant_text' }>;
@@ -105,6 +106,8 @@ export const AssistantText = memo(function AssistantText({ msg }: Props) {
             return <BashInline key={key} cmd={row.cmd} />;
           case 'code-chip':
             return <CodeBlockRow key={key} lang={row.lang} body={row.body} />;
+          case 'section-header':
+            return <SectionHeader key={key} label={row.title} />;
           case 'text':
             return (
               <TextRow

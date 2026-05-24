@@ -25,6 +25,8 @@ export type Row =
   | { kind: 'code-chip'; lang: string; body: string }
   /** Single-line `$ command` (not in a fence) — compact bash chip. */
   | { kind: 'bash-inline'; cmd: string }
+  /** Markdown `## heading` line — renders as SectionHeader standalone divider. */
+  | { kind: 'section-header'; title: string }
   /** Free-form prose paragraph. */
   | { kind: 'text'; body: string };
 
@@ -52,6 +54,14 @@ const FENCED_BLOCK_RE = /```([^\s`\n]*)([^\n]*)\n([\s\S]*?)```/g;
  * false-positives on jQuery / regex / etc.
  */
 const DOLLAR_LINE_RE = /^[ \t]*\$ (.+)$/gm;
+
+/**
+ * Markdown ATX-style heading line: `## Title`. We match levels 2 and 3 so
+ * the LLM's natural section breaks (`## 步骤一`, `### 分析`) become visible
+ * section dividers. Level 1 (`# Title`) is rare in inline replies and we
+ * don't want to grab the user's emphasized first line.
+ */
+const HEADING_LINE_RE = /^[ \t]*(#{2,3})[ \t]+(.+?)[ \t]*#*[ \t]*$/gm;
 
 /**
  * Push a `text` row from `body[start..end]`, trimming leading/trailing
@@ -134,37 +144,60 @@ export function extractRows(body: string): Row[] {
 }
 
 /**
- * Scan a prose range for single-line `$ cmd` instances, splitting it into
- * alternating text + bash-inline rows. Outside this range we already
- * handled fenced blocks, so any backticks here are inline code (handled by
- * TextRow's renderer).
+ * Scan a prose range for line-level structural tokens (`## heading`,
+ * `$ cmd`), splitting it into ordered rows. Anything left over becomes
+ * `text` rows.
+ *
+ * We do two passes:
+ *   1. Collect all match positions from heading + dollar regexes.
+ *   2. Sort by index, walk in order, emit text gaps + matched rows.
+ *
+ * This keeps document order regardless of which pattern comes first.
+ * Outside this range we already handled fenced blocks, so backticks
+ * here are inline code (rendered as-is by TextRow).
  */
 function scanProseRange(rows: Row[], body: string, start: number, end: number): void {
   if (start >= end) return;
   const slice = body.slice(start, end);
   if (!slice.trim()) return;
 
-  // Look for `$ cmd` at line starts. Use a fresh regex (DOLLAR_LINE_RE is
-  // global; reset lastIndex).
+  // Collect all line-level matches.
+  type Tok = { start: number; end: number; row: Row };
+  const toks: Tok[] = [];
+
+  HEADING_LINE_RE.lastIndex = 0;
+  let hm: RegExpExecArray | null;
+  while ((hm = HEADING_LINE_RE.exec(slice)) !== null) {
+    toks.push({
+      start: hm.index,
+      end: hm.index + hm[0].length,
+      row: { kind: 'section-header', title: (hm[2] ?? '').trim() },
+    });
+  }
+
   DOLLAR_LINE_RE.lastIndex = 0;
-  let lastEnd = 0;
   let dm: RegExpExecArray | null;
-  let foundAny = false;
   while ((dm = DOLLAR_LINE_RE.exec(slice)) !== null) {
-    foundAny = true;
-    const lineStart = dm.index;
-    const lineEnd = dm.index + dm[0].length;
-    // Text before this $ line.
-    if (lineStart > lastEnd) {
-      pushText(rows, slice, lastEnd, lineStart);
-    }
-    rows.push({ kind: 'bash-inline', cmd: (dm[1] ?? '').trim() });
-    lastEnd = lineEnd;
+    toks.push({
+      start: dm.index,
+      end: dm.index + dm[0].length,
+      row: { kind: 'bash-inline', cmd: (dm[1] ?? '').trim() },
+    });
   }
-  if (foundAny) {
-    if (lastEnd < slice.length) pushText(rows, slice, lastEnd, slice.length);
-  } else {
-    // No $ lines — whole slice is one text row.
+
+  if (toks.length === 0) {
+    // No structural tokens — whole slice is one text row.
     pushText(rows, slice, 0, slice.length);
+    return;
   }
+
+  // Walk in document order, emitting text gaps + structural rows.
+  toks.sort((a, b) => a.start - b.start);
+  let lastEnd = 0;
+  for (const t of toks) {
+    if (t.start > lastEnd) pushText(rows, slice, lastEnd, t.start);
+    rows.push(t.row);
+    lastEnd = t.end;
+  }
+  if (lastEnd < slice.length) pushText(rows, slice, lastEnd, slice.length);
 }

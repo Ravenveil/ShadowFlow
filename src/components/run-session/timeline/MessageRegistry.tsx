@@ -22,6 +22,7 @@ import { ToolEchoLine } from './messages/ToolEchoLine';
 import { StepPanel } from './messages/StepPanel';
 import { DiffPanel } from './messages/DiffPanel';
 import { MsgFoot } from './messages/MsgFoot';
+import { SectionHeader } from './messages/SectionHeader';
 
 interface Props {
   msg: TimelineMessage;
@@ -65,6 +66,18 @@ export const MessageRegistry = memo(function MessageRegistry({
     case 'status_line':
       // Not rendered in the scrolling stream — caller picks this out.
       return null;
+    case 'section_header':
+      // Round 2.5 — standalone section divider ("Builder" / "思考过程" /
+      // "工作 · ..."). Children are subsequent rows in the stream, not
+      // nested under this header (that's an extractRows concept). The
+      // header is a self-contained foldable row.
+      return (
+        <SectionHeader
+          label={msg.title}
+          meta={msg.meta}
+          defaultOpen={msg.default_open ?? true}
+        />
+      );
     default: {
       // Exhaustiveness — compile error if a new kind is added without a case.
       const _exhaustive: never = msg;
