@@ -1,37 +1,30 @@
 /**
- * transport/api-clients/index.ts — Provider dispatch (Phase 2 consolidation,
- * commit 1 of 3 — interim shim).
+ * transport/api-clients/index.ts — Compat shim (Phase 2 consolidation).
  *
- * Phase 2 collapsed the duplicate provider abstractions: the simple
- * single-turn `LLMProvider` (Track A) and the multi-turn `ApiClient` (Track B,
- * formerly under `lib/api-clients/`). This commit moves Track B in and
- * routes anthropic + google through the new in-tree ApiClient classes; the
- * OpenAI-compat family still goes through the legacy `openai-compat-instances`
- * factory and is replaced by `OpenAiCompatApiClient` in commit 2.
+ * Phase 2 collapsed the duplicate provider abstractions:
+ *   - Track A (formerly here): `LLMProvider` + `callProvider()` simple
+ *     AsyncGenerator<ProviderChunk> (single-turn, no tool_use)
+ *   - Track B (formerly under `lib/api-clients/`): `ApiClient` + `stream()`
+ *     AssistantEvent (multi-turn, tool_use, usage accounting)
+ * into a single home at `transport/api-clients/`. ApiClient is the canonical
+ * contract; `callProvider()` is preserved here as a thin adapter over
+ * `ApiClient.stream({ tools: [] })` so legacy single-turn callers
+ * (routes/llm.ts, transport/spawners/anthropic.ts) keep working unchanged.
  *
- * Public surface is unchanged: `callProvider`, `getProvider`, plus the
- * provider catalog tables from `./types`. Callers (routes/llm.ts,
- * routes/run-sessions.ts, transport/spawners/anthropic.ts) need no edits.
+ * Long-term: those callers should migrate to `new XxxApiClient(...).stream(...)`
+ * directly, or move through `ApiClientCallable` → `LlmCallable.turn()`. This
+ * file's `callProvider` is a transition shim, not a forever API.
+ *
+ * Re-exports the data tables (DEFAULT_MODELS, PROVIDER_ENV_VAR, etc.) from
+ * `./types` verbatim — those constants are still the single source of truth
+ * for the 13 provider catalog.
  */
 
-import {
-  azureProviderInstance,
-  deepseekProviderInstance,
-  groqProviderInstance,
-  lmstudioProviderInstance,
-  mistralProviderInstance,
-  moonshotProviderInstance,
-  ollamaProviderInstance,
-  openaiProviderInstance,
-  openrouterProviderInstance,
-  qwenProviderInstance,
-  zhipuProviderInstance,
-} from './openai-compat-instances';
 import { AnthropicApiClient } from './anthropic-api-client';
 import { GoogleApiClient } from './google-api-client';
+import { OpenAiCompatApiClient } from './openai-compat-api-client';
 import {
   isProviderId,
-  type LLMProvider,
   type ProviderChunk,
   type ProviderId,
   type ProviderInput,
@@ -53,110 +46,35 @@ export {
   isProviderId,
 } from './types';
 
-/**
- * Adapter — wraps an ApiClient class as an LLMProvider so the existing
- * `streamCompletion(ProviderInput)` dispatch pattern keeps working. Only
- * `text_delta` AssistantEvents are forwarded; tool_use / usage / message_stop
- * are dropped (single-turn back-compat path has no consumer for them).
- */
-type ApiClientLike = {
-  stream(args: {
-    system_prompt: string;
-    messages: Array<{ role: 'user'; blocks: Array<{ kind: 'text'; text: string }> }>;
-    tools: never[];
-    signal: AbortSignal;
-  }): AsyncIterable<{ kind: string; text?: string }>;
-};
-
-function adapt(id: ProviderId, build: (input: ProviderInput) => ApiClientLike): LLMProvider {
-  return {
-    id,
-    defaultModel: '', // unused on this path; ApiClient reads its own DEFAULT_MODELS fallback
-    async *streamCompletion(input: ProviderInput): AsyncGenerator<ProviderChunk> {
-      const signal = input.signal ?? new AbortController().signal;
-      let client: ApiClientLike;
-      try {
-        client = build(input);
-      } catch (err) {
-        yield {
-          type: 'error',
-          message: (err as Error).message ?? String(err),
-          code: 'PROVIDER_ERROR',
-          provider: id,
-        };
-        return;
-      }
-      try {
-        const stream = client.stream({
-          system_prompt: input.systemPrompt,
-          messages: [
-            { role: 'user', blocks: [{ kind: 'text', text: input.userMessage }] },
-          ],
-          tools: [],
-          signal,
-        });
-        for await (const ev of stream) {
-          if (signal.aborted) return;
-          if (ev.kind === 'text_delta' && typeof ev.text === 'string') {
-            yield { type: 'text-delta', text: ev.text };
-          }
-        }
-        yield { type: 'end' };
-      } catch (err) {
-        if (signal.aborted) return;
-        yield {
-          type: 'error',
-          message: (err as Error).message ?? String(err),
-          code: 'PROVIDER_ERROR',
-          provider: id,
-        };
-      }
-    },
-  };
-}
-
-const anthropicProvider: LLMProvider = adapt('anthropic', (input) =>
-  new AnthropicApiClient({
-    apiKey: input.api_key,
-    model: input.model,
-    max_tokens: input.max_tokens,
-    temperature: input.temperature,
-  }),
-);
-
-const googleProvider: LLMProvider = adapt('google', (input) =>
-  new GoogleApiClient({
-    apiKey: input.api_key,
-    model: input.model,
-    max_tokens: input.max_tokens,
-    temperature: input.temperature,
-  }),
-);
-
-const PROVIDERS: Record<ProviderId, LLMProvider> = {
-  anthropic:  anthropicProvider,
-  openai:     openaiProviderInstance,
-  deepseek:   deepseekProviderInstance,
-  zhipu:      zhipuProviderInstance,
-  google:     googleProvider,
-  qwen:       qwenProviderInstance,
-  moonshot:   moonshotProviderInstance,
-  mistral:    mistralProviderInstance,
-  groq:       groqProviderInstance,
-  openrouter: openrouterProviderInstance,
-  ollama:     ollamaProviderInstance,
-  lmstudio:   lmstudioProviderInstance,
-  azure:      azureProviderInstance,
-};
-
-export function getProvider(id: ProviderId): LLMProvider {
-  return PROVIDERS[id];
-}
+/** OpenAI-compatible providers (all routed through OpenAiCompatApiClient). */
+const OPENAI_COMPAT: ReadonlySet<ProviderId> = new Set<ProviderId>([
+  'openai',
+  'deepseek',
+  'zhipu',
+  'qwen',
+  'moonshot',
+  'mistral',
+  'groq',
+  'openrouter',
+  'ollama',
+  'lmstudio',
+  'azure',
+]);
 
 /**
- * Dispatch to the named provider's `streamCompletion`. Behavior preserved
- * from the original Track A implementation: unknown id → single error chunk
- * + return; otherwise delegate to the provider's stream.
+ * Single-turn streaming entry — adapts ApiClient.stream() into the simple
+ * AsyncGenerator<ProviderChunk> shape that older callers expect. Used by:
+ *   - routes/llm.ts (proxy/back-compat endpoint)
+ *   - transport/spawners/anthropic.ts (default-executor SSE runner)
+ *
+ * Behavior contract preserved from the original Track A `callProvider`:
+ *   - Unknown provider id              → yield single 'error' chunk, return
+ *   - text deltas                      → yield { type: 'text-delta', text }
+ *   - normal end                       → yield { type: 'end' }
+ *   - any throw from ApiClient.stream  → yield { type: 'error', ... }, return
+ *
+ * Tool-use / usage / message_stop AssistantEvents are intentionally dropped
+ * — single-turn callers don't consume them.
  */
 export async function* callProvider(
   providerId: string,
@@ -170,5 +88,72 @@ export async function* callProvider(
     };
     return;
   }
-  yield* PROVIDERS[providerId].streamCompletion(input);
+
+  const apiKey = input.api_key;
+  const model = input.model;
+  const max_tokens = input.max_tokens;
+  const temperature = input.temperature;
+  const signal = input.signal ?? new AbortController().signal;
+
+  let client;
+  try {
+    if (providerId === 'anthropic') {
+      client = new AnthropicApiClient({ apiKey, model, max_tokens, temperature });
+    } else if (providerId === 'google') {
+      client = new GoogleApiClient({ apiKey, model, max_tokens, temperature });
+    } else if (OPENAI_COMPAT.has(providerId)) {
+      client = new OpenAiCompatApiClient({
+        providerId,
+        apiKey,
+        model,
+        max_tokens,
+        temperature,
+        baseURL: input.base_url,
+      });
+    } else {
+      yield {
+        type: 'error',
+        message: `Unsupported provider: "${providerId}"`,
+        code: 'PROVIDER_ERROR',
+        provider: providerId,
+      };
+      return;
+    }
+  } catch (err) {
+    yield {
+      type: 'error',
+      message: (err as Error).message ?? String(err),
+      code: 'PROVIDER_ERROR',
+      provider: providerId,
+    };
+    return;
+  }
+
+  try {
+    const stream = client.stream({
+      system_prompt: input.systemPrompt,
+      messages: [
+        { role: 'user', blocks: [{ kind: 'text', text: input.userMessage }] },
+      ],
+      tools: [],
+      signal,
+    });
+    for await (const ev of stream) {
+      if (signal.aborted) return;
+      if (ev.kind === 'text_delta') {
+        yield { type: 'text-delta', text: ev.text };
+      }
+      // tool_use / usage / message_stop events are intentionally dropped on
+      // this single-turn back-compat path.
+    }
+    yield { type: 'end' };
+  } catch (err) {
+    if (signal.aborted) return;
+    yield {
+      type: 'error',
+      message: (err as Error).message ?? String(err),
+      code: 'PROVIDER_ERROR',
+      provider: providerId,
+    };
+  }
 }
