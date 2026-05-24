@@ -65,11 +65,10 @@ import type { ToolSpec } from '../../lib/tool-spec';
 import { DEFAULT_MODELS } from './types';
 
 /**
- * Provider id → default baseURL. Sourced from
- * `server/src/llm-providers/openai-compat-instances.ts` — DO NOT duplicate /
- * diverge; this table must be a strict mirror so adding a new provider is a
- * single-file change in BOTH places (the legacy single-call factory + this
- * multi-turn client).
+ * Provider id → default baseURL. Post Phase 2 consolidation this is now the
+ * SINGLE source of truth for OpenAI-compatible base URLs (the legacy
+ * `llm-providers/openai-compat-instances.ts` factory was deleted; that table
+ * has been folded into this one).
  *
  * Note: these are SDK base URLs (no `/chat/completions` suffix). The OpenAI
  * SDK appends `/chat/completions` itself given a `baseURL` of e.g.
@@ -90,10 +89,10 @@ const PROVIDER_BASE_URLS: Record<string, string> = {
   openrouter: 'https://openrouter.ai/api/v1',
   ollama: 'http://localhost:11434/v1',
   lmstudio: 'http://localhost:1234/v1',
-  // azure is deliberately omitted — see assembler.buildApiClient docstring
-  // (Checker S14.1 P0-1). If anyone constructs this client directly with
-  // providerId='azure' and no explicit baseURL, resolveBaseURL() throws so
-  // the request body never leaves the machine.
+  // azure is deliberately omitted — see transport/ApiClientCallable.ts
+  // buildApiClient() (Checker S14.1 P0-1). If anyone constructs this client
+  // directly with providerId='azure' and no explicit baseURL, resolveBaseURL()
+  // throws so the request body never leaves the machine.
 };
 
 /** Providers that allow an empty api_key (local runtimes). Mirror of
