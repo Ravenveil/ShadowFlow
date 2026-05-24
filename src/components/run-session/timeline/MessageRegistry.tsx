@@ -25,12 +25,25 @@ import { MsgFoot } from './messages/MsgFoot';
 
 interface Props {
   msg: TimelineMessage;
+  /** Round 2 — wired to UserTurnMessage's hover retry button. */
+  onUserRetry?: (text: string) => void;
+  resending?: boolean;
 }
 
-export const MessageRegistry = memo(function MessageRegistry({ msg }: Props) {
+export const MessageRegistry = memo(function MessageRegistry({
+  msg,
+  onUserRetry,
+  resending,
+}: Props) {
   switch (msg.kind) {
     case 'user_turn':
-      return <UserTurnMessage msg={msg} />;
+      return (
+        <UserTurnMessage
+          msg={msg}
+          onRetry={onUserRetry}
+          resending={resending}
+        />
+      );
     case 'thinking':
       return <ThinkingMessage msg={msg} />;
     case 'assistant_meta':
