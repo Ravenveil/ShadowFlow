@@ -182,7 +182,9 @@ async function testTextDelta_zhipu(): Promise<void> {
       | undefined;
     check('zhipu stop_reason: stop → end_turn', 'end_turn', stop?.stop_reason);
 
-    check('zhipu SDK baseURL', 'https://open.bigmodel.cn/api/paas/v4', inspect.ctorOptions?.baseURL);
+    // 2026-05-24 default flipped to coding plan (most users) — see
+    // PROVIDER_BASE_URLS comment in openai-compat-api-client.ts.
+    check('zhipu SDK baseURL', 'https://open.bigmodel.cn/api/coding/paas/v4', inspect.ctorOptions?.baseURL);
   } finally {
     restore();
   }
@@ -811,6 +813,126 @@ async function testAzureBaseUrlMissing(): Promise<void> {
   );
 }
 
+/**
+ * reasoning_content (e.g. zhipu glm-5.x chain-of-thought) must be wrapped in
+ * <sf:thinking>...</sf:thinking> so the downstream parser routes it to a
+ * dedicated thinking-chunk event rather than mingling with the answer body.
+ * State machine: init → thinking (open tag) → content (close tag).
+ */
+async function testReasoningWrappedInThinking(): Promise<void> {
+  console.log(
+    '\n[openai-compat-api-client] reasoning_content wrapped in <sf:thinking>',
+  );
+  const { restore } = patchSdk([
+    // pure reasoning_content first
+    { choices: [{ delta: { reasoning_content: 'let me ' } }] },
+    { choices: [{ delta: { reasoning_content: 'think...' } }] },
+    // then the answer
+    { choices: [{ delta: { content: 'answer' } }] },
+    { choices: [{ delta: {}, finish_reason: 'stop' }] },
+  ]);
+  try {
+    const client = new OpenAiCompatApiClient({
+      providerId: 'zhipu',
+      apiKey: 'sk-z',
+      model: 'glm-5.0',
+    });
+    const events = await collect(
+      client.stream({
+        system_prompt: '',
+        messages: [{ role: 'user', blocks: [{ kind: 'text', text: 'q' }] }],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    const texts = events
+      .filter((e) => e.kind === 'text_delta')
+      .map((e) => (e as { text: string }).text);
+    // first reasoning chunk gets opener; second is plain; first content gets closer
+    check(
+      'reasoning_content + content wrap sequence',
+      ['<sf:thinking>let me ', 'think...', '</sf:thinking>answer'],
+      texts,
+    );
+  } finally {
+    restore();
+  }
+}
+
+/**
+ * Pure-thinking turn (model emits only reasoning_content, never sends
+ * content) — stream-end must still emit a standalone </sf:thinking> closer
+ * so the parser doesn't deadlock with an open tag in the buffer.
+ */
+async function testReasoningClosedOnStreamEnd(): Promise<void> {
+  console.log(
+    '\n[openai-compat-api-client] reasoning-only stream closes <sf:thinking> at end',
+  );
+  const { restore } = patchSdk([
+    { choices: [{ delta: { reasoning_content: 'just thinking' } }] },
+    { choices: [{ delta: {}, finish_reason: 'stop' }] },
+  ]);
+  try {
+    const client = new OpenAiCompatApiClient({
+      providerId: 'zhipu',
+      apiKey: 'sk-z',
+    });
+    const events = await collect(
+      client.stream({
+        system_prompt: '',
+        messages: [{ role: 'user', blocks: [{ kind: 'text', text: 'q' }] }],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    const texts = events
+      .filter((e) => e.kind === 'text_delta')
+      .map((e) => (e as { text: string }).text);
+    check(
+      'reasoning-only emits opener + closer (closer at stream end)',
+      ['<sf:thinking>just thinking', '</sf:thinking>'],
+      texts,
+    );
+  } finally {
+    restore();
+  }
+}
+
+/**
+ * When the model emits content WITHOUT any reasoning_content, the
+ * <sf:thinking> wrapper must NOT appear. Plain pass-through.
+ */
+async function testContentOnlyUnwrapped(): Promise<void> {
+  console.log(
+    '\n[openai-compat-api-client] content-only stream emits no <sf:thinking>',
+  );
+  const { restore } = patchSdk([
+    { choices: [{ delta: { content: 'direct ' } }] },
+    { choices: [{ delta: { content: 'answer' } }] },
+    { choices: [{ delta: {}, finish_reason: 'stop' }] },
+  ]);
+  try {
+    const client = new OpenAiCompatApiClient({
+      providerId: 'openai',
+      apiKey: 'sk',
+    });
+    const events = await collect(
+      client.stream({
+        system_prompt: '',
+        messages: [],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    const texts = events
+      .filter((e) => e.kind === 'text_delta')
+      .map((e) => (e as { text: string }).text);
+    check('content-only verbatim, no wrap', ['direct ', 'answer'], texts);
+  } finally {
+    restore();
+  }
+}
+
 async function main(): Promise<void> {
   await testTextDelta_zhipu();
   await testTextDelta_openai();
@@ -828,6 +950,9 @@ async function main(): Promise<void> {
   await testToolCallIdFallback();
   await testUsageEmitOnce();
   await testAzureBaseUrlMissing();
+  await testReasoningWrappedInThinking();
+  await testReasoningClosedOnStreamEnd();
+  await testContentOnlyUnwrapped();
 
   console.log(`\n${pass} pass, ${fail} fail`);
   if (fail > 0) process.exit(1);

@@ -396,6 +396,29 @@ export class OpenAiCompatApiClient implements ApiClient {
     // spamming the log on every subsequent tool call in this stream.
     let warnedSyntheticId = false;
 
+    // reasoning_content → <sf:thinking> packaging state machine.
+    //
+    // Providers like Zhipu glm-5.x emit chain-of-thought via
+    // `delta.reasoning_content` BEFORE the regular `delta.content` answer
+    // begins. If we forward both as plain `text_delta` the downstream parser
+    // can't tell them apart — thinking ends up rendered as the final answer.
+    //
+    // Solution: wrap reasoning_content in <sf:thinking>...</sf:thinking> so
+    // server/src/parser.ts:343's existing extractor catches it and emits a
+    // dedicated `thinking-chunk` event (which the timeline-projector routes
+    // to the ThinkCard slot in the UI).
+    //
+    // Phases:
+    //   'init'     — nothing yielded yet
+    //   'thinking' — currently inside an open <sf:thinking> block
+    //   'content'  — past thinking, streaming the actual answer
+    //
+    // Transitions:
+    //   init → thinking : on first reasoning_content delta; prepend opener tag
+    //   thinking → content : on first content delta; prepend closer tag
+    //   stream end while phase='thinking' : emit standalone closer tag
+    let phase: 'init' | 'thinking' | 'content' = 'init';
+
     // OpenAI SDK's `create()` is overloaded by `stream: boolean` literal —
     // TS can't always pick the streaming overload when other fields use loose
     // types (Record<string, unknown> in `parameters` etc.). Casting to a
@@ -498,15 +521,28 @@ export class OpenAiCompatApiClient implements ApiClient {
 
       const choice = chunk.choices?.[0];
       if (choice?.delta) {
-        // 1a) thinking / chain-of-thought (glm-5.x reasoning_content)
+        // 1a) thinking / chain-of-thought (glm-5.x reasoning_content).
+        // Wrap in <sf:thinking> so the downstream parser routes it to the
+        // ThinkCard slot rather than the answer body. See `phase` declaration
+        // above for the full state machine contract.
         const reasoning = choice.delta.reasoning_content;
         if (typeof reasoning === 'string' && reasoning.length > 0) {
-          yield { kind: 'text_delta', text: reasoning };
+          if (phase === 'init') {
+            yield { kind: 'text_delta', text: '<sf:thinking>' + reasoning };
+            phase = 'thinking';
+          } else {
+            yield { kind: 'text_delta', text: reasoning };
+          }
         }
-        // 1b) text content
+        // 1b) text content — close any open thinking block before yielding.
         const txt = choice.delta.content;
         if (typeof txt === 'string' && txt.length > 0) {
-          yield { kind: 'text_delta', text: txt };
+          if (phase === 'thinking') {
+            yield { kind: 'text_delta', text: '</sf:thinking>' + txt };
+          } else {
+            yield { kind: 'text_delta', text: txt };
+          }
+          phase = 'content';
         }
         // 2) tool_calls deltas — fold by index
         const tcDeltas = choice.delta.tool_calls;
@@ -549,6 +585,14 @@ export class OpenAiCompatApiClient implements ApiClient {
       //    can keep arriving until the finish chunk, so flushing earlier
       //    risks emitting a half-assembled tool_use.
       if (choice?.finish_reason && !stopEmitted) {
+        // Close any open <sf:thinking> block before the tool_use / usage /
+        // message_stop terminators. Happens when the model emits only
+        // reasoning_content with no follow-up `content` (e.g. a pure-tool
+        // turn after extended thinking).
+        if (phase === 'thinking') {
+          yield { kind: 'text_delta', text: '</sf:thinking>' };
+          phase = 'content';
+        }
         yield* flush();
         stopEmitted = true;
       }
@@ -558,6 +602,10 @@ export class OpenAiCompatApiClient implements ApiClient {
     // proxies cut off early). flush() still emits message_stop with
     // finishReason='unknown' so the runtime terminates cleanly.
     if (!stopEmitted) {
+      if (phase === 'thinking') {
+        yield { kind: 'text_delta', text: '</sf:thinking>' };
+        phase = 'content';
+      }
       yield* flush();
     }
   }
