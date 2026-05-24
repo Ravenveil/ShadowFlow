@@ -1133,9 +1133,12 @@ export function ByokSection() {
 
           {/* API Key + Base URL */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-            {/* API Key — Cherry Studio style: single input. When key is saved,
-                value renders as ●●●●●●●●●●●●●●●●●cFH0 (real chars masked by
-                password type); focus auto-selects so any keystroke replaces it. */}
+            {/* API Key — Cherry Studio style: input stays empty even when a
+                key is saved. The "saved · last 4 chars" hint goes into the
+                placeholder, not into value. This lets the user click + type
+                directly to replace the key without any select-all gymnastics
+                (2026-05-24 fix: old fake-bullets-in-value path made backspace
+                / mid-cursor edits unreliable). */}
             {!selectedMeta.noKey && (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -1149,14 +1152,9 @@ export function ByokSection() {
                 <div style={{ position: 'relative' }}>
                   <input
                     type={showKey ? 'text' : 'password'}
-                    value={
-                      hasKey && !keyInput
-                        ? '•'.repeat(24) + (maskedKey.slice(-4) || '')
-                        : keyInput
-                    }
+                    value={keyInput}
                     onChange={e => {
-                      // Strip the fake mask dots if any survived (user replaces selected text)
-                      setKeyInput(e.target.value.replace(/•/g, ''));
+                      setKeyInput(e.target.value);
                       markDirty();
                     }}
                     onKeyDown={async e => {
@@ -1167,11 +1165,6 @@ export function ByokSection() {
                     }}
                     onFocus={e => {
                       e.target.style.borderColor = 'var(--t-accent)';
-                      // If we're showing the fake mask, select-all so first
-                      // keystroke replaces it cleanly.
-                      if (hasKey && !keyInput) {
-                        requestAnimationFrame(() => e.target.select());
-                      }
                     }}
                     onBlur={async e => {
                       e.target.style.borderColor = 'var(--t-border)';
@@ -1181,7 +1174,14 @@ export function ByokSection() {
                         if (ok) setKeyInput('');
                       }
                     }}
-                    placeholder={selectedMeta.keyPlaceholder}
+                    placeholder={
+                      hasKey
+                        ? T(
+                            `已保存 ···${maskedKey.slice(-4) || ''} · 输入新值替换`,
+                            `Saved ···${maskedKey.slice(-4) || ''} · type to replace`,
+                          )
+                        : selectedMeta.keyPlaceholder
+                    }
                     style={{
                       width: '100%', boxSizing: 'border-box',
                       padding: '0 130px 0 14px', height: 40,
