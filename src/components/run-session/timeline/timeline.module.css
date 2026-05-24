@@ -711,12 +711,16 @@
 /* ── user message hover retry button (Round 2 P2 / spec section 3.3) ──
  *
  * Per the spec: button hidden by default, fades in on .user row hover.
- * Uses RotateCcw lucide icon to match ErrorBanner resend semantics. */
-.user { position: relative; }
+ * Uses RotateCcw lucide icon to match ErrorBanner resend semantics.
+ *
+ * Placement: an inline flex item with `margin-left:auto` so it sits at
+ * the right edge of the row without overlapping the prompt text. Keeps
+ * the same opacity:0 → 1 hover affordance. `.user` reserves 28px of
+ * right padding so multi-line text never wraps under the button slot. */
+.user { padding-right: 30px; }
 .userRetry {
-  position: absolute;
-  right: 0;
-  top: 0;
+  margin-left: auto;
+  align-self: flex-start;
   background: transparent;
   border: 1px solid transparent;
   color: var(--fg-4);
