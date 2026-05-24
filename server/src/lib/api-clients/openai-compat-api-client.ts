@@ -78,7 +78,11 @@ import { DEFAULT_MODELS } from '../../transport/api-clients/types';
 const PROVIDER_BASE_URLS: Record<string, string> = {
   openai: 'https://api.openai.com/v1',
   deepseek: 'https://api.deepseek.com/v1',
-  zhipu: 'https://open.bigmodel.cn/api/paas/v4',
+  // Zhipu has TWO billing surfaces: Coding Plan (subscription) vs pay-as-you-go
+  // resource packs. Coding Plan covers glm-4.5/4.6/4.7/5.x family and is the
+  // default for most users. Override via settings → BYOK → API 地址 if you're
+  // on per-token billing only (paas/v4). 2026-05-24 default flipped to coding.
+  zhipu: 'https://open.bigmodel.cn/api/coding/paas/v4',
   qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   moonshot: 'https://api.moonshot.cn/v1',
   mistral: 'https://api.mistral.ai/v1',
@@ -477,6 +481,10 @@ export class OpenAiCompatApiClient implements ApiClient {
         choices?: Array<{
           delta?: {
             content?: string | null;
+            // Zhipu glm-5.x family emits chain-of-thought here BEFORE the
+            // actual content starts. Without forwarding it the UI shows a
+            // blank screen for 30+ seconds while the model thinks.
+            reasoning_content?: string | null;
             tool_calls?: Array<{
               index: number;
               id?: string;
@@ -491,7 +499,12 @@ export class OpenAiCompatApiClient implements ApiClient {
 
       const choice = chunk.choices?.[0];
       if (choice?.delta) {
-        // 1) text content
+        // 1a) thinking / chain-of-thought (glm-5.x reasoning_content)
+        const reasoning = choice.delta.reasoning_content;
+        if (typeof reasoning === 'string' && reasoning.length > 0) {
+          yield { kind: 'text_delta', text: reasoning };
+        }
+        // 1b) text content
         const txt = choice.delta.content;
         if (typeof txt === 'string' && txt.length > 0) {
           yield { kind: 'text_delta', text: txt };
