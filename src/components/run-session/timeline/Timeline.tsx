@@ -52,10 +52,19 @@ export const Timeline = memo(function Timeline({
 
   // Filter the status_line out of the scrolling stream — it's a slot.
   const streamMessages = messages.filter((m) => m.kind !== 'status_line');
-  const statusLineMsg = messages.find(
-    (m): m is Extract<TimelineMessage, { kind: 'status_line' }> =>
-      m.kind === 'status_line',
-  );
+  // 2026-05-24 Round 2 fix (P0): the projector emits a fresh status_line
+  // message id per verb-change (see server/src/lib/timeline-projector.ts
+  // bumpStatusLine`). `.find()` returns the *first* match, so the statusline
+  // froze on `elapsed_s = 0` from the first event. We need the *latest*
+  // status_line. Use a reverse for-loop to avoid an O(n) reverse() copy.
+  let statusLineMsg: Extract<TimelineMessage, { kind: 'status_line' }> | undefined;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.kind === 'status_line') {
+      statusLineMsg = m;
+      break;
+    }
+  }
 
   // Detect when the user scrolls. If they're within STICK_THRESHOLD_PX of the
   // bottom, keep auto-scrolling; otherwise pause.
