@@ -707,6 +707,10 @@ export function ByokSection() {
 
   // Detail form state
   const [keyInput,     setKeyInput]     = useState('');
+  // Cherry Studio-style editing: when isEditing=false the input value is
+  // the saved key (browser masks via type=password). On focus we lift the
+  // saved key into keyInput so the user can backspace / select-all to edit.
+  const [isEditing,    setIsEditing]    = useState(false);
   const [baseUrlInput, setBaseUrlInput] = useState('');
   const [enabledModels, setEnabledModels] = useState<string[]>([]);
   const [provEnabled,  setProvEnabled]  = useState(false);
@@ -1133,12 +1137,11 @@ export function ByokSection() {
 
           {/* API Key + Base URL */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-            {/* API Key — Cherry Studio style: input stays empty even when a
-                key is saved. The "saved · last 4 chars" hint goes into the
-                placeholder, not into value. This lets the user click + type
-                directly to replace the key without any select-all gymnastics
-                (2026-05-24 fix: old fake-bullets-in-value path made backspace
-                / mid-cursor edits unreliable). */}
+            {/* API Key — Cherry Studio style: input value IS the saved key
+                (masked by type=password). On focus we lift saved → keyInput
+                so backspace/select-all/type all work like a normal text
+                field. No fake-bullets, no select-all RAF hack.
+                (2026-05-24 fix.) */}
             {!selectedMeta.noKey && (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -1152,7 +1155,7 @@ export function ByokSection() {
                 <div style={{ position: 'relative' }}>
                   <input
                     type={showKey ? 'text' : 'password'}
-                    value={keyInput}
+                    value={isEditing ? keyInput : maskedKey}
                     onChange={e => {
                       setKeyInput(e.target.value);
                       markDirty();
@@ -1160,28 +1163,29 @@ export function ByokSection() {
                     onKeyDown={async e => {
                       if (e.key === 'Enter' && keyInput.trim()) {
                         const ok = await autoSave({ apiKey: keyInput.trim() });
-                        if (ok) setKeyInput('');
+                        if (ok) {
+                          setKeyInput('');
+                          setIsEditing(false);
+                        }
                       }
                     }}
                     onFocus={e => {
                       e.target.style.borderColor = 'var(--t-accent)';
+                      if (!isEditing) {
+                        setKeyInput(maskedKey || '');
+                        setIsEditing(true);
+                      }
                     }}
                     onBlur={async e => {
                       e.target.style.borderColor = 'var(--t-border)';
-                      // Auto-save on blur if user typed a new key
-                      if (keyInput.trim()) {
-                        const ok = await autoSave({ apiKey: keyInput.trim() });
-                        if (ok) setKeyInput('');
+                      if (isEditing && keyInput !== maskedKey) {
+                        // User changed it — save (or save empty to delete)
+                        await autoSave({ apiKey: keyInput.trim() });
                       }
+                      setKeyInput('');
+                      setIsEditing(false);
                     }}
-                    placeholder={
-                      hasKey
-                        ? T(
-                            `已保存 ···${maskedKey.slice(-4) || ''} · 输入新值替换`,
-                            `Saved ···${maskedKey.slice(-4) || ''} · type to replace`,
-                          )
-                        : selectedMeta.keyPlaceholder
-                    }
+                    placeholder={selectedMeta.keyPlaceholder}
                     style={{
                       width: '100%', boxSizing: 'border-box',
                       padding: '0 130px 0 14px', height: 40,
