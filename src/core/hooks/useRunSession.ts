@@ -656,6 +656,38 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
           ),
         };
       }
+      // 2026-05-24 Lane B defensive aggregator (audit P0-3):
+      // If projector is still emitting one tool_echo / assistant_text per
+      // text-delta (5-15 char chunks), merge consecutive same-kind same-turn
+      // text messages whose ts gap is <500ms into the previous message's
+      // body. This prevents the "messages chopped into fragments" symptom
+      // even if the server fix lands later than the frontend.
+      const last = state.messages[state.messages.length - 1];
+      const isCoalescable =
+        (incoming.kind === 'tool_echo' || incoming.kind === 'assistant_text') &&
+        last &&
+        last.kind === incoming.kind &&
+        last.turn_id === incoming.turn_id &&
+        incoming.ts - last.ts < 500;
+      if (isCoalescable && last.kind === 'tool_echo' && incoming.kind === 'tool_echo') {
+        const merged: TimelineMessage = { ...last, body: last.body + incoming.body, ts: incoming.ts };
+        return {
+          ...state,
+          messages: [...state.messages.slice(0, -1), merged],
+        };
+      }
+      if (isCoalescable && last.kind === 'assistant_text' && incoming.kind === 'assistant_text') {
+        const merged: TimelineMessage = {
+          ...last,
+          body: last.body + incoming.body,
+          streaming: incoming.streaming ?? last.streaming,
+          ts: incoming.ts,
+        };
+        return {
+          ...state,
+          messages: [...state.messages.slice(0, -1), merged],
+        };
+      }
       return { ...state, messages: [...state.messages, incoming] };
     }
     case 'MESSAGE_PATCH': {

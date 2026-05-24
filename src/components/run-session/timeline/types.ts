@@ -14,6 +14,7 @@ export type MessageKind =
   | 'user_turn'
   | 'thinking'
   | 'assistant_meta'
+  | 'assistant_text'
   | 'rationale'
   | 'tool_call'
   | 'tool_echo'
@@ -62,6 +63,12 @@ export type TimelineMessage =
       identity: string;
       summary: string;
     })
+  | (TimelineMessageBase & {
+      kind: 'assistant_text';
+      body: string;
+      /** While true, the AssistantText renderer shows a trailing blink-caret. */
+      streaming?: boolean;
+    })
   | (TimelineMessageBase & { kind: 'rationale'; bullets: string[] })
   | (TimelineMessageBase & {
       kind: 'tool_call';
@@ -98,6 +105,8 @@ export type TimelineMessage =
     });
 
 export type MessagePatch =
+  | { id: string; op: 'text_append'; chunk: string }
+  | { id: string; op: 'text_finalize' }
   | { id: string; op: 'append_step'; step: StepRow }
   | { id: string; op: 'update_step'; index: number; patch: Partial<StepRow> }
   | { id: string; op: 'append_substep'; step_index: number; sub: StepRow }
@@ -136,6 +145,14 @@ export function applyPatch(
   patch: MessagePatch,
 ): TimelineMessage {
   switch (patch.op) {
+    case 'text_append': {
+      if (msg.kind !== 'assistant_text') return msg;
+      return { ...msg, body: msg.body + patch.chunk, streaming: true };
+    }
+    case 'text_finalize': {
+      if (msg.kind !== 'assistant_text') return msg;
+      return { ...msg, streaming: false };
+    }
     case 'append_step': {
       if (msg.kind !== 'step_panel') return msg;
       return { ...msg, steps: [...msg.steps, patch.step] };

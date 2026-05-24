@@ -15,6 +15,7 @@ import type { TimelineMessage } from './types';
 import { UserTurnMessage } from './messages/UserTurnMessage';
 import { ThinkingMessage } from './messages/ThinkingMessage';
 import { AssistantMeta } from './messages/AssistantMeta';
+import { AssistantText } from './messages/AssistantText';
 import { RationaleMessage } from './messages/RationaleMessage';
 import { ToolCallChip } from './messages/ToolCallChip';
 import { ToolEchoLine } from './messages/ToolEchoLine';
@@ -34,6 +35,8 @@ export const MessageRegistry = memo(function MessageRegistry({ msg }: Props) {
       return <ThinkingMessage msg={msg} />;
     case 'assistant_meta':
       return <AssistantMeta msg={msg} />;
+    case 'assistant_text':
+      return <AssistantText msg={msg} />;
     case 'rationale':
       return <RationaleMessage msg={msg} />;
     case 'tool_call':

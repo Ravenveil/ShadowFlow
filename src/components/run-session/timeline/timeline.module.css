@@ -191,6 +191,47 @@
   color: var(--fg-3);
 }
 
+/* ── assistant_text · 流式自由文本气泡 ─────────────────────── */
+.text {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--fg-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.text code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-2);
+  background: var(--bg-elev-1);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.text pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-2);
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  overflow-x: auto;
+  line-height: 1.55;
+}
+.text pre code { padding: 0; background: transparent; }
+.textCaret {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  background: var(--accent-bright);
+  margin-left: 2px;
+  vertical-align: -2px;
+  animation: tl-pulse 1.05s ease-in-out infinite;
+  border-radius: 1px;
+}
+
 /* ── rationale · accent recess ─────────────────────────────── */
 .reason {
   border-radius: 10px;
