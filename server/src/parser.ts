@@ -334,6 +334,79 @@ export function parseAndExtract(
     return '';
   });
 
+  // <tool_use name="X" id="Y">JSON</tool_use> — Claude Code CLI tool invocation
+  //
+  // The Claude Code CLI api client (transport/api-clients/claude-code-cli-api-client.ts:428-430)
+  // proactively wraps every Anthropic-shape `tool_use` ContentBlock in this
+  // pseudo-XML so the otherwise text-only parser can route it. Without
+  // this extractor the entire wrapper leaks through to `event:'text'`,
+  // getting chunked into 5-15 char fragments by the streaming projector and
+  // rendered as literal "<tool_use name=" strings (P0-2 in design audit
+  // 2026-05-24). Emit a structured `tool-use` event so the timeline
+  // projector can render it as a `tool_call` chip rather than carving up the
+  // wrapper into text fragments.
+  buffer = buffer.replace(
+    /<tool_use(\s+(?:[^>"']|"[^"]*"|'[^']*')*?)?>([\s\S]*?)<\/tool_use>/g,
+    (_match, attrs: string | undefined, body: string) => {
+      const a = parseAttrs(attrs ?? '');
+      events.push({
+        event: 'tool-use',
+        data: {
+          id: a.id ?? null,
+          name: a.name ?? 'unknown',
+          input: body.trim(), // body is JSON.stringify(tool_use.input) or free text
+          ...nodeIdField(),
+        },
+      });
+      return '';
+    },
+  );
+
+  // <tool_result for="<tool_use_id>" name="...">...</tool_result> —
+  // Claude Code CLI tool execution result. Pairs with <tool_use> above by
+  // `id`/`for` attribute. The CLI client emits these whenever a tool_result
+  // ContentBlock comes back from the spawned process. Without this extractor
+  // the entire result body leaks into the text stream verbatim.
+  buffer = buffer.replace(
+    /<tool_result(\s+(?:[^>"']|"[^"]*"|'[^']*')*?)?>([\s\S]*?)<\/tool_result>/g,
+    (_match, attrs: string | undefined, body: string) => {
+      const a = parseAttrs(attrs ?? '');
+      events.push({
+        event: 'tool-result',
+        data: {
+          for: a.for ?? a.id ?? null,
+          output: body.trim(),
+          ...nodeIdField(),
+        },
+      });
+      return '';
+    },
+  );
+
+  // <function_calls>...</function_calls> — Anthropic-style nested function-
+  // invocation block emitted by some Claude models when they call a tool
+  // without an explicit `<tool_use name=...>` wrapper. Always contains one
+  // or more `<invoke>` children with `<parameter>` leaves. We capture the
+  // whole block as a single `tool-use` event with name='function_calls' and
+  // raw body so the frontend can render it as one chip (rather than fragment
+  // it into text-deltas). Future enhancement: parse <invoke>/<parameter>
+  // children into structured params.
+  buffer = buffer.replace(
+    /<function_calls?>([\s\S]*?)<\/function_calls?>/g,
+    (_match, body: string) => {
+      events.push({
+        event: 'tool-use',
+        data: {
+          id: null,
+          name: 'function_calls',
+          input: body.trim(),
+          ...nodeIdField(),
+        },
+      });
+      return '';
+    },
+  );
+
   // sf:thinking  (paired tag, body is the LLM's chain-of-thought for the
   // current step). Emitted as a streaming-friendly chunk via the dedicated
   // `thinking-chunk` event so the front-end can accumulate a real reasoning
@@ -525,12 +598,16 @@ export function parseAndExtract(
 //       and gets emitted as raw `text` events — bug observed 2026-05-18.
 // Returns -1 if no such prefix exists.
 function findPartialTagStart(buf: string): number {
-  const a = buf.indexOf('<sf:');
-  const b = buf.indexOf('<artifact');
+  // Known full prefixes — anything that starts one of these is held back as
+  // a potential streaming tag until the matching close is seen. Includes the
+  // Claude Code CLI / Anthropic-style tool wrappers added 2026-05-24 (P0-2):
+  // <tool_use> / <tool_result> / <function_call(s)>.
+  const prefixes = ['<sf:', '<artifact', '<tool_use', '<tool_result', '<function_call'];
   let known = -1;
-  if (a !== -1 && b !== -1) known = Math.min(a, b);
-  else if (a !== -1) known = a;
-  else if (b !== -1) known = b;
+  for (const p of prefixes) {
+    const idx = buf.indexOf(p);
+    if (idx !== -1 && (known === -1 || idx < known)) known = idx;
+  }
 
   // Tail prefix: `<` followed by chars that could still grow into `<sf:…` or
   // `<artifact…`. We hold back from the `<` even if it's a literal `<5` math

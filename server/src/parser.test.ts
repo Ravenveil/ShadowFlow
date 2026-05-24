@@ -331,6 +331,99 @@ plain reply
     { data: t3?.data });
 })();
 
+// ─── Test 15: <tool_use> from Claude Code CLI wrapper → tool-use event ─────
+
+(function testToolUseExtraction() {
+  console.log('\n[15] <tool_use name="..." id="..."> → tool-use event');
+  const input =
+    '<tool_use name="Bash" id="toolu_01ABC">\n{"command":"ls","description":"list"}\n</tool_use>';
+  const { buffer, events } = parseAndExtract(input, 'sess-15', noopArtifact);
+  check('buffer drained of tool_use wrapper', buffer.trim() === '', { buffer });
+  check('exactly 1 tool-use event', countEvent(events, 'tool-use') === 1);
+  const e = findEvent(events, 'tool-use');
+  const d = e?.data as Record<string, unknown> | undefined;
+  check('tool-use name=Bash', d?.name === 'Bash');
+  check('tool-use id=toolu_01ABC', d?.id === 'toolu_01ABC');
+  check(
+    'tool-use input has command JSON',
+    typeof d?.input === 'string' && (d?.input as string).includes('"command":"ls"'),
+    { input: d?.input },
+  );
+  check('no text event leaks the wrapper', countEvent(events, 'text') === 0);
+})();
+
+// ─── Test 16: <tool_result for="..."> → tool-result event ───────────────────
+
+(function testToolResultExtraction() {
+  console.log('\n[16] <tool_result for="..."> → tool-result event');
+  const input =
+    '<tool_result for="toolu_01ABC">file1.txt\nfile2.txt</tool_result>';
+  const { buffer, events } = parseAndExtract(input, 'sess-16', noopArtifact);
+  check('buffer drained', buffer.trim() === '', { buffer });
+  check('exactly 1 tool-result event', countEvent(events, 'tool-result') === 1);
+  const e = findEvent(events, 'tool-result');
+  const d = e?.data as Record<string, unknown> | undefined;
+  check('tool-result for=toolu_01ABC', d?.for === 'toolu_01ABC');
+  check('tool-result output trimmed', d?.output === 'file1.txt\nfile2.txt');
+})();
+
+// ─── Test 17: <function_calls>...<invoke>... → tool-use event ───────────────
+
+(function testFunctionCallsBlock() {
+  console.log('\n[17] <function_calls> block → tool-use(name=function_calls)');
+  const input =
+    '<function_calls>\n<invoke name="Read"><parameter name="path">/tmp/x</parameter></invoke>\n</function_calls>';
+  const { buffer, events } = parseAndExtract(input, 'sess-17', noopArtifact);
+  check('buffer drained', buffer.trim() === '', { buffer });
+  check(
+    'exactly 1 tool-use event',
+    countEvent(events, 'tool-use') === 1,
+    { events },
+  );
+  const e = findEvent(events, 'tool-use');
+  const d = e?.data as Record<string, unknown> | undefined;
+  check('name=function_calls', d?.name === 'function_calls');
+  check(
+    'input preserves <invoke> body for downstream rendering',
+    typeof d?.input === 'string' && (d?.input as string).includes('<invoke name="Read"'),
+    { input: d?.input },
+  );
+  check('no text event leaks XML', countEvent(events, 'text') === 0);
+})();
+
+// ─── Test 18: partial <tool_use> tag stays in buffer (streaming) ────────────
+
+(function testPartialToolUseHeldBack() {
+  console.log('\n[18] partial <tool_use prefix held back until close arrives');
+  const input1 = 'some text before <tool_use name="Bash"';
+  const { buffer: b1, events: e1 } = parseAndExtract(
+    input1,
+    'sess-18',
+    noopArtifact,
+  );
+  // text before the partial tag should emit, partial tag held in buffer
+  const t1 = findEvent(e1, 'text');
+  check(
+    'text before partial tag emitted',
+    (t1?.data as Record<string, unknown>)?.text === 'some text before ',
+    { e1 },
+  );
+  check('buffer holds the partial <tool_use', b1.startsWith('<tool_use'), {
+    b1,
+  });
+  check('no tool-use event yet (still open)', countEvent(e1, 'tool-use') === 0);
+
+  // feed the rest
+  const input2 = b1 + ' id="x">body</tool_use>';
+  const { buffer: b2, events: e2 } = parseAndExtract(
+    input2,
+    'sess-18',
+    noopArtifact,
+  );
+  check('tool-use event emitted on close', countEvent(e2, 'tool-use') === 1);
+  check('buffer drained after close', b2.trim() === '', { b2 });
+})();
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 console.log('\n────────────────────────────────────────');
