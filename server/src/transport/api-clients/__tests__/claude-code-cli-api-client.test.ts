@@ -37,8 +37,8 @@ import {
   __resetClaudeCapabilityCache,
   type SpawnFn,
 } from '../claude-code-cli-api-client';
-import type { AssistantEvent } from '../../conversation-runtime';
-import type { ToolSpec } from '../../tool-spec';
+import type { AssistantEvent } from '../../../lib/conversation-runtime';
+import type { ToolSpec } from '../../../lib/tool-spec';
 
 let pass = 0;
 let fail = 0;

@@ -45,13 +45,13 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import type {
   ApiClient,
   AssistantEvent,
-} from '../conversation-runtime';
+} from '../../lib/conversation-runtime';
 import type {
   ConversationMessage,
   TokenUsage,
-} from '../conversation-types';
-import type { ToolSpec } from '../tool-spec';
-import { DEFAULT_MODELS } from '../../transport/api-clients/types';
+} from '../../lib/conversation-types';
+import type { ToolSpec } from '../../lib/tool-spec';
+import { DEFAULT_MODELS } from './types';
 
 export interface GoogleApiClientOptions {
   /** BYOK key. If absent and env GOOGLE_API_KEY also empty, stream() throws. */

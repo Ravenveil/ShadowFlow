@@ -33,11 +33,11 @@ import type { MessageStreamEvent } from '@anthropic-ai/sdk/resources/messages';
 import type {
   ApiClient,
   AssistantEvent,
-} from '../conversation-runtime';
-import type { ConversationMessage, TokenUsage } from '../conversation-types';
-import { toAnthropicMessages } from '../anthropic-block-adapter';
-import type { ToolSpec } from '../tool-spec';
-import { DEFAULT_MODELS } from '../../transport/api-clients/types';
+} from '../../lib/conversation-runtime';
+import type { ConversationMessage, TokenUsage } from '../../lib/conversation-types';
+import { toAnthropicMessages } from '../../lib/anthropic-block-adapter';
+import type { ToolSpec } from '../../lib/tool-spec';
+import { DEFAULT_MODELS } from './types';
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../prompt-assembly';
 
 /**

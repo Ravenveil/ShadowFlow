@@ -1,17 +1,19 @@
 /**
- * llm-providers/index.ts — Provider dispatch (Story 15.18)
+ * transport/api-clients/index.ts — Provider dispatch (Phase 2 consolidation,
+ * commit 1 of 3 — interim shim).
  *
- * Single entry point: `callProvider(providerId, input)` returns the same
- * `AsyncGenerator<ProviderChunk>` shape regardless of provider. Unknown
- * provider ids surface as a `PROVIDER_ERROR` chunk (NEVER throws) so callers
- * can stay symmetric.
+ * Phase 2 collapsed the duplicate provider abstractions: the simple
+ * single-turn `LLMProvider` (Track A) and the multi-turn `ApiClient` (Track B,
+ * formerly under `lib/api-clients/`). This commit moves Track B in and
+ * routes anthropic + google through the new in-tree ApiClient classes; the
+ * OpenAI-compat family still goes through the legacy `openai-compat-instances`
+ * factory and is replaced by `OpenAiCompatApiClient` in commit 2.
  *
- * 2026-05-16: expanded from 4 → 12 providers (anthropic + openai-compat
- * factory generating 10 OpenAI-shape providers + google stub).
+ * Public surface is unchanged: `callProvider`, `getProvider`, plus the
+ * provider catalog tables from `./types`. Callers (routes/llm.ts,
+ * routes/run-sessions.ts, transport/spawners/anthropic.ts) need no edits.
  */
 
-import { anthropicProvider } from './anthropic';
-import { googleProvider } from './google';
 import {
   azureProviderInstance,
   deepseekProviderInstance,
@@ -25,6 +27,8 @@ import {
   qwenProviderInstance,
   zhipuProviderInstance,
 } from './openai-compat-instances';
+import { AnthropicApiClient } from './anthropic-api-client';
+import { GoogleApiClient } from './google-api-client';
 import {
   isProviderId,
   type LLMProvider,
@@ -36,6 +40,7 @@ import {
 export type {
   LLMProvider,
   ProviderChunk,
+  ProviderErrorCode,
   ProviderId,
   ProviderInput,
 } from './types';
@@ -47,6 +52,86 @@ export {
   PROVIDERS_NO_KEY,
   isProviderId,
 } from './types';
+
+/**
+ * Adapter — wraps an ApiClient class as an LLMProvider so the existing
+ * `streamCompletion(ProviderInput)` dispatch pattern keeps working. Only
+ * `text_delta` AssistantEvents are forwarded; tool_use / usage / message_stop
+ * are dropped (single-turn back-compat path has no consumer for them).
+ */
+type ApiClientLike = {
+  stream(args: {
+    system_prompt: string;
+    messages: Array<{ role: 'user'; blocks: Array<{ kind: 'text'; text: string }> }>;
+    tools: never[];
+    signal: AbortSignal;
+  }): AsyncIterable<{ kind: string; text?: string }>;
+};
+
+function adapt(id: ProviderId, build: (input: ProviderInput) => ApiClientLike): LLMProvider {
+  return {
+    id,
+    defaultModel: '', // unused on this path; ApiClient reads its own DEFAULT_MODELS fallback
+    async *streamCompletion(input: ProviderInput): AsyncGenerator<ProviderChunk> {
+      const signal = input.signal ?? new AbortController().signal;
+      let client: ApiClientLike;
+      try {
+        client = build(input);
+      } catch (err) {
+        yield {
+          type: 'error',
+          message: (err as Error).message ?? String(err),
+          code: 'PROVIDER_ERROR',
+          provider: id,
+        };
+        return;
+      }
+      try {
+        const stream = client.stream({
+          system_prompt: input.systemPrompt,
+          messages: [
+            { role: 'user', blocks: [{ kind: 'text', text: input.userMessage }] },
+          ],
+          tools: [],
+          signal,
+        });
+        for await (const ev of stream) {
+          if (signal.aborted) return;
+          if (ev.kind === 'text_delta' && typeof ev.text === 'string') {
+            yield { type: 'text-delta', text: ev.text };
+          }
+        }
+        yield { type: 'end' };
+      } catch (err) {
+        if (signal.aborted) return;
+        yield {
+          type: 'error',
+          message: (err as Error).message ?? String(err),
+          code: 'PROVIDER_ERROR',
+          provider: id,
+        };
+      }
+    },
+  };
+}
+
+const anthropicProvider: LLMProvider = adapt('anthropic', (input) =>
+  new AnthropicApiClient({
+    apiKey: input.api_key,
+    model: input.model,
+    max_tokens: input.max_tokens,
+    temperature: input.temperature,
+  }),
+);
+
+const googleProvider: LLMProvider = adapt('google', (input) =>
+  new GoogleApiClient({
+    apiKey: input.api_key,
+    model: input.model,
+    max_tokens: input.max_tokens,
+    temperature: input.temperature,
+  }),
+);
 
 const PROVIDERS: Record<ProviderId, LLMProvider> = {
   anthropic:  anthropicProvider,
@@ -69,9 +154,9 @@ export function getProvider(id: ProviderId): LLMProvider {
 }
 
 /**
- * Dispatch to the named provider's `streamCompletion`. If the id is unknown
- * (or coerced through `as ProviderId`), yields a single `PROVIDER_ERROR`
- * chunk and returns — callers don't need a try/catch for the dispatch.
+ * Dispatch to the named provider's `streamCompletion`. Behavior preserved
+ * from the original Track A implementation: unknown id → single error chunk
+ * + return; otherwise delegate to the provider's stream.
  */
 export async function* callProvider(
   providerId: string,

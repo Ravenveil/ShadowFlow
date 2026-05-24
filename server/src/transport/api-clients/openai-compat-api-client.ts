@@ -55,14 +55,14 @@ import OpenAI from 'openai';
 import type {
   ApiClient,
   AssistantEvent,
-} from '../conversation-runtime';
+} from '../../lib/conversation-runtime';
 import type {
   ContentBlock,
   ConversationMessage,
   TokenUsage,
-} from '../conversation-types';
-import type { ToolSpec } from '../tool-spec';
-import { DEFAULT_MODELS } from '../../transport/api-clients/types';
+} from '../../lib/conversation-types';
+import type { ToolSpec } from '../../lib/tool-spec';
+import { DEFAULT_MODELS } from './types';
 
 /**
  * Provider id → default baseURL. Sourced from

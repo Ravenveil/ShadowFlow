@@ -30,11 +30,11 @@
  */
 
 import type { ApiClient } from '../lib/conversation-runtime';
-import { AnthropicApiClient } from '../lib/api-clients/anthropic-api-client';
-import { OpenAiCompatApiClient } from '../lib/api-clients/openai-compat-api-client';
-import { GoogleApiClient } from '../lib/api-clients/google-api-client';
-import { ClaudeCodeCliApiClient } from '../lib/api-clients/claude-code-cli-api-client';
-import { CodexCliApiClient } from '../lib/api-clients/codex-cli-api-client';
+import { AnthropicApiClient } from './api-clients/anthropic-api-client';
+import { OpenAiCompatApiClient } from './api-clients/openai-compat-api-client';
+import { GoogleApiClient } from './api-clients/google-api-client';
+import { ClaudeCodeCliApiClient } from './api-clients/claude-code-cli-api-client';
+import { CodexCliApiClient } from './api-clients/codex-cli-api-client';
 import type {
   LlmCallable,
   LlmCallableCapabilities,

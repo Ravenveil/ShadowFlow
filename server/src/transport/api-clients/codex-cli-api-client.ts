@@ -58,9 +58,9 @@ import {
   type ChildProcessWithoutNullStreams,
   type SpawnOptionsWithoutStdio,
 } from 'node:child_process';
-import type { ApiClient, AssistantEvent } from '../conversation-runtime';
-import type { ConversationMessage, TokenUsage } from '../conversation-types';
-import type { ToolSpec } from '../tool-spec';
+import type { ApiClient, AssistantEvent } from '../../lib/conversation-runtime';
+import type { ConversationMessage, TokenUsage } from '../../lib/conversation-types';
+import type { ToolSpec } from '../../lib/tool-spec';
 
 /**
  * SpawnFn — narrow contract over child_process.spawn so the client can be
