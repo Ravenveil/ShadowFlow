@@ -971,7 +971,6 @@ export function ByokSection() {
   const availableIds  = filteredProviders.filter(id => !configuredIds.includes(id));
 
   const hasKey = Boolean(savedState?.apiKey?.length);
-  const maskedKey = savedState?.apiKey ?? '';
   const isConfigured = hasKey || (selectedMeta.noKey && Boolean(savedState));
   const isVerified = savedState?.enabled;
 
@@ -1137,10 +1136,12 @@ export function ByokSection() {
 
           {/* API Key + Base URL */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-            {/* API Key — Cherry Studio style: input value IS the saved key
-                (masked by type=password). On focus we lift saved → keyInput
-                so backspace/select-all/type all work like a normal text
-                field. No fake-bullets, no select-all RAF hack.
+            {/* API Key — server returns the saved key already masked as
+                "••••XXXX" (8 chars, see settings.ts:197 maskApiKey). The
+                client cannot recover the real length, so we render a fixed
+                bullet string when saved as the "已保存" signal. On focus we
+                clear into a fresh editing buffer because we cannot
+                round-trip the real key for in-place editing anyway.
                 (2026-05-24 fix.) */}
             {!selectedMeta.noKey && (
               <div>
@@ -1155,7 +1156,7 @@ export function ByokSection() {
                 <div style={{ position: 'relative' }}>
                   <input
                     type={showKey ? 'text' : 'password'}
-                    value={isEditing ? keyInput : maskedKey}
+                    value={isEditing ? keyInput : (hasKey ? '•'.repeat(40) : '')}
                     onChange={e => {
                       setKeyInput(e.target.value);
                       markDirty();
@@ -1172,20 +1173,32 @@ export function ByokSection() {
                     onFocus={e => {
                       e.target.style.borderColor = 'var(--t-accent)';
                       if (!isEditing) {
-                        setKeyInput(maskedKey || '');
+                        // Start fresh — server cannot give us the real key
+                        // to edit in place. User types new value (or leaves
+                        // empty to delete saved key on blur).
+                        setKeyInput('');
                         setIsEditing(true);
                       }
                     }}
                     onBlur={async e => {
                       e.target.style.borderColor = 'var(--t-border)';
-                      if (isEditing && keyInput !== maskedKey) {
-                        // User changed it — save (or save empty to delete)
-                        await autoSave({ apiKey: keyInput.trim() });
+                      if (isEditing) {
+                        const trimmed = keyInput.trim();
+                        if (trimmed.length > 0) {
+                          // User typed a new key — save it
+                          await autoSave({ apiKey: trimmed });
+                        } else if (hasKey && keyInput === '') {
+                          // Field was emptied but user didn't type anything
+                          // new. Treat as "no-op cancel" (do NOT delete the
+                          // saved key on bare-blur — too easy to lose it).
+                          // If user actually wants to delete, they can
+                          // use the 移除密钥 button.
+                        }
                       }
                       setKeyInput('');
                       setIsEditing(false);
                     }}
-                    placeholder={selectedMeta.keyPlaceholder}
+                    placeholder={hasKey ? T('输入新值替换保存的密钥', 'Type to replace saved key') : selectedMeta.keyPlaceholder}
                     style={{
                       width: '100%', boxSizing: 'border-box',
                       padding: '0 130px 0 14px', height: 40,
