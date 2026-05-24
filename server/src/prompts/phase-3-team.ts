@@ -15,6 +15,12 @@
  *     the workflow-config step finish (daemon will have already emitted the
  *     edges by this point).
  *   - emits <sf:complete redirect="/editor"/> to terminate the turn.
+ *
+ * Round 3 P0 fix (2026-05-24): the <sf:step name="配置 Team Workflow"> tag's
+ * `output_kind` was changed from "edges" → "none" for the same reason as
+ * phase-2-agent.ts's "配置 Agent 角色" — daemon emits <sf:edge> frames, the
+ * LLM doesn't, so the parser's output_kind gate was incorrectly firing
+ * STEP_NO_OUTPUT against BMAD live BYOK runs.
  */
 
 export const PHASE_3_TEAM = `# Phase 3 · 收尾：工具集 / Policy / Workflow 帧 / complete
@@ -49,13 +55,17 @@ emit \`<sf:step name="Policy 协作规则" output_kind="none" status="done"/>\`
 
 ## 3.3 配置 Team Workflow（总结帧）
 
-emit \`<sf:step name="配置 Team Workflow" output_kind="edges" status="running"/>\`
+emit \`<sf:step name="配置 Team Workflow" output_kind="none" status="running"/>\`
 
 此时 daemon 已经按 team.yaml 把所有 \`<sf:edge>\` 帧发完了。你**不要**再尝试
 emit edge 或调用任何 register_edge 工具 —— 只需用一两句中文总结："已按 team.yaml
 连好 N 条 sequential / M 条 conditional 边"，作为 UI 步骤列表里这一步的注脚。
 
-emit \`<sf:step name="配置 Team Workflow" output_kind="edges" status="done"/>\`
+emit \`<sf:step name="配置 Team Workflow" output_kind="none" status="done"/>\`
+
+> **output_kind 说明**：本步 \`output_kind="none"\`，不是 "edges"。
+> daemon 负责 emit \`<sf:edge>\` 帧；LLM 这一步只做总结性 thinking 输出，
+> 没有"建图"产出，标 none 让 parser 的 step-gating 不会误报 STEP_NO_OUTPUT。
 
 ## 3.4 完成
 

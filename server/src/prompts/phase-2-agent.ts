@@ -22,6 +22,14 @@
  *   - Emits the <sf:node>/<sf:edge> blueprint frames for every agent in the
  *     selected subset, so the UI already shows the team graph before the
  *     LLM produces a single token.
+ *
+ * Round 3 P0 fix (2026-05-24): the <sf:step name="配置 Agent 角色"> tag's
+ * `output_kind` was changed from "nodes" → "none" because the LLM no longer
+ * emits <sf:node> tags itself (per A3, daemon-led). The parser's S2.2
+ * output_kind gate (parser.ts:200) was firing STEP_NO_OUTPUT errors against
+ * BMAD live runs because LLM correctly followed the "don't emit node" rule
+ * yet the step still declared `output_kind="nodes"`. The agent-substep frames
+ * remain the LLM's actual observable output for this step.
  */
 
 export const PHASE_2_AGENT = `# Phase 2 · 为每个选中的 Agent 推进 5 个 substep
@@ -37,12 +45,17 @@ substep 顺序 emit 状态帧，并按 system prompt 完成产出。
 
 ## 总框架
 
-emit \`<sf:step name="配置 Agent 角色" output_kind="nodes" status="running"/>\`
+emit \`<sf:step name="配置 Agent 角色" output_kind="none" status="running"/>\`
 
 然后**对你被调度执行的那个 agent**，按顺序 emit 5 个 substep。
 未被调度到的 agent 由 daemon 自己 emit pending 状态，无需你处理。
 
-最后 emit \`<sf:step name="配置 Agent 角色" output_kind="nodes" status="done"/>\`.
+最后 emit \`<sf:step name="配置 Agent 角色" output_kind="none" status="done"/>\`.
+
+> **output_kind 说明**：这一步的 \`output_kind="none"\`，不是 "nodes"。
+> daemon 负责 emit \`<sf:node>\` 蓝图帧；本步 LLM 只产 \`<sf:agent-substep>\` 状态帧，
+> 所以从 parser 角度看本步没有"建图"产出，标 none 让 step-gating 不会误报
+> STEP_NO_OUTPUT。
 
 ## 单个 agent 的 5 substep 推进顺序
 
