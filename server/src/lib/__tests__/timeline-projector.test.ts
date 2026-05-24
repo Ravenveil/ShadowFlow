@@ -55,11 +55,13 @@ console.log('\n[1] user_turn opens turn');
 {
   const p = createTimelineProjector();
   const r1 = p.onUserMessage('帮我搭一个 BMAD team');
-  check('emit 1 message', 1, r1.messages.length);
+  // user_turn is the first message; status_line slot bump is the second.
+  const userTurns = r1.messages.filter((m) => m.kind === 'user_turn');
+  check('emit 1 user_turn message', 1, userTurns.length);
   check('first kind=user_turn', 'user_turn', r1.messages[0].kind);
-  const ut = r1.messages[0] as Extract<TimelineMessage, { kind: 'user_turn' }>;
+  const ut = userTurns[0] as Extract<TimelineMessage, { kind: 'user_turn' }>;
   check('user_turn text preserved', '帮我搭一个 BMAD team', ut.text);
-  assert('turn_id present', typeof r1.messages[0].turn_id === 'string' && r1.messages[0].turn_id.length > 0);
+  assert('turn_id present', typeof userTurns[0].turn_id === 'string' && userTurns[0].turn_id.length > 0);
 }
 
 // ── Test 2: classify → assistant_meta + msg_foot ─────────────────────────────
@@ -114,8 +116,13 @@ console.log('\n[4] step_panel id stable across steps');
   const panelId = r1.messages[0]!.id;
   p.onAssembleDone(0, 100);
   const r2 = p.onAssembleStart(1, 'step B');
-  // Second start should NOT emit a new step_panel message
-  check('second step start emits 0 new messages', 0, r2.messages.length);
+  // Second start should NOT emit a new step_panel message. (Status_line
+  // slot bumps are unrelated singletons — exclude from this assertion.)
+  check(
+    'second step start emits 0 new step_panel messages',
+    0,
+    r2.messages.filter((m) => m.kind === 'step_panel').length,
+  );
   const append2 = r2.patches.find((x) => x.op === 'append_step') as Extract<MessagePatch, { op: 'append_step' }>;
   check('append_step still targets original panel id', panelId, append2.id);
 }
@@ -169,17 +176,24 @@ console.log('\n[7] thinking lifecycle');
   const p = createTimelineProjector();
   p.onUserMessage('q');
   const r1 = p.onThinkingChunk('Hmm, ');
-  check('thinking opens a message', 1, r1.messages.length);
-  check('thinking message kind', 'thinking', r1.messages[0].kind);
-  const tid = r1.messages[0]!.id;
-  const tMsg = r1.messages[0] as Extract<TimelineMessage, { kind: 'thinking' }>;
+  // status_line bumps are independent singletons — filter them out when
+  // counting thinking message lifecycle events.
+  const r1Thinking = r1.messages.filter((m) => m.kind === 'thinking');
+  check('thinking opens a message', 1, r1Thinking.length);
+  check('thinking message kind', 'thinking', r1Thinking[0].kind);
+  const tid = r1Thinking[0]!.id;
+  const tMsg = r1Thinking[0] as Extract<TimelineMessage, { kind: 'thinking' }>;
   check('thinking status streaming', 'streaming', tMsg.status);
   const appendBody = r1.patches.find((x) => x.op === 'thinking_append_body') as Extract<MessagePatch, { op: 'thinking_append_body' }>;
   assert('append_body patch present', !!appendBody);
   check('chunk preserved', 'Hmm, ', appendBody.chunk);
 
   const r2 = p.onThinkingChunk('let me think');
-  check('second chunk: no new message', 0, r2.messages.length);
+  check(
+    'second chunk: no new thinking message',
+    0,
+    r2.messages.filter((m) => m.kind === 'thinking').length,
+  );
   const appendBody2 = r2.patches.find((x) => x.op === 'thinking_append_body') as Extract<MessagePatch, { op: 'thinking_append_body' }>;
   check('second append_body targets same id', tid, appendBody2.id);
 
@@ -311,6 +325,89 @@ console.log('\n[11] onComplete cleanup');
   assert('thinking finalized on complete', !!finalize);
   const footUpd = r.patches.find((x) => x.op === 'msg_foot_update') as Extract<MessagePatch, { op: 'msg_foot_update' }>;
   assert('msg_foot updated to done', footUpd?.patch.status === 'done');
+}
+
+// ── Test 12: onText accumulates into single assistant_text ─────────────────
+// 2026-05-24 P0-1 — multiple onText chunks must batch into one
+// assistant_text message via text_append patches, not 200 separate rows.
+console.log('\n[12] onText accumulates into single assistant_text');
+{
+  const p = createTimelineProjector();
+  p.onUserMessage('q');
+  const r1 = p.onText('Hello ');
+  const at = r1.messages.find((m) => m.kind === 'assistant_text') as Extract<TimelineMessage, { kind: 'assistant_text' }>;
+  assert('first text emits assistant_text message', !!at);
+  check('assistant_text body = first chunk', 'Hello ', at.body);
+  const atId = at.id;
+
+  const r2 = p.onText('world');
+  check('second text emits 0 new assistant_text messages', 0, r2.messages.filter((m) => m.kind === 'assistant_text').length);
+  const appendPatch = r2.patches.find((x) => x.op === 'text_append') as Extract<MessagePatch, { op: 'text_append' }>;
+  assert('text_append patch emitted on second chunk', !!appendPatch);
+  check('text_append targets the same assistant_text id', atId, appendPatch.id);
+  check('text_append chunk', 'world', appendPatch.chunk);
+
+  const r3 = p.onText('!');
+  const appendPatch2 = r3.patches.find((x) => x.op === 'text_append') as Extract<MessagePatch, { op: 'text_append' }>;
+  check('third chunk patches same id', atId, appendPatch2.id);
+}
+
+// ── Test 13: thinking-chunk closes assistant_text → next text opens new ────
+console.log('\n[13] thinking-chunk interrupts text accumulation');
+{
+  const p = createTimelineProjector();
+  p.onUserMessage('q');
+  const r1 = p.onText('first segment ');
+  const at1 = r1.messages.find((m) => m.kind === 'assistant_text') as Extract<TimelineMessage, { kind: 'assistant_text' }>;
+  const id1 = at1.id;
+
+  // Thinking arrives mid-stream — closes text accumulation.
+  p.onThinkingChunk('hmm, reconsidering');
+
+  // Next text run should open a NEW assistant_text message.
+  const r2 = p.onText('second segment');
+  const at2 = r2.messages.find((m) => m.kind === 'assistant_text') as Extract<TimelineMessage, { kind: 'assistant_text' }>;
+  assert('thinking-then-text opens new assistant_text', !!at2);
+  assert('new assistant_text has different id', id1 !== at2.id);
+  check('new assistant_text body is the new chunk', 'second segment', at2.body);
+}
+
+// ── Test 14: assemble step boundary closes assistant_text ──────────────────
+console.log('\n[14] assemble step boundary closes text run');
+{
+  const p = createTimelineProjector();
+  p.onUserMessage('q');
+  p.onText('plain answer ');
+  // Stepping into a new assemble step should reset accumulation.
+  p.onAssembleStart(0, 'next step');
+  const r = p.onText('more answer');
+  const ats = r.messages.filter((m) => m.kind === 'assistant_text');
+  check('text after assemble opens new assistant_text', 1, ats.length);
+  const appended = r.patches.filter((x) => x.op === 'text_append');
+  check('no text_append for the first chunk after boundary', 0, appended.length);
+}
+
+// ── Test 15: status_line emitted by onText/onComplete/onUserMessage ─────────
+// 2026-05-24 P0-3 — status_line slot was never populated; now bumped on key
+// events so the always-on bottom bar has a verb to render.
+console.log('\n[15] status_line slot populated');
+{
+  const p = createTimelineProjector();
+  const r1 = p.onUserMessage('hi');
+  const sl1 = r1.messages.find((m) => m.kind === 'status_line') as Extract<TimelineMessage, { kind: 'status_line' }>;
+  assert('user turn emits status_line', !!sl1);
+  check('initial verb', 'Thinking', sl1?.verb);
+
+  const r2 = p.onText('answering');
+  const sl2 = r2.messages.find((m) => m.kind === 'status_line') as Extract<TimelineMessage, { kind: 'status_line' }>;
+  assert('text emits status_line', !!sl2);
+  check('text verb', 'Writing', sl2?.verb);
+
+  const r3 = p.onComplete();
+  const sl3 = r3.messages.find((m) => m.kind === 'status_line') as Extract<TimelineMessage, { kind: 'status_line' }>;
+  assert('complete emits status_line', !!sl3);
+  check('complete verb', 'Done', sl3?.verb);
+  check('complete tools_running=0', 0, sl3?.tools_running);
 }
 
 // ── Summary ─────────────────────────────────────────────────────────────────

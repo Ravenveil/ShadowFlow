@@ -95,6 +95,11 @@ export type MessageKind =
   | 'rationale'
   | 'tool_call'
   | 'tool_echo'
+  // 2026-05-24 P0-1 — dedicated kind for the assistant's natural-language
+  // answer body. Was previously crammed into tool_echo, one message per
+  // chunk; now accumulates via `text_append` patches so a 1000-token answer
+  // is one timeline row rather than 200 fragments.
+  | 'assistant_text'
   | 'step_panel'
   | 'diff_panel'
   | 'msg_foot'
@@ -168,6 +173,10 @@ export type TimelineMessage =
       body: string;
     })
   | (TimelineMessageBase & {
+      kind: 'assistant_text';
+      body: string;
+    })
+  | (TimelineMessageBase & {
       kind: 'step_panel';
       total_steps: number;
       steps: StepRow[];
@@ -212,6 +221,11 @@ export type MessagePatch =
     }
   | { id: string; op: 'thinking_append_body'; chunk: string }
   | { id: string; op: 'thinking_finalize'; tokens?: number }
+  // 2026-05-24 P0-1 — append a streamed chunk to an open assistant_text
+  // message. The projector batches token-level deltas onto a single
+  // assistant_text message until something orthogonal (tool call, thinking,
+  // step transition) closes it.
+  | { id: string; op: 'text_append'; chunk: string }
   | { id: string; op: 'diff_append_line'; line: DiffLine }
   | {
       id: string;

@@ -143,6 +143,21 @@ export function createTimelineProjector(): TimelineProjector {
   let openThinkingId: string | null = null;
   let thinkingBuf = '';
 
+  // 2026-05-24 P0-1 — currently-accumulating assistant_text message id.
+  // Set on the first onText() of a contiguous text run; cleared by any
+  // non-text projector callback (tool/substep/thinking/blueprint/complete)
+  // so the next text run opens a new message. This batches token deltas
+  // into one timeline row rather than the previous one-per-chunk explosion
+  // (a 1000-token answer was rendering as 200 separate `tool_echo`s).
+  let openAssistantTextId: string | null = null;
+
+  // 2026-05-24 P0-3 — single status_line slot id (always-on bottom bar).
+  // Lazily created on the first bumpStatusLine() call; survives across
+  // turns (the front-end keys this slot off message kind 'status_line', so
+  // re-emitting the same id keeps the same row updated rather than pushing
+  // duplicates).
+  let statusLineId: string | null = null;
+
   let openDiffPanelId: string | null = null;
   let diffLineNo = 0;
   let diffAdded = 0;
@@ -212,6 +227,57 @@ export function createTimelineProjector(): TimelineProjector {
     thinkingBuf = '';
   }
 
+  /**
+   * Close the currently-accumulating assistant_text message so the next
+   * onText() call opens a fresh one. Called whenever a semantically
+   * different event (tool call/result, agent substep, blueprint, thinking,
+   * step transition, complete) breaks the contiguous text run.
+   *
+   * The current implementation only nulls the id — the message's body has
+   * already been built up via text_append patches and the front-end has it.
+   * Future work could emit a `text_finalize` patch if downstream needs to
+   * know "stream done" without inferring it from the next non-text event.
+   */
+  function closeOpenText(_out: ProjectorEmit) {
+    // _out reserved for a future text_finalize patch; for now closing is
+    // purely state — body already streamed and rendered by the front-end.
+    void _out;
+    openAssistantTextId = null;
+  }
+
+  /**
+   * Update the always-on status_line slot. The id is FIXED so the front-end
+   * can render exactly one bottom bar regardless of how many patches we
+   * emit. First call pushes the message; subsequent calls replace it (the
+   * front-end MessageRegistry-by-id collation overwrites the previous
+   * status_line in place).
+   *
+   * We re-emit the full message rather than a patch op so the design's
+   * "stable bottom slot keyed by kind" contract works without a new patch
+   * shape — status_line is a singleton, not a growable container.
+   */
+  function bumpStatusLine(
+    out: ProjectorEmit,
+    verb: string,
+    toolsRunning = 0,
+  ) {
+    // Each emission gets a fresh id but the same kind. The front-end's
+    // MessageRegistry filters `status_line` out of the timeline stream and
+    // renders only the latest one in a fixed bottom slot (StatusLine.tsx),
+    // so duplicates don't accumulate visually. Using fresh ids keeps the
+    // per-message id-uniqueness invariant intact.
+    statusLineId = newId('msg');
+    out.messages.push({
+      id: statusLineId,
+      kind: 'status_line',
+      turn_id: turnId,
+      ts: nowMs(),
+      verb,
+      elapsed_s: Math.max(0, Math.round((nowMs() - turnStartMs) / 1000)),
+      tools_running: toolsRunning,
+    });
+  }
+
   function emit(): ProjectorEmit {
     return { messages: [], patches: [] };
   }
@@ -222,6 +288,7 @@ export function createTimelineProjector(): TimelineProjector {
       // Close anything open from a prior turn before opening a new one.
       if (msgFootId) bumpMsgFoot(out, { status: 'done' });
       closeOpenThinking(out);
+      closeOpenText(out);
       // Reset turn-scoped state.
       turnId = newId('turn');
       turnStartMs = nowMs();
@@ -243,6 +310,8 @@ export function createTimelineProjector(): TimelineProjector {
         ts: nowMs(),
         text,
       });
+      // Reset statusline to a neutral state on a fresh turn.
+      bumpStatusLine(out, 'Thinking', 0);
       return out;
     },
 
@@ -275,6 +344,9 @@ export function createTimelineProjector(): TimelineProjector {
 
     onAssembleStart(stepIndex: number, stepName: string): ProjectorEmit {
       const out = emit();
+      // A new step boundary closes any in-flight assistant_text run so the
+      // next free-text chunk opens a fresh message under the new step.
+      closeOpenText(out);
       ensureMsgFoot(out);
       ensureStepPanel(out);
       const panelId = stepPanelId!;
@@ -288,6 +360,7 @@ export function createTimelineProjector(): TimelineProjector {
           patch: { status: 'running', name: stepName },
         });
         currentRunningStepIndex = stepIndex;
+        bumpStatusLine(out, `Configuring · ${stepName}`, 0);
         return out;
       }
       const newRow: StepRow = { name: stepName, status: 'running', substeps: [] };
@@ -297,6 +370,7 @@ export function createTimelineProjector(): TimelineProjector {
       if (stepIndex + 1 > totalSteps) totalSteps = stepIndex + 1;
       out.patches.push({ id: panelId, op: 'append_step', step: newRow });
       currentRunningStepIndex = stepIndex;
+      bumpStatusLine(out, `Configuring · ${stepName}`, 0);
       return out;
     },
 
@@ -320,6 +394,8 @@ export function createTimelineProjector(): TimelineProjector {
 
     onAgentSubstepStart(nodeId: string, substep: string): ProjectorEmit {
       const out = emit();
+      // Substep boundary closes any in-flight assistant_text run.
+      closeOpenText(out);
       if (!stepPanelId || currentRunningStepIndex === null) return out;
       const stepLocalIdx = stepIndexLookup.get(currentRunningStepIndex);
       if (stepLocalIdx === undefined) return out;
@@ -348,6 +424,7 @@ export function createTimelineProjector(): TimelineProjector {
         step_index: stepLocalIdx,
         sub,
       });
+      bumpStatusLine(out, `${nodeId} · ${substep}`, 0);
       return out;
     },
 
@@ -375,6 +452,9 @@ export function createTimelineProjector(): TimelineProjector {
 
     onThinkingChunk(chunk: string): ProjectorEmit {
       const out = emit();
+      // Thinking interrupts a text run — close it so the next text chunk
+      // opens a new message AFTER the thinking block.
+      closeOpenText(out);
       if (!openThinkingId) {
         openThinkingId = newId('msg');
         thinkingBuf = '';
@@ -394,6 +474,7 @@ export function createTimelineProjector(): TimelineProjector {
         op: 'thinking_append_body',
         chunk,
       });
+      bumpStatusLine(out, 'Thinking', 0);
       return out;
     },
 
@@ -403,6 +484,12 @@ export function createTimelineProjector(): TimelineProjector {
       // Close any open thinking first — blueprint marks the transition from
       // analysis to artifact production.
       closeOpenThinking(out);
+      closeOpenText(out);
+      bumpStatusLine(
+        out,
+        `Editing · ${data.filename ?? 'output.yml'}`,
+        toolsRun + 1,
+      );
       openDiffPanelId = newId('msg');
       diffLineNo = 0;
       diffAdded = 0;
@@ -438,22 +525,40 @@ export function createTimelineProjector(): TimelineProjector {
     onText(text: string): ProjectorEmit {
       const out = emit();
       if (!text.trim()) return out;
-      out.messages.push({
-        id: newId('msg'),
-        kind: 'tool_echo',
-        turn_id: turnId,
-        ts: nowMs(),
-        body: text,
-      });
+      // 2026-05-24 P0-1 — accumulate contiguous text-delta chunks onto a
+      // single assistant_text message. The first chunk pushes the message;
+      // subsequent chunks emit text_append patches that the front-end
+      // applies in place. Any non-text event (tool/substep/blueprint/...)
+      // calls closeOpenText() so the next text run opens a fresh message.
+      if (!openAssistantTextId) {
+        openAssistantTextId = newId('msg');
+        out.messages.push({
+          id: openAssistantTextId,
+          kind: 'assistant_text',
+          turn_id: turnId,
+          ts: nowMs(),
+          body: text,
+        });
+      } else {
+        out.patches.push({
+          id: openAssistantTextId,
+          op: 'text_append',
+          chunk: text,
+        });
+      }
+      // While text is streaming the status line reads "Writing".
+      bumpStatusLine(out, 'Writing', 0);
       return out;
     },
 
     onComplete(): ProjectorEmit {
       const out = emit();
       closeOpenThinking(out);
+      closeOpenText(out);
       if (msgFootId) {
         bumpMsgFoot(out, { status: 'done' });
       }
+      bumpStatusLine(out, 'Done', 0);
       return out;
     },
 
