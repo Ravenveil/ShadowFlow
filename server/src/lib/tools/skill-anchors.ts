@@ -1,49 +1,38 @@
 /**
- * skill-anchors.ts — S4 (skill-team-conversion-design-v1.md §5).
+ * skill-anchors.ts — Tool **schema** catalog for future LLM-driven skill assembly.
  *
- * Four internal tools the LLM uses inside ConversationRuntime (S5) to drive
- * the skill → team assembly multi-turn loop. They are the *only* channel for
- * pulling persona / model / tools / memory / io text out of the agent yaml
- * library — when LLM calls `get_skill_anchor` it gets back the body **byte-
- * for-byte from the file**, which it then echoes into `<sf:agent-persona>`.
- * That removes the entire "LLM paraphrased the skill" drift class (design
- * §4.3 "引用 vs 创造" discipline).
+ * Post-Phase 2 status (2026-05-22 onward):
+ *   - The Phase 2 decision A3 (daemon-led DAG) replaced the LLM tool_use
+ *     orchestration these tools were built for. There is NO runtime caller
+ *     of these schemas in the current codebase.
+ *   - The 4 ToolSpec definitions are retained as a reference for a possible
+ *     future "LLM-driven explicit DAG assembly" mode. If that ever comes
+ *     back, the executor implementations were preserved in git history at
+ *     commit `7e9fe80` (server/src/lib/tools/skill-anchors.ts in that revision).
  *
- * Tool list
- * ─────────
- *   1. list_team_agents(skill_id)        → summary of all member agents
- *   2. get_skill_anchor(skill_id, agent_id, slot)
- *                                        → { ref, tokens, body } verbatim
- *   3. register_agent(node spec)         → ack + `event: 'node'` sse frame
- *   4. register_edge(from, to, ...)      → ack + `event: 'edge'` sse frame
+ * Why keep the schemas at all:
+ *   - They document the contract a future LLM-driven mode would have to
+ *     honour (list_team_agents / get_skill_anchor / register_agent / register_edge).
+ *   - The `disable-model-invocation` mechanism in skill-loader.ts can opt
+ *     specific user skills back into the tool-use path; the schemas here are
+ *     the canonical definition of what those tools would expose to the LLM.
  *
- * Side-effects discipline
- * ────────────────────────
- * `register_agent` / `register_edge` do NOT emit SSE themselves. They return
- * `sseEvents[]` in their ToolExecutionResult and the ConversationRuntime is
- * the only thing that actually writes to the wire. This is plan-eng-review
- * decision D4 ("B = wrap as normal return + side-channel"). It keeps every
- * tool executor a pure function and makes them trivial to unit-test.
+ * Removed in this commit (commit follow-up to 7e9fe80 — P2-8 cleanup):
+ *   - All 4 executor implementations (execListTeamAgents / execGetSkillAnchor /
+ *     execRegisterAgent / execRegisterEdge) and the `skillAnchorExecutors`
+ *     dispatch map.
+ *   - Helper functions only used by the executors (isRecord, errResult,
+ *     isSkillSlot, isEdgeKind, slotBodyVerbatim).
+ *   - The test file `__tests__/skill-anchors.test.ts` which exclusively
+ *     exercised the deleted executors.
  *
- * Validation
- * ──────────
- * Each executor narrows its `input: unknown` parameter with a tiny hand-
- * written guard (we have no ajv). Failure → `{ output: { error }, isError:
- * true }` so the LLM gets a structured error back and can retry. We never
- * `as`-cast — that's how silent corrupt data would slip through to the file
- * layer.
- *
- * Case sensitivity
- * ────────────────
- * All ids and slot names are matched exactly. No lower-casing, no trimming.
- * SKILL.md frontmatter / agent yaml `id` is the source of truth (see
- * PermissionPolicy.fromAllowedTools JSDoc for the matching principle).
+ * See:
+ *   - docs/architecture/orchestration-transport.md §"Phase 2" for the
+ *     decision rationale (A3 daemon-led DAG, A6 unified callable path)
+ *   - server/src/workflow/scheduler.ts for the replacement
  */
 
 import type { ToolSpec } from '../tool-spec';
-import { loadAgent } from '../agent-yaml';
-import { loadTeam } from '../team-yaml';
-import type { SkillSlot } from '../skill-types';
 
 /**
  * What a tool returns to the runtime. `output` is fed straight back to the
@@ -51,6 +40,10 @@ import type { SkillSlot } from '../skill-types';
  * channel for register_agent / register_edge — the runtime yields each entry
  * downstream verbatim. `isError` flips the `is_error` flag on the
  * `tool_result` ContentBlock.
+ *
+ * Retained as a type-only export — no concrete executor uses it today; a
+ * future LLM-driven mode that re-implements the four tools would return this
+ * shape.
  */
 export interface ToolExecutionResult {
   output: unknown;
@@ -60,40 +53,11 @@ export interface ToolExecutionResult {
 
 export type ToolExecutor = (input: unknown) => Promise<ToolExecutionResult>;
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-/**
- * Cheap structural typecheck — narrow an unknown to a plain object record.
- * We do this instead of pulling ajv because:
- *   - the input shapes are 3-6 fields each (low cost to hand-roll)
- *   - this keeps the dependency surface tiny (S2/S3 also avoid runtime deps)
- *   - executors are the only path that ever sees unsafe `input`, so the
- *     guard logic stays colocated and grep-able.
- */
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-function errResult(reason: string): ToolExecutionResult {
-  return { output: { error: reason }, isError: true };
-}
-
-const VALID_SLOTS: readonly SkillSlot[] = ['persona', 'model', 'tools', 'memory', 'io'];
-function isSkillSlot(v: unknown): v is SkillSlot {
-  return typeof v === 'string' && (VALID_SLOTS as readonly string[]).includes(v);
-}
-
-const VALID_EDGE_KINDS = ['sequential', 'parallel', 'conditional'] as const;
-type EdgeKindIn = (typeof VALID_EDGE_KINDS)[number];
-function isEdgeKind(v: unknown): v is EdgeKindIn {
-  return typeof v === 'string' && (VALID_EDGE_KINDS as readonly string[]).includes(v);
-}
-
 // ─── ToolSpec catalog ───────────────────────────────────────────────────────
 //
-// All four specs are `source: 'base'`. They go into the LLM's tool list every
-// turn of the skill-assembler conversation. The runtime (S5) will register
-// them on the ToolRegistry at boot.
+// All four specs are `source: 'base'`. They are NOT registered with any
+// runtime today. A future LLM-driven assembly mode would import this array
+// and register the corresponding executors on a ToolRegistry.
 
 export const skillAnchorTools: ToolSpec[] = [
   {
@@ -137,63 +101,33 @@ export const skillAnchorTools: ToolSpec[] = [
   {
     name: 'register_agent',
     description:
-      'Register one assembled agent into the team blueprint. The runtime emits the result as ' +
-      'SSE `event: "node"` matching the frontend NodeEvent interface (src/api/runSessions.ts). ' +
+      'Declare a single team member, emitting an `event: "node"` SSE frame for the UI to render. ' +
       'Pass persona / model / tools you previously fetched via get_skill_anchor verbatim.',
     input_schema: {
       type: 'object',
       properties: {
-        // Identity (matches NodeEvent base shape)
-        node_id: { type: 'string' },
+        id: { type: 'string', description: 'Agent id (filename stem of the .agent.yaml).' },
         title: { type: 'string' },
+        sub: { type: 'string' },
+        avatar_char: { type: 'string' },
         type: { type: 'string', enum: ['agent', 'coordinator'] },
-        sub: { type: 'string', description: 'Sub-title (副标题, e.g. 角色定位).' },
-        chips: { type: 'array', items: { type: 'string' }, description: 'UI tag chips (3-5 个中文标签).' },
-        avatar_char: { type: 'string', description: 'Single character avatar (default = title[0]).' },
-        status: {
-          type: 'string',
-          enum: ['building', 'ready', 'pending'],
-          description: 'NodeStatus — defaults to "ready" if omitted.',
-        },
-        // Model (flattened: model.id → model, model.temperature → temperature, ...)
-        model_id: { type: 'string' },
-        model_temperature: { type: 'number' },
-        model_max_tokens: { type: 'number' },
-        model_context_window: { type: 'number' },
-        // Tools (flattened: tools.picked → tools_picked, tools.candidate → tools_candidate)
-        tools_picked: { type: 'array', items: { type: 'string' } },
-        tools_candidate: { type: 'array', items: { type: 'string' } },
-        // Persona (flattened: persona.body → persona, persona.source → persona_source, ...)
         persona: { type: 'string' },
-        persona_source: { type: 'string', description: 'e.g. "reader.agent.yaml#persona"' },
-        persona_tokens: { type: 'number' },
-        persona_cached: { type: 'boolean' },
+        model: { type: 'object' },
+        tools: { type: 'object' },
         memory: { type: 'string' },
-        // S6.5 stacked extras (v3)
-        skill_ref: { type: 'string', description: 'e.g. "paper-review.team.yaml#members.reader"' },
-        io_input: {},
-        io_output: {},
+        io: { type: 'object' },
+        source_file: { type: 'string' },
       },
-      required: [
-        'node_id',
-        'title',
-        'type',
-        'model_id',
-        'tools_picked',
-        'persona',
-        'persona_source',
-        'persona_tokens',
-        'persona_cached',
-      ],
-      additionalProperties: false,
+      required: ['id', 'title', 'persona', 'model', 'tools'],
+      additionalProperties: true,
     },
     source: 'base',
   },
   {
     name: 'register_edge',
     description:
-      'Register one edge in the team DAG. The runtime emits the result as SSE `event: "edge"` ' +
-      'matching the frontend EdgeEvent interface (src/api/runSessions.ts).',
+      'Declare a DAG edge from one agent to another, emitting an `event: "edge"` SSE frame. ' +
+      'kind defaults to "sequential". For "conditional" kind, supply a condition expression (expr-eval syntax).',
     input_schema: {
       type: 'object',
       properties: {
@@ -209,283 +143,3 @@ export const skillAnchorTools: ToolSpec[] = [
     source: 'base',
   },
 ];
-
-// ─── Executors ─────────────────────────────────────────────────────────────
-
-async function execListTeamAgents(input: unknown): Promise<ToolExecutionResult> {
-  if (!isRecord(input)) return errResult('list_team_agents: input must be an object');
-  const { skill_id } = input;
-  if (typeof skill_id !== 'string' || skill_id.length === 0) {
-    return errResult('list_team_agents: skill_id is required and must be a non-empty string');
-  }
-  const { team, resolvedAgents, errors } = loadTeam(skill_id);
-  if (!team) {
-    return errResult(
-      `list_team_agents: team not found: ${skill_id}${
-        errors.length ? ` (${errors.join('; ')})` : ''
-      }`,
-    );
-  }
-  const agents = resolvedAgents.map((a) => ({
-    id: a.id,
-    title: a.title,
-    type: a.type ?? 'agent',
-    sub: a.sub,
-    persona_tokens: a.anchors.persona.tokens,
-    model_id: a.model.id,
-    picked_tool_count: a.tools.picked.length,
-  }));
-  return { output: { agents } };
-}
-
-async function execGetSkillAnchor(input: unknown): Promise<ToolExecutionResult> {
-  if (!isRecord(input)) return errResult('get_skill_anchor: input must be an object');
-  const { skill_id, agent_id, slot } = input;
-  if (typeof skill_id !== 'string' || skill_id.length === 0) {
-    return errResult('get_skill_anchor: skill_id is required and must be a non-empty string');
-  }
-  if (typeof agent_id !== 'string' || agent_id.length === 0) {
-    return errResult('get_skill_anchor: agent_id is required and must be a non-empty string');
-  }
-  if (!isSkillSlot(slot)) {
-    return errResult(
-      `get_skill_anchor: slot must be one of ${VALID_SLOTS.join('|')} (got ${JSON.stringify(slot)})`,
-    );
-  }
-
-  // Verify agent is a member of the named team (drift guard).
-  const teamResult = loadTeam(skill_id);
-  if (!teamResult.team) {
-    return errResult(`get_skill_anchor: team not found: ${skill_id}`);
-  }
-  if (!teamResult.team.members_ids.includes(agent_id)) {
-    return errResult(
-      `get_skill_anchor: agent "${agent_id}" is not a member of team "${skill_id}"`,
-    );
-  }
-
-  const agent = loadAgent(agent_id);
-  if ('error' in agent) {
-    return errResult(`get_skill_anchor: ${agent.error}`);
-  }
-  const anchor = agent.anchors[slot];
-  const body = slotBodyVerbatim(slot, agent);
-  return {
-    output: {
-      ref: anchor.ref,
-      tokens: anchor.tokens,
-      body,
-    },
-  };
-}
-
-/**
- * Return the slot body in the exact form the agent yaml stores it. For
- * persona / memory that's the raw string verbatim. For model / tools / io we
- * JSON-stringify the structured value so the LLM can echo a deterministic
- * block back into <sf:agent-model> etc. The token counts in agent.anchors
- * were computed against this same representation in agent-yaml.ts, so the
- * `tokens` field stays consistent with `body.length / 4`.
- */
-function slotBodyVerbatim(slot: SkillSlot, agent: ReturnType<typeof loadAgent>): string {
-  if ('error' in agent) return '';
-  switch (slot) {
-    case 'persona':
-      return agent.persona;
-    case 'memory':
-      return agent.memory ?? '';
-    case 'model':
-      return JSON.stringify(agent.model);
-    case 'tools':
-      return JSON.stringify(agent.tools);
-    case 'io':
-      return JSON.stringify(agent.io ?? {});
-  }
-}
-
-async function execRegisterAgent(input: unknown): Promise<ToolExecutionResult> {
-  if (!isRecord(input)) return errResult('register_agent: input must be an object');
-
-  const required: Array<keyof typeof input> = [
-    'node_id',
-    'title',
-    'type',
-    'model_id',
-    'tools_picked',
-    'persona',
-    'persona_source',
-    'persona_tokens',
-    'persona_cached',
-  ];
-  for (const k of required) {
-    if (input[k as string] === undefined) {
-      return errResult(`register_agent: missing required field "${String(k)}"`);
-    }
-  }
-
-  if (typeof input.node_id !== 'string' || input.node_id.length === 0) {
-    return errResult('register_agent: node_id must be a non-empty string');
-  }
-  if (typeof input.title !== 'string') {
-    return errResult('register_agent: title must be a string');
-  }
-  if (input.type !== 'agent' && input.type !== 'coordinator') {
-    return errResult('register_agent: type must be "agent" or "coordinator"');
-  }
-  if (typeof input.model_id !== 'string') {
-    return errResult('register_agent: model_id must be a string');
-  }
-  if (!Array.isArray(input.tools_picked) || !input.tools_picked.every((t) => typeof t === 'string')) {
-    return errResult('register_agent: tools_picked must be string[]');
-  }
-  if (
-    input.tools_candidate !== undefined &&
-    (!Array.isArray(input.tools_candidate) ||
-      !input.tools_candidate.every((t) => typeof t === 'string'))
-  ) {
-    return errResult('register_agent: tools_candidate must be string[] when provided');
-  }
-  if (typeof input.persona !== 'string') {
-    return errResult('register_agent: persona must be a string');
-  }
-  if (typeof input.persona_source !== 'string') {
-    return errResult('register_agent: persona_source must be a string');
-  }
-  if (typeof input.persona_tokens !== 'number') {
-    return errResult('register_agent: persona_tokens must be a number');
-  }
-  if (typeof input.persona_cached !== 'boolean') {
-    return errResult('register_agent: persona_cached must be a boolean');
-  }
-
-  // New (S7) optional fields — validate when present.
-  if (input.sub !== undefined && typeof input.sub !== 'string') {
-    return errResult('register_agent: sub must be a string when provided');
-  }
-  if (
-    input.chips !== undefined &&
-    (!Array.isArray(input.chips) || !input.chips.every((c) => typeof c === 'string'))
-  ) {
-    return errResult('register_agent: chips must be string[] when provided');
-  }
-  if (input.avatar_char !== undefined && typeof input.avatar_char !== 'string') {
-    return errResult('register_agent: avatar_char must be a string when provided');
-  }
-  const VALID_STATUS = ['building', 'ready', 'pending'] as const;
-  if (
-    input.status !== undefined &&
-    (typeof input.status !== 'string' ||
-      !(VALID_STATUS as readonly string[]).includes(input.status))
-  ) {
-    return errResult(
-      `register_agent: status must be one of ${VALID_STATUS.join('|')} when provided`,
-    );
-  }
-  if (input.skill_ref !== undefined && typeof input.skill_ref !== 'string') {
-    return errResult('register_agent: skill_ref must be a string when provided');
-  }
-
-  // S7 (skill-team-conversion-design-v1.md §5 + S6 review P0 #1):
-  // Emit a FLAT payload that matches the frontend NodeEvent interface in
-  // `src/api/runSessions.ts` (read by useRunSession.ts NODE reducer). The
-  // previous nested `{model: {id, ...}, tools: {picked, candidate}, persona: {body, ...}}`
-  // shape would have orphaned tool-emitted nodes from the UI graph — the
-  // frontend reducer reads `p.model` / `p.tools_picked` / `p.persona` as
-  // scalars, not objects. See useRunSession.ts:233 destructure.
-  const nodeData = {
-    // Identity
-    node_id: input.node_id,
-    type: input.type,
-    title: input.title,
-    sub: typeof input.sub === 'string' ? input.sub : '',
-    chips: Array.isArray(input.chips) ? input.chips : [],
-    status: typeof input.status === 'string' ? input.status : 'ready',
-    avatar_char:
-      typeof input.avatar_char === 'string' && input.avatar_char.length > 0
-        ? input.avatar_char
-        : (input.title as string).charAt(0) || '?',
-    // Model (flat)
-    model: input.model_id as string,
-    temperature: typeof input.model_temperature === 'number' ? input.model_temperature : undefined,
-    max_tokens: typeof input.model_max_tokens === 'number' ? input.model_max_tokens : undefined,
-    context_window:
-      typeof input.model_context_window === 'number' ? input.model_context_window : undefined,
-    // Tools (flat)
-    tools_picked: input.tools_picked as string[],
-    tools_candidate: Array.isArray(input.tools_candidate)
-      ? (input.tools_candidate as string[])
-      : undefined,
-    // Persona (flat) — single string body + S6.5 v3 stacked extras for the
-    // SkillSection provenance pill (source / tokens / cached).
-    persona: input.persona as string,
-    persona_source: input.persona_source as string,
-    persona_tokens: input.persona_tokens as number,
-    persona_cached: input.persona_cached as boolean,
-    // Memory (flat string per frontend NodeEvent.memory)
-    memory: typeof input.memory === 'string' ? input.memory : undefined,
-    // S6.5 stacked extras
-    skill_ref: typeof input.skill_ref === 'string' ? input.skill_ref : undefined,
-    io_input: input.io_input,
-    io_output: input.io_output,
-  };
-
-  // 2026-05-20 (S6 contract fix): emit `event: 'node'` to match parser.ts
-  // baseline + frontend `src/api/runSessions.ts` listener.
-  return {
-    output: { ok: true, node_id: input.node_id },
-    sseEvents: [{ event: 'node', data: nodeData }],
-  };
-}
-
-async function execRegisterEdge(input: unknown): Promise<ToolExecutionResult> {
-  if (!isRecord(input)) return errResult('register_edge: input must be an object');
-  if (typeof input.from !== 'string' || input.from.length === 0) {
-    return errResult('register_edge: from must be a non-empty string');
-  }
-  if (typeof input.to !== 'string' || input.to.length === 0) {
-    return errResult('register_edge: to must be a non-empty string');
-  }
-  if (input.kind !== undefined && !isEdgeKind(input.kind)) {
-    return errResult(
-      `register_edge: kind must be one of ${VALID_EDGE_KINDS.join('|')} (got ${JSON.stringify(input.kind)})`,
-    );
-  }
-  if (input.condition !== undefined && typeof input.condition !== 'string') {
-    return errResult('register_edge: condition must be a string when provided');
-  }
-  if (input.max_retries !== undefined && typeof input.max_retries !== 'number') {
-    return errResult('register_edge: max_retries must be a number when provided');
-  }
-
-  // S7 (2026-05-20): include `status: 'active'` so the payload matches the
-  // frontend EdgeEvent contract (src/api/runSessions.ts:122-126) verbatim.
-  // parser.ts <sf:edge> handler already emits this same default; keep both
-  // code paths in lock-step.
-  const edgeData = {
-    from: input.from,
-    to: input.to,
-    status: 'active',
-    kind: (input.kind as EdgeKindIn | undefined) ?? 'sequential',
-    condition: typeof input.condition === 'string' ? input.condition : undefined,
-    max_retries: typeof input.max_retries === 'number' ? input.max_retries : undefined,
-  };
-
-  // 2026-05-20 (S6 contract fix): emit `event: 'edge'` to match parser.ts
-  // + frontend listener; see register_agent for the rationale.
-  return {
-    output: { ok: true },
-    sseEvents: [{ event: 'edge', data: edgeData }],
-  };
-}
-
-/**
- * Name → executor. ConversationRuntime (S5) wires this into its dispatch
- * table. Keep keys byte-identical to ToolSpec.name above — the runtime looks
- * up by exact match.
- */
-export const skillAnchorExecutors: Record<string, ToolExecutor> = {
-  list_team_agents: execListTeamAgents,
-  get_skill_anchor: execGetSkillAnchor,
-  register_agent: execRegisterAgent,
-  register_edge: execRegisterEdge,
-};

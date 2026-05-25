@@ -1,14 +1,13 @@
 /**
- * tools/index.ts — S4 module barrel.
+ * tools/index.ts — Module barrel for tool schemas.
  *
- * Re-exports the SkillAnchor tool family so callers (S5 ConversationRuntime,
- * S6 runSkillAssembler) can pull both the ToolSpec catalog and the executor
- * dispatch table from one import path.
+ * Post-Phase 2: only the SCHEMAS are re-exported. The executor dispatch table
+ * (`skillAnchorExecutors`) was removed alongside the tool_use orchestration
+ * it powered — see `skill-anchors.ts` header for the rationale.
  */
 
 export {
   skillAnchorTools,
-  skillAnchorExecutors,
   type ToolExecutionResult,
   type ToolExecutor,
 } from './skill-anchors';
