@@ -32,8 +32,17 @@ import { parseAndExtract, type SseEvent as ParserSseEvent } from './parser';
 import { resolveCallable } from './transport/dispatcher';
 import { runDag } from './workflow/scheduler';
 import type { TurnChunk } from './workflow/types';
-import type { TeamDef } from './lib/skill-types';
-import type { TeamDefV1 } from './lib/team-yaml';
+import type { SkillAgentDef } from './lib/skill-types';
+import {
+  toTeamDefV1,
+  toTeamDefV1FromCompiled,
+} from './lib/team-yaml';
+// Round 4 PR-C: compile cache produces the canonical agent-vs-team config.
+// The assembler now reads `getCompiledSkill(skill_id)` to decide the branch
+// instead of inspecting `SkillDefinition.team` directly. `getCompiledSkill`
+// is cache-only — compile() itself runs at ingest time + skill-loader boot.
+import { getCompiledSkill, compile as compileSkill } from './lib/skill-compiler';
+import { tryReadSkill } from './skill-reader';
 
 export type OutputType = 'answer' | 'report' | 'review' | 'workflow';
 export type SessionMode = 'single' | 'team';
@@ -454,60 +463,124 @@ export async function* runSkillAssembler(
     );
   };
 
-  // Branch 1 — team-backed skills go through the DAG scheduler with artifact
-  // handoff between agents (Phase 2 decisions A3 / A2). Transport-agnostic.
-  if (skill.team) {
-    const teamV1 = toTeamDefV1(skill.team);
+  // Round 4 PR-C — compile-driven branch selection.
+  //
+  // Pre-PR-C the assembler inspected `skill.team` (a static field set at load
+  // time). The new architecture lets the LLM-side SkillCompiler decide
+  // agent-vs-team based on skill content, with the verdict cached under
+  // `.shadowflow/cache/skill-compile/<hash>.json`. We look that up first.
+  //
+  // Lookup priority:
+  //   1. `getCompiledSkill(skill_name)` — cache hit on ingest-side compile
+  //   2. On-the-fly `compile()` if the skill has reference files on disk
+  //      (handles skills that were registered before PR-C landed)
+  //   3. Legacy `skill.team` (TeamDef) — back-compat for built-in skills
+  //      whose system_prompt + static team field still live in code
+  let compiled = await getCompiledSkill(skill_name);
+
+  if (!compiled) {
+    // Try to compile on the fly. The references dir lives under the
+    // installed skill bundle; built-in skills don't have one, so this
+    // simply no-ops for them and we fall through to legacy team handling.
+    const refDir = path.join(
+      process.cwd(),
+      '.shadowflow',
+      'skills',
+      skill_name,
+      'references',
+    );
+    if (fs.existsSync(refDir)) {
+      try {
+        const skillRead = await tryReadSkill(refDir);
+        if (skillRead) {
+          compiled = await compileSkill(skillRead);
+        }
+      } catch (err) {
+        console.warn(
+          `[skill-assembler] on-demand compile failed for ${skill_name}: ${(err as Error).message ?? err}`,
+        );
+      }
+    }
+  }
+
+  // Branch 1 — compiled team config → DAG scheduler.
+  // (Phase 2 decisions A3 / A2 preserved: daemon-led DAG + artifact handoff.)
+  if (compiled?.mode === 'team' && compiled.teamConfig) {
+    const synthAgents = synthAgentsFromCompiled(compiled.teamConfig);
+    const teamV1 = toTeamDefV1FromCompiled(compiled.teamConfig, synthAgents);
+    console.log(
+      `[skill-assembler] running compiled team ${teamV1.team_id}: ${teamV1.members_ids.length} members, ${teamV1.edges_v1.length} edges, derivedFrom=${compiled.teamConfig.derivedFrom}`,
+    );
     const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal);
     yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
     return;
   }
 
-  // Branch 2 — non-team skill: single LlmCallable.turn() (Phase 2 decision A6).
+  // Branch 1b — legacy: skill ships an explicit TeamDef (built-in skills /
+  // pre-PR-C bundles). Same DAG path, just synthesised via the older helper.
+  if (skill.team) {
+    const teamV1 = toTeamDefV1(skill.team);
+    console.log(
+      `[skill-assembler] running legacy team ${teamV1.team_id}: ${teamV1.members_ids.length} members (no compile cache)`,
+    );
+    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal);
+    yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
+    return;
+  }
+
+  // Branch 2 — single agent. Prefer the compiled `agentConfig.system_prompt`
+  // when available (it's the LLM-curated version of raw_skill_md + persona).
+  // Falls back to the skill's static system_prompt for back-compat.
+  const compiledSystem = compiled?.agentConfig?.system_prompt;
+  const branch2System =
+    typeof compiledSystem === 'string' && compiledSystem.trim().length > 0
+      ? compiledSystem
+      : effectiveSystemPrompt;
   const chunkStream = callable.turn({
-    system: effectiveSystemPrompt,
+    system: branch2System,
     prompt: goal,
     history: [],
     workspace: projectDir,
     signal: effectiveSignal,
-    model: opts.model,
+    model: opts.model ?? compiled?.agentConfig?.model_hint,
     maxTokens: opts.max_tokens,
     temperature: opts.temperature,
   });
   yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
 }
 
-// ─── Helpers (Phase 2) ────────────────────────────────────────────────────────
-
 /**
- * Convert a legacy `TeamDef` (the shape `SkillDefinition.team` carries) into a
- * `TeamDefV1` that `workflow/scheduler.runDag()` consumes. Synthesises the v1
- * fields (`members_ids`, `edges_v1`, `policy_obj`) from the legacy fields so
- * skills using the older `team.skill.yaml` schema can still run on the new DAG
- * engine. Skills loaded via the S0.5 `team_ref` path get the same V1 fields
- * via `team-yaml.ts:loadGlobalTeam`, but the v1 fields are dropped in
- * `skill-loader.ts:240` to fit the legacy `TeamDef` shape — we re-synthesise
- * them here from the same legacy fields, keeping behaviour identical.
+ * Build minimal `SkillAgentDef[]` from a compiled team config's per-member
+ * personas. The scheduler / executor only needs `id` + `persona` to drive a
+ * node (everything else is metadata for UI / cost accounting), so we
+ * synthesize the rest with sentinels. This keeps the compiled team path
+ * decoupled from the agent-yaml registry — a skill that ships only prose
+ * agents still runs end-to-end.
  */
-function toTeamDefV1(team: TeamDef): TeamDefV1 {
-  return {
-    ...team,
-    team_id: team.name,
-    version: 1,
-    description: undefined,
-    policy_obj: {
-      retry: team.retry ?? 3,
+function synthAgentsFromCompiled(
+  team: { members_ids: string[]; members_personas: Record<string, string> },
+): SkillAgentDef[] {
+  return team.members_ids.map((id) => ({
+    id,
+    title: id,
+    persona: team.members_personas[id] ?? `Agent ${id}`,
+    model: { id: 'compiled-default' },
+    tools: { picked: [], candidate: [] },
+    anchors: {
+      persona: { ref: `<compiled>#${id}/persona`, tokens: 0, cached: false },
+      model: { ref: `<compiled>#${id}/model`, tokens: 0, cached: false },
+      tools: { ref: `<compiled>#${id}/tools`, tokens: 0, cached: false },
+      memory: { ref: `<compiled>#${id}/memory`, tokens: 0, cached: false },
+      io: { ref: `<compiled>#${id}/io`, tokens: 0, cached: false },
     },
-    members_ids: team.agents.map((a) => a.id),
-    // Legacy edges have no `kind` — default to sequential so the scheduler's
-    // Kahn-layered topology drives each agent after its parent completes.
-    edges_v1: team.edges.map((e) => ({
-      from: e.from,
-      to: e.to,
-      kind: 'sequential' as const,
-    })),
-  };
+    source_file: '<compiled>',
+  }));
 }
+
+// ─── Helpers (Phase 2) ────────────────────────────────────────────────────────
+//
+// Round 4 PR-C: `toTeamDefV1` moved to `lib/team-yaml.ts` so the legacy
+// converter sits next to its compiled-config sibling. Re-imported above.
 
 /**
  * Convert a `TurnChunk` stream from `LlmCallable.turn()` or `runDag()` into

@@ -381,3 +381,81 @@ export function listTeams(): { teams: TeamDefV1[]; errors: string[] } {
 export function clearTeamCache(): void {
   cache.clear();
 }
+
+// ─── TeamDefV1 synthesizers ──────────────────────────────────────────────────
+//
+// Round 4 PR-C: assembler used to synthesize TeamDefV1 from the legacy
+// `SkillDefinition.team` shape (TeamDef). With the SkillCompiler in place,
+// teams can also be synthesized from a CompiledTeamConfig (which carries
+// `members_personas` instead of pre-resolved `SkillAgentDef[]`). Both helpers
+// live here so callers don't have to duplicate the field synthesis logic.
+
+/**
+ * Convert a legacy `TeamDef` (the shape `SkillDefinition.team` historically
+ * carries from `team.skill.yaml` / `team_ref`) into a `TeamDefV1` that
+ * `workflow/scheduler.runDag()` consumes. Synthesises v1 fields
+ * (`members_ids`, `edges_v1`, `policy_obj`) from the legacy fields so old
+ * skills still execute on the new DAG engine. This used to live inside
+ * `assembler.ts`; moved here in PR-C as part of the compile-config rewrite.
+ */
+export function toTeamDefV1(team: TeamDef): TeamDefV1 {
+  return {
+    ...team,
+    team_id: team.name,
+    version: 1,
+    description: undefined,
+    policy_obj: {
+      retry: team.retry ?? 3,
+    },
+    members_ids: team.agents.map((a) => a.id),
+    // Legacy edges have no `kind` — default to sequential so the scheduler's
+    // Kahn-layered topology drives each agent after its parent completes.
+    edges_v1: team.edges.map((e) => ({
+      from: e.from,
+      to: e.to,
+      kind: 'sequential' as const,
+    })),
+  };
+}
+
+/**
+ * Build a `TeamDefV1` from PR-C's `CompiledTeamConfig` plus an `agents:
+ * SkillAgentDef[]` array (synthesized by the assembler from
+ * `members_personas`). This is the **post-compile** equivalent of
+ * `toTeamDefV1` — the input now carries explicit edges_v1/policy_obj
+ * already, so we just stitch the legacy fields back on for downstream
+ * scheduler/observer interop.
+ *
+ * @param compiled  output of `compile()` — exactly one teamConfig populated
+ * @param agents    SkillAgentDef[] in the same order as compiled.members_ids;
+ *                  the assembler synthesizes these from members_personas
+ *                  (lightweight SkillAgentDef with persona-only payload).
+ */
+export function toTeamDefV1FromCompiled(
+  compiled: {
+    team_id: string;
+    name: string;
+    description?: string;
+    members_ids: string[];
+    edges_v1: TeamEdgeV1[];
+    policy_obj: TeamPolicyV1;
+  },
+  agents: SkillAgentDef[],
+): TeamDefV1 {
+  return {
+    name: compiled.name,
+    team_id: compiled.team_id,
+    version: 1,
+    description: compiled.description,
+    mode: 'serial',
+    policy: compiled.policy_obj.retry !== undefined ? 'strict' : 'permissive',
+    policy_obj: compiled.policy_obj,
+    retry: compiled.policy_obj.retry ?? 3,
+    members_ids: compiled.members_ids,
+    edges_v1: compiled.edges_v1,
+    edges: compiled.edges_v1.map((e) => ({ from: e.from, to: e.to })),
+    agents,
+    loaded_at: Date.now(),
+    source_dir: '<compiled>',
+  };
+}

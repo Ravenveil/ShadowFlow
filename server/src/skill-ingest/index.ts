@@ -24,6 +24,7 @@ import { fetchSkill, parseSource } from './fetch';
 import { probeSkill, renderProbeForPrompt } from './probe';
 import { registerSkill, listInstalled, getInstalled } from './register';
 import { tryReadSkill } from '../skill-reader';
+import { compile as compileSkill } from '../lib/skill-compiler';
 import type { ProbeResult } from './probe';
 import type { InstalledSkill } from './register';
 
@@ -54,11 +55,26 @@ export async function ingestSkill(source: string, forced_id?: string): Promise<I
   // PR-A (Round 4): after the skill has been copied into
   // `.shadowflow/skills/<id>/references/`, walk it through `readSkill()` so
   // the SkillCompiler (PR-C) has a cached `SkillReadOutput` ready when the
-  // user first invokes the skill. Failures are swallowed — the worst case
-  // is PR-C re-walks on its first compile pass.
+  // user first invokes the skill.
+  //
+  // PR-C (Round 4): immediately following the reader walk, invoke the
+  // compiler to produce a `CompiledSkill` (agent or team config) under
+  // `.shadowflow/cache/skill-compile/<content_hash>.json`. Compilation is
+  // best-effort: any failure is swallowed (the assembler will see a cache
+  // miss and either re-compile or use fallback). Failures here MUST NOT
+  // break ingest — registering the skill is the user-visible contract.
   const refDir = path.join(reg.dir, 'references');
   if (fs.existsSync(refDir)) {
-    await tryReadSkill(refDir);
+    const skillRead = await tryReadSkill(refDir);
+    if (skillRead) {
+      try {
+        await compileSkill(skillRead);
+      } catch (err) {
+        console.warn(
+          `[skill-ingest] compile failed for ${reg.id}: ${(err as Error).message ?? err} — fallback will apply at run time`,
+        );
+      }
+    }
   }
 
   return {
