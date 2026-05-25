@@ -66,9 +66,12 @@ const PARSER = new Parser({
  *   - `node.team`                 → current team id
  *
  * Arrays are flattened to strings because expr-eval treats arrays as opaque
- * objects with no comparison ops. If `condition: prev.analyst.artifacts contains
- * "approved"` is desired, the team owner writes `"approved" in prev.analyst.artifacts`
- * which works because expr-eval's `in` operator does substring search on strings.
+ * objects with no comparison ops. expr-eval's `in` operator does NOT do JS
+ * substring matching on strings — realistic gating patterns are:
+ *   - `prev.analyst.status == "done"`
+ *   - `length(prev.analyst.artifacts) > 0`
+ *   - `prev.analyst.duration < 5000`
+ * See `condition.test.ts` for the hardened contract.
  */
 interface PriorView {
   [nodeId: string]: {
