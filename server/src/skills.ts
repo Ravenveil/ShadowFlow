@@ -234,8 +234,16 @@ export function reloadSkills(): {
 } {
   // Lazy-require avoids a circular import at module init time
   // (skill-loader imports SkillDefinition type from this file).
-  const { loadFsSkills } = require('./loaders/skill-loader') as typeof import('./loaders/skill-loader');
-  const { loaded, errors } = loadFsSkills(Object.keys(HARDCODED_SKILLS));
+  const loader = require('./loaders/skill-loader') as typeof import('./loaders/skill-loader');
+  const { loaded, errors } = loader.loadFsSkills(Object.keys(HARDCODED_SKILLS));
   SKILLS = { ...HARDCODED_SKILLS, ...loaded };
+  // Round 4 PR-C: fire-and-forget compile cache warmer. Boot is never
+  // blocked by the LLM compile pass; the assembler also handles cache
+  // misses on demand, so this is a latency optimisation only.
+  try {
+    loader.warmCompileCache(loaded);
+  } catch (err) {
+    console.warn(`[skill-loader] warmCompileCache failed: ${(err as Error).message ?? err}`);
+  }
   return { reloaded: Object.keys(loaded).length, errors };
 }

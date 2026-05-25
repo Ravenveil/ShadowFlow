@@ -21,6 +21,14 @@ import matter from 'gray-matter';
 import type { SkillDefinition, SkillMode, PreviewType } from '../skills';
 import { loadTeam as loadLegacyTeam } from '../lib/skill-yaml';
 import { loadTeam as loadGlobalTeam } from '../lib/team-yaml';
+// Round 4 PR-C: warm the compile cache in the background for any installed
+// skill that doesn't already have one. Intentionally fire-and-forget so
+// boot is not blocked on (potentially slow) LLM compile calls.
+import { tryReadSkill } from '../skill-reader';
+import {
+  compile as compileSkill,
+  getCompiledSkill,
+} from '../lib/skill-compiler';
 
 const DEFAULT_SKILLS_DIR = path.join(process.cwd(), '.shadowflow', 'skills');
 // S6.4 — when the Node server is launched from the `server/` subdir
@@ -421,5 +429,57 @@ function scanOneDir(
   }
   for (const id of overrides) {
     console.log(`[skill-loader] override hardcoded skill: ${id}`);
+  }
+}
+
+// ─── PR-C: background compile cache warmer ───────────────────────────────────
+
+/**
+ * For every skill in `loaded`, check whether the compile cache already has
+ * an entry for it (via `getCompiledSkill`). If not, fire a fire-and-forget
+ * compile() pass in the background. Boot is never blocked.
+ *
+ * Called from `reloadSkills()` after `loadFsSkills()` returns. Intentionally
+ * not awaited — the assembler also runs an on-demand compile when it sees
+ * a cache miss at run time, so this is just a latency-optimisation pre-warm.
+ *
+ * Skills without `.shadowflow/skills/<id>/references/` (built-in skills,
+ * command-skills) are skipped — they ship with system_prompt in the
+ * SkillDefinition and don't need a separate compile pass.
+ */
+export function warmCompileCache(
+  loaded: Record<string, SkillDefinition>,
+): void {
+  for (const skillId of Object.keys(loaded)) {
+    if (skillId.includes(':')) continue; // skip W2 command-skills
+    void warmOneSkill(skillId);
+  }
+}
+
+async function warmOneSkill(skillId: string): Promise<void> {
+  try {
+    const existing = await getCompiledSkill(skillId);
+    if (existing) return;
+  } catch {
+    /* fall through to compile attempt */
+  }
+
+  const candidates = [
+    path.join(process.cwd(), '.shadowflow', 'skills', skillId, 'references'),
+    path.join(process.cwd(), '..', '.shadowflow', 'skills', skillId, 'references'),
+  ];
+  const refDir = candidates.find((d) => fs.existsSync(d));
+  if (!refDir) return; // no on-disk references — caller (assembler) skips compile
+
+  try {
+    const skillRead = await tryReadSkill(refDir);
+    if (!skillRead) return;
+    console.log(`[skill-loader] background compile starting for ${skillId}`);
+    await compileSkill(skillRead);
+    console.log(`[skill-loader] background compile finished for ${skillId}`);
+  } catch (err) {
+    console.warn(
+      `[skill-loader] background compile failed for ${skillId}: ${(err as Error).message ?? err}`,
+    );
   }
 }
