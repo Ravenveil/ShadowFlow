@@ -92,6 +92,7 @@ function fakeCallable(
   opts: { delayMs?: number; failNodes?: Set<string> } = {},
 ): LlmCallable {
   return {
+    id: 'fake',
     capabilities: {
       supportsToolUse: false,
       supportsMultiTurn: false,
@@ -125,6 +126,7 @@ function rendezvousCallable(n: number): LlmCallable {
   let release!: () => void;
   const gate = new Promise<void>((r) => { release = r; });
   return {
+    id: 'rendezvous',
     capabilities: {
       supportsToolUse: false,
       supportsMultiTurn: false,
@@ -236,6 +238,7 @@ describe('workflow/scheduler — parallel layer (Phase 2 A4)', () => {
     const rendezvous = rendezvousCallable(2);
     const trivial = fakeCallable({});
     const callable: LlmCallable = {
+      id: 'composite',
       capabilities: rendezvous.capabilities,
       async *turn(input) {
         if (input.prompt === 'B' || input.prompt === 'C') {

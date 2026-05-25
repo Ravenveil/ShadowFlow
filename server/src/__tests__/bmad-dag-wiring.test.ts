@@ -37,6 +37,7 @@ function mkWorkspace(): string {
 /** Stub callable that yields a predictable text-delta per node. */
 function stubCallable(): LlmCallable {
   return {
+    id: 'stub',
     capabilities: {
       supportsToolUse: false,
       supportsMultiTurn: false,

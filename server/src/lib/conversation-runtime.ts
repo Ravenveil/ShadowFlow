@@ -1,95 +1,23 @@
 /**
  * conversation-runtime.ts — Transport-layer types for ApiClient adapters.
  *
- * Phase 2 (2026-05-22) — the `ConversationRuntime` multi-turn tool_use loop
- * has been removed; the daemon-led DAG (`workflow/scheduler.ts`) + artifact
- * handoff (decision A3) replaces it. This file now retains ONLY the type
- * surface that the Transport layer's ApiClient adapters
- * (`lib/api-clients/*-api-client.ts`) implement, plus the `addUsage` helper.
+ * Post-Phase 2: this file is a thin type-shim. The original `ConversationRuntime`
+ * multi-turn tool_use driver was removed when the daemon-led DAG (Phase 2
+ * decision A3, `workflow/scheduler.ts`) + artifact handoff (A2) replaced it.
+ * Only the Transport-layer contract types survive here, imported by
+ * `transport/api-clients/*-api-client.ts`.
  *
- * Retained exports (used by Transport layer):
+ * Surviving exports:
  *   - `ApiClient` / `AssistantEvent`           — per-provider streaming contract
  *   - `ToolExecutor` / `ToolExecutionResult`   — tool dispatcher contract
- *     (kept for skill-anchors.ts schema; no runtime caller in Phase 2)
+ *     (kept for `lib/tools/skill-anchors.ts` schema; no runtime caller today)
  *   - `RuntimeSession` / `SseEvent`            — shared shape definitions
- *   - `addUsage`                                — TokenUsage accumulator
+ *   - `addUsage`                               — TokenUsage accumulator
  *
- * Removed (Phase 2):
- *   - `ConversationRuntime` class              — LLM tool_use multi-turn driver
- *   - `ConversationRuntimeOptions`             — its options bag
- *
- * Historical note (pre-Phase 2, preserved for context):
- *   S5 (skill-team-conversion-design-v1.md §5 line 900-952) — TypeScript port
- *   of `claw-code-reference rust/crates/runtime/src/conversation.rs`. Replaced
- *   the single-LLM-call `runSkillAssembler` shape with an iterative loop:
- *
- *   user input
- *     → push as user message
- *     → loop ≤ maxIterations:
- *         · call ApiClient.stream(system + messages + tools)
- *         · stream assistant blocks (text + tool_use) into session
- *         · if no tool_use this turn → break (assistant ended turn)
- *         · for each tool_use: PermissionPolicy.authorize → ToolExecutor.execute
- *           → push ToolResult back into session.messages
- *         · loop continues with new tool_result in context
- *     → yield 'complete' SSE
- *
- * Why we wrote this instead of using the @anthropic-ai/sdk built-in tool loop
- * ─────────────────────────────────────────────────────────────────────────
- * design §6 D-fallback: keeping our own loop means
- *   (a) provider-agnostic (GLM / OpenAI etc plug into ApiClient)
- *   (b) we control the SSE wire format and can yield mid-turn events
- *       (text_delta, tool side-effects) at our own pace
- *   (c) compaction / max_iter / abort semantics are testable without an
- *       SDK mock
- *
- * Key design points
- * ─────────────────
- * 1. **ApiClient is an interface, not a class**. S5 ships only the contract +
- *    a Fake for testing. S6 wires the real Anthropic provider (and other
- *    providers in server/src/llm-providers/) by implementing this interface.
- * 2. **ToolExecutor is an interface too**. S5 also ships only the contract.
- *    The skill-anchor executors from S4 will be wrapped into one
- *    ToolExecutor in S6.
- * 3. **max_iterations = 50** (D2 decision 2026-05-20). Rust upstream's 16 is
- *    too small — measured 4-agent skill runs take 25-30 turns. 50 gives
- *    headroom; if we ever blow through it that's a real runaway, surface it.
- * 4. **AbortSignal end-to-end**. Checked at the top of every iteration AND
- *    before every tool execution. ApiClient implementations must also honor
- *    the signal mid-stream (their problem; we just propagate).
- * 5. **text_delta buffering**. We accumulate text into a single buffer per
- *    turn and flush to ONE `text` ContentBlock when:
- *      - a tool_use arrives (text → block before tool_use block)
- *      - MessageStop arrives (final flush)
- *    We do NOT make a new block per delta — that would explode
- *    session.messages and break the Anthropic round-trip shape.
- * 6. **tool_name enrichment**. The Anthropic wire format's tool_result block
- *    doesn't carry the original tool name (only tool_use_id), but our
- *    internal ContentBlock requires `tool_name` for debug. Runtime fills it
- *    in from the pending ToolUse it just dispatched. AnthropicBlockAdapter
- *    leaves it empty by design (see that module's JSDoc).
- * 7. **Error policy**:
- *      - ApiClient throws (rate limit / network)  → yield 'error' SSE, then
- *                                                     re-throw to upstream
- *                                                     for retry / SSE close
- *      - Tool throws / tool returns isError=true → packed as tool_result
- *                                                     is_error=true, fed
- *                                                     back to LLM, loop
- *                                                     continues
- *      - PermissionPolicy deny                    → tool_result is_error=true
- *                                                     with deny reason, fed
- *                                                     back, loop continues
- *      - max_iterations hit without MessageStop  → yield 'error' SSE with
- *                                                     code MAX_ITERATIONS,
- *                                                     then 'complete' with
- *                                                     stop_reason='max_iter'
- *      - signal.aborted                           → yield 'aborted' SSE,
- *                                                     return early (NO
- *                                                     'complete')
- * 8. **Usage accounting**. Each AssistantEvent of kind 'usage' adds into the
- *    running totalUsage. We attach the snapshot to the assistant message
- *    when it's pushed. The final 'complete' event also carries cumulative
- *    usage so the upstream SSE handler can record it.
+ * If you came here looking for the old multi-turn loop with tool_use →
+ * tool_result → recurse, see `workflow/scheduler.ts` + `workflow/executor.ts`
+ * for the Phase 2 replacement. `docs/architecture/orchestration-transport.md`
+ * documents the rewrite (decisions A1/A2/A3/A6).
  */
 
 import type { ConversationMessage, TokenUsage } from './conversation-types';
