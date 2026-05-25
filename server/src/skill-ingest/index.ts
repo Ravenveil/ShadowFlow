@@ -18,9 +18,12 @@
  * id get disambiguated by appending the source hash.
  */
 
+import path from 'path';
+import fs from 'fs';
 import { fetchSkill, parseSource } from './fetch';
 import { probeSkill, renderProbeForPrompt } from './probe';
 import { registerSkill, listInstalled, getInstalled } from './register';
+import { tryReadSkill } from '../skill-reader';
 import type { ProbeResult } from './probe';
 import type { InstalledSkill } from './register';
 
@@ -47,6 +50,17 @@ export async function ingestSkill(source: string, forced_id?: string): Promise<I
   const fetched = await fetchSkill(source);
   const probe = probeSkill(fetched.dir, fetched.subpath);
   const reg = registerSkill({ fetched, probe, forced_id });
+
+  // PR-A (Round 4): after the skill has been copied into
+  // `.shadowflow/skills/<id>/references/`, walk it through `readSkill()` so
+  // the SkillCompiler (PR-C) has a cached `SkillReadOutput` ready when the
+  // user first invokes the skill. Failures are swallowed — the worst case
+  // is PR-C re-walks on its first compile pass.
+  const refDir = path.join(reg.dir, 'references');
+  if (fs.existsSync(refDir)) {
+    await tryReadSkill(refDir);
+  }
+
   return {
     id: reg.id,
     name: reg.name,
