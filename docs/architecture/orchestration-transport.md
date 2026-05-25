@@ -1,8 +1,12 @@
 # Orchestration ⊥ Transport — ShadowFlow 后端技术架构
 
-**Date**: 2026-05-22
-**Status**: 设计目标（Phase 1 落地中，Phase 2/3 未实现）
+**Date**: 2026-05-22（Phase 2 落地 2026-05-23 ~ 2026-05-24）
+**Status**: Phase 2 已落地（commits 26bc300 → d353eb0）；Phase 3 localStorage 重构未做（hygiene 项，不阻塞功能）
 **Owner**: 后端 chat-flow 团队
+
+> **更新历史**
+> - 2026-05-22 初版，描述目标架构 + Phase 2 Eng Review 决策
+> - 2026-05-25 Status 校正：Phase 2 实际已实现，更新违反点与影响面章节
 
 ---
 
@@ -11,15 +15,17 @@
 > ShadowFlow 后端必须把**编排层（Orchestration）**和**传输层（Transport）**正交分离：
 > 编排不关心 LLM 怎么调用，传输不关心调用方是单轮还是多轮。
 
-这条原则违反在两处：
+这条原则**曾**违反在两处（Phase 2 已修复，记录留作架构演化的活档）：
 
-1. **`server/src/assembler.ts:404-411`** — `runTeamBackedSkill` 硬绑 ApiClient，CLI 模式下静默回退
+1. ~~**`server/src/assembler.ts:404-411`** — `runTeamBackedSkill` 硬绑 ApiClient，CLI 模式下静默回退~~
+   → **已修复**（commit `d7a2671`）：`assembler.ts:425` 通过 `resolveCallable(executor, ...)` 拿到统一的 `LlmCallable`；team-backed 走 `workflow/scheduler.runDag()`，non-team 走 `callable.turn()`，两条分支都和 transport 解耦。
 2. **localStorage `sf.defaultExecutor = "byok:zhipu" | "cli:claude" | ...`** — mode 和 protocol 揉成一个字符串
+   → 仍未修（Phase 3 项，doc §"Phase 3" 节明确推后；不影响 BMAD cli/acp 跑通）。
 
-两个违反点导致的产品症状：
-- BMAD 在 picker 选 cli:claude 时不工作
-- Question Form / Step Artifact / DS injection 等结构化 SSE 事件在 CLI 模式下都该 broken
-- 用户切 picker 的体验是"为什么 BMAD 在 BYOK 下能跑，CLI 下就不行"
+Phase 2 落地后，这些产品症状的**机制根因已消除**（实际验收见 §3 Acceptance Criteria 表，部分项仍待人工/E2E 跑通签收）：
+- ~~BMAD 在 picker 选 cli:claude 时不工作~~ → 架构上现在 transport-agnostic（待 §3 AC#1 E2E 签收）
+- ~~Question Form / Step Artifact / DS injection 等结构化 SSE 事件在 CLI 模式下都该 broken~~ → 走 daemon-emit `<sf:agent-substep>` 路径而非 LLM tool_use
+- 用户切 picker 的体验目标是"任何 picker × 任何 skill 都该跑得动"
 
 ---
 
