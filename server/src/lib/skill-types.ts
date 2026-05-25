@@ -87,3 +87,18 @@ export interface TeamDef {
   loaded_at: number;
   source_dir: string;
 }
+
+// ─── Round 4 PR-A re-exports ────────────────────────────────────────────────
+//
+// `SkillReadOutput` is the verbatim file collection PR-C's SkillCompiler
+// consumes. It lives next to skill-ingest under `server/src/skill-reader/`
+// (separate concern from the v3 stacked skill yaml above). Re-exported here
+// so downstream callers can `import { SkillReadOutput } from '../lib/skill-types'`
+// alongside the existing TeamDef / SkillAgentDef without learning a new path.
+export type {
+  SkillReadOutput,
+  SkillFileEntry,
+  AgentFile as SkillReaderAgentFile,
+  WorkflowFile as SkillReaderWorkflowFile,
+  DocFile as SkillReaderDocFile,
+} from '../skill-reader/types';
