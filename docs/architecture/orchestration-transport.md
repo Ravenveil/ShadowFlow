@@ -375,6 +375,7 @@ lib/tools/skill-anchor-executor.ts      ← daemon-emit 取代 LLM 调用
 | Phase 3 discriminated union localStorage 重构 | Phase 2 稳定后单独 PR |
 | Checkpoint / resume（断点续跑） | 长 workflow 用户撞掉线场景时 |
 | Codex stream 解析精度优化（`parsers/cli-streams/codex-stream-json.ts`） | 用户在 Codex 路径下抱怨"打字机效果断断续续"时 |
+| **scheduler 反边支持**：conditional 边作为反边（如 BMAD `qa → dev`）时，downstream 永远卡 in-degree=1 死锁。证据：`bmad-dag-wiring.test.ts` 第二个 case。当前规避：team 作者别写反边。长期方案与 sub-workflow / checkpoint-resume 一起做。 | 第二个想用 BMAD-style 反馈循环的 team 出现时 |
 
 ### 7. Risk / Failure modes
 
