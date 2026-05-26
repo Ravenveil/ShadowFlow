@@ -1,23 +1,23 @@
 /**
- * conversation-runtime.ts — Transport-layer types for ApiClient adapters.
+ * conversation-runtime.ts — Transport-layer types + re-exports.
  *
- * Post-Phase 2: this file is a thin type-shim. The original `ConversationRuntime`
- * multi-turn tool_use driver was removed when the daemon-led DAG (Phase 2
- * decision A3, `workflow/scheduler.ts`) + artifact handoff (A2) replaced it.
- * Only the Transport-layer contract types survive here, imported by
- * `transport/api-clients/*-api-client.ts`.
+ * Houses the Transport-layer contract types (ApiClient, AssistantEvent,
+ * ToolExecutor, RuntimeSession, SseEvent, addUsage helper) consumed by
+ * `transport/api-clients/*-api-client.ts`. The `ConversationRuntime` class
+ * itself lives in `conversation-runtime-impl.ts` and is re-exported below
+ * so existing import sites (`./conversation-runtime`) keep working.
  *
- * Surviving exports:
- *   - `ApiClient` / `AssistantEvent`           — per-provider streaming contract
- *   - `ToolExecutor` / `ToolExecutionResult`   — tool dispatcher contract
- *     (kept for `lib/tools/skill-anchors.ts` schema; no runtime caller today)
- *   - `RuntimeSession` / `SseEvent`            — shared shape definitions
- *   - `addUsage`                               — TokenUsage accumulator
+ * History:
+ *   - Phase 2 (2026-05-22): the multi-turn tool_use driver was removed when
+ *     daemon-led DAG + artifact handoff became the primary orchestration
+ *     path. Only types survived.
+ *   - Round 4 PR-D (2026-05-26): single-agent tool-use is back as a
+ *     first-class flow (compiled `agentConfig.tools[]` from PR-C). The
+ *     ConversationRuntime class was restored in a sibling module.
  *
- * If you came here looking for the old multi-turn loop with tool_use →
- * tool_result → recurse, see `workflow/scheduler.ts` + `workflow/executor.ts`
- * for the Phase 2 replacement. `docs/architecture/orchestration-transport.md`
- * documents the rewrite (decisions A1/A2/A3/A6).
+ * If you came here looking for *multi-agent* orchestration, that still
+ * lives in `workflow/scheduler.ts` + `workflow/executor.ts`. PR-D's runtime
+ * is for the single-agent branch and per-node LLM calls.
  */
 
 import type { ConversationMessage, TokenUsage } from './conversation-types';
@@ -137,6 +137,17 @@ export interface RuntimeSession {
  *     per-turn latency — summing across turns makes no sense. We keep the
  *     most recent non-undefined value so the UI can show "this turn's TTFT".
  */
+// ─── PR-D re-export ────────────────────────────────────────────────────────
+//
+// The class implementation lives in `conversation-runtime-impl.ts`; we
+// re-export it here so existing `import { ConversationRuntime } from
+// './conversation-runtime'` call sites work after PR-D's restoration.
+export {
+  ConversationRuntime,
+  type ConversationRuntimeOptions,
+  type RunTurnArgs,
+} from './conversation-runtime-impl';
+
 export function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
   const sumOrUndef = (x?: number, y?: number): number | undefined =>
     x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0);
