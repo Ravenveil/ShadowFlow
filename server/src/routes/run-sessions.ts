@@ -16,6 +16,11 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { runSkillAssembler } from '../assembler';
 import { classifyErrorCode } from '../lib/classify-error';
+// Round 4 PR-E — canonical `@skill` token parser shared byte-equal with the
+// frontend (`src/lib/skillToken.ts`). Replaces an inline regex that drifted
+// in shape from the SkillDropdown UI; both call sites now agree on which
+// goal text patterns are recognised as inline-skill tokens.
+import { parseSkillToken } from '../lib/skill-token';
 import { saveRun, type ArtifactType } from '../storage/runs';
 import { getSetting } from '../storage/settings';
 import { SKILLS } from '../skills';
@@ -398,14 +403,18 @@ router.post('/', (req: Request, res: Response) => {
     goal_text = goal_text.replace(slashCmdRe, '').replace(/\s{2,}/g, ' ').trim();
     if (!goal_text) goal_text = '执行该 skill 命令。';
   } else {
-    // @skill:<id> — also case-sensitive so `@skill:BMAD-METHOD` resolves.
-    const skillTokenRe = /@skill[:\s]+([a-zA-Z0-9][a-zA-Z0-9_.-]{0,63})/;
-    const m = goal_text.match(skillTokenRe);
-    if (m) {
-      inline_skill_token = m[1];
-      goal_text = goal_text.replace(skillTokenRe, '').replace(/\s{2,}/g, ' ').trim();
+    // @<id> / @skill:<id> / @skill <id> — canonical parser. Case-sensitive
+    // capture (BMAD-METHOD ≠ bmad-method) per canonical-id.ts. Defends
+    // against `user@gmail.com` accidentally matching as `@gmail`. The same
+    // module backs the frontend SkillDropdown so UI and route agree on
+    // exactly which tokens are recognised.
+    const parsed = parseSkillToken(goal_text);
+    if (parsed.skill_id) {
+      inline_skill_token = parsed.skill_id;
+      goal_text = parsed.remaining;
       if (!goal_text) {
-        // user typed only "@skill:foo" without a goal — fall back to a generic prompt
+        // user typed only "@bmad" / "@skill:foo" without a goal — fall back
+        // to a generic prompt so the assembler always has something to act on
         goal_text = '用这个 skill 帮我开始一项任务。';
       }
     }

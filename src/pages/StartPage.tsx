@@ -53,6 +53,11 @@ import { SkillPickerModal } from '../components/SkillPickerModal';
 import { extractSkillUrl, listInstalledSkills, type SkillIngestSummary, type InstalledSkill } from '../api/skillIngest';
 import { listSkills, type SkillInfo } from '../api/skills';
 import { CommandMenu, detectTrigger, type CommandMenuItem } from '../components/composer/CommandMenu';
+// Round 4 PR-E — canonical `@<id>` parser shared with the server route, plus
+// the live compile-status dropdown that surfaces "已编译 · team · 6 agents"
+// next to the existing CommandMenu.
+import { parseSkillToken } from '../lib/skillToken';
+import { SkillDropdown } from '../components/SkillDropdown';
 
 // ---------------------------------------------------------------------------
 // Recent drafts helpers
@@ -847,12 +852,22 @@ export default function StartPage() {
     // pendingSkill is null. CommandMenu sets pendingSkill on explicit pick,
     // but a user who types `@paper-review …` and skips the menu (or hits the
     // first letters wrong) would otherwise fall back to the default skill.
+    //
+    // PR-E (Round 4) — uses the canonical `parseSkillToken` so the frontend
+    // and the server route (`routes/run-sessions.ts`) agree byte-for-byte
+    // on what is / isn't a token. Notably defends against `user@gmail.com`
+    // accidentally matching as `@gmail`.
     let resolvedSkillName = pendingSkill?.skill_id;
     if (!resolvedSkillName && installedSkills && installedSkills.length > 0) {
-      const m = text.match(/^@([a-z0-9_-]+)(?:\s|$)/i);
-      if (m) {
-        const guess = m[1].toLowerCase();
-        const hit = installedSkills.find((s) => s.id.toLowerCase() === guess);
+      const { skill_id: parsedId } = parseSkillToken(text);
+      if (parsedId) {
+        // Case-insensitive lookup — server's canonical-id is case-sensitive
+        // but the user might type any casing; prefer an exact-id hit first
+        // (which would be a case match) and fall back to lowercase compare.
+        const exact = installedSkills.find((s) => s.id === parsedId);
+        const hit = exact ?? installedSkills.find(
+          (s) => s.id.toLowerCase() === parsedId.toLowerCase(),
+        );
         if (hit) {
           resolvedSkillName = hit.id;
           console.log(`[StartPage] auto-resolved skill_name from goal token: @${hit.id}`);
@@ -1325,6 +1340,14 @@ export default function StartPage() {
                 items={commandMenuItems}
                 onSelect={handleCommandPick}
                 onClose={() => setCommandMenu(null)}
+              />
+              {/* PR-E (Round 4) — compile-status overlay. Mirrors the
+                  CommandMenu's `@<id>` filter via the canonical token
+                  parser so the user sees "已编译 · team · 6 agents"
+                  before submitting. Hides when there's no @-token. */}
+              <SkillDropdown
+                composerText={composer}
+                installedSkills={installedSkills}
               />
             </div>
 

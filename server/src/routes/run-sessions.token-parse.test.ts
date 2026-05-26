@@ -13,12 +13,15 @@
  *     slash short-circuit was added
  */
 import { describe, it, expect } from 'vitest';
+// PR-E (Round 4) — the route now delegates `@skill` parsing to the canonical
+// `parseSkillToken` module. The slash command parser is independent and
+// still mirrored inline (see `slashCmdRe` below).
+import { parseSkillToken } from '../lib/skill-token';
 
 // Mirrored verbatim from server/src/routes/run-sessions.ts (W2 / review-fix).
-// Keep these in sync if the route changes.
+// Keep this in sync if the route's slash regex changes.
 const slashCmdRe =
   /(?:^|\s)\/([a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}):([a-zA-Z0-9][a-zA-Z0-9_-]{0,63})(?=\s|$)/;
-const skillTokenRe = /@skill[:\s]+([a-zA-Z0-9][a-zA-Z0-9_.-]{0,63})/;
 
 interface ParseResult {
   inline_skill_token: string | undefined;
@@ -35,10 +38,11 @@ function parseGoal(input: string): ParseResult {
     goal_text = goal_text.replace(slashCmdRe, '').replace(/\s{2,}/g, ' ').trim();
     if (!goal_text) goal_text = '执行该 skill 命令。';
   } else {
-    const m = goal_text.match(skillTokenRe);
-    if (m) {
-      inline_skill_token = m[1];
-      goal_text = goal_text.replace(skillTokenRe, '').replace(/\s{2,}/g, ' ').trim();
+    // PR-E — canonical parser replaces inline @skill regex.
+    const parsed = parseSkillToken(goal_text);
+    if (parsed.skill_id) {
+      inline_skill_token = parsed.skill_id;
+      goal_text = parsed.remaining;
       if (!goal_text) goal_text = '用这个 skill 帮我开始一项任务。';
     }
   }
