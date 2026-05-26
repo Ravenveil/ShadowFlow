@@ -143,8 +143,13 @@ export async function* callProvider(
       if (ev.kind === 'text_delta') {
         yield { type: 'text-delta', text: ev.text };
       }
-      // tool_use / usage / message_stop events are intentionally dropped on
-      // this single-turn back-compat path.
+      // tool_use / usage / message_stop events are not surfaced on this
+      // single-turn back-compat path because callers (routes/llm.ts,
+      // transport/spawners/anthropic.ts) only consume text. Round 4 PR-D
+      // ConversationRuntime callers should NOT use `callProvider`; they
+      // construct an ApiClient directly and observe the full AssistantEvent
+      // stream — see `assembler.ts` Branch 2 + `workflow/executor.ts`
+      // `buildRuntimeStream` for the wiring.
     }
     yield { type: 'end' };
   } catch (err) {

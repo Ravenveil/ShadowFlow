@@ -46,6 +46,16 @@ import type { NodeObserver } from './observer';
 //     };
 //   }
 import type { LlmCallable } from '../transport/LlmCallable';
+import { ApiClientCallable } from '../transport/ApiClientCallable';
+// Round 4 PR-D Lane 1 — per-agent ConversationRuntime path. When the agent
+// declares a tool whitelist AND the callable wraps a direct ApiClient,
+// we drive the agent through the multi-turn tool_use loop. Otherwise the
+// existing single-shot `callable.turn()` path runs (CLI / ACP / MCP
+// backed transports keep handling tool loops internally).
+import { ConversationRuntime } from '../lib/conversation-runtime';
+import { ToolRunner } from '../lib/tool-runner';
+import { PermissionPolicyV2 } from '../lib/permission-policy-v2';
+import { ToolRegistry } from '../lib/tool-spec';
 
 // ─── Workspace I/O ───────────────────────────────────────────────────────────
 
@@ -162,13 +172,22 @@ export async function executeNode(
   let firstError: LlmCallError | undefined;
 
   try {
-    const stream = callable.turn({
-      system,
-      prompt: node.id, // user-turn payload is the node id; the persona +
-                      // input slurp does the heavy lifting via `system`.
-      history: [],     // Phase 2 decision A2: no history; artifact handoff.
-      signal,
-    });
+    // Round 4 PR-D Lane 1: per-agent ConversationRuntime when the agent
+    // advertises a tool whitelist AND the transport exposes a direct
+    // ApiClient. Otherwise fall back to the single-shot callable.turn()
+    // path (CLI / ACP / MCP backed transports manage their own tool
+    // loops; we don't try to re-host their loops here).
+    const pickedTools = node.tools?.picked ?? [];
+    const stream =
+      pickedTools.length > 0 && callable instanceof ApiClientCallable
+        ? buildRuntimeStream(callable, node, system, pickedTools, signal)
+        : callable.turn({
+            system,
+            prompt: node.id, // user-turn payload is the node id; the persona +
+                            // input slurp does the heavy lifting via `system`.
+            history: [],     // Phase 2 decision A2: no history; artifact handoff.
+            signal,
+          });
 
     // `LlmCallable.turn()` now yields canonical `TurnChunk` (post-Lane 1
     // placeholder removal). We still re-stamp `node_id` here because a
@@ -232,4 +251,46 @@ export async function executeNode(
 
   observer.onNodeEnd(node.id, result);
   return result;
+}
+
+/**
+ * Build a `ConversationRuntime`-driven chunk stream for one node. Pulled out
+ * of `executeNode()` to keep the per-node hot path readable.
+ *
+ * The runtime here is single-use (one runTurn() call per node, matching the
+ * Phase 2 artifact-handoff contract — no rolling cross-node history). The
+ * tool whitelist comes from `node.tools.picked` verbatim; permission policy
+ * is deny-by-default + whitelist allowed.
+ */
+function buildRuntimeStream(
+  callable: ApiClientCallable,
+  node: SkillAgentDef,
+  system: string,
+  pickedTools: string[],
+  signal: AbortSignal,
+): AsyncGenerator<TurnChunk> {
+  const apiClient = callable.getApiClient();
+  const registry = new ToolRegistry(
+    pickedTools.map((name) => ({
+      name,
+      description: `agent tool ${name}`,
+      input_schema: { type: 'object', properties: {} },
+      source: 'base' as const,
+    })),
+  );
+  const policy = PermissionPolicyV2.fromAllowedTools(pickedTools);
+  const runner = new ToolRunner(registry, policy);
+  const runtime = new ConversationRuntime({
+    apiClient,
+    toolRunner: runner,
+    // Phase 2 + PR-D: default 50. Agents that need more should override via
+    // a future per-agent `max_iterations` field.
+    maxIterations: 50,
+  });
+  return runtime.runTurn({
+    system_prompt: system,
+    user_message: node.id, // mirrors callable.turn()'s prompt: see executeNode().
+    history: [],
+    signal,
+  });
 }

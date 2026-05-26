@@ -43,6 +43,15 @@ import {
 // is cache-only — compile() itself runs at ingest time + skill-loader boot.
 import { getCompiledSkill, compile as compileSkill } from './lib/skill-compiler';
 import { tryReadSkill } from './skill-reader';
+// Round 4 PR-D: single-agent tool-use loop driver. When `compiled.agentConfig
+// .tools[]` is non-empty AND the resolved callable wraps a direct ApiClient,
+// we drive the conversation via `ConversationRuntime` so the LLM can iterate
+// tool_use → tool_result without the orchestrator hosting the loop.
+import { ConversationRuntime } from './lib/conversation-runtime';
+import { ToolRunner } from './lib/tool-runner';
+import { PermissionPolicyV2 } from './lib/permission-policy-v2';
+import { ToolRegistry } from './lib/tool-spec';
+import { ApiClientCallable } from './transport/ApiClientCallable';
 
 export type OutputType = 'answer' | 'report' | 'review' | 'workflow';
 export type SessionMode = 'single' | 'team';
@@ -536,6 +545,51 @@ export async function* runSkillAssembler(
     typeof compiledSystem === 'string' && compiledSystem.trim().length > 0
       ? compiledSystem
       : effectiveSystemPrompt;
+
+  // Round 4 PR-D — when the compiled agentConfig advertises tools AND the
+  // resolved transport is a direct ApiClient (anthropic-direct / byok:*),
+  // drive the conversation via `ConversationRuntime` so the LLM can iterate
+  // tool_use → tool_result. CLI / ACP / MCP backed callables don't expose
+  // ApiClient, so they keep going through `callable.turn()` as before
+  // (those transports host their own tool loops internally).
+  const compiledTools = compiled?.agentConfig?.tools ?? [];
+  const wantsToolLoop = compiledTools.length > 0;
+  if (wantsToolLoop && callable instanceof ApiClientCallable) {
+    const apiClient = callable.getApiClient();
+    // The compiled `tools` list is just a whitelist of names; the actual
+    // tool specs come from the (Lane 2) registered tool registry. For the
+    // PR-D wiring we register all whitelisted names as `base` specs with a
+    // permissive schema — Lane 2's `registerToolExecutor` calls supply the
+    // executors. When Lane 2's per-tool spec registration lands we can
+    // upgrade this synthesis to pick real specs from a shared registry.
+    const registry = new ToolRegistry(
+      compiledTools.map((name) => ({
+        name,
+        description: `compiled tool ${name}`,
+        input_schema: { type: 'object', properties: {} },
+        source: 'base' as const,
+      })),
+    );
+    const policy = PermissionPolicyV2.fromAllowedTools(compiledTools);
+    const runner = new ToolRunner(registry, policy);
+    const runtime = new ConversationRuntime({
+      apiClient,
+      toolRunner: runner,
+      maxIterations: compiled?.agentConfig?.max_iterations ?? 50,
+    });
+    const chunkStream: AsyncGenerator<TurnChunk> = runtime.runTurn({
+      system_prompt: branch2System,
+      user_message: goal,
+      history: [],
+      signal: effectiveSignal,
+    });
+    yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
+    return;
+  }
+
+  // Fallback — no tool whitelist OR the transport doesn't expose an
+  // ApiClient (CLI / ACP / MCP). Single-shot through the unified
+  // `LlmCallable.turn()` path.
   const chunkStream = callable.turn({
     system: branch2System,
     prompt: goal,

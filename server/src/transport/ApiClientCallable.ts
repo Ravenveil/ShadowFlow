@@ -135,6 +135,20 @@ export class ApiClientCallable implements LlmCallable {
     this.client = client;
   }
 
+  /**
+   * Accessor for the wrapped `ApiClient`. Round 4 PR-D Lane 1 needs this so
+   * the assembler / workflow executor can route tool-use scenarios through
+   * `ConversationRuntime` (which speaks the `ApiClient.stream(...)` shape
+   * directly) instead of the single-turn `turn()` adapter above.
+   *
+   * Returns the same instance each call — safe to use across multiple
+   * `ConversationRuntime` constructions; the underlying SDK clients are
+   * stateless per-request.
+   */
+  getApiClient(): ApiClient {
+    return this.client;
+  }
+
   async *turn(input: LlmCallableTurnInput): AsyncGenerator<TurnChunk> {
     // Synthesise a single-user-message conversation. The Phase 2 contract is
     // "one turn = one stream call"; multi-turn history is the orchestrator's
