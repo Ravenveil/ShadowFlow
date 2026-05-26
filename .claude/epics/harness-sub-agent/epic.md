@@ -6,7 +6,7 @@ updated: 2026-05-26T14:20:03Z
 prd: harness-6dim-survey-and-river-memory
 priority: P1
 progress: 0%
-source_doc: docs/harness-6dim-survey-and-river-memory.md §2.2 Q3 + §4 B3
+source_doc: docs/harness/harness-6dim-survey-and-river-memory.md §2.2 Q3 + §4 B3
 ---
 
 # Epic: Harness Dimension — Sub-Agent（角色契约 + 关卡模板）

@@ -1,7 +1,7 @@
 ---
 status: superseded
 superseded_at: 2026-05-26
-superseded_by: docs/backend-capability-map-and-upgrade-plan.md
+superseded_by: docs/harness/backend-capability-map-and-upgrade-plan.md
 ---
 
 # ⚠️ 此 Epic 已 SUPERSEDED
@@ -10,7 +10,7 @@ superseded_by: docs/backend-capability-map-and-upgrade-plan.md
 
 ## 新位置
 
-**主计划**：[`docs/backend-capability-map-and-upgrade-plan.md`](../../../docs/backend-capability-map-and-upgrade-plan.md)
+**主计划**：[`docs/harness/backend-capability-map-and-upgrade-plan.md`](../../../docs/harness/backend-capability-map-and-upgrade-plan.md)
 
 对应的新动作：**N1 — Team Validation Hooks**（§4.3）。在新计划里这块**仍然是最高 ROI 的真正新建模块**，结论一致。
 

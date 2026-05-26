@@ -1,7 +1,7 @@
 ---
 status: superseded
 superseded_at: 2026-05-26
-superseded_by: docs/backend-capability-map-and-upgrade-plan.md
+superseded_by: docs/harness/backend-capability-map-and-upgrade-plan.md
 ---
 
 # ⚠️ 此 Epic 已 SUPERSEDED
@@ -10,7 +10,7 @@ superseded_by: docs/backend-capability-map-and-upgrade-plan.md
 
 ## 新位置
 
-**主计划**：[`docs/backend-capability-map-and-upgrade-plan.md`](../../../docs/backend-capability-map-and-upgrade-plan.md)
+**主计划**：[`docs/harness/backend-capability-map-and-upgrade-plan.md`](../../../docs/harness/backend-capability-map-and-upgrade-plan.md)
 
 对应的新动作：**E3 Skill steps 类型扩展** + **E5 通用 SOP Skill 种子**（§4.2 暴露增强）。
 

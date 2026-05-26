@@ -6,7 +6,7 @@ updated: 2026-05-26T14:20:03Z
 prd: harness-6dim-survey-and-river-memory
 priority: P2
 progress: 0%
-source_doc: docs/harness-6dim-survey-and-river-memory.md §2.2 Q4 + §3 + §4 B4/B6/B8/B9
+source_doc: docs/harness/harness-6dim-survey-and-river-memory.md §2.2 Q4 + §3 + §4 B4/B6/B8/B9
 ---
 
 # Epic: Harness Dimension — Workflow（团队工作流 + 项目记忆）

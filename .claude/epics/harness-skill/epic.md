@@ -6,7 +6,7 @@ updated: 2026-05-26T14:20:03Z
 prd: harness-6dim-survey-and-river-memory
 priority: P2
 progress: 0%
-source_doc: docs/harness-6dim-survey-and-river-memory.md §2.2 Q2 + §4 B5
+source_doc: docs/harness/harness-6dim-survey-and-river-memory.md §2.2 Q2 + §4 B5
 ---
 
 # Epic: Harness Dimension — Skill（SOP 强化 + 通用 Skill 库）

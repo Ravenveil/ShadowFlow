@@ -48,7 +48,7 @@ based_on: Explore agent 6 维代码基线调研 (2026-05-26)
 ## 3. 技术路线（按 task 推进顺序）
 
 ### Task 001 — 设计文档（先做）
-- 输出：`docs/design/team-validation-hook-v1.md`
+- 输出：`docs/harness/design/team-validation-hook-v1.md`
 - 关键决策：(a) hook on_fail = retry 走 Policy Matrix retry 路径合流，**不重复计数**；(b) 沙盒用 asyncio.wait_for + subprocess.run timeout 双层防御
 - 与 epic 1 章节 [001.md](./001.md) AC 一致
 

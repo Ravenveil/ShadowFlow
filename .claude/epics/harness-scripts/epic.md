@@ -6,7 +6,7 @@ updated: 2026-05-26T14:20:03Z
 prd: harness-6dim-survey-and-river-memory
 priority: P0
 progress: 0%
-source_doc: docs/harness-6dim-survey-and-river-memory.md §2.2 Q5 + §4 B1
+source_doc: docs/harness/harness-6dim-survey-and-river-memory.md §2.2 Q5 + §4 B1
 ---
 
 # Epic: Harness Dimension — Scripts（Team Validation Hook）
