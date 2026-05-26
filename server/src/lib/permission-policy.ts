@@ -1,32 +1,43 @@
 /**
- * permission-policy.ts — per-tool allow/deny gate for ConversationRuntime.
+ * permission-policy.ts — per-tool allow/deny/prompt gate for ConversationRuntime.
  *
  * S3 (skill-team-conversion-design-v1.md §5; D6 in §6) — TypeScript port of
- * `claw-code-reference rust/crates/runtime/src/permissions.rs`, intentionally
- * stripped to **allow/deny only**. The Rust upstream supports a third
- * `'prompt'` mode that escalates to an interactive prompter; we decided to
- * defer that to v3 because:
+ * `claw-code-reference rust/crates/runtime/src/permissions.rs`.
  *
- *   1. UX for interactive approval is non-trivial inside an SSE pipeline
- *      (would need a dedicated approval frame + client round-trip).
- *   2. Today's MVP uses static allowed-tools lists from SKILL.md frontmatter
- *      — every authorization is deterministic, no human-in-the-loop needed.
- *   3. Easier to evolve allow/deny → allow/deny/prompt later than to rip out
- *      a half-baked prompter, so we ship the smaller surface first.
+ * **PR-D update (Round 4 Lane 2, 2026-05-26)**: extended PermissionMode with
+ * `'prompt'`. The Rust upstream has always had this third mode; we deferred
+ * it during S3 because the interactive SSE plumbing wasn't ready. Now that
+ * builtin write-tier tools (write_file / edit_file) want prompt semantics,
+ * the union is widened here at the base type so callers (and Lane 1's
+ * permission-policy-v2.ts) can rely on it.
  *
- * The class is intentionally synchronous: no async, no prompter callback, no
- * I/O. ConversationRuntime (S5) calls authorize() in the same tick as it sees
- * a tool_use block from the LLM.
+ * The synchronous `authorize()` here treats `'prompt'` as **deny by default**
+ * — it has no callback, no async, no prompter. permission-policy-v2.ts
+ * (Lane 1) extends this class with the interactive prompter for the runtime.
+ * Keeping the base class deny-on-prompt is the safe choice: any caller that
+ * hasn't been upgraded to v2 will fail closed.
  *
  * Static factory `fromAllowedTools(['bash', ...])` builds the canonical
  * "deny-by-default + listed tools allowed" policy that maps directly to
  * Anthropic SKILL.md `allowed-tools: [...]` frontmatter.
  */
 
-export type PermissionMode = 'allow' | 'deny';
+export type PermissionMode = 'allow' | 'deny' | 'prompt';
 
-/** authorize() return shape — { allow: true } or { deny: reason }. */
-export type PermissionOutcome = { allow: true } | { deny: string };
+/**
+ * authorize() return shape.
+ *   - { allow: true }            tool may run immediately
+ *   - { deny: reason }           tool refused; reason echoes back to the LLM
+ *   - { prompt: reason }         tool requires human approval before running.
+ *                                The synchronous base class never emits this
+ *                                — permission-policy-v2.ts (Lane 1) does the
+ *                                actual prompt handling. Kept in the union so
+ *                                downstream types stay consistent.
+ */
+export type PermissionOutcome =
+  | { allow: true }
+  | { deny: string }
+  | { prompt: string };
 
 export class PermissionPolicy {
   /**
@@ -62,7 +73,14 @@ export class PermissionPolicy {
    *                signature now means call sites won't churn when v3 lands.
    */
   authorize(toolName: string, _input?: string): PermissionOutcome {
-    if (this.modeFor(toolName) === 'allow') return { allow: true };
+    const mode = this.modeFor(toolName);
+    if (mode === 'allow') return { allow: true };
+    if (mode === 'prompt') {
+      // Synchronous base class fails closed on prompt. permission-policy-v2.ts
+      // (Lane 1) overrides this to invoke an interactive prompter and may
+      // return { prompt: ... } or resolve through user approval.
+      return { deny: `tool '${toolName}' requires approval (prompt mode); no prompter wired` };
+    }
     return { deny: `tool '${toolName}' denied by permission policy` };
   }
 

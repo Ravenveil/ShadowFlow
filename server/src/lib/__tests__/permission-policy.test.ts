@@ -155,9 +155,12 @@ function check(label: string, expected: unknown, actual: unknown) {
   const out1: PermissionOutcome = p.authorize('bash');
   const out2: PermissionOutcome = p.authorize('rm');
 
-  // Narrow on `allow` key.
-  const got1 = 'allow' in out1 ? `allowed:${out1.allow}` : `denied:${out1.deny}`;
-  const got2 = 'allow' in out2 ? `allowed:${out2.allow}` : `denied:${out2.deny}`;
+  // Narrow on `allow` key. Other branches widened in PR-D to include
+  // { prompt: string } — guard explicitly for the `deny` shape.
+  const renderNonAllow = (o: Exclude<PermissionOutcome, { allow: true }>): string =>
+    'deny' in o ? `denied:${o.deny}` : `prompt:${o.prompt}`;
+  const got1 = 'allow' in out1 ? `allowed:${out1.allow}` : renderNonAllow(out1);
+  const got2 = 'allow' in out2 ? `allowed:${out2.allow}` : renderNonAllow(out2);
   check('narrow: allow branch', 'allowed:true', got1);
   check(
     'narrow: deny branch',
