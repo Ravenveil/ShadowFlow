@@ -310,6 +310,61 @@ async def put_team_policy(team_id: str, body: TeamPolicyRequest) -> Dict[str, An
 
 
 # ---------------------------------------------------------------------------
+# Validation hooks endpoints — N1/002
+# ---------------------------------------------------------------------------
+#
+# PM decision Q12.1: `validation_hooks` is a TOP-LEVEL team field, parallel to
+# `policy_obj` / `policy_matrix` / `workflow` (NOT nested inside policy). See
+# `docs/design/team-validation-hook-v1.md` §H6 and §5 Hook Schema.
+#
+# Persistence shape on the team record:
+#     record["validation_hooks"] = [HookSpec, …]   # raw list
+#
+# The wrapper `ValidationHooksConfig` is request-body symmetry only (mirrors
+# `TeamWorkflow` / `TeamPolicyRequest`); we unwrap before storing.
+
+from shadowflow.runtime.validation_hooks import ValidationHooksConfig  # noqa: E402
+
+
+@router.get("/{team_id}/validation-hooks")
+async def get_team_validation_hooks(team_id: str) -> Dict[str, Any]:
+    """Get saved validation hooks for a team.
+
+    Returns `{data: {validation_hooks: [...]}}`. Teams created before
+    N1/002 won't have the field; we return an empty list (backwards
+    compatible — AC1 in the design doc).
+    """
+    _validate_team_id(team_id)
+    record = _load_team(team_id)
+    if record is None:
+        raise _not_found(team_id)
+    hooks = record.get("validation_hooks", [])
+    return _envelope({"validation_hooks": hooks})
+
+
+@router.put("/{team_id}/validation-hooks")
+async def put_team_validation_hooks(
+    team_id: str, body: ValidationHooksConfig
+) -> Dict[str, Any]:
+    """Replace the team's validation hooks with the given list.
+
+    Whole-list replacement (same pattern as `PUT /workflow` and
+    `PUT /policy`). Per-hook discriminator + unique-id checks are enforced
+    by the Pydantic model; FastAPI surfaces validation failures as 422.
+    """
+    _validate_team_id(team_id)
+    record = _load_team(team_id)
+    if record is None:
+        raise _not_found(team_id)
+    record["validation_hooks"] = [
+        hook.model_dump(exclude_none=True) for hook in body.validation_hooks
+    ]
+    record["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _save_team(record)
+    return _envelope({"validation_hooks": record["validation_hooks"]})
+
+
+# ---------------------------------------------------------------------------
 # Chat-driven editing — user describes changes in natural language
 # ---------------------------------------------------------------------------
 
