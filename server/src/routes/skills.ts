@@ -18,8 +18,14 @@ import { SKILLS, HARDCODED_SKILLS, reloadSkills } from '../skills';
 import { ingestSkill, listInstalled, parseSource } from '../skill-ingest';
 import { getAgent, getAnchorBody } from '../lib/skill-yaml';
 import type { SkillSlot } from '../lib/skill-types';
+import previewTriageRouter from './skills-preview-triage';
 
 const router = Router();
+
+// Round 4 PR-E — `/:id/compile-status` lives in its own file so the compile
+// cache plumbing stays out of the (already long) skills.ts. Mounted at the
+// router root so the URL stays `/api/skills/:id/compile-status`.
+router.use('/', previewTriageRouter);
 
 // 2026-05-10 Story 15.28 — POST /save name validation. Same regex used by
 // loaders/skill-loader.ts so any name we accept here will round-trip cleanly

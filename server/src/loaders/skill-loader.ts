@@ -29,6 +29,13 @@ import {
   compile as compileSkill,
   getCompiledSkill,
 } from '../lib/skill-compiler';
+// Round 4 PR-E — surface "compiling..." state to the `compile-status`
+// endpoint so the SkillDropdown can render a spinner while the warmer
+// runs. In-memory only; pure UX-affordance.
+import {
+  markCompiling,
+  markCompileDone,
+} from '../routes/skills-preview-triage';
 
 const DEFAULT_SKILLS_DIR = path.join(process.cwd(), '.shadowflow', 'skills');
 // S6.4 — when the Node server is launched from the `server/` subdir
@@ -475,7 +482,16 @@ async function warmOneSkill(skillId: string): Promise<void> {
     const skillRead = await tryReadSkill(refDir);
     if (!skillRead) return;
     console.log(`[skill-loader] background compile starting for ${skillId}`);
-    await compileSkill(skillRead);
+    // PR-E — let `GET /api/skills/:id/compile-status` show "compiling..."
+    // while we're inside the LLM round-trip. Always paired with the
+    // markCompileDone in the finally below so a thrown compile never
+    // leaves the dropdown stuck on the spinner.
+    markCompiling(skillId);
+    try {
+      await compileSkill(skillRead);
+    } finally {
+      markCompileDone(skillId);
+    }
     console.log(`[skill-loader] background compile finished for ${skillId}`);
   } catch (err) {
     console.warn(
