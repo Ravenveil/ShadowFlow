@@ -500,7 +500,7 @@ export async function* runSkillAssembler(
     );
     if (fs.existsSync(refDir)) {
       try {
-        const skillRead = await tryReadSkill(refDir);
+        const skillRead = await tryReadSkill(refDir, { skill_id: skill_name });
         if (skillRead) {
           compiled = await compileSkill(skillRead);
         }

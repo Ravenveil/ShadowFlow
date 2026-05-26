@@ -65,7 +65,7 @@ export async function ingestSkill(source: string, forced_id?: string): Promise<I
   // break ingest — registering the skill is the user-visible contract.
   const refDir = path.join(reg.dir, 'references');
   if (fs.existsSync(refDir)) {
-    const skillRead = await tryReadSkill(refDir);
+    const skillRead = await tryReadSkill(refDir, { skill_id: reg.id });
     if (skillRead) {
       try {
         await compileSkill(skillRead);

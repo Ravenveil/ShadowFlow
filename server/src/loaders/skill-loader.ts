@@ -479,7 +479,7 @@ async function warmOneSkill(skillId: string): Promise<void> {
   if (!refDir) return; // no on-disk references — caller (assembler) skips compile
 
   try {
-    const skillRead = await tryReadSkill(refDir);
+    const skillRead = await tryReadSkill(refDir, { skill_id: skillId });
     if (!skillRead) return;
     console.log(`[skill-loader] background compile starting for ${skillId}`);
     // PR-E — let `GET /api/skills/:id/compile-status` show "compiling..."

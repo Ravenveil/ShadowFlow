@@ -141,6 +141,31 @@ function collectDocs(skillDir: string): DocFile[] {
 }
 
 /**
+ * Derive a stable skill_id from the directory path when the caller doesn't
+ * supply one. Walks up past the conventional `references/` subdir so callers
+ * passing `<.shadowflow/skills/<id>/references>` still get `<id>` instead of
+ * the literal string `"references"`.
+ *
+ * 2026-05-26 follow-up to PR-E: SkillDropdown showed `◌ 未编译` because the
+ * boot warmer wrote compile cache keyed by `"references"` instead of the
+ * real skill id.
+ */
+function deriveSkillIdFromPath(skillDir: string): string {
+  const abs = path.resolve(skillDir);
+  const base = path.basename(abs);
+  if (base.toLowerCase() === 'references') {
+    const parent = path.basename(path.dirname(abs));
+    if (parent) return parent;
+  }
+  return base;
+}
+
+export interface ReadSkillOptions {
+  /** Explicit skill_id override. When omitted, derived from skillDir. */
+  skill_id?: string;
+}
+
+/**
  * Read a skill directory into a verbatim `SkillReadOutput`.
  *
  * @param skillDir absolute or cwd-relative path to a skill root. The root is
@@ -150,15 +175,17 @@ function collectDocs(skillDir: string): DocFile[] {
  *                 the `references/` path. For freshly-cloned cache content
  *                 (e.g. `.shadowflow/cache/skill-ingest/<hash>/`) call this
  *                 with the cache root directly.
+ * @param opts.skill_id explicit override (recommended when caller knows the
+ *                 real id). Falls back to `deriveSkillIdFromPath(skillDir)`.
  * @returns A verbatim `SkillReadOutput`. Idempotent — same disk state always
  *          yields the same `content_hash`. Disk cache hit avoids the file
  *          walk; cache miss writes the result for next time.
  */
-export async function readSkill(skillDir: string): Promise<SkillReadOutput> {
+export async function readSkill(skillDir: string, opts?: ReadSkillOptions): Promise<SkillReadOutput> {
   if (!fs.existsSync(skillDir)) {
     // Empty skill — still return a well-shaped object so callers don't have
     // to special-case it. content_hash of empty input is deterministic.
-    const skill_id = path.basename(path.resolve(skillDir));
+    const skill_id = opts?.skill_id ?? deriveSkillIdFromPath(skillDir);
     const empty: SkillReadOutput = {
       skill_id,
       content_hash: computeContentHash([]),
@@ -170,7 +197,7 @@ export async function readSkill(skillDir: string): Promise<SkillReadOutput> {
     return empty;
   }
 
-  const skill_id = path.basename(path.resolve(skillDir));
+  const skill_id = opts?.skill_id ?? deriveSkillIdFromPath(skillDir);
 
   const [agent_files, workflow_files] = await Promise.all([
     parseAgents(skillDir),
@@ -221,9 +248,12 @@ export async function readSkill(skillDir: string): Promise<SkillReadOutput> {
  * errors. The ingest pipeline must not fail because the post-install reader
  * tripped over a disk read; the worst case is PR-C re-walks on first compile.
  */
-export async function tryReadSkill(skillDir: string): Promise<SkillReadOutput | null> {
+export async function tryReadSkill(
+  skillDir: string,
+  opts?: ReadSkillOptions,
+): Promise<SkillReadOutput | null> {
   try {
-    return await readSkill(skillDir);
+    return await readSkill(skillDir, opts);
   } catch (err) {
     console.warn(`[skill-reader] readSkill failed for ${skillDir}:`, err);
     return null;
