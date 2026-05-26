@@ -33,8 +33,15 @@ from shadowflow.runtime.contracts_builder import (
     ToolPolicy,
 )
 from shadowflow.runtime.errors import ShadowflowError
+from shadowflow.runtime.prompts import SystemPromptBuilder
 
 logger = logging.getLogger(__name__)
+
+# T1 follow-up: single source for agent system_prompt (see prompts/builder.py).
+# Stateless — safe as module-level singleton. Previously this site emitted a
+# one-liner `f"You are {role.name}. {role.description}"` that dropped
+# responsibilities/constraints/handoff_rules from the RoleProfile contract.
+_PROMPT_BUILDER = SystemPromptBuilder()
 
 # 模板存储目录（与 server.py 中 _CUSTOM_DIR 对齐，保证 GET /templates 可读取）
 _CUSTOM_TEMPLATE_DIR = Path("templates/custom")
@@ -291,7 +298,7 @@ def _build_workflow_definition(
                 "provider": role.executor_provider,
                 "model": role.executor_model,
             },
-            "prompt": f"You are {role.name}. {role.description}",
+            "prompt": _PROMPT_BUILDER.build(role),
             "role": role.role_id,
             "tool_refs": tools,
         }
