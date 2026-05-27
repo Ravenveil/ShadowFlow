@@ -36,6 +36,7 @@ import { ConversationPicker } from '../components/ConversationPicker';
 import { createRunSession } from '../api/runSessions';
 import { quickCreateAgent } from '../api/agents';
 import { createTeam, putTeamWorkflow, type TeamWorkflowNode, type TeamWorkflowEdge } from '../api/teams';
+import { deriveRosterRule, enforceRoster } from '../lib/assemblyRules';
 import { createGroup } from '../api/groupApi';
 import PythonBackendBanner from '../components/PythonBackendBanner';
 import { useWorkspaceStore } from '../store/workspaceStore';
@@ -3817,7 +3818,18 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
-    const agentNodes = session.nodes.filter((n) => n.type === 'agent');
+    const rawAgentNodes = session.nodes.filter((n) => n.type === 'agent');
+    // 确定性 roster Rule：用户明确要"一个 agent"时，代码层硬截断到上限，
+    // 不依赖 LLM 是否遵守 prompt 里的 SINGLE_AGENT_DIRECTIVE。
+    const rosterRule = deriveRosterRule(goal);
+    const { kept: agentNodes, dropped: droppedAgents } = enforceRoster(rawAgentNodes, rosterRule);
+    if (droppedAgents.length > 0) {
+      console.warn(
+        `[RunSession] roster Rule（${rosterRule?.reason}）命中："${rosterRule?.matched}" → ` +
+        `保留 ${agentNodes.length} 个 agent，确定性丢弃 ${droppedAgents.length} 个（` +
+        droppedAgents.map((n) => n.title).join(', ') + `）`,
+      );
+    }
 
     // 2026-05-19 — team name comes from the LLM-generated blueprint YAML
     // header (e.g. `name: "BMAD 全流程团队"`), NOT from the coordinator
