@@ -62,7 +62,8 @@ export function deriveRosterRule(goal: string): RosterRule | null {
 }
 
 /**
- * 按 Rule 确定性截断 agent 节点列表。保留前 maxAgents 个（含 coordinator），
+ * 按 Rule 确定性截断 agent 节点列表。保留前 maxAgents 个 agent 节点
+ * （coordinator 不受此函数约束，由调用方在 session.nodes 层处理），
  * 丢弃其余。返回保留 + 丢弃两份，便于调用方记日志 / 提示用户。
  *
  * 泛型 T 只要求有 type 字段，避免耦合 RunSession 的具体 node 类型。

@@ -3831,6 +3831,18 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
       );
     }
 
+    // 截断后的权威节点/边集——workflow DAG 必须与 team 成员一致，
+    // 否则被丢弃的 agent 会变成幽灵节点 / 悬空边。
+    // coordinator 节点不受 enforceRoster 约束，始终保留。
+    const keptNodeIds = new Set<string>([
+      ...agentNodes.map((n) => n.id),
+      ...session.nodes.filter((n) => n.type === 'coordinator').map((n) => n.id),
+    ]);
+    const filteredNodes = session.nodes.filter((n) => keptNodeIds.has(n.id));
+    const filteredEdges = session.edges.filter(
+      (e) => keptNodeIds.has(e.from) && keptNodeIds.has(e.to),
+    );
+
     // 2026-05-19 — team name comes from the LLM-generated blueprint YAML
     // header (e.g. `name: "BMAD 全流程团队"`), NOT from the coordinator
     // agent's title. Before this fix the team was named after the
@@ -3900,26 +3912,28 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           // Simple column-based seed layout — mirrors BlueprintCanvas so the
           // /teams/:id DAG opens with a reasonable initial arrangement. Real
           // editor positions take over once the user drags.
+          // NOTE: use filteredNodes/filteredEdges (roster-truncated) so that
+          // the workflow DAG is consistent with the team members created above.
           const NODE_W = 168;
           const NODE_H = 78;
           const COL_GAP = 96;
           const ROW_GAP = 28;
           const incoming: Record<string, number> = {};
-          session.nodes.forEach(n => { incoming[n.id] = 0; });
-          session.edges.forEach(e => {
+          filteredNodes.forEach(n => { incoming[n.id] = 0; });
+          filteredEdges.forEach(e => {
             if (incoming[e.to] != null) incoming[e.to]++;
           });
           // BFS to assign columns (longest path from root).
           const col = new Map<string, number>();
           const queue: string[] = [];
-          session.nodes.forEach(n => {
+          filteredNodes.forEach(n => {
             if ((incoming[n.id] ?? 0) === 0) { col.set(n.id, 0); queue.push(n.id); }
           });
-          let guard = session.nodes.length * 4 + 8;
+          let guard = filteredNodes.length * 4 + 8;
           while (queue.length && guard-- > 0) {
             const id = queue.shift()!;
             const c = col.get(id) ?? 0;
-            session.edges.forEach(e => {
+            filteredEdges.forEach(e => {
               if (e.from === id) {
                 const prev = col.get(e.to);
                 if (prev === undefined || prev < c + 1) {
@@ -3932,7 +3946,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           // Bucket by column to compute row index.
           const rowCounter: Record<number, number> = {};
           const positions = new Map<string, { x: number; y: number }>();
-          session.nodes.forEach(n => {
+          filteredNodes.forEach(n => {
             const c = col.get(n.id) ?? 0;
             const r = rowCounter[c] ?? 0;
             rowCounter[c] = r + 1;
@@ -3942,7 +3956,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
             });
           });
 
-          const workflowNodes: TeamWorkflowNode[] = session.nodes.map(n => {
+          const workflowNodes: TeamWorkflowNode[] = filteredNodes.map(n => {
             const aid = nodeIdToAgentId.get(n.id) ?? '';
             return {
               id: n.id,
@@ -3956,7 +3970,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
             };
           });
 
-          const workflowEdges: TeamWorkflowEdge[] = session.edges.map((e, i) => ({
+          const workflowEdges: TeamWorkflowEdge[] = filteredEdges.map((e, i) => ({
             id: `edge-${i}-${e.from}-${e.to}`,
             source: e.from,
             target: e.to,
