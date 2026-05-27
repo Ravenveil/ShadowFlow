@@ -197,6 +197,7 @@ export interface SingleAgentIntent {
   matched?: string;
 }
 
+// 前端孪生：src/lib/assemblyRules.ts（deriveRosterRule）。改正则两边同步。
 /**
  * Detect an explicit "create exactly one agent" request in the goal.
  * Returns `{ single: true, matched }` only when a singular-agent phrase is
