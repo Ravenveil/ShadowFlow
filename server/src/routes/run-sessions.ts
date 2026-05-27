@@ -16,6 +16,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { runSkillAssembler } from '../assembler';
 import { classifyErrorCode } from '../lib/classify-error';
+import { createRunBus, type RunEventSink } from '../lib/run-event-bus';
 // Round 4 PR-E — canonical `@skill` token parser shared byte-equal with the
 // frontend (`src/lib/skillToken.ts`). Replaces an inline regex that drifted
 // in shape from the SkillDropdown UI; both call sites now agree on which
@@ -306,15 +307,19 @@ void sessionStore.loadAll();
 // effectively handled by the step-store's idempotent disk-removal).
 const stepStoreSingleton = createStepStore();
 
-// 2026-05-16 — Active stream registry. Lets POST /api/run-sessions/:id/abort
-// reach into the currently-open SSE handler and trigger its AbortController
-// (cancels the upstream LLM call) + end the response. Entries are added on
-// stream open and removed in the finally{} block.
-interface ActiveStream {
-  abort: AbortController;
-  res: Response;
-}
-const activeStreams = new Map<string, ActiveStream>();
+// T3-1 (2026-05-27): the legacy per-connection `activeStreams` registry +
+// ActiveStream interface were removed. Abort / retry-pending / resume-pending
+// now go through `runBus` (emit + cancel), which buffers and fans out to every
+// attached view instead of poking one connection's `res`.
+
+// T3-1 (docs/architecture/opendesign-streaming-architecture-study.md §5): the
+// run-event bus makes each run a persistent entity with a buffered, monotonically
+// numbered event log + a set of attached SSE views. The pipeline runs ONCE
+// (guarded by runBus.claimStart) and emit()s into the log; every GET /stream
+// connection is a detachable view that resumes from `?after`/Last-Event-ID.
+// This is what decouples execution from the SSE connection — reconnects replay
+// the buffered events instead of re-running the whole LLM pipeline.
+const runBus = createRunBus();
 
 const VALID_ARTIFACT_TYPES: ReadonlyArray<ArtifactType> = ['yaml', 'html', 'markdown'];
 
@@ -712,14 +717,56 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.flushHeaders();
 
-  // Helper to write a named SSE event. For `error` events we run the payload
-  // through classifyErrorCode() so the front-end always sees the 6-bucket UI
-  // code (auth / rate_limit / context_too_long / network / server / unknown)
-  // on `data.code`. The original fine-grained server code is preserved under
-  // `data.server_code` for logs/debugging without breaking existing readers
-  // that key off `code` (e.g. the BYOK banner regex).
+  // T3-1: this connection is a VIEW onto a persistent run. The run owns the
+  // AbortController (so a cancel persists across reconnects) and the buffered
+  // event log; we attach a sink that writes frames to THIS response.
+  const run = runBus.ensure(id);
+  const abortController = run.abort; // alias — existing signal refs keep working
+
+  // S0.1 (intent-workflow-design-v1 §4.0) — periodic SSE heartbeat. Without
+  // this, idle Vite/nginx proxies cut the connection after ~30s of silence
+  // (Claude "thinking" + long YAML emit easily exceed this), the front-end
+  // hits the "已达最大重试次数" alert and the run looks broken. We write a
+  // comment frame (`: heartbeat\n\n`) every 15s — comment frames per SSE
+  // spec are ignored by EventSource but reset proxy timers. Per-connection.
+  const HEARTBEAT_MS = 15_000;
+  const heartbeatTimer = setInterval(() => {
+    if (res.writableEnded) {
+      clearInterval(heartbeatTimer);
+      return;
+    }
+    try {
+      res.write(': heartbeat\n\n');
+    } catch {
+      clearInterval(heartbeatTimer);
+    }
+  }, HEARTBEAT_MS);
+
+  // SSE sink: writes one buffered/live event frame to THIS response. The `id:`
+  // field lets the browser resume via Last-Event-ID after a drop. Error-code
+  // classification happens at emit time (see sendEvent), so replayed frames
+  // already carry the normalized 6-bucket code.
+  const sink: RunEventSink = {
+    send: (rec) => {
+      if (res.writableEnded) return;
+      const line = `id: ${rec.id}\nevent: ${rec.event}\ndata: ${JSON.stringify(rec.data)}\n\n`;
+      res.write(line);
+      if (typeof (res as unknown as { flush?: () => void }).flush === 'function') {
+        (res as unknown as { flush: () => void }).flush();
+      }
+    },
+    end: () => {
+      clearInterval(heartbeatTimer);
+      if (!res.writableEnded) res.end();
+    },
+  };
+
+  // Emit → run-event bus (buffer + fan out to all attached sinks). For `error`
+  // events we normalize the code to the 6-bucket UI taxonomy (auth / rate_limit
+  // / context_too_long / network / server / unknown) BEFORE buffering, so a
+  // reconnect's replayed frames carry the normalized code. Original fine-grained
+  // server code is preserved under `data.server_code`.
   const sendEvent = (event: string, data: unknown) => {
-    if (res.writableEnded) return;
     let payload: unknown = data;
     if (event === 'error' && data && typeof data === 'object') {
       const d = data as Record<string, unknown>;
@@ -739,51 +786,41 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
         ...(rawCode && rawCode !== uiCode ? { server_code: rawCode } : {}),
       };
     }
-    const line = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
-    res.write(line);
-    if (typeof (res as unknown as { flush?: () => void }).flush === 'function') {
-      (res as unknown as { flush: () => void }).flush();
-    }
+    runBus.emit(id, event, payload);
   };
 
-  // Wire client disconnect → AbortController → Claude stream cancellation.
-  const abortController = new AbortController();
+  // Resume cursor: ?after=N (our fetch client) or Last-Event-ID header (native
+  // EventSource reconnect). attach() replays the buffered events with id > after,
+  // then registers this sink for live events (or ends immediately if terminal).
+  const afterRaw = req.query.after ?? req.headers['last-event-id'];
+  const after = Number(Array.isArray(afterRaw) ? afterRaw[0] : afterRaw) || 0;
+  const detach = runBus.attach(id, after, sink);
 
-  // S0.1 (intent-workflow-design-v1 §4.0) — periodic SSE heartbeat. Without
-  // this, idle Vite/nginx proxies cut the connection after ~30s of silence
-  // (Claude "thinking" + long YAML emit easily exceed this), the front-end
-  // hits the "已达最大重试次数" alert and the run looks broken. We write a
-  // comment frame (`: heartbeat\n\n`) every 15s — comment frames per SSE
-  // spec are ignored by EventSource but reset proxy timers. cleared on
-  // req close so we never write after res.end().
-  const HEARTBEAT_MS = 15_000;
-  const heartbeatTimer = setInterval(() => {
-    if (res.writableEnded) {
-      clearInterval(heartbeatTimer);
-      return;
-    }
-    try {
-      res.write(': heartbeat\n\n');
-    } catch {
-      clearInterval(heartbeatTimer);
-    }
-  }, HEARTBEAT_MS);
-
+  // Client disconnect: detach this view ONLY. We deliberately do NOT abort the
+  // run — it stays alive so the client can reconnect and resume from its cursor
+  // (OpenDesign semantics; root-cause fix for "reconnect re-runs the LLM").
+  // Explicit cancellation goes through POST /:id/abort → runBus.cancel.
   req.on('close', () => {
     clearInterval(heartbeatTimer);
-    if (!abortController.signal.aborted) {
-      console.log(`[run-sessions] client disconnected, aborting session ${id}`);
-      abortController.abort();
-    }
+    detach();
   });
 
-  // 2026-05-16 — Publish this stream so POST /:id/abort can find it.
-  activeStreams.set(id, { abort: abortController, res });
-
-  // Send a heartbeat comment to confirm connection
+  // Confirm connection (comment frame, ignored by EventSource).
   res.write(': connected\n\n');
 
-  console.log(`[run-sessions] Starting SSE stream for session ${id} skill=${session.skill_name}`);
+  console.log(
+    `[run-sessions] SSE view attached for session ${id} (after=${after}) skill=${session.skill_name}`,
+  );
+
+  // T3-1: run the pipeline EXACTLY ONCE. The first connection claims the start
+  // and drives the LLM/assembler, emitting into the bus; reconnects get
+  // claimStart()===false here and fall straight through to the end of the
+  // handler — they are already attached above and stream the buffered + live
+  // events via their sink. (Body kept at its original indentation to keep this
+  // a surgical diff: it is the same code, now guarded + routed through the bus.)
+  if (!runBus.claimStart(id)) {
+    return;
+  }
 
   // S1.2 — TS-side classify frame. Synchronous keyword classifier; runs in ~µs
   // so we can emit it right after the connection handshake, parallel to the
@@ -1013,7 +1050,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     flushProjector(projector.onUserMessage(session.goal));
 
     for await (const { event, data } of generator) {
-      if (res.writableEnded || abortController.signal.aborted) break;
+      if (abortController.signal.aborted) break;
       sendEvent(event, data);
       console.log(`[run-sessions] → event:${event}`, JSON.stringify(data).slice(0, 80));
 
@@ -1199,15 +1236,15 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     } else {
       console.error(`[run-sessions] Stream error for session ${id}:`, err);
       sawError = true;
-      if (!res.writableEnded) {
-        sendEvent('error', {
-          // sendEvent() runs classifyErrorCode() against this message; the
-          // regexes will sort 5xx / ECONNREFUSED / 401 surfacing in `err`.
-          code: 'INTERNAL_ERROR',
-          message: `Internal server error during assembly: ${(err as Error)?.message ?? String(err)}`,
-          session_id: id,
-        });
-      }
+      // Emit unconditionally — the bus buffers it so reconnecting clients still
+      // see the error even if no view is currently attached.
+      sendEvent('error', {
+        // sendEvent() runs classifyErrorCode() against this message; the
+        // regexes will sort 5xx / ECONNREFUSED / 401 surfacing in `err`.
+        code: 'INTERNAL_ERROR',
+        message: `Internal server error during assembly: ${(err as Error)?.message ?? String(err)}`,
+        session_id: id,
+      });
     }
   } finally {
     // Story 15.14 — Auto-critique pass. Only when we saw a complete event AND
@@ -1232,7 +1269,6 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       sawComplete &&
       !abortController.signal.aborted &&
       artifactInfo.filename &&
-      !res.writableEnded &&
       critiqueEnabled
     ) {
       try {
@@ -1283,16 +1319,13 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       }
     }
 
-    // S0.1 — ensure heartbeat stops whatever the exit path (success, error,
-    // abort). req.on('close') already clears it on client disconnect but we
-    // also exit via the for-await / catch paths.
-    clearInterval(heartbeatTimer);
-    if (!res.writableEnded) {
-      res.end();
-    }
-    // 2026-05-16 — drop from active registry whatever the exit reason.
-    activeStreams.delete(id);
-    console.log(`[run-sessions] Stream ended for session ${id}`);
+    // T3-1: mark the run terminal. runBus.finish() flushes `end()` to EVERY
+    // attached view (closing each res + clearing its heartbeat), so we no longer
+    // res.end() this one connection directly — a reconnect that attaches after
+    // we finish will replay the buffer then end immediately (attach() handles
+    // the terminal case). Status: failed iff we saw an error and no complete.
+    runBus.finish(id, sawError && !sawComplete ? 'failed' : 'succeeded');
+    console.log(`[run-sessions] run ${id} finished (complete=${sawComplete} error=${sawError})`);
 
     // Persist run record — only when the stream actually terminated (not when
     // the client aborted mid-flight). A 'complete' OR an explicit 'error'
@@ -1405,20 +1438,17 @@ router.post('/:id/steps/:n/retry', (req: Request, res: Response) => {
   // the next run. step-store.clear() removes <session_id>/steps/.
   stepStoreSingleton.clear(id);
 
-  const stream = activeStreams.get(id);
-  if (stream && !stream.res.writableEnded) {
-    try {
-      const line = `event: retry-pending\ndata: ${JSON.stringify({
-        session_id: id,
-        from_step: stepN,
-        cleared_steps: cleared,
-        strategy: 'full_rerun',
-      })}\n\n`;
-      stream.res.write(line);
-    } catch (e) {
-      console.warn(`[run-sessions] retry-pending emit failed for ${id}:`, e);
-    }
-  }
+  // T3-1: surface retry-pending to currently-attached views, then reset the run
+  // so the next GET /stream connection re-runs from scratch (full_rerun). Without
+  // the reset, claimStart would return false on the existing (terminal) run and
+  // the reconnect would only replay the old buffer instead of re-executing.
+  runBus.emit(id, 'retry-pending', {
+    session_id: id,
+    from_step: stepN,
+    cleared_steps: cleared,
+    strategy: 'full_rerun',
+  });
+  runBus.reset(id);
 
   console.log(
     `[run-sessions] retry requested session=${id} from_step=${stepN} cleared=${cleared.join(',') || '(none)'}`,
@@ -1454,9 +1484,10 @@ router.post('/:id/resume', (req: Request, res: Response) => {
   const lastDone = [...all].reverse().find((s) => s.status === 'done');
   const resumeFrom = lastDone ? lastDone.step_index + 1 : 0;
 
-  const stream = activeStreams.get(id);
+  const run = runBus.get(id);
+  const active = Boolean(run && !runBus.isTerminal(run.status));
   const allDone = all.length > 0 && all.every((s) => s.status === 'done');
-  if (allDone && !stream) {
+  if (allDone && !active) {
     res.status(410).json({
       error: {
         code: 'SESSION_COMPLETE',
@@ -1470,18 +1501,14 @@ router.post('/:id/resume', (req: Request, res: Response) => {
     `[run-sessions] resume requested session=${id} from_step=${resumeFrom} (last_done=${lastDone?.step_index ?? 'none'})`,
   );
 
-  if (stream && !stream.res.writableEnded) {
-    try {
-      const line = `event: resume-pending\ndata: ${JSON.stringify({
-        session_id: id,
-        from_step: resumeFrom,
-        strategy: 'full_rerun',
-      })}\n\n`;
-      stream.res.write(line);
-    } catch (e) {
-      console.warn(`[run-sessions] resume-pending emit failed for ${id}:`, e);
-    }
-  }
+  // T3-1: surface resume-pending to attached views, then reset so the next
+  // connection re-runs (see retry endpoint for rationale).
+  runBus.emit(id, 'resume-pending', {
+    session_id: id,
+    from_step: resumeFrom,
+    strategy: 'full_rerun',
+  });
+  runBus.reset(id);
 
   res.status(202).json({
     session_id: id,
@@ -1509,32 +1536,25 @@ router.post('/:id/resume', (req: Request, res: Response) => {
 // the UI shrugs it off.
 router.post('/:id/abort', (req: Request, res: Response) => {
   const { id } = req.params;
-  const stream = activeStreams.get(id);
+  const run = runBus.get(id);
   const session = sessionStore.get(id);
 
-  if (!stream && !session) {
+  if (!run && !session) {
     res.status(404).json({
       error: { code: 'SESSION_NOT_FOUND', message: `Run session ${id} not found` },
     });
     return;
   }
 
-  if (stream) {
+  // T3-1: cancel through the bus. We first emit an `aborted` frame so every
+  // attached view (and any reconnect that replays the buffer) sees the reason,
+  // then runBus.cancel() aborts the run's AbortController — the pipeline's
+  // for-await breaks on the signal and its finally{} calls runBus.finish()
+  // (idempotent with cancel's own finish, which ends all views).
+  if (run && !runBus.isTerminal(run.status)) {
     console.log(`[run-sessions] client requested abort for session ${id}`);
-    if (!stream.abort.signal.aborted) stream.abort.abort();
-    // Best-effort: write a final aborted event so any other listeners on the
-    // same EventSource can react. The for-await loop in the stream handler
-    // already breaks on `signal.aborted`, then the finally{} block runs
-    // res.end() + activeStreams.delete().
-    try {
-      if (!stream.res.writableEnded) {
-        const line = `event: aborted\ndata: ${JSON.stringify({ session_id: id, reason: 'user_requested' })}\n\n`;
-        stream.res.write(line);
-      }
-    } catch (e) {
-      // SSE write race with res.end() — non-fatal.
-      console.warn(`[run-sessions] aborted-event write failed for ${id}:`, e);
-    }
+    runBus.emit(id, 'aborted', { session_id: id, reason: 'user_requested' });
+    runBus.cancel(id);
   }
 
   // Drop the session record so a stale client cannot reconnect.

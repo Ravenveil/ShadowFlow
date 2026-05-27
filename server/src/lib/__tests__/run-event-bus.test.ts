@@ -186,5 +186,22 @@ function makeSink(): RunEventSink & { got: RunEventRecord[]; ended: boolean } {
   ok('run gone after cleanup', !bus.get('r11'));
 }
 
+// ── 12: reset drops the run so claimStart re-runs (retry/resume) ─────────────
+{
+  console.log('\n[12] reset → next claimStart re-runs (full_rerun)');
+  const bus = createRunBus();
+  bus.claimStart('r12');
+  bus.emit('r12', 'a', {});
+  const sink = makeSink();
+  bus.attach('r12', 0, sink);
+  bus.reset('r12');
+  ok('attached view ended on reset', sink.ended);
+  ok('run removed', !bus.get('r12'));
+  ok('claimStart true again after reset (re-run allowed)', bus.claimStart('r12'));
+  // Fresh run: event ids restart at 1.
+  const rec = bus.emit('r12', 'b', {});
+  check('fresh run id restarts at 1', 1, rec?.id);
+}
+
 console.log(`\n${pass} pass, ${fail} fail`);
 if (fail > 0) process.exit(1);

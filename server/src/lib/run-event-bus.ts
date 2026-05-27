@@ -91,6 +91,13 @@ export interface RunBus {
   finish(id: string, status: Exclude<RunStatus, 'running'>): void;
   /** Request cancellation: abort execution; finish as `canceled`. */
   cancel(id: string): void;
+  /**
+   * Drop a run entirely so the next `claimStart` re-runs from scratch. Used by
+   * retry/resume ("full_rerun"): aborts any in-flight execution, ends attached
+   * views, and removes the run + its buffered log. The next GET /stream then
+   * `ensure`s a fresh run and `claimStart` returns true again.
+   */
+  reset(id: string): void;
   isTerminal(status: RunStatus): boolean;
   /** Test/introspection. */
   size(): number;
@@ -220,6 +227,21 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     finish(id, 'canceled');
   };
 
+  const reset = (id: string): void => {
+    const run = runs.get(id);
+    if (!run) return;
+    if (!run.abort.signal.aborted) run.abort.abort();
+    for (const sink of run.clients) {
+      try {
+        sink.end();
+      } catch {
+        /* ignore */
+      }
+    }
+    run.clients.clear();
+    runs.delete(id);
+  };
+
   return {
     ensure,
     get,
@@ -228,6 +250,7 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     attach,
     finish,
     cancel,
+    reset,
     isTerminal: (status) => TERMINAL.has(status),
     size: () => runs.size,
   };
