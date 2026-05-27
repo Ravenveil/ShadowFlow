@@ -573,6 +573,25 @@ export function parseAndExtract(
     return '';
   });
 
+  // P4 fix (audit/thinking-transport-fix-plan-2026-05-27.md §2.6): strip leaked
+  // SSE wire frames. ShadowFlow serializes its own SSE as
+  // `event: <name>\ndata: <one-line json>\n\n` (run-sessions.ts:742). When the
+  // LLM parrots that shape back as plain text (observed after a reconnect
+  // re-run feeds prior frame-shaped output back as context), this subtractive
+  // parser would otherwise leak it verbatim into the answer bubble — the
+  // `event: assemble\ndata: {…}` the user saw. These frames are never
+  // legitimate answer content. The match is tight (an `event:` line immediately
+  // followed by a `data:` line whose payload opens with `{`/`[`) so normal prose
+  // — even prose that happens to mention "event:" — is not touched. This is a
+  // T1 stop-the-bleed guard; the structural fix is backend additive
+  // normalization (audit §2.7, T3).
+  if (/^[ \t]*event:[ \t]*[\w.-]+[ \t]*\r?\n[ \t]*data:[ \t]*[{[]/m.test(buffer)) {
+    buffer = buffer.replace(
+      /^[ \t]*event:[ \t]*[\w.-]+[ \t]*\r?\n[ \t]*data:[ \t]*[{[][^\n]*\r?\n?/gm,
+      '',
+    );
+  }
+
   // 2026-05-11 Layer 1 — Claude Code-style conversation mode.
   // After stripping all known + unknown closed tags, the residual non-tag
   // text is the LLM's plain natural-language reply. Emit as `text` events.

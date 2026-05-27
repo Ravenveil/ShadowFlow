@@ -424,6 +424,35 @@ plain reply
   check('buffer drained after close', b2.trim() === '', { b2 });
 })();
 
+// ─── Test 19: P4 — leaked SSE wire frames stripped, not rendered as text ────
+
+(function testSseFrameLeakStripped() {
+  console.log('\n[19] P4 leaked SSE frames (event:/data:) stripped from text');
+  const input =
+    'event: assemble\ndata: {"step":"分析目标需求","status":"running"}\n\n' +
+    'event: assemble\ndata: {"step":"分析目标需求","status":"done"}\n\n';
+  const { buffer, events } = parseAndExtract(input, 'sess-19', noopArtifact);
+  const textEvents = events.filter((e) => e.event === 'text');
+  const leaked = textEvents.some((e) =>
+    String((e.data as Record<string, unknown>)?.text ?? '').includes('event: assemble'),
+  );
+  check('no SSE frame leaks into text', !leaked, { textEvents });
+  check('buffer holds no residual frame', !buffer.includes('event: assemble'), { buffer });
+})();
+
+// ─── Test 20: P4 — normal prose mentioning "event:" is NOT stripped ─────────
+
+(function testProseWithEventWordPreserved() {
+  console.log('\n[20] P4 normal prose with "event:" preserved (tight match)');
+  // No `data: {` follow-on → must NOT be treated as an SSE frame.
+  const input = 'The click event: when the user taps the button, we log it.';
+  const { events } = parseAndExtract(input, 'sess-20', noopArtifact);
+  const txt = String(
+    (findEvent(events, 'text')?.data as Record<string, unknown>)?.text ?? '',
+  );
+  check('prose preserved verbatim', txt === input, { txt });
+})();
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 console.log('\n────────────────────────────────────────');
