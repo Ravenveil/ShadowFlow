@@ -200,6 +200,12 @@ export class ConversationRuntime {
           if (ev.kind === 'text_delta') {
             textBuf += ev.text;
             yield { type: 'text-delta', value: ev.text };
+          } else if (ev.kind === 'thinking_delta') {
+            // P1: stream extended-thinking content out as its own TurnChunk.
+            // Deliberately NOT appended to assistantBlocks — thinking is
+            // display-only and must not pollute the replayed text history
+            // (it would otherwise be fed back as a user-visible answer block).
+            yield { type: 'thinking-delta', value: ev.text };
           } else if (ev.kind === 'tool_use') {
             // Flush any accumulated text into a text block BEFORE the
             // tool_use block. Order matters: when we replay this assistant

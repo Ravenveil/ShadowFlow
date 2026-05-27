@@ -32,6 +32,10 @@ import type { ToolSpec } from './tool-spec';
  */
 export type AssistantEvent =
   | { kind: 'text_delta'; text: string }
+  // P1 (audit/thinking-transport-fix-plan-2026-05-27.md): extended-thinking
+  // content, streamed before the answer. Display-only — not folded into the
+  // assistant message history (see conversation-runtime-impl.ts).
+  | { kind: 'thinking_delta'; text: string }
   | { kind: 'tool_use'; id: string; name: string; input: unknown }
   | { kind: 'usage'; usage: TokenUsage }
   | {

@@ -678,6 +678,18 @@ async function* pipeChunksToSse(
           yield e;
         }
       }
+    } else if (chunk.type === 'thinking-delta') {
+      // P1: extended-thinking content → `thinking-chunk` SSE, consumed by the
+      // timeline projector's onThinkingChunk (run-sessions.ts) which feeds the
+      // collapsible thinking card. Bypasses the parser: thinking is plain
+      // prose with no <sf:*> tags, and it arrives strictly before any answer
+      // text, so textBuf is still empty here.
+      yield {
+        event: 'thinking-chunk',
+        data: chunk.node_id
+          ? { text: chunk.value, node_id: chunk.node_id }
+          : { text: chunk.value },
+      };
     } else if (chunk.type === 'error') {
       // Final flush of any pending text before yielding the error frame.
       if (textBuf.trim().length > 0) {

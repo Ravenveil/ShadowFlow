@@ -54,6 +54,60 @@ export interface AnthropicApiClientOptions {
   max_tokens?: number;
   /** 0..1 sampling temp; omitted from request when undefined. */
   temperature?: number;
+  /**
+   * Extended thinking (P1, audit/thinking-transport-fix-plan-2026-05-27.md).
+   *   - `{ budget_tokens }` → enable; API streams `thinking` blocks before the
+   *      answer, which we surface as `thinking_delta` AssistantEvents (→ the
+   *      design-spec collapsible thinking card).
+   *   - `false`            → explicitly disable.
+   *   - `undefined`        → enabled by default (Sonnet 4.x family supports it;
+   *      the dispatcher only builds this client for Anthropic models). Budget
+   *      from SHADOWFLOW_ANTHROPIC_THINKING_BUDGET env, else 4096.
+   *
+   * Hard API constraints handled below: when enabled, `temperature` MUST be
+   * omitted (API rejects custom temp) and `max_tokens` MUST exceed
+   * `budget_tokens`.
+   */
+  thinking?: { budget_tokens: number } | false;
+}
+
+/**
+ * Resolve the effective thinking config from the option + env, applying the
+ * two hard API constraints. Returns the SDK request fragment plus whether
+ * temperature should be suppressed.
+ *
+ * - `thinking === false` → disabled (caller opted out).
+ * - `thinking === { budget_tokens }` → that budget.
+ * - `thinking === undefined` → default-on with env/4096 budget.
+ *
+ * budget is clamped to [1024, max_tokens - 1] so `max_tokens > budget_tokens`
+ * always holds (API requirement) and the API's own 1024 floor is respected.
+ */
+function resolveThinking(
+  thinking: { budget_tokens: number } | false | undefined,
+  max_tokens: number,
+): { enabled: boolean; budget_tokens: number } {
+  if (thinking === false) return { enabled: false, budget_tokens: 0 };
+  // Global ops kill-switch (§1.5 #5 — "按开关分流"): lets an operator disable
+  // extended thinking fleet-wide without a code change, e.g. to cut cost /
+  // latency. Default remains on.
+  const sw = (process.env.SHADOWFLOW_ANTHROPIC_THINKING ?? '').trim().toLowerCase();
+  if (sw === 'off' || sw === '0' || sw === 'false' || sw === 'no') {
+    return { enabled: false, budget_tokens: 0 };
+  }
+  let budget: number;
+  if (thinking && typeof thinking.budget_tokens === 'number') {
+    budget = thinking.budget_tokens;
+  } else {
+    const envBudget = Number(process.env.SHADOWFLOW_ANTHROPIC_THINKING_BUDGET);
+    budget = Number.isFinite(envBudget) && envBudget > 0 ? envBudget : 4096;
+  }
+  // API floor 1024; must stay strictly below max_tokens.
+  const upper = Math.max(1024, max_tokens - 1);
+  budget = Math.min(Math.max(budget, 1024), upper);
+  // Degenerate: max_tokens too small to fit any thinking budget → disable.
+  if (max_tokens <= 1024) return { enabled: false, budget_tokens: 0 };
+  return { enabled: true, budget_tokens: budget };
 }
 
 /**
@@ -135,6 +189,7 @@ export class AnthropicApiClient implements ApiClient {
     const model =
       this.opts.model ?? process.env.SHADOWFLOW_DEFAULT_MODEL ?? DEFAULT_MODELS.anthropic;
     const max_tokens = this.opts.max_tokens ?? 8192;
+    const think = resolveThinking(this.opts.thinking, max_tokens);
 
     const client = new Anthropic({ apiKey });
     const wireMessages = toAnthropicMessages(args.messages);
@@ -164,9 +219,15 @@ export class AnthropicApiClient implements ApiClient {
         {
           model,
           max_tokens,
-          ...(this.opts.temperature !== undefined
-            ? { temperature: this.opts.temperature }
-            : {}),
+          // P1: extended thinking. When enabled, Anthropic streams `thinking`
+          // blocks before the answer AND forbids a custom temperature (the
+          // request 400s if temperature is sent), so temperature is suppressed
+          // here — only forwarded in the non-thinking path.
+          ...(think.enabled
+            ? { thinking: { type: 'enabled' as const, budget_tokens: think.budget_tokens } }
+            : this.opts.temperature !== undefined
+              ? { temperature: this.opts.temperature }
+              : {}),
           system: args.system_prompt,
           // toAnthropicMessages can return system-role envelopes in pathological
           // inputs; the type below narrows away `system`. We never produce
@@ -205,9 +266,19 @@ export class AnthropicApiClient implements ApiClient {
           pending.set(ev.index, { id: block.id, name: block.name, jsonBuf: '' });
         }
       } else if (ev.type === 'content_block_delta') {
-        const delta = ev.delta as { type: string; text?: string; partial_json?: string };
+        const delta = ev.delta as {
+          type: string;
+          text?: string;
+          partial_json?: string;
+          thinking?: string;
+        };
         if (delta.type === 'text_delta' && typeof delta.text === 'string') {
           yield { kind: 'text_delta', text: delta.text };
+        } else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+          // P1: extended-thinking content. `signature_delta` (the block's
+          // cryptographic signature) is intentionally ignored — it carries no
+          // displayable text and the runtime has no use for it today.
+          yield { kind: 'thinking_delta', text: delta.thinking };
         } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
           const p = pending.get(ev.index);
           if (p) p.jsonBuf += delta.partial_json;

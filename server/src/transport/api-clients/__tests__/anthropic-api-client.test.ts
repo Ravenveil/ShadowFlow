@@ -330,6 +330,10 @@ async function testSdkCallShape(): Promise<void> {
       model: 'claude-custom-1',
       max_tokens: 1234,
       temperature: 0.5,
+      // P1: thinking defaults ON and suppresses temperature. This test asserts
+      // the general non-thinking call shape (incl. temperature forwarding), so
+      // opt out explicitly here. Thinking behavior is covered separately below.
+      thinking: false,
     });
     await collect(
       client.stream({
@@ -491,6 +495,128 @@ async function testStopReasonFallbackWhenAbsent(): Promise<void> {
   }
 }
 
+async function testThinkingDeltaTranslation(): Promise<void> {
+  console.log('\n[anthropic-api-client] P1: thinking_delta translation');
+  // Anthropic streams a thinking block (content_block_start type=thinking,
+  // then thinking_delta chunks, then a signature_delta) BEFORE the answer.
+  const { restore } = patchSdk([
+    { type: 'message_start', message: { usage: { input_tokens: 10 } } },
+    { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Let me ' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'reason...' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'sig-abc' } },
+    { type: 'content_block_stop', index: 0 },
+    { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } },
+    { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'answer' } },
+    { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 5 } },
+    { type: 'message_stop' },
+  ]);
+  try {
+    const client = new AnthropicApiClient({ apiKey: 'sk-ant-test' });
+    const events = await collect(
+      client.stream({
+        system_prompt: 'sys',
+        messages: [{ role: 'user', blocks: [{ kind: 'text', text: 'hi' }] }],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+
+    const thinking = events.filter((e) => e.kind === 'thinking_delta');
+    check('thinking_delta: count (signature_delta ignored)', 2, thinking.length);
+    check(
+      'thinking_delta: texts in order',
+      ['Let me ', 'reason...'],
+      thinking.map((e) => (e as { text: string }).text),
+    );
+    // Thinking precedes the answer text in event order.
+    const firstThinkingIdx = events.findIndex((e) => e.kind === 'thinking_delta');
+    const firstTextIdx = events.findIndex((e) => e.kind === 'text_delta');
+    checkTruthy('thinking_delta emitted before text_delta', firstThinkingIdx < firstTextIdx);
+
+    const texts = events.filter((e) => e.kind === 'text_delta');
+    check('text_delta still translated alongside thinking', ['answer'], texts.map((e) => (e as { text: string }).text));
+  } finally {
+    restore();
+  }
+}
+
+async function testThinkingEnabledByDefault(): Promise<void> {
+  console.log('\n[anthropic-api-client] P1: thinking enabled by default + temperature suppressed');
+  const { restore, inspect } = patchSdk([{ type: 'message_stop' }]);
+  try {
+    // temperature provided, but thinking (default ON) must suppress it.
+    const client = new AnthropicApiClient({ apiKey: 'sk-ant-test', max_tokens: 8192, temperature: 0.2 });
+    await collect(
+      client.stream({ system_prompt: '', messages: [], tools: [], signal: new AbortController().signal }),
+    );
+    const args = inspect.streamArgs!;
+    checkTruthy('thinking present in request', args.thinking !== undefined);
+    check('thinking.type === enabled', 'enabled', args.thinking?.type);
+    check('thinking.budget_tokens default 4096', 4096, args.thinking?.budget_tokens);
+    check('temperature SUPPRESSED when thinking enabled', undefined, args.temperature);
+  } finally {
+    restore();
+  }
+}
+
+async function testThinkingDisabledOptOut(): Promise<void> {
+  console.log('\n[anthropic-api-client] P1: thinking:false opts out, temperature returns');
+  const { restore, inspect } = patchSdk([{ type: 'message_stop' }]);
+  try {
+    const client = new AnthropicApiClient({ apiKey: 'sk-ant-test', temperature: 0.2, thinking: false });
+    await collect(
+      client.stream({ system_prompt: '', messages: [], tools: [], signal: new AbortController().signal }),
+    );
+    const args = inspect.streamArgs!;
+    check('thinking omitted when thinking:false', undefined, args.thinking);
+    check('temperature forwarded when thinking disabled', 0.2, args.temperature);
+  } finally {
+    restore();
+  }
+}
+
+async function testThinkingEnvKillSwitch(): Promise<void> {
+  console.log('\n[anthropic-api-client] P1: SHADOWFLOW_ANTHROPIC_THINKING=off disables');
+  const prev = process.env.SHADOWFLOW_ANTHROPIC_THINKING;
+  process.env.SHADOWFLOW_ANTHROPIC_THINKING = 'off';
+  const { restore, inspect } = patchSdk([{ type: 'message_stop' }]);
+  try {
+    const client = new AnthropicApiClient({ apiKey: 'sk-ant-test', temperature: 0.2 });
+    await collect(
+      client.stream({ system_prompt: '', messages: [], tools: [], signal: new AbortController().signal }),
+    );
+    const args = inspect.streamArgs!;
+    check('thinking disabled by env kill-switch', undefined, args.thinking);
+    check('temperature forwarded when env-disabled', 0.2, args.temperature);
+  } finally {
+    restore();
+    if (prev === undefined) delete process.env.SHADOWFLOW_ANTHROPIC_THINKING;
+    else process.env.SHADOWFLOW_ANTHROPIC_THINKING = prev;
+  }
+}
+
+async function testThinkingBudgetClamp(): Promise<void> {
+  console.log('\n[anthropic-api-client] P1: budget clamped below max_tokens (API: max_tokens > budget)');
+  const { restore, inspect } = patchSdk([{ type: 'message_stop' }]);
+  try {
+    // Request a budget that exceeds max_tokens; must clamp to max_tokens - 1.
+    const client = new AnthropicApiClient({
+      apiKey: 'sk-ant-test',
+      max_tokens: 2000,
+      thinking: { budget_tokens: 9000 },
+    });
+    await collect(
+      client.stream({ system_prompt: '', messages: [], tools: [], signal: new AbortController().signal }),
+    );
+    const args = inspect.streamArgs!;
+    check('budget clamped to max_tokens - 1', 1999, args.thinking?.budget_tokens);
+    checkTruthy('max_tokens strictly greater than budget', args.max_tokens > args.thinking.budget_tokens);
+  } finally {
+    restore();
+  }
+}
+
 async function main(): Promise<void> {
   await testNoApiKey();
   await testTextDelta();
@@ -502,6 +628,11 @@ async function main(): Promise<void> {
   await testEnvKey();
   await testStopReasonFromMessageDelta();
   await testStopReasonFallbackWhenAbsent();
+  await testThinkingDeltaTranslation();
+  await testThinkingEnabledByDefault();
+  await testThinkingDisabledOptOut();
+  await testThinkingEnvKillSwitch();
+  await testThinkingBudgetClamp();
 
   console.log(`\n${pass} pass, ${fail} fail`);
   if (fail > 0) process.exit(1);

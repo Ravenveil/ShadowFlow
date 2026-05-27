@@ -56,6 +56,9 @@ export interface UsagePayload {
  */
 export type TurnChunk =
   | { type: 'text-delta'; value: string; node_id?: string }
+  // P1: extended-thinking content. Bypasses the parser (it is plain prose, not
+  // tagged) and maps to the `thinking-chunk` SSE frame in pipeChunksToSse.
+  | { type: 'thinking-delta'; value: string; node_id?: string }
   | { type: 'tool-use'; tool: ToolUsePayload; node_id?: string }
   | { type: 'error'; error: LlmCallError; node_id?: string }
   | { type: 'usage'; usage: UsagePayload; node_id?: string }
