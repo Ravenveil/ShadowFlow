@@ -438,6 +438,19 @@ plain reply
   );
   check('no SSE frame leaks into text', !leaked, { textEvents });
   check('buffer holds no residual frame', !buffer.includes('event: assemble'), { buffer });
+  // T3: leaked frames are now surfaced as a `raw` event (not silently dropped).
+  const rawEv = findEvent(events, 'raw');
+  check('emits a raw event', !!rawEv, { events });
+  check(
+    'raw event source = sse-frame-leak',
+    (rawEv?.data as Record<string, unknown>)?.source === 'sse-frame-leak',
+    { rawEv },
+  );
+  check(
+    'raw body carries the frame text',
+    String((rawEv?.data as Record<string, unknown>)?.text ?? '').includes('event: assemble'),
+    { rawEv },
+  );
 })();
 
 // ─── Test 20: P4 — normal prose mentioning "event:" is NOT stripped ─────────

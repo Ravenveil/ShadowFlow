@@ -99,6 +99,12 @@ export interface TimelineProjector {
   onYamlLine(line: string): ProjectorEmit;
   /** Optional plain text assistant chunk → tool_echo (used rarely). */
   onText(text: string): ProjectorEmit;
+  /**
+   * T3: unclassified content (leaked SSE frames, off-protocol blobs, raw CLI
+   * lines) → a `raw` message. Closes any open text/thinking first so raw never
+   * merges into the answer. `source` is an optional provenance hint.
+   */
+  onRaw(text: string, source?: string): ProjectorEmit;
   /** Final event → close thinking, finalize msg_foot. */
   onComplete(): ProjectorEmit;
 
@@ -551,6 +557,24 @@ export function createTimelineProjector(
       }
       // While text is streaming the status line reads "Writing".
       bumpStatusLine(out, 'Writing', 0);
+      return out;
+    },
+
+    onRaw(text: string, source?: string): ProjectorEmit {
+      const out = emit();
+      if (!text.trim()) return out;
+      // Raw content is its own block — never let it bleed into the open answer
+      // text or thinking. Close them first, then push a standalone raw message.
+      closeOpenThinking(out);
+      closeOpenText(out);
+      out.messages.push({
+        id: newId('msg'),
+        kind: 'raw',
+        turn_id: turnId,
+        ts: nowMs(),
+        body: text,
+        ...(source ? { source } : {}),
+      });
       return out;
     },
 

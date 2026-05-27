@@ -436,6 +436,31 @@ console.log('\n[16] P3 deterministic ids across reconnect');
   assert('ids carry the seed (traceable)', run1[0].includes('sess_ABC'));
 }
 
+// ── Test 17: P-raw — onRaw emits a standalone raw message, closes open text ──
+console.log('\n[17] onRaw → raw message (closes open text, never merges)');
+{
+  const p = createTimelineProjector({ idSeed: 'sess-raw' });
+  p.onUserMessage('q');
+  p.onText('正常回答开头');
+  const r = p.onRaw('event: assemble\ndata: {"x":1}', 'sse-frame-leak');
+  const raw = r.messages.find((m) => m.kind === 'raw') as
+    | Extract<TimelineMessage, { kind: 'raw' }>
+    | undefined;
+  assert('emits a raw message', !!raw);
+  check('raw body preserved', 'event: assemble\ndata: {"x":1}', raw?.body);
+  check('raw source preserved', 'sse-frame-leak', raw?.source);
+  // onRaw calls closeOpenText, so the NEXT onText opens a FRESH assistant_text
+  // message (different id) — proving raw didn't merge into the prior answer.
+  const before = p._debug();
+  const r2 = p.onText('后续新回答');
+  const newText = r2.messages.find((m) => m.kind === 'assistant_text');
+  assert('raw closed the open text → next onText opens a new message', !!newText);
+  void before;
+  // Empty/whitespace raw is a no-op.
+  const r3 = p.onRaw('   ');
+  check('blank raw emits nothing', 0, r3.messages.filter((m) => m.kind === 'raw').length);
+}
+
 // ── Summary ─────────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

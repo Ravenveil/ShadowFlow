@@ -100,6 +100,13 @@ export type MessageKind =
   // chunk; now accumulates via `text_append` patches so a 1000-token answer
   // is one timeline row rather than 200 fragments.
   | 'assistant_text'
+  // 2026-05-27 (T3, opendesign-streaming-architecture-study §5) — first-class
+  // bucket for content that is NOT a recognized answer/tag: leaked SSE wire
+  // frames, off-protocol blobs, raw CLI lines. Mirrors OpenDesign's `raw`
+  // event kind. Routing such content here (instead of cramming it into
+  // assistant_text) is what keeps the answer bubble clean — the additive
+  // counterpart to the subtractive parser's "residue == text" leak.
+  | 'raw'
   | 'step_panel'
   | 'diff_panel'
   | 'msg_foot'
@@ -175,6 +182,13 @@ export type TimelineMessage =
   | (TimelineMessageBase & {
       kind: 'assistant_text';
       body: string;
+    })
+  | (TimelineMessageBase & {
+      kind: 'raw';
+      /** The unclassified content, verbatim. Rendered as a collapsed block. */
+      body: string;
+      /** Optional provenance hint (e.g. 'sse-frame-leak', 'unknown-tag'). */
+      source?: string;
     })
   | (TimelineMessageBase & {
       kind: 'step_panel';

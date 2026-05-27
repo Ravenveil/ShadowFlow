@@ -15,6 +15,12 @@ export type MessageKind =
   | 'thinking'
   | 'assistant_meta'
   | 'assistant_text'
+  /**
+   * T3 — first-class bucket for unclassified content (leaked SSE frames,
+   * off-protocol blobs, raw CLI lines). Rendered as a collapsed raw block so
+   * it never pollutes the answer bubble. Mirrors OpenDesign's `raw` kind.
+   */
+  | 'raw'
   | 'rationale'
   | 'tool_call'
   | 'tool_echo'
@@ -77,6 +83,13 @@ export type TimelineMessage =
       body: string;
       /** While true, the AssistantText renderer shows a trailing blink-caret. */
       streaming?: boolean;
+    })
+  | (TimelineMessageBase & {
+      kind: 'raw';
+      /** Unclassified content, verbatim. Rendered in a collapsed mono block. */
+      body: string;
+      /** Optional provenance hint (e.g. 'sse-frame-leak', 'unknown-tag'). */
+      source?: string;
     })
   | (TimelineMessageBase & { kind: 'rationale'; bullets: string[] })
   | (TimelineMessageBase & {

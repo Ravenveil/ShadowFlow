@@ -1098,6 +1098,10 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
         } else if (event === 'text' && data && typeof data === 'object') {
           const d = data as { text?: string };
           if (typeof d.text === 'string') flushProjector(projector.onText(d.text));
+        } else if (event === 'raw' && data && typeof data === 'object') {
+          // T3: unclassified content → collapsed raw block (never the answer).
+          const d = data as { text?: string; source?: string };
+          if (typeof d.text === 'string') flushProjector(projector.onRaw(d.text, d.source));
         } else if (event === 'complete') {
           flushProjector(projector.onComplete());
         }

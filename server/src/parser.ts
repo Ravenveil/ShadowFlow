@@ -586,10 +586,20 @@ export function parseAndExtract(
   // T1 stop-the-bleed guard; the structural fix is backend additive
   // normalization (audit §2.7, T3).
   if (/^[ \t]*event:[ \t]*[\w.-]+[ \t]*\r?\n[ \t]*data:[ \t]*[{[]/m.test(buffer)) {
+    // T3 (raw first-class kind): don't silently drop the leaked frames —
+    // collect them and surface as a single `raw` event so they render in a
+    // collapsed raw block (debuggable) instead of polluting the answer.
+    let leaked = '';
     buffer = buffer.replace(
       /^[ \t]*event:[ \t]*[\w.-]+[ \t]*\r?\n[ \t]*data:[ \t]*[{[][^\n]*\r?\n?/gm,
-      '',
+      (m) => {
+        leaked += m;
+        return '';
+      },
     );
+    if (leaked.trim()) {
+      events.push({ event: 'raw', data: { text: leaked.trim(), source: 'sse-frame-leak', ...nodeIdField() } });
+    }
   }
 
   // 2026-05-11 Layer 1 — Claude Code-style conversation mode.
