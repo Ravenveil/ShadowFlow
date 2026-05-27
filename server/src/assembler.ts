@@ -52,6 +52,14 @@ import { ToolRunner } from './lib/tool-runner';
 import { PermissionPolicyV2 } from './lib/permission-policy-v2';
 import { ToolRegistry } from './lib/tool-spec';
 import { ApiClientCallable } from './transport/ApiClientCallable';
+// Task 4 — deterministic recipe → daemon-led assembly (Branch 0). Structure
+// comes from the matched Skill recipe (not an LLM emit); Rules are the safety
+// floor at the assembly exit.
+import { selectRecipe } from './assembly/select';
+import { deriveRules, enforceRules } from './assembly/rules/enforce';
+import type { RosterNode } from './assembly/rules/types';
+import type { AssemblyRecipe } from './assembly/skills/types';
+import type { TeamDef } from './lib/skill-types';
 
 export type OutputType = 'answer' | 'report' | 'review' | 'workflow';
 export type SessionMode = 'single' | 'team';
@@ -537,7 +545,31 @@ export async function* runSkillAssembler(
     return;
   }
 
-  // Branch 2 — single agent. Prefer the compiled `agentConfig.system_prompt`
+  // Branch 0 — 确定性 recipe 命中：结构由 recipe(Skill)定，不靠 LLM emit。Rule 出口兜底。
+  const matchedRecipe = selectRecipe(goal);
+  if (matchedRecipe) {
+    const teamDef = recipeToTeamDef(matchedRecipe);
+    const roster: RosterNode[] = teamDef.agents.map(a => ({
+      role_id: (a as any).id, type: (a as any).type, title: (a as any).title,
+    }));
+    const rules = deriveRules(goal, matchedRecipe);
+    const { violations } = enforceRules(roster, rules);
+    if (violations.length > 0) console.warn(`[skill-assembler] recipe ${matchedRecipe.id} violations: ${violations.join('; ')}`);
+    console.log(`[skill-assembler] session=${session_id} recipe=${matchedRecipe.id} → daemon-led (${teamDef.agents.length} roles)`);
+    const teamV1 = toTeamDefV1(teamDef);
+    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal);
+    yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
+    return;
+  }
+
+  // Branch 2 — single agent fallback. Reached only when NO recipe matched
+  // (Branch 0) and the skill carries no compiled/legacy team. Structure here
+  // is NOT deterministically defined: the LLM may free-emit `<sf:node>` roster
+  // under SINGLE_AGENT_DIRECTIVE and the client-side enforces the roster cap as
+  // a stopgap. Phase C will push that roster enforcement down server-side so
+  // even the fallback path goes through the Rule exit.
+  //
+  // Prefer the compiled `agentConfig.system_prompt`
   // when available (it's the LLM-curated version of raw_skill_md + persona).
   // Falls back to the skill's static system_prompt for back-compat.
   const compiledSystem = compiled?.agentConfig?.system_prompt;
@@ -629,6 +661,59 @@ function synthAgentsFromCompiled(
     },
     source_file: '<compiled>',
   }));
+}
+
+/**
+ * recipeToTeamDef — Task 4: synthesise a `TeamDef` from a deterministic
+ * AssemblyRecipe so Branch 0 can reuse the existing daemon-led `runDag` path.
+ *
+ * The recipe only carries the *structure* (role_id / type / title + edges).
+ * `SkillAgentDef` requires persona/model/tools/anchors/source_file, so we fill
+ * those with neutral defaults — PHASE_2 (the daemon/LLM) is expected to author
+ * the real persona per node. We do NOT cast away the required fields; every
+ * mandatory `SkillAgentDef` member is populated with a real, typed default
+ * (mirroring `synthAgentsFromCompiled`).
+ *
+ * Persona default note: recipe.roles give a `title` (+ optional `hint`) but no
+ * persona body. We seed `persona` from title/hint so the node is never an empty
+ * string at runDag time. See the report's "核心假设" caveat — whether the LLM
+ * actually re-authors these is a scheduler concern, not this synthesiser's.
+ */
+function recipeToTeamDef(recipe: AssemblyRecipe): TeamDef {
+  const agents: SkillAgentDef[] = recipe.roles.map((role) => {
+    const personaSeed =
+      role.hint && role.hint.trim().length > 0
+        ? `${role.title}\n\n${role.hint}`
+        : role.title;
+    return {
+      id: role.role_id,
+      title: role.title,
+      type: role.type,
+      // Required by SkillAgentDef — seeded from recipe structure, expected to be
+      // re-authored by the daemon/LLM in PHASE_2.
+      persona: personaSeed,
+      model: { id: 'recipe-default' },
+      tools: { picked: [], candidate: [] },
+      anchors: {
+        persona: { ref: `synthetic:recipe:${recipe.id}#${role.role_id}/persona`, tokens: 0, cached: false },
+        model: { ref: `synthetic:recipe:${recipe.id}#${role.role_id}/model`, tokens: 0, cached: false },
+        tools: { ref: `synthetic:recipe:${recipe.id}#${role.role_id}/tools`, tokens: 0, cached: false },
+        memory: { ref: `synthetic:recipe:${recipe.id}#${role.role_id}/memory`, tokens: 0, cached: false },
+        io: { ref: `synthetic:recipe:${recipe.id}#${role.role_id}/io`, tokens: 0, cached: false },
+      },
+      source_file: `synthetic:recipe:${recipe.id}`,
+    };
+  });
+  return {
+    name: `recipe.${recipe.id}`,
+    mode: recipe.edges.length > 0 ? 'serial' : 'dag',
+    policy: 'strict',
+    retry: 3,
+    agents,
+    edges: recipe.edges.map((e) => ({ from: e.from, to: e.to })),
+    loaded_at: Date.now(),
+    source_dir: `synthetic:recipe:${recipe.id}`,
+  };
 }
 
 // ─── Helpers (Phase 2) ────────────────────────────────────────────────────────
