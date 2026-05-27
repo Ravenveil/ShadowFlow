@@ -215,6 +215,12 @@ export type TimelineMessage =
       verb: string;
       elapsed_s: number;
       tools_running: number;
+      /**
+       * True once the turn has reached a terminal state (onComplete). The
+       * front-end freezes the elapsed-seconds ticker when set — `elapsed_s`
+       * is the final duration, not a live baseline to drift from.
+       */
+      terminal?: boolean;
     });
 
 /**

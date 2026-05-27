@@ -288,6 +288,7 @@ export function createTimelineProjector(
     out: ProjectorEmit,
     verb: string,
     toolsRunning = 0,
+    terminal = false,
   ) {
     // Each emission gets a fresh id but the same kind. The front-end's
     // MessageRegistry filters `status_line` out of the timeline stream and
@@ -303,6 +304,7 @@ export function createTimelineProjector(
       verb,
       elapsed_s: Math.max(0, Math.round((nowMs() - turnStartMs) / 1000)),
       tools_running: toolsRunning,
+      terminal,
     });
   }
 
@@ -662,7 +664,7 @@ export function createTimelineProjector(
       if (msgFootId) {
         bumpMsgFoot(out, { status: 'done' });
       }
-      bumpStatusLine(out, 'Done', 0);
+      bumpStatusLine(out, 'Done', 0, true);
       return out;
     },
 

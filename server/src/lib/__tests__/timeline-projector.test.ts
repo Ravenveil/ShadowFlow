@@ -402,12 +402,16 @@ console.log('\n[15] status_line slot populated');
   const sl2 = r2.messages.find((m) => m.kind === 'status_line') as Extract<TimelineMessage, { kind: 'status_line' }>;
   assert('text emits status_line', !!sl2);
   check('text verb', 'Writing', sl2?.verb);
+  assert('non-terminal status_line not flagged terminal', !sl2?.terminal);
 
   const r3 = p.onComplete();
   const sl3 = r3.messages.find((m) => m.kind === 'status_line') as Extract<TimelineMessage, { kind: 'status_line' }>;
   assert('complete emits status_line', !!sl3);
   check('complete verb', 'Done', sl3?.verb);
   check('complete tools_running=0', 0, sl3?.tools_running);
+  // Regression: footer ticker must freeze on completion. The terminal flag is
+  // what tells StatusLine.tsx to stop counting ("Done for 409s" bug).
+  check('complete status_line terminal=true', true, sl3?.terminal);
 }
 
 // ── Test 16: P3 — deterministic ids across reconnect (same idSeed) ──────────

@@ -124,6 +124,11 @@ export type TimelineMessage =
       verb: string;
       elapsed_s: number;
       tools_running: number;
+      /**
+       * True once the turn is terminal (projector onComplete). When set the
+       * StatusLine ticker freezes — elapsed_s is the final duration.
+       */
+      terminal?: boolean;
     })
   | (TimelineMessageBase & {
       kind: 'section_header';

@@ -33,6 +33,10 @@ export const StatusLine = memo(function StatusLine({ msg }: Props) {
   // server reuses id across two verbs (shouldn't happen but cheap to guard).
   useEffect(() => {
     setTickElapsed(msg.elapsed_s);
+    // Terminal turn (Done): elapsed_s is the final duration. Do NOT run the
+    // ticker, otherwise the bar keeps counting wall-clock seconds forever
+    // after completion (the "Done for 409s and climbing" bug).
+    if (msg.terminal) return;
     const startWall = Date.now();
     const anchorSec = msg.elapsed_s;
     const t = setInterval(() => {
@@ -40,7 +44,7 @@ export const StatusLine = memo(function StatusLine({ msg }: Props) {
       setTickElapsed(anchorSec + driftSec);
     }, 1000);
     return () => clearInterval(t);
-  }, [msg.id, msg.verb, msg.elapsed_s]);
+  }, [msg.id, msg.verb, msg.elapsed_s, msg.terminal]);
 
   return (
     <div className={styles.statusLine}>
