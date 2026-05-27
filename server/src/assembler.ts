@@ -30,6 +30,7 @@ import { parseAndExtract, type SseEvent as ParserSseEvent } from './parser';
 // buildApiClient. The factory returns a LlmCallable, and Orchestration drives
 // it through `turn()` (non-team) or `workflow/scheduler.runDag()` (team).
 import { resolveCallable } from './transport/dispatcher';
+import type { LlmCallable } from './transport/LlmCallable';
 import { runDag } from './workflow/scheduler';
 import type { TurnChunk } from './workflow/types';
 import type { SkillAgentDef } from './lib/skill-types';
@@ -549,6 +550,10 @@ export async function* runSkillAssembler(
   const matchedRecipe = selectRecipe(goal);
   if (matchedRecipe) {
     const teamDef = recipeToTeamDef(matchedRecipe);
+    // Persona enrichment (b 机制补全): recipe 只给骨架 persona(title + hint),
+    // LLM 按 goal 把每个节点的 persona 填实,再交给 runDag。结构(节点/角色/边)
+    // 仍由 recipe 定死,这里只改 agents[i].persona 内容。失败兜底见函数内。
+    await enrichRecipePersonas(teamDef, goal, callable, effectiveSignal);
     const roster: RosterNode[] = teamDef.agents.map(a => ({
       role_id: (a as any).id, type: (a as any).type, title: (a as any).title,
     }));
@@ -714,6 +719,75 @@ function recipeToTeamDef(recipe: AssemblyRecipe): TeamDef {
     loaded_at: Date.now(),
     source_dir: `synthetic:recipe:${recipe.id}`,
   };
+}
+
+/**
+ * enrichRecipePersonas — Branch 0 预处理(b 机制补全)。
+ *
+ * `recipeToTeamDef` 只能从 recipe 的 `title` + `hint` 拼出骨架 persona,runDag
+ * 会把 `SkillAgentDef.persona` 直接当 agent 的 system prompt。后果:用户说"创建
+ * 一个开发工程师 agent",出来的 persona 仍是通用骨架,不体现 goal。
+ *
+ * 这一步对 teamDef.agents 里每个角色用 `callable.turn` 发一次性请求,让 LLM 按
+ * goal + 角色 title 写一段实 persona,回填到 `agent.persona`。结构(节点数/角色/
+ * 边)完全不动——只填内容。
+ *
+ * 兜底契约:任一节点 enrichment 抛错(call-phase `LlmCallError`)、yield `error`
+ * chunk、超时、或收集到空文本 → 保留该节点原骨架 persona,console.warn,继续下一个。
+ * 整个装配绝不因 enrichment 失败而崩。
+ */
+async function enrichRecipePersonas(
+  teamDef: TeamDef,
+  goal: string,
+  callable: LlmCallable,
+  signal: AbortSignal,
+): Promise<void> {
+  for (const agent of teamDef.agents) {
+    const title = (agent as { title?: string }).title ?? agent.id;
+    const prompt =
+      `用户目标:"${goal}"。请为团队中"${title}"这个角色写一段中文 persona(80-200 字),` +
+      `说明:它是干什么的、输入什么、输出什么、1-2 条约束。直接输出 persona 正文,不要别的。`;
+    try {
+      // call-phase 错误(auth missing / executor not found 等)会在第一个 chunk
+      // 之前 throw —— 被外层 catch 接住,保留骨架 persona。
+      const stream = callable.turn({
+        system: '你是一个团队角色设定撰写助手,只输出 persona 正文。',
+        prompt,
+        history: [],
+        signal,
+      });
+      // 文本收集范式同 pipeChunksToSse:只累加 `text-delta` 的 value;遇到 `error`
+      // chunk(stream-mid 错误)就放弃这个节点。non-stream 后端(A1)会用单个
+      // text-delta 装全文,这里照样能收。
+      let collected = '';
+      let streamErrored = false;
+      for await (const chunk of stream) {
+        if (chunk.type === 'text-delta') {
+          collected += chunk.value;
+        } else if (chunk.type === 'error') {
+          streamErrored = true;
+          console.warn(
+            `[skill-assembler] persona enrichment for "${title}" stream error: ${chunk.error.message} — keeping skeleton persona`,
+          );
+          break;
+        }
+        // thinking-delta / tool-use / usage / done 对 persona 文本无贡献,忽略。
+      }
+      const enriched = collected.trim();
+      if (!streamErrored && enriched.length > 0) {
+        agent.persona = enriched;
+      } else if (!streamErrored) {
+        console.warn(
+          `[skill-assembler] persona enrichment for "${title}" returned empty — keeping skeleton persona`,
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `[skill-assembler] persona enrichment for "${title}" threw — keeping skeleton persona:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
 }
 
 // ─── Helpers (Phase 2) ────────────────────────────────────────────────────────
