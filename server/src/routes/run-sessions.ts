@@ -1102,6 +1102,13 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           // T3: unclassified content → collapsed raw block (never the answer).
           const d = data as { text?: string; source?: string };
           if (typeof d.text === 'string') flushProjector(projector.onRaw(d.text, d.source));
+        } else if (event === 'unknown-tag' && data && typeof data === 'object') {
+          // T3: unrecognized <sf:foo>…</sf:foo> block content was previously
+          // dropped. Surface its body as a raw block so nothing vanishes silently.
+          const d = data as { name?: string; body?: string };
+          if (typeof d.body === 'string' && d.body.trim()) {
+            flushProjector(projector.onRaw(d.body, `unknown-tag:${d.name ?? '?'}`));
+          }
         } else if (event === 'complete') {
           flushProjector(projector.onComplete());
         }
