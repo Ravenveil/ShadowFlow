@@ -799,6 +799,13 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     runBus.emit(id, event, payload);
   };
 
+  // Confirm connection (comment frame, ignored by EventSource). MUST be sent
+  // BEFORE attach(): a reconnect to an already-terminal run makes attach()
+  // replay the buffer then synchronously call sink.end() (res.end()). Any write
+  // after that throws ERR_STREAM_WRITE_AFTER_END and crashes the process — so
+  // the connected frame goes out first, while the response is still open.
+  if (!res.writableEnded) res.write(': connected\n\n');
+
   // Resume cursor: ?after=N (our fetch client) or Last-Event-ID header (native
   // EventSource reconnect). attach() replays the buffered events with id > after,
   // then registers this sink for live events (or ends immediately if terminal).
@@ -814,9 +821,6 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     clearInterval(heartbeatTimer);
     detach();
   });
-
-  // Confirm connection (comment frame, ignored by EventSource).
-  res.write(': connected\n\n');
 
   console.log(
     `[run-sessions] SSE view attached for session ${id} (after=${after}) skill=${session.skill_name}`,
