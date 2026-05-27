@@ -3789,6 +3789,12 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   // an async run is mid-flight.
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'ok' | 'failed'>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Visible verdict for the deterministic roster Rule. console.warn alone is
+  // invisible to the user — when the assembler streams in N agents but the
+  // roster Rule truncates to fewer, the user must see *why* the final team is
+  // smaller than what flowed across the canvas (Script/Validation = visible,
+  // non-negotiable verdict, not a hidden self-report).
+  const [rosterNotice, setRosterNotice] = useState<string | null>(null);
   const inFlightRef = useRef(false);
   // Read currentWorkspaceId so persisted agents/teams/groups belong to the
   // user's currently selected workspace — otherwise they'd land in the
@@ -3824,11 +3830,23 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
     const rosterRule = deriveRosterRule(goal);
     const { kept: agentNodes, dropped: droppedAgents } = enforceRoster(rawAgentNodes, rosterRule);
     if (droppedAgents.length > 0) {
+      const droppedNames = droppedAgents.map((n) => n.title).join(', ');
       console.warn(
         `[RunSession] roster Rule（${rosterRule?.reason}）命中："${rosterRule?.matched}" → ` +
         `保留 ${agentNodes.length} 个 agent，确定性丢弃 ${droppedAgents.length} 个（` +
-        droppedAgents.map((n) => n.title).join(', ') + `）`,
+        droppedNames + `）`,
       );
+      // Surface the verdict to the user (not just the console).
+      setRosterNotice(
+        t('runSession.rosterTruncated', {
+          reason: rosterRule?.reason ?? '',
+          kept: agentNodes.length,
+          dropped: droppedAgents.length,
+          names: droppedNames,
+        }),
+      );
+    } else {
+      setRosterNotice(null);
     }
 
     // 截断后的权威节点/边集——workflow DAG 必须与 team 成员一致，
@@ -4139,6 +4157,30 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
       <div style={{ padding: '8px 16px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
         <PythonBackendBanner />
         {autoSaveChip && <div>{autoSaveChip}</div>}
+        {rosterNotice && (
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid="run-session-roster-notice"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 6,
+              fontSize: 11.5,
+              fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+              letterSpacing: '0.02em',
+              background: 'rgba(234, 179, 8, 0.10)',
+              border: '1px solid rgba(234, 179, 8, 0.35)',
+              color: '#eab308',
+              alignSelf: 'flex-start',
+            }}
+          >
+            <AlertTriangle size={12} strokeWidth={2.2} />
+            <span>{rosterNotice}</span>
+          </div>
+        )}
       </div>
       {savedTeamId && (
         <div

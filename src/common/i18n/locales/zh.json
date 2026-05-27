@@ -581,6 +581,7 @@
   "runSession.teamSaved": "Team 已保存",
   "runSession.persistFailed": "持久化失败",
   "runSession.resave": "重新保存",
+  "runSession.rosterTruncated": "按「{{reason}}」规则确定性裁剪：保留 {{kept}} 个 agent，丢弃 {{dropped}} 个（{{names}}）",
   "runSession.viewTeam": "查看 Team →",
   "runSession.gotoChat": "Chat →",
   "runSession.gotoAgents": "Agents →"
