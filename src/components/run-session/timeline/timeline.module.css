@@ -307,6 +307,43 @@
 .echoFile { color: var(--fg-1); font-weight: 600; }
 .echoNum  { color: var(--fg-2); font-weight: 600; font-family: var(--font-mono); }
 
+/* ── tool-group container ──────────────────────────────────────
+ * Wraps a run of consecutive tool_call + tool_echo rows in one bordered
+ * card (chip on top, echo continuation nested below), à la Claude Code /
+ * OpenDesign. Keeps the flat .tool / .echo aesthetic inside; the frame
+ * just supplies the visual boundary. */
+.toolGroup {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-elev-1);
+  overflow: hidden;
+}
+.toolGroupHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  user-select: none;
+}
+.toolGroupIcon { color: var(--fg-4); flex: none; }
+.toolGroupLabel { color: var(--fg-3); font-weight: 600; }
+.toolGroupCount { color: var(--accent-bright); font-weight: 600; }
+/* Inside the frame, neutralise the per-row vertical padding the .echo line
+ * normally relies on against a flat stream, and tighten the chip spacing. */
+.toolGroupBody {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 /* ── step panel ────────────────────────────────────────────── */
 .panel {
   background: var(--bg-elev-1);

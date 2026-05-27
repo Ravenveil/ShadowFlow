@@ -20,8 +20,58 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { TimelineMessage } from './types';
 import { MessageRegistry } from './MessageRegistry';
 import { StatusLine } from './messages/StatusLine';
+import { ToolGroup } from './messages/ToolGroup';
 import { TopStatusBar } from './TopStatusBar';
 import styles from './timeline.module.css';
+
+/**
+ * A single rendered row in the stream: either one standalone message, or a
+ * run of consecutive tool_call/tool_echo messages collapsed into one group.
+ * Grouping happens at the render layer only — message data is untouched.
+ */
+type RenderRow =
+  | { type: 'single'; msg: TimelineMessage }
+  | { type: 'tool-group'; key: string; msgs: TimelineMessage[]; callCount: number };
+
+const isToolKind = (k: TimelineMessage['kind']): boolean =>
+  k === 'tool_call' || k === 'tool_echo';
+
+/**
+ * Walk the stream and merge each maximal run of adjacent tool_call/tool_echo
+ * messages into one `tool-group` row. Everything else passes through as a
+ * `single` row. Mirrors OpenDesign's buildBlocks tool-group collapsing, but
+ * over our already-projected TimelineMessage stream (no AgentEvent replay).
+ */
+function buildRenderRows(messages: TimelineMessage[]): RenderRow[] {
+  const rows: RenderRow[] = [];
+  let i = 0;
+  while (i < messages.length) {
+    const m = messages[i]!;
+    if (!isToolKind(m.kind)) {
+      rows.push({ type: 'single', msg: m });
+      i += 1;
+      continue;
+    }
+    // Greedily consume the contiguous tool run.
+    const run: TimelineMessage[] = [];
+    let j = i;
+    while (j < messages.length && isToolKind(messages[j]!.kind)) {
+      run.push(messages[j]!);
+      j += 1;
+    }
+    const callCount = run.filter((r) => r.kind === 'tool_call').length;
+    // A lone tool_echo with no preceding chip in the run is unusual but
+    // harmless — still render it inside the group frame for consistency.
+    rows.push({
+      type: 'tool-group',
+      key: `tg-${run[0]!.id}`,
+      msgs: run,
+      callCount,
+    });
+    i = j;
+  }
+  return rows;
+}
 
 export interface TimelineProps {
   messages: TimelineMessage[];
@@ -146,15 +196,34 @@ export const Timeline = memo(function Timeline({
         />
       )}
       <div className={containerClass} ref={containerRef}>
-        {streamMessages.map((m) => (
-          <div key={m.id} className={styles.item} data-kind={m.kind}>
-            <MessageRegistry
-              msg={m}
-              onUserRetry={onUserRetry}
-              resending={resending}
-            />
-          </div>
-        ))}
+        {buildRenderRows(streamMessages).map((row) =>
+          row.type === 'single' ? (
+            <div
+              key={row.msg.id}
+              className={styles.item}
+              data-kind={row.msg.kind}
+            >
+              <MessageRegistry
+                msg={row.msg}
+                onUserRetry={onUserRetry}
+                resending={resending}
+              />
+            </div>
+          ) : (
+            <div key={row.key} className={styles.item} data-kind="tool-group">
+              <ToolGroup callCount={row.callCount}>
+                {row.msgs.map((m) => (
+                  <MessageRegistry
+                    key={m.id}
+                    msg={m}
+                    onUserRetry={onUserRetry}
+                    resending={resending}
+                  />
+                ))}
+              </ToolGroup>
+            </div>
+          ),
+        )}
       </div>
       {renderStatusLine && statusLineMsg && <StatusLine msg={statusLineMsg} />}
     </>
