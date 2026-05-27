@@ -24,6 +24,15 @@ interface Props {
 
 const STORAGE_PREFIX = 'sf:think:tl:';
 
+/** "Thought for 8s" / "1m 4s" — compact like cursor/chatgpt. */
+function formatThinkDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const total = Math.round(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
 function readPersistedOpen(id: string, fallback: boolean): boolean {
   try {
     const v = window.localStorage.getItem(STORAGE_PREFIX + id);
@@ -57,6 +66,19 @@ export const ThinkingMessage = memo(function ThinkingMessage({
   const formattedTokens =
     typeof msg.tokens === 'number' ? msg.tokens.toLocaleString() : null;
 
+  // T3 UX (align claude code / cursor): a finished thinking block with NO body
+  // is pure noise — don't render it. While streaming we still show the live
+  // "Thinking…" head even before the first chunk lands.
+  if (!isStreaming && !hasBody) return null;
+
+  // Head label: live "Thinking" while streaming, "Thought for Xs" once done
+  // (the reasoning collapses into a quiet, expandable summary).
+  const headLabel = isStreaming
+    ? msg.label || 'Thinking'
+    : typeof msg.duration_ms === 'number' && msg.duration_ms > 0
+      ? `Thought for ${formatThinkDuration(msg.duration_ms)}`
+      : 'Thought';
+
   return (
     <div className={styles.thinking}>
       <button
@@ -70,7 +92,7 @@ export const ThinkingMessage = memo(function ThinkingMessage({
         ) : (
           <Cloud className={styles.thinkingGlyph} aria-hidden />
         )}
-        <span className={styles.thinkingLab}>{msg.label}</span>
+        <span className={styles.thinkingLab}>{headLabel}</span>
         {formattedTokens !== null && (
           <>
             <span className={styles.thinkingSep}>·</span>

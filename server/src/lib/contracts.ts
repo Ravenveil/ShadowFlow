@@ -157,6 +157,8 @@ export type TimelineMessage =
       preview?: string;
       body?: string;
       status: 'streaming' | 'done';
+      /** Thinking duration ms, set on finalize. Front-end shows "Thought for Xs". */
+      duration_ms?: number;
     })
   | (TimelineMessageBase & {
       kind: 'assistant_meta';
@@ -240,7 +242,7 @@ export type MessagePatch =
       patch: Partial<StepRow>;
     }
   | { id: string; op: 'thinking_append_body'; chunk: string }
-  | { id: string; op: 'thinking_finalize'; tokens?: number }
+  | { id: string; op: 'thinking_finalize'; tokens?: number; duration_ms?: number }
   // 2026-05-24 P0-1 — append a streamed chunk to an open assistant_text
   // message. The projector batches token-level deltas onto a single
   // assistant_text message until something orthogonal (tool call, thinking,

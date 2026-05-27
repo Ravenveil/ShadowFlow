@@ -169,6 +169,7 @@ export function createTimelineProjector(
 
   let openThinkingId: string | null = null;
   let thinkingBuf = '';
+  let thinkingStartMs = 0;
 
   // 2026-05-24 P0-1 — currently-accumulating assistant_text message id.
   // Set on the first onText() of a contiguous text run; cleared by any
@@ -250,9 +251,11 @@ export function createTimelineProjector(
       id: openThinkingId,
       op: 'thinking_finalize',
       tokens: Math.max(1, Math.round(thinkingBuf.length / 4)),
+      duration_ms: thinkingStartMs > 0 ? nowMs() - thinkingStartMs : undefined,
     });
     openThinkingId = null;
     thinkingBuf = '';
+    thinkingStartMs = 0;
   }
 
   /**
@@ -489,6 +492,7 @@ export function createTimelineProjector(
       if (!openThinkingId) {
         openThinkingId = newId('msg');
         thinkingBuf = '';
+        thinkingStartMs = nowMs();
         out.messages.push({
           id: openThinkingId,
           kind: 'thinking',

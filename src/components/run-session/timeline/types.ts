@@ -70,6 +70,8 @@ export type TimelineMessage =
       preview?: string;
       body?: string;
       status: 'streaming' | 'done';
+      /** Thinking duration ms, set on finalize. Renders as "Thought for Xs". */
+      duration_ms?: number;
     })
   | (TimelineMessageBase & {
       kind: 'assistant_meta';
@@ -153,7 +155,7 @@ export type MessagePatch =
       patch: Partial<StepRow>;
     }
   | { id: string; op: 'thinking_append_body'; chunk: string }
-  | { id: string; op: 'thinking_finalize'; tokens?: number }
+  | { id: string; op: 'thinking_finalize'; tokens?: number; duration_ms?: number }
   | { id: string; op: 'diff_append_line'; line: DiffLine }
   | {
       id: string;
@@ -228,6 +230,7 @@ export function applyPatch(
         ...msg,
         status: 'done',
         tokens: patch.tokens ?? msg.tokens,
+        duration_ms: patch.duration_ms ?? msg.duration_ms,
       };
     }
     case 'diff_append_line': {

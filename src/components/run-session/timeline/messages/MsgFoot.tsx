@@ -22,18 +22,15 @@ function formatElapsed(ms?: number): string {
 }
 
 export const MsgFoot = memo(function MsgFoot({ msg }: Props) {
-  const isRunning = msg.status === 'running';
+  // T3 UX (align claude code / cursor / OpenDesign): during a run the SINGLE
+  // live activity indicator is the pinned bottom status_line. The foot is no
+  // longer a second live "Running …" row — it renders only once the turn is
+  // done, as a quiet end-of-turn summary (Done · 5s · 1 tool · 1.2k t).
+  if (msg.status === 'running') return null;
   return (
     <div className={styles.foot}>
-      <span
-        className={
-          isRunning
-            ? `${styles.footStatus} ${styles.footStatusRun}`
-            : styles.footStatus
-        }
-        aria-hidden
-      />
-      <span className={styles.footLab}>{isRunning ? 'Running' : 'Done'}</span>
+      <span className={styles.footStatus} aria-hidden />
+      <span className={styles.footLab}>Done</span>
       {typeof msg.elapsed_ms === 'number' && (
         <>
           <span className={styles.footSep}>·</span>
