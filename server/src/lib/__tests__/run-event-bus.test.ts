@@ -11,6 +11,7 @@
  *   - claimStart returns true exactly once (single-start guard kills re-run)
  *   - finish ends clients; cancel aborts the signal
  *   - detach stops live delivery
+ *   - wait() resolves on terminal (finish/cancel/reset); immediate when already terminal
  */
 
 import { createRunBus, type RunEventRecord, type RunEventSink } from '../run-event-bus';
@@ -270,6 +271,64 @@ async function asyncTests(): Promise<void> {
     const bus = createRunBus();
     await bus.shutdownActive({ graceMs: 0 });
     ok('resolved with empty bus', true);
+  }
+
+  // ── 17: wait() resolves on finish with the terminal status ─────────────────
+  {
+    console.log('\n[17] wait() resolves when run finishes');
+    const bus = createRunBus();
+    bus.ensure('w1');
+    const p = bus.wait('w1');
+    let settled = false;
+    void p.then(() => { settled = true; });
+    // Not yet — run still running.
+    await Promise.resolve();
+    ok('wait pending while running', !settled);
+    bus.finish('w1', 'succeeded');
+    check('wait resolves with finish status', 'succeeded', await p);
+  }
+
+  // ── 18: wait() resolves on cancel as canceled ──────────────────────────────
+  {
+    console.log('\n[18] wait() resolves canceled when run is canceled');
+    const bus = createRunBus();
+    bus.ensure('w2');
+    const p = bus.wait('w2');
+    bus.cancel('w2');
+    check('wait resolves canceled', 'canceled', await p);
+  }
+
+  // ── 19: wait() on an already-terminal run resolves immediately ─────────────
+  {
+    console.log('\n[19] wait() on already-terminal run resolves immediately');
+    const bus = createRunBus();
+    bus.ensure('w3');
+    bus.finish('w3', 'failed');
+    check('immediate terminal status', 'failed', await bus.wait('w3'));
+    // Absent run: safe immediate 'canceled', never hangs.
+    check('wait on unknown run resolves canceled', 'canceled', await bus.wait('nope'));
+  }
+
+  // ── 20: multiple waiters all resolve on the same terminal transition ───────
+  {
+    console.log('\n[20] every waiter resolves on a single finish');
+    const bus = createRunBus();
+    bus.ensure('w4');
+    const ps = [bus.wait('w4'), bus.wait('w4'), bus.wait('w4')];
+    bus.finish('w4', 'succeeded');
+    const results = await Promise.all(ps);
+    check('all three waiters resolved succeeded', ['succeeded', 'succeeded', 'succeeded'], results);
+  }
+
+  // ── 21: reset() resolves pending waiters (no permanent hang) ───────────────
+  {
+    console.log('\n[21] reset() resolves pending waiters instead of hanging');
+    const bus = createRunBus();
+    bus.claimStart('w5');
+    const p = bus.wait('w5');
+    bus.reset('w5');
+    check('non-terminal reset resolves canceled', 'canceled', await p);
+    ok('run removed after reset', !bus.get('w5'));
   }
 }
 

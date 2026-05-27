@@ -56,6 +56,13 @@ export interface Run {
   /** True once a pipeline has been claimed to start (single-start guard). */
   started: boolean;
   /**
+   * Pending `wait()` resolvers. Each is called with the run's terminal status
+   * exactly once when the run reaches a terminal state (finish / cancel /
+   * shutdownActive) or is dropped (reset), then the set is cleared so no
+   * waiter ever hangs forever. Mirrors OpenDesign `runs.ts` `run.waiters`.
+   */
+  waiters: Set<(status: RunStatus) => void>;
+  /**
    * Exit code of the underlying CLI child process, once known (A10). `null`
    * means "not exited via code" (still running, killed by signal, or never
    * spawned a child). Lets callers distinguish a crash (non-zero) from a clean
@@ -102,6 +109,14 @@ export interface RunBus {
   attach(id: string, after: number, sink: RunEventSink): () => void;
   /** Mark terminal, flush `end` to clients, schedule cleanup. Idempotent. */
   finish(id: string, status: Exclude<RunStatus, 'running'>): void;
+  /**
+   * Resolve when the run reaches a terminal status (OpenDesign `runs.ts:198`).
+   * If the run is absent (never created / already cleaned up) or already
+   * terminal, resolves immediately with the current/terminal status; otherwise
+   * registers a waiter that fires on the next finish/cancel/reset transition.
+   * Never rejects, never hangs past a terminal/reset transition.
+   */
+  wait(id: string): Promise<RunStatus>;
   /** Request cancellation: abort execution; finish as `canceled`. */
   cancel(id: string): void;
   /**
@@ -155,6 +170,7 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
       clients: new Set(),
       abort: new AbortController(),
       started: false,
+      waiters: new Set(),
       exitCode: null,
       signal: null,
       createdAt: ts,
@@ -247,6 +263,9 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
       }
     }
     run.clients.clear();
+    // Resolve everyone awaiting this run's terminal status (single fire each).
+    for (const waiter of run.waiters) waiter(status);
+    run.waiters.clear();
     scheduleCleanup(run);
   };
 
@@ -289,6 +308,17 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     });
   };
 
+  const wait = (id: string): Promise<RunStatus> => {
+    const run = runs.get(id);
+    // Absent (never created / already cleaned up): nothing to await. 'canceled'
+    // is the safe terminal answer for "no such live run".
+    if (!run) return Promise.resolve('canceled');
+    if (TERMINAL.has(run.status)) return Promise.resolve(run.status);
+    return new Promise<RunStatus>((resolve) => {
+      run.waiters.add(resolve);
+    });
+  };
+
   const reset = (id: string): void => {
     const run = runs.get(id);
     if (!run) return;
@@ -301,6 +331,14 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
       }
     }
     run.clients.clear();
+    // Don't strand wait() callers when the run is dropped mid-flight. If it was
+    // already terminal, resolve with that status; otherwise treat the drop as a
+    // cancellation so awaiters unblock instead of hanging forever.
+    const resolvedStatus: RunStatus = TERMINAL.has(run.status)
+      ? run.status
+      : 'canceled';
+    for (const waiter of run.waiters) waiter(resolvedStatus);
+    run.waiters.clear();
     runs.delete(id);
   };
 
@@ -311,6 +349,7 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     emit,
     attach,
     finish,
+    wait,
     cancel,
     setExit,
     shutdownActive,
