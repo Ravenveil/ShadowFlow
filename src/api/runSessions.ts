@@ -414,8 +414,16 @@ export function subscribeRunSession(
   // 'complete' 事件也算 terminal — 服务端正常收尾后 EventSource 也会触发 onerror。
   const maxRetries = options?.maxRetries ?? 5;
   const baseDelay = options?.baseDelay ?? 1000;
+  // 2026-05-27 — 增量续传 cursor。后端每个 SSE 帧带 `id:`（单调编号），且
+  // `GET /stream?after=N` / `Last-Event-ID` 会重放 id>N 的事件。我们手动重连
+  // 时新建的 EventSource 不会自动携带上一个连接的 Last-Event-ID（原生 EventSource
+  // 只在内部自动重连时才带），所以这里手动追踪已见的最大 cursor，并在 connect()
+  // 拼到 `?after=`，对照 OpenDesign daemon.ts 的增量续传策略。首连为空 → 全量。
+  let lastEventId = '';
 
   const parse = (e: MessageEvent) => {
+    // 每个命名事件回调都先走这里 → 统一捕获 lastEventId（非空才更新）。
+    if (e.lastEventId) lastEventId = e.lastEventId;
     try { return JSON.parse(e.data); } catch { return null; }
   };
 
@@ -427,13 +435,20 @@ export function subscribeRunSession(
     //   • URL query:    /run-session/<id>?fallback=synthetic
     //   • localStorage: sf.syntheticFallback=1
     let streamUrl = `${getApiBase()}/api/run-sessions/${sessionId}/stream`;
+    const qs = new URLSearchParams();
     try {
       const fromUrl = new URLSearchParams(window.location.search).get('fallback');
       const fromLs = localStorage.getItem('sf.syntheticFallback');
       if (fromUrl === 'synthetic' || fromLs === '1') {
-        streamUrl += '?fallback=synthetic';
+        qs.set('fallback', 'synthetic');
       }
     } catch { /* ssr / sandbox — ignore */ }
+    // 2026-05-27 — 增量续传：重连时带上已见的最大 cursor，后端只重放 id>after。
+    // 首连 lastEventId 为空 → 不带 after（全量）。与 fallback=synthetic 经
+    // URLSearchParams 自然共存（? / & 由 toString() 处理）。
+    if (lastEventId) qs.set('after', lastEventId);
+    const query = qs.toString();
+    if (query) streamUrl += `?${query}`;
     es = new EventSource(streamUrl);
 
     es.addEventListener('classify',  (e) => { const d = parse(e as MessageEvent); if (d) handlers.onClassify?.(d); });
