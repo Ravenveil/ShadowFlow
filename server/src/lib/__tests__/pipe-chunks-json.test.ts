@@ -9,7 +9,7 @@
  * back to a `raw` block when the blob doesn't parse or is interrupted.
  */
 
-import { pipeChunksToSse } from '../../assembler';
+import { pipeChunksToSse, firstJsonValueEnd } from '../../assembler';
 import type { TurnChunk } from '../../workflow/types';
 
 let pass = 0;
@@ -83,6 +83,48 @@ async function main() {
     ]);
     ok('held text released as raw', ev.some((e) => e.event === 'raw'));
     ok('the node tag still surfaces as node event', ev.some((e) => e.event === 'node'));
+  }
+
+  // 5: JSON object + trailing prose → blueprint card AND trailing text.
+  //    Boundary fix (spec §2.2): prose must NOT be swallowed into raw.
+  {
+    console.log('\n[5] JSON + trailing prose → card + text (prose not lost to raw)');
+    const ev = await collect([
+      { type: 'text-delta', value: '{"name":"x"}' },
+      { type: 'text-delta', value: '\n\n后续说明文字' },
+      { type: 'done' },
+    ]);
+    ok('emits a blueprint event', ev.some((e) => e.event === 'blueprint'));
+    ok('emits yaml-line events', ev.some((e) => e.event === 'yaml-line'));
+    ok('trailing prose surfaces as text', textOf(ev).includes('后续说明文字'));
+    ok('no raw fallback for this case', !ev.some((e) => e.event === 'raw'));
+    ok('no JSON leaked into text', !textOf(ev).includes('"name"'));
+  }
+
+  // 6: JSON with string-embedded braces + trailing prose → boundary respected.
+  {
+    console.log('\n[6] JSON whose string contains braces + trailing prose');
+    const ev = await collect([
+      { type: 'text-delta', value: '{"tpl":"用 {x} 占位","ok":true}' },
+      { type: 'text-delta', value: ' 我建议你接下来检查配置' },
+      { type: 'done' },
+    ]);
+    ok('emits blueprint despite braces in string', ev.some((e) => e.event === 'blueprint'));
+    ok('trailing prose surfaces as text', textOf(ev).includes('我建议你接下来检查配置'));
+    ok('no raw fallback', !ev.some((e) => e.event === 'raw'));
+  }
+
+  // 7: firstJsonValueEnd unit checks — balance scanning with strings/escapes.
+  {
+    console.log('\n[7] firstJsonValueEnd unit');
+    ok('plain object end', firstJsonValueEnd('{"a":1} tail') === 7);
+    ok('array end', firstJsonValueEnd('[1,2,3] more') === 7);
+    ok('nested object end', firstJsonValueEnd('{"a":{"b":[1]}}X') === 15);
+    ok('braces inside string ignored', firstJsonValueEnd('{"s":"}}}"}rest') === 11);
+    ok('escaped quote inside string', firstJsonValueEnd('{"s":"a\\"}b"}z') === 13);
+    ok('leading whitespace skipped', firstJsonValueEnd('  {"a":1}') === 9);
+    ok('unbalanced returns -1', firstJsonValueEnd('{"a":1') === -1);
+    ok('non-json start returns -1', firstJsonValueEnd('hello {a}') === -1);
   }
 
   console.log(`\n${pass} pass, ${fail} fail`);

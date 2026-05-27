@@ -651,6 +651,57 @@ function synthAgentsFromCompiled(
  *   - tool-use → dropped (O1 path: LLM does not host tool_use; daemon-led
  *                DAG already emits structured SSE frames via parser tags)
  */
+/**
+ * firstJsonValueEnd — given text that STARTS with `{` or `[` (after any
+ * leading whitespace), return the exclusive end index of the first complete,
+ * brace-balanced JSON value. Returns -1 if no balanced value is found (e.g.
+ * truncated / never-closing).
+ *
+ * Hand-rolled brace-balance scanner (no third-party libs). It tracks string
+ * literals so that `{`/`}`/`[`/`]` inside a JSON string — and escaped quotes
+ * like `\"` — are NOT counted as structural brackets.
+ */
+export function firstJsonValueEnd(text: string): number {
+  let i = 0;
+  // Skip leading whitespace.
+  while (i < text.length && /\s/.test(text[i])) i++;
+  const open = text[i];
+  if (open !== '{' && open !== '[') return -1;
+  const close = open === '{' ? '}' : ']';
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === open) {
+      depth++;
+    } else if (ch === close) {
+      depth--;
+      if (depth === 0) {
+        // Exclusive end index just past the matching close bracket.
+        return i + 1;
+      }
+    }
+  }
+  return -1; // never balanced
+}
+
 export async function* pipeChunksToSse(
   chunks: AsyncGenerator<TurnChunk> | AsyncIterable<TurnChunk>,
   session_id: string,
@@ -667,28 +718,64 @@ export async function* pipeChunksToSse(
   let jsonHold: string | null = null;
   let answerStarted = false;
 
-  /** Turn the held JSON into structured events, or fall back to a raw block. */
+  /** Build the structured blueprint + yaml-line frames for a parsed JSON value. */
+  const blueprintFramesFor = (parsed: unknown): ParserSseEvent[] => {
+    const pretty = JSON.stringify(parsed, null, 2);
+    const lines = pretty.split('\n');
+    const filename = Array.isArray(parsed) ? 'output.json' : 'agent-blueprint.json';
+    const evs: ParserSseEvent[] = [
+      { event: 'blueprint', data: { filename, yaml: pretty } },
+    ];
+    for (const line of lines) {
+      evs.push({ event: 'yaml-line', data: { line, total_lines: lines.length } });
+    }
+    return evs;
+  };
+
+  /**
+   * Turn the held JSON into structured events, or fall back to a raw block.
+   *
+   * Boundary fix (spec §2.2): when the held text is NOT one whole JSON value
+   * (e.g. `{...}\n\n后续散文`), we slice off the leading complete JSON value via
+   * brace-balance scanning. If that prefix parses, the JSON renders as a card
+   * and the trailing prose surfaces as a normal `text` event instead of being
+   * swallowed into the raw fallback.
+   */
   const releaseJson = (forceRaw: boolean): ParserSseEvent[] => {
     const raw = jsonHold;
     jsonHold = null;
     if (!raw || !raw.trim()) return [];
     if (!forceRaw) {
+      const trimmed = raw.trim();
+      // 1) Fast path — the whole held buffer is a single JSON value.
       try {
-        const parsed = JSON.parse(raw.trim());
+        const parsed = JSON.parse(trimmed);
         if (parsed && typeof parsed === 'object') {
-          const pretty = JSON.stringify(parsed, null, 2);
-          const lines = pretty.split('\n');
-          const filename = Array.isArray(parsed) ? 'output.json' : 'agent-blueprint.json';
-          const evs: ParserSseEvent[] = [
-            { event: 'blueprint', data: { filename, yaml: pretty } },
-          ];
-          for (const line of lines) {
-            evs.push({ event: 'yaml-line', data: { line, total_lines: lines.length } });
-          }
-          return evs;
+          return blueprintFramesFor(parsed);
         }
       } catch {
-        /* not valid JSON after all → raw fallback below */
+        /* fall through to prefix-extraction below */
+      }
+      // 2) Boundary path — only the leading `{...}` / `[...]` is JSON; the
+      //    rest is trailing prose. Find where the first complete JSON value
+      //    ends, parse the prefix, emit the remainder as text.
+      const end = firstJsonValueEnd(trimmed);
+      if (end > 0) {
+        const prefix = trimmed.slice(0, end);
+        const rest = trimmed.slice(end);
+        try {
+          const parsed = JSON.parse(prefix);
+          if (parsed && typeof parsed === 'object') {
+            const evs = blueprintFramesFor(parsed);
+            const restText = rest.trim();
+            if (restText.length > 0) {
+              evs.push({ event: 'text', data: { text: restText } });
+            }
+            return evs;
+          }
+        } catch {
+          /* prefix didn't parse either → raw fallback below */
+        }
       }
     }
     return [{ event: 'raw', data: { text: raw.trim(), source: 'json-blob' } }];
