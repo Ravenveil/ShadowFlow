@@ -651,12 +651,76 @@ function synthAgentsFromCompiled(
  *   - tool-use → dropped (O1 path: LLM does not host tool_use; daemon-led
  *                DAG already emits structured SSE frames via parser tags)
  */
-async function* pipeChunksToSse(
+export async function* pipeChunksToSse(
   chunks: AsyncGenerator<TurnChunk> | AsyncIterable<TurnChunk>,
   session_id: string,
   artifactCallback: (filename: string, content: string, type: string) => void,
 ): AsyncGenerator<ParserSseEvent> {
   let textBuf = '';
+
+  // P2 / T2 (audit §2.5 A2): hold back a bare-JSON answer so it renders as a
+  // structured diff_panel card instead of leaking raw JSON (literal \n / "}).
+  // Engages only when the turn's FIRST answer content is text whose first
+  // non-whitespace char is `{`/`[` (normal prose never starts that way). On a
+  // real structured event arriving mid-hold (mixed output) we release the held
+  // text as a `raw` block rather than risk corrupting the answer.
+  let jsonHold: string | null = null;
+  let answerStarted = false;
+
+  /** Turn the held JSON into structured events, or fall back to a raw block. */
+  const releaseJson = (forceRaw: boolean): ParserSseEvent[] => {
+    const raw = jsonHold;
+    jsonHold = null;
+    if (!raw || !raw.trim()) return [];
+    if (!forceRaw) {
+      try {
+        const parsed = JSON.parse(raw.trim());
+        if (parsed && typeof parsed === 'object') {
+          const pretty = JSON.stringify(parsed, null, 2);
+          const lines = pretty.split('\n');
+          const filename = Array.isArray(parsed) ? 'output.json' : 'agent-blueprint.json';
+          const evs: ParserSseEvent[] = [
+            { event: 'blueprint', data: { filename, yaml: pretty } },
+          ];
+          for (const line of lines) {
+            evs.push({ event: 'yaml-line', data: { line, total_lines: lines.length } });
+          }
+          return evs;
+        }
+      } catch {
+        /* not valid JSON after all → raw fallback below */
+      }
+    }
+    return [{ event: 'raw', data: { text: raw.trim(), source: 'json-blob' } }];
+  };
+
+  /** Route one parser event through the JSON-hold state machine. */
+  const consume = (e: ParserSseEvent, nodeId?: string): ParserSseEvent[] => {
+    if (e.event === 'text') {
+      const text = String((e.data as { text?: string })?.text ?? '');
+      if (jsonHold !== null) {
+        jsonHold += text;
+        return [];
+      }
+      if (!answerStarted && /^\s*[[{]/.test(text)) {
+        jsonHold = text; // start holding a candidate JSON answer
+        return [];
+      }
+      answerStarted = true;
+      return [
+        nodeId
+          ? { event: 'text', data: { ...(e.data as object), node_id: nodeId } }
+          : e,
+      ];
+    }
+    // A real structured event. If we were mid-hold, the answer wasn't pure
+    // JSON → release the held text as raw, then emit this event.
+    answerStarted = true;
+    const out: ParserSseEvent[] = [];
+    if (jsonHold !== null) out.push(...releaseJson(true));
+    out.push(e);
+    return out;
+  };
 
   for await (const chunk of chunks) {
     if (chunk.type === 'text-delta') {
@@ -671,12 +735,7 @@ async function* pipeChunksToSse(
         // Phase 2 chunk shape carries node_id; stamp it on `text` events so
         // the front-end's per-node panel routing (parser.ts:286 contract)
         // can light up the right AgentDetail surface.
-        if (chunk.node_id && e.event === 'text') {
-          const d = e.data as { text: string; node_id?: string };
-          yield { event: e.event, data: { ...d, node_id: chunk.node_id } };
-        } else {
-          yield e;
-        }
+        for (const out of consume(e, chunk.node_id)) yield out;
       }
     } else if (chunk.type === 'thinking-delta') {
       // P1: extended-thinking content → `thinking-chunk` SSE, consumed by the
@@ -691,12 +750,13 @@ async function* pipeChunksToSse(
           : { text: chunk.value },
       };
     } else if (chunk.type === 'error') {
-      // Final flush of any pending text before yielding the error frame.
+      // Final flush of any pending text + held JSON before the error frame.
       if (textBuf.trim().length > 0) {
         const { events } = parseAndExtract(textBuf, session_id, artifactCallback);
-        for (const e of events) yield e;
+        for (const e of events) for (const out of consume(e, chunk.node_id)) yield out;
         textBuf = '';
       }
+      for (const out of releaseJson(false)) yield out;
       yield {
         event: 'error',
         data: {
@@ -706,14 +766,15 @@ async function* pipeChunksToSse(
         },
       };
     } else if (chunk.type === 'done') {
-      // Per-node `done`. Flush any residual text buffered for this node.
+      // Per-node `done`. Flush any residual text + held JSON for this node.
       // We don't emit a terminal SSE here — the scheduler emits one `done`
       // per node and the natural end-of-stream is the orchestration signal.
       if (textBuf.trim().length > 0) {
         const { events } = parseAndExtract(textBuf, session_id, artifactCallback);
-        for (const e of events) yield e;
+        for (const e of events) for (const out of consume(e, chunk.node_id)) yield out;
         textBuf = '';
       }
+      for (const out of releaseJson(false)) yield out;
     } else if (chunk.type === 'usage') {
       yield {
         event: 'usage',
@@ -725,11 +786,14 @@ async function* pipeChunksToSse(
     // tags in the LLM's text, not via host tool_use loops.
   }
 
-  // Final flush after the upstream stream ends naturally.
+  // Final flush after the upstream stream ends naturally: drain residual text
+  // through the hold state machine, then release any held JSON as a structured
+  // card (or raw fallback).
   if (textBuf.trim().length > 0) {
     const { events } = parseAndExtract(textBuf, session_id, artifactCallback);
-    for (const e of events) yield e;
+    for (const e of events) for (const out of consume(e)) yield out;
   }
+  for (const out of releaseJson(false)) yield out;
 }
 
 // Re-export legacy direct-Anthropic helpers in case any internal code imported
