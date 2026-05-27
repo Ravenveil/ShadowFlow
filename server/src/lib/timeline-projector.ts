@@ -105,6 +105,15 @@ export interface TimelineProjector {
    * merges into the answer. `source` is an optional provenance hint.
    */
   onRaw(text: string, source?: string): ProjectorEmit;
+  /**
+   * T3 tool chain — a tool invocation (CLI/ACP/parser `tool-use` event) → a
+   * `tool_call` message. Closes open text/thinking first so the chip starts a
+   * fresh block (the front-end Timeline groups a tool_call + following tool_echo
+   * into one tool-group card).
+   */
+  onToolUse(name: string, input: unknown): ProjectorEmit;
+  /** Tool result (`tool-result` event) → a `tool_echo` continuation line. */
+  onToolResult(output: string): ProjectorEmit;
   /** Final event → close thinking, finalize msg_foot. */
   onComplete(): ProjectorEmit;
 
@@ -574,6 +583,49 @@ export function createTimelineProjector(
         ts: nowMs(),
         body: text,
         ...(source ? { source } : {}),
+      });
+      return out;
+    },
+
+    onToolUse(name: string, input: unknown): ProjectorEmit {
+      const out = emit();
+      ensureMsgFoot(out);
+      // A tool call starts a fresh block — close open answer text/thinking so
+      // the front-end's tool-group card (tool_call + following tool_echo)
+      // renders standalone rather than inside the prose.
+      closeOpenThinking(out);
+      closeOpenText(out);
+      let argsSummary = '';
+      try {
+        argsSummary = typeof input === 'string' ? input : JSON.stringify(input ?? {});
+      } catch {
+        argsSummary = String(input);
+      }
+      if (argsSummary.length > 200) argsSummary = argsSummary.slice(0, 200) + '…';
+      out.messages.push({
+        id: newId('msg'),
+        kind: 'tool_call',
+        turn_id: turnId,
+        ts: nowMs(),
+        name,
+        args_summary: argsSummary,
+      });
+      toolsRun += 1;
+      bumpStatusLine(out, `Running · ${name}`, toolsRun);
+      bumpMsgFoot(out, { tools: toolsRun });
+      return out;
+    },
+
+    onToolResult(output: string): ProjectorEmit {
+      const out = emit();
+      const body = (output ?? '').trim();
+      if (!body) return out;
+      out.messages.push({
+        id: newId('msg'),
+        kind: 'tool_echo',
+        turn_id: turnId,
+        ts: nowMs(),
+        body,
       });
       return out;
     },

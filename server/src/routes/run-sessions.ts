@@ -1102,6 +1102,15 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           // T3: unclassified content → collapsed raw block (never the answer).
           const d = data as { text?: string; source?: string };
           if (typeof d.text === 'string') flushProjector(projector.onRaw(d.text, d.source));
+        } else if (event === 'tool-use' && data && typeof data === 'object') {
+          // T3 tool chain: surface tool invocations as tool_call messages so
+          // the timeline's tool-group card renders them (previously dropped).
+          const d = data as { name?: string; input?: unknown };
+          if (typeof d.name === 'string') flushProjector(projector.onToolUse(d.name, d.input));
+        } else if (event === 'tool-result' && data && typeof data === 'object') {
+          const d = data as { output?: unknown };
+          const out = typeof d.output === 'string' ? d.output : d.output != null ? JSON.stringify(d.output) : '';
+          if (out) flushProjector(projector.onToolResult(out));
         } else if (event === 'unknown-tag' && data && typeof data === 'object') {
           // T3: unrecognized <sf:foo>…</sf:foo> block content was previously
           // dropped. Surface its body as a raw block so nothing vanishes silently.

@@ -461,6 +461,29 @@ console.log('\n[17] onRaw → raw message (closes open text, never merges)');
   check('blank raw emits nothing', 0, r3.messages.filter((m) => m.kind === 'raw').length);
 }
 
+// ── Test 18: tool chain — onToolUse → tool_call, onToolResult → tool_echo ────
+console.log('\n[18] onToolUse/onToolResult → tool_call + tool_echo');
+{
+  const p = createTimelineProjector({ idSeed: 'sess-tool' });
+  p.onUserMessage('q');
+  p.onText('我来跑个命令');
+  const r1 = p.onToolUse('Bash', { command: 'pytest' });
+  const call = r1.messages.find((m) => m.kind === 'tool_call') as
+    | Extract<TimelineMessage, { kind: 'tool_call' }>
+    | undefined;
+  assert('emits tool_call', !!call);
+  check('tool_call name', 'Bash', call?.name);
+  assert('args_summary carries input', (call?.args_summary ?? '').includes('pytest'));
+  const r2 = p.onToolResult('All tests passed');
+  const echo = r2.messages.find((m) => m.kind === 'tool_echo') as
+    | Extract<TimelineMessage, { kind: 'tool_echo' }>
+    | undefined;
+  assert('emits tool_echo', !!echo);
+  check('tool_echo body', 'All tests passed', echo?.body);
+  // blank result is a no-op
+  check('blank tool result no-op', 0, p.onToolResult('  ').messages.length);
+}
+
 // ── Summary ─────────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

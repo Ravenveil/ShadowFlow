@@ -163,9 +163,17 @@ export async function* runCliSpawn(
       };
       return;
     }
+    // 2026-05-27 — with additive normalization the parsers now surface
+    // tool-use / tool-result / thinking-chunk / raw / usage events as real
+    // output (previously dropped). Count them as "substantive" too, so a run
+    // that produced only tool calls or unclassified raw content does NOT get
+    // the misleading "没有返回内容" synthetic text below.
+    const SUBSTANTIVE_EVENTS = new Set([
+      'text', 'assemble', 'node', 'edge', 'blueprint', 'classify',
+      'tool-use', 'tool-result', 'thinking-chunk', 'raw', 'usage',
+    ]);
     for await (const evt of dispatchParser(desc.stream_format, child.stdout, input.session_id, artifactCb)) {
-      if (evt.event === 'text' || evt.event === 'assemble' || evt.event === 'node' ||
-          evt.event === 'edge' || evt.event === 'blueprint' || evt.event === 'classify') {
+      if (SUBSTANTIVE_EVENTS.has(evt.event)) {
         sawSubstantive = true;
       }
       yield evt;
