@@ -203,5 +203,77 @@ function makeSink(): RunEventSink & { got: RunEventRecord[]; ended: boolean } {
   check('fresh run id restarts at 1', 1, rec?.id);
 }
 
-console.log(`\n${pass} pass, ${fail} fail`);
-if (fail > 0) process.exit(1);
+// ── 13: setExit writes exitCode/signal readable via get() (A10) ──────────────
+{
+  console.log('\n[13] setExit records exitCode/signal');
+  const bus = createRunBus();
+  bus.ensure('r13');
+  // defaults are null before any exit is recorded
+  check('exitCode defaults null', null, bus.get('r13')!.exitCode);
+  check('signal defaults null', null, bus.get('r13')!.signal);
+  bus.setExit('r13', 0, null);
+  check('clean exit code persisted', 0, bus.get('r13')!.exitCode);
+  bus.setExit('r13', null, 'SIGKILL');
+  check('signal persisted', 'SIGKILL', bus.get('r13')!.signal);
+  check('exitCode cleared with signal', null, bus.get('r13')!.exitCode);
+  // unknown run is a no-op (must not throw)
+  bus.setExit('does-not-exist', 1, null);
+  ok('setExit on unknown run is a no-op', !bus.get('does-not-exist'));
+}
+
+// Async blocks (shutdownActive returns a Promise). Wrapped in an async IIFE
+// because tsx compiles this file to CJS where top-level await is unsupported.
+async function asyncTests(): Promise<void> {
+  // ── 14: shutdownActive cancels all non-terminal runs + fires aborts (A8) ────
+  {
+    console.log('\n[14] shutdownActive cancels every active run');
+    const bus = createRunBus();
+    const ids = ['s1', 's2', 's3'];
+    const aborts: Record<string, boolean> = {};
+    for (const id of ids) {
+      const run = bus.ensure(id);
+      aborts[id] = false;
+      run.abort.signal.addEventListener('abort', () => { aborts[id] = true; });
+    }
+    // graceMs:0 skips the wait so the test stays synchronous-ish.
+    await bus.shutdownActive({ graceMs: 0 });
+    for (const id of ids) {
+      check(`${id} canceled`, 'canceled', bus.get(id)!.status);
+      ok(`${id} abort fired`, aborts[id]);
+    }
+  }
+
+  // ── 15: shutdownActive skips already-terminal runs (no double-process) ──────
+  {
+    console.log('\n[15] shutdownActive does not reprocess terminal runs');
+    const bus = createRunBus();
+    // A run that already succeeded must keep its status, not flip to canceled.
+    bus.ensure('done');
+    bus.finish('done', 'succeeded');
+    // And an already-canceled run whose abort already fired stays put.
+    const canceledRun = bus.ensure('cx');
+    let cxAbortCount = 0;
+    canceledRun.abort.signal.addEventListener('abort', () => { cxAbortCount++; });
+    bus.cancel('cx');
+    // One still-running run that SHOULD be canceled.
+    bus.ensure('live');
+    await bus.shutdownActive({ graceMs: 0 });
+    check('terminal succeeded run untouched', 'succeeded', bus.get('done')!.status);
+    check('already-canceled run untouched', 'canceled', bus.get('cx')!.status);
+    check('cx abort fired exactly once (not re-aborted)', 1, cxAbortCount);
+    check('the live run got canceled', 'canceled', bus.get('live')!.status);
+  }
+
+  // ── 16: shutdownActive resolves with no active runs ────────────────────────
+  {
+    console.log('\n[16] shutdownActive is a clean no-op when nothing is active');
+    const bus = createRunBus();
+    await bus.shutdownActive({ graceMs: 0 });
+    ok('resolved with empty bus', true);
+  }
+}
+
+void asyncTests().then(() => {
+  console.log(`\n${pass} pass, ${fail} fail`);
+  if (fail > 0) process.exit(1);
+});

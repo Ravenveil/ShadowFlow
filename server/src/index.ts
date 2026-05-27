@@ -7,7 +7,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
-import runSessionsRouter from './routes/run-sessions';
+import runSessionsRouter, { shutdownActiveRuns } from './routes/run-sessions';
 import runsRouter from './routes/runs';
 import agentsRouter from './routes/agents';
 import teamsRouter from './routes/teams';
@@ -211,6 +211,26 @@ detectAcpAgents(true)
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
+// ── Graceful shutdown (T3 A8) ───────────────────────────────────────────────
+// On SIGTERM/SIGINT, cancel all active run-sessions so their spawned CLI/ACP
+// child processes get SIGTERM→SIGKILL'd instead of orphaning + burning tokens.
+let shuttingDown = false;
+async function gracefulShutdown(sig: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[index] ${sig} received — cancelling active runs…`);
+  try {
+    await shutdownActiveRuns(3000);
+  } catch (e) {
+    console.warn(`[index] shutdownActiveRuns failed: ${(e as Error).message}`);
+  } finally {
+    process.exit(0);
+  }
+}
+process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
+
+// ── Start ───────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   const mode = process.env.ANTHROPIC_API_KEY ? 'Claude-powered (server key)' : 'BYOK (user-supplied key)';
   console.log(`

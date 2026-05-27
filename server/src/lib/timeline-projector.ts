@@ -114,6 +114,12 @@ export interface TimelineProjector {
   onToolUse(name: string, input: unknown): ProjectorEmit;
   /** Tool result (`tool-result` event) → a `tool_echo` continuation line. */
   onToolResult(output: string): ProjectorEmit;
+  /**
+   * T3 usage chain — token usage frame (`usage` event from any executor) →
+   * accumulate input+output tokens onto the turn's msg_foot. Idempotent-ish:
+   * each frame adds its tokens to the running total.
+   */
+  onUsage(usage: { input_tokens?: number; output_tokens?: number; total_tokens?: number }): ProjectorEmit;
   /** Final event → close thinking, finalize msg_foot. */
   onComplete(): ProjectorEmit;
 
@@ -143,6 +149,9 @@ export function createTimelineProjector(
   // Per-turn state. Reset whenever onUserMessage opens a fresh turn.
   let turnId = newId('turn');
   let turnStartMs = nowMs();
+  // T3 usage chain: running token total for the current turn (input+output),
+  // surfaced on the msg_foot. Reset by onUserMessage.
+  let totalTokens = 0;
   let stepPanelId: string | null = null;
   /** Index in the panel's `steps[]` keyed by the legacy step_index. */
   const stepIndexLookup = new Map<number, number>();
@@ -206,13 +215,14 @@ export function createTimelineProjector(
     });
   }
 
-  function bumpMsgFoot(out: ProjectorEmit, patch: { tools?: number; status?: 'running' | 'done' }) {
+  function bumpMsgFoot(out: ProjectorEmit, patch: { tools?: number; status?: 'running' | 'done'; tokens?: number }) {
     if (!msgFootId) return;
-    const merged: { elapsed_ms: number; tools?: number; status?: 'running' | 'done' } = {
+    const merged: { elapsed_ms: number; tools?: number; status?: 'running' | 'done'; tokens?: number } = {
       elapsed_ms: nowMs() - turnStartMs,
     };
     if (patch.tools !== undefined) merged.tools = patch.tools;
     if (patch.status !== undefined) merged.status = patch.status;
+    if (patch.tokens !== undefined) merged.tokens = patch.tokens;
     out.patches.push({
       id: msgFootId,
       op: 'msg_foot_update',
@@ -310,6 +320,7 @@ export function createTimelineProjector(
       // Reset turn-scoped state.
       turnId = newId('turn');
       turnStartMs = nowMs();
+      totalTokens = 0;
       stepPanelId = null;
       stepPanelSteps = [];
       stepIndexLookup.clear();
@@ -627,6 +638,20 @@ export function createTimelineProjector(
         ts: nowMs(),
         body,
       });
+      return out;
+    },
+
+    onUsage(usage): ProjectorEmit {
+      const out = emit();
+      ensureMsgFoot(out);
+      const add =
+        (typeof usage.total_tokens === 'number' ? usage.total_tokens : 0) ||
+        (typeof usage.input_tokens === 'number' ? usage.input_tokens : 0) +
+          (typeof usage.output_tokens === 'number' ? usage.output_tokens : 0);
+      if (add > 0) {
+        totalTokens += add;
+        bumpMsgFoot(out, { tokens: totalTokens });
+      }
       return out;
     },
 

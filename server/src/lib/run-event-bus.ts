@@ -55,6 +55,19 @@ export interface Run {
   abort: AbortController;
   /** True once a pipeline has been claimed to start (single-start guard). */
   started: boolean;
+  /**
+   * Exit code of the underlying CLI child process, once known (A10). `null`
+   * means "not exited via code" (still running, killed by signal, or never
+   * spawned a child). Lets callers distinguish a crash (non-zero) from a clean
+   * exit (0) after the run reaches a terminal status.
+   */
+  exitCode: number | null;
+  /**
+   * Terminating signal of the underlying CLI child process, once known (A10).
+   * e.g. `'SIGTERM'` / `'SIGKILL'`. `null` when the child exited via a code or
+   * never spawned.
+   */
+  signal: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -92,6 +105,21 @@ export interface RunBus {
   /** Request cancellation: abort execution; finish as `canceled`. */
   cancel(id: string): void;
   /**
+   * Record the underlying CLI child process's exit outcome (A10). `code` is the
+   * numeric exit code (or null if killed by signal); `signal` is the killing
+   * signal (or null if exited via code). No-op for unknown runs. Does NOT change
+   * status — finish/cancel own that; this is pure metadata for crash diagnosis.
+   */
+  setExit(id: string, code: number | null, signal: string | null): void;
+  /**
+   * Graceful shutdown (A8): cancel every non-terminal run — abort its execution
+   * signal (the cli spawner listens and SIGTERM→SIGKILLs its child) and finish
+   * it as `canceled`. Optionally waits up to `graceMs` (default 3000) for those
+   * downstream child kills to settle before resolving, so the process can exit
+   * cleanly. The wait timer is unref'd so it never keeps the process alive.
+   */
+  shutdownActive(opts?: { graceMs?: number }): Promise<void>;
+  /**
    * Drop a run entirely so the next `claimStart` re-runs from scratch. Used by
    * retry/resume ("full_rerun"): aborts any in-flight execution, ends attached
    * views, and removes the run + its buffered log. The next GET /stream then
@@ -127,6 +155,8 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
       clients: new Set(),
       abort: new AbortController(),
       started: false,
+      exitCode: null,
+      signal: null,
       createdAt: ts,
       updatedAt: ts,
     };
@@ -227,6 +257,38 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     finish(id, 'canceled');
   };
 
+  const setExit = (
+    id: string,
+    code: number | null,
+    signal: string | null,
+  ): void => {
+    const run = runs.get(id);
+    if (!run) return;
+    run.exitCode = code;
+    run.signal = signal;
+    run.updatedAt = now();
+  };
+
+  const shutdownActive = async (
+    opts: { graceMs?: number } = {},
+  ): Promise<void> => {
+    const graceMs = opts.graceMs ?? 3000;
+    const active = Array.from(runs.values()).filter(
+      (run) => !TERMINAL.has(run.status),
+    );
+    for (const run of active) {
+      // Reuse cancel(): aborts the signal (cli spawner does SIGTERM→SIGKILL)
+      // and finishes as 'canceled' via the existing logic. No duplication.
+      cancel(run.id);
+    }
+    if (active.length === 0 || graceMs <= 0) return;
+    // Give downstream child kills a moment to settle before the process exits.
+    await new Promise<void>((resolve) => {
+      const t = setTimeout(resolve, graceMs);
+      (t as { unref?: () => void }).unref?.();
+    });
+  };
+
   const reset = (id: string): void => {
     const run = runs.get(id);
     if (!run) return;
@@ -250,6 +312,8 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     attach,
     finish,
     cancel,
+    setExit,
+    shutdownActive,
     reset,
     isTerminal: (status) => TERMINAL.has(status),
     size: () => runs.size,

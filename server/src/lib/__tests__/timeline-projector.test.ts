@@ -484,6 +484,30 @@ console.log('\n[18] onToolUse/onToolResult → tool_call + tool_echo');
   check('blank tool result no-op', 0, p.onToolResult('  ').messages.length);
 }
 
+// ── Test 19: usage chain — onUsage accumulates tokens onto msg_foot ─────────
+console.log('\n[19] onUsage → msg_foot tokens accumulate');
+{
+  const p = createTimelineProjector({ idSeed: 'sess-usage' });
+  p.onUserMessage('q');
+  p.onClassify({ output_type: 'answer', mode: 'single', confidence: 0.9, source: 'ts' }); // opens msg_foot
+  const r1 = p.onUsage({ input_tokens: 100, output_tokens: 50 });
+  const patch1 = r1.patches.find((x) => x.op === 'msg_foot_update') as
+    | Extract<MessagePatch, { op: 'msg_foot_update' }>
+    | undefined;
+  check('first usage → 150 tokens', 150, patch1?.patch.tokens);
+  const r2 = p.onUsage({ output_tokens: 25 });
+  const patch2 = r2.patches.find((x) => x.op === 'msg_foot_update') as
+    | Extract<MessagePatch, { op: 'msg_foot_update' }>
+    | undefined;
+  check('second usage accumulates → 175', 175, patch2?.patch.tokens);
+  // total_tokens wins when present
+  const r3 = p.onUsage({ total_tokens: 10, input_tokens: 999 });
+  const patch3 = r3.patches.find((x) => x.op === 'msg_foot_update') as
+    | Extract<MessagePatch, { op: 'msg_foot_update' }>
+    | undefined;
+  check('total_tokens preferred → 185', 185, patch3?.patch.tokens);
+}
+
 // ── Summary ─────────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

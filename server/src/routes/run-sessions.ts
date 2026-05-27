@@ -321,6 +321,16 @@ const stepStoreSingleton = createStepStore();
 // the buffered events instead of re-running the whole LLM pipeline.
 const runBus = createRunBus();
 
+/**
+ * T3 A8 — graceful shutdown entry point for the daemon. Cancels every active
+ * run (aborting its signal → the cli spawner SIGTERM→SIGKILLs its child) and
+ * waits a short grace so child processes are reaped before the process exits.
+ * Wired to SIGTERM/SIGINT in index.ts.
+ */
+export async function shutdownActiveRuns(graceMs?: number): Promise<void> {
+  await runBus.shutdownActive(graceMs !== undefined ? { graceMs } : undefined);
+}
+
 const VALID_ARTIFACT_TYPES: ReadonlyArray<ArtifactType> = ['yaml', 'html', 'markdown'];
 
 function coerceArtifactType(raw: unknown): ArtifactType | null {
@@ -1111,6 +1121,10 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           const d = data as { output?: unknown };
           const out = typeof d.output === 'string' ? d.output : d.output != null ? JSON.stringify(d.output) : '';
           if (out) flushProjector(projector.onToolResult(out));
+        } else if (event === 'usage' && data && typeof data === 'object') {
+          // T3 usage chain: token usage → msg_foot tokens (was previously
+          // forwarded as a legacy event but never projected into the timeline).
+          flushProjector(projector.onUsage(data as Record<string, number>));
         } else if (event === 'unknown-tag' && data && typeof data === 'object') {
           // T3: unrecognized <sf:foo>…</sf:foo> block content was previously
           // dropped. Surface its body as a raw block so nothing vanishes silently.
