@@ -29,6 +29,13 @@ export const PHASE_1_ANALYZE_AGENT_FIRST = `# Phase 1 · 分析目标 (Agent-fir
 完成 phase 1 后**直接进入 phase 2**（配置 Agent 角色）—— 不要 emit "挑选
 Team 蓝图" 这个 step；这条流没有"挑选"，是"创造"。
 
+## ⚠️ 尊重用户的数量意图
+
+如果 goal 明确说要「一个 / 单个 agent」（例如"帮我创建一个开发工程师agent"），
+**只创造 1 个 agent**，它同时充当 coordinator 和执行者。**不要**因为任务看起来
+复杂就自动扩写成多角色团队（架构师 / 测试 / 评审等）。用户说一个就是一个；想扩成
+团队是用户后续的决定，不是你现在替他做的。
+
 ## 输入信息不足时的处理 — 用 \`<sf:question-form>\` 不用 markdown
 
 如果 goal 模糊（比如"帮我做个东西"），phase 1 \`<sf:thinking>\` 里写明缺什么，

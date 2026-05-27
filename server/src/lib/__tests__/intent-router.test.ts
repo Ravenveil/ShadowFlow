@@ -15,6 +15,7 @@
 import {
   classifyTS,
   classifyIntent,
+  detectExplicitSingleAgent,
   ANSWER_KW,
   REPORT_KW,
   REVIEW_KW,
@@ -128,6 +129,31 @@ check('REVIEW_KW length matches Python',   8, REVIEW_KW.length);
 check('WORKFLOW_KW length matches Python', 7, WORKFLOW_KW.length);
 check('WORKFLOW_KW[0] === 工作流', '工作流', WORKFLOW_KW[0]);
 check('ANSWER_KW[0]   === 什么是', '什么是', ANSWER_KW[0]);
+
+// ── detectExplicitSingleAgent (2026-05-27 regression: "一个却来三个") ────────
+// The exact bug report goal MUST be detected as single-agent intent.
+check('single #1 bug-report goal → single=true',
+  true, detectExplicitSingleAgent('帮我创建一个开发工程师agent').single);
+check('single #2 "单个 agent" → single=true',
+  true, detectExplicitSingleAgent('给我一个单个 agent 就行').single);
+check('single #3 "create a single agent" → single=true',
+  true, detectExplicitSingleAgent('create a single agent for code review').single);
+check('single #4 "one agent" → single=true',
+  true, detectExplicitSingleAgent('I just need one agent').single);
+check('single #5 "一名助手" → single=true',
+  true, detectExplicitSingleAgent('帮我做一名客服助手').single);
+
+// Team / plural intent MUST NOT be forced to single.
+check('single #6 "团队" overrides singular phrase → single=false',
+  false, detectExplicitSingleAgent('创建一个开发团队').single);
+check('single #7 explicit team request → single=false',
+  false, detectExplicitSingleAgent('帮我搭一个 review 团队，要 3 个 agent').single);
+check('single #8 plain team goal → single=false',
+  false, detectExplicitSingleAgent('搭一个论文评审 team').single);
+check('single #9 no quantity phrase → single=false',
+  false, detectExplicitSingleAgent('帮我写个 agent 做代码审查').single);
+check('single #10 empty goal → single=false',
+  false, detectExplicitSingleAgent('').single);
 
 // ── Summary ───────────────────────────────────────────────────────────────
 console.log(`\n${pass} pass / ${fail} fail`);

@@ -63,7 +63,7 @@ import {
 // `classify` frame within ~1ms of stream open (LLM's own <sf:classify .../>
 // arrives many seconds later, after parser extraction). Two frames coexist;
 // front-end may diff them for consistency (S5.2 future story).
-import { classifyTS } from '../lib/intent-router';
+import { classifyTS, detectExplicitSingleAgent, SINGLE_AGENT_DIRECTIVE } from '../lib/intent-router';
 import { loadTeam as loadGlobalTeam } from '../lib/team-yaml';
 // S2.3 (intent-workflow-design-v1 §4.4) — step artifact persistence + per-step
 // SSE frame. Parser fires node/edge/blueprint between `assemble:running` and
@@ -1009,6 +1009,19 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       );
       console.log(`[run-sessions] no teamSpec → agent-first prompt flow`);
     }
+
+    // 2026-05-27 — respect literal "create one agent" intent. When the goal
+    // explicitly asks for a single agent (and not a team), hard-cap the roster
+    // at one node so "帮我创建一个开发工程师agent" no longer expands into a
+    // 3-agent squad. Deterministic detector lives in lib/intent-router.ts.
+    const singleAgentIntent = detectExplicitSingleAgent(session.goal);
+    if (singleAgentIntent.single) {
+      effectiveSystemPrompt += SINGLE_AGENT_DIRECTIVE;
+      console.log(
+        `[run-sessions] explicit single-agent intent ("${singleAgentIntent.matched}") → roster capped at 1`,
+      );
+    }
+
     const generator = teamSpec && wantSyntheticFallback
       ? synthesizeTeamRun(teamSpec, id, abortController.signal)
       : runSkillAssembler({

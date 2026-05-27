@@ -165,6 +165,72 @@ export function classifyIntent(
   return { outputType: 'report', mode: 'team', confidence: 0.75, complexity: 3 };
 }
 
+// ─── Explicit single-agent intent (2026-05-27) ─────────────────────────────
+//
+// Bug: typing "帮我创建一个开发工程师agent" into the StartPage composer produced
+// a 3-agent team (架构师 / 全栈开发 / 测试工程师). Root cause — the default
+// `agent-team-blueprint` skill runs the agent-first prompt, whose only sizing
+// rule is "凭 goal 推导需要哪些 agent 角色". The LLM read "开发工程师" as a
+// complex job and expanded it into a software squad, ignoring the user's
+// literal "一个 agent".
+//
+// This detector is a DETERMINISTIC guard (so it's unit-testable, unlike an
+// LLM prompt change). When the goal explicitly asks for a single agent AND
+// does not mention a team, the caller appends `SINGLE_AGENT_DIRECTIVE` to the
+// system prompt to hard-cap the roster at one node.
+
+// Matches "一个 / 单个 / 1个 / 一名 / 一位 …… agent/智能体/员工/助手" with up to a
+// short job-title gap in between ("一个开发工程师agent"), plus the English
+// "a/one/single agent" forms.
+const SINGLE_AGENT_PATTERNS: readonly RegExp[] = [
+  /(?:一个|单个|1\s*个|一名|一位|就一个|只要一个|只.{0,3}一个)[^。！？\n]{0,10}?(?:agent|智能体|员工|助手)/i,
+  /\b(?:a|one|single)\s+agent\b/i,
+  /\bjust\s+one\s+agent\b/i,
+];
+
+// Negative guard — if the user also says "团队 / 小队 / team / 多个 / 几个 …",
+// they want a team; do NOT force single even when a singular phrase matched.
+const TEAM_INTENT_PATTERN = /团队|小队|一组|一队|多个|几个|多名|\bteam\b|team of/i;
+
+export interface SingleAgentIntent {
+  single: boolean;
+  matched?: string;
+}
+
+/**
+ * Detect an explicit "create exactly one agent" request in the goal.
+ * Returns `{ single: true, matched }` only when a singular-agent phrase is
+ * present AND no team phrase is present.
+ */
+export function detectExplicitSingleAgent(goal: string): SingleAgentIntent {
+  const g = (goal ?? '').trim();
+  if (!g) return { single: false };
+  if (TEAM_INTENT_PATTERN.test(g)) return { single: false };
+  for (const re of SINGLE_AGENT_PATTERNS) {
+    const m = g.match(re);
+    if (m) return { single: true, matched: m[0] };
+  }
+  return { single: false };
+}
+
+/**
+ * System-prompt directive appended when `detectExplicitSingleAgent` fires.
+ * Written in Chinese to match the surrounding multi-turn prompt language.
+ */
+export const SINGLE_AGENT_DIRECTIVE = `
+
+# ⚠️ 用户明确要求：只建 1 个 Agent
+
+用户在 goal 里明确说了要「一个 / 单个 agent」。**严格只产出 1 个 agent 节点**，
+它同时充当 coordinator 和执行者。**禁止**因为任务看起来复杂就把它扩写成多角色
+团队（不要自动补架构师 / 测试 / 评审等额外角色）。
+
+- 只 emit 1 个 \`<sf:node type="agent">\`（node_id 用 coordinator）
+- 不要 emit 第二个 agent 节点，也不要 emit agent 之间的 edge
+- 如果你判断任务确实需要更多角色，在 \`<sf:thinking>\` 里说明即可，但**仍然只建
+  1 个**，把"是否扩成团队"留给用户后续决定
+`;
+
 // ─── Design-doc-shaped wrapper: classifyTS() ───────────────────────────────
 
 /**
