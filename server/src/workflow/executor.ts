@@ -178,13 +178,17 @@ export async function executeNode(
     // path (CLI / ACP / MCP backed transports manage their own tool
     // loops; we don't try to re-host their loops here).
     const pickedTools = node.tools?.picked ?? [];
+    // Branch 0 recipe path threads `ctx.goal`; when ABSENT (BMAD / legacy team
+    // paths) we fall back to `node.id`, byte-for-byte preserving the pre-goal
+    // behaviour. The `?? node.id` is the BMAD-isolation flag.
+    const userTurn = ctx.goal ?? node.id;
     const stream =
       pickedTools.length > 0 && callable instanceof ApiClientCallable
-        ? buildRuntimeStream(callable, node, system, pickedTools, signal)
+        ? buildRuntimeStream(callable, node, system, pickedTools, signal, userTurn)
         : callable.turn({
             system,
-            prompt: node.id, // user-turn payload is the node id; the persona +
-                            // input slurp does the heavy lifting via `system`.
+            prompt: userTurn, // Branch 0: user goal; else node.id (BMAD). The
+                            // persona + input slurp does the heavy lifting via `system`.
             history: [],     // Phase 2 decision A2: no history; artifact handoff.
             signal,
           });
@@ -268,6 +272,7 @@ function buildRuntimeStream(
   system: string,
   pickedTools: string[],
   signal: AbortSignal,
+  userTurn: string,
 ): AsyncGenerator<TurnChunk> {
   const apiClient = callable.getApiClient();
   const registry = new ToolRegistry(
@@ -289,7 +294,7 @@ function buildRuntimeStream(
   });
   return runtime.runTurn({
     system_prompt: system,
-    user_message: node.id, // mirrors callable.turn()'s prompt: see executeNode().
+    user_message: userTurn, // ctx.goal ?? node.id — mirrors callable.turn()'s prompt: see executeNode().
     history: [],
     signal,
   });

@@ -157,4 +157,11 @@ export interface NodeContext {
    */
   workspace: string;
   priorResults: Map<string, RunResult>;
+  /**
+   * Optional user goal — Branch 0 (recipe) path threads the original user goal
+   * through `runDag` so the per-node executor can use it as the user-turn
+   * payload (`prompt`). When ABSENT (BMAD / legacy team paths) the executor
+   * falls back to `node.id`, preserving the exact pre-goal behaviour.
+   */
+  goal?: string;
 }

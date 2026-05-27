@@ -158,6 +158,7 @@ async function* runDagInternal(
   workspace: string,
   signal: AbortSignal,
   observer: NodeObserver,
+  goal?: string,
 ): AsyncGenerator<TurnChunk> {
   const idx = buildIndex(team);
   const queue = new ChunkQueue();
@@ -241,6 +242,7 @@ async function* runDagInternal(
               // (Layers are sequential, so this only contains nodes from
               // earlier layers — exactly what conditions expect.)
               priorResults: new Map(results),
+              goal,
             };
 
             const incoming = idx.in.get(id) ?? [];
@@ -398,8 +400,9 @@ export function runDag(
   callable: LlmCallable,
   workspace: string,
   signal: AbortSignal,
+  goal?: string,
 ): AsyncGenerator<TurnChunk> {
-  return runDagInternal(team, callable, workspace, signal, NULL_OBSERVER);
+  return runDagInternal(team, callable, workspace, signal, NULL_OBSERVER, goal);
 }
 
 /**
@@ -413,6 +416,7 @@ export function runDagWithObserver(
   workspace: string,
   signal: AbortSignal,
   observer: NodeObserver,
+  goal?: string,
 ): AsyncGenerator<TurnChunk> {
-  return runDagInternal(team, callable, workspace, signal, observer);
+  return runDagInternal(team, callable, workspace, signal, observer, goal);
 }
