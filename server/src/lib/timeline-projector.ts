@@ -55,24 +55,16 @@ import type {
 //      without parsing.
 //   3. Cheap (this is a hot path — multiple per event).
 //
-// A 48-bit epoch-ms timestamp + 80-bit counter+random component matches the
-// ULID layout without pulling in the `ulid` dependency. Counter handles
-// same-ms collisions; random tail guarantees distinctness across projector
-// instances (paranoid — same process, same ms, two SSE handlers).
-
-const ID_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-let idCounter = 0;
-
-function newId(prefix: string): string {
-  idCounter = (idCounter + 1) & 0xffffff;
-  const ts = Date.now().toString(36).padStart(9, '0');
-  const ctr = idCounter.toString(36).padStart(5, '0');
-  let rand = '';
-  for (let i = 0; i < 6; i++) {
-    rand += ID_ALPHABET[Math.floor(Math.random() * ID_ALPHABET.length)];
-  }
-  return `${prefix}_${ts}${ctr}${rand}`;
-}
+// P3 fix (audit/thinking-transport-fix-plan-2026-05-27.md §2.6): message ids
+// MUST be deterministic per (projector seed + emit order), NOT random. The SSE
+// `/stream` handler creates a FRESH projector and re-runs the whole pipeline on
+// every (re)connection; with random ids each reconnect re-emitted the user_turn
+// (and everything else) under a new id, defeating the front-end's id-keyed
+// dedup → the user message showed twice. With a stable `idSeed` (= session_id)
+// + a per-projector monotonic counter, a reconnect reproduces the IDENTICAL id
+// sequence, so the front-end OVERWRITES the prior run's messages by id instead
+// of appending duplicates. The id factory now lives inside createTimelineProjector
+// so each projector owns its own counter (no cross-instance global state).
 
 function nowMs(): number {
   return Date.now();
@@ -121,7 +113,18 @@ export interface TimelineProjector {
   };
 }
 
-export function createTimelineProjector(): TimelineProjector {
+export function createTimelineProjector(
+  opts?: { idSeed?: string },
+): TimelineProjector {
+  // P3: deterministic per-projector id factory. `idSeed` (= session_id from the
+  // stream handler) makes ids stable across SSE reconnects so the front-end
+  // dedups by id; absent a seed (legacy callers / unit tests) we fall back to a
+  // random per-projector seed so two live projectors never collide.
+  const idSeed = opts?.idSeed ?? `r${Math.random().toString(36).slice(2, 10)}`;
+  let idCounter = 0;
+  const newId = (prefix: string): string =>
+    `${prefix}_${idSeed}_${(idCounter++).toString(36).padStart(4, '0')}`;
+
   // Per-turn state. Reset whenever onUserMessage opens a fresh turn.
   let turnId = newId('turn');
   let turnStartMs = nowMs();

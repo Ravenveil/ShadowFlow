@@ -410,6 +410,32 @@ console.log('\n[15] status_line slot populated');
   check('complete tools_running=0', 0, sl3?.tools_running);
 }
 
+// ── Test 16: P3 — deterministic ids across reconnect (same idSeed) ──────────
+// The SSE /stream handler re-runs the whole pipeline through a FRESH projector
+// on every reconnect. With a stable idSeed, the SAME emit order must reproduce
+// the IDENTICAL id sequence so the front-end dedups by id (no duplicate
+// user_turn). Different seeds must NOT collide.
+console.log('\n[16] P3 deterministic ids across reconnect');
+{
+  const drive = (seed: string): string[] => {
+    const p = createTimelineProjector({ idSeed: seed });
+    const ids: string[] = [];
+    for (const m of p.onUserMessage('帮我创建一个开发工程师agent').messages) ids.push(m.id);
+    for (const m of p.onClassify({ output_type: 'workflow', mode: 'team', confidence: 0.9, complexity: 3, source: 'ts' }).messages) ids.push(m.id);
+    for (const m of p.onAssembleStart(0, '分析目标需求').messages) ids.push(m.id);
+    return ids;
+  };
+  const run1 = drive('sess_ABC');
+  const run2 = drive('sess_ABC'); // simulated reconnect: same session id
+  const runX = drive('sess_XYZ'); // different session
+
+  assert('reconnect reproduces ≥1 id', run1.length > 0);
+  check('reconnect: identical id sequence (same seed)', JSON.stringify(run1), JSON.stringify(run2));
+  assert('first user_turn id stable across reconnect', run1[0] === run2[0]);
+  assert('different seed → different ids', run1[0] !== runX[0]);
+  assert('ids carry the seed (traceable)', run1[0].includes('sess_ABC'));
+}
+
 // ── Summary ─────────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -996,7 +996,11 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     // event stream. Emits `message` + `message-patch` SSE frames in addition
     // to the legacy events. Legacy stream is untouched — front-end can
     // subscribe to either or both during migration. See lib/timeline-projector.ts.
-    const projector = createTimelineProjector();
+    // P3 fix (audit 2026-05-27 §2.6): seed the projector with the session id so
+    // message ids are deterministic across SSE reconnects (this handler re-runs
+    // the whole pipeline per connection). Stable ids → the front-end overwrites
+    // by id instead of appending a duplicate user_turn on every reconnect.
+    const projector = createTimelineProjector({ idSeed: id });
     const flushProjector = (emit: {
       messages: import('../lib/contracts').TimelineMessage[];
       patches: import('../lib/contracts').MessagePatch[];
