@@ -1224,32 +1224,84 @@ export default function StartPage() {
             gap: 32,
           }}
         >
-          {/* Hero */}
-          <div style={{ textAlign: 'center' }}>
+          {/* Hero — design-pkg aligned (Geist heavy display + eyebrow pill + lead).
+              Decorative purple glow sits behind, accent-tint eyebrow, sf-display-l
+              scale heading (clamp for responsive), single-line lead. Additive only:
+              all original copy preserved, no sections removed. */}
+          <div style={{ textAlign: 'center', position: 'relative' }}>
+            {/* Decorative glow ornament — pointer-events none, sits behind text */}
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                top: -120,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: 560,
+                height: 360,
+                borderRadius: '50%',
+                background:
+                  'radial-gradient(ellipse, color-mix(in oklab, var(--t-accent) 18%, transparent) 0%, transparent 60%)',
+                filter: 'blur(40px)',
+                pointerEvents: 'none',
+                zIndex: 0,
+              }}
+            />
+            {/* Eyebrow pill — accent-tinted, mono UPPERCASE, +0.14em tracking per
+                design package convention */}
             <div
               style={{
+                position: 'relative',
+                zIndex: 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
                 fontFamily: 'var(--font-mono)',
-                fontSize: 10,
+                fontSize: 10.5,
                 fontWeight: 700,
-                letterSpacing: '.18em',
-                color: 'var(--t-accent)',
-                marginBottom: 18,
+                letterSpacing: '.14em',
+                textTransform: 'uppercase',
+                color: 'var(--t-accent-bright)',
+                padding: '6px 12px',
+                borderRadius: 999,
+                background: 'var(--t-accent-tint)',
+                border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)',
+                marginBottom: 24,
               }}
             >
-              ✦ SHADOWFLOW
+              <span aria-hidden style={{ fontSize: 12 }}>◆</span>
+              {t('start.heroEyebrow')}
             </div>
             <h1
               style={{
-                fontSize: 44,
-                fontWeight: 700,
-                lineHeight: 1.1,
-                letterSpacing: '-.025em',
+                position: 'relative',
+                zIndex: 1,
+                // Responsive clamp aligned to sf-display-l (62px) ⇢ sf-h2 (36px)
+                fontSize: 'clamp(36px, 6.2vw, 62px)',
+                fontWeight: 800,
+                lineHeight: 1.04,
+                letterSpacing: '-.035em',
                 margin: 0,
                 color: 'var(--t-fg)',
               }}
             >
               {t('start.heroTitle')}
             </h1>
+            {/* Lead — design house voice; sf-body-lg scale, fg-3 secondary */}
+            <p
+              style={{
+                position: 'relative',
+                zIndex: 1,
+                fontSize: 15,
+                fontWeight: 500,
+                lineHeight: 1.55,
+                color: 'var(--t-fg-3)',
+                maxWidth: 560,
+                margin: '18px auto 0',
+              }}
+            >
+              {t('start.heroLead')}
+            </p>
           </div>
 
           {/* Composer — textarea + structured fields + chip row, all in one box */}
