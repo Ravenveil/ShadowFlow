@@ -43,6 +43,12 @@ export interface ConvHeaderFBProps {
   threadOpen?: boolean;
   /** 任务数 badge */
   tasksCount?: number;
+  /**
+   * Stream J 2026-05-28 · ⋯ 按钮新行为：
+   * 优先调用此 callback（一般打开 GroupSettingsModalFB）；如果没传则 fallback
+   * 回退到原有的 9 项下拉菜单（round-1 B 的实现，标 deprecated 保留）。
+   */
+  onMoreClick?: () => void;
 }
 
 // ── 成员头像 mock 数据（设计稿固定 5 个色块）────────────────────────────
@@ -95,6 +101,7 @@ export default function ConvHeaderFB({
   onDagClick,
   threadOpen = false,
   tasksCount,
+  onMoreClick,
 }: ConvHeaderFBProps) {
   // missing-key 回退到中文 fb（useI18n 未命中时返回 key 本身）
   const tr = (k: string, fb: string, opts?: Record<string, unknown>) => {
@@ -253,7 +260,14 @@ export default function ConvHeaderFB({
               type="button"
               className={`${styles.btn} ${styles.btnIcon}`}
               title="更多"
-              onClick={() => setMenuOpen((p) => !p)}
+              onClick={() => {
+                // Stream J 2026-05-28 · 优先走新 modal；老调用方未传 → fallback 菜单
+                if (onMoreClick) {
+                  onMoreClick();
+                  return;
+                }
+                setMenuOpen((p) => !p);
+              }}
             >
               <MoreHorizontal size={15} strokeWidth={1.6} />
             </button>

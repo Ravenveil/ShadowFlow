@@ -28,7 +28,8 @@ import { listSchedules, type Schedule } from '../api/schedules';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { getTemplate } from '../api/templates';
 import { buildChatBuilderUrl } from '../core/utils/builderNavigation';
-import { fetchRecentMessages } from '../api/groupApi';
+import { fetchRecentMessages, patchGroup } from '../api/groupApi';
+import { listAgents, type AgentRecord } from '../api/agents';
 import PythonBackendBanner from '../components/PythonBackendBanner';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import type { GroupItem, GroupMetrics, Message } from '../common/types/inbox';
@@ -43,6 +44,7 @@ import ComposerFB from '../components/chat-fb/ComposerFB';
 import { ChatFeedFB, type ChatFeedAction } from '../components/chat-fb/ChatFeedFB';
 import { ThreadDrawerFB, type ThreadSourceMessage } from '../components/chat-fb/ThreadDrawerFB';
 import FeedSearchbarFB, { type FeedSearchFilterKey } from '../components/chat-fb/FeedSearchbarFB';
+import GroupSettingsModalFB from '../components/chat-fb/GroupSettingsModalFB';
 import { postGroupMessage } from '../api/groupApi';
 
 // ── Design token helpers ────────────────────────────────────────────────────
@@ -559,6 +561,7 @@ export default function ChatPage() {
   const groupName = group?.name ?? groupId ?? '';
   const metrics = group?.metrics ?? DEFAULT_METRICS;
   const { t } = useI18n();
+  const updateGroupMeta = useInboxStore(s => s.updateGroupMeta);
 
   const [activeTab, setActiveTab] = useState<'chat' | 'briefboard' | 'approvals'>('chat');
   const [briefBoardAlias, setBriefBoardAlias] = useState('BriefBoard');
@@ -617,6 +620,112 @@ export default function ChatPage() {
 
   // ── Stream D · Thread Drawer 显隐 (chat-fb.html .drawer.hide 行 604) ───────
   const [threadDrawerOpen, setThreadDrawerOpen] = useState(true);
+
+  // ── Stream J 2026-05-28 · 群设置 modal 状态 ───────────────────────────────
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // workspace 维度 agents（GroupItem 没有 agent_ids，只能从全量 listAgents 过滤）
+  // TODO Stream K：等后端给 group 加 agent_ids 字段后改成读 group.agent_ids
+  const [allAgents, setAllAgents] = useState<AgentRecord[]>([]);
+  useEffect(() => {
+    listAgents(currentWorkspaceId ?? undefined)
+      .then(setAllAgents)
+      .catch(() => setAllAgents([]));
+  }, [currentWorkspaceId]);
+
+  // ── Stream J · 用户层 per-group 偏好 (mute / pin / fold / showNickname) ───
+  // 暂存 localStorage；TODO Stream K：等后端 user-settings endpoint 上线后替换。
+  interface GroupPrefs { muted: boolean; pinned: boolean; folded: boolean; showNickname: boolean }
+  const PREFS_DEFAULT: GroupPrefs = { muted: false, pinned: false, folded: false, showNickname: true };
+  const prefsKey = groupId ? `sf-group-prefs-${groupId}` : null;
+  const [groupPrefs, setGroupPrefs] = useState<GroupPrefs>(PREFS_DEFAULT);
+  useEffect(() => {
+    if (!prefsKey) { setGroupPrefs(PREFS_DEFAULT); return; }
+    try {
+      const raw = localStorage.getItem(prefsKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setGroupPrefs({ ...PREFS_DEFAULT, ...parsed });
+      } else {
+        setGroupPrefs(PREFS_DEFAULT);
+      }
+    } catch {
+      setGroupPrefs(PREFS_DEFAULT);
+    }
+    // PREFS_DEFAULT 是常量，挪不出依赖列表
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefsKey]);
+
+  const togglePref = useCallback((key: keyof GroupPrefs) => {
+    setGroupPrefs(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      if (prefsKey) {
+        try { localStorage.setItem(prefsKey, JSON.stringify(next)); }
+        catch (err) { console.warn('[ChatPage] persist group prefs failed:', err); }
+      }
+      return next;
+    });
+  }, [prefsKey]);
+
+  // 群成员（注入 modal members prop）— 设计稿固定 5 色映射
+  const AVATAR_COLORS: Array<'b' | 'r' | 'g' | 'p' | 'o'> = ['b', 'r', 'g', 'p', 'o'];
+  function hashColor(id: string): 'b' | 'r' | 'g' | 'p' | 'o' {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+    return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+  }
+  // TODO Stream K：当后端 group record 有 agent_ids 时改为按 id 取并保留顺序。
+  // 临时方案：当前 workspace 的全量 agents 都视为成员（小公司单 workspace 假设）。
+  const settingsMembers = allAgents.slice(0, 12).map(a => ({
+    id: a.agent_id,
+    name: a.name,
+    role: (a.soul?.split('\n')[0] ?? '').slice(0, 12) || 'Agent',
+    avatarColor: hashColor(a.agent_id),
+  }));
+  const settingsAgentCount = settingsMembers.length || (metrics.members ?? 0);
+  const settingsOnlineCount = Math.max(settingsAgentCount - 1, 0);
+
+  // GroupSettingsModalFB 的 onEditField 只回传 field key（不带新值）。
+  // 由 ChatPage 自己负责弹 prompt / inline 编辑器收集新值，再决定是否调 patchGroup。
+  // 当前阶段先用 window.prompt 占位；TODO Stream K：换 chat-fb 风内联输入。
+  const handleEditField = useCallback(
+    async (field: 'groupNickname' | 'announcement' | 'myNickname' | 'searchChat') => {
+      if (!groupId) return;
+      if (field === 'searchChat') {
+        // 复用顶部 inline search bar
+        setSettingsOpen(false);
+        setSearchOpen(true);
+        return;
+      }
+      if (field === 'groupNickname') {
+        const cur = group?.name ?? '';
+        const next = typeof window !== 'undefined' ? window.prompt('修改群昵称', cur) : null;
+        if (!next || next === cur) return;
+        updateGroupMeta(groupId, { name: next });
+        try {
+          await patchGroup(groupId, { name: next });
+        } catch (err) {
+          console.warn('[ChatPage] patchGroup name 失败（Stream K 后端可能未上线）：', err);
+        }
+        return;
+      }
+      if (field === 'announcement') {
+        const cur = (group as unknown as { announcement?: string })?.announcement ?? '';
+        const next = typeof window !== 'undefined' ? window.prompt('修改群公告', cur) : null;
+        if (next === null || next === cur) return;
+        try {
+          await patchGroup(groupId, { announcement: next });
+          updateGroupMeta(groupId, { /* 占位 — 等 GroupItem 类型加 announcement */ } as Partial<GroupItem>);
+        } catch (err) {
+          console.warn('[ChatPage] patchGroup announcement 失败：', err);
+        }
+        return;
+      }
+      // myNickname — 用户层 settings；目前没 endpoint，先 console.log
+      // TODO Stream K：写入 user prefs endpoint
+      console.log('[ChatPage] onEditField myNickname → TODO Stream K user prefs');
+    },
+    [groupId, group, updateGroupMeta],
+  );
 
   // ── Stream H · feed inline searchbar 显隐 + state ─────────────────────────
   const [searchOpen, setSearchOpen] = useState(false);
@@ -752,6 +861,7 @@ export default function ChatPage() {
                   onThreadToggle={() => setThreadDrawerOpen(p => !p)}
                   onTasksClick={() => handleTabChange('approvals')}
                   onSearchToggle={() => setSearchOpen(p => !p)}
+                  onMoreClick={() => setSettingsOpen(true)}
                 />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: `1px solid ${T.bd}`, background: T.p }}>
@@ -886,6 +996,31 @@ export default function ChatPage() {
           <div style={{ position: 'fixed', inset: 0, zIndex: 499, background: 'rgba(0,0,0,0.4)' }} onClick={() => { setScheduleDrawerOpen(false); refreshSchedule(); }}/>
           <ScheduleDrawer groupId={groupId ?? ''} onClose={() => { setScheduleDrawerOpen(false); refreshSchedule(); }}/>
         </>
+      )}
+
+      {/* Stream J 2026-05-28 · DingTalk 风群设置 modal — 由 ConvHeaderFB ⋯ 触发 */}
+      {group && (
+        <GroupSettingsModalFB
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          groupName={group.name}
+          agentCount={settingsAgentCount}
+          onlineCount={settingsOnlineCount}
+          startedAt={undefined /* TODO Stream K: group.startedAt 或 currentRun.started_at */}
+          members={settingsMembers}
+          groupNickname={group.name}
+          announcement={(group as unknown as { announcement?: string }).announcement ?? ''}
+          myNickname="我"
+          isOwner={false /* TODO Stream K: 接 owner 概念 */}
+          settings={groupPrefs}
+          onEditField={field => void handleEditField(field)}
+          onToggleSetting={key => togglePref(key as keyof GroupPrefs)}
+          onViewAllMembers={() => console.log('[ChatPage] onViewAllMembers — TODO Stream K')}
+          onInviteMember={() => console.log('[ChatPage] onInviteMember — TODO Stream K')}
+          onSearchInChat={() => console.log('[ChatPage] onSearchInChat — TODO Stream K')}
+          onArchive={() => console.log('[ChatPage] onArchive — TODO Stream K')}
+          onLeave={() => console.log('[ChatPage] onLeave — TODO Stream K')}
+        />
       )}
     </div>
   );
