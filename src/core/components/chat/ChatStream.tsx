@@ -70,6 +70,18 @@ export interface ChatMessage {
    */
   kind?: 'syscard' | 'inline-approval';
   payload?: Record<string, unknown>;
+  /**
+   * Stream H 2026-05-28 · agent message 内嵌结构化 issue 列表（critic / reviewer
+   * 产出）。ChatFeedFB 用 IssueListFB 渲染；不传则不渲染。
+   * id / severity / title 字段对齐 IssueListFB 的 IssueItem。
+   */
+  issues?: Array<{
+    id: string;
+    severity: 'high' | 'med' | 'low';
+    title: string;
+    excerpt?: string;
+    location?: { file?: string; line?: number };
+  }>;
 }
 
 export interface MessageBubbleProps {

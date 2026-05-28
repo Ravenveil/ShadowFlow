@@ -2237,3 +2237,21 @@
   white-space: nowrap;
   vertical-align: bottom;
 }
+
+/* ── Stream H 2026-05-28 · @mention 行内高亮 chip ────────────────────────────
+   对照 chat-fb.html 行 1237 — `<span ...accent-tint...>@阿批</span>` */
+.mention {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 0 2px;
+  border-radius: 4px;
+  background: var(--accent-tint, color-mix(in oklab, var(--accent) 15%, transparent));
+  color: var(--accent-bright, var(--accent));
+  font-weight: 700;
+  font-size: inherit;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.mention:hover {
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+}

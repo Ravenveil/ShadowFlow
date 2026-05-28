@@ -20,6 +20,8 @@ import { TypingDotsFB } from './TypingDotsFB';
 import { MsgReactionsFB } from './MsgReactionsFB';
 import { SyscardFB, type SyscardKind } from './SyscardFB';
 import { InlineApprovalFB, type InlineApprovalStatus, type InlineApprovalChoice, type InlineApprovalMetric } from './InlineApprovalFB';
+import { IssueListFB } from './IssueListFB';
+import type { ReactNode } from 'react';
 
 /** Stream H 2026-05-28 · 9 个 hover toolbar 动作 + system 卡的统一 action 类型。 */
 export type ChatFeedAction =
@@ -64,6 +66,32 @@ function initialOf(name: string | undefined): string {
   if (!t) return '?';
   const first = Array.from(t)[0] ?? '?';
   return /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
+}
+
+/**
+ * Stream H 2026-05-28 · 把 message 文本里的 @mention 解析成绿底高亮 chip。
+ * 对照 chat-fb.html 行 1237 `<span style="...accent-tint...">@阿批</span>`。
+ * 只处理 `@中文/字母数字-_` 字符串；不处理空格分词后的子串。
+ */
+function renderWithMentions(text: string): ReactNode {
+  if (!text) return null;
+  // 中文 / 英文 / 数字 / _- 都可在 @ 后跟，最多 16 字符（防止吃整行）
+  const re = /@([一-龥A-Za-z0-9_-]{1,16})/g;
+  const out: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let idx = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(
+      <span key={`mention-${idx++}`} className={styles.mention}>
+        @{m[1]}
+      </span>
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out.length > 0 ? out : text;
 }
 
 function fmtTime(ts: string | undefined): string {
@@ -132,9 +160,12 @@ function AgentMsg({
           {m.timestamp && <span className={styles.msgT}>{fmtTime(m.timestamp)}</span>}
         </div>
         <div className={styles.msgText}>
-          {m.content}
+          {renderWithMentions(m.content)}
           {m.streaming && <span className={styles.streamCaret} aria-hidden>▍</span>}
         </div>
+
+        {/* Stream H · agent msg issue 列表（critic/reviewer 产出）— 对照 chat-fb.html 1200-1204 */}
+        {m.issues && m.issues.length > 0 && <IssueListFB issues={m.issues} />}
 
         {m.toolCall && (
           <div className={styles.toolChip}>
@@ -209,7 +240,7 @@ function UserMsg({
             <span className={styles.usermsgReplyExcerpt}>{m.replyTo.excerpt}</span>
           </button>
         )}
-        <div className={styles.usermsgBubble}>{m.content}</div>
+        <div className={styles.usermsgBubble}>{renderWithMentions(m.content)}</div>
         {m.status && (
           <div className={styles.usermsgDelivered}>
             已送达{m.status === 'read' ? ' · 已读' : ''}
