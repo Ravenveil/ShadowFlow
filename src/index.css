@@ -12,17 +12,30 @@
  * 一次 Google Fonts 请求, display=swap 避免 FOIT。
  * ============================================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Geist:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+/* 2026-05-28 字体升级 (含 CJK):
+ *   - Bricolage Grotesque: display(可变 opsz 12-96, wght 300-800)
+ *   - Geist: body 中性骨架
+ *   - JetBrains Mono: mono(48% 文本)
+ *   - Noto Sans SC: 思源黑体, CJK fallback(中文/日文汉字)。Latin 不命中它,
+ *     Latin 继续走前述 3 个; 仅当字符是中日韩才用思源, 干净不冲突。 */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Geist:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@300..900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ---- Font families -------------------------------------- */
+/* ---- Font families --------------------------------------
+ * 三声部 + CJK fallback:
+ *   --font-sans:    body/UI         (Geist Latin + Noto Sans SC CJK)
+ *   --font-display: hero/标题        (Bricolage Latin + Noto Sans SC CJK)
+ *   --font-mono:    标签/ID/code     (JetBrains Mono Latin + Noto Sans SC CJK)
+ * 字体栈顺序: Latin 第一, CJK 第二, system 兜底。浏览器按 codepoint 命中,
+ * Bricolage/Geist/JetBrains 不含汉字 → 自动落到 Noto Sans SC 而非系统默认
+ * 的微软雅黑(小字号发糊). */
 :root {
-  --font-sans:    'Geist', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Bricolage Grotesque', 'Geist', ui-sans-serif, system-ui, sans-serif;
-  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans:    'Geist', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Bricolage Grotesque', 'Geist', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Noto Sans SC', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* ---- SKIN SLOTS (7) ----------------------------------------
      7-slot YAML Skin Pack. Everything downstream derives from these. */
