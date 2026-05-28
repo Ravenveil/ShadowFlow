@@ -49,7 +49,13 @@ export default function PinnedBriefFB({
 }: PinnedBriefFBProps) {
   if (!group) return null;
 
-  const tr = (k: string, fb: string) => (t ? t(k) : fb);
+  // 注意：useI18n.t() 在 key 不存在时会原样返回 key（含点号字符串），
+  // 因此用 "包含 . 的返回值 = 未命中" 启发式来回退到中文 fallback。
+  const tr = (k: string, fb: string) => {
+    if (!t) return fb;
+    const v = t(k);
+    return v && v !== k ? v : fb;
+  };
   const runCount = group.metrics?.activeRuns ?? 0;
   const runTag = runCount > 0 ? `#${String(runCount).padStart(3, '0')}` : '#---';
 

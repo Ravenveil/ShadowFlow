@@ -50,7 +50,11 @@ function initialOf(name?: string): string {
 }
 
 export function ThreadDrawerFB({ groupId, group, metrics, t, onClose }: ThreadDrawerFBProps) {
-  const tr = (k: string, fb: string) => (t ? t(k) : fb);
+  const tr = (k: string, fb: string) => {
+    if (!t) return fb;
+    const v = t(k);
+    return v && v !== k ? v : fb;
+  };
   const [tab, setTab] = useState<DrawerTab>('thread');
   const [threads, setThreads] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);

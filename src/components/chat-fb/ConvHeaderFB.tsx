@@ -96,8 +96,12 @@ export default function ConvHeaderFB({
   threadOpen = false,
   tasksCount,
 }: ConvHeaderFBProps) {
-  const tr = (k: string, fb: string, opts?: Record<string, unknown>) =>
-    (t ? t(k, opts) : fb);
+  // missing-key 回退到中文 fb（useI18n 未命中时返回 key 本身）
+  const tr = (k: string, fb: string, opts?: Record<string, unknown>) => {
+    if (!t) return fb;
+    const v = t(k, opts);
+    return v && v !== k ? v : fb;
+  };
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [toggles, setToggles] = useState<Record<string, boolean>>(() => {

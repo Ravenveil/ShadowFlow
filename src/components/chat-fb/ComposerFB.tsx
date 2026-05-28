@@ -42,7 +42,11 @@ export default function ComposerFB({
   t,
   placeholder,
 }: ComposerFBProps) {
-  const tr = (k: string, fb: string) => (t ? t(k) : fb);
+  const tr = (k: string, fb: string) => {
+    if (!t) return fb;
+    const v = t(k);
+    return v && v !== k ? v : fb;
+  };
   const [slashOpen, setSlashOpen] = useState(false);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
