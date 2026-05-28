@@ -133,6 +133,53 @@ export async function fetchRecentMessages(
  * actually work: previously useChatStream POSTed to /api/chat/sessions/...
  * which had no backend, so messages vanished on refresh.
  */
+/**
+ * Stream J 2026-05-28 · 群元数据 PATCH 客户端。
+ *
+ * 配合 Stream K 即将加的 `PATCH /api/groups/{groupId}` 后端 endpoint。
+ * 在 Stream K 上线前请求会 404，调用方应 try/catch 容错（保留本地乐观更新）。
+ */
+export interface PatchGroupRequest {
+  name?: string;
+  announcement?: string;
+}
+
+/**
+ * Stream J · 后端返回结构（与 shadowflow/api/groups.py 的 GroupRecord 对齐）。
+ * 字段宽松：只列我们 FE 当前会用到的，其他字段透传。
+ */
+export interface GroupRecord {
+  group_id: string;
+  name: string;
+  announcement?: string;
+  agent_ids?: string[];
+  workspace_id?: string;
+  team_id?: string;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
+export async function patchGroup(
+  groupId: string,
+  body: PatchGroupRequest,
+): Promise<GroupRecord> {
+  const res = await fetch(
+    `${getApiBase()}/api/groups/${encodeURIComponent(groupId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  );
+  await _checkPythonStatus(res);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  // backend envelope: { data: GroupRecord, meta: {...} }；也兼容裸返回
+  return (json.data ?? json) as GroupRecord;
+}
+
 export async function postGroupMessage(
   groupId: string,
   content: string,

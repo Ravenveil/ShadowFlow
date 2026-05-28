@@ -30,6 +30,11 @@ interface InboxState {
    */
   fetchWorkspaceInbox: (workspaceId: string | null) => Promise<void>;
   updateGroupStatus: (groupId: string, partial: Partial<GroupItem>) => void;
+  /**
+   * Stream J 2026-05-28 · 群元数据本地乐观更新（name / announcement 等）。
+   * 配合 patchGroup() — 不论后端是否上线，FE 都先 flip 本地状态。
+   */
+  updateGroupMeta: (groupId: string, partial: Partial<GroupItem>) => void;
   updateGroupMetrics: (groupId: string, partial: Partial<GroupMetrics>) => void;
   updateActiveRuns: (groupId: string, delta: number) => void;
   markRead: (groupId: string) => void;
@@ -103,6 +108,16 @@ export const useInboxStore = create<InboxState>((set, get) => ({
   },
 
   updateGroupStatus: (groupId: string, partial: Partial<GroupItem>) => {
+    set((state) => ({
+      groups: state.groups.map((g) =>
+        g.id === groupId ? { ...g, ...partial } : g
+      ),
+    }));
+  },
+
+  updateGroupMeta: (groupId: string, partial: Partial<GroupItem>) => {
+    // 与 updateGroupStatus 同形态；分开命名是为了让调用方语义清楚：
+    // status 走 SSE；meta（name/announcement）走 PATCH。
     set((state) => ({
       groups: state.groups.map((g) =>
         g.id === groupId ? { ...g, ...partial } : g
