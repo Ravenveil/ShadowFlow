@@ -14,14 +14,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApiBase } from '../../api/_base';
 import { applyCustomTheme, loadCustomTheme } from './customTheme';
 
-export type ThemePref = 'dark' | 'light' | 'system';
-type DataTheme = 'night' | 'day';
+// 2026-05-28 — added 'paper' as a third skin pack (warm cream/sepia aesthetic),
+// alongside dark/light/system. Aligns with the design package's 7-slot Skin
+// Pack model. UI mapping: 'paper' → data-theme="paper".
+export type ThemePref = 'dark' | 'light' | 'system' | 'paper';
+type DataTheme = 'night' | 'day' | 'paper';
 
 const SYSTEM_QUERY = '(prefers-color-scheme: dark)';
 const STORAGE_KEY = 'sf-theme';
 
 function isPref(v: unknown): v is ThemePref {
-  return v === 'dark' || v === 'light' || v === 'system';
+  return v === 'dark' || v === 'light' || v === 'system' || v === 'paper';
 }
 
 function readStoredPref(): ThemePref {
@@ -41,6 +44,7 @@ function writeStoredPref(pref: ThemePref): void {
 function resolveDataTheme(pref: ThemePref): DataTheme {
   if (pref === 'dark') return 'night';
   if (pref === 'light') return 'day';
+  if (pref === 'paper') return 'paper';
   if (typeof window !== 'undefined' && window.matchMedia) {
     return window.matchMedia(SYSTEM_QUERY).matches ? 'night' : 'day';
   }
