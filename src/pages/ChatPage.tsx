@@ -848,26 +848,20 @@ export default function ChatPage() {
             composer 被推到 viewport 之下，底部 compFoot（send 按钮 + kbd hint）
             就看不见了。 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
-          {/* Stream D · FB-HiFi ConvHeader + CreateAgentButton 仍保留在右侧 */}
+          {/* 2026-05-28 — 用户明确要求删掉「基于此对话创建 Agent」按钮（截图标注）
+              ConvHeaderFB 现在独占 header 行，去掉外层 flex 包装。 */}
           {group && (
-            <div style={{ display: 'flex', alignItems: 'stretch' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <ConvHeaderFB
-                  group={group}
-                  isRunning={isRunning}
-                  t={t}
-                  threadOpen={threadDrawerOpen}
-                  tasksCount={metrics.pendingApprovalsCount}
-                  onThreadToggle={() => setThreadDrawerOpen(p => !p)}
-                  onTasksClick={() => handleTabChange('approvals')}
-                  onSearchToggle={() => setSearchOpen(p => !p)}
-                  onMoreClick={() => setSettingsOpen(true)}
-                />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: `1px solid ${T.bd}`, background: T.p }}>
-                <CreateAgentButton label={t('chat.createAgentFromChat')} builderUrl={builderUrl}/>
-              </div>
-            </div>
+            <ConvHeaderFB
+              group={group}
+              isRunning={isRunning}
+              t={t}
+              threadOpen={threadDrawerOpen}
+              tasksCount={metrics.pendingApprovalsCount}
+              onThreadToggle={() => setThreadDrawerOpen(p => !p)}
+              onTasksClick={() => handleTabChange('approvals')}
+              onSearchToggle={() => setSearchOpen(p => !p)}
+              onMoreClick={() => setSettingsOpen(true)}
+            />
           )}
           <PinnedBriefFB group={group} t={t}/>
 
