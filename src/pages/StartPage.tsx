@@ -1247,31 +1247,6 @@ export default function StartPage() {
                 zIndex: 0,
               }}
             />
-            {/* Eyebrow pill — accent-tinted, mono UPPERCASE, +0.14em tracking per
-                design package convention */}
-            <div
-              style={{
-                position: 'relative',
-                zIndex: 1,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10.5,
-                fontWeight: 700,
-                letterSpacing: '.14em',
-                textTransform: 'uppercase',
-                color: 'var(--t-accent-bright)',
-                padding: '6px 12px',
-                borderRadius: 999,
-                background: 'var(--t-accent-tint)',
-                border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)',
-                marginBottom: 24,
-              }}
-            >
-              <span aria-hidden style={{ fontSize: 12 }}>◆</span>
-              {t('start.heroEyebrow')}
-            </div>
             <h1
               style={{
                 position: 'relative',
