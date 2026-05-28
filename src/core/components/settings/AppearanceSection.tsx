@@ -23,6 +23,7 @@ export const APPEARANCE_I18N_KEYS = {
   themeDark: 'appearance.theme.dark',
   themeLight: 'appearance.theme.light',
   themeSystem: 'appearance.theme.system',
+  themePaper: 'appearance.theme.paper',
   selected: 'appearance.selected',
   note: 'appearance.note',
 } as const;
@@ -32,8 +33,11 @@ interface Palette {
   fg: string; fg2: string; fg4: string; accent: string; accentTint: string;
 }
 
-// Exact palette per theme — NOT var(--t-*) tokens on purpose.
-const P: { dark: Palette; light: Palette } = {
+// Exact palette per theme — NOT var(--t-*) tokens on purpose. 2026-05-28: added
+// `paper` palette and re-synced `light` palette to the new soft-white tokens in
+// src/index.css ([data-theme="day"] = #F7F7F5 bg + white #FFFFFF panels, NOT
+// the old cream/beige values which now live under the `paper` theme).
+const P: { dark: Palette; light: Palette; paper: Palette } = {
   dark: {
     bg: '#111113',
     panel: '#18181B',
@@ -46,15 +50,26 @@ const P: { dark: Palette; light: Palette } = {
     accentTint: 'rgba(168,85,247,.18)',
   },
   light: {
-    bg: '#F5F4EF',
+    bg: '#F7F7F5',       // soft warm off-white (matches [data-theme="day"] --t-bg)
     panel: '#FFFFFF',
-    sidebar: '#ECECEA',
-    border: '#E2E0D8',
-    fg: '#18181B',
+    sidebar: '#FAFAF8',
+    border: '#ECECEA',
+    fg: '#0A0A0A',
     fg2: '#52525B',
     fg4: '#A1A1AA',
-    accent: '#A855F7',
-    accentTint: 'rgba(168,85,247,.12)',
+    accent: '#7C3AED',
+    accentTint: 'rgba(168,85,247,.08)',
+  },
+  paper: {
+    bg: '#EBE8DE',       // warm cream/sepia "paper on paper" aesthetic
+    panel: '#FAF9F5',
+    sidebar: '#F0EEE6',
+    border: '#D1CFC5',
+    fg: '#141413',
+    fg2: '#4D4C48',
+    fg4: '#87867F',
+    accent: '#7C3AED',
+    accentTint: 'rgba(124,58,237,.10)',
   },
 } as const;
 
@@ -216,6 +231,7 @@ function ThemeCard({ id, label, sublabel, selected, onClick }: ThemeCardProps) {
   const [hover, setHover] = React.useState(false);
 
   const isLight  = id === 'light';
+  const isPaper  = id === 'paper';
   const isSystem = id === 'system';
 
   // Card shell uses current token system (adapts to active theme)
@@ -225,7 +241,7 @@ function ThemeCard({ id, label, sublabel, selected, onClick }: ThemeCardProps) {
     ? 'var(--t-panel-2)'
     : 'var(--t-panel)';
 
-  const previewC: Palette = isLight ? P.light : P.dark;
+  const previewC: Palette = isPaper ? P.paper : isLight ? P.light : P.dark;
 
   return (
     <button
@@ -339,6 +355,7 @@ export function AppearanceSection() {
     themeDark:   isZh ? '深色'   : 'Dark',
     themeLight:  isZh ? '浅色'   : 'Light',
     themeSystem: isZh ? '跟随系统' : 'System',
+    themePaper:  isZh ? '纸张'   : 'Paper',
     customLabel: isZh ? '颜色定制' : 'Custom Colors',
     customHint:  isZh
       ? '调整以下颜色会立即生效并保存。覆盖当前主题对应的 CSS 变量；点重置回到当前模式默认。'
@@ -387,6 +404,7 @@ export function AppearanceSection() {
   const options: Array<{ id: ThemePref; label: string; sublabel: string }> = [
     { id: 'dark',   label: tx.themeDark,   sublabel: 'dark'   },
     { id: 'light',  label: tx.themeLight,  sublabel: 'light'  },
+    { id: 'paper',  label: tx.themePaper,  sublabel: 'paper'  },
     { id: 'system', label: tx.themeSystem, sublabel: 'auto'   },
   ];
 
@@ -417,7 +435,7 @@ export function AppearanceSection() {
         >
           {tx.modeLabel}
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
           {options.map(({ id, label, sublabel }) => (
             <ThemeCard
               key={id}
