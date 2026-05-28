@@ -240,11 +240,19 @@ export function GroupSettingsModalFB(props: GroupSettingsModalFBProps) {
     }
   }, [editingField]);
 
-  // 关 modal 时清理编辑态
+  // 关 modal 时清理编辑态 + 把焦点移走（避免 a11y warning：focused element 进 aria-hidden 子树）
   useEffect(() => {
     if (!open) {
       setEditingField(null);
       setEditingValue('');
+      // 若聚焦还在 dialog 内（如 toggle button），主动 blur 它，避免浏览器
+      // 「Blocked aria-hidden on an element because its descendant retained focus」警告
+      if (typeof document !== 'undefined') {
+        const active = document.activeElement as HTMLElement | null;
+        if (active && overlayRef.current?.contains(active)) {
+          active.blur();
+        }
+      }
     }
   }, [open]);
 
