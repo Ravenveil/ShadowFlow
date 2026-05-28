@@ -589,22 +589,29 @@
   background: var(--bg);
   letter-spacing: .01em;
 }
-/* OpenDesign-style status dot: small filled circle, pulsing while live,
-   static on terminal. Replaces the previous Cloud SVG (semantically wrong;
-   cloud = upload/weather, not "agent activity"). 6px diameter sits visually
-   centered against the 11px mono verb. */
+/* Status dot — exact port of v8 `.statusline .status-dot` (run-session-v8.html
+   line 1309). 7px disc, accent-bright, sf-pulse animation, plus a 3px halo
+   ring (color-mix at 16% over transparent) that's the signature glow OpenDesign
+   uses for live-state indicators. Replaces the previous Cloud SVG (semantically
+   wrong; cloud = upload/weather, not "agent activity"). */
 .statusGlyph {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--accent-bright);
   animation: sf-pulse 1.6s ease-in-out infinite;
   flex-shrink: 0;
   display: inline-block;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent-bright) 16%, transparent);
 }
+/* Terminal (Done) variant — not in v8 CSS (the design demo only shows live
+   state) but needed because we freeze the ticker on completion (terminal flag).
+   Drop the halo + animation, mute the dot to fg-4 so "Done" reads as a
+   resting state without screaming for attention. */
 .statusGlyphDone {
   background: var(--fg-4);
   animation: none;
+  box-shadow: none;
 }
 .statusVerb {
   color: var(--fg-2);
