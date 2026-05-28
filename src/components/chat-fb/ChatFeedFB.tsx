@@ -15,6 +15,13 @@
 
 import type { ChatMessage } from '../../core/components/chat/ChatStream';
 import styles from './chatFB.module.css';
+import { MessageHoverToolbarFB } from './MessageHoverToolbarFB';
+
+// hover toolbar handler 占位（Stream H 整合时由 ChatPage 注入真实 handler）
+// eslint-disable-next-line no-console
+const logToolbarAction = (action: string, messageId: string): void => {
+  console.log(`[ChatFeedFB] hover-tb: ${action} on ${messageId}`);
+};
 
 export interface ChatFeedFBProps {
   messages: ChatMessage[];
@@ -66,7 +73,19 @@ function AgentMsg({ m }: { m: ChatMessage }) {
   const letter = m.senderGlyph || initialOf(m.senderName);
 
   return (
-    <div className={styles.msg}>
+    <div className={`${styles.msg} ${styles.msgHoverHost}`} id={`msg-${m.id}`}>
+      <MessageHoverToolbarFB
+        messageId={m.id}
+        onReact={id => logToolbarAction('react', id)}
+        onReply={id => logToolbarAction('reply', id)}
+        onThread={id => logToolbarAction('thread', id)}
+        onQuote={id => logToolbarAction('quote', id)}
+        onRewrite={id => logToolbarAction('rewrite', id)}
+        onTranslate={id => logToolbarAction('translate', id)}
+        onPin={id => logToolbarAction('pin', id)}
+        onForward={id => logToolbarAction('forward', id)}
+        onMore={id => logToolbarAction('more', id)}
+      />
       <span className={styles.agentAv}>
         <span
           className={styles.avLg}
@@ -121,13 +140,45 @@ function AgentMsg({ m }: { m: ChatMessage }) {
 function UserMsg({ m }: { m: ChatMessage }) {
   const p = paletteOf(m.senderName ?? 'me');
   const letter = m.senderGlyph || initialOf(m.senderName) || '我';
+  // TODO: 等后端 reply-to 数据模型上线后，replyTo 字段会由 chat_messages.metadata
+  //       映射；当前仅前端结构，点击滚动暂用 anchor#msg-{id}。
+  const handleReplyClick = m.replyTo
+    ? () => {
+        const el = document.getElementById(`msg-${m.replyTo!.id}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    : undefined;
   return (
-    <div className={styles.usermsg}>
+    <div className={`${styles.usermsg} ${styles.msgHoverHost}`} id={`msg-${m.id}`}>
+      <MessageHoverToolbarFB
+        messageId={m.id}
+        onReact={id => logToolbarAction('react', id)}
+        onReply={id => logToolbarAction('reply', id)}
+        onThread={id => logToolbarAction('thread', id)}
+        onQuote={id => logToolbarAction('quote', id)}
+        onRewrite={id => logToolbarAction('rewrite', id)}
+        onTranslate={id => logToolbarAction('translate', id)}
+        onPin={id => logToolbarAction('pin', id)}
+        onForward={id => logToolbarAction('forward', id)}
+        onMore={id => logToolbarAction('more', id)}
+      />
       <div className={styles.usermsgCol}>
         <div className={styles.usermsgHd}>
           {m.timestamp && <span className={styles.msgT}>{fmtTime(m.timestamp)}</span>}
           <span className={styles.msgNm}>{m.senderName ?? '我'}</span>
         </div>
+        {m.replyTo && (
+          // .reply 引用块 — chat-fb.html 行 1233-1241 / CSS 行 448-452
+          <button
+            type="button"
+            className={styles.usermsgReply}
+            onClick={handleReplyClick}
+            aria-label={`引用 ${m.replyTo.sender} 的消息`}
+          >
+            <span className={styles.usermsgReplyWho}>{m.replyTo.sender}</span>
+            <span className={styles.usermsgReplyExcerpt}>{m.replyTo.excerpt}</span>
+          </button>
+        )}
         <div className={styles.usermsgBubble}>{m.content}</div>
         {m.status && (
           <div className={styles.usermsgDelivered}>

@@ -1267,6 +1267,281 @@
   cursor: not-allowed;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Stream F · FeedSearchbar / MessageHoverToolbar / IssueList
+ *   对照 _evidence/design-pkg-2026-05-28/chat-fb.html
+ *   - searchbar : 行 555-596
+ *   - hover-tb  : 行 411-440 + 1576-1589 模板
+ *   - issue-list: 行 367-373
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── FeedSearchbar (inline drop under header) ──────────────────────────── */
+.searchbar {
+  max-height: 0;
+  overflow: hidden;
+  background: var(--skin-panel, #fff);
+  border-bottom: 1px solid transparent;
+  flex-shrink: 0;
+  transition: max-height 180ms ease, border-bottom-color 180ms ease;
+}
+.searchbarOpen {
+  max-height: 96px;
+  border-bottom-color: var(--border, #e4e7ec);
+}
+.sbInner {
+  padding: 9px 18px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.sbRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sbInput {
+  flex: 1;
+  height: 30px;
+  padding: 0 11px;
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #e4e7ec);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sbInput:focus-within {
+  border-color: color-mix(in oklab, var(--accent, #2f80ed) 50%, var(--border, #e4e7ec));
+}
+.sbInput svg {
+  color: var(--fg-4, #98a2b3);
+  flex-shrink: 0;
+}
+.sbInput input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--fg-1, #101828);
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.sbCount {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4, #98a2b3);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sbNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+.sbKbd {
+  padding: 1px 5px;
+  background: var(--bg-elev-2, #f2f4f7);
+  border: 1px solid var(--border, #e4e7ec);
+  border-radius: 4px;
+  font-size: 9.5px;
+  color: var(--fg-3, #475467);
+  font-family: var(--font-mono);
+}
+.sbNum {
+  color: var(--fg-1, #101828);
+  font-weight: 600;
+}
+.sbClose {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-4, #98a2b3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sbClose:hover {
+  background: var(--bg-elev-2, #f2f4f7);
+  color: var(--fg-1, #101828);
+}
+.sbChips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.sbChip {
+  padding: 2px 8px;
+  border-radius: 11px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--skin-panel, #fff);
+  color: var(--fg-3, #475467);
+  border: 1px solid var(--border, #e4e7ec);
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.45;
+}
+.sbChip:hover {
+  background: var(--bg-elev-2, #f2f4f7);
+  color: var(--fg-1, #101828);
+}
+.sbChipOn {
+  background: var(--accent-tint, #e7f0fd);
+  color: var(--accent-bright, #1d4ed8);
+  border-color: color-mix(in oklab, var(--accent, #2f80ed) 30%, transparent);
+}
+.sbChipOn:hover {
+  background: var(--accent-tint, #e7f0fd);
+}
+
+/* ─── MessageHoverToolbar (Lark-style; 9 actions + sep) ─────────────────── */
+.hoverTb {
+  position: absolute;
+  top: -13px;
+  right: 10px;
+  z-index: 5;
+  display: flex;
+  background: var(--skin-panel, #fff);
+  border: 1px solid var(--border, #e4e7ec);
+  border-radius: 8px;
+  padding: 2px;
+  box-shadow: var(--shadow-pop, 0 6px 18px rgba(15, 23, 42, 0.12));
+  opacity: 0;
+  transform: translateY(3px);
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+/* 父级 hover 时显示 — 用 :has() 让组件自洽 */
+/* stylelint-disable-next-line selector-pseudo-class-no-unknown */
+.msgHoverHost:hover > .hoverTb,
+.hoverTbShow {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.hoverTbIt {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-3, #475467);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.hoverTbIt:hover {
+  background: var(--bg-elev-2, #f2f4f7);
+  color: var(--fg-1, #101828);
+}
+.hoverTbSep {
+  width: 1px;
+  height: 14px;
+  background: var(--border, #e4e7ec);
+  margin: 6px 2px;
+  align-self: center;
+}
+
+/* msgHoverHost — 包装消息卡，给 hover-tb 提供定位锚 + hover 触发器 */
+.msgHoverHost {
+  position: relative;
+}
+
+/* user-msg 工具栏沿气泡左缘悬浮，避开右侧头像 — 对照 chat-fb.html 行 426 */
+.usermsg.msgHoverHost > .hoverTb,
+.usermsg .hoverTb {
+  right: 54px;
+}
+
+/* ─── IssueList (structured findings inside agent msg) ──────────────────── */
+.issueList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
+.issue {
+  display: flex;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--skin-panel, #fff);
+  border-radius: 6px;
+  border: 1px solid var(--border, #e4e7ec);
+}
+.issueClickable {
+  cursor: pointer;
+  outline: none;
+}
+.issueClickable:hover {
+  background: var(--bg-elev-2, #f2f4f7);
+  border-color: color-mix(in oklab, var(--accent, #2f80ed) 35%, var(--border, #e4e7ec));
+}
+.issueClickable:focus-visible {
+  border-color: var(--accent, #2f80ed);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent, #2f80ed) 25%, transparent);
+}
+.issueSec {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 36px;
+  letter-spacing: 0.04em;
+  align-self: flex-start;
+  line-height: 1.5;
+}
+.issueSev_high {
+  color: var(--status-err, #dc2626);
+}
+.issueSev_med {
+  color: var(--status-warn, #d97706);
+}
+.issueSev_low {
+  color: var(--fg-4, #98a2b3);
+}
+.issueBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.issueTitle {
+  font-size: 12px;
+  color: var(--fg-2, #344054);
+  line-height: 1.45;
+  font-weight: 500;
+}
+.issueExcerpt {
+  font-size: 11.5px;
+  color: var(--fg-3, #475467);
+  line-height: 1.5;
+  /* 2 行 clip */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.issueLoc {
+  align-self: flex-start;
+  margin-top: 2px;
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-elev-2, #f2f4f7);
+  border: 1px solid var(--border, #e4e7ec);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4, #98a2b3);
+}
+
 /* ═══ G: ThreadDrawer dr-ctx / dr-comp / dr-doc ═══
  * Stream G 落地 chat-fb.html 设计稿 P3 漏项：
  *   - dr-ctx 头部源消息预览（avatar + name + excerpt）  HTML 行 619-624
@@ -1492,4 +1767,473 @@
   padding: 10px 13px;
   opacity: 0.7;
   letter-spacing: 0.04em;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * E: Syscard / InlineApproval / TypingDots / Reactions / Reply 引用块
+ * 对照 _evidence/design-pkg-2026-05-28/chat-fb.html
+ *   - .syscard     CSS 行 330-339   HTML 行 1220-1231
+ *   - .gate-wrap   CSS 行 461-484   HTML 行 1243-1265
+ *   - .typing      CSS 行 487-496   HTML 行 1267-1272
+ *   - .reactions   CSS 行 385-397   HTML 行 1146-1180
+ *   - .thread-chip CSS 行 399-407   HTML 行 1173-1178
+ *   - .read-by     CSS 行 409       HTML 行 1179
+ *   - usermsg .reply CSS 行 448-452 HTML 行 1236
+ * Stream E 范围 — 行内"功能层"二级元素；本段只追加，不改动既有规则。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Syscard（feed 内系统决策事件卡）─────────────────────────────────────── */
+.syscard {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0;
+}
+.syscardBox {
+  display: flex;
+  gap: 10px;
+  padding: 11px 13px;
+  border-radius: 9px;
+  max-width: 560px;
+  background: var(--status-reject-tint, color-mix(in oklab, var(--status-reject) 12%, transparent));
+  border: 1px solid color-mix(in oklab, var(--status-reject) 30%, transparent);
+}
+.syscardBox[data-kind="policy-approve"],
+.syscardBox[data-kind="gate-pass"] {
+  background: color-mix(in oklab, var(--status-ok) 12%, transparent);
+  border-color: color-mix(in oklab, var(--status-ok) 30%, transparent);
+}
+.syscardBox[data-kind="system-event"] {
+  background: var(--bg-elev-2);
+  border-color: var(--border);
+}
+.syscardDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+.syscardCol {
+  flex: 1;
+  min-width: 0;
+}
+.syscardTag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--status-reject);
+  margin-bottom: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.syscardTag[data-kind="policy-approve"],
+.syscardTag[data-kind="gate-pass"] {
+  color: var(--status-ok);
+}
+.syscardTag[data-kind="system-event"] {
+  color: var(--fg-3);
+}
+.syscardTagIcon {
+  flex-shrink: 0;
+}
+.syscardBody {
+  font-size: 11.5px;
+  color: var(--fg-2);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.syscardMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 5px;
+}
+.syscardMetaKv {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.syscardMetaK {
+  color: var(--fg-5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.syscardMetaV {
+  color: var(--fg-2);
+  font-weight: 600;
+}
+.syscardTs {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--fg-5);
+  margin-top: 4px;
+}
+
+/* ─── InlineApproval（feed 内嵌 Approval Gate 卡）─────────────────────────── */
+.gateWrap {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0;
+}
+.gateWrap[data-status="approved"] .gate {
+  border-color: color-mix(in oklab, var(--status-ok) 38%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--status-ok) 22%, transparent),
+    0 8px 22px -10px color-mix(in oklab, var(--status-ok) 35%, transparent);
+}
+.gateWrap[data-status="rejected"] .gate {
+  border-color: color-mix(in oklab, var(--status-reject) 38%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--status-reject) 22%, transparent),
+    0 8px 22px -10px color-mix(in oklab, var(--status-reject) 35%, transparent);
+}
+.gate {
+  width: 100%;
+  max-width: 640px;
+  padding: 14px 15px 13px;
+  border-radius: 11px;
+  position: relative;
+  background: var(--skin-panel);
+  border: 1px solid color-mix(in oklab, var(--accent) 38%, transparent);
+  box-shadow: var(--glow-accent, 0 0 0 1px color-mix(in oklab, var(--accent) 22%, transparent),
+    0 8px 22px -10px color-mix(in oklab, var(--accent) 35%, transparent));
+}
+.gateTag {
+  position: absolute;
+  top: -10px;
+  left: 14px;
+  padding: 2px 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.gateRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  flex-wrap: wrap;
+}
+.gateAv {
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+.gateNm {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fg-1);
+}
+.gateRole {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+}
+.gateWait {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  margin-left: auto;
+}
+.gateResultOk {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--status-ok);
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.gateResultReject {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--status-reject);
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.gateTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg-1);
+  margin-bottom: 4px;
+}
+.gateBody {
+  font-size: 13px;
+  color: var(--fg-2);
+  margin-bottom: 9px;
+  line-height: 1.5;
+}
+.gateKv {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.gateKvCell {
+  padding: 6px 9px;
+  background: var(--bg-elev-2);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.gateKvK {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--fg-4);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.gateKvV {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg-1);
+  margin-top: 2px;
+}
+.gateCtas {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.gateKbd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+}
+/* Reject 按钮变体（既有 .btn/.btnPrimary/.btnGhost/.btnSm 链合使用） */
+.btnReject {
+  background: color-mix(in oklab, var(--status-reject) 14%, transparent);
+  color: var(--status-reject);
+  border: 1px solid color-mix(in oklab, var(--status-reject) 35%, transparent);
+}
+.btnReject:hover {
+  background: color-mix(in oklab, var(--status-reject) 22%, transparent);
+}
+
+/* ─── TypingDots（agent 思考中三点）──────────────────────────────────────── */
+.typing {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-left: 2px;
+  margin: 4px 0;
+}
+.typingAv {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+.typingNm {
+  font-size: 11.5px;
+  color: var(--fg-4);
+}
+.typingDots {
+  display: inline-flex;
+  gap: 3px;
+}
+.typingDots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fg-4);
+  animation: chatFbTypingPulse 1.2s ease-in-out infinite;
+}
+.typingDots span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.typingDots span:nth-child(3) {
+  animation-delay: 0.36s;
+}
+.typingMeta {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  margin-left: 6px;
+}
+@keyframes chatFbTypingPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+
+/* ─── Reactions / Thread-chip / Read-by（agent msg 二级元素）─────────────── */
+.reactions {
+  display: flex;
+  gap: 5px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.react {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 11px;
+  background: var(--skin-panel);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--fg-3);
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1;
+  font-family: inherit;
+}
+.react:hover {
+  background: var(--bg-elev-2);
+}
+.reactN {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+}
+.reactMine {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+  border-color: color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.reactAdd {
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: var(--skin-panel);
+  border: 1px dashed var(--border-strong);
+  color: var(--fg-4);
+}
+.reactAdd:hover {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+
+.threadChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: var(--accent-tint);
+  border: 1px solid color-mix(in oklab, var(--accent) 25%, transparent);
+  color: var(--accent-bright);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
+.threadChip:hover {
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+}
+.threadChipC {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+.threadChipLast {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+}
+.threadChipArr {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.readByRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.readByStack {
+  display: inline-flex;
+}
+.readByAv {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  color: var(--fg-3);
+  margin-left: -4px;
+  flex-shrink: 0;
+}
+.readByAv:first-child {
+  margin-left: 0;
+}
+.readBy {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--fg-5);
+}
+
+/* ─── usermsg .reply 引用块 ──────────────────────────────────────────────── */
+.usermsgReply {
+  display: block;
+  width: 100%;
+  text-align: right;
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 5px;
+  margin-bottom: 5px;
+  background: var(--bg-elev-2);
+  border: none;
+  border-left: 2px solid var(--accent);
+  color: var(--fg-4);
+  max-width: 100%;
+  cursor: pointer;
+  line-height: 1.4;
+  font-family: inherit;
+}
+.usermsgReply:hover {
+  background: color-mix(in oklab, var(--accent) 12%, var(--bg-elev-2));
+}
+.usermsgReplyWho {
+  font-weight: 700;
+  color: var(--fg-3);
+}
+.usermsgReplyExcerpt {
+  margin-left: 6px;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }

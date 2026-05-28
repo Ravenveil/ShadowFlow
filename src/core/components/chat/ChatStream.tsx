@@ -50,6 +50,17 @@ export interface ChatMessage {
   senderGlyph?: string;
   /** Group-chat sender avatar tile color (token, e.g. `var(--t-accent)`). */
   senderColor?: string;
+  /**
+   * 引用上文消息（飞书风 user msg `.reply` 引用块）。
+   * 当前仅 FB feed (`ChatFeedFB`) 渲染，user role 才显示。
+   * TODO: 后端 chat schema 暂无对应字段，前端先用此结构占位；
+   *       接 ACP/Python 后将由 `chat_messages.metadata.reply_to` 映射。
+   */
+  replyTo?: {
+    id: string;
+    sender: string;
+    excerpt: string;
+  };
 }
 
 export interface MessageBubbleProps {
