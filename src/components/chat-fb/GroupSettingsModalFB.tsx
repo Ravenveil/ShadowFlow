@@ -27,7 +27,7 @@
  *   - "查看全部" / "邀请" / 5 个 KV row / archive / leave 的实际跳转/弹窗：本组件只回调
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { X } from 'lucide-react';
 import styles from './chatFB.module.css';
 
@@ -81,7 +81,17 @@ export interface GroupSettingsModalFBProps {
   announcement?: string;
   myNickname?: string;
   isOwner?: boolean;
+  /**
+   * 兼容老签名：只回传 field key（由调用方自己弹 prompt 收新值）。
+   * 新设计：使用 onUpdateField 做内联编辑（modal 内 row 变 input）。
+   * 两者并存时优先 onUpdateField — onEditField 留给 searchChat 行（无 value 概念）。
+   */
   onEditField?: (field: GsetEditField) => void;
+  /**
+   * 2026-05-28 · Stream L · 内联编辑保存回调。row 点击 → input → blur/Enter → 调用此 prop。
+   * 调用方负责 PATCH + updateGroupMeta；返回 Promise 时 modal 行会显示 saving 态（未实现 UI）。
+   */
+  onUpdateField?: (field: 'groupNickname' | 'announcement' | 'myNickname', nextValue: string) => void | Promise<void>;
 
   // ── toggles ──
   settings?: GsetSettings;
@@ -170,6 +180,7 @@ export function GroupSettingsModalFB(props: GroupSettingsModalFBProps) {
     myNickname,
     isOwner,
     onEditField,
+    onUpdateField,
     settings = DEFAULT_SETTINGS,
     onToggleSetting,
     onArchive,
@@ -181,15 +192,79 @@ export function GroupSettingsModalFB(props: GroupSettingsModalFBProps) {
   const tx = t ?? fallbackT;
   const overlayRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Stream L 2026-05-28 · 内联编辑 state ─────────────────────────────────
+  // 哪个 KV 行处于编辑态（一次只能一个）。null 表示无编辑。
+  type EditableField = 'groupNickname' | 'announcement' | 'myNickname';
+  const [editingField, setEditingField] = useState<EditableField | null>(null);
+  // 当前 input 缓冲值（避免每次 keystroke 触发 props 回调）
+  const [editingValue, setEditingValue] = useState<string>('');
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const beginEdit = useCallback((field: EditableField, current: string) => {
+    setEditingField(field);
+    setEditingValue(current);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingField(null);
+    setEditingValue('');
+  }, []);
+
+  const commitEdit = useCallback(async () => {
+    if (!editingField) return;
+    const field = editingField;
+    const next = editingValue.trim();
+    // 关 editor 先，让 UI 立刻摆脱 input（防止 onBlur 二次触发）
+    setEditingField(null);
+    setEditingValue('');
+    // 空值或没变都 no-op
+    if (!next) return;
+    const prev = field === 'groupNickname' ? (groupNickname ?? groupName)
+               : field === 'announcement' ? (announcement ?? '')
+               : (myNickname ?? '');
+    if (next === prev) return;
+    try {
+      await onUpdateField?.(field, next);
+    } catch (err) {
+      // 失败时让用户看到 modal 还在；console.warn 让上层调试
+      // eslint-disable-next-line no-console
+      console.warn('[GroupSettingsModal] onUpdateField failed:', err);
+    }
+  }, [editingField, editingValue, onUpdateField, groupName, groupNickname, announcement, myNickname]);
+
+  // open 切换或切换 editing field 时聚焦 input
+  useEffect(() => {
+    if (editingField && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingField]);
+
+  // 关 modal 时清理编辑态
+  useEffect(() => {
+    if (!open) {
+      setEditingField(null);
+      setEditingValue('');
+    }
+  }, [open]);
+
   // Escape 键关；只在 open 时挂监听
+  // 注：若处于内联编辑态，Escape 优先取消编辑而不是关 modal
   useEffect(() => {
     if (!open) return undefined;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (editingField) {
+          cancelEdit();
+          e.stopPropagation();
+        } else {
+          onClose();
+        }
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose]);
+  }, [open, onClose, editingField, cancelEdit]);
 
   // 点 overlay 自身关闭（点 dialog 内部冒泡到这里时 e.target 已是 dialog 子节点，不关）
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -336,38 +411,61 @@ export function GroupSettingsModalFB(props: GroupSettingsModalFBProps) {
 
           <div className={styles.gsetSep} />
 
-          {/* 3) editable KV rows */}
+          {/* 3) editable KV rows · Stream L 2026-05-28: 点击 → row 变 input → Enter/blur 保存 */}
           <div className={styles.gsetSec}>
-            <button
-              type="button"
-              className={styles.gsetRow}
-              onClick={() => onEditField?.('groupNickname')}
-            >
-              <div className={styles.gsetRowK}>{tx('gset.row.groupNickname')}</div>
-              <div className={styles.gsetRowV}><span>{groupNicknameText}</span></div>
-              <div className={styles.gsetRowChev}>›</div>
-            </button>
-            <button
-              type="button"
-              className={styles.gsetRow}
-              onClick={() => onEditField?.('announcement')}
-            >
-              <div className={styles.gsetRowK}>{tx('gset.row.announcement')}</div>
-              <div className={styles.gsetRowV}><span>{announcementText}</span></div>
-              <div className={styles.gsetRowChev}>›</div>
-            </button>
-            <button
-              type="button"
-              className={styles.gsetRow}
-              onClick={() => onEditField?.('myNickname')}
-            >
-              <div className={styles.gsetRowK}>{tx('gset.row.myNickname')}</div>
-              <div className={styles.gsetRowV}>
-                <span>{myNicknameText}</span>
-                {isOwner && <span className={styles.gsetTagOwner}>{tx('gset.owner')}</span>}
-              </div>
-              <div className={styles.gsetRowChev}>›</div>
-            </button>
+            {renderEditableRow({
+              field: 'groupNickname',
+              label: tx('gset.row.groupNickname'),
+              displayValue: groupNicknameText,
+              rawValue: groupNickname ?? groupName,
+              extraTag: null,
+              styles,
+              editingField,
+              editingValue,
+              setEditingValue,
+              inputRef,
+              beginEdit,
+              commitEdit,
+              cancelEdit,
+              onEditField,
+              hasInlineUpdate: Boolean(onUpdateField),
+            })}
+            {renderEditableRow({
+              field: 'announcement',
+              label: tx('gset.row.announcement'),
+              displayValue: announcementText,
+              rawValue: announcement ?? '',
+              extraTag: null,
+              styles,
+              editingField,
+              editingValue,
+              setEditingValue,
+              inputRef,
+              beginEdit,
+              commitEdit,
+              cancelEdit,
+              onEditField,
+              hasInlineUpdate: Boolean(onUpdateField),
+            })}
+            {renderEditableRow({
+              field: 'myNickname',
+              label: tx('gset.row.myNickname'),
+              displayValue: myNicknameText,
+              rawValue: myNickname ?? '',
+              extraTag: isOwner ? (
+                <span className={styles.gsetTagOwner}>{tx('gset.owner')}</span>
+              ) : null,
+              styles,
+              editingField,
+              editingValue,
+              setEditingValue,
+              inputRef,
+              beginEdit,
+              commitEdit,
+              cancelEdit,
+              onEditField,
+              hasInlineUpdate: Boolean(onUpdateField),
+            })}
             <button
               type="button"
               className={styles.gsetRow}
@@ -421,3 +519,112 @@ export function GroupSettingsModalFB(props: GroupSettingsModalFBProps) {
 }
 
 export default GroupSettingsModalFB;
+
+// ─── 内联编辑行渲染 helper ────────────────────────────────────────────────
+// 抽离成函数而非组件，是为了把所有 state 都从 modal 主组件透传——避免再多一层 React 组件
+// 边界引入受控/非受控难调的问题。
+interface EditableRowArgs {
+  field: 'groupNickname' | 'announcement' | 'myNickname';
+  label: string;
+  /** 兜底显示（如 '—'） */
+  displayValue: string;
+  /** 进入编辑时填进 input 的真实原值 */
+  rawValue: string;
+  /** 右侧附加 tag（如 OWNER 徽章），不要时传 null */
+  extraTag: React.ReactNode | null;
+  styles: Record<string, string>;
+  editingField: 'groupNickname' | 'announcement' | 'myNickname' | null;
+  editingValue: string;
+  setEditingValue: (v: string) => void;
+  inputRef: React.MutableRefObject<HTMLInputElement | null>;
+  beginEdit: (field: 'groupNickname' | 'announcement' | 'myNickname', current: string) => void;
+  commitEdit: () => void | Promise<void>;
+  cancelEdit: () => void;
+  onEditField?: (field: GsetEditField) => void;
+  /**
+   * 当调用方接了 onUpdateField 走真·内联编辑时为 true，此时 onEditField 不再被触发
+   * （否则老调用方会弹 window.prompt 干扰）。
+   */
+  hasInlineUpdate: boolean;
+}
+
+function renderEditableRow(args: EditableRowArgs): React.ReactNode {
+  const {
+    field, label, displayValue, rawValue, extraTag,
+    styles, editingField, editingValue, setEditingValue, inputRef,
+    beginEdit, commitEdit, cancelEdit, onEditField, hasInlineUpdate,
+  } = args;
+
+  const isEditing = editingField === field;
+
+  if (isEditing) {
+    return (
+      <div
+        className={styles.gsetRow}
+        key={field}
+        data-editing="true"
+        // 编辑态用 div 而非 button，避免点 input 时被父 button 抢焦点
+      >
+        <div className={styles.gsetRowK}>{label}</div>
+        <div className={styles.gsetRowV}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={editingValue}
+            onChange={(e) => setEditingValue(e.target.value)}
+            onBlur={() => { void commitEdit(); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void commitEdit();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                cancelEdit();
+              }
+            }}
+            // 设计稿没专门 input 样式；用 inline style 贴齐 row 排版（避免污染 CSS module）
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 12,
+              padding: '4px 8px',
+              borderRadius: 6,
+              border: '1px solid var(--accent, #7c3aed)',
+              outline: 'none',
+              background: 'var(--bg, transparent)',
+              color: 'var(--fg-1, inherit)',
+              textAlign: 'right',
+              font: 'inherit',
+            }}
+            aria-label={label}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className={styles.gsetRow}
+      key={field}
+      onClick={() => {
+        if (hasInlineUpdate) {
+          // 真·内联编辑：进入 input 模式，不再触发外部 onEditField
+          beginEdit(field, rawValue);
+        } else {
+          // Legacy：回退到旧 onEditField（调用方自己弹 window.prompt 等）
+          onEditField?.(field);
+        }
+      }}
+    >
+      <div className={styles.gsetRowK}>{label}</div>
+      <div className={styles.gsetRowV}>
+        <span>{displayValue}</span>
+        {extraTag}
+      </div>
+      <div className={styles.gsetRowChev}>›</div>
+    </button>
+  );
+}

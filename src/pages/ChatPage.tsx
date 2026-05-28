@@ -705,58 +705,91 @@ export default function ChatPage() {
     for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
     return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
   }
-  // TODO Stream K：当后端 group record 有 agent_ids 时改为按 id 取并保留顺序。
-  // 临时方案：当前 workspace 的全量 agents 都视为成员（小公司单 workspace 假设）。
-  const settingsMembers = allAgents.slice(0, 12).map(a => ({
-    id: a.agent_id,
-    name: a.name,
-    role: (a.soul?.split('\n')[0] ?? '').slice(0, 12) || 'Agent',
-    avatarColor: hashColor(a.agent_id),
-  }));
+  // ── Stream L 2026-05-28 · 真·群成员 ────────────────────────────────────
+  // 后端 GroupItem 现在带 agent_ids（inbox.py/groups.py 透传）。优先按 id 取对应
+  // AgentRecord；查不到则用 id 自构 placeholder（保证 modal 不空）。
+  // 老群没 agent_ids 字段时 fallback 到全 workspace agents（保持现状）。
+  const settingsMembers = (() => {
+    const memberIds = group?.agent_ids ?? [];
+    if (memberIds.length === 0) {
+      return allAgents.slice(0, 12).map(a => ({
+        id: a.agent_id,
+        name: a.name,
+        role: (a.soul?.split('\n')[0] ?? '').slice(0, 12) || 'Agent',
+        avatarColor: hashColor(a.agent_id),
+      }));
+    }
+    return memberIds.map((id) => {
+      const a = allAgents.find(x => x.agent_id === id);
+      const name = a?.name ?? id;
+      const role = a ? ((a.soul?.split('\n')[0] ?? '').slice(0, 12) || 'Agent') : 'Member';
+      return { id, name, role, avatarColor: hashColor(id) };
+    });
+  })();
   const settingsAgentCount = settingsMembers.length || (metrics.members ?? 0);
   const settingsOnlineCount = Math.max(settingsAgentCount - 1, 0);
 
-  // GroupSettingsModalFB 的 onEditField 只回传 field key（不带新值）。
-  // 由 ChatPage 自己负责弹 prompt / inline 编辑器收集新值，再决定是否调 patchGroup。
-  // 当前阶段先用 window.prompt 占位；TODO Stream K：换 chat-fb 风内联输入。
-  const handleEditField = useCallback(
-    async (field: 'groupNickname' | 'announcement' | 'myNickname' | 'searchChat') => {
+  // ── Stream L 2026-05-28 · created_at → "HH:mm" 显示 ───────────────────
+  const settingsStartedAt = (() => {
+    const iso = group?.created_at;
+    if (!iso) return undefined;
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return undefined;
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      return `${hh}:${mm}`;
+    } catch {
+      return undefined;
+    }
+  })();
+
+  // ── Stream L 2026-05-28 · 内联编辑保存（取代 Stream J 的 window.prompt 占位） ──
+  // GroupSettingsModalFB 已经把 row 转成 input，commit 后调这里：
+  //   1. 立即 updateGroupMeta（乐观更新，UI 即时反映）
+  //   2. PATCH 后端持久化；失败时不回滚（视为弱一致，刷新会拉到真值）
+  // myNickname 暂走 console.log（Stream K 已落地 user-settings endpoint，等 FE 接）
+  const handleUpdateField = useCallback(
+    async (field: 'groupNickname' | 'announcement' | 'myNickname', nextValue: string) => {
       if (!groupId) return;
-      if (field === 'searchChat') {
-        // 复用顶部 inline search bar
-        setSettingsOpen(false);
-        setSearchOpen(true);
-        return;
-      }
       if (field === 'groupNickname') {
-        const cur = group?.name ?? '';
-        const next = typeof window !== 'undefined' ? window.prompt('修改群昵称', cur) : null;
-        if (!next || next === cur) return;
-        updateGroupMeta(groupId, { name: next });
+        updateGroupMeta(groupId, { name: nextValue });
         try {
-          await patchGroup(groupId, { name: next });
+          await patchGroup(groupId, { name: nextValue });
         } catch (err) {
-          console.warn('[ChatPage] patchGroup name 失败（Stream K 后端可能未上线）：', err);
+          console.warn('[ChatPage] patchGroup name 失败：', err);
         }
         return;
       }
       if (field === 'announcement') {
-        const cur = (group as unknown as { announcement?: string })?.announcement ?? '';
-        const next = typeof window !== 'undefined' ? window.prompt('修改群公告', cur) : null;
-        if (next === null || next === cur) return;
+        updateGroupMeta(groupId, { announcement: nextValue });
         try {
-          await patchGroup(groupId, { announcement: next });
-          updateGroupMeta(groupId, { /* 占位 — 等 GroupItem 类型加 announcement */ } as Partial<GroupItem>);
+          await patchGroup(groupId, { announcement: nextValue });
         } catch (err) {
           console.warn('[ChatPage] patchGroup announcement 失败：', err);
         }
         return;
       }
-      // myNickname — 用户层 settings；目前没 endpoint，先 console.log
-      // TODO Stream K：写入 user prefs endpoint
-      console.log('[ChatPage] onEditField myNickname → TODO Stream K user prefs');
+      if (field === 'myNickname') {
+        // TODO Stream K FE 接 user-settings endpoint（PUT /api/groups/{id}/user-settings）
+        // 设计上 myNickname 是 user-per-group 偏好，不走 patchGroup。
+        // eslint-disable-next-line no-console
+        console.log('[ChatPage] onUpdateField myNickname →', nextValue, '(TODO Stream K user-settings)');
+      }
     },
-    [groupId, group, updateGroupMeta],
+    [groupId, updateGroupMeta],
+  );
+
+  // searchChat / 老回调入口（只剩 searchChat 走老路径；KV 行编辑现走 onUpdateField）
+  const handleEditField = useCallback(
+    (field: 'groupNickname' | 'announcement' | 'myNickname' | 'searchChat') => {
+      if (field === 'searchChat') {
+        setSettingsOpen(false);
+        setSearchOpen(true);
+      }
+      // 其他 field 此函数被 modal 内联编辑接管，不会再到这里
+    },
+    [],
   );
 
   // ── Stream H · feed inline searchbar 显隐 + state ─────────────────────────
@@ -1024,7 +1057,7 @@ export default function ChatPage() {
         </>
       )}
 
-      {/* Stream J 2026-05-28 · DingTalk 风群设置 modal — 由 ConvHeaderFB ⋯ 触发 */}
+      {/* Stream L 2026-05-28 · DingTalk 风群设置 modal — 内联编辑 + 真 agent_ids + announcement */}
       {group && (
         <GroupSettingsModalFB
           open={settingsOpen}
@@ -1032,20 +1065,24 @@ export default function ChatPage() {
           groupName={group.name}
           agentCount={settingsAgentCount}
           onlineCount={settingsOnlineCount}
-          startedAt={undefined /* TODO Stream K: group.startedAt 或 currentRun.started_at */}
+          startedAt={settingsStartedAt}
           members={settingsMembers}
           groupNickname={group.name}
-          announcement={(group as unknown as { announcement?: string }).announcement ?? ''}
+          announcement={group.announcement ?? ''}
           myNickname="我"
-          isOwner={false /* TODO Stream K: 接 owner 概念 */}
+          isOwner={false /* TODO: 接 owner 概念（当前所有用户都是 anonymous） */}
           settings={groupPrefs}
-          onEditField={field => void handleEditField(field)}
+          onEditField={handleEditField}
+          onUpdateField={handleUpdateField}
           onToggleSetting={key => togglePref(key as keyof GroupPrefs)}
-          onViewAllMembers={() => console.log('[ChatPage] onViewAllMembers — TODO Stream K')}
-          onInviteMember={() => console.log('[ChatPage] onInviteMember — TODO Stream K')}
-          onSearchInChat={() => console.log('[ChatPage] onSearchInChat — TODO Stream K')}
-          onArchive={() => console.log('[ChatPage] onArchive — TODO Stream K')}
-          onLeave={() => console.log('[ChatPage] onLeave — TODO Stream K')}
+          onViewAllMembers={() => console.log('[ChatPage] onViewAllMembers — TODO')}
+          onInviteMember={() => console.log('[ChatPage] onInviteMember — TODO')}
+          onSearchInChat={() => {
+            setSettingsOpen(false);
+            setSearchOpen(true);
+          }}
+          onArchive={() => console.log('[ChatPage] onArchive — TODO')}
+          onLeave={() => console.log('[ChatPage] onLeave — TODO')}
         />
       )}
     </div>
