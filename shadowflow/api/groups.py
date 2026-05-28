@@ -403,6 +403,117 @@ class ThreadViewResponse(BaseModel):
     meta: Dict[str, Any] = Field(default_factory=dict)
 
 
+# ---------------------------------------------------------------------------
+# Stream K — group settings (group metadata + per-user preferences)
+# ---------------------------------------------------------------------------
+
+
+def _envelope(data: Any, **meta: Any) -> Dict[str, Any]:
+    """Standard response envelope (mirrors teams.py / workspaces.py)."""
+    return {"data": data, "meta": meta}
+
+
+def _group_not_found(group_id: str) -> HTTPException:
+    return HTTPException(
+        status_code=404,
+        detail={"error": {"code": "GROUP_NOT_FOUND", "message": f"Group {group_id!r} not found"}},
+    )
+
+
+class PatchGroupRequest(BaseModel):
+    """Group-level metadata patch payload.
+
+    All fields are optional — only the provided fields are updated. Empty
+    JSON body is a no-op (still bumps `updated_at`). Future expansion can
+    add avatar, member_emails, etc.
+    """
+
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    announcement: Optional[str] = Field(None, max_length=2000)
+
+
+class UserGroupSetting(BaseModel):
+    """Per-user-per-group preferences.
+
+    Stored under ``record["user_settings"][user_id]`` in the group's JSON file.
+    Until auth lands, ``user_id`` comes from a query parameter and defaults to
+    ``"anonymous"`` — see TODO at the bottom of this module.
+    """
+
+    muted: bool = False
+    pinned: bool = False
+    folded: bool = False
+    show_nickname: bool = True
+    my_nickname: Optional[str] = Field(None, max_length=80)
+
+
+@router.patch("/api/groups/{group_id}")
+async def patch_group(group_id: str, body: PatchGroupRequest) -> Dict[str, Any]:
+    """Update group-level metadata (name / announcement).
+
+    Tolerant of legacy records that lack the ``announcement`` field — they
+    pick it up on the first PATCH that touches that field.
+    """
+    record = _load_group(group_id)
+    if record is None:
+        raise _group_not_found(group_id)
+
+    if body.name is not None:
+        record["name"] = body.name
+    if body.announcement is not None:
+        record["announcement"] = body.announcement
+    record["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _save_group(record)
+    return _envelope(record)
+
+
+@router.get("/api/groups/{group_id}/user-settings")
+async def get_user_group_settings(
+    group_id: str,
+    user_id: str = Query(default="anonymous", max_length=120),
+) -> Dict[str, Any]:
+    """Return the requesting user's preferences for this group.
+
+    Defaults to a clean ``UserGroupSetting()`` when the user has never saved
+    settings for this group — so the FE always gets a complete shape.
+    """
+    record = _load_group(group_id)
+    if record is None:
+        raise _group_not_found(group_id)
+
+    all_settings: Dict[str, Any] = record.get("user_settings", {})
+    setting = all_settings.get(user_id, UserGroupSetting().model_dump())
+    return _envelope(setting)
+
+
+@router.put("/api/groups/{group_id}/user-settings")
+async def put_user_group_settings(
+    group_id: str,
+    body: UserGroupSetting,
+    user_id: str = Query(default="anonymous", max_length=120),
+) -> Dict[str, Any]:
+    """Whole-record replace of the requesting user's preferences for this group.
+
+    Matches the simple PUT semantics used by PolicyMatrix / workflow endpoints
+    — the FE sends the full shape every time.
+    """
+    record = _load_group(group_id)
+    if record is None:
+        raise _group_not_found(group_id)
+
+    all_settings: Dict[str, Any] = record.setdefault("user_settings", {})
+    all_settings[user_id] = body.model_dump()
+    record["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _save_group(record)
+    return _envelope(body.model_dump())
+
+
+# TODO(stream-k): swap query-param `user_id` for an authenticated principal
+# once auth lands. The persisted user_settings dict is forward-compatible —
+# real user_ids just become the new keys; "anonymous" entries from this MVP
+# phase can be migrated or dropped during the auth cut-over.
+
+
 @router.get(
     "/api/groups/{group_id}/messages/{message_id}/thread",
     response_model=ThreadViewResponse,
