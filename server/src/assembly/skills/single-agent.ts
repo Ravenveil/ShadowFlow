@@ -5,6 +5,10 @@ export const SINGLE_AGENT_RECIPE: AssemblyRecipe = {
   id: 'single-agent',
   description: '单个 agent：用户明确要一个 agent 时，只建一个、兼协调与执行',
   match: { singleAgent: true },
+  // Post-assembly UX: after the single agent's team auto-saves into the
+  // current workspace, ask the user whether to move it to a fresh workspace.
+  // Single-agent only — multi-agent recipes omit this flag and never prompt.
+  askWorkspaceOnCreate: true,
   roles: [
     {
       role_id: 'coordinator',

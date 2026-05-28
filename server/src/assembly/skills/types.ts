@@ -11,6 +11,15 @@ export interface AssemblyRecipe {
   };
   roles: RecipeRole[];
   edges: RecipeEdge[];
+  /**
+   * Post-assembly UX hint — NOT a structural field. When true, the assembler
+   * emits a lightweight `assembly-meta` SSE frame ({ ask_workspace: true }) so
+   * the front-end can offer the user a "move this team to a new workspace"
+   * affordance after the team auto-saves into the current workspace. Only
+   * meaningful for single-agent recipes (multi-agent recipes leave it unset →
+   * no prompt). Does not affect node/role/edge structure in any way.
+   */
+  askWorkspaceOnCreate?: boolean;
 }
 export interface RecipeRole {
   role_id: string;

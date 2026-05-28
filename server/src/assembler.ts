@@ -560,6 +560,14 @@ export async function* runSkillAssembler(
     if (violations.length > 0) console.warn(`[skill-assembler] recipe ${matchedRecipe.id} violations: ${violations.join('; ')}`);
     console.log(`[skill-assembler] session=${session_id} recipe=${matchedRecipe.id} → daemon-led (${teamDef.agents.length} roles)`);
     const teamV1 = toTeamDefV1(teamDef);
+    // Post-assembly UX hint — emit BEFORE the chunk stream so the front-end
+    // receives it early (before the team auto-saves). Single-agent recipes set
+    // `askWorkspaceOnCreate: true`; the client then offers a "move to new
+    // workspace" affordance on the auto-save chip. Non-structural; safe to
+    // ignore for any client that doesn't listen for `assembly-meta`.
+    if (matchedRecipe.askWorkspaceOnCreate) {
+      yield { event: 'assembly-meta', data: { ask_workspace: true, recipe: matchedRecipe.id } };
+    }
     // 传 goal → executor 把 user-turn prompt 设为 goal(而非 node.id)。
     const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, goal);
     yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);

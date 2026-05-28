@@ -155,6 +155,9 @@ class CreateTeamRequest(BaseModel):
 class PatchTeamRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=120)
     description: Optional[str] = Field(None, max_length=500)
+    # Move the team to a different workspace (e.g. user chose "create new
+    # workspace" right after a single-agent run). When None the team stays put.
+    workspace_id: Optional[str] = Field(None, max_length=80)
     add_agent_ids: List[str] = Field(default_factory=list)
     remove_agent_ids: List[str] = Field(default_factory=list)
 
@@ -213,6 +216,8 @@ async def patch_team(team_id: str, body: PatchTeamRequest) -> Dict[str, Any]:
         record["name"] = body.name
     if body.description is not None:
         record["description"] = body.description
+    if body.workspace_id is not None:
+        record["workspace_id"] = body.workspace_id
 
     current_ids: List[str] = record.get("agent_ids", [])
     # Add new members (no duplicates)
