@@ -16,17 +16,26 @@
 import type { ChatMessage } from '../../core/components/chat/ChatStream';
 import styles from './chatFB.module.css';
 import { MessageHoverToolbarFB } from './MessageHoverToolbarFB';
+import { TypingDotsFB } from './TypingDotsFB';
+import { MsgReactionsFB } from './MsgReactionsFB';
+import { SyscardFB, type SyscardKind } from './SyscardFB';
+import { InlineApprovalFB, type InlineApprovalStatus, type InlineApprovalChoice, type InlineApprovalMetric } from './InlineApprovalFB';
 
-// hover toolbar handler 占位（Stream H 整合时由 ChatPage 注入真实 handler）
-// eslint-disable-next-line no-console
-const logToolbarAction = (action: string, messageId: string): void => {
-  console.log(`[ChatFeedFB] hover-tb: ${action} on ${messageId}`);
-};
+/** Stream H 2026-05-28 · 9 个 hover toolbar 动作 + system 卡的统一 action 类型。 */
+export type ChatFeedAction =
+  | 'react' | 'reply' | 'thread' | 'quote'
+  | 'rewrite' | 'translate' | 'pin' | 'forward' | 'more';
 
 export interface ChatFeedFBProps {
   messages: ChatMessage[];
   /** 群名，用作日期分割线下方 sysnote 文案 */
   groupName?: string;
+  /** Stream H · 统一消息动作 callback；不传走 console.log 占位 */
+  onMessageAction?: (action: ChatFeedAction, messageId: string) => void;
+  /** Stream H · 是否在 feed 末尾渲染 TypingDots（chatStream.loading） */
+  typing?: boolean;
+  /** Stream H · TypingDots 显示的 agent 名 */
+  typingAgentName?: string;
 }
 
 // ─── 头像配色（按 senderName / id 稳定 hash 映射）─────────────────────────────
@@ -67,7 +76,13 @@ function fmtTime(ts: string | undefined): string {
 }
 
 // ─── Agent 消息（左侧）─────────────────────────────────────────────────────────
-function AgentMsg({ m }: { m: ChatMessage }) {
+function AgentMsg({
+  m,
+  onAction,
+}: {
+  m: ChatMessage;
+  onAction: (action: ChatFeedAction, id: string) => void;
+}) {
   const key = m.senderName ?? m.id;
   const p = paletteOf(key);
   const letter = m.senderGlyph || initialOf(m.senderName);
@@ -76,15 +91,15 @@ function AgentMsg({ m }: { m: ChatMessage }) {
     <div className={`${styles.msg} ${styles.msgHoverHost}`} id={`msg-${m.id}`}>
       <MessageHoverToolbarFB
         messageId={m.id}
-        onReact={id => logToolbarAction('react', id)}
-        onReply={id => logToolbarAction('reply', id)}
-        onThread={id => logToolbarAction('thread', id)}
-        onQuote={id => logToolbarAction('quote', id)}
-        onRewrite={id => logToolbarAction('rewrite', id)}
-        onTranslate={id => logToolbarAction('translate', id)}
-        onPin={id => logToolbarAction('pin', id)}
-        onForward={id => logToolbarAction('forward', id)}
-        onMore={id => logToolbarAction('more', id)}
+        onReact={id => onAction('react', id)}
+        onReply={id => onAction('reply', id)}
+        onThread={id => onAction('thread', id)}
+        onQuote={id => onAction('quote', id)}
+        onRewrite={id => onAction('rewrite', id)}
+        onTranslate={id => onAction('translate', id)}
+        onPin={id => onAction('pin', id)}
+        onForward={id => onAction('forward', id)}
+        onMore={id => onAction('more', id)}
       />
       <span className={styles.agentAv}>
         <span
@@ -131,13 +146,28 @@ function AgentMsg({ m }: { m: ChatMessage }) {
             <span className={styles.toolChipOk}>✓</span>
           </div>
         )}
+
+        {/* Stream H 2026-05-28 · MsgReactionsFB 接入（reactions / thread-chip / read-by）
+            TODO: 等后端 chat_messages.reactions / thread_count / read_by 字段上线后
+                  把下面的 mock 值换成 m.payload 里的真实数据。当前只有 onAddReaction
+                  让用户能"点 +"触发空 toolbar，其他字段为空时组件返回 null 不渲染。 */}
+        <MsgReactionsFB
+          onAddReaction={() => onAction('react', m.id)}
+          onOpenThread={() => onAction('thread', m.id)}
+        />
       </div>
     </div>
   );
 }
 
 // ─── User 消息（右侧）─────────────────────────────────────────────────────────
-function UserMsg({ m }: { m: ChatMessage }) {
+function UserMsg({
+  m,
+  onAction,
+}: {
+  m: ChatMessage;
+  onAction: (action: ChatFeedAction, id: string) => void;
+}) {
   const p = paletteOf(m.senderName ?? 'me');
   const letter = m.senderGlyph || initialOf(m.senderName) || '我';
   // TODO: 等后端 reply-to 数据模型上线后，replyTo 字段会由 chat_messages.metadata
@@ -152,15 +182,15 @@ function UserMsg({ m }: { m: ChatMessage }) {
     <div className={`${styles.usermsg} ${styles.msgHoverHost}`} id={`msg-${m.id}`}>
       <MessageHoverToolbarFB
         messageId={m.id}
-        onReact={id => logToolbarAction('react', id)}
-        onReply={id => logToolbarAction('reply', id)}
-        onThread={id => logToolbarAction('thread', id)}
-        onQuote={id => logToolbarAction('quote', id)}
-        onRewrite={id => logToolbarAction('rewrite', id)}
-        onTranslate={id => logToolbarAction('translate', id)}
-        onPin={id => logToolbarAction('pin', id)}
-        onForward={id => logToolbarAction('forward', id)}
-        onMore={id => logToolbarAction('more', id)}
+        onReact={id => onAction('react', id)}
+        onReply={id => onAction('reply', id)}
+        onThread={id => onAction('thread', id)}
+        onQuote={id => onAction('quote', id)}
+        onRewrite={id => onAction('rewrite', id)}
+        onTranslate={id => onAction('translate', id)}
+        onPin={id => onAction('pin', id)}
+        onForward={id => onAction('forward', id)}
+        onMore={id => onAction('more', id)}
       />
       <div className={styles.usermsgCol}>
         <div className={styles.usermsgHd}>
@@ -210,9 +240,22 @@ function SystemMsg({ m }: { m: ChatMessage }) {
 }
 
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
-export function ChatFeedFB({ messages, groupName }: ChatFeedFBProps) {
+export function ChatFeedFB({
+  messages,
+  groupName,
+  onMessageAction,
+  typing,
+  typingAgentName,
+}: ChatFeedFBProps) {
   const today = new Date();
   const dayLabel = `今天 · ${today.getMonth() + 1} 月 ${today.getDate()} 日`;
+
+  // 缺省 callback —— 没接 handler 时落到 console，方便定位"哪个动作未接"
+  const handleAction = (action: ChatFeedAction, id: string): void => {
+    if (onMessageAction) onMessageAction(action, id);
+    // eslint-disable-next-line no-console
+    else console.log(`[ChatFeedFB] action ${action} on ${id} (no parent handler)`);
+  };
 
   return (
     <div className={styles.feed}>
@@ -230,10 +273,68 @@ export function ChatFeedFB({ messages, groupName }: ChatFeedFBProps) {
       )}
 
       {messages.map(m => {
+        // Stream H · 系统决策卡（待 SSE schema 定下来后由 useChatStream 投递）
+        if (m.kind === 'syscard') {
+          const p = (m.payload ?? {}) as {
+            kind?: SyscardKind;
+            title?: string;
+            meta?: Record<string, string>;
+          };
+          return (
+            <SyscardFB
+              key={m.id}
+              kind={p.kind ?? 'system-event'}
+              title={p.title}
+              reason={m.content}
+              timestamp={m.timestamp}
+              meta={p.meta}
+            />
+          );
+        }
+        // Stream H · 行内 Approval Gate
+        if (m.kind === 'inline-approval') {
+          const p = (m.payload ?? {}) as {
+            gateId?: string;
+            agentName?: string;
+            agentGlyph?: string;
+            agentColor?: string;
+            agentRole?: string;
+            title?: string;
+            metrics?: InlineApprovalMetric[];
+            choices?: InlineApprovalChoice[];
+            status?: InlineApprovalStatus;
+            waitText?: string;
+          };
+          return (
+            <InlineApprovalFB
+              key={m.id}
+              gateId={p.gateId ?? m.id}
+              agentName={p.agentName ?? m.senderName}
+              agentGlyph={p.agentGlyph ?? m.senderGlyph}
+              agentColor={p.agentColor}
+              agentRole={p.agentRole}
+              title={p.title}
+              description={m.content}
+              metrics={p.metrics}
+              choices={
+                p.choices ?? [
+                  { key: 'approve', label: '批准', kind: 'approve' },
+                  { key: 'reject', label: '驳回', kind: 'reject' },
+                ]
+              }
+              status={p.status ?? 'pending'}
+              waitText={p.waitText}
+              onChoose={key => handleAction(key === 'approve' ? 'pin' : 'more', m.id)}
+            />
+          );
+        }
         if (m.role === 'system') return <SystemMsg key={m.id} m={m} />;
-        if (m.role === 'user') return <UserMsg key={m.id} m={m} />;
-        return <AgentMsg key={m.id} m={m} />;
+        if (m.role === 'user') return <UserMsg key={m.id} m={m} onAction={handleAction} />;
+        return <AgentMsg key={m.id} m={m} onAction={handleAction} />;
       })}
+
+      {/* Stream H · 末尾 TypingDots（chatStream.loading 时） */}
+      {typing && <TypingDotsFB agentName={typingAgentName} />}
     </div>
   );
 }

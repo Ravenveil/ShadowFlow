@@ -61,6 +61,15 @@ export interface ChatMessage {
     sender: string;
     excerpt: string;
   };
+  /**
+   * Stream H 2026-05-28 · 非常规 kind 用于 feed 流内嵌系统/审批卡。
+   * 等 SSE schema 定下来后由 useChatStream 投递。
+   *   - 'syscard'         → SyscardFB（policy reject/approve, gate fail/pass）
+   *   - 'inline-approval' → InlineApprovalFB（feed 内嵌审批门）
+   * payload 是宽松 JSON，让组件按需取字段；保持 ChatMessage 主体兼容。
+   */
+  kind?: 'syscard' | 'inline-approval';
+  payload?: Record<string, unknown>;
 }
 
 export interface MessageBubbleProps {

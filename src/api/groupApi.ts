@@ -136,7 +136,13 @@ export async function fetchRecentMessages(
 export async function postGroupMessage(
   groupId: string,
   content: string,
-  options?: { senderName?: string; senderKind?: 'user' | 'agent' | 'system' },
+  options?: {
+    senderName?: string;
+    senderKind?: 'user' | 'agent' | 'system';
+    /** Stream H 2026-05-28 · 接住 Stream G 后端已加的 reply_to 持久化字段。
+     *  传 messageId（被引用的消息 id）即可让后端把这条标记为 thread 子消息。 */
+    replyTo?: string;
+  },
 ): Promise<Message> {
   const res = await fetch(`${getApiBase()}/api/groups/${groupId}/messages`, {
     method: 'POST',
@@ -145,6 +151,7 @@ export async function postGroupMessage(
       content,
       sender_name: options?.senderName ?? 'user',
       sender_kind: options?.senderKind ?? 'user',
+      reply_to: options?.replyTo,
     }),
   });
   await _checkPythonStatus(res);

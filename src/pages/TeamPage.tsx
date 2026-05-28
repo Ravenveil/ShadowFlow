@@ -29,9 +29,10 @@
  *   - Delete team flow + error banner.
  *   - List immediately updates after creation (AC4).
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Upload, Users, Trash2 } from 'lucide-react';
+import { TeamWorkflowEditor } from '../core/components/team/TeamWorkflowEditor';
 import {
   deleteTeam,
   getTeam,
@@ -517,8 +518,49 @@ const DETAIL_TABS: DetailTab[] = ['members', 'policy', 'dag', 'activity', 'depen
 // ---------------------------------------------------------------------------
 
 /** Team header: ×N count icon + name + L2-STRICT pill + stats row + action buttons. */
-function DesignTeamHeader({ team }: { team: TeamRecord }) {
+function DesignTeamHeader({
+  team,
+  onRename,
+  onStartRun,
+}: {
+  team: TeamRecord;
+  onRename: (newName: string) => Promise<void> | void;
+  onStartRun: () => void;
+}) {
   const createdDate = new Date(team.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(team.name);
+  const [renaming, setRenaming] = useState(false);
+  const [renameErr, setRenameErr] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      setDraft(team.name);
+      // focus next tick after input mounts
+      setTimeout(() => inputRef.current?.select(), 0);
+    }
+  }, [editing, team.name]);
+
+  async function commit() {
+    const next = draft.trim();
+    if (!next || next === team.name) {
+      setEditing(false);
+      setRenameErr(null);
+      return;
+    }
+    setRenaming(true);
+    setRenameErr(null);
+    try {
+      await onRename(next);
+      setEditing(false);
+    } catch (err) {
+      setRenameErr(err instanceof Error ? err.message : '重命名失败');
+    } finally {
+      setRenaming(false);
+    }
+  }
+
   return (
     <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--t-border)', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
       <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: 'var(--t-fg-2)', flexShrink: 0 }}>
@@ -526,9 +568,36 @@ function DesignTeamHeader({ team }: { team: TeamRecord }) {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span data-testid="detail-team-name" style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--t-fg)' }}>
-            {team.name}
-          </span>
+          {editing ? (
+            <input
+              ref={inputRef}
+              data-testid="detail-team-name-input"
+              value={draft}
+              disabled={renaming}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); void commit(); }
+                else if (e.key === 'Escape') { e.preventDefault(); setEditing(false); setRenameErr(null); }
+              }}
+              onBlur={() => { void commit(); }}
+              maxLength={120}
+              style={{
+                fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em',
+                color: 'var(--t-fg)', background: 'var(--t-panel-2)',
+                border: '1px solid var(--t-accent)', borderRadius: 6,
+                padding: '2px 8px', outline: 'none', minWidth: 160,
+              }}
+            />
+          ) : (
+            <span
+              data-testid="detail-team-name"
+              onDoubleClick={() => setEditing(true)}
+              title="双击重命名"
+              style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--t-fg)', cursor: 'text' }}
+            >
+              {team.name}
+            </span>
+          )}
           <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 6, background: 'color-mix(in oklab, var(--status-warn) 18%, transparent)', color: 'var(--status-warn)', border: '1px solid color-mix(in oklab, var(--status-warn) 35%, transparent)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', flexShrink: 0 }}>
             L2-STRICT
           </span>
@@ -539,10 +608,29 @@ function DesignTeamHeader({ team }: { team: TeamRecord }) {
           <span>{team.agent_ids.length} agents</span>
           <span>·</span>
           <span>创建 {createdDate}</span>
+          {renameErr && <span style={{ color: 'var(--t-err)' }}>· {renameErr}</span>}
         </div>
       </div>
-      <button type="button" className="hf-btn" style={{ fontSize: 12, flexShrink: 0 }}>重命名</button>
-      <button type="button" style={{ fontSize: 12, flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'var(--t-accent)', color: 'var(--t-accent-ink)', fontWeight: 700 }}>启动新 run</button>
+      <button
+        type="button"
+        className="hf-btn"
+        style={{ fontSize: 12, flexShrink: 0 }}
+        data-testid="btn-rename-team"
+        onClick={() => setEditing((v) => !v)}
+        disabled={renaming}
+      >
+        {editing ? (renaming ? '保存中…' : '完成') : '重命名'}
+      </button>
+      <button
+        type="button"
+        data-testid="btn-start-new-run"
+        title={`以 ${team.name} 发起新对话`}
+        aria-label={`以 ${team.name} 发起新对话`}
+        onClick={onStartRun}
+        style={{ fontSize: 12, flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'var(--t-accent)', color: 'var(--t-accent-ink)', fontWeight: 700 }}
+      >
+        启动新 run
+      </button>
     </div>
   );
 }
@@ -597,10 +685,149 @@ function DesignMemberRow({ agent, onRemove }: { agent: AgentRecord; onRemove?: (
   );
 }
 
+/** Modal: pick one or more agents not already in the team and add them. */
+function AddMemberModal({
+  team,
+  agents,
+  onAdded,
+  onClose,
+}: {
+  team: TeamRecord;
+  agents: AgentRecord[];
+  onAdded: (updated: TeamRecord) => void;
+  onClose: () => void;
+}) {
+  const candidates = useMemo(
+    () => agents.filter((a) => !team.agent_ids.includes(a.agent_id)),
+    [agents, team.agent_ids],
+  );
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function submit() {
+    if (selected.size === 0) return;
+    setSubmitting(true);
+    setErr(null);
+    try {
+      const updated = await patchTeam(team.team_id, { add_agent_ids: Array.from(selected) });
+      onAdded(updated);
+      onClose();
+    } catch (e) {
+      setErr(e instanceof TeamApiError ? `添加失败（${e.status}）` : '添加失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      data-testid="add-member-modal"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 60,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+      }}
+    >
+      <div style={{
+        width: '100%', maxWidth: 480,
+        background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12,
+        color: 'var(--t-fg)',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--t-border)', padding: '14px 18px' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', color: 'var(--t-fg-4)', textTransform: 'uppercase' }}>
+              {team.name}
+            </div>
+            <h2 style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 700 }}>+ 招人</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="关闭"
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', fontSize: 16, padding: 4 }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ padding: '14px 18px' }}>
+          <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: '0 0 10px' }}>
+            选择要加入的 Agent · 已选 {selected.size} 个
+          </p>
+          {candidates.length === 0 ? (
+            <p style={{ padding: '24px 0', textAlign: 'center', fontSize: 12, color: 'var(--t-fg-4)' }} data-testid="no-candidate-agents-hint">
+              所有 Agent 都已在此 Team —— 请先去 Agent 页创建。
+            </p>
+          ) : (
+            <div
+              data-testid="add-member-list"
+              style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflow: 'auto' }}
+            >
+              {candidates.map((a) => {
+                const on = selected.has(a.agent_id);
+                return (
+                  <label
+                    key={a.agent_id}
+                    data-testid={`add-member-option-${a.agent_id}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                      padding: '8px 10px', borderRadius: 8,
+                      border: '1px solid ' + (on ? 'var(--t-accent)' : 'var(--t-border)'),
+                      background: on ? 'var(--t-accent-tint)' : 'transparent',
+                    }}
+                  >
+                    <input type="checkbox" checked={on} onChange={() => toggle(a.agent_id)} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-fg)' }}>{a.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--t-fg-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {a.soul.length > 60 ? a.soul.slice(0, 60) + '…' : a.soul}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+          {err && <p style={{ marginTop: 10, fontSize: 11, color: 'var(--t-err)' }}>{err}</p>}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 18px', borderTop: '1px solid var(--t-border)' }}>
+          <button type="button" className="hf-btn" style={{ fontSize: 12 }} onClick={onClose}>取消</button>
+          <button
+            type="button"
+            data-testid="btn-add-members-submit"
+            disabled={selected.size === 0 || submitting}
+            onClick={submit}
+            style={{
+              fontSize: 12, padding: '6px 14px', borderRadius: 8, border: 'none', fontWeight: 700, cursor: selected.size === 0 ? 'not-allowed' : 'pointer',
+              background: 'var(--t-accent)', color: 'var(--t-accent-ink)',
+              opacity: selected.size === 0 || submitting ? 0.5 : 1,
+            }}
+          >
+            {submitting ? '添加中…' : `加入 (${selected.size})`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Left panel of the 2-col grid: loads agents and renders member rows. */
 function DesignMemberPanel({ team, onTeamUpdated }: { team: TeamRecord; onTeamUpdated: (t: TeamRecord) => void }) {
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => { listAgents().then(setAgents).catch(() => {}); }, []);
 
@@ -620,7 +847,15 @@ function DesignMemberPanel({ team, onTeamUpdated }: { team: TeamRecord; onTeamUp
         <span style={{ fontSize: 13, fontWeight: 700 }}>成员</span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>{team.agent_ids.length} agents</span>
         <div style={{ flex: 1 }} />
-        <button type="button" className="hf-btn" style={{ fontSize: 11 }}>+ 招人</button>
+        <button
+          type="button"
+          className="hf-btn"
+          style={{ fontSize: 11 }}
+          data-testid="btn-add-member"
+          onClick={() => setShowAddModal(true)}
+        >
+          + 招人
+        </button>
       </div>
       <div style={{ flex: 1, overflow: 'auto' }}>
         {memberAgents.length === 0 ? (
@@ -635,6 +870,14 @@ function DesignMemberPanel({ team, onTeamUpdated }: { team: TeamRecord; onTeamUp
           ))
         )}
       </div>
+      {showAddModal && (
+        <AddMemberModal
+          team={team}
+          agents={agents}
+          onAdded={onTeamUpdated}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -642,7 +885,17 @@ function DesignMemberPanel({ team, onTeamUpdated }: { team: TeamRecord; onTeamUp
 const DAG_COLORS = ['#A855F7', '#F59E0B', '#22D3EE', '#EF4444', '#10B981', '#3B82F6', '#EC4899'];
 
 /** Right panel of the 2-col grid: SVG dot-grid DAG with real nodes/edges. */
-function WorkflowDagPanel({ nodes, edges }: { nodes: TeamWorkflowNode[]; edges: TeamWorkflowEdge[] }) {
+function WorkflowDagPanel({
+  nodes,
+  edges,
+  onEdit,
+  onYaml,
+}: {
+  nodes: TeamWorkflowNode[];
+  edges: TeamWorkflowEdge[];
+  onEdit: () => void;
+  onYaml: () => void;
+}) {
   const NODE_W = 148;
   const NODE_H = 64;
   const PAD = 24;
@@ -664,8 +917,8 @@ function WorkflowDagPanel({ nodes, edges }: { nodes: TeamWorkflowNode[]; edges: 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <span style={{ fontSize: 13, fontWeight: 700 }}>工作流 DAG</span>
         <div style={{ flex: 1 }} />
-        <button type="button" className="hf-btn" style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>编辑</button>
-        <button type="button" className="hf-btn" style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>YAML</button>
+        <button type="button" className="hf-btn" style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }} data-testid="btn-dag-edit" onClick={onEdit}>编辑</button>
+        <button type="button" className="hf-btn" style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }} data-testid="btn-dag-yaml" onClick={onYaml}>YAML</button>
       </div>
       <div style={{ background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 10, padding: 14 }}>
         {nodes.length === 0 ? (
@@ -740,6 +993,165 @@ function WorkflowDagPanel({ nodes, edges }: { nodes: TeamWorkflowNode[]; edges: 
             </span>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Workflow modals — DAG editor (uses TeamWorkflowEditor) + YAML read-only view
+// ---------------------------------------------------------------------------
+
+function WorkflowEditorModal({
+  team,
+  agents,
+  onClose,
+}: {
+  team: TeamRecord;
+  agents: AgentRecord[];
+  onClose: () => void;
+}) {
+  return (
+    <div
+      data-testid="workflow-editor-modal"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 60,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        padding: 24,
+      }}
+    >
+      <div style={{
+        width: '100%', maxWidth: 1100, height: '85vh',
+        background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12,
+        color: 'var(--t-fg)', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--t-border)', padding: '14px 18px', flexShrink: 0 }}>
+          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>编辑工作流 DAG · {team.name}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="关闭"
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', fontSize: 16, padding: 4 }}
+          >
+            ✕
+          </button>
+        </div>
+        <div style={{ flex: 1, padding: 14, overflow: 'hidden' }}>
+          <TeamWorkflowEditor team={team} agents={agents} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function workflowToYaml(nodes: TeamWorkflowNode[], edges: TeamWorkflowEdge[]): string {
+  const lines: string[] = [];
+  lines.push('# Auto-generated YAML-ish view of team workflow');
+  lines.push('nodes:');
+  if (nodes.length === 0) {
+    lines.push('  []');
+  } else {
+    for (const n of nodes) {
+      lines.push(`  - id: ${n.id}`);
+      lines.push(`    type: ${n.type}`);
+      lines.push(`    position: { x: ${n.position.x}, y: ${n.position.y} }`);
+      lines.push(`    data:`);
+      lines.push(`      agentId: ${n.data.agentId}`);
+      lines.push(`      name: ${JSON.stringify(n.data.name)}`);
+      lines.push(`      soul: ${JSON.stringify(n.data.soul)}`);
+    }
+  }
+  lines.push('edges:');
+  if (edges.length === 0) {
+    lines.push('  []');
+  } else {
+    for (const e of edges) {
+      lines.push(`  - id: ${e.id}`);
+      lines.push(`    source: ${e.source}`);
+      lines.push(`    target: ${e.target}`);
+      if (e.data?.mode) lines.push(`    mode: ${e.data.mode}`);
+      if (e.label) lines.push(`    label: ${JSON.stringify(e.label)}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+function WorkflowYamlModal({
+  team,
+  nodes,
+  edges,
+  onClose,
+}: {
+  team: TeamRecord;
+  nodes: TeamWorkflowNode[];
+  edges: TeamWorkflowEdge[];
+  onClose: () => void;
+}) {
+  const yaml = useMemo(() => workflowToYaml(nodes, edges), [nodes, edges]);
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(yaml);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore — clipboard may be denied
+    }
+  }
+
+  return (
+    <div
+      data-testid="workflow-yaml-modal"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 60,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        padding: 24,
+      }}
+    >
+      <div style={{
+        width: '100%', maxWidth: 640, maxHeight: '80vh',
+        background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12,
+        color: 'var(--t-fg)', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--t-border)', padding: '14px 18px', flexShrink: 0 }}>
+          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>工作流 YAML · {team.name} <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', marginLeft: 6 }}>(只读)</span></h2>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="hf-btn"
+              style={{ fontSize: 11 }}
+              onClick={copy}
+              data-testid="btn-yaml-copy"
+            >
+              {copied ? '已复制 ✓' : '复制'}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="关闭"
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', fontSize: 16, padding: 4 }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+        <pre
+          data-testid="workflow-yaml-text"
+          style={{
+            margin: 0, padding: 16, overflow: 'auto',
+            fontFamily: 'var(--font-mono)', fontSize: 11.5, lineHeight: 1.55,
+            color: 'var(--t-fg-2)', background: 'var(--t-bg)', whiteSpace: 'pre',
+          }}
+        >
+          {yaml}
+        </pre>
       </div>
     </div>
   );
@@ -826,6 +1238,10 @@ function TeamDetailPage() {
   // Workflow nodes and edges for the DAG panel.
   const [workflowNodes, setWorkflowNodes] = useState<TeamWorkflowNode[]>([]);
   const [workflowEdges, setWorkflowEdges] = useState<TeamWorkflowEdge[]>([]);
+  // DAG editor / YAML modals
+  const [showDagEditor, setShowDagEditor] = useState(false);
+  const [showDagYaml, setShowDagYaml] = useState(false);
+  const [allAgents, setAllAgents] = useState<AgentRecord[]>([]);
 
   // Policy store actions — used to seed PolicyMatrixPanel with team-specific data.
   const setAgents      = usePolicyStore((s) => s.setAgents);
@@ -918,6 +1334,30 @@ function TeamDetailPage() {
       /* fall back to single-team display */
     });
   }, [currentId]);
+
+  // Agents list — needed for the DAG editor modal's draggable agent panel.
+  useEffect(() => {
+    listAgents().then(setAllAgents).catch(() => { /* non-fatal */ });
+  }, []);
+
+  // Rename: patch backend then refresh local team state.
+  const handleRename = useCallback(
+    async (newName: string) => {
+      if (!teamId) return;
+      const updated = await patchTeam(teamId, { name: newName });
+      setTeam(updated);
+      setAllTeams((prev) => prev.map((x) => x.team_id === teamId ? updated : x));
+    },
+    [teamId],
+  );
+
+  // Start a new run — for now we just navigate to /start.
+  // StartPage doesn't yet read ?team_id but the param is forwarded so a
+  // future "preselect team" UX can pick it up without changing this caller.
+  const handleStartRun = useCallback(() => {
+    if (!teamId) return;
+    navigate(`/start?team_id=${encodeURIComponent(teamId)}`);
+  }, [navigate, teamId]);
 
   // Rules of Hooks: handlePolicySave must be called before any early return.
   const handlePolicySave = useCallback(
@@ -1027,11 +1467,16 @@ function TeamDetailPage() {
 
         {/* P1 Team Detail — header + 2-col grid + full-width policy */}
         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'auto' }}>
-          <DesignTeamHeader team={team} />
+          <DesignTeamHeader team={team} onRename={handleRename} onStartRun={handleStartRun} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, padding: 18, alignContent: 'start' }}>
             <DesignMemberPanel team={team} onTeamUpdated={setTeam} />
-            <WorkflowDagPanel nodes={workflowNodes} edges={workflowEdges} />
+            <WorkflowDagPanel
+              nodes={workflowNodes}
+              edges={workflowEdges}
+              onEdit={() => setShowDagEditor(true)}
+              onYaml={() => setShowDagYaml(true)}
+            />
           </div>
 
           <div style={{ padding: '0 18px 24px' }}>
@@ -1048,6 +1493,30 @@ function TeamDetailPage() {
             navigate(`/teams/${newTeam.team_id}`);
           }}
           onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {showDagEditor && (
+        <WorkflowEditorModal
+          team={team}
+          agents={allAgents}
+          onClose={() => {
+            setShowDagEditor(false);
+            // Re-fetch workflow so the closed editor's saved nodes show up in the
+            // dot-grid preview without a page reload.
+            getTeamWorkflow(team.team_id)
+              .then((wf) => { setWorkflowNodes(wf.nodes); setWorkflowEdges(wf.edges); })
+              .catch(() => { /* keep stale view */ });
+          }}
+        />
+      )}
+
+      {showDagYaml && (
+        <WorkflowYamlModal
+          team={team}
+          nodes={workflowNodes}
+          edges={workflowEdges}
+          onClose={() => setShowDagYaml(false)}
         />
       )}
     </div>

@@ -40,8 +40,10 @@ import InboxPanelFB from '../components/chat-fb/InboxPanelFB';
 import ConvHeaderFB from '../components/chat-fb/ConvHeaderFB';
 import PinnedBriefFB from '../components/chat-fb/PinnedBriefFB';
 import ComposerFB from '../components/chat-fb/ComposerFB';
-import { ChatFeedFB } from '../components/chat-fb/ChatFeedFB';
-import { ThreadDrawerFB } from '../components/chat-fb/ThreadDrawerFB';
+import { ChatFeedFB, type ChatFeedAction } from '../components/chat-fb/ChatFeedFB';
+import { ThreadDrawerFB, type ThreadSourceMessage } from '../components/chat-fb/ThreadDrawerFB';
+import FeedSearchbarFB, { type FeedSearchFilterKey } from '../components/chat-fb/FeedSearchbarFB';
+import { postGroupMessage } from '../api/groupApi';
 
 // ── Design token helpers ────────────────────────────────────────────────────
 const T = {
@@ -616,6 +618,83 @@ export default function ChatPage() {
   // ── Stream D · Thread Drawer 显隐 (chat-fb.html .drawer.hide 行 604) ───────
   const [threadDrawerOpen, setThreadDrawerOpen] = useState(true);
 
+  // ── Stream H · feed inline searchbar 显隐 + state ─────────────────────────
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
+  const [searchFilters, setSearchFilters] = useState<FeedSearchFilterKey[]>([]);
+  const toggleSearchFilter = useCallback((k: FeedSearchFilterKey) => {
+    setSearchFilters(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]);
+  }, []);
+
+  // ── Stream H · Thread Drawer 源消息 + 9 个 hover toolbar 动作分发 ─────────
+  const [threadSourceMsg, setThreadSourceMsg] = useState<ThreadSourceMessage | null>(null);
+
+  // 用最新 messages 反查源消息（state 在 callback 里只能取闭包快照，用 ref 解决）
+  const messagesRef = useRef(chatStream.messages);
+  messagesRef.current = chatStream.messages;
+
+  const handleMessageAction = useCallback((action: ChatFeedAction, messageId: string) => {
+    const msg = messagesRef.current.find(m => m.id === messageId);
+    if (!msg) return;
+    if (action === 'thread') {
+      setThreadSourceMsg({
+        id: msg.id,
+        senderName: msg.senderName ?? (msg.role === 'user' ? '我' : 'Agent'),
+        excerpt: msg.content,
+        timestamp: msg.timestamp,
+      });
+      setThreadDrawerOpen(true);
+      return;
+    }
+    if (action === 'reply') {
+      // 插入 @sender 到 composer 头部（最朴素引用语义；后续 Story 接富文本）
+      const who = msg.senderName ?? 'Agent';
+      setComposer(prev => prev.startsWith(`@${who} `) ? prev : `@${who} ${prev}`);
+      return;
+    }
+    if (action === 'quote') {
+      setComposer(prev => `> ${msg.senderName ?? 'Agent'}: ${msg.content.slice(0, 80)}\n${prev}`);
+      return;
+    }
+    if (action === 'translate' || action === 'rewrite' || action === 'forward' || action === 'pin' || action === 'react' || action === 'more') {
+      // TODO Stream H · 等后端 reactions / pin / rewrite 接口上线后接 API
+      // eslint-disable-next-line no-console
+      console.log(`[ChatPage] message action ${action} on ${messageId} — TODO 接 API`);
+      return;
+    }
+  }, []);
+
+  // ── Stream H · ThreadDrawer onReplySubmit（POST 带 reply_to） ──────────────
+  const handleReplySubmit = useCallback(
+    async (text: string, postToMain: boolean) => {
+      if (!groupId || !threadSourceMsg) return;
+      // 主线（reply_to 指向源消息），用于 thread 子频道
+      await postGroupMessage(groupId, text, {
+        senderName: 'user',
+        senderKind: 'user',
+        replyTo: threadSourceMsg.id,
+      });
+      if (postToMain) {
+        // 同时投到主频道（不带 reply_to）
+        await postGroupMessage(groupId, text, {
+          senderName: 'user',
+          senderKind: 'user',
+        });
+        // 刷新 feed 让主频道新消息出现（Stream H 用最简方案：轻量重拉历史）
+        // TODO: 接入 useChatStream 的 mutateMessages，避免整段重拉。
+      }
+    },
+    [groupId, threadSourceMsg],
+  );
+
+  // Typing dots 用的 agent name（取群里第一个 agent；查不到默认 "Agent"）
+  // TODO: 等 chat SSE 推 "typing" 事件后用真正的发起方名替换。
+  const typingAgentName = (() => {
+    if (!chatStream.loading) return undefined;
+    const lastAgent = [...chatStream.messages].reverse().find(m => m.role === 'agent');
+    return lastAgent?.senderName ?? 'Agent';
+  })();
+
   return (
     // 2026-05-28 修 composer 截断 (round 3)：父容器 (HfLayout.tsx:58) 是
     // overflow:auto，会让我们的 flex 高度计算"软绑定"，子内容可以撑大整页超出
@@ -672,6 +751,7 @@ export default function ChatPage() {
                   tasksCount={metrics.pendingApprovalsCount}
                   onThreadToggle={() => setThreadDrawerOpen(p => !p)}
                   onTasksClick={() => handleTabChange('approvals')}
+                  onSearchToggle={() => setSearchOpen(p => !p)}
                 />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: `1px solid ${T.bd}`, background: T.p }}>
@@ -726,6 +806,15 @@ export default function ChatPage() {
           {/* Chat messages — Stream D · FB-HiFi feed */}
           {activeTab === 'chat' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, background: T.bg }}>
+              {/* Stream H · feed 顶 inline 搜索条 — 由 ConvHeader 搜索按钮 toggle */}
+              <FeedSearchbarFB
+                open={searchOpen}
+                onClose={() => setSearchOpen(false)}
+                value={searchValue}
+                onChange={setSearchValue}
+                filters={searchFilters}
+                onToggleFilter={toggleSearchFilter}
+              />
               <div ref={chatScrollRef} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
                 {chatStream.messages.length === 0 ? (
                   <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, padding: 32 }}>
@@ -744,7 +833,13 @@ export default function ChatPage() {
                     )}
                   </div>
                 ) : (
-                  <ChatFeedFB messages={chatStream.messages} groupName={group?.name}/>
+                  <ChatFeedFB
+                    messages={chatStream.messages}
+                    groupName={group?.name}
+                    onMessageAction={handleMessageAction}
+                    typing={chatStream.loading}
+                    typingAgentName={typingAgentName}
+                  />
                 )}
               </div>
               {chatStream.error && (
@@ -776,7 +871,12 @@ export default function ChatPage() {
             group={group}
             metrics={metrics}
             t={t}
-            onClose={() => setThreadDrawerOpen(false)}
+            onClose={() => {
+              setThreadDrawerOpen(false);
+              setThreadSourceMsg(null);
+            }}
+            sourceMessage={threadSourceMsg ?? undefined}
+            onReplySubmit={threadSourceMsg ? handleReplySubmit : undefined}
           />
         )}
       </div>
