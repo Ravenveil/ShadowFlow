@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApiBase } from '../../api/_base';
+import { applyCustomTheme, loadCustomTheme } from './customTheme';
 
 export type ThemePref = 'dark' | 'light' | 'system';
 type DataTheme = 'night' | 'day';
@@ -71,7 +72,13 @@ export function useTheme(): {
 
   // Apply on every mount (covers route changes where the previous instance
   // unmounted but documentElement was untouched). Cheap, idempotent.
-  useEffect(() => { applyTheme(theme); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  // Custom slot overrides (accent/bg/fg) are reapplied alongside so they
+  // survive page reloads — inline style takes precedence over the data-theme
+  // token, so this works whether theme is dark/light/system.
+  useEffect(() => {
+    applyTheme(theme);
+    applyCustomTheme(loadCustomTheme());
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Background sync from backend on FIRST mount of the app session. If backend
   // disagrees with localStorage, prefer backend (cross-device source of truth)

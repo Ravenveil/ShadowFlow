@@ -5,9 +5,16 @@
  * literal colors, so users can see the exact palette before switching.
  * Selected card gets a purple accent ring + badge.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { useTheme, type ThemePref } from '../../../components/hifi/useTheme';
 import { useI18n } from '../../../common/i18n';
+import {
+  loadCustomTheme,
+  setCustomColor,
+  resetCustomTheme,
+  getEffectiveColor,
+  type CustomSlot,
+} from '../../../components/hifi/customTheme';
 
 export const APPEARANCE_I18N_KEYS = {
   header: 'appearance.header',
@@ -332,7 +339,50 @@ export function AppearanceSection() {
     themeDark:   isZh ? '深色'   : 'Dark',
     themeLight:  isZh ? '浅色'   : 'Light',
     themeSystem: isZh ? '跟随系统' : 'System',
+    customLabel: isZh ? '颜色定制' : 'Custom Colors',
+    customHint:  isZh
+      ? '调整以下颜色会立即生效并保存。覆盖当前主题对应的 CSS 变量；点重置回到当前模式默认。'
+      : 'Edits apply instantly and persist. Overrides the current theme tokens; reset to fall back to mode defaults.',
+    slotAccent:  isZh ? '强调色' : 'Accent',
+    slotBg:      isZh ? '背景色' : 'Background',
+    slotFg:      isZh ? '前景色' : 'Foreground',
+    resetBtn:    isZh ? '重置默认' : 'Reset to defaults',
   };
+
+  // ── 颜色定制 state ───────────────────────────────────────────────────────
+  // Seed from localStorage (custom override) → fall back to active computed
+  // CSS token → fall back to a sane hex literal so <input type="color"> never
+  // receives an empty/invalid value. Reading getComputedStyle at mount-time
+  // is fine for one-shot init; user edits drive subsequent state.
+  const [accent, setAccent] = useState(
+    () => loadCustomTheme().accent ?? getEffectiveColor('accent', '#A855F7'),
+  );
+  const [bg, setBg] = useState(
+    () => loadCustomTheme().bg ?? getEffectiveColor('bg', '#0A0A0A'),
+  );
+  const [fg, setFg] = useState(
+    () => loadCustomTheme().fg ?? getEffectiveColor('fg', '#FFFFFF'),
+  );
+
+  const slotState: Record<CustomSlot, [string, (v: string) => void, string]> = {
+    accent: [accent, setAccent, tx.slotAccent],
+    bg:     [bg,     setBg,     tx.slotBg],
+    fg:     [fg,     setFg,     tx.slotFg],
+  };
+
+  function handleColorChange(slot: CustomSlot, value: string) {
+    slotState[slot][1](value);
+    setCustomColor(slot, value);
+  }
+
+  function handleReset() {
+    resetCustomTheme();
+    // Re-seed from now-effective defaults so the swatches reflect the active
+    // mode's tokens (not the previously customized values).
+    setAccent(getEffectiveColor('accent', '#A855F7'));
+    setBg(getEffectiveColor('bg', '#0A0A0A'));
+    setFg(getEffectiveColor('fg', '#FFFFFF'));
+  }
 
   const options: Array<{ id: ThemePref; label: string; sublabel: string }> = [
     { id: 'dark',   label: tx.themeDark,   sublabel: 'dark'   },
@@ -378,6 +428,94 @@ export function AppearanceSection() {
               onClick={() => void setTheme(id)}
             />
           ))}
+        </div>
+      </div>
+
+      {/* 颜色定制 — 3 个 CSS var slot 的色板(强调色/背景/前景)+ 重置。 */}
+      <div data-testid="appearance-custom-colors">
+        <p
+          style={{
+            margin: '0 0 6px',
+            fontFamily: 'var(--font-mono, monospace)',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: 'var(--t-fg-4)',
+          }}
+        >
+          {tx.customLabel}
+        </p>
+        <p style={{ margin: '0 0 12px', fontSize: 11.5, color: 'var(--t-fg-4)', lineHeight: 1.55 }}>
+          {tx.customHint}
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {(['accent', 'bg', 'fg'] as const).map((slot) => {
+            const [value, , label] = slotState[slot];
+            return (
+              <div
+                key={slot}
+                data-testid={`color-row-${slot}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  border: '1px solid var(--t-border)',
+                  borderRadius: 8,
+                  background: 'var(--t-panel)',
+                }}
+              >
+                <span style={{ fontSize: 13, color: 'var(--t-fg)' }}>{label}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono, monospace)',
+                      fontSize: 11,
+                      color: 'var(--t-fg-3)',
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    {value.toUpperCase()}
+                  </span>
+                  <input
+                    type="color"
+                    value={value}
+                    onChange={(e) => handleColorChange(slot, e.target.value)}
+                    aria-label={label}
+                    data-testid={`color-input-${slot}`}
+                    style={{
+                      width: 44,
+                      height: 28,
+                      padding: 0,
+                      border: '1px solid var(--t-border)',
+                      borderRadius: 6,
+                      background: 'transparent',
+                      cursor: 'pointer',
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+          <button
+            type="button"
+            onClick={handleReset}
+            data-testid="custom-colors-reset"
+            style={{
+              alignSelf: 'flex-start',
+              marginTop: 4,
+              fontSize: 12,
+              padding: '6px 12px',
+              border: '1px solid var(--t-border)',
+              borderRadius: 6,
+              background: 'var(--t-panel)',
+              color: 'var(--t-fg)',
+              cursor: 'pointer',
+            }}
+          >
+            {tx.resetBtn}
+          </button>
         </div>
       </div>
     </div>
