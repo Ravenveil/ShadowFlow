@@ -1266,3 +1266,230 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ═══ G: ThreadDrawer dr-ctx / dr-comp / dr-doc ═══
+ * Stream G 落地 chat-fb.html 设计稿 P3 漏项：
+ *   - dr-ctx 头部源消息预览（avatar + name + excerpt）  HTML 行 619-624
+ *   - dr-comp 底部 mini composer + 同步勾选            HTML 行 652-662
+ *   - dr-doc 文档列表（lucide icon + name + chip）      HTML 行 1461-1497
+ *   不复用既有 .drCtx/.drDoc/.drComp 命名以免污染 dr-replies pane
+ *   的兼容渲染；新选择器都加在文件末尾，按"只能加不能删"原则。
+ * ─────────────────────────────────────────────────── */
+
+/* dr-ctx 源消息预览 row（用户传 sourceMessage 时启用） */
+.drCtxRow {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.drCtxAv {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.drCtxBody {
+  flex: 1;
+  min-width: 0;
+}
+.drCtxHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.drCtxNm {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--skin-fg-1, var(--fg-1));
+}
+.drCtxMeta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--skin-fg-4, var(--fg-4));
+}
+.drCtxExcerpt {
+  font-size: 11px;
+  color: var(--skin-fg-3, var(--fg-3));
+  margin-top: 2px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+/* dr-comp · Thread 底部回复 mini composer */
+.drComp {
+  flex-shrink: 0;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--skin-border, var(--border));
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.drCompInput {
+  width: 100%;
+  background: var(--skin-panel, var(--bg-elev-1));
+  border: 1px solid var(--skin-border, var(--border));
+  border-radius: 7px;
+  padding: 7px 9px;
+  font-size: 11px;
+  color: var(--skin-fg-1, var(--fg-1));
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  line-height: 1.45;
+  transition: border-color 120ms;
+  box-sizing: border-box;
+}
+.drCompInput:focus {
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+}
+.drCompInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.drCompOpts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.drCompCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--skin-fg-4, var(--fg-4));
+  cursor: pointer;
+  user-select: none;
+}
+.drCompCheck input {
+  accent-color: var(--accent);
+  width: 11px;
+  height: 11px;
+  cursor: pointer;
+}
+.drCompCheck input:disabled {
+  cursor: not-allowed;
+}
+.drCompSend {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-ink, #fff);
+  background: var(--accent);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 120ms;
+}
+.drCompSend:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.drCompSend:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* dr-doc · 文档列表（mock 阶段） */
+.drDocList {
+  flex: 1;
+  overflow: auto;
+  padding: 2px 0 8px;
+  display: flex;
+  flex-direction: column;
+}
+.drDocItem {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--skin-border-subtle, var(--border-subtle));
+  cursor: pointer;
+  transition: background 120ms;
+}
+.drDocItem:hover {
+  background: var(--skin-panel-2, var(--bg-elev-2));
+}
+.drDocIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+  color: var(--skin-fg-3, var(--fg-3));
+  flex-shrink: 0;
+}
+.drDocBody {
+  flex: 1;
+  min-width: 0;
+}
+.drDocName {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--skin-fg-1, var(--fg-1));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.drDocChip {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+  color: var(--skin-fg-4, var(--fg-4));
+  flex-shrink: 0;
+}
+.drDocChip[data-kind='pdf'] {
+  background: color-mix(in oklab, #dc2626 14%, var(--bg-elev-2));
+  color: #b91c1c;
+  border-color: color-mix(in oklab, #dc2626 22%, transparent);
+}
+.drDocChip[data-kind='md'] {
+  background: color-mix(in oklab, #2563eb 14%, var(--bg-elev-2));
+  color: #1d4ed8;
+  border-color: color-mix(in oklab, #2563eb 22%, transparent);
+}
+.drDocChip[data-kind='img'] {
+  background: color-mix(in oklab, #059669 14%, var(--bg-elev-2));
+  color: #047857;
+  border-color: color-mix(in oklab, #059669 22%, transparent);
+}
+.drDocChip[data-kind='code'] {
+  background: color-mix(in oklab, #7c3aed 14%, var(--bg-elev-2));
+  color: #6d28d9;
+  border-color: color-mix(in oklab, #7c3aed 22%, transparent);
+}
+.drDocMeta {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--skin-fg-4, var(--fg-4));
+  margin-top: 4px;
+}
+.drDocTodo {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--skin-fg-5, var(--fg-5));
+  padding: 10px 13px;
+  opacity: 0.7;
+  letter-spacing: 0.04em;
+}

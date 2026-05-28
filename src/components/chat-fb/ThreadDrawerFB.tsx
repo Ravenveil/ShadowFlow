@@ -6,13 +6,14 @@
  *
  * 数据来源：
  *   - Thread:  fetchRecentMessages(groupId) — 复用旧 ChatDrawer 的接线
+ *              （Stream G）头部源消息预览 + 底部 mini composer 支持「同时发到主频道」勾选
  *   - 任务:    ApprovalGatePanel（沿用 Epic 4 已有组件）
- *   - 文档:    占位（chat-fb 设计稿是静态 mock，等 Story 文档系统接入再补）
+ *   - 文档:    Stream G 落 3 个 mock 文件（等 /api/groups/{id}/docs endpoint 上线后切真实数据）
  *   - Brief:   BriefBoardView
  */
 
 import { useEffect, useState } from 'react';
-import { X, Pencil, Plus, Upload } from 'lucide-react';
+import { X, Pencil, Plus, Upload, FileText, FileCode, FileImage } from 'lucide-react';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
 import { fetchRecentMessages } from '../../api/groupApi';
@@ -21,10 +22,22 @@ import styles from './chatFB.module.css';
 
 type DrawerTab = 'thread' | 'tasks' | 'docs' | 'brief';
 
+export interface ThreadSourceMessage {
+  id: string;
+  senderName: string;
+  senderAvatar?: string;
+  excerpt: string;
+  timestamp?: string;
+}
+
 export interface ThreadDrawerFBProps {
   groupId?: string;
   group?: GroupItem;
   metrics: GroupMetrics;
+  /** Stream G — 源消息预览。不传则不渲染（向后兼容）。 */
+  sourceMessage?: ThreadSourceMessage;
+  /** Stream G — 回复提交。返回 Promise，组件根据 await 状态切 loading。 */
+  onReplySubmit?: (text: string, postToMain: boolean) => Promise<void>;
   t?: (k: string, opts?: Record<string, unknown>) => string;
   onClose?: () => void;
 }
@@ -49,7 +62,58 @@ function initialOf(name?: string): string {
   return /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
 }
 
-export function ThreadDrawerFB({ groupId, group, metrics, t, onClose }: ThreadDrawerFBProps) {
+// ─────────────────────────────────────────────────────────────
+// Mock docs（Stream G）— 等后端 GET /api/groups/{id}/docs endpoint
+// 上线后改成 useEffect + fetch。此处先用本地 mock 让 UI 不空。
+// ─────────────────────────────────────────────────────────────
+type MockDocKind = 'md' | 'pdf' | 'img' | 'code';
+interface MockDoc {
+  id: string;
+  name: string;
+  type: MockDocKind;
+  editedAt: string;
+  editedBy: string;
+}
+const MOCK_DOCS: MockDoc[] = [
+  { id: '1', name: 'methodology.md', type: 'md', editedAt: '2 hours ago', editedBy: 'reader' },
+  { id: '2', name: 'review-v3.pdf', type: 'pdf', editedAt: 'yesterday', editedBy: 'critic' },
+  { id: '3', name: 'figures.png', type: 'img', editedAt: '3 days ago', editedBy: 'reader' },
+];
+function docIcon(type: MockDocKind) {
+  // lucide-react 单色线性，不使用 emoji
+  switch (type) {
+    case 'pdf':
+      return <FileText size={16} strokeWidth={2} />;
+    case 'img':
+      return <FileImage size={16} strokeWidth={2} />;
+    case 'code':
+      return <FileCode size={16} strokeWidth={2} />;
+    default:
+      return <FileText size={16} strokeWidth={2} />;
+  }
+}
+function docTypeChip(type: MockDocKind): string {
+  switch (type) {
+    case 'pdf':
+      return 'PDF';
+    case 'img':
+      return 'IMG';
+    case 'code':
+      return 'CODE';
+    default:
+      return 'MD';
+  }
+}
+
+export function ThreadDrawerFB({
+  groupId,
+  group,
+  metrics,
+  sourceMessage,
+  onReplySubmit,
+  t,
+  onClose,
+}: ThreadDrawerFBProps) {
   const tr = (k: string, fb: string) => {
     if (!t) return fb;
     const v = t(k);
@@ -58,6 +122,11 @@ export function ThreadDrawerFB({ groupId, group, metrics, t, onClose }: ThreadDr
   const [tab, setTab] = useState<DrawerTab>('thread');
   const [threads, setThreads] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Stream G — composer state
+  const [replyText, setReplyText] = useState('');
+  const [postToMain, setPostToMain] = useState(false);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     if (!groupId || tab !== 'thread') return;
@@ -74,6 +143,21 @@ export function ThreadDrawerFB({ groupId, group, metrics, t, onClose }: ThreadDr
     { k: 'docs', label: tr('chat.tabDocs', '文档') },
     { k: 'brief', label: 'Brief' },
   ];
+
+  // Stream G — 提交回复
+  const handleReplySubmit = async () => {
+    const text = replyText.trim();
+    if (!text || !onReplySubmit || sending) return;
+    setSending(true);
+    try {
+      await onReplySubmit(text, postToMain);
+      setReplyText('');
+    } catch {
+      // 让父组件用自己的 toast / 错误条提示；这里不静默吞但也不强弹
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <div className={styles.drawer}>
@@ -99,6 +183,45 @@ export function ThreadDrawerFB({ groupId, group, metrics, t, onClose }: ThreadDr
       {/* THREAD pane */}
       {tab === 'thread' && (
         <div className={styles.drPane}>
+          {/* Stream G — dr-ctx 源消息预览（如果父组件传了 sourceMessage） */}
+          {sourceMessage && (
+            <div className={styles.drCtx}>
+              <div className={styles.drCtxRow}>
+                <span
+                  className={styles.drCtxAv}
+                  style={(() => {
+                    const p = paletteOf(sourceMessage.senderName);
+                    return {
+                      background: `color-mix(in oklab, ${p.accent} 18%, var(--skin-panel-2))`,
+                      borderColor: `color-mix(in oklab, ${p.accent} 45%, transparent)`,
+                      color: p.ink,
+                    };
+                  })()}
+                >
+                  {initialOf(sourceMessage.senderName)}
+                </span>
+                <div className={styles.drCtxBody}>
+                  <div className={styles.drCtxHead}>
+                    <span className={styles.drCtxNm}>{sourceMessage.senderName}</span>
+                    {sourceMessage.timestamp && (
+                      <span className={styles.drCtxMeta}>
+                        {new Date(sourceMessage.timestamp).toLocaleTimeString('zh-CN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    )}
+                  </div>
+                  <div className={styles.drCtxExcerpt}>
+                    {sourceMessage.excerpt.length > 80
+                      ? sourceMessage.excerpt.slice(0, 80) + '…'
+                      : sourceMessage.excerpt}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {!groupId ? (
             <div className={styles.drEmpty}>{tr('chat.pickTeamFirst', '请先选择一个群组')}</div>
           ) : loading ? (
@@ -107,11 +230,13 @@ export function ThreadDrawerFB({ groupId, group, metrics, t, onClose }: ThreadDr
             <div className={styles.drEmpty}>{tr('chat.noMessages', '暂无消息')}</div>
           ) : (
             <>
-              <div className={styles.drCtx}>
-                <div className={styles.drCtxCount}>
-                  {threads.length} 条消息 · {group?.metrics?.members ?? 0} 人
+              {!sourceMessage && (
+                <div className={styles.drCtx}>
+                  <div className={styles.drCtxCount}>
+                    {threads.length} 条消息 · {group?.metrics?.members ?? 0} 人
+                  </div>
                 </div>
-              </div>
+              )}
               <div className={styles.drReplies}>
                 {threads.map((msg, i) => {
                   const isUser = msg.sender_kind === 'user';
@@ -169,6 +294,45 @@ export function ThreadDrawerFB({ groupId, group, metrics, t, onClose }: ThreadDr
               </div>
             </>
           )}
+
+          {/* Stream G — dr-comp 底部 mini composer */}
+          {groupId && onReplySubmit && (
+            <div className={styles.drComp}>
+              <textarea
+                className={styles.drCompInput}
+                value={replyText}
+                onChange={e => setReplyText(e.target.value)}
+                placeholder={tr('chat.replyPlaceholder', '回复 thread…（Cmd+Enter 发送）')}
+                onKeyDown={e => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleReplySubmit();
+                  }
+                }}
+                disabled={sending}
+                rows={2}
+              />
+              <div className={styles.drCompOpts}>
+                <label className={styles.drCompCheck}>
+                  <input
+                    type="checkbox"
+                    checked={postToMain}
+                    onChange={e => setPostToMain(e.target.checked)}
+                    disabled={sending}
+                  />
+                  <span>{tr('chat.alsoPostToMain', '同时发到主频道')}</span>
+                </label>
+                <button
+                  className={styles.drCompSend}
+                  type="button"
+                  onClick={handleReplySubmit}
+                  disabled={sending || !replyText.trim()}
+                >
+                  {sending ? tr('common.sending', '发送中…') : tr('common.send', '发送')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -191,14 +355,37 @@ export function ThreadDrawerFB({ groupId, group, metrics, t, onClose }: ThreadDr
         </div>
       )}
 
-      {/* DOCS pane — 占位 */}
+      {/* DOCS pane — Stream G mock 文件列表（TODO: 接 /api/groups/{id}/docs） */}
       {tab === 'docs' && (
         <div className={styles.drPane}>
-          <div className={styles.drEmpty}>
-            {tr('chat.noLinkedDocs', '暂无关联文档')}
-            <br />
-            <span style={{ fontSize: 10, opacity: 0.7 }}>文档系统待后续 story 接入</span>
-          </div>
+          {groupId ? (
+            <div className={styles.drDocList}>
+              {MOCK_DOCS.map(doc => (
+                <div key={doc.id} className={styles.drDocItem}>
+                  <span className={styles.drDocIcon}>{docIcon(doc.type)}</span>
+                  <div className={styles.drDocBody}>
+                    <div className={styles.drDocName}>
+                      {doc.name}
+                      <span className={styles.drDocChip} data-kind={doc.type}>
+                        {docTypeChip(doc.type)}
+                      </span>
+                    </div>
+                    <div className={styles.drDocMeta}>
+                      {doc.editedBy} · edited {doc.editedAt}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className={styles.drDocTodo}>
+                {tr(
+                  'chat.docsMockNotice',
+                  '* mock 数据 · 等后端 GET /api/groups/{id}/docs endpoint',
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className={styles.drEmpty}>{tr('chat.pickTeamFirst', '请先选择一个群组')}</div>
+          )}
           <div className={styles.drActbar}>
             <button className={styles.drActBtn} type="button" disabled>
               <Upload size={13} strokeWidth={2} />
