@@ -110,10 +110,13 @@ def _list_groups_records(workspace_id: Optional[str] = None) -> List[Dict[str, A
                 records.append(rec)
             else:
                 rec_ws = rec.get("workspace_id")
-                # Workspace_id-less legacy records match any filter (so they
-                # don't vanish during migration). Only records that explicitly
-                # belong to a DIFFERENT workspace are filtered out.
-                if not rec_ws or rec_ws == workspace_id:
+                # 2026-05-28 — strict scoping. Previously `not rec_ws` was
+                # treated as a wildcard so legacy / fixture records with
+                # workspace_id=null bled into every workspace's chat list.
+                # Now an explicit workspace_id filter only matches records
+                # whose workspace_id equals it; null / missing records are
+                # excluded. To see those run an unscoped list (no query).
+                if rec_ws == workspace_id:
                     records.append(rec)
         except (json.JSONDecodeError, OSError):
             pass

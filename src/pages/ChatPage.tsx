@@ -557,6 +557,38 @@ export default function ChatPage() {
     void fetchWorkspaceInbox(currentWorkspaceId);
   }, [currentWorkspaceId, fetchWorkspaceInbox]);
 
+  // 2026-05-28 — /chat 落地 auto-pick：
+  //  1) 若 URL 已带 :groupId 则保留
+  //  2) 否则恢复 localStorage 里的 sf.chat.lastGroupId（且该 id 在当前 workspace 列表里）
+  //  3) 再否则取列表第一项
+  //  4) 列表为空 → 留在空状态（不强跳）
+  // 依赖 groups —— 等列表实际加载完才决断，避免初始空数组就乱跳。
+  useEffect(() => {
+    if (groupId) return;
+    if (groups.length === 0) return;
+    let target: string | null = null;
+    try {
+      const last = typeof localStorage !== 'undefined' ? localStorage.getItem('sf.chat.lastGroupId') : null;
+      if (last && groups.some(g => g.id === last)) target = last;
+    } catch {
+      // localStorage 不可用就直接走 fallback
+    }
+    if (!target) target = groups[0].id;
+    navigate(`/chat/${target}`, { replace: true });
+  }, [groupId, groups, navigate]);
+
+  // 用户切换会话时把 groupId 存进 lastGroupId（包括 InboxPanel 点击 + URL 直接打开）
+  useEffect(() => {
+    if (!groupId) return;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('sf.chat.lastGroupId', groupId);
+      }
+    } catch {
+      // 写失败忽略
+    }
+  }, [groupId]);
+
   const group = groups.find(g => g.id === groupId);
   const groupName = group?.name ?? groupId ?? '';
   const metrics = group?.metrics ?? DEFAULT_METRICS;

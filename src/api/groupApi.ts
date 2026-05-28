@@ -104,6 +104,24 @@ export async function createGroup(
   };
 }
 
+/**
+ * 2026-05-28 · 列出 workspace 内的群（不带 workspace_id 时返回全部 — 仅供管理/无 scope 场景）。
+ *
+ * 这里调用方应总是传 currentWorkspaceId（来自 useWorkspaceStore.currentId），
+ * 这样 useEffect 把 workspaceId 进依赖列表后，workspace 切换可自动重拉。
+ *
+ * 后端响应包络: `{ data: GroupRecord[], groups: GroupRecord[], meta: {...} }`
+ * （`groups` 是 legacy stub 兼容字段，等价于 `data`）。
+ */
+export async function listGroups(workspaceId?: string | null): Promise<GroupRecord[]> {
+  const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+  const res = await fetch(`${getApiBase()}/api/groups${qs}`);
+  await _checkPythonStatus(res);
+  if (!res.ok) return [];
+  const json = await res.json().catch(() => ({} as { data?: GroupRecord[]; groups?: GroupRecord[] }));
+  return (json.data ?? json.groups ?? []) as GroupRecord[];
+}
+
 export async function fetchBriefBoard(
   groupId: string,
   date: string
