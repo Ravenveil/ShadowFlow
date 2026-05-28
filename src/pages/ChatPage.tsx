@@ -617,7 +617,11 @@ export default function ChatPage() {
   const [threadDrawerOpen, setThreadDrawerOpen] = useState(true);
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: T.bg, color: T.fg }}>
+    // 2026-05-28 修 composer 截断 (round 3)：父容器 (HfLayout.tsx:58) 是
+    // overflow:auto，会让我们的 flex 高度计算"软绑定"，子内容可以撑大整页超出
+    // viewport 下沿。这里显式 height:100% 强制取父高度，再配合 minHeight:0
+    // 让 column 链能 shrink，composer (flex-shrink:0) 才能稳稳贴在底部。
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, height: '100%', background: T.bg, color: T.fg }}>
       {/* Hidden elements for test compatibility */}
       <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', pointerEvents: 'none' }}>
         <BreadcrumbBar label={groupName}/>
