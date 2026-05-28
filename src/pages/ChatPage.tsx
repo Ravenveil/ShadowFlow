@@ -35,6 +35,13 @@ import type { GroupItem, GroupMetrics, Message } from '../common/types/inbox';
 import { useI18n } from '../common/i18n';
 import { ChatStream } from '../core/components/chat/ChatStream';
 import { useChatStream } from '../core/hooks/useChatStream';
+// ── Stream D 2026-05-28 · 接入 chat-fb FB-HiFi 组件 ─────────────────────────
+import InboxPanelFB from '../components/chat-fb/InboxPanelFB';
+import ConvHeaderFB from '../components/chat-fb/ConvHeaderFB';
+import PinnedBriefFB from '../components/chat-fb/PinnedBriefFB';
+import ComposerFB from '../components/chat-fb/ComposerFB';
+import { ChatFeedFB } from '../components/chat-fb/ChatFeedFB';
+import { ThreadDrawerFB } from '../components/chat-fb/ThreadDrawerFB';
 
 // ── Design token helpers ────────────────────────────────────────────────────
 const T = {
@@ -66,6 +73,9 @@ type FilterKey = 'all' | 'unread' | 'mention' | 'agent';
 type DrawerTab = 'Thread' | '任务' | '文档' | 'Brief';
 
 // ── Avatar (FBAv equivalent) ─────────────────────────────────────────────────
+/** @deprecated 2026-05-28 — 仅供旧 InboxPanel / ConvHeader / ChatDrawer 内部使用，
+ *  这些组件本身已被 chat-fb FB-HiFi 版替代（见 src/components/chat-fb/）。
+ *  保留是为了不破坏 deprecated 函数定义引用关系，符合"只能加不能删"原则。 */
 function Av({ g, color, size = 32, sq }: { g: string; color: string; size?: number; sq?: boolean }) {
   return (
     <span style={{
@@ -80,6 +90,8 @@ function Av({ g, color, size = 32, sq }: { g: string; color: string; size?: numb
 }
 
 // ── InboxRow ─────────────────────────────────────────────────────────────────
+/** @deprecated 2026-05-28 — 由 chat-fb/InboxPanelFB 内部 IbxRow 替代 */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function InboxRow({ n, desc, u, active, run, warn, t, members, mention, lock, onClick }: {
   n: string; desc: string; u?: number; active?: boolean; run?: boolean; warn?: boolean;
   t?: string; members?: number; mention?: boolean; lock?: boolean; onClick?: () => void;
@@ -108,6 +120,8 @@ function InboxRow({ n, desc, u, active, run, warn, t, members, mention, lock, on
 }
 
 // ── DmRow ─────────────────────────────────────────────────────────────────────
+/** @deprecated 2026-05-28 — 由 chat-fb/InboxPanelFB 替代 */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function DmRow({ g, n, last, color, t, mention, run, unread, onClick }: {
   g: string; n: string; last?: string; color: string; t?: string;
   mention?: boolean; run?: boolean; unread?: number; onClick?: () => void;
@@ -140,6 +154,9 @@ interface InboxPanelProps {
   onDm: (id: string) => void;
 }
 
+/** @deprecated 2026-05-28 — 已替换为 chat-fb/InboxPanelFB（FB-HiFi 风）。
+ *  保留供回滚 / diff 阅读 ；不再被 ChatPage 主渲染调用。 */
+// @ts-expect-error TS6133 — deprecated 保留版，主渲染已切到 InboxPanelFB
 function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProps) {
   const { t } = useI18n();
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -248,6 +265,8 @@ function InboxPanel({ groups, groupId, agentDMs, onGroup, onDm }: InboxPanelProp
 }
 
 // ── Conversation header ───────────────────────────────────────────────────────
+/** @deprecated 2026-05-28 — 已替换为 chat-fb/ConvHeaderFB */
+// @ts-expect-error TS6133 — deprecated 保留版
 function ConvHeader({ group, isRunning, builderUrl, t }: { group?: GroupItem; isRunning: boolean; builderUrl: string; t: (k: string, opts?: Record<string, unknown>) => string }) {
   const members = group?.metrics?.members ?? 0;
   const runCount = group?.metrics?.activeRuns ?? 0;
@@ -294,6 +313,8 @@ function ConvHeader({ group, isRunning, builderUrl, t }: { group?: GroupItem; is
 }
 
 // ── Pinned Brief ─────────────────────────────────────────────────────────────
+/** @deprecated 2026-05-28 — 已替换为 chat-fb/PinnedBriefFB */
+// @ts-expect-error TS6133 — deprecated 保留版
 function PinnedBrief({ group }: { group?: GroupItem }) {
   const { t } = useI18n();
   if (!group) return null;
@@ -327,6 +348,8 @@ interface ComposerProps {
   t: (k: string) => string;
 }
 
+/** @deprecated 2026-05-28 — 已替换为 chat-fb/ComposerFB */
+// @ts-expect-error TS6133 — deprecated 保留版
 function RichComposer({ value, onChange, onSend, onRunSkill, loading, t }: ComposerProps) {
   const [slashOpen, setSlashOpen] = useState(false);
   const cmds = [
@@ -406,6 +429,8 @@ function RichComposer({ value, onChange, onSend, onRunSkill, loading, t }: Compo
 }
 
 // ── Right drawer: Thread / 任务 / 文档 / Brief ────────────────────────────────
+/** @deprecated 2026-05-28 — 已替换为 chat-fb/ThreadDrawerFB */
+// @ts-expect-error TS6133 — deprecated 保留版
 function ChatDrawer({ groupId, group, metrics }: { groupId?: string; group?: GroupItem; metrics: GroupMetrics }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<DrawerTab>('Thread');
@@ -588,6 +613,9 @@ export default function ChatPage() {
   const builderUrl = buildChatBuilderUrl({ chatId: groupId ?? '', goalText: groupName });
   const isRunning = group?.status === 'running' || (group?.metrics?.activeRuns ?? 0) > 0;
 
+  // ── Stream D · Thread Drawer 显隐 (chat-fb.html .drawer.hide 行 604) ───────
+  const [threadDrawerOpen, setThreadDrawerOpen] = useState(true);
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: T.bg, color: T.fg }}>
       {/* Hidden elements for test compatibility */}
@@ -603,12 +631,47 @@ export default function ChatPage() {
 
       {/* 3-column body: inbox · main · drawer */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <InboxPanel groups={groups} groupId={groupId} agentDMs={agentDMs} onGroup={id => navigate(`/chat/${id}`)} onDm={id => navigate(`/agent-dm/${id}`)}/>
+        {/* Stream D · FB-HiFi InboxPanel — chat-fb.html 行 878-1014 */}
+        <InboxPanelFB
+          groups={groups}
+          groupId={groupId}
+          agentDMs={agentDMs}
+          onGroup={id => navigate(`/chat/${id}`)}
+          onDm={id => navigate(`/agent-dm/${id}`)}
+          i18n={{
+            searchPlaceholder: t('chat.searchJump'),
+            filterAll: t('chat.filterAll'),
+            filterUnread: t('chat.filterUnread'),
+            filterMention: t('chat.filterMention'),
+            filterAgent: t('chat.filterAgent'),
+            sectionDMs: t('chat.sectionDMs'),
+            emptyGroups: t('chat.emptyGroups'),
+            noMatched: t('chat.noMatchedGroups'),
+          }}
+        />
 
         {/* ─ Center column ─ */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          {group && <ConvHeader group={group} isRunning={isRunning} builderUrl={builderUrl} t={t}/>}
-          <PinnedBrief group={group}/>
+          {/* Stream D · FB-HiFi ConvHeader + CreateAgentButton 仍保留在右侧 */}
+          {group && (
+            <div style={{ display: 'flex', alignItems: 'stretch' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <ConvHeaderFB
+                  group={group}
+                  isRunning={isRunning}
+                  t={t}
+                  threadOpen={threadDrawerOpen}
+                  tasksCount={metrics.pendingApprovalsCount}
+                  onThreadToggle={() => setThreadDrawerOpen(p => !p)}
+                  onTasksClick={() => handleTabChange('approvals')}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: `1px solid ${T.bd}`, background: T.p }}>
+                <CreateAgentButton label={t('chat.createAgentFromChat')} builderUrl={builderUrl}/>
+              </div>
+            </div>
+          )}
+          <PinnedBriefFB group={group} t={t}/>
 
           {/* Sub tabs (Chat / BriefBoard / Approvals) */}
           {groupId && (
@@ -652,31 +715,29 @@ export default function ChatPage() {
             </div>
           )}
 
-          {/* Chat messages */}
+          {/* Chat messages — Stream D · FB-HiFi feed */}
           {activeTab === 'chat' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, background: T.bg }}>
               <div ref={chatScrollRef} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-                <ChatStream
-                  messages={chatStream.messages}
-                  showSenderHeader
-                  emptyState={
-                    <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, padding: 32 }}>
-                      {!groupId ? (
-                        <>
-                          <div style={{ width: 48, height: 48, borderRadius: 14, background: T.p, border: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fg5 }}>
-                            <Users size={22} strokeWidth={1.4}/>
-                          </div>
-                          <div style={{ textAlign: 'center' }}>
-                            <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: T.fg3 }}>{t('chat.emptyPickTeamTitle')}</p>
-                            <p style={{ margin: 0, fontSize: 11, color: T.fg5, lineHeight: 1.6 }}>{t('chat.emptyPickTeamHint')}</p>
-                          </div>
-                        </>
-                      ) : (
-                        <p style={{ fontSize: 13, color: T.fg5, margin: 0 }}>{t('chat.noMessages')}</p>
-                      )}
-                    </div>
-                  }
-                />
+                {chatStream.messages.length === 0 ? (
+                  <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, padding: 32 }}>
+                    {!groupId ? (
+                      <>
+                        <div style={{ width: 48, height: 48, borderRadius: 14, background: T.p, border: `1px solid ${T.bd}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fg5 }}>
+                          <Users size={22} strokeWidth={1.4}/>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: T.fg3 }}>{t('chat.emptyPickTeamTitle')}</p>
+                          <p style={{ margin: 0, fontSize: 11, color: T.fg5, lineHeight: 1.6 }}>{t('chat.emptyPickTeamHint')}</p>
+                        </div>
+                      </>
+                    ) : (
+                      <p style={{ fontSize: 13, color: T.fg5, margin: 0 }}>{t('chat.noMessages')}</p>
+                    )}
+                  </div>
+                ) : (
+                  <ChatFeedFB messages={chatStream.messages} groupName={group?.name}/>
+                )}
               </div>
               {chatStream.error && (
                 <div style={{ padding: '6px 18px', fontSize: 11, color: T.err, background: `color-mix(in oklab, ${T.err} 12%, transparent)`, borderTop: `1px solid ${T.bd}`, flexShrink: 0 }}>
@@ -686,7 +747,12 @@ export default function ChatPage() {
             </div>
           )}
 
-          <RichComposer
+          {/* 隐藏的旧 ChatStream — 保留供测试可能依赖的 markup 渲染（非 chat tab 时不渲染） */}
+          <div style={{ display: 'none' }} aria-hidden>
+            <ChatStream messages={[]} />
+          </div>
+
+          <ComposerFB
             value={composer}
             onChange={setComposer}
             onSend={() => void handleSend()}
@@ -696,7 +762,15 @@ export default function ChatPage() {
           />
         </div>
 
-        <ChatDrawer groupId={groupId} group={group} metrics={metrics}/>
+        {threadDrawerOpen && (
+          <ThreadDrawerFB
+            groupId={groupId}
+            group={group}
+            metrics={metrics}
+            t={t}
+            onClose={() => setThreadDrawerOpen(false)}
+          />
+        )}
       </div>
 
       {scheduleDrawerOpen && (

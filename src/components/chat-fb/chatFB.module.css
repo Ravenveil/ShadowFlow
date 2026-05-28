@@ -858,3 +858,411 @@
   display: inline-block;
   flex-shrink: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Stream D · ChatFeedFB / Messages
+ * 对照 chat-fb.html 行 315-496（feed / msg / usermsg / typing / day-div）
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.feed {
+  flex: 1;
+  overflow: auto;
+  padding: 22px 24px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── 日期分割 ───────────────────────────────────────────────────────────── */
+.dayDiv {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+}
+.dayLn {
+  flex: 1;
+  height: 1px;
+  background: var(--skin-border, var(--border));
+}
+.dayLb {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--skin-fg-4, var(--fg-4));
+}
+
+/* ── 系统通知行 ─────────────────────────────────────────────────────────── */
+.sysnote {
+  text-align: center;
+}
+.sysnote span {
+  display: inline-block;
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--skin-fg-4, var(--fg-4));
+  background: color-mix(in oklab, var(--skin-fg-4, #888) 6%, transparent);
+}
+
+/* ── Agent 消息 ─────────────────────────────────────────────────────────── */
+.msg {
+  display: flex;
+  gap: 10px;
+  position: relative;
+}
+.agentAv {
+  position: relative;
+  flex-shrink: 0;
+}
+.avLg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  border-radius: 8px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.bodyWrap {
+  flex: 1;
+  min-width: 0;
+  max-width: 720px;
+  padding-left: 12px;
+  border-left: 2px solid;
+}
+.msgHd {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.msgNm {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--skin-fg-1, var(--fg-1));
+}
+.agPill {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+}
+.msgT {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--skin-fg-5, var(--fg-5));
+}
+.msgText {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--skin-fg-2, var(--fg-2));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.streamCaret {
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--accent);
+  animation: hf-pulse 1s steps(2, end) infinite;
+  font-weight: 600;
+}
+
+/* ── 工具调用 chip ──────────────────────────────────────────────────────── */
+.toolChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 9px;
+  border-radius: 5px;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+}
+.toolChipN {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--skin-fg-2, var(--fg-2));
+  font-weight: 600;
+}
+.toolChipM {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--skin-fg-4, var(--fg-4));
+}
+.toolChipOk {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--status-ok);
+  font-weight: 600;
+}
+
+/* ── User 消息（右侧）───────────────────────────────────────────────────── */
+.usermsg {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  position: relative;
+}
+.usermsgCol {
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.usermsgHd {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+.usermsgBubble {
+  padding: 9px 13px;
+  background: var(--accent-tint);
+  color: var(--skin-fg-1, var(--fg-1));
+  border-radius: 11px 11px 3px 11px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.usermsgDelivered {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--skin-fg-5, var(--fg-5));
+  margin-top: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Stream D · ThreadDrawerFB
+ * 对照 chat-fb.html 行 599-818
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.drawer {
+  width: 360px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--skin-border, var(--border));
+  background: var(--skin-panel, var(--bg-elev));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  transition: width 160ms ease;
+}
+
+/* Tabs */
+.drTabs {
+  display: flex;
+  border-bottom: 1px solid var(--skin-border, var(--border));
+  padding: 0 8px;
+  flex-shrink: 0;
+  align-items: center;
+}
+.drTab {
+  padding: 11px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--skin-fg-4, var(--fg-4));
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 120ms;
+}
+.drTab:hover {
+  color: var(--skin-fg-2, var(--fg-2));
+}
+.drTabOn {
+  color: var(--skin-fg-1, var(--fg-1));
+  font-weight: 700;
+  border-bottom-color: var(--accent);
+}
+.drTabN {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--skin-fg-4, var(--fg-4));
+  padding: 0 5px;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+  border-radius: 8px;
+  min-width: 14px;
+  text-align: center;
+}
+.drClose {
+  margin-left: auto;
+  padding: 10px 8px;
+  color: var(--skin-fg-4, var(--fg-4));
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.drClose:hover {
+  color: var(--skin-fg-1, var(--fg-1));
+}
+
+/* Pane */
+.drPane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.drEmpty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--skin-fg-5, var(--fg-5));
+  padding: 30px 16px;
+  text-align: center;
+}
+
+/* dr-ctx */
+.drCtx {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--skin-border, var(--border));
+  flex-shrink: 0;
+}
+.drCtxCount {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--skin-fg-4, var(--fg-4));
+  letter-spacing: 0.04em;
+}
+
+/* dr-replies */
+.drReplies {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.drReply {
+  display: flex;
+  gap: 8px;
+  position: relative;
+}
+.drAv {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 5px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.drReplyBody {
+  flex: 1;
+  min-width: 0;
+}
+.drReplyAgent .drReplyBody {
+  border-left: 2px solid;
+  padding-left: 7px;
+}
+.drReplyUser {
+  justify-content: flex-end;
+}
+.drReplyUser .drReplyBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.drReplyHd {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.drReplyNm {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--skin-fg-1, var(--fg-1));
+}
+.drReplyAg {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.drReplyT {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--skin-fg-5, var(--fg-5));
+}
+.drReplyTxt {
+  font-size: 11px;
+  color: var(--skin-fg-2, var(--fg-2));
+  margin-top: 3px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.drReplyBubble {
+  font-size: 11px;
+  padding: 6px 10px;
+  background: var(--accent-tint);
+  color: var(--skin-fg-1, var(--fg-1));
+  border-radius: 10px 10px 3px 10px;
+  margin-top: 3px;
+  border: 1px solid color-mix(in oklab, var(--accent) 28%, transparent);
+  max-width: 280px;
+  word-break: break-word;
+}
+
+/* Actbar */
+.drActbar {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--skin-border, var(--border));
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.drActBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--skin-fg-3, var(--fg-3));
+  background: transparent;
+  border: 1px solid var(--skin-border, var(--border));
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 120ms;
+}
+.drActBtn:not(:disabled):hover {
+  color: var(--accent-bright);
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+  background: var(--accent-tint);
+}
+.drActBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
