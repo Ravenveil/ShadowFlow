@@ -215,6 +215,14 @@ export interface RunSessionState {
    * produced a chunk yet (avoids null-checks at every call site).
    */
   perNodeChunks: Record<string, NodeChunkBuffer>;
+  /**
+   * Post-assembly UX hint. Set true when the assembler emits an
+   * `assembly-meta` SSE frame with `ask_workspace: true` (single-agent
+   * recipe). RunSessionPage reads this after the team auto-saves to render a
+   * non-blocking "已存入「<ws>」· 换到新工作区" prompt. Defaults false; no
+   * effect on any structural rendering.
+   */
+  askWorkspace: boolean;
 }
 
 // 2026-05-11 UX fix — steps are now driven entirely by `<sf:step>` events
@@ -267,6 +275,8 @@ type Action =
   // mutates by id via the pure applyPatch helper.
   | { type: 'MESSAGE'; payload: TimelineMessage }
   | { type: 'MESSAGE_PATCH'; payload: MessagePatch }
+  // Post-assembly UX hint from the `assembly-meta` SSE frame.
+  | { type: 'ASSEMBLY_META'; payload: { ask_workspace?: boolean; recipe?: string } }
   // 2026-05-16 — user pressed Stop. Mark stream terminated locally and
   // append "（用户已停止）" to the chat reply so the UI shows a clear marker
   // even if the LLM was mid-sentence.
@@ -690,6 +700,10 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       }
       return { ...state, messages: [...state.messages, incoming] };
     }
+    case 'ASSEMBLY_META':
+      // Single-agent recipe asked us to offer a workspace choice. Latch true;
+      // never auto-resets (the prompt is dismissed by the page, not the stream).
+      return { ...state, askWorkspace: state.askWorkspace || action.payload.ask_workspace === true };
     case 'MESSAGE_PATCH': {
       // S6.10-B — mutate the matching message by id via applyPatch. If no
       // match (out-of-order delivery, possible during reconnect), we drop
@@ -777,6 +791,7 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     pendingQuestionForm: null,
     messages: [],
     perNodeChunks: {},
+    askWorkspace: false,
   });
 
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -819,6 +834,8 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
       // coexist during the transition.
       onMessage:       (d) => dispatch({ type: 'MESSAGE', payload: d }),
       onMessagePatch:  (d) => dispatch({ type: 'MESSAGE_PATCH', payload: d }),
+      // Post-assembly UX hint — single-agent recipe offers workspace choice.
+      onAssemblyMeta:  (d) => dispatch({ type: 'ASSEMBLY_META', payload: d }),
       onRetrying:      (attempt, delayMs) => dispatch({ type: 'RETRYING', attempt, delayMs }),
       // EventSource gave up retrying — pure network bucket so the UI can
       // surface a "重发" CTA instead of "配置 API Key". setConnected(false)

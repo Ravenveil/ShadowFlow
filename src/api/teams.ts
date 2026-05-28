@@ -92,6 +92,8 @@ export interface CreateTeamRequest {
 export interface PatchTeamRequest {
   name?: string;
   description?: string;
+  /** Move the team into a different workspace (e.g. user created a new one). */
+  workspace_id?: string;
   add_agent_ids?: string[];
   remove_agent_ids?: string[];
 }

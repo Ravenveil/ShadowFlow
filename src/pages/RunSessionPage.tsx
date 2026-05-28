@@ -35,7 +35,9 @@ import { DesignSystemPicker } from '../components/DesignSystemPicker';
 import { ConversationPicker } from '../components/ConversationPicker';
 import { createRunSession } from '../api/runSessions';
 import { quickCreateAgent } from '../api/agents';
-import { createTeam, putTeamWorkflow, type TeamWorkflowNode, type TeamWorkflowEdge } from '../api/teams';
+import { createTeam, patchTeam, putTeamWorkflow, type TeamWorkflowNode, type TeamWorkflowEdge } from '../api/teams';
+import { CreateWorkspaceModal } from '../components/workspace/CreateWorkspaceModal';
+import type { WorkspaceSummary } from '../api/workspaces';
 import { deriveRosterRule, enforceRoster } from '../lib/assemblyRules';
 import { createGroup } from '../api/groupApi';
 import PythonBackendBanner from '../components/PythonBackendBanner';
@@ -3801,6 +3803,16 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   // default bucket and `/teams` (which filters by workspace) would still
   // show "还没有团队" even though save succeeded.
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentId);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const switchWorkspace = useWorkspaceStore((s) => s.switchTo);
+  const currentWorkspaceName =
+    workspaces.find((w) => w.workspace_id === currentWorkspaceId)?.name ?? '默认工作区';
+  // Post-assembly UX (single-agent recipe): after the team auto-saves into the
+  // current workspace, offer to move it to a brand-new one. State for the
+  // CreateWorkspaceModal + a transient "moved" confirmation.
+  const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
+  const [workspaceMovedTo, setWorkspaceMovedTo] = useState<string | null>(null);
+  const [workspaceMoveError, setWorkspaceMoveError] = useState<string | null>(null);
 
   // Auto-persist team + agents + chat group when blueprint run completes.
   // Reruns when saveState flips back to 'idle' (i.e. user pressed retry).
@@ -4071,6 +4083,29 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
     }
   }
 
+  // Post-assembly UX (single-agent): the user picked "换到新工作区" and the
+  // CreateWorkspaceModal returned a freshly created workspace. Move the
+  // already-saved team into it, switch the active workspace, then confirm.
+  async function handleWorkspaceCreated(ws: WorkspaceSummary) {
+    setShowWorkspaceModal(false);
+    setWorkspaceMoveError(null);
+    if (!savedTeamId) {
+      // Team not persisted yet — just switch to the new workspace so the user
+      // isn't stranded. (Shouldn't normally happen: the prompt only shows
+      // after a successful save.)
+      switchWorkspace(ws.workspace_id);
+      setWorkspaceMovedTo(ws.name);
+      return;
+    }
+    try {
+      await patchTeam(savedTeamId, { workspace_id: ws.workspace_id });
+      switchWorkspace(ws.workspace_id);
+      setWorkspaceMovedTo(ws.name);
+    } catch (e) {
+      setWorkspaceMoveError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   // Auto-save status chip — sits inline at the top of the page so the user
   // always knows whether the team was persisted. Failure state surfaces a
   // retry button that flips saveState back to 'idle' to re-run the effect.
@@ -4181,7 +4216,103 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
             <span>{rosterNotice}</span>
           </div>
         )}
+        {/* Post-assembly UX (single-agent recipe): non-blocking prompt offering
+            to move the auto-saved team into a fresh workspace. Reuses the
+            roster-notice chip styling (neutral tone). */}
+        {session.askWorkspace && saveState === 'ok' && !workspaceMovedTo && (
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid="run-session-workspace-prompt"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '4px 10px',
+              borderRadius: 6,
+              fontSize: 11.5,
+              fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+              letterSpacing: '0.02em',
+              background: 'var(--t-bg-elev-2, #141414)',
+              border: '1px solid var(--t-border, #27272A)',
+              color: 'var(--t-fg-3, #A1A1AA)',
+              alignSelf: 'flex-start',
+            }}
+          >
+            <span>已存入「{currentWorkspaceName}」</span>
+            <span style={{ opacity: 0.4 }}>·</span>
+            <button
+              type="button"
+              data-testid="run-session-workspace-switch"
+              onClick={() => setShowWorkspaceModal(true)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--t-fg-1, #fafafa)',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+                fontSize: 11.5,
+                fontFamily: 'inherit',
+                padding: 0,
+              }}
+            >
+              换到新工作区
+            </button>
+          </div>
+        )}
+        {workspaceMovedTo && (
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid="run-session-workspace-moved"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 6,
+              fontSize: 11.5,
+              fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+              letterSpacing: '0.02em',
+              background: 'rgba(52, 211, 153, 0.10)',
+              border: '1px solid rgba(52, 211, 153, 0.35)',
+              color: '#34d399',
+              alignSelf: 'flex-start',
+            }}
+          >
+            <Check size={12} strokeWidth={2.4} />
+            <span>已移到「{workspaceMovedTo}」</span>
+          </div>
+        )}
+        {workspaceMoveError && (
+          <div
+            role="alert"
+            data-testid="run-session-workspace-move-error"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 6,
+              fontSize: 11.5,
+              fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+              background: 'rgba(220, 38, 38, 0.10)',
+              border: '1px solid rgba(220, 38, 38, 0.35)',
+              color: '#ef4444',
+              alignSelf: 'flex-start',
+            }}
+          >
+            <AlertTriangle size={12} strokeWidth={2.2} />
+            <span>移动工作区失败 · {workspaceMoveError}</span>
+          </div>
+        )}
       </div>
+      {showWorkspaceModal && (
+        <CreateWorkspaceModal
+          onClose={() => setShowWorkspaceModal(false)}
+          onCreated={handleWorkspaceCreated}
+        />
+      )}
       {savedTeamId && (
         <div
           style={{

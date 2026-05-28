@@ -395,6 +395,13 @@ export function subscribeRunSession(
      * grows, thinking body streams, diff lines append, msg_foot timer ticks).
      */
     onMessagePatch?: (data: import('../components/run-session/timeline/types').MessagePatch) => void;
+    /**
+     * Post-assembly UX hint. Emitted by the assembler when the matched recipe
+     * carries `askWorkspaceOnCreate` (single-agent). Front-end uses it to
+     * offer a "move team to a new workspace" affordance after auto-save.
+     * Non-structural — clients that ignore it lose nothing.
+     */
+    onAssemblyMeta?: (data: { ask_workspace?: boolean; recipe?: string }) => void;
     onRetrying?: (attempt: number, delayMs: number) => void;
     onError?: (err: Event) => void;
     onServerError?: (message: string, code?: string) => void;
@@ -490,6 +497,9 @@ export function subscribeRunSession(
     // above; back-end emits both during the transition.
     es.addEventListener('message',       (e) => { const d = parse(e as MessageEvent); if (d) handlers.onMessage?.(d); });
     es.addEventListener('message-patch', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onMessagePatch?.(d); });
+    // Post-assembly UX hint — single-agent recipe asks whether to move the
+    // auto-saved team to a new workspace.
+    es.addEventListener('assembly-meta', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onAssemblyMeta?.(d); });
     es.addEventListener('error',     (e) => {
       const d = parse(e as MessageEvent);
       if (d?.message) {
