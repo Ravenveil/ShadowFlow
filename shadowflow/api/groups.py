@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 from shadowflow.api._limiter import limiter
 
@@ -334,12 +334,20 @@ async def post_group_message(
     request: Request,
     group_id: str,
     body: PostMessageRequest,
+    background_tasks: BackgroundTasks,
 ) -> MessageItem:
     """Append a message to a group's persisted message log.
 
     Atomic w.r.t. file IO via _save_group's tempfile-replace pattern. Not
     safe under concurrent writes to the SAME group from multiple processes;
     that's acceptable for the current single-uvicorn-process deployment.
+
+    Side effect — Stream C chat→agent bridge: when the incoming message is
+    from a user (``sender_kind == 'user'``) and the group has agent members,
+    we schedule an async dispatch via ``BackgroundTasks`` that calls the
+    configured BYOK LLM and appends the agent reply back into this group's
+    message log. The dispatch failures are isolated — they cannot affect
+    the persistence success of this endpoint.
     """
     rec = _load_group(group_id)
     if rec is None:
@@ -355,4 +363,12 @@ async def post_group_message(
     messages.append(msg)
     rec["messages"] = messages
     _save_group(rec)
+
+    # Stream C bridge: only dispatch on user-originated messages. Agent /
+    # system messages should never trigger another agent reply (would loop).
+    if body.sender_kind == "user" and rec.get("agent_ids"):
+        from shadowflow.api._chat_bridge import dispatch_agent_reply  # noqa: PLC0415
+
+        background_tasks.add_task(dispatch_agent_reply, group_id)
+
     return MessageItem(**msg)
