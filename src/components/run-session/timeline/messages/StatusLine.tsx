@@ -16,7 +16,6 @@
  * Visual ref: v8 .statusline (line 1717-1730).
  */
 import { memo, useEffect, useState } from 'react';
-import { Cloud } from 'lucide-react';
 import type { TimelineMessage } from '../types';
 import styles from '../timeline.module.css';
 
@@ -48,7 +47,14 @@ export const StatusLine = memo(function StatusLine({ msg }: Props) {
 
   return (
     <div className={styles.statusLine}>
-      <Cloud className={styles.statusGlyph} aria-hidden />
+      <span
+        className={
+          msg.terminal
+            ? `${styles.statusGlyph} ${styles.statusGlyphDone}`
+            : styles.statusGlyph
+        }
+        aria-hidden
+      />
       <span className={styles.statusVerb}>{msg.verb}</span>
       <span>for</span>
       <span className={styles.statusNum}>
