@@ -2255,3 +2255,442 @@
 .mention:hover {
   background: color-mix(in oklab, var(--accent) 22%, transparent);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   I: GroupSettings Modal (gset-*)
+   对照 _evidence/design-pkg-2026-05-28-v7/chat-fb.html 行 191-421 (CSS)
+                                                          行 1742-1842 (markup)
+   DingTalk 风右侧抽屉：group card / members grid / KV rows / toggles / danger
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* overlay — 抽屉容器；ChatPage 加 .gsetOverlay.open 显示 */
+.gsetOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0);
+  pointer-events: none;
+  transition: background 200ms var(--ease-out, ease-out);
+}
+.gsetOverlay.open {
+  pointer-events: auto;
+  background: rgba(0, 0, 0, 0.12);
+}
+:global([data-theme="night"]) .gsetOverlay.open,
+:global(.frame[data-theme="night"]) .gsetOverlay.open {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+/* right-side slide-in dialog */
+.gsetDialog {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow:
+    -16px 0 40px -16px rgba(0, 0, 0, 0.22),
+    -1px 0 0 0 var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateX(100%);
+  transition: transform 260ms var(--ease-out, ease-out);
+}
+.gsetOverlay.open .gsetDialog {
+  transform: translateX(0);
+}
+
+/* header */
+.gsetHd {
+  height: 52px;
+  padding: 0 10px 0 20px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  background: transparent;
+}
+.gsetTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-1);
+  flex: 1;
+  letter-spacing: 0.005em;
+}
+.gsetX {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--fg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 140ms ease, color 140ms ease;
+}
+.gsetX svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.8;
+}
+.gsetX:hover {
+  background: color-mix(in oklab, var(--fg-1) 8%, transparent);
+  color: var(--fg-1);
+}
+
+/* body (scrollable) */
+.gsetBd {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  padding: 0 16px 20px;
+}
+
+/* group identity hero */
+.gsetCard {
+  display: flex;
+  gap: 16px;
+  padding: 20px 4px 22px;
+  align-items: center;
+}
+.gsetCardAv {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  flex-shrink: 0;
+  background: var(--skin-panel);
+  border: 1px solid color-mix(in oklab, var(--accent) 38%, transparent);
+  color: var(--accent-bright, var(--accent));
+  font-family: var(--font-serif, var(--font-sans, inherit));
+  font-size: 30px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.6) inset,
+    0 6px 18px -6px color-mix(in oklab, var(--accent) 38%, transparent),
+    0 0 0 4px color-mix(in oklab, var(--accent) 8%, transparent);
+}
+:global(.frame[data-theme="night"]) .gsetCardAv,
+:global([data-theme="night"]) .gsetCardAv {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+    0 6px 22px -4px color-mix(in oklab, var(--accent) 40%, transparent),
+    0 0 0 4px color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.gsetCardMeta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.gsetCardNm {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--fg-1);
+  letter-spacing: -0.005em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gsetCardStats {
+  font-size: 11px;
+  color: var(--fg-4);
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+}
+
+/* section spacing — soft 14px gap, no hard line */
+.gsetSep {
+  height: 14px;
+}
+
+/* section grouped as elevated card (Linear style) */
+.gsetSec {
+  padding: 14px 16px 12px;
+  background: var(--skin-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+}
+:global(.frame[data-theme="night"]) .gsetSec,
+:global([data-theme="night"]) .gsetSec {
+  background: color-mix(in oklab, var(--skin-panel) 92%, #fff);
+  border-color: color-mix(in oklab, var(--border) 60%, transparent);
+}
+.gsetSecHd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px 12px;
+}
+.gsetSecTtl {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--fg-4);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.gsetSecCnt {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--fg-3);
+  padding: 1px 7px;
+  background: color-mix(in oklab, var(--fg-1) 7%, transparent);
+  border-radius: 9px;
+  line-height: 16px;
+  font-weight: 500;
+}
+.gsetSpacer {
+  flex: 1;
+}
+.gsetLink {
+  border: none;
+  background: transparent;
+  color: var(--accent-bright, var(--accent));
+  font-size: 11.5px;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-weight: 500;
+  transition: background 120ms ease;
+}
+.gsetLink:hover {
+  background: var(--accent-tint, color-mix(in oklab, var(--accent) 15%, transparent));
+}
+
+/* members grid */
+.gsetMembers {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px 2px;
+  padding: 2px 0 4px;
+}
+.gsetM {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  padding: 4px 2px;
+  border-radius: 10px;
+  transition: transform 140ms var(--ease-out, ease-out);
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+}
+.gsetM:hover {
+  transform: translateY(-1px);
+}
+.gsetM:hover .gsetMAv {
+  box-shadow:
+    0 4px 10px -2px rgba(0, 0, 0, 0.18),
+    0 0 0 3px color-mix(in oklab, var(--fg-1) 5%, transparent);
+}
+.gsetMAv {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif, var(--font-sans, inherit));
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 160ms ease;
+}
+.gsetMAv[data-c="r"] { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+.gsetMAv[data-c="b"] { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+.gsetMAv[data-c="g"] { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+.gsetMAv[data-c="o"] { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.gsetMAv[data-c="p"] { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); }
+.onDot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--status-ok, #10b981);
+  border: 2px solid var(--skin-panel);
+}
+.gsetMAvAdd {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  border: 1.5px dashed var(--border-strong, var(--border));
+  color: var(--fg-4) !important;
+  font-family: var(--font-sans, inherit);
+  font-size: 22px;
+  font-weight: 300;
+  box-shadow: none !important;
+}
+.gsetMNm {
+  font-size: 12px;
+  color: var(--fg-1);
+  line-height: 1.2;
+  text-align: center;
+  font-weight: 500;
+}
+.gsetMRole {
+  font-size: 9.5px;
+  color: var(--fg-4);
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* editable + toggle rows */
+.gsetRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 6px;
+  margin: 0 -6px;
+  border-radius: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background 120ms ease;
+  width: calc(100% + 12px);
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.gsetRow:last-child {
+  border-bottom: none;
+}
+.gsetRow:hover {
+  background: color-mix(in oklab, var(--fg-1) 4%, transparent);
+}
+.gsetRowSw {
+  cursor: pointer;
+}
+.gsetRowSw:hover {
+  background: transparent;
+}
+.gsetRowK {
+  font-size: 12.5px;
+  color: var(--fg-1);
+  flex-shrink: 0;
+  min-width: 88px;
+  font-weight: 500;
+}
+.gsetRowV {
+  flex: 1;
+  font-size: 12px;
+  color: var(--fg-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  justify-content: flex-end;
+  text-align: right;
+}
+.gsetRowV > span:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gsetRowVMute {
+  color: var(--fg-4);
+}
+.gsetRowChev {
+  color: var(--fg-5, var(--fg-4));
+  font-size: 15px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.gsetTagOwner {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 3.5px;
+  background: var(--accent-tint, color-mix(in oklab, var(--accent) 15%, transparent));
+  color: var(--accent-bright, var(--accent));
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  border: none;
+}
+
+/* toggle switch */
+.gsetSw {
+  width: 34px;
+  height: 20px;
+  border-radius: 11px;
+  background: color-mix(in oklab, var(--fg-1) 14%, transparent);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 220ms var(--ease-out, ease-out);
+  display: inline-block;
+}
+.gsetSw::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2.5px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  transition: left 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.gsetRowSw.on .gsetSw {
+  background: var(--accent);
+}
+.gsetRowSw.on .gsetSw::after {
+  left: 16px;
+}
+
+/* danger group */
+.gsetDanger {
+  display: flex;
+  gap: 10px;
+  padding: 6px 4px 10px;
+}
+.gsetDangerBtn {
+  flex: 1;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--skin-panel);
+  color: var(--fg-2);
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.gsetDangerBtn:hover {
+  background: color-mix(in oklab, var(--fg-1) 5%, transparent);
+  color: var(--fg-1);
+}
+.gsetDangerBtnRed {
+  color: var(--status-reject, #ef4444);
+}
+.gsetDangerBtnRed:hover {
+  background: color-mix(in oklab, var(--status-reject, #ef4444) 8%, transparent);
+  color: var(--status-reject, #ef4444);
+  border-color: color-mix(in oklab, var(--status-reject, #ef4444) 35%, var(--border));
+}
