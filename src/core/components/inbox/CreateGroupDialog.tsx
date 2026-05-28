@@ -15,6 +15,7 @@ import { PolicyMatrixPanel } from '../Panel/PolicyMatrixPanel';
 import { createGroup } from '../../../api/groupApi';
 import { getTemplate } from '../../../api/templates';
 import { useInboxStore } from '../../store/useInboxStore';
+import { useWorkspaceStore } from '../../../store/workspaceStore';
 import type { GroupItem } from '../../../common/types/inbox';
 import { useI18n } from '../../../common/i18n';
 
@@ -314,6 +315,9 @@ interface CreateGroupDialogProps {
 export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDialogProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
+  // 2026-05-28 — 群必须绑定 workspace，否则切换工作区时这条会"挂在所有空间"
+  // 共享显示。从 workspaceStore 取当前 id，没有就 fall back 到 'default'。
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentId) ?? undefined;
   const [state, dispatch] = useReducer(reducer, initialState);
   const [templateSpec, setTemplateSpec] = useState<TemplateSpec | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -378,6 +382,7 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
           .map((s) => s.trim())
           .filter(Boolean),
         policyMatrix: {},
+        workspaceId: currentWorkspaceId,
       });
       // Append to store without re-fetching
       const newGroup: GroupItem = {

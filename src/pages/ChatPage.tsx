@@ -650,8 +650,12 @@ export default function ChatPage() {
           }}
         />
 
-        {/* ─ Center column ─ */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {/* ─ Center column ─
+            2026-05-28 修 composer 显示不全：column flex 父容器必须 minHeight:0，
+            否则 flex:1 的 chat-feed 不会让出空间给后面 flex-shrink:0 的 composer，
+            composer 被推到 viewport 之下，底部 compFoot（send 按钮 + kbd hint）
+            就看不见了。 */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
           {/* Stream D · FB-HiFi ConvHeader + CreateAgentButton 仍保留在右侧 */}
           {group && (
             <div style={{ display: 'flex', alignItems: 'stretch' }}>
