@@ -1,9 +1,18 @@
 /* ============================================================================
  * ShadowFlow · Global styles
- * Dark terminal/IDE aesthetic · purple accent · Geist + Geist Mono
+ * Dark terminal/IDE aesthetic · purple accent · 三声部字体系统
+ *
+ * 2026-05-28 字体升级 (三声部 — 设计稿"terminal + 编辑出版"双气质):
+ *   - Display: Bricolage Grotesque — 可变字体, 编辑出版风, 独特字形(g/a/?),
+ *     用于 .sf-display-* / .sf-h* 标题层级, 给 hero 注入设计感
+ *   - Body: Geist — 中性骨架(保留), 13px 正文密度大量用
+ *   - Mono: JetBrains Mono — 程序员字体, x-高更大、字形辨识度强、连字可选
+ *     用于 ~48% mono 文本(标签/ID/code)
+ *
+ * 一次 Google Fonts 请求, display=swap 避免 FOIT。
  * ============================================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Geist:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -11,8 +20,9 @@
 
 /* ---- Font families -------------------------------------- */
 :root {
-  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans:    'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Bricolage Grotesque', 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* ---- SKIN SLOTS (7) ----------------------------------------
      7-slot YAML Skin Pack. Everything downstream derives from these. */
@@ -152,14 +162,14 @@ input, textarea, select { font-family: inherit; color: inherit; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
 /* ============ Typography classes ============ */
-.sf-display-xl { font-family: var(--font-sans); font-size: 84px; font-weight: 700; line-height: 1.0; letter-spacing: -.04em; }
-.sf-display-l  { font-family: var(--font-sans); font-size: 62px; font-weight: 800; line-height: 1.02; letter-spacing: -.035em; }
-.sf-display-m  { font-family: var(--font-sans); font-size: 48px; font-weight: 900; line-height: 1.05; letter-spacing: -.03em; }
-.sf-h1         { font-family: var(--font-sans); font-size: 40px; font-weight: 800; line-height: 1.1;  letter-spacing: -.025em; }
-.sf-h2         { font-family: var(--font-sans); font-size: 36px; font-weight: 800; line-height: 1.15; letter-spacing: -.02em; }
-.sf-h3         { font-family: var(--font-sans); font-size: 28px; font-weight: 700; line-height: 1.2;  letter-spacing: -.015em; }
-.sf-h4         { font-family: var(--font-sans); font-size: 22px; font-weight: 800; line-height: 1.25; }
-.sf-h5         { font-family: var(--font-sans); font-size: 18px; font-weight: 700; line-height: 1.3; }
+.sf-display-xl { font-family: var(--font-display); font-size: 84px; font-weight: 700; line-height: 1.0; letter-spacing: -.04em; }
+.sf-display-l  { font-family: var(--font-display); font-size: 62px; font-weight: 800; line-height: 1.02; letter-spacing: -.035em; }
+.sf-display-m  { font-family: var(--font-display); font-size: 48px; font-weight: 900; line-height: 1.05; letter-spacing: -.03em; }
+.sf-h1         { font-family: var(--font-display); font-size: 40px; font-weight: 800; line-height: 1.1;  letter-spacing: -.025em; }
+.sf-h2         { font-family: var(--font-display); font-size: 36px; font-weight: 800; line-height: 1.15; letter-spacing: -.02em; }
+.sf-h3         { font-family: var(--font-display); font-size: 28px; font-weight: 700; line-height: 1.2;  letter-spacing: -.015em; }
+.sf-h4         { font-family: var(--font-display); font-size: 22px; font-weight: 800; line-height: 1.25; }
+.sf-h5         { font-family: var(--font-display); font-size: 18px; font-weight: 700; line-height: 1.3; }
 .sf-body       { font-family: var(--font-sans); font-size: 13px; font-weight: 500; line-height: 1.5; }
 .sf-body-sm    { font-family: var(--font-sans); font-size: 12px; font-weight: 500; line-height: 1.45; }
 .sf-body-lg    { font-family: var(--font-sans); font-size: 15px; font-weight: 500; line-height: 1.55; }

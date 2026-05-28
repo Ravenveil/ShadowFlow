@@ -1,0 +1,860 @@
+/* ============================================================================
+ * chat-fb CSS Module · FB-HiFi 设计语言
+ * 对齐 _evidence/design-pkg-2026-05-28/chat-fb.html
+ * 颜色 token 全部走 var(--xxx)（已在 src/index.css 和 fb-hifi.css 定义），
+ * 此处只负责布局/尺寸/字号/状态映射，不重复定义 token。
+ * ============================================================================ */
+
+/* ============================================================================
+ * Stream A · Inbox 左栏 (InboxPanelFB)
+ * 设计稿对照行号：chat-fb.html 行 194-260（CSS）+ 行 878-1018（HTML）
+ * ============================================================================ */
+
+/* ---- 外壳 (行 194-197) ---- */
+.inbox {
+  width: 296px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-family: inherit;
+}
+
+/* ---- 搜索区 (行 198-205) ---- */
+.searchWrap {
+  padding: 12px 12px 8px;
+}
+.input {
+  height: 32px;
+  padding: 0 10px;
+  background: var(--skin-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg-1);
+  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: text;
+}
+.input svg {
+  color: var(--fg-4);
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.inputPh {
+  color: var(--fg-4);
+}
+.kbd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+}
+
+/* ---- 过滤 chips (行 207-212) ---- */
+.chips {
+  padding: 0 12px 10px;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.chip {
+  padding: 3px 9px;
+  border-radius: 11px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--skin-panel);
+  color: var(--fg-3);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  font-family: inherit;
+}
+.chipOn {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+  border-color: color-mix(in oklab, var(--accent) 30%, transparent);
+}
+
+/* ---- 区段标签 (行 214-216) ---- */
+.labRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px 4px;
+  gap: 6px;
+}
+.lab {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.lab svg {
+  width: 11px;
+  height: 11px;
+}
+.labN {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+}
+
+/* ---- 行列表 (行 218-259) ---- */
+.list {
+  padding: 0 8px 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.listInner {
+  padding: 0 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  position: relative;
+  margin-left: -2px;
+}
+.row:hover {
+  background: var(--skin-panel);
+}
+.rowActive {
+  background: var(--accent-tint);
+  border-left-color: var(--accent);
+}
+.rowActive:hover {
+  background: var(--accent-tint);
+}
+
+/* ---- 头像 (行 225-240) ---- */
+.av {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+  position: relative;
+  border: 1px solid;
+}
+.av svg {
+  width: 16px;
+  height: 16px;
+}
+.cnt {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  min-width: 15px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--skin-panel);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--fg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stat {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-elev-2);
+}
+.statRun {
+  background: var(--status-run);
+  animation: chatFbPulse 1.4s infinite;
+}
+.statWarn {
+  background: var(--status-warn);
+}
+
+/* ---- 元数据 (行 241-259) ---- */
+.meta {
+  flex: 1;
+  min-width: 0;
+}
+.top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.nm {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-1);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rowUnread .nm {
+  font-weight: 700;
+}
+.live {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--status-run);
+  background: color-mix(in oklab, var(--status-run) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--status-run) 28%, transparent);
+}
+.t {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  flex-shrink: 0;
+}
+.rowUnread .t {
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+.at {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--status-reject);
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--status-reject-tint);
+  border: 1px solid color-mix(in oklab, var(--status-reject) 25%, transparent);
+}
+.unr {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--status-reject);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ---- 空态 ---- */
+.empty {
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.emptyIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-5);
+}
+.emptyText {
+  margin: 0;
+  font-size: 11px;
+  color: var(--fg-5);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+/* ---- 动画 (chat-fb.html 全局 @keyframes pulse) ---- */
+@keyframes chatFbPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ============================================================================
+ * Stream B · 主对话区 (ChatMainFB) —— 由 Stream B 在此处往下加
+ * 对照 chat-fb.html
+ *   - ConvHeader   : CSS 264-300 / HTML 1019-1096
+ *   - PinnedBrief  : CSS 301-313 / HTML 1123-1138
+ *   - Composer     : CSS 498-535 / HTML 1276-1309
+ *   - 共用 btn/btn-icon/hdr-menu : CSS 121-189
+ * ============================================================================ */
+
+/* ─── 共用 btn 基类 (chat-fb.html 121-151) ──────────────────────────────────── */
+.btn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: var(--fg-2);
+  font-family: inherit;
+}
+.btnPrimary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btnPrimary:hover {
+  filter: brightness(1.08);
+}
+.btnPrimary:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.btnGhost {
+  background: transparent;
+  color: var(--fg-2);
+  border: 1px solid var(--border);
+}
+.btnGhost:hover {
+  background: var(--bg-elev-2);
+  border-color: var(--border-strong);
+}
+.btnIcon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--fg-3);
+  border: 1px solid transparent;
+  position: relative;
+  background: transparent;
+  cursor: pointer;
+}
+.btnIcon:hover {
+  background: var(--bg-elev-2);
+  color: var(--fg-1);
+}
+.btnIconActive {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+  border-color: color-mix(in oklab, var(--accent) 35%, transparent);
+}
+.btnIcon .badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--status-reject);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--skin-panel);
+}
+.btnIconActive .badge {
+  background: var(--accent);
+  border-color: var(--accent-tint);
+}
+.btnIcon .pulseDot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-run);
+  box-shadow: 0 0 0 1.5px var(--skin-panel);
+  animation: chatFbPulse 1.4s infinite;
+}
+.btnSm {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
+/* ─── B: ConvHeader (chat-fb.html 264-300 / 1019-1096) ─────────────────────── */
+.hdr {
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--skin-panel);
+  flex-shrink: 0;
+}
+.hdrAv {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.hdrAv svg {
+  width: 18px;
+  height: 18px;
+}
+.hdrTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.hdrNm {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg-1);
+}
+.hdrMeta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-5);
+}
+.hdrSubline {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pillLive {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--status-run) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--status-run) 35%, transparent);
+  color: var(--status-run);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.pillLive::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-run);
+  animation: chatFbPulse 1.4s infinite;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--border);
+  color: var(--fg-4);
+  background: var(--bg-elev-2);
+}
+.hdrDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.hdrDotOk {
+  background: var(--status-ok);
+}
+.avStack {
+  display: flex;
+}
+.avMini {
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
+  border-radius: 4px;
+  border: 1px solid;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-left: -6px;
+}
+.avMini:first-child {
+  margin-left: 0;
+}
+
+/* ─── B: hdr-menu (chat-fb.html 153-189) ──────────────────────────────────── */
+.hdrMenuWrap {
+  position: relative;
+  display: inline-flex;
+}
+.hdrMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 232px;
+  background: var(--skin-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop, 0 24px 48px -20px rgba(24, 24, 27, 0.15), 0 8px 16px -10px rgba(24, 24, 27, 0.08));
+  padding: 6px;
+  z-index: 50;
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  pointer-events: none;
+  transform-origin: top right;
+  transition: opacity 140ms cubic-bezier(0.16, 0.84, 0.44, 1),
+              transform 140ms cubic-bezier(0.16, 0.84, 0.44, 1);
+}
+.hdrMenuOpen {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.hdrMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--fg-2);
+  user-select: none;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  width: 100%;
+  text-align: left;
+}
+.hdrMenuItem:hover {
+  background: var(--bg-elev-2);
+  color: var(--fg-1);
+}
+.hdrMenuItem svg {
+  width: 14px;
+  height: 14px;
+  color: var(--fg-4);
+  flex-shrink: 0;
+  stroke-width: 1.6;
+}
+.hdrMenuItem:hover svg {
+  color: var(--fg-2);
+}
+.hdrMenuItem .label {
+  flex: 1;
+}
+.hdrMenuItem .hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-5);
+  padding: 1px 5px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.hdrMenuItem .sw {
+  width: 24px;
+  height: 14px;
+  border-radius: 8px;
+  background: var(--bg-elev-3);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 140ms ease;
+}
+.hdrMenuItem .sw::after {
+  content: '';
+  position: absolute;
+  top: 1.5px;
+  left: 1.5px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: left 140ms cubic-bezier(0.16, 0.84, 0.44, 1);
+}
+.hdrMenuItemOn .sw {
+  background: var(--accent);
+}
+.hdrMenuItemOn .sw::after {
+  left: 11px;
+}
+.hdrMenuSep {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 5px 4px;
+}
+.hdrMenuItemDanger {
+  color: var(--status-reject);
+}
+.hdrMenuItemDanger svg {
+  color: var(--status-reject);
+}
+.hdrMenuItemDanger:hover {
+  background: color-mix(in oklab, var(--status-reject) 8%, transparent);
+  color: var(--status-reject);
+}
+
+/* ─── B: PinnedBrief (chat-fb.html 301-313 / 1123-1138) ───────────────────── */
+.brief {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--cream, color-mix(in oklab, var(--accent) 6%, var(--skin-panel)));
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.briefPin {
+  color: var(--accent);
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+.briefTag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--accent-bright);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.briefPinnedBy {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+  margin-left: 8px;
+}
+.briefBody {
+  font-size: 11.5px;
+  color: var(--fg-2);
+  margin-top: 3px;
+  line-height: 1.45;
+}
+.briefBody b {
+  margin-left: 6px;
+  color: var(--fg-1);
+  font-weight: 600;
+}
+.briefBody b:first-child {
+  margin-left: 0;
+}
+.briefMore {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+  cursor: pointer;
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+}
+.briefMore:hover {
+  color: var(--fg-2);
+}
+
+/* ─── B: Composer (chat-fb.html 498-535 / 1276-1309) ──────────────────────── */
+.composer {
+  padding: 11px 20px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  position: relative;
+  flex-shrink: 0;
+}
+.slashPop {
+  position: absolute;
+  bottom: 88px;
+  left: 20px;
+  width: 360px;
+  z-index: 10;
+  background: var(--skin-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop, 0 24px 48px -20px rgba(24, 24, 27, 0.15), 0 8px 16px -10px rgba(24, 24, 27, 0.08));
+  padding: 5px;
+}
+.slashHead {
+  padding: 6px 9px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.slashLab {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  letter-spacing: 0.06em;
+}
+.slashHint {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  margin-left: auto;
+}
+.slashItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.slashItem:hover {
+  background: var(--bg-elev-2);
+}
+.slashItemSel {
+  background: var(--accent-tint);
+}
+.slashItem .cmd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg-2);
+  min-width: 68px;
+}
+.slashItemSel .cmd {
+  color: var(--accent-bright);
+}
+.slashItem .d {
+  font-size: 11.5px;
+  color: var(--fg-3);
+  flex: 1;
+}
+.compShell {
+  background: var(--skin-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  overflow: hidden;
+}
+.compTools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 9px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.compToolBtn {
+  width: 26px;
+  height: 24px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-4);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+.compToolBtn:hover {
+  background: var(--bg-elev-2);
+  color: var(--fg-2);
+}
+.compToolBtn svg {
+  width: 14px;
+  height: 14px;
+}
+.compMd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  padding: 0 6px;
+}
+.compArea {
+  padding: 11px 13px;
+  min-height: 50px;
+  font-size: 13px;
+  color: var(--fg-2);
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.5;
+  display: block;
+}
+.compArea::placeholder {
+  color: var(--fg-5);
+}
+.compFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px 8px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-elev-2);
+}
+.compFootL {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.compKbd {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+}
+.compSaved {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+}
+.dotOk {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-ok);
+  display: inline-block;
+  flex-shrink: 0;
+}

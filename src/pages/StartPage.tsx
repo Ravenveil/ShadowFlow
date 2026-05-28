@@ -1276,32 +1276,19 @@ export default function StartPage() {
               style={{
                 position: 'relative',
                 zIndex: 1,
-                // Responsive clamp aligned to sf-display-l (62px) ⇢ sf-h2 (36px)
-                fontSize: 'clamp(36px, 6.2vw, 62px)',
+                // Bricolage Grotesque variable display font — opsz axis lets it
+                // read with extra display character at this large size.
+                fontFamily: 'var(--font-display)',
+                fontSize: 'clamp(36px, 6.2vw, 64px)',
                 fontWeight: 800,
                 lineHeight: 1.04,
-                letterSpacing: '-.035em',
+                letterSpacing: '-.04em',
                 margin: 0,
                 color: 'var(--t-fg)',
               }}
             >
               {t('start.heroTitle')}
             </h1>
-            {/* Lead — design house voice; sf-body-lg scale, fg-3 secondary */}
-            <p
-              style={{
-                position: 'relative',
-                zIndex: 1,
-                fontSize: 15,
-                fontWeight: 500,
-                lineHeight: 1.55,
-                color: 'var(--t-fg-3)',
-                maxWidth: 560,
-                margin: '18px auto 0',
-              }}
-            >
-              {t('start.heroLead')}
-            </p>
           </div>
 
           {/* Composer — textarea + structured fields + chip row, all in one box */}
