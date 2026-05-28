@@ -112,6 +112,46 @@ export interface TimelineProps {
 
 const STICK_THRESHOLD_PX = 100;
 
+/**
+ * Reorder messages so each turn's `msg_foot` sits at the BOTTOM of that turn,
+ * with every other message keeping its original relative order. Needed because
+ * the projector emits msg_foot lazily (whenever the first step/classify lands)
+ * and that determines its position in the stream — leaving the summary row
+ * floating mid-turn. v8 design wants the summary at the very end of the AI's
+ * response (Reference: _evidence/design-pkg-2026-05-28/run-session-v8.html
+ * line 1668 — `.msg-foot` sits as the final child of the assistant turn).
+ *
+ * Time/space complexity: O(n), single pass to group + single pass to flatten.
+ * Turn order is the first-seen order of each `turn_id` in the input.
+ */
+function hoistMsgFootToEnd(
+  messages: readonly TimelineMessage[],
+): TimelineMessage[] {
+  const byTurn = new Map<string, TimelineMessage[]>();
+  const turnOrder: string[] = [];
+  for (const m of messages) {
+    let bucket = byTurn.get(m.turn_id);
+    if (!bucket) {
+      bucket = [];
+      byTurn.set(m.turn_id, bucket);
+      turnOrder.push(m.turn_id);
+    }
+    bucket.push(m);
+  }
+  const out: TimelineMessage[] = [];
+  for (const t of turnOrder) {
+    const group = byTurn.get(t)!;
+    const feet: TimelineMessage[] = [];
+    const others: TimelineMessage[] = [];
+    for (const m of group) {
+      if (m.kind === 'msg_foot') feet.push(m);
+      else others.push(m);
+    }
+    out.push(...others, ...feet);
+  }
+  return out;
+}
+
 export const Timeline = memo(function Timeline({
   messages,
   className,
@@ -132,7 +172,15 @@ export const Timeline = memo(function Timeline({
   const [stickToBottom, setStickToBottom] = useState(true);
 
   // Filter the status_line out of the scrolling stream — it's a slot.
-  const streamMessages = messages.filter((m) => m.kind !== 'status_line');
+  // Then hoist each turn's msg_foot to the BOTTOM of that turn. The projector
+  // creates msg_foot lazily on the first step/classify event, so it lands
+  // wherever it was first pushed (mid-stream). v8 design renders the per-turn
+  // summary row at the very end of the AI's response, so we reorder here
+  // before delegating to buildRenderRows. Pure FE concern — the server stream
+  // order is preserved for any consumer that needs raw event order.
+  const streamMessages = hoistMsgFootToEnd(
+    messages.filter((m) => m.kind !== 'status_line'),
+  );
   // 2026-05-24 Round 2 fix (P0): the projector emits a fresh status_line
   // message id per verb-change (see server/src/lib/timeline-projector.ts
   // bumpStatusLine`). `.find()` returns the *first* match, so the statusline
