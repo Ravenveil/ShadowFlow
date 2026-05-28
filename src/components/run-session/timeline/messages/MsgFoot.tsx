@@ -1,8 +1,16 @@
 /**
- * MsgFoot — end-of-turn summary row. Dashed top border separates it from
- * the assistant body. While `status='running'` the status dot pulses blue;
- * on `msg_foot_update` patch with status='done' it flips to a static green
- * dot. Visual ref: v8 .msg-foot (line 1325-1338).
+ * MsgFoot — per-turn summary row. Dashed top border separates it from the
+ * assistant body. Renders in BOTH states per v8 design:
+ *   running → pulsing accent dot + "Running · 3m 42s · 4 tools · 632t · ¥0.012"
+ *   done    → static ok dot + "Done · …"
+ *
+ * 2026-05-28 alignment fix: prior implementation hid the foot during running
+ * (claiming "OpenDesign uses the bottom status_line for live activity"). v8
+ * actually does the OPPOSITE — the statusline CSS is a v7 leftover with NO
+ * body usage, and the msg-foot carries Running through to Done. See
+ * _evidence/design-pkg-2026-05-28/run-session-v8.html line 1668-1679.
+ *
+ * Visual ref: v8 .msg-foot (line 1327-1339).
  */
 import { memo } from 'react';
 import type { TimelineMessage } from '../types';
@@ -22,15 +30,18 @@ function formatElapsed(ms?: number): string {
 }
 
 export const MsgFoot = memo(function MsgFoot({ msg }: Props) {
-  // T3 UX (align claude code / cursor / OpenDesign): during a run the SINGLE
-  // live activity indicator is the pinned bottom status_line. The foot is no
-  // longer a second live "Running …" row — it renders only once the turn is
-  // done, as a quiet end-of-turn summary (Done · 5s · 1 tool · 1.2k t).
-  if (msg.status === 'running') return null;
+  const running = msg.status === 'running';
   return (
     <div className={styles.foot}>
-      <span className={styles.footStatus} aria-hidden />
-      <span className={styles.footLab}>Done</span>
+      <span
+        className={
+          running
+            ? `${styles.footStatus} ${styles.footStatusRun}`
+            : styles.footStatus
+        }
+        aria-hidden
+      />
+      <span className={styles.footLab}>{running ? 'Running' : 'Done'}</span>
       {typeof msg.elapsed_ms === 'number' && (
         <>
           <span className={styles.footSep}>·</span>

@@ -81,9 +81,12 @@ export interface TimelineProps {
    */
   className?: string;
   /**
-   * When true, render the bottom always-on `status_line` slot. Defaults to
-   * true. Glue (Task #37) can set this to false if it wants to render the
-   * status line in its own slot outside the Timeline tree.
+   * When true, render the bottom always-on `status_line` slot. Default is
+   * now `false` per v8 design (2026-05-28): the design package uses msg-foot
+   * (per-turn, running→done with full metrics) as the single live activity
+   * surface, and only keeps the `.statusline` CSS as a v7 leftover with no
+   * body usage. Callers who specifically want a Codex/Claude Code-style
+   * sticky strip can opt in with `renderStatusLine={true}`.
    */
   renderStatusLine?: boolean;
   /**
@@ -112,7 +115,7 @@ const STICK_THRESHOLD_PX = 100;
 export const Timeline = memo(function Timeline({
   messages,
   className,
-  renderStatusLine = true,
+  renderStatusLine = false,
   renderTopBar = false,
   startedAt,
   isComplete = false,

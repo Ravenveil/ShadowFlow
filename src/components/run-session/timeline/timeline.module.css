@@ -560,9 +560,16 @@
   background: var(--status-ok);
   flex-shrink: 0;
 }
+/* Running variant — exact port of v8 `.msg-foot .st.run` (line 1335).
+   Promotes dot from 6→7px, swaps to accent-bright with the signature 3px
+   halo and sf-pulse rhythm (matches the status-dot dialect used elsewhere
+   for live indicators). */
 .footStatusRun {
-  background: var(--status-run);
-  animation: tl-pulse 1.4s ease-in-out infinite;
+  width: 7px;
+  height: 7px;
+  background: var(--accent-bright);
+  animation: sf-pulse 1.6s ease-in-out infinite;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent-bright) 16%, transparent);
 }
 .footLab {
   color: var(--fg-2);
