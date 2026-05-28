@@ -26,6 +26,21 @@ export interface GroupItem {
   lastMessage: string;
   lastActivityAt: string;
   metrics?: GroupMetrics;
+  /**
+   * 2026-05-28 · Stream L · 群公告（PATCH /api/groups/{id} announcement 字段同步）。
+   * 老群没有该字段，FE 用 ?? '' 兜底显示 "—"。
+   */
+  announcement?: string;
+  /**
+   * 2026-05-28 · Stream L · 群成员 agent 列表（真实成员 != 全 workspace agents）。
+   * 后端 record 已有，inbox.py / groups.py list 端点透传。
+   */
+  agent_ids?: string[];
+  /**
+   * 2026-05-28 · Stream L · 群创建时间（用于群设置 modal 显示 "启动于 09:14"）。
+   * 后端 record.created_at（ISO 字符串），FE 自己 format。
+   */
+  created_at?: string;
 }
 
 export interface AgentDMItem {

@@ -49,6 +49,10 @@ class GroupItem(BaseModel):
     lastMessage: str = ""
     lastActivityAt: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metrics: Dict[str, Any] = Field(default_factory=dict)
+    # 2026-05-28 · Stream L · 群设置 modal 用到的额外字段（缺失即省略）
+    announcement: Optional[str] = None
+    agent_ids: List[str] = Field(default_factory=list)
+    created_at: Optional[str] = None
 
 
 class AgentDMItem(BaseModel):
@@ -205,6 +209,10 @@ async def get_workspace_inbox(
                              "activeRuns": 0,
                              "pendingApprovalsCount": 0,
                              "costToday": 0},
+                    # 2026-05-28 · Stream L · 群设置 modal 用：透传 record 字段
+                    announcement=rec.get("announcement") or None,
+                    agent_ids=list(rec.get("agent_ids", []) or []),
+                    created_at=rec.get("created_at") or None,
                 )
             )
         except Exception:
