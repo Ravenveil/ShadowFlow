@@ -1,11 +1,12 @@
 """Groups API — chat group persistence.
 
-POST   /api/groups                          — create a new group chat
-GET    /api/groups                          — list groups (filter by workspace_id)
-GET    /api/groups/{id}                     — get single group
-GET    /api/groups/{id}/messages?limit=N    — list recent messages
-POST   /api/groups/{id}/messages            — append a message
-GET    /api/groups/{id}/briefboard?date=    — per-day agent output feed
+POST   /api/groups                                       — create a new group chat
+GET    /api/groups                                       — list groups (filter by workspace_id)
+GET    /api/groups/{id}                                  — get single group
+GET    /api/groups/{id}/messages?limit=N                 — list recent messages
+POST   /api/groups/{id}/messages                         — append a message (optional reply_to)
+GET    /api/groups/{id}/briefboard?date=                 — per-day agent output feed
+GET    /api/groups/{id}/messages/{msg_id}/thread         — thread view: source + replies
 
 Storage: JSON files under .shadowflow/groups/{group_id}.json (mirrors
 shadowflow/api/teams.py for consistency). Each group record holds its
@@ -165,12 +166,20 @@ class MessageItem(BaseModel):
     sender_kind: str = "user"
     content: str
     timestamp: str
+    # Stream G — thread reply support. Stored on each message; nullable when the
+    # message is a top-level post (not a reply). Carrying the source message_id
+    # lets us query a thread via /api/groups/{gid}/messages/{mid}/thread.
+    message_id: Optional[str] = None
+    reply_to: Optional[str] = None
 
 
 class PostMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=8000)
     sender_name: str = "user"
     sender_kind: str = "user"
+    # Stream G — optional thread anchor. When provided, this message is a reply
+    # to the message whose `message_id` equals `reply_to`.
+    reply_to: Optional[str] = None
 
 
 class GroupMessagesResponse(BaseModel):
@@ -358,6 +367,11 @@ async def post_group_message(
         "sender_kind": body.sender_kind,
         "content": body.content,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        # Stream G — give every message a stable id so it can be referenced by
+        # future replies. Existing records without `message_id` are still served
+        # back via get_group_messages (Pydantic treats the field as Optional).
+        "message_id": uuid4().hex,
+        "reply_to": body.reply_to,
     }
     messages = rec.get("messages", [])
     messages.append(msg)
@@ -372,3 +386,64 @@ async def post_group_message(
         background_tasks.add_task(dispatch_agent_reply, group_id)
 
     return MessageItem(**msg)
+
+
+# ---------------------------------------------------------------------------
+# Stream G — thread view endpoint
+# ---------------------------------------------------------------------------
+
+
+class ThreadViewData(BaseModel):
+    source_message: MessageItem
+    replies: List[MessageItem]
+
+
+class ThreadViewResponse(BaseModel):
+    data: ThreadViewData
+    meta: Dict[str, Any] = Field(default_factory=dict)
+
+
+@router.get(
+    "/api/groups/{group_id}/messages/{message_id}/thread",
+    response_model=ThreadViewResponse,
+)
+async def get_message_thread(group_id: str, message_id: str) -> ThreadViewResponse:
+    """Return the thread view for a message.
+
+    Response shape: ``{ data: { source_message, replies: [...] }, meta: {} }``
+    where ``replies`` is every message whose ``reply_to`` equals ``message_id``,
+    in chronological order. 404 when no message with that id exists in the
+    group's persisted message log.
+    """
+    rec = _load_group(group_id)
+    if rec is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "GROUP_NOT_FOUND", "message": f"Group {group_id!r} not found"}},
+        )
+
+    messages: List[Dict[str, Any]] = rec.get("messages", [])
+    source: Optional[Dict[str, Any]] = next(
+        (m for m in messages if m.get("message_id") == message_id), None
+    )
+    if source is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": {
+                    "code": "MESSAGE_NOT_FOUND",
+                    "message": f"Message {message_id!r} not found in group {group_id!r}",
+                }
+            },
+        )
+
+    replies = [m for m in messages if m.get("reply_to") == message_id]
+    # `messages` is already insertion-ordered (chronological); preserve that.
+
+    return ThreadViewResponse(
+        data=ThreadViewData(
+            source_message=MessageItem(**source),
+            replies=[MessageItem(**r) for r in replies],
+        ),
+        meta={"count": len(replies)},
+    )
