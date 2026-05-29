@@ -1137,12 +1137,12 @@ export function ByokSection() {
           {/* API Key + Base URL */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             {/* API Key — server returns the saved key already masked as
-                "••••XXXX" (8 chars, see settings.ts:197 maskApiKey). The
-                client cannot recover the real length, so we render a fixed
-                bullet string when saved as the "已保存" signal. On focus we
+                "••••XXXX" (settings.ts:197 maskApiKey); the real plaintext is
+                never sent to the client. When saved we display that masked
+                value so the eye toggle can reveal the last-4 tail. On focus we
                 clear into a fresh editing buffer because we cannot
                 round-trip the real key for in-place editing anyway.
-                (2026-05-24 fix.) */}
+                (2026-05-24 fix; 2026-05-29 reveal-tail fix.) */}
             {!selectedMeta.noKey && (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -1156,7 +1156,13 @@ export function ByokSection() {
                 <div style={{ position: 'relative' }}>
                   <input
                     type={showKey ? 'text' : 'password'}
-                    value={isEditing ? keyInput : (hasKey ? '•'.repeat(40) : '')}
+                    // Not editing + a key is saved → show the server's masked
+                    // tail (`••••XXXX`, settings.ts:197 maskApiKey) so the eye
+                    // toggle actually reveals something useful (which key is
+                    // stored, by its last 4 chars). The full plaintext is never
+                    // sent to the client by design, so a fixed 40-bullet string
+                    // made "显示" a no-op (2026-05-29 fix).
+                    value={isEditing ? keyInput : (hasKey ? (savedState?.apiKey ?? '') : '')}
                     onChange={e => {
                       setKeyInput(e.target.value);
                       markDirty();
