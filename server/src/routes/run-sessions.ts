@@ -30,11 +30,11 @@ import { composeSystemPrompt, type LayerToggles } from '../prompt-assembly';
 import { composeMultiTurnPrompt } from '../prompts';
 import { loadSkillSideFiles } from '../loaders/skill-side-files';
 import {
-  PROVIDER_ENV_VAR,
   PROVIDER_IDS,
   isProviderId,
   type ProviderId,
 } from '../transport/api-clients';
+import { resolveProviderKey } from '../transport/byokKey';
 // Story 15.14 — auto-critique pass after artifact-saved.
 import { runCritique } from '../critic';
 // Story 15.29 — multi-turn conversation glue: validate / auto-create
@@ -435,29 +435,10 @@ router.post('/', (req: Request, res: Response) => {
     }
   }
 
-  // Story 15.18 — multi-provider BYOK header dispatch. Each provider has its
-  // own header (X-Anthropic-Key / X-OpenAI-Key / X-DeepSeek-Key / X-Zhipu-Key
-  // / …); express lower-cases keys. We coerce + validate `provider` first,
-  // then read the matching header, falling back to the per-provider env var
-  // and the byok-config.json store. The `anthropic_key` field stays for
+  // Story 15.18 — multi-provider BYOK. Provider → key resolution (header →
+  // settings/byok → env) lives in transport/byokKey.ts (shared with the Node
+  // chat gateway groups-chat.ts). The `anthropic_key` field stays for
   // back-compat (15.7 / 15.19 test paths).
-  //
-  // 2026-05-16: extended from 4 → 12 providers in lockstep with the BYOK UI.
-  const HEADER_BY_PROVIDER: Record<ProviderId, string> = {
-    anthropic:  'x-anthropic-key',
-    openai:     'x-openai-key',
-    deepseek:   'x-deepseek-key',
-    zhipu:      'x-zhipu-key',
-    google:     'x-google-key',
-    qwen:       'x-qwen-key',
-    moonshot:   'x-moonshot-key',
-    mistral:    'x-mistral-key',
-    groq:       'x-groq-key',
-    openrouter: 'x-openrouter-key',
-    ollama:     'x-ollama-key',
-    lmstudio:   'x-lmstudio-key',
-    azure:      'x-azure-key',
-  };
 
   // Story 15.18 — validate provider; reject unknown ids loudly with 400.
   let validated_provider: ProviderId = 'anthropic';
@@ -484,22 +465,9 @@ router.post('/', (req: Request, res: Response) => {
   // ByokSection writes apiKey to byok-config.json via PUT /api/settings/byok,
   // but until now run-sessions only read header + env, so configuring a
   // Zhipu/DeepSeek/OpenAI key in Settings did absolutely nothing at runtime.
-  const headerName = HEADER_BY_PROVIDER[validated_provider];
-  const byokStored = (() => {
-    try {
-      const cfg = getSetting('byok') as
-        | { providers?: Record<string, { apiKey?: string }> }
-        | undefined;
-      const k = cfg?.providers?.[validated_provider]?.apiKey;
-      return typeof k === 'string' && k.trim().length > 0 ? k.trim() : undefined;
-    } catch {
-      return undefined;
-    }
-  })();
-  const provider_api_key =
-    (req.headers[headerName] as string | undefined) ||
-    byokStored ||
-    process.env[PROVIDER_ENV_VAR[validated_provider]];
+  // 2026-05-29 — key 解析提炼到 transport/byokKey.ts（与 Node chat 网关
+  // groups-chat.ts 共用同一策略：header → settings/byok → env）。
+  const provider_api_key = resolveProviderKey(validated_provider, req.headers);
 
   // Back-compat field (still consumed by some legacy code paths). For the
   // anthropic provider it MUST mirror provider_api_key so the runner sees

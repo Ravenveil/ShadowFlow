@@ -30,9 +30,7 @@
  */
 
 import { createProxyMiddleware } from 'http-proxy-middleware';
-
-const PYTHON_BACKEND_URL =
-  process.env.PYTHON_BACKEND_URL ?? 'http://localhost:8000';
+import { PYTHON_BACKEND_URL } from './python-backend';
 
 export const proxyFallback = createProxyMiddleware({
   target: PYTHON_BACKEND_URL,
