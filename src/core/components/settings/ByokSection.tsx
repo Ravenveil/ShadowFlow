@@ -725,9 +725,12 @@ export function ByokSection() {
   const [enabledModels, setEnabledModels] = useState<string[]>([]);
   const [provEnabled,  setProvEnabled]  = useState(false);
   const [showKey,      setShowKey]      = useState(false);
-  // Full plaintext lifted from the server on demand (eye-toggle reveal of a
-  // saved key). null = not revealed; falls back to the masked tail.
-  const [revealedKey,  setRevealedKey]  = useState<string | null>(null);
+  // Full plaintext, eager-loaded when a provider with a saved key is selected
+  // (Cherry-Studio style: the field shows the real key length masked as dots,
+  // and the eye toggle flips type=password↔text to reveal it instantly). ''
+  // until loaded / when none / on reveal failure → input falls back to the
+  // server's masked tail (`••••XXXX`).
+  const [fullKey,      setFullKey]      = useState('');
   const [saveState,    setSaveState]    = useState<SaveState>('idle');
   const [testState,    setTestState]    = useState<TestState>('idle');
   const [, setIsDirty] = useState(false);  // retained as no-op setter for legacy markDirty callers
@@ -868,7 +871,7 @@ export function ByokSection() {
     const saved = store.providers[selectedId];
     setKeyInput('');
     setShowKey(false);
-    setRevealedKey(null);
+    setFullKey('');
     setSaveState('idle');
     setTestState('idle');
     setIsDirty(false);
@@ -876,6 +879,16 @@ export function ByokSection() {
     setProvEnabled(saved?.enabled ?? false);
     const defaults = allModels.filter(m => m.provider === selectedId).map(m => m.id);
     setEnabledModels(saved?.models?.length ? saved.models : defaults);
+    // Eager-load the full plaintext so the field shows the real key length
+    // (masked) and the eye can reveal it without a per-click fetch. Falls back
+    // to the masked tail if the reveal endpoint is unavailable.
+    if (saved?.apiKey) {
+      let cancelled = false;
+      revealProviderKey(selectedId).then(full => {
+        if (!cancelled && full != null) setFullKey(full);
+      });
+      return () => { cancelled = true; };
+    }
   }, [selectedId, store]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cherry Studio-style auto-save: every input/toggle flushes immediately to
@@ -1174,20 +1187,16 @@ export function ByokSection() {
                   <input
                     type={showKey ? 'text' : 'password'}
                     // Value resolution (not editing):
-                    //  • eye ON + plaintext fetched → full key (revealedKey)
-                    //  • otherwise saved → masked tail (`••••XXXX`, the server
-                    //    default; settings.ts:197 maskApiKey)
+                    //  • saved key → full plaintext once eager-loaded (fullKey),
+                    //    else the server masked tail (`••••XXXX`) as fallback.
+                    //    type=password renders it as dots → real key length;
+                    //    the eye flips to type=text to reveal. (Cherry style.)
                     //  • no key → empty (placeholder shows)
                     // Editing always reflects the user's live keyInput.
-                    // (2026-05-29: eye reveal now fetches the full plaintext via
-                    // /byok/:id/reveal; previously rendered a fixed 40-bullet
-                    // string that made "显示" a no-op.)
                     value={
                       isEditing
                         ? keyInput
-                        : (showKey && revealedKey != null
-                            ? revealedKey
-                            : (hasKey ? (savedState?.apiKey ?? '') : ''))
+                        : (hasKey ? (fullKey || (savedState?.apiKey ?? '')) : '')
                     }
                     onChange={e => {
                       setKeyInput(e.target.value);
@@ -1206,10 +1215,9 @@ export function ByokSection() {
                       e.target.style.borderColor = 'var(--t-accent)';
                       if (!isEditing) {
                         // Start fresh — user types a new value to replace the
-                        // saved key (or leaves empty to keep it). Drop any
-                        // revealed plaintext so the editing buffer starts clean.
+                        // saved key (or leaves empty to keep it). fullKey stays
+                        // cached so a focus-then-blur with no change restores it.
                         setKeyInput('');
-                        setRevealedKey(null);
                         setIsEditing(true);
                       }
                     }}
@@ -1247,18 +1255,7 @@ export function ByokSection() {
                   }}>
                     <button
                       type="button"
-                      onClick={async () => {
-                        const next = !showKey;
-                        setShowKey(next);
-                        if (!next) { setRevealedKey(null); return; }
-                        // Turning ON for a saved key (not mid-edit) → fetch the
-                        // full plaintext. While editing, keyInput already holds
-                        // what the user typed, so no fetch needed.
-                        if (!isEditing && hasKey && revealedKey == null) {
-                          const full = await revealProviderKey(selectedId);
-                          if (full != null) setRevealedKey(full);
-                        }
-                      }}
+                      onClick={() => setShowKey(v => !v)}
                       title={showKey ? T('隐藏', 'Hide') : T('显示', 'Show')}
                       style={{
                         background: 'transparent', border: 'none',
@@ -1266,13 +1263,15 @@ export function ByokSection() {
                         display: 'flex', alignItems: 'center',
                       }}
                     >
+                      {/* Icon reflects the CURRENT state (Cherry Studio):
+                          shown → open eye, hidden → eye with a slash. */}
                       {showKey ? (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 3l18 18"/><path d="M10.6 6.2A10 10 0 0 1 12 6c7 0 10 6 10 6a17 17 0 0 1-3.2 4M6.6 6.6A17 17 0 0 0 2 12s3 6 10 6c1.6 0 3-.3 4.2-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>
+                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
                         </svg>
                       ) : (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+                          <path d="M3 3l18 18"/><path d="M10.6 6.2A10 10 0 0 1 12 6c7 0 10 6 10 6a17 17 0 0 1-3.2 4M6.6 6.6A17 17 0 0 0 2 12s3 6 10 6c1.6 0 3-.3 4.2-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>
                         </svg>
                       )}
                     </button>

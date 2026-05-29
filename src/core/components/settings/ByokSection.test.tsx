@@ -1,29 +1,37 @@
 /**
- * ByokSection — regression test for the API-key reveal bug (2026-05-29).
+ * ByokSection — API-key field behaviour (2026-05-29).
  *
- * Bug: with a saved key, the input rendered a hardcoded `'•'.repeat(40)`
- * instead of the server's masked tail (`••••XXXX`). The eye toggle only flips
- * the input `type`, so "显示" revealed 40 literal bullets — i.e. nothing
- * useful. Fix: when not editing, display `savedState.apiKey` (the masked tail)
- * so the toggle reveals the last-4 chars.
+ * Cherry-Studio model: when a provider with a saved key is selected the full
+ * plaintext is eager-loaded via GET /byok/:id/reveal and rendered in the input
+ * (masked as dots via type=password → real key length). The eye toggle flips
+ * type=password↔text to reveal it. If the reveal endpoint is unavailable the
+ * field gracefully falls back to the server's masked tail (`••••XXXX`).
+ *
+ * Regression history: the field used to render a hardcoded `'•'.repeat(40)`
+ * for any saved key, so the eye revealed nothing useful.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render as rawRender, screen, fireEvent } from '@testing-library/react';
+import { render as rawRender, screen } from '@testing-library/react';
 import { I18nProvider } from '../../../common/i18n';
 import { ByokSection } from './ByokSection';
 
 const render: typeof rawRender = (ui, options) =>
   rawRender(<I18nProvider defaultLanguage="zh">{ui}</I18nProvider>, options);
 
-const MASKED = '••••sk12'; // what settings.ts maskApiKey('...sk12') returns
-const FULL = 'sk-ant-api03-REALKEY-sk12'; // plaintext returned by /reveal
+const MASKED = '••••sk12';                  // settings.ts maskApiKey('...sk12')
+const FULL = 'sk-ant-api03-REALKEY-sk12';   // plaintext from /reveal
 
-/** Mock the GETs ByokSection fires. `savedKey` empty → no key configured. */
-function mockFetch(savedKey: string, fullKey = FULL) {
+/**
+ * Mock ByokSection's GETs. `savedKey` empty → no provider configured.
+ * `revealOk=false` makes /reveal 404 (simulates an un-restarted backend).
+ */
+function mockFetch(savedKey: string, revealOk = true) {
   return vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith('/api/settings/byok/anthropic/reveal')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ apiKey: fullKey }) } as Response);
+      return revealOk
+        ? Promise.resolve({ ok: true, json: () => Promise.resolve({ apiKey: FULL }) } as Response)
+        : Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: 'Not Found' }) } as Response);
     }
     if (url.endsWith('/api/settings/byok')) {
       const providers = savedKey
@@ -38,44 +46,45 @@ function mockFetch(savedKey: string, fullKey = FULL) {
   });
 }
 
-describe('ByokSection — API key field value', () => {
+describe('ByokSection — API key field', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  // Regression (2026-05-29): the reveal eye showed nothing useful because the
-  // input rendered a hardcoded '•'.repeat(40) for any saved key, discarding the
-  // server's masked tail. Both tests pin the value expression at line ~1159.
-
-  it('shows the server masked tail for a saved key (not a fixed bullet string)', async () => {
+  it('eager-loads the full plaintext key and renders it masked (type=password)', async () => {
     vi.stubGlobal('fetch', mockFetch(MASKED));
     render(<ByokSection />);
-    const input = await screen.findByPlaceholderText('输入新值替换保存的密钥') as HTMLInputElement;
-    expect(input.value).toBe(MASKED);          // before fix: '•'.repeat(40)
-    expect(input.value).not.toBe('•'.repeat(40));
+    // findByDisplayValue waits for the async /reveal to land the full key.
+    const input = await screen.findByDisplayValue(FULL) as HTMLInputElement;
+    expect(input.getAttribute('type')).toBe('password');  // masked by default
+  });
+
+  it('eye toggle flips the input type to reveal the full key', async () => {
+    vi.stubGlobal('fetch', mockFetch(MASKED));
+    render(<ByokSection />);
+    const input = await screen.findByDisplayValue(FULL) as HTMLInputElement;
+    expect(input.getAttribute('type')).toBe('password');
+
+    // Native .click() — fireEvent.click's synthetic event is flaky on this
+    // nested button in jsdom (focus events work, proving wiring is live).
+    (screen.getByTitle('显示') as HTMLButtonElement).click();
+
+    await screen.findByTitle('隐藏'); // title flips → state toggled
+    expect(input.getAttribute('type')).toBe('text');
+    expect(input.value).toBe(FULL);
+  });
+
+  it('falls back to the masked tail when /reveal is unavailable (404)', async () => {
+    vi.stubGlobal('fetch', mockFetch(MASKED, /* revealOk */ false));
+    render(<ByokSection />);
+    const input = await screen.findByDisplayValue(MASKED) as HTMLInputElement;
+    expect(input.value).toBe(MASKED);
   });
 
   it('leaves the field empty (placeholder visible) when no key is saved', async () => {
     vi.stubGlobal('fetch', mockFetch(''));
     render(<ByokSection />);
-    // Anthropic has no saved key → the provider key placeholder is shown.
     const input = await screen.findByPlaceholderText('sk-ant-…') as HTMLInputElement;
     expect(input.value).toBe('');
-  });
-
-  it('eye toggle fetches and reveals the full plaintext key', async () => {
-    vi.stubGlobal('fetch', mockFetch(MASKED));
-    render(<ByokSection />);
-    const input = await screen.findByPlaceholderText('输入新值替换保存的密钥') as HTMLInputElement;
-    expect(input.value).toBe(MASKED);
-    expect(input.getAttribute('type')).toBe('password');
-
-    // Native .click() routes through React's delegated listener reliably in
-    // jsdom (fireEvent.click is flaky on this nested button — see probe notes).
-    (screen.getByTitle('显示') as HTMLButtonElement).click();
-
-    // Reveal is async (fetch /reveal). findBy retries until the full key lands.
-    const revealed = await screen.findByDisplayValue(FULL) as HTMLInputElement;
-    expect(revealed.getAttribute('type')).toBe('text');
   });
 });
