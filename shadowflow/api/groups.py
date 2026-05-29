@@ -23,6 +23,7 @@ ad-hoc from a run-session blueprint (no template) persist correctly.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -32,7 +33,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from shadowflow.api._limiter import limiter
 
@@ -353,6 +355,9 @@ async def post_group_message(
     group_id: str,
     body: PostMessageRequest,
     background_tasks: BackgroundTasks,
+    x_llm_key: Optional[str] = Header(None, alias="X-LLM-Key"),
+    x_llm_provider: Optional[str] = Header(None, alias="X-LLM-Provider"),
+    x_llm_model: Optional[str] = Header(None, alias="X-LLM-Model"),
 ) -> MessageItem:
     """Append a message to a group's persisted message log.
 
@@ -363,9 +368,15 @@ async def post_group_message(
     Side effect — Stream C chat→agent bridge: when the incoming message is
     from a user (``sender_kind == 'user'``) and the group has agent members,
     we schedule an async dispatch via ``BackgroundTasks`` that calls the
-    configured BYOK LLM and appends the agent reply back into this group's
+    configured BYOK LLM and appends agent replies back into this group's
     message log. The dispatch failures are isolated — they cannot affect
     the persistence success of this endpoint.
+
+    2026-05-29 — Forward the frontend BYOK credentials (``X-LLM-*`` headers,
+    same as ``/api/chat/completions``) into the background dispatch so the
+    group agent can reply using the key configured in the browser, not only a
+    server-side env var. ``dispatch_agent_reply`` falls back to env keys when
+    these are absent.
     """
     rec = _load_group(group_id)
     if rec is None:
@@ -390,11 +401,62 @@ async def post_group_message(
     # Stream C bridge: only dispatch on user-originated messages. Agent /
     # system messages should never trigger another agent reply (would loop).
     if body.sender_kind == "user" and rec.get("agent_ids"):
-        from shadowflow.api._chat_bridge import dispatch_agent_reply  # noqa: PLC0415
+        from shadowflow.api._chat_bridge import (  # noqa: PLC0415
+            build_byok_override,
+            dispatch_agent_reply,
+        )
 
-        background_tasks.add_task(dispatch_agent_reply, group_id)
+        byok_override = build_byok_override(x_llm_provider, x_llm_key, x_llm_model)
+        background_tasks.add_task(dispatch_agent_reply, group_id, byok_override)
 
     return MessageItem(**msg)
+
+
+# ---------------------------------------------------------------------------
+# 2026-05-29 — Group chat SSE: real-time push of async agent replies.
+# Mirrors stream_approval_events / stream_run_events. Lets the browser see the
+# _chat_bridge fan-out replies the moment they land, instead of polling.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/groups/{group_id}/events")
+async def stream_group_events(group_id: str, request: Request) -> StreamingResponse:
+    """SSE stream of a group's live events.
+
+    Events emitted (``event:`` line → ``data:`` JSON):
+      agent.message  — an agent reply was appended to the group
+      system.notice  — a bridge/system notice was appended
+      agent.typing   — an agent is composing a reply (optional UX hint)
+
+    Keepalive comments every 15s keep the connection open through proxies.
+    """
+    if _load_group(group_id) is None:
+        raise HTTPException(status_code=404, detail=f"Group not found: {group_id}")
+
+    from shadowflow.api._group_events import subscribe, unsubscribe  # noqa: PLC0415
+
+    async def _generate():
+        q = subscribe(group_id)
+        try:
+            yield ": connected\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=15.0)
+                    event_type = event.get("type", "message")
+                    data = json.dumps(event.get("data", {}), default=str)
+                    yield f"event: {event_type}\ndata: {data}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            unsubscribe(group_id, q)
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ---------------------------------------------------------------------------

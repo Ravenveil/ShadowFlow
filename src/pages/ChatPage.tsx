@@ -618,7 +618,9 @@ export default function ChatPage() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const savedScrollTop = useRef(0);
 
-  const chatStream = useChatStream({ mode: 'group', targetId: groupId ?? null, sseChannel: 'workflow', runId: undefined });
+  // sseChannel:'group' → 订阅 /api/groups/{id}/events，异步 agent 回复（含多 agent
+  // fan-out）实时流入，无需手动刷新。
+  const chatStream = useChatStream({ mode: 'group', targetId: groupId ?? null, sseChannel: 'group' });
 
 
   useEffect(() => {

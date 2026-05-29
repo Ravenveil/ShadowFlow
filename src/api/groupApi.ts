@@ -2,6 +2,7 @@
 
 import type { Message } from '../common/types/inbox';
 import { getApiBase } from './_base';
+import { buildByokHeaders } from './chat';
 import { markPythonDown, markPythonUp } from '../core/hooks/usePythonBackendStatus';
 
 /**
@@ -211,7 +212,9 @@ export async function postGroupMessage(
 ): Promise<Message> {
   const res = await fetch(`${getApiBase()}/api/groups/${groupId}/messages`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    // Forward BYOK X-LLM-* headers so the async chat-bridge dispatch can reply
+    // with the browser-configured key (not just a server-side env var).
+    headers: { 'Content-Type': 'application/json', ...buildByokHeaders() },
     body: JSON.stringify({
       content,
       sender_name: options?.senderName ?? 'user',

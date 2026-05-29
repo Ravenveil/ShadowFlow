@@ -34,8 +34,23 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
+
+# Cap how many agents reply to a single user message. Multi-agent fan-out runs
+# serially (each agent sees prior replies), so a large group would be slow and
+# token-expensive without a guard. Excess agents are skipped with a log line.
+_MAX_FANOUT_AGENTS = 5
+
+# provider name -> default model, kept in sync with _BYOK_ENV_PREFERENCE and the
+# frontend (src/api/chat.ts). Used when the frontend forwards a key but no model.
+_PROVIDER_DEFAULT_MODEL: Dict[str, str] = {
+    "claude": "claude-3-5-haiku-20241022",
+    "openai": "gpt-4o-mini",
+    "deepseek": "deepseek-chat",
+    "zhipu": "glm-4-flash",
+}
 
 # Ordered preference: try Claude first (best multi-turn), then OpenAI,
 # DeepSeek, Zhipu. Each entry maps env var → (ProviderType, default model).
@@ -63,6 +78,24 @@ def _resolve_byok_env() -> Optional[Tuple[str, str, str]]:
         if api_key:
             return api_key, provider_name, default_model
     return None
+
+
+def build_byok_override(
+    provider: Optional[str],
+    key: Optional[str],
+    model: Optional[str],
+) -> Optional[Tuple[str, str, str]]:
+    """Build a (api_key, provider_name, model) tuple from frontend X-LLM-*
+    headers, or None when no key was forwarded.
+
+    Mirrors the BYOK convention used by /api/chat/completions: provider
+    defaults to 'zhipu', model falls back to the provider's default.
+    """
+    if not key:
+        return None
+    provider_name = (provider or "zhipu").lower()
+    resolved_model = model or _PROVIDER_DEFAULT_MODEL.get(provider_name, "glm-4-flash")
+    return key, provider_name, resolved_model
 
 
 def _load_agent_record(agent_id: str) -> Optional[Dict[str, Any]]:
@@ -111,9 +144,13 @@ def _build_messages_payload(
 
 
 def _append_message_to_group(group_id: str, msg: Dict[str, Any]) -> bool:
-    """Append a single message to a group, atomically. Reloads the group
-    fresh to avoid clobbering concurrent writes that landed since dispatch
-    started. Returns True on success."""
+    """Append a single message to a group, atomically, then publish it on the
+    group's SSE bus so subscribed browsers see it in real time.
+
+    Reloads the group fresh to avoid clobbering concurrent writes that landed
+    since dispatch started. Returns True on success. SSE publish is best-effort
+    and never fails the append.
+    """
     # Lazy import to avoid circulars (groups imports this module)
     from shadowflow.api.groups import _load_group, _save_group  # noqa: PLC0415
 
@@ -126,10 +163,21 @@ def _append_message_to_group(group_id: str, msg: Dict[str, Any]) -> bool:
     rec["messages"] = messages
     try:
         _save_group(rec)
-        return True
     except Exception as exc:
         logger.exception("chat-bridge: failed to append message to %s: %s", group_id, exc)
         return False
+
+    # Real-time push (best-effort). Event type from sender_kind so the frontend
+    # can route agent bubbles vs. system rows.
+    try:
+        from shadowflow.api._group_events import publish_group_event  # noqa: PLC0415
+
+        kind = msg.get("sender_kind", "agent")
+        event_type = "system.notice" if kind == "system" else "agent.message"
+        publish_group_event(group_id, {"type": event_type, "data": msg})
+    except Exception:  # pragma: no cover — SSE push must never break persistence
+        logger.debug("chat-bridge: SSE publish failed for %s", group_id, exc_info=True)
+    return True
 
 
 def _make_system_notice(content: str) -> Dict[str, Any]:
@@ -138,6 +186,7 @@ def _make_system_notice(content: str) -> Dict[str, Any]:
         "sender_kind": "system",
         "content": content,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "message_id": uuid4().hex,
     }
 
 
@@ -147,13 +196,113 @@ def _make_agent_message(agent_name: str, content: str) -> Dict[str, Any]:
         "sender_kind": "agent",
         "content": content,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "message_id": uuid4().hex,
     }
 
 
-async def dispatch_agent_reply(group_id: str) -> None:
-    """Fire-and-forget background task: pick the group's first agent, ask
-    an LLM provider for a reply using BYOK env keys, and append that reply
-    as a `sender_kind='agent'` message on the same group.
+async def _reply_for_one_agent(
+    group_id: str,
+    agent_id: str,
+    api_key: str,
+    provider_name: str,
+    default_model: str,
+) -> None:
+    """Produce one agent's reply and append it to the group.
+
+    Reloads the group fresh so that in a fan-out the LLM payload includes
+    replies from earlier agents in this same round. Failures are turned into
+    `sender_kind='system'` notices and never raised — so one bad agent doesn't
+    abort the rest of the fan-out.
+    """
+    from shadowflow.api.groups import _load_group  # noqa: PLC0415
+
+    agent_rec = _load_agent_record(agent_id)
+    if agent_rec is None:
+        _append_message_to_group(
+            group_id,
+            _make_system_notice(f"[chat-bridge] Agent '{agent_id}' not found in registry."),
+        )
+        return
+
+    agent_name: str = agent_rec.get("name") or agent_id
+    soul: str = agent_rec.get("soul", "") or ""
+
+    # Fresh history so fan-out agents see prior replies from this round.
+    rec = _load_group(group_id)
+    history: List[Dict[str, Any]] = (rec or {}).get("messages", []) or []
+    msgs = _build_messages_payload(history, soul)
+    if not msgs or all(m["role"] == "system" for m in msgs):
+        _append_message_to_group(
+            group_id,
+            _make_system_notice("[chat-bridge] No user message to reply to."),
+        )
+        return
+
+    try:
+        from shadowflow.llm import (  # noqa: PLC0415
+            LLMConfig,
+            ProviderType,
+            create_provider,
+        )
+    except ImportError as exc:
+        _append_message_to_group(
+            group_id,
+            _make_system_notice(f"[chat-bridge] LLM module unavailable: {exc}"),
+        )
+        return
+
+    provider_map = {
+        "claude": ProviderType.CLAUDE,
+        "openai": ProviderType.OPENAI,
+        "deepseek": ProviderType.DEEPSEEK,
+        "zhipu": ProviderType.ZHIPU,
+    }
+    ptype = provider_map.get(provider_name)
+    if ptype is None:
+        _append_message_to_group(
+            group_id,
+            _make_system_notice(f"[chat-bridge] Unknown provider mapping: {provider_name}"),
+        )
+        return
+
+    config = LLMConfig(model=default_model, api_key=api_key)
+    try:
+        provider = create_provider(ptype, config)
+        response = await provider.chat(msgs)
+    except Exception as exc:
+        logger.exception("chat-bridge: LLM call failed for group %s agent %s", group_id, agent_id)
+        _append_message_to_group(
+            group_id,
+            _make_system_notice(f"[chat-bridge] LLM error ({agent_name}): {exc!s}"),
+        )
+        return
+
+    reply_content = (response.content or "").strip() if response else ""
+    if not reply_content:
+        _append_message_to_group(
+            group_id,
+            _make_system_notice(f"[chat-bridge] {agent_name} returned an empty response."),
+        )
+        return
+
+    _append_message_to_group(group_id, _make_agent_message(agent_name, reply_content))
+
+
+async def dispatch_agent_reply(
+    group_id: str,
+    byok_override: Optional[Tuple[str, str, str]] = None,
+) -> None:
+    """Fire-and-forget background task: every agent in the group replies (in
+    order, serially) to the latest user message, each reply appended as a
+    `sender_kind='agent'` message and pushed on the group SSE bus.
+
+    BYOK resolution: ``byok_override`` (forwarded from the frontend X-LLM-*
+    headers) wins; otherwise fall back to server env keys via
+    ``_resolve_byok_env``. When neither is available a system notice is written.
+
+    Fan-out is serial and capped at ``_MAX_FANOUT_AGENTS`` so later agents see
+    earlier replies and the round stays bounded. Policy-Matrix-driven routing
+    (who replies / in what order) is a future enhancement — TODO below.
 
     This function MUST NOT raise — any failure is caught and turned into a
     `sender_kind='system'` notice so the user always gets visible feedback.
@@ -179,101 +328,28 @@ async def dispatch_agent_reply(group_id: str) -> None:
             )
             return
 
-        # TODO(policy-matrix): multi-agent routing — for now we pick the first
-        # agent_id and ignore the rest. When Policy Matrix lands, replace this
-        # with a routing decision that picks the right agent (or fans out).
-        primary_agent_id = agent_ids[0]
-        if len(agent_ids) > 1:
-            logger.info(
-                "chat-bridge: group %s has %d agents; dispatching only to %s",
-                group_id,
-                len(agent_ids),
-                primary_agent_id,
-            )
-
-        agent_rec = _load_agent_record(primary_agent_id)
-        if agent_rec is None:
-            _append_message_to_group(
-                group_id,
-                _make_system_notice(
-                    f"[chat-bridge] Agent '{primary_agent_id}' not found in registry."
-                ),
-            )
-            return
-
-        agent_name: str = agent_rec.get("name") or primary_agent_id
-        soul: str = agent_rec.get("soul", "") or ""
-
-        # ----- BYOK lookup ------------------------------------------------
-        byok = _resolve_byok_env()
+        # ----- BYOK lookup (override wins, env fallback) ------------------
+        byok = byok_override or _resolve_byok_env()
         if byok is None:
             _append_message_to_group(group_id, _make_system_notice(_BYOK_MISSING_NOTICE))
             return
         api_key, provider_name, default_model = byok
 
-        # ----- Build LLM payload from history ----------------------------
-        history: List[Dict[str, Any]] = rec.get("messages", []) or []
-        msgs = _build_messages_payload(history, soul)
-        if not msgs or all(m["role"] == "system" for m in msgs):
-            _append_message_to_group(
+        # TODO(policy-matrix): use rec["policy_matrix"] to decide which agents
+        # reply and in what order. MVP: every member replies once, in order.
+        roster = agent_ids[:_MAX_FANOUT_AGENTS]
+        if len(agent_ids) > _MAX_FANOUT_AGENTS:
+            logger.info(
+                "chat-bridge: group %s has %d agents; capping fan-out to %d",
                 group_id,
-                _make_system_notice("[chat-bridge] No user message to reply to."),
+                len(agent_ids),
+                _MAX_FANOUT_AGENTS,
             )
-            return
 
-        # ----- Invoke LLM ------------------------------------------------
-        try:
-            from shadowflow.llm import (  # noqa: PLC0415
-                LLMConfig,
-                ProviderType,
-                create_provider,
+        for agent_id in roster:
+            await _reply_for_one_agent(
+                group_id, agent_id, api_key, provider_name, default_model
             )
-        except ImportError as exc:
-            _append_message_to_group(
-                group_id,
-                _make_system_notice(f"[chat-bridge] LLM module unavailable: {exc}"),
-            )
-            return
-
-        provider_map = {
-            "claude": ProviderType.CLAUDE,
-            "openai": ProviderType.OPENAI,
-            "deepseek": ProviderType.DEEPSEEK,
-            "zhipu": ProviderType.ZHIPU,
-        }
-        ptype = provider_map.get(provider_name)
-        if ptype is None:
-            _append_message_to_group(
-                group_id,
-                _make_system_notice(
-                    f"[chat-bridge] Unknown provider mapping: {provider_name}"
-                ),
-            )
-            return
-
-        config = LLMConfig(model=default_model, api_key=api_key)
-        try:
-            provider = create_provider(ptype, config)
-            response = await provider.chat(msgs)
-        except Exception as exc:
-            logger.exception("chat-bridge: LLM call failed for group %s", group_id)
-            _append_message_to_group(
-                group_id,
-                _make_system_notice(f"[chat-bridge] LLM error: {exc!s}"),
-            )
-            return
-
-        reply_content = (response.content or "").strip() if response else ""
-        if not reply_content:
-            _append_message_to_group(
-                group_id,
-                _make_system_notice("[chat-bridge] LLM returned empty response."),
-            )
-            return
-
-        _append_message_to_group(
-            group_id, _make_agent_message(agent_name, reply_content)
-        )
     except Exception as exc:  # pragma: no cover — defensive last-resort
         logger.exception("chat-bridge: unexpected failure: %s", exc)
         try:

@@ -34,7 +34,7 @@ import type { ChatMessage } from '../components/chat/ChatStream';
 // ---------------------------------------------------------------------------
 
 export type ChatStreamMode = 'group' | 'dm';
-export type ChatSseChannel = 'workflow' | 'approvals' | 'none';
+export type ChatSseChannel = 'workflow' | 'approvals' | 'group' | 'none';
 
 export interface UseChatStreamOptions {
   /** group → /api/groups/{id}/messages + /chat/sessions/{id}/messages
@@ -143,32 +143,6 @@ function inboxToChat(item: InboxMessage, idx: number): ChatMessage {
   };
 }
 
-interface BackendChatMessage {
-  message_id?: string;
-  role?: 'user' | 'assistant' | 'system';
-  content?: string;
-  created_at?: string;
-}
-
-interface BackendChatTurnResult {
-  user_message?: BackendChatMessage;
-  assistant_message?: BackendChatMessage;
-  response_text?: string;
-  session?: { session_id?: string };
-}
-
-function backendMsgToChat(msg: BackendChatMessage | undefined, fallbackId: string): ChatMessage | null {
-  if (!msg) return null;
-  const role: ChatMessage['role'] =
-    msg.role === 'user' ? 'user' : msg.role === 'system' ? 'system' : 'agent';
-  return {
-    id: msg.message_id ?? fallbackId,
-    role,
-    content: msg.content ?? '',
-    timestamp: msg.created_at,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -229,6 +203,9 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
       url = `/workflow/runs/${encodeURIComponent(runId)}/events`;
     } else if (sseChannel === 'approvals') {
       url = `/api/approvals/events`;
+    } else if (sseChannel === 'group' && targetId) {
+      // Real-time push of async chat-bridge agent replies for this group.
+      url = `/api/groups/${encodeURIComponent(targetId)}/events`;
     }
     if (!url) return;
 
@@ -247,19 +224,51 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
             const content = String(payload.content ?? payload.message ?? '');
             if (!content) return;
             const senderName = (payload.sender_name as string) ?? (payload.agent_name as string) ?? 'Agent';
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: String(payload.message_id ?? `sse-${Date.now()}-${prev.length}`),
-                role: 'agent',
-                content,
-                timestamp:
-                  (payload.timestamp as string) ?? new Date().toISOString(),
-                senderName,
-                senderGlyph: senderName.charAt(0).toUpperCase(),
-                streaming: eventType === 'agent.message' && payload.streaming === true,
-              },
-            ]);
+            const msgId = String(payload.message_id ?? `sse-${Date.now()}`);
+            setMessages((prev) => {
+              // Dedup — the same agent reply can arrive both via SSE and a
+              // later history refresh; key off the backend message_id.
+              if (payload.message_id && prev.some((m) => m.id === msgId)) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: msgId,
+                  role: 'agent',
+                  content,
+                  timestamp:
+                    (payload.timestamp as string) ?? new Date().toISOString(),
+                  senderName,
+                  senderGlyph: senderName.charAt(0).toUpperCase(),
+                  streaming: eventType === 'agent.message' && payload.streaming === true,
+                },
+              ];
+            });
+            return;
+          }
+
+          // system.notice → centered system row (chat-bridge feedback, e.g.
+          // missing BYOK key or a dangling agent member).
+          if (eventType === 'system.notice') {
+            const content = String(payload.content ?? '');
+            if (!content) return;
+            const msgId = String(payload.message_id ?? `sse-sys-${Date.now()}`);
+            setMessages((prev) => {
+              if (payload.message_id && prev.some((m) => m.id === msgId)) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: msgId,
+                  role: 'system',
+                  content,
+                  timestamp:
+                    (payload.timestamp as string) ?? new Date().toISOString(),
+                },
+              ];
+            });
             return;
           }
 
@@ -303,7 +312,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
       sseHandleRef.current?.close();
       sseHandleRef.current = null;
     };
-  }, [sseChannel, runId]);
+  }, [sseChannel, runId, targetId]);
 
   // ---- send -----------------------------------------------------------------
   const send = useCallback(
@@ -324,51 +333,14 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
 
       try {
         if (mode === 'group') {
-          // 2026-05-19 — primary persistence path: POST to the group's
-          // message log on the Python backend so the message survives
-          // page reload. Previously this hit /api/chat/sessions/... which
-          // had no backend, so chat history died on refresh.
+          // Persist the user message to the group's log on the Python backend.
+          // The backend chat-bridge then dispatches agent replies asynchronously
+          // and pushes them back over the group SSE channel (sseChannel:'group'),
+          // so we do NOT append the reply here — the SSE handler does.
           await postGroupMessage(targetId, text, { senderName: 'user', senderKind: 'user' });
-          // Mark the optimistic bubble as delivered.
           setMessages((prev) =>
             prev.map((m) => (m.id === optimisticId ? { ...m, status: 'delivered' as const } : m)),
           );
-          // Best-effort: still try the legacy chat-sessions endpoint so any
-          // agent-side auto-reply infrastructure that depends on it still
-          // fires. Failure here is non-fatal — persistence already happened.
-          try {
-            const base = (await import('../../api/_base')).getApiBase();
-            const res = await fetch(
-              `${base}/api/chat/sessions/${encodeURIComponent(targetId)}/messages`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: text }),
-              },
-            );
-            if (res.ok) {
-              const turn = (await res.json()) as BackendChatTurnResult;
-              const assistant = backendMsgToChat(
-                turn.assistant_message,
-                `assist-${Date.now()}`,
-              );
-              if (assistant) {
-                setMessages((prev) => [...prev, assistant]);
-              } else if (turn.response_text) {
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    id: `assist-${Date.now()}`,
-                    role: 'agent',
-                    content: turn.response_text!,
-                    timestamp: new Date().toISOString(),
-                  },
-                ]);
-              }
-            }
-          } catch {
-            // Legacy endpoint absent — that's fine; we still persisted.
-          }
           return;
         }
 

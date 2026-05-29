@@ -1,25 +1,29 @@
 /**
- * AgentDMPage — Phase 2 mock 单聊视图.
+ * AgentDMPage — live 1:1 单聊视图.
  *
- * Renders a fully-styled (but mock-data-only) DM view between the user and a
- * single agent. Mirrors the shell pattern used by ChatPage: this page lives
- * inside <HfLayout> so it only renders the inner content column (HfTopBar +
- * body). The body is a 2-column grid: [message stream + composer | agent card].
+ * Renders a fully-styled DM view between the user and a single agent. Mirrors
+ * the shell pattern used by ChatPage: this page lives inside <HfLayout> so it
+ * only renders the inner content column (HfTopBar + body). The body is a
+ * 2-column grid: [message stream + composer | agent card].
  *
- * Phase 2 scope: pure front-end, no backend wiring. The composer locally
- * appends to a mock message list so users can feel the interaction without
- * any real ACP / streaming session.
+ * 2026-05-29 — Wired to the real backend via `useChatStream` in `dm` mode
+ * (POST /api/chat/completions, BYOK, single-turn, soul injected by agent_id).
+ * Replaced the prior phase-2 mock message list + 700ms fake reply. The agent
+ * profile card on the right still shows representative metrics (no metrics
+ * backend yet).
  *
  * Functional preservations (existing tests in AgentDMPage.test.tsx still pass):
  *   - BreadcrumbBar (a11y landmark, hidden visually) — agent name visible
  *     in HfTopBar crumbs.
  *   - `kind: ...` / `status: ...` mono metadata strip.
  *   - CreateAgentButton "创建类似 Agent" with Builder gating.
+ *   - composer placeholder keyed off the agent name.
  */
-import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { BreadcrumbBar } from '../core/components/inbox/BreadcrumbBar';
 import { CreateAgentButton } from '../core/components/inbox/CreateAgentButton';
+import { useChatStream } from '../core/hooks/useChatStream';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { buildAgentDMBuilderUrl } from '../core/utils/builderNavigation';
 import { HfTopBar, HfAvatar, HfDot } from '../components/hifi';
@@ -38,41 +42,14 @@ interface MockMessage {
   toolCall?: { name: string; args?: string };
 }
 
-const INITIAL_MESSAGES: MockMessage[] = [
-  {
-    id: '1',
-    role: 'user',
-    content: '你好，帮我写一篇 Q1 review',
-    timestamp: '5m ago',
-    status: 'read',
-  },
-  {
-    id: '2',
-    role: 'agent',
-    content: '好的，先看下 Q1 数据，能给我对比基线吗？',
-    timestamp: '5m ago',
-  },
-  {
-    id: '3',
-    role: 'user',
-    content: '加上 Q4 数据对比',
-    timestamp: '4m ago',
-    status: 'read',
-  },
-  {
-    id: '4',
-    role: 'agent',
-    content: 'reading docs/q1-data.md...',
-    timestamp: '4m ago',
-    toolCall: { name: 'fs.read', args: 'docs/q1-data.md' },
-  },
-  {
-    id: '5',
-    role: 'agent',
-    content: '初稿已写好，重点突出三个增长点。',
-    timestamp: '2m ago',
-  },
-];
+/** Format a backend ISO timestamp (or undefined) into a short HH:MM label for
+ *  the DM bubble meta line. Falls back to the raw value / empty string. */
+function formatDmTime(ts?: string): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
 const MOCK_AGENT = {
   id: 'agent-001',
@@ -358,8 +335,13 @@ export default function AgentDMPage() {
     agentName,
   });
 
-  // ---- Composer + mock message stream ------------------------------------
-  const [messages, setMessages] = useState<MockMessage[]>(INITIAL_MESSAGES);
+  // ---- Composer + real DM message stream (useChatStream `dm` mode) --------
+  // POSTs to /api/chat/completions (BYOK) with agent_id so the backend injects
+  // this agent's `soul` as the system prompt. Single-turn, synchronous, no SSE.
+  const { messages: chatMessages, send, error: dmError } = useChatStream({
+    mode: 'dm',
+    targetId: agentId ?? null,
+  });
   const [draft, setDraft] = useState('');
   const streamRef = useRef<HTMLDivElement | null>(null);
 
@@ -370,32 +352,31 @@ export default function AgentDMPage() {
     });
   };
 
+  // Adapt the shared ChatMessage[] to the local MessageBubble's MockMessage
+  // shape. `system` rows (rare in DM) render as left-aligned agent bubbles.
+  const messages: MockMessage[] = useMemo(
+    () =>
+      chatMessages.map((m) => ({
+        id: m.id,
+        role: m.role === 'user' ? 'user' : 'agent',
+        content: m.content,
+        timestamp: formatDmTime(m.timestamp),
+        status: m.status,
+        toolCall: m.toolCall,
+      })),
+    [chatMessages],
+  );
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages.length]);
+
   const sendMessage = () => {
     const text = draft.trim();
     if (!text) return;
-    const newMsg: MockMessage = {
-      id: `u-${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: t('agentDM.msgJustNow'),
-      status: 'sent',
-    };
-    setMessages((prev) => [...prev, newMsg]);
     setDraft('');
     scrollToBottom();
-    // Simulated agent reply (mock-only) so the page feels alive.
-    window.setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `a-${Date.now()}`,
-          role: 'agent',
-          content: t('agentDM.msgReceived'),
-          timestamp: t('agentDM.msgJustNow'),
-        },
-      ]);
-      scrollToBottom();
-    }, 700);
+    void send(text);
   };
 
   const onComposerKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -528,6 +509,19 @@ export default function AgentDMPage() {
                 agentGlyph={language === 'zh' ? displayAgent.glyph : displayAgent.glyphEn}
               />
             ))}
+            {dmError ? (
+              <div
+                className="hf-mono"
+                style={{
+                  fontSize: 11,
+                  color: 'var(--t-danger, #e5484d)',
+                  textAlign: 'center',
+                  padding: '6px 0',
+                }}
+              >
+                {language === 'zh' ? `发送失败：${dmError}` : `Send failed: ${dmError}`}
+              </div>
+            ) : null}
           </div>
 
           {/* composer */}
@@ -615,9 +609,7 @@ export default function AgentDMPage() {
         </div>
       </div>
 
-      {/* Phase-2 marker — kept visible (smaller) so /agent-dm/:agentId is
-          obviously the new mock view; also satisfies existing test that asserts
-          on the placeholder string. */}
+      {/* Mode marker — now a live BYOK DM (was a phase-2 mock). */}
       <div
         aria-hidden="false"
         style={{
@@ -633,7 +625,7 @@ export default function AgentDMPage() {
           opacity: 0.7,
         }}
       >
-        DM · phase 2 mock
+        DM · live
       </div>
     </div>
   );

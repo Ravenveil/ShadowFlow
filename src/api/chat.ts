@@ -26,11 +26,16 @@ export interface ChatCompletionResponse {
   tokens_used: number;
 }
 
-export async function chatCompletion(
-  req: ChatCompletionRequest,
-  opts?: { provider?: string; key?: string; model?: string; signal?: AbortSignal }
-): Promise<ChatCompletionResponse> {
-  // 读 localStorage 里的 secrets
+/**
+ * 从 localStorage `sf_secrets` 构造 BYOK `X-LLM-*` headers。
+ * chatCompletion（单聊）与 postGroupMessage（群聊）共用，让两条路都把浏览器里
+ * 配的 key 转发给后端。总是带 `X-LLM-Provider`；有 key/model 时才带对应 header。
+ */
+export function buildByokHeaders(opts?: {
+  provider?: string;
+  key?: string;
+  model?: string;
+}): Record<string, string> {
   let secrets: Record<string, string> = {};
   try {
     secrets = JSON.parse(localStorage.getItem('sf_secrets') ?? '{}');
@@ -44,12 +49,20 @@ export async function chatCompletion(
     provider === 'deepseek' ? secrets['deepseek_key'] : ''
   ) ?? '';
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-LLM-Provider': provider,
-  };
+  const headers: Record<string, string> = { 'X-LLM-Provider': provider };
   if (key) headers['X-LLM-Key'] = key;
   if (opts?.model) headers['X-LLM-Model'] = opts.model;
+  return headers;
+}
+
+export async function chatCompletion(
+  req: ChatCompletionRequest,
+  opts?: { provider?: string; key?: string; model?: string; signal?: AbortSignal }
+): Promise<ChatCompletionResponse> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...buildByokHeaders(opts),
+  };
 
   const res = await fetch(`${getApiBase()}/api/chat/completions`, {
     method: 'POST',
