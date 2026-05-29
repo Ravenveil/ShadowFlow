@@ -3619,7 +3619,6 @@ interface RunSessionRightPaneProps {
 }
 
 function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: RunSessionRightPaneProps) {
-  const { t } = useI18n();
   const {
     activeTab,
     setActiveTab,
@@ -3659,19 +3658,6 @@ function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: Ru
   // auto-follow effect in useFollowMode keeps the default unlocked path.
   const handleTabChange = (next: TabId) => setActiveTab(next, { lock: true });
 
-  // "去聊天 →" — jump to this run's chat conversation. When the run
-  // completed and auto-persist successfully created a chat group, we
-  // navigate straight to /chat/<groupId>. Otherwise fall back to /chat
-  // and log a TODO so the missing wiring is easy to find.
-  const handleGoToChat = () => {
-    if (chatGroupId) {
-      onNavigate(`/chat/${chatGroupId}`);
-      return;
-    }
-    // eslint-disable-next-line no-console
-    console.log('[RunSessionRightPane] TODO: chat group not yet linked for this run — falling back to /chat');
-    onNavigate('/chat');
-  };
 
   const panels: Record<TabId, React.ReactNode> = {
     overview: (
@@ -3723,9 +3709,7 @@ function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: Ru
         blueprintFilename={session.blueprintFile}
       />
 
-      {/* 2026-05-29 — 右下角常驻「去聊天」悬浮按钮已删除。run-session 完成后
-          统一从「Team saved」toast 的 Chat 按钮进入聊天（保留单一入口，避免
-          两个语义相同的去聊天入口）。handleGoToChat 不再被引用。 */}
+      {/* 2026-05-29 — 右下角常驻「去聊天」悬浮按钮已删；统一从「Team saved」 toast 的 Chat 按钮进入聊天（单一入口）。 */}
     </section>
   );
 }
