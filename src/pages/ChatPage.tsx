@@ -672,12 +672,37 @@ export default function ChatPage() {
   const [groupSchedule, setGroupSchedule] = useState<Schedule | null>(null);
   const [composer, setComposer] = useState('');
 
+  // 2026-05-29 — ModelPicker 选择（与 run-session/StartPage 共享 sf.defaultExecutor
+  // + sf.model）。chat send 会把它拼进 postGroupMessage，让 Node 网关用对应
+  // executor（CLI/API）生成回复。群聊 + DM 共用同一选择。
+  const [pickExecutor, setPickExecutor] = useState<string>(
+    () => localStorage.getItem('sf.defaultExecutor') ?? '',
+  );
+  const [pickModel, setPickModel] = useState<string>(
+    () => localStorage.getItem('sf.model') ?? '',
+  );
+  const modelPickerProps = useMemo(
+    () => ({
+      value: { executor: pickExecutor, model: pickModel },
+      onChange: (next: { executor: string; model: string }) => {
+        localStorage.setItem('sf.defaultExecutor', next.executor);
+        setPickExecutor(next.executor);
+        if (next.executor.startsWith('byok:') && next.model) {
+          localStorage.setItem('sf.model', next.model);
+          setPickModel(next.model);
+        }
+      },
+      onNavigateSettings: (target: string) => navigate(target),
+    }),
+    [pickExecutor, pickModel, navigate],
+  );
+
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const savedScrollTop = useRef(0);
 
   // sseChannel:'group' → 订阅 /api/groups/{id}/events，异步 agent 回复（含多 agent
   // fan-out）实时流入，无需手动刷新。
-  const chatStream = useChatStream({ mode: 'group', targetId: groupId ?? null, sseChannel: 'group' });
+  const chatStream = useChatStream({ mode: 'group', targetId: groupId ?? null, sseChannel: 'group', executor: pickExecutor, model: pickModel });
 
   // ── 2026-05-29 · 内嵌单聊（DM）─────────────────────────────────────────────
   // 点左侧 agent 不再整页跳到 /agent-dm（会丢掉左侧列表 + 框架）；改为留在 chat
@@ -690,7 +715,7 @@ export default function ChatPage() {
   const [dmAgentId, setDmAgentId] = useState<string | null>(null);   // 当前单聊的 agent
   const [dmGroupId, setDmGroupId] = useState<string | null>(null);   // resolve 出的 conversation id
   const [dmComposer, setDmComposer] = useState('');
-  const dmStream = useChatStream({ mode: 'group', targetId: dmGroupId, sseChannel: 'group' });
+  const dmStream = useChatStream({ mode: 'group', targetId: dmGroupId, sseChannel: 'group', executor: pickExecutor, model: pickModel });
   const dmAgent = useMemo(
     () => agentDMs.find(d => d.agentId === dmAgentId) ?? null,
     [agentDMs, dmAgentId],
@@ -1099,6 +1124,7 @@ export default function ChatPage() {
                 onSend={() => { const txt = dmComposer.trim(); if (txt) { setDmComposer(''); void handleDmSend(txt); } }}
                 loading={dmStream.loading}
                 t={t}
+                modelPicker={modelPickerProps}
               />
             </>
           ) : (
@@ -1222,6 +1248,7 @@ export default function ChatPage() {
             onRunSkill={() => { const goal = composer.trim(); if (goal) navigate(`/run-session?goal=${encodeURIComponent(goal)}`); }}
             loading={chatStream.loading}
             t={t}
+            modelPicker={modelPickerProps}
           />
           </>
           )}

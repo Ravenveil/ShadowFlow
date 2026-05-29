@@ -246,6 +246,10 @@ export async function postGroupMessage(
     /** Stream H 2026-05-28 · 接住 Stream G 后端已加的 reply_to 持久化字段。
      *  传 messageId（被引用的消息 id）即可让后端把这条标记为 thread 子消息。 */
     replyTo?: string;
+    /** 2026-05-29 · ModelPicker 选择。Node 网关（groups-chat.ts）据此用对应
+     *  executor（cli:* / byok:*）生成回复。executor 空时网关默认 anthropic-direct。 */
+    executor?: string;
+    model?: string;
   },
 ): Promise<Message> {
   const res = await fetch(`${getApiBase()}/api/groups/${groupId}/messages`, {
@@ -258,6 +262,8 @@ export async function postGroupMessage(
       sender_name: options?.senderName ?? 'user',
       sender_kind: options?.senderKind ?? 'user',
       reply_to: options?.replyTo,
+      executor: options?.executor,
+      model: options?.model,
     }),
   });
   await _checkPythonStatus(res);

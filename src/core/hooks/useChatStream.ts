@@ -48,6 +48,12 @@ export interface UseChatStreamOptions {
   sseChannel?: ChatSseChannel;
   /** History page size for `mode === 'group'`. Defaults to 50. */
   historyLimit?: number;
+  /**
+   * 2026-05-29 · ModelPicker 选择，group 模式 send 时透传给 postGroupMessage →
+   * Node 网关据此用 cli:* / byok:* executor 生成回复。
+   */
+  executor?: string;
+  model?: string;
 }
 
 export interface UseChatStreamResult {
@@ -148,7 +154,7 @@ function inboxToChat(item: InboxMessage, idx: number): ChatMessage {
 // ---------------------------------------------------------------------------
 
 export function useChatStream(options: UseChatStreamOptions): UseChatStreamResult {
-  const { mode, targetId, runId, sseChannel = 'none', historyLimit = 50 } = options;
+  const { mode, targetId, runId, sseChannel = 'none', historyLimit = 50, executor, model } = options;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -337,7 +343,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
           // The backend chat-bridge then dispatches agent replies asynchronously
           // and pushes them back over the group SSE channel (sseChannel:'group'),
           // so we do NOT append the reply here — the SSE handler does.
-          await postGroupMessage(targetId, text, { senderName: 'user', senderKind: 'user' });
+          await postGroupMessage(targetId, text, { senderName: 'user', senderKind: 'user', executor, model });
           setMessages((prev) =>
             prev.map((m) => (m.id === optimisticId ? { ...m, status: 'delivered' as const } : m)),
           );
@@ -373,7 +379,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
         );
       }
     },
-    [mode, targetId]
+    [mode, targetId, executor, model]
   );
 
   // ---- refresh --------------------------------------------------------------

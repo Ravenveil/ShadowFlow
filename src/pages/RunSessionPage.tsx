@@ -12,7 +12,7 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowDown, Check, Circle, Cpu, ExternalLink, Key, KeyRound, Paperclip, Plus, RotateCcw, ServerCrash, Settings, Square, Timer, WifiOff } from 'lucide-react';
+import { AlertTriangle, ArrowDown, Check, Circle, ExternalLink, Key, KeyRound, Paperclip, Plus, RotateCcw, ServerCrash, Settings, Square, Timer, WifiOff } from 'lucide-react';
 import { useRunSession } from '../core/hooks/useRunSession';
 import type { RunSessionNode, RunSessionEdge, RunSessionStep, SessionError } from '../core/hooks/useRunSession';
 import {
@@ -30,6 +30,7 @@ import { useI18n } from '../common/i18n';
 import { ArtifactPreview } from '../components/ArtifactPreview';
 import { CodeBlockToolbar, parseCodeFences } from '../components/CodeBlockToolbar';
 import { SkillPicker } from '../components/SkillPicker';
+import ModelPicker from '../components/ModelPicker';
 import { DesignSystemPicker } from '../components/DesignSystemPicker';
 // Story 15.29 — Conversation linkage UI in PreparationPanel.
 import { ConversationPicker } from '../components/ConversationPicker';
@@ -81,110 +82,8 @@ import { retryStep as retryStepApi } from '../api/runSessions';
 //   CLI item  →  sf.defaultExecutor = `cli:<agentId>`
 //   API item  →  sf.defaultExecutor = `byok:<providerId>`,  sf.model = <modelId>
 
-const PICKER_CLI_META: Record<string, { name: string; tint: string; monogram: string }> = {
-  claude:         { name: 'Claude Code',    tint: '#D97706', monogram: 'CC' },
-  codex:          { name: 'Codex CLI',      tint: '#10B981', monogram: 'CX' },
-  gemini:         { name: 'Gemini CLI',     tint: '#4285F4', monogram: 'Gm' },
-  opencode:       { name: 'OpenCode',       tint: '#22C55E', monogram: 'OC' },
-  openclaw:       { name: 'OpenClaw',       tint: '#F97316', monogram: 'OW' },
-  cursor:         { name: 'Cursor Agent',   tint: '#8B5CF6', monogram: 'CU' },
-  'cursor-agent': { name: 'Cursor Agent',   tint: '#8B5CF6', monogram: 'CU' },
-  'qwen-coder':   { name: 'Qwen Code',      tint: '#A855F7', monogram: 'Qw' },
-  'gh-copilot':   { name: 'GitHub Copilot', tint: '#0078D4', monogram: 'GH' },
-  hermes:         { name: 'Hermes',         tint: '#EC4899', monogram: 'Hm' },
-  devin:          { name: 'Devin',          tint: '#6366F1', monogram: 'Dv' },
-  kimi:           { name: 'Kimi CLI',       tint: '#06B6D4', monogram: 'Km' },
-  kiro:           { name: 'Kiro',           tint: '#F59E0B', monogram: 'Kr' },
-  kilo:           { name: 'Kilo',           tint: '#3B82F6', monogram: 'Kl' },
-  vibe:           { name: 'Vibe',           tint: '#EC4899', monogram: 'Vb' },
-  'deepseek-tui': { name: 'DeepSeek TUI',   tint: '#3D8BFD', monogram: 'DS' },
-  qoder:          { name: 'Qoder CLI',      tint: '#8B5CF6', monogram: 'Qd' },
-  pi:             { name: 'Pi',             tint: '#A855F7', monogram: 'πi' },
-  aider:          { name: 'Aider',          tint: '#059669', monogram: 'Ai' },
-  cline:          { name: 'Cline',          tint: '#6366F1', monogram: 'Cl' },
-  'windsurf-cli': { name: 'Windsurf',       tint: '#06B6D4', monogram: 'Ws' },
-};
-
-const PICKER_PROVIDER_META: Record<string, { name: string; tint: string; monogram: string }> = {
-  anthropic: { name: 'Anthropic',       tint: '#D97706', monogram: 'A'  },
-  openai:    { name: 'OpenAI',          tint: '#10B981', monogram: 'O'  },
-  google:    { name: 'Google Gemini',   tint: '#4285F4', monogram: 'G'  },
-  deepseek:  { name: 'DeepSeek',        tint: '#3D8BFD', monogram: 'DS' },
-  zhipu:     { name: 'Zhipu GLM',       tint: '#7C3AED', monogram: 'ZP' },
-  qwen:      { name: 'Qwen',            tint: '#A855F7', monogram: 'Qw' },
-  moonshot:  { name: 'Moonshot · Kimi', tint: '#06B6D4', monogram: 'MK' },
-  mistral:   { name: 'Mistral',         tint: '#FB923C', monogram: 'Mi' },
-  groq:      { name: 'Groq',            tint: '#F97316', monogram: 'Gr' },
-  azure:     { name: 'Azure OpenAI',    tint: '#0078D4', monogram: 'Az' },
-  ollama:    { name: 'Ollama',          tint: '#A1A1AA', monogram: 'Ol' },
-  lmstudio:  { name: 'LM Studio',       tint: '#22C55E', monogram: 'LM' },
-};
-
-interface PickerCliItem {
-  kind: 'cli';
-  agentId: string;
-  name: string;
-  tint: string;
-  monogram: string;
-  version: string | null;
-}
-interface PickerApiItem {
-  kind: 'api';
-  providerId: string;
-  providerName: string;
-  tint: string;
-  monogram: string;
-  modelId: string;
-}
-type PickerItem = PickerCliItem | PickerApiItem;
-
-async function fetchPickerCliItems(apiBase: string): Promise<PickerCliItem[]> {
-  try {
-    const res = await fetch(`${apiBase}/api/settings/agents/detect`, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return [];
-    const j = await res.json();
-    const agents = Array.isArray(j.agents) ? j.agents : [];
-    return agents
-      .filter((a: { installed?: boolean }) => a.installed === true)
-      .map((a: { id: string; name?: string; version?: string | null }) => {
-        const meta = PICKER_CLI_META[a.id] ?? { name: a.name ?? a.id, tint: '#71717A', monogram: a.id.slice(0, 2).toUpperCase() };
-        return { kind: 'cli' as const, agentId: a.id, name: meta.name, tint: meta.tint, monogram: meta.monogram, version: a.version ?? null };
-      });
-  } catch {
-    return [];
-  }
-}
-
-async function fetchPickerApiItems(apiBase: string): Promise<PickerApiItem[]> {
-  try {
-    const res = await fetch(`${apiBase}/api/settings/byok`, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return [];
-    const j = await res.json();
-    const providers = (j && typeof j.providers === 'object') ? j.providers as Record<string, { enabled?: boolean; models?: string[]; apiKey?: string | null }> : {};
-    const out: PickerApiItem[] = [];
-    for (const [providerId, p] of Object.entries(providers)) {
-      // Only show providers that are enabled AND have at least one model.
-      // (Ollama/LMStudio don't need a key, so we don't gate on apiKey presence.)
-      if (!p.enabled) continue;
-      const models = Array.isArray(p.models) ? p.models : [];
-      if (models.length === 0) continue;
-      const meta = PICKER_PROVIDER_META[providerId] ?? { name: providerId, tint: '#71717A', monogram: providerId.slice(0, 2).toUpperCase() };
-      for (const modelId of models) {
-        out.push({
-          kind: 'api',
-          providerId,
-          providerName: meta.name,
-          tint: meta.tint,
-          monogram: meta.monogram,
-          modelId,
-        });
-      }
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
+// ModelPicker 的常量/类型/数据加载已抽到 src/common/constants/modelPicker.ts +
+// 组件 src/components/ModelPicker.tsx（2026-05-29），三处复用（run-session/chat/start）。
 
 // ---------------------------------------------------------------------------
 // Small spinner (inline div, no icon)
@@ -1731,7 +1630,8 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   void thinkTick;
   const liveThinkMs =
     thinkStreaming && thinkStartRef.current !== null ? Date.now() - thinkStartRef.current : null;
-  const [showModelPicker, setShowModelPicker] = useState(false);
+  // ModelPicker（抽成 <ModelPicker> 组件）的选择 state——发送路径
+  // buildPickerOverrides 仍读这俩；组件 onChange 负责回写 + localStorage。
   const [selectedModel, setSelectedModel] = useState<string>(
     () => localStorage.getItem('sf.model') ?? 'claude-sonnet-4-6',
   );
@@ -1749,71 +1649,6 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
     return () => window.clearTimeout(handle);
   }, [draftKey, message]);
 
-  // sessionStorage cache so the picker is instant across page navigations
-  // within a session — agents/detect spawns up to 16 CLI subprocesses each
-  // with a 3s timeout, which can take 10-15s on a cold open. We prefill
-  // from cache, render immediately, then silently refresh in the background.
-  const PICKER_CACHE_KEY = 'sf.modelPicker.cache.v1';
-  const PICKER_CACHE_TTL_MS = 60_000;
-  function loadCachedPicker(): { cli: PickerCliItem[]; api: PickerApiItem[]; ts: number } | null {
-    try {
-      const raw = sessionStorage.getItem(PICKER_CACHE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed.ts !== 'number') return null;
-      if (Date.now() - parsed.ts > PICKER_CACHE_TTL_MS) return null;
-      return parsed;
-    } catch { return null; }
-  }
-  function saveCachedPicker(cli: PickerCliItem[], api: PickerApiItem[]) {
-    try {
-      sessionStorage.setItem(PICKER_CACHE_KEY, JSON.stringify({ cli, api, ts: Date.now() }));
-    } catch {/* sessionStorage may be full or disabled */}
-  }
-
-  const [pickerCliItems, setPickerCliItems] = useState<PickerCliItem[]>(
-    () => loadCachedPicker()?.cli ?? [],
-  );
-  const [pickerApiItems, setPickerApiItems] = useState<PickerApiItem[]>(
-    () => loadCachedPicker()?.api ?? [],
-  );
-  const [pickerLoading, setPickerLoading] = useState(false);
-  const modelBtnRef = useRef<HTMLButtonElement>(null);
-
-  // Prewarm on mount — start the agents/detect + /byok requests immediately
-  // so by the time the user clicks the model icon, results are already in.
-  // Only shows the spinner if we have nothing cached.
-  useEffect(() => {
-    const apiBase = import.meta.env.VITE_API_BASE ?? '';
-    const hasCached = pickerCliItems.length > 0 || pickerApiItems.length > 0;
-    if (!hasCached) setPickerLoading(true);
-    Promise.all([fetchPickerCliItems(apiBase), fetchPickerApiItems(apiBase)])
-      .then(([cli, api]) => {
-        setPickerCliItems(cli);
-        setPickerApiItems(api);
-        saveCachedPicker(cli, api);
-      })
-      .finally(() => setPickerLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Re-refresh silently when picker opens (catches newly-installed CLIs /
-  // newly-added BYOK keys without blocking UI on the data we already have).
-  useEffect(() => {
-    if (!showModelPicker) return;
-    const apiBase = import.meta.env.VITE_API_BASE ?? '';
-    const hasData = pickerCliItems.length > 0 || pickerApiItems.length > 0;
-    if (!hasData) setPickerLoading(true);
-    Promise.all([fetchPickerCliItems(apiBase), fetchPickerApiItems(apiBase)])
-      .then(([cli, api]) => {
-        setPickerCliItems(cli);
-        setPickerApiItems(api);
-        saveCachedPicker(cli, api);
-      })
-      .finally(() => setPickerLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showModelPicker]);
-
   // 2026-05-11 Layer 1 — Claude Code-style chat fallback.
   // Requires actual chatReply text AND no error. The 5x-retry path stuffs
   // repeated "Failed to authenticate..." into chatReply via daemon text
@@ -1829,17 +1664,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
     !session.chatReply.includes('<sf:') &&
     (session.outputType == null || session.outputType === 'chat');
 
-  // Close model picker on outside click
-  useEffect(() => {
-    if (!showModelPicker) return;
-    const handler = (e: MouseEvent) => {
-      if (modelBtnRef.current && !modelBtnRef.current.closest('[data-model-picker]')?.contains(e.target as Node)) {
-        setShowModelPicker(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showModelPicker]);
+  // (model picker 的点外关闭逻辑已随 <ModelPicker> 组件内置，此处不再需要。)
 
   // 2026-05-16 Scroll anchoring + Jump-to-latest pill.
   // When the user scrolls up from the bottom of the stream area we mark
@@ -2734,184 +2559,21 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
               >
                 <Paperclip size={14} strokeWidth={1.8} />
               </button>
-              {/* Model picker — click to open inline switcher */}
-              <div style={{ position: 'relative' }} data-model-picker>
-                {(() => {
-                  let label = '选择模型';
-                  let tooltip = '选择模型';
-                  if (selectedExecutor.startsWith('cli:')) {
-                    const id = selectedExecutor.slice(4);
-                    const name = PICKER_CLI_META[id]?.name ?? id;
-                    label = name;
-                    tooltip = `CLI · ${name}`;
-                  } else if (selectedExecutor.startsWith('byok:')) {
-                    const pid = selectedExecutor.slice(5);
-                    const provName = PICKER_PROVIDER_META[pid]?.name ?? pid;
-                    label = selectedModel || provName;
-                    tooltip = `API · ${provName} / ${selectedModel}`;
-                  } else if (selectedModel) {
-                    label = selectedModel;
-                    tooltip = `模型: ${selectedModel}`;
+              {/* Model picker — 抽成 <ModelPicker> 复用组件（2026-05-29）。
+                  onChange 维持原落库语义：写 sf.defaultExecutor + sf.model，
+                  发送路径 buildPickerOverrides 仍读 selectedExecutor/selectedModel。 */}
+              <ModelPicker
+                value={{ executor: selectedExecutor, model: selectedModel }}
+                onChange={(next) => {
+                  localStorage.setItem('sf.defaultExecutor', next.executor);
+                  setSelectedExecutor(next.executor);
+                  if (next.executor.startsWith('byok:') && next.model) {
+                    localStorage.setItem('sf.model', next.model);
+                    setSelectedModel(next.model);
                   }
-                  return (
-                    <button
-                      ref={modelBtnRef}
-                      type="button"
-                      title={tooltip}
-                      className="cmp-btn"
-                      onClick={() => setShowModelPicker(v => !v)}
-                      style={{
-                        ...(showModelPicker ? {
-                          background: 'var(--t-accent-tint)',
-                          borderColor: 'var(--t-accent)',
-                          color: 'var(--t-accent-bright)',
-                        } : {}),
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        paddingLeft: 8,
-                        paddingRight: 10,
-                        width: 'auto',
-                        maxWidth: 200,
-                      }}
-                    >
-                      <Cpu size={15} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-                        {label}
-                      </span>
-                    </button>
-                  );
-                })()}
-                {showModelPicker && (() => {
-                  const renderItem = (it: PickerItem) => {
-                    const active = it.kind === 'cli'
-                      ? selectedExecutor === `cli:${it.agentId}`
-                      : selectedExecutor === `byok:${it.providerId}` && selectedModel === it.modelId;
-                    const key = it.kind === 'cli' ? `cli:${it.agentId}` : `byok:${it.providerId}:${it.modelId}`;
-                    const title = it.kind === 'cli' ? it.name : it.modelId;
-                    const sub = it.kind === 'cli'
-                      ? (it.version ? it.version : 'CLI · installed')
-                      : it.providerName;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        title={it.kind === 'cli' ? `${title} · ${sub}` : `${title} — ${sub}`}
-                        onClick={() => {
-                          if (it.kind === 'cli') {
-                            const ex = `cli:${it.agentId}`;
-                            localStorage.setItem('sf.defaultExecutor', ex);
-                            setSelectedExecutor(ex);
-                          } else {
-                            const ex = `byok:${it.providerId}`;
-                            localStorage.setItem('sf.defaultExecutor', ex);
-                            localStorage.setItem('sf.model', it.modelId);
-                            setSelectedExecutor(ex);
-                            setSelectedModel(it.modelId);
-                          }
-                          setShowModelPicker(false);
-                        }}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                          padding: '7px 12px', border: 0, cursor: 'pointer',
-                          background: active ? 'var(--t-accent-tint)' : 'transparent',
-                          textAlign: 'left', transition: 'background .1s',
-                        }}
-                        onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--t-hover, var(--t-panel))'; }}
-                        onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                      >
-                        <span style={{
-                          width: 20, height: 20, borderRadius: 5, flexShrink: 0,
-                          background: `color-mix(in oklab, ${it.tint} 14%, var(--t-panel))`,
-                          border: `1px solid color-mix(in oklab, ${it.tint} ${active ? 60 : 30}%, transparent)`,
-                          color: it.tint,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 8.5,
-                          letterSpacing: '-0.04em', userSelect: 'none',
-                        }}>{it.monogram}</span>
-                        <span style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{
-                            display: 'block',
-                            fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, fontWeight: 500,
-                            color: active ? 'var(--t-accent-bright)' : 'var(--t-fg)',
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                          }}>{title}</span>
-                          <span style={{
-                            display: 'block',
-                            fontFamily: 'var(--font-mono, monospace)', fontSize: 9.5,
-                            color: 'var(--t-fg-4)', marginTop: 1,
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                          }}>{sub}</span>
-                        </span>
-                        {active && (
-                          <Check size={12} strokeWidth={2.5} style={{ color: 'var(--t-accent)', flexShrink: 0 }} />
-                        )}
-                      </button>
-                    );
-                  };
-                  const sectionLabel = (text: string) => (
-                    <div style={{
-                      padding: '8px 12px 4px',
-                      fontFamily: 'var(--font-mono, monospace)',
-                      fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase',
-                      color: 'var(--t-fg-4)', fontWeight: 600,
-                    }}>{text}</div>
-                  );
-                  const emptyHint = (text: string, target: string) => (
-                    <button
-                      type="button"
-                      onClick={() => { navigate(target); setShowModelPicker(false); }}
-                      style={{
-                        width: '100%', textAlign: 'left',
-                        padding: '6px 12px 9px',
-                        background: 'transparent', border: 0, cursor: 'pointer',
-                        fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5,
-                        color: 'var(--t-fg-4)',
-                        display: 'flex', alignItems: 'center', gap: 6,
-                      }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t-accent-bright)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--t-fg-4)'; }}
-                    >
-                      <span>{text}</span>
-                      <ExternalLink size={10} strokeWidth={1.8} />
-                    </button>
-                  );
-                  return (
-                    <div style={{
-                      position: 'absolute', bottom: 'calc(100% + 6px)', left: 0,
-                      width: 260, maxHeight: 460, zIndex: 200,
-                      background: 'var(--t-panel)',
-                      border: '1px solid var(--t-border)',
-                      borderRadius: 10,
-                      boxShadow: '0 8px 24px -8px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.04)',
-                      padding: '4px 0',
-                      overflowY: 'auto',
-                    }}>
-                      {/* CLI section */}
-                      {sectionLabel('CLI')}
-                      {pickerLoading && pickerCliItems.length === 0 ? (
-                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>{t('common.detecting')}</div>
-                      ) : pickerCliItems.length === 0
-                        ? emptyHint('未检测到已安装的 CLI · 去设置', '/settings#local-cli')
-                        : pickerCliItems.map(renderItem)
-                      }
-                      {/* Divider between sections */}
-                      <div style={{
-                        margin: '4px 0',
-                        borderTop: '1px solid var(--t-border)',
-                      }} />
-                      {/* API section */}
-                      {sectionLabel('API')}
-                      {pickerLoading && pickerApiItems.length === 0 ? (
-                        <div style={{ padding: '4px 12px 8px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-4)' }}>{t('common.loading')}</div>
-                      ) : pickerApiItems.length === 0
-                        ? emptyHint('未配置 API Key · 去设置 BYOK', '/settings#byok')
-                        : pickerApiItems.map(renderItem)
-                      }
-                    </div>
-                  );
-                })()}
-              </div>
+                }}
+                onNavigateSettings={(target) => navigate(target)}
+              />
             </div>
             {/* Right — live token estimate + send / stop. While
                 session.isStreaming is true (SSE live + not yet complete) we

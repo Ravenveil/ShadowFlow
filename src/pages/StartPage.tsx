@@ -49,6 +49,7 @@ import { GoalClarityWizard } from '../core/components/builder/GoalClarityWizard'
 import { HfTopBar } from '../components/hifi';
 import { useI18n } from '../common/i18n';
 import { SkillUrlChip } from '../components/SkillUrlChip';
+import ModelPicker from '../components/ModelPicker';
 import { SkillPickerModal } from '../components/SkillPickerModal';
 import { extractSkillUrl, listInstalledSkills, type SkillIngestSummary, type InstalledSkill } from '../api/skillIngest';
 import { listSkills, type SkillInfo } from '../api/skills';
@@ -742,6 +743,14 @@ export default function StartPage() {
   const { secrets } = useSecretsStore();
   const [showWizard, setShowWizard] = useState(false);
   const [composer, setComposer] = useState('');
+  // 2026-05-29 — ModelPicker 选择（与 run-session/chat 共享 sf.defaultExecutor +
+  // sf.model）。handleSubmit 已读这俩 localStorage key，onChange 写入即生效。
+  const [pickExecutor, setPickExecutor] = useState<string>(
+    () => localStorage.getItem('sf.defaultExecutor') ?? '',
+  );
+  const [pickModel, setPickModel] = useState<string>(
+    () => localStorage.getItem('sf.model') ?? '',
+  );
   // Skill-URL detection state. When the composer contains a github / raw-md
   // URL, we surface a chip offering to install it as a skill before submission.
   // dismissedUrls accumulates URLs the user explicitly said "no" to so we don't
@@ -1616,6 +1625,24 @@ export default function StartPage() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* 2026-05-29 — ModelPicker（CLI + API）。写 sf.defaultExecutor/sf.model，
+                  handleSubmit 读它们拼进 run-session 请求。 */}
+              <div style={{ flexShrink: 0 }}>
+                <ModelPicker
+                  value={{ executor: pickExecutor, model: pickModel }}
+                  variant="compact"
+                  onChange={(next) => {
+                    localStorage.setItem('sf.defaultExecutor', next.executor);
+                    setPickExecutor(next.executor);
+                    if (next.executor.startsWith('byok:') && next.model) {
+                      localStorage.setItem('sf.model', next.model);
+                      setPickModel(next.model);
+                    }
+                  }}
+                  onNavigateSettings={(target) => navigate(target)}
+                />
               </div>
 
               {/* MODE chip · Auto (default) / Single / Team */}

@@ -12,6 +12,8 @@ import {
   AtSign, Slash, Smile, Paperclip, Scissors, CheckSquare, Sparkles, Send,
 } from 'lucide-react';
 import styles from './chatFB.module.css';
+import ModelPicker from '../ModelPicker';
+import type { ModelPickerValue } from '../../common/constants/modelPicker';
 
 export interface ComposerFBProps {
   value: string;
@@ -23,6 +25,15 @@ export interface ComposerFBProps {
   /** i18n 函数，可选 */
   t?: (k: string) => string;
   placeholder?: string;
+  /**
+   * 2026-05-29 · 模型/执行器选择器。状态由父（ChatPage）持有——发送时要把
+   * executor/model 拼进请求。未传则不渲染（保持向后兼容）。
+   */
+  modelPicker?: {
+    value: ModelPickerValue;
+    onChange: (v: ModelPickerValue) => void;
+    onNavigateSettings?: (target: string) => void;
+  };
 }
 
 const SLASH_CMDS: Array<{ cmd: string; d: string; sel?: boolean }> = [
@@ -41,6 +52,7 @@ export default function ComposerFB({
   loading = false,
   t,
   placeholder,
+  modelPicker,
 }: ComposerFBProps) {
   const tr = (k: string, fb: string) => {
     if (!t) return fb;
@@ -127,6 +139,16 @@ export default function ComposerFB({
             >
               <Sparkles strokeWidth={1.7} />
             </button>
+          )}
+          {modelPicker && (
+            <div style={{ marginLeft: 4 }}>
+              <ModelPicker
+                value={modelPicker.value}
+                onChange={modelPicker.onChange}
+                onNavigateSettings={modelPicker.onNavigateSettings}
+                variant="compact"
+              />
+            </div>
           )}
           <span className={styles.compMd}>Markdown</span>
         </div>
