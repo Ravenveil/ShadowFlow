@@ -564,6 +564,16 @@ export default function ChatPage() {
     const teamSet = new Set(ids);
     return groups.filter(g => (g.agent_ids ?? []).some(id => teamSet.has(id)));
   }, [groups, currentTeam]);
+
+  // 2026-05-29 — DM 列表同样按当前 team 过滤：只显示该 team 的成员（agent_ids），
+  // 避免历史重复创建的孤儿 agent（同名 dev_engineer ×4）全量冒出来。未选 team
+  // 时回退显示全部（老行为）。
+  const teamAgentDMs = useMemo(() => {
+    const ids = currentTeam?.agent_ids ?? [];
+    if (ids.length === 0) return agentDMs;
+    const set = new Set(ids);
+    return agentDMs.filter(d => set.has(d.agentId));
+  }, [agentDMs, currentTeam]);
   // Workspace-driven inbox fetch — pulls groups created by run-session
   // auto-save and any other ad-hoc groups so they appear in the rail.
   // Previously /chat only saw template-roster groups, leaving the rail
@@ -668,6 +678,29 @@ export default function ChatPage() {
   // sseChannel:'group' → 订阅 /api/groups/{id}/events，异步 agent 回复（含多 agent
   // fan-out）实时流入，无需手动刷新。
   const chatStream = useChatStream({ mode: 'group', targetId: groupId ?? null, sseChannel: 'group' });
+
+  // ── 2026-05-29 · 内嵌单聊（DM）─────────────────────────────────────────────
+  // 点左侧 agent 不再整页跳到 /agent-dm（会丢掉左侧列表 + 框架）；改为留在 chat
+  // 页内，只把中间栏从群聊换成与该 agent 的单聊。dmStream 走 dm 模式（BYOK
+  // /api/chat/completions，soul 注入）。dmAgentId=null 时回到群聊视图。
+  const [dmAgentId, setDmAgentId] = useState<string | null>(null);
+  const dmStream = useChatStream({ mode: 'dm', targetId: dmAgentId });
+  const dmAgent = useMemo(
+    () => agentDMs.find(d => d.agentId === dmAgentId) ?? null,
+    [agentDMs, dmAgentId],
+  );
+  const handleDmSend = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || !dmAgentId) return;
+      try {
+        await dmStream.send(trimmed);
+      } catch (err) {
+        console.warn('[ChatPage] dm send failed:', err);
+      }
+    },
+    [dmStream, dmAgentId],
+  );
 
 
   useEffect(() => {
@@ -970,10 +1003,11 @@ export default function ChatPage() {
         {/* Stream D · FB-HiFi InboxPanel — chat-fb.html 行 878-1014 */}
         <InboxPanelFB
           groups={teamGroups}
-          groupId={groupId}
-          agentDMs={agentDMs}
-          onGroup={id => navigate(`/chat/${id}`)}
-          onDm={id => navigate(`/agent-dm/${id}`)}
+          groupId={dmAgentId ? undefined : groupId}
+          agentDMs={teamAgentDMs}
+          dmId={dmAgentId ?? undefined}
+          onGroup={id => { setDmAgentId(null); navigate(`/chat/${id}`); }}
+          onDm={id => setDmAgentId(id)}
           i18n={{
             searchPlaceholder: t('chat.searchJump'),
             filterAll: t('chat.filterAll'),
