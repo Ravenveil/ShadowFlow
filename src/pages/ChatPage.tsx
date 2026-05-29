@@ -550,6 +550,8 @@ export default function ChatPage() {
   const fetchWorkspaceInbox = useInboxStore(s => s.fetchWorkspaceInbox);
   const currentWorkspaceId = useWorkspaceStore(s => s.currentId);
   const currentTeam = useWorkspaceStore(s => s.currentTeam);
+  const setCurrentTeam = useWorkspaceStore(s => s.setCurrentTeam);
+  const switchTo = useWorkspaceStore(s => s.switchTo);
 
   // 选了 team 时只显示该 team 的会话：group.agent_ids 与 team.agent_ids 有交集即归属。
   // 未选 team（currentTeam 为空）→ 显示当前 workspace 全部会话（老行为）。
@@ -568,6 +570,50 @@ export default function ChatPage() {
   useEffect(() => {
     void fetchWorkspaceInbox(currentWorkspaceId);
   }, [currentWorkspaceId, fetchWorkspaceInbox]);
+
+  // 2026-05-29 — 进入 /chat/:groupId 时，把左上角「公司(team)/工作区」自动切到
+  // 这个群的归属。这样从 run-session「去聊天」直达、或直接打开 URL 时，左上角与
+  // chat 列表都对得上，不会出现「群属于 team A 但左上角停在 team B / 列表混着别的
+  // team」。流程：getGroup(id) 拿 workspace_id+team_id → 必要时 switchTo(workspace)
+  // → getTeam(team_id) → setCurrentTeam。全程 best-effort，失败不阻塞聊天。
+  useEffect(() => {
+    if (!groupId) return;
+    let alive = true;
+    void (async () => {
+      try {
+        // 先看已加载列表里有没有（省一次请求）；没有再单查。
+        const known = groups.find((g) => g.id === groupId);
+        const rec = await getGroup(groupId);
+        if (!alive || !rec) return;
+        const ws = rec.workspace_id ?? undefined;
+        const teamId = rec.team_id ?? undefined;
+        if (ws && ws !== currentWorkspaceId) {
+          switchTo(ws); // 注意：switchTo 在 workspace 变化时会清空 currentTeam
+        }
+        if (teamId && teamId !== currentTeam?.team_id) {
+          try {
+            const team = await getTeam(teamId);
+            if (!alive) return;
+            setCurrentTeam({
+              team_id: team.team_id,
+              name: team.name,
+              agent_ids: team.agent_ids ?? [],
+            });
+          } catch {
+            // 团队拿不到就不强切 team —— 列表退回 workspace 级显示。
+          }
+        }
+        void known;
+      } catch {
+        // 群单查失败（如 Python 后端未起）忽略，保持现状。
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // 只在 groupId 变化时对账，避免 currentTeam/workspace 自身变化触发循环。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupId]);
 
   // 2026-05-28 — /chat 落地 auto-pick：
   //  1) 若 URL 已带 :groupId 则保留

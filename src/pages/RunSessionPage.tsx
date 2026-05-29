@@ -3723,42 +3723,9 @@ function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: Ru
         blueprintFilename={session.blueprintFile}
       />
 
-      {/* Right-bottom dock — single primary CTA. Anchored absolute so the
-          stub panels (and their eventual replacements) keep their natural
-          height and the dock floats above them. */}
-      <div
-        style={{
-          position: 'absolute',
-          right: 20,
-          bottom: 20,
-          zIndex: 5,
-          display: 'flex',
-          gap: 8,
-        }}
-      >
-        <button
-          type="button"
-          onClick={handleGoToChat}
-          data-testid="run-session-go-to-chat"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '8px 14px',
-            borderRadius: 8,
-            background: 'var(--t-accent)',
-            color: 'var(--t-accent-ink, #fff)',
-            border: 'none',
-            fontSize: 12.5,
-            fontWeight: 600,
-            cursor: 'pointer',
-            boxShadow: '0 4px 14px rgba(0,0,0,.22)',
-            fontFamily: 'inherit',
-          }}
-        >
-          {t('projects.artifactsEmptyCta')}
-        </button>
-      </div>
+      {/* 2026-05-29 — 右下角常驻「去聊天」悬浮按钮已删除。run-session 完成后
+          统一从「Team saved」toast 的 Chat 按钮进入聊天（保留单一入口，避免
+          两个语义相同的去聊天入口）。handleGoToChat 不再被引用。 */}
     </section>
   );
 }

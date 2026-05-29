@@ -178,6 +178,22 @@ export interface GroupRecord {
   [key: string]: unknown;
 }
 
+/**
+ * 2026-05-29 · 单查一个群记录（含 workspace_id / team_id）。
+ *
+ * 用于 ChatPage：从 URL 的 /chat/:groupId 直达时，即使该群不在当前 team/workspace
+ * 的列表里，也能拿到它的归属，从而把左上角「公司(team)」自动切到对应 team。
+ * 后端 GET /api/groups/{id} 返回 `{ data: GroupRecord, meta }`；404 时返回 null。
+ */
+export async function getGroup(groupId: string): Promise<GroupRecord | null> {
+  const res = await fetch(`${getApiBase()}/api/groups/${encodeURIComponent(groupId)}`);
+  await _checkPythonStatus(res);
+  if (!res.ok) return null;
+  const json = await res.json().catch(() => null);
+  if (!json) return null;
+  return (json.data ?? json) as GroupRecord;
+}
+
 export async function patchGroup(
   groupId: string,
   body: PatchGroupRequest,

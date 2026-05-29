@@ -1,291 +1,268 @@
 /**
- * WorkspaceSelector — sidebar workspace switcher (DingTalk-style).
- * Replaces the old separate WorkspaceStrip row.
+ * WorkspaceStrip — top-of-sidebar workspace + team selector (FB-HiFi universal).
  *
- * Props:
- *   collapsed — sidebar is in icon-only mode; show monogram only,
- *               dropdown opens via portal to the right of the icon.
+ * Lives at the top of HfSidebar so every FB-HiFi page (chat, teams, agents,
+ * calendar, projects) shares the same workspace/team context.
+ *
+ * 产品心智（对标钉钉）：**公司 = team**。一个 workspace（账号/租户）下可有多个
+ * team；切 team 就像钉钉切公司，chat 列表随之只显示该 team 的群。下拉分两段：
+ *   - 团队：切当前 workspace 下的 team（setCurrentTeam）—— 主操作
+ *   - 工作区：切到另一个 workspace（switchTo，会清空 currentTeam）
+ * 顶部按钮优先显示当前 team 名（未选 team 时回退 workspace 名）。
+ *
+ * Data: useWorkspaceStore (zustand, persisted: currentId + currentTeam) +
+ * listTeams(currentId)。切 workspace 自动重拉 teams 并对账 currentTeam（团队
+ * 已删则回退第一个）。
  */
+
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { createPortal } from 'react-dom';
-import { ChevronDown, Users } from 'lucide-react';
-import { useWorkspaceStore } from '../../store/workspaceStore';
-// CreateWorkspaceModal 入口已迁到 /teams 新建团队流程（用户视角 ws=team 是同一回事）
-// 文件保留供 future 使用，但本组件不再 mount
-import { listTeams, type TeamRecord } from '../../api/teams';
+import { useWorkspaceStore, selectCurrentWorkspace } from '../../store/workspaceStore';
+import { listTeams, type TeamSummary } from '../../api/teams';
 import { useI18n } from '../../common/i18n';
 
-interface WorkspaceSelectorProps {
-  collapsed?: boolean;
-}
+export function WorkspaceStrip() {
+  const { language } = useI18n();
+  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
 
-export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
-  const { t } = useI18n();
-  const workspaces = useWorkspaceStore((s) => s.workspaces);
-  const currentId  = useWorkspaceStore((s) => s.currentId);
-  const currentTeam = useWorkspaceStore((s) => s.currentTeam);
-  const switchTo   = useWorkspaceStore((s) => s.switchTo);
-  const setCurrentTeam = useWorkspaceStore((s) => s.setCurrentTeam);
-  const fetchWs    = useWorkspaceStore((s) => s.fetchWorkspaces);
-  const navigate   = useNavigate();
-
-  const [open, setOpen]           = useState(false);
-  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
-  // Teams in the current workspace — lazy loaded when dropdown opens so we
-  // don't pay the Python round-trip for users who never open the switcher.
-  const [teams, setTeams] = useState<TeamRecord[]>([]);
-  const [teamsLoaded, setTeamsLoaded] = useState(false);
+  const { workspaces, currentId, currentTeam, switchTo, setCurrentTeam, fetchWorkspaces } =
+    useWorkspaceStore();
+  const current = useWorkspaceStore(selectCurrentWorkspace);
+  const [open, setOpen] = useState(false);
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    setTeamsLoaded(false);
-    listTeams(currentId ?? undefined)
-      .then((data) => { if (alive) { setTeams(data); setTeamsLoaded(true); } })
-      .catch(() => { if (alive) { setTeams([]); setTeamsLoaded(true); } });
-    return () => { alive = false; };
-  }, [open, currentId]);
+    fetchWorkspaces();
+  }, [fetchWorkspaces]);
 
-  const wrapRef    = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLDivElement>(null);
-  const dropRef    = useRef<HTMLDivElement>(null);
-
+  // 拉当前 workspace 的 teams（切 workspace 自动重拉），并对账 currentTeam。
   useEffect(() => {
-    if (workspaces.length === 0) fetchWs().catch(() => {});
-  }, [workspaces.length, fetchWs]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e: MouseEvent) {
-      const t = e.target as Node;
-      if (!wrapRef.current?.contains(t) && !dropRef.current?.contains(t)) setOpen(false);
+    if (!currentId) {
+      setTeams([]);
+      return;
     }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    let alive = true;
+    listTeams(currentId)
+      .then((list) => {
+        if (!alive) return;
+        setTeams(list);
+        // 对账：持久化的 currentTeam 不在最新列表里 → 回退第一个；在则用最新刷新。
+        const match = currentTeam ? list.find((t) => t.team_id === currentTeam.team_id) : undefined;
+        if (match) {
+          if (
+            match.name !== currentTeam!.name ||
+            (match.agent_ids ?? []).length !== (currentTeam!.agent_ids ?? []).length
+          ) {
+            setCurrentTeam({ team_id: match.team_id, name: match.name, agent_ids: match.agent_ids ?? [] });
+          }
+        } else if (list.length > 0) {
+          const f = list[0];
+          setCurrentTeam({ team_id: f.team_id, name: f.name, agent_ids: f.agent_ids ?? [] });
+        } else {
+          setCurrentTeam(null);
+        }
+      })
+      .catch(() => {
+        if (alive) setTeams([]);
+      });
+    return () => {
+      alive = false;
+    };
+    // currentTeam 故意不进依赖：只在 workspace 切换时重拉/对账，避免循环。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId]);
+
+  // 点外部关闭
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  const getInit = (name: string) => {
-    const a = Array.from(name);
-    return a.length >= 2 ? a[0] + a[1] : (a[0] ?? '?');
+  const wsName = current?.name ?? T('我的工作区', 'My workspace');
+  // 顶部主标题：优先 team 名（= 当前「公司」），未选 team 回退 workspace 名。
+  const title = currentTeam?.name ?? wsName;
+  const subtitle = currentTeam
+    ? `${(currentTeam.agent_ids ?? []).length} ${T('成员', 'members')} · ${wsName}`
+    : `${current?.agent_count ?? 0} agents · ${current?.team_count ?? teams.length} teams`;
+
+  const handlePickTeam = (tm: TeamSummary) => {
+    setCurrentTeam({ team_id: tm.team_id, name: tm.name, agent_ids: tm.agent_ids ?? [] });
+    setOpen(false);
   };
-  const current = workspaces.find((w) => w.workspace_id === currentId) ?? workspaces[0];
-  const color   = current?.color || 'var(--t-accent)';
-  // 选了 team 就让触发器显示 team（名字 + 字头），否则显示 workspace。
-  const displayName = currentTeam?.name ?? current?.name ?? 'ShadowFlow';
-  const init    = getInit(displayName);
 
-  function handleClick() {
-    if (collapsed && triggerRef.current) {
-      setAnchorRect(triggerRef.current.getBoundingClientRect());
-    }
-    setOpen((v) => !v);
-  }
-
-  // ── Dropdown content (shared between portal and inline) ─────────────────────
-  const dropdownContent = (
-    <div
-      ref={dropRef}
-      style={{
-        ...(collapsed && anchorRect
-          ? { position: 'fixed', top: anchorRect.top, left: anchorRect.right + 8 }
-          : { position: 'absolute', top: 'calc(100% + 6px)', left: 0 }),
-        minWidth: 220, background: 'var(--t-panel)',
-        border: '1px solid var(--t-border)', borderRadius: 10,
-        boxShadow: '0 8px 24px rgba(0,0,0,.18)',
-        zIndex: 9999, padding: '6px',
-        display: 'flex', flexDirection: 'column', gap: 2,
-      }}
-    >
-      {/* 2026-05-28 — 单一团队列表（用户语义：workspace=team 是一回事）
-          原来上下两区（workspace items + teams items）合并成一区。
-          点 team item：切到该 team 所属 workspace + 留在当前页，不 navigate。
-          这样用户从任意页（chat/agent/run-session/...）切团队都不会被踢走。 */}
-      <div style={{ padding: '4px 8px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Users size={11} strokeWidth={2} aria-hidden style={{ color: 'var(--t-fg-4)' }} />
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          {t('workspace.myTeams') || '我的团队'} · {teamsLoaded ? teams.length : '…'}
-        </span>
-      </div>
-
-      {teamsLoaded && teams.length === 0 && (
-        <div style={{ padding: '8px 10px', fontSize: 11.5, color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono)' }}>
-          {t('workspace.noTeams') || '还没有团队'}
-        </div>
-      )}
-
-      {/* 已选 team 时给一行"显示全部会话" —— 复位 currentTeam，chat 回到 workspace
-          全量会话视图。否则用户选了 team 后没法退回看全部。 */}
-      {currentTeam && (
-        <button
-          type="button"
-          onClick={() => { setCurrentTeam(null); setOpen(false); }}
-          data-testid="workspace-dropdown-all"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
-            border: '1px solid transparent', background: 'transparent',
-            width: '100%', textAlign: 'left', color: 'var(--t-fg-4)', fontSize: 12,
-          }}
-        >
-          <span style={{
-            width: 30, height: 30, borderRadius: 7, flexShrink: 0,
-            background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Users size={13} strokeWidth={2} style={{ color: 'var(--t-fg-4)' }} />
-          </span>
-          <span style={{ flex: 1 }}>{t('workspace.allConversations') || '显示全部会话'}</span>
-        </button>
-      )}
-
-      {teams.map((tm) => {
-        const on = tm.team_id === currentTeam?.team_id;
-        const c  = current?.color || 'var(--t-accent)';
-        const i  = getInit(tm.name);
-        return (
-          <button
-            key={tm.team_id}
-            type="button"
-            // 选中 team = 设为 currentTeam（chat 据此过滤会话 + 显示成员）。
-            // 若该 team 属于别的 workspace，先把 workspace 切过去再设 team
-            // （switchTo 会清 currentTeam，所以顺序：先 switchTo 再 setCurrentTeam）。
-            onClick={() => {
-              if (tm.workspace_id && tm.workspace_id !== currentId) {
-                switchTo(tm.workspace_id);
-              }
-              setCurrentTeam({ team_id: tm.team_id, name: tm.name, agent_ids: tm.agent_ids ?? [] });
-              setOpen(false);
-            }}
-            data-testid={`workspace-dropdown-team-${tm.team_id}`}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
-              border: on ? `1px solid color-mix(in oklab, ${c} 40%, transparent)` : '1px solid transparent',
-              background: on ? `color-mix(in oklab, ${c} 12%, var(--t-panel))` : 'transparent',
-              width: '100%', textAlign: 'left', transition: 'all 100ms ease',
-            }}
-          >
-            <span style={{
-              width: 30, height: 30, borderRadius: 7,
-              background: `color-mix(in oklab, ${c} 18%, var(--t-panel-2))`,
-              border: `1px solid color-mix(in oklab, ${c} 45%, transparent)`,
-              color: c, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 900, fontSize: i.length > 1 ? 10.5 : 12.5,
-              letterSpacing: '-0.03em', flexShrink: 0,
-            }}>{i}</span>
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: on ? 700 : 500, color: on ? c : 'var(--t-fg-2)' }}>
-              {tm.name}
-            </span>
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)',
-              padding: '1px 5px', borderRadius: 3, background: 'var(--t-panel-2)',
-              border: '1px solid var(--t-border)', flexShrink: 0,
-            }}>
-              {tm.agent_ids?.length ?? 0}A
-            </span>
-          </button>
-        );
-      })}
-
-      {/* 兜底：teams 列表为空且 workspaces 也未加载时显示 workspace 名 */}
-      {workspaces.length === 0 && !teamsLoaded && (
-        <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--t-fg-4)', fontFamily: 'var(--font-mono)' }}>
-          ShadowFlow · Default
-        </div>
-      )}
-
-      <div style={{ borderTop: '1px solid var(--t-border)', marginTop: 4, paddingTop: 4 }}>
-        <button
-          type="button"
-          // workspace 和 team 合并语义后，"新建" 意为创建一个新团队。当前没有
-          // CreateTeamModal 易复用入口，先跳 /teams 走 TeamPage 的新建流程。
-          onClick={() => { setOpen(false); navigate('/teams'); }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
-            border: '1px solid transparent', background: 'transparent',
-            width: '100%', textAlign: 'left', color: 'var(--t-fg-4)', fontSize: 12,
-          }}
-        >
-          <span style={{
-            width: 20, height: 20, borderRadius: 5,
-            border: '1.5px dashed var(--t-border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, flexShrink: 0, color: 'var(--t-fg-5)',
-          }}>+</span>
-          {t('workspace.createTeam') || '新建团队'}
-        </button>
-      </div>
-    </div>
-  );
-
-  // ── Collapsed: icon-only, dropdown opens via portal to the right ─────────────
-  if (collapsed) {
-    return (
-      <div ref={wrapRef} style={{ position: 'relative' }}>
-        <div
-          ref={triggerRef}
-          data-testid="org-switcher-trigger"
-          onClick={handleClick}
-          title={displayName}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '3px 0' }}
-        >
-          <span style={{
-            width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 900, fontSize: init.length > 1 ? 10 : 13,
-            background: `color-mix(in oklab, ${color} 22%, var(--t-panel-2))`,
-            border: `1px solid color-mix(in oklab, ${color} 50%, transparent)`,
-            color: color, letterSpacing: '-0.03em',
-          }}>{init}</span>
-        </div>
-        {open && createPortal(dropdownContent, document.body)}
-      </div>
-    );
-  }
-
-  // ── Expanded: full card, dropdown inline (sidebar is wide enough) ────────────
   return (
-    <div ref={wrapRef} style={{ position: 'relative', width: '100%' }}>
-      <div
-        ref={triggerRef}
-        data-testid="org-switcher-trigger"
-        onClick={handleClick}
+    <div
+      style={{ padding: '12px 12px 10px', borderBottom: '1px solid var(--t-border)', position: 'relative' }}
+      ref={dropdownRef}
+    >
+      <button
+        onClick={() => setOpen((v) => !v)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '6px 9px', borderRadius: 8,
-          background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
-          cursor: 'pointer', width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          width: '100%',
+          padding: '8px 10px',
+          borderRadius: 8,
+          border: '1px solid var(--t-border)',
+          background: 'var(--t-panel-2)',
+          cursor: 'pointer',
+          textAlign: 'left',
         }}
       >
-        <span style={{
-          width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 900, fontSize: init.length > 1 ? 10 : 13,
-          background: `color-mix(in oklab, ${color} 22%, var(--t-panel-2))`,
-          border: `1px solid color-mix(in oklab, ${color} 50%, transparent)`,
-          color: color, letterSpacing: '-0.03em',
-        }}>{init}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {displayName}
-          </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {currentTeam
-              ? `${currentTeam.agent_ids.length} agents · ${current?.name ?? 'Workspace'}`
-              : current
-                ? `${current.agent_count} agents · ${current.team_count} teams`
-                : 'Workspace'}
-          </div>
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            flexShrink: 0,
+            background: 'var(--t-accent)',
+            color: '#fff',
+            display: 'grid',
+            placeItems: 'center',
+            fontWeight: 700,
+            fontSize: 15,
+          }}
+        >
+          {title.charAt(0)}
         </div>
-        <ChevronDown size={13} strokeWidth={2} style={{ color: 'var(--t-fg-4)', flexShrink: 0, transition: 'transform 150ms', transform: open ? 'rotate(180deg)' : 'none' }} />
-      </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--t-fg)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {title}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t-fg-4)' }}>{subtitle}</div>
+        </div>
+        <span style={{ fontSize: 10, color: 'var(--t-fg-4)' }}>▾</span>
+      </button>
 
-      {open && dropdownContent}
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 12,
+            right: 12,
+            zIndex: 50,
+            marginTop: 4,
+            background: 'var(--t-panel)',
+            border: '1px solid var(--t-border)',
+            borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(0,0,0,.18)',
+            overflow: 'hidden',
+            maxHeight: 380,
+            overflowY: 'auto',
+          }}
+        >
+          {/* ── 团队（= 公司）段 ───────────────────────────── */}
+          <div
+            style={{
+              padding: '7px 12px 4px',
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: '.06em',
+              textTransform: 'uppercase',
+              color: 'var(--t-fg-5)',
+            }}
+          >
+            {T('团队', 'Teams')}
+          </div>
+          {teams.length === 0 ? (
+            <div style={{ padding: '4px 12px 8px', fontSize: 12, color: 'var(--t-fg-4)' }}>
+              {T('当前工作区暂无团队', 'No teams in this workspace')}
+            </div>
+          ) : (
+            teams.map((tm) => (
+              <button
+                key={tm.team_id}
+                onClick={() => handlePickTeam(tm)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: 'none',
+                  background:
+                    tm.team_id === currentTeam?.team_id ? 'var(--t-panel-2)' : 'transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  color: 'var(--t-fg)',
+                }}
+              >
+                <span style={{ flex: 1, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {tm.name}
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--t-fg-5)' }}>
+                  {(tm.agent_ids ?? []).length}
+                </span>
+                {tm.team_id === currentTeam?.team_id && (
+                  <span style={{ fontSize: 10, color: 'var(--t-accent)' }}>✓</span>
+                )}
+              </button>
+            ))
+          )}
+
+          {/* ── 工作区段 ───────────────────────────────────── */}
+          {workspaces.length > 1 && (
+            <>
+              <div style={{ height: 1, background: 'var(--t-border)', margin: '4px 0' }} />
+              <div
+                style={{
+                  padding: '7px 12px 4px',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: '.06em',
+                  textTransform: 'uppercase',
+                  color: 'var(--t-fg-5)',
+                }}
+              >
+                {T('工作区', 'Workspaces')}
+              </div>
+              {workspaces.map((ws) => (
+                <button
+                  key={ws.workspace_id}
+                  onClick={() => {
+                    // switchTo 在 id 变化时会清空 currentTeam；上面的 effect 会
+                    // 按新 workspace 重拉 teams 并自动选第一个。
+                    switchTo(ws.workspace_id);
+                    setOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: 'none',
+                    background: ws.workspace_id === currentId ? 'var(--t-panel-2)' : 'transparent',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    color: 'var(--t-fg)',
+                  }}
+                >
+                  <span style={{ flex: 1, fontSize: 12.5 }}>{ws.name}</span>
+                  {ws.workspace_id === currentId && (
+                    <span style={{ fontSize: 10, color: 'var(--t-accent)' }}>✓</span>
+                  )}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
-
-/** @deprecated use WorkspaceSelector instead */
-export { WorkspaceSelector as WorkspaceStrip };
