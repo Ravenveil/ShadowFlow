@@ -1675,6 +1675,39 @@
   cursor: not-allowed;
 }
 
+/* Stream L 2026-05-28 · dr-comp 右下 0G synced 角标（v7 line 1559） */
+.drCompSyncRight {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.drCompSyncDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-ok, #10b981);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-ok, #10b981) 22%, transparent);
+}
+.drCompSyncText {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  color: var(--fg-4);
+  letter-spacing: 0.02em;
+}
+
+/* Stream L 2026-05-28 · dr-typing 行（thread 内 "—— Agent 正在输入 ⋯ ——" v7 line 1546） */
+.drTyping {
+  text-align: center;
+  padding: 4px 0 6px;
+}
+.drTyping span {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  color: var(--fg-5, var(--fg-4));
+  letter-spacing: 0.02em;
+}
+
 /* dr-doc · 文档列表（mock 阶段） */
 .drDocList {
   flex: 1;
@@ -2489,6 +2522,11 @@
   background: transparent;
   font: inherit;
   color: inherit;
+  /* 2026-05-29 修「脱框」：grid item 默认 min-width = min-content，长名字
+     （dev_engineer / 全栈开发）会撑大 cell 让总宽度超出 modal 380px。
+     min-width:0 让 1fr 真正能等分；min-width:0 + 配下面 gsetMNm/Role 的
+     overflow:hidden 让超长名字省略号截断而不撑爆。 */
+  min-width: 0;
 }
 .gsetM:hover {
   transform: translateY(-1px);
@@ -2549,6 +2587,11 @@
   line-height: 1.2;
   text-align: center;
   font-weight: 500;
+  /* 配合 .gsetM min-width:0：长名字省略号截断而非撑爆 grid */
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .gsetMRole {
   font-size: 9.5px;
@@ -2557,6 +2600,10 @@
   letter-spacing: 0.02em;
   line-height: 1.2;
   text-align: center;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* editable + toggle rows */
