@@ -14,6 +14,10 @@ export interface Message {
   sender_kind: string;
   content: string;
   timestamp: string;
+  /** 2026-05-29 · Stream M — 稳定消息 id + 反应/置顶（消息工具栏接后端）。 */
+  message_id?: string;
+  reactions?: Record<string, string[]>;
+  pinned?: boolean;
 }
 
 export interface GroupItem {

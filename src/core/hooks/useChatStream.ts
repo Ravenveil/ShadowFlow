@@ -125,9 +125,12 @@ function inboxRoleToChatRole(senderKind: string | undefined): ChatMessage['role'
 }
 
 function inboxToChat(item: InboxMessage, idx: number): ChatMessage {
-  // InboxMessage doesn't carry an id — synthesize a stable one based on idx + ts
+  // 2026-05-29 · Stream M — 优先用后端真实 message_id 当 id（reactions/pin 动作要靠
+  // 它定位消息）。老消息缺 message_id 时退回合成 id。
   const id =
-    (item as InboxMessage & { id?: string }).id ?? `gmsg-${item.timestamp}-${idx}`;
+    item.message_id ??
+    (item as InboxMessage & { id?: string }).id ??
+    `gmsg-${item.timestamp}-${idx}`;
   return {
     id,
     role: inboxRoleToChatRole(item.sender_kind),
@@ -135,6 +138,8 @@ function inboxToChat(item: InboxMessage, idx: number): ChatMessage {
     timestamp: item.timestamp,
     senderName: item.sender_name,
     senderGlyph: (item.sender_name ?? '?').charAt(0).toUpperCase(),
+    reactions: item.reactions,
+    pinned: item.pinned,
   };
 }
 

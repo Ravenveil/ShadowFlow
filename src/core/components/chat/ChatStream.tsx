@@ -82,6 +82,12 @@ export interface ChatMessage {
     excerpt?: string;
     location?: { file?: string; line?: number };
   }>;
+  /**
+   * Stream M 2026-05-29 · 消息级反应（emoji→user_id[]）+ 置顶标记。
+   * 由后端 /messages/{id}/reactions、/pin 持久化，useChatStream 透传。
+   */
+  reactions?: Record<string, string[]>;
+  pinned?: boolean;
 }
 
 export interface MessageBubbleProps {

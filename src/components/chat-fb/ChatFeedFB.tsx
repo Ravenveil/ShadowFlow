@@ -15,13 +15,30 @@
 
 import type { ChatMessage } from '../../core/components/chat/ChatStream';
 import styles from './chatFB.module.css';
+import { Pin } from 'lucide-react';
 import { MessageHoverToolbarFB } from './MessageHoverToolbarFB';
 import { TypingDotsFB } from './TypingDotsFB';
-import { MsgReactionsFB } from './MsgReactionsFB';
+import { MsgReactionsFB, type MsgReactionItem, type ReactionIconKey } from './MsgReactionsFB';
 import { SyscardFB, type SyscardKind } from './SyscardFB';
 import { InlineApprovalFB, type InlineApprovalStatus, type InlineApprovalChoice, type InlineApprovalMetric } from './InlineApprovalFB';
 import { IssueListFB } from './IssueListFB';
 import type { ReactNode } from 'react';
+
+// ─── Stream M 2026-05-29 · 后端 reactions(emoji→user[]) → MsgReactionItem[] ──────
+// auth 未落地，当前用户固定 'anonymous'（与后端 ReactionRequest 默认一致）。
+const CURRENT_USER = 'anonymous';
+const REACTION_ICON_KEYS: ReactionIconKey[] = ['thumbs-up', 'heart', 'flame', 'siren', 'bookmark', 'smile'];
+function toReactionItems(reactions?: Record<string, string[]>): MsgReactionItem[] {
+  if (!reactions) return [];
+  return Object.entries(reactions)
+    .filter(([, users]) => Array.isArray(users) && users.length > 0)
+    .map(([emoji, users]) => ({
+      id: emoji,
+      icon: (REACTION_ICON_KEYS.includes(emoji as ReactionIconKey) ? emoji : 'smile') as ReactionIconKey,
+      count: users.length,
+      picked: users.includes(CURRENT_USER),
+    }));
+}
 
 /** Stream H 2026-05-28 · 9 个 hover toolbar 动作 + system 卡的统一 action 类型。 */
 export type ChatFeedAction =
@@ -158,6 +175,11 @@ function AgentMsg({
             AGENT
           </span>
           {m.timestamp && <span className={styles.msgT}>{fmtTime(m.timestamp)}</span>}
+          {m.pinned && (
+            <span className={styles.msgT} title="已置顶" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: 'var(--t-accent)' }}>
+              <Pin size={10} strokeWidth={2} aria-hidden />置顶
+            </span>
+          )}
         </div>
         <div className={styles.msgText}>
           {renderWithMentions(m.content)}
@@ -183,7 +205,9 @@ function AgentMsg({
                   把下面的 mock 值换成 m.payload 里的真实数据。当前只有 onAddReaction
                   让用户能"点 +"触发空 toolbar，其他字段为空时组件返回 null 不渲染。 */}
         <MsgReactionsFB
+          reactions={toReactionItems(m.reactions)}
           onAddReaction={() => onAction('react', m.id)}
+          onToggleReaction={() => onAction('react', m.id)}
           onOpenThread={() => onAction('thread', m.id)}
         />
       </div>
@@ -225,6 +249,11 @@ function UserMsg({
       />
       <div className={styles.usermsgCol}>
         <div className={styles.usermsgHd}>
+          {m.pinned && (
+            <span className={styles.msgT} title="已置顶" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: 'var(--t-accent)' }}>
+              <Pin size={10} strokeWidth={2} aria-hidden />置顶
+            </span>
+          )}
           {m.timestamp && <span className={styles.msgT}>{fmtTime(m.timestamp)}</span>}
           <span className={styles.msgNm}>{m.senderName ?? '我'}</span>
         </div>
@@ -241,6 +270,12 @@ function UserMsg({
           </button>
         )}
         <div className={styles.usermsgBubble}>{renderWithMentions(m.content)}</div>
+        {m.reactions && Object.keys(m.reactions).length > 0 && (
+          <MsgReactionsFB
+            reactions={toReactionItems(m.reactions)}
+            onToggleReaction={() => onAction('react', m.id)}
+          />
+        )}
         {m.status && (
           <div className={styles.usermsgDelivered}>
             已送达{m.status === 'read' ? ' · 已读' : ''}

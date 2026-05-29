@@ -174,6 +174,12 @@ class MessageItem(BaseModel):
     # lets us query a thread via /api/groups/{gid}/messages/{mid}/thread.
     message_id: Optional[str] = None
     reply_to: Optional[str] = None
+    # Stream M 2026-05-29 — message-level actions (消息悬浮工具栏接后端).
+    #   reactions: emoji → [user_id]（去重；空 emoji 项会被删除）
+    #   pinned:    是否被置顶
+    # 老消息没有这两个字段时 Pydantic 用默认值，向后兼容。
+    reactions: Optional[Dict[str, List[str]]] = None
+    pinned: bool = False
 
 
 class PostMessageRequest(BaseModel):
@@ -389,6 +395,89 @@ async def post_group_message(
         background_tasks.add_task(dispatch_agent_reply, group_id)
 
     return MessageItem(**msg)
+
+
+# ---------------------------------------------------------------------------
+# Stream M 2026-05-29 — message-level actions: reactions + pin
+# （消息悬浮工具栏「反应」「Pin」接后端；翻译/AI改写/转发见批 2）
+# ---------------------------------------------------------------------------
+
+
+class ReactionRequest(BaseModel):
+    emoji: str = Field(..., min_length=1, max_length=16)
+    # auth 未落地前 user_id 走前端传入，默认 anonymous（与 user-settings 一致）
+    user_id: str = "anonymous"
+
+
+class PinRequest(BaseModel):
+    # None = toggle（不传就翻转）；显式 true/false = 直接设定
+    pinned: Optional[bool] = None
+
+
+def _message_not_found(message_id: str) -> HTTPException:
+    return HTTPException(
+        status_code=404,
+        detail={"error": {"code": "MESSAGE_NOT_FOUND", "message": f"Message {message_id!r} not found"}},
+    )
+
+
+def _find_message(rec: Dict[str, Any], message_id: str) -> Optional[Dict[str, Any]]:
+    for m in rec.get("messages", []):
+        if m.get("message_id") == message_id:
+            return m
+    return None
+
+
+@router.post("/api/groups/{group_id}/messages/{message_id}/reactions")
+@limiter.limit("120/minute")
+async def toggle_reaction(
+    request: Request, group_id: str, message_id: str, body: ReactionRequest
+) -> Dict[str, Any]:
+    """Toggle one emoji reaction by one user on a message.
+
+    Idempotent toggle: if the user already reacted with this emoji, the
+    reaction is removed; otherwise it is added. Empty emoji buckets are
+    pruned so the stored map stays clean.
+    """
+    rec = _load_group(group_id)
+    if rec is None:
+        raise _group_not_found(group_id)
+    target = _find_message(rec, message_id)
+    if target is None:
+        raise _message_not_found(message_id)
+
+    reactions: Dict[str, List[str]] = dict(target.get("reactions") or {})
+    users = list(reactions.get(body.emoji, []))
+    if body.user_id in users:
+        users.remove(body.user_id)
+    else:
+        users.append(body.user_id)
+    if users:
+        reactions[body.emoji] = users
+    else:
+        reactions.pop(body.emoji, None)
+    target["reactions"] = reactions
+    _save_group(rec)
+    return _envelope({"message_id": message_id, "reactions": reactions})
+
+
+@router.post("/api/groups/{group_id}/messages/{message_id}/pin")
+@limiter.limit("120/minute")
+async def pin_message(
+    request: Request, group_id: str, message_id: str, body: PinRequest
+) -> Dict[str, Any]:
+    """Pin or unpin a message. Body `pinned` omitted → toggle current state."""
+    rec = _load_group(group_id)
+    if rec is None:
+        raise _group_not_found(group_id)
+    target = _find_message(rec, message_id)
+    if target is None:
+        raise _message_not_found(message_id)
+
+    new_val = (not bool(target.get("pinned", False))) if body.pinned is None else body.pinned
+    target["pinned"] = new_val
+    _save_group(rec)
+    return _envelope({"message_id": message_id, "pinned": new_val})
 
 
 # ---------------------------------------------------------------------------

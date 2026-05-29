@@ -226,3 +226,48 @@ export async function postGroupMessage(
   }
   return (await res.json()) as Message;
 }
+
+// ── Stream M 2026-05-29 · 消息悬浮工具栏「反应」「Pin」接后端 ───────────────
+// 后端：POST /api/groups/{gid}/messages/{mid}/reactions  (toggle by user)
+//       POST /api/groups/{gid}/messages/{mid}/pin         (toggle / set)
+
+/** Toggle 一个 emoji 反应。返回该消息更新后的完整 reactions map（emoji→user[]）。 */
+export async function reactToMessage(
+  groupId: string,
+  messageId: string,
+  emoji: string,
+  userId = 'anonymous',
+): Promise<Record<string, string[]>> {
+  const res = await fetch(
+    `${getApiBase()}/api/groups/${groupId}/messages/${messageId}/reactions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emoji, user_id: userId }),
+    },
+  );
+  await _checkPythonStatus(res);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  return (json.data?.reactions ?? {}) as Record<string, string[]>;
+}
+
+/** Pin / unpin 一条消息。pinned 省略 = toggle。返回置顶后的新状态。 */
+export async function pinMessage(
+  groupId: string,
+  messageId: string,
+  pinned?: boolean,
+): Promise<boolean> {
+  const res = await fetch(
+    `${getApiBase()}/api/groups/${groupId}/messages/${messageId}/pin`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pinned === undefined ? {} : { pinned }),
+    },
+  );
+  await _checkPythonStatus(res);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  return Boolean(json.data?.pinned);
+}

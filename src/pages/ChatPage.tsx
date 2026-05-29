@@ -45,7 +45,7 @@ import { ChatFeedFB, type ChatFeedAction } from '../components/chat-fb/ChatFeedF
 import { ThreadDrawerFB, type ThreadSourceMessage } from '../components/chat-fb/ThreadDrawerFB';
 import FeedSearchbarFB, { type FeedSearchFilterKey } from '../components/chat-fb/FeedSearchbarFB';
 import GroupSettingsModalFB from '../components/chat-fb/GroupSettingsModalFB';
-import { postGroupMessage } from '../api/groupApi';
+import { postGroupMessage, reactToMessage, pinMessage } from '../api/groupApi';
 
 // ── Design token helpers ────────────────────────────────────────────────────
 const T = {
@@ -844,13 +844,29 @@ export default function ChatPage() {
       setComposer(prev => `> ${msg.senderName ?? 'Agent'}: ${msg.content.slice(0, 80)}\n${prev}`);
       return;
     }
-    if (action === 'translate' || action === 'rewrite' || action === 'forward' || action === 'pin' || action === 'react' || action === 'more') {
-      // TODO Stream H · 等后端 reactions / pin / rewrite 接口上线后接 API
-      // eslint-disable-next-line no-console
-      console.log(`[ChatPage] message action ${action} on ${messageId} — TODO 接 API`);
+    // Stream M 2026-05-29 · 反应 / 置顶已接后端（toggle 后重拉历史刷新 UI）。
+    if (action === 'react') {
+      if (!groupId) return;
+      // MVP：统一 toggle 一个 👍(thumbs-up)；后续接 emoji picker 传不同 key。
+      reactToMessage(groupId, messageId, 'thumbs-up')
+        .then(() => chatStream.refresh())
+        .catch(err => console.warn('[ChatPage] react 失败：', err));
       return;
     }
-  }, []);
+    if (action === 'pin') {
+      if (!groupId) return;
+      pinMessage(groupId, messageId)
+        .then(() => chatStream.refresh())
+        .catch(err => console.warn('[ChatPage] pin 失败：', err));
+      return;
+    }
+    if (action === 'translate' || action === 'rewrite' || action === 'forward' || action === 'more') {
+      // 批 2 TODO：翻译/AI改写走 BYOK LLM，转发需选目标群 UI。
+      // eslint-disable-next-line no-console
+      console.log(`[ChatPage] message action ${action} on ${messageId} — 批2 待接`);
+      return;
+    }
+  }, [groupId, chatStream]);
 
   // ── Stream H · ThreadDrawer onReplySubmit（POST 带 reply_to） ──────────────
   const handleReplySubmit = useCallback(
