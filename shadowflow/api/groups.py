@@ -444,6 +444,7 @@ async def post_group_message(
     x_llm_key: Optional[str] = Header(None, alias="X-LLM-Key"),
     x_llm_provider: Optional[str] = Header(None, alias="X-LLM-Provider"),
     x_llm_model: Optional[str] = Header(None, alias="X-LLM-Model"),
+    x_sf_no_dispatch: Optional[str] = Header(None, alias="X-SF-No-Dispatch"),
 ) -> MessageItem:
     """Append a message to a group's persisted message log.
 
@@ -463,6 +464,19 @@ async def post_group_message(
     group agent can reply using the key configured in the browser, not only a
     server-side env var. ``dispatch_agent_reply`` falls back to env keys when
     these are absent.
+
+    2026-05-29 (Node 接管) — ``X-SF-No-Dispatch`` header suppresses the Python
+    reply bridge. The Node gateway (``server/src/routes/groups-chat.ts``) now
+    intercepts this endpoint, persists the user message here with this header
+    set (so Python does NOT also reply — would double up), then generates the
+    agent reply via its own dispatcher (CLI/API) and POSTs it back here as a
+    ``sender_kind='agent'`` message. Direct (non-Node) callers omit the header
+    and keep the legacy Python bridge as a fallback.
+
+    SSE publish — agent/system messages are pushed onto the group's event bus
+    so the browser sees them in real time regardless of which process wrote
+    them (Python bridge OR Node gateway). User messages are NOT published (the
+    sender already shows them optimistically; publishing would echo-duplicate).
     """
     rec = _load_group(group_id)
     if rec is None:
@@ -484,9 +498,23 @@ async def post_group_message(
     rec["messages"] = messages
     _save_group(rec)
 
+    # Push agent/system messages onto the SSE bus so subscribed browsers see
+    # them live. Covers the Node-gateway path (Node writes agent replies here)
+    # AND any direct agent/system writer. User messages skip publish (the
+    # sender renders them optimistically; publishing would duplicate).
+    if body.sender_kind in ("agent", "system"):
+        try:
+            from shadowflow.api._group_events import publish_group_event  # noqa: PLC0415
+
+            event_type = "system.notice" if body.sender_kind == "system" else "agent.message"
+            publish_group_event(group_id, {"type": event_type, "data": msg})
+        except Exception:  # pragma: no cover — SSE push must never fail the write
+            pass
+
     # Stream C bridge: only dispatch on user-originated messages. Agent /
     # system messages should never trigger another agent reply (would loop).
-    if body.sender_kind == "user" and rec.get("agent_ids"):
+    # Skipped when X-SF-No-Dispatch is set — the Node gateway owns the reply.
+    if body.sender_kind == "user" and rec.get("agent_ids") and not x_sf_no_dispatch:
         from shadowflow.api._chat_bridge import (  # noqa: PLC0415
             build_byok_override,
             dispatch_agent_reply,

@@ -278,3 +278,69 @@ def test_group_events_subscribe_publish_unsubscribe():
     assert _group_events.subscriber_count("gx") == 0
     # publishing to a group with no subscribers is a no-op (no raise)
     _group_events.publish_group_event("gx", {"type": "agent.message", "data": {}})
+
+
+# ---------------------------------------------------------------------------
+# Node-gateway support (2026-05-29): X-SF-No-Dispatch suppress header + SSE
+# publish on agent/system writes via the HTTP endpoint.
+# ---------------------------------------------------------------------------
+
+
+def _post_message(group_id: str, **body):
+    """POST /api/groups/{id}/messages via TestClient; returns (resp, captured_events)."""
+    from fastapi.testclient import TestClient
+    from shadowflow.server import app
+
+    headers = body.pop("_headers", {})
+    q = _group_events.subscribe(group_id)
+    client = TestClient(app)
+    resp = client.post(f"/api/groups/{group_id}/messages", json=body, headers=headers)
+    events = []
+    while not q.empty():
+        events.append(q.get_nowait())
+    _group_events.unsubscribe(group_id, q)
+    return resp, events
+
+
+def test_user_message_no_dispatch_header_suppresses_python_bridge(monkeypatch, fake_llm):
+    """X-SF-No-Dispatch on a user message → Python persists but does NOT auto-reply
+    (the Node gateway owns the reply). Without the header the bridge fires."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")  # bridge would have a key
+    _make_agent("a1", "Alice", soul="s")
+    _make_group("g1", ["a1"], user_text="seed")
+
+    before = len(groups_mod._load_group("g1")["messages"])
+    resp, _ = _post_message(
+        "g1", content="hi", sender_name="user", sender_kind="user",
+        _headers={"X-SF-No-Dispatch": "1"},
+    )
+    assert resp.status_code == 201
+    # Only the user message was appended; no agent reply (dispatch suppressed).
+    msgs = groups_mod._load_group("g1")["messages"]
+    assert len(msgs) == before + 1
+    assert all(m.get("sender_kind") != "agent" for m in msgs[before:])
+
+
+def test_agent_message_publishes_sse_via_http(fake_llm):
+    """POSTing a sender_kind='agent' message publishes agent.message on the bus
+    (this is how the Node gateway's reply reaches the browser)."""
+    _make_agent("a1", "Alice", soul="s")
+    _make_group("g1", ["a1"])
+    resp, events = _post_message(
+        "g1", content="reply from node", sender_name="Alice", sender_kind="agent",
+    )
+    assert resp.status_code == 201
+    agent_events = [e for e in events if e["type"] == "agent.message"]
+    assert len(agent_events) == 1
+    assert agent_events[0]["data"]["content"] == "reply from node"
+
+
+def test_user_message_does_not_publish_sse(fake_llm):
+    """User messages are NOT published (sender shows them optimistically)."""
+    _make_agent("a1", "Alice", soul="s")
+    _make_group("g1", ["a1"])
+    _resp, events = _post_message(
+        "g1", content="hi", sender_name="user", sender_kind="user",
+        _headers={"X-SF-No-Dispatch": "1"},
+    )
+    assert [e for e in events if e["type"] == "agent.message"] == []
