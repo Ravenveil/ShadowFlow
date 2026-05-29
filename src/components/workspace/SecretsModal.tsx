@@ -1,15 +1,23 @@
 /**
  * SecretsModal — API Keys 管理面板
  *
- * 将 API Keys 存储在 localStorage('sf_secrets')。
- * 支持字段：zhipu_key, openai_key, claude_key, deepseek_key, backend_url
- * Ollama 本地运行无需 key，通过 backend_url 指向即可。
+ * 2026-05-29 — 统一 BYOK 存储：本组件改为读写 **B 套 KEY_STORAGE**（与设置页
+ * ApiKeySettings 同一份真相），不再写老的 `sf_secrets` JSON。claude↔anthropic
+ * 映射对齐 B 套；backend_url 走独立 key `sf_backend_url`。这样无论在弹窗还是设置
+ * 页配 key，chat/DM/群聊/run-session 都读得到同一份。详 memory/debt_byok_two_key_stores。
  */
 
 import React, { useState } from 'react';
 import { Key } from '../../common/icons/iconRegistry';
+import {
+  getStoredApiKey,
+  setStoredApiKey,
+  clearStoredApiKey,
+  getBackendUrl,
+  setBackendUrl,
+} from '../../api/_base';
 
-const STORAGE_KEY = 'sf_secrets';
+const DEFAULT_BACKEND_URL = 'http://localhost:8000';
 
 export interface SFSecrets {
   zhipu_key: string;
@@ -19,33 +27,30 @@ export interface SFSecrets {
   backend_url: string;
 }
 
-const DEFAULT_SECRETS: SFSecrets = {
-  zhipu_key: '',
-  openai_key: '',
-  claude_key: '',
-  deepseek_key: '',
-  backend_url: 'http://localhost:8000',
-};
-
+/** 从 B 套 KEY_STORAGE 读出本弹窗管理的 4 个 key + backend_url。
+ *  claude 字段映射 B 套 'anthropic'。 */
 export function useSecrets(): SFSecrets {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SECRETS };
-    const parsed = JSON.parse(raw) as Partial<SFSecrets>;
-    return {
-      zhipu_key:    parsed.zhipu_key    ?? DEFAULT_SECRETS.zhipu_key,
-      openai_key:   parsed.openai_key   ?? DEFAULT_SECRETS.openai_key,
-      claude_key:   parsed.claude_key   ?? DEFAULT_SECRETS.claude_key,
-      deepseek_key: parsed.deepseek_key ?? DEFAULT_SECRETS.deepseek_key,
-      backend_url:  parsed.backend_url  ?? DEFAULT_SECRETS.backend_url,
-    };
-  } catch {
-    return { ...DEFAULT_SECRETS };
-  }
+  return {
+    zhipu_key:    getStoredApiKey('zhipu') ?? '',
+    openai_key:   getStoredApiKey('openai') ?? '',
+    claude_key:   getStoredApiKey('anthropic') ?? '',
+    deepseek_key: getStoredApiKey('deepseek') ?? '',
+    backend_url:  getBackendUrl() ?? DEFAULT_BACKEND_URL,
+  };
 }
 
+/** 写回 B 套 KEY_STORAGE：空值清除该 provider 的 key。 */
 function saveSecrets(secrets: SFSecrets): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(secrets));
+  const writeKey = (val: string, pid: 'zhipu' | 'openai' | 'anthropic' | 'deepseek') => {
+    const v = val.trim();
+    if (v) setStoredApiKey(v, pid);
+    else clearStoredApiKey(pid);
+  };
+  writeKey(secrets.zhipu_key, 'zhipu');
+  writeKey(secrets.openai_key, 'openai');
+  writeKey(secrets.claude_key, 'anthropic');
+  writeKey(secrets.deepseek_key, 'deepseek');
+  setBackendUrl(secrets.backend_url);
 }
 
 const inputStyle: React.CSSProperties = {

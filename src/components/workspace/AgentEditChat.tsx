@@ -7,6 +7,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { FBIcons } from './FBAtoms';
 import { chatEditAgent, type AgentChatResponse } from '../../api/agents';
+import { getStoredApiKey, type ProviderId } from '../../api/_base';
 
 interface ChatMsg {
   id: number;
@@ -20,23 +21,10 @@ interface AgentEditChatProps {
   onAgentUpdated: () => void;
 }
 
-function getSecrets(): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem('sf_secrets') ?? '{}');
-  } catch {
-    return {};
-  }
-}
-
+// 2026-05-29 — 统一从 B 套 KEY_STORAGE 读 key（claude→anthropic 映射）。
 function getProviderKey(provider: string): string {
-  const secrets = getSecrets();
-  const map: Record<string, string> = {
-    zhipu: 'zhipu_key',
-    openai: 'openai_key',
-    claude: 'claude_key',
-    deepseek: 'deepseek_key',
-  };
-  return secrets[map[provider] ?? ''] ?? '';
+  const pid = (provider === 'claude' ? 'anthropic' : provider) as ProviderId;
+  return getStoredApiKey(pid) ?? '';
 }
 
 const PROVIDERS = ['zhipu', 'openai', 'claude', 'deepseek', 'ollama'] as const;

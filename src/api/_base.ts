@@ -30,7 +30,39 @@
  * Story 15.9 keeps working without a hook rewrite. Migrating GenerationSettings
  * to `useSetting` is tracked as a follow-up in 15.17 Dev Agent Record.
  */
+/**
+ * Backend URL 独立 localStorage key（2026-05-29 统一 BYOK 存储）。
+ * 此前 backend_url 只存在旧的 `sf_secrets` JSON 里（A 套）；统一到 B 套
+ * KEY_STORAGE 体系后，backend_url 作为独立 key 与各 provider key 并列。
+ * `getApiBase` 优先读它，并兼容回退到老 `sf_secrets.backend_url`（迁移过渡期）。
+ */
+export const BACKEND_URL_STORAGE = 'sf_backend_url';
+
+export function getBackendUrl(): string | null {
+  try {
+    const v = localStorage.getItem(BACKEND_URL_STORAGE);
+    if (v && v.trim()) return v.trim().replace(/\/$/, '');
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+export function setBackendUrl(url: string): void {
+  try {
+    const v = url.trim();
+    if (v) localStorage.setItem(BACKEND_URL_STORAGE, v);
+    else localStorage.removeItem(BACKEND_URL_STORAGE);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function getApiBase(): string {
+  // 1) 新独立 key（统一后的真相源）
+  const direct = getBackendUrl();
+  if (direct) return direct;
+  // 2) 兼容：老 sf_secrets.backend_url（迁移前的用户值）
   try {
     const raw = localStorage.getItem('sf_secrets');
     if (raw) {
@@ -46,6 +78,48 @@ export function getApiBase(): string {
   const envBase = (import.meta.env.VITE_API_BASE as string | undefined) ?? '';
   // Empty string → relative URLs → Vite proxy handles routing to backend
   return envBase.trim().replace(/\/$/, '');
+}
+
+/**
+ * 一次性把老的 `sf_secrets` JSON（A 套）迁移进 B 套 KEY_STORAGE，2026-05-29
+ * 统一 BYOK 存储。app 启动调一次（main.tsx）。规则：
+ *   - 4 个 provider key（zhipu/openai/claude/deepseek）→ setStoredApiKey
+ *     （claude→anthropic 映射）；**仅当 B 套对应位为空才搬**，不覆盖用户在
+ *     设置页已配的新值。
+ *   - backend_url → sf_backend_url（同样不覆盖已有）。
+ *   - 打标记 `sf_secrets_migrated_v1`，迁移一次后不再重复（幂等）。
+ * 老 sf_secrets 保留只读（不删），万一回退还能找回。
+ */
+const _MIGRATION_FLAG = 'sf_secrets_migrated_v1';
+
+export function migrateLegacySecrets(): void {
+  try {
+    if (localStorage.getItem(_MIGRATION_FLAG)) return;
+    const raw = localStorage.getItem('sf_secrets');
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      // provider key 映射：sf_secrets 字段名 → B 套 ProviderId
+      const map: Array<[string, ProviderId]> = [
+        ['zhipu_key', 'zhipu'],
+        ['openai_key', 'openai'],
+        ['claude_key', 'anthropic'],
+        ['deepseek_key', 'deepseek'],
+      ];
+      for (const [field, pid] of map) {
+        const val = parsed[field];
+        if (typeof val === 'string' && val.trim() && !getStoredApiKey(pid)) {
+          setStoredApiKey(val.trim(), pid);
+        }
+      }
+      const burl = parsed['backend_url'];
+      if (typeof burl === 'string' && burl.trim() && !getBackendUrl()) {
+        setBackendUrl(burl.trim());
+      }
+    }
+    localStorage.setItem(_MIGRATION_FLAG, '1');
+  } catch {
+    // 迁移失败不应阻塞 app 启动；下次仍会尝试（未打标记）
+  }
 }
 
 // ---------------------------------------------------------------------------

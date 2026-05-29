@@ -36,21 +36,20 @@ export interface ChatCompletionResponse {
 const _BYOK_PROVIDER_ORDER = ['claude', 'openai', 'deepseek', 'zhipu'] as const;
 
 /**
- * 读取某 chat-provider 的 key，**同时兼容两套 BYOK 存储**：
- *   1) sf_secrets.{provider}_key（SecretsModal 弹窗写的）
- *   2) _base.ts KEY_STORAGE（设置页 BYOK UI 写的，claude→sf_anthropic_key）
- * 这样无论用户在哪个 UI 配的 key，单聊 / 群聊都拿得到——修「明明配了 key 却
- * 401 NO_API_KEY」的前后端不一致。
+ * 读取某 chat-provider 的 key。2026-05-29 统一存储后 **B 套 KEY_STORAGE 是真相源**
+ * （SecretsModal + 设置页 ApiKeySettings 都写它），优先读；老 `sf_secrets.{p}_key`
+ * 仅作迁移过渡期的兼容回退（main.tsx 的 migrateLegacySecrets 已把老值搬进 B 套，
+ * 这条回退基本不会再命中，留着兜底未迁移的边角）。claude↔anthropic 映射。
  */
 function _readByokKey(provider: string, secrets: Record<string, string>): string {
-  const direct = secrets[`${provider}_key`];
-  if (direct) return direct;
   const baseId = (provider === 'claude' ? 'anthropic' : provider) as ProviderId;
   try {
-    return getStoredApiKey(baseId) ?? '';
+    const k = getStoredApiKey(baseId);
+    if (k) return k;
   } catch {
-    return '';
+    /* ignore */
   }
+  return secrets[`${provider}_key`] ?? '';
 }
 
 /**
