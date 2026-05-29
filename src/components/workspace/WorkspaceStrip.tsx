@@ -24,7 +24,9 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
   const { t } = useI18n();
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const currentId  = useWorkspaceStore((s) => s.currentId);
+  const currentTeam = useWorkspaceStore((s) => s.currentTeam);
   const switchTo   = useWorkspaceStore((s) => s.switchTo);
+  const setCurrentTeam = useWorkspaceStore((s) => s.setCurrentTeam);
   const fetchWs    = useWorkspaceStore((s) => s.fetchWorkspaces);
   const navigate   = useNavigate();
 
@@ -69,7 +71,9 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
   };
   const current = workspaces.find((w) => w.workspace_id === currentId) ?? workspaces[0];
   const color   = current?.color || 'var(--t-accent)';
-  const init    = current ? getInit(current.name) : 'Sh';
+  // 选了 team 就让触发器显示 team（名字 + 字头），否则显示 workspace。
+  const displayName = currentTeam?.name ?? current?.name ?? 'ShadowFlow';
+  const init    = getInit(displayName);
 
   function handleClick() {
     if (collapsed && triggerRef.current) {
@@ -110,20 +114,47 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
         </div>
       )}
 
+      {/* 已选 team 时给一行"显示全部会话" —— 复位 currentTeam，chat 回到 workspace
+          全量会话视图。否则用户选了 team 后没法退回看全部。 */}
+      {currentTeam && (
+        <button
+          type="button"
+          onClick={() => { setCurrentTeam(null); setOpen(false); }}
+          data-testid="workspace-dropdown-all"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
+            border: '1px solid transparent', background: 'transparent',
+            width: '100%', textAlign: 'left', color: 'var(--t-fg-4)', fontSize: 12,
+          }}
+        >
+          <span style={{
+            width: 30, height: 30, borderRadius: 7, flexShrink: 0,
+            background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Users size={13} strokeWidth={2} style={{ color: 'var(--t-fg-4)' }} />
+          </span>
+          <span style={{ flex: 1 }}>{t('workspace.allConversations') || '显示全部会话'}</span>
+        </button>
+      )}
+
       {teams.map((tm) => {
-        const on = tm.workspace_id === currentId;
+        const on = tm.team_id === currentTeam?.team_id;
         const c  = current?.color || 'var(--t-accent)';
         const i  = getInit(tm.name);
         return (
           <button
             key={tm.team_id}
             type="button"
-            // 不 navigate — 把 team 所属 ws 切过去，留在当前页。当前页的 useEffect
-            // 监听 currentWorkspaceId 变化会自动 refetch inbox / teams 数据。
+            // 选中 team = 设为 currentTeam（chat 据此过滤会话 + 显示成员）。
+            // 若该 team 属于别的 workspace，先把 workspace 切过去再设 team
+            // （switchTo 会清 currentTeam，所以顺序：先 switchTo 再 setCurrentTeam）。
             onClick={() => {
               if (tm.workspace_id && tm.workspace_id !== currentId) {
                 switchTo(tm.workspace_id);
               }
+              setCurrentTeam({ team_id: tm.team_id, name: tm.name, agent_ids: tm.agent_ids ?? [] });
               setOpen(false);
             }}
             data-testid={`workspace-dropdown-team-${tm.team_id}`}
@@ -197,7 +228,7 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
           ref={triggerRef}
           data-testid="org-switcher-trigger"
           onClick={handleClick}
-          title={current?.name ?? 'ShadowFlow'}
+          title={displayName}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '3px 0' }}
         >
           <span style={{
@@ -238,10 +269,14 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
         }}>{init}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {current?.name ?? 'ShadowFlow'}
+            {displayName}
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', marginTop: 1 }}>
-            {current ? `${current.agent_count} agents · ${current.team_count} teams` : 'Workspace'}
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {currentTeam
+              ? `${currentTeam.agent_ids.length} agents · ${current?.name ?? 'Workspace'}`
+              : current
+                ? `${current.agent_count} agents · ${current.team_count} teams`
+                : 'Workspace'}
           </div>
         </div>
         <ChevronDown size={13} strokeWidth={2} style={{ color: 'var(--t-fg-4)', flexShrink: 0, transition: 'transform 150ms', transform: open ? 'rotate(180deg)' : 'none' }} />

@@ -473,6 +473,9 @@
   "calendar.inlineErrorGeneric": "创建失败",
 
   "workspace.createWorkspace": "新建 Workspace",
+  "workspace.myTeams": "我的团队",
+  "workspace.createTeam": "新建团队",
+  "workspace.allConversations": "显示全部会话",
   "workspace.viewAll": "查看全部",
   "workspace.noTeams": "还没有 team",
   "workspace.fieldName": "名称",

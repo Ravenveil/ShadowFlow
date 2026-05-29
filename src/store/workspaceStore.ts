@@ -9,14 +9,28 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { listWorkspaces, WorkspaceSummary } from '../api/workspaces';
 
+/**
+ * 当前选中的 team。用户语义上 workspace=team 是一回事，但数据模型里 1 个
+ * workspace 可含多个 team。选中一个 team 后，chat 只显示该 team 的会话 + agent。
+ * agent_ids 一并存下来，刷新后无需重新 fetch 即可立即过滤。
+ */
+export interface CurrentTeam {
+  team_id: string;
+  name: string;
+  agent_ids: string[];
+}
+
 interface WorkspaceState {
   workspaces: WorkspaceSummary[];
   currentId: string | null;
+  /** null = 未选中任何 team（chat 显示当前 workspace 全部会话）。 */
+  currentTeam: CurrentTeam | null;
   loading: boolean;
   error: string | null;
 
   fetchWorkspaces: () => Promise<void>;
   switchTo: (id: string) => void;
+  setCurrentTeam: (team: CurrentTeam | null) => void;
   setWorkspaces: (ws: WorkspaceSummary[]) => void;
 }
 
@@ -25,6 +39,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     (set, get) => ({
       workspaces: [],
       currentId: null,
+      currentTeam: null,
       loading: false,
       error: null,
 
@@ -48,7 +63,13 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
 
       switchTo: (id: string) => {
-        set({ currentId: id });
+        // 切到不同 workspace 时清空当前 team —— team 属于旧 workspace，
+        // 留着会让 chat 用错 workspace 的 agent_ids 过滤。同 workspace 不清。
+        set((s) => (id === s.currentId ? { currentId: id } : { currentId: id, currentTeam: null }));
+      },
+
+      setCurrentTeam: (team: CurrentTeam | null) => {
+        set({ currentTeam: team });
       },
 
       setWorkspaces: (ws: WorkspaceSummary[]) => {
@@ -57,8 +78,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     }),
     {
       name: 'sf-workspace',
-      // Only persist currentId — workspace list is always re-fetched from API
-      partialize: (s) => ({ currentId: s.currentId }),
+      // Persist currentId + currentTeam so the team filter survives reload
+      // without a re-fetch. Workspace list itself is always re-fetched.
+      partialize: (s) => ({ currentId: s.currentId, currentTeam: s.currentTeam }),
     },
   ),
 );

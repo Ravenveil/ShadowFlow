@@ -44,6 +44,12 @@ export interface ConvHeaderFBProps {
   /** 任务数 badge */
   tasksCount?: number;
   /**
+   * 群真实成员（来自 group.agent_ids → AgentRecord 解析；查不到时 ChatPage
+   * 兜底全 workspace agents）。传入则替换 STUB_MEMBERS 渲染真实头像栈，
+   * 成员数也用真实长度。空/未传 → 回退老 stub（保持设计稿观感）。
+   */
+  members?: Array<{ id: string; name: string; avatarColor?: string }>;
+  /**
    * Stream J 2026-05-28 · ⋯ 按钮新行为：
    * 优先调用此 callback（一般打开 GroupSettingsModalFB）；如果没传则 fallback
    * 回退到原有的 9 项下拉菜单（round-1 B 的实现，标 deprecated 保留）。
@@ -60,6 +66,15 @@ const STUB_MEMBERS: Array<{ ch: string; color: string; fg: string }> = [
   { ch: '写', color: '#EF4444', fg: '#B91C1C' },
   { ch: '审', color: '#10B981', fg: '#059669' },
 ];
+
+// ChatPage 用 'b'|'r'|'g'|'p'|'o' 5 色给成员上色（hashColor）；这里映射回 hex。
+const MEMBER_COLOR: Record<string, { color: string; fg: string }> = {
+  b: { color: '#3B82F6', fg: '#2563EB' },
+  r: { color: '#EF4444', fg: '#B91C1C' },
+  g: { color: '#10B981', fg: '#059669' },
+  p: { color: '#A855F7', fg: '#7C3AED' },
+  o: { color: '#F59E0B', fg: '#B45309' },
+};
 
 interface MenuItemDef {
   key: string;
@@ -101,6 +116,7 @@ export default function ConvHeaderFB({
   onDagClick,
   threadOpen = false,
   tasksCount,
+  members,
   onMoreClick,
 }: ConvHeaderFBProps) {
   // missing-key 回退到中文 fb（useI18n 未命中时返回 key 本身）
@@ -144,9 +160,13 @@ export default function ConvHeaderFB({
     setMenuOpen(false);
   };
 
-  const members = group?.metrics?.members ?? 0;
+  // 真实成员优先；为空回退到老 stub（设计稿观感）。成员数同理。
+  const realMembers = members ?? [];
+  const useReal = realMembers.length > 0;
+  const memberCount = useReal ? realMembers.length : (group?.metrics?.members ?? 0);
   const runCount = group?.metrics?.activeRuns ?? 0;
   const taskN = tasksCount ?? 5;
+  const MAX_AV = 6; // 头像栈最多显示几个，多出折叠为 +N
 
   return (
     <div className={styles.hdr}>
@@ -162,11 +182,11 @@ export default function ConvHeaderFB({
           {group && (
             <>
               <span className={styles.hdrMeta}>
-                · {tr('chat.memberCount', `${members} 人`, { count: members })}
+                · {tr('chat.memberCount', `${memberCount} 人`, { count: memberCount })}
               </span>
               <span className={`${styles.hdrDot} ${styles.hdrDotOk}`} />
               <span className={styles.hdrMeta}>
-                {Math.max(0, members - 1)} 在线
+                {Math.max(0, memberCount - 1)} 在线
               </span>
               {isRunning && (
                 <span className={styles.pillLive}>
@@ -181,22 +201,54 @@ export default function ConvHeaderFB({
         {group && (
           <div className={styles.hdrSubline}>
             <span className={styles.avStack}>
-              {STUB_MEMBERS.map((m, i) => (
+              {useReal
+                ? realMembers.slice(0, MAX_AV).map((m, i) => {
+                    const pal = MEMBER_COLOR[m.avatarColor ?? 'b'] ?? MEMBER_COLOR.b;
+                    const ch = Array.from(m.name.trim())[0] ?? '?';
+                    return (
+                      <span
+                        key={m.id || i}
+                        className={styles.avMini}
+                        title={m.name}
+                        style={{
+                          background: `color-mix(in oklab, ${pal.color} 14%, var(--skin-panel))`,
+                          borderColor: `color-mix(in oklab, ${pal.color} 35%, transparent)`,
+                          color: pal.fg,
+                        }}
+                      >
+                        {ch}
+                      </span>
+                    );
+                  })
+                : STUB_MEMBERS.map((m, i) => (
+                    <span
+                      key={i}
+                      className={styles.avMini}
+                      style={{
+                        background: `color-mix(in oklab, ${m.color} 14%, var(--skin-panel))`,
+                        borderColor: `color-mix(in oklab, ${m.color} 35%, transparent)`,
+                        color: m.fg,
+                      }}
+                    >
+                      {m.ch}
+                    </span>
+                  ))}
+              {useReal && realMembers.length > MAX_AV && (
                 <span
-                  key={i}
                   className={styles.avMini}
+                  title={`+${realMembers.length - MAX_AV}`}
                   style={{
-                    background: `color-mix(in oklab, ${m.color} 14%, var(--skin-panel))`,
-                    borderColor: `color-mix(in oklab, ${m.color} 35%, transparent)`,
-                    color: m.fg,
+                    background: 'var(--skin-panel-2, var(--t-panel-2))',
+                    borderColor: 'var(--t-border)',
+                    color: 'var(--t-fg-4)',
                   }}
                 >
-                  {m.ch}
+                  +{realMembers.length - MAX_AV}
                 </span>
-              ))}
+              )}
             </span>
             <span>
-              started 09:14 · run {runCount > 0 ? `${runCount}m` : '--'}
+              {runCount > 0 ? `run ${runCount}m` : `${memberCount} agents`}
             </span>
           </div>
         )}

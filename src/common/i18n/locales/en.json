@@ -473,6 +473,9 @@
   "calendar.inlineErrorGeneric": "Create failed",
 
   "workspace.createWorkspace": "New workspace",
+  "workspace.myTeams": "My teams",
+  "workspace.createTeam": "New team",
+  "workspace.allConversations": "All conversations",
   "workspace.viewAll": "View all",
   "workspace.noTeams": "No team yet",
   "workspace.fieldName": "Name",

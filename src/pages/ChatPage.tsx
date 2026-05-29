@@ -10,7 +10,7 @@
  *  - ChatDrawer Brief → BriefBoardView
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Users, Hash, Lock,
@@ -549,6 +549,18 @@ export default function ChatPage() {
   const agentDMs = useInboxStore(s => s.agentDMs);
   const fetchWorkspaceInbox = useInboxStore(s => s.fetchWorkspaceInbox);
   const currentWorkspaceId = useWorkspaceStore(s => s.currentId);
+  const currentTeam = useWorkspaceStore(s => s.currentTeam);
+
+  // 选了 team 时只显示该 team 的会话：group.agent_ids 与 team.agent_ids 有交集即归属。
+  // 未选 team（currentTeam 为空）→ 显示当前 workspace 全部会话（老行为）。
+  // 老群可能没有 agent_ids，会被过滤掉——这是预期：它们不属于任何 team，
+  // 用户可通过下拉「显示全部会话」复位查看。
+  const teamGroups = useMemo(() => {
+    const ids = currentTeam?.agent_ids ?? [];
+    if (ids.length === 0) return groups;
+    const teamSet = new Set(ids);
+    return groups.filter(g => (g.agent_ids ?? []).some(id => teamSet.has(id)));
+  }, [groups, currentTeam]);
   // Workspace-driven inbox fetch — pulls groups created by run-session
   // auto-save and any other ad-hoc groups so they appear in the rail.
   // Previously /chat only saw template-roster groups, leaving the rail
@@ -565,17 +577,19 @@ export default function ChatPage() {
   // 依赖 groups —— 等列表实际加载完才决断，避免初始空数组就乱跳。
   useEffect(() => {
     if (groupId) return;
-    if (groups.length === 0) return;
+    // auto-pick 限定在当前 team 的会话内（teamGroups），避免跳到 team 外的会话。
+    // team 内无会话则留空（不强跳）。
+    if (teamGroups.length === 0) return;
     let target: string | null = null;
     try {
       const last = typeof localStorage !== 'undefined' ? localStorage.getItem('sf.chat.lastGroupId') : null;
-      if (last && groups.some(g => g.id === last)) target = last;
+      if (last && teamGroups.some(g => g.id === last)) target = last;
     } catch {
       // localStorage 不可用就直接走 fallback
     }
-    if (!target) target = groups[0].id;
+    if (!target) target = teamGroups[0].id;
     navigate(`/chat/${target}`, { replace: true });
-  }, [groupId, groups, navigate]);
+  }, [groupId, teamGroups, navigate]);
 
   // 用户切换会话时把 groupId 存进 lastGroupId（包括 InboxPanel 点击 + URL 直接打开）
   useEffect(() => {
@@ -890,7 +904,7 @@ export default function ChatPage() {
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* Stream D · FB-HiFi InboxPanel — chat-fb.html 行 878-1014 */}
         <InboxPanelFB
-          groups={groups}
+          groups={teamGroups}
           groupId={groupId}
           agentDMs={agentDMs}
           onGroup={id => navigate(`/chat/${id}`)}
@@ -920,6 +934,7 @@ export default function ChatPage() {
               group={group}
               isRunning={isRunning}
               t={t}
+              members={settingsMembers}
               threadOpen={threadDrawerOpen}
               tasksCount={metrics.pendingApprovalsCount}
               onThreadToggle={() => setThreadDrawerOpen(p => !p)}
@@ -1046,6 +1061,10 @@ export default function ChatPage() {
             }}
             sourceMessage={threadSourceMsg ?? undefined}
             onReplySubmit={threadSourceMsg ? handleReplySubmit : undefined}
+            // Stream L 2026-05-28 · dr-typing + 0G synced 角标
+            typingAgentName={chatStream.loading ? typingAgentName : undefined}
+            // TODO: 0G txHash 现在还没接，先展示 synced 但隐藏 hash 部分
+            syncStatus={{ synced: true }}
           />
         )}
       </div>

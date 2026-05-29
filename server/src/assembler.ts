@@ -107,6 +107,7 @@ function buildBlueprintYaml(
   outputType: OutputType,
   mode: SessionMode,
   agents: AgentDef[],
+  teamName?: string,
 ): string {
   const agentsYaml = agents
     .map(a => [
@@ -122,10 +123,14 @@ function buildBlueprintYaml(
     ? agents.slice(1).map(a => `  - {from: ${agents[0].node_id}, to: ${a.node_id}}`).join('\n')
     : '  []';
 
+  // `name:` 行供前端 extractYamlTeamName 命中（LLM 起的团队名）。为空时省略，
+  // 让前端走 goal 文本兜底。
+  const safeName = (teamName ?? '').replace(/"/g, '\\"').trim();
   return [
     `# ShadowFlow Blueprint`,
     `# Generated session: ${sessionId}`,
     `version: "1.0"`,
+    ...(safeName ? [`name: "${safeName}"`] : []),
     `session_id: "${sessionId}"`,
     `output_type: "${outputType}"`,
     `mode: "${mode}"`,
@@ -176,6 +181,7 @@ export async function* runAssembler(opts: AssemblerOptions): AsyncGenerator<SseE
   let agents: AgentDef[];
   let confidence: number;
   let complexity: number;
+  let teamName: string;
 
   const resolvedKey = anthropic_key || process.env.ANTHROPIC_API_KEY;
 
@@ -198,6 +204,7 @@ Respond with ONLY a valid JSON object (no markdown, no explanation):
   "mode": "single|team",
   "confidence": 0.0-1.0,
   "complexity": 0.0-1.0,
+  "team_name": "中文团队名 (4-12 字)",
   "agents": [
     {
       "node_id": "snake_case_id",
@@ -218,6 +225,8 @@ Rules:
 - Choose mode based on task complexity
 - All text fields in Chinese
 - chips array: exactly 2-3 items
+- team_name: 概括这个团队的职责的简洁中文名 (4-12 字)，例如 "全栈开发小队"、"市场调研团队"。
+  不要直接照抄用户的原始 goal 文本，也不要用某个成员的名字当团队名。
 `;
 
   const message = await client.messages.create({
@@ -235,6 +244,7 @@ Rules:
     mode: SessionMode;
     confidence: number;
     complexity: number;
+    team_name?: string;
     agents: AgentDef[];
   };
 
@@ -243,6 +253,9 @@ Rules:
   confidence = Math.min(1, Math.max(0, parsed.confidence ?? 0.85));
   complexity = Math.min(1, Math.max(0, parsed.complexity ?? 0.5));
   agents = parsed.agents ?? [];
+  // LLM 起的团队名 —— 写进 blueprint YAML 的 `name:` 行，前端 RunSessionPage
+  // extractYamlTeamName 据此命名 team（而非照抄 goal 文本）。
+  teamName = typeof parsed.team_name === 'string' ? parsed.team_name.trim() : '';
 
   yield { event: 'assemble', data: { step: STEP_NAMES[0], status: 'done', elapsed_ms: Date.now() - startMs } };
 
@@ -297,7 +310,7 @@ Rules:
   // ── Step 4: 设置工具集 (emit YAML blueprint — YAML 自带 tools 列) ──
   yield { event: 'assemble', data: { step: STEP_NAMES[3], status: 'running' } };
   await sleep(jitter(STEP_DELAYS[3][0], STEP_DELAYS[3][1]));
-  const blueprintYaml = buildBlueprintYaml(session_id, goal, outputType, mode, agents);
+  const blueprintYaml = buildBlueprintYaml(session_id, goal, outputType, mode, agents, teamName);
   const blueprintFilename = `blueprint-${session_id.slice(0, 8)}.yaml`;
   yield { event: 'blueprint', data: { yaml: blueprintYaml, filename: blueprintFilename } };
   yield { event: 'assemble', data: { step: STEP_NAMES[3], status: 'done', elapsed_ms: Date.now() - startMs } };

@@ -40,6 +40,16 @@ export interface ThreadDrawerFBProps {
   onReplySubmit?: (text: string, postToMain: boolean) => Promise<void>;
   t?: (k: string, opts?: Record<string, unknown>) => string;
   onClose?: () => void;
+  /**
+   * Stream L 2026-05-28 · 当某个 agent 正在 thread 内输入时填它名字。
+   * 传 undefined / 空字符串则不显示 dr-typing 行（设计稿 v7 line 1546）。
+   */
+  typingAgentName?: string;
+  /**
+   * Stream L 2026-05-28 · 0G 同步状态显示在 dr-comp 右下（v7 line 1559）。
+   * 不传则隐藏角标。传 { synced: true, txHash: "0x3f7a…bc91" } 显示绿点 + mono 文本。
+   */
+  syncStatus?: { synced: boolean; txHash?: string };
 }
 
 const PALETTE: Array<{ accent: string; ink: string }> = [
@@ -113,6 +123,8 @@ export function ThreadDrawerFB({
   onReplySubmit,
   t,
   onClose,
+  typingAgentName,
+  syncStatus,
 }: ThreadDrawerFBProps) {
   const tr = (k: string, fb: string) => {
     if (!t) return fb;
@@ -295,6 +307,19 @@ export function ThreadDrawerFB({
             </>
           )}
 
+          {/* Stream L 2026-05-28 — dr-typing 行 (v7 line 1546)
+              当 typingAgentName 在场时显示「—— Agent 正在输入 ⋯ ——」（mono 9px，置中） */}
+          {typingAgentName && (
+            <div className={styles.drTyping}>
+              <span>
+                {tr(
+                  'chat.threadTyping',
+                  `—— ${typingAgentName} 正在输入 ⋯ ——`,
+                )}
+              </span>
+            </div>
+          )}
+
           {/* Stream G — dr-comp 底部 mini composer */}
           {groupId && onReplySubmit && (
             <div className={styles.drComp}>
@@ -322,6 +347,17 @@ export function ThreadDrawerFB({
                   />
                   <span>{tr('chat.alsoPostToMain', '同时发到主频道')}</span>
                 </label>
+                {/* Stream L 2026-05-28 — 0G synced 角标 (v7 line 1559)
+                    syncStatus 不传时此 span 完全不渲染 */}
+                {syncStatus && (
+                  <span className={styles.drCompSyncRight}>
+                    {syncStatus.synced && <span className={styles.drCompSyncDot} aria-hidden />}
+                    <span className={styles.drCompSyncText}>
+                      {syncStatus.synced ? '0G synced' : '0G pending'}
+                      {syncStatus.txHash ? ` · ${syncStatus.txHash}` : ''}
+                    </span>
+                  </span>
+                )}
                 <button
                   className={styles.drCompSend}
                   type="button"
