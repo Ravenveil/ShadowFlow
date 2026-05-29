@@ -194,6 +194,28 @@ export async function getGroup(groupId: string): Promise<GroupRecord | null> {
   return (json.data ?? json) as GroupRecord;
 }
 
+/**
+ * 2026-05-29 · 单聊 = conversation 模型（kind='dm'）。点 agent 时 find-or-create
+ * 该 agent 的 DM conversation，返回其 group_id。前端拿到后用 group 模式
+ * useChatStream 发消息 —— 单聊底层复用群聊整套（持久化 + 回复桥 + SSE 实时回复
+ * + 刷新不丢）。DM conversation 不出现在群列表（后端 list 默认排除 kind='dm'）。
+ */
+export async function resolveDmConversation(
+  agentId: string,
+  workspaceId?: string | null,
+): Promise<string | null> {
+  const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+  const res = await fetch(
+    `${getApiBase()}/api/chat/dm/${encodeURIComponent(agentId)}/resolve${qs}`,
+    { method: 'POST' },
+  );
+  await _checkPythonStatus(res);
+  if (!res.ok) return null;
+  const json = await res.json().catch(() => null);
+  if (!json) return null;
+  return (json.data?.group_id ?? json.group_id ?? null) as string | null;
+}
+
 export async function patchGroup(
   groupId: string,
   body: PatchGroupRequest,

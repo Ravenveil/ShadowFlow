@@ -28,7 +28,7 @@ import { listSchedules, type Schedule } from '../api/schedules';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { getTemplate } from '../api/templates';
 import { buildChatBuilderUrl } from '../core/utils/builderNavigation';
-import { fetchRecentMessages, patchGroup, getGroup } from '../api/groupApi';
+import { fetchRecentMessages, patchGroup, getGroup, resolveDmConversation } from '../api/groupApi';
 import { getTeam } from '../api/teams';
 import { listAgents, type AgentRecord } from '../api/agents';
 import PythonBackendBanner from '../components/PythonBackendBanner';
@@ -683,24 +683,47 @@ export default function ChatPage() {
   // 点左侧 agent 不再整页跳到 /agent-dm（会丢掉左侧列表 + 框架）；改为留在 chat
   // 页内，只把中间栏从群聊换成与该 agent 的单聊。dmStream 走 dm 模式（BYOK
   // /api/chat/completions，soul 注入）。dmAgentId=null 时回到群聊视图。
-  const [dmAgentId, setDmAgentId] = useState<string | null>(null);
+  // 2026-05-29 — 单聊 = conversation 模型（kind='dm'）。点 agent 时先 resolve 出
+  // 该 agent 的 DM conversation（一条 kind='dm' 的 group 记录），dmStream 用
+  // group 模式跑 —— 单聊底层复用群聊整套：持久化 + dispatch_agent_reply 回复桥
+  // + SSE 实时回复 + 刷新不丢。UI 不变（仍是下方那套内嵌单聊视图）。
+  const [dmAgentId, setDmAgentId] = useState<string | null>(null);   // 当前单聊的 agent
+  const [dmGroupId, setDmGroupId] = useState<string | null>(null);   // resolve 出的 conversation id
   const [dmComposer, setDmComposer] = useState('');
-  const dmStream = useChatStream({ mode: 'dm', targetId: dmAgentId });
+  const dmStream = useChatStream({ mode: 'group', targetId: dmGroupId, sseChannel: 'group' });
   const dmAgent = useMemo(
     () => agentDMs.find(d => d.agentId === dmAgentId) ?? null,
     [agentDMs, dmAgentId],
   );
+  // 点 agent：resolve DM conversation → 设 dmGroupId（dmStream 据此加载历史+订阅）。
+  const openDm = useCallback(
+    async (agentId: string) => {
+      setDmAgentId(agentId);
+      setDmGroupId(null); // 先清空，避免显示上一个 agent 的历史
+      try {
+        const gid = await resolveDmConversation(agentId, currentWorkspaceId);
+        setDmGroupId(gid);
+      } catch (err) {
+        console.warn('[ChatPage] resolve DM conversation failed:', err);
+      }
+    },
+    [currentWorkspaceId],
+  );
+  const closeDm = useCallback(() => {
+    setDmAgentId(null);
+    setDmGroupId(null);
+  }, []);
   const handleDmSend = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || !dmAgentId) return;
+      if (!trimmed || !dmGroupId) return;
       try {
         await dmStream.send(trimmed);
       } catch (err) {
         console.warn('[ChatPage] dm send failed:', err);
       }
     },
-    [dmStream, dmAgentId],
+    [dmStream, dmGroupId],
   );
 
 
@@ -1007,8 +1030,8 @@ export default function ChatPage() {
           groupId={dmAgentId ? undefined : groupId}
           agentDMs={teamAgentDMs}
           dmId={dmAgentId ?? undefined}
-          onGroup={id => { setDmAgentId(null); navigate(`/chat/${id}`); }}
-          onDm={id => setDmAgentId(id)}
+          onGroup={id => { closeDm(); navigate(`/chat/${id}`); }}
+          onDm={id => void openDm(id)}
           i18n={{
             searchPlaceholder: t('chat.searchJump'),
             filterAll: t('chat.filterAll'),

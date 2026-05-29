@@ -102,12 +102,24 @@ def _load_group(group_id: str) -> Optional[Dict[str, Any]]:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def _list_groups_records(workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def _list_groups_records(
+    workspace_id: Optional[str] = None,
+    kinds: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """List group/conversation records.
+
+    2026-05-29 — conversation 模型：每条记录有 kind（'group' | 'dm'）。默认只返回
+    kind='group'（DM 是单聊，不该出现在群列表）。``kinds`` 显式传入时按它过滤
+    （DM resolve 端点传 ['dm']）。老记录无 kind 字段 → 视为 'group'（向后兼容）。
+    """
+    allow = set(kinds) if kinds is not None else {"group"}
     d = _groups_dir()
     records: List[Dict[str, Any]] = []
     for p in sorted(d.glob("*.json")):
         try:
             rec = json.loads(p.read_text(encoding="utf-8"))
+            if (rec.get("kind") or "group") not in allow:
+                continue
             if workspace_id is None:
                 records.append(rec)
             else:
@@ -125,10 +137,14 @@ def _list_groups_records(workspace_id: Optional[str] = None) -> List[Dict[str, A
     return records
 
 
-def list_groups(workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_groups(
+    workspace_id: Optional[str] = None,
+    kinds: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
     """Public helper used by shadowflow.api.inbox to aggregate groups into
-    the chat inbox view. Returns raw records — callers can reshape."""
-    return _list_groups_records(workspace_id)
+    the chat inbox view. Returns raw records — callers can reshape.
+    Default excludes DM conversations (kind='dm')."""
+    return _list_groups_records(workspace_id, kinds)
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +163,9 @@ class CreateGroupRequest(BaseModel):
     policy_matrix: Dict[str, Any] = Field(default_factory=dict)
     workspace_id: Optional[str] = None
     team_id: Optional[str] = None
+    # 2026-05-29 — conversation kind：'group'（群聊）| 'dm'（单聊）。DM 不显示在
+    # 群列表，但底层复用同一存储 + 回复桥（dispatch_agent_reply 对 N=1 即单聊）。
+    kind: str = "group"
 
     @field_validator("policy_matrix")
     @classmethod
@@ -240,6 +259,7 @@ async def create_group(request: Request, body: CreateGroupRequest) -> GroupRespo
         "policy_matrix": body.policy_matrix,
         "workspace_id": body.workspace_id,
         "team_id": body.team_id,
+        "kind": body.kind or "group",
         "created_at": created_at,
         "messages": [],
     }
@@ -254,6 +274,72 @@ async def create_group(request: Request, body: CreateGroupRequest) -> GroupRespo
         workspace_id=body.workspace_id,
         team_id=body.team_id,
     )
+
+
+# ---------------------------------------------------------------------------
+# DM conversation — find-or-create（2026-05-29）
+# 单聊 = kind='dm' 且 agent_ids 恰 1 个的 conversation。前端点 agent 时先 resolve
+# 拿到 conversation id，再用 group 模式（同一持久化 + dispatch_agent_reply 回复桥
+# + SSE）发消息。DM 不出现在群列表（_list_groups_records 默认排除 kind='dm'）。
+# ---------------------------------------------------------------------------
+
+
+class DmResolveResponse(BaseModel):
+    group_id: str
+    agent_id: str
+    created: bool
+
+
+@router.post("/api/chat/dm/{agent_id}/resolve", response_model=DmResolveResponse)
+@limiter.limit("60/minute")
+async def resolve_dm_conversation(
+    request: Request,
+    agent_id: str,
+    workspace_id: Optional[str] = Query(default=None),
+) -> DmResolveResponse:
+    """Find-or-create the DM conversation for (workspace_id, agent_id).
+
+    Idempotent: returns the existing kind='dm' conversation whose single member
+    is ``agent_id`` in this workspace, or creates one. The returned ``group_id``
+    is then used by the frontend exactly like a group conversation.
+    """
+    # 找已有 DM conversation（同 workspace + 单成员是该 agent）。
+    for rec in _list_groups_records(workspace_id, kinds=["dm"]):
+        ids = rec.get("agent_ids") or []
+        if len(ids) == 1 and ids[0] == agent_id:
+            return DmResolveResponse(
+                group_id=rec.get("group_id", ""), agent_id=agent_id, created=False
+            )
+
+    # 没有就建一条。name 取 agent 名（拿不到就用 id），方便 header 显示。
+    agent_name = agent_id
+    try:
+        from shadowflow.api._chat_bridge import _load_agent_record  # noqa: PLC0415
+
+        arec = _load_agent_record(agent_id)
+        if arec and arec.get("name"):
+            agent_name = arec["name"]
+    except Exception:
+        pass
+
+    group_id = uuid4().hex
+    created_at = datetime.now(timezone.utc).isoformat()
+    record: Dict[str, Any] = {
+        "group_id": group_id,
+        "name": agent_name,
+        "template_id": "",
+        "group_template_id": "",
+        "agent_ids": [agent_id],
+        "member_emails": [],
+        "policy_matrix": {},
+        "workspace_id": workspace_id,
+        "team_id": None,
+        "kind": "dm",
+        "created_at": created_at,
+        "messages": [],
+    }
+    _save_group(record)
+    return DmResolveResponse(group_id=group_id, agent_id=agent_id, created=True)
 
 
 @router.get("/api/groups")
