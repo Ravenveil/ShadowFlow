@@ -17,6 +17,7 @@ import exportRouter from './routes/export';
 import settingsRouter from './routes/settings';
 import cliRouter from './routes/cli';
 import acpRouter from './routes/acp';
+import { groupsChatRouter } from './routes/groups-chat';
 // Story 15.14 — POST /api/artifacts/lint
 import artifactsRouter from './routes/artifacts';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
