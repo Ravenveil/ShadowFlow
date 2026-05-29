@@ -7,8 +7,8 @@
  * useful. Fix: when not editing, display `savedState.apiKey` (the masked tail)
  * so the toggle reveals the last-4 chars.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render as rawRender, screen } from '@testing-library/react';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render as rawRender, screen, fireEvent } from '@testing-library/react';
 import { I18nProvider } from '../../../common/i18n';
 import { ByokSection } from './ByokSection';
 
@@ -16,11 +16,15 @@ const render: typeof rawRender = (ui, options) =>
   rawRender(<I18nProvider defaultLanguage="zh">{ui}</I18nProvider>, options);
 
 const MASKED = '••••sk12'; // what settings.ts maskApiKey('...sk12') returns
+const FULL = 'sk-ant-api03-REALKEY-sk12'; // plaintext returned by /reveal
 
-/** Mock the two GETs ByokSection fires on mount. `savedKey` empty → no key. */
-function mockFetch(savedKey: string) {
+/** Mock the GETs ByokSection fires. `savedKey` empty → no key configured. */
+function mockFetch(savedKey: string, fullKey = FULL) {
   return vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
+    if (url.endsWith('/api/settings/byok/anthropic/reveal')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ apiKey: fullKey }) } as Response);
+    }
     if (url.endsWith('/api/settings/byok')) {
       const providers = savedKey
         ? { anthropic: { apiKey: savedKey, baseUrl: '', models: [], enabled: true } }
@@ -57,5 +61,21 @@ describe('ByokSection — API key field value', () => {
     // Anthropic has no saved key → the provider key placeholder is shown.
     const input = await screen.findByPlaceholderText('sk-ant-…') as HTMLInputElement;
     expect(input.value).toBe('');
+  });
+
+  it('eye toggle fetches and reveals the full plaintext key', async () => {
+    vi.stubGlobal('fetch', mockFetch(MASKED));
+    render(<ByokSection />);
+    const input = await screen.findByPlaceholderText('输入新值替换保存的密钥') as HTMLInputElement;
+    expect(input.value).toBe(MASKED);
+    expect(input.getAttribute('type')).toBe('password');
+
+    // Native .click() routes through React's delegated listener reliably in
+    // jsdom (fireEvent.click is flaky on this nested button — see probe notes).
+    (screen.getByTitle('显示') as HTMLButtonElement).click();
+
+    // Reveal is async (fetch /reveal). findBy retries until the full key lands.
+    const revealed = await screen.findByDisplayValue(FULL) as HTMLInputElement;
+    expect(revealed.getAttribute('type')).toBe('text');
   });
 });

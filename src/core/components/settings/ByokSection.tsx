@@ -182,6 +182,16 @@ async function deleteProvider(id: string): Promise<boolean> {
   } catch { return false; }
 }
 
+/** Fetch the full plaintext key for the eye-toggle reveal. null on failure. */
+async function revealProviderKey(id: string): Promise<string | null> {
+  try {
+    const r = await fetch(`${API_BASE}/api/settings/byok/${id}/reveal`, { signal: AbortSignal.timeout(3000) });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    return typeof j?.apiKey === 'string' ? j.apiKey : null;
+  } catch { return null; }
+}
+
 // ── Logo components ───────────────────────────────────────────────────────────
 
 function ProviderLogo({ id, size = 32, active = false }: { id: string; size?: number; active?: boolean }) {
@@ -715,6 +725,9 @@ export function ByokSection() {
   const [enabledModels, setEnabledModels] = useState<string[]>([]);
   const [provEnabled,  setProvEnabled]  = useState(false);
   const [showKey,      setShowKey]      = useState(false);
+  // Full plaintext lifted from the server on demand (eye-toggle reveal of a
+  // saved key). null = not revealed; falls back to the masked tail.
+  const [revealedKey,  setRevealedKey]  = useState<string | null>(null);
   const [saveState,    setSaveState]    = useState<SaveState>('idle');
   const [testState,    setTestState]    = useState<TestState>('idle');
   const [, setIsDirty] = useState(false);  // retained as no-op setter for legacy markDirty callers
@@ -855,6 +868,7 @@ export function ByokSection() {
     const saved = store.providers[selectedId];
     setKeyInput('');
     setShowKey(false);
+    setRevealedKey(null);
     setSaveState('idle');
     setTestState('idle');
     setIsDirty(false);
@@ -1150,19 +1164,31 @@ export function ByokSection() {
                     {T('API 密钥', 'API Key')}
                   </span>
                   <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>
-                    {T('本地加密存储', 'Stored locally')}
+                    {/* Honest label: keys are stored as plaintext JSON locally
+                        (server/src/storage/settings.ts), not encrypted at rest.
+                        The eye-reveal endpoint returns that plaintext. */}
+                    {T('本地存储', 'Stored locally')}
                   </span>
                 </div>
                 <div style={{ position: 'relative' }}>
                   <input
                     type={showKey ? 'text' : 'password'}
-                    // Not editing + a key is saved → show the server's masked
-                    // tail (`••••XXXX`, settings.ts:197 maskApiKey) so the eye
-                    // toggle actually reveals something useful (which key is
-                    // stored, by its last 4 chars). The full plaintext is never
-                    // sent to the client by design, so a fixed 40-bullet string
-                    // made "显示" a no-op (2026-05-29 fix).
-                    value={isEditing ? keyInput : (hasKey ? (savedState?.apiKey ?? '') : '')}
+                    // Value resolution (not editing):
+                    //  • eye ON + plaintext fetched → full key (revealedKey)
+                    //  • otherwise saved → masked tail (`••••XXXX`, the server
+                    //    default; settings.ts:197 maskApiKey)
+                    //  • no key → empty (placeholder shows)
+                    // Editing always reflects the user's live keyInput.
+                    // (2026-05-29: eye reveal now fetches the full plaintext via
+                    // /byok/:id/reveal; previously rendered a fixed 40-bullet
+                    // string that made "显示" a no-op.)
+                    value={
+                      isEditing
+                        ? keyInput
+                        : (showKey && revealedKey != null
+                            ? revealedKey
+                            : (hasKey ? (savedState?.apiKey ?? '') : ''))
+                    }
                     onChange={e => {
                       setKeyInput(e.target.value);
                       markDirty();
@@ -1179,10 +1205,11 @@ export function ByokSection() {
                     onFocus={e => {
                       e.target.style.borderColor = 'var(--t-accent)';
                       if (!isEditing) {
-                        // Start fresh — server cannot give us the real key
-                        // to edit in place. User types new value (or leaves
-                        // empty to delete saved key on blur).
+                        // Start fresh — user types a new value to replace the
+                        // saved key (or leaves empty to keep it). Drop any
+                        // revealed plaintext so the editing buffer starts clean.
                         setKeyInput('');
+                        setRevealedKey(null);
                         setIsEditing(true);
                       }
                     }}
@@ -1220,7 +1247,18 @@ export function ByokSection() {
                   }}>
                     <button
                       type="button"
-                      onClick={() => setShowKey(v => !v)}
+                      onClick={async () => {
+                        const next = !showKey;
+                        setShowKey(next);
+                        if (!next) { setRevealedKey(null); return; }
+                        // Turning ON for a saved key (not mid-edit) → fetch the
+                        // full plaintext. While editing, keyInput already holds
+                        // what the user typed, so no fetch needed.
+                        if (!isEditing && hasKey && revealedKey == null) {
+                          const full = await revealProviderKey(selectedId);
+                          if (full != null) setRevealedKey(full);
+                        }
+                      }}
                       title={showKey ? T('隐藏', 'Hide') : T('显示', 'Show')}
                       style={{
                         background: 'transparent', border: 'none',

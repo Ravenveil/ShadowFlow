@@ -895,6 +895,22 @@ router.put('/byok/:providerId', (req: Request, res: Response) => {
   }
 });
 
+// GET /api/settings/byok/:providerId/reveal → { apiKey: <plaintext> }
+// Returns the FULL stored key so the settings UI eye-toggle can reveal it on
+// demand. Keys are persisted in plaintext locally (single-user local app); the
+// `maskApiKey` used by the list/PUT responses is shoulder-surf protection for
+// the default view, not at-rest encryption — so there's nothing to decrypt.
+// 404 when the provider isn't configured (no key to reveal).
+router.get('/byok/:providerId/reveal', (req: Request, res: Response) => {
+  const { providerId } = req.params;
+  const store = loadByok();
+  const provider = store.providers[providerId];
+  if (!provider || !provider.apiKey) {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'provider not configured' } });
+  }
+  res.json({ apiKey: provider.apiKey });
+});
+
 // DELETE /api/settings/byok/:providerId → remove provider
 router.delete('/byok/:providerId', (req: Request, res: Response) => {
   const { providerId } = req.params;
