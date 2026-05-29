@@ -219,8 +219,36 @@ async def get_workspace_inbox(
             # Defensive: skip a malformed record rather than 500 the whole list
             continue
 
+    # 2026-05-29 — 填充 agent_dms：列出该 workspace 的 agents 作为单聊入口。
+    # 之前写死 []，导致 team 建好后 chat 左侧看不到任何 agent，没法单聊。
+    # agent 记录来自 .shadowflow/agents/*.json（quick-hire / 落库 agent）。
+    agent_dms: List[AgentDMItem] = []
+    try:
+        from shadowflow.api.agents import _list_agents  # local import avoids cycles
+
+        for arec in _list_agents():
+            rec_ws = arec.get("workspace_id")
+            # 与 group 同款严格 scoping：传了 workspace_id 就只收相等的；
+            # 不传（管理/无 scope 场景）则全收。
+            if workspace_id is not None and rec_ws != workspace_id:
+                continue
+            agent_dms.append(
+                AgentDMItem(
+                    agentId=arec.get("agent_id", ""),
+                    agentName=arec.get("name") or arec.get("agent_id", "") or "Agent",
+                    kind=arec.get("source") or "local",
+                    status=arec.get("status") if arec.get("status") in ("running", "blocked", "idle", "pending_approval") else "idle",
+                    unreadCount=0,
+                    lastMessage=(arec.get("soul") or "")[:140],
+                    lastActivityAt=arec.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                )
+            )
+    except Exception:
+        # agent 列表失败不应阻塞 inbox 主体（groups 仍可用）。
+        agent_dms = []
+
     return InboxResponse(
-        data=InboxData(groups=groups, agent_dms=[]),
+        data=InboxData(groups=groups, agent_dms=agent_dms),
         meta={
             "trace_id": uuid4().hex,
             "timestamp": datetime.now(timezone.utc).isoformat(),
