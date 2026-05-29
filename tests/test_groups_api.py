@@ -3,7 +3,8 @@
 Covers:
   - POST /api/groups  → 201 on success
   - POST /api/groups  → 400 when name is empty
-  - POST /api/groups  → 404 when template_id does not exist
+  - POST /api/groups  → 201 even for an unknown template_id (template
+    requirement was intentionally dropped 2026-05-19; see groups.py History)
 """
 
 from __future__ import annotations
@@ -75,10 +76,14 @@ class TestCreateGroup:
         res = client.post("/api/groups", json=_body(name="   "))
         assert res.status_code == 400
 
-    def test_create_missing_template_returns_404(self, client: TestClient):
+    def test_create_unknown_template_still_succeeds(self, client: TestClient):
+        """Template requirement was intentionally dropped on 2026-05-19 so that
+        groups created ad-hoc from a run-session blueprint (no template) persist.
+        An unknown template_id must therefore create the group (201), not 404 —
+        the id is stored verbatim. See groups.py module History."""
         res = client.post("/api/groups", json=_body(template_id="no-such-template-xyz"))
-        assert res.status_code == 404
-        assert "Template not found" in res.json()["detail"]
+        assert res.status_code == 201
+        assert res.json()["template_id"] == "no-such-template-xyz"
 
     def test_create_minimal_body(self, client: TestClient):
         """Only required fields — agent_ids, member_emails, policy_matrix default to empty."""
