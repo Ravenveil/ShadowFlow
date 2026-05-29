@@ -3618,7 +3618,9 @@ interface RunSessionRightPaneProps {
   chatGroupId: string | null;
 }
 
-function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: RunSessionRightPaneProps) {
+// chatGroupId 仍由父组件传入（接口保留），但右下角「去聊天」按钮删除后本组件
+// 不再消费它 —— 统一从「Team saved」toast 进聊天。这里不解构以免 unused 告警。
+function RunSessionRightPane({ session, sessionId, onNavigate }: RunSessionRightPaneProps) {
   const {
     activeTab,
     setActiveTab,
