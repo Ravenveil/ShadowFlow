@@ -684,6 +684,7 @@ export default function ChatPage() {
   // 页内，只把中间栏从群聊换成与该 agent 的单聊。dmStream 走 dm 模式（BYOK
   // /api/chat/completions，soul 注入）。dmAgentId=null 时回到群聊视图。
   const [dmAgentId, setDmAgentId] = useState<string | null>(null);
+  const [dmComposer, setDmComposer] = useState('');
   const dmStream = useChatStream({ mode: 'dm', targetId: dmAgentId });
   const dmAgent = useMemo(
     () => agentDMs.find(d => d.agentId === dmAgentId) ?? null,
@@ -1026,6 +1027,59 @@ export default function ChatPage() {
             composer 被推到 viewport 之下，底部 compFoot（send 按钮 + kbd hint）
             就看不见了。 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+          {dmAgentId ? (
+            /* ── 2026-05-29 · 内嵌单聊视图：轻量 header + 返回 + 复用 ChatFeedFB/ComposerFB ── */
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', minHeight: 52, flexShrink: 0, borderBottom: `1px solid ${T.bd}` }}>
+                <button
+                  type="button"
+                  onClick={() => setDmAgentId(null)}
+                  title={t('chat.backToGroup') || '返回群聊'}
+                  style={{ border: `1px solid ${T.bd}`, background: T.p2, borderRadius: 7, cursor: 'pointer', color: T.fg3, width: 28, height: 28, display: 'grid', placeItems: 'center', flexShrink: 0, fontSize: 16, lineHeight: 1 }}
+                >
+                  ‹
+                </button>
+                <span style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, background: T.ac, color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 14 }}>
+                  {(dmAgent?.agentName ?? dmAgentId).charAt(0).toUpperCase()}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: T.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {dmAgent?.agentName ?? dmAgentId}
+                  </div>
+                  <div style={{ fontSize: 11, color: dmStream.error ? T.err : T.fg4 }}>
+                    {dmStream.error
+                      ? `${t('chat.sendFailed') || '发送失败'}：${dmStream.error}`
+                      : dmStream.loading
+                        ? (t('chat.typing') || '正在输入…')
+                        : (t('chat.dmSubtitle') || '单聊 · DM')}
+                  </div>
+                </div>
+              </div>
+              <div style={{ flex: 1, overflow: 'auto', minHeight: 0, background: T.bg }}>
+                {dmStream.messages.length === 0 ? (
+                  <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+                    <p style={{ fontSize: 13, color: T.fg5, margin: 0 }}>{t('chat.noMessages') || '暂无消息记录'}</p>
+                  </div>
+                ) : (
+                  <ChatFeedFB
+                    messages={dmStream.messages}
+                    groupName={dmAgent?.agentName}
+                    onMessageAction={handleMessageAction}
+                    typing={dmStream.loading}
+                    typingAgentName={dmAgent?.agentName ?? ''}
+                  />
+                )}
+              </div>
+              <ComposerFB
+                value={dmComposer}
+                onChange={setDmComposer}
+                onSend={() => { const txt = dmComposer.trim(); if (txt) { setDmComposer(''); void handleDmSend(txt); } }}
+                loading={dmStream.loading}
+                t={t}
+              />
+            </>
+          ) : (
+          <>
           {/* 2026-05-28 — 用户明确要求删掉「基于此对话创建 Agent」按钮（截图标注）
               ConvHeaderFB 现在独占 header 行，去掉外层 flex 包装。 */}
           {group && (
@@ -1146,9 +1200,11 @@ export default function ChatPage() {
             loading={chatStream.loading}
             t={t}
           />
+          </>
+          )}
         </div>
 
-        {threadDrawerOpen && (
+        {threadDrawerOpen && !dmAgentId && (
           <ThreadDrawerFB
             groupId={groupId}
             group={group}
