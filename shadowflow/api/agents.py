@@ -375,7 +375,9 @@ async def get_created_agent(agent_id: str) -> Dict[str, Any]:
 def _remove_agent_from_teams(agent_id: str) -> None:
     """Remove agent_id from all team files after agent deletion (cascade cleanup)."""
     import json as _json
-    teams_dir = Path(__file__).resolve().parents[2] / ".shadowflow" / "teams"
+    # 跟随 _AGENTS_DIR（同 .shadowflow 根），生产路径不变，但测试 monkeypatch
+    # _AGENTS_DIR 时这里也一起隔离，不会改写真实 .shadowflow/teams。
+    teams_dir = _AGENTS_DIR.parent / "teams"
     if not teams_dir.exists():
         return
     for team_file in teams_dir.glob("*.json"):
