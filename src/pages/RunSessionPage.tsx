@@ -12,7 +12,7 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowDown, Check, Circle, ExternalLink, Key, KeyRound, Paperclip, Plus, RotateCcw, ServerCrash, Settings, Square, Timer, WifiOff } from 'lucide-react';
+import { AlertTriangle, ArrowDown, Check, Circle, ExternalLink, FolderOpen, Key, KeyRound, Paperclip, Plus, RotateCcw, ServerCrash, Settings, Square, Timer, WifiOff } from 'lucide-react';
 import { useRunSession } from '../core/hooks/useRunSession';
 import type { RunSessionNode, RunSessionEdge, RunSessionStep, SessionError } from '../core/hooks/useRunSession';
 import {
@@ -31,6 +31,7 @@ import { ArtifactPreview } from '../components/ArtifactPreview';
 import { CodeBlockToolbar, parseCodeFences } from '../components/CodeBlockToolbar';
 import { SkillPicker } from '../components/SkillPicker';
 import ModelPicker from '../components/ModelPicker';
+import DirPicker from '../components/DirPicker';
 import { DesignSystemPicker } from '../components/DesignSystemPicker';
 // Story 15.29 — Conversation linkage UI in PreparationPanel.
 import { ConversationPicker } from '../components/ConversationPicker';
@@ -1638,6 +1639,13 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
   const [selectedExecutor, setSelectedExecutor] = useState<string>(
     () => localStorage.getItem('sf.defaultExecutor') ?? '',
   );
+  // 2026-05-30 — CLI 工作目录(cwd)。DirPicker 选 → 存 sf.cwd → 发送路径
+  // buildPickerOverrides 拼进 body(仅 cli:/acp:/mcp: 生效)。
+  const [selectedCwd, setSelectedCwd] = useState<string>(
+    () => localStorage.getItem('sf.cwd') ?? '',
+  );
+  const [showDirPicker, setShowDirPicker] = useState(false);
+  const dirAnchorRef = useRef<HTMLButtonElement>(null);
 
   // 2026-05-16 — Debounced draft autosave (300ms). Empty `message` clears the
   // entry inside saveDraft, so the localStorage row goes away cleanly when
@@ -1748,7 +1756,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
     setMessage('');
     setAttachedFiles([]);
     try {
-      const overrides = buildPickerOverrides(selectedExecutor, selectedModel);
+      const overrides = buildPickerOverrides(selectedExecutor, selectedModel, selectedCwd);
       const resp = await fetch(`/api/run-sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1786,7 +1794,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
     if (!content || resending) return;
     setResending(true);
     try {
-      const overrides = buildPickerOverrides(selectedExecutor, selectedModel);
+      const overrides = buildPickerOverrides(selectedExecutor, selectedModel, selectedCwd);
 
       const resp = await fetch(`/api/run-sessions/${sessionId}/messages`, {
         method: 'POST',
@@ -2559,6 +2567,30 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
               >
                 <Paperclip size={14} strokeWidth={1.8} />
               </button>
+              {/* 2026-05-30 — 工作目录(CLI cwd)选择器。点开后端目录浏览器逐层选,
+                  存 sf.cwd;选了 CLI executor 才真正生效。 */}
+              <button
+                ref={dirAnchorRef}
+                type="button"
+                title={selectedCwd ? `CLI 工作目录: ${selectedCwd}` : '选择 CLI 工作目录'}
+                onClick={() => setShowDirPicker((v) => !v)}
+                style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: selectedCwd ? 'var(--t-accent-tint)' : 'transparent', border: 0, borderRadius: 7, cursor: 'pointer', color: selectedCwd ? 'var(--t-accent-bright)' : 'var(--t-fg-4)' }}
+              >
+                <FolderOpen size={14} strokeWidth={1.8} />
+              </button>
+              {showDirPicker && (
+                <DirPicker
+                  value={selectedCwd || undefined}
+                  anchorRef={dirAnchorRef}
+                  title="选择 CLI 工作目录"
+                  onPick={(p) => {
+                    localStorage.setItem('sf.cwd', p);
+                    setSelectedCwd(p);
+                    setShowDirPicker(false);
+                  }}
+                  onClose={() => setShowDirPicker(false)}
+                />
+              )}
               {/* Model picker — 抽成 <ModelPicker> 复用组件（2026-05-29）。
                   onChange 维持原落库语义：写 sf.defaultExecutor + sf.model，
                   发送路径 buildPickerOverrides 仍读 selectedExecutor/selectedModel。 */}
@@ -2673,6 +2705,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             const overrides = buildPickerOverrides(
               localStorage.getItem('sf.defaultExecutor') ?? '',
               localStorage.getItem('sf.model') ?? '',
+              localStorage.getItem('sf.cwd') ?? '',
             );
             const resp = await fetch(`${getApiBase()}/api/run-sessions/${sessionId}/messages`, {
               method: 'POST',

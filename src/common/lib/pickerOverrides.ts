@@ -14,8 +14,14 @@ import type { ProviderId } from '../../api/_base';
 export function buildPickerOverrides(
   selectedExecutor: string,
   selectedModel: string,
+  /** 2026-05-30 — CLI 工作目录(绝对路径)。仅 cli:/acp:/mcp: 有意义,API 忽略。 */
+  selectedCwd?: string,
 ): Record<string, string> {
   const overrides: Record<string, string> = {};
+  // cwd 只对本地命令行执行器有意义。后端也会校验绝对路径并对 API 模式忽略。
+  if (selectedCwd && selectedCwd.trim() && /^(cli|acp|mcp):/.test(selectedExecutor)) {
+    overrides.cwd = selectedCwd.trim();
+  }
   if (selectedExecutor.startsWith('byok:')) {
     const pid = selectedExecutor.slice(5);
     if ((PROVIDER_IDS as readonly string[]).includes(pid)) {

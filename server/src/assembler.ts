@@ -390,6 +390,12 @@ export interface SkillAssemblerOptions {
    * route handler boundary). Supersedes `anthropic_key` when set.
    */
   api_key?: string;
+  /**
+   * 2026-05-30 — CLI 工作目录(绝对路径,用户在对话框选)。空 → workspace
+   * 回退到 .shadowflow/projects/<session_id>。仅 cli:/acp:/mcp: 用得上
+   * (workspace = opts.cwd || projectDir)。
+   */
+  cwd?: string;
 }
 
 /**
@@ -425,6 +431,9 @@ export async function* runSkillAssembler(
 
   // Project directory for artifact persistence (under cwd, e.g. server/)
   const projectDir = path.join(process.cwd(), '.shadowflow', 'projects', session_id);
+  // CLI/ACP/MCP 工作目录:用户在对话框选的绝对路径优先,否则回退到 session 产物目录。
+  // 2026-05-30 — 两处 resolveCallable(单 + team) 都用这个 workspace。
+  const workspace = opts.cwd || projectDir;
   try {
     fs.mkdirSync(projectDir, { recursive: true });
   } catch (err) {
@@ -467,7 +476,8 @@ export async function* runSkillAssembler(
       maxTokens: opts.max_tokens,
       temperature: opts.temperature,
       sessionId: session_id,
-      workspace: projectDir,
+      // CLI/ACP/MCP cwd:用户在对话框选的目录优先,否则回退到 session 产物目录。
+      workspace,
     });
   } catch (err) {
     yield {
@@ -651,7 +661,7 @@ export async function* runSkillAssembler(
     system: branch2System,
     prompt: goal,
     history: [],
-    workspace: projectDir,
+    workspace,
     signal: effectiveSignal,
     model: opts.model ?? compiled?.agentConfig?.model_hint,
     maxTokens: opts.max_tokens,

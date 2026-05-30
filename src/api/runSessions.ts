@@ -56,6 +56,11 @@ export interface RunSessionCreateRequest {
    */
   executor?: string;
   /**
+   * 2026-05-30 — CLI 工作目录(绝对路径)。仅 cli:/acp:/mcp: 有意义,API 忽略。
+   * 空 → 后端回退到 .shadowflow/projects/<session_id>。
+   */
+  cwd?: string;
+  /**
    * Story 15.14 follow-up — UI toggle (GenerationSettings). `false` skips
    * the server-side critique pass; `undefined` defers to settings.json.
    */

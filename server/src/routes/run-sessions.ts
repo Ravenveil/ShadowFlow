@@ -107,6 +107,9 @@ interface SessionRecord {
    *   session.executor > skill.executor (frontmatter) > 'anthropic-direct'.
    */
   executor?: string;
+  /** 2026-05-30 — CLI 工作目录(绝对路径)。空 → assembler 回退到产物目录。
+   *  仅 cli:/acp:/mcp: 有意义。 */
+  cwd?: string;
   /** Story 15.13 — multi-layer prompt assembly inputs (all optional). */
   project_meta?: Record<string, unknown> | null;
   /** Story 15.12 interface — pre-rendered side-files block; loader to be wired by 15.12. */
@@ -362,6 +365,8 @@ router.post('/', (req: Request, res: Response) => {
     executor,
     // Story 15.18 — optional provider selector.
     provider,
+    // 2026-05-30 — CLI 工作目录(绝对路径)。仅 cli:/acp:/mcp: 用得上。
+    cwd,
     // Story 15.29 — optional conversation linkage. Server validates / auto-creates.
     conversation_id,
     // Story 15.14 follow-up — body-level auto_critique override (UI toggle).
@@ -381,6 +386,7 @@ router.post('/', (req: Request, res: Response) => {
     layer_toggles?: unknown;
     executor?: unknown;
     provider?: unknown;
+    cwd?: unknown;
     conversation_id?: unknown;
     auto_critique?: unknown;
   };
@@ -522,6 +528,11 @@ router.post('/', (req: Request, res: Response) => {
   // CLI registry data-driven and avoids hard-coding the list in two places.
   const validated_executor =
     typeof executor === 'string' && executor.trim().length > 0 ? executor.trim() : undefined;
+  // CLI 工作目录:只接受非空绝对路径(Win 盘符 C:\… 或 POSIX /…)。相对路径丢弃。
+  const validated_cwd =
+    typeof cwd === 'string' && cwd.trim() && /^([a-zA-Z]:[\\/]|[\\/])/.test(cwd.trim())
+      ? cwd.trim()
+      : undefined;
 
   // ── Story 15.29 — conversation_id validate / auto-create ─────────────────
   // Three branches:
@@ -573,6 +584,7 @@ router.post('/', (req: Request, res: Response) => {
     side_files: validated_side_files,
     layer_toggles: validated_layer_toggles,
     executor: validated_executor,
+    cwd: validated_cwd,
     conversation_id: validated_conversation_id,
     auto_critique: typeof auto_critique === 'boolean' ? auto_critique : undefined,
     created_at: Date.now(),
@@ -634,6 +646,7 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     api_key?: unknown;
     anthropic_key?: unknown;
     executor?: unknown;
+    cwd?: unknown;
   };
   // Accept either `content` (chat-style payload that the RunSessionPage send box
   // uses) or `goal` (mirrors POST /api/run-sessions). content wins when both
@@ -654,6 +667,10 @@ router.post('/:id/messages', (req: Request, res: Response) => {
   if (typeof body.api_key === 'string') overrides.api_key = body.api_key;
   if (typeof body.anthropic_key === 'string') overrides.anthropic_key = body.anthropic_key;
   if (typeof body.executor === 'string') overrides.executor = body.executor;
+  // CLI 工作目录:follow-up 可改;仅接受绝对路径(否则保留 source 继承值)。
+  if (typeof body.cwd === 'string' && /^([a-zA-Z]:[\\/]|[\\/])/.test(body.cwd.trim())) {
+    overrides.cwd = body.cwd.trim();
+  }
 
   sessionStore.set(new_session_id, {
     ...source,
@@ -1007,6 +1024,8 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           // Story 15.19 v2 — forward executor; assembler defaults to skill.executor
           // → 'anthropic-direct' when undefined, preserving back-compat.
           executor: session.executor,
+          // 2026-05-30 — CLI 工作目录(用户选的);空 → assembler 回退到产物目录。
+          cwd: session.cwd,
           // Story 15.18 — provider + api_key forwarded; default executor runner
           // dispatches into llm-providers/. CLI / ACP runners ignore them.
           provider: session.provider,
