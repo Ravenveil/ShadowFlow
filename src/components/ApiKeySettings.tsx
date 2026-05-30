@@ -47,7 +47,8 @@ interface ProviderConfig {
   docsUrl: string;
 }
 
-const PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
+// Partial：只配了 4 个 provider（其余 PROVIDER_IDS 走服务端但本 UI 不渲染卡片）。
+const PROVIDER_CONFIGS: Partial<Record<ProviderId, ProviderConfig>> = {
   anthropic: {
     id: 'anthropic',
     label: 'Anthropic',
@@ -82,6 +83,14 @@ const PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
   },
 };
 
+// 此 UI 只为有完整 config 的 provider 渲染卡片/单选。_base.ts 的 PROVIDER_IDS
+// 2026-05-16 从 4 扩到 13（匹配服务端 header/storage），但这里只配了 4 个；
+// 直接 PROVIDER_IDS.map 会对缺配置的 id 读 .label 崩（Session 设置整页报错根因）。
+// 按 PROVIDER_IDS 顺序过滤出「有 config 的」，未来再扩容也不会崩。
+const CONFIGURED_PROVIDER_IDS: readonly ProviderId[] = PROVIDER_IDS.filter(
+  (id): id is ProviderId => id in PROVIDER_CONFIGS,
+);
+
 export interface ApiKeySettingsProps {
   /** Optional callback fired when the Anthropic key changes (set or cleared). */
   onChange?: (key: string | null) => void;
@@ -104,7 +113,8 @@ interface ProviderKeyRowProps {
 
 function ProviderKeyRow({ provider, onAnthropicChange, compact }: ProviderKeyRowProps) {
   const { t } = useI18n();
-  const cfg = PROVIDER_CONFIGS[provider];
+  // 调用方只用 CONFIGURED_PROVIDER_IDS / 'anthropic'，必有 config（! 安全）。
+  const cfg = PROVIDER_CONFIGS[provider]!;
   const [draft, setDraft] = useState('');
   const [stored, setStored] = useState<string | null>(() => getStoredApiKey(provider));
   const [showFull, setShowFull] = useState(false);
@@ -344,7 +354,7 @@ function DefaultProviderRadio() {
         Default Provider
       </div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        {PROVIDER_IDS.map(id => {
+        {CONFIGURED_PROVIDER_IDS.map(id => {
           const hasKey = !!getStoredApiKey(id);
           const isActive = active === id;
           return (
@@ -374,7 +384,7 @@ function DefaultProviderRadio() {
                 }}
                 style={{ accentColor: 'var(--t-accent)' }}
               />
-              <span style={{ fontWeight: 500 }}>{PROVIDER_CONFIGS[id].label}</span>
+              <span style={{ fontWeight: 500 }}>{PROVIDER_CONFIGS[id]?.label ?? id}</span>
               {!hasKey && (
                 <span
                   style={{
@@ -408,7 +418,7 @@ export function ApiKeySettings({ onChange, compact = false }: ApiKeySettingsProp
       style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
     >
       <DefaultProviderRadio />
-      {PROVIDER_IDS.map(id => (
+      {CONFIGURED_PROVIDER_IDS.map(id => (
         <ProviderKeyRow
           key={id}
           provider={id}
