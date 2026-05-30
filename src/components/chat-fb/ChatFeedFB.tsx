@@ -15,7 +15,7 @@
 
 import type { ChatMessage } from '../../core/components/chat/ChatStream';
 import styles from './chatFB.module.css';
-import { Pin } from 'lucide-react';
+import { Pin, User } from 'lucide-react';
 import { MessageHoverToolbarFB } from './MessageHoverToolbarFB';
 import { TypingDotsFB } from './TypingDotsFB';
 import { MsgReactionsFB, type MsgReactionItem, type ReactionIconKey } from './MsgReactionsFB';
@@ -224,7 +224,8 @@ function UserMsg({
   onAction: (action: ChatFeedAction, id: string) => void;
 }) {
   const p = paletteOf(m.senderName ?? 'me');
-  const letter = m.senderGlyph || initialOf(m.senderName) || '我';
+  // 用户消息头像：未显式设置 glyph 时用游客/人形图标，不再用「U」首字母占位
+  const avatar = m.senderGlyph ? m.senderGlyph : <User size={15} strokeWidth={2} aria-hidden />;
   // TODO: 等后端 reply-to 数据模型上线后，replyTo 字段会由 chat_messages.metadata
   //       映射；当前仅前端结构，点击滚动暂用 anchor#msg-{id}。
   const handleReplyClick = m.replyTo
@@ -288,9 +289,12 @@ function UserMsg({
           background: `color-mix(in oklab, ${p.accent} 16%, var(--skin-panel))`,
           borderColor: `color-mix(in oklab, ${p.accent} 38%, transparent)`,
           color: p.ink,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        {letter}
+        {avatar}
       </span>
     </div>
   );

@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { X, Pencil, Plus, Upload, FileText, FileCode, FileImage } from 'lucide-react';
+import { X, Pencil, Plus, Upload, FileText, FileCode, FileImage, User } from 'lucide-react';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
 import { fetchRecentMessages } from '../../api/groupApi';
@@ -264,9 +264,12 @@ export function ThreadDrawerFB({
                           background: `color-mix(in oklab, ${p.accent} 18%, var(--skin-panel-2))`,
                           borderColor: `color-mix(in oklab, ${p.accent} 45%, transparent)`,
                           color: p.ink,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
                       >
-                        {initialOf(msg.sender_name)}
+                        {isUser ? <User size={14} strokeWidth={2} aria-hidden /> : initialOf(msg.sender_name)}
                       </span>
                       <div
                         className={styles.drReplyBody}

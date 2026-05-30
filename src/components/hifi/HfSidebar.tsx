@@ -18,7 +18,7 @@ import { WorkspaceSelector } from '../workspace/WorkspaceStrip';
 import type { LucideIcon } from 'lucide-react';
 import { HfDot } from './HfAtoms';
 import { useI18n } from '../../common/i18n';
-import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
+import { Settings as HfSettingsIcon, User as HfUserIcon } from '../../common/icons/iconRegistry';
 import { useAuth } from '../../core/auth/AuthContext';
 import type { UserProfile, AuthStatus } from '../../core/auth/AuthContext';
 import { WalletLoginModal } from './WalletLoginModal';
@@ -94,7 +94,7 @@ const activeBar: CSSProperties = {
 // ── UserCard — live auth state ────────────────────────────────────────────────
 
 function avatarGlyph(user: UserProfile | null): string {
-  if (!user) return '?';
+  if (!user) return ''; // 未登录头像由游客图标渲染，不再用字符
   if (user.display_name) return user.display_name.charAt(0).toUpperCase();
   if (user.type === 'guest') return 'G';
   return user.address.slice(2, 4).toUpperCase();
@@ -115,6 +115,8 @@ interface UserCardProps {
 function UserCard({ user, status, collapsed, onOpen }: UserCardProps) {
   const isLoading = status === 'loading';
   const glyph = avatarGlyph(user);
+  // 未登录时不用「?」字符当头像，改用游客线性图标
+  const guestIcon = !user && !isLoading;
   const avatarBg = user?.type === 'wallet' ? 'var(--t-accent)' : 'var(--t-fg-4)';
   const name = user?.display_name ?? (user?.type === 'guest' ? '访客' : (user ? shortAddress(user.address) : '未登录'));
   const sub = user ? shortAddress(user.address) : '点击登录';
@@ -127,7 +129,7 @@ function UserCard({ user, status, collapsed, onOpen }: UserCardProps) {
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 0', cursor: 'pointer', position: 'relative' }}
       >
         <div style={{ width: 26, height: 26, borderRadius: '50%', background: avatarBg, color: 'var(--t-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 10, opacity: isLoading ? 0.5 : 1 }}>
-          {isLoading ? '…' : glyph}
+          {isLoading ? '…' : guestIcon ? <HfUserIcon size={14} strokeWidth={2} /> : glyph}
         </div>
         {user && (
           <span style={{ position: 'absolute', bottom: 8, right: 6 }}>
@@ -144,7 +146,7 @@ function UserCard({ user, status, collapsed, onOpen }: UserCardProps) {
       style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', marginTop: 6, background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 8, cursor: 'pointer' }}
     >
       <div style={{ width: 24, height: 24, borderRadius: '50%', background: avatarBg, color: 'var(--t-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 10, flexShrink: 0, opacity: isLoading ? 0.5 : 1 }}>
-        {isLoading ? '…' : glyph}
+        {isLoading ? '…' : guestIcon ? <HfUserIcon size={13} strokeWidth={2} /> : glyph}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 11.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isLoading ? '加载中…' : name}</div>
