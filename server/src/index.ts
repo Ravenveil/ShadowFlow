@@ -18,6 +18,8 @@ import settingsRouter from './routes/settings';
 import cliRouter from './routes/cli';
 import acpRouter from './routes/acp';
 import { groupsChatRouter } from './routes/groups-chat';
+// 2026-05-30 — 后端目录浏览器(给 CLI cwd 选工作目录;浏览器拿不到真实磁盘路径)
+import { fsBrowseRouter } from './routes/fs-browse';
 // Story 15.14 — POST /api/artifacts/lint
 import artifactsRouter from './routes/artifacts';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
@@ -109,6 +111,9 @@ app.use('/api/conversations', conversationsRouter);
 // 2026-05-30 修：此前只 import 未 app.use，发消息漏过网关落到 Python chat-bridge，
 // 导致 CLI executor 永远走不通（Python spawn 不了 CLI）。
 app.use('/api/groups', groupsChatRouter);
+// 后端目录浏览器(GET /api/fs/list|home|validate)。Node 读本机磁盘列目录,前端逐层
+// 点选 → 回传真实绝对路径当 CLI cwd。挂在 proxyFallback 之前,否则会被转去 Python。
+app.use('/api/fs', fsBrowseRouter);
 // Part D — LLM protocol entrypoints. MUST be mounted BEFORE proxyFallback
 // otherwise /api/llm/* would be forwarded to Python instead of handled here.
 app.use('/api/llm', llmRouter);
