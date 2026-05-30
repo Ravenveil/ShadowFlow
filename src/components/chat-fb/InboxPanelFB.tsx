@@ -18,6 +18,7 @@
 import { useMemo, useState } from 'react';
 import { Search, Pin, MessageSquare, Lock, Hash, Bot } from 'lucide-react';
 import type { GroupItem, AgentDMItem } from '../../common/types/inbox';
+import { AGENT_PALETTE, ACCENT_PALETTE, hashIndex, initialOf } from './agentAvatar';
 import styles from './chatFB.module.css';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -50,46 +51,10 @@ export interface InboxPanelFBProps {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 工具：头像配色调色板（按名字 hash 映射，稳定色）
-// 对照 chat-fb.html 行 919-1010 出现的 6 种 hue（橙/紫/红/青/绿/灰）
+// 头像配色：统一从 agentAvatar 取（单一事实来源，跨页面同 agent 同色）
 // ─────────────────────────────────────────────────────────────────────────────
 
-const HUE_PALETTE: Array<{ bg: string; border: string; fg: string }> = [
-  // 橙（warn 类）
-  { bg: 'color-mix(in oklab, #F59E0B 16%, var(--skin-panel))', border: 'color-mix(in oklab, #F59E0B 38%, transparent)', fg: '#B45309' },
-  // 紫
-  { bg: 'color-mix(in oklab, #A855F7 14%, var(--skin-panel))', border: 'color-mix(in oklab, #A855F7 35%, transparent)', fg: '#7C3AED' },
-  // 红
-  { bg: 'color-mix(in oklab, #EF4444 14%, var(--skin-panel))', border: 'color-mix(in oklab, #EF4444 35%, transparent)', fg: '#B91C1C' },
-  // 青蓝
-  { bg: 'color-mix(in oklab, #0891B2 14%, var(--skin-panel))', border: 'color-mix(in oklab, #0891B2 35%, transparent)', fg: '#0891B2' },
-  // 浅青
-  { bg: 'color-mix(in oklab, #22D3EE 14%, var(--skin-panel))', border: 'color-mix(in oklab, #22D3EE 35%, transparent)', fg: '#0891B2' },
-  // 绿
-  { bg: 'color-mix(in oklab, #10B981 14%, var(--skin-panel))', border: 'color-mix(in oklab, #10B981 35%, transparent)', fg: '#059669' },
-  // 灰
-  { bg: 'color-mix(in oklab, #71717A 14%, var(--skin-panel))', border: 'color-mix(in oklab, #71717A 35%, transparent)', fg: '#52525B' },
-];
-
-const ACCENT_PALETTE = {
-  bg: 'var(--accent-tint)',
-  border: 'color-mix(in oklab, var(--accent) 35%, transparent)',
-  fg: 'var(--accent-bright)',
-};
-
-function hashIndex(key: string, mod: number): number {
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
-  return Math.abs(h) % mod;
-}
-
-/** 取名字首字（中文取首字，英文取首字母大写） */
-function initialOf(name: string): string {
-  const trimmed = (name ?? '').trim();
-  if (!trimmed) return '?';
-  const first = Array.from(trimmed)[0] ?? '?';
-  return /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
-}
+const HUE_PALETTE = AGENT_PALETTE;
 
 /** ISO 时间戳格式化为相对显示：now / HH:mm / 昨日 / 周一 */
 function formatRelativeTime(iso: string | undefined): string {

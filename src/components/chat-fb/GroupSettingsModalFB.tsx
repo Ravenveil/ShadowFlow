@@ -29,6 +29,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X } from 'lucide-react';
+import { paletteFor, initialOf } from './agentAvatar';
 import styles from './chatFB.module.css';
 
 // ─── 类型 ──────────────────────────────────────────────────────────────────
@@ -119,16 +120,6 @@ const DEFAULT_SETTINGS: GsetSettings = {
   folded: false,
   showNickname: true,
 };
-
-const COLOR_RING: GsetAvatarColor[] = ['b', 'r', 'g', 'p', 'o'];
-
-function hashColor(id: string): GsetAvatarColor {
-  let h = 0;
-  for (let i = 0; i < id.length; i += 1) {
-    h = (h * 31 + id.charCodeAt(i)) | 0;
-  }
-  return COLOR_RING[Math.abs(h) % COLOR_RING.length];
-}
 
 function firstChar(s: string): string {
   // 取首个字形（中文一个字、英文一个字母）
@@ -386,7 +377,8 @@ export function GroupSettingsModalFB(props: GroupSettingsModalFBProps) {
             </div>
             <div className={styles.gsetMembers}>
               {members.map((m) => {
-                const color = m.avatarColor ?? hashColor(m.id);
+                // 按 agent_id 取浅墨兰迪色，和 DM 列表 / 全 app 同 agent 同色
+                const pal = paletteFor(m.id);
                 return (
                   <button
                     type="button"
@@ -394,8 +386,11 @@ export function GroupSettingsModalFB(props: GroupSettingsModalFBProps) {
                     key={m.id}
                     aria-label={`${m.name} · ${m.role}`}
                   >
-                    <div className={styles.gsetMAv} data-c={color}>
-                      {firstChar(m.name)}
+                    <div
+                      className={styles.gsetMAv}
+                      style={{ background: pal.bg, color: pal.fg, border: `1px solid ${pal.border}` }}
+                    >
+                      {initialOf(m.name)}
                       {m.online && <span className={styles.onDot} aria-hidden />}
                     </div>
                     <div className={styles.gsetMNm}>{m.name}</div>
