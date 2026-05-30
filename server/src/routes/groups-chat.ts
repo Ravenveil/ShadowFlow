@@ -25,6 +25,8 @@
  * Persistence is delegated to Python (not direct JSON writes) so atomic-write,
  * schema, path-validation and single-writer invariants stay in one process.
  */
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { Router, type Request, type Response } from 'express';
 import { PYTHON_BACKEND_URL } from '../python-backend';
 import { resolveCallable } from '../transport/dispatcher';
@@ -94,6 +96,22 @@ function toHistory(
   return out;
 }
 
+/**
+ * Per-group scratch workspace for CLI/ACP/MCP executors. CliCallable requires a
+ * cwd to spawn the binary (chat has no run-session workspace). We give each
+ * group a stable dir under the server data root so the CLI has somewhere to run
+ * (and any files it writes stay grouped, not scattered in the repo).
+ */
+function ensureChatWorkspace(groupId: string): string {
+  const dir = join(process.cwd(), '.shadowflow', 'chat-workspaces', groupId.replace(/[^\w-]/g, '_'));
+  try {
+    mkdirSync(dir, { recursive: true });
+  } catch {
+    /* best-effort; spawn will surface a clearer error if it truly can't run */
+  }
+  return dir;
+}
+
 /** Resolve executor → callable opts (key only for byok:/anthropic-direct). */
 function resolveExecutorKey(
   executor: string,
@@ -118,6 +136,8 @@ async function runFanout(
   headers: Request['headers'],
 ): Promise<void> {
   const apiKey = resolveExecutorKey(executor, headers);
+  // CLI/ACP/MCP need a cwd; byok/anthropic-direct ignore it. Always provide one.
+  const workspace = ensureChatWorkspace(groupId);
 
   const group = await pyGet<GroupRecord>(`/api/groups/${encodeURIComponent(groupId)}`);
   if (!group) return;
@@ -155,7 +175,7 @@ async function runFanout(
     let buf = '';
     let errMsg = '';
     try {
-      const callable = resolveCallable(executor, { apiKey, model });
+      const callable = resolveCallable(executor, { apiKey, model, workspace });
       for await (const chunk of callable.turn({
         system: soul,
         prompt,
