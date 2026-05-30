@@ -345,13 +345,17 @@ async def resolve_dm_conversation(
 @router.get("/api/groups")
 async def list_groups_endpoint(
     workspace_id: Optional[str] = Query(default=None),
+    include_archived: bool = Query(default=False),
 ) -> Dict[str, Any]:
     """List groups, optionally filtered by workspace_id.
 
     Wraps records in {data, meta} envelope to match other endpoints — but
     also exposes a top-level `groups` array for the front-end's existing
-    stub-compatible callers."""
+    stub-compatible callers. Archived groups (group-level ``archived: true``)
+    are hidden by default; pass ``include_archived=true`` to include them."""
     records = _list_groups_records(workspace_id)
+    if not include_archived:
+        records = [r for r in records if not r.get("archived")]
     return {
         "data": records,
         "groups": records,  # legacy stub-compatible field
@@ -698,6 +702,9 @@ class PatchGroupRequest(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=120)
     announcement: Optional[str] = Field(None, max_length=2000)
+    # 归档群聊（群级，非每用户）。True → 从默认群列表隐藏；列表端点用
+    # include_archived=true 仍可拉到。
+    archived: Optional[bool] = None
 
 
 class UserGroupSetting(BaseModel):
@@ -730,6 +737,8 @@ async def patch_group(group_id: str, body: PatchGroupRequest) -> Dict[str, Any]:
         record["name"] = body.name
     if body.announcement is not None:
         record["announcement"] = body.announcement
+    if body.archived is not None:
+        record["archived"] = body.archived
     record["updated_at"] = datetime.now(timezone.utc).isoformat()
     _save_group(record)
     return _envelope(record)
