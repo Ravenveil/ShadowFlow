@@ -91,6 +91,49 @@ class TestQuickCreate:
 
 
 # ---------------------------------------------------------------------------
+# avatar_color — 头像色落库（统一头像色字段）
+# ---------------------------------------------------------------------------
+
+
+class TestAvatarColor:
+    def test_create_persists_avatar_color(self):
+        resp = client.post("/api/agents", json={"name": "Nova", "soul": "x", "avatar_color": "#e11d8f"})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["avatar_color"] == "#e11d8f"
+        # GET 单个也带回字段
+        aid = resp.json()["data"]["agent_id"]
+        got = client.get(f"/api/agents/{aid}")
+        assert got.json()["data"]["avatar_color"] == "#e11d8f"
+
+    def test_create_without_color_is_none(self):
+        resp = client.post("/api/agents", json={"name": "Auto", "soul": "x"})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["avatar_color"] is None
+
+    def test_create_rejects_non_hex(self):
+        # 长度合法（≤9）但非 #rrggbb → 命中自定义校验器（400），而非 Pydantic 长度 422
+        resp = client.post("/api/agents", json={"name": "Bad", "soul": "x", "avatar_color": "#12xyz"})
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"]["code"] == "INVALID_AVATAR_COLOR"
+
+    def test_create_rejects_overlong_color(self):
+        # 超长 → Pydantic max_length 拦截（422）
+        resp = client.post("/api/agents", json={"name": "Bad2", "soul": "x", "avatar_color": "red; }body{ evil"})
+        assert resp.status_code == 422
+
+    def test_patch_sets_and_clears_color(self):
+        aid = client.post("/api/agents", json={"name": "Patchy", "soul": "x"}).json()["data"]["agent_id"]
+        # 设置
+        r1 = client.patch(f"/api/agents/{aid}", json={"avatar_color": "#0891b2"})
+        assert r1.status_code == 200
+        assert r1.json()["data"]["avatar_color"] == "#0891b2"
+        # 清除（"" → None）
+        r2 = client.patch(f"/api/agents/{aid}", json={"avatar_color": ""})
+        assert r2.status_code == 200
+        assert r2.json()["data"]["avatar_color"] is None
+
+
+# ---------------------------------------------------------------------------
 # List and Get
 # ---------------------------------------------------------------------------
 

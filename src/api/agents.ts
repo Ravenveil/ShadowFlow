@@ -5,6 +5,7 @@
  */
 
 import { getApiBase } from './_base';
+import { registerAgentColors } from '../components/chat-fb/agentAvatar';
 const API_BASE_URL = getApiBase();
 
 export class AgentApiError extends Error {
@@ -56,6 +57,8 @@ export interface QuickCreateRequest {
   name: string;
   soul: string;
   workspace_id?: string;
+  /** 头像色（可选）：#rrggbb；不传则前端按名字 hash 兜底。 */
+  avatar_color?: string | null;
 }
 
 export interface AgentRecord {
@@ -67,6 +70,8 @@ export interface AgentRecord {
   status: 'idle' | 'running' | 'paused' | 'error';
   source: 'quick_hire' | 'catalog';
   created_at: string;
+  /** 后端持久化的头像色（#rrggbb）；未设置为 null/缺省。 */
+  avatar_color?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +94,9 @@ export async function listAgents(workspaceId?: string): Promise<AgentRecord[]> {
   const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
   const res = await fetch(`${API_BASE_URL}/api/agents${qs}`);
   const env = await _handleResponse<Envelope<AgentRecord[]>>(res);
+  // 同步全 app 头像色注册表（真源 = 后端 avatar_color），让聊天/DM 等只有 name 的
+  // 界面也能取到同一个色。所有 listAgents 调用方因此自动受益。
+  registerAgentColors(env.data);
   return env.data;
 }
 
@@ -135,6 +143,8 @@ export interface AgentPatchRequest {
   soul?: string;
   skills?: string[];
   tools?: string[];
+  /** #rrggbb 设置；"" 清除（回到按名字 hash）。 */
+  avatar_color?: string | null;
 }
 
 export async function patchAgent(agentId: string, patch: AgentPatchRequest): Promise<AgentRecord> {
@@ -144,6 +154,8 @@ export async function patchAgent(agentId: string, patch: AgentPatchRequest): Pro
     body: JSON.stringify(patch),
   });
   const env = await _handleResponse<Envelope<AgentRecord>>(res);
+  // patch 返回完整 record；同步注册表，让改色后全 app 即时一致。
+  registerAgentColors([env.data]);
   return env.data;
 }
 

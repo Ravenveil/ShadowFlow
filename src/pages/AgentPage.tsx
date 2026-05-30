@@ -28,7 +28,7 @@ import type { AgentRecord } from '../api/agents';
 import { BlueprintModal } from '../components/agents/BlueprintModal';
 import { HfTopBar, HfAvatar, HfPill } from '../components/hifi';
 import HfSelect from '../components/hifi/HfSelect';
-import { AGENT_PALETTE, paletteFor, paletteFromColor, initialOf, getAgentColorOverride, setAgentColorOverride } from '../components/chat-fb/agentAvatar';
+import { AGENT_PALETTE, paletteFor, paletteFromColor, initialOf, getAgentColor, registerAgentColor } from '../components/chat-fb/agentAvatar';
 import { useI18n } from '../common/i18n';
 import { useWorkspaceStore } from '../store/workspaceStore';
 
@@ -182,12 +182,28 @@ export function AgentPage() {
     setHiring(true);
     setHireError(null);
     try {
-      const agent = await quickCreateAgent({
+      const created = await quickCreateAgent({
         name: hireName.trim(),
         soul: hireSoul.trim(),
+        avatar_color: hireColor,
+        // 带上当前 workspace，否则落到 "default"，切回本工作区刷新就「招了却不见」
+        workspace_id: currentId ?? undefined,
       });
-      // 用户手选了头像色 → 记 override（按显示名），全 app paletteFor 即时生效
-      if (hireColor != null) setAgentColorOverride(agent.name, hireColor);
+      // quickCreate 响应是「部分」record（无 soul/status/workspace_id）—— 补全成完整
+      // AgentRecord 再乐观插入，否则 AgentTile 读 agent.soul.length 会崩。
+      const agent: AgentRecord = {
+        agent_id: created.agent_id,
+        name: created.name ?? hireName.trim(),
+        soul: created.soul ?? hireSoul.trim(),
+        workspace_id: created.workspace_id ?? currentId ?? 'default',
+        blueprint: created.blueprint ?? {},
+        status: created.status ?? 'idle',
+        source: created.source ?? 'quick_hire',
+        created_at: created.created_at ?? new Date().toISOString(),
+        avatar_color: created.avatar_color ?? hireColor ?? null,
+      };
+      // 乐观注册（按显示名），全 app paletteFor 即时生效；下次 listAgents 以后端为准
+      if (hireColor != null) registerAgentColor(agent.name, hireColor);
       setAgents((prev) => [agent, ...prev]);
       setRecent((prev) => [
         { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), text: `${agent.name} hired` },
@@ -855,12 +871,13 @@ function AgentTile({ agent, isDeleting, onDelete }: AgentTileProps) {
   const navigate = useNavigate();
   const role = agentRole(agent);
   const glyph = agentGlyph(agent.name);
-  // 用户手选过头像色 → 用之；否则回退到原 name-hash 主题色
-  const color = getAgentColorOverride(agent.name) ?? agentColor(agent);
+  // 头像色优先级：后端 avatar_color 字段 → 注册表（按名字）→ 原 name-hash 主题色
+  const color = agent.avatar_color ?? getAgentColor(agent.name) ?? agentColor(agent);
   const level = agentLevel(agent);
   const hired = agent.status !== 'idle' || agent.source === 'catalog';
+  const soulText = agent.soul ?? '';
   const soulPreview =
-    agent.soul.length > 70 ? agent.soul.slice(0, 70) + '…' : agent.soul || '—';
+    soulText.length > 70 ? soulText.slice(0, 70) + '…' : soulText || '—';
   const model =
     ((agent.blueprint as Record<string, unknown> | undefined)?.model as string) ||
     'sonnet-4';

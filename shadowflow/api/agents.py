@@ -71,6 +71,17 @@ def _validate_agent_id(agent_id: str) -> None:
         )
 
 
+def _validate_avatar_color(color: Optional[str]) -> None:
+    """avatar_color 必须是 #rgb/#rrggbb 十六进制（"" 视为清除，放行）。"""
+    if color is None or color == "":
+        return
+    if not _HEX_COLOR_RE.match(color):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "INVALID_AVATAR_COLOR", "message": "avatar_color must be a #rgb or #rrggbb hex string"}},
+        )
+
+
 def _agents_dir() -> Path:
     _AGENTS_DIR.mkdir(parents=True, exist_ok=True)
     return _AGENTS_DIR
@@ -192,10 +203,16 @@ class RefreshRequest(BaseModel):
     agent_id: str = Field(..., min_length=1, max_length=200, pattern=r"^[a-zA-Z0-9_-]+$")
 
 
+# 头像色：仅接受 #rgb / #rrggbb 十六进制，防止注入任意 CSS。
+_HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
 class QuickCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     soul: str = Field(..., min_length=1, max_length=2000)
     workspace_id: str = "default"
+    # 头像色（可选）：用户手选时传 #rrggbb；不传则前端按名字 hash 兜底。
+    avatar_color: Optional[str] = Field(None, max_length=9)
 
 
 class QuickCreateResponse(BaseModel):
@@ -210,6 +227,8 @@ class AgentPatchRequest(BaseModel):
     soul: Optional[str] = Field(None, min_length=1, max_length=2000)
     skills: Optional[List[str]] = None
     tools: Optional[List[str]] = None
+    # 传 "" 清除颜色（回到按名字 hash）；传 #rrggbb 设置。
+    avatar_color: Optional[str] = Field(None, max_length=9)
 
 
 class AgentChatRequest(BaseModel):
@@ -327,6 +346,7 @@ def _build_default_blueprint(name: str, soul: str) -> AgentBlueprint:
 
 @router.post("")
 async def quick_create_agent(body: QuickCreateRequest) -> Dict[str, Any]:
+    _validate_avatar_color(body.avatar_color)
     blueprint = _build_default_blueprint(body.name, body.soul)
     now = datetime.now(timezone.utc).isoformat()
     agent_id = f"agent-{uuid4().hex[:12]}"
@@ -339,10 +359,14 @@ async def quick_create_agent(body: QuickCreateRequest) -> Dict[str, Any]:
         "status": "idle",
         "source": "quick_hire",
         "created_at": now,
+        # 头像色：手选才写；不传存 None（前端按名字 hash 兜底）。
+        "avatar_color": body.avatar_color or None,
     }
     _save_agent(record)
     return _envelope({
         "agent_id": agent_id,
+        "name": body.name,
+        "avatar_color": record["avatar_color"],
         "blueprint": blueprint.model_dump(),
         "created_at": now,
         "source": "quick_hire",
@@ -431,6 +455,10 @@ async def patch_agent(agent_id: str, body: AgentPatchRequest) -> Dict[str, Any]:
         if bp.get("role_profiles") and len(bp["role_profiles"]) > 0:
             bp["role_profiles"][0]["description"] = body.soul
             bp["role_profiles"][0]["persona"] = body.soul
+    if body.avatar_color is not None:
+        _validate_avatar_color(body.avatar_color)
+        # "" → 清除（回到按名字 hash）；#rrggbb → 设置。
+        record["avatar_color"] = body.avatar_color or None
     if body.skills is not None:
         if bp.get("role_profiles") and len(bp["role_profiles"]) > 0:
             bp["role_profiles"][0]["skills"] = body.skills
