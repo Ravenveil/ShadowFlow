@@ -8,7 +8,8 @@
  * **不写 localStorage** —— 选中只 `onChange({executor, model})`，落库由父组件决定
  * （run-session/chat/StartPage 各自写 sf.defaultExecutor + sf.model）。
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Cpu, Check, ExternalLink } from 'lucide-react';
 import { useI18n } from '../common/i18n';
 import { getApiBase } from '../api/_base';
@@ -53,11 +54,14 @@ export default function ModelPicker({
   const [apiItems, setApiItems] = useState<PickerApiItem[]>(() => loadCachedPicker()?.api ?? []);
   const [loading, setLoading] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
-  // 实际弹出方向：默认按 props，但若该方向空间不够而反方向更宽，则自动翻转，
-  // 避免下拉顶到页头被裁切（StartPage 居中 composer 向上弹会被裁）。
-  const [effPlacement, setEffPlacement] = useState<'up' | 'down'>(placement);
+  // 下拉用 portal 渲染到 <body> + position:fixed，逃离 composer `.compShell`
+  // 等祖先的 overflow:hidden / transform 裁切（之前 absolute 被 compShell 裁掉，
+  // 模型下拉「显示不出来」，2026-05-30 修）。坐标按触发按钮的视口 rect 计算。
+  const dropdownRef = useRef<HTMLDivElement>(null);
   // 实际最大高度：按选定方向的可用视口空间夹取（≤460），永不溢出页边。
   const [maxH, setMaxH] = useState(460);
+  // fixed 定位坐标：top 或 bottom 二选一（向下/向上弹），left 夹取防溢出右边。
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number }>({ left: 0 });
 
   // Prewarm on mount + refresh on open (catches newly-installed CLI / new keys).
   const refresh = () => {
@@ -77,31 +81,51 @@ export default function ModelPicker({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (open) refresh(); }, [open]);
 
-  // Click-outside close.
+  // Click-outside close. The dropdown is portaled to <body>, so it's NOT a DOM
+  // descendant of wrapRef — must also exclude dropdownRef or a click on a menu
+  // item would be treated as "outside" and close before the item's onClick.
   useEffect(() => {
     if (!open) return;
     function onDoc(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (wrapRef.current?.contains(t)) return;
+      if (dropdownRef.current?.contains(t)) return;
+      setOpen(false);
     }
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  // 打开时按可用空间决定上/下弹 + 夹取最大高度，避免下拉顶到页头被裁。
-  useEffect(() => {
+  // 打开时（及滚动/resize 时）按按钮 rect 算 fixed 坐标 + 上/下弹方向 + 最大高度。
+  // useLayoutEffect：定位在 paint 前完成，避免下拉先闪一下再归位。
+  useLayoutEffect(() => {
     if (!open) return;
-    const btn = wrapRef.current?.querySelector('button');
-    if (!btn) return;
-    const rect = btn.getBoundingClientRect();
-    const GAP = 12;
-    const spaceAbove = rect.top - GAP;
-    const spaceBelow = window.innerHeight - rect.bottom - GAP;
-    const dir: 'up' | 'down' =
-      placement === 'up'
-        ? (spaceAbove < 360 && spaceBelow > spaceAbove ? 'down' : 'up')
-        : (spaceBelow < 360 && spaceAbove > spaceBelow ? 'up' : 'down');
-    setEffPlacement(dir);
-    setMaxH(Math.max(180, Math.min(460, dir === 'up' ? spaceAbove : spaceBelow)));
+    const compute = () => {
+      const btn = wrapRef.current?.querySelector('button');
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const GAP = 6;
+      const DROP_W = 260;
+      const spaceAbove = rect.top - 12;
+      const spaceBelow = window.innerHeight - rect.bottom - 12;
+      const dir: 'up' | 'down' =
+        placement === 'up'
+          ? (spaceAbove < 360 && spaceBelow > spaceAbove ? 'down' : 'up')
+          : (spaceBelow < 360 && spaceAbove > spaceBelow ? 'up' : 'down');
+      setMaxH(Math.max(180, Math.min(460, dir === 'up' ? spaceAbove : spaceBelow)));
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - DROP_W - 8));
+      setPos(dir === 'up'
+        ? { left, bottom: window.innerHeight - rect.top + GAP }
+        : { left, top: rect.bottom + GAP });
+    };
+    compute();
+    // capture=true：捕获任意可滚动祖先的滚动，让 fixed 下拉跟随按钮。
+    window.addEventListener('scroll', compute, true);
+    window.addEventListener('resize', compute);
+    return () => {
+      window.removeEventListener('scroll', compute, true);
+      window.removeEventListener('resize', compute);
+    };
   }, [open, placement]);
 
   const { label, tooltip } = pickerLabel(value.executor, value.model);
@@ -215,10 +239,10 @@ export default function ModelPicker({
           {label}
         </span>
       </button>
-      {open && (
-        <div style={{
-          position: 'absolute', left: 0, width: 260, maxHeight: maxH, zIndex: 200,
-          ...(effPlacement === 'up' ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
+      {open && createPortal(
+        <div ref={dropdownRef} data-model-picker-pop style={{
+          position: 'fixed', left: pos.left, width: 260, maxHeight: maxH, zIndex: 1000,
+          ...(pos.top != null ? { top: pos.top } : { bottom: pos.bottom ?? 0 }),
           background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 10,
           boxShadow: '0 8px 24px -8px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.04)',
           padding: '4px 0', overflowY: 'auto',
@@ -240,7 +264,8 @@ export default function ModelPicker({
             : apiItems.length === 0
               ? emptyHint('未配置 API Key · 去设置 BYOK', '/settings#byok')
               : apiItems.map(renderItem)}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
