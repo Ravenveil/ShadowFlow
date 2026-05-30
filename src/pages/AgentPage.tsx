@@ -27,6 +27,8 @@ import {
 import type { AgentRecord } from '../api/agents';
 import { BlueprintModal } from '../components/agents/BlueprintModal';
 import { HfTopBar, HfAvatar, HfPill } from '../components/hifi';
+import HfSelect from '../components/hifi/HfSelect';
+import { AGENT_PALETTE, paletteFor, paletteFromColor, initialOf, getAgentColorOverride, setAgentColorOverride } from '../components/chat-fb/agentAvatar';
 import { useI18n } from '../common/i18n';
 import { useWorkspaceStore } from '../store/workspaceStore';
 
@@ -95,7 +97,6 @@ function agentLevel(agent: AgentRecord): number | null {
 // ---------------------------------------------------------------------------
 
 export function AgentPage() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { t } = useI18n();
   const currentId = useWorkspaceStore((s) => s.currentId);
@@ -112,6 +113,8 @@ export function AgentPage() {
   const [hireSoul, setHireSoul] = useState('');
   const [hireModel, setHireModel] = useState('claude-sonnet-4');
   const [hireLevel, setHireLevel] = useState<'L1' | 'L2' | 'L3'>('L1');
+  // 头像色：null = 自动（按名字 hash），字符串 = 手选任意 CSS 颜色
+  const [hireColor, setHireColor] = useState<string | null>(null);
   const [hiring, setHiring] = useState(false);
   const [hireError, setHireError] = useState<string | null>(null);
   const [recent, setRecent] = useState<Array<{ time: string; text: string }>>([]);
@@ -183,6 +186,8 @@ export function AgentPage() {
         name: hireName.trim(),
         soul: hireSoul.trim(),
       });
+      // 用户手选了头像色 → 记 override（按显示名），全 app paletteFor 即时生效
+      if (hireColor != null) setAgentColorOverride(agent.name, hireColor);
       setAgents((prev) => [agent, ...prev]);
       setRecent((prev) => [
         { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), text: `${agent.name} hired` },
@@ -191,6 +196,7 @@ export function AgentPage() {
       // Clear form
       setHireName('');
       setHireSoul('');
+      setHireColor(null);
     } catch (err) {
       // TODO: i18n — error messages with dynamic interpolation, no matching key yet
       if (err instanceof AgentApiError) {
@@ -489,30 +495,42 @@ export function AgentPage() {
               />
             </FormRow>
 
+            <FormRow label={t('agent.fieldAvatar', { defaultValue: '头像' })}>
+              <AvatarColorPicker
+                name={hireName}
+                color={hireColor}
+                onPick={setHireColor}
+                autoLabel={t('agent.avatarAuto', { defaultValue: '自动' })}
+              />
+            </FormRow>
+
             <FormRow label={t('agent.fieldModel')}>
-              <select
+              <HfSelect
                 value={hireModel}
-                onChange={(e) => setHireModel(e.target.value)}
-                style={inputStyle()}
-              >
-                <option value="claude-sonnet-4">claude-sonnet-4</option>
-                <option value="claude-opus-4">claude-opus-4</option>
-                <option value="claude-haiku-4">claude-haiku-4</option>
-                <option value="gpt-5">gpt-5</option>
-                <option value="zhipu-glm-4">zhipu-glm-4</option>
-              </select>
+                onChange={setHireModel}
+                ariaLabel={t('agent.fieldModel')}
+                mono
+                options={[
+                  { value: 'claude-sonnet-4', label: 'claude-sonnet-4' },
+                  { value: 'claude-opus-4', label: 'claude-opus-4' },
+                  { value: 'claude-haiku-4', label: 'claude-haiku-4' },
+                  { value: 'gpt-5', label: 'gpt-5' },
+                  { value: 'zhipu-glm-4', label: 'zhipu-glm-4' },
+                ]}
+              />
             </FormRow>
 
             <FormRow label={t('agent.fieldLevel')}>
-              <select
+              <HfSelect
                 value={hireLevel}
-                onChange={(e) => setHireLevel(e.target.value as 'L1' | 'L2' | 'L3')}
-                style={inputStyle()}
-              >
-                <option value="L1">{t('agent.levelL1')}</option>
-                <option value="L2">{t('agent.levelL2')}</option>
-                <option value="L3">{t('agent.levelL3')}</option>
-              </select>
+                onChange={(v) => setHireLevel(v as 'L1' | 'L2' | 'L3')}
+                ariaLabel={t('agent.fieldLevel')}
+                options={[
+                  { value: 'L1', label: t('agent.levelL1') },
+                  { value: 'L2', label: t('agent.levelL2') },
+                  { value: 'L3', label: t('agent.levelL3') },
+                ]}
+              />
             </FormRow>
 
             {hireError && (
@@ -642,6 +660,138 @@ function FormRow({
   );
 }
 
+// 头像换色：实时预览头像 + 7 个快捷预设 + 取色器（滑块）+ hex 文本输入 + 自动。
+// 选中色是任意 CSS 颜色串（null = 自动，按名字 hash）。预览与全 app 头像同一套
+// 浅墨兰迪合成逻辑（paletteFromColor）。
+function AvatarColorPicker({
+  name,
+  color,
+  onPick,
+  autoLabel,
+}: {
+  name: string;
+  color: string | null;
+  onPick: (color: string | null) => void;
+  autoLabel: string;
+}) {
+  const previewPal = color != null ? paletteFromColor(color) : paletteFor(name || 'agent');
+  const glyph = initialOf(name) || '?';
+  // hex 文本输入框纯由草稿驱动（避免「中途合法 3 位 hex 提交后卡住」）；
+  // 预设/取色器改色时同步草稿。
+  const [hexDraft, setHexDraft] = useState('');
+
+  // 把 #abc / abcdef 等规整成合法 #rrggbb；非法返回 null。
+  function normalizeHex(v: string): string | null {
+    let s = v.trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{3}$/.test(s)) s = s.split('').map(c => c + c).join('');
+    return /^[0-9a-fA-F]{6}$/.test(s) ? `#${s.toLowerCase()}` : null;
+  }
+  const pickPreset = (c: string) => { onPick(c); setHexDraft(c); };
+  const colorWellValue = normalizeHex(color ?? '') ?? normalizeHex(hexDraft) ?? '#888888';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* 实时预览 */}
+        <span
+          style={{
+            width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 700, fontSize: 17,
+            background: previewPal.bg,
+            border: `1px solid ${previewPal.border}`,
+            color: previewPal.fg,
+          }}
+          aria-hidden
+        >
+          {glyph}
+        </span>
+        {/* 快捷预设色板 */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          {AGENT_PALETTE.map((pal, i) => {
+            const active = color === pal.accent;
+            return (
+              <button
+                key={i}
+                type="button"
+                aria-label={`头像色 ${i + 1}`}
+                aria-pressed={active}
+                onClick={() => pickPreset(pal.accent)}
+                style={{
+                  width: 22, height: 22, borderRadius: 7, padding: 0, cursor: 'pointer',
+                  background: pal.accent,
+                  border: active ? '2px solid var(--t-fg)' : '2px solid transparent',
+                  boxShadow: active ? '0 0 0 2px var(--t-panel)' : 'none',
+                  outline: 'none',
+                  transition: 'transform 120ms, border-color 120ms',
+                  transform: active ? 'scale(1.08)' : 'none',
+                }}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 自定义：取色器（带滑块）+ hex 输入 + 自动 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* 原生取色器：点开是带色相滑块的系统取色面板，可选任意颜色 */}
+        <label
+          title="自定义颜色"
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 30, height: 30, borderRadius: 8, cursor: 'pointer', flexShrink: 0,
+            border: '1px solid var(--t-border)', background: 'var(--t-panel-2)', position: 'relative',
+          }}
+        >
+          <Sparkles size={14} strokeWidth={2} style={{ color: 'var(--t-fg-3)' }} />
+          <input
+            type="color"
+            value={colorWellValue}
+            onChange={(e) => { onPick(e.target.value); setHexDraft(e.target.value); }}
+            aria-label="自定义头像颜色"
+            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', padding: 0, border: 0 }}
+          />
+        </label>
+        {/* hex 文本输入 */}
+        <input
+          type="text"
+          value={hexDraft}
+          placeholder="#7c5cff"
+          spellCheck={false}
+          onChange={(e) => {
+            setHexDraft(e.target.value);
+            const hx = normalizeHex(e.target.value);
+            if (hx) onPick(hx);
+          }}
+          aria-label="头像颜色 hex"
+          style={{
+            flex: 1, minWidth: 0, height: 30, padding: '0 9px', borderRadius: 8,
+            fontFamily: 'var(--font-mono, monospace)', fontSize: 12,
+            background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
+            color: 'var(--t-fg)', outline: 'none', boxSizing: 'border-box',
+          }}
+        />
+        {/* 自动（清除手选，回到按名字 hash） */}
+        <button
+          type="button"
+          onClick={() => { onPick(null); setHexDraft(''); }}
+          aria-pressed={color == null}
+          style={{
+            height: 30, padding: '0 11px', borderRadius: 8, cursor: 'pointer', flexShrink: 0,
+            fontSize: 11, fontWeight: 600,
+            background: color == null ? 'var(--t-accent-tint)' : 'transparent',
+            border: `1px solid ${color == null ? 'var(--t-accent)' : 'var(--t-border)'}`,
+            color: color == null ? 'var(--t-accent-bright)' : 'var(--t-fg-3)',
+            transition: 'all 120ms',
+          }}
+        >
+          {autoLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({ onNewAgent }: { onNewAgent: () => void }) {
   const { t } = useI18n();
   return (
@@ -705,7 +855,8 @@ function AgentTile({ agent, isDeleting, onDelete }: AgentTileProps) {
   const navigate = useNavigate();
   const role = agentRole(agent);
   const glyph = agentGlyph(agent.name);
-  const color = agentColor(agent);
+  // 用户手选过头像色 → 用之；否则回退到原 name-hash 主题色
+  const color = getAgentColorOverride(agent.name) ?? agentColor(agent);
   const level = agentLevel(agent);
   const hired = agent.status !== 'idle' || agent.source === 'catalog';
   const soulPreview =

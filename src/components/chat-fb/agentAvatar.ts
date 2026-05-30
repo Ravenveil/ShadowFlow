@@ -56,10 +56,71 @@ export function hashIndex(key: string, mod: number): number {
 }
 
 /**
+ * 由任意 CSS 颜色合成一套浅墨兰迪头像配色（淡底 + 描边 + 字色）。
+ * 让用户在 7 个预设之外可选「任意颜色」（取色器 / hex 输入）。
+ */
+export function paletteFromColor(color: string): AvatarPalette {
+  return {
+    accent: color,
+    bg: `color-mix(in oklab, ${color} 15%, var(--skin-panel))`,
+    border: `color-mix(in oklab, ${color} 38%, transparent)`,
+    // 字色用原色压暗一档，保证在淡底上可读
+    fg: `color-mix(in oklab, ${color} 78%, #000)`,
+  };
+}
+
+// ── 用户手选颜色覆盖（Quick Hire「换头像色」）──────────────────────────────────
+// 用户显式给某个 agent 选了色 → 记 name→任意 CSS 颜色串，全 app 的 paletteFor
+// 优先用它，不再按名字 hash。存 localStorage，刷新后仍生效。后端 Message 不带
+// agent_id，故按「显示名」存。
+const OVERRIDE_KEY = 'sf.agentAvatarColors';
+
+function loadOverrides(): Record<string, string> {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(OVERRIDE_KEY) : null;
+    const obj = raw ? JSON.parse(raw) : {};
+    if (!obj || typeof obj !== 'object') return {};
+    // 兼容旧版（存的是数字索引）：迁移为颜色串。
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === 'string') out[k] = v;
+      else if (typeof v === 'number') out[k] = AGENT_PALETTE[((v % AGENT_PALETTE.length) + AGENT_PALETTE.length) % AGENT_PALETTE.length].accent;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+let _overrides: Record<string, string> = loadOverrides();
+
+/** 取某 agent 的手选色（CSS 颜色串）；无则 null。 */
+export function getAgentColorOverride(name: string): string | null {
+  const v = _overrides[(name ?? '').trim()];
+  return typeof v === 'string' && v ? v : null;
+}
+
+/** 设/清某 agent 的手选色（传 null 清除，回到按名字 hash）。 */
+export function setAgentColorOverride(name: string, color: string | null): void {
+  const k = (name ?? '').trim();
+  if (!k) return;
+  if (color == null || color === '') delete _overrides[k];
+  else _overrides[k] = color;
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(OVERRIDE_KEY, JSON.stringify(_overrides));
+  } catch {
+    /* 隐私模式等写失败：保留内存态即可 */
+  }
+}
+
+/**
  * 取某个 agent/会话的稳定配色。
  * @param key 稳定标识——agent 一律传「显示名」，保证跨页面同 agent 同色。
+ *            若该名字有用户手选色（override），优先用之。
  */
 export function paletteFor(key: string): AvatarPalette {
+  const ov = getAgentColorOverride(key);
+  if (ov) return paletteFromColor(ov);
   return AGENT_PALETTE[hashIndex(key || '?', AGENT_PALETTE.length)];
 }
 

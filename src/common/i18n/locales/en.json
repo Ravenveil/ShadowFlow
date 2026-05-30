@@ -166,6 +166,8 @@
   "agent.fieldName": "Name",
   "agent.fieldRole": "Role",
   "agent.fieldSoul": "Soul",
+  "agent.fieldAvatar": "Avatar",
+  "agent.avatarAuto": "Auto",
   "agent.fieldModel": "Model",
   "agent.fieldLevel": "Permission L",
   "agent.levelL1": "L1 · Read Only",

@@ -166,6 +166,8 @@
   "agent.fieldName": "名字",
   "agent.fieldRole": "角色",
   "agent.fieldSoul": "灵魂",
+  "agent.fieldAvatar": "头像",
+  "agent.avatarAuto": "自动",
   "agent.fieldModel": "模型",
   "agent.fieldLevel": "权限 L",
   "agent.levelL1": "L1 · 只读",
