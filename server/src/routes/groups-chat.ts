@@ -97,6 +97,38 @@ function toHistory(
 }
 
 /**
+ * Extract clean assistant text from one `text-delta` chunk value.
+ *
+ * spawner-bridge (CLI/ACP/MCP) forwards each SSE event verbatim as a text-delta
+ * whose value is the wire line `event: <name>\ndata: <json>\n\n` — lossless on
+ * the wire, but the consumer must re-parse. We pull `data.text` only from
+ * `event: text` blocks (NOT `raw`/`usage`/`complete`, which also carry a
+ * `text` field). ApiClientCallable (byok) yields clean text already (no
+ * `event:` prefix) → passed through unchanged.
+ */
+function sseWireToText(value: string): string {
+  if (!/^event:\s/m.test(value)) return value; // byok clean text
+  let out = '';
+  for (const block of value.split('\n\n')) {
+    let ev = '';
+    let data = '';
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event:')) ev = line.slice(6).trim();
+      else if (line.startsWith('data:')) data = line.slice(5).trim();
+    }
+    if (ev === 'text' && data) {
+      try {
+        const j = JSON.parse(data) as { text?: unknown };
+        if (typeof j.text === 'string') out += j.text;
+      } catch {
+        /* non-JSON data line — skip */
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Per-group scratch workspace for CLI/ACP/MCP executors. CliCallable requires a
  * cwd to spawn the binary (chat has no run-session workspace). We give each
  * group a stable dir under the server data root so the CLI has somewhere to run
@@ -183,7 +215,7 @@ async function runFanout(
         signal: ctrl.signal,
         model,
       })) {
-        if (chunk.type === 'text-delta') buf += chunk.value;
+        if (chunk.type === 'text-delta') buf += sseWireToText(chunk.value);
         else if (chunk.type === 'error') {
           errMsg = chunk.error?.message ?? 'stream error';
           break;
