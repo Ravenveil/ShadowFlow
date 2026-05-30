@@ -22,6 +22,7 @@ import {
   Sparkles,
   User,
   Users,
+  LayoutTemplate,
   Workflow,
   BookOpen,
   Paperclip,
@@ -403,7 +404,7 @@ function ChipBtn({
 
 interface PrimitiveCardProps {
   testId: string;
-  glyph: string;
+  glyph: ReactNode;
   title: string;
   description: string;
   onClick: () => void;
@@ -1947,21 +1948,21 @@ export default function StartPage() {
                   在那里）；模板卡片滚到下面 Skill Pack 区。 */}
               <PrimitiveCard
                 testId="primitive-card-agent"
-                glyph="◉"
+                glyph={<User size={20} strokeWidth={2} />}
                 title={t('start.createAgent')}
                 description={t('start.createAgentDesc')}
                 onClick={() => navigate('/agents')}
               />
               <PrimitiveCard
                 testId="primitive-card-team"
-                glyph="⊞"
+                glyph={<Users size={20} strokeWidth={2} />}
                 title={t('start.createTeam')}
                 description={t('start.createTeamDesc')}
                 onClick={() => navigate('/teams')}
               />
               <PrimitiveCard
                 testId="primitive-card-templates"
-                glyph="◆"
+                glyph={<LayoutTemplate size={20} strokeWidth={2} />}
                 title={t('start.fromTemplate')}
                 description={t('start.fromTemplateDesc')}
                 onClick={() => {
