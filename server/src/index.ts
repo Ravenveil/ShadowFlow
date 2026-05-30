@@ -103,6 +103,12 @@ app.use('/api/projects', projectScopedConversationsRouter);
 // Story 16.1 — River Memory CRUD
 app.use('/api/memory-entries', memoryEntriesRouter);
 app.use('/api/conversations', conversationsRouter);
+// Chat/DM/群聊 发消息网关 — 拦下 POST /api/groups/:id/messages 用 Node dispatcher
+// 生成回复（CLI + API 都真生效）。其余 /api/groups/* 不在此定义 → next() →
+// proxyFallback 转 Python。必须挂在 proxyFallback 之前。
+// 2026-05-30 修：此前只 import 未 app.use，发消息漏过网关落到 Python chat-bridge，
+// 导致 CLI executor 永远走不通（Python spawn 不了 CLI）。
+app.use('/api/groups', groupsChatRouter);
 // Part D — LLM protocol entrypoints. MUST be mounted BEFORE proxyFallback
 // otherwise /api/llm/* would be forwarded to Python instead of handled here.
 app.use('/api/llm', llmRouter);
