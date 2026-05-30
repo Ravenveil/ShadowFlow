@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, Pencil, Plus, Upload, FileText, FileCode, FileImage, User } from 'lucide-react';
+import { paletteFor, initialOf } from './agentAvatar';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
 import { fetchRecentMessages } from '../../api/groupApi';
@@ -52,25 +53,7 @@ export interface ThreadDrawerFBProps {
   syncStatus?: { synced: boolean; txHash?: string };
 }
 
-const PALETTE: Array<{ accent: string; ink: string }> = [
-  { accent: '#A855F7', ink: '#7C3AED' },
-  { accent: '#F59E0B', ink: '#B45309' },
-  { accent: '#22D3EE', ink: '#0891B2' },
-  { accent: '#EF4444', ink: '#B91C1C' },
-  { accent: '#10B981', ink: '#059669' },
-  { accent: '#3B82F6', ink: '#1D4ED8' },
-];
-function paletteOf(key: string) {
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
-  return PALETTE[Math.abs(h) % PALETTE.length];
-}
-function initialOf(name?: string): string {
-  const tn = (name ?? '').trim();
-  if (!tn) return '?';
-  const first = Array.from(tn)[0] ?? '?';
-  return /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
-}
+// 头像配色统一从 agentAvatar 取（单一事实来源，跨页面同 agent 同色）
 
 // ─────────────────────────────────────────────────────────────
 // Mock docs（Stream G）— 等后端 GET /api/groups/{id}/docs endpoint
@@ -202,11 +185,11 @@ export function ThreadDrawerFB({
                 <span
                   className={styles.drCtxAv}
                   style={(() => {
-                    const p = paletteOf(sourceMessage.senderName);
+                    const p = paletteFor(sourceMessage.senderName);
                     return {
-                      background: `color-mix(in oklab, ${p.accent} 18%, var(--skin-panel-2))`,
-                      borderColor: `color-mix(in oklab, ${p.accent} 45%, transparent)`,
-                      color: p.ink,
+                      background: p.bg,
+                      borderColor: p.border,
+                      color: p.fg,
                     };
                   })()}
                 >
@@ -252,7 +235,7 @@ export function ThreadDrawerFB({
               <div className={styles.drReplies}>
                 {threads.map((msg, i) => {
                   const isUser = msg.sender_kind === 'user';
-                  const p = paletteOf(msg.sender_name ?? String(i));
+                  const p = paletteFor(msg.sender_name ?? String(i));
                   return (
                     <div
                       key={i}
@@ -261,9 +244,9 @@ export function ThreadDrawerFB({
                       <span
                         className={styles.drAv}
                         style={{
-                          background: `color-mix(in oklab, ${p.accent} 18%, var(--skin-panel-2))`,
-                          borderColor: `color-mix(in oklab, ${p.accent} 45%, transparent)`,
-                          color: p.ink,
+                          background: p.bg,
+                          borderColor: p.border,
+                          color: p.fg,
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -281,7 +264,7 @@ export function ThreadDrawerFB({
                             <span
                               className={styles.drReplyAg}
                               style={{
-                                color: p.ink,
+                                color: p.fg,
                                 background: `color-mix(in oklab, ${p.accent} 15%, transparent)`,
                               }}
                             >

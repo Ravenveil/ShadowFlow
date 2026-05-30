@@ -16,6 +16,7 @@
 import type { ChatMessage } from '../../core/components/chat/ChatStream';
 import styles from './chatFB.module.css';
 import { Pin, User } from 'lucide-react';
+import { paletteFor, initialOf } from './agentAvatar';
 import { MessageHoverToolbarFB } from './MessageHoverToolbarFB';
 import { TypingDotsFB } from './TypingDotsFB';
 import { MsgReactionsFB, type MsgReactionItem, type ReactionIconKey } from './MsgReactionsFB';
@@ -57,33 +58,7 @@ export interface ChatFeedFBProps {
   typingAgentName?: string;
 }
 
-// ─── 头像配色（按 senderName / id 稳定 hash 映射）─────────────────────────────
-const PALETTE: Array<{ accent: string; ink: string }> = [
-  { accent: '#A855F7', ink: '#7C3AED' }, // 紫
-  { accent: '#F59E0B', ink: '#B45309' }, // 橙
-  { accent: '#22D3EE', ink: '#0891B2' }, // 青
-  { accent: '#EF4444', ink: '#B91C1C' }, // 红
-  { accent: '#10B981', ink: '#059669' }, // 绿
-  { accent: '#3B82F6', ink: '#1D4ED8' }, // 蓝
-  { accent: '#A855F7', ink: '#6B21A8' }, // 暗紫
-];
-
-function hash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-function paletteOf(key: string) {
-  return PALETTE[hash(key || '?') % PALETTE.length];
-}
-
-function initialOf(name: string | undefined): string {
-  const t = (name ?? '').trim();
-  if (!t) return '?';
-  const first = Array.from(t)[0] ?? '?';
-  return /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
-}
+// 头像配色统一从 agentAvatar 取（单一事实来源，跨页面同 agent 同色）
 
 /**
  * Stream H 2026-05-28 · 把 message 文本里的 @mention 解析成绿底高亮 chip。
@@ -128,8 +103,8 @@ function AgentMsg({
   m: ChatMessage;
   onAction: (action: ChatFeedAction, id: string) => void;
 }) {
-  const key = m.senderName ?? m.id;
-  const p = paletteOf(key);
+  // 按 agent 显示名取色——和 DM 列表 / 群设置同 agent 同色
+  const p = paletteFor(m.senderName ?? m.id);
   const letter = m.senderGlyph || initialOf(m.senderName);
 
   return (
@@ -150,9 +125,9 @@ function AgentMsg({
         <span
           className={styles.avLg}
           style={{
-            background: `color-mix(in oklab, ${p.accent} 14%, var(--skin-panel))`,
-            borderColor: `color-mix(in oklab, ${p.accent} 35%, transparent)`,
-            color: p.ink,
+            background: p.bg,
+            borderColor: p.border,
+            color: p.fg,
           }}
         >
           {letter}
@@ -167,7 +142,7 @@ function AgentMsg({
           <span
             className={styles.agPill}
             style={{
-              color: p.ink,
+              color: p.fg,
               background: `color-mix(in oklab, ${p.accent} 12%, transparent)`,
               borderColor: `color-mix(in oklab, ${p.accent} 28%, transparent)`,
             }}
@@ -223,7 +198,7 @@ function UserMsg({
   m: ChatMessage;
   onAction: (action: ChatFeedAction, id: string) => void;
 }) {
-  const p = paletteOf(m.senderName ?? 'me');
+  const p = paletteFor(m.senderName ?? 'me');
   // 用户消息头像：未显式设置 glyph 时用游客/人形图标，不再用「U」首字母占位
   const avatar = m.senderGlyph ? m.senderGlyph : <User size={15} strokeWidth={2} aria-hidden />;
   // TODO: 等后端 reply-to 数据模型上线后，replyTo 字段会由 chat_messages.metadata
@@ -286,9 +261,9 @@ function UserMsg({
       <span
         className={styles.avLg}
         style={{
-          background: `color-mix(in oklab, ${p.accent} 16%, var(--skin-panel))`,
-          borderColor: `color-mix(in oklab, ${p.accent} 38%, transparent)`,
-          color: p.ink,
+          background: p.bg,
+          borderColor: p.border,
+          color: p.fg,
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',

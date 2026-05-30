@@ -377,8 +377,8 @@ export function GroupSettingsModalFB(props: GroupSettingsModalFBProps) {
             </div>
             <div className={styles.gsetMembers}>
               {members.map((m) => {
-                // 按 agent_id 取浅墨兰迪色，和 DM 列表 / 全 app 同 agent 同色
-                const pal = paletteFor(m.id);
+                // 按 agent 显示名取浅墨兰迪色，和 DM 列表 / 聊天气泡 / 全 app 同 agent 同色
+                const pal = paletteFor(m.name);
                 return (
                   <button
                     type="button"

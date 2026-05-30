@@ -342,7 +342,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
                     key={d.agentId}
                     name={d.agentName}
                     letter={initialOf(d.agentName)}
-                    hueKey={d.agentId}
+                    hueKey={d.agentName}
                     statusKind={dmStatus(d)}
                     live={d.status === 'running'}
                     unread={d.unreadCount}
