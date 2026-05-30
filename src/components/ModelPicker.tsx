@@ -53,6 +53,11 @@ export default function ModelPicker({
   const [apiItems, setApiItems] = useState<PickerApiItem[]>(() => loadCachedPicker()?.api ?? []);
   const [loading, setLoading] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  // 实际弹出方向：默认按 props，但若该方向空间不够而反方向更宽，则自动翻转，
+  // 避免下拉顶到页头被裁切（StartPage 居中 composer 向上弹会被裁）。
+  const [effPlacement, setEffPlacement] = useState<'up' | 'down'>(placement);
+  // 实际最大高度：按选定方向的可用视口空间夹取（≤460），永不溢出页边。
+  const [maxH, setMaxH] = useState(460);
 
   // Prewarm on mount + refresh on open (catches newly-installed CLI / new keys).
   const refresh = () => {
@@ -81,6 +86,23 @@ export default function ModelPicker({
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
+
+  // 打开时按可用空间决定上/下弹 + 夹取最大高度，避免下拉顶到页头被裁。
+  useEffect(() => {
+    if (!open) return;
+    const btn = wrapRef.current?.querySelector('button');
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const GAP = 12;
+    const spaceAbove = rect.top - GAP;
+    const spaceBelow = window.innerHeight - rect.bottom - GAP;
+    const dir: 'up' | 'down' =
+      placement === 'up'
+        ? (spaceAbove < 360 && spaceBelow > spaceAbove ? 'down' : 'up')
+        : (spaceBelow < 360 && spaceAbove > spaceBelow ? 'up' : 'down');
+    setEffPlacement(dir);
+    setMaxH(Math.max(180, Math.min(460, dir === 'up' ? spaceAbove : spaceBelow)));
+  }, [open, placement]);
 
   const { label, tooltip } = pickerLabel(value.executor, value.model);
 
@@ -195,8 +217,8 @@ export default function ModelPicker({
       </button>
       {open && (
         <div style={{
-          position: 'absolute', left: 0, width: 260, maxHeight: 460, zIndex: 200,
-          ...(placement === 'up' ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
+          position: 'absolute', left: 0, width: 260, maxHeight: maxH, zIndex: 200,
+          ...(effPlacement === 'up' ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
           background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 10,
           boxShadow: '0 8px 24px -8px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.04)',
           padding: '4px 0', overflowY: 'auto',
