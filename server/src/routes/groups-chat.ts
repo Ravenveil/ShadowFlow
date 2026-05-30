@@ -25,8 +25,9 @@
  * Persistence is delegated to Python (not direct JSON writes) so atomic-write,
  * schema, path-validation and single-writer invariants stay in one process.
  */
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, statSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
+import { homedir } from 'node:os';
 import { Router, type Request, type Response } from 'express';
 import { PYTHON_BACKEND_URL } from '../python-backend';
 import { resolveCallable } from '../transport/dispatcher';
@@ -44,6 +45,8 @@ interface GroupRecord {
   agent_ids?: string[];
   messages?: Array<{ sender_name?: string; sender_kind?: string; content?: string }>;
   kind?: string;
+  /** 2026-05-30 — 用户在群设置选的 CLI 工作目录(绝对路径)。空 = 用默认。 */
+  workspace_dir?: string;
 }
 interface AgentRecord {
   agent_id: string;
@@ -129,13 +132,30 @@ function sseWireToText(value: string): string {
 }
 
 /**
- * Per-group scratch workspace for CLI/ACP/MCP executors. CliCallable requires a
- * cwd to spawn the binary (chat has no run-session workspace). We give each
- * group a stable dir under the server data root so the CLI has somewhere to run
- * (and any files it writes stay grouped, not scattered in the repo).
+ * Resolve the CLI/ACP/MCP working directory (cwd) for a group.
+ *
+ * Priority (2026-05-30):
+ *   1. group.workspace_dir — user-picked absolute path (group settings DirPicker).
+ *      Used verbatim if it's an existing absolute directory. The bypassed CLI
+ *      can read/write here, so it's the user's explicit choice.
+ *   2. Fallback scratch dir OUTSIDE the repo:
+ *      `$SHADOWFLOW_CHAT_DIR | ~/.shadowflow-chat`/chat-workspaces/<groupId>.
+ *      Previously this lived under the repo (`process.cwd()/.shadowflow/...`),
+ *      which let `claude` follow the git root and read the whole ShadowFlow
+ *      codebase — `bypassPermissions + cwd-in-repo` is the dangerous combo we
+ *      avoid here (see docs/architecture/chat-cli-cwd-and-permissions.md).
  */
-function ensureChatWorkspace(groupId: string): string {
-  const dir = join(process.cwd(), '.shadowflow', 'chat-workspaces', groupId.replace(/[^\w-]/g, '_'));
+function resolveChatWorkspace(groupId: string, userDir?: string): string {
+  if (userDir && userDir.trim() && isAbsolute(userDir.trim())) {
+    const p = userDir.trim();
+    try {
+      if (statSync(p).isDirectory()) return p;
+    } catch {
+      /* user dir gone / unreadable — fall through to default scratch */
+    }
+  }
+  const root = process.env.SHADOWFLOW_CHAT_DIR?.trim() || join(homedir(), '.shadowflow-chat');
+  const dir = join(root, 'chat-workspaces', groupId.replace(/[^\w-]/g, '_'));
   try {
     mkdirSync(dir, { recursive: true });
   } catch {
@@ -168,11 +188,12 @@ async function runFanout(
   headers: Request['headers'],
 ): Promise<void> {
   const apiKey = resolveExecutorKey(executor, headers);
-  // CLI/ACP/MCP need a cwd; byok/anthropic-direct ignore it. Always provide one.
-  const workspace = ensureChatWorkspace(groupId);
 
   const group = await pyGet<GroupRecord>(`/api/groups/${encodeURIComponent(groupId)}`);
   if (!group) return;
+  // CLI/ACP/MCP need a cwd; byok/anthropic-direct ignore it. Honor the group's
+  // user-picked workspace_dir, else a repo-external scratch dir.
+  const workspace = resolveChatWorkspace(groupId, group.workspace_dir);
   const agentIds = (group.agent_ids ?? []).slice(0, MAX_FANOUT_AGENTS);
   if (agentIds.length === 0) {
     await pyPostMessage(groupId, {

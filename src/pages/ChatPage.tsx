@@ -596,6 +596,7 @@ export default function ChatPage() {
         const known = groups.find((g) => g.id === groupId);
         const rec = await getGroup(groupId);
         if (!alive || !rec) return;
+        setGroupWorkspaceDir(rec.workspace_dir);  // 群级 CLI 工作目录,给 DirPicker 预填
         const ws = rec.workspace_id ?? undefined;
         const teamId = rec.team_id ?? undefined;
         if (ws && ws !== currentWorkspaceId) {
@@ -713,7 +714,37 @@ export default function ChatPage() {
   // group 模式跑 —— 单聊底层复用群聊整套：持久化 + dispatch_agent_reply 回复桥
   // + SSE 实时回复 + 刷新不丢。UI 不变（仍是下方那套内嵌单聊视图）。
   const [dmAgentId, setDmAgentId] = useState<string | null>(null);   // 当前单聊的 agent
-  const [dmGroupId, setDmGroupId] = useState<string | null>(null);   // resolve 出的 conversation id
+  const [dmGroupId, setDmGroupId] = useState<string | null>(null);
+  // 2026-05-30 — DM 群的 CLI 工作目录(workspace_dir)。openDm 时 getGroup 拉取。
+  const [dmWorkspaceDir, setDmWorkspaceDir] = useState<string | undefined>(undefined);  // DM 群的 CLI 工作目录
+  // 2026-05-30 — 当前群聊的 CLI 工作目录(workspace_dir)。由 getGroup 同步填充。
+  const [groupWorkspaceDir, setGroupWorkspaceDir] = useState<string | undefined>(undefined);
+
+  // 2026-05-30 — 群聊/DM CLI 工作目录选择器。选了 → patchGroup workspace_dir +
+  // 乐观更新本地 state。仅 CLI executor 回话时后端真用得上。声明须在上面所有
+  // state(groupWorkspaceDir/dmWorkspaceDir/dmGroupId)之后,避免 TDZ。
+  const groupDirPicker = useMemo(
+    () => ({
+      value: groupWorkspaceDir,
+      onPick: (p: string) => {
+        if (!groupId) return;
+        setGroupWorkspaceDir(p);
+        void patchGroup(groupId, { workspace_dir: p }).catch(() => {});
+      },
+    }),
+    [groupWorkspaceDir, groupId],
+  );
+  const dmDirPicker = useMemo(
+    () => ({
+      value: dmWorkspaceDir,
+      onPick: (p: string) => {
+        if (!dmGroupId) return;
+        setDmWorkspaceDir(p);
+        void patchGroup(dmGroupId, { workspace_dir: p }).catch(() => {});
+      },
+    }),
+    [dmWorkspaceDir, dmGroupId],
+  );
   const [dmComposer, setDmComposer] = useState('');
   const dmStream = useChatStream({ mode: 'group', targetId: dmGroupId, sseChannel: 'group', executor: pickExecutor, model: pickModel });
   const dmAgent = useMemo(
@@ -725,9 +756,12 @@ export default function ChatPage() {
     async (agentId: string) => {
       setDmAgentId(agentId);
       setDmGroupId(null); // 先清空，避免显示上一个 agent 的历史
+      setDmWorkspaceDir(undefined);
       try {
         const gid = await resolveDmConversation(agentId, currentWorkspaceId);
         setDmGroupId(gid);
+        // 拉该 DM 群的 workspace_dir 给 DirPicker 预填(失败忽略)。
+        if (gid) void getGroup(gid).then((g) => setDmWorkspaceDir(g?.workspace_dir)).catch(() => {});
       } catch (err) {
         console.warn('[ChatPage] resolve DM conversation failed:', err);
       }
@@ -1125,6 +1159,7 @@ export default function ChatPage() {
                 loading={dmStream.loading}
                 t={t}
                 modelPicker={modelPickerProps}
+                dirPicker={dmDirPicker}
               />
             </>
           ) : (
@@ -1249,6 +1284,7 @@ export default function ChatPage() {
             loading={chatStream.loading}
             t={t}
             modelPicker={modelPickerProps}
+            dirPicker={groupDirPicker}
           />
           </>
           )}

@@ -37,6 +37,7 @@ import {
   CheckCircle2,
   XCircle,
   Trash2,
+  FolderOpen,
 } from 'lucide-react';
 import { getApiBase } from '../api/_base';
 import { useSecretsStore } from '../core/hooks/useSecretsStore';
@@ -51,6 +52,7 @@ import { HfTopBar } from '../components/hifi';
 import { useI18n } from '../common/i18n';
 import { SkillUrlChip } from '../components/SkillUrlChip';
 import ModelPicker from '../components/ModelPicker';
+import DirPicker from '../components/DirPicker';
 import { SkillPickerModal } from '../components/SkillPickerModal';
 import { extractSkillUrl, listInstalledSkills, type SkillIngestSummary, type InstalledSkill } from '../api/skillIngest';
 import { listSkills, type SkillInfo } from '../api/skills';
@@ -752,6 +754,11 @@ export default function StartPage() {
   const [pickModel, setPickModel] = useState<string>(
     () => localStorage.getItem('sf.model') ?? '',
   );
+  // 2026-05-30 — CLI 工作目录(cwd)。DirPicker 选 → 存 sf.cwd → handleSubmit 拼进
+  // run-session 请求(仅 cli:/acp:/mcp: 生效)。与 run-session/chat 同一 sf.cwd。
+  const [pickCwd, setPickCwd] = useState<string>(() => localStorage.getItem('sf.cwd') ?? '');
+  const [showDirPicker, setShowDirPicker] = useState(false);
+  const dirAnchorRef = useRef<HTMLButtonElement>(null);
   // Skill-URL detection state. When the composer contains a github / raw-md
   // URL, we surface a chip offering to install it as a skill before submission.
   // dismissedUrls accumulates URLs the user explicitly said "no" to so we don't
@@ -1644,6 +1651,38 @@ export default function StartPage() {
                   }}
                   onNavigateSettings={(target) => navigate(target)}
                 />
+              </div>
+
+              {/* 2026-05-30 — CLI 工作目录(cwd)。选了 CLI executor 才真生效。 */}
+              <div style={{ flexShrink: 0, position: 'relative' }}>
+                <button
+                  ref={dirAnchorRef}
+                  type="button"
+                  title={pickCwd ? `CLI 工作目录: ${pickCwd}` : '选择 CLI 工作目录'}
+                  onClick={() => setShowDirPicker((v) => !v)}
+                  style={{
+                    width: 32, height: 32, display: 'inline-flex', alignItems: 'center',
+                    justifyContent: 'center', borderRadius: 8, cursor: 'pointer',
+                    background: pickCwd ? 'var(--t-accent-tint)' : 'transparent',
+                    border: `1px solid ${pickCwd ? 'var(--t-accent)' : 'var(--t-border)'}`,
+                    color: pickCwd ? 'var(--t-accent-bright)' : 'var(--t-fg-4)',
+                  }}
+                >
+                  <FolderOpen size={14} strokeWidth={1.8} />
+                </button>
+                {showDirPicker && (
+                  <DirPicker
+                    value={pickCwd || undefined}
+                    anchorRef={dirAnchorRef}
+                    title="选择 CLI 工作目录"
+                    onPick={(p) => {
+                      localStorage.setItem('sf.cwd', p);
+                      setPickCwd(p);
+                      setShowDirPicker(false);
+                    }}
+                    onClose={() => setShowDirPicker(false)}
+                  />
+                )}
               </div>
 
               {/* MODE chip · Auto (default) / Single / Team */}

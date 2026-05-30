@@ -9,10 +9,11 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import {
-  AtSign, Slash, Smile, Paperclip, Scissors, CheckSquare, Sparkles, Send,
+  AtSign, Slash, Smile, Paperclip, Scissors, CheckSquare, Sparkles, Send, FolderOpen,
 } from 'lucide-react';
 import styles from './chatFB.module.css';
 import ModelPicker from '../ModelPicker';
+import DirPicker from '../DirPicker';
 import type { ModelPickerValue } from '../../common/constants/modelPicker';
 
 export interface ComposerFBProps {
@@ -34,6 +35,14 @@ export interface ComposerFBProps {
     onChange: (v: ModelPickerValue) => void;
     onNavigateSettings?: (target: string) => void;
   };
+  /**
+   * 2026-05-30 · CLI 工作目录(cwd)选择器。chat 群级 —— 选了写进群 workspace_dir。
+   * value = 群当前 workspace_dir;onPick 回传所选绝对路径。未传则不渲染。
+   */
+  dirPicker?: {
+    value?: string;
+    onPick: (absPath: string) => void;
+  };
 }
 
 const SLASH_CMDS: Array<{ cmd: string; d: string; sel?: boolean }> = [
@@ -53,6 +62,7 @@ export default function ComposerFB({
   t,
   placeholder,
   modelPicker,
+  dirPicker,
 }: ComposerFBProps) {
   const tr = (k: string, fb: string) => {
     if (!t) return fb;
@@ -60,6 +70,8 @@ export default function ComposerFB({
     return v && v !== k ? v : fb;
   };
   const [slashOpen, setSlashOpen] = useState(false);
+  const [dirOpen, setDirOpen] = useState(false);
+  const dirAnchorRef = useRef<HTMLButtonElement>(null);
   const slashPopRef = useRef<HTMLDivElement>(null);
   const slashBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -166,6 +178,29 @@ export default function ComposerFB({
                 variant="compact"
               />
             </div>
+          )}
+          {dirPicker && (
+            <>
+              <button
+                ref={dirAnchorRef}
+                type="button"
+                className={styles.compToolBtn}
+                title={dirPicker.value ? `CLI 工作目录: ${dirPicker.value}` : '选择 CLI 工作目录'}
+                onClick={() => setDirOpen((v) => !v)}
+                style={dirPicker.value ? { color: 'var(--t-accent-bright)' } : undefined}
+              >
+                <FolderOpen strokeWidth={1.7} />
+              </button>
+              {dirOpen && (
+                <DirPicker
+                  value={dirPicker.value || undefined}
+                  anchorRef={dirAnchorRef}
+                  title="选择 CLI 工作目录(本群)"
+                  onPick={(p) => { dirPicker.onPick(p); setDirOpen(false); }}
+                  onClose={() => setDirOpen(false)}
+                />
+              )}
+            </>
           )}
           <span className={styles.compMd}>Markdown</span>
         </div>

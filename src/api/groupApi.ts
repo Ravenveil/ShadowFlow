@@ -161,6 +161,8 @@ export async function fetchRecentMessages(
 export interface PatchGroupRequest {
   name?: string;
   announcement?: string;
+  /** 2026-05-30 — CLI 工作目录(绝对路径)。空串 = 清除(回退默认)。 */
+  workspace_dir?: string;
 }
 
 /**
@@ -173,6 +175,8 @@ export interface GroupRecord {
   announcement?: string;
   agent_ids?: string[];
   workspace_id?: string;
+  /** 2026-05-30 — CLI 工作目录(绝对路径,群级)。 */
+  workspace_dir?: string;
   team_id?: string;
   created_at?: string;
   [key: string]: unknown;

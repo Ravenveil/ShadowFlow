@@ -163,6 +163,10 @@ class CreateGroupRequest(BaseModel):
     policy_matrix: Dict[str, Any] = Field(default_factory=dict)
     workspace_id: Optional[str] = None
     team_id: Optional[str] = None
+    # 2026-05-30 — CLI 工作目录(绝对路径)。群里选 CLI executor 回话时,Node 网关
+    # (groups-chat.ts)用它当 spawn cwd。空 = 回退到仓库外默认 scratch 目录。
+    # 与 workspace_id(ShadowFlow 工作区概念)无关。
+    workspace_dir: Optional[str] = None
     # 2026-05-29 — conversation kind：'group'（群聊）| 'dm'（单聊）。DM 不显示在
     # 群列表，但底层复用同一存储 + 回复桥（dispatch_agent_reply 对 N=1 即单聊）。
     kind: str = "group"
@@ -258,6 +262,7 @@ async def create_group(request: Request, body: CreateGroupRequest) -> GroupRespo
         "member_emails": body.member_emails,
         "policy_matrix": body.policy_matrix,
         "workspace_id": body.workspace_id,
+        "workspace_dir": body.workspace_dir,
         "team_id": body.team_id,
         "kind": body.kind or "group",
         "created_at": created_at,
@@ -705,6 +710,8 @@ class PatchGroupRequest(BaseModel):
     # 归档群聊（群级，非每用户）。True → 从默认群列表隐藏；列表端点用
     # include_archived=true 仍可拉到。
     archived: Optional[bool] = None
+    # 2026-05-30 — CLI 工作目录(绝对路径)。空字符串 = 清除(回退默认)。
+    workspace_dir: Optional[str] = Field(None, max_length=4096)
 
 
 class UserGroupSetting(BaseModel):
@@ -739,6 +746,9 @@ async def patch_group(group_id: str, body: PatchGroupRequest) -> Dict[str, Any]:
         record["announcement"] = body.announcement
     if body.archived is not None:
         record["archived"] = body.archived
+    if body.workspace_dir is not None:
+        # 空串 = 清除(回退到 Node 默认 scratch 目录);非空原样存(Node 端再校验)。
+        record["workspace_dir"] = body.workspace_dir.strip() or None
     record["updated_at"] = datetime.now(timezone.utc).isoformat()
     _save_group(record)
     return _envelope(record)
