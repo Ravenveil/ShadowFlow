@@ -7,7 +7,7 @@
  * Props 与旧 ChatPage.tsx 内 RichComposer 对齐。
  */
 
-import { useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import {
   AtSign, Slash, Smile, Paperclip, Scissors, CheckSquare, Sparkles, Send,
 } from 'lucide-react';
@@ -60,6 +60,22 @@ export default function ComposerFB({
     return v && v !== k ? v : fb;
   };
   const [slashOpen, setSlashOpen] = useState(false);
+  const slashPopRef = useRef<HTMLDivElement>(null);
+  const slashBtnRef = useRef<HTMLButtonElement>(null);
+
+  // 点击弹窗与「/命令」按钮之外的任何地方 → 收起 slash 菜单。排除按钮本身，
+  // 否则开着时点按钮会先被这里关、再被按钮 onClick 切回，等于关不掉。
+  useEffect(() => {
+    if (!slashOpen) return;
+    function onDoc(e: MouseEvent) {
+      const target = e.target as Node;
+      if (slashPopRef.current?.contains(target)) return;
+      if (slashBtnRef.current?.contains(target)) return;
+      setSlashOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [slashOpen]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -79,7 +95,7 @@ export default function ComposerFB({
   return (
     <div className={styles.composer}>
       {slashOpen && (
-        <div className={styles.slashPop} role="listbox">
+        <div ref={slashPopRef} className={styles.slashPop} role="listbox">
           <div className={styles.slashHead}>
             <span className={styles.slashLab}>SLASH COMMANDS</span>
             <span className={styles.slashHint}>↑↓ 选 · ↵ 用</span>
@@ -110,6 +126,7 @@ export default function ComposerFB({
             <AtSign strokeWidth={1.7} />
           </button>
           <button
+            ref={slashBtnRef}
             type="button"
             className={styles.compToolBtn}
             title="/命令"
