@@ -11,8 +11,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, ChevronRight, ArrowUp, Check, X, HardDrive } from 'lucide-react';
-import { fsHome, fsList, type FsEntry } from '../api/fsBrowse';
+import { Folder, FolderOpen, ChevronRight, ArrowUp, Check, X, HardDrive, MonitorUp } from 'lucide-react';
+import { fsHome, fsList, fsPickNative, type FsEntry } from '../api/fsBrowse';
 
 export interface DirPickerProps {
   /** 当前已选目录(用于初始定位);空 = 从 home 开始。 */
@@ -34,19 +34,26 @@ export default function DirPicker({ value, onPick, onClose, anchorRef, title }: 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number }>({ left: 0 });
+  // 2026-05-30 — 可编辑路径栏(对齐 OpenDesign:粘贴绝对路径直接转到)。draft 是输入框
+  // 当前文本,导航成功后同步成真实路径;手输/粘贴后回车或点「转到」→ load。
+  const [draft, setDraft] = useState<string>(value ?? '');
+  const [nativePicking, setNativePicking] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // 加载某目录(undefined=home;'ROOT'=盘符)。
+  // 加载某目录(undefined=home;'ROOT'=盘符;绝对路径=跳转到该目录)。
   const load = (p?: string) => {
     setLoading(true);
     setErr(null);
     fsList(p)
       .then((r) => {
         if (!r) {
-          setErr('无法读取目录(后端未响应)');
+          // fsList 在 404/非目录/网络失败时返回 null。给可操作的提示。
+          setErr(p && p !== 'ROOT' ? `读不到该目录:${p}(检查路径是否存在、是否是文件夹)` : '无法读取目录(后端未响应)');
           return;
         }
-        setCur(r.path === 'ROOT' ? undefined : r.path);
+        const real = r.path === 'ROOT' ? undefined : r.path;
+        setCur(real);
+        setDraft(real ?? '');
         setParent(r.parent);
         setEntries(r.entries);
       })
@@ -107,9 +114,32 @@ export default function DirPicker({ value, onPick, onClose, anchorRef, title }: 
         borderBottom: '1px solid var(--t-border)', flexShrink: 0,
       }}>
         <FolderOpen size={14} strokeWidth={1.8} style={{ color: 'var(--t-accent)', flexShrink: 0 }} />
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg)', flex: 1 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {title ?? '选择工作目录'}
         </span>
+        {/* 系统原生文件夹对话框(后端在本机替弹,拿真实路径)。 */}
+        <button
+          type="button"
+          title="弹出系统文件夹对话框选择"
+          disabled={nativePicking}
+          onClick={() => {
+            setNativePicking(true);
+            setErr(null);
+            fsPickNative()
+              .then((p) => { if (p) onPick(p); })
+              .finally(() => setNativePicking(false));
+          }}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+            padding: '3px 8px', borderRadius: 6, cursor: nativePicking ? 'default' : 'pointer',
+            background: 'var(--t-accent-tint)', border: '1px solid var(--t-accent)',
+            color: 'var(--t-accent-bright)', fontSize: 10.5, fontWeight: 600,
+            opacity: nativePicking ? 0.6 : 1,
+          }}
+        >
+          <MonitorUp size={12} strokeWidth={2} />
+          {nativePicking ? '已弹出…' : '系统选择'}
+        </button>
         <button
           type="button"
           onClick={onClose}
@@ -119,11 +149,10 @@ export default function DirPicker({ value, onPick, onClose, anchorRef, title }: 
         </button>
       </div>
 
-      {/* current path bar */}
+      {/* current path bar — 可编辑:粘贴绝对路径回车/点「转到」直接跳转 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
         borderBottom: '1px solid var(--t-border)', flexShrink: 0,
-        fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--t-fg-3)',
       }}>
         <button
           type="button"
@@ -139,9 +168,35 @@ export default function DirPicker({ value, onPick, onClose, anchorRef, title }: 
         >
           <ArrowUp size={12} strokeWidth={2} />
         </button>
-        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', direction: 'rtl', textAlign: 'left' }}>
-          {cur ?? '此电脑 / 盘符'}
-        </span>
+        <input
+          type="text"
+          value={draft}
+          spellCheck={false}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && draft.trim()) { e.preventDefault(); load(draft.trim()); }
+          }}
+          placeholder="粘贴绝对路径回车跳转，如 D:\\我的项目"
+          style={{
+            flex: 1, minWidth: 0, background: 'var(--t-bg)', border: '1px solid var(--t-border)',
+            borderRadius: 6, padding: '4px 8px', color: 'var(--t-fg)',
+            fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, outline: 'none',
+          }}
+        />
+        <button
+          type="button"
+          title="转到该路径"
+          disabled={!draft.trim()}
+          onClick={() => { if (draft.trim()) load(draft.trim()); }}
+          style={{
+            flexShrink: 0, padding: '4px 10px', borderRadius: 6, border: 0,
+            cursor: draft.trim() ? 'pointer' : 'default',
+            background: draft.trim() ? 'var(--t-accent)' : 'var(--t-border)',
+            color: draft.trim() ? '#fff' : 'var(--t-fg-4)', fontSize: 11, fontWeight: 600,
+          }}
+        >
+          转到
+        </button>
       </div>
 
       {/* entry list */}

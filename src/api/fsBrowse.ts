@@ -57,6 +57,22 @@ export interface FsValidate {
   path?: string;
 }
 
+/**
+ * 弹出操作系统原生文件夹对话框(daemon 在本机替前端弹),返回用户选的绝对路径。
+ * null = 用户取消 / 本机不支持(浏览器拿不到原生弹窗路径,故走后端)。
+ */
+export async function fsPickNative(): Promise<string | null> {
+  try {
+    const res = await fetch(`${getApiBase()}/api/fs/pick-native`);
+    if (!res.ok) return null; // 503 UNSUPPORTED 等
+    const json = await res.json();
+    const p = json.data?.path;
+    return typeof p === 'string' && p.trim() ? p.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 校验候选 cwd:必须是存在的绝对目录。 */
 export async function fsValidate(path: string): Promise<FsValidate> {
   try {
