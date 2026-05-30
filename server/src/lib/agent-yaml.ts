@@ -205,6 +205,27 @@ export function listAgents(): { agents: SkillAgentDef[]; errors: string[] } {
   return { agents, errors };
 }
 
+/**
+ * Delete an agent's yaml file (the design-time soul template under
+ * `.shadowflow/agents/<id>.agent.yaml`). Returns true if a file was removed,
+ * false if no yaml existed for this id.
+ *
+ * Used by the agents route's DELETE fallback: yaml templates have semantic ids
+ * ("reader" / "arch" / "critic"…), not Python's `agent-*`, so Python returns
+ * 404 for them — we delete the local file instead. Re-seeding restores them.
+ */
+export function deleteAgent(agentId: string): boolean {
+  const filePath = resolveAgentFile(agentId);
+  if (!filePath) return false;
+  try {
+    fs.unlinkSync(filePath);
+  } catch {
+    return false;
+  }
+  clearAgentCache();
+  return true;
+}
+
 /** Clear the in-memory cache — useful for tests / hot reload. */
 export function clearAgentCache(): void {
   cache.clear();

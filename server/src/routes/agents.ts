@@ -28,7 +28,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { listAgents as listYamlAgents } from '../lib/agent-yaml';
+import { listAgents as listYamlAgents, deleteAgent as deleteYamlAgent } from '../lib/agent-yaml';
 import type { AgentRecord } from '../storage/agents';
 
 const router = Router();
@@ -156,20 +156,35 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// ─── DELETE /api/agents/:id — forward to Python ─────────────────────────────
+// ─── DELETE /api/agents/:id — Python first, fall back to local yaml ──────────
+// Real Python agents (`agent-*`) delete via Python. Local yaml soul-templates
+// (semantic ids like "reader"/"arch" surfaced by the GET merge) aren't in
+// Python → it 404s → we delete their .shadowflow/agents/<id>.agent.yaml file
+// instead, so the talent pool's delete works for both kinds.
 router.delete('/:id', async (req: Request, res: Response) => {
+  const id = req.params.id;
   try {
     const { status, payload } = await forwardJson(
       'DELETE',
-      `/${encodeURIComponent(req.params.id)}`,
+      `/${encodeURIComponent(id)}`,
       undefined,
     );
     if (status === 204 || status === 200) {
       res.status(204).send();
       return;
     }
+    // Not a Python agent — try the local yaml template.
+    if (status === 404 && deleteYamlAgent(id)) {
+      res.status(204).send();
+      return;
+    }
     res.status(status).json(payload);
   } catch (err) {
+    // Python unreachable — a yaml-template delete can still succeed locally.
+    if (deleteYamlAgent(id)) {
+      res.status(204).send();
+      return;
+    }
     res.status(502).json({
       error: {
         code: 'PYTHON_UNREACHABLE',
