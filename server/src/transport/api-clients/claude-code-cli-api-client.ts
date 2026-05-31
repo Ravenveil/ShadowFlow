@@ -182,6 +182,14 @@ export interface ClaudeCapabilities {
   partialMessages: boolean;
   /** `--add-dir` flag accepted (informational; not currently used). */
   addDir: boolean;
+  /**
+   * `--input-format` flag accepted by `<bin> -p` → the CLI can read a
+   * `stream-json` message stream on stdin. When true we feed history as NATIVE
+   * structured blocks (tool_use/tool_result never become `<tool_use>` XML);
+   * when false we fall back to the text prompt. Optional so test fixtures that
+   * pre-seed only {partialMessages,addDir} keep type-checking (undefined→false).
+   */
+  streamJsonInput?: boolean;
 }
 
 /**
@@ -273,6 +281,7 @@ export async function probeClaudeCapabilities(
         settle({
           partialMessages: stdout.includes('--include-partial-messages'),
           addDir: stdout.includes('--add-dir'),
+          streamJsonInput: stdout.includes('--input-format'),
         });
       });
 
@@ -594,11 +603,20 @@ export class ClaudeCodeCliApiClient implements ApiClient {
     const capabilities: ClaudeCapabilities =
       this.opts.capabilities ?? (await probeClaudeCapabilities(binPath, spawnImpl));
 
-    // Gap-close (2026-05-31): opt-in structured stdin. When enabled, prior tool
-    // calls/results go to the CLI as NATIVE stream-json blocks (never <tool_use>
-    // XML). Default off — the exact CLI input envelope needs a live-CLI smoke
-    // test before it can be the default (see serializeStreamJsonInput).
-    const useStreamJsonInput = process.env.SHADOWFLOW_CLI_INPUT_STREAM_JSON === '1';
+    // Gap-close (2026-05-31): structured stdin. When the CLI supports
+    // `--input-format` (capability-probed), prior tool calls/results go to it as
+    // NATIVE stream-json blocks (never `<tool_use>` XML) — Law 1 closed on the
+    // input side too. SAFE-BY-DEFAULT: a CLI build without the flag auto-falls
+    // back to the proven text prompt, so nothing breaks on older binaries.
+    // Env override (escape hatch): `SHADOWFLOW_CLI_INPUT_STREAM_JSON=0` forces
+    // the text path even where supported; `=1` forces structured (test/manual).
+    const streamJsonEnv = process.env.SHADOWFLOW_CLI_INPUT_STREAM_JSON;
+    const useStreamJsonInput =
+      streamJsonEnv === '1'
+        ? true
+        : streamJsonEnv === '0'
+          ? false
+          : capabilities.streamJsonInput === true;
 
     const spawnArgs = [...extraArgs];
     if (useStreamJsonInput && !spawnArgs.includes('--input-format')) {

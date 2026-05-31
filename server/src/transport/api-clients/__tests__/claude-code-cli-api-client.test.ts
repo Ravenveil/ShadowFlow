@@ -730,6 +730,71 @@ async function testStdinReceivesPrompt(): Promise<void> {
   }
 }
 
+async function testStreamJsonInputWhenSupported(): Promise<void> {
+  console.log('\n[claude-code-cli] --input-format stream-json: native blocks on stdin (no XML)');
+  // Force the structured path by priming the capability (skips the help probe).
+  __primeClaudeCapability('claude-sj', {
+    partialMessages: false,
+    addDir: false,
+    streamJsonInput: true,
+  });
+  let sub!: ScriptedSubprocess;
+  const { spawnFn, inspect } = makeSpawnFn(() => {
+    sub = makeFakeChild();
+    return sub;
+  });
+  {
+    const client = new ClaudeCodeCliApiClient({ binPath: 'claude-sj', spawnFn });
+    const eventsP = collect(
+      client.stream({
+        system_prompt: '',
+        messages: [
+          { role: 'user', blocks: [{ kind: 'text', text: 'Compute 1+1' }] },
+          {
+            role: 'assistant',
+            blocks: [{ kind: 'tool_use', id: 'c1', name: 'echo', input: { msg: 'two' } }],
+          },
+          {
+            role: 'tool',
+            blocks: [
+              { kind: 'tool_result', tool_use_id: 'c1', tool_name: 'echo', output: 'two', is_error: false },
+            ],
+          },
+        ],
+        tools: [ECHO_TOOL],
+        signal: new AbortController().signal,
+      }),
+    );
+    await new Promise((r) => setImmediate(r));
+    sub.finish(0);
+    await eventsP.catch(() => {/* defensive */});
+
+    const spawnCall = inspect.spawned[0];
+    checkTruthy(
+      `--input-format stream-json forwarded (args=${JSON.stringify(spawnCall.args)})`,
+      spawnCall.args.includes('--input-format') &&
+        spawnCall.args[spawnCall.args.indexOf('--input-format') + 1] === 'stream-json',
+    );
+    const allStdin = sub.stdinWrites.join('');
+    checkTruthy('stdin has NO <tool_use> XML', !allStdin.includes('<tool_use'));
+    checkTruthy('stdin has NO <tool_result> XML', !allStdin.includes('<tool_result'));
+    checkTruthy('stdin carries native tool_use block', allStdin.includes('"type":"tool_use"'));
+    checkTruthy('stdin carries native tool_result block', allStdin.includes('"type":"tool_result"'));
+    checkTruthy('stdin tool_use id preserved', allStdin.includes('"id":"c1"'));
+    // Each non-empty stdin line must be valid JSON (proper JSONL).
+    const lines = allStdin.split('\n').filter((l) => l.trim().length > 0);
+    let allJson = true;
+    for (const l of lines) {
+      try {
+        JSON.parse(l);
+      } catch {
+        allJson = false;
+      }
+    }
+    checkTruthy('every stdin line is valid JSON (JSONL)', allJson);
+  }
+}
+
 async function testSpawnEnoent(): Promise<void> {
   console.log('\n[claude-code-cli] spawn ENOENT → install-hint error');
   let sub!: ScriptedSubprocess;
@@ -1297,6 +1362,7 @@ async function main(): Promise<void> {
   await testResultTerminator();
   await testEmptyStdoutDefensiveStop();
   await testStdinReceivesPrompt();
+  await testStreamJsonInputWhenSupported();
   await testSpawnEnoent();
 
   // S14.2 follow-up — 6 new fixes
