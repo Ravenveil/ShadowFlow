@@ -331,97 +331,86 @@ plain reply
     { data: t3?.data });
 })();
 
-// ─── Test 15: <tool_use> from Claude Code CLI wrapper → tool-use event ─────
+// ─── Test 15: P1 — <tool_use> XML is NO LONGER extracted (flows as text) ────
+// Tools are now structured TurnChunks (ConversationRuntime / ApiClientCallable
+// → pipeChunksToSse), never re-parsed out of text. So a literal <tool_use>
+// wrapper in the text stream passes through as a plain `text` event.
 
-(function testToolUseExtraction() {
-  console.log('\n[15] <tool_use name="..." id="..."> → tool-use event');
+(function testToolUseNotExtracted() {
+  console.log('\n[15] P1 <tool_use> wrapper flows as text (no tool-use event)');
   const input =
     '<tool_use name="Bash" id="toolu_01ABC">\n{"command":"ls","description":"list"}\n</tool_use>';
   const { buffer, events } = parseAndExtract(input, 'sess-15', noopArtifact);
-  check('buffer drained of tool_use wrapper', buffer.trim() === '', { buffer });
-  check('exactly 1 tool-use event', countEvent(events, 'tool-use') === 1);
-  const e = findEvent(events, 'tool-use');
-  const d = e?.data as Record<string, unknown> | undefined;
-  check('tool-use name=Bash', d?.name === 'Bash');
-  check('tool-use id=toolu_01ABC', d?.id === 'toolu_01ABC');
+  check('buffer drained', buffer.trim() === '', { buffer });
+  check('NO tool-use event extracted from text', countEvent(events, 'tool-use') === 0);
+  const t = findEvent(events, 'text');
   check(
-    'tool-use input has command JSON',
-    typeof d?.input === 'string' && (d?.input as string).includes('"command":"ls"'),
-    { input: d?.input },
+    'wrapper passes through as text',
+    typeof (t?.data as Record<string, unknown>)?.text === 'string' &&
+      ((t?.data as Record<string, unknown>)?.text as string).includes('<tool_use name="Bash"'),
+    { t },
   );
-  check('no text event leaks the wrapper', countEvent(events, 'text') === 0);
 })();
 
-// ─── Test 16: <tool_result for="..."> → tool-result event ───────────────────
+// ─── Test 16: P1 — <tool_result> XML is NO LONGER extracted (flows as text) ─
 
-(function testToolResultExtraction() {
-  console.log('\n[16] <tool_result for="..."> → tool-result event');
+(function testToolResultNotExtracted() {
+  console.log('\n[16] P1 <tool_result> flows as text (no tool-result event)');
   const input =
     '<tool_result for="toolu_01ABC">file1.txt\nfile2.txt</tool_result>';
   const { buffer, events } = parseAndExtract(input, 'sess-16', noopArtifact);
   check('buffer drained', buffer.trim() === '', { buffer });
-  check('exactly 1 tool-result event', countEvent(events, 'tool-result') === 1);
-  const e = findEvent(events, 'tool-result');
-  const d = e?.data as Record<string, unknown> | undefined;
-  check('tool-result for=toolu_01ABC', d?.for === 'toolu_01ABC');
-  check('tool-result output trimmed', d?.output === 'file1.txt\nfile2.txt');
+  check('NO tool-result event extracted', countEvent(events, 'tool-result') === 0);
+  const t = findEvent(events, 'text');
+  check(
+    'result passes through as text',
+    typeof (t?.data as Record<string, unknown>)?.text === 'string' &&
+      ((t?.data as Record<string, unknown>)?.text as string).includes('<tool_result for='),
+    { t },
+  );
 })();
 
-// ─── Test 17: <function_calls>...<invoke>... → tool-use event ───────────────
+// ─── Test 17: P1 — <function_calls> block is NO LONGER extracted ────────────
 
-(function testFunctionCallsBlock() {
-  console.log('\n[17] <function_calls> block → tool-use(name=function_calls)');
+(function testFunctionCallsNotExtracted() {
+  console.log('\n[17] P1 <function_calls> flows as text (no tool-use event)');
   const input =
     '<function_calls>\n<invoke name="Read"><parameter name="path">/tmp/x</parameter></invoke>\n</function_calls>';
   const { buffer, events } = parseAndExtract(input, 'sess-17', noopArtifact);
   check('buffer drained', buffer.trim() === '', { buffer });
+  check('NO tool-use event extracted', countEvent(events, 'tool-use') === 0);
+  const t = findEvent(events, 'text');
   check(
-    'exactly 1 tool-use event',
-    countEvent(events, 'tool-use') === 1,
-    { events },
+    'block passes through as text',
+    typeof (t?.data as Record<string, unknown>)?.text === 'string' &&
+      ((t?.data as Record<string, unknown>)?.text as string).includes('<function_calls>'),
+    { t },
   );
-  const e = findEvent(events, 'tool-use');
-  const d = e?.data as Record<string, unknown> | undefined;
-  check('name=function_calls', d?.name === 'function_calls');
-  check(
-    'input preserves <invoke> body for downstream rendering',
-    typeof d?.input === 'string' && (d?.input as string).includes('<invoke name="Read"'),
-    { input: d?.input },
-  );
-  check('no text event leaks XML', countEvent(events, 'text') === 0);
 })();
 
-// ─── Test 18: partial <tool_use> tag stays in buffer (streaming) ────────────
+// ─── Test 18: P1 — a <tool_use prefix is no longer specially held back ──────
+// findPartialTagStart dropped the tool prefixes, so a mid-stream <tool_use
+// fragment is NOT buffered waiting for a close — it just flows as text. The
+// only tags still held back are <sf:* / <artifact.
 
-(function testPartialToolUseHeldBack() {
-  console.log('\n[18] partial <tool_use prefix held back until close arrives');
+(function testToolUseNotHeldBack() {
+  console.log('\n[18] P1 <tool_use fragment is not held back (flows as text)');
   const input1 = 'some text before <tool_use name="Bash"';
   const { buffer: b1, events: e1 } = parseAndExtract(
     input1,
     'sess-18',
     noopArtifact,
   );
-  // text before the partial tag should emit, partial tag held in buffer
+  check('no tool-use event', countEvent(e1, 'tool-use') === 0);
+  // The whole fragment flows as text; nothing is held in the buffer for tools.
+  check('buffer does NOT hold the <tool_use fragment', !b1.includes('<tool_use'), { b1 });
   const t1 = findEvent(e1, 'text');
   check(
-    'text before partial tag emitted',
-    (t1?.data as Record<string, unknown>)?.text === 'some text before ',
+    'fragment emitted as text including the <tool_use literal',
+    typeof (t1?.data as Record<string, unknown>)?.text === 'string' &&
+      ((t1?.data as Record<string, unknown>)?.text as string).includes('<tool_use name="Bash"'),
     { e1 },
   );
-  check('buffer holds the partial <tool_use', b1.startsWith('<tool_use'), {
-    b1,
-  });
-  check('no tool-use event yet (still open)', countEvent(e1, 'tool-use') === 0);
-
-  // feed the rest
-  const input2 = b1 + ' id="x">body</tool_use>';
-  const { buffer: b2, events: e2 } = parseAndExtract(
-    input2,
-    'sess-18',
-    noopArtifact,
-  );
-  check('tool-use event emitted on close', countEvent(e2, 'tool-use') === 1);
-  check('buffer drained after close', b2.trim() === '', { b2 });
 })();
 
 // ─── Test 19: P4 — leaked SSE wire frames stripped, not rendered as text ────

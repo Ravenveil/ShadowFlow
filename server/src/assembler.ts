@@ -929,6 +929,23 @@ export async function* pipeChunksToSse(
     return out;
   };
 
+  /**
+   * P1: flush any pending text (through the parser + JSON-hold state machine)
+   * and release a held JSON answer, returning the resulting events. Called
+   * before a structured tool-use/tool-result frame so the tool chip lands in
+   * timeline order *after* the prose/JSON that preceded it.
+   */
+  const flushPending = (nodeId?: string): ParserSseEvent[] => {
+    const out: ParserSseEvent[] = [];
+    if (textBuf.trim().length > 0) {
+      const { events } = parseAndExtract(textBuf, session_id, artifactCallback);
+      for (const e of events) out.push(...consume(e, nodeId));
+      textBuf = '';
+    }
+    out.push(...releaseJson(false));
+    return out;
+  };
+
   for await (const chunk of chunks) {
     if (chunk.type === 'text-delta') {
       textBuf += chunk.value;
@@ -987,10 +1004,34 @@ export async function* pipeChunksToSse(
         event: 'usage',
         data: { ...chunk.usage, node_id: chunk.node_id },
       };
+    } else if (chunk.type === 'tool-use') {
+      // P1 (root-cure plan §5) — tool calls are now FIRST-CLASS structured SSE,
+      // sourced from the typed `tool-use` TurnChunk (ConversationRuntime /
+      // ApiClientCallable), NOT re-parsed from <tool_use> XML in the text
+      // stream. Flush any pending text + held JSON first so the tool chip lands
+      // in timeline order after the prose that preceded it.
+      for (const out of flushPending(chunk.node_id)) yield out;
+      yield {
+        event: 'tool-use',
+        data: {
+          name: chunk.tool.tool_name,
+          input: chunk.tool.tool_input,
+          id: chunk.tool.call_id ?? null,
+          node_id: chunk.node_id,
+        },
+      };
+    } else if (chunk.type === 'tool-result') {
+      for (const out of flushPending(chunk.node_id)) yield out;
+      yield {
+        event: 'tool-result',
+        data: {
+          for: chunk.result.tool_use_id,
+          output: chunk.result.output,
+          is_error: chunk.result.is_error ?? false,
+          node_id: chunk.node_id,
+        },
+      };
     }
-    // chunk.type === 'tool-use' is intentionally dropped — Phase 2 decision A3
-    // (daemon-led DAG) means orchestration emits structured SSE via `<sf:*>`
-    // tags in the LLM's text, not via host tool_use loops.
   }
 
   // Final flush after the upstream stream ends naturally: drain residual text

@@ -222,6 +222,14 @@ export class ConversationRuntime {
               input: ev.input,
             });
             pendingTools.push({ id: ev.id, name: ev.name, input: ev.input });
+            // P1 (root-cure plan §5): surface the model's tool call as a
+            // STRUCTURED chunk so the UI renders a tool_call chip — instead of
+            // the call staying invisible inside the loop (the old behavior) or
+            // being recovered by re-parsing <tool_use> XML out of text.
+            yield {
+              type: 'tool-use',
+              tool: { tool_name: ev.name, tool_input: ev.input, call_id: ev.id },
+            };
           } else if (ev.kind === 'usage') {
             totalUsage = addUsage(totalUsage, ev.usage);
             yield {
@@ -315,6 +323,7 @@ export class ConversationRuntime {
           };
         }
 
+        const toolOutput = outputToString(dispatch.output);
         history.push({
           role: 'tool',
           blocks: [
@@ -322,11 +331,22 @@ export class ConversationRuntime {
               kind: 'tool_result',
               tool_use_id: t.id,
               tool_name: t.name,
-              output: outputToString(dispatch.output),
+              output: toolOutput,
               is_error: dispatch.isError ?? false,
             },
           ],
         });
+        // P1: surface the result as a STRUCTURED chunk (pairs with the tool-use
+        // chunk above by tool_use_id) so the UI's tool-group card shows the
+        // tool_echo continuation line. Previously results stayed loop-internal.
+        yield {
+          type: 'tool-result',
+          result: {
+            tool_use_id: t.id,
+            output: toolOutput,
+            is_error: dispatch.isError ?? false,
+          },
+        };
       }
       // Loop continues with the new tool_result(s) appended to history.
     }

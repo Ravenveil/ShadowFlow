@@ -35,6 +35,21 @@ export interface ToolUsePayload {
 }
 
 /**
+ * Tool execution result, paired with a prior `ToolUsePayload` by `tool_use_id`.
+ *
+ * P1 (sse-frame-leak root-cure plan §5): tool calls + results are first-class
+ * STRUCTURED chunks, not text re-parsed out of an XML round-trip. ConversationRuntime
+ * surfaces these after `toolRunner.dispatch`; `pipeChunksToSse` maps them to the
+ * `tool-result` SSE frame the timeline projector already consumes.
+ */
+export interface ToolResultPayload {
+  tool_use_id: string;
+  /** Stringified tool output (already flattened by the runtime). */
+  output: string;
+  is_error?: boolean;
+}
+
+/**
  * Token / cost accounting emitted at the end of a callable turn.
  */
 export interface UsagePayload {
@@ -60,6 +75,9 @@ export type TurnChunk =
   // tagged) and maps to the `thinking-chunk` SSE frame in pipeChunksToSse.
   | { type: 'thinking-delta'; value: string; node_id?: string }
   | { type: 'tool-use'; tool: ToolUsePayload; node_id?: string }
+  // P1: structured tool execution result (paired with a prior tool-use by
+  // tool_use_id). Maps to the `tool-result` SSE frame in pipeChunksToSse.
+  | { type: 'tool-result'; result: ToolResultPayload; node_id?: string }
   | { type: 'error'; error: LlmCallError; node_id?: string }
   | { type: 'usage'; usage: UsagePayload; node_id?: string }
   | { type: 'done'; node_id?: string };

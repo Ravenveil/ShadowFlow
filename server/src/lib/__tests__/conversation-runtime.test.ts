@@ -237,6 +237,32 @@ function buildRuntime(opts: {
       '2. tool use: assistant block order is text → tool_use',
       a0[0]?.kind === 'text' && a0[1]?.kind === 'tool_use',
     );
+    // P1 (root-cure plan §5): the runtime now SURFACES the model's tool call
+    // and the dispatch result as structured TurnChunks (previously they stayed
+    // loop-internal and the UI never saw them). pipeChunksToSse maps these to
+    // tool-use / tool-result SSE frames → timeline tool-group card.
+    const tuChunk = chunks.find((c) => c.type === 'tool-use');
+    check('2. P1: yields a tool-use chunk', !!tuChunk);
+    check(
+      '2. P1: tool-use chunk carries name + call_id',
+      tuChunk?.type === 'tool-use' &&
+        tuChunk.tool.tool_name === 'echo_tool' &&
+        tuChunk.tool.call_id === 'toolu_01',
+    );
+    const trChunk = chunks.find((c) => c.type === 'tool-result');
+    check('2. P1: yields a tool-result chunk', !!trChunk);
+    check(
+      '2. P1: tool-result pairs by tool_use_id, not flagged error',
+      trChunk?.type === 'tool-result' &&
+        trChunk.result.tool_use_id === 'toolu_01' &&
+        trChunk.result.is_error === false,
+    );
+    // Ordering: tool-use chunk must precede its tool-result chunk on the wire.
+    check(
+      '2. P1: tool-use chunk precedes tool-result chunk',
+      chunks.findIndex((c) => c.type === 'tool-use') <
+        chunks.findIndex((c) => c.type === 'tool-result'),
+    );
   }
 
   // ── 3. Deny → loop continues ─────────────────────────────────────────────

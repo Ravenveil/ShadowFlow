@@ -334,78 +334,21 @@ export function parseAndExtract(
     return '';
   });
 
-  // <tool_use name="X" id="Y">JSON</tool_use> — Claude Code CLI tool invocation
+  // ─── P1 (root-cure plan §5): tool calls are NO LONGER parsed out of text ────
   //
-  // The Claude Code CLI api client (transport/api-clients/claude-code-cli-api-client.ts:428-430)
-  // proactively wraps every Anthropic-shape `tool_use` ContentBlock in this
-  // pseudo-XML so the otherwise text-only parser can route it. Without
-  // this extractor the entire wrapper leaks through to `event:'text'`,
-  // getting chunked into 5-15 char fragments by the streaming projector and
-  // rendered as literal "<tool_use name=" strings (P0-2 in design audit
-  // 2026-05-24). Emit a structured `tool-use` event so the timeline
-  // projector can render it as a `tool_call` chip rather than carving up the
-  // wrapper into text fragments.
-  buffer = buffer.replace(
-    /<tool_use(\s+(?:[^>"']|"[^"]*"|'[^']*')*?)?>([\s\S]*?)<\/tool_use>/g,
-    (_match, attrs: string | undefined, body: string) => {
-      const a = parseAttrs(attrs ?? '');
-      events.push({
-        event: 'tool-use',
-        data: {
-          id: a.id ?? null,
-          name: a.name ?? 'unknown',
-          input: body.trim(), // body is JSON.stringify(tool_use.input) or free text
-          ...nodeIdField(),
-        },
-      });
-      return '';
-    },
-  );
-
-  // <tool_result for="<tool_use_id>" name="...">...</tool_result> —
-  // Claude Code CLI tool execution result. Pairs with <tool_use> above by
-  // `id`/`for` attribute. The CLI client emits these whenever a tool_result
-  // ContentBlock comes back from the spawned process. Without this extractor
-  // the entire result body leaks into the text stream verbatim.
-  buffer = buffer.replace(
-    /<tool_result(\s+(?:[^>"']|"[^"]*"|'[^']*')*?)?>([\s\S]*?)<\/tool_result>/g,
-    (_match, attrs: string | undefined, body: string) => {
-      const a = parseAttrs(attrs ?? '');
-      events.push({
-        event: 'tool-result',
-        data: {
-          for: a.for ?? a.id ?? null,
-          output: body.trim(),
-          ...nodeIdField(),
-        },
-      });
-      return '';
-    },
-  );
-
-  // <function_calls>...</function_calls> — Anthropic-style nested function-
-  // invocation block emitted by some Claude models when they call a tool
-  // without an explicit `<tool_use name=...>` wrapper. Always contains one
-  // or more `<invoke>` children with `<parameter>` leaves. We capture the
-  // whole block as a single `tool-use` event with name='function_calls' and
-  // raw body so the frontend can render it as one chip (rather than fragment
-  // it into text-deltas). Future enhancement: parse <invoke>/<parameter>
-  // children into structured params.
-  buffer = buffer.replace(
-    /<function_calls?>([\s\S]*?)<\/function_calls?>/g,
-    (_match, body: string) => {
-      events.push({
-        event: 'tool-use',
-        data: {
-          id: null,
-          name: 'function_calls',
-          input: body.trim(),
-          ...nodeIdField(),
-        },
-      });
-      return '';
-    },
-  );
+  // We deleted the `<tool_use>` / `<tool_result>` / `<function_calls>` XML
+  // extractors that used to live here. Tool invocations + results are now
+  // FIRST-CLASS structured events sourced from typed `tool-use` / `tool-result`
+  // TurnChunks (ConversationRuntime surfaces the model's call + the dispatch
+  // result; ApiClientCallable maps native tool_use) and emitted directly by
+  // `assembler.ts` pipeChunksToSse — they never round-trip through this text
+  // parser. This kills the structured→XML-text→regex回环 (OpenDesign alignment:
+  // tools come from structure, not from re-parsing flattened text).
+  //
+  // Consequence: if a model literally emits `<tool_use>…</tool_use>` as prose
+  // (inline-XML models with no native tool API — rare), it now flows through as
+  // a normal `text` event instead of a tool chip. That is an accepted trade per
+  // the plan; the structured path is the supported route.
 
   // sf:thinking  (paired tag, body is the LLM's chain-of-thought for the
   // current step). Emitted as a streaming-friendly chunk via the dedicated
@@ -628,10 +571,11 @@ export function parseAndExtract(
 // Returns -1 if no such prefix exists.
 function findPartialTagStart(buf: string): number {
   // Known full prefixes — anything that starts one of these is held back as
-  // a potential streaming tag until the matching close is seen. Includes the
-  // Claude Code CLI / Anthropic-style tool wrappers added 2026-05-24 (P0-2):
-  // <tool_use> / <tool_result> / <function_call(s)>.
-  const prefixes = ['<sf:', '<artifact', '<tool_use', '<tool_result', '<function_call'];
+  // a potential streaming tag until the matching close is seen. P1 removed the
+  // tool wrappers (<tool_use>/<tool_result>/<function_call>): tools are now
+  // structured TurnChunks, not text, so we no longer hold text back for them.
+  // The parser's only remaining held tags are the business/artifact tags.
+  const prefixes = ['<sf:', '<artifact'];
   let known = -1;
   for (const p of prefixes) {
     const idx = buf.indexOf(p);
