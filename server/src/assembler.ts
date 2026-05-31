@@ -1031,6 +1031,13 @@ export async function* pipeChunksToSse(
           node_id: chunk.node_id,
         },
       };
+    } else if (chunk.type === 'sse') {
+      // ② Spawner passthrough — the CLI/ACP/MCP spawner already produced this as
+      // a structured ShadowFlow event ({event,data}). Forward it to the wire
+      // VERBATIM (never re-flatten to text → never mis-flagged as sse-frame-leak).
+      // Flush pending text/JSON first so it lands in timeline order.
+      for (const out of flushPending(chunk.node_id)) yield out;
+      yield { event: chunk.event, data: chunk.data };
     }
   }
 

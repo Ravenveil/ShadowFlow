@@ -32,16 +32,6 @@ import type { SseEvent } from '../parser';
 import { LlmCallError, type LlmCallErrorKind, type TurnChunk } from '../workflow/types';
 
 /**
- * Encode an SSE event as the on-the-wire string the front-end already
- * understands. Mirrors what `routes/run-sessions.ts` writes today.
- */
-function encodeSseLine(ev: SseEvent): string {
-  const dataStr =
-    typeof ev.data === 'string' ? ev.data : JSON.stringify(ev.data);
-  return `event: ${ev.event}\ndata: ${dataStr}\n\n`;
-}
-
-/**
  * Best-effort mapping from a spawner error event's `code` field to one of
  * `LlmCallErrorKind`. Unknown codes degrade to `provider-error` so the front-
  * end still gets a readable message.
@@ -63,21 +53,73 @@ function spawnerErrorKind(code: unknown): LlmCallErrorKind {
 }
 
 /**
- * Translate one SSE event into a TurnChunk. Error events become typed error
- * chunks (CL3/E3); everything else is forwarded as the SSE wire line in a
- * text-delta payload.
+ * Translate one already-structured spawner SSE event into a TurnChunk.
+ *
+ * ② sse-frame-leak CLI-path root cure (2026-05-31): the spawner's stream-json
+ * parser (dispatchParser) ALREADY produced structured ShadowFlow events. We map
+ * the core channels (text / thinking / tool-use / tool-result) onto typed
+ * TurnChunks — so the CLI path now has the same independent channels as the API
+ * path — and pass every other already-structured business event (node /
+ * assemble / blueprint / classify / edge / yaml-line / usage / raw / complete /
+ * discovery / question-form / …) through VERBATIM as an `sse` chunk.
+ *
+ * The OLD behavior re-encoded EVERY event as a `text-delta` carrying the literal
+ * `event:/data:` wire line; the downstream text parser then mis-flagged those
+ * frames as sse-frame-leak `raw` blocks (so <sf:node>/complete never rendered →
+ * TEAM 0 + a screen full of raw). Mapping/passthrough keeps the structure.
  */
 export function sseEventToChunk(ev: SseEvent): TurnChunk {
-  if (ev.event === 'error') {
-    const data = (ev.data ?? {}) as { code?: unknown; message?: unknown };
-    const code = data.code;
-    const message = typeof data.message === 'string' ? data.message : 'spawner error';
-    return {
-      type: 'error',
-      error: new LlmCallError(spawnerErrorKind(code), message, { cause: ev.data }),
-    };
+  const data = (ev.data ?? {}) as Record<string, unknown>;
+  const nodeId = typeof data.node_id === 'string' ? data.node_id : undefined;
+
+  switch (ev.event) {
+    case 'error': {
+      const code = data.code;
+      const message = typeof data.message === 'string' ? data.message : 'spawner error';
+      return {
+        type: 'error',
+        error: new LlmCallError(spawnerErrorKind(code), message, { cause: ev.data }),
+        node_id: nodeId,
+      };
+    }
+    case 'text': {
+      const value = typeof data.text === 'string' ? data.text : '';
+      return { type: 'text-delta', value, node_id: nodeId };
+    }
+    case 'thinking-chunk': {
+      const value = typeof data.text === 'string' ? data.text : '';
+      return { type: 'thinking-delta', value, node_id: nodeId };
+    }
+    case 'tool-use': {
+      return {
+        type: 'tool-use',
+        tool: {
+          tool_name: typeof data.name === 'string' ? data.name : 'unknown',
+          tool_input: data.input,
+          call_id: typeof data.id === 'string' ? data.id : undefined,
+        },
+        node_id: nodeId,
+      };
+    }
+    case 'tool-result': {
+      const output =
+        typeof data.output === 'string'
+          ? data.output
+          : data.output != null
+            ? JSON.stringify(data.output)
+            : '';
+      const forId =
+        typeof data.for === 'string' ? data.for : typeof data.id === 'string' ? data.id : '';
+      return {
+        type: 'tool-result',
+        result: { tool_use_id: forId, output, is_error: data.is_error === true },
+        node_id: nodeId,
+      };
+    }
+    default:
+      // Already-structured ShadowFlow business event — forward verbatim.
+      return { type: 'sse', event: ev.event, data: ev.data, node_id: nodeId };
   }
-  return { type: 'text-delta', value: encodeSseLine(ev) };
 }
 
 /**

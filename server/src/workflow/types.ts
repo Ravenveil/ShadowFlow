@@ -80,6 +80,15 @@ export type TurnChunk =
   | { type: 'tool-result'; result: ToolResultPayload; node_id?: string }
   | { type: 'error'; error: LlmCallError; node_id?: string }
   | { type: 'usage'; usage: UsagePayload; node_id?: string }
+  // Spawner passthrough (②, sse-frame-leak CLI-path root cure, 2026-05-31).
+  // CLI/ACP/MCP spawners already parse their stream-json into STRUCTURED
+  // ShadowFlow SSE events ({event,data}) via dispatchParser. The bridge used to
+  // re-flatten each one into a `text-delta` carrying the literal `event:/data:`
+  // wire line — which the downstream text parser then mis-flagged as an
+  // sse-frame-leak `raw` block (every <sf:node>/complete became raw → TEAM 0).
+  // This chunk carries such an already-structured event through pipeChunksToSse
+  // VERBATIM so it reaches the wire as itself. Only the spawner bridge emits it.
+  | { type: 'sse'; event: string; data: unknown; node_id?: string }
   | { type: 'done'; node_id?: string };
 
 // ─── Error model (Phase 2 decision CL3/E3) ───────────────────────────────────

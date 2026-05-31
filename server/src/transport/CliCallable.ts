@@ -43,10 +43,15 @@ export interface CliCallableOptions {
 export class CliCallable implements LlmCallable {
   readonly id: string;
   readonly capabilities: LlmCallableCapabilities = {
-    // CLI stdio surface does not expose Anthropic-style tool_use to ShadowFlow.
-    // Even Claude Code CLI's internal tool calls are flattened in stream-json
-    // output before they reach us, so from the Transport contract's view the
-    // CLI is a text-only oracle.
+    // `supportsToolUse` = "can ShadowFlow inject tool specs and DRIVE a
+    // tool_use→tool_result loop through this callable" — still false: the CLI
+    // self-hosts and runs its own tools; we don't pass it tool specs.
+    //
+    // NB (② 2026-05-31): we DO now SURFACE the CLI's internal tool calls — the
+    // spawner's stream-json parser emits structured `tool-use`/`tool-result`
+    // events and `spawner-bridge` maps them to typed chunks (no longer flattened
+    // to text). So the CLI path is multi-channel for display even though we
+    // don't drive the loop. Surfacing ≠ driving; this flag governs driving.
     supportsToolUse: false,
     supportsMultiTurn: false,
     supportsStreamingDelta: true,
