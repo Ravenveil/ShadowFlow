@@ -432,6 +432,85 @@ function serializePrompt(messages: ConversationMessage[], tools: ToolSpec[]): st
   return out.join('\n');
 }
 
+/**
+ * Structured stdin for `--input-format stream-json` (gap-close, 2026-05-31).
+ *
+ * Closes the last sse-frame-leak-plan gap on Law 1 (tools never become text):
+ * instead of `serializePrompt`'s `<tool_use>`/`<tool_result>` XML, prior tool
+ * calls + results are emitted as NATIVE Anthropic content blocks in a JSONL
+ * message stream — exactly how OpenDesign's CLI integration feeds history.
+ * Tool *definitions* (the available-tools list) are NOT tool calls, so carrying
+ * them as a leading text block is fine; only tool_use/tool_result must stay
+ * structured.
+ *
+ * Envelope (one JSON per line): `{"type":"user"|"assistant","message":{role,content:[blocks]}}`.
+ * ShadowFlow roles map: assistant→assistant; user/tool/system→user (tool_result
+ * lives in a user message per Anthropic convention; system is also sent via
+ * `--append-system`).
+ *
+ * GATED OFF by default (`SHADOWFLOW_CLI_INPUT_STREAM_JSON=1` to enable): the
+ * exact CLI input envelope can't be verified here without a live `claude`
+ * binary, so the proven text path stays default until a real-CLI smoke test
+ * promotes this. The serialization itself is fully unit-tested.
+ */
+export function serializeStreamJsonInput(
+  messages: ConversationMessage[],
+  tools: ToolSpec[],
+): string {
+  type NativeBlock =
+    | { type: 'text'; text: string }
+    | { type: 'tool_use'; id: string; name: string; input: unknown }
+    | { type: 'tool_result'; tool_use_id: string; content: string; is_error: boolean };
+
+  const lines: string[] = [];
+
+  const emit = (apiRole: 'user' | 'assistant', content: NativeBlock[]): void => {
+    if (content.length === 0) return;
+    lines.push(JSON.stringify({ type: apiRole, message: { role: apiRole, content } }));
+  };
+
+  // Tool definitions as a leading user text block (definitions ≠ calls).
+  if (tools.length > 0) {
+    const list = ['## Available tools', ...tools.map((t) => `- ${t.name}: ${t.description}`)].join('\n');
+    emit('user', [{ type: 'text', text: list }]);
+  }
+
+  for (const m of messages) {
+    const apiRole: 'user' | 'assistant' = m.role === 'assistant' ? 'assistant' : 'user';
+    const content: NativeBlock[] = [];
+    for (const b of m.blocks) {
+      if (b.kind === 'text') {
+        content.push({ type: 'text', text: b.text });
+      } else if (b.kind === 'tool_use') {
+        // NATIVE structured block — never `<tool_use>` XML text.
+        content.push({
+          type: 'tool_use',
+          id: b.id,
+          name: b.name,
+          input: typeof b.input === 'string' ? safeJsonParse(b.input) : (b.input ?? {}),
+        });
+      } else if (b.kind === 'tool_result') {
+        content.push({
+          type: 'tool_result',
+          tool_use_id: b.tool_use_id,
+          content: b.output,
+          is_error: Boolean(b.is_error),
+        });
+      }
+    }
+    emit(apiRole, content);
+  }
+  return lines.join('\n') + (lines.length > 0 ? '\n' : '');
+}
+
+function safeJsonParse(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return s;
+  }
+}
+
 // ─── Default spawn args (mirror cli-registry.ts 'claude' entry) ───────────
 
 /**
@@ -515,7 +594,16 @@ export class ClaudeCodeCliApiClient implements ApiClient {
     const capabilities: ClaudeCapabilities =
       this.opts.capabilities ?? (await probeClaudeCapabilities(binPath, spawnImpl));
 
+    // Gap-close (2026-05-31): opt-in structured stdin. When enabled, prior tool
+    // calls/results go to the CLI as NATIVE stream-json blocks (never <tool_use>
+    // XML). Default off — the exact CLI input envelope needs a live-CLI smoke
+    // test before it can be the default (see serializeStreamJsonInput).
+    const useStreamJsonInput = process.env.SHADOWFLOW_CLI_INPUT_STREAM_JSON === '1';
+
     const spawnArgs = [...extraArgs];
+    if (useStreamJsonInput && !spawnArgs.includes('--input-format')) {
+      spawnArgs.push('--input-format', 'stream-json');
+    }
     if (capabilities.partialMessages && !extraArgs.includes('--include-partial-messages')) {
       spawnArgs.push('--include-partial-messages');
     }
@@ -619,8 +707,11 @@ export class ClaudeCodeCliApiClient implements ApiClient {
       args.signal.addEventListener('abort', onAbort, { once: true });
     }
 
-    // Pipe prompt into stdin and close.
-    const prompt = serializePrompt(args.messages, args.tools);
+    // Pipe prompt into stdin and close. Structured JSONL when stream-json input
+    // is enabled (tools-as-text-XML gap closed); proven text prompt otherwise.
+    const prompt = useStreamJsonInput
+      ? serializeStreamJsonInput(args.messages, args.tools)
+      : serializePrompt(args.messages, args.tools);
     try {
       child.stdin.write(prompt);
       child.stdin.end();
