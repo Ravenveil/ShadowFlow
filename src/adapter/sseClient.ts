@@ -34,6 +34,14 @@ export class SseClient {
   private retryCount = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
+  // True once a run-terminal event (`complete` / run-level `error` /
+  // `run.completed` / `run.failed`) has been dispatched. After that the server
+  // closing the stream is a NORMAL end, not a dropped connection — so the
+  // subsequent EventSource `onerror` must NOT trigger reconnect/back-off.
+  // Without this, a finished (even errored) run kept reconnecting until the
+  // retry sequence exhausted, surfacing a misleading "网络异常 · 已达最大重试次数"
+  // banner on top of an already-terminal run (sse-frame-leak bug, 2026-05-31).
+  private terminal = false;
 
   constructor(options: SseClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE).replace(/\/$/, "");
@@ -43,6 +51,7 @@ export class SseClient {
   /** Subscribe to events for *runId*. Safe to call multiple times — reconnects cleanly. */
   connect(runId: string): void {
     this.closed = false;
+    this.terminal = false;
     if (this.runId !== runId) {
       this.lastEventId = null;
       this.retryCount = 0;
@@ -106,6 +115,13 @@ export class SseClient {
     this.es.onerror = (evt) => {
       this._closeEs();
       if (this.closed) return;
+      // The run already reached a terminal event — the server simply closed the
+      // stream. Treat as a clean end: stop here, no reconnect, no error banner.
+      if (this.terminal) {
+        this._clearRetry();
+        this.closed = true;
+        return;
+      }
       this._scheduleReconnect(evt);
     };
 
@@ -133,6 +149,9 @@ export class SseClient {
     } catch {
       payload = evt.data;
     }
+    if (this._isTerminalEvent(type, payload)) {
+      this.terminal = true;
+    }
     const list = this.handlers.get(type);
     if (list) {
       for (const h of list) h(payload);
@@ -142,6 +161,28 @@ export class SseClient {
     if (catchAll) {
       for (const h of catchAll) h({ type, payload });
     }
+  }
+
+  /**
+   * Is this a run-terminal event (after which the stream legitimately ends)?
+   * `complete` and the Python workflow's `run.completed` / `run.failed` are
+   * unconditionally terminal. `error` is terminal ONLY when run-level —
+   * step-scoped errors (e.g. parser STEP_NO_OUTPUT, which carry `step_index`)
+   * are recoverable and must not stop reconnection.
+   */
+  private _isTerminalEvent(type: string, payload: unknown): boolean {
+    if (type === "complete" || type === "run.completed" || type === "run.failed") {
+      return true;
+    }
+    if (type === "error") {
+      // Step-scoped errors carry step_index/step_name — not run-terminal.
+      const isStepScoped =
+        typeof payload === "object" &&
+        payload !== null &&
+        ("step_index" in payload || "step_name" in payload);
+      return !isStepScoped;
+    }
+    return false;
   }
 
   private _scheduleReconnect(evt: Event): void {

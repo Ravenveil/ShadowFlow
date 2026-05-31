@@ -229,6 +229,25 @@ const HISTORY_LIMIT = 20;
 const HISTORY_PER_MSG_MAX = 1024;
 const HISTORY_BLOCK_MAX = 4096;
 
+// sse-frame-leak stop-bleed (2026-05-31). ShadowFlow serializes its own SSE as
+// `event: <name>\ndata: <one-line json>\n\n`. When a prior turn's leaked frames
+// got stored as assistant content, re-injecting them here as CONVERSATION
+// HISTORY makes the LLM parrot the frame shape back — and the parser's
+// sse-frame-leak guard then renders the WHOLE turn as `raw` blocks (no real
+// <sf:node>/<sf:complete> ever produced → TEAM 0 + errored run). We strip the
+// frame-shaped lines before they re-enter the prompt, closing the feedback loop
+// at its source. Tight match (an `event:` line immediately followed by a `data:`
+// line opening with `{`/`[`) so normal prose is untouched. Mirrors
+// parser.ts:588's guard regex. The structural fix (typed event stream, control
+// frames never sharing the text channel) is tracked in the root-cure plan doc.
+const SSE_FRAME_LINE_RE =
+  /^[ \t]*event:[ \t]*[\w.-]+[ \t]*\r?\n[ \t]*data:[ \t]*[{[][^\n]*\r?\n?/gm;
+
+export function stripLeakedSseFrames(content: string): string {
+  if (!content.includes('event:')) return content; // fast path — no candidates
+  return content.replace(SSE_FRAME_LINE_RE, '');
+}
+
 function renderConversationHistoryBlock(
   conversation_id: string | undefined,
 ): string | undefined {
@@ -250,7 +269,8 @@ function renderConversationHistoryBlock(
   const renderOne = (m: { role: string; content: string }): string => {
     const role =
       m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System';
-    let body = m.content;
+    // sse-frame-leak stop-bleed: never re-feed frame-shaped text as context.
+    let body = stripLeakedSseFrames(m.content);
     if (body.length > HISTORY_PER_MSG_MAX) {
       body = body.slice(0, HISTORY_PER_MSG_MAX) + '…(truncated)';
     }
