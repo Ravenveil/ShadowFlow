@@ -11,9 +11,18 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { quickCreateAgent, AgentApiError } from '../../../api/agents';
 import type { AgentRecord } from '../../../api/agents';
+import { createWorkspace } from '../../../api/workspaces';
+import { useWorkspaceStore } from '../../../store/workspaceStore';
 import { CatalogInstallTab } from './CatalogInstallTab';
 
 type Tab = 'quick' | 'catalog';
+
+/**
+ * 2026-05-31 — 新 agent 的归属选择。default=加入当前(默认)工作区;new=新建一个
+ * 工作区(= 组建一个新团队空间)再把 agent 放进去。用户要求创建单 agent 时明确
+ * 询问「加入默认工作区 还是 另起一个」。
+ */
+type WsChoice = 'default' | 'new';
 
 interface CreateAgentModalProps {
   onCreated: (agent: AgentRecord) => void;
@@ -27,6 +36,15 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
   const [tab, setTab] = useState<Tab>('quick');
   const [name, setName] = useState('');
   const [soul, setSoul] = useState('');
+  // 工作区归属:加入当前默认工作区 / 新建工作区。
+  const [wsChoice, setWsChoice] = useState<WsChoice>('default');
+  const [newWsName, setNewWsName] = useState('');
+  const currentId = useWorkspaceStore((s) => s.currentId);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const switchTo = useWorkspaceStore((s) => s.switchTo);
+  const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
+  const currentWsName =
+    workspaces.find((w) => w.workspace_id === currentId)?.name ?? 'ShadowFlow 默认工作区';
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +60,21 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
     setSubmitting(true);
     setError(null);
     try {
-      const agent = await quickCreateAgent({ name: name.trim(), soul: soul.trim() });
+      // 归属工作区:新建则先 POST 创建 workspace,切过去,用其 id;否则用当前默认。
+      let wsId = currentId ?? undefined;
+      if (wsChoice === 'new') {
+        const wsName = newWsName.trim();
+        if (!wsName) {
+          setError('请填写新工作区名称');
+          setSubmitting(false);
+          return;
+        }
+        const ws = await createWorkspace({ name: wsName });
+        wsId = ws.workspace_id;
+        switchTo(ws.workspace_id);
+        void fetchWorkspaces();
+      }
+      const agent = await quickCreateAgent({ name: name.trim(), soul: soul.trim(), workspace_id: wsId });
       onCreated(agent);
       onClose();
     } catch (err) {
@@ -142,6 +174,52 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
                 className="resize-none rounded border border-shadowflow-border bg-white/5 px-3 py-2 text-sm text-white/90 placeholder-white/25 outline-none focus:border-white/30"
                 data-testid="agent-soul-input"
               />
+            </div>
+
+            {/* 2026-05-31 — 工作区归属选择(加入默认 / 新建) */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium text-white/60">放到哪个工作区？</label>
+              <div className="flex flex-col gap-1.5">
+                <label className="flex cursor-pointer items-start gap-2 rounded border border-shadowflow-border bg-white/[0.02] px-3 py-2 text-sm hover:bg-white/5">
+                  <input
+                    type="radio"
+                    name="ws-choice"
+                    checked={wsChoice === 'default'}
+                    onChange={() => setWsChoice('default')}
+                    className="mt-0.5"
+                    data-testid="ws-choice-default"
+                  />
+                  <span className="flex flex-col">
+                    <span className="text-white/90">加入当前工作区</span>
+                    <span className="text-xs text-white/40">{currentWsName}</span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2 rounded border border-shadowflow-border bg-white/[0.02] px-3 py-2 text-sm hover:bg-white/5">
+                  <input
+                    type="radio"
+                    name="ws-choice"
+                    checked={wsChoice === 'new'}
+                    onChange={() => setWsChoice('new')}
+                    className="mt-0.5"
+                    data-testid="ws-choice-new"
+                  />
+                  <span className="flex flex-1 flex-col gap-1.5">
+                    <span className="text-white/90">新建一个工作区</span>
+                    {wsChoice === 'new' && (
+                      <input
+                        type="text"
+                        value={newWsName}
+                        onChange={(e) => setNewWsName(e.target.value)}
+                        placeholder="新工作区名称，例：开发团队"
+                        maxLength={40}
+                        className="rounded border border-shadowflow-border bg-white/5 px-2.5 py-1.5 text-sm text-white/90 placeholder-white/25 outline-none focus:border-white/30"
+                        data-testid="ws-new-name-input"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    )}
+                  </span>
+                </label>
+              </div>
             </div>
 
             {/* Advanced settings (collapsed by default) */}
