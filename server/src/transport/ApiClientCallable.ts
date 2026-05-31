@@ -206,7 +206,7 @@ export class ApiClientCallable implements LlmCallable {
  * when the event is not part of the public TurnChunk taxonomy (defensive,
  * but in practice the 4 kinds below cover everything ApiClient emits).
  */
-function assistantEventToChunk(ev: unknown): TurnChunk | null {
+export function assistantEventToChunk(ev: unknown): TurnChunk | null {
   if (!ev || typeof ev !== 'object') return null;
   const e = ev as { kind?: string };
   switch (e.kind) {
@@ -214,6 +214,17 @@ function assistantEventToChunk(ev: unknown): TurnChunk | null {
       const text = (e as { text?: unknown }).text;
       return typeof text === 'string'
         ? { type: 'text-delta', value: text }
+        : null;
+    }
+    case 'thinking_delta': {
+      // Gap-close (2026-05-31): without this case, extended-thinking on the
+      // no-tools API path (`callable.turn()`, executor.ts:186 else-branch) was
+      // silently dropped — only the with-tools ConversationRuntime path
+      // surfaced it. Map it to the typed thinking-delta channel so thinking is
+      // structured on EVERY path (Law 2: text/thinking/tool are independent).
+      const text = (e as { text?: unknown }).text;
+      return typeof text === 'string'
+        ? { type: 'thinking-delta', value: text }
         : null;
     }
     case 'tool_use': {

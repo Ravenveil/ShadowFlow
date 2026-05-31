@@ -384,18 +384,11 @@ function extractUsage(raw: unknown): TokenUsage | undefined {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-/**
- * Wrap an extended-thinking chunk in the project's `<sf:thinking>` text
- * protocol so parser.ts surfaces it as a collapsible "thinking" block in the
- * UI without polluting `assistant.text`. AssistantEvent has no dedicated
- * `thinking_delta` kind (deliberately — the rest of the pipeline is text-only
- * after the ApiClient layer), so we emit it as a single `text_delta` carrying
- * the full wrapped string. Emitting bulk-at-close (rather than streaming
- * partials) means parser.ts always sees an atomic open/close pair.
- */
-function wrapThinking(text: string): string {
-  return `<sf:thinking step="extended" origin="cli">${text}</sf:thinking>`;
-}
+// NOTE (2026-05-31): the former `wrapThinking()` helper (which serialized
+// extended-thinking into `<sf:thinking>` TEXT for parser.ts to re-extract) was
+// removed. AssistantEvent DOES have a `thinking_delta` kind, and we now yield
+// it directly — thinking is a typed channel end-to-end, never round-tripped
+// through text. See ApiClientCallable's `thinking_delta` → `thinking-delta` map.
 
 // ─── Prompt serialization ─────────────────────────────────────────────────
 
@@ -744,7 +737,12 @@ export class ClaudeCodeCliApiClient implements ApiClient {
               typeof block.thinking === 'string' &&
               block.thinking.length > 0
             ) {
-              yield { kind: 'text_delta', text: wrapThinking(block.thinking) };
+              // Gap-close (2026-05-31): emit thinking as the typed `thinking_delta`
+              // kind instead of wrapping it as `<sf:thinking>` TEXT. Thinking no
+              // longer round-trips through the text parser (Law 1: never becomes
+              // text; Law 2: independent channel). ApiClientCallable maps this to
+              // the `thinking-delta` TurnChunk.
+              yield { kind: 'thinking_delta', text: block.thinking };
               if (msgId) textStreamed.add(msgId);
             }
           } else if (block.type === 'tool_use') {
@@ -826,7 +824,8 @@ export class ClaudeCodeCliApiClient implements ApiClient {
           pending.delete(idx);
         } else if (p && p.kind === 'thinking') {
           if (p.buf.length > 0) {
-            yield { kind: 'text_delta', text: wrapThinking(p.buf) };
+            // Gap-close (2026-05-31): typed thinking channel, not wrapped text.
+            yield { kind: 'thinking_delta', text: p.buf };
             if (currentMessageId) textStreamed.add(currentMessageId);
           }
           pending.delete(idx);

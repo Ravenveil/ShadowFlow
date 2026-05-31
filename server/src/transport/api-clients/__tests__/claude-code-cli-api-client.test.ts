@@ -778,8 +778,8 @@ async function testSpawnEnoent(): Promise<void> {
  * inside a `thinking` block. We must buffer + emit ONE text_delta at
  * content_block_stop wrapped in <sf:thinking step="extended" origin="cli">.
  */
-async function testThinkingDeltaWrapped(): Promise<void> {
-  console.log('\n[claude-code-cli] thinking_delta wrapped as <sf:thinking>');
+async function testThinkingDeltaTyped(): Promise<void> {
+  console.log('\n[claude-code-cli] thinking → typed thinking_delta kind (NOT wrapped text)');
   let sub!: ScriptedSubprocess;
   const { spawnFn } = makeSpawnFn(() => {
     sub = makeFakeChild();
@@ -836,14 +836,21 @@ async function testThinkingDeltaWrapped(): Promise<void> {
     ]);
     sub.finish(0);
     const events = await eventsP;
+    // Gap-close (2026-05-31): thinking is a typed channel now — it must NOT be
+    // wrapped as <sf:thinking> text_delta. Exactly one thinking_delta carrying
+    // the concatenated buffer, and zero text_delta.
     const texts = events
       .filter((e) => e.kind === 'text_delta')
       .map((e) => (e as { text: string }).text);
-    check('exactly one wrapped text_delta', 1, texts.length);
+    check('no text_delta (thinking is not text)', 0, texts.length);
+    const thinks = events
+      .filter((e) => e.kind === 'thinking_delta')
+      .map((e) => (e as { text: string }).text);
+    check('exactly one thinking_delta', 1, thinks.length);
     check(
-      'thinking text wrapped atomically',
-      '<sf:thinking step="extended" origin="cli">Step 1: parse the request. Step 2: form a plan.</sf:thinking>',
-      texts[0],
+      'thinking_delta carries concatenated buffer (no <sf:thinking> wrapper)',
+      'Step 1: parse the request. Step 2: form a plan.',
+      thinks[0],
     );
   }
 }
@@ -896,16 +903,20 @@ async function testAssistantWrapperFallback(): Promise<void> {
     const texts = events
       .filter((e) => e.kind === 'text_delta')
       .map((e) => (e as { text: string }).text);
-    check('two text_delta (text + thinking)', 2, texts.length);
+    // Gap-close (2026-05-31): only the plain text is a text_delta now; thinking
+    // surfaces on its own typed channel (not wrapped as <sf:thinking> text).
+    check('one text_delta (plain text only)', 1, texts.length);
     checkTruthy(
       `plain text surfaced (got ${JSON.stringify(texts)})`,
       texts.some((t) => t === 'Here is the plan.'),
     );
+    const thinks = events
+      .filter((e) => e.kind === 'thinking_delta')
+      .map((e) => (e as { text: string }).text);
+    check('one thinking_delta (typed, not wrapped text)', 1, thinks.length);
     checkTruthy(
-      `thinking surfaced with <sf:thinking> wrap (got ${JSON.stringify(texts)})`,
-      texts.some(
-        (t) => t === '<sf:thinking step="extended" origin="cli">reasoning bits</sf:thinking>',
-      ),
+      `thinking surfaced on its own channel (got ${JSON.stringify(thinks)})`,
+      thinks.some((t) => t === 'reasoning bits'),
     );
 
     const tools = events.filter((e) => e.kind === 'tool_use') as Array<{
@@ -1289,7 +1300,7 @@ async function main(): Promise<void> {
   await testSpawnEnoent();
 
   // S14.2 follow-up — 6 new fixes
-  await testThinkingDeltaWrapped();
+  await testThinkingDeltaTyped();
   await testAssistantWrapperFallback();
   await testAssistantWrapperDedupToolUse();
   await testFallbackBinsTriggered();
