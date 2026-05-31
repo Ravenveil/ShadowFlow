@@ -1425,9 +1425,18 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       let summary: string;
       if (artifactInfo.filename) {
         summary = `[Generated artifact: ${artifactInfo.filename}]`;
-      } else if (collectedStreamText.trim().length > 0) {
-        summary = collectedStreamText.slice(0, 1024);
-        if (collectedStreamText.length > 1024) summary += '…(truncated)';
+      } else if (stripLeakedSseFrames(collectedStreamText).trim().length > 0) {
+        // P2 — control-frame channel isolation (root-cure plan §5). NEVER
+        // persist frame-shaped text as assistant content: if it lands in the
+        // conversation log it gets re-injected as CONVERSATION HISTORY next
+        // turn, the LLM parrots the frame shape, and the whole turn collapses
+        // into sse-frame-leak `raw` blocks. Sanitize at the WRITE side so a
+        // frame can never enter storage in the first place; the read-side
+        // strip in renderConversationHistoryBlock then only has to clean up
+        // legacy rows written before this guard existed.
+        const clean = stripLeakedSseFrames(collectedStreamText).trim();
+        summary = clean.slice(0, 1024);
+        if (clean.length > 1024) summary += '…(truncated)';
       } else if (abortController.signal.aborted) {
         summary = '[run aborted by user]';
       } else if (sawError) {

@@ -55,4 +55,24 @@ describe('stripLeakedSseFrames', () => {
     const s = 'just a normal assistant message with no frames';
     expect(stripLeakedSseFrames(s)).toBe(s);
   });
+
+  // P2 write-side isolation (root-cure plan §4b): the assistant-turn persistence
+  // at run-sessions.ts:1428 sanitizes `collectedStreamText` through this helper
+  // BEFORE appendMessage, so a frame can never enter the conversation log and be
+  // re-injected as history next turn. This locks that scenario.
+  it('P2 persistence: frame-only collected text → empty summary (nothing persisted)', () => {
+    const collected =
+      'event: assemble\ndata: {"step":"plan"}\n' +
+      'event: complete\ndata: {"session_id":"a667cabe","run_id":"run-a667cabe"}\n';
+    expect(stripLeakedSseFrames(collected).trim()).toBe('');
+  });
+
+  it('P2 persistence: real answer mixed with a stray frame → only clean answer persisted', () => {
+    const collected =
+      'The reader/critic team is assembled and ready.\n' +
+      'event: complete\ndata: {"session_id":"x"}\n';
+    const clean = stripLeakedSseFrames(collected).trim();
+    expect(clean).toBe('The reader/critic team is assembled and ready.');
+    expect(clean).not.toContain('event: complete');
+  });
 });
