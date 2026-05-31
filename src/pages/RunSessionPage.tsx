@@ -3534,22 +3534,31 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
     //      reference like "Skill: ...")
     //   3. Generic "AI 团队 · YYYY-MM-DD" so it's always something
     //      meaningful that the user can rename later
-    function extractYamlTeamName(yaml: string | null): string | null {
-      if (!yaml) return null;
-      // Match leading `name:` line, tolerating optional quotes and trailing comments.
-      const m = yaml.match(/^\s*name\s*:\s*["']?([^"'\n#]+?)["']?\s*(?:#.*)?$/m);
+    // 2026-05-31 — blueprint 现在是 JSON(runSkillAssembler 的 blueprintFramesFor
+    // pretty-print LLM 的 JSON),不再是 YAML。LLM 已被 skill prompt 要求产出
+    // `name`(skills.ts:198/217「short Chinese team name, do NOT copy goal」)。
+    // 旧 extractYamlTeamName 的正则只认 YAML `name:`,认不出 JSON `"name":`(key
+    // 带引号)→ 一直提取失败 → 回退到 goal 原文,这才是「团队叫帮我创建…」的真因。
+    // 修:先 JSON.parse 读 .name;再兼容 JSON `"name":` / YAML `name:` 两种行格式。
+    // 用户要求:不要用 goal 兜底 —— 信任 LLM 起的名。仅在真的没有时用中性占位。
+    function extractTeamName(blueprint: string | null): string | null {
+      if (!blueprint) return null;
+      try {
+        const obj = JSON.parse(blueprint) as { name?: unknown };
+        if (typeof obj.name === 'string' && obj.name.trim()) return obj.name.trim();
+      } catch {
+        /* 不是纯 JSON(可能是 YAML 或混入文本)→ 走正则 */
+      }
+      // 兼容 JSON `"name": "..."` 与 YAML `name: ...`。
+      const m =
+        blueprint.match(/"name"\s*:\s*"([^"\n]+?)"/) ??
+        blueprint.match(/^\s*name\s*:\s*["']?([^"'\n#]+?)["']?\s*(?:#.*)?$/m);
       const name = m ? m[1].trim() : '';
       return name || null;
     }
-    const yamlTeamName = extractYamlTeamName(session.blueprintYaml);
-    const trimmedGoal = goal.trim();
-    const goalLooksLikeSkillRef =
-      /^(skill\s*:|\/?\.?claude\/skills\/|skill_)/i.test(trimmedGoal);
-    const fallbackName =
-      yamlTeamName ??
-      (trimmedGoal && !goalLooksLikeSkillRef ? trimmedGoal.slice(0, 40) : null) ??
-      `AI 团队 · ${new Date().toISOString().slice(0, 10)}`;
-    const teamName = fallbackName;
+    const llmTeamName = extractTeamName(session.blueprintYaml);
+    // 不用 goal 兜底(用户明确要求);LLM 没给名时用中性占位,用户可改名。
+    const teamName = llmTeamName ?? `未命名团队 · ${new Date().toISOString().slice(0, 10)}`;
     const wsId = currentWorkspaceId ?? undefined;
 
     setSaveState('saving');
