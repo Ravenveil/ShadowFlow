@@ -34,7 +34,7 @@ const TeamPanel: React.FC<TeamPanelProps> = ({ session }) => {
         background: 'var(--t-bg, #0a0a0a)',
       }}
     >
-      <BlueprintCanvas nodes={session.nodes} edges={session.edges} />
+      <BlueprintCanvas nodes={session.nodes} edges={session.edges} isComplete={session.isComplete} />
       <div
         style={{
           position: 'absolute',
@@ -45,7 +45,7 @@ const TeamPanel: React.FC<TeamPanelProps> = ({ session }) => {
           pointerEvents: 'auto',
         }}
       >
-        <PolicyMatrixMini agents={session.nodes} />
+        <PolicyMatrixMini agents={session.nodes} isComplete={session.isComplete} />
       </div>
     </div>
   );

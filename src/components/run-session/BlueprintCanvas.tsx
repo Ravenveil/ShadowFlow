@@ -31,6 +31,9 @@ import type { RunSessionNode, RunSessionEdge } from '../../core/hooks/useRunSess
 export interface BlueprintCanvasProps {
   nodes: RunSessionNode[];
   edges: RunSessionEdge[];
+  /** 2026-06-01 — run 是否已结束。空画布时:未结束=「等待…」脉冲;已结束=
+   *  终态「未生成 team 蓝图」静态提示,不再无限转(修 done 却仍显示等待的矛盾)。 */
+  isComplete?: boolean;
 }
 
 const NODE_W = 168;
@@ -291,7 +294,7 @@ function BlueprintCanvasInner({ nodes, edges }: BlueprintCanvasProps) {
   );
 }
 
-const BlueprintCanvas: React.FC<BlueprintCanvasProps> = ({ nodes, edges }) => {
+const BlueprintCanvas: React.FC<BlueprintCanvasProps> = ({ nodes, edges, isComplete }) => {
   const statusCounts = useMemo(() => {
     let building = 0;
     let ready = 0;
@@ -325,7 +328,7 @@ const BlueprintCanvas: React.FC<BlueprintCanvasProps> = ({ nodes, edges }) => {
       >
         <span
           aria-hidden
-          className="sf-pulse"
+          className={isComplete ? undefined : 'sf-pulse'}
           style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--t-fg-4, #737373)' }}
         />
         <span
@@ -334,9 +337,14 @@ const BlueprintCanvas: React.FC<BlueprintCanvasProps> = ({ nodes, edges }) => {
             fontSize: 11,
             color: 'var(--t-fg-4, #737373)',
             letterSpacing: '0.06em',
+            textAlign: 'center',
+            maxWidth: 280,
+            lineHeight: 1.5,
           }}
         >
-          等待 Team 蓝图生成…
+          {isComplete
+            ? '本次运行未生成 team 蓝图（agent 在对话/工具里完成,未产出 <sf:node>）'
+            : '等待 Team 蓝图生成…'}
         </span>
       </div>
     );

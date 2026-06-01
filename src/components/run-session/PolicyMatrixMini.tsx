@@ -31,6 +31,8 @@ import { deriveRaci as deriveRaciShared } from '../../lib/teamGovernance';
 
 export interface PolicyMatrixMiniProps {
   agents: RunSessionNode[];
+  /** 2026-06-01 — run 已结束时,空矩阵显示终态提示而非无限「等待 Agent 加入…」。 */
+  isComplete?: boolean;
 }
 
 // 6 canonical responsibility buckets, fixed for v1. Display labels match
@@ -162,7 +164,7 @@ function deriveRaci(agent: RunSessionNode): Record<string, RaciCell> {
   });
 }
 
-const PolicyMatrixMini: React.FC<PolicyMatrixMiniProps> = ({ agents }) => {
+const PolicyMatrixMini: React.FC<PolicyMatrixMiniProps> = ({ agents, isComplete }) => {
   // Take first 4 agents only — card is sized for that exact density.
   const rows = agents.slice(0, 4);
 
@@ -287,7 +289,7 @@ const PolicyMatrixMini: React.FC<PolicyMatrixMiniProps> = ({ agents }) => {
               color: 'var(--t-fg-5, #525252)',
             }}
           >
-            等待 Agent 加入…
+            {isComplete ? '本次无 agent 矩阵' : '等待 Agent 加入…'}
           </div>
         ) : (
           rows.map((agent, ri) => (
