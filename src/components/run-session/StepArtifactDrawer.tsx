@@ -123,7 +123,7 @@ const StepArtifactDrawer: React.FC<StepArtifactDrawerProps> = ({
           position: 'fixed',
           top: 0,
           right: 0,
-          height: '100vh',
+          height: 'calc(100vh / var(--app-zoom))',
           width: DRAWER_WIDTH,
           background: 'var(--t-panel, var(--bg-elev-1))',
           borderLeft: '1px solid var(--t-border, var(--border))',

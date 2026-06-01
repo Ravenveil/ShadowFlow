@@ -4161,7 +4161,8 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           gridTemplateColumns: isChatMode
             ? '1fr'
             : (collapsed ? '44px 1fr' : '420px 1fr'),
-          height: '100vh',
+          // 抵消全局 zoom(index.css --app-zoom),否则 100vh 内容超视口被裁。
+          height: 'calc(100vh / var(--app-zoom))',
           background: 'var(--t-bg)',
           color: 'var(--t-fg)',
           fontFamily: 'inherit',

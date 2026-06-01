@@ -1956,7 +1956,7 @@ export default function EditorPage({
         <QuickDemoBYOKModal open={showBYOK} onClose={() => setShowBYOK(false)} />
         <YamlSyncBridge />
         <RuntimeBridge runId={runId} />
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: V.bg }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh / var(--app-zoom))', overflow: 'hidden', background: V.bg }}>
           <EditorTopBar onBack={onBack} lang={lang} onToggleLang={onToggleLang} templateTitle={templateTitle} />
           <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '296px 1fr 336px', minHeight: 0 }}>
             <LeftSidebar />

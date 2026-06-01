@@ -189,7 +189,7 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
     top: 0,
     right: 0,
     width: 320,
-    height: '100vh',
+    height: 'calc(100vh / var(--app-zoom))',
     background: 'var(--t-panel, #141414)',
     borderLeft: '1px solid var(--t-border, rgba(255,255,255,0.08))',
     display: 'flex',
