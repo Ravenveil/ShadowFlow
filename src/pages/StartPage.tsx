@@ -36,6 +36,8 @@ import {
   Pause,
   CheckCircle2,
   XCircle,
+  Loader2,
+  CircleDashed,
   Trash2,
   FolderOpen,
 } from 'lucide-react';
@@ -57,11 +59,12 @@ import { SkillPickerModal } from '../components/SkillPickerModal';
 import { extractSkillUrl, listInstalledSkills, type SkillIngestSummary, type InstalledSkill } from '../api/skillIngest';
 import { listSkills, type SkillInfo } from '../api/skills';
 import { CommandMenu, detectTrigger, type CommandMenuItem } from '../components/composer/CommandMenu';
-// Round 4 PR-E — canonical `@<id>` parser shared with the server route, plus
-// the live compile-status dropdown that surfaces "已编译 · team · 6 agents"
-// next to the existing CommandMenu.
+// Round 4 PR-E — canonical `@<id>` parser shared with the server route. The
+// compile-status (已编译 / 编译中 / 降级 / 未编译) now renders as an inline
+// badge on each `@` skill row inside CommandMenu — the old standalone dark
+// SkillDropdown overlay was folded in (2026-06-01) to kill the duplicate popover.
 import { parseSkillToken } from '../lib/skillToken';
-import { SkillDropdown } from '../components/SkillDropdown';
+import type { CompileStatus } from '../components/SkillDropdown';
 
 // ---------------------------------------------------------------------------
 // Recent drafts helpers
@@ -777,6 +780,9 @@ export default function StartPage() {
   // /api/skills/installed lacks `description`, so we keep both sources.
   const [catalogSkills, setCatalogSkills] = useState<SkillInfo[] | null>(null);
   const [commandMenu, setCommandMenu] = useState<{ mode: '@' | '/'; query: string; start: number; end: number } | null>(null);
+  // 2026-06-01 — per-skill compile status, fetched lazily when the `@` menu is
+  // open. Folds the old SkillDropdown overlay into a CommandMenu row badge.
+  const [skillStatusById, setSkillStatusById] = useState<Record<string, CompileStatus>>({});
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   // Lazy-load installed skills the first time either trigger opens — both
   // `@` and `/` list the same skill set as "skill-pack → agent/team物化"
@@ -1060,6 +1066,90 @@ export default function StartPage() {
   // commands plus `<id>:<cmd>` sub-commands (W2, mirrors Claude Code's
   // `/<plugin>:<command>` slash menu). The `skill:` id prefix lets
   // handleCommandPick dispatch.
+  // Fetch compile-status for installed skills while the `@` menu is open so each
+  // row can show a 已编译/编译中/降级/未编译 badge. Lifted verbatim-in-spirit from
+  // the retired SkillDropdown overlay; cached per id so re-opening won't refetch.
+  useEffect(() => {
+    if (commandMenu?.mode !== '@' || !installedSkills) return;
+    const toFetch = installedSkills
+      .map((s) => s.id)
+      .filter((id) => !skillStatusById[id]);
+    if (toFetch.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      toFetch.map(async (id) => {
+        try {
+          const r = await fetch(
+            `${getApiBase()}/api/skills/${encodeURIComponent(id)}/compile-status`,
+          );
+          if (!r.ok) return null;
+          return { id, data: (await r.json()) as CompileStatus };
+        } catch {
+          return null;
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      setSkillStatusById((prev) => {
+        const next = { ...prev };
+        for (const r of results) if (r && r.data) next[r.id] = r.data;
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [commandMenu?.mode, installedSkills, skillStatusById]);
+
+  // Build the inline compile-status badge for a skill row (theme-aware mid-tone
+  // colours so it reads on the light panel — the old overlay used too-light -400
+  // variants on a hardcoded dark bg).
+  function skillStatusBadge(status: CompileStatus | undefined): React.ReactNode {
+    const base: React.CSSProperties = {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
+      fontSize: 10,
+      fontWeight: 600,
+      whiteSpace: 'nowrap',
+    };
+    if (!status) {
+      return (
+        <span style={{ ...base, color: 'var(--t-fg-5)' }}>
+          <CircleDashed size={11} /> …
+        </span>
+      );
+    }
+    if (status.status === 'compiled' && status.compiled) {
+      const c = status.compiled;
+      const meta = c.mode === 'team' ? `team·${c.members_count ?? 0}` : c.mode;
+      return (
+        <span style={{ ...base, color: '#059669' }}>
+          <CheckCircle2 size={11} /> {meta}
+        </span>
+      );
+    }
+    if (status.status === 'compiling') {
+      return (
+        <span style={{ ...base, color: '#0284c7' }}>
+          <Loader2 size={11} className="animate-spin" /> 编译中
+        </span>
+      );
+    }
+    if (status.status === 'failed') {
+      return (
+        <span style={{ ...base, color: '#d97706' }}>
+          <XCircle size={11} /> 降级
+        </span>
+      );
+    }
+    return (
+      <span style={{ ...base, color: 'var(--t-fg-5)' }}>
+        <CircleDashed size={11} /> 未编译
+      </span>
+    );
+  }
+
   const commandMenuItems: CommandMenuItem[] = useMemo(() => {
     if (!commandMenu) return [];
     // Stable alphabetical order by display name so the menu doesn't shuffle
@@ -1081,6 +1171,9 @@ export default function StartPage() {
         title: `${commandMenu.mode}${s.id}`,
         subtitle: `${s.name}${detail ? ` · ${detail}` : ''}`,
         hint: 'skill',
+        // @ mode: inline compile-status badge (folds in the old SkillDropdown).
+        // / mode: leave undefined so the 'skill' hint shows as before.
+        badge: commandMenu.mode === '@' ? skillStatusBadge(skillStatusById[s.id]) : undefined,
       };
     });
     if (commandMenu.mode === '@') {
@@ -1110,7 +1203,7 @@ export default function StartPage() {
       { id: 'help', title: '/help', subtitle: '快捷键提示', hint: 'command' },
     ];
     return [...builtin, ...subCommandItems, ...skillItems];
-  }, [commandMenu, installedSkills, catalogSkills]);
+  }, [commandMenu, installedSkills, catalogSkills, skillStatusById]);
 
   function toggleKnowledgePack(packId: string) {
     setKnowledge((prev) =>
@@ -1364,6 +1457,10 @@ export default function StartPage() {
                   color: 'var(--t-fg)',
                 }}
               />
+              {/* 2026-06-01 — compile-status (已编译/编译中/降级/未编译) now renders
+                  as an inline badge on each `@` skill row (see commandMenuItems →
+                  skillStatusBadge). The old standalone dark SkillDropdown overlay
+                  was removed to kill the duplicate popover stacked on the input. */}
               <CommandMenu
                 open={commandMenu !== null}
                 mode={commandMenu?.mode ?? '@'}
@@ -1371,14 +1468,6 @@ export default function StartPage() {
                 items={commandMenuItems}
                 onSelect={handleCommandPick}
                 onClose={() => setCommandMenu(null)}
-              />
-              {/* PR-E (Round 4) — compile-status overlay. Mirrors the
-                  CommandMenu's `@<id>` filter via the canonical token
-                  parser so the user sees "已编译 · team · 6 agents"
-                  before submitting. Hides when there's no @-token. */}
-              <SkillDropdown
-                composerText={composer}
-                installedSkills={installedSkills}
               />
             </div>
 

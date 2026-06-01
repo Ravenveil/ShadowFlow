@@ -25,6 +25,13 @@ export interface CommandMenuItem {
   icon?: React.ReactNode;
   /** Optional hint shown at the right edge of the row (e.g. shortcut). */
   hint?: string;
+  /**
+   * Optional rich node shown at the right edge (takes precedence over `hint`).
+   * Used by `@` skill rows to surface compile status (已编译 / 编译中 / 降级 /
+   * 未编译) inline — folds the old standalone SkillDropdown overlay into this
+   * single menu so there's no second dark popover.
+   */
+  badge?: React.ReactNode;
   /** When true, the row is rendered dim + non-selectable. */
   disabled?: boolean;
 }
@@ -254,17 +261,23 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                     </span>
                   )}
                 </span>
-                {item.hint && (
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 9.5,
-                      color: 'var(--t-fg-5)',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {item.hint}
+                {item.badge ? (
+                  <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}>
+                    {item.badge}
                   </span>
+                ) : (
+                  item.hint && (
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9.5,
+                        color: 'var(--t-fg-5)',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {item.hint}
+                    </span>
+                  )
                 )}
               </div>
             );
