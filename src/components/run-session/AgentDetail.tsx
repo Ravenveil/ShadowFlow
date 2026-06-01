@@ -25,6 +25,7 @@
  */
 import React from 'react';
 import type { RunSessionNode } from '../../core/hooks/useRunSession';
+import { deriveRaci, RESP_KEYS } from '../../lib/teamGovernance';
 import { Check } from 'lucide-react';
 import { PersonaPromptCard } from './PersonaPromptCard';
 import { ToolsGrid } from './ToolsGrid';
@@ -429,7 +430,70 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ agent }) => {
           >
             <MemoryRow value={agent.memory} />
           </SkillSection>
+
+          {/* ── RACI 职责(agent 属性,字段视图 ─ 非网格) ──────────────── */}
+          <RaciField agent={agent} />
         </>
+      )}
+    </div>
+  );
+};
+
+/**
+ * RaciField — RACI 分工作为 agent 的一个**字段**展示(用户要求:不要网格)。
+ * 读 agent 的 RACI(优先已落库的 node.raci,否则按角色派生),把有担当的职责
+ * 渲染成 "职责·角色" 小标签,如「评审·主责」「沟通·拍板」。
+ */
+const RESP_LABEL: Record<string, string> = {
+  plan: '决策', draft: '设计', review: '实现', approve: '评审', gate: '沟通', tool: '文档',
+};
+const ROLE_LABEL: Record<string, string> = { R: '主责', A: '拍板', C: '协同', I: '知会' };
+
+const RaciField: React.FC<{ agent: RunSessionNode }> = ({ agent }) => {
+  const raci = deriveRaci({
+    type: agent.type,
+    title: agent.title,
+    sub: agent.sub,
+    persona: agent.persona,
+    toolsPicked: agent.toolsPicked,
+    raci: (agent as RunSessionNode & { raci?: Record<string, string> }).raci,
+  });
+  const items = RESP_KEYS.filter((k) => raci[k] !== '-');
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div
+        style={{
+          fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+          fontSize: 9.5, letterSpacing: '0.08em', textTransform: 'uppercase',
+          color: 'var(--t-fg-5, #525252)', marginBottom: 5,
+        }}
+      >
+        {agent.id.toUpperCase()}.RACI · 职责分工
+      </div>
+      {items.length === 0 ? (
+        <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>—</span>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          {items.map((k) => {
+            const role = raci[k];
+            const accent = role === 'R' || role === 'A';
+            return (
+              <span
+                key={k}
+                title={`${RESP_LABEL[k]} · ${ROLE_LABEL[role]}(${role})`}
+                style={{
+                  fontSize: 10.5, padding: '2px 7px', borderRadius: 4,
+                  fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+                  background: accent ? 'var(--t-accent-tint, rgba(168,85,247,.12))' : 'var(--t-bg-elev-2, #141414)',
+                  border: `1px solid ${accent ? 'var(--t-accent, #A855F7)' : 'var(--t-border, #27272A)'}`,
+                  color: accent ? 'var(--t-accent-bright, #D8B4FE)' : 'var(--t-fg-3, #A1A1AA)',
+                }}
+              >
+                {RESP_LABEL[k]}·{ROLE_LABEL[role]}
+              </span>
+            );
+          })}
+        </div>
       )}
     </div>
   );
