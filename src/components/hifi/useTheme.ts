@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApiBase } from '../../api/_base';
 import { applyCustomTheme, loadCustomTheme } from './customTheme';
+import { initFontScale } from './fontScale';
 
 // 2026-05-28 — added 'paper' as a third skin pack (warm cream/sepia aesthetic),
 // alongside dark/light/system. Aligns with the design package's 7-slot Skin
@@ -82,6 +83,7 @@ export function useTheme(): {
   useEffect(() => {
     applyTheme(theme);
     applyCustomTheme(loadCustomTheme());
+    initFontScale();  // 2026-06-01 — 应用用户存的全局字号(无则用 CSS 默认)
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Background sync from backend on FIRST mount of the app session. If backend

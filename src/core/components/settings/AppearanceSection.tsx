@@ -15,6 +15,14 @@ import {
   getEffectiveColor,
   type CustomSlot,
 } from '../../../components/hifi/customTheme';
+import {
+  applyFontPx,
+  saveFontPx,
+  currentFontPx,
+  DEFAULT_FONT_PX,
+  FONT_PX_MIN,
+  FONT_PX_MAX,
+} from '../../../components/hifi/fontScale';
 
 export const APPEARANCE_I18N_KEYS = {
   header: 'appearance.header',
@@ -364,6 +372,11 @@ export function AppearanceSection() {
     slotBg:      isZh ? '背景色' : 'Background',
     slotFg:      isZh ? '前景色' : 'Foreground',
     resetBtn:    isZh ? '重置默认' : 'Reset to defaults',
+    fontLabel:   isZh ? '字号' : 'Font Size',
+    fontHint:    isZh
+      ? '拖动调整全局字号(12–18px),立即生效并保存。只改字号,不缩放界面、不影响布局。'
+      : 'Drag to set global font size (12–18px). Applies instantly. Only the font scales — no layout zoom.',
+    fontReset:   isZh ? '恢复默认' : 'Reset',
   };
 
   // ── 颜色定制 state ───────────────────────────────────────────────────────
@@ -399,6 +412,20 @@ export function AppearanceSection() {
     setAccent(getEffectiveColor('accent', '#A855F7'));
     setBg(getEffectiveColor('bg', '#0A0A0A'));
     setFg(getEffectiveColor('fg', '#FFFFFF'));
+  }
+
+  // ── 字号自由调整(2026-06-01)──────────────────────────────────────────────
+  // 滑块 12–18px 自由调,实时应用 <html> font-size,不缩放、不碰布局。
+  const [fontPx, setFontPx] = useState(() => currentFontPx());
+  function handleFontChange(px: number) {
+    setFontPx(px);
+    applyFontPx(px);                              // 实时生效
+    saveFontPx(px === DEFAULT_FONT_PX ? null : px); // 等于默认则清存储(回 CSS 默认)
+  }
+  function handleFontReset() {
+    setFontPx(DEFAULT_FONT_PX);
+    applyFontPx(null);
+    saveFontPx(null);
   }
 
   const options: Array<{ id: ThemePref; label: string; sublabel: string }> = [
@@ -446,6 +473,81 @@ export function AppearanceSection() {
               onClick={() => void setTheme(id)}
             />
           ))}
+        </div>
+      </div>
+
+      {/* 字号 — 自由滑块 12–18px,实时生效。 */}
+      <div data-testid="appearance-font-size">
+        <p
+          style={{
+            margin: '0 0 6px',
+            fontFamily: 'var(--font-mono, monospace)',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: 'var(--t-fg-4)',
+          }}
+        >
+          {tx.fontLabel}
+        </p>
+        <p style={{ margin: '0 0 12px', fontSize: 11.5, color: 'var(--t-fg-4)', lineHeight: 1.55 }}>
+          {tx.fontHint}
+        </p>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '12px 14px',
+            border: '1px solid var(--t-border)',
+            borderRadius: 8,
+            background: 'var(--t-panel)',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--t-fg-4)', flexShrink: 0 }}>A</span>
+          <input
+            type="range"
+            min={FONT_PX_MIN}
+            max={FONT_PX_MAX}
+            step={0.5}
+            value={fontPx}
+            onChange={(e) => handleFontChange(parseFloat(e.target.value))}
+            aria-label={tx.fontLabel}
+            data-testid="font-size-slider"
+            style={{ flex: 1, accentColor: ACCENT, cursor: 'pointer' }}
+          />
+          <span style={{ fontSize: 18, color: 'var(--t-fg-4)', flexShrink: 0 }}>A</span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono, monospace)',
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--t-fg)',
+              minWidth: 44,
+              textAlign: 'right',
+              flexShrink: 0,
+            }}
+          >
+            {fontPx}px
+          </span>
+          <button
+            type="button"
+            onClick={handleFontReset}
+            data-testid="font-size-reset"
+            style={{
+              fontSize: 12,
+              padding: '5px 10px',
+              border: '1px solid var(--t-border)',
+              borderRadius: 6,
+              background: 'var(--t-panel-2, var(--t-panel))',
+              color: 'var(--t-fg)',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            {tx.fontReset}
+          </button>
         </div>
       </div>
 
