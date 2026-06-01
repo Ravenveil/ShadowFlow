@@ -40,6 +40,7 @@ import { quickCreateAgent } from '../api/agents';
 import { createTeam, patchTeam, putTeamWorkflow, type TeamWorkflowNode, type TeamWorkflowEdge } from '../api/teams';
 import { CreateWorkspaceModal } from '../components/workspace/CreateWorkspaceModal';
 import type { WorkspaceSummary } from '../api/workspaces';
+import { createWorkspace } from '../api/workspaces';
 import { deriveRosterRule, enforceRoster } from '../lib/assemblyRules';
 import { createGroup } from '../api/groupApi';
 import PythonBackendBanner from '../components/PythonBackendBanner';
@@ -3437,8 +3438,15 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   // user clicks the chip's 重新保存 button → setSaveState('idle') → effect
   // fires again. `inFlightRef` prevents the effect from double-firing while
   // an async run is mid-flight.
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'ok' | 'failed'>('idle');
+  const [saveState, setSaveState] = useState<
+    'idle' | 'saving' | 'ok' | 'failed' | 'need-workspace'
+  >('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
+  // 组建保存时若处于 ShadowFlow 根态(未选工作区),先问用户放到哪个工作区
+  // (已有 / 新建)——绝不静默落 "default" 而让团队/agent 变孤儿。
+  const [wsPickMode, setWsPickMode] = useState<'existing' | 'new'>('existing');
+  const [wsPickId, setWsPickId] = useState('');
+  const [wsPickNewName, setWsPickNewName] = useState('');
   // Visible verdict for the deterministic roster Rule. console.warn alone is
   // invisible to the user — when the assembler streams in N agents but the
   // roster Rule truncates to fewer, the user must see *why* the final team is
@@ -3481,6 +3489,12 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   useEffect(() => {
     if (!blueprintSettled) return;
     if (saveState === 'saving' || saveState === 'ok') return;
+    // ShadowFlow 根态(未选工作区):不静默落 "default"。先弹工作区选择器,
+    // 用户选定/新建后 switchTo 会改 currentWorkspaceId → 本 effect 重跑 → 正常保存。
+    if (!currentWorkspaceId) {
+      setSaveState('need-workspace');
+      return;
+    }
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
@@ -3766,8 +3780,84 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   // Auto-save status chip — sits inline at the top of the page so the user
   // always knows whether the team was persisted. Failure state surfaces a
   // retry button that flips saveState back to 'idle' to re-run the effect.
+  // 组建保存的工作区选择确认:已有则切过去,新建则先建再切。switchTo 改
+  // currentWorkspaceId → 保存 effect 重跑并以该工作区持久化(agent+team 不再孤儿)。
+  async function confirmSaveWorkspace() {
+    try {
+      let id = wsPickId;
+      if (wsPickMode === 'new') {
+        const nm = wsPickNewName.trim();
+        if (!nm) return;
+        const ws = await createWorkspace({ name: nm });
+        id = ws.workspace_id;
+      }
+      if (!id) return;
+      switchWorkspace(id);
+      void useWorkspaceStore.getState().fetchWorkspaces();
+      setSaveState('idle'); // 重新触发保存 effect(此时 currentWorkspaceId 已有值)
+    } catch {
+      /* 创建工作区失败:留在 need-workspace,用户可重试 */
+    }
+  }
+
+  const needWorkspacePicker =
+    saveState !== 'need-workspace' ? null : (
+      <div
+        data-testid="run-session-save-need-workspace"
+        style={{
+          display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8,
+          padding: '8px 12px', borderRadius: 8,
+          background: 'var(--t-bg-elev-2, #141414)',
+          border: '1px solid var(--t-border, #27272A)',
+          fontSize: 12, color: 'var(--t-fg-2, #D4D4D8)',
+        }}
+      >
+        <span>把这个团队和 Agent 保存到哪个工作区？</span>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <input type="radio" name="rs-ws" checked={wsPickMode === 'existing'} onChange={() => setWsPickMode('existing')} />
+          已有
+        </label>
+        {wsPickMode === 'existing' && (
+          <select
+            value={wsPickId || workspaces[0]?.workspace_id || ''}
+            onChange={(e) => setWsPickId(e.target.value)}
+            data-testid="rs-ws-existing-select"
+            style={{ background: 'var(--t-bg)', color: 'var(--t-fg-1)', border: '1px solid var(--t-border)', borderRadius: 5, padding: '3px 6px', fontSize: 12 }}
+          >
+            {workspaces.length === 0 && <option value="">（无已有工作区）</option>}
+            {workspaces.map((w) => (
+              <option key={w.workspace_id} value={w.workspace_id}>{w.name}</option>
+            ))}
+          </select>
+        )}
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <input type="radio" name="rs-ws" checked={wsPickMode === 'new'} onChange={() => setWsPickMode('new')} />
+          新建
+        </label>
+        {wsPickMode === 'new' && (
+          <input
+            type="text"
+            value={wsPickNewName}
+            onChange={(e) => setWsPickNewName(e.target.value)}
+            placeholder="新工作区名称"
+            maxLength={40}
+            data-testid="rs-ws-new-name"
+            style={{ background: 'var(--t-bg)', color: 'var(--t-fg-1)', border: '1px solid var(--t-border)', borderRadius: 5, padding: '3px 8px', fontSize: 12, width: 160 }}
+          />
+        )}
+        <button
+          type="button"
+          onClick={confirmSaveWorkspace}
+          data-testid="rs-ws-confirm"
+          style={{ padding: '3px 12px', borderRadius: 5, background: 'var(--t-accent)', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+        >
+          保存到此工作区
+        </button>
+      </div>
+    );
+
   const autoSaveChip =
-    saveState === 'idle' ? null : (
+    saveState === 'idle' || saveState === 'need-workspace' ? null : (
       <div
         data-testid={`run-session-save-${saveState}`}
         style={{
@@ -3848,6 +3938,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
       <InjectKeyframes />
       <div style={{ padding: '8px 16px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
         <PythonBackendBanner />
+        {needWorkspacePicker && <div>{needWorkspacePicker}</div>}
         {autoSaveChip && <div>{autoSaveChip}</div>}
         {rosterNotice && (
           <div

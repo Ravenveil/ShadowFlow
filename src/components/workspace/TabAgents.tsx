@@ -16,6 +16,7 @@ import {
   type AgentRecord,
 } from '../../api/agents';
 import { AgentEditChat } from './AgentEditChat';
+import { useWorkspaceStore } from '../../store/workspaceStore';
 
 type AgentStatus = 'run' | 'ok' | 'warn' | 'idle' | 'wait';
 
@@ -94,6 +95,8 @@ function QuickHireModal({ onClose, onCreated }: { onClose: () => void; onCreated
   const [soul, setSoul] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 带上当前工作区,否则后端默认落 "default" → 在用户工作区「创建了却找不到」。
+  const currentId = useWorkspaceStore((s) => s.currentId);
 
   const canSubmit = name.trim().length > 0 && soul.trim().length > 0 && !submitting;
 
@@ -101,7 +104,7 @@ function QuickHireModal({ onClose, onCreated }: { onClose: () => void; onCreated
     setSubmitting(true);
     setError(null);
     try {
-      const record = await quickCreateAgent({ name: name.trim(), soul: soul.trim() });
+      const record = await quickCreateAgent({ name: name.trim(), soul: soul.trim(), workspace_id: currentId ?? undefined });
       onCreated(record);
     } catch (e) {
       const msg = e instanceof AgentApiError

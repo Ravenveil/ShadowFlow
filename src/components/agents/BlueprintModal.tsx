@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Inbox as BlueprintInbox } from '../../common/icons/iconRegistry';
 import type { AgentRecord } from '../../api/agents';
 import { quickCreateAgent } from '../../api/agents';
+import { useWorkspaceStore } from '../../store/workspaceStore';
 
 interface BlueprintModalProps {
   agent: AgentRecord;
@@ -129,6 +130,8 @@ function AgentPreviewCard({ agent }: { agent: AgentRecord }) {
 export function BlueprintModal({ agent, onClose, onImported, initialImport }: BlueprintModalProps) {
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle');
   const isImportOnly = !agent.agent_id;
+  // 导入创建也带上当前工作区,避免落 "default" 而在工作区找不到。
+  const currentId = useWorkspaceStore((s) => s.currentId);
 
   // Import section state
   const [importRaw, setImportRaw] = useState(initialImport ?? '');
@@ -237,6 +240,7 @@ export function BlueprintModal({ agent, onClose, onImported, initialImport }: Bl
       const imported = await quickCreateAgent({
         name: importPreview.name,
         soul: importPreview.soul,
+        workspace_id: currentId ?? undefined,
       });
       setImportStatus('done');
       onImported?.(imported);
@@ -247,6 +251,7 @@ export function BlueprintModal({ agent, onClose, onImported, initialImport }: Bl
         const imported = await quickCreateAgent({
           name: `${importPreview.name}-copy`,
           soul: importPreview.soul,
+          workspace_id: currentId ?? undefined,
         });
         setImportStatus('done');
         onImported?.(imported);
