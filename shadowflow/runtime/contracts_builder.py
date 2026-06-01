@@ -55,6 +55,10 @@ class RoleProfile(BaseModel):
     description: str = ""
     persona: str = ""
     responsibilities: List[str] = Field(default_factory=list)
+    # RACI 分工(2026-06-01):职责桶 → R/A/C/I。与上面的 responsibilities(自由文本
+    # 职责描述)正交、不同概念,故独立字段。组建时由 deriveRaci 派生写入;手动招人留空。
+    # v1 职责桶:plan|draft|review|approve|gate|tool(对齐 PolicyMatrixMini)。
+    raci: Dict[str, str] = Field(default_factory=dict)
     constraints: List[str] = Field(default_factory=list)
     tools: List[str] = Field(default_factory=list)
     executor_kind: Literal["api", "cli"] = "api"

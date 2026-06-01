@@ -219,6 +219,8 @@ class QuickCreateRequest(BaseModel):
     # 而不是退化成 Python 默认 blueprint。手动招人(只填 name+soul)不传 → 走默认。
     model: Optional[str] = Field(None, max_length=120)
     tools: Optional[List[str]] = Field(None, max_length=64)
+    # RACI 分工(职责桶 → R/A/C/I)。组建保存由前端 deriveRaci 派生传入;手动招人不传 → {}。
+    raci: Optional[Dict[str, str]] = None
 
 
 class QuickCreateResponse(BaseModel):
@@ -332,16 +334,24 @@ def _build_default_blueprint(
     soul: str,
     model: Optional[str] = None,
     tools: Optional[List[str]] = None,
+    raci: Optional[Dict[str, str]] = None,
 ) -> AgentBlueprint:
-    # 契约扩展:组建保存可带设计期的 model / tools;不传则回退默认。
+    # 契约扩展:组建保存可带设计期的 model / tools / raci;不传则回退默认 / 空。
     tool_ids = [t for t in (tools or []) if isinstance(t, str) and t.strip()] or list(
         DEFAULT_MCP_SERVERS
     )
+    # RACI:只接受合法档位,过滤脏值;为空则 {}。
+    clean_raci = {
+        str(k): str(v).upper()
+        for k, v in (raci or {}).items()
+        if isinstance(v, str) and str(v).upper() in ("R", "A", "C", "I")
+    }
     role = RoleProfile(
         name=name,
         description=soul,
         persona=soul,
         tools=tool_ids,
+        raci=clean_raci,
         executor_kind=DEFAULT_EXECUTOR_KIND,
         executor_provider=DEFAULT_LLM_PROVIDER,
         executor_model=(model.strip() if model and model.strip() else DEFAULT_LLM_MODEL),
@@ -362,7 +372,7 @@ def _build_default_blueprint(
 @router.post("")
 async def quick_create_agent(body: QuickCreateRequest) -> Dict[str, Any]:
     _validate_avatar_color(body.avatar_color)
-    blueprint = _build_default_blueprint(body.name, body.soul, body.model, body.tools)
+    blueprint = _build_default_blueprint(body.name, body.soul, body.model, body.tools, body.raci)
     now = datetime.now(timezone.utc).isoformat()
     agent_id = f"agent-{uuid4().hex[:12]}"
     record = {

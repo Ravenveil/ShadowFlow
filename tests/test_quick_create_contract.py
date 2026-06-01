@@ -71,3 +71,17 @@ class TestQuickCreateContract:
         too_long = "x" * 8001
         res = client.post("/api/agents", json={"name": "超长", "soul": too_long})
         assert res.status_code == 422
+
+    def test_raci_flows_into_role_and_filters_dirty(self, client: TestClient):
+        data = _post(
+            client,
+            name="带RACI",
+            soul="灵魂",
+            raci={"plan": "a", "review": "R", "approve": "X", "tool": "c"},
+        )
+        # 合法档位归一为大写;非法值(X)被过滤丢弃。
+        assert _role0(data)["raci"] == {"plan": "A", "review": "R", "tool": "C"}
+
+    def test_raci_defaults_empty_when_omitted(self, client: TestClient):
+        data = _post(client, name="无RACI", soul="灵魂")
+        assert _role0(data)["raci"] == {}

@@ -25,6 +25,9 @@
 import React from 'react';
 import { Maximize2 } from 'lucide-react';
 import type { RunSessionNode } from '../../core/hooks/useRunSession';
+// 单一真源:RACI 派生逻辑统一在 teamGovernance(组建保存也用同一份)。优先用
+// node.raci(后端已落库的),否则按 type/persona/tools 现算。
+import { deriveRaci as deriveRaciShared } from '../../lib/teamGovernance';
 
 export interface PolicyMatrixMiniProps {
   agents: RunSessionNode[];
@@ -145,50 +148,18 @@ function renderCell(value: RaciCell): React.ReactNode {
   }
 }
 
-// 2026-05-19 — derive RACI from real agent fields until backend ships a
-// dedicated RACI extension. NOT mock data:
-//   - coordinator → R on plan + approve, A on gate (orchestration),
-//                   C on review, I elsewhere
-//   - agent       → R on draft + tool (their actual workload),
-//                   C on review, I on plan/approve (informed of upstream)
-//   - persona hints flip review→R when persona text mentions 评审/review/critique
-// When backend grows `node.responsibilities: Record<respKey, R|A|C|I>`,
-// this function becomes a one-line `agent.responsibilities[key] ?? '-'`.
+// RACI 派生统一走 teamGovernance.deriveRaci(优先 node.raci,否则按 type/persona/tools
+// 现算)。本组件只负责把它映射成 6 列网格。
 function deriveRaci(agent: RunSessionNode): Record<string, RaciCell> {
-  const isCoord = agent.type === 'coordinator';
-  const personaLc = (agent.persona ?? '').toLowerCase();
-  const isReviewer = /评审|review|critic|qa|测试/i.test(personaLc + ' ' + (agent.title ?? '') + ' ' + (agent.sub ?? ''));
-  const hasTools = (agent.toolsPicked?.length ?? 0) > 0;
-
-  if (isCoord) {
-    return {
-      plan:    'R',
-      draft:   'I',
-      review:  'C',
-      approve: 'R',
-      gate:    'A',
-      tool:    'I',
-    };
-  }
-  if (isReviewer) {
-    return {
-      plan:    'I',
-      draft:   'C',
-      review:  'R',
-      approve: 'A',
-      gate:    'C',
-      tool:    hasTools ? 'R' : 'I',
-    };
-  }
-  // Default agent — does the work
-  return {
-    plan:    'I',
-    draft:   'R',
-    review:  'C',
-    approve: 'I',
-    gate:    'I',
-    tool:    hasTools ? 'R' : 'C',
-  };
+  return deriveRaciShared({
+    type: agent.type,
+    title: agent.title,
+    sub: agent.sub,
+    persona: agent.persona,
+    toolsPicked: agent.toolsPicked,
+    // 若 RunSessionNode 将来带 raci,这里会自动优先用它(deriveRaciShared 内部判断）。
+    raci: (agent as RunSessionNode & { raci?: Record<string, string> }).raci,
+  });
 }
 
 const PolicyMatrixMini: React.FC<PolicyMatrixMiniProps> = ({ agents }) => {

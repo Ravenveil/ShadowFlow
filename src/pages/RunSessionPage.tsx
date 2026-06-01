@@ -41,6 +41,7 @@ import { createTeam, patchTeam, putTeamWorkflow, type TeamWorkflowNode, type Tea
 import { CreateWorkspaceModal } from '../components/workspace/CreateWorkspaceModal';
 import type { WorkspaceSummary } from '../api/workspaces';
 import { createWorkspace } from '../api/workspaces';
+import { deriveRaci, derivePolicyMatrix, isAccountable } from '../lib/teamGovernance';
 import { deriveRosterRule, enforceRoster } from '../lib/assemblyRules';
 import { createGroup } from '../api/groupApi';
 import PythonBackendBanner from '../components/PythonBackendBanner';
@@ -3588,9 +3589,10 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
               // 用 sub 导致组建保存的 agent 灵魂被削成一句话。
               soul: n.persona || n.sub || n.title,
               workspace_id: wsId,
-              // 把设计期的 model / tools 一并带过去,而非退化成 Python 默认 blueprint。
+              // 把设计期的 model / tools / RACI 分工一并带过去,而非退化成默认 blueprint。
               model: n.model,
               tools: n.toolsPicked,
+              raci: deriveRaci(n),
             }),
           ),
         );
@@ -3694,6 +3696,31 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           console.warn('[RunSession] putTeamWorkflow failed:', wfErr);
         }
 
+        // 权责矩阵(交互门禁):从 DAG 边 + RACI 派生 agent×agent 的 permit/deny/warn,
+        // 存进 group.policy_matrix(此前写死 {} → 组建画的权责丢失)。键用 agent_id。
+        let policyMatrix: Record<string, Record<string, string>> = {};
+        try {
+          const nodeToAgent = new Map<string, string>();
+          agentNodes.forEach((n, i) => {
+            const aid = created[i]?.agent_id;
+            if (aid) nodeToAgent.set(n.id, aid);
+          });
+          const policyAgents = agentNodes
+            .map((n, i) => {
+              const id = created[i]?.agent_id;
+              return id
+                ? { id, isCoordinator: n.type === 'coordinator', isAccountable: isAccountable(deriveRaci(n)) }
+                : null;
+            })
+            .filter((a): a is NonNullable<typeof a> => a !== null);
+          const policyEdges = filteredEdges
+            .map((e) => ({ from: nodeToAgent.get(e.from), to: nodeToAgent.get(e.to) }))
+            .filter((e): e is { from: string; to: string } => !!e.from && !!e.to);
+          policyMatrix = derivePolicyMatrix(policyAgents, policyEdges);
+        } catch (pmErr) {
+          console.warn('[RunSession] derivePolicyMatrix failed:', pmErr);
+        }
+
         try {
           const grp = await createGroup({
             templateId: '',
@@ -3701,7 +3728,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
             name: teamName,
             agentIds,
             memberEmails: [],
-            policyMatrix: {},
+            policyMatrix,
             workspaceId: wsId,
             teamId: team.team_id,
           });

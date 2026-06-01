@@ -64,6 +64,8 @@ export interface QuickCreateRequest {
   model?: string;
   /** 契约扩展:设计期工具集（tool ids）;不传走后端默认 MCP 集。 */
   tools?: string[];
+  /** RACI 分工:职责桶(plan|draft|review|approve|gate|tool) → R/A/C/I。组建保存带,手动招人不带。 */
+  raci?: Record<string, string>;
 }
 
 export interface AgentRecord {
