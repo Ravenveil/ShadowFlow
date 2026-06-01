@@ -29,7 +29,9 @@ interface WorkspaceState {
   error: string | null;
 
   fetchWorkspaces: () => Promise<void>;
-  switchTo: (id: string) => void;
+  /** Switch into a workspace, or pass null to return to the ShadowFlow root
+   *  (no workspace selected → no agents shown; agents live inside workspaces). */
+  switchTo: (id: string | null) => void;
   setCurrentTeam: (team: CurrentTeam | null) => void;
   setWorkspaces: (ws: WorkspaceSummary[]) => void;
 }
@@ -48,11 +50,12 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         try {
           const ws = await listWorkspaces();
           const current = get().currentId;
-          // Keep currentId if still valid, otherwise fall back to first workspace
+          // Keep currentId if still valid; otherwise fall back to the ShadowFlow
+          // ROOT (null), NOT the first workspace. Root = no workspace selected =
+          // no agents shown (取消默认工作区设计). The user explicitly enters a
+          // workspace via the switcher; agents only exist inside workspaces.
           const validCurrent =
-            current && ws.find((w) => w.workspace_id === current)
-              ? current
-              : (ws[0]?.workspace_id ?? null);
+            current && ws.find((w) => w.workspace_id === current) ? current : null;
           set({ workspaces: ws, currentId: validCurrent, loading: false });
         } catch (err) {
           set({
@@ -62,9 +65,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         }
       },
 
-      switchTo: (id: string) => {
-        // 切到不同 workspace 时清空当前 team —— team 属于旧 workspace，
-        // 留着会让 chat 用错 workspace 的 agent_ids 过滤。同 workspace 不清。
+      switchTo: (id: string | null) => {
+        // 切到不同 workspace（或回到 root=null）时清空当前 team —— team 属于旧
+        // workspace，留着会让 chat 用错 workspace 的 agent_ids 过滤。同 workspace 不清。
         set((s) => (id === s.currentId ? { currentId: id } : { currentId: id, currentTeam: null }));
       },
 

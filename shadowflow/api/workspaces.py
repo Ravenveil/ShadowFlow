@@ -10,8 +10,12 @@ Endpoints:
 All success responses use {data, meta} envelope.
 Errors raise HTTP exceptions with {error: {code, message}} body.
 
-Default workspace (AC6): GET /api/workspaces auto-creates "我的工作区" if no
-workspaces exist, ensuring at least one workspace is always present.
+No default workspace (2026-06-01, A design): GET /api/workspaces returns the
+existing list verbatim — empty when none exist. There is NO auto-created
+"我的工作区"; the frontend treats "no workspace selected" as the ShadowFlow root
+(shows no agents). Agents/teams always belong to an explicit workspace, and
+creation forces a workspace choice (existing/new) rather than silently
+defaulting (which previously orphaned agents under workspace_id="default").
 """
 
 from __future__ import annotations

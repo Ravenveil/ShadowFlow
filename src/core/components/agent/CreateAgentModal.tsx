@@ -7,7 +7,7 @@
  *
  * On submit: POST /api/agents, calls onCreated with the new agent record.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { quickCreateAgent, AgentApiError } from '../../../api/agents';
 import type { AgentRecord } from '../../../api/agents';
@@ -18,11 +18,14 @@ import { CatalogInstallTab } from './CatalogInstallTab';
 type Tab = 'quick' | 'catalog';
 
 /**
- * 2026-05-31 — 新 agent 的归属选择。default=加入当前(默认)工作区;new=新建一个
- * 工作区(= 组建一个新团队空间)再把 agent 放进去。用户要求创建单 agent 时明确
- * 询问「加入默认工作区 还是 另起一个」。
+ * 2026-05-31 — 新 agent 的归属选择。existing=放进某个已有工作区(下拉选具体哪个,
+ * 默认当前);new=新建一个工作区(= 组建一个新团队空间)再把 agent 放进去。
+ *
+ * 显式询问、不静默落 `default`:此前由 agent/run-session 创建的 agent 因 caller 没传
+ * workspace_id 而落到 "default" 工作区、在用户工作区里「创建了却找不到」(根因见
+ * 后端 agents.py POST 默认 workspace_id="default")。强制在创建口选工作区杜绝孤儿。
  */
-type WsChoice = 'default' | 'new';
+type WsChoice = 'existing' | 'new';
 
 interface CreateAgentModalProps {
   onCreated: (agent: AgentRecord) => void;
@@ -36,15 +39,23 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
   const [tab, setTab] = useState<Tab>('quick');
   const [name, setName] = useState('');
   const [soul, setSoul] = useState('');
-  // 工作区归属:加入当前默认工作区 / 新建工作区。
-  const [wsChoice, setWsChoice] = useState<WsChoice>('default');
+  // 工作区归属:放进某个已有工作区(选具体哪个)/ 新建工作区。
+  const [wsChoice, setWsChoice] = useState<WsChoice>('existing');
+  const [targetWsId, setTargetWsId] = useState<string>('');
   const [newWsName, setNewWsName] = useState('');
   const currentId = useWorkspaceStore((s) => s.currentId);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const switchTo = useWorkspaceStore((s) => s.switchTo);
   const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
-  const currentWsName =
-    workspaces.find((w) => w.workspace_id === currentId)?.name ?? 'ShadowFlow 默认工作区';
+
+  // Ensure the workspace list is loaded (the select needs it) and default the
+  // selected target to the current workspace.
+  useEffect(() => {
+    if (workspaces.length === 0) void fetchWorkspaces();
+  }, [workspaces.length, fetchWorkspaces]);
+  useEffect(() => {
+    if (!targetWsId && currentId) setTargetWsId(currentId);
+  }, [currentId, targetWsId]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,8 +71,9 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
     setSubmitting(true);
     setError(null);
     try {
-      // 归属工作区:新建则先 POST 创建 workspace,切过去,用其 id;否则用当前默认。
-      let wsId = currentId ?? undefined;
+      // 归属工作区:新建则先 POST 创建 workspace、切过去、用其 id;否则用下拉选中的
+      // 已有工作区(兜底当前)。绝不静默落 "default"。
+      let wsId: string | undefined;
       if (wsChoice === 'new') {
         const wsName = newWsName.trim();
         if (!wsName) {
@@ -73,6 +85,13 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
         wsId = ws.workspace_id;
         switchTo(ws.workspace_id);
         void fetchWorkspaces();
+      } else {
+        wsId = targetWsId || currentId || undefined;
+        if (!wsId) {
+          setError('请选择一个工作区');
+          setSubmitting(false);
+          return;
+        }
       }
       const agent = await quickCreateAgent({ name: name.trim(), soul: soul.trim(), workspace_id: wsId });
       onCreated(agent);
@@ -184,14 +203,32 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
                   <input
                     type="radio"
                     name="ws-choice"
-                    checked={wsChoice === 'default'}
-                    onChange={() => setWsChoice('default')}
+                    checked={wsChoice === 'existing'}
+                    onChange={() => setWsChoice('existing')}
                     className="mt-0.5"
-                    data-testid="ws-choice-default"
+                    data-testid="ws-choice-existing"
                   />
-                  <span className="flex flex-col">
-                    <span className="text-white/90">加入当前工作区</span>
-                    <span className="text-xs text-white/40">{currentWsName}</span>
+                  <span className="flex flex-1 flex-col gap-1.5">
+                    <span className="text-white/90">放进已有工作区</span>
+                    {wsChoice === 'existing' && (
+                      <select
+                        value={targetWsId}
+                        onChange={(e) => setTargetWsId(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded border border-shadowflow-border bg-white/5 px-2.5 py-1.5 text-sm text-white/90 outline-none focus:border-white/30"
+                        data-testid="ws-existing-select"
+                      >
+                        {workspaces.length === 0 && (
+                          <option value="">（加载中…）</option>
+                        )}
+                        {workspaces.map((w) => (
+                          <option key={w.workspace_id} value={w.workspace_id}>
+                            {w.name}
+                            {w.workspace_id === currentId ? '（当前）' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </span>
                 </label>
                 <label className="flex cursor-pointer items-start gap-2 rounded border border-shadowflow-border bg-white/[0.02] px-3 py-2 text-sm hover:bg-white/5">

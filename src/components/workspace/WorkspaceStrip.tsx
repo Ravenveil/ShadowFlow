@@ -69,9 +69,13 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
     const a = Array.from(name);
     return a.length >= 2 ? a[0] + a[1] : (a[0] ?? '?');
   };
-  const current = workspaces.find((w) => w.workspace_id === currentId) ?? workspaces[0];
+  // 不再回退 workspaces[0]：currentId 为 null = ShadowFlow 根（未选工作区），
+  // 此时 current=undefined，触发器显示品牌 "ShadowFlow"、根态副标题、不显示某个
+  // 工作区的计数（取消默认工作区设计）。
+  const current = workspaces.find((w) => w.workspace_id === currentId);
+  const atRoot  = !current && !currentTeam;
   const color   = current?.color || 'var(--t-accent)';
-  // 选了 team 就让触发器显示 team（名字 + 字头），否则显示 workspace。
+  // 选了 team 就让触发器显示 team（名字 + 字头），否则显示 workspace；都没有=根。
   const displayName = currentTeam?.name ?? current?.name ?? 'ShadowFlow';
   const init    = getInit(displayName);
 
@@ -101,7 +105,34 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
           原来上下两区（workspace items + teams items）合并成一区。
           点 team item：切到该 team 所属 workspace + 留在当前页，不 navigate。
           这样用户从任意页（chat/agent/run-session/...）切团队都不会被踢走。 */}
-      <div style={{ padding: '4px 8px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
+      {/* 回到 ShadowFlow 根目录：清空 workspace + team 选择。根态不显示任何 agent，
+          agent 只在进入某个工作区后出现（取消默认工作区设计）。 */}
+      <button
+        type="button"
+        onClick={() => { switchTo(null); setCurrentTeam(null); setOpen(false); }}
+        data-testid="workspace-dropdown-root"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
+          border: atRoot ? '1px solid color-mix(in oklab, var(--t-accent) 40%, transparent)' : '1px solid transparent',
+          background: atRoot ? 'color-mix(in oklab, var(--t-accent) 12%, var(--t-panel))' : 'transparent',
+          width: '100%', textAlign: 'left',
+          color: atRoot ? 'var(--t-accent)' : 'var(--t-fg-2)', fontSize: 12,
+          fontWeight: atRoot ? 700 : 500,
+        }}
+      >
+        <span style={{
+          width: 30, height: 30, borderRadius: 7, flexShrink: 0,
+          background: 'color-mix(in oklab, var(--t-accent) 18%, var(--t-panel-2))',
+          border: '1px solid color-mix(in oklab, var(--t-accent) 45%, transparent)',
+          color: 'var(--t-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontWeight: 900, fontSize: 10, letterSpacing: '-0.03em',
+        }}>SF</span>
+        <span style={{ flex: 1 }}>ShadowFlow</span>
+        {atRoot && <span style={{ fontSize: 10, color: 'var(--t-accent)' }}>✓</span>}
+      </button>
+
+      <div style={{ padding: '8px 8px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
         <Users size={11} strokeWidth={2} aria-hidden style={{ color: 'var(--t-fg-4)' }} />
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
           {t('workspace.myTeams') || '我的团队'} · {teamsLoaded ? teams.length : '…'}
@@ -276,7 +307,7 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
               ? `${currentTeam.agent_ids.length} agents · ${current?.name ?? 'Workspace'}`
               : current
                 ? `${current.agent_count} agents · ${current.team_count} teams`
-                : 'Workspace'}
+                : '选择或新建工作区'}
           </div>
         </div>
         <ChevronDown size={13} strokeWidth={2} style={{ color: 'var(--t-fg-4)', flexShrink: 0, transition: 'transform 150ms', transform: open ? 'rotate(180deg)' : 'none' }} />

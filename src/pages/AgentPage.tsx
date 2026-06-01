@@ -137,6 +137,13 @@ export function AgentPage() {
 
   // Fetch agents
   const fetchAgents = useCallback(async () => {
+    // ShadowFlow 根目录（未选工作区）不显示任何 agent —— agent 只属于具体工作区
+    // （取消默认工作区设计）。不带 workspace 过滤会拉到全部，违背根态语义，故直接空。
+    if (!currentId) {
+      setAgents([]);
+      setLoadStatus('success');
+      return;
+    }
     setLoadStatus('loading');
     setErrorMsg(null);
     try {
@@ -424,8 +431,23 @@ export function AgentPage() {
             </div>
           )}
 
-          {/* Empty state */}
-          {loadStatus === 'success' && agents.length === 0 && (
+          {/* Root (no workspace) — 取消默认工作区设计：根目录不显示 agent，
+              引导用户先进入/新建一个工作区。 */}
+          {loadStatus === 'success' && agents.length === 0 && !currentId && (
+            <div
+              className="hf-meta"
+              style={{ padding: '56px 0', textAlign: 'center', lineHeight: 1.7 }}
+            >
+              你在 <b style={{ color: 'var(--t-fg-2)' }}>ShadowFlow</b>。
+              <br />
+              Agent 属于具体工作区 —— 请从左上角切换器<b>选择或新建一个工作区</b>，
+              <br />
+              再在其中招募 Agent。
+            </div>
+          )}
+
+          {/* Empty state（工作区内无 agent） */}
+          {loadStatus === 'success' && agents.length === 0 && currentId && (
             <EmptyState onNewAgent={focusQuickHire} />
           )}
 
