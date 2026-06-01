@@ -209,10 +209,16 @@ _HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 class QuickCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    soul: str = Field(..., min_length=1, max_length=2000)
+    # soul 即 persona。上限放宽到 8000:run-session「组建」保存时携带 LLM 生成的
+    # 完整 persona(此前前端只传短副标题 sub,灵魂被削;现传 node.persona)。
+    soul: str = Field(..., min_length=1, max_length=8000)
     workspace_id: str = "default"
     # 头像色（可选）：用户手选时传 #rrggbb；不传则前端按名字 hash 兜底。
     avatar_color: Optional[str] = Field(None, max_length=9)
+    # 契约扩展(2026-06-01):组建保存把设计期的 model / tools 一并带过来,
+    # 而不是退化成 Python 默认 blueprint。手动招人(只填 name+soul)不传 → 走默认。
+    model: Optional[str] = Field(None, max_length=120)
+    tools: Optional[List[str]] = Field(None, max_length=64)
 
 
 class QuickCreateResponse(BaseModel):
@@ -321,19 +327,28 @@ async def get_routing_log(
 # ---------------------------------------------------------------------------
 
 
-def _build_default_blueprint(name: str, soul: str) -> AgentBlueprint:
+def _build_default_blueprint(
+    name: str,
+    soul: str,
+    model: Optional[str] = None,
+    tools: Optional[List[str]] = None,
+) -> AgentBlueprint:
+    # 契约扩展:组建保存可带设计期的 model / tools;不传则回退默认。
+    tool_ids = [t for t in (tools or []) if isinstance(t, str) and t.strip()] or list(
+        DEFAULT_MCP_SERVERS
+    )
     role = RoleProfile(
         name=name,
         description=soul,
         persona=soul,
-        tools=list(DEFAULT_MCP_SERVERS),
+        tools=tool_ids,
         executor_kind=DEFAULT_EXECUTOR_KIND,
         executor_provider=DEFAULT_LLM_PROVIDER,
-        executor_model=DEFAULT_LLM_MODEL,
+        executor_model=(model.strip() if model and model.strip() else DEFAULT_LLM_MODEL),
     )
     tool_policies = [
         ToolPolicy(tool_id=tool_id, default_permission="allow")
-        for tool_id in DEFAULT_MCP_SERVERS
+        for tool_id in tool_ids
     ]
     return AgentBlueprint(
         name=name,
@@ -347,7 +362,7 @@ def _build_default_blueprint(name: str, soul: str) -> AgentBlueprint:
 @router.post("")
 async def quick_create_agent(body: QuickCreateRequest) -> Dict[str, Any]:
     _validate_avatar_color(body.avatar_color)
-    blueprint = _build_default_blueprint(body.name, body.soul)
+    blueprint = _build_default_blueprint(body.name, body.soul, body.model, body.tools)
     now = datetime.now(timezone.utc).isoformat()
     agent_id = f"agent-{uuid4().hex[:12]}"
     record = {

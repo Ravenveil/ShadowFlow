@@ -3584,8 +3584,13 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           agentNodes.map((n) =>
             quickCreateAgent({
               name: n.title,
-              soul: n.sub || n.title,
+              // 优先用 run 里生成的完整 persona(灵魂),而不是短副标题 sub —— 此前
+              // 用 sub 导致组建保存的 agent 灵魂被削成一句话。
+              soul: n.persona || n.sub || n.title,
               workspace_id: wsId,
+              // 把设计期的 model / tools 一并带过去,而非退化成 Python 默认 blueprint。
+              model: n.model,
+              tools: n.toolsPicked,
             }),
           ),
         );

@@ -55,10 +55,15 @@ interface Envelope<T> {
 
 export interface QuickCreateRequest {
   name: string;
+  /** Agent 灵魂(= persona)。组建保存应传 run 里生成的完整 persona,而非短副标题。 */
   soul: string;
   workspace_id?: string;
   /** 头像色（可选）：#rrggbb；不传则前端按名字 hash 兜底。 */
   avatar_color?: string | null;
+  /** 契约扩展:设计期 model（如 claude-sonnet-4-6）;不传走后端默认。 */
+  model?: string;
+  /** 契约扩展:设计期工具集（tool ids）;不传走后端默认 MCP 集。 */
+  tools?: string[];
 }
 
 export interface AgentRecord {
