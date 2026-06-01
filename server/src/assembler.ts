@@ -917,6 +917,73 @@ export function firstJsonValueEnd(text: string): number {
   return -1; // never balanced
 }
 
+/**
+ * 2026-06-01 — bridge a Claude-Code-CLI (or any agent's) built-in
+ * `AskUserQuestion` tool call into the native `question-form` SSE event so the
+ * existing `QuestionFormModal` lights up. Without this the structured question
+ * arrives only as a generic `tool-use` chip and the prose falls into the text
+ * stream — the user sees no interactive picker.
+ *
+ * CLI `AskUserQuestion` input shape:
+ *   { questions: [{ question, header, multiSelect, options: [{label, description}] }] }
+ * → QuestionFormModal `FormBody`:
+ *   { questions: [{ id, label, type:'radio'|'checkbox'|'text', options?: string[], required }] }
+ *
+ * Returns null for any non-AskUserQuestion tool or malformed input (caller then
+ * just emits the plain tool-use chip).
+ */
+function askUserQuestionToFormEvent(
+  toolName: string,
+  toolInput: unknown,
+  callId: string | null | undefined,
+  nodeId: string | undefined,
+): ParserSseEvent | null {
+  if (toolName !== 'AskUserQuestion') return null;
+  const input = toolInput as { questions?: unknown } | null;
+  const rawQs = Array.isArray(input?.questions) ? (input!.questions as unknown[]) : [];
+  if (rawQs.length === 0) return null;
+
+  const questions = rawQs.map((raw, i) => {
+    const q = (raw ?? {}) as {
+      question?: unknown;
+      header?: unknown;
+      multiSelect?: unknown;
+      options?: unknown;
+    };
+    const opts = Array.isArray(q.options)
+      ? (q.options as unknown[])
+          .map((o) =>
+            typeof o === 'string'
+              ? o
+              : ((o as { label?: unknown })?.label != null
+                  ? String((o as { label?: unknown }).label)
+                  : ''),
+          )
+          .filter((s) => s.length > 0)
+      : [];
+    const hasOpts = opts.length > 0;
+    const questionText = typeof q.question === 'string' ? q.question : `问题 ${i + 1}`;
+    const header = typeof q.header === 'string' && q.header.trim() ? q.header.trim() : '';
+    return {
+      id: `q${i}`,
+      label: header ? `${header} — ${questionText}` : questionText,
+      type: hasOpts ? (q.multiSelect === true ? 'checkbox' : 'radio') : 'text',
+      ...(hasOpts ? { options: opts } : {}),
+      required: true,
+    };
+  });
+
+  return {
+    event: 'question-form',
+    data: {
+      id: callId ?? `askuser-${nodeId ?? '0'}`,
+      title: '需要您澄清',
+      body: { questions },
+      ...(nodeId ? { node_id: nodeId } : {}),
+    },
+  };
+}
+
 export async function* pipeChunksToSse(
   chunks: AsyncGenerator<TurnChunk> | AsyncIterable<TurnChunk>,
   session_id: string,
@@ -1115,6 +1182,16 @@ export async function* pipeChunksToSse(
           node_id: chunk.node_id,
         },
       };
+      // 2026-06-01 — also surface CLI/built-in `AskUserQuestion` as an
+      // interactive question-form modal (not just a tool chip). The user's
+      // answer POSTs a follow-up message → continues the conversation.
+      const qfEvent = askUserQuestionToFormEvent(
+        chunk.tool.tool_name,
+        chunk.tool.tool_input,
+        chunk.tool.call_id,
+        chunk.node_id,
+      );
+      if (qfEvent) yield qfEvent;
     } else if (chunk.type === 'tool-result') {
       for (const out of flushPending(chunk.node_id)) yield out;
       yield {
