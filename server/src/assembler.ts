@@ -453,6 +453,57 @@ function loadAssemblyDirective(): string {
  *
  * The caller is responsible for forwarding yielded events to the SSE response.
  */
+// 2026-06-01 — 组装 ⊥ 执行。@skill(explicit_skill)命中编译好的 team 时,组装阶段
+// 只应"搭出团队蓝图 + 落库",**不应**用 runDag 把 agent 跑起来(否则 BMAD 的
+// bmad-agent-ux-designer 会激活 persona、自我介绍"嗨我是 Sally…",把"组好后才该
+// 发生的对话"漏进组装 run)。这里 emit node/agent-persona/edge/complete 蓝图事件
+// (对齐 synthesizeTeamRun 的事件形状),Team 画布据此画出真实 DAG;跟 agent 对话
+// 是组好之后单独进 chat/run 的动作,不在此发生。
+async function* emitCompiledTeamBlueprint(
+  teamConfig: { members_ids: string[]; members_personas: Record<string, string>; edges_v1: Array<{ from: string; to: string; kind?: string }>; name?: string },
+  synthAgents: SkillAgentDef[],
+  session_id: string,
+): AsyncGenerator<ParserSseEvent> {
+  const byId = new Map(synthAgents.map((a) => [a.id, a]));
+  yield {
+    event: 'classify',
+    data: { output_type: 'workflow', mode: 'team', confidence: 0.98, complexity: Math.min(5, Math.max(1, teamConfig.members_ids.length)), source: 'compiled-skill-team' },
+  };
+  for (const id of teamConfig.members_ids) {
+    const a = byId.get(id);
+    const persona = a?.persona ?? teamConfig.members_personas[id] ?? `Agent ${id}`;
+    const shortPersona = persona.split('\n').find((l) => l.trim().length > 0)?.slice(0, 80) ?? id;
+    const toolsPicked = a?.tools?.picked ?? [];
+    yield {
+      event: 'node',
+      data: {
+        node_id: id,
+        type: /coord/i.test(id) ? 'coordinator' : 'agent',
+        title: a?.title ?? id,
+        sub: '',
+        chips: toolsPicked.slice(0, 3),
+        status: 'ready',
+        avatar_char: (a?.title ?? id).charAt(0),
+        model: a?.model?.id,
+        tools_picked: toolsPicked,
+        persona: shortPersona,
+        skill_ref: a?.source_file,
+      },
+    };
+    yield {
+      event: 'agent-persona',
+      data: { node_id: id, persona, source: a?.anchors?.persona?.ref ?? `<compiled>#${id}/persona`, cached: true },
+    };
+  }
+  for (const e of teamConfig.edges_v1) {
+    yield { event: 'edge', data: { from: e.from, to: e.to, status: 'active' } };
+  }
+  yield {
+    event: 'complete',
+    data: { session_id, run_id: `run-${session_id.slice(0, 8)}` },
+  };
+}
+
 export async function* runSkillAssembler(
   opts: SkillAssemblerOptions,
 ): AsyncGenerator<ParserSseEvent> {
@@ -592,6 +643,15 @@ export async function* runSkillAssembler(
   if (compiled?.mode === 'team' && compiled.teamConfig) {
     const synthAgents = synthAgentsFromCompiled(compiled.teamConfig);
     const teamV1 = toTeamDefV1FromCompiled(compiled.teamConfig, synthAgents);
+    // 组装 ⊥ 执行:@skill 组装意图 → 只 emit 团队蓝图(不跑 agent)。非 @skill 的
+    // 编译 team 流(若有)保留原 runDag 执行行为,blast radius 最小。
+    if (explicit_skill) {
+      console.log(
+        `[skill-assembler] @skill assemble (no exec) compiled team ${teamV1.team_id}: ${teamV1.members_ids.length} members, ${teamV1.edges_v1.length} edges, derivedFrom=${compiled.teamConfig.derivedFrom}`,
+      );
+      yield* emitCompiledTeamBlueprint(compiled.teamConfig, synthAgents, session_id);
+      return;
+    }
     console.log(
       `[skill-assembler] running compiled team ${teamV1.team_id}: ${teamV1.members_ids.length} members, ${teamV1.edges_v1.length} edges, derivedFrom=${compiled.teamConfig.derivedFrom}`,
     );
