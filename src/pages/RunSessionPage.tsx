@@ -4161,8 +4161,11 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           gridTemplateColumns: isChatMode
             ? '1fr'
             : (collapsed ? '44px 1fr' : '420px 1fr'),
-          // 抵消全局 zoom(index.css --app-zoom),否则 100vh 内容超视口被裁。
-          height: 'calc(100vh / var(--app-zoom))',
+          // 2026-06-01 — 本页嵌在 HfLayout 的 Outlet 内(其高度已是「视口 - topbar」且
+          // 外层已抵消 zoom),所以填满父容器即可;用 100vh 会多出一个 topbar 的高度
+          // 致 composer 底部溢出被裁。height:100% 不受 zoom 影响(相对父级,父级已处理)。
+          height: '100%',
+          minHeight: 0,
           background: 'var(--t-bg)',
           color: 'var(--t-fg)',
           fontFamily: 'inherit',
