@@ -37,7 +37,7 @@ import { DesignSystemPicker } from '../components/DesignSystemPicker';
 import { ConversationPicker } from '../components/ConversationPicker';
 import { createRunSession } from '../api/runSessions';
 import { quickCreateAgent } from '../api/agents';
-import { createTeam, patchTeam, putTeamWorkflow, type TeamWorkflowNode, type TeamWorkflowEdge } from '../api/teams';
+import { createTeam, patchTeam, putTeamWorkflow, putTeamPolicy, type TeamWorkflowNode, type TeamWorkflowEdge } from '../api/teams';
 import { CreateWorkspaceModal } from '../components/workspace/CreateWorkspaceModal';
 import type { WorkspaceSummary } from '../api/workspaces';
 import { createWorkspace } from '../api/workspaces';
@@ -3719,6 +3719,16 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           policyMatrix = derivePolicyMatrix(policyAgents, policyEdges);
         } catch (pmErr) {
           console.warn('[RunSession] derivePolicyMatrix failed:', pmErr);
+        }
+
+        // 存进 TEAM 的 policy(TeamPage 读的是 GET /api/teams/:id/policy,与 group
+        // 的 policy_matrix 是两套存储)。这样组建画的权责矩阵在团队页可见。
+        if (Object.keys(policyMatrix).length > 0) {
+          try {
+            await putTeamPolicy(team.team_id, policyMatrix);
+          } catch (tpErr) {
+            console.warn('[RunSession] putTeamPolicy failed:', tpErr);
+          }
         }
 
         try {
