@@ -188,7 +188,7 @@ function composeAgentSystemPrompt(skill: SkillReadOutput, persona: string): stri
  */
 const GENERIC_FILE_STEMS = new Set(['skill', 'index', 'agent', 'main', 'readme']);
 
-function memberIdFromFile(f: SkillFileEntry): string | null {
+export function memberIdFromFile(f: SkillFileEntry): string | null {
   const segs = f.path.split('/').filter(Boolean);
   const file = segs[segs.length - 1] ?? '';
   let stem = file.replace(/\.synthesized\.md$/i, '').replace(/\.[^.]+$/, '');

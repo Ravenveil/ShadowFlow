@@ -35,9 +35,9 @@ import fs from 'fs';
 import path from 'path';
 import { callProvider, isProviderId, type ProviderId } from '../../transport/api-clients';
 import { getSetting } from '../../storage/settings';
-import type { SkillReadOutput } from '../../skill-reader/types';
+import type { SkillReadOutput, SkillFileEntry } from '../../skill-reader/types';
 import { buildCompilePrompt } from './prompt';
-import { fallbackCompile } from './fallback';
+import { fallbackCompile, memberIdFromFile } from './fallback';
 import { readCompileCache, writeCompileCache } from './cache';
 import type {
   CompiledSkill,
@@ -210,6 +210,82 @@ export async function getCompiledSkill(
 }
 
 /**
+ * Extract a phase rank from an agent file path: the first integer prefixing
+ * any path segment (e.g. `src/bmm-skills/2-plan-workflows/bmad-agent-pm/SKILL.md`
+ * → 2). Lets a structured skill's own directory layout order the lifecycle DAG.
+ * No numeric phase → sorts last (Infinity), original order preserved.
+ */
+function phaseRankFromPath(p: string): number {
+  for (const seg of p.split('/')) {
+    const m = seg.match(/^(\d+)[-_]/);
+    if (m) return parseInt(m[1], 10);
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+const STRUCTURED_PERSONA_MAX = 4000;
+
+/**
+ * 确定性结构化编译 — 直接从 skill **声明的** agent 建队,不调 LLM。
+ *
+ * 返回 null 当 skill 不是可识别的多 agent 结构(真 agent 文件 ≤1)→ 调用方落到
+ * LLM 路。`derivedFrom:'structured'` 标记为一等结果(UI 显示「已编译」而非「降级」)。
+ *
+ * 成员 = agent_files 里的真 persona(verbatim);edges = 按 skill 自身**阶段目录**
+ * 前缀(1-… → 2-… → 3-…)排出的生命周期链。全程零 token、可复现、不依赖 key。
+ */
+function tryStructuredCompile(skill: SkillReadOutput): CompiledSkill | null {
+  const files: SkillFileEntry[] = skill.agent_files ?? [];
+  if (files.length < 2) return null;
+
+  // Stable phase-ordered copy (never mutate skill.agent_files).
+  const ordered = files
+    .map((f, i) => ({ f, i, phase: phaseRankFromPath(f.path) }))
+    .sort((a, b) => a.phase - b.phase || a.i - b.i);
+
+  const members_ids: string[] = [];
+  const members_personas: Record<string, string> = {};
+  for (const { f } of ordered) {
+    const id = memberIdFromFile(f);
+    if (!id || members_ids.includes(id)) continue;
+    members_ids.push(id);
+    const raw = f.raw.trim();
+    members_personas[id] =
+      raw.length > STRUCTURED_PERSONA_MAX
+        ? raw.slice(0, STRUCTURED_PERSONA_MAX) + '\n[…truncated]'
+        : raw;
+  }
+  if (members_ids.length < 2) return null;
+
+  const edges_v1 = members_ids.slice(1).map((to, i) => ({
+    from: members_ids[i],
+    to,
+    kind: 'sequential' as const,
+  }));
+
+  const teamConfig: CompiledTeamConfig = {
+    team_id: skill.skill_id,
+    version: 1,
+    name: skill.skill_id,
+    description: `Structured team — ${members_ids.length} declared agent(s), phase-ordered.`,
+    members_ids,
+    members_personas,
+    edges_v1,
+    policy_obj: { retry: 3, timeout_per_step_ms: 60_000 },
+    derivedFrom: 'structured',
+  };
+  return {
+    skill_id: skill.skill_id,
+    source_content_hash: skill.content_hash,
+    compiled_at: new Date().toISOString(),
+    compiler_version: 'v1',
+    mode: 'team',
+    teamConfig,
+    llm_call_meta: { model: 'structured', tokens_in: 0, tokens_out: 0, duration_ms: 0 },
+  };
+}
+
+/**
  * Full compile pipeline. Cache hit → instant return; cache miss → LLM call
  * (with fallback on any failure). Always returns a runnable CompiledSkill.
  *
@@ -223,6 +299,18 @@ export async function compile(skill: SkillReadOutput): Promise<CompiledSkill> {
   const cached = await readCompileCache(skill.content_hash);
   if (cached) {
     return { ...cached, skill_id: skill.skill_id };
+  }
+
+  // 2026-06-01 — 确定性优先:skill 若声明了多 agent 结构(≥2 个真 agent 文件),
+  // 直接结构化建队(读人家声明的 roster + 按阶段目录排 DAG),**跳过 LLM 编译**
+  // ——快(秒出,免 ~140s)、忠实(verbatim roster,不让 LLM 猜/漏)、可复现、
+  // 不依赖 key。只有"无结构/散文型"skill(<2 真 agent)才落到下面的 LLM 兜底。
+  const structured = tryStructuredCompile(skill);
+  if (structured) {
+    await writeCompileCache(structured).catch(() => {
+      /* cache failure non-fatal */
+    });
+    return structured;
   }
 
   // 2) provider resolution — fallback when nothing usable
