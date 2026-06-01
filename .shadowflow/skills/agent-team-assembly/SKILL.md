@@ -55,7 +55,18 @@ triggers:
 
 **这是你最常走、也最该做对的路。** 步骤:
 
-1. **解析目标 skill 蓝图**:加载 skill `<id>` 声明的 team,来源优先级:
+0. **定位蓝图来源**(关键):目标 skill `<id>` 的蓝图可能**已随系统提示注入**
+   (见 `=== 目标 skill 上下文 ===`),也可能**没注入**(它不在已编译注册表里,
+   上下文会标 `skill_unresolved` / 提示"未找到")。
+   - 已注入 → 直接用。
+   - **没注入 / 不完整** → 调用工具 **`read_skill(ref="<id>")`** 把真实蓝图拉下来。
+     `ref` 解析顺序:**① skill id**(`.shadowflow/skills/<id>/` 及 `references/`)→
+     **② 本地路径**(目录按 skill 打包 / 单文件)→ **③ https URL**(如 raw SKILL.md
+     或 team yaml 的网页链接)。
+     > 运行时没提供 `read_skill`(如 CLI/ACP 路)时,用你自带的文件/网页读取能力按
+     > 同样来源去读。`read_skill` 返回 error = 真没找到:**如实说"未找到该 skill",
+     > 不要编造蓝图。**
+1. **解析目标 skill 蓝图**(从上一步拿到的文本里):来源优先级:
    - `team_ref` → `.shadowflow/teams/<ref>.team.yaml`(成员 ids + edges)
    - 编译出的 `teamConfig`(getCompiledSkill)
    - 该 skill `SKILL.md` frontmatter 的 `agents` / `workflow` 段
@@ -125,6 +136,6 @@ classify mode=team → 设计 coordinator + 2~3 个开发/测试 agent → emit 
 产出交付前过 `.claude/rules/assembly-rules-sync.md` 的 roster Rule(单 agent 守卫 / roster 上限,前后端孪生 `assemblyRules.ts`/`intent-router.ts`)——确定性截断,不靠你自觉。Path A 复现既定蓝图通常已合规;Path B 设计路更需 Rule 兜底。
 
 ## 📺 【进度看板】
-- Path A:`读取 <id> 蓝图 → 实例化 N 个角色 → 还原 DAG → 完成`。
+- Path A:`定位蓝图(上下文/read_skill)→ 解析 <id> 蓝图 → 实例化 N 个角色 → 还原 DAG → 完成`。
 - Path B:`分析目标 → 挑/设计蓝图 → 配角色 → 工具 → Policy → 完成`。
 每步更新状态(⏳/✅)+ 产出。

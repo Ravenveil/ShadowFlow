@@ -48,9 +48,13 @@ import { tryReadSkill } from './skill-reader';
 // we drive the conversation via `ConversationRuntime` so the LLM can iterate
 // tool_use → tool_result without the orchestrator hosting the loop.
 import { ConversationRuntime } from './lib/conversation-runtime';
-import { ToolRunner } from './lib/tool-runner';
+import { ToolRunner, registerToolExecutor } from './lib/tool-runner';
 import { PermissionPolicyV2 } from './lib/permission-policy-v2';
-import { ToolRegistry } from './lib/tool-spec';
+import { ToolRegistry, type ToolSpec } from './lib/tool-spec';
+// 2026-06-01 — 组装期 read_skill 工具:@skill 触发但目标蓝图未随上下文给出时,
+// 让组装 agent 按 ref(skill id / 本地路径 / https URL)拉真实蓝图,解析不到则如实
+// 报"未找到",而非凭空编造。自包含执行器,直接注册(不依赖未接的 builtin ALS)。
+import { readSkillTool, readSkillToolExecutor } from './lib/tools/builtin/read-skill';
 import { ApiClientCallable } from './transport/ApiClientCallable';
 // Task 4 — deterministic recipe → daemon-led assembly (Branch 0). Structure
 // comes from the matched Skill recipe (not an LLM emit); Rules are the safety
@@ -351,6 +355,11 @@ export interface SkillAssemblerOptions {
    *  兜底时:true → 用组装指令(读 agent-team-assembly 的 SKILL.md+yaml,禁 discovery、
    *  强制 emit <sf:node>),而非该 skill 的对话 prompt。 */
   explicit_skill?: boolean;
+  /** 2026-06-01 — 用户原始请求的 skill id(@skill:<id> 的 <id> 或显式 skill_name),
+   *  未经 SKILLS 注册表回退。当它 ≠ `skill_name`(已回退到默认)时,说明请求的 skill
+   *  没在注册表里;Branch 2 会提示组装 agent 用 read_skill(skill_requested) 去磁盘/网络
+   *  拉真实蓝图,而不是静默用默认。 */
+  skill_requested?: string;
   session_id: string;
   anthropic_key?: string;
   signal?: AbortSignal;
@@ -447,7 +456,7 @@ function loadAssemblyDirective(): string {
 export async function* runSkillAssembler(
   opts: SkillAssemblerOptions,
 ): AsyncGenerator<ParserSseEvent> {
-  const { goal, skill_name, explicit_skill, session_id, anthropic_key, signal, system_prompt } = opts;
+  const { goal, skill_name, explicit_skill, skill_requested, session_id, anthropic_key, signal, system_prompt } = opts;
 
   const skill = SKILLS[skill_name] ?? SKILLS['agent-team-blueprint'];
   // Story 15.5: caller may have composed a DS-augmented prompt; fall back to
@@ -652,8 +661,36 @@ export async function* runSkillAssembler(
   // 让 LLM 立即按"组装工作流"emit <sf:node>/<sf:edge>/<sf:complete>、禁止 discovery
   // 反问(治此前 @skill 反问"你想哪一件"的毛病),目标 skill 的内容作为蓝图上下文附后。
   const assemblyDirective = explicit_skill ? loadAssemblyDirective() : '';
+  // 2026-06-01 — 请求的 skill 在注册表里没命中(已回退到默认 blueprint)时,
+  // skill_requested !== skill_name。这时不静默用默认:提示组装 agent 用 read_skill
+  // 按 ref 拉真实蓝图(解析不到再如实报"未找到")。read_skill 工具仅在 ApiClient
+  // 路注册进工具循环;CLI/ACP 路靠 agent 自带的文件/网页读取能力(措辞做了兼容)。
+  const requestedRef =
+    typeof skill_requested === 'string' && skill_requested.trim() ? skill_requested.trim() : '';
+  const skillUnresolved = explicit_skill && !!requestedRef && requestedRef !== skill_name;
+  if (skillUnresolved) {
+    console.warn(
+      `[skill-assembler] session=${session_id} requested skill '${requestedRef}' not in registry — ` +
+        `routing to assembly with read_skill recovery (resolved=${skill_name}).`,
+    );
+    // 客户端可见提示(非破坏:不监听此事件的客户端忽略即可)。
+    yield {
+      event: 'assembly-meta',
+      data: { skill_unresolved: true, requested: requestedRef, fallback: skill_name },
+    };
+  }
+  const toolHint = explicit_skill
+    ? `\n\n=== 运行时能力:read_skill ===\n` +
+      (skillUnresolved
+        ? `⚠️ 用户请求的 skill「${requestedRef}」未随上下文给出蓝图(不在已编译注册表里)。` +
+          `请**先调用 \`read_skill(ref="${requestedRef}")\`**(若运行时未提供该工具,则用你自带的文件/网页读取能力)` +
+          `拉取它的真实蓝图(SKILL.md + team/agent yaml),再按 Path A 忠实实例化。`
+        : `若目标 skill 的蓝图未随上下文给出,用 \`read_skill(ref=...)\`(ref 可为 skill id / 本地路径 / https URL;` +
+          `运行时未提供该工具时用你自带的读取能力)拉取真实蓝图后再实例化。`) +
+      `\n解析不到就**如实告知"未找到该 skill"**,绝不凭空编造蓝图。`
+    : '';
   const branch2System = assemblyDirective
-    ? `${assemblyDirective}\n\n=== 目标 skill 上下文(${skill_name})===\n${baseSystem}`
+    ? `${assemblyDirective}${toolHint}\n\n=== 目标 skill 上下文(${skill_name})===\n${baseSystem}`
     : baseSystem;
 
   // Round 4 PR-D — when the compiled agentConfig advertises tools AND the
@@ -663,24 +700,39 @@ export async function* runSkillAssembler(
   // ApiClient, so they keep going through `callable.turn()` as before
   // (those transports host their own tool loops internally).
   const compiledTools = compiled?.agentConfig?.tools ?? [];
-  const wantsToolLoop = compiledTools.length > 0;
+  // 2026-06-01 — 组装意图(explicit_skill)时把 read_skill 加进工具白名单,即使
+  // 目标 skill 没声明工具,也能让组装 agent 走 ConversationRuntime 循环、用
+  // read_skill 拉真实蓝图。read_skill 自包含、直接注册执行器(其余编译工具的执行器
+  // 仍由 Lane 2 提供)。
+  const effectiveToolNames = Array.from(
+    new Set([...compiledTools, ...(explicit_skill ? ['read_skill'] : [])]),
+  );
+  const wantsToolLoop = effectiveToolNames.length > 0;
   if (wantsToolLoop && callable instanceof ApiClientCallable) {
     const apiClient = callable.getApiClient();
+    if (effectiveToolNames.includes('read_skill')) {
+      // Idempotent (Map set) — guarantees the executor is live whenever the
+      // assembly loop runs, without depending on a boot-time registration.
+      registerToolExecutor('read_skill', readSkillToolExecutor);
+    }
     // The compiled `tools` list is just a whitelist of names; the actual
     // tool specs come from the (Lane 2) registered tool registry. For the
     // PR-D wiring we register all whitelisted names as `base` specs with a
     // permissive schema — Lane 2's `registerToolExecutor` calls supply the
-    // executors. When Lane 2's per-tool spec registration lands we can
-    // upgrade this synthesis to pick real specs from a shared registry.
-    const registry = new ToolRegistry(
-      compiledTools.map((name) => ({
-        name,
-        description: `compiled tool ${name}`,
-        input_schema: { type: 'object', properties: {} },
-        source: 'base' as const,
-      })),
+    // executors. `read_skill` ships its real spec (so the LLM sees the `ref`
+    // param) + a self-contained executor.
+    const specs: ToolSpec[] = effectiveToolNames.map((name) =>
+      name === 'read_skill'
+        ? readSkillTool
+        : {
+            name,
+            description: `compiled tool ${name}`,
+            input_schema: { type: 'object', properties: {} },
+            source: 'base' as const,
+          },
     );
-    const policy = PermissionPolicyV2.fromAllowedTools(compiledTools);
+    const registry = new ToolRegistry(specs);
+    const policy = PermissionPolicyV2.fromAllowedTools(effectiveToolNames);
     const runner = new ToolRunner(registry, policy);
     const runtime = new ConversationRuntime({
       apiClient,

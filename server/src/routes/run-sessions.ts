@@ -91,6 +91,10 @@ interface SessionRecord {
    *  true → assembler 走"组装意图"路:Branch 2 兜底时用组装指令(禁 discovery),
    *  而非该 skill 的对话 prompt。见 .shadowflow/skills/agent-team-assembly。 */
   explicit_skill?: boolean;
+  /** 2026-06-01 — 用户原始请求的 skill id(@skill:<id> 的 <id> / 显式 skill_name),
+   *  未经 SKILLS 注册表回退。≠ skill_name 时说明请求的 skill 不在注册表里;assembler
+   *  Branch 2 据此用 read_skill 去磁盘/网络拉真实蓝图,而非静默用默认 blueprint。 */
+  skill_requested?: string;
   output_hint?: string;
   workspace_id?: string;
   mode?: string;
@@ -598,6 +602,7 @@ router.post('/', (req: Request, res: Response) => {
     goal: goal_text,
     skill_name: validated_skill,
     explicit_skill,
+    skill_requested: skill_candidate || undefined,
     output_hint,
     workspace_id,
     mode,
@@ -1041,6 +1046,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           goal: session.goal,
           skill_name: session.skill_name,
           explicit_skill: session.explicit_skill,
+          skill_requested: session.skill_requested,
           session_id: id,
           anthropic_key: session.anthropic_key,
           signal: abortController.signal,

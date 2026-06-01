@@ -45,12 +45,31 @@ tasks:
   # ════════════════════════════════════════════════════════════════════════
   # Path A · @skill:<id> —— 读既定蓝图 + 忠实实例化(复现)
   # ════════════════════════════════════════════════════════════════════════
-  - id: step_a1_read_blueprint
-    name: "[A] 读取目标 skill 的既定蓝图"
+  - id: step_a0_resolve
+    name: "[A] 定位蓝图来源(已在上下文 / 需 read_skill 拉取)"
     depends_on: [step_0_route]
     when: "parameters.skill_id 非空"
     instruction: |
-      加载 skill {{parameters.skill_id}} 声明的 team 蓝图,来源优先级:
+      先判断目标 skill {{parameters.skill_id}} 的蓝图是否**已随系统提示给出**
+      (见"=== 目标 skill 上下文 ===")。
+      - 已给出 → 直接进 step_a1,用上下文里的蓝图。
+      - **未给出 / 不完整 / 上下文显示"未找到(skill_unresolved)"** → 调用工具
+        `read_skill(ref="{{parameters.skill_id}}")` 拉取真实蓝图。ref 解析顺序:
+          1. skill id   → `.shadowflow/skills/<id>/`(及其 `references/`)
+          2. 本地路径    → 目录(按 skill 打包读)或单文件
+          3. https URL  → 直接抓取(如 raw SKILL.md / team yaml 的链接)
+        运行时未提供 read_skill 工具时(如 CLI/ACP 路),改用你自带的文件/网页读取
+        能力按同样的来源去读。
+      🚨 read_skill 返回 error = 真没找到:**如实告知用户"未找到该 skill",绝不凭空
+        编造蓝图**。
+    expected_output: "蓝图文本到手(来自上下文或 read_skill);或确认未找到并终止。"
+
+  - id: step_a1_read_blueprint
+    name: "[A] 解析目标 skill 的既定蓝图"
+    depends_on: [step_a0_resolve]
+    when: "parameters.skill_id 非空"
+    instruction: |
+      从 step_a0 拿到的蓝图文本里解析出 team 结构,来源优先级:
       1. `team_ref` → `.shadowflow/teams/<ref>.team.yaml`(成员 ids + edges)
       2. 编译出的 teamConfig(getCompiledSkill)
       3. 该 skill SKILL.md frontmatter 的 agents / workflow 段
