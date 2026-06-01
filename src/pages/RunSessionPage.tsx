@@ -4161,7 +4161,9 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           gridTemplateColumns: isChatMode
             ? '1fr'
             : (collapsed ? '44px 1fr' : '420px 1fr'),
-          height: '100vh',
+          // 抵消全局 --app-zoom(index.css):本页全屏 grid,zoom 后用裸 100vh 会超物理
+          // 视口致 composer 底部被裁。除以系数让放大后正好填满。与 HfLayout 同口径。
+          height: 'calc(100vh / var(--app-zoom, 1))',
           background: 'var(--t-bg)',
           color: 'var(--t-fg)',
           fontFamily: 'inherit',

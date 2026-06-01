@@ -42,8 +42,9 @@ export function HfLayout() {
   const active = pathToActive(pathname);
   const needsLayoutTopBar = LAYOUT_TOPBAR_PREFIXES.some(p => pathname.startsWith(p));
 
+  // zoom-shell:height 抵消全局 --app-zoom,放大后内容不超物理视口(见 index.css)。
   return (
-    <div className="hf-root" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <div className="hf-root zoom-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <HfSidebar active={active} />
       <main
         style={{

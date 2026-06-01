@@ -33,6 +33,11 @@
  * Bricolage/Geist/JetBrains 不含汉字 → 自动落到 Noto Sans SC 而非系统默认
  * 的微软雅黑(小字号发糊). */
 :root {
+  /* 2026-06-01 — 全局界面缩放系数(用户在「设置 → 外观 → 字号」滑块调,fontScale.ts
+   * 写 documentElement inline 覆盖)。默认 1(原始大小)。全 app 字号 100% 用 px,
+   * 改基准无效,只有 zoom 能等比放大 px 文字。定高全屏壳须加 .zoom-shell 抵消。 */
+  --app-zoom: 1;
+
   --font-sans:    'Geist', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Bricolage Grotesque', 'Geist', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
   --font-mono:    'JetBrains Mono', 'Noto Sans SC', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -117,13 +122,24 @@ html, body {
   margin: 0;
   padding: 0;
   font-family: var(--font-sans);
-  /* 2026-06-01 — 全局基准默认 14px(用户反馈偏小)。用户可在「设置 → 外观 → 字号」
-   * 滑块自由调(12–18px,fontScale.ts 写 documentElement inline 覆盖此值)。
-   * 只调字号、不缩放、不碰布局(弃用之前失败的 zoom 方案:zoom 撑破 100vh 全屏壳)。 */
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* 2026-06-01 — 全局界面缩放。zoom 在 <html> 等比放大所有 px 文字+间距(全 app 0 rem,
+ * 唯一可行的「整体调大」)。默认 --app-zoom:1 不放大;用户拖滑块改它。
+ * 已知代价:定高全屏壳(height:100vh + overflow:hidden)zoom 后内容超物理视口被裁,
+ * 用 .zoom-shell 抵消(下方)。 */
+html {
+  zoom: var(--app-zoom);
+}
+
+/* 定高全屏壳专用:height 抵消 zoom,使放大后内容正好填满物理视口(不裁底部)。
+ * 所有 height:100vh + overflow:hidden 的 app 根壳/抽屉都应挂这个 class 而非裸 100vh。 */
+.zoom-shell {
+  height: calc(100vh / var(--app-zoom)) !important;
 }
 
 /* Theme-aware root surface lives on <html> only — useTheme writes

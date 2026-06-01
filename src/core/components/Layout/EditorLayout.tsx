@@ -18,7 +18,7 @@ export function EditorLayout({
   inspectorWidth = 280,
 }: EditorLayoutProps) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', background: 'var(--t-bg)', overflow: 'hidden' }}>
+    <div className="zoom-shell" style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', background: 'var(--t-bg)', overflow: 'hidden' }}>
       {/* Toolbar row */}
       <div style={{ height: 48, flexShrink: 0, borderBottom: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
         {toolbar}

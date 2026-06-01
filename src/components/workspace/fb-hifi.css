@@ -73,7 +73,8 @@
 .fb-shell {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* 抵消全局 --app-zoom(index.css),放大后内容不超物理视口被裁。 */
+  height: calc(100vh / var(--app-zoom, 1));
   overflow: hidden;
   background: var(--t-bg);
   color: var(--t-fg);

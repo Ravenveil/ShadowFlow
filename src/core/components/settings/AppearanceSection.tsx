@@ -16,12 +16,12 @@ import {
   type CustomSlot,
 } from '../../../components/hifi/customTheme';
 import {
-  applyFontPx,
-  saveFontPx,
-  currentFontPx,
-  DEFAULT_FONT_PX,
-  FONT_PX_MIN,
-  FONT_PX_MAX,
+  applyZoom,
+  saveZoom,
+  currentZoom,
+  DEFAULT_ZOOM,
+  ZOOM_MIN,
+  ZOOM_MAX,
 } from '../../../components/hifi/fontScale';
 
 export const APPEARANCE_I18N_KEYS = {
@@ -372,10 +372,10 @@ export function AppearanceSection() {
     slotBg:      isZh ? '背景色' : 'Background',
     slotFg:      isZh ? '前景色' : 'Foreground',
     resetBtn:    isZh ? '重置默认' : 'Reset to defaults',
-    fontLabel:   isZh ? '字号' : 'Font Size',
+    fontLabel:   isZh ? '界面缩放(字号)' : 'Interface Scale',
     fontHint:    isZh
-      ? '拖动调整全局字号(12–18px),立即生效并保存。只改字号,不缩放界面、不影响布局。'
-      : 'Drag to set global font size (12–18px). Applies instantly. Only the font scales — no layout zoom.',
+      ? '拖动整体放大/缩小界面(85%–140%),立即生效并保存。等比缩放所有文字和间距。'
+      : 'Drag to scale the whole UI (85%–140%). Applies instantly. Zooms all text & spacing proportionally.',
     fontReset:   isZh ? '恢复默认' : 'Reset',
   };
 
@@ -414,18 +414,19 @@ export function AppearanceSection() {
     setFg(getEffectiveColor('fg', '#FFFFFF'));
   }
 
-  // ── 字号自由调整(2026-06-01)──────────────────────────────────────────────
-  // 滑块 12–18px 自由调,实时应用 <html> font-size,不缩放、不碰布局。
-  const [fontPx, setFontPx] = useState(() => currentFontPx());
-  function handleFontChange(px: number) {
-    setFontPx(px);
-    applyFontPx(px);                              // 实时生效
-    saveFontPx(px === DEFAULT_FONT_PX ? null : px); // 等于默认则清存储(回 CSS 默认)
+  // ── 界面缩放自由调整(2026-06-01 v2,zoom 方案)─────────────────────────────
+  // 滑块 0.85–1.4 自由调,实时写 <html> --app-zoom → 整体等比放大所有 px 文字+间距。
+  // 全 app 字号 100% 用 px,改字号基准无效,zoom 才是唯一可行的「整体调大」。
+  const [zoom, setZoomState] = useState(() => currentZoom());
+  function handleZoomChange(z: number) {
+    setZoomState(z);
+    applyZoom(z);                                 // 实时生效
+    saveZoom(z === DEFAULT_ZOOM ? null : z);       // 等于默认则清存储
   }
-  function handleFontReset() {
-    setFontPx(DEFAULT_FONT_PX);
-    applyFontPx(null);
-    saveFontPx(null);
+  function handleZoomReset() {
+    setZoomState(DEFAULT_ZOOM);
+    applyZoom(null);
+    saveZoom(null);
   }
 
   const options: Array<{ id: ThemePref; label: string; sublabel: string }> = [
@@ -508,11 +509,11 @@ export function AppearanceSection() {
           <span style={{ fontSize: 12, color: 'var(--t-fg-4)', flexShrink: 0 }}>A</span>
           <input
             type="range"
-            min={FONT_PX_MIN}
-            max={FONT_PX_MAX}
-            step={0.5}
-            value={fontPx}
-            onChange={(e) => handleFontChange(parseFloat(e.target.value))}
+            min={ZOOM_MIN}
+            max={ZOOM_MAX}
+            step={0.05}
+            value={zoom}
+            onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
             aria-label={tx.fontLabel}
             data-testid="font-size-slider"
             style={{ flex: 1, accentColor: ACCENT, cursor: 'pointer' }}
@@ -529,11 +530,11 @@ export function AppearanceSection() {
               flexShrink: 0,
             }}
           >
-            {fontPx}px
+            {Math.round(zoom * 100)}%
           </span>
           <button
             type="button"
-            onClick={handleFontReset}
+            onClick={handleZoomReset}
             data-testid="font-size-reset"
             style={{
               fontSize: 12,
