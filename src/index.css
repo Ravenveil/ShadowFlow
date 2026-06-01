@@ -119,6 +119,12 @@ html, body {
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
+  /* 2026-06-01 字体整体偏小 → 等比放大 8%(用户「字体略小,你看着来」)。
+   * 全 app 有 ~148 处内联 fontSize px 写死,单调 body/sf-* token 跟不全;
+   * zoom 在渲染层等比缩放文字+间距+比例,布局零破坏。Chrome/Edge 完美支持,
+   * 且自建 fixed 浮层(DirPicker/ModelPicker)的 getBoundingClientRect 坐标
+   * 会自动按 zoom 校正,无需额外处理。改这一个值即可整体调大小。 */
+  zoom: 1.08;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
