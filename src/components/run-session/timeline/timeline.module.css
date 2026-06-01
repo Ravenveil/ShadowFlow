@@ -322,8 +322,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--border-subtle);
+  /* button reset — this header is a collapse toggle */
+  appearance: none;
+  border: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
   background: var(--bg);
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -332,9 +338,13 @@
   color: var(--fg-4);
   user-select: none;
 }
+.toolGroupHead:hover { background: var(--bg-elev-1); }
+/* Border only when expanded (so a collapsed header has no dangling underline). */
+.toolGroupHeadOpen { border-bottom: 1px solid var(--border-subtle); }
 .toolGroupIcon { color: var(--fg-4); flex: none; }
 .toolGroupLabel { color: var(--fg-3); font-weight: 600; }
 .toolGroupCount { color: var(--accent-bright); font-weight: 600; }
+.toolGroupChevron { margin-left: auto; color: var(--fg-4); flex: none; }
 /* Inside the frame, neutralise the per-row vertical padding the .echo line
  * normally relies on against a flat stream, and tighten the chip spacing. */
 .toolGroupBody {

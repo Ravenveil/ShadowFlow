@@ -14,8 +14,8 @@
  * outlined container per consecutive tool run. We keep ShadowFlow's flat
  * `.tool` / `.echo` aesthetic inside; the frame just supplies the boundary.
  */
-import { memo, type ReactNode } from 'react';
-import { Wrench } from 'lucide-react';
+import { memo, useState, type ReactNode } from 'react';
+import { Wrench, ChevronRight, ChevronDown } from 'lucide-react';
 import styles from '../timeline.module.css';
 
 interface Props {
@@ -23,19 +23,38 @@ interface Props {
   callCount: number;
   /** Pre-rendered child rows (ToolCallChip / ToolEchoLine). */
   children: ReactNode;
+  /** Start expanded (default false — tool calls are collapsed by default and
+   *  expand on click, à la Claude Code, so a big Read/Bash result doesn't
+   *  flood the timeline). */
+  defaultExpanded?: boolean;
 }
 
-export const ToolGroup = memo(function ToolGroup({ callCount, children }: Props) {
+export const ToolGroup = memo(function ToolGroup({
+  callCount,
+  children,
+  defaultExpanded = false,
+}: Props) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   return (
     <div className={styles.toolGroup}>
-      <div className={styles.toolGroupHead} aria-hidden>
+      <button
+        type="button"
+        className={`${styles.toolGroupHead} ${expanded ? styles.toolGroupHeadOpen : ''}`}
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+      >
         <Wrench size={11} className={styles.toolGroupIcon} />
         <span className={styles.toolGroupLabel}>工具调用</span>
         {callCount > 1 && (
           <span className={styles.toolGroupCount}>×{callCount}</span>
         )}
-      </div>
-      <div className={styles.toolGroupBody}>{children}</div>
+        {expanded ? (
+          <ChevronDown size={12} className={styles.toolGroupChevron} />
+        ) : (
+          <ChevronRight size={12} className={styles.toolGroupChevron} />
+        )}
+      </button>
+      {expanded && <div className={styles.toolGroupBody}>{children}</div>}
     </div>
   );
 });
