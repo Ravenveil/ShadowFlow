@@ -72,8 +72,11 @@ tasks:
       从 step_a0 拿到的蓝图文本里解析出 team 结构,来源优先级:
       1. `team_ref` → `.shadowflow/teams/<ref>.team.yaml`(成员 ids + edges)
       2. 编译出的 teamConfig(getCompiledSkill)
-      3. 该 skill SKILL.md frontmatter 的 agents / workflow 段
+      3. 该 skill 真实声明的 agent(它的 agent 定义文件 / SKILL.md frontmatter 的
+         agents 段)+ workflow 段。
       读出:有哪些 agent(id/title/persona/model/tools/raci)、DAG 边、谁是 coordinator。
+      🚨 agent 一律取自 skill 真实声明的 agent,**绝不**把非 agent 的清单(安装模块/
+         包注册表/目录名/占位)当成 agent,也不臆造角色。读不到真 agent 就如实说明、不编造。
       🚨 这是复现既定结构,不是设计 —— 不要 classify/不要拆角色,照蓝图来。
     expected_output: "完整 roster(agent 列表 + 各自 persona/model/tools/raci)+ edges。"
 

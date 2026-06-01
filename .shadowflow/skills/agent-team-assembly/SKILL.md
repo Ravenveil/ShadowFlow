@@ -129,6 +129,10 @@ classify mode=team → 设计 coordinator + 2~3 个开发/测试 agent → emit 
 ## ❌ NEVER
 - 不反问 / 不 discovery —— 组装请求来了就组。
 - Path A 不增删蓝图未声明的 agent、不改写/截断其 persona。
+- **不臆造 agent**:角色一律来自 skill **真实声明的 agent**(它的 agent 定义文件 /
+  team 蓝图),verbatim 取用。**绝不**把非 agent 的清单(安装模块/包注册表/目录名/
+  占位名)、或你自己想出来的角色当成 skill 的 agent。读不到真 agent 就**如实说
+  "该 skill 未声明 agent"**,绝不编造或拿别的东西顶替。
 - 不手动 emit PolicyMatrix(daemon 派生)。
 - 无蓝图时不硬编 agent×agent 的 permit/deny。
 

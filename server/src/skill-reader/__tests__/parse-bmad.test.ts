@@ -10,12 +10,14 @@
  * If the cache dir is absent the test SKIPs with a clear message rather than
  * failing — CI environments without the seed get a graceful no-op.
  *
- * Coverage:
- *   1. readSkill returns ≥1 agent_file (synthesized from bmad-modules.yaml)
+ * Coverage (updated 2026-06-01 — reader now discovers REAL nested agents,
+ * not synthesized bmad-modules.yaml entries):
+ *   1. readSkill returns ≥1 REAL agent_file (the bmad-agent-* personas)
  *   2. doc_files contains README.md (and other top-level prose)
  *   3. raw of doc_file matches fs.readFileSync byte-for-byte
  *   4. workflow_files is 0 (BMAD has no root-level workflows/ dir)
- *   5. Each synthesized agent_file path matches `agents/<id>.synthesized.md`
+ *   5. Agent paths are real on-disk files, NOT `*.synthesized.md`, and at
+ *      least one bmad-agent-* persona is present
  *   6. content_hash is stable across two calls
  */
 
@@ -68,14 +70,18 @@ async function main() {
   console.log(`\n[BMAD cache] ${BMAD_CACHE}`);
   const out = await readSkill(BMAD_CACHE);
 
-  // ── Test 1: synthesized agents ────────────────────────────────────────
-  console.log('\n[1] synthesized agent_files from bmad-modules.yaml');
+  // ── Test 1: REAL discovered agents ────────────────────────────────────
+  console.log('\n[1] real agent_files discovered (bmad-agent-* personas)');
   assert('agent_files.length >= 1', out.agent_files.length >= 1);
-  // bmad-modules.yaml ships with ≥6 module entries in the upstream repo.
+  // BMAD ships its phase personas under src/bmm-skills/*/bmad-agent-*/SKILL.md.
   // Loosely assert ≥3 to allow upstream churn without breaking the test.
   assert(
     `agent_files.length >= 3 (actual: ${out.agent_files.length})`,
     out.agent_files.length >= 3,
+  );
+  assert(
+    'NONE are synthesized placeholders (no *.synthesized.md)',
+    out.agent_files.every((a) => !/\.synthesized\.md$/.test(a.path)),
   );
 
   // ── Test 2: doc_files include README ──────────────────────────────────
@@ -104,13 +110,15 @@ async function main() {
   console.log('\n[4] workflow_files is empty (BMAD has no root workflows/)');
   eq('workflow_files.length === 0', 0, out.workflow_files.length);
 
-  // ── Test 5: synthesized paths ────────────────────────────────────────
-  console.log('\n[5] synthesized agent paths match agents/<id>.synthesized.md');
+  // ── Test 5: real agent paths (not synthesized) ───────────────────────
+  console.log('\n[5] agent paths are real on-disk files; ≥1 bmad-agent-* present');
+  assert(
+    `at least one bmad-agent-* persona (paths: ${out.agent_files.map((a) => a.path).slice(0, 8).join(', ')})`,
+    out.agent_files.some((a) => /bmad-agent-[^/]+\/skill\.md$/i.test(a.path)),
+  );
   for (const a of out.agent_files) {
-    assert(
-      `path matches pattern: ${a.path}`,
-      /^agents\/[^/]+\.synthesized\.md$/.test(a.path),
-    );
+    const onDisk = fs.existsSync(path.join(BMAD_CACHE, a.path));
+    assert(`real file on disk: ${a.path}`, onDisk);
   }
 
   // ── Test 6: content_hash deterministic ───────────────────────────────

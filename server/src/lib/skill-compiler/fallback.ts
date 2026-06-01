@@ -179,16 +179,24 @@ function composeAgentSystemPrompt(skill: SkillReadOutput, persona: string): stri
  * `[a-z0-9][a-z0-9_-]{0,63}` regex used elsewhere in the codebase.
  *
  * Examples:
- *   agents/analyst.md            → "analyst"
- *   agents/dev/senior.md         → "dev-senior"
- *   agents/01-pm.synthesized.md  → "01-pm"   (the `.synthesized` suffix
- *                                              from `parse-agents.ts` BMAD
- *                                              path is stripped here so
- *                                              fallback ids match the LLM
- *                                              path's natural ids)
+ *   agents/analyst.md                 → "analyst"
+ *   .../bmad-agent-analyst/SKILL.md   → "bmad-agent-analyst"  (file stem is a
+ *                                        generic marker → use the dir name, so
+ *                                        N nested SKILL.md files don't all
+ *                                        collapse to the id "skill")
+ *   agents/01-pm.synthesized.md       → "01-pm"  (legacy synth suffix stripped)
  */
+const GENERIC_FILE_STEMS = new Set(['skill', 'index', 'agent', 'main', 'readme']);
+
 function memberIdFromFile(f: SkillFileEntry): string | null {
-  const stem = path.basename(f.path).replace(/\.synthesized\.md$/i, '').replace(/\.[^.]+$/, '');
+  const segs = f.path.split('/').filter(Boolean);
+  const file = segs[segs.length - 1] ?? '';
+  let stem = file.replace(/\.synthesized\.md$/i, '').replace(/\.[^.]+$/, '');
+  // When the file itself carries no identity (e.g. `SKILL.md` inside a
+  // per-agent directory), the meaningful id is the containing directory.
+  if (GENERIC_FILE_STEMS.has(stem.toLowerCase()) && segs.length >= 2) {
+    stem = segs[segs.length - 2];
+  }
   const slug = stem
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')

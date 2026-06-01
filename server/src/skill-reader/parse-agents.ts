@@ -43,57 +43,105 @@ function toPosix(p: string): string {
   return p.replace(/\\/g, '/');
 }
 
-/**
- * Parse `<skillDir>/agents/*` into AgentFile entries. Files outside the
- * standard extensions are skipped. Returns `[]` when the dir is missing.
- */
-function readStandardAgentsDir(skillDir: string): AgentFile[] {
-  const agentsDir = path.join(skillDir, 'agents');
-  if (!fs.existsSync(agentsDir)) return [];
+// 2026-06-01 — real-agent discovery. The skill-reader's job is to surface the
+// agents a skill ACTUALLY ships, verbatim — never to invent them. Real skills
+// don't always keep agents in a flat top-level `agents/` dir; BMAD-METHOD, for
+// example, puts each real persona at `src/bmm-skills/<phase>/bmad-agent-*/SKILL.md`.
+// We walk the tree (bounded) and collect a file as an agent when it is EITHER:
+//   (a) inside a directory literally named `agents/` (at any depth), or
+//   (b) a `SKILL.md` (or SKILL.yaml) inside an `*agent*`-named dir (e.g.
+//       `bmad-agent-analyst/`).
+// Heavy / irrelevant subtrees are pruned and depth is capped so a big repo
+// checkout (BMAD ships its whole source tree) stays fast.
 
-  let entries: fs.Dirent[];
+const SKIP_DIRS = new Set([
+  '.git', 'node_modules', 'dist', 'build', '.cache', 'coverage',
+  'evals', 'website', 'tools', 'test', 'tests', '__tests__',
+  '.next', 'out', 'vendor', 'docs',
+]);
+const MAX_WALK_DEPTH = 8;
+const MAX_NESTED_AGENTS = 50;
+/** Matches dir names like `bmad-agent-analyst`, `agent-foo`, `my_agent`. */
+const AGENT_DIR_RE = /(^|[-_])agent([-_]|$)/i;
+const AGENT_DIR_SKILL_RE = /^skill\.(md|ya?ml)$/i;
+
+/** Read one on-disk agent file into an AgentFile (verbatim raw + parsed fm). */
+function readAgentFile(absFile: string, relPath: string, ext: string): AgentFile | null {
+  let raw: string;
   try {
-    entries = fs.readdirSync(agentsDir, { withFileTypes: true });
+    raw = fs.readFileSync(absFile, 'utf-8');
   } catch {
-    return [];
+    return null;
   }
-
-  const out: AgentFile[] = [];
-  for (const e of entries) {
-    if (!e.isFile()) continue;
-    if (e.name.startsWith('.')) continue;
-    const ext = path.extname(e.name).toLowerCase();
-    if (!AGENT_EXTS.has(ext)) continue;
-
-    const abs = path.join(agentsDir, e.name);
-    let raw: string;
+  let frontmatter: Record<string, unknown> | null = null;
+  if (ext === '.md') {
     try {
-      raw = fs.readFileSync(abs, 'utf-8');
+      const parsed = matter(raw);
+      if (parsed.data && Object.keys(parsed.data).length > 0) {
+        frontmatter = parsed.data as Record<string, unknown>;
+      }
     } catch {
-      continue;
+      // malformed frontmatter → keep raw, drop frontmatter
     }
+  }
+  return { path: toPosix(relPath), raw, frontmatter };
+}
 
-    let frontmatter: Record<string, unknown> | null = null;
-    if (ext === '.md') {
-      try {
-        const parsed = matter(raw);
-        if (parsed.data && Object.keys(parsed.data).length > 0) {
-          frontmatter = parsed.data as Record<string, unknown>;
-        }
-      } catch {
-        // malformed frontmatter → keep raw, drop frontmatter
+/**
+ * Recursively discover real agent files. Handles the flat agents-dir layout
+ * (top level or nested) AND the BMAD-style nested `<agent-named-dir>/SKILL.md`
+ * layout. Verbatim — never synthesizes. Returns `[]` when none are found.
+ */
+function discoverAgents(skillDir: string): AgentFile[] {
+  const out: AgentFile[] = [];
+  const seen = new Set<string>();
+
+  function visit(absDir: string, relDir: string, depth: number): void {
+    if (depth > MAX_WALK_DEPTH || out.length >= MAX_NESTED_AGENTS) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    // Deterministic order so the content hash is stable across platforms.
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    const dirBase = path.basename(absDir).toLowerCase();
+    const isAgentsDir = dirBase === 'agents';
+    const isAgentNamedDir = AGENT_DIR_RE.test(dirBase);
+
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue;
+      const rel = relDir ? `${relDir}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        if (SKIP_DIRS.has(e.name.toLowerCase())) continue;
+        visit(path.join(absDir, e.name), rel, depth + 1);
+        continue;
+      }
+      if (!e.isFile()) continue;
+      const ext = path.extname(e.name).toLowerCase();
+      if (!AGENT_EXTS.has(ext)) continue;
+
+      // (a) any file directly inside an `agents/` dir (depth ≥ 1 so the skill
+      //     root itself is never mistaken for an agent), or
+      // (b) a SKILL.md inside an `*agent*`-named dir (one persona per dir).
+      const underAgentsDir = isAgentsDir && depth >= 1;
+      const agentDirSkill = isAgentNamedDir && AGENT_DIR_SKILL_RE.test(e.name);
+      if (!underAgentsDir && !agentDirSkill) continue;
+      if (seen.has(rel)) continue;
+
+      const af = readAgentFile(path.join(absDir, e.name), rel, ext);
+      if (af) {
+        out.push(af);
+        seen.add(rel);
+        if (out.length >= MAX_NESTED_AGENTS) return;
       }
     }
-
-    out.push({
-      path: toPosix(path.join('agents', e.name)),
-      raw,
-      frontmatter,
-    });
   }
 
-  // Sort for deterministic hash input.
-  out.sort((a, b) => a.path.localeCompare(b.path));
+  if (!fs.existsSync(skillDir)) return [];
+  visit(skillDir, '', 0);
   return out;
 }
 
@@ -176,7 +224,27 @@ function synthesizeBmadModules(skillDir: string): AgentFile[] {
  * informational only.
  */
 export async function parseAgents(skillDir: string): Promise<AgentFile[]> {
-  const standard = readStandardAgentsDir(skillDir);
+  // Principle (2026-06-01): a skill's agents are whatever the skill SHIPS —
+  // read them verbatim, never invent. Discover real agent files first (flat
+  // `agents/*` + nested `**/<*agent*>/SKILL.md`).
+  const real = discoverAgents(skillDir);
+  if (real.length > 0) {
+    real.sort((a, b) => a.path.localeCompare(b.path));
+    return real;
+  }
+
+  // LAST RESORT ONLY — when the skill ships ZERO real agent files. The
+  // `bmad-modules.yaml` entries are an INSTALL-MODULE registry (separate repos),
+  // NOT agent roles; synthesizing "agents" from them is a degraded heuristic and
+  // is logged loudly so we know we're not reading real structure. Previously
+  // this ran unconditionally and SHADOWED real nested agents (e.g. BMAD's
+  // bmad-agent-* personas), producing garbage teams of module names.
   const synthesized = synthesizeBmadModules(skillDir);
-  return [...standard, ...synthesized];
+  if (synthesized.length > 0) {
+    console.warn(
+      `[skill-reader] ${skillDir}: no real agent files found — fell back to ` +
+        `${synthesized.length} bmad-modules.yaml module entries (install modules, NOT agent roles).`,
+    );
+  }
+  return synthesized;
 }
