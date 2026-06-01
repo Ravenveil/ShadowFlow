@@ -126,7 +126,9 @@ interface ResolvedKey {
  * when no provider is configured — caller falls back to rule-based compile.
  */
 function resolveCompileProvider(): ResolvedKey | null {
-  let byok: { providers?: Record<string, { apiKey?: string; baseUrl?: string }> } | undefined;
+  let byok:
+    | { providers?: Record<string, { apiKey?: string; baseUrl?: string; enabled?: boolean }> }
+    | undefined;
   try {
     byok = getSetting('byok') as typeof byok;
   } catch {
@@ -137,6 +139,15 @@ function resolveCompileProvider(): ResolvedKey | null {
 
   for (const providerId of COMPILE_PROVIDER_ORDER) {
     const saved = byok?.providers?.[providerId];
+    // 2026-06-01 — respect the BYOK `enabled` toggle. A provider the user has
+    // switched OFF in Settings must be skipped even if a (stale / wrong) key
+    // still sits in its slot. Root cause of a real bug: an `anthropic` slot
+    // that was disabled but held a GLM-format key got picked first (it's first
+    // in COMPILE_PROVIDER_ORDER), so the compiler sent `claude-sonnet-4-6` + a
+    // non-Anthropic key to api.anthropic.com → PROVIDER_ERROR → every prose
+    // skill fell back to a garbage rule-based team. Skipping disabled providers
+    // lets resolution fall through to the actually-enabled one (e.g. zhipu).
+    if (saved && saved.enabled === false) continue;
     const savedKey = typeof saved?.apiKey === 'string' ? saved.apiKey.trim() : '';
     const envKey = process.env[providerEnvVarFor(providerId)] ?? '';
     const apiKey = savedKey || envKey;
