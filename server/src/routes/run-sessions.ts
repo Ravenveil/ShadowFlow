@@ -87,6 +87,10 @@ const router = Router();
 interface SessionRecord {
   goal: string;
   skill_name: string;
+  /** 2026-06-01 — 用户显式 @skill:<id> 或显式 skill_name 触发(非默认回退)。
+   *  true → assembler 走"组装意图"路:Branch 2 兜底时用组装指令(禁 discovery),
+   *  而非该 skill 的对话 prompt。见 .shadowflow/skills/agent-team-assembly。 */
+  explicit_skill?: boolean;
   output_hint?: string;
   workspace_id?: string;
   mode?: string;
@@ -527,6 +531,9 @@ router.post('/', (req: Request, res: Response) => {
     skill_candidate && SKILLS[skill_candidate]
       ? skill_candidate
       : 'agent-team-blueprint';
+  // 2026-06-01 — 用户是否显式指定了 skill(@skill:<id> 或显式 skill_name)。
+  // 用于 assembler 的"组装意图"路由:显式时,Branch 2 兜底不走对话而走组装指令。
+  const explicit_skill = !!skill_candidate;
 
   // Story 15.9 — validate and store generation overrides. Each helper returns
   // `undefined` for invalid input so the assembler falls back to env / default.
@@ -590,6 +597,7 @@ router.post('/', (req: Request, res: Response) => {
   sessionStore.set(session_id, {
     goal: goal_text,
     skill_name: validated_skill,
+    explicit_skill,
     output_hint,
     workspace_id,
     mode,
@@ -1032,6 +1040,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       : runSkillAssembler({
           goal: session.goal,
           skill_name: session.skill_name,
+          explicit_skill: session.explicit_skill,
           session_id: id,
           anthropic_key: session.anthropic_key,
           signal: abortController.signal,

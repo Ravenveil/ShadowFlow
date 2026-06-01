@@ -347,6 +347,10 @@ Rules:
 export interface SkillAssemblerOptions {
   goal: string;
   skill_name: string;
+  /** 2026-06-01 — 用户显式 @skill:<id> / skill_name 触发(组装意图)。Branch 2
+   *  兜底时:true → 用组装指令(读 agent-team-assembly 的 SKILL.md+yaml,禁 discovery、
+   *  强制 emit <sf:node>),而非该 skill 的对话 prompt。 */
+  explicit_skill?: boolean;
   session_id: string;
   anthropic_key?: string;
   signal?: AbortSignal;
@@ -398,6 +402,37 @@ export interface SkillAssemblerOptions {
   cwd?: string;
 }
 
+// 2026-06-01 — 组装意图指令。读 `.shadowflow/skills/agent-team-assembly` 的
+// SKILL.md + assembly_workflow.yaml,作为「显式 @skill / 组装」落到 Branch 2 时的
+// 系统提示前缀:强制 LLM 立即组装(emit <sf:*>)、禁止 discovery 反问、按两条路
+// (Path A 读蓝图 / Path B 设计)走。这样那两份文件被真正"用"起来。缓存一次。
+let _assemblyDirectiveCache: string | null = null;
+function loadAssemblyDirective(): string {
+  if (_assemblyDirectiveCache !== null) return _assemblyDirectiveCache;
+  const dirs = [
+    path.join(process.cwd(), '..', '.shadowflow', 'skills', 'agent-team-assembly'),
+    path.join(process.cwd(), '.shadowflow', 'skills', 'agent-team-assembly'),
+  ];
+  let out = '';
+  for (const d of dirs) {
+    try {
+      const mdPath = path.join(d, 'SKILL.md');
+      if (!fs.existsSync(mdPath)) continue;
+      const md = fs.readFileSync(mdPath, 'utf-8');
+      const ypPath = path.join(d, 'assembly_workflow.yaml');
+      const yaml = fs.existsSync(ypPath) ? fs.readFileSync(ypPath, 'utf-8') : '';
+      out = yaml
+        ? `${md}\n\n--- 组装工作流定义 (assembly_workflow.yaml) ---\n${yaml}`
+        : md;
+      break;
+    } catch {
+      /* best-effort; fall through to empty */
+    }
+  }
+  _assemblyDirectiveCache = out;
+  return out;
+}
+
 /**
  * runSkillAssembler — drives an LLM transport with a skill's system_prompt,
  * extracts <sf:*> + <artifact> tags via parser.ts, persists artifacts to disk
@@ -412,7 +447,7 @@ export interface SkillAssemblerOptions {
 export async function* runSkillAssembler(
   opts: SkillAssemblerOptions,
 ): AsyncGenerator<ParserSseEvent> {
-  const { goal, skill_name, session_id, anthropic_key, signal, system_prompt } = opts;
+  const { goal, skill_name, explicit_skill, session_id, anthropic_key, signal, system_prompt } = opts;
 
   const skill = SKILLS[skill_name] ?? SKILLS['agent-team-blueprint'];
   // Story 15.5: caller may have composed a DS-augmented prompt; fall back to
@@ -608,10 +643,18 @@ export async function* runSkillAssembler(
   // when available (it's the LLM-curated version of raw_skill_md + persona).
   // Falls back to the skill's static system_prompt for back-compat.
   const compiledSystem = compiled?.agentConfig?.system_prompt;
-  const branch2System =
+  const baseSystem =
     typeof compiledSystem === 'string' && compiledSystem.trim().length > 0
       ? compiledSystem
       : effectiveSystemPrompt;
+  // 2026-06-01 组装接线:用户显式 @skill / 组装意图却落到 Branch 2(目标 skill 无
+  // team/recipe)时,前缀注入组装指令(agent-team-assembly 的 SKILL.md+yaml)——
+  // 让 LLM 立即按"组装工作流"emit <sf:node>/<sf:edge>/<sf:complete>、禁止 discovery
+  // 反问(治此前 @skill 反问"你想哪一件"的毛病),目标 skill 的内容作为蓝图上下文附后。
+  const assemblyDirective = explicit_skill ? loadAssemblyDirective() : '';
+  const branch2System = assemblyDirective
+    ? `${assemblyDirective}\n\n=== 目标 skill 上下文(${skill_name})===\n${baseSystem}`
+    : baseSystem;
 
   // Round 4 PR-D — when the compiled agentConfig advertises tools AND the
   // resolved transport is a direct ApiClient (anthropic-direct / byok:*),
