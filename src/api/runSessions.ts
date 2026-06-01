@@ -523,12 +523,12 @@ export function subscribeRunSession(
         if (!serverTerminated && !cancelled) handlers.onError?.(err);
         return;
       }
-      // 2026-05-19 fix: backend 重启后内存 sessionStore 丢失 → /stream
-      // 返回 404 JSON `{"error":"Session X not found"}`，不是 SSE。
-      // EventSource 拿到非 200 直接关闭 + onerror，没有 `error` SSE 帧，
-      // 所以 serverTerminated 不会被标。我们靠 fetch HEAD/GET probe 探
-      // status code：404 / 410 立刻终止 + 通知用户 session 已过期，不
-      // 浪费 5 次指数退避在一个永久不存在的资源上。
+      // session 不存在 → /stream 返回 404 JSON `{"error":"Session X not found"}`，
+      // 不是 SSE。EventSource 拿到非 200 直接关闭 + onerror，没有 `error` SSE 帧，
+      // 所以 serverTerminated 不会被标。我们靠 fetch GET probe 探 status：404 / 410
+      // 立刻终止 + 通知用户 session 已过期，不浪费 5 次指数退避在永久不存在的资源上。
+      // 2026-06-01: 会话已落盘(session-store)抗重启，404 主因是「闲置超 TTL 被回收」，
+      // 不再是「重启丢内存」——文案随之更正。
       fetch(`${getApiBase()}/api/run-sessions/${sessionId}/stream`, {
         method: 'GET',
         headers: { Accept: 'text/event-stream', ...authHeaders() },
@@ -537,7 +537,7 @@ export function subscribeRunSession(
           if ((resp.status === 404 || resp.status === 410) && !cancelled) {
             serverTerminated = true;
             handlers.onServerError?.(
-              `Session 不存在或已过期（${resp.status}）。Backend 重启后内存 session 会丢失，请回起点新建。`,
+              `会话已过期或不存在（${resp.status}）。长时间未访问的会话会被自动回收，请回起点重新发起。`,
               'SESSION_NOT_FOUND',
             );
             return;

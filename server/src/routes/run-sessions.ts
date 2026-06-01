@@ -17,6 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { runSkillAssembler } from '../assembler';
 import { classifyErrorCode } from '../lib/classify-error';
 import { createRunBus, type RunEventSink } from '../lib/run-event-bus';
+import { createRunEventStore } from '../lib/run-event-store';
 // Round 4 PR-E — canonical `@skill` token parser shared byte-equal with the
 // frontend (`src/lib/skillToken.ts`). Replaces an inline regex that drifted
 // in shape from the SkillDropdown UI; both call sites now agree on which
@@ -150,6 +151,16 @@ interface SessionRecord {
    */
   messages?: ConversationMessage[];
   created_at: number;
+  /**
+   * 2026-06-01 — last-activity timestamp for the activity-based TTL sweep.
+   * Bumped on every persist (touchSession) AND on each /stream attach, so a
+   * session a user keeps coming back to never expires out from under them.
+   * Old records (pre-2026-06-01) lack it; migrator defaults it to created_at.
+   * Replaces the old "created_at < now-1h" sweep that nuked sessions an hour
+   * after creation regardless of activity (root cause of the spurious
+   * "Session 不存在或已过期 404" the user hit on revisit).
+   */
+  updated_at?: number;
 }
 
 // ── Story 15.13 — layer_toggles + project_meta validators ────────────────────
@@ -323,19 +334,50 @@ const sessionStore = createSessionStore<SessionRecord>({
   migrate: (raw): SessionRecord | undefined => {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
     const rec = raw as Partial<SessionRecord> & Record<string, unknown>;
-    // Only the two new fields are touched; everything else round-trips as-is.
+    // Only the new fields are touched; everything else round-trips as-is.
     if (!Array.isArray(rec.messages)) rec.messages = [];
     if (typeof rec.version !== 'number' || rec.version < SESSION_SCHEMA_VERSION) {
       rec.version = SESSION_SCHEMA_VERSION;
+    }
+    // 2026-06-01 — pre-existing records have no `updated_at`; seed it from
+    // created_at so the activity-based TTL has a sensible starting point.
+    if (typeof rec.updated_at !== 'number') {
+      rec.updated_at = typeof rec.created_at === 'number' ? rec.created_at : Date.now();
     }
     return rec as SessionRecord;
   },
 });
 void sessionStore.loadAll();
 
+// 2026-06-01 — activity-based session TTL. Old code swept any session
+// `created_at < now-1h`, i.e. killed it one hour after CREATION no matter how
+// recently it was viewed — so coming back to a run after lunch surfaced a
+// spurious "Session 不存在或已过期 (404)". Sessions persist to disk (session-store),
+// so the only thing TTL guards is unbounded cardinality; an idle window is the
+// right axis, not absolute age. 24h of inactivity is generous for a desktop
+// tool and still bounds the on-disk session count.
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Effective last-activity instant for the TTL sweep. */
+function sessionLastActivity(s: SessionRecord): number {
+  return Math.max(s.created_at ?? 0, s.updated_at ?? 0);
+}
+
+/**
+ * Re-persist a session with a refreshed `updated_at`. Cheap (session-store
+ * double-writes async) and keeps an actively-viewed session from expiring.
+ * No-op if the session is already gone.
+ */
+function touchSession(id: string): void {
+  const s = sessionStore.get(id);
+  if (!s) return;
+  s.updated_at = Date.now();
+  sessionStore.set(id, s);
+}
+
 // S2.3 — module-level singleton. One bucket per session; cleanup happens
-// alongside sessionStore's 1h TTL sweep (clear() on session delete is
-// effectively handled by the step-store's idempotent disk-removal).
+// alongside sessionStore's activity-based TTL sweep (clear() on session delete
+// is effectively handled by the step-store's idempotent disk-removal).
 const stepStoreSingleton = createStepStore();
 
 // T3-1 (2026-05-27): the legacy per-connection `activeStreams` registry +
@@ -350,7 +392,12 @@ const stepStoreSingleton = createStepStore();
 // connection is a detachable view that resumes from `?after`/Last-Event-ID.
 // This is what decouples execution from the SSE connection — reconnects replay
 // the buffered events instead of re-running the whole LLM pipeline.
-const runBus = createRunBus();
+// O2 / T3-5 — inject disk persistence so the run timeline survives a Node
+// restart (hydrated at construction; debounced snapshots on emit/finish). Runs
+// that were mid-flight at crash hydrate as `canceled` with their history intact
+// + a synthetic "interrupted by restart" terminal frame, so a reconnect replays
+// the timeline read-only instead of re-running the pipeline.
+const runBus = createRunBus({ persist: createRunEventStore() });
 
 /**
  * T3 A8 — graceful shutdown entry point for the daemon. Cancels every active
@@ -621,12 +668,15 @@ router.post('/', (req: Request, res: Response) => {
     conversation_id: validated_conversation_id,
     auto_critique: typeof auto_critique === 'boolean' ? auto_critique : undefined,
     created_at: Date.now(),
+    updated_at: Date.now(),
   });
 
-  // Clean up old sessions (older than 1 hour)
-  const oneHourAgo = Date.now() - 3_600_000;
+  // Clean up sessions idle longer than the TTL (last-activity based, not
+  // created-at — see SESSION_TTL_MS). An actively-viewed session is touched on
+  // every /stream attach, so revisits never trip this.
+  const ttlCutoff = Date.now() - SESSION_TTL_MS;
   for (const [id, sess] of sessionStore.entries()) {
-    if (sess.created_at < oneHourAgo) sessionStore.delete(id);
+    if (sessionLastActivity(sess) < ttlCutoff) sessionStore.delete(id);
   }
 
   console.log(
@@ -736,6 +786,10 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     res.status(404).json({ error: `Session ${id} not found` });
     return;
   }
+
+  // Viewing a session counts as activity — refresh its TTL so a run the user
+  // keeps open / comes back to never expires mid-use (2026-06-01).
+  touchSession(id);
 
   // Set SSE headers — must be set before any write
   res.setHeader('Content-Type', 'text/event-stream');

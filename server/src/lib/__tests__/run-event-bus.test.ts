@@ -14,7 +14,32 @@
  *   - wait() resolves on terminal (finish/cancel/reset); immediate when already terminal
  */
 
-import { createRunBus, type RunEventRecord, type RunEventSink } from '../run-event-bus';
+import {
+  createRunBus,
+  type RunEventRecord,
+  type RunEventSink,
+  type RunSnapshot,
+  type RunPersistence,
+} from '../run-event-bus';
+
+/** In-memory fake of the disk RunPersistence (O2). Records saves/removes. */
+function makeFakePersist(seed: RunSnapshot[] = []): {
+  persist: RunPersistence;
+  saved: Map<string, RunSnapshot>;
+  removed: string[];
+} {
+  const saved = new Map<string, RunSnapshot>();
+  const removed: string[] = [];
+  return {
+    saved,
+    removed,
+    persist: {
+      save: (snap) => { saved.set(snap.id, JSON.parse(JSON.stringify(snap)) as RunSnapshot); },
+      remove: (id) => { saved.delete(id); removed.push(id); },
+      loadAllSync: () => seed,
+    },
+  };
+}
 
 let pass = 0;
 let fail = 0;
@@ -329,6 +354,74 @@ async function asyncTests(): Promise<void> {
     bus.reset('w5');
     check('non-terminal reset resolves canceled', 'canceled', await p);
     ok('run removed after reset', !bus.get('w5'));
+  }
+
+  // ── 22: O2 — emit + finish persist snapshots ───────────────────────────────
+  {
+    console.log('\n[22] O2 persist: emit + finish save snapshots');
+    const fp = makeFakePersist();
+    const bus = createRunBus({ persist: fp.persist });
+    bus.claimStart('p1');
+    bus.emit('p1', 'text', { d: 'hi' });
+    ok('save called on emit', fp.saved.has('p1'));
+    check('persisted event count', 1, fp.saved.get('p1')?.events.length);
+    bus.finish('p1', 'succeeded');
+    check('persisted terminal status', 'succeeded', fp.saved.get('p1')?.status);
+  }
+
+  // ── 23: O2 — hydrate a terminal run → attach replays + ends, no re-run ──────
+  {
+    console.log('\n[23] O2 hydrate terminal run from disk');
+    const seed: RunSnapshot[] = [{
+      id: 'h1', status: 'succeeded',
+      events: [{ id: 1, event: 'text', data: { d: 'x' }, ts: 0 }],
+      nextEventId: 2, exitCode: null, signal: null, createdAt: 0, updatedAt: 0,
+    }];
+    const fp = makeFakePersist(seed);
+    const bus = createRunBus({ persist: fp.persist });
+    ok('hydrated run exists', !!bus.get('h1'));
+    ok('hydrated claimStart=false (no re-run)', bus.claimStart('h1') === false);
+    const sink = makeSink();
+    bus.attach('h1', 0, sink);
+    check('replayed buffered event', 1, sink.got.length);
+    ok('terminal hydrate ended sink immediately', sink.ended);
+  }
+
+  // ── 24: O2 — hydrate a RUNNING (crashed) run → synthetic terminal + canceled ─
+  {
+    console.log('\n[24] O2 hydrate interrupted run → synthetic terminal');
+    const seed: RunSnapshot[] = [{
+      id: 'h2', status: 'running',
+      events: [{ id: 1, event: 'text', data: {}, ts: 0 }],
+      nextEventId: 2, exitCode: null, signal: null, createdAt: 0, updatedAt: 0,
+    }];
+    const fp = makeFakePersist(seed);
+    const bus = createRunBus({ persist: fp.persist });
+    const run = bus.get('h2');
+    check('interrupted run marked canceled', 'canceled', run?.status);
+    check('synthetic terminal frame appended', 2, run?.events.length);
+    const last = run?.events[run.events.length - 1];
+    ok('synthetic frame is run-level error', last?.event === 'error');
+    ok('synthetic frame flagged interrupted_by_restart',
+      !!(last?.data as { interrupted_by_restart?: boolean })?.interrupted_by_restart);
+    ok('re-persisted corrected snapshot (canceled)', fp.saved.get('h2')?.status === 'canceled');
+    const sink = makeSink();
+    bus.attach('h2', 0, sink);
+    ok('attach ends after hydrate (terminal)', sink.ended);
+    check('replays history + synthetic terminal', 2, sink.got.length);
+  }
+
+  // ── 25: O2 — reset removes the persisted snapshot ──────────────────────────
+  {
+    console.log('\n[25] O2 reset removes persisted snapshot');
+    const fp = makeFakePersist();
+    const bus = createRunBus({ persist: fp.persist });
+    bus.claimStart('r1');
+    bus.emit('r1', 'text', {});
+    ok('snapshot saved before reset', fp.saved.has('r1'));
+    bus.reset('r1');
+    ok('reset removed snapshot', fp.removed.includes('r1'));
+    ok('snapshot gone after reset', !fp.saved.has('r1'));
   }
 }
 

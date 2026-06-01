@@ -31,6 +31,37 @@ export interface RunEventRecord {
 
 export type RunStatus = 'running' | 'succeeded' | 'failed' | 'canceled';
 
+/**
+ * O2 / T3-5 — the serializable subset of a Run, written to disk by an injected
+ * RunPersistence so the timeline survives a Node restart. Excludes the live-only
+ * fields (clients, abort, waiters) which are reconstructed empty on hydrate.
+ */
+export interface RunSnapshot {
+  id: string;
+  status: RunStatus;
+  events: RunEventRecord[];
+  nextEventId: number;
+  exitCode: number | null;
+  signal: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Injected disk-persistence adapter (impl: run-event-store.ts). Kept as an
+ * interface so run-event-bus stays Express/fs-agnostic and unit-testable with a
+ * fake. All methods are best-effort: the bus never awaits or depends on them
+ * for correctness — disk is a recovery log, memory is the runtime truth.
+ */
+export interface RunPersistence {
+  /** Persist (typically debounced) a run snapshot. */
+  save(snap: RunSnapshot): void;
+  /** Remove a run's persisted snapshot. */
+  remove(id: string): void;
+  /** Synchronously load all persisted snapshots (called once at construction). */
+  loadAllSync(): RunSnapshot[];
+}
+
 const TERMINAL: ReadonlySet<RunStatus> = new Set<RunStatus>([
   'succeeded',
   'failed',
@@ -87,6 +118,13 @@ export interface RunBusOptions {
   /** Injectable clock + cleanup scheduler (tests). */
   now?: () => number;
   schedule?: (fn: () => void, ms: number) => void;
+  /**
+   * O2 / T3-5 — optional disk persistence. When provided, runs are hydrated
+   * from it at construction and snapshots are saved on emit/finish/setExit and
+   * removed on reset/cleanup. Omit (the default) for pure in-memory behavior —
+   * existing callers and the 28 unit tests are unaffected.
+   */
+  persist?: RunPersistence;
 }
 
 export interface RunBus {
@@ -158,7 +196,30 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
       (t as { unref?: () => void }).unref?.();
     });
 
+  const persist = opts.persist;
   const runs = new Map<string, Run>();
+
+  /** Serializable view of a run for disk persistence (O2). */
+  const snapshot = (run: Run): RunSnapshot => ({
+    id: run.id,
+    status: run.status,
+    events: run.events,
+    nextEventId: run.nextEventId,
+    exitCode: run.exitCode,
+    signal: run.signal,
+    createdAt: run.createdAt,
+    updatedAt: run.updatedAt,
+  });
+
+  /** Best-effort persist; never throws into the hot path. */
+  const save = (run: Run): void => {
+    if (!persist) return;
+    try {
+      persist.save(snapshot(run));
+    } catch {
+      /* disk is a recovery log, not a correctness dependency */
+    }
+  };
 
   const create = (id: string): Run => {
     const ts = now();
@@ -179,6 +240,55 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     runs.set(id, run);
     return run;
   };
+
+  // O2 hydration — restore persisted runs at startup. A run that was `running`
+  // when the process died has no live producer; we append a synthetic run-level
+  // `error` terminal frame (so a reconnecting view replays the full as-of-crash
+  // timeline and then STOPS cleanly instead of hanging / reconnect-looping) and
+  // mark it `canceled`. `started: true` ensures claimStart() never re-runs it.
+  if (persist) {
+    let hydrated = 0;
+    let interrupted = 0;
+    for (const snap of persist.loadAllSync()) {
+      if (!snap || typeof snap.id !== 'string' || runs.has(snap.id)) continue;
+      const run: Run = {
+        id: snap.id,
+        status: snap.status,
+        events: Array.isArray(snap.events) ? snap.events.slice() : [],
+        nextEventId: typeof snap.nextEventId === 'number' ? snap.nextEventId : (snap.events?.length ?? 0) + 1,
+        clients: new Set(),
+        abort: new AbortController(),
+        started: true,
+        waiters: new Set(),
+        exitCode: snap.exitCode ?? null,
+        signal: snap.signal ?? null,
+        createdAt: snap.createdAt ?? now(),
+        updatedAt: snap.updatedAt ?? now(),
+      };
+      if (!TERMINAL.has(run.status)) {
+        run.events.push({
+          id: run.nextEventId++,
+          event: 'error',
+          data: {
+            session_id: run.id,
+            code: 'server',
+            message: '会话进程已重启，本次运行已中断（历史已保留）',
+            interrupted_by_restart: true,
+          },
+          ts: now(),
+        });
+        run.status = 'canceled';
+        interrupted += 1;
+      }
+      runs.set(run.id, run);
+      save(run); // re-persist the corrected (terminal) snapshot
+      hydrated += 1;
+    }
+    if (hydrated > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`[run-event-bus] hydrated ${hydrated} run(s) from disk (${interrupted} interrupted → canceled)`);
+    }
+  }
 
   const ensure = (id: string): Run => runs.get(id) ?? create(id);
   const get = (id: string): Run | undefined => runs.get(id);
@@ -211,6 +321,7 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
         // handler will detach it shortly.
       }
     }
+    save(run); // O2 — debounced disk snapshot so the timeline survives restart
     return rec;
   };
 
@@ -246,7 +357,10 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
   const scheduleCleanup = (run: Run): void => {
     schedule(() => {
       const cur = runs.get(run.id);
-      if (cur && TERMINAL.has(cur.status)) runs.delete(run.id);
+      if (cur && TERMINAL.has(cur.status)) {
+        runs.delete(run.id);
+        persist?.remove(run.id);
+      }
     }, ttlMs);
   };
 
@@ -266,6 +380,7 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     // Resolve everyone awaiting this run's terminal status (single fire each).
     for (const waiter of run.waiters) waiter(status);
     run.waiters.clear();
+    save(run); // O2 — persist the terminal snapshot so a restart serves it read-only
     scheduleCleanup(run);
   };
 
@@ -286,6 +401,7 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     run.exitCode = code;
     run.signal = signal;
     run.updatedAt = now();
+    save(run);
   };
 
   const shutdownActive = async (
@@ -340,6 +456,7 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     for (const waiter of run.waiters) waiter(resolvedStatus);
     run.waiters.clear();
     runs.delete(id);
+    persist?.remove(id); // O2 — drop the snapshot so the next claimStart re-runs clean
   };
 
   return {
