@@ -33,11 +33,6 @@
  * Bricolage/Geist/JetBrains 不含汉字 → 自动落到 Noto Sans SC 而非系统默认
  * 的微软雅黑(小字号发糊). */
 :root {
-  /* 2026-06-01 — 全局字号放大系数。html{zoom:var(--app-zoom)} 等比放大文字+间距;
-   * 定高全屏壳(height:100vh + overflow:hidden)须用 calc(100vh/var(--app-zoom))
-   * 抵消,否则 zoom 后内容超 100vh 被裁(侧栏底部/composer 消失)。只改这一处即整体缩放。 */
-  --app-zoom: 1.1;
-
   --font-sans:    'Geist', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Bricolage Grotesque', 'Geist', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
   --font-mono:    'JetBrains Mono', 'Noto Sans SC', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -122,16 +117,11 @@ html, body {
   margin: 0;
   padding: 0;
   font-family: var(--font-sans);
-  /* 2026-06-01 — 全局基准 13→14px(用户反馈字偏小)。只调字号,不缩放、不碰布局,
-   * 正文阅读区继承此值即变大;布局高度/间距不变,不会裁切。 */
+  /* 2026-06-01 — 全局基准默认 14px(用户反馈偏小)。用户可在「设置 → 外观 → 字号」
+   * 滑块自由调(12–18px,fontScale.ts 写 documentElement inline 覆盖此值)。
+   * 只调字号、不缩放、不碰布局(弃用之前失败的 zoom 方案:zoom 撑破 100vh 全屏壳)。 */
   font-size: 14px;
   line-height: 1.5;
-  /* 2026-06-01 字体整体偏小 → 等比放大 8%(用户「字体略小,你看着来」)。
-   * 全 app 有 ~148 处内联 fontSize px 写死,单调 body/sf-* token 跟不全;
-   * zoom 在渲染层等比缩放文字+间距+比例,布局零破坏。Chrome/Edge 完美支持,
-   * 且自建 fixed 浮层(DirPicker/ModelPicker)的 getBoundingClientRect 坐标
-   * 会自动按 zoom 校正,无需额外处理。改 :root 的 --app-zoom 即可整体调大小。 */
-  zoom: var(--app-zoom);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

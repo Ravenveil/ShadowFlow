@@ -42,12 +42,8 @@ export function HfLayout() {
   const active = pathToActive(pathname);
   const needsLayoutTopBar = LAYOUT_TOPBAR_PREFIXES.some(p => pathname.startsWith(p));
 
-  // 2026-06-01 — 根高度抵消全局 zoom(index.css :root{--app-zoom})。zoom 放大内容
-  // 但 100vh 仍按物理视口算 → 内容超出被 overflow:hidden 裁掉(侧栏「设置」、composer
-  // 提问框消失)。除以 --app-zoom 让放大后内容正好填满视口;改 index.css 的 --app-zoom
-  // 即自动同步,无需改这里。
   return (
-    <div className="hf-root" style={{ display: 'flex', height: 'calc(100vh / var(--app-zoom))', overflow: 'hidden' }}>
+    <div className="hf-root" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <HfSidebar active={active} />
       <main
         style={{
