@@ -567,6 +567,12 @@ export async function* runSkillAssembler(
   const apiKey = opts.api_key ?? anthropic_key;
   const effectiveSignal = signal ?? new AbortController().signal;
 
+  // C(2026-06-02)— @skill 走 LLM 编排器:LLM 读组装 skill 工作流 + 读目标 skill 真实声明
+  // + verbatim emit 蓝图(忠实"从组装 skill 出发")。LLM 是否可用:cli:/acp:/mcp: 外部 runner
+  // 自带认证(无需 key);anthropic-direct/byok: 需 apiKey。无 LLM 时退回确定性结构化 emit(离线兜底)。
+  const llmAvailable = /^(cli:|acp:|mcp:)/.test(executor) || !!apiKey;
+  const orchestrate = !!explicit_skill && llmAvailable;
+
   console.log(
     `[skill-assembler] session=${session_id} executor=${executor}` +
       ` skill=${skill_name} team=${skill.team ? 'yes' : 'no'}`,
@@ -652,20 +658,21 @@ export async function* runSkillAssembler(
 
   // Branch 1 — compiled team config → DAG scheduler.
   // (Phase 2 decisions A3 / A2 preserved: daemon-led DAG + artifact handoff.)
-  if (compiled?.mode === 'team' && compiled.teamConfig) {
+  // `orchestrate`(C):explicit_skill + 有 LLM → 放行到 Branch 2 的 LLM 编排器(不走下面任何确定性/执行路)。
+  if (compiled?.mode === 'team' && compiled.teamConfig && !orchestrate) {
     const synthAgents = synthAgentsFromCompiled(compiled.teamConfig);
     const teamV1 = toTeamDefV1FromCompiled(compiled.teamConfig, synthAgents);
-    // 组装 ⊥ 执行:@skill 组装意图 → 只 emit 团队蓝图(不跑 agent)。非 @skill 的
-    // 编译 team 流(若有)保留原 runDag 执行行为,blast radius 最小。
     if (explicit_skill) {
-      // 待决1 — 轻量闸门:用户显式"要 1 个 agent" → 只 emit 1 个(其余 verbatim 复现不砍)。
+      // C 离线兜底:explicit_skill 但无 LLM(无 key 的 HTTP 执行器)→ 用确定性结构化结果直接 emit
+      // 蓝图(不跑 agent)。待决1 轻量闸门:显式"要 1 个 agent" → 只 emit 1 个。
       const singleAgent = detectExplicitSingleAgent(goal).single;
       console.log(
-        `[skill-assembler] @skill assemble (no exec) compiled team ${teamV1.team_id}: ${teamV1.members_ids.length} members, ${teamV1.edges_v1.length} edges, derivedFrom=${compiled.teamConfig.derivedFrom}, single=${singleAgent}`,
+        `[skill-assembler] @skill OFFLINE deterministic emit (no LLM) team ${teamV1.team_id}: ${teamV1.members_ids.length} members, single=${singleAgent}`,
       );
       yield* emitCompiledTeamBlueprint(compiled.teamConfig, synthAgents, session_id, singleAgent);
       return;
     }
+    // 非 @skill 的编译 team → 执行(runDag),保持原行为。
     console.log(
       `[skill-assembler] running compiled team ${teamV1.team_id}: ${teamV1.members_ids.length} members, ${teamV1.edges_v1.length} edges, derivedFrom=${compiled.teamConfig.derivedFrom}`,
     );
@@ -676,7 +683,7 @@ export async function* runSkillAssembler(
 
   // Branch 1b — legacy: skill ships an explicit TeamDef (built-in skills /
   // pre-PR-C bundles). Same DAG path, just synthesised via the older helper.
-  if (skill.team) {
+  if (skill.team && !orchestrate) {
     const teamV1 = toTeamDefV1(skill.team);
     console.log(
       `[skill-assembler] running legacy team ${teamV1.team_id}: ${teamV1.members_ids.length} members (no compile cache)`,
@@ -687,7 +694,8 @@ export async function* runSkillAssembler(
   }
 
   // Branch 0 — 确定性 recipe 命中：结构由 recipe(Skill)定，不靠 LLM emit。Rule 出口兜底。
-  const matchedRecipe = selectRecipe(goal);
+  // orchestrate(@skill+LLM)时跳过 recipe —— @skill 应由组装 skill 工作流驱动,不被 goal-recipe 抢路。
+  const matchedRecipe = orchestrate ? null : selectRecipe(goal);
   if (matchedRecipe) {
     const teamDef = recipeToTeamDef(matchedRecipe);
     // 正本清源: user goal 不再烤进 persona(撤掉 enrichRecipePersonas 双调用),
@@ -753,15 +761,21 @@ export async function* runSkillAssembler(
       data: { skill_unresolved: true, requested: requestedRef, fallback: skill_name },
     };
   }
+  // C(2026-06-02)— @skill LLM 编排指令:**先读目标 skill 的真实声明,再 verbatim emit**。
+  // 不预分"哪步确定/哪步模糊";忠实靠"工具锁输入 + verbatim 纪律 + 出口闸门"。
+  const targetRef = requestedRef || skill_name;
   const toolHint = explicit_skill
-    ? `\n\n=== 运行时能力:read_skill ===\n` +
+    ? `\n\n=== 组装执行(读目标 skill → 忠实 emit)===\n` +
+      `你要组装的是 skill「${targetRef}」。**第一步:用 \`read_skill(ref="${targetRef}")\` 工具` +
+      `(运行时未提供该工具时,如 CLI/ACP 路,用你自带的 Read/Glob 等文件能力)读取它真实声明的 roster**,` +
+      `来源优先级:team_ref → \`<ref>.team.yaml\` / 自带 roster 清单(如 \`module.yaml\` 的 \`agents:\` 段)/ \`agents/\` 目录。\n` +
       (skillUnresolved
-        ? `⚠️ 用户请求的 skill「${requestedRef}」未随上下文给出蓝图(不在已编译注册表里)。` +
-          `请**先调用 \`read_skill(ref="${requestedRef}")\`**(若运行时未提供该工具,则用你自带的文件/网页读取能力)` +
-          `拉取它的真实蓝图(SKILL.md + team/agent yaml),再按 Path A 忠实实例化。`
-        : `若目标 skill 的蓝图未随上下文给出,用 \`read_skill(ref=...)\`(ref 可为 skill id / 本地路径 / https URL;` +
-          `运行时未提供该工具时用你自带的读取能力)拉取真实蓝图后再实例化。`) +
-      `\n解析不到就**如实告知"未找到该 skill"**,绝不凭空编造蓝图。`
+        ? `⚠️ 该 skill 不在已编译注册表、蓝图未随上下文给出,**务必**先 read_skill 拉取。\n`
+        : ``) +
+      `**第二步:照声明 verbatim emit** —— 声明几个角色就 emit 几个 \`<sf:node>\`,` +
+      `**绝不**混入子技能的子助手、安装模块名(如 bmad-modules.yaml 的模块)、或你臆造的角色;` +
+      `再按其工作流/阶段 emit \`<sf:edge>\`(分阶段的:阶段内并行、相邻阶段相连,不要硬拉成一条直线)、\`<sf:complete>\`。\n` +
+      `read_skill 解析不到 → **如实告知"未找到该 skill"**,绝不凭空编造蓝图。`
     : '';
   const branch2System = assemblyDirective
     ? `${assemblyDirective}${toolHint}\n\n=== 目标 skill 上下文(${skill_name})===\n${baseSystem}`
