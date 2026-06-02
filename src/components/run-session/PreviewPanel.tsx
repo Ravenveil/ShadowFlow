@@ -278,8 +278,23 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
               {currentStep ? `等待 "${currentStep.name}" 步骤产出 YAML…` : '等待 YAML 流开始…'}
             </span>
           ) : (
-            lines.map((ln, i) => (
-              <div key={i} style={{ display: 'flex', minWidth: 0 }}>
+            lines.map((ln, i) => {
+              // 2026-06-02 (Trae 式跟随) — highlight the line currently being
+              // streamed so the eye locks onto where YAML is being written.
+              // Steady tint (not a fading flash) because the last line keeps
+              // mutating token-by-token; a left accent bar marks the cursor row.
+              const isActiveLine = isStreaming && i === lines.length - 1;
+              return (
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  minWidth: 0,
+                  background: isActiveLine ? 'var(--t-accent-tint, rgba(168,85,247,.10))' : undefined,
+                  boxShadow: isActiveLine ? 'inset 2px 0 0 var(--t-accent, #A855F7)' : undefined,
+                  borderRadius: isActiveLine ? 2 : undefined,
+                }}
+              >
                 <span
                   aria-hidden
                   style={{
@@ -287,7 +302,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
                     width: 36,
                     paddingRight: 10,
                     textAlign: 'right',
-                    color: 'var(--t-fg-6)',
+                    color: isActiveLine ? 'var(--t-accent, #A855F7)' : 'var(--t-fg-6)',
                     flexShrink: 0,
                     userSelect: 'none',
                   }}
@@ -311,7 +326,8 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
                   />
                 )}
               </div>
-            ))
+              );
+            })
           )}
         </pre>
       )}

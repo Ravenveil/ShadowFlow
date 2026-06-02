@@ -61,6 +61,10 @@ function AgentBlueprintNode({ data, selected }: NodeProps<AgentBlueprintNodeData
   const { node } = data;
   const v = statusVisual(node.status);
   const isCoordinator = node.type === 'coordinator';
+  // 2026-06-02 (Trae 式跟随) — the node being built right now gets a breathing
+  // accent glow so it visibly pops out of the DAG as the canvas pans to it,
+  // matching the spotlight the Agent/Preview tabs apply to the active region.
+  const isBuilding = node.status === 'building';
   return (
     <div
       className="sf-node"
@@ -74,9 +78,11 @@ function AgentBlueprintNode({ data, selected }: NodeProps<AgentBlueprintNodeData
         border: `1px solid ${isCoordinator ? 'var(--t-accent, #A855F7)' : v.ring}`,
         boxShadow: selected
           ? '0 0 0 2px var(--t-accent, #A855F7), 0 6px 18px -8px rgba(0,0,0,.4)'
-          : isCoordinator
-            ? 'var(--glow-accent, 0 0 0 3px rgba(168,85,247,.15))'
-            : '0 2px 12px -4px rgba(0,0,0,.3)',
+          : isBuilding
+            ? '0 0 0 1.5px var(--status-run, #60a5fa), 0 0 22px -4px rgba(96,165,250,.7)'
+            : isCoordinator
+              ? 'var(--glow-accent, 0 0 0 3px rgba(168,85,247,.15))'
+              : '0 2px 12px -4px rgba(0,0,0,.3)',
         color: 'var(--t-fg-1, #FAFAFA)',
         opacity: node.status === 'pending' ? 0.6 : 1,
         display: 'flex',
