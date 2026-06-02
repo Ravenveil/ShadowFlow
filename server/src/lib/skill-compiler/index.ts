@@ -33,6 +33,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import yaml from 'js-yaml';
 import { callProvider, isProviderId, type ProviderId } from '../../transport/api-clients';
 import { getSetting } from '../../storage/settings';
@@ -285,6 +286,30 @@ export function _resetStructuredSpecForTests(): void {
   _structuredSpecCache = null;
 }
 
+// 待决2 — SPEC 指纹纳入结构化编译的 compiler_version,让"改 SPEC"使旧的 structured
+// 缓存失效(SPEC yaml 不在目标 skill content_hash 里,否则改了 SPEC 旧缓存仍命中)。
+function structuredSpecFingerprint(): string {
+  return crypto.createHash('sha256').update(JSON.stringify(loadStructuredSpec())).digest('hex').slice(0, 8);
+}
+function structuredCompilerVersion(): string {
+  return `v1+spec:${structuredSpecFingerprint()}`;
+}
+
+// 待决3 — persona 模式真接:verbatim(逐字,上限截断)| summary(取首段、短)。
+function applyPersonaMode(raw: string, mode: string): string {
+  const trimmed = raw.trim();
+  if (mode === 'summary') {
+    const firstPara = trimmed.split(/\n\s*\n/).find((p) => p.trim().length > 0)?.trim() ?? trimmed;
+    return firstPara.length > 400 ? firstPara.slice(0, 400) + '\n[…]' : firstPara;
+  }
+  // verbatim(默认)
+  return trimmed.length > STRUCTURED_PERSONA_MAX ? trimmed.slice(0, STRUCTURED_PERSONA_MAX) + '\n[…truncated]' : trimmed;
+}
+
+// 待决3 — raci_rules 真接:引擎读取并校验(目前仅 role-table)。RACI 的实际派生在
+// 前端 deriveRaci 实现该规则;此处校验让该字段"活"起来(非法值告警+回落)。
+const SUPPORTED_RACI_RULES = new Set(['role-table']);
+
 /**
  * 确定性结构化编译 — 直接从 skill **声明的** agent 建队,不调 LLM。规则由组装 skill 的
  * yaml `path_a_structured` 块(SPEC)驱动,**不再硬编**:成员来源 / DAG 排法均读 yaml。
@@ -296,6 +321,12 @@ function tryStructuredCompile(skill: SkillReadOutput): CompiledSkill | null {
   const spec = loadStructuredSpec();
   // members_source:目前只支持 agent_files;未知来源 → 不接管,交给 LLM 路。
   if (spec.members_source !== 'agent_files') return null;
+  // raci_rules 校验(待决3):非支持值告警,RACI 仍按 role-table(前端 deriveRaci)派生。
+  if (!SUPPORTED_RACI_RULES.has(spec.raci_rules)) {
+    console.warn(
+      `[skill-compiler] path_a_structured.raci_rules='${spec.raci_rules}' 未支持,回落 role-table(RACI 由前端 deriveRaci 派生)`,
+    );
+  }
 
   const files: SkillFileEntry[] = skill.agent_files ?? [];
   if (files.length < 2) return null;
@@ -318,11 +349,7 @@ function tryStructuredCompile(skill: SkillReadOutput): CompiledSkill | null {
     const id = memberIdFromFile(f);
     if (!id || members_ids.includes(id)) continue;
     members_ids.push(id);
-    const raw = f.raw.trim();
-    members_personas[id] =
-      raw.length > STRUCTURED_PERSONA_MAX
-        ? raw.slice(0, STRUCTURED_PERSONA_MAX) + '\n[…truncated]'
-        : raw;
+    members_personas[id] = applyPersonaMode(f.raw, spec.persona);  // 待决3:按 persona 模式取
   }
   if (members_ids.length < 2) return null;
 
@@ -336,7 +363,7 @@ function tryStructuredCompile(skill: SkillReadOutput): CompiledSkill | null {
     team_id: skill.skill_id,
     version: 1,
     name: skill.skill_id,
-    description: `Structured team — ${members_ids.length} declared agent(s), edge_strategy=${spec.edge_strategy}.`,
+    description: `Structured team — ${members_ids.length} declared agent(s), edge_strategy=${spec.edge_strategy}, persona=${spec.persona}.`,
     members_ids,
     members_personas,
     edges_v1,
@@ -347,7 +374,7 @@ function tryStructuredCompile(skill: SkillReadOutput): CompiledSkill | null {
     skill_id: skill.skill_id,
     source_content_hash: skill.content_hash,
     compiled_at: new Date().toISOString(),
-    compiler_version: 'v1',
+    compiler_version: structuredCompilerVersion(),  // 待决2:含 SPEC 指纹 → 改 SPEC 旧缓存失效
     mode: 'team',
     teamConfig,
     llm_call_meta: { model: 'structured', tokens_in: 0, tokens_out: 0, duration_ms: 0 },
@@ -364,10 +391,17 @@ function tryStructuredCompile(skill: SkillReadOutput): CompiledSkill | null {
  * round-trip works.
  */
 export async function compile(skill: SkillReadOutput): Promise<CompiledSkill> {
-  // 1) cache lookup
+  // 1) cache lookup —— 待决2:structured 缓存是 SPEC-依赖的。若缓存是 structured 但
+  // compiler_version 与当前 SPEC 指纹不符(= SPEC yaml 改过)→ 视为 miss,重编译。
   const cached = await readCompileCache(skill.content_hash);
   if (cached) {
-    return { ...cached, skill_id: skill.skill_id };
+    const staleStructured =
+      cached.teamConfig?.derivedFrom === 'structured' &&
+      cached.compiler_version !== structuredCompilerVersion();
+    if (!staleStructured) {
+      return { ...cached, skill_id: skill.skill_id };
+    }
+    // SPEC 改过 → 落到下面重编译(structured 仅 ~5ms,代价可忽略)。
   }
 
   // 2026-06-01 — 确定性优先:skill 若声明了多 agent 结构(≥2 个真 agent 文件),

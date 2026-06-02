@@ -118,8 +118,10 @@ export interface CompiledSkill {
   source_content_hash: string;
   /** ISO 8601 UTC timestamp of compilation. */
   compiled_at: string;
-  /** Bumping this invalidates all caches (prompt template changes etc.). */
-  compiler_version: 'v1';
+  /** Bumping this invalidates caches. 'v1' for LLM/fallback; structured path
+   *  appends a SPEC fingerprint (`v1+spec:<hash>`) so changing path_a_structured
+   *  busts its caches. */
+  compiler_version: string;
   mode: CompiledMode;
   agentConfig?: CompiledAgentConfig;
   teamConfig?: CompiledTeamConfig;

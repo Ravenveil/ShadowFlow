@@ -61,6 +61,8 @@ import { ApiClientCallable } from './transport/ApiClientCallable';
 // floor at the assembly exit.
 import { selectRecipe } from './assembly/select';
 import { deriveRules, enforceRules } from './assembly/rules/enforce';
+// 待决1 — Path A 轻量闸门:只尊重"用户显式要 1 个 agent"的意图(其余 verbatim 不砍)。
+import { detectExplicitSingleAgent } from './lib/intent-router';
 import type { RosterNode } from './assembly/rules/types';
 import type { AssemblyRecipe } from './assembly/skills/types';
 import type { TeamDef } from './lib/skill-types';
@@ -463,13 +465,21 @@ async function* emitCompiledTeamBlueprint(
   teamConfig: { members_ids: string[]; members_personas: Record<string, string>; edges_v1: Array<{ from: string; to: string; kind?: string }>; name?: string },
   synthAgents: SkillAgentDef[],
   session_id: string,
+  singleAgent = false,
 ): AsyncGenerator<ParserSseEvent> {
   const byId = new Map(synthAgents.map((a) => [a.id, a]));
+  // 待决1 — 轻量闸门:用户显式"要 1 个 agent"时,只取 1 个(优先 coordinator,否则第一个),
+  // 不发 edges。这是唯一对 Path A 的"卡线"——绝不引入 roster 上限(忠实复现不该砍)。
+  const memberIds =
+    singleAgent && teamConfig.members_ids.length > 1
+      ? [teamConfig.members_ids.find((id) => /coord/i.test(id)) ?? teamConfig.members_ids[0]]
+      : teamConfig.members_ids;
+  const emitEdges = !singleAgent;
   yield {
     event: 'classify',
-    data: { output_type: 'workflow', mode: 'team', confidence: 0.98, complexity: Math.min(5, Math.max(1, teamConfig.members_ids.length)), source: 'compiled-skill-team' },
+    data: { output_type: 'workflow', mode: singleAgent ? 'single' : 'team', confidence: 0.98, complexity: Math.min(5, Math.max(1, memberIds.length)), source: 'compiled-skill-team' },
   };
-  for (const id of teamConfig.members_ids) {
+  for (const id of memberIds) {
     const a = byId.get(id);
     const persona = a?.persona ?? teamConfig.members_personas[id] ?? `Agent ${id}`;
     const shortPersona = persona.split('\n').find((l) => l.trim().length > 0)?.slice(0, 80) ?? id;
@@ -495,8 +505,10 @@ async function* emitCompiledTeamBlueprint(
       data: { node_id: id, persona, source: a?.anchors?.persona?.ref ?? `<compiled>#${id}/persona`, cached: true },
     };
   }
-  for (const e of teamConfig.edges_v1) {
-    yield { event: 'edge', data: { from: e.from, to: e.to, status: 'active' } };
+  if (emitEdges) {
+    for (const e of teamConfig.edges_v1) {
+      yield { event: 'edge', data: { from: e.from, to: e.to, status: 'active' } };
+    }
   }
   yield {
     event: 'complete',
@@ -646,10 +658,12 @@ export async function* runSkillAssembler(
     // 组装 ⊥ 执行:@skill 组装意图 → 只 emit 团队蓝图(不跑 agent)。非 @skill 的
     // 编译 team 流(若有)保留原 runDag 执行行为,blast radius 最小。
     if (explicit_skill) {
+      // 待决1 — 轻量闸门:用户显式"要 1 个 agent" → 只 emit 1 个(其余 verbatim 复现不砍)。
+      const singleAgent = detectExplicitSingleAgent(goal).single;
       console.log(
-        `[skill-assembler] @skill assemble (no exec) compiled team ${teamV1.team_id}: ${teamV1.members_ids.length} members, ${teamV1.edges_v1.length} edges, derivedFrom=${compiled.teamConfig.derivedFrom}`,
+        `[skill-assembler] @skill assemble (no exec) compiled team ${teamV1.team_id}: ${teamV1.members_ids.length} members, ${teamV1.edges_v1.length} edges, derivedFrom=${compiled.teamConfig.derivedFrom}, single=${singleAgent}`,
       );
-      yield* emitCompiledTeamBlueprint(compiled.teamConfig, synthAgents, session_id);
+      yield* emitCompiledTeamBlueprint(compiled.teamConfig, synthAgents, session_id, singleAgent);
       return;
     }
     console.log(
