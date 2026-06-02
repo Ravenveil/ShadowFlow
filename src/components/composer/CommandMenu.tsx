@@ -218,19 +218,21 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                   minHeight: 32,
                 }}
               >
-                <span
-                  style={{
-                    flexShrink: 0,
-                    width: 18,
-                    height: 18,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: active ? 'var(--t-accent)' : 'var(--t-fg-3)',
-                  }}
-                >
-                  {item.icon ?? (mode === '@' ? <AtSign size={13} /> : <Slash size={13} />)}
-                </span>
+                {item.icon && (
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      width: 18,
+                      height: 18,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: active ? 'var(--t-accent)' : 'var(--t-fg-3)',
+                    }}
+                  >
+                    {item.icon}
+                  </span>
+                )}
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span
                     style={{
