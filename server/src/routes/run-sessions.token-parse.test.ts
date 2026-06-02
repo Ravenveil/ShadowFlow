@@ -43,7 +43,7 @@ function parseGoal(input: string): ParseResult {
     if (parsed.skill_id) {
       inline_skill_token = parsed.skill_id;
       goal_text = parsed.remaining;
-      if (!goal_text) goal_text = '用这个 skill 帮我开始一项任务。';
+      if (!goal_text) goal_text = '用这个 skill 帮我组建 agent / team。';
     }
   }
   return { inline_skill_token, goal_text };
@@ -113,6 +113,6 @@ describe('@skill:<id> parsing (regression after slash short-circuit)', () => {
   it('empty after stripping → fallback goal text', () => {
     const r = parseGoal('@skill:bmad');
     expect(r.inline_skill_token).toBe('bmad');
-    expect(r.goal_text).toBe('用这个 skill 帮我开始一项任务。');
+    expect(r.goal_text).toBe('用这个 skill 帮我组建 agent / team。');
   });
 });

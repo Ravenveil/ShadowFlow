@@ -509,9 +509,10 @@ router.post('/', (req: Request, res: Response) => {
       inline_skill_token = parsed.skill_id;
       goal_text = parsed.remaining;
       if (!goal_text) {
-        // user typed only "@bmad" / "@skill:foo" without a goal — fall back
-        // to a generic prompt so the assembler always has something to act on
-        goal_text = '用这个 skill 帮我开始一项任务。';
+        // user typed only "@bmad" / "@skill:foo" without a goal — @skill 的本意是
+        // "用这个 skill 组装 agent/team",所以默认目标按组装措辞(而非泛化"开始任务"),
+        // 让 LLM 编排器明确去读该 skill 的声明并组队。
+        goal_text = '用这个 skill 帮我组建 agent / team。';
       }
     }
   }
