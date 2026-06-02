@@ -24,10 +24,12 @@ parameters:
 #      src/lib/assemblyRules.ts + server/src/assembly/rules,由 enforceRules 出口卡。
 # 改这块 = 改引擎建队行为(无需改代码)。缺省/缺失时引擎用内置默认值,行为不变。
 path_a_structured:
-  members_source: agent_files       # 成员从哪来(目前只支持 agent_files)
+  # 【引擎实时响应】改这两个值立刻改变建队行为:
+  members_source: agent_files       # 成员从哪来(引擎只认 agent_files;其它值→不接管,交 LLM)
   edge_strategy: phase-dir-order    # DAG 怎么排:phase-dir-order(按阶段目录 1-→2-→3-)| sequential(磁盘顺序)
-  raci_rules: role-table            # RACI 怎么派生(声明式;矩阵由前端 deriveRaci 按 role 表派生)
-  persona: verbatim                 # persona 逐字取用、不改写不截断
+  # 【声明意图,引擎暂不读取——只描述当前固定行为,改这两个值引擎不响应】:
+  raci_rules: role-table            # RACI 现由前端 deriveRaci 按 role 表派生(引擎不算 RACI)
+  persona: verbatim                 # persona 现恒为逐字取用(引擎未实现其它模式)
 
 agent:
   name: "Team-Assembly-Director"
