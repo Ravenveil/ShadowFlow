@@ -17,6 +17,18 @@ parameters:
     type: string
     description: "single | team(选填)。用户显式指定优先。"
 
+# ── Path A 构造配方(SPEC / Skill 维度:"怎么造")────────────────────────────
+# 引擎确定性建队的唯一真源(server/src/lib/skill-compiler tryStructuredCompile 读这里)。
+# 这是「怎么造」(Skill),不是「不许越的线」——
+#   ⛔ roster 上限 / 单 agent 守卫 / 治理 = Rule(B),不放这,留在
+#      src/lib/assemblyRules.ts + server/src/assembly/rules,由 enforceRules 出口卡。
+# 改这块 = 改引擎建队行为(无需改代码)。缺省/缺失时引擎用内置默认值,行为不变。
+path_a_structured:
+  members_source: agent_files       # 成员从哪来(目前只支持 agent_files)
+  edge_strategy: phase-dir-order    # DAG 怎么排:phase-dir-order(按阶段目录 1-→2-→3-)| sequential(磁盘顺序)
+  raci_rules: role-table            # RACI 怎么派生(声明式;矩阵由前端 deriveRaci 按 role 表派生)
+  persona: verbatim                 # persona 逐字取用、不改写不截断
+
 agent:
   name: "Team-Assembly-Director"
   system_prompt: |

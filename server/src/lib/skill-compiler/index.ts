@@ -33,6 +33,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import yaml from 'js-yaml';
 import { callProvider, isProviderId, type ProviderId } from '../../transport/api-clients';
 import { getSetting } from '../../storage/settings';
 import type { SkillReadOutput, SkillFileEntry } from '../../skill-reader/types';
@@ -226,22 +227,90 @@ function phaseRankFromPath(p: string): number {
 const STRUCTURED_PERSONA_MAX = 4000;
 
 /**
- * 确定性结构化编译 — 直接从 skill **声明的** agent 建队,不调 LLM。
+ * Path A 构造配方(SPEC),由组装 skill 的 yaml `path_a_structured` 块声明。
+ * 这是 "怎么造"(Skill 维度);"不许越的线"(roster 上限等 Rule)不在这,留在
+ * assemblyRules + enforceRules。改 yaml 即改建队行为,无需改本文件。
+ */
+interface StructuredSpec {
+  members_source: string; // 'agent_files'
+  edge_strategy: string;  // 'phase-dir-order' | 'sequential'
+  raci_rules: string;     // 声明式(矩阵由前端 deriveRaci 派生);引擎不计算 RACI
+  persona: string;        // 'verbatim'
+}
+
+const DEFAULT_STRUCTURED_SPEC: StructuredSpec = {
+  members_source: 'agent_files',
+  edge_strategy: 'phase-dir-order',
+  raci_rules: 'role-table',
+  persona: 'verbatim',
+};
+
+let _structuredSpecCache: StructuredSpec | null = null;
+
+/**
+ * 读组装 skill 的 `assembly_workflow.yaml` → `path_a_structured` 块,作为构造配方真源。
+ * yaml 缺失 / 块缺失 / 解析失败 → 用内置默认(行为与重构前一致,非破坏)。缓存一次。
+ */
+function loadStructuredSpec(): StructuredSpec {
+  if (_structuredSpecCache) return _structuredSpecCache;
+  const candidates = [
+    path.join(process.cwd(), '..', '.shadowflow', 'skills', 'agent-team-assembly', 'assembly_workflow.yaml'),
+    path.join(process.cwd(), '.shadowflow', 'skills', 'agent-team-assembly', 'assembly_workflow.yaml'),
+  ];
+  let spec: StructuredSpec = { ...DEFAULT_STRUCTURED_SPEC };
+  for (const p of candidates) {
+    try {
+      if (!fs.existsSync(p)) continue;
+      const doc = yaml.load(fs.readFileSync(p, 'utf-8')) as { path_a_structured?: Partial<StructuredSpec> } | null;
+      const block = doc?.path_a_structured;
+      if (block && typeof block === 'object') {
+        spec = {
+          members_source: typeof block.members_source === 'string' ? block.members_source : DEFAULT_STRUCTURED_SPEC.members_source,
+          edge_strategy: typeof block.edge_strategy === 'string' ? block.edge_strategy : DEFAULT_STRUCTURED_SPEC.edge_strategy,
+          raci_rules: typeof block.raci_rules === 'string' ? block.raci_rules : DEFAULT_STRUCTURED_SPEC.raci_rules,
+          persona: typeof block.persona === 'string' ? block.persona : DEFAULT_STRUCTURED_SPEC.persona,
+        };
+      }
+      break;
+    } catch {
+      /* best-effort → defaults */
+    }
+  }
+  _structuredSpecCache = spec;
+  return spec;
+}
+
+/** 测试用:重置 spec 缓存(改 yaml 后重读)。 */
+export function _resetStructuredSpecForTests(): void {
+  _structuredSpecCache = null;
+}
+
+/**
+ * 确定性结构化编译 — 直接从 skill **声明的** agent 建队,不调 LLM。规则由组装 skill 的
+ * yaml `path_a_structured` 块(SPEC)驱动,**不再硬编**:成员来源 / DAG 排法均读 yaml。
  *
- * 返回 null 当 skill 不是可识别的多 agent 结构(真 agent 文件 ≤1)→ 调用方落到
- * LLM 路。`derivedFrom:'structured'` 标记为一等结果(UI 显示「已编译」而非「降级」)。
- *
- * 成员 = agent_files 里的真 persona(verbatim);edges = 按 skill 自身**阶段目录**
- * 前缀(1-… → 2-… → 3-…)排出的生命周期链。全程零 token、可复现、不依赖 key。
+ * 返回 null 当 skill 不是可识别的多 agent 结构(真 agent 文件 ≤1)→ 调用方落到 LLM 路。
+ * `derivedFrom:'structured'` = 一等结果(UI 显示「已编译」而非「降级」)。全程零 token、可复现。
  */
 function tryStructuredCompile(skill: SkillReadOutput): CompiledSkill | null {
+  const spec = loadStructuredSpec();
+  // members_source:目前只支持 agent_files;未知来源 → 不接管,交给 LLM 路。
+  if (spec.members_source !== 'agent_files') return null;
+
   const files: SkillFileEntry[] = skill.agent_files ?? [];
   if (files.length < 2) return null;
 
-  // Stable phase-ordered copy (never mutate skill.agent_files).
-  const ordered = files
-    .map((f, i) => ({ f, i, phase: phaseRankFromPath(f.path) }))
-    .sort((a, b) => a.phase - b.phase || a.i - b.i);
+  // 成员排序由 edge_strategy 决定:
+  //   phase-dir-order — 按阶段目录前缀(1-→2-→3-)排,同阶段保持原序;
+  //   sequential      — 保持磁盘发现顺序。
+  // 排好后一律串成顺序链(a→b→c)。
+  const indexed = files.map((f, i) => ({ f, i }));
+  const ordered =
+    spec.edge_strategy === 'sequential'
+      ? indexed
+      : indexed
+          .map((x) => ({ ...x, phase: phaseRankFromPath(x.f.path) }))
+          .sort((a, b) => a.phase - b.phase || a.i - b.i);
 
   const members_ids: string[] = [];
   const members_personas: Record<string, string> = {};
@@ -267,7 +336,7 @@ function tryStructuredCompile(skill: SkillReadOutput): CompiledSkill | null {
     team_id: skill.skill_id,
     version: 1,
     name: skill.skill_id,
-    description: `Structured team — ${members_ids.length} declared agent(s), phase-ordered.`,
+    description: `Structured team — ${members_ids.length} declared agent(s), edge_strategy=${spec.edge_strategy}.`,
     members_ids,
     members_personas,
     edges_v1,
