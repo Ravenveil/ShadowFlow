@@ -3315,9 +3315,10 @@ interface RunSessionRightPaneProps {
   chatGroupId: string | null;
 }
 
-// chatGroupId 仍由父组件传入（接口保留），但右下角「去聊天」按钮删除后本组件
-// 不再消费它 —— 统一从「Team saved」toast 进聊天。这里不解构以免 unused 告警。
-function RunSessionRightPane({ session, sessionId, onNavigate }: RunSessionRightPaneProps) {
+// 2026-06-02 — 右下角常驻「去聊天」悬浮按钮加回（用户要求）。run 完成后从这里
+// 直接进入本次 run 关联的 chat 群（chatGroupId），无群时兜底跳 /chat。
+function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: RunSessionRightPaneProps) {
+  const { t } = useI18n();
   const {
     activeTab,
     setActiveTab,
@@ -3374,6 +3375,18 @@ function RunSessionRightPane({ session, sessionId, onNavigate }: RunSessionRight
   // auto-follow effect in useFollowMode keeps the default unlocked path.
   const handleTabChange = (next: TabId) => setActiveTab(next, { lock: true });
 
+  // "去聊天 →" — jump to this run's chat conversation. When the run completed
+  // and auto-persist created a chat group, navigate straight to
+  // /chat/<groupId>; otherwise fall back to /chat.
+  const handleGoToChat = () => {
+    if (chatGroupId) {
+      onNavigate(`/chat/${chatGroupId}`);
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.log('[RunSessionRightPane] chat group not yet linked for this run — falling back to /chat');
+    onNavigate('/chat');
+  };
 
   const panels: Record<TabId, React.ReactNode> = {
     overview: (
@@ -3432,7 +3445,42 @@ function RunSessionRightPane({ session, sessionId, onNavigate }: RunSessionRight
         blueprintFilename={session.blueprintFile}
       />
 
-      {/* 2026-05-29 — 右下角常驻「去聊天」悬浮按钮已删；统一从「Team saved」 toast 的 Chat 按钮进入聊天（单一入口）。 */}
+      {/* Right-bottom dock — single primary CTA. Anchored absolute so the
+          panels keep their natural height and the dock floats above them.
+          2026-06-02 — 按用户要求加回（曾于 2026-05-29 删除）。 */}
+      <div
+        style={{
+          position: 'absolute',
+          right: 20,
+          bottom: 20,
+          zIndex: 5,
+          display: 'flex',
+          gap: 8,
+        }}
+      >
+        <button
+          type="button"
+          onClick={handleGoToChat}
+          data-testid="run-session-go-to-chat"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '8px 14px',
+            borderRadius: 8,
+            background: 'var(--t-accent)',
+            color: 'var(--t-accent-ink, #fff)',
+            border: 'none',
+            fontSize: 12.5,
+            fontWeight: 600,
+            cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(0,0,0,.22)',
+            fontFamily: 'inherit',
+          }}
+        >
+          {t('projects.artifactsEmptyCta')}
+        </button>
+      </div>
     </section>
   );
 }
