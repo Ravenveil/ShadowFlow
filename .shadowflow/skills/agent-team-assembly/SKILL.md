@@ -140,6 +140,22 @@ classify mode=team → 设计 coordinator + 2~3 个开发/测试 agent → emit 
 ## 🛡️ 【Rule 出口】
 产出交付前过 `.claude/rules/assembly-rules-sync.md` 的 roster Rule(单 agent 守卫 / roster 上限,前后端孪生 `assemblyRules.ts`/`intent-router.ts`)——确定性截断,不靠你自觉。Path A 复现既定蓝图通常已合规;Path B 设计路更需 Rule 兜底。
 
+## 🚑 【异常兜底规则(失败位置 → 兜底动作)】
+| 失败位置 | 兜底动作 |
+|---|---|
+| A0 · `read_skill` 解析不到(skill 不存在) | **如实告知"未找到该 skill `<id>`"并停止**,绝不编造蓝图 |
+| A1 · 蓝图里没有真 agent 声明 | 如实说"该 skill 未声明 agent",**不拿模块名/包注册表/目录名顶替** |
+| A2 · emit 中途被用户中断 | 按 `on_abort`:不留半成品,未 `<sf:complete/>` 的不落库,告知"已中断、未保存" |
+| A3 · Rule 出口违规(roster 超限 / 单 agent 被违反) | 交 `enforceRules` 确定性截断,并提示被截断的原因 |
+| 任意步陷入反复探索/想反问 | **立刻回到看板当前步,用现有信息 emit**,禁止 discovery |
+
+## 🧩 【依赖(工具 / Rule / daemon)】
+| 依赖 | 用途 | 关键输出 |
+|---|---|---|
+| `read_skill` 工具(CLI/ACP 路用自带 Read/Glob) | A0 读目标 skill 真实声明(skill id / 本地路径 / https URL) | 蓝图文本(SKILL.md + team/agent yaml + module.yaml 等) |
+| 装配 Rule(`assemblyRules.ts ↔ intent-router.ts` 孪生 + `enforceRules`) | A3 出口客观校验 roster(单 agent / 上限) | 合规放行 / 违规截断 |
+| daemon | A3 之后:落库 team+agents+DAG,从 DAG+RACI **派生** PolicyMatrix | 持久化的 team(/团队 页可见) |
+
 ## 📺 【进度看板 —— 每步必更新(⏳进行 / ✅完成),这是编排感的核心】
 
 组装一开始就打印对应 path 的看板;**进入一步标 ⏳,拿到该步交付物后标 ✅,才进下一步**(一步一交付物,
@@ -154,3 +170,14 @@ classify mode=team → 设计 coordinator + 2~3 个开发/测试 agent → emit 
 | A3 | 收尾 | 过 Rule 出口 → `<sf:complete/>` | 完成、daemon 落库 + 派生 PolicyMatrix | — |
 
 **Path B(纯目标设计):** B1 分析目标(classify)→ B2 设计蓝图 → B3 emit 角色+工具+DAG → B4 收尾(Rule 出口 + complete)。
+
+## 🎁 【最终交付物模板(组装完成后给用户的简报)】
+`<sf:complete/>` 后,用一段简报收口(让用户一眼看清组了什么、下一步去哪):
+```
+✅ 团队「<team 名>」已组装 —— 来自 skill <id>(忠实复现既定蓝图)。
+· 成员(N):<role1>(一句角色) · <role2> · …
+· 工作流:<DAG 摘要,如 分析→规划/UX→架构→开发>
+· 权责矩阵:已由 DAG + RACI 自动派生。
+下一步:去「团队」页运行,或在此聊天继续。
+```
+> 这是"展示与执行解耦":看板是过程、交付物模板是结果;两者都写进 skill,但都不替代 `<sf:*>` 帧(画布据帧渲染)。
