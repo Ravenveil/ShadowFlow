@@ -571,7 +571,11 @@ export async function* runSkillAssembler(
   // + verbatim emit 蓝图(忠实"从组装 skill 出发")。LLM 是否可用:cli:/acp:/mcp: 外部 runner
   // 自带认证(无需 key);anthropic-direct/byok: 需 apiKey。无 LLM 时退回确定性结构化 emit(离线兜底)。
   const llmAvailable = /^(cli:|acp:|mcp:)/.test(executor) || !!apiKey;
-  const orchestrate = !!explicit_skill && llmAvailable;
+  // 2026-06-02 合并:**统一 orchestrator** —— 组装的 LLM 编排路对两种模式都执行同一份
+  // agent-team-assembly(一条 5 步流,第 2 步按 skill_id 分支:有=复现读声明 / 无=设计)。
+  // recipe 命中的设计仍走 Branch 0 确定性快路;@skill 不看 recipe(复现优先)。
+  const matchedRecipe = explicit_skill ? null : selectRecipe(goal);
+  const orchestrate = llmAvailable && (!!explicit_skill || !matchedRecipe);
 
   console.log(
     `[skill-assembler] session=${session_id} executor=${executor}` +
@@ -693,9 +697,8 @@ export async function* runSkillAssembler(
     return;
   }
 
-  // Branch 0 — 确定性 recipe 命中：结构由 recipe(Skill)定，不靠 LLM emit。Rule 出口兜底。
-  // orchestrate(@skill+LLM)时跳过 recipe —— @skill 应由组装 skill 工作流驱动,不被 goal-recipe 抢路。
-  const matchedRecipe = orchestrate ? null : selectRecipe(goal);
+  // Branch 0 — 确定性 recipe 命中(matchedRecipe 已在顶部算好):结构由 recipe 定,不靠 LLM emit。
+  // orchestrate 时 matchedRecipe 必为 null(@skill 不看 recipe;设计命中 recipe 时 orchestrate=false 走这条)。
   if (matchedRecipe) {
     const teamDef = recipeToTeamDef(matchedRecipe);
     // 正本清源: user goal 不再烤进 persona(撤掉 enrichRecipePersonas 双调用),
@@ -742,48 +745,46 @@ export async function* runSkillAssembler(
   // team/recipe)时,前缀注入组装指令(agent-team-assembly 的 SKILL.md+yaml)——
   // 让 LLM 立即按"组装工作流"emit <sf:node>/<sf:edge>/<sf:complete>、禁止 discovery
   // 反问(治此前 @skill 反问"你想哪一件"的毛病),目标 skill 的内容作为蓝图上下文附后。
-  const assemblyDirective = explicit_skill ? loadAssemblyDirective() : '';
-  // 2026-06-01 — 请求的 skill 在注册表里没命中(已回退到默认 blueprint)时,
-  // skill_requested !== skill_name。这时不静默用默认:提示组装 agent 用 read_skill
-  // 按 ref 拉真实蓝图(解析不到再如实报"未找到")。read_skill 工具仅在 ApiClient
-  // 路注册进工具循环;CLI/ACP 路靠 agent 自带的文件/网页读取能力(措辞做了兼容)。
+  // 2026-06-02 合并:orchestrate 时(两模式)都注入**统一组装 skill**(agent-team-assembly)作驱动。
+  // 复现(explicit_skill)= 读目标 skill 真实声明 verbatim emit;设计(无 @skill)= 按 goal 走工作流设计分支。
+  const assemblyDirective = orchestrate ? loadAssemblyDirective() : '';
   const requestedRef =
     typeof skill_requested === 'string' && skill_requested.trim() ? skill_requested.trim() : '';
   const skillUnresolved = explicit_skill && !!requestedRef && requestedRef !== skill_name;
-  if (skillUnresolved) {
+  if (orchestrate && skillUnresolved) {
     console.warn(
       `[skill-assembler] session=${session_id} requested skill '${requestedRef}' not in registry — ` +
-        `routing to assembly with read_skill recovery (resolved=${skill_name}).`,
+        `assembly read_skill recovery (resolved=${skill_name}).`,
     );
-    // 客户端可见提示(非破坏:不监听此事件的客户端忽略即可)。
-    yield {
-      event: 'assembly-meta',
-      data: { skill_unresolved: true, requested: requestedRef, fallback: skill_name },
-    };
+    yield { event: 'assembly-meta', data: { skill_unresolved: true, requested: requestedRef, fallback: skill_name } };
   }
-  // C(2026-06-02)— @skill LLM 编排指令:**先读目标 skill 的真实声明,再 verbatim emit**。
-  // 不预分"哪步确定/哪步模糊";忠实靠"工具锁输入 + verbatim 纪律 + 出口闸门"。
   const targetRef = requestedRef || skill_name;
-  const toolHint = explicit_skill
-    ? `\n\n=== 组装执行(读目标 skill → 忠实 emit)===\n` +
-      `你要组装的是 skill「${targetRef}」。**第一步:用 \`read_skill(ref="${targetRef}")\` 工具` +
-      `(运行时未提供该工具时,如 CLI/ACP 路,用你自带的 Read/Glob 等文件能力)读取它真实声明的 roster**,` +
-      `来源优先级:team_ref → \`<ref>.team.yaml\` / 自带 roster 清单(如 \`module.yaml\` 的 \`agents:\` 段)/ \`agents/\` 目录。\n` +
-      (skillUnresolved
-        ? `⚠️ 该 skill 不在已编译注册表、蓝图未随上下文给出,**务必**先 read_skill 拉取。\n`
-        : ``) +
-      `**第二步:照声明 verbatim emit** —— 声明几个角色就 emit 几个 \`<sf:node>\`,` +
-      `**绝不**混入子技能的子助手、安装模块名(如 bmad-modules.yaml 的模块)、或你臆造的角色;` +
-      `再按其工作流/阶段 emit \`<sf:edge>\`(分阶段的:阶段内并行、相邻阶段相连,不要硬拉成一条直线)、\`<sf:complete>\`。\n` +
-      `**⚡ 效率纪律(重要)**:这是"产出团队蓝图帧",不是写代码任务。**一旦拿到权威成员表` +
-      `(team_ref 的 team.yaml 最优先,其次 module.yaml agents),就立刻逐个 emit \`<sf:node>\`** —— ` +
-      `不要再反复探索/逐个去核对每个 persona 的来源/纠结边界 case;persona 直接取声明里现成的文本,` +
-      `某成员没有现成 persona 就用一句话角色描述带过。**尽量少的工具调用、尽快 emit 完整套帧。**\n` +
-      `read_skill 解析不到 → **如实告知"未找到该 skill"**,绝不凭空编造蓝图。`
-    : '';
-  const branch2System = assemblyDirective
-    ? `${assemblyDirective}${toolHint}\n\n=== 目标 skill 上下文(${skill_name})===\n${baseSystem}`
-    : baseSystem;
+  // toolHint 按模式分支(对齐统一 skill 的 step2):复现 → 读声明 verbatim;设计 → 按 goal 设计。
+  let toolHint = '';
+  if (orchestrate && explicit_skill) {
+    toolHint =
+      `\n\n=== 复现模式:读目标 skill「${targetRef}」→ 忠实 emit ===\n` +
+      `第一步 用 \`read_skill(ref="${targetRef}")\`(CLI/ACP 路用自带 Read/Glob)读它真实声明的 roster,` +
+      `优先级 team_ref→\`<ref>.team.yaml\` > \`module.yaml\` 的 \`agents:\` > \`agents/\` 目录。` +
+      (skillUnresolved ? `(该 skill 未随上下文给出,务必先 read_skill。)` : ``) + `\n` +
+      `第二步 照声明 **verbatim emit**:声明几个角色 emit 几个 \`<sf:node>\`,**绝不**混子助手/模块名/臆造;` +
+      `再 emit \`<sf:edge>\`(分阶段:阶段内并行、相邻阶段相连,别硬拉直线)、\`<sf:complete>\`。\n` +
+      `⚡ 拿到权威成员表就**立刻**逐个 emit,别反复探索/逐个核对 persona;读不到→如实报"未找到"、不编造。`;
+  } else if (orchestrate) {
+    toolHint =
+      `\n\n=== 设计模式(无 @skill):按用户目标设计团队 ===\n` +
+      `目标:${goal}\n` +
+      `按工作流第 2 步设计分支:先 emit \`<sf:classify>\`;recipe 命中则照 recipe,否则设计 coordinator + 2~4 个 agent` +
+      `(single 则 1 个)。逐个 emit \`<sf:node>\`+\`<sf:agent-persona>\`,再 emit \`<sf:edge>\` 还原 DAG、\`<sf:complete>\`。` +
+      `受 Rule 出口约束(单 agent 守卫 / roster 上限)。`;
+  }
+  // orchestrate → 统一 directive 驱动(复现附目标 skill 上下文;设计只给 goal,不再附旧 blueprint prompt)。
+  // 非 orchestrate(无 LLM 兜底等)→ 用 baseSystem(旧 prompt),保持原行为。
+  const branch2System = !orchestrate
+    ? baseSystem
+    : explicit_skill
+      ? `${assemblyDirective}${toolHint}\n\n=== 目标 skill 上下文(${skill_name})===\n${baseSystem}`
+      : `${assemblyDirective}${toolHint}`;
 
   // Round 4 PR-D — when the compiled agentConfig advertises tools AND the
   // resolved transport is a direct ApiClient (anthropic-direct / byok:*),
