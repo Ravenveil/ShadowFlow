@@ -357,9 +357,23 @@ const InlineRoster: React.FC<{
   const VISIBLE = 7;
   const overflow = agents.length > VISIBLE ? agents.length - (VISIBLE - 1) : 0;
   const visible = overflow > 0 ? agents.slice(0, VISIBLE - 1) : agents;
+
+  // 2026-06-02 (Trae 式跟随) — when the selection follows the building agent,
+  // keep the active avatar chip horizontally in view so the roster tracks
+  // along with the auto-switch instead of leaving it scrolled off.
+  const railRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const on = rail.querySelector<HTMLElement>('.aac-sw-av.on');
+    if (on && typeof on.scrollIntoView === 'function') {
+      on.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    }
+  }, [selectedId]);
+
   return (
     <div className="aac-sw">
-      <div className="aac-sw-rail">
+      <div className="aac-sw-rail" ref={railRef}>
         {visible.map((a) => {
           const st = a.status === 'building' ? 'running' : a.status === 'ready' ? 'ok' : a.status === 'pending' ? 'pending' : 'idle';
           const on = a.id === selectedId;

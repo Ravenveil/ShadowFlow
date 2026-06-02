@@ -310,6 +310,24 @@ input, textarea, select { font-family: inherit; color: inherit; }
 @keyframes sf-spin      { to { transform: rotate(360deg); } }
 @keyframes sf-cur       { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
 
+/* 2026-06-02 — Trae 式「实时跟随」聚光：run-session 自动滚动到正在生成的
+ * section / agent 时，给目标元素套一圈渐隐的 accent 光环 + 轻微 tint，
+ * 像盯着光标落点。RunSessionPage 的 anchor-scroll effect 在滚动后给元素
+ * 加 .sf-spotlight，1.6s 后移除（动画结束即视觉归零）。 */
+@keyframes sf-spotlight {
+  0%   { box-shadow: 0 0 0 2px var(--accent), 0 0 22px -2px rgba(168,85,247,.65); background-color: rgba(168,85,247,.10); }
+  60%  { box-shadow: 0 0 0 2px var(--accent), 0 0 22px -2px rgba(168,85,247,.45); background-color: rgba(168,85,247,.06); }
+  100% { box-shadow: 0 0 0 0 transparent;                                         background-color: transparent; }
+}
+.sf-spotlight {
+  animation: sf-spotlight 1.6s ease-out 1;
+  border-radius: 12px;
+  scroll-margin-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-spotlight { animation: none; }
+}
+
 /* ReactFlow overrides */
 .react-flow            { background: var(--bg) !important; }
 .react-flow__renderer,

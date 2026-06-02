@@ -81,9 +81,11 @@ export interface UseFollowModeOptions {
   /**
    * Optional node list (from useRunSession.nodes). When the current step
    * is an agent-config step, the tooltip surfaces the currently-building
-   * agent's title for extra context.
+   * agent's title for extra context. The node `id` (when present) also
+   * drives `followedNodeId` so the Agent tab can auto-select whichever
+   * agent is currently being built (Trae-style "切到正在改的").
    */
-  nodes?: Array<{ title: string; status?: string }>;
+  nodes?: Array<{ id?: string; title: string; status?: string }>;
   /**
    * S6.6 — currently-running agent substep (from useRunSession.activeAgentSubstep).
    * Drives AgentDetail's anchor scroll: when this transitions to a new
@@ -126,6 +128,13 @@ export interface UseFollowModeReturn {
    * and calls `document.getElementById(currentAnchor)?.scrollIntoView()`.
    */
   currentAnchor: string | null;
+  /**
+   * 2026-06-02 — id of the agent node currently being built, or null when
+   * none is building. AgentPanel auto-selects this while in 'auto' mode so
+   * the Agent tab follows "正在改的那张卡" instead of staying on the first
+   * node. Mode-independent (RightPane decides whether to honour it).
+   */
+  followedNodeId: string | null;
 }
 
 /**
@@ -245,6 +254,20 @@ export function useFollowMode({
     return SUBSTEP_TO_ANCHOR[activeAgentSubstep.name] ?? null;
   }, [activeAgentSubstep]);
 
+  // 2026-06-02 — which agent is being built right now. Prefer the substep's
+  // node_id (most precise — it's literally the agent whose slots are
+  // streaming). Fall back to the last node with status === 'building'. Null
+  // when nothing is building (assembly idle / done) so AgentPanel keeps the
+  // user's current selection rather than snapping.
+  const followedNodeId: string | null = useMemo(() => {
+    if (activeAgentSubstep?.node_id) return activeAgentSubstep.node_id;
+    if (!nodes || nodes.length === 0) return null;
+    for (let i = nodes.length - 1; i >= 0; i -= 1) {
+      if (nodes[i].status === 'building' && nodes[i].id) return nodes[i].id ?? null;
+    }
+    return null;
+  }, [activeAgentSubstep, nodes]);
+
   return {
     activeTab,
     setActiveTab,
@@ -253,6 +276,7 @@ export function useFollowMode({
     followedTab,
     currentStepLabel,
     currentAnchor,
+    followedNodeId,
   };
 }
 

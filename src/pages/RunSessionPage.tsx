@@ -3326,6 +3326,7 @@ function RunSessionRightPane({ session, sessionId, onNavigate }: RunSessionRight
     followedTab,
     currentStepLabel,
     currentAnchor,
+    followedNodeId,
   } = useFollowMode({
     steps: session.steps,
     activeSubsteps: session.activeSubsteps,
@@ -3340,12 +3341,28 @@ function RunSessionRightPane({ session, sessionId, onNavigate }: RunSessionRight
   // scroll keeps the user's mental focus continuous. Only fires while the
   // user is on the Agent tab; jumping while they manually browse Overview
   // would be jarring.
+  //
+  // 2026-06-02 (Trae 式跟随) — after scrolling, flash a fading accent
+  // spotlight on the target section so the eye locks onto what's being
+  // generated. The class self-removes when the 1.6s animation ends; we also
+  // clear it on cleanup so a rapid substep stream re-triggers cleanly.
   React.useEffect(() => {
     if (!currentAnchor) return;
     if (activeTab !== 'agent') return;
+    if (followMode !== 'auto') return; // 用户锁定后不打扰
     const el = document.getElementById(currentAnchor);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [currentAnchor, activeTab]);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // restart the animation even if the class is still present
+    el.classList.remove('sf-spotlight');
+    void el.offsetWidth; // force reflow so re-adding restarts the keyframes
+    el.classList.add('sf-spotlight');
+    const t = window.setTimeout(() => el.classList.remove('sf-spotlight'), 1700);
+    return () => {
+      window.clearTimeout(t);
+      el.classList.remove('sf-spotlight');
+    };
+  }, [currentAnchor, activeTab, followMode]);
 
   // Task spec Item 8 — Header content for the right-pane toolbar:
   // run id (truncated mono) + status pill (构建中 / 已完成 / 出错).
@@ -3367,7 +3384,14 @@ function RunSessionRightPane({ session, sessionId, onNavigate }: RunSessionRight
       />
     ),
     team: <TeamPanel session={session} />,
-    agent: <AgentPanel session={session} />,
+    agent: (
+      <AgentPanel
+        session={session}
+        followNodeId={followedNodeId}
+        followActive={followMode === 'auto'}
+        onManualSelect={() => setActiveTab('agent', { lock: true })}
+      />
+    ),
     preview: (
       <PreviewPanel
         session={session}

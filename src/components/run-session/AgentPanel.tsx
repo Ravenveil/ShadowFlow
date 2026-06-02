@@ -37,9 +37,23 @@ import { useCommandK } from '../../core/hooks/useCommandK';
 
 export interface AgentPanelProps {
   session: UseRunSessionReturn;
+  /** 2026-06-02 — id of the agent currently being built (from useFollowMode).
+   *  While `followActive`, the panel auto-selects this so the view follows
+   *  "正在改的那张卡". Null when nothing is building. */
+  followNodeId?: string | null;
+  /** True when follow mode is 'auto' (not user-locked). Gates auto-select. */
+  followActive?: boolean;
+  /** Called when the user picks an agent manually — lets the parent flip
+   *  follow mode to 'locked' so auto-follow stops fighting the user. */
+  onManualSelect?: () => void;
 }
 
-const AgentPanel: React.FC<AgentPanelProps> = ({ session }) => {
+const AgentPanel: React.FC<AgentPanelProps> = ({
+  session,
+  followNodeId = null,
+  followActive = false,
+  onManualSelect,
+}) => {
   const agents = session.nodes;
   const [selectedId, setSelectedId] = useState<string>('');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -57,6 +71,24 @@ const AgentPanel: React.FC<AgentPanelProps> = ({ session }) => {
       setSelectedId(agents[0].id);
     }
   }, [agents, selectedId]);
+
+  // 2026-06-02 (Trae 式跟随) — while follow is 'auto', snap the selection to
+  // whichever agent is currently building. Only fires when the target node
+  // actually exists and differs from the current selection, so a user who
+  // locked follow (followActive=false) keeps their manual choice.
+  useEffect(() => {
+    if (!followActive) return;
+    if (!followNodeId || followNodeId === selectedId) return;
+    if (!agents.some((a) => a.id === followNodeId)) return;
+    setSelectedId(followNodeId);
+  }, [followActive, followNodeId, selectedId, agents]);
+
+  // Manual selection (roster chip / picker) → update local selection AND
+  // tell the parent to lock follow so auto-select stops overriding.
+  const handleManualSelect = (id: string) => {
+    setSelectedId(id);
+    onManualSelect?.();
+  };
 
   // ⌘K / Ctrl-K opens the picker. agent-2's useCommandK is a fire-only
   // hook ("open" trigger); the consumer (us) decides what to do — we
@@ -100,7 +132,7 @@ const AgentPanel: React.FC<AgentPanelProps> = ({ session }) => {
               agent={selectedAgent}
               agents={agents}
               selectedId={selectedId}
-              onSelectAgent={setSelectedId}
+              onSelectAgent={handleManualSelect}
               onOpenPicker={() => setPickerOpen(true)}
             />
           ) : (
@@ -114,7 +146,7 @@ const AgentPanel: React.FC<AgentPanelProps> = ({ session }) => {
         agents={agents}
         selectedId={selectedId}
         onSelect={(id) => {
-          setSelectedId(id);
+          handleManualSelect(id);
           setPickerOpen(false);
         }}
         onClose={() => setPickerOpen(false)}
