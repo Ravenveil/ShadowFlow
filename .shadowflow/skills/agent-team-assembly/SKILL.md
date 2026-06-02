@@ -43,11 +43,12 @@ triggers:
 
 ---
 
-## 📌 【Action 0 · 分流】
+## 📌 【Action 0 · 分流 + 起看板】
 1. 扫描用户输入是否含 `@skill:<id>`(或显式 skill_name)。
    - **含 → 走 Path A**,目标蓝图 = skill `<id>`。
    - **不含 → 走 Path B**,从 `{{goal}}` 设计。
-2. 读取本目录 `assembly_workflow.yaml`,按其中对应 path 的 `tasks` 执行。
+2. 读取本目录 `assembly_workflow.yaml`,按其中对应 path 的 `tasks` **逐步执行**。
+3. **一开始就打印「进度看板」,每步更新**(见末节)——这是"工作流编排"的体现,也防瞎逛。
 
 ---
 
@@ -139,7 +140,17 @@ classify mode=team → 设计 coordinator + 2~3 个开发/测试 agent → emit 
 ## 🛡️ 【Rule 出口】
 产出交付前过 `.claude/rules/assembly-rules-sync.md` 的 roster Rule(单 agent 守卫 / roster 上限,前后端孪生 `assemblyRules.ts`/`intent-router.ts`)——确定性截断,不靠你自觉。Path A 复现既定蓝图通常已合规;Path B 设计路更需 Rule 兜底。
 
-## 📺 【进度看板】
-- Path A:`定位蓝图(上下文/read_skill)→ 解析 <id> 蓝图 → 实例化 N 个角色 → 还原 DAG → 完成`。
-- Path B:`分析目标 → 挑/设计蓝图 → 配角色 → 工具 → Policy → 完成`。
-每步更新状态(⏳/✅)+ 产出。
+## 📺 【进度看板 —— 每步必更新(⏳进行 / ✅完成),这是编排感的核心】
+
+组装一开始就打印对应 path 的看板;**进入一步标 ⏳,拿到该步交付物后标 ✅,才进下一步**(一步一交付物,
+但单步内别瞎逛)。
+
+**Path A(@skill 复现):**
+| # | 阶段 | 干什么 | 交付物 | 进入下一步条件 |
+|---|---|---|---|---|
+| A0 | 定位蓝图 | 上下文有就用;没有 → `read_skill` 拉 | 蓝图文本到手 | 拿到蓝图文本 |
+| A1 | 解析蓝图 | 读出 roster + edges(`team_ref` 最权威 > module.yaml agents > agents 目录) | roster 表(N 角色)+ edges | **拿到权威成员表即可,立刻进 A2** |
+| A2 | 实例化 | 逐个 emit `<sf:node>`+`<sf:agent-persona>`,再 emit `<sf:edge>` | N 节点 + N persona + 全部边 | 全部 emit 完 |
+| A3 | 收尾 | 过 Rule 出口 → `<sf:complete/>` | 完成、daemon 落库 + 派生 PolicyMatrix | — |
+
+**Path B(纯目标设计):** B1 分析目标(classify)→ B2 设计蓝图 → B3 emit 角色+工具+DAG → B4 收尾(Rule 出口 + complete)。

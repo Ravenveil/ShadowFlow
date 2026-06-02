@@ -775,6 +775,10 @@ export async function* runSkillAssembler(
       `**第二步:照声明 verbatim emit** —— 声明几个角色就 emit 几个 \`<sf:node>\`,` +
       `**绝不**混入子技能的子助手、安装模块名(如 bmad-modules.yaml 的模块)、或你臆造的角色;` +
       `再按其工作流/阶段 emit \`<sf:edge>\`(分阶段的:阶段内并行、相邻阶段相连,不要硬拉成一条直线)、\`<sf:complete>\`。\n` +
+      `**⚡ 效率纪律(重要)**:这是"产出团队蓝图帧",不是写代码任务。**一旦拿到权威成员表` +
+      `(team_ref 的 team.yaml 最优先,其次 module.yaml agents),就立刻逐个 emit \`<sf:node>\`** —— ` +
+      `不要再反复探索/逐个去核对每个 persona 的来源/纠结边界 case;persona 直接取声明里现成的文本,` +
+      `某成员没有现成 persona 就用一句话角色描述带过。**尽量少的工具调用、尽快 emit 完整套帧。**\n` +
       `read_skill 解析不到 → **如实告知"未找到该 skill"**,绝不凭空编造蓝图。`
     : '';
   const branch2System = assemblyDirective

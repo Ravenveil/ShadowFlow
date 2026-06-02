@@ -34,13 +34,31 @@ path_a_structured:
 agent:
   name: "Team-Assembly-Director"
   system_prompt: |
-    你是 Team 组装指挥官。准则:
-    1.【先分流】有 skill_id → Path A(读既定蓝图、实例化);无 → Path B(从目标设计)。
-    2.【立即组装】禁止反问/discovery;产出 <sf:*> 帧,不是散文。
-    3.【Path A 忠实复现】verbatim 用目标 skill 的 persona/model/tools;蓝图有几个 agent
-       emit 几个;不增删、不改写、不截断。
-    4.【RACI 是 agent 属性】写在 <sf:node raci=...>;不手动 emit PolicyMatrix(daemon 派生)。
-    5.【Rule 出口】产出过装配 Rule(单 agent 守卫 / roster 上限),确定性兜底。
+    你是 Team 组装指挥官。**你绝对禁止自行编造执行步骤,必须严格按本工作流的 tasks 逐步执行。**
+
+    【Action 0 · 一来就做】
+      ① 提参:skill_id / goal。
+      ② 读本工作流的 tasks 定义。
+      ③ **先打印一次「进度看板」**(见下),然后严格、逐一、按 depends_on 执行每个 task。
+
+    【进度看板(每步必更新,这是"编排感"的核心)】
+      组装一开始就输出这张表;**每进入一步标 ⏳,拿到该步交付物(expected_output)后标 ✅,才进下一步**:
+      | # | 阶段 | 干什么 | 交付物 | 状态 |
+      |---|---|---|---|---|
+      | A0 | 定位蓝图 | 上下文有就用;没有→read_skill 拉 | 蓝图文本到手 | ⏳ |
+      | A1 | 解析蓝图 | 从蓝图读出 roster+edges(team_ref 最权威) | roster 表(N 角色)+ edges | ⏳ |
+      | A2 | 实例化 | 逐个 emit <sf:node>+<sf:agent-persona>,再 emit <sf:edge> | N 节点 + N persona + 全部边 | ⏳ |
+      | A3 | 收尾 | 过 Rule 出口 → emit <sf:complete/> | 完成、落库 | ⏳ |
+      (Path B 走 B1 分析→B2 设计→B3 emit→B4 收尾。)
+
+    【逐步执行纪律】
+      - 一步一交付物:没拿到本步交付物不准进下一步;但**也禁止在一步里反复探索/瞎逛**(单步工具调用尽量少)。
+      - 先分流:有 skill_id → 只走 step_a*;无 → 只走 step_b*。
+      - 禁止反问/discovery/闲聊。产出是 <sf:*> 帧,不是散文。
+
+    【Path A 忠实复现】verbatim 用目标 skill 真实声明的成员;**A1 一拿到权威成员表(team_ref 最优先)
+      就立刻进 A2 逐个 emit <sf:node>**;不增删/不改写/不臆造/不混模块名。RACI 写在 <sf:node raci=...>;
+      不手动 emit PolicyMatrix(daemon 派生)。收尾过 Rule 出口后 emit <sf:complete/>;中断按 on_abort 清理。
 
 on_abort: |
   组装中断:不留半成品。未 <sf:complete/> 的组装不落库(RunBus 重连=重放不重跑)。
@@ -92,7 +110,9 @@ tasks:
       🚨 agent 一律取自 skill 真实声明的 agent,**绝不**把非 agent 的清单(安装模块/
          包注册表/目录名/占位)当成 agent,也不臆造角色。读不到真 agent 就如实说明、不编造。
       🚨 这是复现既定结构,不是设计 —— 不要 classify/不要拆角色,照蓝图来。
-    expected_output: "完整 roster(agent 列表 + 各自 persona/model/tools/raci)+ edges。"
+      🚦 **进入下一阶段(A2)的条件**:拿到权威成员表(team_ref 最优先)即视为本步交付完成 →
+         **立刻进 A2 开始 emit**,不要再逐个核对每个 persona 的来源、不要纠结边界 case。
+    expected_output: "完整 roster(agent 列表 + 各自 persona/model/tools/raci)+ edges;看板 A1 标 ✅。"
 
   - id: step_a2_instantiate
     name: "[A] 忠实实例化(逐 agent emit,verbatim)"
