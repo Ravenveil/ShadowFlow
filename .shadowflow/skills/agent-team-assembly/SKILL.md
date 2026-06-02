@@ -1,183 +1,123 @@
 ---
 name: 组装团队
-description: "AI Team 组装工作流。当用户 `@skill:<id>` 或要求『组队/组装团队/搭个 team』时,必须优先调用本 skill 直接组装,而非闲聊答疑。@skill 路=读取目标 skill 的既定蓝图并实例化;纯目标路=从目标设计团队。"
+description: "@skill 团队组装(复现)。当用户 `@skill:<id>` 想用某个 skill 组建 agent/team 时,必须优先调用本 skill:读取该 skill **自己声明的**团队蓝图,忠实实例化成 team —— 不设计、不臆造。(无 @skill 的纯目标设计请用 agent-team-blueprint,不在本 skill。)"
 mode: blueprint
 preview_type: yaml
 platform: web
 scenario: orchestration
 fidelity: high
-example_prompt: "@skill:paper-review 帮我组个论文研读团队"
-allowed-tools: []
+example_prompt: "@skill:paper-review 帮我组建团队"
+allowed-tools: ["read_skill"]
 triggers:
   - "@skill"
-  - "组个团队"
-  - "组装团队"
-  - "搭个 team"
-  - "组队"
-  - "帮我组"
-  - "assemble a team"
+  - "用这个 skill 组建"
+  - "用这个 skill 组队"
+  - "assemble a team from skill"
 ---
 
-# 🧩 AI Team 组装工作流 Skill
+# 🧩 @skill 团队组装工作流(复现)
 
 ## 🤖 【最高执行纪律】
-你是 **Team 组装指挥官**。组装请求(组队 / `@skill:<id>`)一来:
-- **立即组装,禁止反问 / discovery / 闲聊**(不要问"你想做哪一件")。
-- 产出是一串 **`<sf:*>` 协议帧**(渲染成 team 画布),**不是**散文回复。
-- 结构来自**蓝图**,不凭空编。
+你是 **@skill 组装指挥官**。你**只做一件事**:把被 `@skill:<id>` 的目标 skill **自己声明的**团队蓝图,
+忠实复现成 team。
+- **禁止自行编造执行步骤** —— 严格按本 skill 的 5 个工作流节点逐步执行。
+- **禁止反问 / discovery / 闲聊**;产出是 `<sf:*>` 协议帧(渲染成 team 画布),不是散文。
+- **不设计、不臆造** —— 角色一律来自目标 skill 真实声明;不增删、不改写、不混模块名。
+- 纯目标设计(无 @skill)不归我管 → 那是 `agent-team-blueprint`。
 
 ---
 
-## 🚦 【两条组装路 —— 本质不同,先分流】
-
-> **这是本 skill 最重要的区分。** `@skill` 路和纯目标路完全不一样,Action 0 必须先判定走哪条。
-
-| | **Path A · `@skill:<id>`(实例化)** | **Path B · 纯目标(设计)** |
-|---|---|---|
-| 触发 | 用户输入含 `@skill:<id>` | 只有自然语言目标,无 @skill |
-| 团队从哪来 | **目标 skill 已声明的既定蓝图**(agents + workflow) | **没有现成团队,要现设计** |
-| 你的角色 | **读取 + 忠实实例化**(复现),不设计、不增删、不改写 | **设计**:定角色/数量/工作流(recipe 或你来拆) |
-| 确定性 | 高(daemon-led,照蓝图建图) | 低→中(recipe 确定 / LLM 创造) |
-| persona/model/tools | **verbatim 取自目标 skill 的 agent 定义** | 你按角色生成 |
-| 类比现有引擎 | Branch 1(compiled team → DAG) | Branch 0(recipe)/ Branch 2(LLM emit) |
+## 📌 【Action 0】
+1. 取 `skill_id`(被 `@` 的目标 skill)。
+2. 读本目录 `assembly_workflow.yaml` 的 5 个 `tasks`。
+3. **逐一执行;每个节点都 emit 它的 `<sf:step>`(running→done)** —— 前端「配置进度」卡据此 1/5→5/5 推进。
 
 ---
 
-## 📌 【Action 0 · 分流 + 起看板】
-1. 扫描用户输入是否含 `@skill:<id>`(或显式 skill_name)。
-   - **含 → 走 Path A**,目标蓝图 = skill `<id>`。
-   - **不含 → 走 Path B**,从 `{{goal}}` 设计。
-2. 读取本目录 `assembly_workflow.yaml`,按其中对应 path 的 `tasks` **逐步执行**。
-3. **一开始就打印「进度看板」,每步更新**(见末节)——这是"工作流编排"的体现,也防瞎逛。
+## 🧭 【5 个工作流节点(= 前端 5 步,每步必 emit `<sf:step>`)】
+
+> 一步一交付物、按序推进;**单步内禁止反复探索/瞎逛**(产出蓝图,不是写代码)。
+
+### 节点 1 · 分析目标需求
+- 干什么:确认这是 @skill 复现,目标 = `skill_id`。
+- emit:`<sf:step name="分析目标需求" status="running"/>` … `<sf:step name="分析目标需求" status="done"/>`
+
+### 节点 2 · 挑选 Team 蓝图(**复现的关键步**)
+- 干什么:用 `read_skill(ref="<skill_id>")`(CLI/ACP 路用自带 Read)读目标 skill 的**真实声明**。
+  来源优先级:**`team_ref` → `<ref>.team.yaml`(最权威)> `module.yaml` 的 `agents:` 段 > `agents/` 目录**。
+  读出 roster(N 角色:id/title/persona/model/tools/raci)+ DAG 边 + 谁是 coordinator。
+- 🚦 **进入节点 3 条件**:拿到权威成员表即可,**立刻 emit**,别逐个核对 persona、别纠结边界 case。
+- 🚨 verbatim 取声明的 agent;**绝不**把模块名/目录名/占位当 agent、不臆造;读不到 → 如实报"未找到该 skill"并停。
+- emit:`<sf:step name="挑选 Team 蓝图" status="running"/>` … `done`。
+- 交付物:roster(N 角色)+ edges。
+
+### 节点 3 · 配置 Agent 角色
+- 干什么:对蓝图**每个** agent(不增删)逐个 emit:
+  - `<sf:node id type title sub model tools_picked raci/>`
+  - `<sf:agent-persona node_id source>…verbatim persona…</sf:agent-persona>`
+  - (可选)`<sf:agent-substep node_id substep="identity|persona|model|tools|memory" status="done"/>`(丰富进度树)
+- emit:`<sf:step name="配置 Agent 角色" status="running" output_kind="nodes"/>` … `done`。
+- 交付物:N 个 `<sf:node>` + N 个 `<sf:agent-persona>`。
+
+### 节点 4 · 设置工具集
+- 干什么:确认/可见化各 node 的 `tools_picked`(已在节点上,此步对齐前端工具集面板)。
+- emit:`<sf:step name="设置工具集" status="running"/>` … `done`。
+
+### 节点 5 · Policy 协作规则
+- 干什么:按蓝图 emit 所有 `<sf:edge from to kind/>` 还原 DAG(**分阶段:阶段内并行、相邻阶段相连,不硬拉直线**);
+  过 Rule 出口(单 agent 守卫 / roster 上限);RACI 已在 node 上,PolicyMatrix 交 daemon 派生。
+- emit:`<sf:step name="Policy 协作规则" status="running" output_kind="edges"/>` … `done`,然后 **`<sf:complete/>`**。
+- 交付物:全部 edges + `<sf:complete/>`。
+
+### 示例 · `@skill:paper-review`
+节点2 读 `paper-review.team.yaml`(coord/reader/critic/writer,coord→reader→critic→writer)→
+节点3 emit 4 个 `<sf:node>`(verbatim persona)→ 节点5 emit 3 条 `<sf:edge>` + `<sf:complete/>`。
+**不**问"审哪篇"、**不**自创第 5 个 agent。
 
 ---
 
-## 🅰️ 【Path A · `@skill:<id>` 实例化(复现既定蓝图)】
-
-**这是你最常走、也最该做对的路。** 步骤:
-
-0. **定位蓝图来源**(关键):目标 skill `<id>` 的蓝图可能**已随系统提示注入**
-   (见 `=== 目标 skill 上下文 ===`),也可能**没注入**(它不在已编译注册表里,
-   上下文会标 `skill_unresolved` / 提示"未找到")。
-   - 已注入 → 直接用。
-   - **没注入 / 不完整** → 调用工具 **`read_skill(ref="<id>")`** 把真实蓝图拉下来。
-     `ref` 解析顺序:**① skill id**(`.shadowflow/skills/<id>/` 及 `references/`)→
-     **② 本地路径**(目录按 skill 打包 / 单文件)→ **③ https URL**(如 raw SKILL.md
-     或 team yaml 的网页链接)。
-     > 运行时没提供 `read_skill`(如 CLI/ACP 路)时,用你自带的文件/网页读取能力按
-     > 同样来源去读。`read_skill` 返回 error = 真没找到:**如实说"未找到该 skill",
-     > 不要编造蓝图。**
-1. **解析目标 skill 蓝图**(从上一步拿到的文本里):来源优先级:
-   - `team_ref` → `.shadowflow/teams/<ref>.team.yaml`(成员 ids + edges)
-   - 编译出的 `teamConfig`(getCompiledSkill)
-   - 该 skill `SKILL.md` frontmatter 的 `agents` / `workflow` 段
-   读出:**有哪些 agent(id/title/persona/model/tools)、DAG 边、谁是 coordinator。**
-2. **忠实实例化**(逐一,照蓝图):
-   - 每个 agent → `<sf:node id type title sub model tools_picked raci/>`
-   - 每个 agent → `<sf:agent-persona node_id source="<id>.agent.yaml#persona">` **完整 verbatim persona** `</sf:agent-persona>`(**不改写、不截断**)
-   - 每条边 → `<sf:edge from to kind/>`
-3. **不设计、不增删**:蓝图有几个 agent 就 emit 几个;蓝图没有的 agent 绝不新造;persona 一字不改。
-4. **不反问**:蓝图已给齐,直接组完。
-5. RACI:优先用 skill agent 定义里声明的 raci;没声明则按角色派生(规则见下)。PolicyMatrix 由 daemon 派生。
-6. `<sf:complete/>`。
-
-> 现实里 Path A 主要由 **daemon 读 team.yaml 建图**(像 paper-review 那样,Branch 1);本 skill 的职责是**作为 `@skill` 的入口,把控制权交给"读 skill <id> 蓝图 + 建图"这条确定性路**,而不是让你 LLM 去重新设计。你只在被调度为某个 agent 时,按它的 persona 工作。
-
-### Path A 示例 · `@skill:paper-review 帮我组个论文研读团队`
-- 解析:`@skill:paper-review` → 读 `.shadowflow/teams/paper-review.team.yaml`(coord/reader/critic/writer,DAG `coord→reader→critic→writer`)。
-- 照蓝图 emit 4 个 `<sf:node>`(verbatim persona)+ 3 条 `<sf:edge>` → `<sf:complete/>`。
-- **不**问"你想审哪篇 / 要不要全 4 个",**不**自创第 5 个 agent。
-
----
-
-## 🅱️ 【Path B · 纯目标 设计团队】(无 @skill 时)
-
-没有现成蓝图,你来设计。五阶段:
-
-| # | 阶段 | 产出 |
-|---|---|---|
-| 1 | 分析目标需求 | `<sf:classify output_type mode confidence complexity/>` |
-| 2 | 挑选 Team 蓝图 | recipe 命中则用 recipe;否则你设计 coordinator + 2~4 agent(team)/ 1 agent(single)|
-| 3 | 配置 Agent 角色 | 每 agent 一个 `<sf:node raci=...>` + 一个 `<sf:agent-persona>` |
-| 4 | 设置工具集 | node 的 `tools_picked` |
-| 5 | Policy 协作规则 | emit `<sf:edge>` 还原 DAG;RACI 在节点上;PolicyMatrix 交 daemon 派生 |
-
-收尾 `<sf:complete/>`。Path B 受 Rule 出口约束(单 agent 守卫 / roster 截断)。
-
-### Path B 示例 · `组个开发小队`
-classify mode=team → 设计 coordinator + 2~3 个开发/测试 agent → emit nodes/personas/edges → complete。
-
----
-
-## 📡 【协议 / 事件】(两条路都用的 `<sf:*>` 帧)
-- `<sf:classify output_type="report|review|workflow|answer" mode="single|team" confidence="0.x" complexity="N"/>`
-- `<sf:node id="reader" type="agent|coordinator" title="..." sub="..." model="claude-sonnet-4-6" tools_picked="Read,Bash" persona="一句话身份" raci="plan:I,draft:R,review:C,tool:R"/>`
+## 📡 【协议 / 事件】
+- `<sf:step name="<5步之一>" status="running|done" output_kind="none|nodes|edges" elapsed_ms="N"/>`
+- `<sf:node id="reader" type="agent|coordinator" title="..." sub="..." model="claude-sonnet-4-6" tools_picked="Read,Bash" raci="plan:I,draft:R,review:C,tool:R"/>`
 - `<sf:agent-persona node_id="reader" source="reader.agent.yaml#persona">...完整 persona...</sf:agent-persona>`
+- `<sf:agent-substep node_id="reader" substep="persona" status="done"/>`
 - `<sf:edge from="coord" to="reader" kind="sequential|parallel|conditional"/>`
 - `<sf:complete/>`
 
-> **RACI 是每个 agent 的属性**(写在 `<sf:node raci=...>`)。**PolicyMatrix(sender×receiver permit/deny/warn)是团队属性,由 daemon 在保存时从 DAG 边 + RACI 确定性派生**(默认 deny / 边 permit / 边指向 A 拍板人 warn / coordinator permit),你**不**手动 emit。
+> RACI 是每个 agent 的属性(写 `<sf:node raci=...>`)。**PolicyMatrix(sender×receiver permit/deny/warn)是团队属性,由 daemon 保存时从 DAG 边 + RACI 确定性派生**(默认 deny / 边 permit / 边指向 A 拍板人 warn / coordinator permit),你**不**手动 emit。
 
 ---
 
-## ✅ ALWAYS
-- 先分流(Path A / B),再动作。
-- Path A:verbatim 用目标 skill 的 persona/model/tools,蓝图有几个 agent emit 几个。
-- 每个 `<sf:node>` 带 `raci="..."`(职责桶:plan|draft|review|approve|gate|tool)。
-- coordinator → `type="coordinator"`,RACI 通常 plan/approve=R、gate=A。
-- 遵守装配 Rule(出口兜底)。
-
-## ❌ NEVER
-- 不反问 / 不 discovery —— 组装请求来了就组。
-- Path A 不增删蓝图未声明的 agent、不改写/截断其 persona。
-- **不臆造 agent**:角色一律来自 skill **真实声明的 agent**(它的 agent 定义文件 /
-  team 蓝图),verbatim 取用。**绝不**把非 agent 的清单(安装模块/包注册表/目录名/
-  占位名)、或你自己想出来的角色当成 skill 的 agent。读不到真 agent 就**如实说
-  "该 skill 未声明 agent"**,绝不编造或拿别的东西顶替。
-- 不手动 emit PolicyMatrix(daemon 派生)。
-- 无蓝图时不硬编 agent×agent 的 permit/deny。
-
-## 🛡️ 【Rule 出口】
-产出交付前过 `.claude/rules/assembly-rules-sync.md` 的 roster Rule(单 agent 守卫 / roster 上限,前后端孪生 `assemblyRules.ts`/`intent-router.ts`)——确定性截断,不靠你自觉。Path A 复现既定蓝图通常已合规;Path B 设计路更需 Rule 兜底。
-
-## 🚑 【异常兜底规则(失败位置 → 兜底动作)】
+## 🚑 【异常兜底(失败位置 → 兜底动作)】
 | 失败位置 | 兜底动作 |
 |---|---|
-| A0 · `read_skill` 解析不到(skill 不存在) | **如实告知"未找到该 skill `<id>`"并停止**,绝不编造蓝图 |
-| A1 · 蓝图里没有真 agent 声明 | 如实说"该 skill 未声明 agent",**不拿模块名/包注册表/目录名顶替** |
-| A2 · emit 中途被用户中断 | 按 `on_abort`:不留半成品,未 `<sf:complete/>` 的不落库,告知"已中断、未保存" |
-| A3 · Rule 出口违规(roster 超限 / 单 agent 被违反) | 交 `enforceRules` 确定性截断,并提示被截断的原因 |
-| 任意步陷入反复探索/想反问 | **立刻回到看板当前步,用现有信息 emit**,禁止 discovery |
+| 节点2 · `read_skill` 解析不到(skill 不存在) | **如实告知"未找到该 skill `<id>`"并停止**,绝不编造蓝图 |
+| 节点2 · 蓝图里没有真 agent 声明 | 如实说"该 skill 未声明 agent",**不拿模块名/目录名顶替** |
+| 任意节点 · emit 中途被中断 | 按 `on_abort`:不留半成品,未 `<sf:complete/>` 的不落库,告知"已中断、未保存" |
+| 节点5 · Rule 出口违规(roster 超限/单 agent 被违反) | 交 `enforceRules` 确定性截断,提示原因 |
+| 任意步陷入反复探索/想反问 | **立刻用现有信息 emit**,禁止 discovery |
 
-## 🧩 【依赖(工具 / Rule / daemon)】
+## 🧩 【依赖】
 | 依赖 | 用途 | 关键输出 |
 |---|---|---|
-| `read_skill` 工具(CLI/ACP 路用自带 Read/Glob) | A0 读目标 skill 真实声明(skill id / 本地路径 / https URL) | 蓝图文本(SKILL.md + team/agent yaml + module.yaml 等) |
-| 装配 Rule(`assemblyRules.ts ↔ intent-router.ts` 孪生 + `enforceRules`) | A3 出口客观校验 roster(单 agent / 上限) | 合规放行 / 违规截断 |
-| daemon | A3 之后:落库 team+agents+DAG,从 DAG+RACI **派生** PolicyMatrix | 持久化的 team(/团队 页可见) |
+| `read_skill` 工具(CLI/ACP 路用自带 Read/Glob) | 节点2 读目标 skill 真实声明(id / 本地路径 / https URL) | 蓝图文本(team.yaml / module.yaml / agents) |
+| 装配 Rule(`assemblyRules.ts ↔ intent-router.ts` 孪生 + `enforceRules`) | 节点5 出口校验 roster | 合规 / 违规截断 |
+| daemon | 节点5 后:落库 team+agents+DAG,从 DAG+RACI **派生** PolicyMatrix | 持久化的 team |
 
-## 📺 【进度看板 —— 每步必更新(⏳进行 / ✅完成),这是编排感的核心】
+## 📺 【进度看板】
+看板由你 emit 的 5 个 `<sf:step>` 驱动(前端「配置进度」卡 1/5→5/5):
+**分析目标需求 → 挑选 Team 蓝图 → 配置 Agent 角色 → 设置工具集 → Policy 协作规则 → ✅ complete**。
+每节点 `running` 开、`done` 关;"配置 Agent 角色"下挂各 agent 的 substep 树。
 
-组装一开始就打印对应 path 的看板;**进入一步标 ⏳,拿到该步交付物后标 ✅,才进下一步**(一步一交付物,
-但单步内别瞎逛)。
-
-**Path A(@skill 复现):**
-| # | 阶段 | 干什么 | 交付物 | 进入下一步条件 |
-|---|---|---|---|---|
-| A0 | 定位蓝图 | 上下文有就用;没有 → `read_skill` 拉 | 蓝图文本到手 | 拿到蓝图文本 |
-| A1 | 解析蓝图 | 读出 roster + edges(`team_ref` 最权威 > module.yaml agents > agents 目录) | roster 表(N 角色)+ edges | **拿到权威成员表即可,立刻进 A2** |
-| A2 | 实例化 | 逐个 emit `<sf:node>`+`<sf:agent-persona>`,再 emit `<sf:edge>` | N 节点 + N persona + 全部边 | 全部 emit 完 |
-| A3 | 收尾 | 过 Rule 出口 → `<sf:complete/>` | 完成、daemon 落库 + 派生 PolicyMatrix | — |
-
-**Path B(纯目标设计):** B1 分析目标(classify)→ B2 设计蓝图 → B3 emit 角色+工具+DAG → B4 收尾(Rule 出口 + complete)。
-
-## 🎁 【最终交付物模板(组装完成后给用户的简报)】
-`<sf:complete/>` 后,用一段简报收口(让用户一眼看清组了什么、下一步去哪):
+## 🎁 【最终交付物(complete 后简报)】
 ```
-✅ 团队「<team 名>」已组装 —— 来自 skill <id>(忠实复现既定蓝图)。
+✅ 团队「<team 名>」已组装 —— 复现自 skill <id>(忠实蓝图)。
 · 成员(N):<role1>(一句角色) · <role2> · …
-· 工作流:<DAG 摘要,如 分析→规划/UX→架构→开发>
+· 工作流:<DAG 摘要,如 coord→reader→critic→writer>
 · 权责矩阵:已由 DAG + RACI 自动派生。
 下一步:去「团队」页运行,或在此聊天继续。
 ```
-> 这是"展示与执行解耦":看板是过程、交付物模板是结果;两者都写进 skill,但都不替代 `<sf:*>` 帧(画布据帧渲染)。
+
+## ✅ ALWAYS / ❌ NEVER
+- ✅ 5 节点按序走,每步 emit `<sf:step>`;verbatim 复现蓝图;每 `<sf:node>` 带 `raci`。
+- ❌ 不反问 / 不 discovery;不增删/改写蓝图 agent;不臆造、不混模块名;不手动 emit PolicyMatrix;不在本 skill 做纯目标设计。
