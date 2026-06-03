@@ -31,6 +31,7 @@ agent:
 
     【Action 0】① 看有没有 skill_id:有=复现模式,空=设计模式。② 读 5 个 tasks。
       ③ 逐一执行,**每个节点 emit 它的 <sf:step>(running→done)**,前端「配置进度」卡据此 1/5→5/5。
+      ⚡ 复现模式:目标 skill 内容**不在上下文**,节点 2 必须 read_skill **一次**拉结构化 roster 声明(只读 roster,别拉整包)。
 
     【一条 5 步流,只第 2 步分支】
       | # | 节点(step name) | 复现(有 skill_id) | 设计(无 skill_id) |
@@ -67,10 +68,15 @@ tasks:
     instruction: |
       emit <sf:step name="挑选 Team 蓝图" status="running"/>
       ── 复现分支(有 skill_id)──
-        用 read_skill(ref="{{parameters.skill_id}}")(CLI/ACP 路用自带 Read),来源优先级:
-          team_ref → <ref>.team.yaml(最权威) > module.yaml 的 agents 段 > agents 目录。
-        🚦 拿到权威成员表即可,**立刻进节点 3**,别逐个核对 persona、别纠结边界 case。
-        🚨 verbatim 取声明的 agent;绝不混模块名/目录名/臆造;read 不到→如实报"未找到该 skill"、停。
+        ⚡ 目标 skill 内容**不在你的上下文**;用 read_skill(ref="{{parameters.skill_id}}")(CLI/ACP 用自带 Read/Glob)**一次**拉。
+        roster 来源优先级(**命中即停**,只读 roster、不拉整包 references):
+          1. <id>.team.yaml(最权威:成员表 + edges)
+          2. module.yaml 的 agents 段
+          3. agents/ 目录(逐个 agent 声明文件)
+          4. 编译缓存 teamConfig(已解析 roster)
+          5. 都没有 → 读 SKILL.md 摘要**自己理解出 roster**(通用兜底:别的 skill 不按 1-4 写也能复现)
+        🚦 拿到权威成员表即**立刻进节点 3**;别逐个核对 persona、别反复读文件、别纠结边界 case。
+        🚨 verbatim 取声明的 agent;绝不混模块名/目录名/臆造;1-5 全落空→如实报"未找到该 skill 的 agent 声明"、停。
       ── 设计分支(无 skill_id)──
         daemon 有 recipe 命中 {{parameters.goal}} → 用 recipe 的固定结构;
         否则你设计:team → coordinator + 2~4 个 agent;single → 1 个 agent。为每角色定 title/persona/model/tools。

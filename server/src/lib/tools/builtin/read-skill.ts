@@ -34,6 +34,7 @@ import path from 'path';
 import type { ToolSpec } from '../../tool-spec';
 import type { ToolExecutor, ToolExecResult } from '../../tool-runner';
 import { readSkill } from '../../../skill-reader';
+import { getCompiledSkill } from '../../skill-compiler';
 
 export const readSkillTool: ToolSpec = {
   name: 'read_skill',
@@ -87,6 +88,34 @@ async function bundleSkillDir(dir: string, refId: string): Promise<string | null
   } catch {
     return null;
   }
+}
+
+/**
+ * Format a compiled team config into a compact, verbatim-ish roster blob the
+ * assembly LLM can replay node-by-node. This is the "structured roster" source
+ * (a few KB) that beats bundling 184 docs: it's the already-parsed members +
+ * personas + DAG edges. Used when a skill's agents live in non-standard paths
+ * (e.g. BMAD → `agent_files` empty) so `read_skill` still returns a real roster.
+ */
+export function formatTeamRoster(tc: {
+  name?: string;
+  members_ids: string[];
+  members_personas: Record<string, string>;
+  edges_v1: Array<{ from: string; to: string; kind?: string }>;
+}): string {
+  const lines: string[] = [
+    `=== compiled team roster: ${tc.name ?? '(unnamed)'} — ${tc.members_ids.length} members ===`,
+  ];
+  for (const id of tc.members_ids) {
+    lines.push(`\n--- agent: ${id} ---\n${tc.members_personas[id] ?? id}`);
+  }
+  if (tc.edges_v1?.length) {
+    lines.push(`\n=== edges (DAG) ===`);
+    for (const e of tc.edges_v1) {
+      lines.push(`${e.from} -> ${e.to}${e.kind ? ` [${e.kind}]` : ''}`);
+    }
+  }
+  return lines.join('\n');
 }
 
 // ── URL fetch (https-only, private-host blocked, size-capped) ────────────────
@@ -164,7 +193,30 @@ export const readSkillToolExecutor: ToolExecutor = {
       /* fall through to id resolution */
     }
 
-    // 3. Installed skill id → .shadowflow/skills/<id>[/references], then teams yaml.
+    // 3. Compiled-team cache → structured roster (members + personas + DAG edges).
+    //    最可靠的 roster 来源:已解析、几 KB。优先于磁盘 bundle,尤其对 agents 在非常规
+    //    路径的 skill(BMAD: agent_files=0)—— 否则 read_skill 拿不到 agent 声明、复现失败。
+    //    (= 组装 skill 优先级链第 4 级,但工具内提前:编译缓存等价于已解析的 team.yaml。)
+    try {
+      const compiled = await getCompiledSkill(ref);
+      if (compiled?.mode === 'team' && compiled.teamConfig) {
+        const { content, truncated } = cap(formatTeamRoster(compiled.teamConfig));
+        return {
+          output: {
+            ref,
+            source: 'compiled-team',
+            skill_id: ref,
+            members: compiled.teamConfig.members_ids.length,
+            truncated,
+            content,
+          },
+        };
+      }
+    } catch {
+      /* 编译缓存读失败 → fall through 到磁盘 bundle */
+    }
+
+    // 4. Installed skill id → .shadowflow/skills/<id>[/references], then teams yaml.
     for (const root of repoRoots()) {
       for (const sub of [
         path.join(root, '.shadowflow', 'skills', ref),

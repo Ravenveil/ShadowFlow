@@ -63,6 +63,7 @@ import { selectRecipe } from './assembly/select';
 import { deriveRules, enforceRules } from './assembly/rules/enforce';
 // 待决1 — Path A 轻量闸门:只尊重"用户显式要 1 个 agent"的意图(其余 verbatim 不砍)。
 import { detectExplicitSingleAgent } from './lib/intent-router';
+import { shouldOrchestrate } from './lib/assembly-routing';
 import type { RosterNode } from './assembly/rules/types';
 import type { AssemblyRecipe } from './assembly/skills/types';
 import type { TeamDef } from './lib/skill-types';
@@ -475,10 +476,22 @@ async function* emitCompiledTeamBlueprint(
       ? [teamConfig.members_ids.find((id) => /coord/i.test(id)) ?? teamConfig.members_ids[0]]
       : teamConfig.members_ids;
   const emitEdges = !singleAgent;
+  // 2026-06-02 — 确定性复现路也驱动前端「配置进度」5 步卡(与统一组装 skill 同名,
+  // 这条不经 parser,故直接 yield `assemble` 事件)。emit 是瞬时的,逐步 running→done。
+  const step = (name: string, status: 'running' | 'done', output_kind = 'none') =>
+    ({ event: 'assemble' as const, data: { step: name, status, output_kind, source: 'compiled-skill-team' } });
+
+  yield step('分析目标需求', 'running');
   yield {
     event: 'classify',
     data: { output_type: 'workflow', mode: singleAgent ? 'single' : 'team', confidence: 0.98, complexity: Math.min(5, Math.max(1, memberIds.length)), source: 'compiled-skill-team' },
   };
+  yield step('分析目标需求', 'done');
+
+  yield step('挑选 Team 蓝图', 'running');
+  yield step('挑选 Team 蓝图', 'done');
+
+  yield step('配置 Agent 角色', 'running', 'nodes');
   for (const id of memberIds) {
     const a = byId.get(id);
     const persona = a?.persona ?? teamConfig.members_personas[id] ?? `Agent ${id}`;
@@ -505,11 +518,19 @@ async function* emitCompiledTeamBlueprint(
       data: { node_id: id, persona, source: a?.anchors?.persona?.ref ?? `<compiled>#${id}/persona`, cached: true },
     };
   }
+  yield step('配置 Agent 角色', 'done');
+
+  yield step('设置工具集', 'running');
+  yield step('设置工具集', 'done');
+
+  yield step('Policy 协作规则', 'running', 'edges');
   if (emitEdges) {
     for (const e of teamConfig.edges_v1) {
       yield { event: 'edge', data: { from: e.from, to: e.to, status: 'active' } };
     }
   }
+  yield step('Policy 协作规则', 'done');
+
   yield {
     event: 'complete',
     data: { session_id, run_id: `run-${session_id.slice(0, 8)}` },
@@ -574,8 +595,9 @@ export async function* runSkillAssembler(
   // 2026-06-02 合并:**统一 orchestrator** —— 组装的 LLM 编排路对两种模式都执行同一份
   // agent-team-assembly(一条 5 步流,第 2 步按 skill_id 分支:有=复现读声明 / 无=设计)。
   // recipe 命中的设计仍走 Branch 0 确定性快路;@skill 不看 recipe(复现优先)。
+  // ⚠️ orchestrate 在下方 `compiled` 解析后才最终确定 —— 已确定性编译出 team 的 skill
+  // (如 BMAD→10 真 agent)走 Branch 1 的 instant+忠实 emit,LLM 编排器仅在无现成蓝图时兜底。
   const matchedRecipe = explicit_skill ? null : selectRecipe(goal);
-  const orchestrate = llmAvailable && (!!explicit_skill || !matchedRecipe);
 
   console.log(
     `[skill-assembler] session=${session_id} executor=${executor}` +
@@ -660,9 +682,23 @@ export async function* runSkillAssembler(
     }
   }
 
+  // 2026-06-02 优化(assembly-skill-optimize-plan §3.0):@skill = 复现意图 → **优先走统一组装
+  // skill 工作流(read_skill 复现)**,不被编译缓存短路。旧逻辑的 hasCompiledTeam 把 @BMAD 短路到
+  // emitCompiledTeamBlueprint、5 步 yaml 一行没执行,正是"没按工作流走"的根因。编译缓存降级为:
+  // ① 无 LLM 离线兜底(下方 Branch 1 的 explicit_skill OFFLINE)② read_skill 第 4 级回退源。
+  // 判定抽到 lib/assembly-routing.ts(纯函数,见 __tests__/assembly-routing.test.ts)。
+  const hasCompiledTeam = !!(compiled?.mode === 'team' && compiled.teamConfig);
+  const hasLegacyTeam = !!skill.team;
+  const orchestrate = shouldOrchestrate({
+    llmAvailable,
+    explicitSkill: !!explicit_skill,
+    matchedRecipe: !!matchedRecipe,
+    hasCompiledTeam,
+    hasLegacyTeam,
+  });
+
   // Branch 1 — compiled team config → DAG scheduler.
   // (Phase 2 decisions A3 / A2 preserved: daemon-led DAG + artifact handoff.)
-  // `orchestrate`(C):explicit_skill + 有 LLM → 放行到 Branch 2 的 LLM 编排器(不走下面任何确定性/执行路)。
   if (compiled?.mode === 'team' && compiled.teamConfig && !orchestrate) {
     const synthAgents = synthAgentsFromCompiled(compiled.teamConfig);
     const teamV1 = toTeamDefV1FromCompiled(compiled.teamConfig, synthAgents);
@@ -778,13 +814,11 @@ export async function* runSkillAssembler(
       `(single 则 1 个)。逐个 emit \`<sf:node>\`+\`<sf:agent-persona>\`,再 emit \`<sf:edge>\` 还原 DAG、\`<sf:complete>\`。` +
       `受 Rule 出口约束(单 agent 守卫 / roster 上限)。`;
   }
-  // orchestrate → 统一 directive 驱动(复现附目标 skill 上下文;设计只给 goal,不再附旧 blueprint prompt)。
-  // 非 orchestrate(无 LLM 兜底等)→ 用 baseSystem(旧 prompt),保持原行为。
-  const branch2System = !orchestrate
-    ? baseSystem
-    : explicit_skill
-      ? `${assemblyDirective}${toolHint}\n\n=== 目标 skill 上下文(${skill_name})===\n${baseSystem}`
-      : `${assemblyDirective}${toolHint}`;
+  // 2026-06-02 优化 §3.1:复现模式**不再**把目标 skill raw bundle(BMAD=512KB/184 doc)拼进 system
+  // prompt —— CLI `-p` 模式啃半兆字符 → 27s 卡死不 emit 的根因。改由 LLM 在节点 2 用 read_skill
+  // 按需拉结构化 roster 声明(几 KB,见 toolHint 的复现指引)。orchestrate 两模式都只放统一
+  // directive + toolHint。非 orchestrate(无 LLM 离线兜底)→ 仍用 baseSystem 保持原行为。
+  const branch2System = !orchestrate ? baseSystem : `${assemblyDirective}${toolHint}`;
 
   // Round 4 PR-D — when the compiled agentConfig advertises tools AND the
   // resolved transport is a direct ApiClient (anthropic-direct / byok:*),
