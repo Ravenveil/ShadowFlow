@@ -3314,11 +3314,13 @@ interface RunSessionRightPaneProps {
    *  the "去聊天" CTA navigates to /chat/<id>; otherwise it falls back to
    *  /chat with a console placeholder. */
   chatGroupId: string | null;
+  /** Auto-save state — dock is only shown when 'ok' (team fully persisted). */
+  saveState: 'idle' | 'saving' | 'ok' | 'failed' | 'need-workspace';
 }
 
 // 2026-06-02 — 右下角常驻「去聊天」悬浮按钮加回（用户要求）。run 完成后从这里
 // 直接进入本次 run 关联的 chat 群（chatGroupId），无群时兜底跳 /chat。
-function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: RunSessionRightPaneProps) {
+function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId, saveState }: RunSessionRightPaneProps) {
   const { t } = useI18n();
   const {
     activeTab,
@@ -3448,40 +3450,45 @@ function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: Ru
 
       {/* Right-bottom dock — single primary CTA. Anchored absolute so the
           panels keep their natural height and the dock floats above them.
-          2026-06-02 — 按用户要求加回（曾于 2026-05-29 删除）。 */}
-      <div
-        style={{
-          position: 'absolute',
-          right: 20,
-          bottom: 20,
-          zIndex: 5,
-          display: 'flex',
-          gap: 8,
-        }}
-      >
-        <button
-          type="button"
-          onClick={handleGoToChat}
-          data-testid="run-session-go-to-chat"
+          2026-06-02 — 按用户要求加回（曾于 2026-05-29 删除）。
+          Phase 0 guard: only show when team is fully persisted (saveState===ok)
+          to prevent the forward CTA misleading the user when save failed or
+          no workspace was selected yet. */}
+      {saveState === 'ok' && (
+        <div
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '8px 14px',
-            borderRadius: 8,
-            background: 'var(--t-accent)',
-            color: 'var(--t-accent-ink, #fff)',
-            border: 'none',
-            fontSize: 12.5,
-            fontWeight: 600,
-            cursor: 'pointer',
-            boxShadow: '0 4px 14px rgba(0,0,0,.22)',
-            fontFamily: 'inherit',
+            position: 'absolute',
+            right: 20,
+            bottom: 20,
+            zIndex: 5,
+            display: 'flex',
+            gap: 8,
           }}
         >
-          {t('projects.artifactsEmptyCta')}
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={handleGoToChat}
+            data-testid="run-session-go-to-chat"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 14px',
+              borderRadius: 8,
+              background: 'var(--t-accent)',
+              color: 'var(--t-accent-ink, #fff)',
+              border: 'none',
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(0,0,0,.22)',
+              fontFamily: 'inherit',
+            }}
+          >
+            {t('projects.artifactsEmptyCta')}
+          </button>
+        </div>
+      )}
     </section>
   );
 }
@@ -3926,7 +3933,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           fontSize: 12, color: 'var(--t-fg-2, #D4D4D8)',
         }}
       >
-        <span>把这个团队和 Agent 保存到哪个工作区？</span>
+        <span>⚠ 蓝图已生成，尚未保存 — 选/建工作区后才能持久化团队与 Agent</span>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <input type="radio" name="rs-ws" checked={wsPickMode === 'existing'} onChange={() => setWsPickMode('existing')} />
           已有
@@ -4261,6 +4268,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
             sessionId={sessionId}
             onNavigate={onNavigate}
             chatGroupId={savedGroupId}
+            saveState={saveState}
           />
         )}
       </div>
