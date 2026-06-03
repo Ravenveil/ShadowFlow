@@ -42,6 +42,18 @@ const router = Router();
 /** Cap fan-out to match Python `_chat_bridge._MAX_FANOUT_AGENTS`. */
 const MAX_FANOUT_AGENTS = 5;
 
+// Phase 2b · B6/B3-min:按 group 持有当前 DAG 运行的 AbortController。新一轮 fanout 开始时
+// abort 上一轮(用户插话即取消上一轮在跑的 DAG),并在结束时清理。
+const activeDagRuns = new Map<string, AbortController>();
+
+// 测试可见:登记本轮 controller 并取消同 group 上一轮,返回本轮 controller。
+export function swapDagRun(groupId: string, registry: Map<string, AbortController>): AbortController {
+  registry.get(groupId)?.abort();
+  const ac = new AbortController();
+  registry.set(groupId, ac);
+  return ac;
+}
+
 interface GroupRecord {
   group_id: string;
   agent_ids?: string[];
@@ -218,8 +230,8 @@ async function runFanout(
 
   // 2026-06-03 Phase 2a — group 绑了 team 且能读到单一真源 DAG → 按拓扑调度多 agent。
   // 读不到 team(无 team_id / 文件缺失 / 无成员)→ 落到下面的串行 fan-out 降级。
-  // ⚠ Phase 2b 加固待办:DAG 路径暂未套用 MAX_FANOUT_AGENTS 并发上限(同层 Promise.all 可能并发大团队)、
-  //   AbortController 未外部取消、无节点超时/僵死检测。Phase 2a 只做拓扑调度正确性;并发与常驻加固见 2b。
+  // ⚠ Phase 2b 剩余(本轮已落:并发上限/外部取消/节点超时/重试):B2 中断恢复(run 状态落盘+重启续跑)、
+  //   B3 完整插话续跑(本轮只做"新消息→取消上一轮"最小语义)仍待后续。
   if (shouldRunTeamDag(group)) {
     const { team } = loadTeamForRun(group.team_id!);
     if (team && team.members.length > 0) {
@@ -229,17 +241,19 @@ async function runFanout(
       const userPrompt =
         latestUser0?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('') ?? '';
 
+      const dagController = swapDagRun(groupId, activeDagRuns);
+
       const deps: RunTeamDagDeps = {
         getAgent: async (agentId) => {
           const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
           return a ? { name: a.name || agentId, soul: a.soul ?? '' } : null;
         },
-        callAgent: async ({ soul, upstream }) => {
-          // 仅用 soul/upstream:agent 名由 runTeamDagFanout 通过独立 postMessage dep 落库(已带 agent.name),此处无需 agentId/name。
+        callAgent: async ({ soul, upstream, signal }) => {
+          // 仅用 soul/upstream/signal:agent 名由 runTeamDagFanout 经独立 postMessage 落库。
+          // signal 来自 runNodeWithPolicy 的 per-attempt 控制器(超时/外部取消即 fire)→ 取消在飞 turn。
           const upstreamText = upstream.length
             ? `\n\n=== 上游 agent 产出 ===\n${upstream.map((u) => `[${u.from}]\n${u.text}`).join('\n\n')}`
             : '';
-          const ctrl = new AbortController();
           let buf = '';
           let errMsg = '';
           try {
@@ -248,7 +262,7 @@ async function runFanout(
               system: soul,
               prompt: userPrompt + upstreamText,
               history: history0.slice(0, -1),
-              signal: ctrl.signal,
+              signal,
               model,
             })) {
               if (chunk.type === 'text-delta') buf += sseWireToText(chunk.value);
@@ -270,7 +284,16 @@ async function runFanout(
           }).catch(() => {});
         },
       };
-      await runTeamDagFanout(team, deps, userPrompt);
+      try {
+        await runTeamDagFanout(team, deps, userPrompt, {
+          signal: dagController.signal,
+          maxConcurrency: MAX_FANOUT_AGENTS,
+          // nodeTimeoutMs/defaultMaxRetries 用 runTeamDagFanout 默认值(120s / 1)。
+        });
+      } finally {
+        // 仅当注册表里仍是本 controller 时才删(避免误删后来者)。
+        if (activeDagRuns.get(groupId) === dagController) activeDagRuns.delete(groupId);
+      }
       return;
     }
   }
