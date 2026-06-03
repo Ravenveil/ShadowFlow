@@ -29,7 +29,7 @@ describe('runNodeWithPolicy', () => {
   });
 
   it('超时(call 挂起超过 timeoutMs)→ reason=timeout(用尽重试)', async () => {
-    const r = await runNodeWithPolicy((sig) => hang(sig), { timeoutMs: 20, maxRetries: 1, signal: new AbortController().signal });
+    const r = await runNodeWithPolicy((sig) => hang(sig), { timeoutMs: 50, maxRetries: 1, signal: new AbortController().signal });
     expect(r.reason).toBe('timeout');
     expect(r.attempts).toBe(2); // 初次 + 1 重试都超时
   });

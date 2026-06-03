@@ -20,6 +20,7 @@ export interface NodeRunResult {
 
 export interface NodePolicy {
   timeoutMs: number;
+  /** 首次之外的额外重试次数(>= 0)。maxRetries:0 = 只试一次。 */
   maxRetries: number;
   signal: AbortSignal;
 }
@@ -48,12 +49,17 @@ export async function runNodeWithPolicy(
     policy.signal.addEventListener('abort', onExternalAbort, { once: true });
     const timer = setTimeout(() => { timedOut = true; ac.abort(); }, policy.timeoutMs);
 
+    // 保存 call promise 并先挂 no-op catch:若本次因超时/外部取消提前 return/continue,
+    // 底层在飞调用(真实 LLM HTTP 可能延迟 reject)的 stale rejection 已被吞,不会变成 Node 未捕获拒绝。
+    const callPromise = call(ac.signal);
+    callPromise.catch(() => { /* stale rejection after we moved on — already handled */ });
     try {
-      const res = await call(ac.signal);
+      const res = await callPromise;
       if (policy.signal.aborted) return { text: '', error: 'aborted', reason: 'aborted', attempts };
       if (res.error) { lastReason = 'error'; lastError = res.error; continue; }
       return { text: res.text, reason: 'ok', attempts };
     } catch (e) {
+      // 外部 abort 优先于超时:两者同时 fire 时归类为 aborted(调用方已取消,不关心超时分类)。
       if (policy.signal.aborted) return { text: '', error: 'aborted', reason: 'aborted', attempts };
       if (timedOut) { lastReason = 'timeout'; lastError = `node timed out after ${policy.timeoutMs}ms`; continue; }
       lastReason = 'error'; lastError = e instanceof Error ? e.message : String(e); continue;
