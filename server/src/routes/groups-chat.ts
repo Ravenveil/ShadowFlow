@@ -218,11 +218,13 @@ async function runFanout(
 
   // 2026-06-03 Phase 2a — group 绑了 team 且能读到单一真源 DAG → 按拓扑调度多 agent。
   // 读不到 team(无 team_id / 文件缺失 / 无成员)→ 落到下面的串行 fan-out 降级。
+  // ⚠ Phase 2b 加固待办:DAG 路径暂未套用 MAX_FANOUT_AGENTS 并发上限(同层 Promise.all 可能并发大团队)、
+  //   AbortController 未外部取消、无节点超时/僵死检测。Phase 2a 只做拓扑调度正确性;并发与常驻加固见 2b。
   if (shouldRunTeamDag(group)) {
     const { team } = loadTeamForRun(group.team_id!);
     if (team && team.members.length > 0) {
-      const fresh0 = await pyGet<GroupRecord>(`/api/groups/${encodeURIComponent(groupId)}`);
-      const history0 = toHistory(fresh0?.messages);
+      // group 已在 runFanout 顶部加载(含 messages);DAG 用单次快照即可(上游上下文经 upstream 参数流转,不靠 history)。
+      const history0 = toHistory(group.messages);
       const latestUser0 = [...history0].reverse().find((m) => m.role === 'user');
       const userPrompt =
         latestUser0?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('') ?? '';
@@ -233,6 +235,7 @@ async function runFanout(
           return a ? { name: a.name || agentId, soul: a.soul ?? '' } : null;
         },
         callAgent: async ({ soul, upstream }) => {
+          // 仅用 soul/upstream:agent 名由 runTeamDagFanout 通过独立 postMessage dep 落库(已带 agent.name),此处无需 agentId/name。
           const upstreamText = upstream.length
             ? `\n\n=== 上游 agent 产出 ===\n${upstream.map((u) => `[${u.from}]\n${u.text}`).join('\n\n')}`
             : '';
