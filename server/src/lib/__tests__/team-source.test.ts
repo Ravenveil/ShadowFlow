@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mapPythonTeamToRunShape } from '../team-source';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { mapPythonTeamToRunShape, loadTeamForRun } from '../team-source';
 
 // Python JSON 真源样例(teams.py 存的形态:agent_ids + workflow{nodes,edges} + policy_matrix)
 const pyTeam = {
@@ -54,5 +57,32 @@ describe('mapPythonTeamToRunShape', () => {
       },
     });
     expect(r.edges).toEqual([]);
+  });
+});
+
+describe('loadTeamForRun', () => {
+  it('读到 <id>.json → 返回映射后的 run shape', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-teams-'));
+    fs.writeFileSync(path.join(dir, 't1.json'), JSON.stringify({
+      team_id: 't1', agent_ids: ['a1', 'a2'],
+      workflow: { nodes: [{ id: 'n1', data: { agentId: 'a1' } }, { id: 'n2', data: { agentId: 'a2' } }],
+                  edges: [{ source: 'n1', target: 'n2', data: { mode: 'direct' } }] },
+      policy_matrix: { a1: { a2: 'permit' } },
+    }));
+    const r = loadTeamForRun('t1', [dir]);
+    expect(r.team?.members).toEqual(['a1', 'a2']);
+    expect(r.team?.edges).toEqual([{ from: 'a1', to: 'a2', kind: 'sequential' }]);
+    expect(r.errors).toEqual([]);
+  });
+  it('文件不存在 → team null + errors', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-teams-'));
+    const r = loadTeamForRun('missing', [dir]);
+    expect(r.team).toBeNull();
+    expect(r.errors[0]).toMatch(/not found/i);
+  });
+  it('非法 id → 拒绝,不读盘', () => {
+    const r = loadTeamForRun('../etc/passwd', ['/tmp']);
+    expect(r.team).toBeNull();
+    expect(r.errors[0]).toMatch(/invalid/i);
   });
 });
