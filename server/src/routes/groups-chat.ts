@@ -241,8 +241,6 @@ async function runFanout(
       const userPrompt =
         latestUser0?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('') ?? '';
 
-      const dagController = swapDagRun(groupId, activeDagRuns);
-
       const deps: RunTeamDagDeps = {
         getAgent: async (agentId) => {
           const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
@@ -284,7 +282,9 @@ async function runFanout(
           }).catch(() => {});
         },
       };
+      let dagController: AbortController | undefined;
       try {
+        dagController = swapDagRun(groupId, activeDagRuns);
         await runTeamDagFanout(team, deps, userPrompt, {
           signal: dagController.signal,
           maxConcurrency: MAX_FANOUT_AGENTS,
@@ -292,7 +292,7 @@ async function runFanout(
         });
       } finally {
         // 仅当注册表里仍是本 controller 时才删(避免误删后来者)。
-        if (activeDagRuns.get(groupId) === dagController) activeDagRuns.delete(groupId);
+        if (dagController && activeDagRuns.get(groupId) === dagController) activeDagRuns.delete(groupId);
       }
       return;
     }
