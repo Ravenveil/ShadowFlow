@@ -30,16 +30,24 @@ describe('computeDagLayers', () => {
   it('引用非成员的边被丢弃,不产生幽灵节点', () => {
     const r = computeDagLayers(['a', 'b'], [E('a', 'b'), E('a', 'ghost'), E('x', 'b')]);
     expect(r.layers).toEqual([['a'], ['b']]);
+    expect(r.ignoredEdges).toEqual([]);
+    expect(r.cyclicNodes).toEqual([]);
   });
 
   it('纯 sequential 成环(非 conditional)→ 环节点兜底进末层 + cyclicNodes 记录', () => {
     const r = computeDagLayers(['a', 'b'], [E('a', 'b'), E('b', 'a')]);
-    expect(r.cyclicNodes.sort()).toEqual(['a', 'b']);
-    expect(r.layers[r.layers.length - 1].sort()).toEqual(['a', 'b']);
+    expect([...r.cyclicNodes].sort()).toEqual(['a', 'b']);
+    expect([...r.layers[r.layers.length - 1]].sort()).toEqual(['a', 'b']);
   });
 
   it('成员顺序在同层内稳定(按 members 输入序)', () => {
     const r = computeDagLayers(['c', 'a', 'b'], []);
     expect(r.layers).toEqual([['c', 'a', 'b']]);
+  });
+
+  it('自环边 a→a 被丢弃,a 正常入第 0 层、不进 cyclicNodes', () => {
+    const r = computeDagLayers(['a', 'b'], [E('a', 'a'), E('a', 'b')]);
+    expect(r.layers).toEqual([['a'], ['b']]);
+    expect(r.cyclicNodes).toEqual([]);
   });
 });

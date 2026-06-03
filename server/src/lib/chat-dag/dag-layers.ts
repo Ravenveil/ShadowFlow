@@ -22,11 +22,12 @@ export interface DagLayersResult {
 export function computeDagLayers(members: string[], edges: TeamEdgeV1[]): DagLayersResult {
   const memberSet = new Set(members);
   const ignoredEdges: TeamEdgeV1[] = [];
-  // 前向边 = 非 conditional、且两端都是成员。
+  // 前向边 = 非 conditional、且两端都是成员。parallel 边也建立执行顺序约束,与 sequential 同等参与分层。
   const forward: TeamEdgeV1[] = [];
   for (const e of edges) {
     if (e.kind === 'conditional') { ignoredEdges.push(e); continue; }
     if (!memberSet.has(e.from) || !memberSet.has(e.to)) continue; // 丢弃幽灵边
+    if (e.from === e.to) continue; // 丢弃自环(坏 DAG;组装期编译校验会挡,运行期不让它卡住节点)
     forward.push(e);
   }
 
