@@ -12,6 +12,11 @@
  * DAG validation: detect cycles, orphan members, and unresolved agent refs.
  * Reports errors but never throws — callers (S0.7 API route) decide whether
  * to 400 or warn.
+ *
+ * ⚠️ D1(2026-06-03 plan-eng-review 锁定):team 的 edges/policy 单一真源 =
+ *    Python JSON(`.shadowflow/teams/<id>.json`),运行期读 `team-source.loadTeamForRun`。
+ *    本 yaml 仅保留 dag_layout(坐标)+ 编译 skill 的静态蓝图;**禁止**再把用户
+ *    保存的 edges/policy 往 yaml 写,否则重新分叉。新读路径一律走 team-source。
  */
 
 import fs from 'fs';
