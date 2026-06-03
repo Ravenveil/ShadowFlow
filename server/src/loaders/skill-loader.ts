@@ -18,7 +18,7 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-import type { SkillDefinition, SkillMode, PreviewType } from '../skills';
+import type { SkillDefinition, SkillMode, PreviewType, SkillSource } from '../skills';
 import { loadTeam as loadLegacyTeam } from '../lib/skill-yaml';
 import { loadTeam as loadGlobalTeam } from '../lib/team-yaml';
 // Round 4 PR-C: warm the compile cache in the background for any installed
@@ -46,6 +46,16 @@ const DEFAULT_SKILLS_DIR = path.join(process.cwd(), '.shadowflow', 'skills');
 // override root entries when both exist with the same id, so the existing
 // runtime-state convention (editor-export-demo etc.) keeps working.
 const ROOT_SKILLS_DIR = path.join(process.cwd(), '..', '.shadowflow', 'skills');
+
+// 2026-06-03 — file-form built-in skills shipped IN the repo (git-tracked),
+// the ShadowFlow analogue of OpenDesign's `skills/` built-in root. Resolved
+// relative to __dirname (NOT process.cwd()) so it works regardless of which
+// dir the server is launched from, and in both layouts:
+//   tsx:  server/src/loaders → ../../skills = server/skills
+//   dist: server/dist/loaders → ../../skills = server/skills
+// Scanned with source='builtin'; user roots are scanned AFTER it so a user
+// skill of the same id shadows the built-in (loaded[id] is last-write-wins).
+const BUILTIN_SKILLS_DIR = path.join(__dirname, '..', '..', 'skills');
 
 export interface SkillLoadResult {
   loaded: Record<string, SkillDefinition>;
@@ -88,24 +98,34 @@ export function loadFsSkills(
   const errors: Array<{ id: string; message: string }> = [];
   const overrides: string[] = [];
 
-  const dirs = skillsDirOverride
-    ? [skillsDirOverride]
-    : [ROOT_SKILLS_DIR, DEFAULT_SKILLS_DIR].filter(fs.existsSync);
+  // Ordered scan roots, each tagged with the `source` to stamp on the skills
+  // it surfaces. Built-in root is scanned FIRST so the user roots (scanned
+  // after) shadow it on id collision — `loaded[id] = skill` is last-write-wins
+  // (see scanOneDir), so later roots override earlier ones.
+  const candidates: Array<{ dir: string; source: SkillSource }> = skillsDirOverride
+    ? [{ dir: skillsDirOverride, source: 'user' }]
+    : [
+        { dir: BUILTIN_SKILLS_DIR, source: 'builtin' },
+        { dir: ROOT_SKILLS_DIR, source: 'user' },
+        { dir: DEFAULT_SKILLS_DIR, source: 'user' },
+      ];
+  const roots = candidates.filter((r) => fs.existsSync(r.dir));
 
-  if (dirs.length === 0) {
+  if (roots.length === 0) {
     return { loaded, errors, overrides };
   }
   // Inline the single-dir scan body via a labelled loop so we can re-run
   // for each candidate dir while keeping the existing per-file error /
   // override book-keeping logic untouched.
-  for (const skillsDir of dirs) {
-    scanOneDir(skillsDir, hardcodedIds, loaded, errors, overrides);
+  for (const { dir, source } of roots) {
+    scanOneDir(dir, source, hardcodedIds, loaded, errors, overrides);
   }
   return { loaded, errors, overrides };
 }
 
 function scanOneDir(
   skillsDir: string,
+  source: SkillSource,
   hardcodedIds: ReadonlyArray<string>,
   loaded: Record<string, SkillDefinition>,
   errors: Array<{ id: string; message: string }>,
@@ -229,6 +249,7 @@ function scanOneDir(
       description: String(fm.description).trim(),
       mode,
       preview_type,
+      source,
       platform: typeof fm.platform === 'string' ? fm.platform : 'web',
       scenario: typeof fm.scenario === 'string' ? fm.scenario : '',
       fidelity: typeof fm.fidelity === 'string' ? fm.fidelity : 'high',
@@ -409,6 +430,7 @@ function scanOneDir(
           description: cmdDescription,
           mode: 'prototype',
           preview_type: 'html',
+          source,
           platform: typeof cmdFm.platform === 'string' ? cmdFm.platform : 'web',
           scenario: typeof cmdFm.scenario === 'string' ? cmdFm.scenario : '',
           fidelity: typeof cmdFm.fidelity === 'string' ? cmdFm.fidelity : 'high',

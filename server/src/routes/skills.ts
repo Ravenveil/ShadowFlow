@@ -47,9 +47,15 @@ router.get('/', (_req: Request, res: Response) => {
     example_prompt: skill.example_prompt,
     has_team: !!skill.team,
     // Skills management (OpenDesign parity): provenance + enabled state.
-    source: Object.prototype.hasOwnProperty.call(HARDCODED_SKILLS, skill_id)
-      ? ('builtin' as const)
-      : ('user' as const),
+    // 2026-06-03 — source is now position-based (stamped by skill-loader from
+    // the scan root: built-in root vs user roots), so file-form built-ins under
+    // server/skills/ report 'builtin' too. Fall back to the hardcoded-id check
+    // for any legacy object that predates the `source` field.
+    source:
+      skill.source ??
+      (Object.prototype.hasOwnProperty.call(HARDCODED_SKILLS, skill_id)
+        ? ('builtin' as const)
+        : ('user' as const)),
     enabled: isSkillEnabled(skill_id),
   }));
   res.json(list);
@@ -108,7 +114,12 @@ router.delete('/:id', (req: Request, res: Response) => {
     res.status(404).json({ error: { code: 'NOT_FOUND', message: 'skill not found' } });
     return;
   }
-  if (Object.prototype.hasOwnProperty.call(HARDCODED_SKILLS, id)) {
+  // 2026-06-03 — protect ALL built-ins, not just hardcoded objects: file-form
+  // built-ins under server/skills/ are git-tracked repo content, so DELETE
+  // (which only ever rm's under .shadowflow/skills/) must refuse them too.
+  // Guard on the position-based `source` and keep the hardcoded check as a
+  // belt-and-braces fallback for legacy objects lacking `source`.
+  if (SKILLS[id].source === 'builtin' || Object.prototype.hasOwnProperty.call(HARDCODED_SKILLS, id)) {
     res.status(403).json({ error: { code: 'BUILTIN_PROTECTED', message: '内置 skill 不可删除' } });
     return;
   }

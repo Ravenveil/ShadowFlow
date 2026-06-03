@@ -19,6 +19,17 @@ export type SkillMode = 'blueprint' | 'prototype' | 'report';
 export type PreviewType = 'yaml' | 'html' | 'markdown';
 
 /**
+ * 2026-06-03 — origin of a skill (aligns ShadowFlow with OpenDesign's
+ * position-based source model; see docs/architecture/opendesign-skill-source-study).
+ *   'builtin' = shipped with ShadowFlow — either a HARDCODED_SKILLS object OR a
+ *               file-form skill under server/skills/ (the built-in scan root).
+ *   'user'    = imported / edited by the user under .shadowflow/skills/.
+ * Assigned by which scan root surfaced the skill (skill-loader), NOT declared
+ * inside the skill. Hardcoded objects carry it literally.
+ */
+export type SkillSource = 'builtin' | 'user';
+
+/**
  * Story 15.19 v2 — `executor` selects which backend runs the skill.
  *
  *   undefined / 'anthropic-direct'  → Anthropic SDK (default, back-compat)
@@ -38,6 +49,12 @@ export interface SkillDefinition {
   description: string;
   mode: SkillMode;
   preview_type: PreviewType;
+  /**
+   * 2026-06-03 — provenance. Set by skill-loader from the scan root, or
+   * literally on hardcoded objects. Undefined on legacy entries → consumers
+   * default ('builtin' for hardcoded ids, 'user' otherwise).
+   */
+  source?: SkillSource;
   /** Story 15.10: optional metadata loaded from SKILL.md frontmatter */
   platform?: string;
   scenario?: string;
@@ -189,6 +206,7 @@ export const HARDCODED_SKILLS: Record<string, SkillDefinition> = {
     description: '根据目标生成 ShadowFlow YAML Blueprint，自动规划 Agent 角色和协作结构',
     mode: 'blueprint',
     preview_type: 'yaml',
+    source: 'builtin',
     system_prompt: AGENT_TEAM_BLUEPRINT_PROMPT,
   },
   'web-prototype': {
@@ -196,6 +214,7 @@ export const HARDCODED_SKILLS: Record<string, SkillDefinition> = {
     description: '生成一个完整的响应式 HTML 网页',
     mode: 'prototype',
     preview_type: 'html',
+    source: 'builtin',
     system_prompt: WEB_PROTOTYPE_PROMPT,
   },
   report: {
@@ -203,6 +222,7 @@ export const HARDCODED_SKILLS: Record<string, SkillDefinition> = {
     description: '生成结构化的 Markdown 研究报告',
     mode: 'report',
     preview_type: 'markdown',
+    source: 'builtin',
     system_prompt: REPORT_PROMPT,
   },
 };
