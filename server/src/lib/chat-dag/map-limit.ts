@@ -13,16 +13,21 @@ export async function mapLimit<T, R>(
   const n = items.length;
   const results: R[] = new Array(n);
   if (n === 0) return results;
-  const cap = Math.max(1, Math.floor(limit));
+  const cap = Number.isFinite(limit) && limit >= 1 ? Math.floor(limit) : 1;
   let next = 0;
+  let failed = false;
 
   async function worker(): Promise<void> {
-    // 每个 worker 不断领取下一个未处理的下标,直到取尽。
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    // 领取下一个未处理下标直到取尽;任一 worker 抛错 → failed=true,其余 worker 下一轮即退出
+    // (不再领新 item;在飞的调用无法取消,但不再消耗新的 LLM 调用)。
+    while (!failed && next < n) {
       const i = next++;
-      if (i >= n) return;
-      results[i] = await fn(items[i], i);
+      try {
+        results[i] = await fn(items[i], i);
+      } catch (e) {
+        failed = true;
+        throw e;
+      }
     }
   }
 

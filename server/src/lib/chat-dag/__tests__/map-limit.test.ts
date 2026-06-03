@@ -46,6 +46,24 @@ describe('mapLimit', () => {
   it('fn 收到正确 index', async () => {
     const seen: Array<[number, number]> = [];
     await mapLimit(['a', 'b', 'c'], 2, async (item, i) => { seen.push([i, item.charCodeAt(0)]); return 0; });
-    expect(seen.map((s) => s[0]).sort()).toEqual([0, 1, 2]);
+    expect(seen.map((s) => s[0]).sort((a, b) => a - b)).toEqual([0, 1, 2]);
+  });
+
+  it('fast-fail 后不再领新 item(失败后 fn 调用数受限)', async () => {
+    let calls = 0;
+    await expect(
+      mapLimit([1, 2, 3, 4], 2, async (n) => {
+        calls++;
+        await tick(5);
+        if (n === 1) throw new Error('boom');
+        return n;
+      }),
+    ).rejects.toThrow('boom');
+    expect(calls).toBeLessThanOrEqual(2); // 修复前会变成 3~4
+  });
+
+  it('limit 为 NaN → 兜底为 1(不返回稀疏空结果)', async () => {
+    const r = await mapLimit([1, 2, 3], NaN, async (n) => n * 2);
+    expect(r).toEqual([2, 4, 6]);
   });
 });
