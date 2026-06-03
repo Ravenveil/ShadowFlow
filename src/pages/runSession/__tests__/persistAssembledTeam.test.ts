@@ -60,6 +60,17 @@ describe('persistAssembledTeam', () => {
     expect(r.fullyPersisted).toBe(true);
   });
 
+  it('quickCreateAgent 抛错 → steps.agents=failed, fatalError 置位、不假成功', async () => {
+    const r = await persistAssembledTeam(
+      makeInput(),
+      okDeps({ quickCreateAgent: vi.fn(async () => { throw new Error('network'); }) }),
+    );
+    expect(r.steps.agents).toBe('failed');
+    expect(r.fatalError).toBeInstanceOf(Error);
+    expect(r.teamId).toBeNull();
+    expect(r.fullyPersisted).toBe(false);
+  });
+
   it('createTeam 抛错 → fatalError 置位、teamId null、fullyPersisted=false', async () => {
     const r = await persistAssembledTeam(
       makeInput(),

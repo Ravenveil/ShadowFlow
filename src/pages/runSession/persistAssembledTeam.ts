@@ -75,6 +75,7 @@ export async function persistAssembledTeam(
     agentIds = created.map((a) => a.agent_id);
     steps.agents = 'ok';
   } catch (e) {
+    steps.agents = 'failed';
     return { teamId: null, groupId: null, agentIds: [], steps, fatalError: asError(e), failedSteps: ['agents'], fullyPersisted: false };
   }
   try {
