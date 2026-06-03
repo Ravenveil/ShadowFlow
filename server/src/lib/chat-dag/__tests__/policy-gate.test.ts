@@ -11,4 +11,8 @@ describe('gate', () => {
   it('缺 receiver 列 → 默认 permit', () => { expect(gate(M, 'pm', 'dev')).toBe('permit'); });
   it('空矩阵 → permit', () => { expect(gate({}, 'a', 'b')).toBe('permit'); });
   it('未知值归一为 permit', () => { expect(gate({ a: { b: 'bogus' } }, 'a', 'b')).toBe('permit'); });
+  it('null/undefined 矩阵 → permit(防御性)', () => {
+    expect(gate(null, 'a', 'b')).toBe('permit');
+    expect(gate(undefined, 'a', 'b')).toBe('permit');
+  });
 });

@@ -8,7 +8,7 @@
 export type GateVerdict = 'permit' | 'deny' | 'warn';
 
 export function gate(
-  matrix: Record<string, Record<string, string>>,
+  matrix: Record<string, Record<string, string>> | null | undefined,
   from: string,
   to: string,
 ): GateVerdict {
