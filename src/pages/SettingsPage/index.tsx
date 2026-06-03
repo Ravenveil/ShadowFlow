@@ -37,6 +37,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Construction } from 'lucide-react';
 import { useI18n } from '../../common/i18n';
 import { ToolProvidersTab } from './ToolProvidersTab';
+import { SkillsCatalogTab } from './SkillsCatalogTab';
 import { LocalCLISection } from '../../core/components/settings/LocalCLISection';
 import { ByokSection } from '../../core/components/settings/ByokSection';
 import { ConnectorsSection } from '../../core/components/settings/ConnectorsSection';
@@ -69,6 +70,7 @@ type SectionId =
   | 'shortcuts'    // placeholder
   | 'language'
   // 集成
+  | 'skills-catalog'           // Skills 管理面板 �?catalog 浏览 / enable / 导入 / 删除
   | 'skill-studio-generation'  // 生成参数 �?model / max_tokens / temperature / defaults
   | 'skill-studio-acp'         // 远端 Agent �?ACP/MCP remote agent discovery
   | 'local-cli'
@@ -120,6 +122,7 @@ const STATIC_NAV_GROUPS: NavGroup[] = [
   {
     group: 'Integrations',
     items: [
+      { id: 'skills-catalog',          label: 'Skills' },
       { id: 'local-cli',               label: 'Local CLI' },
       { id: 'byok',                    label: 'API Keys' },
       { id: 'skill-studio-generation', label: 'Generation Settings' },
@@ -178,6 +181,7 @@ function buildNavGroups(t: (key: string) => string): NavGroup[] {
     {
       group: t('settings.groupIntegrations'),
       items: [
+        { id: 'skills-catalog',          label: t('settings.navSkillsCatalog') },
         { id: 'local-cli',               label: t('settings.navLocalCli') },
         { id: 'byok',                    label: t('settings.navByok') },
         { id: 'skill-studio-generation', label: t('settings.navGeneration') },
@@ -485,6 +489,7 @@ export default function SettingsPage() {
           {activeSection === 'language'   && <LegacySectionWrap><LanguageSection /></LegacySectionWrap>}
 
           {/* 集成 — 新设计 */}
+          {activeSection === 'skills-catalog' && <LegacySectionWrap><SkillsCatalogTab /></LegacySectionWrap>}
           {activeSection === 'local-cli' && <LocalCLISection />}
           {activeSection === 'byok'      && <ByokSection />}
           {activeSection === 'skill-studio-generation' && (

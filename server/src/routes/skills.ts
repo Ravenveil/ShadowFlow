@@ -17,6 +17,7 @@ import { Router, Request, Response } from 'express';
 import { SKILLS, HARDCODED_SKILLS, reloadSkills } from '../skills';
 import { ingestSkill, listInstalled, parseSource } from '../skill-ingest';
 import { getAgent, getAnchorBody } from '../lib/skill-yaml';
+import { getDisabledSkills, isSkillEnabled, setSkillEnabled } from '../lib/skill-prefs';
 import type { SkillSlot } from '../lib/skill-types';
 import previewTriageRouter from './skills-preview-triage';
 
@@ -45,8 +46,114 @@ router.get('/', (_req: Request, res: Response) => {
     fidelity: skill.fidelity,
     example_prompt: skill.example_prompt,
     has_team: !!skill.team,
+    // Skills management (OpenDesign parity): provenance + enabled state.
+    source: Object.prototype.hasOwnProperty.call(HARDCODED_SKILLS, skill_id)
+      ? ('builtin' as const)
+      : ('user' as const),
+    enabled: isSkillEnabled(skill_id),
   }));
   res.json(list);
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Skills management — enable/disable toggle + user-skill deletion.
+//
+// Registered BEFORE the wildcard `/:skillId/team` & `/:skillId/agents/...`
+// routes below so the two-segment `/:id/enabled` PATCH is unambiguous. Express
+// matches in registration order; `/:id/enabled` (verb PATCH) and the existing
+// GET `/:skillId/team` don't collide (different methods + literal segment), but
+// keeping the management routes up top avoids any future shadowing.
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * PATCH /api/skills/:id/enabled — flip a skill's enabled flag.
+ *
+ * body: { enabled: boolean }. Disabling a skill keeps it in GET /api/skills
+ * (with enabled:false for the toggle) but removes it from the @skill picker
+ * (GET /api/skills/installed). Works for builtin and user skills alike.
+ */
+router.patch('/:id/enabled', (req: Request, res: Response) => {
+  const id = req.params.id;
+  if (!VALID_SKILL_ID_RE.test(id)) {
+    res.status(400).json({ error: { code: 'INVALID_ID', message: 'invalid skill id' } });
+    return;
+  }
+  if (!SKILLS[id]) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'skill not found' } });
+    return;
+  }
+  const enabled = (req.body ?? {}).enabled;
+  if (typeof enabled !== 'boolean') {
+    res.status(400).json({ error: { code: 'INVALID_BODY', message: 'enabled must be a boolean' } });
+    return;
+  }
+  setSkillEnabled(id, enabled);
+  res.json({ data: { skill_id: id, enabled } });
+});
+
+/**
+ * DELETE /api/skills/:id — remove a user-ingested skill from disk.
+ *
+ * Built-in (hardcoded) skills are protected (403). For user skills we wipe
+ * `.shadowflow/skills/<id>/`, drop the entry from `.installed.json` if present,
+ * and reloadSkills() so the registry drops the override immediately.
+ */
+router.delete('/:id', (req: Request, res: Response) => {
+  const id = req.params.id;
+  if (!VALID_SKILL_ID_RE.test(id)) {
+    res.status(400).json({ error: { code: 'INVALID_ID', message: 'invalid skill id' } });
+    return;
+  }
+  if (!SKILLS[id]) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'skill not found' } });
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(HARDCODED_SKILLS, id)) {
+    res.status(403).json({ error: { code: 'BUILTIN_PROTECTED', message: '内置 skill 不可删除' } });
+    return;
+  }
+
+  // Path-traversal hardening — mirror the /save endpoint: resolve the target
+  // and confirm it stays under the skills root before any rmSync.
+  const skillsRoot = path.resolve(process.cwd(), '.shadowflow', 'skills');
+  const dir = path.resolve(skillsRoot, id);
+  if (!dir.startsWith(skillsRoot + path.sep) && dir !== skillsRoot) {
+    res.status(400).json({ error: { code: 'INVALID_PATH', message: 'resolved path escapes skills root' } });
+    return;
+  }
+
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+
+    // Drop the entry from .installed.json (array of InstalledSkill) if present.
+    const registryFile = path.join(skillsRoot, '.installed.json');
+    if (fs.existsSync(registryFile)) {
+      try {
+        const raw = fs.readFileSync(registryFile, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const next = parsed.filter((x) => x && x.id !== id);
+          const tmp = registryFile + '.tmp.' + process.pid;
+          fs.writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf-8');
+          fs.renameSync(tmp, registryFile);
+        }
+      } catch (err) {
+        console.warn('[skills:delete] failed to prune .installed.json:', err);
+      }
+    }
+
+    try {
+      reloadSkills();
+    } catch (err) {
+      console.warn('[skills:delete] reloadSkills() after delete failed:', err);
+    }
+
+    res.json({ data: { skill_id: id, deleted: true } });
+  } catch (err) {
+    const msg = (err as Error).message ?? String(err);
+    console.error('[skills:delete] failed:', err);
+    res.status(500).json({ error: { code: 'DELETE_FAILED', message: msg } });
+  }
 });
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -371,7 +478,10 @@ router.get('/installed', (_req: Request, res: Response) => {
   // overriding the bundled demo.
   const seen = new Set(items.map((x) => x.id));
   const merged = [...items, ...teamSkills.filter((t) => !seen.has(t.id))];
-  res.json({ data: merged });
+  // Skills management: disabled skills are hidden from the @skill picker.
+  const disabled = getDisabledSkills();
+  const visible = merged.filter((item) => !disabled.has(item.id));
+  res.json({ data: visible });
 });
 
 /**

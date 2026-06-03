@@ -17,6 +17,25 @@ export interface SkillInfo {
   description: string;
   mode: SkillMode;
   preview_type: SkillPreviewType;
+  /**
+   * Story (Skills 管理) — server-supplied management metadata. All optional so
+   * the hardcoded `LOCAL_SKILLS` fallback (which omits them) stays valid.
+   *
+   * - `source`        : 'builtin' (shipped, undeletable) vs 'user' (added by user)
+   * - `enabled`       : whether the skill is active (toggled via setSkillEnabled)
+   * - `platform`      : target platform tag (e.g. claude / generic)
+   * - `scenario`      : usage scenario tag
+   * - `fidelity`      : output fidelity tag (e.g. blueprint / prototype)
+   * - `has_team`      : whether the skill ships a paired team blueprint
+   * - `example_prompt`: a suggested prompt to demo the skill
+   */
+  source?: 'builtin' | 'user';
+  enabled?: boolean;
+  platform?: string;
+  scenario?: string;
+  fidelity?: string;
+  has_team?: boolean;
+  example_prompt?: string;
 }
 
 /**
@@ -57,5 +76,51 @@ export async function listSkills(): Promise<SkillInfo[]> {
     return data;
   } catch {
     return LOCAL_SKILLS;
+  }
+}
+
+/**
+ * Toggle a skill's enabled state.
+ *
+ * `PATCH /api/skills/:id/enabled` with body `{ enabled }`. Server responds
+ * `{ data: { skill_id, enabled } }` on success; we ignore the body and resolve
+ * void (the caller already knows the target state). Throws on non-2xx so the
+ * UI can revert an optimistic toggle.
+ */
+export async function setSkillEnabled(skillId: string, enabled: boolean): Promise<void> {
+  const res = await fetch(
+    `${getApiBase()}/api/skills/${encodeURIComponent(skillId)}/enabled`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    },
+  );
+  if (!res.ok) throw new Error('setSkillEnabled failed: ' + res.status);
+}
+
+/**
+ * Delete a user skill.
+ *
+ * `DELETE /api/skills/:id`. Built-in skills return 403; we surface the server's
+ * `error.message` (e.g. "内置不可删") in the thrown Error so the UI can show a
+ * meaningful reason. Falls back to the status code when the body is unreadable.
+ */
+export async function deleteSkill(skillId: string): Promise<void> {
+  const res = await fetch(
+    `${getApiBase()}/api/skills/${encodeURIComponent(skillId)}`,
+    { method: 'DELETE' },
+  );
+  if (!res.ok) {
+    let message = `deleteSkill failed: ${res.status}`;
+    try {
+      const body = (await res.json()) as { error?: { message?: string } };
+      if (body?.error?.message) {
+        message = `deleteSkill failed: ${body.error.message}`;
+      }
+    } catch {
+      // body not JSON / already consumed — keep status-based message
+    }
+    throw new Error(message);
   }
 }
