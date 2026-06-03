@@ -27,8 +27,10 @@ describe('真源一致性 — 写后读 edges/policy 不偏差', () => {
     };
     fs.writeFileSync(path.join(dir, 'tc.json'), JSON.stringify(saved));
 
-    const { team } = loadTeamForRun('tc', [dir]);
+    const { team, errors } = loadTeamForRun('tc', [dir]);
+    expect(errors).toEqual([]);
     expect(team?.members).toEqual(['pm', 'arch', 'dev', 'qa']);
+    // edges 按 Python JSON workflow.edges 的数组顺序保留(回归边 qa→dev 在末位)
     expect(team?.edges).toEqual([
       { from: 'pm', to: 'arch', kind: 'sequential' },
       { from: 'arch', to: 'dev', kind: 'sequential' },
