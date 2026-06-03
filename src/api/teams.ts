@@ -183,11 +183,17 @@ export async function getTeamWorkflow(teamId: string): Promise<TeamWorkflow> {
 }
 
 export async function putTeamWorkflow(teamId: string, workflow: TeamWorkflow): Promise<void> {
-  await fetch(`${API_BASE_URL}/api/teams/${teamId}/workflow`, {
+  const res = await fetch(`${API_BASE_URL}/api/teams/${teamId}/workflow`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(workflow),
   });
+  if (!res.ok) {
+    const body = await res.text();
+    let detail: unknown = body;
+    try { detail = JSON.parse(body); } catch { /* raw */ }
+    throw new TeamApiError(res.status, detail, _extractErrorCode(detail));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -205,11 +211,17 @@ export async function getTeamPolicy(teamId: string): Promise<TeamPolicyMatrix> {
 }
 
 export async function putTeamPolicy(teamId: string, matrix: Record<string, Record<string, string>>): Promise<void> {
-  await fetch(`${API_BASE_URL}/api/teams/${teamId}/policy`, {
+  const res = await fetch(`${API_BASE_URL}/api/teams/${teamId}/policy`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ matrix }),
   });
+  if (!res.ok) {
+    const body = await res.text();
+    let detail: unknown = body;
+    try { detail = JSON.parse(body); } catch { /* raw */ }
+    throw new TeamApiError(res.status, detail, _extractErrorCode(detail));
+  }
 }
 
 // ---------------------------------------------------------------------------
