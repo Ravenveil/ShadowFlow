@@ -77,9 +77,11 @@ export async function runTeamDagFanout(
   let warnedEdges = 0;
   let aborted = false;
 
+  let ranLayers = 0;
   for (const layer of layers) {
-    if (signal.aborted) aborted = true;
+    if (signal.aborted || aborted) { aborted = true; break; } // 外部已取消或节点已 abort:不再起新层
     await mapLimit(layer, maxConcurrency, async (agentId) => {
+      // 快速跳过(非唯一屏障):runNodeWithPolicy 入口会再查 signal.aborted 作硬屏障。
       if (signal.aborted || aborted) { perAgent[agentId] = 'aborted'; return; }
 
       // 上游产出按 gate 过滤。
@@ -138,7 +140,15 @@ export async function runTeamDagFanout(
       perAgent[agentId] = 'ok';
       await deps.postMessage({ content: reply, sender_name: agent.name, sender_kind: 'agent' });
     });
+    ranLayers++;
   }
 
-  return { ranLayers: layers.length, perAgent, deniedEdges, warnedEdges, aborted };
+  // 未被执行到的节点(abort break 跳过的层)统一标 aborted。
+  if (aborted) {
+    for (const id of team.members) {
+      if (!(id in perAgent)) perAgent[id] = 'aborted';
+    }
+  }
+
+  return { ranLayers, perAgent, deniedEdges, warnedEdges, aborted };
 }

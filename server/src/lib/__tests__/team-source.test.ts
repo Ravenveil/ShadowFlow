@@ -48,6 +48,14 @@ describe('mapPythonTeamToRunShape', () => {
     });
     expect(r.edges).toEqual([]);
   });
+  it('workflow.edge.data.max_retries 透传到 TeamEdgeV1', () => {
+    const r = mapPythonTeamToRunShape({
+      team_id: 't', agent_ids: ['a', 'b'],
+      workflow: { nodes: [{ id: 'n1', data: { agentId: 'a' } }, { id: 'n2', data: { agentId: 'b' } }],
+                  edges: [{ source: 'n1', target: 'n2', data: { mode: 'direct', max_retries: 5 } }] },
+    });
+    expect(r.edges[0]).toEqual({ from: 'a', to: 'b', kind: 'sequential', max_retries: 5 });
+  });
   it('node 缺 agentId → 该节点不入 map,指向它的边视为悬空跳过', () => {
     const r = mapPythonTeamToRunShape({
       team_id: 't3',

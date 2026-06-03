@@ -18,7 +18,7 @@ export interface TeamRunShape {
 }
 
 interface PyWorkflowNode { id?: string; data?: { agentId?: string } }
-interface PyWorkflowEdge { source?: string; target?: string; data?: { mode?: string } }
+interface PyWorkflowEdge { source?: string; target?: string; data?: { mode?: string; max_retries?: number } }
 interface PyTeamJson {
   team_id?: string;
   name?: string;
@@ -42,10 +42,14 @@ export function mapPythonTeamToRunShape(json: PyTeamJson): TeamRunShape {
   }
   const edges: TeamEdgeV1[] = [];
   for (const e of json.workflow?.edges ?? []) {
+    // max_retries 透传(B4 per-edge 重试预算)。注:当前 RunSession 写 workflow 时尚未写 edge.max_retries,
+    // 故生产路实际多走 runTeamDagFanout 的 defaultMaxRetries;一旦组装期写入该字段,此处自动接通。
     const from = e.source ? nodeToAgent.get(e.source) : undefined;
     const to = e.target ? nodeToAgent.get(e.target) : undefined;
     if (!from || !to) continue; // 悬空边跳过
-    edges.push({ from, to, kind: mapMode(e.data?.mode) });
+    const edge: TeamEdgeV1 = { from, to, kind: mapMode(e.data?.mode) };
+    if (typeof e.data?.max_retries === 'number') edge.max_retries = e.data.max_retries;
+    edges.push(edge);
   }
   return { members, edges, policy_matrix: json.policy_matrix ? { ...json.policy_matrix } : {} };
 }

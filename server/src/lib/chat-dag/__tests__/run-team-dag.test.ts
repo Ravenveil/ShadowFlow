@@ -130,7 +130,7 @@ describe('runTeamDagFanout', () => {
 
   it('节点超时 → 标 timeout', async () => {
     const deps = mkDeps({
-      callAgent: (((args: { signal: AbortSignal }) => new Promise((_, reject) => { args.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }); })) as unknown as RunTeamDagDeps['callAgent']),
+      callAgent: vi.fn((args: Parameters<RunTeamDagDeps['callAgent']>[0]) => new Promise<{ text: string; error?: string }>((_, reject) => { args.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }); })),
     });
     const r = await runTeamDagFanout(
       { members: ['solo'], edges: [], policy_matrix: {} },
