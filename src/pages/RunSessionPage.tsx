@@ -3619,6 +3619,7 @@ function friendlySaveError(fatal: Error | null, failedSteps: string[]): string {
   }
   const label: Record<string, string> = { workflow: 'DAG 工作流', policy: '权责矩阵', group: '群聊' };
   const parts = failedSteps.filter((s) => s !== 'group').map((s) => label[s] ?? s);
+  if (parts.length === 0) return '群聊关联失败,团队本体已建 — 可在设置中手动绑定';
   return `团队已建,但${parts.join('、')}保存失败 —— 请重试以补全`;
 }
 
@@ -3809,7 +3810,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
             }),
           },
           {
-            quickCreateAgent: (spec) => quickCreateAgent(spec as Parameters<typeof quickCreateAgent>[0]),
+            quickCreateAgent,
             createTeam,
             putTeamWorkflow,
             putTeamPolicy,

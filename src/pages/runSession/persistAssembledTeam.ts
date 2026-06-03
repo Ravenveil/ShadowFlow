@@ -39,7 +39,7 @@ export interface AgentSpec {
   workspace_id?: string;
   model?: string;
   tools?: string[];
-  raci?: unknown;
+  raci?: Record<string, string>;
 }
 
 export interface PersistDeps {
