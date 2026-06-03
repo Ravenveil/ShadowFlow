@@ -7,7 +7,7 @@ function mkDeps(over: Partial<RunTeamDagDeps> = {}): RunTeamDagDeps & { posted: 
   const callOrder: string[] = [];
   const deps: RunTeamDagDeps & { posted: typeof posted; callOrder: string[] } = {
     getAgent: vi.fn(async (id: string) => ({ name: id.toUpperCase(), soul: `soul-${id}` })),
-    callAgent: vi.fn(async ({ agentId, upstream }: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[] }) => { callOrder.push(agentId); return { text: `${agentId}:reply(up=${upstream.map((u) => u.from).join('+') || 'none'})` }; }),
+    callAgent: vi.fn(async ({ agentId, upstream }: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[]; signal: AbortSignal }) => { callOrder.push(agentId); return { text: `${agentId}:reply(up=${upstream.map((u) => u.from).join('+') || 'none'})` }; }),
     postMessage: vi.fn(async (m) => { posted.push({ sender_name: m.sender_name, sender_kind: m.sender_kind, content: m.content }); }),
     posted, callOrder,
     ...over,
@@ -79,7 +79,7 @@ describe('runTeamDagFanout', () => {
   });
 
   it('agent 报错 → 发系统错误消息、记 error、不中断后续层', async () => {
-    const deps = mkDeps({ callAgent: vi.fn(async ({ agentId }) => (agentId === 'pm' ? { text: '', error: 'boom' } : { text: `${agentId}:ok` })) });
+    const deps = mkDeps({ callAgent: vi.fn(async ({ agentId }: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[]; signal: AbortSignal }) => (agentId === 'pm' ? { text: '', error: 'boom' } : { text: `${agentId}:ok` })) });
     const r = await runTeamDagFanout(linear, deps, 'go');
     expect(r.perAgent.pm).toBe('error');
     expect(r.perAgent.dev).toBe('ok');
@@ -87,7 +87,7 @@ describe('runTeamDagFanout', () => {
   });
 
   it('agent 空回复 → 记 empty + 系统提示,不喂下游', async () => {
-    const deps = mkDeps({ callAgent: vi.fn(async ({ agentId }) => (agentId === 'pm' ? { text: '   ' } : { text: `${agentId}:ok` })) });
+    const deps = mkDeps({ callAgent: vi.fn(async ({ agentId }: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[]; signal: AbortSignal }) => (agentId === 'pm' ? { text: '   ' } : { text: `${agentId}:ok` })) });
     const r = await runTeamDagFanout(linear, deps, 'go');
     expect(r.perAgent.pm).toBe('empty');
     const calls = (deps.callAgent as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
@@ -102,11 +102,55 @@ describe('runTeamDagFanout', () => {
 
   it('warn 边但上游空回复 → warnedEdges 仍计数、note 说明无产出、不喂下游', async () => {
     const team: TeamRunShape = { ...linear, policy_matrix: { pm: { arch: 'warn' } } };
-    const deps = mkDeps({ callAgent: vi.fn(async ({ agentId, upstream }: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[] }) => (agentId === 'pm' ? { text: '   ' } : { text: `${agentId}:up=${upstream.map((u) => u.from).join('+') || 'none'}` })) });
+    const deps = mkDeps({ callAgent: vi.fn(async ({ agentId, upstream }: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[]; signal: AbortSignal }) => (agentId === 'pm' ? { text: '   ' } : { text: `${agentId}:up=${upstream.map((u) => u.from).join('+') || 'none'}` })) });
     const r = await runTeamDagFanout(team, deps, 'go');
     expect(r.warnedEdges).toBe(1);
     const calls = (deps.callAgent as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     expect(calls.find((c) => c.agentId === 'arch').upstream).toEqual([]); // pm 空,不喂
     expect(deps.posted.some((p) => p.sender_kind === 'system' && /无产出/.test(p.content))).toBe(true);
+  });
+
+  it('opts.signal 预先 abort → 不跑任何 agent,全部 perAgent=aborted', async () => {
+    const deps = mkDeps();
+    const ac = new AbortController(); ac.abort();
+    const r = await runTeamDagFanout(linear, deps, 'go', { signal: ac.signal });
+    expect(deps.callOrder).toEqual([]);
+    expect(r.perAgent).toEqual({ pm: 'aborted', arch: 'aborted', dev: 'aborted' });
+  });
+
+  it('节点持续 error + maxRetries 重试 → 最终标 error,且重试了', async () => {
+    const calls: string[] = [];
+    const deps = mkDeps({
+      callAgent: vi.fn(async ({ agentId }: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[]; signal: AbortSignal }) => { calls.push(agentId); return agentId === 'pm' ? { text: '', error: 'boom' } : { text: `${agentId}:ok` }; }),
+    });
+    const r = await runTeamDagFanout(linear, deps, 'go', { defaultMaxRetries: 2 });
+    expect(r.perAgent.pm).toBe('error');
+    expect(calls.filter((c) => c === 'pm').length).toBe(3); // 初次 + 2 重试
+  });
+
+  it('节点超时 → 标 timeout', async () => {
+    const deps = mkDeps({
+      callAgent: (((args: { signal: AbortSignal }) => new Promise((_, reject) => { args.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }); })) as unknown as RunTeamDagDeps['callAgent']),
+    });
+    const r = await runTeamDagFanout(
+      { members: ['solo'], edges: [], policy_matrix: {} },
+      deps, 'go', { nodeTimeoutMs: 20, defaultMaxRetries: 0 },
+    );
+    expect(r.perAgent.solo).toBe('timeout');
+  });
+
+  it('同层并发不超过 maxConcurrency', async () => {
+    const team: TeamRunShape = { members: ['a', 'b', 'c', 'd'], edges: [], policy_matrix: {} };
+    let active = 0; let peak = 0;
+    const deps = mkDeps({
+      callAgent: (async ({ agentId }: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[]; signal: AbortSignal }) => {
+        active++; peak = Math.max(peak, active);
+        await new Promise((r) => setTimeout(r, 15));
+        active--;
+        return { text: `${agentId}:ok` };
+      }),
+    });
+    await runTeamDagFanout(team, deps, 'go', { maxConcurrency: 2 });
+    expect(peak).toBeLessThanOrEqual(2);
   });
 });
