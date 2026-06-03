@@ -3306,6 +3306,8 @@ export default function RunSessionPage() {
 // Important: this component does NOT mock data. The stubs render text
 // placeholders; the real session data is consumed inside each stub's
 // replacement via useRunSession() when those land.
+type SaveState = 'idle' | 'saving' | 'ok' | 'failed' | 'need-workspace';
+
 interface RunSessionRightPaneProps {
   session: ReturnType<typeof useRunSession>;
   sessionId: string;
@@ -3315,7 +3317,7 @@ interface RunSessionRightPaneProps {
    *  /chat with a console placeholder. */
   chatGroupId: string | null;
   /** Auto-save state — dock is only shown when 'ok' (team fully persisted). */
-  saveState: 'idle' | 'saving' | 'ok' | 'failed' | 'need-workspace';
+  saveState: SaveState;
 }
 
 // 2026-06-02 — 右下角常驻「去聊天」悬浮按钮加回（用户要求）。run 完成后从这里
@@ -3656,9 +3658,7 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
   // user clicks the chip's 重新保存 button → setSaveState('idle') → effect
   // fires again. `inFlightRef` prevents the effect from double-firing while
   // an async run is mid-flight.
-  const [saveState, setSaveState] = useState<
-    'idle' | 'saving' | 'ok' | 'failed' | 'need-workspace'
-  >('idle');
+  const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
   // 组建保存时若处于 ShadowFlow 根态(未选工作区),先问用户放到哪个工作区
   // (已有 / 新建)——绝不静默落 "default" 而让团队/agent 变孤儿。
@@ -3933,7 +3933,10 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
           fontSize: 12, color: 'var(--t-fg-2, #D4D4D8)',
         }}
       >
-        <span>⚠ 蓝图已生成，尚未保存 — 选/建工作区后才能持久化团队与 Agent</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <AlertTriangle size={12} strokeWidth={2.2} />
+          蓝图已生成，尚未保存 — 选/建工作区后才能持久化团队与 Agent
+        </span>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <input type="radio" name="rs-ws" checked={wsPickMode === 'existing'} onChange={() => setWsPickMode('existing')} />
           已有
