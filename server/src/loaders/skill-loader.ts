@@ -18,7 +18,8 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-import type { SkillDefinition, SkillMode, PreviewType, SkillSource } from '../skills';
+import type { SkillDefinition, SkillMode, PreviewType, SkillSource, SkillKind } from '../skills';
+import { inferKind } from '../skills';
 import { loadTeam as loadLegacyTeam } from '../lib/skill-yaml';
 import { loadTeam as loadGlobalTeam } from '../lib/team-yaml';
 // Round 4 PR-C: warm the compile cache in the background for any installed
@@ -75,6 +76,21 @@ const MAX_ENTRIES = 200;
 
 const VALID_MODES: ReadonlySet<SkillMode> = new Set(['blueprint', 'prototype', 'report']);
 const VALID_PREVIEW_TYPES: ReadonlySet<PreviewType> = new Set(['yaml', 'html', 'markdown']);
+// 2026-06-03 — 分类主轴白名单（docs §10.3）。
+const VALID_KINDS: ReadonlySet<SkillKind> = new Set(['workflow', 'capability', 'generator']);
+
+/**
+ * 2026-06-03 — domain 归一（对齐 OpenDesign `normalizeCategory`，apps/daemon/src/skills.ts）。
+ * lowercase + slug 白名单（`[a-z0-9][a-z0-9-]*`）+ 截断 64；空/非法 → undefined。
+ * 防止 `Design` vs `design` 产生两个重复 filter pill，防止自由串/换行/超长污染
+ * API JSON、DomainBadge 渲染、domainPills 的 value(state key)。
+ */
+function normalizeDomain(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const s = raw.trim().toLowerCase().slice(0, 64);
+  if (!s) return undefined;
+  return /^[a-z0-9][a-z0-9-]*$/.test(s) ? s : undefined;
+}
 
 /**
  * Scan `.shadowflow/skills/` for SKILL.md files and parse them.
@@ -244,12 +260,20 @@ function scanOneDir(
       ? rawAllowed.filter((t): t is string => typeof t === 'string' && t.length > 0)
       : undefined;
 
+    // 2026-06-03 — 分类（docs §10.3）。kind 取 frontmatter（白名单校验），缺省由 mode
+    // 推断；domain 是自由字符串（领域/功能细分），缺省 undefined。
+    const rawKind = typeof fm.kind === 'string' ? (fm.kind.trim() as SkillKind) : undefined;
+    const kind: SkillKind = rawKind && VALID_KINDS.has(rawKind) ? rawKind : inferKind(mode);
+    const domain = normalizeDomain(fm.domain);
+
     const skill: SkillDefinition = {
       name: String(fm.name).trim(),
       description: String(fm.description).trim(),
       mode,
       preview_type,
       source,
+      kind,
+      domain,
       platform: typeof fm.platform === 'string' ? fm.platform : 'web',
       scenario: typeof fm.scenario === 'string' ? fm.scenario : '',
       fidelity: typeof fm.fidelity === 'string' ? fm.fidelity : 'high',
@@ -431,6 +455,9 @@ function scanOneDir(
           mode: 'prototype',
           preview_type: 'html',
           source,
+          // 命令子 skill（/<id>:<cmd>）是 agent 装配的原子命令 → 归 capability。
+          kind: 'capability',
+          domain: normalizeDomain(cmdFm.domain),
           platform: typeof cmdFm.platform === 'string' ? cmdFm.platform : 'web',
           scenario: typeof cmdFm.scenario === 'string' ? cmdFm.scenario : '',
           fidelity: typeof cmdFm.fidelity === 'string' ? cmdFm.fidelity : 'high',

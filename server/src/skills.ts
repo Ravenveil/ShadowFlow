@@ -30,6 +30,23 @@ export type PreviewType = 'yaml' | 'html' | 'markdown';
 export type SkillSource = 'builtin' | 'user';
 
 /**
+ * 2026-06-03 — 分类主轴（docs §10.3，已确认采纳）。
+ *   'workflow'   多步编排 / 常 team-backed 的流程（bmad、gstack review/ship…）
+ *   'capability' agent 装配的原子能力（web-search、file-system、MCP 封装…）
+ *   'generator'  一发把目标变成交付物（web-prototype=html、report=markdown）
+ * 副轴 `domain`（领域/功能细分）是自由字符串。kind 缺省由 mode 推断（见 inferKind）。
+ */
+export type SkillKind = 'workflow' | 'capability' | 'generator';
+
+/**
+ * mode → kind 的缺省推断：blueprint=workflow，prototype/report=generator。
+ * capability 没有对应 mode，只能由 SKILL.md frontmatter 显式声明。
+ */
+export function inferKind(mode: SkillMode): SkillKind {
+  return mode === 'blueprint' ? 'workflow' : 'generator';
+}
+
+/**
  * Story 15.19 v2 — `executor` selects which backend runs the skill.
  *
  *   undefined / 'anthropic-direct'  → Anthropic SDK (default, back-compat)
@@ -55,6 +72,13 @@ export interface SkillDefinition {
    * default ('builtin' for hardcoded ids, 'user' otherwise).
    */
   source?: SkillSource;
+  /**
+   * 2026-06-03 — 分类（docs §10.3）。主轴 `kind` 缺省由 mode 推断；副轴 `domain`
+   * 是领域/功能细分（engineering/research/product/design/content/data/ops/general…），
+   * 自由字符串。skill-loader 从 frontmatter 读，或在 hardcoded 对象上直接声明。
+   */
+  kind?: SkillKind;
+  domain?: string;
   /** Story 15.10: optional metadata loaded from SKILL.md frontmatter */
   platform?: string;
   scenario?: string;
@@ -207,6 +231,8 @@ export const HARDCODED_SKILLS: Record<string, SkillDefinition> = {
     mode: 'blueprint',
     preview_type: 'yaml',
     source: 'builtin',
+    kind: 'workflow',
+    domain: 'general',
     system_prompt: AGENT_TEAM_BLUEPRINT_PROMPT,
   },
   'web-prototype': {
@@ -215,6 +241,8 @@ export const HARDCODED_SKILLS: Record<string, SkillDefinition> = {
     mode: 'prototype',
     preview_type: 'html',
     source: 'builtin',
+    kind: 'generator',
+    domain: 'design',
     system_prompt: WEB_PROTOTYPE_PROMPT,
   },
   report: {
@@ -223,6 +251,8 @@ export const HARDCODED_SKILLS: Record<string, SkillDefinition> = {
     mode: 'report',
     preview_type: 'markdown',
     source: 'builtin',
+    kind: 'generator',
+    domain: 'general',
     system_prompt: REPORT_PROMPT,
   },
 };

@@ -14,7 +14,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Router, Request, Response } from 'express';
-import { SKILLS, HARDCODED_SKILLS, reloadSkills } from '../skills';
+import { SKILLS, HARDCODED_SKILLS, reloadSkills, inferKind } from '../skills';
 import { ingestSkill, listInstalled, parseSource } from '../skill-ingest';
 import { getAgent, getAnchorBody } from '../lib/skill-yaml';
 import { getDisabledSkills, isSkillEnabled, setSkillEnabled } from '../lib/skill-prefs';
@@ -56,6 +56,9 @@ router.get('/', (_req: Request, res: Response) => {
       (Object.prototype.hasOwnProperty.call(HARDCODED_SKILLS, skill_id)
         ? ('builtin' as const)
         : ('user' as const)),
+    // 2026-06-03 — 分类（docs §10.3）。kind 缺省由 mode 推断；domain 缺省 null。
+    kind: skill.kind ?? inferKind(skill.mode),
+    domain: skill.domain ?? null,
     enabled: isSkillEnabled(skill_id),
   }));
   res.json(list);

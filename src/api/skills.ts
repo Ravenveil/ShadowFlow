@@ -10,6 +10,8 @@ import { getApiBase } from './_base';
 
 export type SkillPreviewType = 'yaml' | 'html' | 'markdown';
 export type SkillMode = 'blueprint' | 'prototype' | 'report';
+/** 2026-06-03 — 分类主轴（docs §10.3）。副轴 domain 是自由字符串。 */
+export type SkillKind = 'workflow' | 'capability' | 'generator';
 
 export interface SkillInfo {
   skill_id: string;
@@ -31,6 +33,9 @@ export interface SkillInfo {
    */
   source?: 'builtin' | 'user';
   enabled?: boolean;
+  /** 2026-06-03 — 分类（docs §10.3）。kind 主轴；domain 副轴（领域/功能细分）。 */
+  kind?: SkillKind;
+  domain?: string | null;
   platform?: string;
   scenario?: string;
   fidelity?: string;

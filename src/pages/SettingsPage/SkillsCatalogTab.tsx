@@ -36,6 +36,7 @@ import {
   deleteSkill,
   type SkillInfo,
   type SkillMode,
+  type SkillKind,
 } from '../../api/skills';
 import { ingestSkill } from '../../api/skillIngest';
 
@@ -45,11 +46,20 @@ import { ingestSkill } from '../../api/skillIngest';
 
 type SourceFilter = 'all' | 'builtin' | 'user';
 type ModeFilter = 'all' | SkillMode;
+type KindFilter = 'all' | SkillKind;
+type DomainFilter = 'all' | string;
 
 interface PillDef<T extends string> {
   value: T;
   label: string;
 }
+
+// 2026-06-03 — 分类主轴 kind → i18n key（docs §10.3）。
+const KIND_LABEL_KEY: Record<SkillKind, string> = {
+  workflow: 'skillsCatalog.kindWorkflow',
+  capability: 'skillsCatalog.kindCapability',
+  generator: 'skillsCatalog.kindGenerator',
+};
 
 // ---------------------------------------------------------------------------
 // Filter pill — selected = accent-tint bg + accent text; idle = bg + border
@@ -136,6 +146,57 @@ function SourceBadge({ isUser, label }: { isUser: boolean; label: string }) {
   );
 }
 
+// 2026-06-03 — 分类主轴 badge（docs §10.3）。每个 kind 一个稳定色，便于扫读。
+const KIND_TINT: Record<SkillKind, { fg: string; bg: string }> = {
+  workflow: { fg: 'var(--t-accent)', bg: 'var(--t-accent-tint)' },
+  capability: { fg: 'var(--status-run, #60a5fa)', bg: 'rgba(96,165,250,.12)' },
+  generator: { fg: 'var(--t-fg-3)', bg: 'var(--t-panel-2)' },
+};
+
+function KindBadge({ kind, label }: { kind: SkillKind; label: string }) {
+  const tint = KIND_TINT[kind];
+  return (
+    <span
+      className="hf-mono"
+      style={{
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: '.06em',
+        textTransform: 'uppercase',
+        padding: '1px 6px',
+        borderRadius: 4,
+        color: tint.fg,
+        background: tint.bg,
+        border: '1px solid transparent',
+        flexShrink: 0,
+      }}
+      data-kind={kind}
+    >
+      {label}
+    </span>
+  );
+}
+
+function DomainBadge({ domain }: { domain: string }) {
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 600,
+        padding: '1px 6px',
+        borderRadius: 4,
+        color: 'var(--t-fg-4)',
+        background: 'var(--t-bg)',
+        border: '1px solid var(--t-border)',
+        flexShrink: 0,
+      }}
+      data-domain={domain}
+    >
+      {domain}
+    </span>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Skill row card
 // ---------------------------------------------------------------------------
@@ -192,11 +253,13 @@ function SkillRow({ skill, modeLabel, onToggle, onDelete }: SkillRowProps) {
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--t-fg)' }}>
             {skill.name}
           </span>
+          {skill.kind && <KindBadge kind={skill.kind} label={t(KIND_LABEL_KEY[skill.kind])} />}
           <ModeBadge mode={skill.mode} label={modeLabel} />
           <SourceBadge
             isUser={isUser}
             label={isUser ? t('skillsCatalog.sourceUser') : t('skillsCatalog.sourceBuiltin')}
           />
+          {skill.domain && <DomainBadge domain={skill.domain} />}
         </div>
         {skill.description && (
           <p
@@ -288,6 +351,8 @@ export function SkillsCatalogTab() {
   const [query, setQuery] = useState('');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all');
+  const [domainFilter, setDomainFilter] = useState<DomainFilter>('all');
 
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState('');
@@ -401,13 +466,15 @@ export function SkillsCatalogTab() {
         if (src !== sourceFilter) return false;
       }
       if (modeFilter !== 'all' && s.mode !== modeFilter) return false;
+      if (kindFilter !== 'all' && (s.kind ?? 'generator') !== kindFilter) return false;
+      if (domainFilter !== 'all' && (s.domain ?? '') !== domainFilter) return false;
       if (q) {
         const hay = `${s.name} ${s.description}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [skills, query, sourceFilter, modeFilter]);
+  }, [skills, query, sourceFilter, modeFilter, kindFilter, domainFilter]);
 
   const sourcePills: PillDef<SourceFilter>[] = [
     { value: 'all', label: t('skillsCatalog.filterAll') },
@@ -419,6 +486,21 @@ export function SkillsCatalogTab() {
     { value: 'blueprint', label: t('skillsCatalog.modeBlueprint') },
     { value: 'prototype', label: t('skillsCatalog.modePrototype') },
     { value: 'report', label: t('skillsCatalog.modeReport') },
+  ];
+  // 2026-06-03 — 分类主轴 kind（固定 3 类）+ 副轴 domain（从数据动态生成，
+  // 对齐 OpenDesign 的 category pills 体验）。docs §10.3。
+  const kindPills: PillDef<KindFilter>[] = [
+    { value: 'all', label: t('skillsCatalog.filterAll') },
+    { value: 'workflow', label: t('skillsCatalog.kindWorkflow') },
+    { value: 'capability', label: t('skillsCatalog.kindCapability') },
+    { value: 'generator', label: t('skillsCatalog.kindGenerator') },
+  ];
+  const domainValues = [
+    ...new Set(skills.map((s) => s.domain).filter((d): d is string => !!d)),
+  ].sort();
+  const domainPills: PillDef<DomainFilter>[] = [
+    { value: 'all', label: t('skillsCatalog.filterAll') },
+    ...domainValues.map((d) => ({ value: d, label: d })),
   ];
 
   return (
@@ -622,6 +704,34 @@ export function SkillsCatalogTab() {
               />
             ))}
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="hf-label" style={{ marginRight: 2 }}>
+              {t('skillsCatalog.filterKindLabel')}
+            </span>
+            {kindPills.map((p) => (
+              <FilterPill
+                key={p.value}
+                def={p}
+                active={kindFilter === p.value}
+                onSelect={setKindFilter}
+              />
+            ))}
+          </div>
+          {domainValues.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span className="hf-label" style={{ marginRight: 2 }}>
+                {t('skillsCatalog.filterDomainLabel')}
+              </span>
+              {domainPills.map((p) => (
+                <FilterPill
+                  key={p.value}
+                  def={p}
+                  active={domainFilter === p.value}
+                  onSelect={setDomainFilter}
+                />
+              ))}
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span className="hf-label" style={{ marginRight: 2 }}>
               {t('skillsCatalog.filterModeLabel')}
