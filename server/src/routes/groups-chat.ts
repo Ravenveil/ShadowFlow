@@ -34,6 +34,8 @@ import { resolveCallable } from '../transport/dispatcher';
 import { resolveProviderKey } from '../transport/byokKey';
 import { isProviderId } from '../transport/api-clients';
 import type { ConversationMessage } from '../lib/conversation-types';
+import { loadTeamForRun } from '../lib/team-source';
+import { runTeamDagFanout, type RunTeamDagDeps } from '../lib/chat-dag/run-team-dag';
 
 const router = Router();
 
@@ -47,11 +49,21 @@ interface GroupRecord {
   kind?: string;
   /** 2026-05-30 — 用户在群设置选的 CLI 工作目录(绝对路径)。空 = 用默认。 */
   workspace_dir?: string;
+  /** 2026-06-03 — group 绑定的 team_id(Python 持久化)。有值且 team 可读时走 DAG 调度。 */
+  team_id?: string | null;
 }
 interface AgentRecord {
   agent_id: string;
   name?: string;
   soul?: string;
+}
+
+/**
+ * 判断是否应走 DAG 执行路径。可纯测试(无 I/O 依赖)。
+ * group.team_id 有值 → true;缺失/null/空字符串 → false(串行降级)。
+ */
+export function shouldRunTeamDag(group: Pick<GroupRecord, 'team_id'>): boolean {
+  return !!group.team_id;
 }
 
 async function pyGet<T>(path: string): Promise<T | null> {
@@ -202,6 +214,62 @@ async function runFanout(
       sender_kind: 'system',
     }).catch(() => {});
     return;
+  }
+
+  // 2026-06-03 Phase 2a — group 绑了 team 且能读到单一真源 DAG → 按拓扑调度多 agent。
+  // 读不到 team(无 team_id / 文件缺失 / 无成员)→ 落到下面的串行 fan-out 降级。
+  if (shouldRunTeamDag(group)) {
+    const { team } = loadTeamForRun(group.team_id!);
+    if (team && team.members.length > 0) {
+      const fresh0 = await pyGet<GroupRecord>(`/api/groups/${encodeURIComponent(groupId)}`);
+      const history0 = toHistory(fresh0?.messages);
+      const latestUser0 = [...history0].reverse().find((m) => m.role === 'user');
+      const userPrompt =
+        latestUser0?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('') ?? '';
+
+      const deps: RunTeamDagDeps = {
+        getAgent: async (agentId) => {
+          const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
+          return a ? { name: a.name || agentId, soul: a.soul ?? '' } : null;
+        },
+        callAgent: async ({ soul, upstream }) => {
+          const upstreamText = upstream.length
+            ? `\n\n=== 上游 agent 产出 ===\n${upstream.map((u) => `[${u.from}]\n${u.text}`).join('\n\n')}`
+            : '';
+          const ctrl = new AbortController();
+          let buf = '';
+          let errMsg = '';
+          try {
+            const callable = resolveCallable(executor, { apiKey, model, workspace });
+            for await (const chunk of callable.turn({
+              system: soul,
+              prompt: userPrompt + upstreamText,
+              history: history0.slice(0, -1),
+              signal: ctrl.signal,
+              model,
+            })) {
+              if (chunk.type === 'text-delta') buf += sseWireToText(chunk.value);
+              else if (chunk.type === 'error') {
+                errMsg = chunk.error?.message ?? 'stream error';
+                break;
+              }
+            }
+          } catch (e) {
+            errMsg = e instanceof Error ? e.message : String(e);
+          }
+          return { text: buf, error: errMsg || undefined };
+        },
+        postMessage: async (m) => {
+          await pyPostMessage(groupId, {
+            content: m.content,
+            sender_name: m.sender_name,
+            sender_kind: m.sender_kind,
+          }).catch(() => {});
+        },
+      };
+      await runTeamDagFanout(team, deps, userPrompt);
+      return;
+    }
   }
 
   for (const agentId of agentIds) {
