@@ -45,4 +45,14 @@ describe('mapPythonTeamToRunShape', () => {
     });
     expect(r.edges).toEqual([]);
   });
+  it('node 缺 agentId → 该节点不入 map,指向它的边视为悬空跳过', () => {
+    const r = mapPythonTeamToRunShape({
+      team_id: 't3',
+      workflow: {
+        nodes: [{ id: 'n1', data: {} }],
+        edges: [{ source: 'n1', target: 'n1' }],
+      },
+    });
+    expect(r.edges).toEqual([]);
+  });
 });

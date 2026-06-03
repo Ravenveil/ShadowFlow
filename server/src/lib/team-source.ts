@@ -44,5 +44,5 @@ export function mapPythonTeamToRunShape(json: PyTeamJson): TeamRunShape {
     if (!from || !to) continue; // 悬空边跳过
     edges.push({ from, to, kind: mapMode(e.data?.mode) });
   }
-  return { members, edges, policy_matrix: json.policy_matrix ?? {} };
+  return { members, edges, policy_matrix: json.policy_matrix ? { ...json.policy_matrix } : {} };
 }
