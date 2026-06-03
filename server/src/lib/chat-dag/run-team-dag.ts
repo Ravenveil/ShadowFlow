@@ -31,6 +31,8 @@ export interface RunTeamDagResult {
   warnedEdges: number;
 }
 
+// 注:_userPrompt 在本阶段故意不用 —— 调用方把用户消息直接 bake 进 callAgent 的 prompt;
+// 保留此形参作为接口位(Phase 3 可能在编排层注入)。
 export async function runTeamDagFanout(
   team: TeamRunShape,
   deps: RunTeamDagDeps,
@@ -43,7 +45,9 @@ export async function runTeamDagFanout(
     if (e.kind === 'conditional') continue;
     if (!team.members.includes(e.from) || !team.members.includes(e.to)) continue;
     if (e.from === e.to) continue;
-    (incoming.get(e.to) ?? incoming.set(e.to, []).get(e.to)!).push(e.from);
+    let list = incoming.get(e.to);
+    if (!list) { list = []; incoming.set(e.to, list); }
+    list.push(e.from);
   }
 
   const outputs = new Map<string, string>(); // agentId → 非空产出
@@ -66,14 +70,16 @@ export async function runTeamDagFanout(
             });
             continue;
           }
+          const text = outputs.get(from);
           if (verdict === 'warn') {
             warnedEdges++;
             await deps.postMessage({
-              content: `[policy] ${from} → ${agentId} warn 提醒(交到拍板/审核点),仍放行。`,
+              content: text
+                ? `[policy] ${from} → ${agentId} warn 提醒(交到拍板/审核点),仍放行。`
+                : `[policy] ${from} → ${agentId} warn 提醒;但上游无产出,无内容可传递。`,
               sender_name: 'system', sender_kind: 'system',
             });
           }
-          const text = outputs.get(from);
           if (text) upstream.push({ from, text });
         }
 

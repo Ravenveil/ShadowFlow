@@ -99,4 +99,14 @@ describe('runTeamDagFanout', () => {
     const r = await runTeamDagFanout(linear, deps, 'go');
     expect(r.perAgent.pm).toBe('error');
   });
+
+  it('warn 边但上游空回复 → warnedEdges 仍计数、note 说明无产出、不喂下游', async () => {
+    const team: TeamRunShape = { ...linear, policy_matrix: { pm: { arch: 'warn' } } };
+    const deps = mkDeps({ callAgent: vi.fn(async ({ agentId, upstream }: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[] }) => (agentId === 'pm' ? { text: '   ' } : { text: `${agentId}:up=${upstream.map((u) => u.from).join('+') || 'none'}` })) });
+    const r = await runTeamDagFanout(team, deps, 'go');
+    expect(r.warnedEdges).toBe(1);
+    const calls = (deps.callAgent as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(calls.find((c) => c.agentId === 'arch').upstream).toEqual([]); // pm 空,不喂
+    expect(deps.posted.some((p) => p.sender_kind === 'system' && /无产出/.test(p.content))).toBe(true);
+  });
 });
