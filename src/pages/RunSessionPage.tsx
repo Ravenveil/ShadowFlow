@@ -37,7 +37,8 @@ import { DesignSystemPicker } from '../components/DesignSystemPicker';
 import { ConversationPicker } from '../components/ConversationPicker';
 import { createRunSession } from '../api/runSessions';
 import { quickCreateAgent } from '../api/agents';
-import { createTeam, patchTeam, putTeamWorkflow, putTeamPolicy, type TeamWorkflowNode, type TeamWorkflowEdge } from '../api/teams';
+import { createTeam, patchTeam, putTeamWorkflow, putTeamPolicy, type TeamWorkflow, type TeamWorkflowNode, type TeamWorkflowEdge } from '../api/teams';
+import { persistAssembledTeam } from './runSession/persistAssembledTeam';
 import { CreateWorkspaceModal } from '../components/workspace/CreateWorkspaceModal';
 import type { WorkspaceSummary } from '../api/workspaces';
 import { createWorkspace } from '../api/workspaces';
@@ -3485,6 +3486,142 @@ function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId }: Ru
   );
 }
 
+// ---------------------------------------------------------------------------
+// Module-scope helpers for auto-save orchestration (used by RunSessionLiveView)
+// ---------------------------------------------------------------------------
+
+/**
+ * Translate the blueprint DAG (session nodes/edges, roster-truncated) into the
+ * TeamWorkflow shape expected by putTeamWorkflow.
+ *
+ * The mapping agentNodes[i] ↔ agentIds[i] is valid because:
+ *   - agentSpecs is built from `agentNodes.map(...)` (same order)
+ *   - persistAssembledTeam calls Promise.all which preserves order
+ */
+function buildWorkflowGraph(
+  agentIds: string[],
+  agentNodes: RunSessionNode[],
+  filteredNodes: RunSessionNode[],
+  filteredEdges: RunSessionEdge[],
+): TeamWorkflow {
+  const nodeIdToAgentId = new Map<string, string>();
+  agentNodes.forEach((n, i) => {
+    const aid = agentIds[i];
+    if (aid) nodeIdToAgentId.set(n.id, aid);
+  });
+
+  // Simple column-based seed layout — mirrors BlueprintCanvas so the
+  // /teams/:id DAG opens with a reasonable initial arrangement.
+  const NODE_W = 168;
+  const NODE_H = 78;
+  const COL_GAP = 96;
+  const ROW_GAP = 28;
+  const incoming: Record<string, number> = {};
+  filteredNodes.forEach(n => { incoming[n.id] = 0; });
+  filteredEdges.forEach(e => {
+    if (incoming[e.to] != null) incoming[e.to]++;
+  });
+  // BFS to assign columns (longest path from root).
+  const col = new Map<string, number>();
+  const queue: string[] = [];
+  filteredNodes.forEach(n => {
+    if ((incoming[n.id] ?? 0) === 0) { col.set(n.id, 0); queue.push(n.id); }
+  });
+  let guard = filteredNodes.length * 4 + 8;
+  while (queue.length && guard-- > 0) {
+    const id = queue.shift()!;
+    const c = col.get(id) ?? 0;
+    filteredEdges.forEach(e => {
+      if (e.from === id) {
+        const prev = col.get(e.to);
+        if (prev === undefined || prev < c + 1) {
+          col.set(e.to, c + 1);
+          queue.push(e.to);
+        }
+      }
+    });
+  }
+  // Bucket by column to compute row index.
+  const rowCounter: Record<number, number> = {};
+  const positions = new Map<string, { x: number; y: number }>();
+  filteredNodes.forEach(n => {
+    const c = col.get(n.id) ?? 0;
+    const r = rowCounter[c] ?? 0;
+    rowCounter[c] = r + 1;
+    positions.set(n.id, {
+      x: c * (NODE_W + COL_GAP),
+      y: r * (NODE_H + ROW_GAP),
+    });
+  });
+
+  const workflowNodes: TeamWorkflowNode[] = filteredNodes.map(n => {
+    const aid = nodeIdToAgentId.get(n.id) ?? '';
+    return {
+      id: n.id,
+      type: 'agentTask',
+      position: positions.get(n.id) ?? { x: 0, y: 0 },
+      data: {
+        agentId: aid,
+        name: n.title,
+        soul: n.sub || n.title,
+      },
+    };
+  });
+
+  const workflowEdges: TeamWorkflowEdge[] = filteredEdges.map((e, i) => ({
+    id: `edge-${i}-${e.from}-${e.to}`,
+    source: e.from,
+    target: e.to,
+    data: { mode: 'direct' },
+  }));
+
+  return { nodes: workflowNodes, edges: workflowEdges };
+}
+
+/**
+ * Derive the PolicyMatrix from the roster-truncated DAG and RACI rules.
+ * Maps agentNodes[i] → agentIds[i] (same index alignment as buildWorkflowGraph).
+ */
+function buildPolicy(
+  agentIds: string[],
+  agentNodes: RunSessionNode[],
+  filteredEdges: RunSessionEdge[],
+): Record<string, Record<string, string>> {
+  const nodeToAgent = new Map<string, string>();
+  agentNodes.forEach((n, i) => {
+    const aid = agentIds[i];
+    if (aid) nodeToAgent.set(n.id, aid);
+  });
+  const policyAgents = agentNodes
+    .map((n, i) => {
+      const id = agentIds[i];
+      return id
+        ? { id, isCoordinator: n.type === 'coordinator', isAccountable: isAccountable(deriveRaci(n)) }
+        : null;
+    })
+    .filter((a): a is NonNullable<typeof a> => a !== null);
+  const policyEdges = filteredEdges
+    .map((e) => ({ from: nodeToAgent.get(e.from), to: nodeToAgent.get(e.to) }))
+    .filter((e): e is { from: string; to: string } => !!e.from && !!e.to);
+  return derivePolicyMatrix(policyAgents, policyEdges);
+}
+
+/**
+ * Produce a user-facing Chinese error string from a PersistResult's fatal
+ * error or failed-step list.
+ */
+function friendlySaveError(fatal: Error | null, failedSteps: string[]): string {
+  if (fatal) {
+    const code = (fatal as { code?: string }).code ?? '';
+    if (code === 'PYTHON_BACKEND_UNAVAILABLE') return 'Python 后端未启动 — Team 无法持久化';
+    if (code.startsWith('HTTP_')) return `服务器返回 ${code.replace('HTTP_', '')} — ${fatal.message}`;
+    return fatal.message;
+  }
+  const label: Record<string, string> = { workflow: 'DAG 工作流', policy: '权责矩阵', group: '群聊' };
+  const parts = failedSteps.filter((s) => s !== 'group').map((s) => label[s] ?? s);
+  return `团队已建,但${parts.join('、')}保存失败 —— 请重试以补全`;
+}
+
 interface RunSessionLiveViewProps {
   sessionId: string;
   goal: string;
@@ -3653,186 +3790,48 @@ function RunSessionLiveView({ sessionId, goal, skillUrl, onNavigate }: RunSessio
 
     (async () => {
       try {
-        const created = await Promise.all(
-          agentNodes.map((n) =>
-            quickCreateAgent({
+        const result = await persistAssembledTeam(
+          {
+            agentSpecs: agentNodes.map((n) => ({
               name: n.title,
-              // 优先用 run 里生成的完整 persona(灵魂),而不是短副标题 sub —— 此前
-              // 用 sub 导致组建保存的 agent 灵魂被削成一句话。
               soul: n.persona || n.sub || n.title,
               workspace_id: wsId,
-              // 把设计期的 model / tools / RACI 分工一并带过去,而非退化成默认 blueprint。
               model: n.model,
               tools: n.toolsPicked,
               raci: deriveRaci(n),
+            })),
+            teamMeta: { name: teamName, description: goal, workspaceId: wsId },
+            buildWorkflow: (agentIds) => buildWorkflowGraph(agentIds, agentNodes, filteredNodes, filteredEdges),
+            buildPolicyMatrix: (agentIds) => buildPolicy(agentIds, agentNodes, filteredEdges),
+            buildGroup: (teamId, agentIds, policyMatrix) => ({
+              templateId: '', groupTemplateId: '', name: teamName,
+              agentIds, memberEmails: [], policyMatrix, workspaceId: wsId, teamId,
             }),
-          ),
+          },
+          {
+            quickCreateAgent: (spec) => quickCreateAgent(spec as Parameters<typeof quickCreateAgent>[0]),
+            createTeam,
+            putTeamWorkflow,
+            putTeamPolicy,
+            createGroup: (req) => createGroup(req as Parameters<typeof createGroup>[0]),
+          },
         );
-        const agentIds = created.map((a) => a.agent_id);
-        const team = await createTeam({
-          name: teamName,
-          description: goal,
-          agent_ids: agentIds,
-          workspace_id: wsId,
-        });
-        setSavedTeamId(team.team_id);
 
-        // 2026-05-19 — persist the blueprint DAG as the team's workflow so
-        // /teams/:id renders nodes + edges instead of "暂无工作流节点". Build
-        // a session-node-id → real-agent-id map, then translate blueprint
-        // nodes/edges into TeamWorkflow shape. Failure here doesn't fail the
-        // whole save — the team itself is already persisted.
-        try {
-          const nodeIdToAgentId = new Map<string, string>();
-          agentNodes.forEach((n, i) => {
-            const aid = created[i]?.agent_id;
-            if (aid) nodeIdToAgentId.set(n.id, aid);
-          });
+        if (result.teamId) setSavedTeamId(result.teamId);
+        if (result.groupId) setSavedGroupId(result.groupId);
 
-          // Simple column-based seed layout — mirrors BlueprintCanvas so the
-          // /teams/:id DAG opens with a reasonable initial arrangement. Real
-          // editor positions take over once the user drags.
-          // NOTE: use filteredNodes/filteredEdges (roster-truncated) so that
-          // the workflow DAG is consistent with the team members created above.
-          const NODE_W = 168;
-          const NODE_H = 78;
-          const COL_GAP = 96;
-          const ROW_GAP = 28;
-          const incoming: Record<string, number> = {};
-          filteredNodes.forEach(n => { incoming[n.id] = 0; });
-          filteredEdges.forEach(e => {
-            if (incoming[e.to] != null) incoming[e.to]++;
-          });
-          // BFS to assign columns (longest path from root).
-          const col = new Map<string, number>();
-          const queue: string[] = [];
-          filteredNodes.forEach(n => {
-            if ((incoming[n.id] ?? 0) === 0) { col.set(n.id, 0); queue.push(n.id); }
-          });
-          let guard = filteredNodes.length * 4 + 8;
-          while (queue.length && guard-- > 0) {
-            const id = queue.shift()!;
-            const c = col.get(id) ?? 0;
-            filteredEdges.forEach(e => {
-              if (e.from === id) {
-                const prev = col.get(e.to);
-                if (prev === undefined || prev < c + 1) {
-                  col.set(e.to, c + 1);
-                  queue.push(e.to);
-                }
-              }
-            });
-          }
-          // Bucket by column to compute row index.
-          const rowCounter: Record<number, number> = {};
-          const positions = new Map<string, { x: number; y: number }>();
-          filteredNodes.forEach(n => {
-            const c = col.get(n.id) ?? 0;
-            const r = rowCounter[c] ?? 0;
-            rowCounter[c] = r + 1;
-            positions.set(n.id, {
-              x: c * (NODE_W + COL_GAP),
-              y: r * (NODE_H + ROW_GAP),
-            });
-          });
-
-          const workflowNodes: TeamWorkflowNode[] = filteredNodes.map(n => {
-            const aid = nodeIdToAgentId.get(n.id) ?? '';
-            return {
-              id: n.id,
-              type: 'agentTask',
-              position: positions.get(n.id) ?? { x: 0, y: 0 },
-              data: {
-                agentId: aid,
-                name: n.title,
-                soul: n.sub || n.title,
-              },
-            };
-          });
-
-          const workflowEdges: TeamWorkflowEdge[] = filteredEdges.map((e, i) => ({
-            id: `edge-${i}-${e.from}-${e.to}`,
-            source: e.from,
-            target: e.to,
-            data: { mode: 'direct' },
-          }));
-
-          await putTeamWorkflow(team.team_id, {
-            nodes: workflowNodes,
-            edges: workflowEdges,
-          });
-        } catch (wfErr) {
-          // Don't fail the whole save on workflow persistence error. Team
-          // record itself is already in place; user can manually rebuild
-          // the DAG in the editor.
-          console.warn('[RunSession] putTeamWorkflow failed:', wfErr);
+        if (result.fatalError) {
+          setSaveError(friendlySaveError(result.fatalError, result.failedSteps));
+          setSaveState('failed');
+        } else if (!result.fullyPersisted) {
+          setSaveError(friendlySaveError(null, result.failedSteps));
+          setSaveState('failed');
+        } else {
+          setSaveState('ok');
         }
-
-        // 权责矩阵(交互门禁):从 DAG 边 + RACI 派生 agent×agent 的 permit/deny/warn,
-        // 存进 group.policy_matrix(此前写死 {} → 组建画的权责丢失)。键用 agent_id。
-        let policyMatrix: Record<string, Record<string, string>> = {};
-        try {
-          const nodeToAgent = new Map<string, string>();
-          agentNodes.forEach((n, i) => {
-            const aid = created[i]?.agent_id;
-            if (aid) nodeToAgent.set(n.id, aid);
-          });
-          const policyAgents = agentNodes
-            .map((n, i) => {
-              const id = created[i]?.agent_id;
-              return id
-                ? { id, isCoordinator: n.type === 'coordinator', isAccountable: isAccountable(deriveRaci(n)) }
-                : null;
-            })
-            .filter((a): a is NonNullable<typeof a> => a !== null);
-          const policyEdges = filteredEdges
-            .map((e) => ({ from: nodeToAgent.get(e.from), to: nodeToAgent.get(e.to) }))
-            .filter((e): e is { from: string; to: string } => !!e.from && !!e.to);
-          policyMatrix = derivePolicyMatrix(policyAgents, policyEdges);
-        } catch (pmErr) {
-          console.warn('[RunSession] derivePolicyMatrix failed:', pmErr);
-        }
-
-        // 存进 TEAM 的 policy(TeamPage 读的是 GET /api/teams/:id/policy,与 group
-        // 的 policy_matrix 是两套存储)。这样组建画的权责矩阵在团队页可见。
-        if (Object.keys(policyMatrix).length > 0) {
-          try {
-            await putTeamPolicy(team.team_id, policyMatrix);
-          } catch (tpErr) {
-            console.warn('[RunSession] putTeamPolicy failed:', tpErr);
-          }
-        }
-
-        try {
-          const grp = await createGroup({
-            templateId: '',
-            groupTemplateId: '',
-            name: teamName,
-            agentIds,
-            memberEmails: [],
-            policyMatrix,
-            workspaceId: wsId,
-            teamId: team.team_id,
-          });
-          if (grp?.groupId) setSavedGroupId(grp.groupId);
-        } catch {
-          // groups endpoint may not be available yet (Python may not have
-          // groups storage wired); chat navigation falls back to /teams.
-          // Don't fail the whole save just because group creation failed.
-        }
-        setSaveState('ok');
       } catch (e: unknown) {
-        // Translate known error codes to friendly Chinese messages so the
-        // status chip can show something actionable instead of raw stack.
-        const code = (e as { code?: string })?.code ?? '';
-        let msg = e instanceof Error ? e.message : String(e);
-        if (code === 'PYTHON_BACKEND_UNAVAILABLE') {
-          msg = 'Python 后端未启动 — Team 无法持久化';
-        } else if (code.startsWith('HTTP_')) {
-          msg = `服务器返回 ${code.replace('HTTP_', '')} — ${msg}`;
-        }
-        console.warn('[RunSession] auto-save failed:', e);
-        setSaveError(msg);
+        console.warn('[RunSession] auto-save crashed:', e);
+        setSaveError(e instanceof Error ? e.message : String(e));
         setSaveState('failed');
       } finally {
         inFlightRef.current = false;
