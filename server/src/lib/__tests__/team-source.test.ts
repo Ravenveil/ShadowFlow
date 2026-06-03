@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -61,8 +61,12 @@ describe('mapPythonTeamToRunShape', () => {
 });
 
 describe('loadTeamForRun', () => {
+  const tmpDirs: string[] = [];
+  const mkTmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-teams-')); tmpDirs.push(d); return d; };
+  afterAll(() => { for (const d of tmpDirs) { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* ignore */ } } });
+
   it('读到 <id>.json → 返回映射后的 run shape', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-teams-'));
+    const dir = mkTmp();
     fs.writeFileSync(path.join(dir, 't1.json'), JSON.stringify({
       team_id: 't1', agent_ids: ['a1', 'a2'],
       workflow: { nodes: [{ id: 'n1', data: { agentId: 'a1' } }, { id: 'n2', data: { agentId: 'a2' } }],
@@ -75,7 +79,7 @@ describe('loadTeamForRun', () => {
     expect(r.errors).toEqual([]);
   });
   it('文件不存在 → team null + errors', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-teams-'));
+    const dir = mkTmp();
     const r = loadTeamForRun('missing', [dir]);
     expect(r.team).toBeNull();
     expect(r.errors[0]).toMatch(/not found/i);
@@ -84,5 +88,12 @@ describe('loadTeamForRun', () => {
     const r = loadTeamForRun('../etc/passwd', ['/tmp']);
     expect(r.team).toBeNull();
     expect(r.errors[0]).toMatch(/invalid/i);
+  });
+  it('JSON 格式错误 → team null + parse failed error', () => {
+    const dir = mkTmp();
+    fs.writeFileSync(path.join(dir, 'bad.json'), '{ not json');
+    const r = loadTeamForRun('bad', [dir]);
+    expect(r.team).toBeNull();
+    expect(r.errors[0]).toMatch(/parse failed/i);
   });
 });

@@ -9,6 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { TeamEdgeV1, EdgeKind } from './team-yaml';
+import { VALID_ID_RE, ROOT_TEAMS_DIR, LOCAL_TEAMS_DIR } from './team-yaml';
 
 export interface TeamRunShape {
   members: string[];
@@ -49,12 +50,9 @@ export function mapPythonTeamToRunShape(json: PyTeamJson): TeamRunShape {
   return { members, edges, policy_matrix: json.policy_matrix ? { ...json.policy_matrix } : {} };
 }
 
-const VALID_ID_RE = /^[A-Za-z0-9_-]+$/;
-// 与 team-yaml.ts 的 ROOT/LOCAL_TEAMS_DIR 同源:Python `<id>.json` 与 Node `<id>.team.yaml` 同目录。
-const DEFAULT_DIRS = [
-  path.join(process.cwd(), '..', '.shadowflow', 'teams'),
-  path.join(process.cwd(), '.shadowflow', 'teams'),
-];
+// VALID_ID_RE / ROOT_TEAMS_DIR / LOCAL_TEAMS_DIR 统一从 team-yaml.ts 导入,避免双 loader 校验分叉。
+// Python `<id>.json` 与 Node `<id>.team.yaml` 存放在同一目录。
+const DEFAULT_DIRS = [ROOT_TEAMS_DIR, LOCAL_TEAMS_DIR];
 
 export interface LoadTeamForRunResult {
   team: TeamRunShape | null;
@@ -72,6 +70,7 @@ export function loadTeamForRun(teamId: string, dirs: string[] = DEFAULT_DIRS): L
       const json = JSON.parse(fs.readFileSync(fp, 'utf-8')) as PyTeamJson;
       return { team: mapPythonTeamToRunShape(json), errors: [] };
     } catch (e) {
+      // 该 dir 文件存在但坏:立即返回(不继续找后面的 dir),让坏文件显形而非被静默跳过。
       return { team: null, errors: [`parse failed: ${(e as Error).message}`] };
     }
   }

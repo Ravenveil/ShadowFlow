@@ -20,10 +20,10 @@ import yaml from 'js-yaml';
 import { loadAgent } from './agent-yaml';
 import type { SkillAgentDef, TeamDef } from './skill-types';
 
-const ROOT_TEAMS_DIR = path.join(process.cwd(), '..', '.shadowflow', 'teams');
-const LOCAL_TEAMS_DIR = path.join(process.cwd(), '.shadowflow', 'teams');
+export const ROOT_TEAMS_DIR = path.join(process.cwd(), '..', '.shadowflow', 'teams');
+export const LOCAL_TEAMS_DIR = path.join(process.cwd(), '.shadowflow', 'teams');
 
-const VALID_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
+export const VALID_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
 // ─── Schema (extends TeamDef with v1 fields the S0.5 yaml adds) ──────────────
 //
