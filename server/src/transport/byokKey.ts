@@ -3,17 +3,22 @@
  *
  * Extracted from run-sessions.ts so the Node chat gateway (groups-chat.ts) and
  * run-sessions share ONE key-resolution policy. Priority order:
- *   1. Per-request HTTP header (e.g. `x-zhipu-key`)        — overrides everything
- *   2. ByokSection's saved key in settings/byok           — the UI-configured path
- *   3. Per-provider env var (e.g. ZHIPU_API_KEY)          — last-resort default
+ *   1. Per-provider HTTP header (e.g. `x-zhipu-key`)       — most specific, wins
+ *   2. Generic `X-LLM-Provider` + `X-LLM-Key` headers      — browser localStorage,
+ *      forwarded by src/api/chat.ts buildByokHeaders (DEBT-1, 2026-06-04)
+ *   3. ByokSection's saved key in settings/byok            — server-side UI path
+ *   4. Per-provider env var (e.g. ZHIPU_API_KEY)           — last-resort default
  *
- * (2) is the "前端做了后端没接上" fix: ByokSection writes apiKey to
+ * (2) is the DEBT-1 unification: the browser stores the user's key in
+ * localStorage (KEY_STORAGE) and forwards it on EVERY request as the generic
+ * `X-LLM-*` headers. Before this, the Node gateway only honored per-provider
+ * headers + the server `byok` setting, so a user who configured their key in
+ * the browser (but never populated server `byok`) got 401 on chat replies.
+ * Honoring the generic header bridges 「browser localStorage → Node gateway」,
+ * matching what the Python /api/chat/completions path already reads.
+ *
+ * (3) is the older "前端做了后端没接上" fix: ByokSection writes apiKey to
  * byok-config.json via PUT /api/settings/byok.
- *
- * NB: this is the server-side key store (`getSetting('byok')`), which is a
- * DIFFERENT source from the browser's localStorage KEY_STORAGE used by the
- * Python /api/chat/completions path. The Node gateway uses this resolver so
- * chat replies pick up the same key run-sessions uses.
  */
 import { getSetting } from '../storage/settings';
 import { PROVIDER_ENV_VAR, type ProviderId } from './api-clients';
@@ -35,6 +40,24 @@ export const HEADER_BY_PROVIDER: Record<ProviderId, string> = {
   azure: 'x-azure-key',
 };
 
+/** 取 header 值(Express 可能给 string[]),trim 后返回非空字符串,否则 undefined。 */
+function pickHeader(
+  headers: Record<string, string | string[] | undefined>,
+  name: string,
+): string | undefined {
+  const v = headers[name];
+  const s = Array.isArray(v) ? v[0] : v;
+  return typeof s === 'string' && s.trim() ? s.trim() : undefined;
+}
+
+/**
+ * 前端 chat-provider 名 → 后端 ProviderId。浏览器 buildByokHeaders 的 `X-LLM-Provider`
+ * 用 chat 名('claude' 等),归一到 ProviderId(claude→anthropic;其余同名)。
+ */
+function normalizeChatProvider(name: string): string {
+  return name === 'claude' ? 'anthropic' : name;
+}
+
 /**
  * Resolve the API key for `provider`. `headers` is the incoming request's
  * headers map (lower-cased keys, as Express provides). Returns undefined when
@@ -44,11 +67,21 @@ export function resolveProviderKey(
   provider: ProviderId,
   headers: Record<string, string | string[] | undefined> = {},
 ): string | undefined {
-  const headerName = HEADER_BY_PROVIDER[provider];
-  const fromHeader = headers[headerName];
-  const headerVal = Array.isArray(fromHeader) ? fromHeader[0] : fromHeader;
-  if (typeof headerVal === 'string' && headerVal.trim()) return headerVal.trim();
+  // 1) per-provider 头(最具体,最高优先)。
+  const specific = pickHeader(headers, HEADER_BY_PROVIDER[provider]);
+  if (specific) return specific;
 
+  // 2) 通用 X-LLM-* 头(DEBT-1 统一,2026-06-04):浏览器把 localStorage 里配的 key 经
+  //    X-LLM-Provider / X-LLM-Key 转发(src/api/chat.ts buildByokHeaders)。仅当通用头声明
+  //    的 provider 归一后与请求 provider 一致才采用,防止张冠李戴(如声明 openai 却被当
+  //    anthropic 用)。这桥接「浏览器 localStorage → Node 网关」,不再依赖服务端 byok 设置另填。
+  const llmKey = pickHeader(headers, 'x-llm-key');
+  const llmProvider = pickHeader(headers, 'x-llm-provider');
+  if (llmKey && llmProvider && normalizeChatProvider(llmProvider) === provider) {
+    return llmKey;
+  }
+
+  // 3) 服务端 byok 设置(ByokSection 经 PUT /api/settings/byok 写入)。
   try {
     const cfg = getSetting('byok') as
       | { providers?: Record<string, { apiKey?: string }> }
@@ -59,6 +92,7 @@ export function resolveProviderKey(
     /* settings unavailable — fall through to env */
   }
 
+  // 4) 环境变量(最后兜底)。
   const envVal = process.env[PROVIDER_ENV_VAR[provider]];
   return typeof envVal === 'string' && envVal.trim() ? envVal.trim() : undefined;
 }
