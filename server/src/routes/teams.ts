@@ -133,6 +133,34 @@ router.put('/:id/dag', (req: Request, res: Response) => {
     return;
   }
 
+  // D1: write-time DAG validation. The PUT only mutates dag_layout coordinates,
+  // but we MUST NOT persist a layout onto a team whose members/edges are
+  // inconsistent (orphan members, edges pointing at non-members, sequential
+  // cycles). Reuse validateDag (the same function /dag/validate exposes) so the
+  // write path enforces what the preflight only suggested. conditional edges are
+  // intentionally excluded from cycle detection by validateDag — we keep that
+  // semantics by not touching it here.
+  const loaded = loadTeam(teamId);
+  if (!loaded.team) {
+    res.status(404).json({
+      error: { code: 'TEAM_NOT_FOUND', message: 'team yaml not loadable', detail: loaded.errors },
+    });
+    return;
+  }
+  const dagErrors = validateDag(loaded.team, loaded.resolvedAgents);
+  if (dagErrors.length > 0) {
+    // errors are hard failures: validateDag returns a flat string[] with no
+    // warning channel, so every entry blocks the write (422, not persisted).
+    res.status(422).json({
+      error: {
+        code: 'DAG_INVALID',
+        message: 'team DAG is invalid; refusing to save layout',
+        errors: dagErrors,
+      },
+    });
+    return;
+  }
+
   let raw: string;
   try {
     raw = fs.readFileSync(filePath, 'utf-8');
