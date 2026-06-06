@@ -33,6 +33,23 @@ from pydantic import BaseModel, Field
 _TEAMS_DIR = Path(__file__).resolve().parents[2] / ".shadowflow" / "teams"
 _TEAM_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
+# D3: sentinel workspace for records that predate the workspace concept (no
+# `workspace_id` field at all). We DO NOT resurrect the old "default" workspace
+# (cancelled 2026-06-01, A design); legacy records are bucketed here so they
+# stop acting as a cross-workspace wildcard. They surface only under an
+# explicit ?workspace_id=unassigned filter (and in the unfiltered list).
+UNASSIGNED_WORKSPACE = "unassigned"
+
+
+def normalize_workspace_id(workspace_id: Optional[str]) -> str:
+    """Backfill a missing/blank workspace_id to the UNASSIGNED sentinel.
+
+    Explicit ids (including the legacy literal "default") are returned as-is.
+    """
+    if workspace_id is None or not str(workspace_id).strip():
+        return UNASSIGNED_WORKSPACE
+    return workspace_id
+
 
 def _validate_team_id(team_id: str) -> None:
     if not _TEAM_ID_RE.match(team_id):
@@ -89,10 +106,12 @@ def _load_team(team_id: str) -> Optional[Dict[str, Any]]:
 def _list_teams(workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """List team records, optionally filtered by workspace_id.
 
-    Records without an explicit `workspace_id` field (legacy data created
-    before the workspace concept landed) match ANY filter so they don't
-    vanish during migration. Only records that explicitly belong to a
-    DIFFERENT workspace are filtered out.
+    D3 (2026-06-06): legacy records without a `workspace_id` field are
+    normalized to the UNASSIGNED sentinel for matching — they no longer act as
+    a wildcard that leaks into every workspace's view. A filtered request only
+    returns records whose (normalized) workspace_id equals the requested one;
+    legacy records surface under ?workspace_id=unassigned. An unfiltered
+    request (workspace_id is None) still returns everything.
     """
     d = _teams_dir()
     records = []
@@ -102,9 +121,7 @@ def _list_teams(workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
             if workspace_id is None:
                 records.append(rec)
                 continue
-            rec_ws = rec.get("workspace_id")
-            # Legacy records (no workspace_id) → treat as wildcard.
-            if not rec_ws or rec_ws == workspace_id:
+            if normalize_workspace_id(rec.get("workspace_id")) == workspace_id:
                 records.append(rec)
         except (json.JSONDecodeError, OSError):
             pass
@@ -120,6 +137,49 @@ def _delete_team_file(team_id: str) -> None:
 def _escape_fmt_str(s: str) -> str:
     """Escape { and } in user-controlled strings to prevent format-string injection."""
     return s.replace("{", "{{").replace("}", "}}")
+
+
+# ---------------------------------------------------------------------------
+# Write-time validation (D1+D2)
+# ---------------------------------------------------------------------------
+
+from shadowflow.api import team_validation as _tv  # noqa: E402
+
+
+def _reject_dag(errors: List[str]) -> None:
+    """Raise a 422 if the DAG structure validation produced errors."""
+    if errors:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": {
+                    "code": "INVALID_DAG",
+                    "message": "Team workflow DAG is invalid: " + "; ".join(errors),
+                    "errors": errors,
+                }
+            },
+        )
+
+
+def _reject_missing_agents(agent_ids: List[str]) -> None:
+    """Raise a 422 if any agent_id does not resolve in the Python agent store.
+
+    Skips empty/whitespace ids. De-dups before probing.
+    """
+    probe = [a for a in dict.fromkeys(agent_ids) if isinstance(a, str) and a.strip()]
+    errors = _tv.validate_agent_ids(probe, exists=_tv.agent_exists_in_store)
+    if errors:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": {
+                    "code": "AGENT_NOT_FOUND",
+                    "message": "Team references agents that do not exist: "
+                    + "; ".join(errors),
+                    "errors": errors,
+                }
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +230,8 @@ class PatchTeamRequest(BaseModel):
 @router.post("", status_code=201)
 async def create_team(body: CreateTeamRequest) -> Dict[str, Any]:
     """Create a new AgentTeam."""
+    # D2: reject creation referencing agents that don't exist in the store.
+    _reject_missing_agents(body.agent_ids)
     now = datetime.now(timezone.utc).isoformat()
     team_id = f"team-{uuid4().hex[:12]}"
     record: Dict[str, Any] = {
@@ -218,6 +280,11 @@ async def patch_team(team_id: str, body: PatchTeamRequest) -> Dict[str, Any]:
         record["description"] = body.description
     if body.workspace_id is not None:
         record["workspace_id"] = body.workspace_id
+
+    # D2: newly-added members must resolve in the store. Existing members are
+    # NOT re-validated (backward compat for teams that predate this check).
+    if body.add_agent_ids:
+        _reject_missing_agents(body.add_agent_ids)
 
     current_ids: List[str] = record.get("agent_ids", [])
     # Add new members (no duplicates)
@@ -272,7 +339,14 @@ async def put_team_workflow(team_id: str, body: TeamWorkflow) -> Dict[str, Any]:
     record = _load_team(team_id)
     if record is None:
         raise _not_found(team_id)
-    record["workflow"] = body.model_dump()
+    workflow = body.model_dump()
+    # D1: validate DAG structure (no cycle via sequential edges, endpoints are
+    # known node ids, no self-loop). D2: every node's non-empty agentId must
+    # resolve in the agent store. Validation fires only on this incoming write,
+    # so existing (possibly-legacy) team records keep loading via GET.
+    _reject_dag(_tv.validate_workflow(workflow))
+    _reject_missing_agents(_tv.workflow_agent_ids(workflow))
+    record["workflow"] = workflow
     record["updated_at"] = datetime.now(timezone.utc).isoformat()
     _save_team(record)
     return _envelope(record["workflow"])

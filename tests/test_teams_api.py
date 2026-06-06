@@ -9,16 +9,39 @@ Covers:
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
 from shadowflow.server import app
 
 
+# Agent ids these tests reference when creating/patching teams. D2 write-time
+# validation now rejects teams that reference non-existent agents, so the
+# fixture seeds these ids into the (isolated, monkeypatched) agent store.
+_SEEDED_AGENT_IDS = [
+    "agent-1", "agent-2", "agent-3",
+    "a", "a1", "a2", "a3",
+    "x", "y",
+]
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     import shadowflow.api.teams as teams_mod
+    import shadowflow.api.agents as agents_mod
+
     monkeypatch.setattr(teams_mod, "_TEAMS_DIR", tmp_path / "teams")
+    # Isolate + seed the agent store so D2 existence checks pass for the ids
+    # these tests use. Never touches the real .shadowflow/agents.
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(agents_mod, "_AGENTS_DIR", agents_dir)
+    for aid in _SEEDED_AGENT_IDS:
+        (agents_dir / f"{aid}.json").write_text(
+            json.dumps({"agent_id": aid, "name": aid}), encoding="utf-8"
+        )
     return TestClient(app)
 
 

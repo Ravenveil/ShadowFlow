@@ -402,7 +402,14 @@ async def quick_create_agent(body: QuickCreateRequest) -> Dict[str, Any]:
 async def list_agents(workspace_id: Optional[str] = Query(None, max_length=200)) -> Dict[str, Any]:
     records = _list_agents()
     if workspace_id:
-        records = [r for r in records if r.get("workspace_id") == workspace_id]
+        # D3: normalize missing/blank workspace_id to the UNASSIGNED sentinel so
+        # legacy agents surface under ?workspace_id=unassigned (and never leak
+        # into an arbitrary workspace's view). Mirrors teams._list_teams.
+        from shadowflow.api.teams import normalize_workspace_id
+        records = [
+            r for r in records
+            if normalize_workspace_id(r.get("workspace_id")) == workspace_id
+        ]
     return _envelope(records, total=len(records))
 
 
