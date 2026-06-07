@@ -60,6 +60,16 @@ export interface RunPersistence {
   remove(id: string): void;
   /** Synchronously load all persisted snapshots (called once at construction). */
   loadAllSync(): RunSnapshot[];
+  /**
+   * O4 — synchronously load a SINGLE persisted snapshot by id, or undefined if
+   * absent. Optional for back-compat with existing fakes; when omitted, the
+   * bus's lazy `hydrateOne()` can only serve runs already loaded at startup.
+   * Used to recover a run whose snapshot is on disk but was never hydrated
+   * (e.g. created after startup, then the in-memory run was GC'd by TTL while
+   * its disk snapshot lingered — a narrow window, but it lets /stream replay
+   * read-only instead of hard-404ing).
+   */
+  loadOneSync?(id: string): RunSnapshot | undefined;
 }
 
 const TERMINAL: ReadonlySet<RunStatus> = new Set<RunStatus>([
@@ -131,6 +141,17 @@ export interface RunBus {
   /** Get an existing run, or create one in `running` state. */
   ensure(id: string): Run;
   get(id: string): Run | undefined;
+  /**
+   * O4 — lazily recover a single run from disk if it isn't in memory. Returns
+   * the run if it's already in memory OR was successfully loaded from the
+   * injected persistence's `loadOneSync`; undefined if there's nothing to
+   * recover (no persistence, no `loadOneSync`, or no snapshot on disk). A
+   * recovered run is hydrated with the SAME semantics as startup hydration:
+   * non-terminal (crash-interrupted) snapshots get a synthetic terminal error
+   * frame + `canceled` status and `started:true` so it is served READ-ONLY
+   * (never re-run). Idempotent — a no-op for an already-present run.
+   */
+  hydrateOne(id: string): Run | undefined;
   /**
    * Claim the right to start this run's pipeline. Returns true exactly once per
    * run (the FIRST caller); subsequent callers (reconnects) get false and must
@@ -241,45 +262,57 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     return run;
   };
 
-  // O2 hydration — restore persisted runs at startup. A run that was `running`
-  // when the process died has no live producer; we append a synthetic run-level
-  // `error` terminal frame (so a reconnecting view replays the full as-of-crash
-  // timeline and then STOPS cleanly instead of hanging / reconnect-looping) and
-  // mark it `canceled`. `started: true` ensures claimStart() never re-runs it.
+  /**
+   * Reconstruct a Run from a persisted snapshot, applying the crash-recovery
+   * correction: a snapshot that was still `running` when the process died has no
+   * live producer, so we append a synthetic run-level `error` terminal frame (so
+   * a reconnecting view replays the full as-of-crash timeline then STOPS cleanly
+   * instead of hanging / reconnect-looping) and mark it `canceled`.
+   * `started: true` ensures claimStart() never re-runs it. Returns the run plus
+   * whether it was interrupted. Shared by startup hydration AND lazy hydrateOne.
+   */
+  const reconstructFromSnapshot = (snap: RunSnapshot): { run: Run; interrupted: boolean } => {
+    const run: Run = {
+      id: snap.id,
+      status: snap.status,
+      events: Array.isArray(snap.events) ? snap.events.slice() : [],
+      nextEventId: typeof snap.nextEventId === 'number' ? snap.nextEventId : (snap.events?.length ?? 0) + 1,
+      clients: new Set(),
+      abort: new AbortController(),
+      started: true,
+      waiters: new Set(),
+      exitCode: snap.exitCode ?? null,
+      signal: snap.signal ?? null,
+      createdAt: snap.createdAt ?? now(),
+      updatedAt: snap.updatedAt ?? now(),
+    };
+    let interrupted = false;
+    if (!TERMINAL.has(run.status)) {
+      run.events.push({
+        id: run.nextEventId++,
+        event: 'error',
+        data: {
+          session_id: run.id,
+          code: 'server',
+          message: '会话进程已重启，本次运行已中断（历史已保留）',
+          interrupted_by_restart: true,
+        },
+        ts: now(),
+      });
+      run.status = 'canceled';
+      interrupted = true;
+    }
+    return { run, interrupted };
+  };
+
+  // O2 hydration — restore all persisted runs at startup.
   if (persist) {
     let hydrated = 0;
     let interrupted = 0;
     for (const snap of persist.loadAllSync()) {
       if (!snap || typeof snap.id !== 'string' || runs.has(snap.id)) continue;
-      const run: Run = {
-        id: snap.id,
-        status: snap.status,
-        events: Array.isArray(snap.events) ? snap.events.slice() : [],
-        nextEventId: typeof snap.nextEventId === 'number' ? snap.nextEventId : (snap.events?.length ?? 0) + 1,
-        clients: new Set(),
-        abort: new AbortController(),
-        started: true,
-        waiters: new Set(),
-        exitCode: snap.exitCode ?? null,
-        signal: snap.signal ?? null,
-        createdAt: snap.createdAt ?? now(),
-        updatedAt: snap.updatedAt ?? now(),
-      };
-      if (!TERMINAL.has(run.status)) {
-        run.events.push({
-          id: run.nextEventId++,
-          event: 'error',
-          data: {
-            session_id: run.id,
-            code: 'server',
-            message: '会话进程已重启，本次运行已中断（历史已保留）',
-            interrupted_by_restart: true,
-          },
-          ts: now(),
-        });
-        run.status = 'canceled';
-        interrupted += 1;
-      }
+      const { run, interrupted: wasInterrupted } = reconstructFromSnapshot(snap);
+      if (wasInterrupted) interrupted += 1;
       runs.set(run.id, run);
       save(run); // re-persist the corrected (terminal) snapshot
       hydrated += 1;
@@ -289,6 +322,26 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
       console.log(`[run-event-bus] hydrated ${hydrated} run(s) from disk (${interrupted} interrupted → canceled)`);
     }
   }
+
+  // O4 — lazy single-run recovery from disk. Used by /stream when a session is
+  // gone and the run isn't in memory: pull its snapshot back so we can replay
+  // the timeline read-only instead of hard-404ing.
+  const hydrateOne = (id: string): Run | undefined => {
+    const existing = runs.get(id);
+    if (existing) return existing;
+    if (!persist || typeof persist.loadOneSync !== 'function') return undefined;
+    let snap: RunSnapshot | undefined;
+    try {
+      snap = persist.loadOneSync(id);
+    } catch {
+      return undefined; // disk is best-effort; treat a read failure as "absent"
+    }
+    if (!snap || typeof snap.id !== 'string' || snap.id !== id) return undefined;
+    const { run } = reconstructFromSnapshot(snap);
+    runs.set(run.id, run);
+    save(run); // persist the corrected (terminal) snapshot, matching startup
+    return run;
+  };
 
   const ensure = (id: string): Run => runs.get(id) ?? create(id);
   const get = (id: string): Run | undefined => runs.get(id);
@@ -462,6 +515,7 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
   return {
     ensure,
     get,
+    hydrateOne,
     claimStart,
     emit,
     attach,

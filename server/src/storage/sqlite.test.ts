@@ -129,6 +129,72 @@ async function main() {
     check('run.project_id set NULL', r?.project_id === null, r?.project_id);
   });
 
+  console.log('\n[6] O3 — fresh db: messages.timeline_message_id column present');
+  await inIsolated(async (m) => {
+    const db = m.getDb();
+    const cols = db.prepare(`PRAGMA table_info(messages)`).all() as { name: string }[];
+    check(
+      'messages has timeline_message_id',
+      cols.some((c) => c.name === 'timeline_message_id'),
+      cols.map((c) => c.name),
+    );
+  });
+
+  console.log('\n[7] O3 — idempotent ALTER upgrades a legacy db missing the column');
+  {
+    // Simulate a pre-O3 db: a messages table WITHOUT timeline_message_id.
+    const orig = process.cwd();
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-sqlite-legacy-'));
+    process.chdir(tmp);
+    try {
+      const dir = path.join(tmp, '.shadowflow');
+      fs.mkdirSync(dir, { recursive: true });
+      const Database = (await import('better-sqlite3')).default;
+      const legacyFile = path.join(dir, 'app.sqlite');
+      const legacy = new Database(legacyFile);
+      // Old messages schema (no timeline_message_id). Needs the FK target table.
+      legacy.exec(`
+        CREATE TABLE conversations (
+          conversation_id TEXT PRIMARY KEY,
+          project_id      TEXT NOT NULL,
+          title           TEXT,
+          created_at      TEXT NOT NULL,
+          updated_at      TEXT NOT NULL
+        );
+        CREATE TABLE messages (
+          message_id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          run_id TEXT,
+          created_at TEXT NOT NULL
+        );
+      `);
+      const beforeCols = (legacy.prepare(`PRAGMA table_info(messages)`).all() as { name: string }[]).map((c) => c.name);
+      check('legacy db lacks the column pre-migration', !beforeCols.includes('timeline_message_id'), beforeCols);
+      legacy.close();
+
+      const m = await import('./sqlite');
+      m._resetForTests();
+      const db = m.getDb(); // runs DDL (no-op CREATE IF NOT EXISTS) + addColumnIfMissing
+      const afterCols = (db.prepare(`PRAGMA table_info(messages)`).all() as { name: string }[]).map((c) => c.name);
+      check('column added to legacy db after migration', afterCols.includes('timeline_message_id'), afterCols);
+      // Re-running getDb (idempotent) must not error / double-add.
+      m._resetForTests();
+      const db2 = m.getDb();
+      const reCols = (db2.prepare(`PRAGMA table_info(messages)`).all() as { name: string }[]).filter((c) => c.name === 'timeline_message_id');
+      check('column present exactly once after second migration', reCols.length === 1, reCols.length);
+      m._resetForTests();
+    } finally {
+      process.chdir(orig);
+      try {
+        fs.rmSync(tmp, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   console.log('\n────────────────────────────────────────');
   console.log(`  ${pass} passed,  ${fail} failed`);
   console.log('────────────────────────────────────────\n');

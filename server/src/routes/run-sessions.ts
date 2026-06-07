@@ -16,7 +16,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { runSkillAssembler } from '../assembler';
 import { classifyErrorCode } from '../lib/classify-error';
-import { createRunBus, type RunEventSink } from '../lib/run-event-bus';
+import { createRunBus, type RunEventSink, type RunStatus } from '../lib/run-event-bus';
 import { createRunEventStore } from '../lib/run-event-store';
 // Round 4 PR-E — canonical `@skill` token parser shared byte-equal with the
 // frontend (`src/lib/skillToken.ts`). Replaces an inline regex that drifted
@@ -409,6 +409,42 @@ export async function shutdownActiveRuns(graceMs?: number): Promise<void> {
   await runBus.shutdownActive(graceMs !== undefined ? { graceMs } : undefined);
 }
 
+/**
+ * O4 — /stream disposition resolver (pure, unit-testable).
+ *
+ * When a client opens GET /:id/stream we must decide HOW to serve it. The
+ * legacy behavior hard-404'd the moment the in-memory session was gone (e.g.
+ * the 1h session TTL fired, or the user came back to an old run after a restart)
+ * — even though the run's full timeline may still be replayable from the
+ * run-event-bus (hydrated from disk). That looked like a broken/lost run.
+ *
+ * New disposition, in priority order:
+ *   - `live`   : the session is present → normal path (may claimStart + run).
+ *   - `replay` : the session is gone but the run exists in the bus (live OR
+ *                hydrated-from-disk) → READ-ONLY replay of the buffered timeline,
+ *                ending with whatever terminal/synthetic frame the bus holds.
+ *                NEVER claimStart, NEVER re-execute, NEVER spend tokens.
+ *   - `gone`   : neither a session nor any recoverable run → accurate 404.
+ *
+ * `run` is the result of looking the run up in the bus AFTER an attempted lazy
+ * `hydrateOne` (so a disk-only snapshot has already been pulled back in). Keeping
+ * this a pure function of {hasSession, run} makes the decision testable without
+ * Express/fs (mirrors the swapDagRun unit-test pattern in groups-chat.ts).
+ */
+export type StreamDisposition =
+  | { kind: 'live' }
+  | { kind: 'replay'; status: RunStatus }
+  | { kind: 'gone' };
+
+export function resolveStreamDisposition(args: {
+  hasSession: boolean;
+  run: { status: RunStatus } | undefined;
+}): StreamDisposition {
+  if (args.hasSession) return { kind: 'live' };
+  if (args.run) return { kind: 'replay', status: args.run.status };
+  return { kind: 'gone' };
+}
+
 const VALID_ARTIFACT_TYPES: ReadonlyArray<ArtifactType> = ['yaml', 'html', 'markdown'];
 
 function coerceArtifactType(raw: unknown): ArtifactType | null {
@@ -777,14 +813,99 @@ router.post('/:id/messages', (req: Request, res: Response) => {
   });
 });
 
+/**
+ * O4 — read-only SSE replay of a run whose owning session is gone.
+ *
+ * Opens an SSE response and attaches a sink to the run-event-bus. The bus
+ * replays every buffered event past the resume cursor (?after / Last-Event-ID),
+ * then — because the run is terminal (or a hydrated/synthetic-terminal run) —
+ * calls sink.end() and the response closes. This deliberately reuses NONE of the
+ * live handler's pipeline machinery: no claimStart, no projector, no assembler,
+ * no session reads. The front-end sees the full historical timeline plus, for a
+ * restart-interrupted run, the synthetic "已中断" terminal frame the bus added —
+ * never a hard 404. Costs zero tokens.
+ */
+function streamReadOnlyReplay(req: Request, res: Response, id: string): void {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders();
+
+  // Heartbeat so an idle proxy doesn't cut the connection mid-replay (a large
+  // buffered timeline can take a beat to flush). Cleared on end / close.
+  const HEARTBEAT_MS = 15_000;
+  const heartbeatTimer = setInterval(() => {
+    if (res.writableEnded) {
+      clearInterval(heartbeatTimer);
+      return;
+    }
+    try {
+      res.write(': heartbeat\n\n');
+    } catch {
+      clearInterval(heartbeatTimer);
+    }
+  }, HEARTBEAT_MS);
+
+  const sink: RunEventSink = {
+    send: (rec) => {
+      if (res.writableEnded) return;
+      const line = `id: ${rec.id}\nevent: ${rec.event}\ndata: ${JSON.stringify(rec.data)}\n\n`;
+      res.write(line);
+      if (typeof (res as unknown as { flush?: () => void }).flush === 'function') {
+        (res as unknown as { flush: () => void }).flush();
+      }
+    },
+    end: () => {
+      clearInterval(heartbeatTimer);
+      if (!res.writableEnded) res.end();
+    },
+  };
+
+  // Connected handshake BEFORE attach: a terminal run makes attach() replay then
+  // synchronously call sink.end() (res.end()); any write after that throws
+  // ERR_STREAM_WRITE_AFTER_END. Send the comment frame while the response is open.
+  if (!res.writableEnded) res.write(': connected\n\n');
+
+  const afterRaw = req.query.after ?? req.headers['last-event-id'];
+  const after = Number(Array.isArray(afterRaw) ? afterRaw[0] : afterRaw) || 0;
+  const detach = runBus.attach(id, after, sink);
+
+  req.on('close', () => {
+    clearInterval(heartbeatTimer);
+    detach();
+  });
+
+  console.log(`[run-sessions] read-only replay for session ${id} (after=${after}) — session gone, bus serves history`);
+}
+
 // ── GET /api/run-sessions/:id/stream ─────────────────────────────────────────
 
 router.get('/:id/stream', async (req: Request, res: Response) => {
   const { id } = req.params;
   const session = sessionStore.get(id);
 
+  // O4 — graceful degradation. The session may be gone (1h TTL fired, or the
+  // user reopened an old run after a restart), but the run-event-bus may still
+  // hold a replayable timeline (live OR hydrated from disk). Before deciding,
+  // try a LAZY disk recovery so a snapshot that was never hydrated at startup
+  // (created post-boot, then GC'd by TTL while its file lingered) can still be
+  // replayed read-only instead of hard-404'd.
   if (!session) {
-    res.status(404).json({ error: `Session ${id} not found` });
+    const recovered = runBus.hydrateOne(id) ?? runBus.get(id);
+    const disp = resolveStreamDisposition({ hasSession: false, run: recovered });
+    if (disp.kind === 'gone') {
+      res
+        .status(404)
+        .json({ error: `会话 ${id} 已过期且无可重放的历史 (session expired, no replayable run)` });
+      return;
+    }
+    // disp.kind === 'replay' — read-only timeline replay. We do NOT touchSession
+    // (there is none), NOT claimStart, NOT run any pipeline. We open SSE, attach
+    // a sink to the bus (which replays buffered events from the resume cursor and
+    // then ends — the run is terminal/hydrated), and return. Zero tokens spent.
+    streamReadOnlyReplay(req, res, id);
     return;
   }
 
@@ -962,6 +1083,12 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   // Story 15.29 — stable run_id used by both saveRun() and the assistant
   // message. Mirrors the legacy `run-${session_id.slice(0, 8)}` shape.
   const persistedRunId = `run-${id.slice(0, 8)}`;
+  // O3 — timeline back-trace anchor. Captured from the projector after the
+  // generator drains (the projector itself is block-scoped inside the try
+  // below, so we stash its last assistant_text id here for the finally's
+  // appendMessage). null when the run produced no streamed prose (e.g.
+  // artifact-only / immediate error).
+  let assistantTimelineMsgId: string | null = null;
 
   // Story 15.29 — write user message at stream start. We do this before
   // runSkillAssembler so chat history is consistent even if the LLM call
@@ -1357,6 +1484,10 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
         }
       }
     }
+    // O3 — generator drained: stash the projector's last assistant_text id so
+    // the finally's appendMessage can back-link the conversation row to its
+    // timeline message. Read here (inside the try, projector still in scope).
+    assistantTimelineMsgId = projector.lastAssistantTextId();
   } catch (err) {
     if (abortController.signal.aborted) {
       // Expected — client disconnected.
@@ -1525,6 +1656,10 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
             !abortController.signal.aborted && (sawComplete || sawError)
               ? persistedRunId
               : null,
+          // O3 — back-trace bridge: link this conversation row to the timeline
+          // projector's assistant_text message that streamed the prose. null
+          // when the run produced no streamed text (artifact-only / early error).
+          timeline_message_id: assistantTimelineMsgId,
         });
       } catch (e) {
         console.error(

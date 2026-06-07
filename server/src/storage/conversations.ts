@@ -28,6 +28,14 @@ export interface MessageRecord {
   role: MessageRole;
   content: string;
   run_id: string | null;
+  /**
+   * O3 — optional back-trace bridge. For assistant rows written by the
+   * run-session SSE stream, this is the timeline projector's assistant_text
+   * message id (`msg_<session_id>_NNNN`) that produced the content, so the
+   * front-end can map a timeline message → its persisted conversation row.
+   * `null` for user/system rows and for any row written before O3.
+   */
+  timeline_message_id: string | null;
   created_at: string;
 }
 
@@ -45,7 +53,27 @@ interface MessageRow {
   role: MessageRole;
   content: string;
   run_id: string | null;
+  // O3 — may be absent on rows written before the column existed; normalized to
+  // null in the mapping helper below.
+  timeline_message_id: string | null;
   created_at: string;
+}
+
+/**
+ * Normalize a raw SELECT * row into a MessageRecord. Defensive against legacy
+ * rows / pre-O3 dbs where `timeline_message_id` may be undefined → coerce to
+ * null so the typed record's contract (string | null) always holds.
+ */
+function toMessageRecord(row: MessageRow): MessageRecord {
+  return {
+    message_id: row.message_id,
+    conversation_id: row.conversation_id,
+    role: row.role,
+    content: row.content,
+    run_id: row.run_id ?? null,
+    timeline_message_id: row.timeline_message_id ?? null,
+    created_at: row.created_at,
+  };
 }
 
 // ── Conversation ────────────────────────────────────────────────────────────
@@ -98,17 +126,25 @@ export function deleteConversation(id: string): boolean {
 // ── Messages ────────────────────────────────────────────────────────────────
 
 export function listMessages(conversation_id: string): MessageRecord[] {
-  return getDb()
-    .prepare(
-      `SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC`,
-    )
-    .all(conversation_id) as MessageRow[];
+  return (
+    getDb()
+      .prepare(
+        `SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC`,
+      )
+      .all(conversation_id) as MessageRow[]
+  ).map(toMessageRecord);
 }
 
 export interface AppendMessageInput {
   role: MessageRole;
   content: string;
   run_id?: string | null;
+  /**
+   * O3 — optional timeline projector assistant_text message id to back-link this
+   * conversation row to its timeline message. Omit (or null) for user/system
+   * rows. Back-compat: undefined is persisted as NULL.
+   */
+  timeline_message_id?: string | null;
 }
 
 export function appendMessage(
@@ -122,14 +158,15 @@ export function appendMessage(
   const tx = db.transaction(() => {
     db.prepare(
       `INSERT INTO messages
-       (message_id, conversation_id, role, content, run_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       (message_id, conversation_id, role, content, run_id, timeline_message_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       message_id,
       conversation_id,
       input.role,
       input.content,
       input.run_id ?? null,
+      input.timeline_message_id ?? null,
       now,
     );
     db.prepare(
@@ -144,6 +181,7 @@ export function appendMessage(
     role: input.role,
     content: input.content,
     run_id: input.run_id ?? null,
+    timeline_message_id: input.timeline_message_id ?? null,
     created_at: now,
   };
 }
@@ -164,5 +202,5 @@ export function getRecentMessages(
        ) ORDER BY created_at ASC`,
     )
     .all(conversation_id, limit) as MessageRow[];
-  return rows;
+  return rows.map(toMessageRecord);
 }

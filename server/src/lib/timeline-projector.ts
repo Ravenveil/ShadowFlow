@@ -123,6 +123,17 @@ export interface TimelineProjector {
   /** Final event → close thinking, finalize msg_foot. */
   onComplete(): ProjectorEmit;
 
+  /**
+   * O3 — back-trace bridge. Returns the id of the most recent `assistant_text`
+   * message created during the current turn (the row that holds the streamed
+   * answer prose), or null if no assistant_text was opened this turn. Unlike the
+   * internal `openAssistantTextId` (which is cleared whenever a non-text event
+   * breaks the run), this remembers the LAST assistant_text id for the turn so
+   * the stream handler can stamp it onto the persisted conversation row after
+   * the generator drains. Pure getter — no state mutation, no emit.
+   */
+  lastAssistantTextId(): string | null;
+
   /** Test helper — internal state snapshot (kept tiny). */
   _debug(): {
     turnId: string;
@@ -178,6 +189,12 @@ export function createTimelineProjector(
   // into one timeline row rather than the previous one-per-chunk explosion
   // (a 1000-token answer was rendering as 200 separate `tool_echo`s).
   let openAssistantTextId: string | null = null;
+
+  // O3 — sticky copy of the last assistant_text id created this turn. Unlike
+  // openAssistantTextId (nulled by closeOpenText on any non-text event), this
+  // survives so lastAssistantTextId() can report it after the run drains. Reset
+  // per turn by onUserMessage.
+  let lastAssistantTextId: string | null = null;
 
   // 2026-05-24 P0-3 — single status_line slot id (always-on bottom bar).
   // Lazily created on the first bumpStatusLine() call; survives across
@@ -337,6 +354,8 @@ export function createTimelineProjector(
       diffAdded = 0;
       nodeMap.clear();
       currentRunningStepIndex = null;
+      openAssistantTextId = null;
+      lastAssistantTextId = null; // O3 — reset back-trace anchor per turn
       out.messages.push({
         id: newId('msg'),
         kind: 'user_turn',
@@ -567,6 +586,7 @@ export function createTimelineProjector(
       // calls closeOpenText() so the next text run opens a fresh message.
       if (!openAssistantTextId) {
         openAssistantTextId = newId('msg');
+        lastAssistantTextId = openAssistantTextId; // O3 sticky back-trace anchor
         out.messages.push({
           id: openAssistantTextId,
           kind: 'assistant_text',
@@ -670,6 +690,10 @@ export function createTimelineProjector(
       }
       bumpStatusLine(out, 'Done', 0, true);
       return out;
+    },
+
+    lastAssistantTextId(): string | null {
+      return lastAssistantTextId;
     },
 
     _debug() {

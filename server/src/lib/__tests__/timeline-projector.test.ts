@@ -512,6 +512,47 @@ console.log('\n[19] onUsage → msg_foot tokens accumulate');
   check('total_tokens preferred → 185', 185, patch3?.patch.tokens);
 }
 
+// ── Test 20: O3 — lastAssistantTextId back-trace anchor ─────────────────────
+// The stream handler stamps this id onto the persisted conversation row so the
+// front-end can map a timeline assistant_text message → its conversation row.
+console.log('\n[20] O3 lastAssistantTextId');
+{
+  const p = createTimelineProjector({ idSeed: 'sess-o3' });
+  // No turn / no text yet → null.
+  assert('null before any assistant_text', p.lastAssistantTextId() === null);
+
+  p.onUserMessage('q');
+  assert('null after user turn, before text', p.lastAssistantTextId() === null);
+
+  // First contiguous text run opens an assistant_text; getter reports its id.
+  const r1 = p.onText('answer part 1 ');
+  const at1 = r1.messages.find((m) => m.kind === 'assistant_text') as Extract<TimelineMessage, { kind: 'assistant_text' }>;
+  check('getter == first assistant_text id', at1.id, p.lastAssistantTextId());
+
+  // Continuation (append patch, no new message) keeps the same id.
+  p.onText('part 2');
+  check('getter stable across text_append', at1.id, p.lastAssistantTextId());
+
+  // A non-text event closes the run; getter STILL remembers the last id
+  // (unlike the internal openAssistantTextId which is nulled).
+  p.onToolUse('Bash', { command: 'ls' });
+  check('getter survives closeOpenText (tool boundary)', at1.id, p.lastAssistantTextId());
+
+  // A second text run opens a NEW assistant_text → getter advances to it.
+  const r2 = p.onText('final answer');
+  const at2 = r2.messages.find((m) => m.kind === 'assistant_text') as Extract<TimelineMessage, { kind: 'assistant_text' }>;
+  assert('second text run has a new id', at1.id !== at2.id);
+  check('getter advances to latest assistant_text', at2.id, p.lastAssistantTextId());
+
+  // onComplete must not lose the anchor (finally reads it after drain).
+  p.onComplete();
+  check('getter survives onComplete', at2.id, p.lastAssistantTextId());
+
+  // New turn resets the anchor.
+  p.onUserMessage('next q');
+  assert('getter reset on new turn', p.lastAssistantTextId() === null);
+}
+
 // ── Summary ─────────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

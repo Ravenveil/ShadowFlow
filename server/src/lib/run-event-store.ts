@@ -37,6 +37,8 @@ export interface RunEventStore {
   remove(id: string): void;
   /** Load every persisted snapshot synchronously (called once at bus construction). */
   loadAllSync(): RunSnapshot[];
+  /** O4 — load a single persisted snapshot by id, or undefined if absent. */
+  loadOneSync(id: string): RunSnapshot | undefined;
 }
 
 export interface RunEventStoreOptions {
@@ -144,6 +146,34 @@ export function createRunEventStore(opts: RunEventStoreOptions = {}): RunEventSt
         }
       }
       return out;
+    },
+
+    loadOneSync(id: string): RunSnapshot | undefined {
+      if (!validId(id)) return undefined;
+      // Prefer the latest pending (not-yet-flushed) snapshot if one is queued,
+      // so a lazy recovery sees the freshest state rather than a stale file.
+      const queued = pending.get(id);
+      if (queued) return queued;
+      let text: string;
+      try {
+        text = fsSync.readFileSync(path.join(RUNS_DIR, `${id}.json`), 'utf8');
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+          // eslint-disable-next-line no-console
+          console.warn(`[run-event-store] loadOne ${id} failed: ${(err as Error).message}`);
+        }
+        return undefined;
+      }
+      try {
+        const snap = JSON.parse(text) as RunSnapshot;
+        if (snap && typeof snap === 'object' && snap.id === id && Array.isArray(snap.events)) {
+          return snap;
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(`[run-event-store] loadOne parse ${id} failed: ${(err as Error).message}`);
+      }
+      return undefined;
     },
   };
 }

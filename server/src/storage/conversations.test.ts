@@ -139,6 +139,53 @@ async function main() {
     check('messages cascaded out', remaining === 0, remaining);
   });
 
+  // O3 — timeline_message_id back-trace bridge. assistant messages written by
+  // the run-session stream carry the timeline projector's assistant_text id so
+  // the front-end can map a timeline message → its conversation row.
+  console.log('\n[6] O3 — appendMessage persists optional timeline_message_id');
+  await inIsolated(async ({ conv, proj }) => {
+    const p = proj.createProject({ name: 'p' });
+    const c = conv.createConversation(p.project_id);
+    const tmid = 'msg_sess-abc_0007';
+    const m = conv.appendMessage(c.conversation_id, {
+      role: 'assistant',
+      content: 'answer',
+      run_id: 'run-xyz',
+      timeline_message_id: tmid,
+    });
+    check('returned record carries timeline_message_id', m.timeline_message_id === tmid, m.timeline_message_id);
+    const all = conv.listMessages(c.conversation_id);
+    check('listMessages reads back timeline_message_id', all[0].timeline_message_id === tmid, all[0].timeline_message_id);
+    const recent = conv.getRecentMessages(c.conversation_id, 5);
+    check('getRecentMessages reads back timeline_message_id', recent[0].timeline_message_id === tmid, recent[0].timeline_message_id);
+  });
+
+  console.log('\n[7] O3 — timeline_message_id is optional (back-compat: null when omitted)');
+  await inIsolated(async ({ conv, proj }) => {
+    const p = proj.createProject({ name: 'p' });
+    const c = conv.createConversation(p.project_id);
+    const m = conv.appendMessage(c.conversation_id, { role: 'user', content: 'hi' });
+    check('omitted → null on returned record', m.timeline_message_id === null, m.timeline_message_id);
+    const all = conv.listMessages(c.conversation_id);
+    check('omitted → null on read', all[0].timeline_message_id === null, all[0].timeline_message_id);
+  });
+
+  console.log('\n[8] O3 — legacy rows (no column-value) read without error');
+  await inIsolated(async ({ conv, proj, sqlite }) => {
+    const db = sqlite.getDb();
+    const p = proj.createProject({ name: 'p' });
+    const c = conv.createConversation(p.project_id);
+    // Simulate a pre-O3 row: INSERT only the original columns, leaving the new
+    // timeline_message_id column at its default (NULL).
+    db.prepare(
+      `INSERT INTO messages (message_id, conversation_id, role, content, run_id, created_at)
+       VALUES (?, ?, 'assistant', 'legacy', NULL, ?)`,
+    ).run('legacy-mid', c.conversation_id, new Date().toISOString());
+    const all = conv.listMessages(c.conversation_id);
+    check('legacy row present', all.length === 1, all.length);
+    check('legacy row timeline_message_id is null', all[0].timeline_message_id === null, all[0].timeline_message_id);
+  });
+
   console.log('\n────────────────────────────────────────');
   console.log(`  ${pass} passed,  ${fail} failed`);
   console.log('────────────────────────────────────────\n');

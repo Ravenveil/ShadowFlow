@@ -37,7 +37,21 @@ function makeFakePersist(seed: RunSnapshot[] = []): {
       save: (snap) => { saved.set(snap.id, JSON.parse(JSON.stringify(snap)) as RunSnapshot); },
       remove: (id) => { saved.delete(id); removed.push(id); },
       loadAllSync: () => seed,
+      // O4 — single-snapshot lookup. Serves the `saved` map (so a run persisted
+      // after construction is recoverable) falling back to the seed.
+      loadOneSync: (id: string) =>
+        saved.get(id) ?? seed.find((s) => s.id === id),
     },
+  };
+}
+
+/** A persistence fake WITHOUT loadOneSync (back-compat path for hydrateOne). */
+function makeFakePersistNoLoadOne(): RunPersistence {
+  const saved = new Map<string, RunSnapshot>();
+  return {
+    save: (snap) => { saved.set(snap.id, snap); },
+    remove: (id) => { saved.delete(id); },
+    loadAllSync: () => [],
   };
 }
 
@@ -245,6 +259,86 @@ function makeSink(): RunEventSink & { got: RunEventRecord[]; ended: boolean } {
   // unknown run is a no-op (must not throw)
   bus.setExit('does-not-exist', 1, null);
   ok('setExit on unknown run is a no-op', !bus.get('does-not-exist'));
+}
+
+// ── 26: O4 — hydrateOne returns in-memory run without touching disk ──────────
+{
+  console.log('\n[26] O4 hydrateOne returns existing in-memory run');
+  const fp = makeFakePersist();
+  const bus = createRunBus({ persist: fp.persist });
+  bus.claimStart('o4a');
+  bus.emit('o4a', 'text', { d: 'x' });
+  const got = bus.hydrateOne('o4a');
+  ok('returns the existing run', !!got && got.id === 'o4a');
+  check('does not duplicate (size 1)', 1, bus.size());
+}
+
+// ── 27: O4 — hydrateOne lazily recovers a terminal disk snapshot ─────────────
+{
+  console.log('\n[27] O4 hydrateOne recovers a terminal snapshot from disk');
+  // Snapshot exists on disk (loadOneSync) but was NOT in loadAllSync seed → not
+  // hydrated at startup. Simulates a post-boot run GC'd from memory.
+  const fp = makeFakePersist();
+  // Stash a terminal snapshot directly in the fake's `saved` map.
+  fp.persist.save({
+    id: 'o4b', status: 'succeeded',
+    events: [{ id: 1, event: 'text', data: { d: 'hello' }, ts: 0 }],
+    nextEventId: 2, exitCode: 0, signal: null, createdAt: 0, updatedAt: 0,
+  });
+  const bus = createRunBus({ persist: fp.persist });
+  ok('not in memory before hydrateOne', !bus.get('o4b'));
+  const got = bus.hydrateOne('o4b');
+  ok('recovered the run', !!got && got.id === 'o4b');
+  ok('recovered as not-re-runnable (claimStart=false)', bus.claimStart('o4b') === false);
+  const sink = makeSink();
+  bus.attach('o4b', 0, sink);
+  check('replays the buffered event', 1, sink.got.length);
+  ok('terminal → ends immediately', sink.ended);
+}
+
+// ── 28: O4 — hydrateOne recovers a RUNNING (crashed) snapshot as interrupted ──
+{
+  console.log('\n[28] O4 hydrateOne recovers a running snapshot → synthetic terminal');
+  const fp = makeFakePersist();
+  fp.persist.save({
+    id: 'o4c', status: 'running',
+    events: [{ id: 1, event: 'text', data: {}, ts: 0 }],
+    nextEventId: 2, exitCode: null, signal: null, createdAt: 0, updatedAt: 0,
+  });
+  const bus = createRunBus({ persist: fp.persist });
+  const got = bus.hydrateOne('o4c');
+  check('recovered run marked canceled', 'canceled', got?.status);
+  check('synthetic terminal frame appended', 2, got?.events.length);
+  const last = got?.events[got.events.length - 1];
+  ok('synthetic frame is interrupted_by_restart',
+    !!(last?.data as { interrupted_by_restart?: boolean })?.interrupted_by_restart);
+  const sink = makeSink();
+  bus.attach('o4c', 0, sink);
+  ok('ends after replay (terminal)', sink.ended);
+  check('replays history + synthetic terminal', 2, sink.got.length);
+}
+
+// ── 29: O4 — hydrateOne returns undefined when nothing is recoverable ────────
+{
+  console.log('\n[29] O4 hydrateOne undefined for unknown run');
+  const fp = makeFakePersist();
+  const bus = createRunBus({ persist: fp.persist });
+  ok('no run, no snapshot → undefined', bus.hydrateOne('nope') === undefined);
+  ok('does not create a phantom run', !bus.get('nope'));
+}
+
+// ── 30: O4 — hydrateOne back-compat: persistence without loadOneSync ─────────
+{
+  console.log('\n[30] O4 hydrateOne no-op when persistence lacks loadOneSync');
+  const bus = createRunBus({ persist: makeFakePersistNoLoadOne() });
+  ok('returns undefined (no loadOneSync)', bus.hydrateOne('x') === undefined);
+  // And with NO persistence at all.
+  const bus2 = createRunBus();
+  ok('returns undefined (no persist)', bus2.hydrateOne('x') === undefined);
+  // In-memory run still returned even without loadOneSync.
+  const bus3 = createRunBus({ persist: makeFakePersistNoLoadOne() });
+  bus3.ensure('mem');
+  ok('in-memory run still returned', bus3.hydrateOne('mem')?.id === 'mem');
 }
 
 // Async blocks (shutdownActive returns a Promise). Wrapped in an async IIFE

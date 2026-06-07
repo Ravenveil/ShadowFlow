@@ -36,6 +36,23 @@ function paths() {
   return { dir, file, migration };
 }
 
+/**
+ * Add a column to a table if it isn't already present. Idempotent: reads
+ * PRAGMA table_info and only issues ALTER TABLE when the column is missing.
+ * `colDef` is the SQLite type/affinity (e.g. 'TEXT') — keep it nullable with
+ * no NOT NULL/UNIQUE so the ALTER can never fail on an existing populated table.
+ */
+function addColumnIfMissing(
+  db: Database.Database,
+  table: string,
+  column: string,
+  colDef: string,
+): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (cols.some((c) => c.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${colDef}`);
+}
+
 export function getDb(): Database.Database {
   if (_db) return _db;
 
@@ -52,6 +69,14 @@ export function getDb(): Database.Database {
   // an existing db is a no-op. This also makes brand-new test cwds work.
   const ddl = fs.readFileSync(migration, 'utf-8');
   db.exec(ddl);
+
+  // ── Idempotent additive column migrations ────────────────────────────────
+  // SQLite has no `ADD COLUMN IF NOT EXISTS`, and CREATE TABLE IF NOT EXISTS
+  // skips column changes on a db that already has the table. So for columns
+  // added after the initial schema we ADD them only when absent. Each entry is
+  // best-effort additive (nullable, no default constraint that could fail) so
+  // an existing db is upgraded in place without a destructive rebuild.
+  addColumnIfMissing(db, 'messages', 'timeline_message_id', 'TEXT');
 
   _db = db;
   _initialized = true;

@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS messages (
   role            TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
   content         TEXT NOT NULL,
   run_id          TEXT,
+  -- O3 — optional back-trace bridge: the timeline projector's assistant_text
+  -- message id (msg_<session_id>_NNNN) that produced this row, so the
+  -- front-end can map a timeline message → its persisted conversation row.
+  -- NULL for user/system rows and for any row written before O3. Fresh DBs get
+  -- the column here; existing DBs are upgraded by the guarded ALTER in
+  -- sqlite.ts (SQLite has no ADD COLUMN IF NOT EXISTS).
+  timeline_message_id TEXT,
   created_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conversation
