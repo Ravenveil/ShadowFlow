@@ -30,6 +30,7 @@ describe('ChatHomePage', () => {
     wrap('/chat?view=personal');
     expect(screen.getByTestId('personal-view')).toBeInTheDocument();
     expect(screen.queryByTestId('team-view')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('workspace-selector')).not.toBeInTheDocument();
   });
 
   it('?view=team 显式回到团队视图', () => {

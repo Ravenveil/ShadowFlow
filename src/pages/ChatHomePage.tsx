@@ -15,11 +15,13 @@ export default function ChatHomePage() {
   const view = searchParams.get('view') === 'personal' ? 'personal' : 'team';
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
-      <div style={{ flexShrink: 0, padding: '8px 14px', borderBottom: '1px solid var(--t-border)', background: 'var(--t-panel)', display: 'flex', alignItems: 'center' }}>
-        <div style={{ width: 260, maxWidth: '60%' }}>
-          <WorkspaceSelector />
+      {view === 'team' && (
+        <div style={{ flexShrink: 0, padding: '8px 14px', borderBottom: '1px solid var(--t-border)', background: 'var(--t-panel)', display: 'flex', alignItems: 'center' }}>
+          <div style={{ width: 260, maxWidth: '60%' }}>
+            <WorkspaceSelector />
+          </div>
         </div>
-      </div>
+      )}
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         {view === 'personal' ? <PersonalChatView /> : <ChatPage />}
       </div>
