@@ -1,41 +1,86 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '../../test/utils';
+import { act, render, screen, waitFor } from '../../test/utils';
 
-// 隔离网络 + 流式 hook
 const sendMock = vi.fn();
+const resolveDmMock = vi.fn().mockResolvedValue('dm-g1');
 vi.mock('../../api/agents', () => ({
   listAgents: vi.fn().mockResolvedValue([
     { agent_id: 'a1', name: '写写', soul: '写手', avatar_color: '#888' },
-    { agent_id: 'a2', name: '查查', soul: '研究员', avatar_color: '#777' },
   ]),
 }));
+vi.mock('../../api/groupApi', () => ({
+  resolveDmConversation: (...args: unknown[]) => resolveDmMock(...args),
+}));
 vi.mock('../../core/hooks/useChatStream', () => ({
-  useChatStream: () => ({ messages: [], send: sendMock, error: null }),
+  useChatStream: vi.fn(() => ({
+    messages: [
+      { id: 'm1', role: 'user', content: '你好' },
+      { id: 'm2', role: 'agent', content: '收到' },
+    ],
+    send: sendMock,
+    error: null,
+  })),
+}));
+// Timeline 重(CSS module+registry),stub 成 kind 列表以断言适配层
+vi.mock('../../components/run-session/timeline/Timeline', () => ({
+  Timeline: ({ messages }: { messages: Array<{ kind: string }> }) => (
+    <div data-testid="timeline" data-kinds={messages.map((m) => m.kind).join(',')} />
+  ),
+}));
+vi.mock('../../core/components/agent/CreateAgentModal', () => ({
+  CreateAgentModal: ({ onCreated }: { onCreated: (a: never) => void }) => (
+    <button data-testid="mock-create" onClick={() => onCreated({ agent_id: 'a9', name: '新人', soul: '' } as never)} />
+  ),
+}));
+vi.mock('../chat-home/PersonalRightPane', () => ({
+  PersonalRightPane: ({ groupId }: { groupId: string }) => <div data-testid="right-pane" data-gid={groupId} />,
 }));
 
+import { useChatStream } from '../../core/hooks/useChatStream';
 import { PersonalChatView } from '../chat-home/PersonalChatView';
 
-describe('PersonalChatView', () => {
-  beforeEach(() => { sendMock.mockClear(); });
+const click = (el: HTMLElement) => act(() => { el.click(); });
 
-  it('加载后渲染 agent 列表', async () => {
+describe('PersonalChatView (融合M1)', () => {
+  beforeEach(() => { sendMock.mockClear(); resolveDmMock.mockClear(); });
+
+  it('选中助手 → resolveDmConversation 被调 + useChatStream 走 group 模式吃 dmGroupId', async () => {
     render(<PersonalChatView />);
-    expect(await screen.findByText('写写')).toBeInTheDocument();
-    expect(screen.getByText('查查')).toBeInTheDocument();
+    click(await screen.findByText('写写'));
+    await waitFor(() => expect(resolveDmMock).toHaveBeenCalledWith('a1', undefined));
+    await waitFor(() => {
+      const calls = (useChatStream as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      const last = calls[calls.length - 1][0];
+      expect(last.mode).toBe('group');
+      expect(last.targetId).toBe('dm-g1');
+    });
   });
 
-  it('未选助手时显示空态', async () => {
+  it('消息流经适配层进 Timeline:user_turn + assistant_text', async () => {
+    render(<PersonalChatView />);
+    click(await screen.findByText('写写'));
+    await waitFor(() => {
+      expect(screen.getByTestId('timeline').getAttribute('data-kinds')).toBe('user_turn,assistant_text');
+    });
+  });
+
+  it('右栏渲染且拿到 dm groupId', async () => {
+    render(<PersonalChatView />);
+    click(await screen.findByText('写写'));
+    await waitFor(() => expect(screen.getByTestId('right-pane').getAttribute('data-gid')).toBe('dm-g1'));
+  });
+
+  it('「+ 新员工」→ 创建完成自动选中进入 DM', async () => {
     render(<PersonalChatView />);
     await screen.findByText('写写');
-    expect(screen.getByText('选择一个助手，开始一对一聊')).toBeInTheDocument();
+    click(screen.getByRole('button', { name: '+ 新员工' }));
+    click(screen.getByTestId('mock-create'));
+    await waitFor(() => expect(resolveDmMock).toHaveBeenCalledWith('a9', undefined));
   });
 
-  it('选中助手后显示其名字头（顶栏）', async () => {
+  it('未选助手 = Cherry Studio 式空态引导(无发起框)', async () => {
     render(<PersonalChatView />);
-    (await screen.findByText('写写')).click();
-    await waitFor(() => {
-      // 顶栏 + 列表都含「写写」→ 至少 2 处
-      expect(screen.getAllByText('写写').length).toBeGreaterThanOrEqual(2);
-    });
+    await screen.findByText('写写');
+    expect(screen.getByText('选择一个助手开始单聊，或创建一位新员工')).toBeInTheDocument();
   });
 });

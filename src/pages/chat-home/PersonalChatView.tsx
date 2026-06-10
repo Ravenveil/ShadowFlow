@@ -1,21 +1,43 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Search, Send } from 'lucide-react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { Plus, Search, Send } from 'lucide-react';
 import { HfAvatar } from '../../components/hifi';
 import { listAgents, type AgentRecord } from '../../api/agents';
-import { useChatStream } from '../../core/hooks/useChatStream';
+import { resolveDmConversation } from '../../api/groupApi';
+import { useChatStream, type ChatMessage } from '../../core/hooks/useChatStream';
 import { useWorkspaceStore } from '../../store/workspaceStore';
+import { Timeline } from '../../components/run-session/timeline/Timeline';
+import type { TimelineMessage } from '../../components/run-session/timeline/types';
+import { CreateAgentModal } from '../../core/components/agent/CreateAgentModal';
+import { PersonalRightPane } from './PersonalRightPane';
 
 /**
- * PersonalChatView — /chat「个人」视图（Cherry Studio 式）。
- * 左：当前工作区 agent 列表（listAgents）；右：选中 agent 的一对一单聊
- * （useChatStream dm 模式，复用 baseline 既有 BYOK 单轮链路）。
- * 选中态用组件内 state（Step 1 不引入新路由）。
+ * ChatMessage → TimelineMessage 适配层(融合M1)。
+ * 纯文本两种卡;M2 过程事件(thinking/tool_call)落库后在此扩展映射即点亮富卡。
+ */
+function toTimelineMessages(messages: ChatMessage[]): TimelineMessage[] {
+  return messages
+    .filter((m) => m.role !== 'system')
+    .map((m, i) =>
+      m.role === 'user'
+        ? ({ id: m.id, kind: 'user_turn', turn_id: m.id, ts: i, text: m.content } as TimelineMessage)
+        : ({ id: m.id, kind: 'assistant_text', turn_id: m.id, ts: i, body: m.content, streaming: m.streaming } as TimelineMessage),
+    );
+}
+
+/**
+ * PersonalChatView — 个人态(Cherry Studio 式三栏,融合M1):
+ *   左:助手列表 + 「+ 新员工」(一边聊天一边创建员工)
+ *   中:真实 DM 单聊(resolveDmConversation → useChatStream group 模式走网关)
+ *      渲染用 run 的 Timeline(自然融合:过程事件 M2 点亮)
+ *   右:PersonalRightPane(run 式标签:员工/任务/Brief,可收起)
  */
 export function PersonalChatView() {
   const workspaceId = useWorkspaceStore((s) => s.currentId);
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [q, setQ] = useState('');
   const [agentId, setAgentId] = useState<string | null>(null);
+  const [dmGroupId, setDmGroupId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -25,22 +47,31 @@ export function PersonalChatView() {
     return () => { alive = false; };
   }, [workspaceId]);
 
+  // 选中助手 → 解析其 dm conversation(kind='dm',群聊后端同一套:持久化+网关回复+SSE)
+  useEffect(() => {
+    if (!agentId) { setDmGroupId(null); return; }
+    let alive = true;
+    setDmGroupId(null);
+    void resolveDmConversation(agentId, workspaceId ?? undefined)
+      .then((gid) => { if (alive) setDmGroupId(gid); })
+      .catch(() => { if (alive) setDmGroupId(null); });
+    return () => { alive = false; };
+  }, [agentId, workspaceId]);
+
   const filtered = useMemo(
     () => agents.filter((a) => a.name.toLowerCase().includes(q.trim().toLowerCase())),
     [agents, q],
   );
   const selected = agents.find((a) => a.agent_id === agentId) ?? null;
 
-  const { messages, send, error } = useChatStream({ mode: 'dm', targetId: agentId });
+  const { messages, send, error } = useChatStream({
+    mode: 'group',
+    targetId: dmGroupId,
+    sseChannel: 'group',
+  });
+  const timelineMessages = useMemo(() => toTimelineMessages(messages), [messages]);
+
   const [draft, setDraft] = useState('');
-  const streamRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      const n = streamRef.current; if (n) n.scrollTop = n.scrollHeight;
-    });
-  }, [messages.length]);
-
   const doSend = () => {
     const t = draft.trim(); if (!t) return;
     setDraft(''); void send(t);
@@ -49,11 +80,21 @@ export function PersonalChatView() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
   };
 
+  function handleCreated(agent: AgentRecord) {
+    setAgents((prev) => [...prev, agent]);
+    setShowCreate(false);
+    setAgentId(agent.agent_id); // 创建即进入 DM —— 一边聊天一边把员工创建出来
+  }
+
   return (
     <div style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0 }}>
-      {/* 左：agent 列表 */}
+      {/* 左:助手列表 + 新员工 */}
       <div style={{ width: 264, flexShrink: 0, borderRight: '1px solid var(--t-border)', display: 'flex', flexDirection: 'column', background: 'var(--t-panel)' }}>
-        <div style={{ padding: 12 }}>
+        <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button type="button" onClick={() => setShowCreate(true)} aria-label="+ 新员工"
+            style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '9px 0', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--t-accent)', color: 'var(--t-accent-ink)', fontWeight: 700, fontSize: 13 }}>
+            <Plus size={15} /> 新员工
+          </button>
           <div style={{ position: 'relative' }}>
             <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: 'var(--t-fg-4)' }} />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索助手" aria-label="搜索助手"
@@ -79,43 +120,42 @@ export function PersonalChatView() {
         </div>
       </div>
 
-      {/* 右：dm 单聊 */}
+      {/* 中:DM 单聊(Timeline 渲染) */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
         {agentId === null || selected === null ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-3)', fontSize: 14 }}>
-            选择一个助手，开始一对一聊
+            选择一个助手开始单聊，或创建一位新员工
           </div>
         ) : (
           <>
             <div style={{ height: 48, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '0 20px', borderBottom: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
               <HfAvatar glyph={Array.from(selected.name)[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={28} />
               <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-fg)' }}>{selected.name}</span>
+              {!dmGroupId && <span style={{ fontSize: 11, color: 'var(--t-fg-4)' }}>连接会话中…</span>}
             </div>
-            <div ref={streamRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 28px', minHeight: 0 }}>
-              {messages.map((m) => {
-                const isUser = m.role === 'user';
-                return (
-                  <div key={m.id} style={{ display: 'flex', flexDirection: isUser ? 'row-reverse' : 'row', marginBottom: 12 }}>
-                    <div style={{ maxWidth: '65%', padding: '10px 14px', borderRadius: isUser ? '12px 12px 4px 12px' : '12px 12px 12px 4px', background: isUser ? 'var(--t-accent)' : 'var(--t-panel-2)', color: isUser ? 'var(--t-accent-ink)' : 'var(--t-fg)', fontSize: 13.5, lineHeight: 1.5, border: isUser ? 'none' : '1px solid var(--t-border)', wordBreak: 'break-word' }}>
-                      {m.content}
-                    </div>
-                  </div>
-                );
-              })}
-              {error && <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--t-err)' }}>发送失败：{error}</div>}
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '12px 16px' }}>
+              <Timeline messages={timelineMessages} />
+              {error && <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>发送失败：{error}</div>}
             </div>
             <div style={{ flexShrink: 0, borderTop: '1px solid var(--t-border)', padding: '12px 20px', background: 'var(--t-panel)', display: 'flex', alignItems: 'flex-end', gap: 10 }}>
               <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey} rows={1} aria-label="发消息"
                 placeholder="发消息 · Enter 发送 · Shift+Enter 换行"
                 style={{ flex: 1, minHeight: 38, maxHeight: 120, padding: '9px 12px', resize: 'none', border: '1px solid var(--t-border)', borderRadius: 10, background: 'var(--t-bg)', color: 'var(--t-fg)', fontSize: 13, outline: 'none' }} />
-              <button type="button" onClick={doSend} disabled={!draft.trim()} aria-label="发送"
-                style={{ height: 38, padding: '0 14px', borderRadius: 10, border: '1px solid var(--t-accent)', background: draft.trim() ? 'var(--t-accent)' : 'var(--t-panel-2)', color: draft.trim() ? 'var(--t-accent-ink)' : 'var(--t-fg-4)', fontWeight: 700, fontSize: 12, cursor: draft.trim() ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <button type="button" onClick={doSend} disabled={!draft.trim() || !dmGroupId} aria-label="发送"
+                style={{ height: 38, padding: '0 14px', borderRadius: 10, border: '1px solid var(--t-accent)', background: draft.trim() && dmGroupId ? 'var(--t-accent)' : 'var(--t-panel-2)', color: draft.trim() && dmGroupId ? 'var(--t-accent-ink)' : 'var(--t-fg-4)', fontWeight: 700, fontSize: 12, cursor: draft.trim() && dmGroupId ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <span>发送</span><Send size={14} />
               </button>
             </div>
           </>
         )}
       </div>
+
+      {/* 右:run 式标签页(选中助手且会话就绪才出现) */}
+      {selected && dmGroupId && <PersonalRightPane agent={selected} groupId={dmGroupId} />}
+
+      {showCreate && (
+        <CreateAgentModal onCreated={handleCreated} onClose={() => setShowCreate(false)} />
+      )}
     </div>
   );
 }
