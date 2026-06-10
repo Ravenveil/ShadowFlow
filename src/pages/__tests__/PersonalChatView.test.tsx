@@ -16,6 +16,8 @@ vi.mock('../../core/hooks/useChatStream', () => ({
     messages: [
       { id: 'm1', role: 'user', content: '你好' },
       { id: 'm2', role: 'agent', content: '收到' },
+      { id: 'm3', role: 'system', content: '[chat] 出错：403' }, // 网关失败反馈 → raw 卡(可见)
+      { id: 'm4', role: 'agent', content: '' }, // tool_call 占位空消息 → 过滤
     ],
     send: sendMock,
     error: null,
@@ -60,7 +62,8 @@ describe('PersonalChatView (融合M1)', () => {
     render(<PersonalChatView />);
     click(await screen.findByText('写写'));
     await waitFor(() => {
-      expect(screen.getByTestId('timeline').getAttribute('data-kinds')).toBe('user_turn,assistant_text');
+      // system → raw 卡(失败反馈必须可见);空 content 消息被过滤
+      expect(screen.getByTestId('timeline').getAttribute('data-kinds')).toBe('user_turn,assistant_text,raw');
     });
   });
 

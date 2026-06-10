@@ -16,12 +16,19 @@ import { PersonalRightPane } from './PersonalRightPane';
  */
 function toTimelineMessages(messages: ChatMessage[]): TimelineMessage[] {
   return messages
-    .filter((m) => m.role !== 'system')
-    .map((m, i) =>
-      m.role === 'user'
-        ? ({ id: m.id, kind: 'user_turn', turn_id: m.id, ts: i, text: m.content } as TimelineMessage)
-        : ({ id: m.id, kind: 'assistant_text', turn_id: m.id, ts: i, body: m.content, streaming: m.streaming } as TimelineMessage),
-    );
+    // 过滤空 content(如 SSE tool_call 占位消息)——否则渲染成空白 .item 行
+    .filter((m) => (m.content ?? '').trim().length > 0)
+    .map((m, i) => {
+      if (m.role === 'user') {
+        return { id: m.id, kind: 'user_turn', turn_id: m.id, ts: i, text: m.content } as TimelineMessage;
+      }
+      if (m.role === 'system') {
+        // system = 网关失败反馈(缺 key/403/悬空成员等)→ raw 卡(折叠 mono 块)。
+        // 决不能过滤:否则环境问题表现为「发了没人理」的静默失败。
+        return { id: m.id, kind: 'raw', turn_id: m.id, ts: i, body: m.content, source: 'chat-gateway' } as TimelineMessage;
+      }
+      return { id: m.id, kind: 'assistant_text', turn_id: m.id, ts: i, body: m.content, streaming: m.streaming } as TimelineMessage;
+    });
 }
 
 /**
@@ -41,6 +48,8 @@ export function PersonalChatView() {
 
   useEffect(() => {
     let alive = true;
+    // 切工作区即重置选中——避免旧 agentId+新 workspaceId 触发跨区 find-or-create DM 落库
+    setAgentId(null);
     void listAgents(workspaceId ?? undefined)
       .then((rows) => { if (alive) setAgents(rows); })
       .catch(() => { if (alive) setAgents([]); });
