@@ -73,6 +73,8 @@ export function PersonalChatView() {
 
   const [draft, setDraft] = useState('');
   const doSend = () => {
+    // dmGroupId 未就绪(后端未启/解析中)时不清空草稿——否则键盘 Enter 路径会静默丢字
+    if (!dmGroupId) return;
     const t = draft.trim(); if (!t) return;
     setDraft(''); void send(t);
   };
@@ -133,9 +135,11 @@ export function PersonalChatView() {
               <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-fg)' }}>{selected.name}</span>
               {!dmGroupId && <span style={{ fontSize: 11, color: 'var(--t-fg-4)' }}>连接会话中…</span>}
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '12px 16px' }}>
+            {/* flex column 受限高度父容器:让 Timeline 自带的 .container(flex:1; min-height:0; overflow-y:auto)
+                成为真正的滚动容器,其内置智能自动滚动(流式跟随/滚底)才生效 */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '12px 16px' }}>
               <Timeline messages={timelineMessages} />
-              {error && <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>发送失败：{error}</div>}
+              {error && <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>发送失败：{error}</div>}
             </div>
             <div style={{ flexShrink: 0, borderTop: '1px solid var(--t-border)', padding: '12px 20px', background: 'var(--t-panel)', display: 'flex', alignItems: 'flex-end', gap: 10 }}>
               <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey} rows={1} aria-label="发消息"
