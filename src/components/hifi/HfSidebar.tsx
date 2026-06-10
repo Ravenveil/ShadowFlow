@@ -11,10 +11,10 @@
  * navigation. Search / NAV / Settings / user card unchanged.
  */
 import { useMemo, useState, type CSSProperties } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { openQuickSwitcher } from './QuickSwitcher';
 import { Home, MessageCircle, Users, Bot, Search, PanelLeftClose, PanelLeftOpen, Folder, CalendarDays } from 'lucide-react';
-import { WorkspaceSelector } from '../workspace/WorkspaceStrip';
+import { PersonalTeamToggle } from '../../pages/chat-home/PersonalTeamToggle';
 import type { LucideIcon } from 'lucide-react';
 import { HfDot } from './HfAtoms';
 import { useI18n } from '../../common/i18n';
@@ -174,6 +174,18 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
   const [showLogin, setShowLogin] = useState(false);
   const { user, status } = useAuth();
 
+  // 个人/团队 全局切换（clawsgo 式，常驻侧栏顶）。用 URL ?view= 驱动，
+  // 点击导航到 /chat 对应态，让 ChatHomePage 内容联动切换。
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const chatView =
+    location.pathname.startsWith('/chat') && searchParams.get('view') === 'personal'
+      ? 'personal'
+      : 'team';
+  const goChatView = (v: 'personal' | 'team') =>
+    navigate(v === 'personal' ? '/chat?view=personal' : '/chat');
+
   const W = collapsed ? 68 : 260;
 
   return (
@@ -191,18 +203,19 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
         overflow: 'hidden',
       }}
     >
-      {/* Workspace switcher + collapse toggle */}
+      {/* 个人/团队 全局切换（clawsgo 式，取代原工作区选择器位置）+ 折叠按钮 */}
       <div
         style={{
           display: 'flex',
+          flexDirection: collapsed ? 'column' : 'row',
           alignItems: 'center',
           gap: 6,
           padding: collapsed ? '8px 6px' : '8px 10px',
           marginBottom: 8,
         }}
       >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <WorkspaceSelector collapsed={collapsed} />
+        <div style={{ flex: collapsed ? undefined : 1, minWidth: 0, width: collapsed ? '100%' : undefined, display: 'flex' }}>
+          <PersonalTeamToggle view={chatView} onChange={goChatView} compact={collapsed} />
         </div>
         <button
           onClick={() => setCollapsed(c => !c)}

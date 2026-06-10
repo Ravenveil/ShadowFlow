@@ -3,6 +3,7 @@
  * Workspace switching is handled by WorkspaceStrip in HfLayout (universal).
  */
 import { useEffect, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { LanguageSwitcher } from '../../core/components/common/LanguageSwitcher';
 import { useTheme } from './useTheme';
 import { useI18n } from '../../common/i18n';
@@ -130,11 +131,17 @@ function ThemeToggle() {
 
 interface HfTopBarProps {
   right?: ReactNode;
-  /** @deprecated Workspace switching is now handled globally by WorkspaceStrip in HfLayout. */
+  /** @deprecated 工作区选择器现在按路由自动显示（/chat 在内容区显示，其余页面在顶栏兜底）。 */
   hideWorkspace?: boolean;
 }
 
-export function HfTopBar({ right, hideWorkspace = true }: HfTopBarProps) {
+export function HfTopBar({ right }: HfTopBarProps) {
+  const { pathname } = useLocation();
+  // /chat 把工作区选择器放在内容区顶部（见 ChatHomePage），其余页面在顶栏兜底，
+  // 因为个人/团队切换占用了原侧栏顶部的工作区选择器位置。
+  // /agent-dm 同属聊天类视图（且自带 HfTopBar），排除以免重复显示。
+  const isChatLike = pathname.startsWith('/chat') || pathname.startsWith('/agent-dm');
+  const showWorkspace = !isChatLike;
   return (
     <header
       style={{
@@ -148,7 +155,11 @@ export function HfTopBar({ right, hideWorkspace = true }: HfTopBarProps) {
         background: 'var(--t-panel)',
       }}
     >
-      {!hideWorkspace && <WorkspaceSelector />}
+      {showWorkspace && (
+        <div style={{ width: 240, flexShrink: 0 }}>
+          <WorkspaceSelector />
+        </div>
+      )}
       <div style={{ flex: 1 }} />
       {right}
       <NetworkLatencyChip />
