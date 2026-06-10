@@ -12,7 +12,7 @@ const InboxPage = lazy(() => import('./pages/InboxPage'));
 // （路由全部 redirect 到 /start 或 /agents）。源文件保留，等后续 audit 决定彻删时机。
 const ImportPage = lazy(() => import('./pages/ImportPage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
-const ChatPage = lazy(() => import('./pages/ChatPage'));
+const ChatHomePage = lazy(() => import('./pages/ChatHomePage'));
 const AgentDMPage = lazy(() => import('./pages/AgentDMPage'));
 // BuilderPage is intentionally NOT routed — /builder is hard-redirected to
 // /start below. The page file is kept on disk for now but no longer
@@ -82,8 +82,8 @@ export function AppRoutes() {
                 sidebar can safely link here when no real groups exist yet.
                 Replaces hardcoded `/chat/default` which POSTed to a fake
                 group_id and 404'd the message persistence. */}
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/chat/:groupId" element={<ChatPage />} />
+            <Route path="/chat" element={<ChatHomePage />} />
+            <Route path="/chat/:groupId" element={<ChatHomePage />} />
             <Route path="/agent-dm/:agentId" element={<AgentDMPage />} />
             <Route path="/builder" element={<Navigate to="/start" replace />} />
             <Route path="/builder/*" element={<Navigate to="/start" replace />} />
