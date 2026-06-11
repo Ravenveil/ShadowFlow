@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { HfAvatar } from '../../components/hifi';
 import type { AgentRecord } from '../../api/agents';
+import { RightPaneTabs, type RightPaneTabDef } from '../../components/run-session/RightPaneTabs';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
 
 type TabId = 'employee' | 'tasks' | 'brief';
-const TABS: Array<{ id: TabId; label: string }> = [
-  { id: 'employee', label: '员工' },
-  { id: 'tasks', label: '任务' },
-  { id: 'brief', label: 'Brief' },
+const TABS: RightPaneTabDef<TabId>[] = [
+  { key: 'employee', label: '员工' },
+  { key: 'tasks', label: '任务' },
+  { key: 'brief', label: 'Brief' },
 ];
 
 interface PersonalRightPaneProps {
@@ -36,8 +37,9 @@ function EmployeeCard({ agent }: { agent: AgentRecord }) {
 }
 
 /**
- * PersonalRightPane — 个人态右栏(run 式标签页设计,M1)。
- * 标签条视觉对齐 run-session RightPaneTabs;面板全复用现有组件
+ * PersonalRightPane — 个人态右栏。
+ * M3a 三栏融合：tab 条从手写仿制升级为直接复用 run-session 的
+ * RightPaneTabs shell(同一视觉/同一 a11y 结构)；面板全复用现有组件
  * (dm conversation 有真实 groupId,任务/Brief 即插即用)。可收起。
  */
 export function PersonalRightPane({ agent, groupId }: PersonalRightPaneProps) {
@@ -57,28 +59,35 @@ export function PersonalRightPane({ agent, groupId }: PersonalRightPaneProps) {
 
   return (
     <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--t-border)', background: 'var(--t-panel)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {/* run 式标签条 */}
-      <div role="tablist" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 2, padding: '8px 8px 0', borderBottom: '1px solid var(--t-border)' }}>
-        {TABS.map((t) => {
-          const on = t.id === tab;
-          return (
-            <button key={t.id} type="button" role="tab" aria-selected={on} onClick={() => setTab(t.id)}
-              style={{ padding: '7px 12px', border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: on ? 700 : 500, color: on ? 'var(--t-fg)' : 'var(--t-fg-3)', background: 'transparent', borderBottom: on ? '2px solid var(--t-accent)' : '2px solid transparent', marginBottom: -1 }}>
-              {t.label}
-            </button>
-          );
-        })}
-        <div style={{ flex: 1 }} />
-        <button type="button" aria-label="收起右栏" title="收起右栏" onClick={() => setCollapsed(true)}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', padding: 6, borderRadius: 6 }}>
-          <PanelRightClose size={15} strokeWidth={1.75} />
-        </button>
-      </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-        {tab === 'employee' && <EmployeeCard agent={agent} />}
-        {tab === 'tasks' && <ApprovalGatePanel groupId={groupId} />}
-        {tab === 'brief' && <BriefBoardView groupId={groupId} />}
-      </div>
+      <RightPaneTabs<TabId>
+        activeTab={tab}
+        onTabChange={setTab}
+        tabs={TABS}
+        ariaLabel="个人态右栏标签"
+        trailing={
+          <button type="button" aria-label="收起右栏" title="收起右栏" onClick={() => setCollapsed(true)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', padding: 6, borderRadius: 6, display: 'inline-flex', alignItems: 'center' }}>
+            <PanelRightClose size={15} strokeWidth={1.75} />
+          </button>
+        }
+        panels={{
+          employee: (
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              <EmployeeCard agent={agent} />
+            </div>
+          ),
+          tasks: (
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 }}>
+              <ApprovalGatePanel groupId={groupId} />
+            </div>
+          ),
+          brief: (
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 }}>
+              <BriefBoardView groupId={groupId} />
+            </div>
+          ),
+        }}
+      />
     </div>
   );
 }

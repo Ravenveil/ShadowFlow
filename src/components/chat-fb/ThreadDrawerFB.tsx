@@ -15,6 +15,7 @@
 import { useEffect, useState } from 'react';
 import { X, Pencil, Plus, Upload, FileText, FileCode, FileImage, User } from 'lucide-react';
 import { paletteFor, initialOf } from './agentAvatar';
+import { RightPaneTabs } from '../run-session/RightPaneTabs';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
 import { fetchRecentMessages } from '../../api/groupApi';
@@ -154,29 +155,11 @@ export function ThreadDrawerFB({
     }
   };
 
-  return (
-    <div className={styles.drawer}>
-      {/* Tabs */}
-      <div className={styles.drTabs}>
-        {tabs.map(tb => (
-          <span
-            key={tb.k}
-            className={`${styles.drTab} ${tab === tb.k ? styles.drTabOn : ''}`}
-            onClick={() => setTab(tb.k)}
-          >
-            {tb.label}
-            {tb.n !== undefined && tb.n > 0 && (
-              <span className={styles.drTabN}>{tb.n}</span>
-            )}
-          </span>
-        ))}
-        <span className={styles.drClose} onClick={onClose} title="关闭">
-          <X size={14} strokeWidth={2} />
-        </span>
-      </div>
+  // M3a 三栏融合 — 四个 pane 构造成 JSX 常量，交给共享 RightPaneTabs shell
+  // 渲染（与 run-session / 个人态右栏同一框架）。内容零改动。
 
-      {/* THREAD pane */}
-      {tab === 'thread' && (
+  // THREAD pane
+  const threadPane = (
         <div className={styles.drPane}>
           {/* Stream G — dr-ctx 源消息预览（如果父组件传了 sourceMessage） */}
           {sourceMessage && (
@@ -356,10 +339,10 @@ export function ThreadDrawerFB({
             </div>
           )}
         </div>
-      )}
+  );
 
-      {/* TASKS pane — 复用 ApprovalGatePanel */}
-      {tab === 'tasks' && (
+  // TASKS pane — 复用 ApprovalGatePanel
+  const tasksPane = (
         <div className={styles.drPane}>
           {groupId ? (
             <div style={{ padding: 14, overflow: 'auto', flex: 1 }}>
@@ -375,10 +358,10 @@ export function ThreadDrawerFB({
             </button>
           </div>
         </div>
-      )}
+  );
 
-      {/* DOCS pane — Stream G mock 文件列表（TODO: 接 /api/groups/{id}/docs） */}
-      {tab === 'docs' && (
+  // DOCS pane — Stream G mock 文件列表（TODO: 接 /api/groups/{id}/docs）
+  const docsPane = (
         <div className={styles.drPane}>
           {groupId ? (
             <div className={styles.drDocList}>
@@ -415,10 +398,10 @@ export function ThreadDrawerFB({
             </button>
           </div>
         </div>
-      )}
+  );
 
-      {/* BRIEF pane — 复用 BriefBoardView */}
-      {tab === 'brief' && (
+  // BRIEF pane — 复用 BriefBoardView
+  const briefPane = (
         <div className={styles.drPane}>
           {groupId ? (
             <div style={{ padding: 14, overflow: 'auto', flex: 1 }}>
@@ -434,7 +417,40 @@ export function ThreadDrawerFB({
             </button>
           </div>
         </div>
-      )}
+  );
+
+  return (
+    <div className={styles.drawer}>
+      <RightPaneTabs<DrawerTab>
+        activeTab={tab}
+        onTabChange={setTab}
+        tabs={tabs.map(tb => ({ key: tb.k, label: tb.label }))}
+        tabCounts={{ tasks: metrics.pendingApprovalsCount }}
+        ariaLabel="聊天右栏标签"
+        trailing={
+          onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              title="关闭"
+              aria-label="关闭右栏"
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--t-fg-4)',
+                padding: 6,
+                borderRadius: 6,
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
+            >
+              <X size={14} strokeWidth={2} />
+            </button>
+          ) : undefined
+        }
+        panels={{ thread: threadPane, tasks: tasksPane, docs: docsPane, brief: briefPane }}
+      />
     </div>
   );
 }

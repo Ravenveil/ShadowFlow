@@ -1,8 +1,12 @@
 /**
- * RightPaneTabs — shell for the four right-pane tabs (Overview / Team /
- * Agent / Preview) used by RunSessionPage. The shell owns:
+ * RightPaneTabs — shared shell for right work-pane tabs.
  *
- *   - toolbar row:  FollowChip slot (left) + tab button group (right)
+ * Born in RunSessionPage (Overview / Team / Agent / Preview)；M3a 三栏融合
+ * 起升格为通用右栏框架：ChatPage 团队态(ThreadDrawerFB)与个人态
+ * (PersonalRightPane)换装到同一 shell，tab 集由调用方通过 `tabs` 注入。
+ * The shell owns:
+ *
+ *   - toolbar row:  FollowChip slot (left) + tab button group + trailing slot
  *   - followed-tab indicator dot pulsing in the upper-right corner
  *   - content area that renders the panel matching `activeTab`
  *
@@ -20,23 +24,34 @@ export type TabId = 'overview' | 'team' | 'agent' | 'preview';
 
 export type RunPillStatus = 'building' | 'done' | 'error';
 
-export interface RightPaneTabsProps {
+export interface RightPaneTabDef<T extends string = TabId> {
+  key: T;
+  label: string;
+}
+
+export interface RightPaneTabsProps<T extends string = TabId> {
   /** Currently visible tab. */
-  activeTab: TabId;
-  onTabChange: (tab: TabId) => void;
+  activeTab: T;
+  onTabChange: (tab: T) => void;
+  /** Tab 集。不传 = run-session 的 Overview/Team/Agent/Preview（向后兼容）。 */
+  tabs?: RightPaneTabDef<T>[];
   /** Optional follow chip rendered at the left of the toolbar. */
   followChip?: React.ReactNode;
-  followedTab?: TabId | null;
-  panels: Record<TabId, React.ReactNode>;
+  followedTab?: T | null;
+  panels: Record<T, React.ReactNode>;
   /** 2026-05-20 — runTitle / runStatus 字段保留但不再在 toolbar 渲染。
    *  v3 设计稿把 run id + 状态 pill 放在左 pane 的 Run Session header，
    *  右 pane toolbar 只放 follow chip + tabs + Blueprint。
    *  保留 prop 名兼容现有 RunSessionPage 调用，避免回归 props 删除。 */
   runTitle?: string;
   runStatus?: RunPillStatus;
-  tabCounts?: Partial<Record<TabId, number>>;
+  tabCounts?: Partial<Record<T, number>>;
   /** v3 toolbar 右端的 Blueprint file tag — 显示当前 run 产出的 artifact 文件名。 */
   blueprintFilename?: string | null;
+  /** toolbar 最右端的动作槽（关闭/收起按钮等）。 */
+  trailing?: React.ReactNode;
+  /** tablist 的 aria-label。不传 = run-session 文案（向后兼容）。 */
+  ariaLabel?: string;
 }
 
 // PILL_TEXT / PILL_BG retained for back-compat in case another caller imports
@@ -49,16 +64,17 @@ const _PILL_TEXT: Record<RunPillStatus, string> = {
 };
 void _PILL_TEXT;
 
-const TAB_DEFS: { key: TabId; label: string }[] = [
+const TAB_DEFS: RightPaneTabDef[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'team', label: 'Team' },
   { key: 'agent', label: 'Agent' },
   { key: 'preview', label: 'Preview' },
 ];
 
-export function RightPaneTabs({
+export function RightPaneTabs<T extends string = TabId>({
   activeTab,
   onTabChange,
+  tabs,
   followChip,
   followedTab,
   panels,
@@ -66,7 +82,10 @@ export function RightPaneTabs({
   runStatus: _runStatus,
   tabCounts,
   blueprintFilename,
-}: RightPaneTabsProps) {
+  trailing,
+  ariaLabel,
+}: RightPaneTabsProps<T>) {
+  const tabDefs = (tabs ?? TAB_DEFS) as RightPaneTabDef<T>[];
   // 2026-05-20 — runTitle / runStatus 不再渲染（v3 设计稿把它们放在左 pane header）。
   // 显式 void 标记给 lint/读代码的人看，避免被当成 bug 删掉。
   void _runTitle; void _runStatus;
@@ -84,10 +103,10 @@ export function RightPaneTabs({
       <style>{toolbarStyles}</style>
       <div className="rs-toolbar">
         {followChip && <div className="rs-toolbar-l">{followChip}</div>}
-        <div className="rs-toolbar-sep" />
+        {followChip && <div className="rs-toolbar-sep" />}
 
-        <div role="tablist" aria-label="Run session right pane tabs" className="rs-tabs">
-          {TAB_DEFS.map(({ key, label }) => {
+        <div role="tablist" aria-label={ariaLabel ?? 'Run session right pane tabs'} className="rs-tabs">
+          {tabDefs.map(({ key, label }) => {
             const isActive = activeTab === key;
             const isFollowed = followedTab === key;
             const count = tabCounts?.[key];
@@ -112,10 +131,15 @@ export function RightPaneTabs({
           })}
         </div>
 
-        {blueprintFilename && (
-          <div className="rs-toolbar-r" title={blueprintFilename}>
-            <span className="rs-bp-lbl">Blueprint</span>
-            <span className="rs-bp-id">{blueprintFilename}</span>
+        {(blueprintFilename || trailing) && (
+          <div className="rs-toolbar-right">
+            {blueprintFilename && (
+              <div className="rs-toolbar-r" title={blueprintFilename}>
+                <span className="rs-bp-lbl">Blueprint</span>
+                <span className="rs-bp-id">{blueprintFilename}</span>
+              </div>
+            )}
+            {trailing}
           </div>
         )}
       </div>
@@ -198,8 +222,13 @@ const toolbarStyles = `
   animation: sf-pulse 1.4s ease-in-out infinite;
 }
 
-.rs-toolbar-r {
+.rs-toolbar-right {
   margin-left: auto;
+  align-self: center;
+  display: inline-flex; align-items: center; gap: 8px;
+  min-width: 0;
+}
+.rs-toolbar-r {
   align-self: center;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 10px; border-radius: 6px;
