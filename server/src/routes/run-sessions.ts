@@ -16,7 +16,12 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { runSkillAssembler } from '../assembler';
 import { classifyErrorCode } from '../lib/classify-error';
-import { createRunBus, type RunEventSink, type RunStatus } from '../lib/run-event-bus';
+import {
+  createRunBus,
+  type RunEventSink,
+  type RunEventRecord,
+  type RunStatus,
+} from '../lib/run-event-bus';
 import { createRunEventStore } from '../lib/run-event-store';
 // Round 4 PR-E — canonical `@skill` token parser shared byte-equal with the
 // frontend (`src/lib/skillToken.ts`). Replaces an inline regex that drifted
@@ -445,6 +450,40 @@ export function resolveStreamDisposition(args: {
   if (args.hasSession) return { kind: 'live' };
   if (args.run) return { kind: 'replay', status: args.run.status };
   return { kind: 'gone' };
+}
+
+// ── B2 · 统一消息读路径 (unified-conversation-core-plan-2026-06-11 §B2) ──────
+// groups-chat.ts 的 GET /api/groups/:id/timeline 需要「conversation → run 列表
+// → 每个 run 的事件日志」，但 sessionStore / runBus 都是本文件私有（刻意：执行
+// 状态单一所有权）。这里导出两个轻量只读查询，而不是把 store 本体漏出去。
+
+/**
+ * List run-session ids belonging to a conversation, most-recently-updated
+ * first. Read-only; never touches runBus.
+ */
+export function listSessionsByConversation(conversationId: string): string[] {
+  const hits: Array<{ id: string; at: number }> = [];
+  for (const [id, s] of sessionStore.entries()) {
+    if (s.conversation_id !== conversationId) continue;
+    hits.push({ id, at: s.updated_at ?? s.created_at ?? 0 });
+  }
+  hits.sort((a, b) => b.at - a.at);
+  return hits.map((h) => h.id);
+}
+
+/**
+ * Read-only snapshot of one run's status + buffered event log for timeline
+ * replay. Uses `hydrateOne` so a run whose snapshot is on disk but not in
+ * memory (post-restart / post-TTL) is recovered with the same read-only
+ * semantics as the /stream replay path. Returns null when there is nothing
+ * to replay (no in-memory run, no disk snapshot).
+ */
+export function getRunReplay(
+  sessionId: string,
+): { status: RunStatus; events: RunEventRecord[] } | null {
+  const run = runBus.hydrateOne(sessionId) ?? runBus.get(sessionId);
+  if (!run) return null;
+  return { status: run.status, events: run.events };
 }
 
 const VALID_ARTIFACT_TYPES: ReadonlyArray<ArtifactType> = ['yaml', 'html', 'markdown'];

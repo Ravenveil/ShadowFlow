@@ -184,6 +184,14 @@ export type TimelineMessage =
   | (TimelineMessageBase & {
       kind: 'assistant_text';
       body: string;
+      /**
+       * B2 (unified-conversation-core-plan-2026-06-11 §B2) — optional speaker
+       * attribution for CHAT-originated messages (group MessageItem has
+       * sender_name; run-originated timeline messages don't). Additive: the
+       * front-end MessageRegistry ignores unknown fields, so old clients are
+       * unaffected.
+       */
+      sender_name?: string;
     })
   | (TimelineMessageBase & {
       kind: 'raw';
@@ -191,6 +199,8 @@ export type TimelineMessage =
       body: string;
       /** Optional provenance hint (e.g. 'sse-frame-leak', 'unknown-tag'). */
       source?: string;
+      /** B2 — optional speaker attribution (see assistant_text.sender_name). */
+      sender_name?: string;
     })
   | (TimelineMessageBase & {
       kind: 'step_panel';

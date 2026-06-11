@@ -36,6 +36,16 @@ import { isProviderId } from '../transport/api-clients';
 import type { ConversationMessage } from '../lib/conversation-types';
 import { loadTeamForRun } from '../lib/team-source';
 import { runTeamDagFanout, type RunTeamDagDeps } from '../lib/chat-dag/run-team-dag';
+// B2 · 统一消息读路径 — chat MessageItem 适配 + run 事件重放（纯函数）。
+import {
+  chatMessagesToTimeline,
+  replayTimeline,
+  type ChatMessageItem,
+} from '../lib/timeline-replay';
+import type { TimelineMessage } from '../lib/contracts';
+// B1 互链：group → conversation；B2：conversation → run sessions → 事件日志。
+import { getConversationByGroup } from '../storage/conversations';
+import { listSessionsByConversation, getRunReplay } from './run-sessions';
 
 const router = Router();
 
@@ -57,7 +67,9 @@ export function swapDagRun(groupId: string, registry: Map<string, AbortControlle
 interface GroupRecord {
   group_id: string;
   agent_ids?: string[];
-  messages?: Array<{ sender_name?: string; sender_kind?: string; content?: string }>;
+  // B2 — ChatMessageItem 是原 inline 形状的超集（多 message_id/timestamp），
+  // toHistory 只读 sender_kind/content，不受影响。
+  messages?: ChatMessageItem[];
   kind?: string;
   /** 2026-05-30 — 用户在群设置选的 CLI 工作目录(绝对路径)。空 = 用默认。 */
   workspace_dir?: string;
@@ -364,6 +376,71 @@ async function runFanout(
     }).catch(() => {});
   }
 }
+
+// ── B2 · GET /api/groups/:id/timeline ────────────────────────────────────────
+// 统一消息读路径 (unified-conversation-core-plan-2026-06-11 §B2)：把一个群的
+// 完整会话历史聚合成前端 Timeline 渲染器可直接消费的 TimelineMessage[]：
+//   a) 聊天消息（Python 群记录 MessageItem）→ chatMessagesToTimeline 适配
+//      （user→user_turn / agent→assistant_text / system→raw，turn_id 按 user
+//      消息切段）；
+//   b) B1 互链 conversation 下每个 run session 的事件日志（run-event-bus 内存
+//      + run-event-store 落盘，经 getRunReplay 统一取出）→ replayTimeline
+//      重放 message/message-patch 得到最终 TimelineMessage[]；
+//   c) 两路按 ts 升序归并；先全量不分页，上限 500 条（保最新）+ truncated 标记。
+// 响应: { group_id, messages: TimelineMessage[], runs: [{session_id,status}], truncated }
+
+/** 全量上限：超过只保留最新的 500 条（truncated: true）。 */
+const TIMELINE_MAX_MESSAGES = 500;
+
+router.get('/:id/timeline', (req: Request, res: Response) => {
+  void (async () => {
+    const groupId = req.params.id;
+    const group = await pyGet<GroupRecord>(`/api/groups/${encodeURIComponent(groupId)}`);
+    if (!group) {
+      // pyGet 把「Python 没起」和「群不存在」都折叠成 null；对读路径两者的
+      // 用户语义一致（拿不到这个群）——用 404 + 提示语区分排查方向。
+      res.status(404).json({
+        error: {
+          code: 'GROUP_NOT_FOUND',
+          message: `group ${groupId} not found (or Python backend unreachable)`,
+        },
+      });
+      return;
+    }
+
+    // a) 聊天消息适配。
+    const chatMessages = chatMessagesToTimeline(group.messages ?? []);
+
+    // b) 互链 run 的过程消息归并。无互链 conversation = 纯聊天群，runs 为空。
+    const runs: Array<{ session_id: string; status: string }> = [];
+    const runMessages: TimelineMessage[] = [];
+    const conv = getConversationByGroup(groupId);
+    if (conv) {
+      for (const sessionId of listSessionsByConversation(conv.conversation_id)) {
+        const replay = getRunReplay(sessionId);
+        if (!replay) {
+          // session 记录在、事件日志已被 TTL 清理：run 列表仍可见，过程消息缺位。
+          runs.push({ session_id: sessionId, status: 'idle' });
+          continue;
+        }
+        runs.push({ session_id: sessionId, status: replay.status });
+        runMessages.push(...replayTimeline(replay.events));
+      }
+    }
+
+    // c) ts 升序归并。sort 稳定：同 ts 时聊天消息先于 run 消息（拼接顺序）。
+    const merged = [...chatMessages, ...runMessages].sort((a, b) => a.ts - b.ts);
+    const truncated = merged.length > TIMELINE_MAX_MESSAGES;
+    const messages = truncated ? merged.slice(merged.length - TIMELINE_MAX_MESSAGES) : merged;
+
+    res.json({ group_id: groupId, messages, runs, truncated });
+  })().catch((e) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!res.headersSent) {
+      res.status(500).json({ error: { code: 'TIMELINE_FAILED', message: msg } });
+    }
+  });
+});
 
 /**
  * POST /api/groups/:id/messages — intercept chat send.
