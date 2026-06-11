@@ -1114,3 +1114,127 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .sf-org-row:hover { background: var(--t-panel-2); }
 .sf-org-row.active { background: var(--t-accent-tint); }
 
+/* ──────────────────────────────────────────────────────────────────────
+   Personal chat view (单聊) — Cherry / clawsgo-grade refinement layer.
+   Real hover/selected/focus transitions + designed empty state. All
+   --t-* tokens so night/day/paper themes flip automatically.
+   ────────────────────────────────────────────────────────────────────── */
+.pcv-rail-head { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+.pcv-new {
+  width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 36px; border-radius: 9px; cursor: pointer;
+  background: var(--t-accent-tint); color: var(--t-accent-bright);
+  border: 1px solid color-mix(in srgb, var(--t-accent) 32%, transparent);
+  font-weight: 600; font-size: 13px; letter-spacing: .01em;
+  transition: background 130ms ease, border-color 130ms ease, transform 130ms cubic-bezier(.2,.8,.2,1);
+}
+.pcv-new:hover { background: color-mix(in srgb, var(--t-accent) 20%, transparent); border-color: var(--t-accent); }
+.pcv-new:active { transform: translateY(1px); }
+
+.pcv-search { position: relative; }
+.pcv-search > svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--t-fg-4); pointer-events: none; }
+.pcv-search input {
+  width: 100%; height: 34px; padding: 0 10px 0 30px; border-radius: 8px;
+  border: 1px solid var(--t-border); background: var(--t-bg); color: var(--t-fg);
+  font-size: 12.5px; outline: none;
+  transition: border-color 130ms ease, box-shadow 130ms ease;
+}
+.pcv-search input::placeholder { color: var(--t-fg-4); }
+.pcv-search input:focus { border-color: var(--t-accent); box-shadow: 0 0 0 3px var(--t-accent-tint); }
+
+.pcv-list { flex: 1; overflow-y: auto; padding: 0 8px 10px; }
+.pcv-list::-webkit-scrollbar { width: 8px; }
+.pcv-list::-webkit-scrollbar-track { background: transparent; }
+.pcv-list::-webkit-scrollbar-thumb { background: var(--t-border-2); border-radius: 4px; border: 2px solid var(--t-panel); }
+.pcv-list::-webkit-scrollbar-thumb:hover { background: var(--t-fg-5); }
+
+.pcv-sec { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--t-fg-5); padding: 10px 8px 6px; }
+
+.pcv-row {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 8px;
+  border-radius: 8px; border: none; cursor: pointer; text-align: left; background: transparent;
+  position: relative; transition: background 120ms ease;
+}
+.pcv-row:hover { background: var(--t-panel-2); }
+.pcv-row.active { background: var(--t-accent-tint); }
+.pcv-row.active::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2.5px; border-radius: 0 3px 3px 0; background: var(--t-accent); }
+.pcv-row-name { font-size: 13px; font-weight: 600; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcv-row.active .pcv-row-name { color: var(--t-accent-bright); }
+.pcv-row-sub { font-size: 11px; color: var(--t-fg-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+
+.pcv-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+.pcv-empty-glyph { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: var(--t-accent-tint); color: var(--t-accent-bright); margin-bottom: 18px; }
+.pcv-empty-title { font-size: 17px; font-weight: 700; color: var(--t-fg); letter-spacing: -.01em; }
+.pcv-empty-sub { font-size: 13px; color: var(--t-fg-3); margin-top: 7px; max-width: 330px; line-height: 1.55; }
+.pcv-empty-hints { display: flex; gap: 8px; margin-top: 22px; flex-wrap: wrap; justify-content: center; max-width: 380px; }
+.pcv-hint { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--t-border); background: var(--t-panel); color: var(--t-fg-3); font-size: 12px; white-space: nowrap; }
+.pcv-hint > svg { color: var(--t-fg-4); flex-shrink: 0; }
+.pcv-empty-cta {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 24px; height: 38px; padding: 0 18px;
+  border-radius: 10px; border: 1px solid transparent; background: var(--t-accent); color: var(--t-accent-ink);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 130ms ease, transform 130ms cubic-bezier(.2,.8,.2,1);
+}
+.pcv-empty-cta:hover { background: var(--t-accent-bright); }
+.pcv-empty-cta:active { transform: translateY(1px); }
+
+.pcv-chat-head { height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--t-border); background: var(--t-panel); }
+.pcv-chat-name { font-size: 14px; font-weight: 700; color: var(--t-fg); }
+.pcv-chat-status { font-size: 11px; color: var(--t-fg-4); }
+
+.pcv-composer { flex-shrink: 0; border-top: 1px solid var(--t-border); padding: 12px 18px; background: var(--t-panel); display: flex; align-items: flex-end; gap: 10px; }
+.pcv-composer textarea {
+  flex: 1; min-height: 40px; max-height: 120px; padding: 10px 12px; resize: none;
+  border: 1px solid var(--t-border); border-radius: 10px; background: var(--t-bg); color: var(--t-fg);
+  font-size: 13px; line-height: 1.5; outline: none; font-family: inherit;
+  transition: border-color 130ms ease, box-shadow 130ms ease;
+}
+.pcv-composer textarea::placeholder { color: var(--t-fg-4); }
+.pcv-composer textarea:focus { border-color: var(--t-accent); box-shadow: 0 0 0 3px var(--t-accent-tint); }
+.pcv-send {
+  height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid transparent;
+  background: var(--t-accent); color: var(--t-accent-ink); font-weight: 600; font-size: 12.5px;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: background 130ms ease, transform 130ms cubic-bezier(.2,.8,.2,1);
+}
+.pcv-send:hover:not(:disabled) { background: var(--t-accent-bright); }
+.pcv-send:active:not(:disabled) { transform: translateY(1px); }
+.pcv-send:disabled { background: var(--t-panel-2); color: var(--t-fg-4); border-color: var(--t-border); cursor: not-allowed; }
+
+/* ── PagePeekOverlay — 原页面(/teams /agents)弹进聊天的站内大弹层 ─────────────
+   对标 clawsgo：遮罩模糊渐入 + 面板上浮，关闭即卸载。 */
+@keyframes sf-peek-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sf-peek-rise { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.sf-peek-backdrop {
+  position: fixed; inset: 0; z-index: 240;
+  background: color-mix(in oklab, var(--t-bg) 55%, transparent);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  animation: sf-peek-fade 160ms ease both;
+}
+.sf-peek-panel {
+  width: min(1180px, calc(100vw - 64px)); height: calc(100vh - 88px);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--t-bg); color: var(--t-fg);
+  border: 1px solid var(--t-border); border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .35);
+  animation: sf-peek-rise 200ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.sf-peek-head {
+  flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-bottom: 1px solid var(--t-border);
+  background: var(--t-panel);
+}
+.sf-peek-title { font-size: 13px; font-weight: 700; }
+.sf-peek-hint { flex: 1; font-size: 10.5px; color: var(--t-fg-5); font-family: var(--font-mono, monospace); }
+.sf-peek-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 6px; border-radius: 7px; border: none; background: none;
+  cursor: pointer; color: var(--t-fg-4);
+  transition: background 120ms ease, color 120ms ease;
+}
+.sf-peek-close:hover { background: var(--t-panel-2); color: var(--t-fg); }
+.sf-peek-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.sf-peek-frame { flex: 1; min-height: 0; width: 100%; border: none; background: var(--t-bg); }
+

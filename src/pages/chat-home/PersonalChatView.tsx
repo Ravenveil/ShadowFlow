@@ -7,9 +7,9 @@ import { useChatStream, type ChatMessage } from '../../core/hooks/useChatStream'
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { Timeline } from '../../components/run-session/timeline/Timeline';
 import type { TimelineMessage } from '../../components/run-session/timeline/types';
-import { CreateAgentModal } from '../../core/components/agent/CreateAgentModal';
 import { PersonalRightPane } from './PersonalRightPane';
 import { ChatRail } from './ChatRailChrome';
+import { PagePeekOverlay } from './PagePeekOverlay';
 
 /**
  * ChatMessage → TimelineMessage 适配层(融合M1)。
@@ -92,10 +92,13 @@ export function PersonalChatView() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
   };
 
-  function handleCreated(agent: AgentRecord) {
-    setAgents((prev) => [...prev, agent]);
+  // 「新员工」= 弹出原 /agents 页面（PagePeekOverlay，完整设计含 Quick Hire）。
+  // 关闭弹层时重拉助手列表，弹层里新建的员工立刻出现在左栏。
+  function handlePeekClose() {
     setShowCreate(false);
-    setAgentId(agent.agent_id); // 创建即进入 DM —— 一边聊天一边把员工创建出来
+    void listAgents(workspaceId ?? undefined)
+      .then(setAgents)
+      .catch(() => { /* 列表保持现状 */ });
   }
 
   return (
@@ -178,9 +181,7 @@ export function PersonalChatView() {
       {/* 右:第三栏常驻(设计稿)——工作区 tab 永远在;员工/任务/Brief 选中助手后点亮 */}
       <PersonalRightPane agent={selected} groupId={dmGroupId} />
 
-      {showCreate && (
-        <CreateAgentModal onCreated={handleCreated} onClose={() => setShowCreate(false)} />
-      )}
+      {showCreate && <PagePeekOverlay target="agents" onClose={handlePeekClose} />}
     </div>
   );
 }

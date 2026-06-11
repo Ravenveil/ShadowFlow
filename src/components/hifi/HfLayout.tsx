@@ -44,7 +44,10 @@ export function HfLayout() {
   // M3b 侧边栏合并（三栏融合）：/chat 下聊天列表栏升格为唯一侧边栏
   // （ChatRailChrome 承载 个人/团队切换 + 低频导航），全局 HfSidebar 不再渲染。
   // 其余页面保持原全局侧边栏不变。
-  const hideSidebar = pathname.startsWith('/chat');
+  // PagePeekOverlay 以同源 iframe 弹出 /teams /agents 原页面——iframe 环境下
+  // 同样隐藏全局侧边栏/宠物栏，只留页面本体（任何内部跳转都保持）。
+  const embedded = typeof window !== 'undefined' && window.self !== window.top;
+  const hideSidebar = pathname.startsWith('/chat') || embedded;
 
   // zoom-shell:height 抵消全局 --app-zoom,放大后内容不超物理视口(见 index.css)。
   return (
@@ -63,7 +66,7 @@ export function HfLayout() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
           <Outlet />
         </div>
-        <PetRail />
+        {!embedded && <PetRail />}
       </main>
       <QuickSwitcher />
     </div>

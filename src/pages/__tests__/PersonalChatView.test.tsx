@@ -29,9 +29,12 @@ vi.mock('../../components/run-session/timeline/Timeline', () => ({
     <div data-testid="timeline" data-kinds={messages.map((m) => m.kind).join(',')} />
   ),
 }));
-vi.mock('../../core/components/agent/CreateAgentModal', () => ({
-  CreateAgentModal: ({ onCreated }: { onCreated: (a: never) => void }) => (
-    <button data-testid="mock-create" onClick={() => onCreated({ agent_id: 'a9', name: '新人', soul: '' } as never)} />
+// 「新员工」现在弹出原 /agents 页面（PagePeekOverlay）——stub 成可关闭的占位
+vi.mock('../chat-home/PagePeekOverlay', () => ({
+  PagePeekOverlay: ({ target, onClose }: { target: string; onClose: () => void }) => (
+    <div data-testid="peek-overlay" data-target={target}>
+      <button data-testid="peek-close" onClick={onClose} />
+    </div>
   ),
 }));
 vi.mock('../chat-home/PersonalRightPane', () => ({
@@ -76,12 +79,18 @@ describe('PersonalChatView (融合M1)', () => {
     await waitFor(() => expect(screen.getByTestId('right-pane').getAttribute('data-gid')).toBe('dm-g1'));
   });
 
-  it('「+ 新员工」→ 创建完成自动选中进入 DM', async () => {
+  it('「+ 新员工」→ 弹出原 /agents 页面(PagePeekOverlay)，关闭后刷新助手列表', async () => {
     render(view());
     await screen.findByText('写写');
     click(screen.getByRole('button', { name: '+ 新员工' }));
-    click(screen.getByTestId('mock-create'));
-    await waitFor(() => expect(resolveDmMock).toHaveBeenCalledWith('a9', undefined));
+    expect(screen.getByTestId('peek-overlay').getAttribute('data-target')).toBe('agents');
+    const { listAgents } = await import('../../api/agents');
+    const callsBefore = (listAgents as unknown as ReturnType<typeof vi.fn>).mock.calls.length;
+    click(screen.getByTestId('peek-close'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('peek-overlay')).not.toBeInTheDocument();
+      expect((listAgents as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(callsBefore);
+    });
   });
 
   it('未选助手 = Cherry Studio 式空态引导(无发起框)', async () => {

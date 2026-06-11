@@ -13,7 +13,7 @@ import { useWorkspaceStore } from '../../store/workspaceStore';
 // CreateWorkspaceModal 入口已迁到 /teams 新建团队流程（用户视角 ws=team 是同一回事）
 // 文件保留供 future 使用，但本组件不再 mount
 import { listTeams, type TeamRecord } from '../../api/teams';
-import { CreateTeamModal } from '../../core/components/team/CreateTeamModal';
+import { PagePeekOverlay } from '../../pages/chat-home/PagePeekOverlay';
 import { useI18n } from '../../common/i18n';
 
 interface WorkspaceSelectorProps {
@@ -35,15 +35,16 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
   // don't pay the Python round-trip for users who never open the switcher.
   const [teams, setTeams] = useState<TeamRecord[]>([]);
   const [teamsLoaded, setTeamsLoaded] = useState(false);
-  // M3 三栏融合 — /teams 页的新建团队流程移植进聊天：下拉加号直接弹
-  // CreateTeamModal（2-step 向导），创建完即切到新团队，不再跳页打断对话。
-  const [showCreateTeam, setShowCreateTeam] = useState(false);
+  // M3 三栏融合 — 「新建团队」弹出原 /teams 页面（PagePeekOverlay 内嵌
+  // MemoryRouter，TeamPage 设计原样复用），不跳页打断对话。关闭时重拉
+  // teams 列表，让弹层里创建的团队立刻出现在下拉里。
+  const [showTeamsPeek, setShowTeamsPeek] = useState(false);
 
-  const handleTeamCreated = (team: TeamRecord) => {
-    setShowCreateTeam(false);
-    setTeams((prev) => [...prev, team]);
-    if (team.workspace_id && team.workspace_id !== currentId) switchTo(team.workspace_id);
-    setCurrentTeam({ team_id: team.team_id, name: team.name, agent_ids: team.agent_ids ?? [] });
+  const handleTeamsPeekClose = () => {
+    setShowTeamsPeek(false);
+    listTeams(currentId ?? undefined)
+      .then((data) => { setTeams(data); setTeamsLoaded(true); })
+      .catch(() => { /* 下次打开下拉再拉 */ });
   };
 
   useEffect(() => {
@@ -239,9 +240,9 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
         <button
           type="button"
           // workspace 和 team 合并语义后，"新建" 意为创建一个新团队。
-          // M3 三栏融合：直接弹 CreateTeamModal（/teams 的 2-step 向导移植进聊天）。
+          // M3 三栏融合：弹出原 /teams 页面（完整设计），不再跳页。
           data-testid="workspace-dropdown-create-team"
-          onClick={() => { setOpen(false); setShowCreateTeam(true); }}
+          onClick={() => { setOpen(false); setShowTeamsPeek(true); }}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
@@ -282,10 +283,7 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
           }}>{init}</span>
         </div>
         {open && createPortal(dropdownContent, document.body)}
-        {showCreateTeam && createPortal(
-          <CreateTeamModal onCreated={handleTeamCreated} onClose={() => setShowCreateTeam(false)} />,
-          document.body,
-        )}
+        {showTeamsPeek && <PagePeekOverlay target="teams" onClose={handleTeamsPeekClose} />}
       </div>
     );
   }
@@ -328,10 +326,7 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
       </div>
 
       {open && dropdownContent}
-      {showCreateTeam && createPortal(
-        <CreateTeamModal onCreated={handleTeamCreated} onClose={() => setShowCreateTeam(false)} />,
-        document.body,
-      )}
+      {showTeamsPeek && <PagePeekOverlay target="teams" onClose={handleTeamsPeekClose} />}
     </div>
   );
 }

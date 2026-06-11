@@ -87,6 +87,11 @@ export function RunWorkPane({ groupId }: { groupId?: string | null }) {
   useEffect(() => {
     if (!groupId) { setRuns([]); return; }
     load(groupId);
+    // 聊天内发起新 run（NewTaskComposer）后自动刷新本面板
+    const onCreated = () => load(groupId);
+    window.addEventListener('sf:run-created', onCreated);
+    return () => window.removeEventListener('sf:run-created', onCreated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId]);
 
   const latest = runs?.[0] ?? null;
