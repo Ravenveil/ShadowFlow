@@ -39,7 +39,7 @@ import { ChatStream } from '../core/components/chat/ChatStream';
 import { useChatStream } from '../core/hooks/useChatStream';
 // ── Stream D 2026-05-28 · 接入 chat-fb FB-HiFi 组件 ─────────────────────────
 import InboxPanelFB from '../components/chat-fb/InboxPanelFB';
-import { ChatRailHeader, ChatRailFooter } from './chat-home/ChatRailChrome';
+import { ChatRail } from './chat-home/ChatRailChrome';
 import { NewTaskComposer } from './chat-home/NewTaskComposer';
 import ConvHeaderFB from '../components/chat-fb/ConvHeaderFB';
 import PinnedBriefFB from '../components/chat-fb/PinnedBriefFB';
@@ -1093,9 +1093,14 @@ export default function ChatPage() {
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* M3b 侧边栏合并 — 列表栏升格为唯一侧边栏：
             顶部个人/团队切换 + InboxPanelFB + 底部低频导航图标行。
-            /chat 下全局 HfSidebar 由 HfLayout 隐藏。 */}
-        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <ChatRailHeader view="team" bordered />
+            /chat 下全局 HfSidebar 由 HfLayout 隐藏。
+            M3d — ChatRail 可收起(48px 窄条)，收起时自动展开右栏(互斥联动)。 */}
+        <ChatRail
+          view="team"
+          width={296}
+          bordered
+          onCollapsedChange={(c) => { if (c && !dmAgentId) setThreadDrawerOpen(true); }}
+        >
           <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
             {/* Stream D · FB-HiFi InboxPanel — chat-fb.html 行 878-1014 */}
             <InboxPanelFB
@@ -1117,8 +1122,7 @@ export default function ChatPage() {
               }}
             />
           </div>
-          <ChatRailFooter bordered />
-        </div>
+        </ChatRail>
 
         {/* ─ Center column ─
             2026-05-28 修 composer 显示不全：column flex 父容器必须 minHeight:0，
