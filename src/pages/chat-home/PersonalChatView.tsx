@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
-import { Plus, Search, Send, MessageSquare, Lock, Rocket, Brain } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Plus, Search, MessageSquare, Lock, Rocket, Brain } from 'lucide-react';
+import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
 import { HfAvatar } from '../../components/hifi';
 import { listAgents, type AgentRecord } from '../../api/agents';
 import { resolveDmConversation } from '../../api/groupApi';
@@ -81,16 +82,13 @@ export function PersonalChatView() {
   });
   const timelineMessages = useMemo(() => toTimelineMessages(messages), [messages]);
 
-  const [draft, setDraft] = useState('');
-  const doSend = () => {
-    // dmGroupId 未就绪(后端未启/解析中)时不清空草稿——否则键盘 Enter 路径会静默丢字
-    if (!dmGroupId) return;
-    const t = draft.trim(); if (!t) return;
-    setDraft(''); void send(t);
-  };
-  const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
-  };
+  // F1 — DM 也用完整 composer。dmGroupId 未就绪时抛错（组件错误条提示,草稿不丢）。
+  async function handleDmSubmit(p: { text: string }) {
+    const t = p.text.trim();
+    if (!t) return;
+    if (!dmGroupId) throw new Error('会话连接中，请稍候再发');
+    await send(t);
+  }
 
   // 「新员工」= 弹出原 /agents 页面（PagePeekOverlay，完整设计含 Quick Hire）。
   // 关闭弹层时重拉助手列表，弹层里新建的员工立刻出现在左栏。
@@ -167,12 +165,13 @@ export function PersonalChatView() {
               <Timeline messages={timelineMessages} />
               {error && <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>发送失败：{error}</div>}
             </div>
-            <div className="pcv-composer">
-              <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey} rows={1} aria-label="发消息"
-                placeholder="发消息 · Enter 发送 · Shift+Enter 换行" />
-              <button type="button" className="pcv-send" onClick={doSend} disabled={!draft.trim() || !dmGroupId} aria-label="发送">
-                <span>发送</span><Send size={14} />
-              </button>
+            {/* F1 — 完整 composer（@技能/附件/模型/知识库），与新任务/开始页同一组件 */}
+            <div style={{ flexShrink: 0, padding: '10px 16px 14px', borderTop: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
+              <UnifiedComposer
+                variant="chat"
+                onSubmit={handleDmSubmit}
+                placeholder={`发给「${selected.name}」 · 试试 @ 提及 Skill`}
+              />
             </div>
           </>
         )}

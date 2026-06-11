@@ -10,13 +10,17 @@
  * createRunSession（含 provider/generation/BYOK header 注入）。
  * 右栏「工作区」tab 通过 window 'sf:run-created' 事件感知新 run 并刷新。
  */
-import { useState, type KeyboardEvent } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Sparkles, ArrowUpRight, Send } from 'lucide-react';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Sparkles, ArrowUpRight } from 'lucide-react';
 import { getApiBase, authHeaders } from '../../api/_base';
 import { createRunSession } from '../../api/runSessions';
 import { useRunSession } from '../../core/hooks/useRunSession';
 import { Timeline } from '../../components/run-session/timeline/Timeline';
+import {
+  UnifiedComposer,
+  type UnifiedComposerSubmitPayload,
+} from '../../components/composer/UnifiedComposer';
 
 // 与 StartPage SUGGESTIONS 同源的模板 chips（点击预填 goal）。
 const SUGGESTIONS: Array<[string, string]> = [
@@ -76,22 +80,22 @@ function ActiveRunThread({ sessionId }: { sessionId: string }) {
 }
 
 export function NewTaskComposer() {
-  const navigate = useNavigate();
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [prefill, setPrefill] = useState('');
 
-  async function handleSend() {
-    const text = draft.trim();
-    if (!text || sending) return;
-    setError(null);
-    setSending(true);
+  // F1 — 提交逻辑注入 UnifiedComposer（完整能力：@技能/附件/模型/知识库都在聊天里）。
+  // 抛错 → 组件内错误条显示。
+  async function handleSubmit(p: UnifiedComposerSubmitPayload) {
+    const text = p.text.trim();
+    if (!text) return;
     try {
       if (!sessionId) {
         // 第一条消息 = 创建 run（createRunSession 注入 provider/generation/BYOK）
-        const resp = await createRunSession({ goal: text });
-        setDraft('');
+        const resp = await createRunSession({
+          goal: text,
+          skill_name: p.skillName,
+          mode: p.mode === 'auto' ? undefined : p.mode,
+        });
         setSessionId(resp.session_id);
         window.dispatchEvent(new CustomEvent('sf:run-created'));
       } else {
@@ -103,25 +107,15 @@ export function NewTaskComposer() {
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = (await resp.json()) as { session_id?: string };
-        setDraft('');
         if (data.session_id && data.session_id !== sessionId) {
           setSessionId(data.session_id);
           window.dispatchEvent(new CustomEvent('sf:run-created'));
         }
       }
     } catch (err) {
-      setError(
+      throw new Error(
         `发送失败：${err instanceof Error ? err.message : String(err)}。请确认后端 server 在运行（:8002），或在「设置 → BYOK」配置 API Key。`,
       );
-    } finally {
-      setSending(false);
-    }
-  }
-
-  function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      void handleSend();
     }
   }
 
@@ -141,54 +135,25 @@ export function NewTaskComposer() {
                 key={label}
                 type="button"
                 className="pcv-hint"
-                onClick={() => setDraft(label)}
+                onClick={() => setPrefill(label)}
                 style={{ cursor: 'pointer', border: 'none', font: 'inherit' }}
               >
                 <span aria-hidden style={{ color: 'var(--t-accent)' }}>{glyph}</span> {label}
               </button>
             ))}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>
-            需要 @技能 / 附件 / 知识库？
-            <button
-              type="button"
-              onClick={() => navigate('/start')}
-              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--t-accent)', fontSize: 11, padding: 0, marginLeft: 4 }}
-            >
-              打开完整开始页 →
-            </button>
-          </div>
         </div>
       )}
 
-      {error && (
-        <div role="alert" style={{ flexShrink: 0, fontSize: 11.5, color: 'var(--t-err)', padding: '4px 16px', textAlign: 'center' }}>
-          {error}
-        </div>
-      )}
-
-      {/* 聊天框 — 常驻底部（run 进行中也能继续发，多轮接力） */}
-      <div className="pcv-composer">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={onKey}
-          rows={1}
-          aria-label="新任务消息"
-          data-testid="newtask-input"
-          placeholder={sessionId ? '补充指令，AI 会接着干 · Enter 发送' : '描述一个目标，直接开干 · Enter 发送'}
+      {/* 完整 composer 常驻底部（F1：@技能/命令/附件/模型/知识库 全在聊天里，
+          不再需要"打开完整开始页"逃生链接；run 进行中也能继续发，多轮接力） */}
+      <div style={{ flexShrink: 0, padding: '10px 16px 14px', borderTop: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
+        <UnifiedComposer
+          variant="chat"
+          onSubmit={handleSubmit}
+          initialText={prefill}
+          placeholder={sessionId ? '补充指令，AI 会接着干 · 试试 @ 提及 Skill' : '描述一个目标，直接开干 · 试试 @ 提及 Skill 或 / 命令'}
         />
-        <button
-          type="button"
-          className="pcv-send"
-          onClick={() => void handleSend()}
-          disabled={!draft.trim() || sending}
-          aria-label="发送"
-          data-testid="newtask-go"
-        >
-          <span>{sending ? '发送中…' : '发送'}</span>
-          <Send size={14} />
-        </button>
       </div>
     </div>
   );
