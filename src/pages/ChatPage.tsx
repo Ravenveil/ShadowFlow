@@ -39,6 +39,7 @@ import { ChatStream } from '../core/components/chat/ChatStream';
 import { useChatStream } from '../core/hooks/useChatStream';
 // ── Stream D 2026-05-28 · 接入 chat-fb FB-HiFi 组件 ─────────────────────────
 import InboxPanelFB from '../components/chat-fb/InboxPanelFB';
+import { ChatRailHeader, ChatRailFooter } from './chat-home/ChatRailChrome';
 import ConvHeaderFB from '../components/chat-fb/ConvHeaderFB';
 import PinnedBriefFB from '../components/chat-fb/PinnedBriefFB';
 import ComposerFB from '../components/chat-fb/ComposerFB';
@@ -1083,25 +1084,34 @@ export default function ChatPage() {
 
       {/* 3-column body: inbox · main · drawer */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {/* Stream D · FB-HiFi InboxPanel — chat-fb.html 行 878-1014 */}
-        <InboxPanelFB
-          groups={teamGroups}
-          groupId={dmAgentId ? undefined : groupId}
-          agentDMs={teamAgentDMs}
-          dmId={dmAgentId ?? undefined}
-          onGroup={id => { closeDm(); navigate(`/chat/${id}`); }}
-          onDm={id => void openDm(id)}
-          i18n={{
-            searchPlaceholder: t('chat.searchJump'),
-            filterAll: t('chat.filterAll'),
-            filterUnread: t('chat.filterUnread'),
-            filterMention: t('chat.filterMention'),
-            filterAgent: t('chat.filterAgent'),
-            sectionDMs: t('chat.sectionDMs'),
-            emptyGroups: t('chat.emptyGroups'),
-            noMatched: t('chat.noMatchedGroups'),
-          }}
-        />
+        {/* M3b 侧边栏合并 — 列表栏升格为唯一侧边栏：
+            顶部个人/团队切换 + InboxPanelFB + 底部低频导航图标行。
+            /chat 下全局 HfSidebar 由 HfLayout 隐藏。 */}
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <ChatRailHeader view="team" bordered />
+          <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+            {/* Stream D · FB-HiFi InboxPanel — chat-fb.html 行 878-1014 */}
+            <InboxPanelFB
+              groups={teamGroups}
+              groupId={dmAgentId ? undefined : groupId}
+              agentDMs={teamAgentDMs}
+              dmId={dmAgentId ?? undefined}
+              onGroup={id => { closeDm(); navigate(`/chat/${id}`); }}
+              onDm={id => void openDm(id)}
+              i18n={{
+                searchPlaceholder: t('chat.searchJump'),
+                filterAll: t('chat.filterAll'),
+                filterUnread: t('chat.filterUnread'),
+                filterMention: t('chat.filterMention'),
+                filterAgent: t('chat.filterAgent'),
+                sectionDMs: t('chat.sectionDMs'),
+                emptyGroups: t('chat.emptyGroups'),
+                noMatched: t('chat.noMatchedGroups'),
+              }}
+            />
+          </div>
+          <ChatRailFooter bordered />
+        </div>
 
         {/* ─ Center column ─
             2026-05-28 修 composer 显示不全：column flex 父容器必须 minHeight:0，

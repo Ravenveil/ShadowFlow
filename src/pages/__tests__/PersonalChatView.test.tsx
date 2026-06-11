@@ -38,16 +38,19 @@ vi.mock('../chat-home/PersonalRightPane', () => ({
   PersonalRightPane: ({ groupId }: { groupId: string }) => <div data-testid="right-pane" data-gid={groupId} />,
 }));
 
+import { MemoryRouter } from 'react-router-dom';
 import { useChatStream } from '../../core/hooks/useChatStream';
 import { PersonalChatView } from '../chat-home/PersonalChatView';
 
 const click = (el: HTMLElement) => act(() => { el.click(); });
+// M3b — ChatRailChrome(个人/团队切换+底部导航)用了 useNavigate/Link,需要 Router 上下文
+const view = () => <MemoryRouter initialEntries={['/chat?view=personal']}><PersonalChatView /></MemoryRouter>;
 
 describe('PersonalChatView (融合M1)', () => {
   beforeEach(() => { sendMock.mockClear(); resolveDmMock.mockClear(); });
 
   it('选中助手 → resolveDmConversation 被调 + useChatStream 走 group 模式吃 dmGroupId', async () => {
-    render(<PersonalChatView />);
+    render(view());
     click(await screen.findByText('写写'));
     await waitFor(() => expect(resolveDmMock).toHaveBeenCalledWith('a1', undefined));
     await waitFor(() => {
@@ -59,7 +62,7 @@ describe('PersonalChatView (融合M1)', () => {
   });
 
   it('消息流经适配层进 Timeline:user_turn + assistant_text', async () => {
-    render(<PersonalChatView />);
+    render(view());
     click(await screen.findByText('写写'));
     await waitFor(() => {
       // system → raw 卡(失败反馈必须可见);空 content 消息被过滤
@@ -68,13 +71,13 @@ describe('PersonalChatView (融合M1)', () => {
   });
 
   it('右栏渲染且拿到 dm groupId', async () => {
-    render(<PersonalChatView />);
+    render(view());
     click(await screen.findByText('写写'));
     await waitFor(() => expect(screen.getByTestId('right-pane').getAttribute('data-gid')).toBe('dm-g1'));
   });
 
   it('「+ 新员工」→ 创建完成自动选中进入 DM', async () => {
-    render(<PersonalChatView />);
+    render(view());
     await screen.findByText('写写');
     click(screen.getByRole('button', { name: '+ 新员工' }));
     click(screen.getByTestId('mock-create'));
@@ -82,7 +85,7 @@ describe('PersonalChatView (融合M1)', () => {
   });
 
   it('未选助手 = Cherry Studio 式空态引导(无发起框)', async () => {
-    render(<PersonalChatView />);
+    render(view());
     await screen.findByText('写写');
     expect(screen.getByText('选择一个助手开始单聊，或创建一位新员工')).toBeInTheDocument();
   });

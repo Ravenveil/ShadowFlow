@@ -9,6 +9,7 @@ import { Timeline } from '../../components/run-session/timeline/Timeline';
 import type { TimelineMessage } from '../../components/run-session/timeline/types';
 import { CreateAgentModal } from '../../core/components/agent/CreateAgentModal';
 import { PersonalRightPane } from './PersonalRightPane';
+import { ChatRailHeader, ChatRailFooter } from './ChatRailChrome';
 
 /**
  * ChatMessage → TimelineMessage 适配层(融合M1)。
@@ -99,8 +100,9 @@ export function PersonalChatView() {
 
   return (
     <div style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0 }}>
-      {/* 左:助手列表 + 新员工 */}
+      {/* 左:助手列表 + 新员工（M3b：顶部个人/团队切换 + 底部低频导航图标行） */}
       <div style={{ width: 264, flexShrink: 0, borderRight: '1px solid var(--t-border)', display: 'flex', flexDirection: 'column', background: 'var(--t-panel)' }}>
+        <ChatRailHeader view="personal" />
         <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button type="button" onClick={() => setShowCreate(true)} aria-label="+ 新员工"
             style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '9px 0', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--t-accent)', color: 'var(--t-accent-ink)', fontWeight: 700, fontSize: 13 }}>
@@ -129,6 +131,7 @@ export function PersonalChatView() {
           })}
           {filtered.length === 0 && <div style={{ fontSize: 11.5, color: 'var(--t-fg-4)', padding: '4px 6px' }}>暂无助手</div>}
         </div>
+        <ChatRailFooter />
       </div>
 
       {/* 中:DM 单聊(Timeline 渲染) */}

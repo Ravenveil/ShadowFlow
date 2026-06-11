@@ -41,11 +41,15 @@ export function HfLayout() {
   const { pathname } = useLocation();
   const active = pathToActive(pathname);
   const needsLayoutTopBar = LAYOUT_TOPBAR_PREFIXES.some(p => pathname.startsWith(p));
+  // M3b 侧边栏合并（三栏融合）：/chat 下聊天列表栏升格为唯一侧边栏
+  // （ChatRailChrome 承载 个人/团队切换 + 低频导航），全局 HfSidebar 不再渲染。
+  // 其余页面保持原全局侧边栏不变。
+  const hideSidebar = pathname.startsWith('/chat');
 
   // zoom-shell:height 抵消全局 --app-zoom,放大后内容不超物理视口(见 index.css)。
   return (
     <div className="hf-root zoom-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      <HfSidebar active={active} />
+      {!hideSidebar && <HfSidebar active={active} />}
       <main
         style={{
           flex: 1,
