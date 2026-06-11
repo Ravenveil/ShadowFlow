@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Users, Hash, Lock,
   CheckSquare, Search, MoreHorizontal, Send, Paperclip,
@@ -40,6 +40,7 @@ import { useChatStream } from '../core/hooks/useChatStream';
 // ── Stream D 2026-05-28 · 接入 chat-fb FB-HiFi 组件 ─────────────────────────
 import InboxPanelFB from '../components/chat-fb/InboxPanelFB';
 import { ChatRailHeader, ChatRailFooter } from './chat-home/ChatRailChrome';
+import { NewTaskComposer } from './chat-home/NewTaskComposer';
 import ConvHeaderFB from '../components/chat-fb/ConvHeaderFB';
 import PinnedBriefFB from '../components/chat-fb/PinnedBriefFB';
 import ComposerFB from '../components/chat-fb/ComposerFB';
@@ -547,6 +548,10 @@ function ChatDrawer({ groupId, group, metrics }: { groupId?: string; group?: Gro
 export default function ChatPage() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
+  // M3c start 吸收 — /chat?new=1 在中栏渲染「新任务」台（StartPage 薄版），
+  // auto-pick 放行避免被强跳进群。
+  const [chatSearchParams] = useSearchParams();
+  const newTaskMode = !groupId && chatSearchParams.get('new') === '1';
   const groups = useInboxStore(s => s.groups);
   const agentDMs = useInboxStore(s => s.agentDMs);
   const fetchWorkspaceInbox = useInboxStore(s => s.fetchWorkspaceInbox);
@@ -636,6 +641,8 @@ export default function ChatPage() {
   // 依赖 groups —— 等列表实际加载完才决断，避免初始空数组就乱跳。
   useEffect(() => {
     if (groupId) return;
+    // M3c — 新任务台模式下不 auto-pick，让用户停留在 goal 输入。
+    if (newTaskMode) return;
     // auto-pick 限定在当前 team 的会话内（teamGroups），避免跳到 team 外的会话。
     // team 内无会话则留空（不强跳）。
     if (teamGroups.length === 0) return;
@@ -648,7 +655,7 @@ export default function ChatPage() {
     }
     if (!target) target = teamGroups[0].id;
     navigate(`/chat/${target}`, { replace: true });
-  }, [groupId, teamGroups, navigate]);
+  }, [groupId, teamGroups, navigate, newTaskMode]);
 
   // 用户切换会话时把 groupId 存进 lastGroupId（包括 InboxPanel 点击 + URL 直接打开）
   useEffect(() => {
@@ -1119,7 +1126,10 @@ export default function ChatPage() {
             composer 被推到 viewport 之下，底部 compFoot（send 按钮 + kbd hint）
             就看不见了。 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
-          {dmAgentId ? (
+          {newTaskMode ? (
+            /* ── M3c · 新任务台（start 吸收）：goal → run-session，聊天即入口 ── */
+            <NewTaskComposer />
+          ) : dmAgentId ? (
             /* ── 2026-05-29 · 内嵌单聊视图：轻量 header + 返回 + 复用 ChatFeedFB/ComposerFB ── */
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', minHeight: 52, flexShrink: 0, borderBottom: `1px solid ${T.bd}` }}>
@@ -1300,7 +1310,7 @@ export default function ChatPage() {
           )}
         </div>
 
-        {threadDrawerOpen && !dmAgentId && (
+        {threadDrawerOpen && !dmAgentId && !newTaskMode && (
           <ThreadDrawerFB
             groupId={groupId}
             group={group}

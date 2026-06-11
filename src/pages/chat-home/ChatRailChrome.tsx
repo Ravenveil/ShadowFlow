@@ -9,7 +9,7 @@
  * 团队态包 InboxPanelFB、个人态包助手列表，两边复用同一对 header/footer。
  */
 import { Link, useNavigate } from 'react-router-dom';
-import { Home, Users, Bot, CalendarDays, Folder, Search } from 'lucide-react';
+import { Home, Users, Bot, CalendarDays, Folder, Search, Plus } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
 import { openQuickSwitcher } from '../../components/hifi/QuickSwitcher';
@@ -32,8 +32,34 @@ export function ChatRailHeader({ view, bordered = false }: { view: ChatHomeView;
         display: 'flex',
       }}
     >
-      <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <PersonalTeamToggle view={view} onChange={goChatView} />
+        {/* M3c start 吸收 — 团队态「+ 新任务」：goal → run-session 的聊天内入口。
+            个人态列表区已有「+ 新员工」，不重复放。 */}
+        {view === 'team' && (
+          <button
+            type="button"
+            data-testid="chatrail-newtask"
+            onClick={() => navigate('/chat?new=1')}
+            style={{
+              width: '100%',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              padding: '9px 0',
+              borderRadius: 10,
+              border: 'none',
+              cursor: 'pointer',
+              background: 'var(--t-accent)',
+              color: 'var(--t-accent-ink)',
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            <Plus size={15} aria-hidden /> 新任务
+          </button>
+        )}
       </div>
     </div>
   );
