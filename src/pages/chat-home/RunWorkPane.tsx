@@ -89,8 +89,19 @@ export function RunWorkPane({ groupId }: { groupId?: string | null }) {
     load(groupId);
     // 聊天内发起新 run（NewTaskComposer）后自动刷新本面板
     const onCreated = () => load(groupId);
+    // F5 实时跟随：useGroupTimeline 发现本群 running run（网关 run 点亮）时
+    // dispatch 'sf:gateway-run-active'（detail={groupId,sessionId}）——
+    // groupId 匹配即刷新列表，主卡 StatusBadge 立即显示「运行中」。
+    const onGatewayRunActive = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { groupId?: string } | undefined;
+      if (detail?.groupId === groupId) load(groupId);
+    };
     window.addEventListener('sf:run-created', onCreated);
-    return () => window.removeEventListener('sf:run-created', onCreated);
+    window.addEventListener('sf:gateway-run-active', onGatewayRunActive);
+    return () => {
+      window.removeEventListener('sf:run-created', onCreated);
+      window.removeEventListener('sf:gateway-run-active', onGatewayRunActive);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId]);
 

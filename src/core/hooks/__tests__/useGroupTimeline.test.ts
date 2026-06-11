@@ -17,7 +17,10 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import type { TimelineMessage } from '../../../components/run-session/timeline/types';
+import type {
+  MessagePatch,
+  TimelineMessage,
+} from '../../../components/run-session/timeline/types';
 
 // ── mock SSE client（捕获 onEvent，记录订阅 URL 与 close 调用）──────────────
 interface CapturedSse {
@@ -37,6 +40,36 @@ vi.mock('../../../api/sseClient', () => ({
       },
     };
   }),
+}));
+
+// ── mock subscribeRunSession（F5 实时：捕获 handlers，测试里手工喂帧）────────
+interface CapturedRunSub {
+  sessionId: string;
+  handlers: {
+    onMessage?: (m: TimelineMessage) => void;
+    onMessagePatch?: (p: MessagePatch) => void;
+    onComplete?: (d: unknown) => void;
+    onServerError?: (message: string, code?: string) => void;
+  };
+  options?: { maxRetries?: number; baseDelay?: number };
+  cancelled: boolean;
+}
+const runSubs: CapturedRunSub[] = [];
+
+vi.mock('../../../api/runSessions', () => ({
+  subscribeRunSession: vi.fn(
+    (
+      sessionId: string,
+      handlers: CapturedRunSub['handlers'],
+      options?: CapturedRunSub['options'],
+    ) => {
+      const inst: CapturedRunSub = { sessionId, handlers, options, cancelled: false };
+      runSubs.push(inst);
+      return () => {
+        inst.cancelled = true;
+      };
+    },
+  ),
 }));
 
 const { useGroupTimeline, lastTurnId, sseFrameToTimeline } = await import('../useGroupTimeline');
@@ -68,6 +101,7 @@ const INITIAL_MESSAGES: TimelineMessage[] = [
 describe('useGroupTimeline (F2 灰度)', () => {
   beforeEach(() => {
     sseInstances.length = 0;
+    runSubs.length = 0;
     fetchMock.mockReset();
   });
 
@@ -196,6 +230,137 @@ describe('useGroupTimeline (F2 灰度)', () => {
     await waitFor(() => expect(sseInstances).toHaveLength(1));
     unmount();
     expect(sseInstances[0]!.closed).toBe(true);
+  });
+
+  describe('F5 实时：running run 订阅 /stream', () => {
+    const RUNNING_TIMELINE = {
+      group_id: 'g1',
+      messages: INITIAL_MESSAGES,
+      runs: [
+        { session_id: 's_run', status: 'running' },
+        { session_id: 's_old', status: 'succeeded' },
+      ],
+      truncated: false,
+    };
+
+    it('running run → 订阅(maxRetries=2)+dispatch sf:gateway-run-active；非 running 不订阅', async () => {
+      const activeEvents: Array<{ groupId?: string; sessionId?: string }> = [];
+      const listener = (e: Event) =>
+        activeEvents.push((e as CustomEvent).detail as { groupId?: string; sessionId?: string });
+      window.addEventListener('sf:gateway-run-active', listener);
+      try {
+        fetchMock.mockResolvedValueOnce(okTimelineResponse(RUNNING_TIMELINE));
+        const { result } = renderHook(() => useGroupTimeline('g1'));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        // 只有 running 的 s_run 被订阅；succeeded 的 s_old 不订阅
+        expect(runSubs).toHaveLength(1);
+        expect(runSubs[0]!.sessionId).toBe('s_run');
+        expect(runSubs[0]!.options?.maxRetries).toBe(2);
+        // 右栏跟随事件已带 groupId/sessionId dispatch
+        expect(activeEvents).toEqual([{ groupId: 'g1', sessionId: 's_run' }]);
+      } finally {
+        window.removeEventListener('sf:gateway-run-active', listener);
+      }
+    });
+
+    it('onMessage 追加(同 id 覆盖) → onMessagePatch 应用 → onComplete 解除订阅', async () => {
+      fetchMock.mockResolvedValueOnce(okTimelineResponse(RUNNING_TIMELINE));
+      const { result } = renderHook(() => useGroupTimeline('g1'));
+      await waitFor(() => expect(runSubs).toHaveLength(1));
+      const sub = runSubs[0]!;
+
+      // onMessage 追加 run 过程卡
+      const runMsg: TimelineMessage = {
+        id: 'run_t1',
+        kind: 'assistant_text',
+        turn_id: 'rt1',
+        ts: 5000,
+        body: '思考中',
+        streaming: true,
+      };
+      act(() => sub.handlers.onMessage?.(runMsg));
+      expect(result.current.messages).toHaveLength(3);
+      expect(result.current.messages[2]!.id).toBe('run_t1');
+
+      // 同 id 再来一帧 → 覆盖不重复追加（/timeline 重拉与 /stream 重放同源 id）
+      act(() => sub.handlers.onMessage?.({ ...runMsg, body: '思考中(更新)' }));
+      expect(result.current.messages).toHaveLength(3);
+      expect(
+        (result.current.messages[2] as Extract<TimelineMessage, { kind: 'assistant_text' }>).body,
+      ).toBe('思考中(更新)');
+
+      // onMessagePatch 就地点亮（text_append 走 applyPatch）
+      act(() =>
+        sub.handlers.onMessagePatch?.({ id: 'run_t1', op: 'text_append', chunk: '…已完成' }),
+      );
+      expect(
+        (result.current.messages[2] as Extract<TimelineMessage, { kind: 'assistant_text' }>).body,
+      ).toBe('思考中(更新)…已完成');
+      // 不存在的 id → no-op 不崩
+      act(() =>
+        sub.handlers.onMessagePatch?.({ id: 'ghost', op: 'text_append', chunk: 'x' }),
+      );
+      expect(result.current.messages).toHaveLength(3);
+
+      // onComplete → 解除订阅 + runs 终态回写 + 不重复订阅
+      act(() => sub.handlers.onComplete?.({ session_id: 's_run' }));
+      expect(sub.cancelled).toBe(true);
+      expect(result.current.runs.find((r) => r.session_id === 's_run')?.status).toBe('succeeded');
+      expect(runSubs).toHaveLength(1); // runs 状态变化重跑 effect，但终态 run 不再订阅
+    });
+
+    it('onServerError → 解除订阅 + runs 标 failed', async () => {
+      fetchMock.mockResolvedValueOnce(okTimelineResponse(RUNNING_TIMELINE));
+      const { result } = renderHook(() => useGroupTimeline('g1'));
+      await waitFor(() => expect(runSubs).toHaveLength(1));
+
+      act(() => runSubs[0]!.handlers.onServerError?.('NO_API_KEY'));
+      expect(runSubs[0]!.cancelled).toBe(true);
+      expect(result.current.runs.find((r) => r.session_id === 's_run')?.status).toBe('failed');
+    });
+
+    it('appendLocalUser 后 2s/6s 各刷一次 runs，发现新 running run 即订阅', async () => {
+      fetchMock.mockResolvedValueOnce(
+        okTimelineResponse({ group_id: 'g1', messages: [], runs: [], truncated: false }),
+      );
+      const { result } = renderHook(() => useGroupTimeline('g1'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(runSubs).toHaveLength(0);
+
+      vi.useFakeTimers();
+      try {
+        // 刷新拿到网关刚创建的新 running run
+        fetchMock.mockResolvedValue(
+          okTimelineResponse({
+            group_id: 'g1',
+            messages: [],
+            runs: [{ session_id: 's_new', status: 'running' }],
+            truncated: false,
+          }),
+        );
+        act(() => result.current.appendLocalUser('跑个任务'));
+
+        await act(async () => { await vi.advanceTimersByTimeAsync(2100); });
+        expect(fetchMock).toHaveBeenCalledTimes(2); // 初始 1 + 2s 刷新 1
+        expect(runSubs).toHaveLength(1);
+        expect(runSubs[0]!.sessionId).toBe('s_new');
+
+        await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+        expect(fetchMock).toHaveBeenCalledTimes(3); // 6s 第二次刷新
+        expect(runSubs).toHaveLength(1); // 已订阅的不重复订阅
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('卸载时解除所有 run 订阅', async () => {
+      fetchMock.mockResolvedValueOnce(okTimelineResponse(RUNNING_TIMELINE));
+      const { unmount } = renderHook(() => useGroupTimeline('g1'));
+      await waitFor(() => expect(runSubs).toHaveLength(1));
+      unmount();
+      expect(runSubs[0]!.cancelled).toBe(true);
+    });
   });
 
   describe('纯函数', () => {
