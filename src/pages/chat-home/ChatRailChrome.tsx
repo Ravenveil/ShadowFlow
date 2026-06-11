@@ -46,7 +46,9 @@ interface FooterItem {
 }
 
 const FOOTER_ITEMS: FooterItem[] = [
-  { key: 'start', Icon: Home, label: '开始', to: '/start' },
+  // F4 路由收口 — 「开始」指向聊天内新任务（UnifiedComposer 全能力已进聊天，
+  // /start 路由保留为金丝雀深链，不再是常规入口）。
+  { key: 'start', Icon: Home, label: '开始', to: '/chat?new=1' },
   { key: 'teams', Icon: Users, label: '团队', to: '/teams' },
   { key: 'agents', Icon: Bot, label: '员工', to: '/agents' },
   { key: 'calendar', Icon: CalendarDays, label: '日历', to: '/calendar' },

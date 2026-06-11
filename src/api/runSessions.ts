@@ -265,6 +265,8 @@ export interface RunSessionSummary {
   session_id: string;
   goal: string;
   conversation_id: string | null;
+  /** F4 — B1 互链的聊天群 id；有值即可一步跳回 /chat/:group_id。 */
+  group_id: string | null;
   /** runBus 内存态：running/succeeded/failed/canceled…；重启后无活跃 run 回落 'idle'。 */
   status: string;
   created_at: number;

@@ -516,6 +516,7 @@ router.get('/', (req: Request, res: Response) => {
     session_id: string;
     goal: string;
     conversation_id: string | null;
+    group_id: string | null;
     status: string;
     created_at: number;
     updated_at: number;
@@ -526,6 +527,10 @@ router.get('/', (req: Request, res: Response) => {
       session_id: id,
       goal: s.goal ?? '',
       conversation_id: s.conversation_id ?? null,
+      // F4 — 互链群 id 带出，前端可从 run 一步跳回聊天会话
+      group_id: s.conversation_id
+        ? (getConversation(s.conversation_id)?.group_id ?? null)
+        : null,
       status: runBus.get(id)?.status ?? 'idle',
       created_at: s.created_at,
       updated_at: s.updated_at ?? s.created_at,
