@@ -486,6 +486,59 @@ export function getRunReplay(
   return { status: run.status, events: run.events };
 }
 
+// ── B3 · 网关过程事件 (unified-conversation-core-plan-2026-06-11 §B3) ────────
+// 聊天网关 (groups-chat.ts runFanout) 执行期的过程（thinking/原始流/状态行）
+// 复用 run 体系管线：每轮 fanout 注册一条轻量 "gateway run"，过程投影成
+// TimelineMessage 经 'message'/'message-patch' 事件 emit 进 runBus 事件日志。
+// B2 的 GET /api/groups/:id/timeline 已按 conversation 归并所有 run —— 这些
+// 过程卡因此零前端改动即可回放（实时推送是 F5 的活）。
+//
+// sessionStore / runBus 仍保持本文件私有（与 listSessionsByConversation /
+// getRunReplay 同款边界）：这里只导出一个注册入口，emit/finish 以闭包形式
+// 交还调用方，store 本体不外漏。
+
+/** B3 — handle returned by registerGatewayRun; closures over the private runBus. */
+export interface GatewayRunHandle {
+  session_id: string;
+  /** Append a 'message' / 'message-patch' event into this run's event log. */
+  emit: (event: 'message' | 'message-patch', payload: unknown) => void;
+  /** Mark the run terminal (idempotent — runBus.finish guards re-entry). */
+  finish: (status: Exclude<RunStatus, 'running'>) => void;
+}
+
+/**
+ * B3 — register a lightweight "gateway run" session for one chat fan-out round.
+ * The session appears in GET /api/run-sessions (per conversation) and its event
+ * log feeds the B2 timeline merge. `claimStart` is called here ON PURPOSE: if
+ * the front-end later opens GET /:id/stream on this session, the 'live' path's
+ * claimStart returns false → it only ATTACHES (replays the gateway's events)
+ * and never boots the skill-assembler pipeline for a chat round.
+ */
+export function registerGatewayRun(meta: {
+  goal: string;
+  conversation_id: string;
+}): GatewayRunHandle {
+  const session_id = uuidv4();
+  sessionStore.set(session_id, {
+    goal: meta.goal,
+    skill_name: 'chat-gateway',
+    conversation_id: meta.conversation_id,
+    created_at: Date.now(),
+    updated_at: Date.now(),
+  });
+  runBus.claimStart(session_id); // ensure() + started=true（单一执行权归网关）
+  return {
+    session_id,
+    emit: (event, payload) => {
+      runBus.emit(session_id, event, payload);
+    },
+    finish: (status) => {
+      runBus.finish(session_id, status);
+      touchSession(session_id); // 结束时刷新活跃度，避免 TTL 早扫
+    },
+  };
+}
+
 const VALID_ARTIFACT_TYPES: ReadonlyArray<ArtifactType> = ['yaml', 'html', 'markdown'];
 
 function coerceArtifactType(raw: unknown): ArtifactType | null {

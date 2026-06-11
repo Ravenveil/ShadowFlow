@@ -46,6 +46,9 @@ import type { TimelineMessage } from '../lib/contracts';
 // B1 互链：group → conversation；B2：conversation → run sessions → 事件日志。
 import { getConversationByGroup } from '../storage/conversations';
 import { listSessionsByConversation, getRunReplay } from './run-sessions';
+// B3 · 网关过程事件 — 每轮 fan-out 开一条 gateway run，执行期过程（thinking
+// 占位/流式片段/错误/msg_foot）经 run 管线 emit，B2 timeline 自动归并回放。
+import { startGatewayRun } from '../lib/gateway-run';
 
 const router = Router();
 
@@ -240,140 +243,259 @@ async function runFanout(
     return;
   }
 
-  // 2026-06-03 Phase 2a — group 绑了 team 且能读到单一真源 DAG → 按拓扑调度多 agent。
-  // 读不到 team(无 team_id / 文件缺失 / 无成员)→ 落到下面的串行 fan-out 降级。
-  // ⚠ Phase 2b 剩余(本轮已落:并发上限/外部取消/节点超时/重试):B2 中断恢复(run 状态落盘+重启续跑)、
-  //   B3 完整插话续跑(本轮只做"新消息→取消上一轮"最小语义)仍待后续。
-  if (shouldRunTeamDag(group)) {
-    const { team } = loadTeamForRun(group.team_id!);
-    if (team && team.members.length > 0) {
-      // group 已在 runFanout 顶部加载(含 messages);DAG 用单次快照即可(上游上下文经 upstream 参数流转,不靠 history)。
-      const history0 = toHistory(group.messages);
-      const latestUser0 = [...history0].reverse().find((m) => m.role === 'user');
-      const userPrompt =
-        latestUser0?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('') ?? '';
+  // B3 · 网关过程事件 — 本轮 fan-out 开一条 gateway run（互链 conversation 下），
+  // 执行期过程经 run 管线 emit；B2 GET /:id/timeline 自动归并回放。
+  // startGatewayRun 失败返回 null（聊天主链路照常），所有 gw 操作 `gw?.` 防御。
+  const lastUserItem = [...(group.messages ?? [])]
+    .reverse()
+    .find((m) => (m.sender_kind ?? 'user') === 'user');
+  const gw = startGatewayRun(
+    groupId,
+    typeof lastUserItem?.content === 'string' ? lastUserItem.content : '',
+  );
 
-      const deps: RunTeamDagDeps = {
-        getAgent: async (agentId) => {
-          const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
-          return a ? { name: a.name || agentId, soul: a.soul ?? '' } : null;
-        },
-        callAgent: async ({ soul, upstream, signal }) => {
-          // 仅用 soul/upstream/signal:agent 名由 runTeamDagFanout 经独立 postMessage 落库。
-          // signal 来自 runNodeWithPolicy 的 per-attempt 控制器(超时/外部取消即 fire)→ 取消在飞 turn。
-          const upstreamText = upstream.length
-            ? `\n\n=== 上游 agent 产出 ===\n${upstream.map((u) => `[${u.from}]\n${u.text}`).join('\n\n')}`
-            : '';
-          let buf = '';
-          let errMsg = '';
-          try {
-            const callable = resolveCallable(executor, { apiKey, model, workspace });
-            for await (const chunk of callable.turn({
-              system: soul,
-              prompt: userPrompt + upstreamText,
-              history: history0.slice(0, -1),
-              signal,
-              model,
-            })) {
-              if (chunk.type === 'text-delta') buf += sseWireToText(chunk.value);
-              else if (chunk.type === 'error') {
-                errMsg = chunk.error?.message ?? 'stream error';
-                break;
-              }
+  try {
+    // 2026-06-03 Phase 2a — group 绑了 team 且能读到单一真源 DAG → 按拓扑调度多 agent。
+    // 读不到 team(无 team_id / 文件缺失 / 无成员)→ 落到下面的串行 fan-out 降级。
+    // ⚠ Phase 2b 剩余(本轮已落:并发上限/外部取消/节点超时/重试):B2 中断恢复(run 状态落盘+重启续跑)、
+    //   B3 完整插话续跑(本轮只做"新消息→取消上一轮"最小语义)仍待后续。
+    if (shouldRunTeamDag(group)) {
+      const { team } = loadTeamForRun(group.team_id!);
+      if (team && team.members.length > 0) {
+        // group 已在 runFanout 顶部加载(含 messages);DAG 用单次快照即可(上游上下文经 upstream 参数流转,不靠 history)。
+        const history0 = toHistory(group.messages);
+        const latestUser0 = [...history0].reverse().find((m) => m.role === 'user');
+        const userPrompt =
+          latestUser0?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('') ?? '';
+
+        const deps: RunTeamDagDeps = {
+          getAgent: async (agentId) => {
+            const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
+            return a ? { name: a.name || agentId, soul: a.soul ?? '' } : null;
+          },
+          callAgent: async ({ name, soul, upstream, signal }) => {
+            // 用 name/soul/upstream/signal:agent 回复由 runTeamDagFanout 经独立 postMessage
+            // 落库（聊天消息路径零变化）;name 仅用于 B3 过程卡 label。
+            // signal 来自 runNodeWithPolicy 的 per-attempt 控制器(超时/外部取消即 fire)→ 取消在飞 turn。
+            const upstreamText = upstream.length
+              ? `\n\n=== 上游 agent 产出 ===\n${upstream.map((u) => `[${u.from}]\n${u.text}`).join('\n\n')}`
+              : '';
+            // B3 — DAG 节点粒度过程卡（重试时每个 attempt 一张新卡，可见即真实）。
+            const thinkingId = gw?.nextId();
+            const startedAt = Date.now();
+            if (gw && thinkingId) {
+              gw.emitMessage({
+                id: thinkingId,
+                kind: 'thinking',
+                turn_id: gw.turnId,
+                ts: startedAt,
+                label: `${name} 正在思考`,
+                status: 'streaming',
+              });
             }
-          } catch (e) {
-            errMsg = e instanceof Error ? e.message : String(e);
-          }
-          return { text: buf, error: errMsg || undefined };
-        },
-        postMessage: async (m) => {
-          await pyPostMessage(groupId, {
-            content: m.content,
-            sender_name: m.sender_name,
-            sender_kind: m.sender_kind,
-          }).catch(() => {});
-        },
-      };
-      let dagController: AbortController | undefined;
-      try {
-        dagController = swapDagRun(groupId, activeDagRuns);
-        await runTeamDagFanout(team, deps, userPrompt, {
-          signal: dagController.signal,
-          maxConcurrency: MAX_FANOUT_AGENTS,
-          // nodeTimeoutMs/defaultMaxRetries 用 runTeamDagFanout 默认值(120s / 1)。
-        });
-      } finally {
-        // 仅当注册表里仍是本 controller 时才删(避免误删后来者)。
-        if (dagController && activeDagRuns.get(groupId) === dagController) activeDagRuns.delete(groupId);
-      }
-      return;
-    }
-  }
-
-  for (const agentId of agentIds) {
-    // Reload each round so later agents see earlier replies (fan-out semantics).
-    const fresh = await pyGet<GroupRecord>(`/api/groups/${encodeURIComponent(groupId)}`);
-    const history = toHistory(fresh?.messages);
-    const latestUser = [...history].reverse().find((m) => m.role === 'user');
-    const prompt =
-      latestUser?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('') ?? '';
-
-    const agent = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
-    if (!agent) {
-      await pyPostMessage(groupId, {
-        content: `[chat] Agent '${agentId}' not found.`,
-        sender_name: 'system',
-        sender_kind: 'system',
-      }).catch(() => {});
-      continue;
-    }
-    const agentName = agent.name || agentId;
-    const soul = agent.soul ?? '';
-
-    const ctrl = new AbortController();
-    let buf = '';
-    let errMsg = '';
-    try {
-      const callable = resolveCallable(executor, { apiKey, model, workspace });
-      for await (const chunk of callable.turn({
-        system: soul,
-        prompt,
-        history: history.slice(0, -1), // exclude the just-read latest user (it's the prompt)
-        signal: ctrl.signal,
-        model,
-      })) {
-        if (chunk.type === 'text-delta') buf += sseWireToText(chunk.value);
-        else if (chunk.type === 'error') {
-          errMsg = chunk.error?.message ?? 'stream error';
-          break;
+            let buf = '';
+            let errMsg = '';
+            try {
+              const callable = resolveCallable(executor, { apiKey, model, workspace });
+              for await (const chunk of callable.turn({
+                system: soul,
+                prompt: userPrompt + upstreamText,
+                history: history0.slice(0, -1),
+                signal,
+                model,
+              })) {
+                if (chunk.type === 'text-delta') {
+                  const piece = sseWireToText(chunk.value);
+                  buf += piece;
+                  // B3 — 流式片段就地点亮（现有解析粒度 = event:text 的干净文本）。
+                  if (gw && thinkingId && piece) {
+                    gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: piece });
+                  }
+                } else if (chunk.type === 'error') {
+                  errMsg = chunk.error?.message ?? 'stream error';
+                  break;
+                }
+              }
+            } catch (e) {
+              errMsg = e instanceof Error ? e.message : String(e);
+            }
+            if (gw && thinkingId) {
+              const elapsed = Date.now() - startedAt;
+              gw.emitPatch({ id: thinkingId, op: 'thinking_finalize', duration_ms: elapsed });
+              if (errMsg) {
+                gw.emitMessage({
+                  id: gw.nextId(),
+                  kind: 'raw',
+                  turn_id: gw.turnId,
+                  ts: Date.now(),
+                  body: `[chat] ${name} 出错：${errMsg}`,
+                  source: 'chat-gateway',
+                });
+              }
+              gw.emitMessage({
+                id: gw.nextId(),
+                kind: 'msg_foot',
+                turn_id: gw.turnId,
+                ts: Date.now(),
+                status: 'done',
+                elapsed_ms: elapsed,
+              });
+            }
+            return { text: buf, error: errMsg || undefined };
+          },
+          postMessage: async (m) => {
+            await pyPostMessage(groupId, {
+              content: m.content,
+              sender_name: m.sender_name,
+              sender_kind: m.sender_kind,
+            }).catch(() => {});
+          },
+        };
+        let dagController: AbortController | undefined;
+        try {
+          dagController = swapDagRun(groupId, activeDagRuns);
+          await runTeamDagFanout(team, deps, userPrompt, {
+            signal: dagController.signal,
+            maxConcurrency: MAX_FANOUT_AGENTS,
+            // nodeTimeoutMs/defaultMaxRetries 用 runTeamDagFanout 默认值(120s / 1)。
+          });
+        } finally {
+          // 仅当注册表里仍是本 controller 时才删(避免误删后来者)。
+          if (dagController && activeDagRuns.get(groupId) === dagController) activeDagRuns.delete(groupId);
         }
+        // 用户插话取消上一轮 → 'canceled'；否则本轮过程完整 → 'succeeded'。
+        gw?.finish(dagController?.signal.aborted ? 'canceled' : 'succeeded');
+        return;
       }
-    } catch (e) {
-      errMsg = e instanceof Error ? e.message : String(e);
     }
 
-    if (errMsg) {
+    for (const agentId of agentIds) {
+      // Reload each round so later agents see earlier replies (fan-out semantics).
+      const fresh = await pyGet<GroupRecord>(`/api/groups/${encodeURIComponent(groupId)}`);
+      const history = toHistory(fresh?.messages);
+      const latestUser = [...history].reverse().find((m) => m.role === 'user');
+      const prompt =
+        latestUser?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('') ?? '';
+
+      const agent = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
+      if (!agent) {
+        await pyPostMessage(groupId, {
+          content: `[chat] Agent '${agentId}' not found.`,
+          sender_name: 'system',
+          sender_kind: 'system',
+        }).catch(() => {});
+        continue;
+      }
+      const agentName = agent.name || agentId;
+      const soul = agent.soul ?? '';
+
+      // B3 — 串行路径过程卡：thinking 占位 → 流式 append → finalize + msg_foot。
+      const thinkingId = gw?.nextId();
+      const startedAt = Date.now();
+      if (gw && thinkingId) {
+        gw.emitMessage({
+          id: thinkingId,
+          kind: 'thinking',
+          turn_id: gw.turnId,
+          ts: startedAt,
+          label: `${agentName} 正在思考`,
+          status: 'streaming',
+        });
+      }
+
+      const ctrl = new AbortController();
+      let buf = '';
+      let errMsg = '';
+      try {
+        const callable = resolveCallable(executor, { apiKey, model, workspace });
+        for await (const chunk of callable.turn({
+          system: soul,
+          prompt,
+          history: history.slice(0, -1), // exclude the just-read latest user (it's the prompt)
+          signal: ctrl.signal,
+          model,
+        })) {
+          if (chunk.type === 'text-delta') {
+            const piece = sseWireToText(chunk.value);
+            buf += piece;
+            // B3 — 流式片段就地点亮（现有解析粒度 = event:text 的干净文本）。
+            if (gw && thinkingId && piece) {
+              gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: piece });
+            }
+          } else if (chunk.type === 'error') {
+            errMsg = chunk.error?.message ?? 'stream error';
+            break;
+          }
+        }
+      } catch (e) {
+        errMsg = e instanceof Error ? e.message : String(e);
+      }
+
+      // B3 — 无论成败都收口本 agent 的过程卡（错误以 raw 卡可见）。
+      if (gw && thinkingId) {
+        const elapsed = Date.now() - startedAt;
+        gw.emitPatch({ id: thinkingId, op: 'thinking_finalize', duration_ms: elapsed });
+        if (errMsg) {
+          gw.emitMessage({
+            id: gw.nextId(),
+            kind: 'raw',
+            turn_id: gw.turnId,
+            ts: Date.now(),
+            body: `[chat] ${agentName} 出错：${errMsg}`,
+            source: 'chat-gateway',
+          });
+        }
+        gw.emitMessage({
+          id: gw.nextId(),
+          kind: 'msg_foot',
+          turn_id: gw.turnId,
+          ts: Date.now(),
+          status: 'done',
+          elapsed_ms: elapsed,
+        });
+      }
+
+      if (errMsg) {
+        await pyPostMessage(groupId, {
+          content: `[chat] ${agentName} 出错：${errMsg}`,
+          sender_name: 'system',
+          sender_kind: 'system',
+        }).catch(() => {});
+        continue;
+      }
+      const reply = buf.trim();
+      if (!reply) {
+        await pyPostMessage(groupId, {
+          content: `[chat] ${agentName} 返回空回复。`,
+          sender_name: 'system',
+          sender_kind: 'system',
+        }).catch(() => {});
+        continue;
+      }
+      // agent 最终回复仍走 pyPostMessage（聊天消息路径零变化）。
       await pyPostMessage(groupId, {
-        content: `[chat] ${agentName} 出错：${errMsg}`,
-        sender_name: 'system',
-        sender_kind: 'system',
+        content: reply,
+        sender_name: agentName,
+        sender_kind: 'agent',
       }).catch(() => {});
-      continue;
     }
-    const reply = buf.trim();
-    if (!reply) {
-      await pyPostMessage(groupId, {
-        content: `[chat] ${agentName} 返回空回复。`,
-        sender_name: 'system',
-        sender_kind: 'system',
-      }).catch(() => {});
-      continue;
+    gw?.finish('succeeded');
+  } catch (e) {
+    // 未捕获异常：过程流以 raw 卡可见地收口，run 标 failed；异常继续上抛
+    // （调用方 fire-and-forget 的 .catch 负责 console.warn，行为不变）。
+    if (gw) {
+      const msg = e instanceof Error ? e.message : String(e);
+      gw.emitMessage({
+        id: gw.nextId(),
+        kind: 'raw',
+        turn_id: gw.turnId,
+        ts: Date.now(),
+        body: `[chat-gateway] fan-out 异常：${msg}`,
+        source: 'chat-gateway',
+      });
+      gw.finish('failed');
     }
-    await pyPostMessage(groupId, {
-      content: reply,
-      sender_name: agentName,
-      sender_kind: 'agent',
-    }).catch(() => {});
+    throw e;
   }
 }
 
