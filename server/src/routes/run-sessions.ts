@@ -44,7 +44,9 @@ import {
   appendMessage,
   createConversation,
   getConversation,
+  getConversationByGroup,
   getRecentMessages,
+  setConversationGroup,
 } from '../storage/conversations';
 import { getOrCreateProject } from '../storage/projects';
 // 2026-05-19 — Cherry Studio parity: replace in-memory Map with a JSON-file
@@ -455,13 +457,22 @@ function coerceArtifactType(raw: unknown): ArtifactType | null {
 }
 
 // ── GET /api/run-sessions — M3 三栏融合 ──────────────────────────────────────
-// 轻量列表：右栏「工作区」tab 按 conversation_id 查群关联的 run。
-// status 来自 runBus（内存）；进程重启后无活跃 run 的记录回落 'idle'。
+// 轻量列表：右栏「工作区」tab 按 conversation_id 或 group_id（B1 互链换算）
+// 查群关联的 run。status 来自 runBus（内存）；重启后无活跃 run 回落 'idle'。
 router.get('/', (req: Request, res: Response) => {
-  const conv =
+  let conv =
     typeof req.query.conversation_id === 'string' && req.query.conversation_id
       ? req.query.conversation_id
       : undefined;
+  // B1 — 群 id 一步到位：服务端经互链换算成 conversation_id。无链接 = 无 run。
+  if (!conv && typeof req.query.group_id === 'string' && req.query.group_id) {
+    const linked = getConversationByGroup(req.query.group_id);
+    if (!linked) {
+      res.json({ sessions: [] });
+      return;
+    }
+    conv = linked.conversation_id;
+  }
   const sessions: Array<{
     session_id: string;
     goal: string;
@@ -511,6 +522,8 @@ router.post('/', (req: Request, res: Response) => {
     cwd,
     // Story 15.29 — optional conversation linkage. Server validates / auto-creates.
     conversation_id,
+    // B1 统一会话内核 — 可选聊天群挂靠：按群复用/创建互链 conversation。
+    group_id,
     // Story 15.14 follow-up — body-level auto_critique override (UI toggle).
     auto_critique,
   } = req.body as {
@@ -530,6 +543,7 @@ router.post('/', (req: Request, res: Response) => {
     provider?: unknown;
     cwd?: unknown;
     conversation_id?: unknown;
+    group_id?: unknown;
     auto_critique?: unknown;
   };
 
@@ -698,6 +712,12 @@ router.post('/', (req: Request, res: Response) => {
       return;
     }
     validated_conversation_id = conversation_id;
+    // B1 统一会话内核 — 调用方同时给了群 id 时补链（conversation 还没挂群才写，
+    // 不覆盖已有链接）。
+    if (typeof group_id === 'string' && group_id) {
+      const conv = getConversation(conversation_id);
+      if (conv && !conv.group_id) setConversationGroup(conversation_id, group_id);
+    }
   } else if (conversation_id !== undefined) {
     res.status(400).json({
       error: {
@@ -706,6 +726,17 @@ router.post('/', (req: Request, res: Response) => {
       },
     });
     return;
+  } else if (typeof group_id === 'string' && group_id) {
+    // B1 统一会话内核 — 按群发起 run：复用该群已互链的 conversation，
+    // 没有则创建并写入 group_id。群聊里发任务从此天然归属同一条会话。
+    const existing = getConversationByGroup(group_id);
+    if (existing) {
+      validated_conversation_id = existing.conversation_id;
+    } else {
+      const project = getOrCreateProject('default', 'Default Project');
+      const conv = createConversation(project.project_id, undefined, group_id);
+      validated_conversation_id = conv.conversation_id;
+    }
   } else {
     const project = getOrCreateProject('default', 'Default Project');
     const conv = createConversation(project.project_id);

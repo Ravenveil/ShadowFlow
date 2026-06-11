@@ -18,6 +18,12 @@ export interface ConversationRecord {
   conversation_id: string;
   project_id: string;
   title: string | null;
+  /**
+   * B1 统一会话内核（2026-06-11）— 与 Python 群聊体系的显式互链。
+   * 指向 groups.py 的 group_id；null = 匿名 run 会话（无聊天群挂靠）。
+   * 反向链接是 group record 的 conversation_id 字段。
+   */
+  group_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -43,8 +49,14 @@ interface ConversationRow {
   conversation_id: string;
   project_id: string;
   title: string | null;
+  // B1 — additive 列；旧库行可能 undefined，映射时归一为 null。
+  group_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+function toConversationRecord(row: ConversationRow): ConversationRecord {
+  return { ...row, group_id: row.group_id ?? null };
 }
 
 interface MessageRow {
@@ -79,38 +91,68 @@ function toMessageRecord(row: MessageRow): MessageRecord {
 // ── Conversation ────────────────────────────────────────────────────────────
 
 export function listConversations(project_id: string): ConversationRecord[] {
-  return getDb()
-    .prepare(
-      `SELECT * FROM conversations WHERE project_id = ? ORDER BY updated_at DESC`,
-    )
-    .all(project_id) as ConversationRow[];
+  return (
+    getDb()
+      .prepare(
+        `SELECT * FROM conversations WHERE project_id = ? ORDER BY updated_at DESC`,
+      )
+      .all(project_id) as ConversationRow[]
+  ).map(toConversationRecord);
 }
 
 export function getConversation(id: string): ConversationRecord | null {
   const row = getDb()
     .prepare(`SELECT * FROM conversations WHERE conversation_id = ?`)
     .get(id) as ConversationRow | undefined;
-  return row ?? null;
+  return row ? toConversationRecord(row) : null;
+}
+
+/**
+ * B1 — 按互链的群 id 反查 conversation（一个群至多挂一条；多条时取最新）。
+ * 「群 → 关联 run 列表」的查询链：group_id → conversation → run-sessions。
+ */
+export function getConversationByGroup(group_id: string): ConversationRecord | null {
+  const row = getDb()
+    .prepare(
+      `SELECT * FROM conversations WHERE group_id = ? ORDER BY updated_at DESC LIMIT 1`,
+    )
+    .get(group_id) as ConversationRow | undefined;
+  return row ? toConversationRecord(row) : null;
+}
+
+/** B1 — 事后补链：把已有 conversation 挂到一个群上（null 清除）。 */
+export function setConversationGroup(
+  conversation_id: string,
+  group_id: string | null,
+): boolean {
+  const info = getDb()
+    .prepare(
+      `UPDATE conversations SET group_id = ?, updated_at = ? WHERE conversation_id = ?`,
+    )
+    .run(group_id, new Date().toISOString(), conversation_id);
+  return info.changes > 0;
 }
 
 export function createConversation(
   project_id: string,
   title?: string,
+  group_id?: string | null,
 ): ConversationRecord {
   const conversation_id = randomUUID();
   const now = new Date().toISOString();
   getDb()
     .prepare(
       `INSERT INTO conversations
-       (conversation_id, project_id, title, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
+       (conversation_id, project_id, title, group_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
-    .run(conversation_id, project_id, title ?? null, now, now);
+    .run(conversation_id, project_id, title ?? null, group_id ?? null, now, now);
 
   return {
     conversation_id,
     project_id,
     title: title ?? null,
+    group_id: group_id ?? null,
     created_at: now,
     updated_at: now,
   };

@@ -170,6 +170,10 @@ class CreateGroupRequest(BaseModel):
     # 2026-05-29 — conversation kind：'group'（群聊）| 'dm'（单聊）。DM 不显示在
     # 群列表，但底层复用同一存储 + 回复桥（dispatch_agent_reply 对 N=1 即单聊）。
     kind: str = "group"
+    # 2026-06-11 B1（统一会话内核）— 与 Node SQLite conversation 的显式互链。
+    # run-sessions 体系的 conversation_id；有值即「该群的 run 都挂在这条
+    # conversation 下」，前端可由 group 一步查到关联 run 列表。
+    conversation_id: Optional[str] = None
 
     @field_validator("policy_matrix")
     @classmethod
@@ -187,6 +191,8 @@ class GroupResponse(BaseModel):
     agents: List[str]
     workspace_id: Optional[str] = None
     team_id: Optional[str] = None
+    # B1 统一会话内核 — 互链的 Node conversation（可选，详见 CreateGroupRequest）
+    conversation_id: Optional[str] = None
 
 
 class MessageItem(BaseModel):
@@ -265,6 +271,7 @@ async def create_group(request: Request, body: CreateGroupRequest) -> GroupRespo
         "workspace_dir": body.workspace_dir,
         "team_id": body.team_id,
         "kind": body.kind or "group",
+        "conversation_id": body.conversation_id,
         "created_at": created_at,
         "messages": [],
     }
@@ -278,6 +285,7 @@ async def create_group(request: Request, body: CreateGroupRequest) -> GroupRespo
         agents=body.agent_ids,
         workspace_id=body.workspace_id,
         team_id=body.team_id,
+        conversation_id=body.conversation_id,
     )
 
 
@@ -351,14 +359,25 @@ async def resolve_dm_conversation(
 async def list_groups_endpoint(
     workspace_id: Optional[str] = Query(default=None),
     include_archived: bool = Query(default=False),
+    kind: Optional[str] = Query(default=None),
 ) -> Dict[str, Any]:
     """List groups, optionally filtered by workspace_id.
 
     Wraps records in {data, meta} envelope to match other endpoints — but
     also exposes a top-level `groups` array for the front-end's existing
     stub-compatible callers. Archived groups (group-level ``archived: true``)
-    are hidden by default; pass ``include_archived=true`` to include them."""
-    records = _list_groups_records(workspace_id)
+    are hidden by default; pass ``include_archived=true`` to include them.
+
+    2026-06-08 — ``kind`` filters by conversation kind so the workbench 单聊
+    侧栏能列出 DM 历史:None/'group'(默认,排除 DM,保持既有行为)、'dm'(只 DM)、
+    'all'(群+DM)。"""
+    if kind == "dm":
+        kinds = ["dm"]
+    elif kind == "all":
+        kinds = ["group", "dm"]
+    else:
+        kinds = ["group"]
+    records = _list_groups_records(workspace_id, kinds=kinds)
     if not include_archived:
         records = [r for r in records if not r.get("archived")]
     return {
@@ -710,6 +729,9 @@ class PatchGroupRequest(BaseModel):
     # 归档群聊（群级，非每用户）。True → 从默认群列表隐藏；列表端点用
     # include_archived=true 仍可拉到。
     archived: Optional[bool] = None
+    # 2026-06-11 B1（统一会话内核）— 事后补链：把已有群挂到一条 Node
+    # conversation 上（如 run 完成后回填）。空串 = 清除链接。
+    conversation_id: Optional[str] = None
     # 2026-05-30 — CLI 工作目录(绝对路径)。空字符串 = 清除(回退默认)。
     workspace_dir: Optional[str] = Field(None, max_length=4096)
 
@@ -749,6 +771,9 @@ async def patch_group(group_id: str, body: PatchGroupRequest) -> Dict[str, Any]:
     if body.workspace_dir is not None:
         # 空串 = 清除(回退到 Node 默认 scratch 目录);非空原样存(Node 端再校验)。
         record["workspace_dir"] = body.workspace_dir.strip() or None
+    if body.conversation_id is not None:
+        # B1 互链：空串 = 清除；非空 = 挂到该 Node conversation（Node 端校验存在性）。
+        record["conversation_id"] = body.conversation_id.strip() or None
     record["updated_at"] = datetime.now(timezone.utc).isoformat()
     _save_group(record)
     return _envelope(record)

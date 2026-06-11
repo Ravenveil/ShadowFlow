@@ -113,9 +113,18 @@ export async function createGroup(
  *
  * 后端响应包络: `{ data: GroupRecord[], groups: GroupRecord[], meta: {...} }`
  * （`groups` 是 legacy stub 兼容字段，等价于 `data`）。
+ *
+ * 2026-06-08 · `kind` 透传后端同名 query：默认 'group'（排除 DM，保持既有行为）、
+ * 'dm'（只 DM，workbench 单聊侧栏列历史用）、'all'（群+DM）。
  */
-export async function listGroups(workspaceId?: string | null): Promise<GroupRecord[]> {
-  const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+export async function listGroups(
+  workspaceId?: string | null,
+  kind?: 'group' | 'dm' | 'all',
+): Promise<GroupRecord[]> {
+  const params = new URLSearchParams();
+  if (workspaceId) params.set('workspace_id', workspaceId);
+  if (kind) params.set('kind', kind);
+  const qs = params.toString() ? `?${params.toString()}` : '';
   const res = await fetch(`${getApiBase()}/api/groups${qs}`);
   await _checkPythonStatus(res);
   if (!res.ok) return [];

@@ -266,9 +266,18 @@ export interface RunSessionSummary {
   updated_at: number;
 }
 
-/** GET /api/run-sessions[?conversation_id=] — 按群查关联 run，新→旧排序。 */
-export async function listRunSessions(conversationId?: string): Promise<RunSessionSummary[]> {
-  const qs = conversationId ? `?conversation_id=${encodeURIComponent(conversationId)}` : '';
+/**
+ * GET /api/run-sessions — 按会话查关联 run，新→旧排序。
+ * B1 互链后正确入参是聊天群 id（服务端经 conversation.group_id 换算）；
+ * 仍支持直接传 conversation_id（by 第二参数切换）。
+ */
+export async function listRunSessions(
+  id?: string,
+  by: 'group' | 'conversation' = 'group',
+): Promise<RunSessionSummary[]> {
+  const qs = id
+    ? `?${by === 'group' ? 'group_id' : 'conversation_id'}=${encodeURIComponent(id)}`
+    : '';
   const resp = await fetch(`${getApiBase()}/api/run-sessions${qs}`, {
     headers: { ...authHeaders() },
   });
