@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
-import { Plus, Search, Send } from 'lucide-react';
+import { Plus, Search, Send, MessageSquare, Lock, Rocket, Brain } from 'lucide-react';
 import { HfAvatar } from '../../components/hifi';
 import { listAgents, type AgentRecord } from '../../api/agents';
 import { resolveDmConversation } from '../../api/groupApi';
@@ -107,28 +107,25 @@ export function PersonalChatView() {
         width={264}
         containerStyle={{ borderRight: '1px solid var(--t-border)', background: 'var(--t-panel)' }}
       >
-        <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button type="button" onClick={() => setShowCreate(true)} aria-label="+ 新员工"
-            style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '9px 0', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--t-accent)', color: 'var(--t-accent-ink)', fontWeight: 700, fontSize: 13 }}>
+        <div className="pcv-rail-head">
+          <button type="button" className="pcv-new" onClick={() => setShowCreate(true)} aria-label="+ 新员工">
             <Plus size={15} /> 新员工
           </button>
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: 'var(--t-fg-4)' }} />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索助手" aria-label="搜索助手"
-              style={{ width: '100%', padding: '8px 10px 8px 30px', borderRadius: 8, border: '1px solid var(--t-border)', background: 'var(--t-bg)', color: 'var(--t-fg)', fontSize: 12.5, outline: 'none' }} />
+          <div className="pcv-search">
+            <Search size={14} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索助手" aria-label="搜索助手" />
           </div>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 8px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t-fg-4)', padding: '6px 6px', letterSpacing: '.04em' }}>助手</div>
+        <div className="pcv-list">
+          <div className="pcv-sec">助手</div>
           {filtered.map((a) => {
             const active = a.agent_id === agentId;
             return (
-              <button key={a.agent_id} type="button" onClick={() => setAgentId(a.agent_id)}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px', borderRadius: 8, border: 'none', cursor: 'pointer', textAlign: 'left', background: active ? 'var(--t-accent-tint)' : 'transparent' }}>
+              <button key={a.agent_id} type="button" className={active ? 'pcv-row active' : 'pcv-row'} onClick={() => setAgentId(a.agent_id)}>
                 <HfAvatar glyph={Array.from(a.name)[0] ?? '?'} color={a.avatar_color ?? 'var(--t-accent)'} size={32} />
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--t-fg-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.soul?.split('\n')[0] ?? ''}</div>
+                  <div className="pcv-row-name">{a.name}</div>
+                  <div className="pcv-row-sub">{a.soul?.split('\n')[0] ?? ''}</div>
                 </div>
               </button>
             );
@@ -140,15 +137,26 @@ export function PersonalChatView() {
       {/* 中:DM 单聊(Timeline 渲染) */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
         {agentId === null || selected === null ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-fg-3)', fontSize: 14 }}>
-            选择一个助手开始单聊，或创建一位新员工
+          <div className="pcv-empty">
+            <div className="pcv-empty-glyph"><MessageSquare size={26} strokeWidth={1.75} /></div>
+            <div className="pcv-empty-title">和你的 AI 同事单聊</div>
+            {/* 这行文案被 PersonalChatView.test.tsx 断言，勿改 */}
+            <div className="pcv-empty-sub">选择一个助手开始单聊，或创建一位新员工</div>
+            <div className="pcv-empty-hints">
+              <span className="pcv-hint"><Lock size={13} /> 私密一对一，不进群</span>
+              <span className="pcv-hint"><Rocket size={13} /> 随时升级成 Run</span>
+              <span className="pcv-hint"><Brain size={13} /> 记忆持续累积</span>
+            </div>
+            <button type="button" className="pcv-empty-cta" onClick={() => setShowCreate(true)}>
+              <Plus size={15} /> 创建新员工
+            </button>
           </div>
         ) : (
           <>
-            <div style={{ height: 48, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '0 20px', borderBottom: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
+            <div className="pcv-chat-head">
               <HfAvatar glyph={Array.from(selected.name)[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={28} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-fg)' }}>{selected.name}</span>
-              {!dmGroupId && <span style={{ fontSize: 11, color: 'var(--t-fg-4)' }}>连接会话中…</span>}
+              <span className="pcv-chat-name">{selected.name}</span>
+              {!dmGroupId && <span className="pcv-chat-status">连接会话中…</span>}
             </div>
             {/* flex column 受限高度父容器:让 Timeline 自带的 .container(flex:1; min-height:0; overflow-y:auto)
                 成为真正的滚动容器,其内置智能自动滚动(流式跟随/滚底)才生效 */}
@@ -156,12 +164,10 @@ export function PersonalChatView() {
               <Timeline messages={timelineMessages} />
               {error && <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>发送失败：{error}</div>}
             </div>
-            <div style={{ flexShrink: 0, borderTop: '1px solid var(--t-border)', padding: '12px 20px', background: 'var(--t-panel)', display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+            <div className="pcv-composer">
               <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey} rows={1} aria-label="发消息"
-                placeholder="发消息 · Enter 发送 · Shift+Enter 换行"
-                style={{ flex: 1, minHeight: 38, maxHeight: 120, padding: '9px 12px', resize: 'none', border: '1px solid var(--t-border)', borderRadius: 10, background: 'var(--t-bg)', color: 'var(--t-fg)', fontSize: 13, outline: 'none' }} />
-              <button type="button" onClick={doSend} disabled={!draft.trim() || !dmGroupId} aria-label="发送"
-                style={{ height: 38, padding: '0 14px', borderRadius: 10, border: '1px solid var(--t-accent)', background: draft.trim() && dmGroupId ? 'var(--t-accent)' : 'var(--t-panel-2)', color: draft.trim() && dmGroupId ? 'var(--t-accent-ink)' : 'var(--t-fg-4)', fontWeight: 700, fontSize: 12, cursor: draft.trim() && dmGroupId ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                placeholder="发消息 · Enter 发送 · Shift+Enter 换行" />
+              <button type="button" className="pcv-send" onClick={doSend} disabled={!draft.trim() || !dmGroupId} aria-label="发送">
                 <span>发送</span><Send size={14} />
               </button>
             </div>
@@ -169,8 +175,8 @@ export function PersonalChatView() {
         )}
       </div>
 
-      {/* 右:run 式标签页(选中助手且会话就绪才出现) */}
-      {selected && dmGroupId && <PersonalRightPane agent={selected} groupId={dmGroupId} />}
+      {/* 右:第三栏常驻(设计稿)——工作区 tab 永远在;员工/任务/Brief 选中助手后点亮 */}
+      <PersonalRightPane agent={selected} groupId={dmGroupId} />
 
       {showCreate && (
         <CreateAgentModal onCreated={handleCreated} onClose={() => setShowCreate(false)} />

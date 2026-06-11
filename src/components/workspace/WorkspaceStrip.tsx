@@ -7,13 +7,13 @@
  *               dropdown opens via portal to the right of the icon.
  */
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Users } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 // CreateWorkspaceModal 入口已迁到 /teams 新建团队流程（用户视角 ws=team 是同一回事）
 // 文件保留供 future 使用，但本组件不再 mount
 import { listTeams, type TeamRecord } from '../../api/teams';
+import { CreateTeamModal } from '../../core/components/team/CreateTeamModal';
 import { useI18n } from '../../common/i18n';
 
 interface WorkspaceSelectorProps {
@@ -28,7 +28,6 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
   const switchTo   = useWorkspaceStore((s) => s.switchTo);
   const setCurrentTeam = useWorkspaceStore((s) => s.setCurrentTeam);
   const fetchWs    = useWorkspaceStore((s) => s.fetchWorkspaces);
-  const navigate   = useNavigate();
 
   const [open, setOpen]           = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
@@ -36,6 +35,16 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
   // don't pay the Python round-trip for users who never open the switcher.
   const [teams, setTeams] = useState<TeamRecord[]>([]);
   const [teamsLoaded, setTeamsLoaded] = useState(false);
+  // M3 三栏融合 — /teams 页的新建团队流程移植进聊天：下拉加号直接弹
+  // CreateTeamModal（2-step 向导），创建完即切到新团队，不再跳页打断对话。
+  const [showCreateTeam, setShowCreateTeam] = useState(false);
+
+  const handleTeamCreated = (team: TeamRecord) => {
+    setShowCreateTeam(false);
+    setTeams((prev) => [...prev, team]);
+    if (team.workspace_id && team.workspace_id !== currentId) switchTo(team.workspace_id);
+    setCurrentTeam({ team_id: team.team_id, name: team.name, agent_ids: team.agent_ids ?? [] });
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -229,9 +238,10 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
       <div style={{ borderTop: '1px solid var(--t-border)', marginTop: 4, paddingTop: 4 }}>
         <button
           type="button"
-          // workspace 和 team 合并语义后，"新建" 意为创建一个新团队。当前没有
-          // CreateTeamModal 易复用入口，先跳 /teams 走 TeamPage 的新建流程。
-          onClick={() => { setOpen(false); navigate('/teams'); }}
+          // workspace 和 team 合并语义后，"新建" 意为创建一个新团队。
+          // M3 三栏融合：直接弹 CreateTeamModal（/teams 的 2-step 向导移植进聊天）。
+          data-testid="workspace-dropdown-create-team"
+          onClick={() => { setOpen(false); setShowCreateTeam(true); }}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
@@ -272,6 +282,10 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
           }}>{init}</span>
         </div>
         {open && createPortal(dropdownContent, document.body)}
+        {showCreateTeam && createPortal(
+          <CreateTeamModal onCreated={handleTeamCreated} onClose={() => setShowCreateTeam(false)} />,
+          document.body,
+        )}
       </div>
     );
   }
@@ -314,6 +328,10 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
       </div>
 
       {open && dropdownContent}
+      {showCreateTeam && createPortal(
+        <CreateTeamModal onCreated={handleTeamCreated} onClose={() => setShowCreateTeam(false)} />,
+        document.body,
+      )}
     </div>
   );
 }

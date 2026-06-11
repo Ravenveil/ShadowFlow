@@ -5,18 +5,21 @@ import type { AgentRecord } from '../../api/agents';
 import { RightPaneTabs, type RightPaneTabDef } from '../../components/run-session/RightPaneTabs';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
+import { RunWorkPane } from './RunWorkPane';
 
-type TabId = 'employee' | 'tasks' | 'brief';
+type TabId = 'work' | 'employee' | 'tasks' | 'brief';
 const TABS: RightPaneTabDef<TabId>[] = [
+  { key: 'work', label: '工作区' },
   { key: 'employee', label: '员工' },
   { key: 'tasks', label: '任务' },
   { key: 'brief', label: 'Brief' },
 ];
 
 interface PersonalRightPaneProps {
-  agent: AgentRecord;
-  /** dm conversation 的 groupId — 任务/Brief 面板直接复用群聊后端。 */
-  groupId: string;
+  /** 选中的助手；未选时第三栏仍常驻（设计稿），员工/任务/Brief 显示引导。 */
+  agent?: AgentRecord | null;
+  /** dm conversation 的 groupId — 任务/Brief/工作区 面板直接复用群聊后端。 */
+  groupId?: string | null;
 }
 
 /** 员工卡 — Cherry Studio 助手面板的薄版(头像/名字/soul)。M2 接执行指标。 */
@@ -36,14 +39,22 @@ function EmployeeCard({ agent }: { agent: AgentRecord }) {
   );
 }
 
+function NeedAgentHint() {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
+      <span style={{ fontSize: 12, color: 'var(--t-fg-4)', lineHeight: 1.7 }}>选择一个助手后这里显示 TA 的资料与任务</span>
+    </div>
+  );
+}
+
 /**
- * PersonalRightPane — 个人态右栏。
- * M3a 三栏融合：tab 条从手写仿制升级为直接复用 run-session 的
- * RightPaneTabs shell(同一视觉/同一 a11y 结构)；面板全复用现有组件
- * (dm conversation 有真实 groupId,任务/Brief 即插即用)。可收起。
+ * PersonalRightPane — 个人态右栏（第三栏，常驻）。
+ * M3 三栏融合：复用 run-session 的 RightPaneTabs shell；「工作区」tab =
+ * RunWorkPane（run-session 右半部分进聊天——按 dm 会话关联 run，设计稿框架）。
+ * 员工/任务/Brief 面板全复用现有组件。可收起。
  */
 export function PersonalRightPane({ agent, groupId }: PersonalRightPaneProps) {
-  const [tab, setTab] = useState<TabId>('employee');
+  const [tab, setTab] = useState<TabId>('work');
   const [collapsed, setCollapsed] = useState(false);
 
   if (collapsed) {
@@ -58,7 +69,7 @@ export function PersonalRightPane({ agent, groupId }: PersonalRightPaneProps) {
   }
 
   return (
-    <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--t-border)', background: 'var(--t-panel)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ width: 312, flexShrink: 0, borderLeft: '1px solid var(--t-border)', background: 'var(--t-panel)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <RightPaneTabs<TabId>
         activeTab={tab}
         onTabChange={setTab}
@@ -71,20 +82,27 @@ export function PersonalRightPane({ agent, groupId }: PersonalRightPaneProps) {
           </button>
         }
         panels={{
-          employee: (
+          work: <RunWorkPane groupId={groupId} />,
+          employee: agent ? (
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
               <EmployeeCard agent={agent} />
             </div>
+          ) : (
+            <NeedAgentHint />
           ),
-          tasks: (
+          tasks: groupId ? (
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 }}>
               <ApprovalGatePanel groupId={groupId} />
             </div>
+          ) : (
+            <NeedAgentHint />
           ),
-          brief: (
+          brief: groupId ? (
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 }}>
               <BriefBoardView groupId={groupId} />
             </div>
+          ) : (
+            <NeedAgentHint />
           ),
         }}
       />

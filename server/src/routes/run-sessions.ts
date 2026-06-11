@@ -454,6 +454,37 @@ function coerceArtifactType(raw: unknown): ArtifactType | null {
     : null;
 }
 
+// ── GET /api/run-sessions — M3 三栏融合 ──────────────────────────────────────
+// 轻量列表：右栏「工作区」tab 按 conversation_id 查群关联的 run。
+// status 来自 runBus（内存）；进程重启后无活跃 run 的记录回落 'idle'。
+router.get('/', (req: Request, res: Response) => {
+  const conv =
+    typeof req.query.conversation_id === 'string' && req.query.conversation_id
+      ? req.query.conversation_id
+      : undefined;
+  const sessions: Array<{
+    session_id: string;
+    goal: string;
+    conversation_id: string | null;
+    status: string;
+    created_at: number;
+    updated_at: number;
+  }> = [];
+  for (const [id, s] of sessionStore.entries()) {
+    if (conv && s.conversation_id !== conv) continue;
+    sessions.push({
+      session_id: id,
+      goal: s.goal ?? '',
+      conversation_id: s.conversation_id ?? null,
+      status: runBus.get(id)?.status ?? 'idle',
+      created_at: s.created_at,
+      updated_at: s.updated_at ?? s.created_at,
+    });
+  }
+  sessions.sort((a, b) => b.updated_at - a.updated_at);
+  res.json({ sessions: sessions.slice(0, 50) });
+});
+
 // ── POST /api/run-sessions ────────────────────────────────────────────────────
 
 router.post('/', (req: Request, res: Response) => {

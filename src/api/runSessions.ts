@@ -254,6 +254,29 @@ export interface StepArtifactEvent {
   status?: 'running' | 'done' | 'failed';
 }
 
+// ── M3 三栏融合 — 轻量列表（右栏「工作区」tab 数据源）──────────────────────────
+
+export interface RunSessionSummary {
+  session_id: string;
+  goal: string;
+  conversation_id: string | null;
+  /** runBus 内存态：running/succeeded/failed/canceled…；重启后无活跃 run 回落 'idle'。 */
+  status: string;
+  created_at: number;
+  updated_at: number;
+}
+
+/** GET /api/run-sessions[?conversation_id=] — 按群查关联 run，新→旧排序。 */
+export async function listRunSessions(conversationId?: string): Promise<RunSessionSummary[]> {
+  const qs = conversationId ? `?conversation_id=${encodeURIComponent(conversationId)}` : '';
+  const resp = await fetch(`${getApiBase()}/api/run-sessions${qs}`, {
+    headers: { ...authHeaders() },
+  });
+  if (!resp.ok) throw new Error(`listRunSessions failed: ${resp.status}`);
+  const data = (await resp.json()) as { sessions: RunSessionSummary[] };
+  return data.sessions;
+}
+
 export async function createRunSession(
   req: RunSessionCreateRequest,
 ): Promise<RunSessionCreateResponse> {

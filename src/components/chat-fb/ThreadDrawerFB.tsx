@@ -18,11 +18,12 @@ import { paletteFor, initialOf } from './agentAvatar';
 import { RightPaneTabs } from '../run-session/RightPaneTabs';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
+import { RunWorkPane } from '../../pages/chat-home/RunWorkPane';
 import { fetchRecentMessages } from '../../api/groupApi';
 import type { GroupItem, GroupMetrics, Message } from '../../common/types/inbox';
 import styles from './chatFB.module.css';
 
-type DrawerTab = 'thread' | 'tasks' | 'docs' | 'brief';
+type DrawerTab = 'thread' | 'work' | 'tasks' | 'docs' | 'brief';
 
 export interface ThreadSourceMessage {
   id: string;
@@ -135,6 +136,8 @@ export function ThreadDrawerFB({
 
   const tabs: Array<{ k: DrawerTab; label: string; n?: number }> = [
     { k: 'thread', label: 'Thread' },
+    // M3 三栏融合 — 「工作区」= run-session 右半部分进聊天（按群关联 run）
+    { k: 'work', label: tr('chat.tabWork', '工作区') },
     { k: 'tasks', label: tr('chat.tabTasks', '任务'), n: metrics.pendingApprovalsCount },
     { k: 'docs', label: tr('chat.tabDocs', '文档') },
     { k: 'brief', label: 'Brief' },
@@ -449,7 +452,17 @@ export function ThreadDrawerFB({
             </button>
           ) : undefined
         }
-        panels={{ thread: threadPane, tasks: tasksPane, docs: docsPane, brief: briefPane }}
+        panels={{
+          thread: threadPane,
+          work: (
+            <div className={styles.drPane}>
+              <RunWorkPane groupId={groupId} />
+            </div>
+          ),
+          tasks: tasksPane,
+          docs: docsPane,
+          brief: briefPane,
+        }}
       />
     </div>
   );
