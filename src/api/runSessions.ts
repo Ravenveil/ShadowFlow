@@ -72,6 +72,11 @@ export interface RunSessionCreateRequest {
    * on the next visit.
    */
   conversation_id?: string;
+  /**
+   * B1 统一会话内核 — 聊天群挂靠。服务端按群复用/创建互链 conversation，
+   * 该群的所有 run 归属同一条会话（群 timeline 经 B2 端点可见）。
+   */
+  group_id?: string;
 }
 
 export interface RunSessionCreateResponse {
