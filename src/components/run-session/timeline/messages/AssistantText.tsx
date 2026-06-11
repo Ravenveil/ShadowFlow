@@ -90,6 +90,24 @@ export const AssistantText = memo(function AssistantText({ msg }: Props) {
 
   return (
     <div className={styles.textStack}>
+      {/* F2 (2026-06-11) — group-chat speaker attribution. Server's
+          chatMessagesToTimeline keeps sender_name on chat-origin
+          assistant_text; run-originated messages never set it, so the
+          run-session page renders exactly as before (additive). */}
+      {msg.sender_name && (
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            lineHeight: 1.2,
+            color: 'var(--fg-4, var(--t-fg-4, #8a8f98))',
+            marginBottom: 2,
+            userSelect: 'none',
+          }}
+        >
+          {msg.sender_name}
+        </div>
+      )}
       {rows.map((row, i) => {
         const key = `r-${i}-${row.kind}`;
         switch (row.kind) {

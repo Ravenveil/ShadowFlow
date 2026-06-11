@@ -85,6 +85,13 @@ export type TimelineMessage =
       body: string;
       /** While true, the AssistantText renderer shows a trailing blink-caret. */
       streaming?: boolean;
+      /**
+       * F2 (2026-06-11) — optional speaker attribution for group-chat-origin
+       * messages (server chatMessagesToTimeline keeps the chat sender_name;
+       * run-originated timeline messages never set it). Additive: absent →
+       * no header rendered, run-session page unaffected.
+       */
+      sender_name?: string;
     })
   | (TimelineMessageBase & {
       kind: 'raw';
@@ -92,6 +99,8 @@ export type TimelineMessage =
       body: string;
       /** Optional provenance hint (e.g. 'sse-frame-leak', 'unknown-tag'). */
       source?: string;
+      /** F2 — optional speaker attribution (see assistant_text.sender_name). */
+      sender_name?: string;
     })
   | (TimelineMessageBase & { kind: 'rationale'; bullets: string[] })
   | (TimelineMessageBase & {

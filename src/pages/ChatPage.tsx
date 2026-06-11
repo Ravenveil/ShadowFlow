@@ -37,6 +37,9 @@ import type { GroupItem, GroupMetrics, Message } from '../common/types/inbox';
 import { useI18n } from '../common/i18n';
 import { ChatStream } from '../core/components/chat/ChatStream';
 import { useChatStream } from '../core/hooks/useChatStream';
+// ── F2 2026-06-11 · 统一会话内核灰度：群聊中栏 Timeline 渲染（默认关）─────────
+import { useGroupTimeline } from '../core/hooks/useGroupTimeline';
+import { Timeline } from '../components/run-session/timeline/Timeline';
 // ── Stream D 2026-05-28 · 接入 chat-fb FB-HiFi 组件 ─────────────────────────
 import InboxPanelFB from '../components/chat-fb/InboxPanelFB';
 import { ChatRail } from './chat-home/ChatRailChrome';
@@ -713,6 +716,20 @@ export default function ChatPage() {
   // fan-out）实时流入，无需手动刷新。
   const chatStream = useChatStream({ mode: 'group', targetId: groupId ?? null, sseChannel: 'group', executor: pickExecutor, model: pickModel });
 
+  // ── F2 2026-06-11 · 统一 Timeline 灰度开关（unified-conversation-core-plan §F2）
+  // localStorage sf.chatTimeline === '1' 或 URL ?timeline=1 时，中栏消息区改用
+  // run-session 的 <Timeline/> 渲染 B2 统一读路径（聊天+run 过程归并流）。
+  // 默认关 = 现状零变化：开关关时给 hook 传 null，完全 idle（不 fetch 不开 SSE）。
+  const timelineGray = useMemo(() => {
+    if (chatSearchParams.get('timeline') === '1') return true;
+    try {
+      return typeof localStorage !== 'undefined' && localStorage.getItem('sf.chatTimeline') === '1';
+    } catch {
+      return false;
+    }
+  }, [chatSearchParams]);
+  const groupTimeline = useGroupTimeline(timelineGray ? (groupId ?? null) : null);
+
   // ── 2026-05-29 · 内嵌单聊（DM）─────────────────────────────────────────────
   // 点左侧 agent 不再整页跳到 /agent-dm（会丢掉左侧列表 + 框架）；改为留在 chat
   // 页内，只把中间栏从群聊换成与该 agent 的单聊。dmStream 走 dm 模式（BYOK
@@ -828,11 +845,14 @@ export default function ChatPage() {
       return;
     }
     setComposer('');
+    // F2 灰度 — 发消息路径不变（chatStream.send 内部仍 POST /messages）；开关开时
+    // 额外把用户消息乐观追加进统一 Timeline（用户消息不会从 SSE 回流）。
+    if (timelineGray) groupTimeline.appendLocalUser(text);
     try {
       await chatStream.send(text);
       requestAnimationFrame(() => { if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight; });
     } catch (err) { console.warn('[ChatPage] send failed:', err); }
-  }, [composer, chatStream, groupExists]);
+  }, [composer, chatStream, groupExists, timelineGray, groupTimeline]);
 
   const builderUrl = buildChatBuilderUrl({ chatId: groupId ?? '', goalText: groupName });
   const isRunning = group?.status === 'running' || (group?.metrics?.activeRuns ?? 0) > 0;
@@ -1260,6 +1280,21 @@ export default function ChatPage() {
                 filters={searchFilters}
                 onToggleFilter={toggleSearchFilter}
               />
+              {timelineGray && groupId ? (
+                /* F2 灰度 — 统一 Timeline 渲染（B2 /timeline 读路径 + SSE 增量）。
+                   flex column + minHeight:0 受限高度容器（同 PersonalChatView），让
+                   Timeline 自带的 .container(flex:1; min-height:0; overflow-y:auto)
+                   成为真正的滚动容器，其智能自动滚动才生效。 */
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '12px 16px' }}>
+                  <Timeline messages={groupTimeline.messages} />
+                  {groupTimeline.loading && groupTimeline.messages.length === 0 && (
+                    <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: T.fg5, paddingTop: 6 }}>统一时间线加载中…</div>
+                  )}
+                  {groupTimeline.error && (
+                    <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: T.err, paddingTop: 6 }}>统一时间线加载失败：{groupTimeline.error}</div>
+                  )}
+                </div>
+              ) : (
               <div ref={chatScrollRef} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
                 {chatStream.messages.length === 0 ? (
                   <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, padding: 32 }}>
@@ -1287,6 +1322,7 @@ export default function ChatPage() {
                   />
                 )}
               </div>
+              )}
               {chatStream.error && (
                 <div style={{ padding: '6px 18px', fontSize: 11, color: T.err, background: `color-mix(in oklab, ${T.err} 12%, transparent)`, borderTop: `1px solid ${T.bd}`, flexShrink: 0 }}>
                   {chatStream.error}
