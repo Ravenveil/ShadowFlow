@@ -20,6 +20,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
 import { openQuickSwitcher } from '../../components/hifi/QuickSwitcher';
+import { WorkspaceSelector } from '../../components/workspace/WorkspaceStrip';
 import { PersonalTeamToggle, type ChatHomeView } from './PersonalTeamToggle';
 
 const RAIL_COLLAPSED_KEY = 'sf.chat.railCollapsed';
@@ -96,6 +97,13 @@ export function ChatRailHeader({
             </button>
           )}
         </div>
+        {/* 工作区/团队选择器 — 从全宽顶条迁入侧边栏（团队态，切换下方/搜索上方），
+            选 context 再开工，不再占一整条横幅。 */}
+        {view === 'team' && (
+          <div style={{ width: '100%', minWidth: 0 }}>
+            <WorkspaceSelector />
+          </div>
+        )}
         {/* M3c start 吸收 — 团队态「+ 新任务」：goal → run-session 的聊天内入口。
             个人态列表区已有「+ 新员工」，不重复放。 */}
         {view === 'team' && (
