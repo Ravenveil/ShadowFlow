@@ -168,7 +168,8 @@ export function NewTaskComposer() {
         /* 空态 — 轻引导，不是整页 hero；聊天框在底部常驻 */
         <div className="pcv-empty" style={{ flex: 1 }}>
           <div className="pcv-empty-glyph"><Sparkles size={26} strokeWidth={1.75} /></div>
-          <div className="pcv-empty-title">说说要做什么</div>
+          {/* start 语义吸收——同款大标题,聊天即开始页 */}
+          <div className="pcv-empty-title" style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.01em' }}>今天要做什么？</div>
           <div className="pcv-empty-sub">下面直接发消息——组建团队、执行、产出，全过程就在这里流式展开</div>
           <div className="pcv-empty-hints">
             {SUGGESTIONS.map(([glyph, label]) => (

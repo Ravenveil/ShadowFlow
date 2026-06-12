@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Search, MessageSquare, Lock, Rocket, Brain } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
+import { NewTaskComposer } from './NewTaskComposer';
 import { HfAvatar } from '../../components/hifi';
 import { listAgents, type AgentRecord } from '../../api/agents';
 import { resolveDmConversation } from '../../api/groupApi';
@@ -138,19 +139,19 @@ export function PersonalChatView() {
       {/* 中:DM 单聊(Timeline 渲染) */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
         {agentId === null || selected === null ? (
-          <div className="pcv-empty">
-            <div className="pcv-empty-glyph"><MessageSquare size={26} strokeWidth={1.75} /></div>
-            <div className="pcv-empty-title">和你的 AI 同事单聊</div>
-            {/* 这行文案被 PersonalChatView.test.tsx 断言，勿改 */}
-            <div className="pcv-empty-sub">选择一个助手开始单聊，或创建一位新员工</div>
-            <div className="pcv-empty-hints">
-              <span className="pcv-hint"><Lock size={13} /> 私密一对一，不进群</span>
-              <span className="pcv-hint"><Rocket size={13} /> 随时升级成 Run</span>
-              <span className="pcv-hint"><Brain size={13} /> 记忆持续累积</span>
+          /* 未选助手 = start 形态(用户 2026-06-12 定形)：今天要做什么 + 完整
+             composer 直接开干(NewTaskComposer=聊天内 start,发首条即建会话跑 run)。
+             不再是"选择一个助手"的死引导;创建员工降为次级文字入口。 */
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+            <NewTaskComposer />
+            <div style={{ flexShrink: 0, textAlign: 'center', padding: '0 16px 10px', background: 'var(--t-panel)' }}>
+              {/* 这行文案被 PersonalChatView.test.tsx 断言（空态语义锚点） */}
+              <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>选择一个助手开始单聊，或创建一位新员工</span>
+              <button type="button" onClick={() => setShowCreate(true)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--t-accent)', fontSize: 11, fontWeight: 600, padding: 0, marginLeft: 6 }}>
+                <Plus size={11} style={{ verticalAlign: '-1px' }} /> 创建新员工
+              </button>
             </div>
-            <button type="button" className="pcv-empty-cta" onClick={() => setShowCreate(true)}>
-              <Plus size={15} /> 创建新员工
-            </button>
           </div>
         ) : (
           <>
