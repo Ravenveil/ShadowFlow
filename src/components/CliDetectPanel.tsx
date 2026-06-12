@@ -151,7 +151,7 @@ export function CliDetectPanel() {
           >
             <RefreshCw
               size={12}
-              style={state.loading ? { animation: 'spin 1s linear infinite' } : undefined}
+              className={state.loading ? 'sf-spin' : undefined}
             />
             Re-scan
           </button>

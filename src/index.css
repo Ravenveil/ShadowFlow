@@ -350,8 +350,35 @@ input, textarea, select { font-family: inherit; color: inherit; }
    AcpAgentsPanel、CliDetectPanel、LocalCLISection、ReviewApprovalWizard、
    ImportTemplateDialog、workspace/chat/Composer）此前依赖「别处恰好用了
    Tailwind animate-spin 才生成 @keyframes spin」或局部 <style> 才能转。
-   这里显式全局定义兜底；与 Tailwind 生成的同名同体 keyframes 重复无害。 */
+   这里显式全局定义兜底；与 Tailwind 生成的同名同体 keyframes 重复无害。
+   F6 批2 收尾：上述 7 处调用点已全部换装 .sf-spin 类（1s 档）或显式引用
+   sf-spin keyframes（0.6/0.7s 档），`spin` 同名兜底保留给历史/第三方。 */
 @keyframes spin         { to { transform: rotate(360deg); } }
+/* 统一 spinner 类（polish-plan §4 loading·spinner）：1s 线性旋转。
+   非 1s 档位（0.6/0.7s）在调用点显式写 `animation: sf-spin .7s linear infinite`。 */
+.sf-spin { animation: sf-spin 1s linear infinite; }
+
+/* ============================================================================
+ * F6 批2 — 骨架屏体系（polish-plan §4 loading·骨架屏，对标 clawsgo-shimmer）
+ * 底色 --t-panel-2，流光 background-position 200% → -50%（1.4s 线性循环），
+ * 圆角随宿主（默认 --r-row，宿主可用 style/类覆盖）。
+ * 用法：<div class="sf-skeleton" style="height:44px;width:72%" />
+ * reduced-motion 由文件末尾全局兜底块终止循环。
+ * ============================================================================ */
+@keyframes sf-shimmer { to { background-position: -50% 0; } }
+.sf-skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--t-panel-2) 40%,
+    color-mix(in srgb, var(--t-fg) 8%, var(--t-panel-2)) 50%,
+    var(--t-panel-2) 60%
+  );
+  background-size: 200% 100%;
+  background-position: 200% 0;
+  border-radius: var(--r-row);
+  animation: sf-shimmer 1.4s linear infinite;
+  pointer-events: none;
+}
 @keyframes sf-cur       { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
 
 /* 2026-06-02 — Trae 式「实时跟随」聚光：run-session 自动滚动到正在生成的
@@ -1296,6 +1323,95 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .sf-peek-close:hover { background: var(--t-panel-2); color: var(--t-fg); }
 .sf-peek-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
 .sf-peek-frame { flex: 1; min-height: 0; width: 100%; border: none; background: var(--t-bg); }
+
+/* ============================================================================
+ * F6 批2 — RunWorkPane（右栏「工作区」tab）换装：内联样式 → sf-wp-* 类。
+ * 此前全内联 = 无态死区（无 hover/active/focus）；现按 polish-plan §4：
+ *   hover·卡片 = border → --t-border-2 + --shadow-1（--dur-1 --ease-out）
+ *   hover·行   = 底色 → --t-hover，仅变一档
+ *   active     = translateY(1px)（--dur-0）
+ *   focus      = focus-visible 2px accent outline
+ * 字号/圆角/时长全部走批1 token。
+ * ============================================================================ */
+.sf-wp {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.sf-wp-label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--t-fg-4);
+  padding: 2px 2px 8px;
+}
+.sf-wp-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: var(--r-full);
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: .02em;
+  flex-shrink: 0;
+}
+.sf-wp-refresh {
+  border: none; background: none; cursor: pointer;
+  color: var(--t-fg-5); padding: 4px; border-radius: var(--r-chip);
+  display: inline-flex;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.sf-wp-refresh:hover { background: var(--t-hover); color: var(--t-fg-2); }
+.sf-wp-refresh:active { background: var(--t-active); }
+.sf-wp-refresh:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
+/* 主卡（最近 run）—— hover 浮起，active 按压 */
+.sf-wp-card {
+  width: 100%; text-align: left; cursor: pointer;
+  border: 1px solid var(--t-border); border-radius: var(--r-card);
+  background: var(--t-panel-2); padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  font-family: inherit; color: inherit;
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out),
+    transform var(--dur-0) var(--ease-out);
+}
+.sf-wp-card:hover { border-color: var(--t-border-2); box-shadow: var(--shadow-1); }
+.sf-wp-card:active { transform: translateY(1px); }
+.sf-wp-card:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
+/* 历史 run 行 —— hover 底色一档 */
+.sf-wp-row {
+  width: 100%; text-align: left; cursor: pointer;
+  border: 1px solid var(--t-border); border-radius: var(--r-row);
+  background: transparent; padding: 8px 10px;
+  display: flex; align-items: center; gap: 8px;
+  font-family: inherit; color: inherit;
+  transition:
+    background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    transform var(--dur-0) var(--ease-out);
+}
+.sf-wp-row:hover { background: var(--t-hover); border-color: var(--t-border-2); }
+.sf-wp-row:active { background: var(--t-active); transform: translateY(1px); }
+.sf-wp-row:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
+/* 空态 CTA */
+.sf-wp-cta {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: var(--r-row); border: none; cursor: pointer;
+  background: var(--t-accent); color: var(--t-accent-ink);
+  font-weight: 700; font-size: var(--fs-sub); font-family: inherit;
+  transition: filter var(--dur-1) var(--ease-out), transform var(--dur-0) var(--ease-out);
+}
+.sf-wp-cta:hover { filter: brightness(1.08); }
+.sf-wp-cta:active { transform: translateY(1px); }
+.sf-wp-cta:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
+/* 空态容器（虚线引导框，沿用现有设计） */
+.sf-wp-empty {
+  border: 1px dashed var(--t-border); border-radius: var(--r-card);
+  padding: 22px 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center;
+}
+/* loading 骨架卡（首载时替代「加载中…」文字） */
+.sf-wp-skel-card {
+  border: 1px solid var(--t-border); border-radius: var(--r-card);
+  padding: 12px; display: flex; flex-direction: column; gap: 8px;
+}
 
 /* ============================================================================
  * prefers-reduced-motion 全局兜底（2026-06-11 F6 批1，polish-plan 清单 #15）

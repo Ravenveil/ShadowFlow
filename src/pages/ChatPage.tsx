@@ -1288,7 +1288,12 @@ export default function ChatPage() {
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '12px 16px' }}>
                   <Timeline messages={groupTimeline.messages} />
                   {groupTimeline.loading && groupTimeline.messages.length === 0 && (
-                    <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: T.fg5, paddingTop: 6 }}>统一时间线加载中…</div>
+                    /* F6 批2 — 首载文字提示升级为 shimmer 骨架（同 RunWorkPane 体系） */
+                    <div role="status" aria-label="统一时间线加载中" style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 6 }}>
+                      <div className="sf-skeleton" aria-hidden style={{ height: 44, width: '72%' }} />
+                      <div className="sf-skeleton" aria-hidden style={{ height: 44, width: '88%' }} />
+                      <div className="sf-skeleton" aria-hidden style={{ height: 44, width: '56%' }} />
+                    </div>
                   )}
                   {groupTimeline.error && (
                     <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: T.err, paddingTop: 6 }}>统一时间线加载失败：{groupTimeline.error}</div>

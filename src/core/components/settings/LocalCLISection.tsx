@@ -409,7 +409,7 @@ export function LocalCLISection() {
               opacity: scanning ? 0.5 : 1,
             }}
           >
-            <RefreshCw size={12} style={{ animation: scanning ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshCw size={12} className={scanning ? 'sf-spin' : undefined} />
             {scanning ? (scanned ? '扫描中…' : '检测中…') : '重新扫描'}
           </button>
         </div>

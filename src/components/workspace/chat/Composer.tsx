@@ -488,7 +488,7 @@ export function Composer({ onSend, streaming = false, onStop, agents = DEFAULT_A
           {/* Attach */}
           <ToolBtn
             icon={uploading
-              ? <Loader2 size={13} strokeWidth={2} style={{ animation: 'spin 1s linear infinite' }} />
+              ? <Loader2 size={13} strokeWidth={2} className="sf-spin" />
               : CI.clip}
             title="上传文件"
             disabled={uploading}

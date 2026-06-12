@@ -786,7 +786,7 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
                     border: '2px solid rgba(255,255,255,.3)',
                     borderTopColor: 'white',
                     display: 'inline-block',
-                    animation: 'spin 0.6s linear infinite',
+                    animation: 'sf-spin 0.6s linear infinite',
                   }}
                 />
                 生成中…

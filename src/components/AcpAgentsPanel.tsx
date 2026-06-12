@@ -113,7 +113,7 @@ export function AcpAgentsPanel() {
               opacity: state.loading ? 0.6 : 1,
             }}
           >
-            <RefreshCw size={12} style={state.loading ? { animation: 'spin 1s linear infinite' } : undefined} />
+            <RefreshCw size={12} className={state.loading ? 'sf-spin' : undefined} />
             Re-scan
           </button>
         </header>

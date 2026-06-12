@@ -247,7 +247,7 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
               <span style={{
                 display: 'inline-block', width: 14, height: 14,
                 border: '2px solid var(--t-bg)', borderTopColor: 'transparent',
-                borderRadius: '50%', animation: 'spin 0.7s linear infinite',
+                borderRadius: '50%', animation: 'sf-spin 0.7s linear infinite',
               }} />
             )}
             {loading ? '导入中...' : '导入'}

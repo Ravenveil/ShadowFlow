@@ -18,7 +18,7 @@
  * .pane-tabs`. We reuse var(--t-*) tokens for theme parity and the
  * existing sf-pulse keyframe for live indicators.
  */
-import React from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export type TabId = 'overview' | 'team' | 'agent' | 'preview';
 
@@ -89,6 +89,34 @@ export function RightPaneTabs<T extends string = TabId>({
   // 2026-05-20 — runTitle / runStatus 不再渲染（v3 设计稿把它们放在左 pane header）。
   // 显式 void 标记给 lint/读代码的人看，避免被当成 bug 删掉。
   void _runTitle; void _runStatus;
+
+  // ── F6 批3 2026-06-12 · 滑动下划线指示条（polish-plan §4 tab 切换）────────
+  // 此前 active 下划线是 per-tab border-bottom，切 tab 瞬时跳变。现改为单一
+  // absolute 指示条按 active 按钮的 offsetLeft/offsetWidth 滑动（transform
+  // translateX + width，--dur-2 --ease-spring）。测量失败（jsdom / 极端时序，
+  // offsetWidth=0）时 ind=null → 保留旧 per-tab border 兜底，行为零回归。
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+  const activeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [ind, setInd] = useState<{ x: number; w: number } | null>(null);
+  const measure = () => {
+    const btn = activeBtnRef.current;
+    if (!btn || !btn.offsetWidth) { setInd(null); return; }
+    // offsetParent = .rs-tabs（position:relative），offsetLeft 即容器内坐标
+    const next = { x: btn.offsetLeft, w: btn.offsetWidth };
+    setInd((prev) => (prev && prev.x === next.x && prev.w === next.w ? prev : next));
+  };
+  const measureRef = useRef(measure);
+  measureRef.current = measure;
+  // 每次渲染后重测（activeTab / tabs / counts 任何变化都覆盖；同值 setState 短路）
+  useLayoutEffect(() => { measureRef.current(); });
+  // 字体加载 / 窗口缩放等布局位移 → ResizeObserver 兜底重测
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measureRef.current());
+    if (tabsRef.current) ro.observe(tabsRef.current);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <section
       style={{
@@ -105,7 +133,12 @@ export function RightPaneTabs<T extends string = TabId>({
         {followChip && <div className="rs-toolbar-l">{followChip}</div>}
         {followChip && <div className="rs-toolbar-sep" />}
 
-        <div role="tablist" aria-label={ariaLabel ?? 'Run session right pane tabs'} className="rs-tabs">
+        <div
+          role="tablist"
+          aria-label={ariaLabel ?? 'Run session right pane tabs'}
+          className={`rs-tabs ${ind ? 'has-ind' : ''}`}
+          ref={tabsRef}
+        >
           {tabDefs.map(({ key, label }) => {
             const isActive = activeTab === key;
             const isFollowed = followedTab === key;
@@ -120,6 +153,7 @@ export function RightPaneTabs<T extends string = TabId>({
                 data-followed={isFollowed ? '1' : undefined}
                 className={`rs-tab ${isActive ? 'on' : ''}`}
                 onClick={() => onTabChange(key)}
+                ref={isActive ? (el) => { activeBtnRef.current = el; } : undefined}
               >
                 {label}
                 {typeof count === 'number' && count > 0 && (
@@ -129,6 +163,14 @@ export function RightPaneTabs<T extends string = TabId>({
               </button>
             );
           })}
+          {/* 滑动指示条 — 测量成功才渲染；失败时 .rs-tab.on 的 border 兜底 */}
+          {ind && (
+            <span
+              aria-hidden
+              className="rs-tab-ind"
+              style={{ transform: `translateX(${ind.x}px)`, width: ind.w }}
+            />
+          )}
         </div>
 
         {(blueprintFilename || trailing) && (
@@ -156,8 +198,13 @@ export function RightPaneTabs<T extends string = TabId>({
           overflow: 'hidden',
         }}
       >
+        {/* key=activeTab：切 tab 时 wrapper 重建触发 fade-in（--dur-1，纯透明度
+            不位移）。panels 本就只渲染 active 一项（切换即卸载/重挂），key 不
+            引入新的状态丢失。 */}
         <div
+          key={activeTab}
           data-tab={activeTab}
+          className="rs-pane-fade"
           style={{
             flex: 1,
             minHeight: 0,
@@ -189,7 +236,7 @@ const toolbarStyles = `
   background: var(--t-border);
   margin: 0 6px 0 4px;
 }
-.rs-tabs { display: inline-flex; align-items: stretch; gap: 0; }
+.rs-tabs { position: relative; display: inline-flex; align-items: stretch; gap: 0; }
 .rs-tab {
   position: relative;
   display: inline-flex; align-items: center; gap: 6px;
@@ -199,10 +246,23 @@ const toolbarStyles = `
   color: var(--t-fg-4);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  transition: color .12s ease, border-color .12s ease;
+  transition: color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
 }
 .rs-tab:hover:not(.on) { color: var(--t-fg-2); }
+.rs-tab:focus-visible { outline: 2px solid var(--t-accent); outline-offset: -2px; border-radius: 4px; }
 .rs-tab.on { color: var(--t-fg); border-bottom-color: var(--t-accent); font-weight: 600; }
+/* F6 批3 — 滑动指示条接管下划线后，关掉 per-tab border（仅测量成功 has-ind 时） */
+.rs-tabs.has-ind .rs-tab.on { border-bottom-color: transparent; }
+.rs-tab-ind {
+  position: absolute; bottom: 0; left: 0;
+  height: 2px; border-radius: 1px;
+  background: var(--t-accent);
+  pointer-events: none;
+  transition: transform var(--dur-2) var(--ease-spring), width var(--dur-2) var(--ease-spring);
+}
+/* tab 内容切换淡入（纯透明度，不位移） */
+@keyframes rs-pane-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.rs-pane-fade { animation: rs-pane-fade-in var(--dur-1) var(--ease-out); }
 .rs-tab-ct {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 9px;

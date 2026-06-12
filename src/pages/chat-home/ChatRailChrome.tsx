@@ -223,7 +223,8 @@ export function ChatRail({
         flexDirection: 'column',
         minHeight: 0,
         width: collapsed ? 48 : width,
-        transition: 'width 200ms ease',
+        /* F6 批3 — 互斥面板时长曲线统一走 token（polish-plan §4 互斥面板）。 */
+        transition: 'width var(--dur-3) var(--ease-in-out)',
         overflow: 'hidden',
         ...(collapsed
           ? { borderRight: '1px solid var(--t-border)', background: 'var(--t-panel)' }
