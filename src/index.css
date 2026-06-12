@@ -221,9 +221,19 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .group:hover > .sf-resend-hover { opacity: 1 !important; }
 /* Chat-bubble hover action row (Copy / Retry / placeholders).
    Parent wraps bubble + .sf-msg-actions in a div.group; row fades in on
-   hover so the resting state stays minimal. */
-.sf-msg-actions { opacity: 0; transition: opacity .15s; }
-.group:hover > .sf-msg-actions { opacity: 1; }
+   hover so the resting state stays minimal.
+   F6 批4：opacity 跳变升级为 opacity + 2px 位移过渡（--dur-1 --ease-out），
+   并补 :focus-within —— 键盘用户 Tab 到行内按钮时工具条同样可见（#12）。 */
+.sf-msg-actions {
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.group:hover > .sf-msg-actions,
+.group:focus-within > .sf-msg-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
 
 /* ============ Scrollbar ============ */
 ::-webkit-scrollbar { width: 8px; height: 8px; }

@@ -75,26 +75,38 @@ export const RawMessage = memo(function RawMessage({ msg }: Props) {
           {lineCount} 行{!open ? ' · 点击展开' : ''}
         </span>
       </button>
-      {open && (
-        <pre
-          style={{
-            margin: 0,
-            padding: '8px 12px',
-            borderTop: '1px solid var(--t-border)',
-            fontSize: 12,
-            lineHeight: 1.5,
-            fontFamily: 'var(--t-mono, ui-monospace, SFMono-Regular, Menlo, monospace)',
-            color: 'var(--t-fg-3, var(--t-fg-4))',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            overflowX: 'auto',
-            maxHeight: 320,
-            overflowY: 'auto',
-          }}
-        >
-          {body}
-        </pre>
-      )}
+      {/* F6 批5 (2026-06-12) — 「点击展开」原为瞬时显隐，改 grid-template-rows
+          0fr↔1fr 过渡（--dur-2 --ease-in-out）。pre 常驻 DOM，折叠时被
+          overflow:hidden 的内层裁到 0 高。展开状态逻辑不变。 */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateRows: open ? '1fr' : '0fr',
+          transition: 'grid-template-rows var(--dur-2) var(--ease-in-out)',
+        }}
+        aria-hidden={!open}
+      >
+        <div style={{ overflow: 'hidden', minHeight: 0 }}>
+          <pre
+            style={{
+              margin: 0,
+              padding: '8px 12px',
+              borderTop: '1px solid var(--t-border)',
+              fontSize: 12,
+              lineHeight: 1.5,
+              fontFamily: 'var(--t-mono, ui-monospace, SFMono-Regular, Menlo, monospace)',
+              color: 'var(--t-fg-3, var(--t-fg-4))',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              overflowX: 'auto',
+              maxHeight: 320,
+              overflowY: 'auto',
+            }}
+          >
+            {body}
+          </pre>
+        </div>
+      </div>
     </div>
   );
 });

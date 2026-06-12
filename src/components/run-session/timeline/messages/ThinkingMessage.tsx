@@ -66,10 +66,27 @@ export const ThinkingMessage = memo(function ThinkingMessage({
   const formattedTokens =
     typeof msg.tokens === 'number' ? msg.tokens.toLocaleString() : null;
 
-  // T3 UX (align claude code / cursor): a finished thinking block with NO body
-  // is pure noise — don't render it. While streaming we still show the live
-  // "Thinking…" head even before the first chunk lands.
-  if (!isStreaming && !hasBody) return null;
+  // F6 批5 (2026-06-12) — was `return null`, which made gateway process cards
+  // (groups-chat emits thinking with label「xxx 正在思考」but the CLI replies
+  // clean text → body stays empty) vanish entirely once finalized. Render a
+  // quiet, non-interactive single label row instead so the process stays
+  // visible: static cloud glyph + label + duration (e.g.「审校把关 正在思考 · 0s」).
+  if (!isStreaming && !hasBody) {
+    const quietDur =
+      typeof msg.duration_ms === 'number' && msg.duration_ms > 0
+        ? formatThinkDuration(msg.duration_ms)
+        : '0s';
+    return (
+      <div className={styles.thinking}>
+        <div className={`${styles.thinkingHead} ${styles.thinkingHeadStatic}`}>
+          <Cloud className={styles.thinkingGlyphQuiet} aria-hidden />
+          <span className={styles.thinkingLab}>{msg.label || 'Thought'}</span>
+          <span className={styles.thinkingSep}>·</span>
+          <span className={styles.thinkingNum}>{quietDur}</span>
+        </div>
+      </div>
+    );
+  }
 
   // Head label: live "Thinking" while streaming, "Thought for Xs" once done
   // (the reasoning collapses into a quiet, expandable summary).
@@ -117,11 +134,24 @@ export const ThinkingMessage = memo(function ThinkingMessage({
           ›
         </span>
       </button>
-      {open && hasBody && (
-        <div className={styles.thinkingBody}>
-          {msg.body!.split('\n\n').map((para, i) => (
-            <p key={i}>{para}</p>
-          ))}
+      {/* F6 批5 — Trae 式折叠：body 常驻 DOM，grid-template-rows 0fr↔1fr
+          过渡（--dur-2），替代 `{open && …}` 瞬时显隐。展开状态逻辑不变。 */}
+      {hasBody && (
+        <div
+          className={
+            open
+              ? `${styles.collapseWrap} ${styles.collapseWrapOpen}`
+              : styles.collapseWrap
+          }
+          aria-hidden={!open}
+        >
+          <div className={styles.collapseInner}>
+            <div className={styles.thinkingBody}>
+              {msg.body!.split('\n\n').map((para, i) => (
+                <p key={i}>{para}</p>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

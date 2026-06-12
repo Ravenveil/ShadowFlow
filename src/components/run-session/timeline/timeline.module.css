@@ -26,13 +26,19 @@
 .container::-webkit-scrollbar { width: 3px; }
 .container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
 
-/* item wrapper ── separates each timeline message + drives slide-in */
+/* item wrapper ── separates each timeline message.
+ * F6 批4（2026-06-12）：入场动画从基类挪到 .itemEnter——只有挂载后才到达的
+ * 新消息才播放（Timeline.tsx 在首帧记录已有 id 集合）；历史回放/刷新重放
+ * 整条流首屏直出，不再齐刷刷抖一遍。CSS animation 一次性入场，流式 patch
+ * 只改 props 不重挂 DOM，不会重播。 */
 .item {
   padding: 11px 0;
   position: relative;
-  animation: tl-slide-in 200ms ease-out;
 }
 .item + .item { border-top: 1px solid var(--border-subtle); }
+.itemEnter {
+  animation: tl-slide-in var(--dur-1) var(--ease-out) both;
+}
 
 @keyframes tl-slide-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -1049,4 +1055,37 @@
 }
 .reasonFlat .reasonList li { margin-bottom: 2px; }
 .reasonFlat .reasonList li::marker { color: var(--accent-bright); }
+
+/* ── F6 批5 · Trae 式折叠（2026-06-12）────────────────────────────
+ *
+ * grid-template-rows 0fr↔1fr 技法：内容常驻 DOM，折叠/展开走高度过渡
+ * （--dur-2 --ease-in-out），替代 `{open && ...}` 的瞬时显隐。
+ * 用法：
+ *   <div class="collapseWrap [collapseWrapOpen]" aria-hidden={!open}>
+ *     <div class="collapseInner">…内容…</div>
+ *   </div>
+ * 共享方：ThinkingMessage body / RawMessage pre / StepPanel steps。
+ * reduced-motion 由 index.css 末尾全局兜底（transition-duration 1ms）。 */
+.collapseWrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-2) var(--ease-in-out);
+}
+.collapseWrapOpen { grid-template-rows: 1fr; }
+.collapseInner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── F6 批5 · 空 body 终态 thinking 卡（网关过程卡）──────────────
+ * groups-chat 网关发 thinking 卡（label「xxx 正在思考」）但 CLI 回干净
+ * 文本时 body 始终为空，finalize 后原实现 return null → 过程卡凭空消失。
+ * 终态空卡降级为一行安静的 label 行：静态云朵 + label + 时长，不可点击。 */
+.thinkingHeadStatic { cursor: default; }
+.thinkingGlyphQuiet {
+  width: 15px;
+  height: 15px;
+  color: var(--fg-4);
+  flex-shrink: 0;
+}
 

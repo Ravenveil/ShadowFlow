@@ -101,8 +101,18 @@ export const StepPanel = memo(function StepPanel({
           <b>{doneCount}</b>/{msg.total_steps} · {formatElapsed(totalElapsed)}
         </span>
       </button>
-      {open && (
-        <div className={styles.steps}>
+      {/* F6 批5 — Trae 式折叠：steps 常驻 DOM，grid-template-rows 0fr↔1fr
+          过渡（--dur-2），替代瞬时显隐。展开状态逻辑不变。 */}
+      <div
+        className={
+          open
+            ? `${styles.collapseWrap} ${styles.collapseWrapOpen}`
+            : styles.collapseWrap
+        }
+        aria-hidden={!open}
+      >
+        <div className={styles.collapseInner}>
+          <div className={styles.steps}>
           {visibleSteps.map((s) => {
             const realIdx = msg.steps.indexOf(s);
             const isRun = s.status === 'running';
@@ -133,8 +143,9 @@ export const StepPanel = memo(function StepPanel({
               </div>
             );
           })}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 });

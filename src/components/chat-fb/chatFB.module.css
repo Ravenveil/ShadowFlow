@@ -1413,13 +1413,17 @@
   padding: 2px;
   box-shadow: var(--shadow-pop, 0 6px 18px rgba(15, 23, 42, 0.12));
   opacity: 0;
-  transform: translateY(3px);
+  transform: translateY(2px);
   pointer-events: none;
-  transition: opacity 0.12s ease, transform 0.12s ease;
+  /* F6 批4：时长/曲线收敛到 token（原 0.12s ease），位移 3px→2px 对齐
+     polish-plan §4「hover·消息工具条」规范 */
+  transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-/* 父级 hover 时显示 — 用 :has() 让组件自洽 */
+/* 父级 hover 时显示；F6 批4 增补 :focus-within —— 键盘 Tab 进消息内的
+   可聚焦元素（含工具条按钮本身）同样呼出工具条（polish-plan 清单 #12） */
 /* stylelint-disable-next-line selector-pseudo-class-no-unknown */
 .msgHoverHost:hover > .hoverTb,
+.msgHoverHost:focus-within > .hoverTb,
 .hoverTbShow {
   opacity: 1;
   transform: translateY(0);

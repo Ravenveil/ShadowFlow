@@ -171,6 +171,19 @@ export const Timeline = memo(function Timeline({
   // back to true if they scroll back down to the bottom.
   const [stickToBottom, setStickToBottom] = useState(true);
 
+  // F6 批4 (2026-06-12) — entrance animation gating. Capture the set of
+  // message ids present on the FIRST render: those are "history" (page
+  // refresh / read-only replay) and must NOT animate. Only messages that
+  // arrive after mount get `.itemEnter` (one-shot CSS fade+translateY).
+  // Streaming patches mutate an existing id → no remount → no replay.
+  const initialIdsRef = useRef<Set<string> | null>(null);
+  if (initialIdsRef.current === null) {
+    initialIdsRef.current = new Set(messages.map((m) => m.id));
+  }
+  const isNewMessage = (id: string): boolean => !initialIdsRef.current!.has(id);
+  const itemClass = (firstId: string): string =>
+    isNewMessage(firstId) ? `${styles.item} ${styles.itemEnter}` : styles.item;
+
   // Filter the status_line out of the scrolling stream — it's a slot.
   // Then hoist each turn's msg_foot to the BOTTOM of that turn. The projector
   // creates msg_foot lazily on the first step/classify event, so it lands
@@ -251,7 +264,7 @@ export const Timeline = memo(function Timeline({
           row.type === 'single' ? (
             <div
               key={row.msg.id}
-              className={styles.item}
+              className={itemClass(row.msg.id)}
               data-kind={row.msg.kind}
             >
               <MessageRegistry
@@ -261,7 +274,11 @@ export const Timeline = memo(function Timeline({
               />
             </div>
           ) : (
-            <div key={row.key} className={styles.item} data-kind="tool-group">
+            <div
+              key={row.key}
+              className={itemClass(row.msgs[0]!.id)}
+              data-kind="tool-group"
+            >
               <ToolGroup callCount={row.callCount}>
                 {row.msgs.map((m) => (
                   <MessageRegistry
