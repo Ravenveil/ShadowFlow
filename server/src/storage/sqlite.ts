@@ -80,6 +80,17 @@ export function getDb(): Database.Database {
   // B1 统一会话内核（2026-06-11）— 与 Python 群聊体系的显式互链：
   // conversation.group_id ↔ group.conversation_id（groups.py 同日加）。
   addColumnIfMissing(db, 'conversations', 'group_id', 'TEXT');
+  // 后端合一·阶段0（2026-06-12）— 持久 run 索引（storage/run-index.ts）。
+  // session↔conversation 映射不再依赖内存 sessionStore 的 TTL 生命周期。
+  db.exec(`CREATE TABLE IF NOT EXISTS run_index (
+    session_id TEXT PRIMARY KEY,
+    conversation_id TEXT,
+    goal TEXT NOT NULL DEFAULT '',
+    status TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_run_index_conversation ON run_index(conversation_id);`);
 
   _db = db;
   _initialized = true;

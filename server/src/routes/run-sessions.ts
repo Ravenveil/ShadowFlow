@@ -53,6 +53,11 @@ import {
   getRecentMessages,
   setConversationGroup,
 } from '../storage/conversations';
+import {
+  listRunIndexByConversation,
+  setRunIndexStatus,
+  upsertRunIndex,
+} from '../storage/run-index';
 import { getOrCreateProject } from '../storage/projects';
 // 2026-05-19 — Cherry Studio parity: replace in-memory Map with a JSON-file
 // backed store so backend restarts no longer wipe live sessions. Survives
@@ -354,7 +359,23 @@ const sessionStore = createSessionStore<SessionRecord>({
     return rec as SessionRecord;
   },
 });
-void sessionStore.loadAll();
+// 后端合一·阶段0 — 启动回填：把内存 store 里已有的 session↔conversation 映射
+// 补进持久 run_index（幂等 upsert），老 run 的历史从此也不怕 TTL 回收。
+void sessionStore.loadAll().then(() => {
+  try {
+    for (const [id, s] of sessionStore.entries()) {
+      if (!s.conversation_id) continue;
+      upsertRunIndex({
+        session_id: id,
+        conversation_id: s.conversation_id,
+        goal: s.goal ?? '',
+        created_at: s.created_at,
+      });
+    }
+  } catch (err) {
+    console.warn('[run-sessions] run_index backfill failed:', err);
+  }
+});
 
 // 2026-06-01 — activity-based session TTL. Old code swept any session
 // `created_at < now-1h`, i.e. killed it one hour after CREATION no matter how
@@ -462,13 +483,21 @@ export function resolveStreamDisposition(args: {
  * first. Read-only; never touches runBus.
  */
 export function listSessionsByConversation(conversationId: string): string[] {
-  const hits: Array<{ id: string; at: number }> = [];
+  const hits = new Map<string, number>();
+  // 阶段0 — 持久索引为主源（TTL 回收后历史仍在）…
+  try {
+    for (const r of listRunIndexByConversation(conversationId)) {
+      hits.set(r.session_id, r.updated_at);
+    }
+  } catch {
+    // sqlite 不可用时仅靠内存——保持旧行为
+  }
+  // …内存 store 兜底合并（覆盖索引未及写入的瞬时窗口）。
   for (const [id, s] of sessionStore.entries()) {
     if (s.conversation_id !== conversationId) continue;
-    hits.push({ id, at: s.updated_at ?? s.created_at ?? 0 });
+    hits.set(id, Math.max(hits.get(id) ?? 0, s.updated_at ?? s.created_at ?? 0));
   }
-  hits.sort((a, b) => b.at - a.at);
-  return hits.map((h) => h.id);
+  return [...hits.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
 }
 
 /**
@@ -526,6 +555,10 @@ export function registerGatewayRun(meta: {
     created_at: Date.now(),
     updated_at: Date.now(),
   });
+  // 阶段0 — 持久索引：TTL 回收后历史过程卡仍可经 conversation 找回
+  try {
+    upsertRunIndex({ session_id, conversation_id: meta.conversation_id, goal: meta.goal });
+  } catch { /* sqlite 不可用不阻塞聊天 */ }
   runBus.claimStart(session_id); // ensure() + started=true（单一执行权归网关）
   return {
     session_id,
@@ -535,6 +568,7 @@ export function registerGatewayRun(meta: {
     finish: (status) => {
       runBus.finish(session_id, status);
       touchSession(session_id); // 结束时刷新活跃度，避免 TTL 早扫
+      try { setRunIndexStatus(session_id, status ?? 'succeeded'); } catch { /* 同上 */ }
     },
   };
 }
@@ -565,7 +599,7 @@ router.get('/', (req: Request, res: Response) => {
     }
     conv = linked.conversation_id;
   }
-  const sessions: Array<{
+  type RunListItem = {
     session_id: string;
     goal: string;
     conversation_id: string | null;
@@ -573,10 +607,29 @@ router.get('/', (req: Request, res: Response) => {
     status: string;
     created_at: number;
     updated_at: number;
-  }> = [];
+  };
+  const byId = new Map<string, RunListItem>();
+  // 阶段0 — 指定会话时持久索引为主源（TTL 回收后的历史 run 仍可见）
+  if (conv) {
+    try {
+      for (const r of listRunIndexByConversation(conv)) {
+        byId.set(r.session_id, {
+          session_id: r.session_id,
+          goal: r.goal,
+          conversation_id: r.conversation_id,
+          group_id: r.conversation_id
+            ? (getConversation(r.conversation_id)?.group_id ?? null)
+            : null,
+          status: runBus.get(r.session_id)?.status ?? r.status ?? 'idle',
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        });
+      }
+    } catch { /* sqlite 不可用回落内存 */ }
+  }
   for (const [id, s] of sessionStore.entries()) {
     if (conv && s.conversation_id !== conv) continue;
-    sessions.push({
+    byId.set(id, {
       session_id: id,
       goal: s.goal ?? '',
       conversation_id: s.conversation_id ?? null,
@@ -589,6 +642,7 @@ router.get('/', (req: Request, res: Response) => {
       updated_at: s.updated_at ?? s.created_at,
     });
   }
+  const sessions = [...byId.values()];
   sessions.sort((a, b) => b.updated_at - a.updated_at);
   res.json({ sessions: sessions.slice(0, 50) });
 });
@@ -866,6 +920,15 @@ router.post('/', (req: Request, res: Response) => {
     created_at: Date.now(),
     updated_at: Date.now(),
   });
+
+  // 后端合一·阶段0 — 持久 run 索引（修：历史随 sessionStore TTL 消失）
+  try {
+    upsertRunIndex({
+      session_id,
+      conversation_id: validated_conversation_id,
+      goal: goal_text,
+    });
+  } catch { /* sqlite 不可用不阻塞创建 */ }
 
   // Clean up sessions idle longer than the TTL (last-activity based, not
   // created-at — see SESSION_TTL_MS). An actively-viewed session is touched on
@@ -1743,6 +1806,8 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     // we finish will replay the buffer then end immediately (attach() handles
     // the terminal case). Status: failed iff we saw an error and no complete.
     runBus.finish(id, sawError && !sawComplete ? 'failed' : 'succeeded');
+    // 阶段0 — 终态写进持久索引
+    try { setRunIndexStatus(id, sawError && !sawComplete ? 'failed' : 'succeeded'); } catch { /* 非致命 */ }
     console.log(`[run-sessions] run ${id} finished (complete=${sawComplete} error=${sawError})`);
 
     // Persist run record — only when the stream actually terminated (not when

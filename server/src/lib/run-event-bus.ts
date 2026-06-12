@@ -412,7 +412,12 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
       const cur = runs.get(run.id);
       if (cur && TERMINAL.has(cur.status)) {
         runs.delete(run.id);
-        persist?.remove(run.id);
+        // 后端合一·阶段0（2026-06-12）— 不再删除磁盘 snapshot。
+        // 终态 run 的事件日志=会话历史的一部分（B2 群 timeline 经
+        // run_index→getRunReplay→hydrateOne 重放过程卡）；O2 时代把它当
+        // "中断恢复用的临时账"到期即焚，正是「重启后历史过程卡消失」的
+        // 第二半根因（第一半=sessionStore TTL,已由 run_index 修复）。
+        // 显式重置语义（retry/reset 的 persist.remove）不受影响。
       }
     }, ttlMs);
   };
