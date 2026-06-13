@@ -270,6 +270,92 @@ export function createGroup(input: CreateGroupInput): GroupRecord {
   return toGroupRecord(row);
 }
 
+/**
+ * 后端合一·阶段2（2026-06-13）— 幂等导入一条完整 Python group record（保留原
+ * group_id + 历史消息），供 groups/*.json → SQLite 迁移脚本调用。重跑安全：
+ * INSERT OR REPLACE group 行 + 删旧消息再插当前消息（消息以传入 record 为准）。
+ * 无回复触发、无 id 重生成——纯数据搬运。
+ */
+export function importGroupRecord(rec: {
+  group_id: string;
+  name?: string;
+  template_id?: string;
+  group_template_id?: string;
+  agent_ids?: string[];
+  member_emails?: string[];
+  policy_matrix?: Record<string, unknown>;
+  workspace_id?: string | null;
+  workspace_dir?: string | null;
+  team_id?: string | null;
+  kind?: string;
+  conversation_id?: string | null;
+  announcement?: string | null;
+  archived?: boolean;
+  user_settings?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string | null;
+  messages?: Array<{
+    message_id?: string;
+    sender_name?: string;
+    sender_kind?: string;
+    content?: string;
+    timestamp?: string;
+    reply_to?: string | null;
+    reactions?: Record<string, string[]> | null;
+    pinned?: boolean;
+  }>;
+}): void {
+  const db = getDb();
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT OR REPLACE INTO groups
+        (group_id, name, template_id, group_template_id, agent_ids, member_emails,
+         policy_matrix, workspace_id, workspace_dir, team_id, kind, conversation_id,
+         announcement, archived, user_settings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      rec.group_id,
+      (rec.name ?? '').trim(),
+      rec.template_id ?? '',
+      rec.group_template_id ?? '',
+      JSON.stringify(rec.agent_ids ?? []),
+      JSON.stringify(rec.member_emails ?? []),
+      JSON.stringify(rec.policy_matrix ?? {}),
+      rec.workspace_id ?? null,
+      rec.workspace_dir ?? null,
+      rec.team_id ?? null,
+      rec.kind || 'group',
+      rec.conversation_id ?? null,
+      rec.announcement ?? null,
+      rec.archived ? 1 : 0,
+      JSON.stringify(rec.user_settings ?? {}),
+      rec.created_at ?? nowIso(),
+      rec.updated_at ?? null,
+    );
+    db.prepare(`DELETE FROM group_messages WHERE group_id = ?`).run(rec.group_id);
+    const insMsg = db.prepare(
+      `INSERT INTO group_messages
+        (message_id, group_id, sender_name, sender_kind, content, timestamp, reply_to, reactions, pinned)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    let idx = 0;
+    for (const m of rec.messages ?? []) {
+      insMsg.run(
+        m.message_id || `${rec.group_id}_mig_${idx++}`,
+        rec.group_id,
+        m.sender_name ?? 'user',
+        m.sender_kind ?? 'user',
+        m.content ?? '',
+        m.timestamp ?? nowIso(),
+        m.reply_to ?? null,
+        JSON.stringify(m.reactions ?? {}),
+        m.pinned ? 1 : 0,
+      );
+    }
+  });
+  tx();
+}
+
 export function getGroup(groupId: string): GroupRecord | null {
   const row = getGroupRow(groupId);
   return row ? toGroupRecord(row) : null;

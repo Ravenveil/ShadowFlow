@@ -39,6 +39,42 @@ afterEach(() => {
   }
 });
 
+describe('importGroupRecord (阶段2 迁移)', () => {
+  it('保留原 group_id + 历史消息导入', () => {
+    store.importGroupRecord({
+      group_id: 'fixedid000000000000000000000000a',
+      name: '迁移群',
+      kind: 'group',
+      agent_ids: ['a1'],
+      created_at: '2026-01-01T00:00:00Z',
+      messages: [
+        { message_id: 'm1', sender_name: 'user', sender_kind: 'user', content: '你好', timestamp: '2026-01-01T00:01:00Z' },
+        { message_id: 'm2', sender_name: 'sel', sender_kind: 'agent', content: '收到', timestamp: '2026-01-01T00:02:00Z', pinned: true },
+      ],
+    });
+    const g = store.getGroup('fixedid000000000000000000000000a');
+    expect(g).not.toBeNull();
+    expect(g!.group_id).toBe('fixedid000000000000000000000000a');
+    expect(g!.name).toBe('迁移群');
+    expect(g!.agent_ids).toEqual(['a1']);
+    expect(g!.messages).toHaveLength(2);
+    expect(g!.messages[0].content).toBe('你好'); // 升序
+    expect(g!.messages[1].pinned).toBe(true);
+  });
+
+  it('幂等：重跑同一 record 不翻倍消息', () => {
+    const rec = {
+      group_id: 'fixedid000000000000000000000000b',
+      name: 'X',
+      messages: [{ message_id: 'm1', content: 'a', timestamp: '2026-01-01T00:00:00Z' }],
+    };
+    store.importGroupRecord(rec);
+    store.importGroupRecord(rec); // 重跑
+    const g = store.getGroup('fixedid000000000000000000000000b');
+    expect(g!.messages).toHaveLength(1); // 不翻倍
+  });
+});
+
 describe('createGroup', () => {
   it('persists a group with defaulted list/dict fields', () => {
     const rec = store.createGroup({ name: 'Test Group' });
