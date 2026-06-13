@@ -20,46 +20,67 @@ import { useWorkspaceStore } from '../../store/workspaceStore';
 import { useInboxStore } from '../../core/store/useInboxStore';
 import { useRunSession } from '../../core/hooks/useRunSession';
 import { Timeline } from '../../components/run-session/timeline/Timeline';
+import { ArtifactPreview } from '../../components/ArtifactPreview';
 import {
   UnifiedComposer,
   type UnifiedComposerSubmitPayload,
 } from '../../components/composer/UnifiedComposer';
 import { StartGallery } from './StartGallery';
 
-/** 活跃 run 的 Timeline 线程 — 单独子组件，useRunSession 需要非空 sessionId。 */
+function filenameOf(url: string): string | undefined {
+  try {
+    const u = new URL(url, window.location.origin);
+    return u.pathname.split('/').filter(Boolean).pop() ?? undefined;
+  } catch {
+    return url.split('/').filter(Boolean).pop() ?? undefined;
+  }
+}
+
+/**
+ * 活跃 run 的融合视图（run-session 进聊天，对标扣子/clawsgo）：
+ *   左 = 对话 + 思考/执行过程（Timeline）
+ *   右 = 工件预览（ArtifactPreview，run 产出工件后自动滑出；无工件时左栏全宽）
+ * useRunSession 需要非空 sessionId，故单独子组件。
+ */
 function ActiveRunThread({ sessionId }: { sessionId: string }) {
   const session = useRunSession(sessionId);
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '10px 16px 0' }}>
-      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 8 }}>
-        <span
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 999,
-            color: session.error ? 'var(--t-err)' : session.isComplete ? 'var(--t-ok, #16a34a)' : 'var(--t-accent)',
-            background: session.error
-              ? 'color-mix(in oklab, var(--t-err) 10%, transparent)'
-              : session.isComplete
-                ? 'color-mix(in oklab, var(--t-ok, #16a34a) 10%, transparent)'
-                : 'var(--t-accent-tint)',
-          }}
-        >
-          {!session.isComplete && !session.error && (
-            <span aria-hidden style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor', animation: 'sf-pulse 1.4s ease-in-out infinite' }} />
-          )}
-          {session.error ? '出错' : session.isComplete ? '已完成' : '运行中'}
-        </span>
-        <span style={{ fontSize: 10, color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono, monospace)' }}>
-          run #{sessionId.slice(0, 6)}
-        </span>
-        <span style={{ flex: 1 }} />
-        <Link
-          to={`/run-session/${sessionId}`}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--t-fg-4)', textDecoration: 'none' }}
-        >
-          完整视图 <ArrowUpRight size={11} aria-hidden />
-        </Link>
-      </div>
+  const hasPreview = !!session.artifactUrl;
+
+  const statusPill = (
+    <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 8 }}>
+      <span
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+          color: session.error ? 'var(--t-err)' : session.isComplete ? 'var(--t-ok, #16a34a)' : 'var(--t-accent)',
+          background: session.error
+            ? 'color-mix(in oklab, var(--t-err) 10%, transparent)'
+            : session.isComplete
+              ? 'color-mix(in oklab, var(--t-ok, #16a34a) 10%, transparent)'
+              : 'var(--t-accent-tint)',
+        }}
+      >
+        {!session.isComplete && !session.error && (
+          <span aria-hidden style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor', animation: 'sf-pulse 1.4s ease-in-out infinite' }} />
+        )}
+        {session.error ? '出错' : session.isComplete ? '已完成' : '运行中'}
+      </span>
+      <span style={{ fontSize: 10, color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono, monospace)' }}>
+        run #{sessionId.slice(0, 6)}
+      </span>
+      <span style={{ flex: 1 }} />
+      <Link
+        to={`/run-session/${sessionId}`}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--t-fg-4)', textDecoration: 'none' }}
+      >
+        完整视图 <ArrowUpRight size={11} aria-hidden />
+      </Link>
+    </div>
+  );
+
+  const left = (
+    <div style={{ flex: hasPreview ? '0 0 50%' : 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '10px 16px 0', borderRight: hasPreview ? '1px solid var(--t-border)' : undefined }}>
+      {statusPill}
       <Timeline
         messages={session.messages}
         isComplete={session.isComplete}
@@ -71,6 +92,33 @@ function ActiveRunThread({ sessionId }: { sessionId: string }) {
           {session.error.hint ? <span style={{ color: 'var(--t-fg-4)' }}> · {session.error.hint}</span> : null}
         </div>
       )}
+    </div>
+  );
+
+  if (!hasPreview) return <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>{left}</div>;
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', animation: 'sf-peek-fade var(--dur-2) var(--ease-out)' }}>
+      {left}
+      {/* 右栏 = 工件预览（run-session 右半部分进聊天） */}
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--t-bg)' }}>
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 14px', borderBottom: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--t-fg-2)' }}>预览</span>
+          <span style={{ fontSize: 10.5, color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono, monospace)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {filenameOf(session.artifactUrl!)}
+          </span>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <ArtifactPreview
+            url={session.artifactUrl!}
+            type={session.artifactType}
+            content={session.blueprintYaml ?? ''}
+            sessionId={sessionId}
+            filename={filenameOf(session.artifactUrl!)}
+            isComplete={session.isComplete}
+          />
+        </div>
+      </div>
     </div>
   );
 }
