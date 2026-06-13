@@ -54,7 +54,9 @@ function NeedAgentHint() {
  * 员工/任务/Brief 面板全复用现有组件。可收起。
  */
 export function PersonalRightPane({ agent, groupId }: PersonalRightPaneProps) {
-  const [tab, setTab] = useState<TabId>('work');
+  // 单聊 1:1 默认看「员工」(该 agent 的资料/人设)——比 run 列表更贴合单聊语境；
+  // 未选助手(无 agent)时回落「工作区」。
+  const [tab, setTab] = useState<TabId>(agent ? 'employee' : 'work');
   const [collapsed, setCollapsed] = useState(false);
 
   if (collapsed) {

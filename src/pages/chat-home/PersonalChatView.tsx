@@ -210,8 +210,8 @@ export function PersonalChatView() {
         )}
       </div>
 
-      {/* 右:第三栏常驻(设计稿)——工作区 tab 永远在;员工/任务/Brief 选中助手后点亮 */}
-      <PersonalRightPane agent={selected} groupId={dmGroupId} />
+      {/* 右:第三栏常驻——按 agent 重挂(key),每个助手进来默认看「员工」资料卡 */}
+      <PersonalRightPane key={selected?.agent_id ?? 'none'} agent={selected} groupId={dmGroupId} />
 
       {showCreate && <PagePeekOverlay target="agents" onClose={handlePeekClose} />}
     </div>

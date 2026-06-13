@@ -18,17 +18,16 @@ const AGENT = { agent_id: 'a1', name: '写写', soul: '写手\n负责文案', av
 const click = (el: HTMLElement) => act(() => { el.click(); });
 
 describe('PersonalRightPane', () => {
-  it('默认显示「工作区」标签 = RunWorkPane(带 dm groupId)', () => {
+  it('选中助手默认显示「员工」标签 = 该 agent 资料卡(1:1 语境)', () => {
     render(<PersonalRightPane agent={AGENT} groupId="g1" />);
-    expect(screen.getByRole('tab', { name: '工作区' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('work-pane').getAttribute('data-gid')).toBe('g1');
+    expect(screen.getByRole('tab', { name: '员工' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('写写')).toBeInTheDocument();
   });
 
-  it('切「员工」→ 员工卡;切「任务」→ ApprovalGatePanel;切「Brief」→ BriefBoardView', () => {
+  it('切「工作区」→ RunWorkPane;切「任务」→ ApprovalGatePanel;切「Brief」→ BriefBoardView', () => {
     render(<PersonalRightPane agent={AGENT} groupId="g1" />);
-    click(screen.getByRole('tab', { name: '员工' }));
-    expect(screen.getByText('写写')).toBeInTheDocument();
-    expect(screen.getByText('写手')).toBeInTheDocument();
+    click(screen.getByRole('tab', { name: '工作区' }));
+    expect(screen.getByTestId('work-pane').getAttribute('data-gid')).toBe('g1');
     click(screen.getByRole('tab', { name: '任务' }));
     expect(screen.getByTestId('approval-panel').getAttribute('data-gid')).toBe('g1');
     click(screen.getByRole('tab', { name: 'Brief' }));
