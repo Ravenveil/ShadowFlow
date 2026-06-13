@@ -194,7 +194,7 @@ export function PersonalChatView() {
                   </div>
                 </div>
               ) : (
-                <Timeline messages={timelineMessages} />
+                <Timeline messages={timelineMessages} variant="chat" />
               )}
               {error && <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>发送失败：{error}</div>}
             </div>

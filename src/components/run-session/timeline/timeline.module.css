@@ -75,6 +75,26 @@
 .userText { padding-top: 1px; }
 .userText b { color: var(--accent-bright); font-weight: 500; }
 
+/* ── chat 变体（个人/群聊）：user 右气泡、无分隔线 ───────────────────────
+   2026-06-13；纯作用域覆盖，run-session(无 .chatVariant)不受影响。
+   过程卡/工具卡/assistant 文本保持原渲染，只动 user_turn 与分隔线。 */
+.chatVariant .item { padding: 7px 0; }
+.chatVariant .item + .item { border-top: none; }
+.chatVariant .user {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+.chatVariant .userCaret { display: none; }
+.chatVariant .userText {
+  max-width: 76%;
+  padding: 8px 13px;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--t-accent, var(--accent));
+  color: var(--t-accent-ink, #fff);
+  font-weight: 500;
+}
+.chatVariant .userText b { color: inherit; }
+
 /* ── thinking · pre-answer cloud ───────────────────────────── */
 .thinking { display: flex; flex-direction: column; gap: 9px; }
 .thinkingHead {

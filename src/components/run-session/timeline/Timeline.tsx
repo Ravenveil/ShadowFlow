@@ -81,6 +81,13 @@ export interface TimelineProps {
    */
   className?: string;
   /**
+   * 2026-06-13 — 展示变体。'chat'：个人/群聊场景，把 user_turn 渲染成右对齐
+   * 气泡、assistant 左对齐、去掉 item 分隔线（像聊天而非流程日志）。默认
+   * undefined = run-session 终端风（❯ 前缀），零回归。纯 CSS 作用域
+   * (.chatVariant)，不改任何消息渲染器逻辑。
+   */
+  variant?: 'chat';
+  /**
    * When true, render the bottom always-on `status_line` slot. Default is
    * now `false` per v8 design (2026-05-28): the design package uses msg-foot
    * (per-turn, running→done with full metrics) as the single live activity
@@ -155,6 +162,7 @@ function hoistMsgFootToEnd(
 export const Timeline = memo(function Timeline({
   messages,
   className,
+  variant,
   renderStatusLine = false,
   renderTopBar = false,
   startedAt,
@@ -232,9 +240,11 @@ export const Timeline = memo(function Timeline({
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages, stickToBottom]);
 
-  const containerClass = className
-    ? `${styles.container} ${className}`
-    : styles.container;
+  const containerClass = [
+    styles.container,
+    variant === 'chat' ? styles.chatVariant : '',
+    className ?? '',
+  ].filter(Boolean).join(' ');
 
   // Derive a sane startedAt if caller didn't pass one — use the earliest
   // message's `ts`. Falls back to undefined when no messages yet (TopStatusBar
