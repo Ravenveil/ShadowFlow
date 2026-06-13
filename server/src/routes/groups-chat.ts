@@ -44,6 +44,7 @@ import {
   type ChatMessageItem,
 } from '../lib/timeline-replay';
 import type { TimelineMessage } from '../lib/contracts';
+import type { TurnChunk } from '../workflow/types';
 // B1 互链：group → conversation；B2：conversation → run sessions → 事件日志。
 import { getConversationByGroup } from '../storage/conversations';
 import { listSessionsByConversation, getRunReplay } from './run-sessions';
@@ -191,6 +192,50 @@ function sseWireToText(value: string): string {
 }
 
 /**
+ * G1（2026-06-13）— 网关 fanout 把 callable.turn() 吐出的 tool-use/tool-result
+ * chunk 投影成 tool_call/tool_echo TimelineMessage，让会话 Timeline 真显示工具
+ * 调用（前端 ToolCallChip/ToolEchoLine 渲染器+contracts 早已就位，只缺网关 emit）。
+ * 映射与 timeline-projector.onToolUse/onToolResult 一致(args 截 200、空 result 跳过)。
+ * gw 为 null（startGatewayRun 失败）时整体 no-op，不影响聊天主链路。
+ */
+export function emitToolChunk(
+  gw: { nextId(): string; turnId: string; emitMessage(m: TimelineMessage): void } | null,
+  chunk: TurnChunk,
+): void {
+  if (!gw) return;
+  if (chunk.type === 'tool-use') {
+    let argsSummary = '';
+    try {
+      argsSummary =
+        typeof chunk.tool.tool_input === 'string'
+          ? chunk.tool.tool_input
+          : JSON.stringify(chunk.tool.tool_input ?? {});
+    } catch {
+      argsSummary = String(chunk.tool.tool_input);
+    }
+    if (argsSummary.length > 200) argsSummary = argsSummary.slice(0, 200) + '…';
+    gw.emitMessage({
+      id: gw.nextId(),
+      kind: 'tool_call',
+      turn_id: gw.turnId,
+      ts: Date.now(),
+      name: chunk.tool.tool_name,
+      args_summary: argsSummary,
+    });
+  } else if (chunk.type === 'tool-result') {
+    const body = (chunk.result.output ?? '').trim();
+    if (!body) return;
+    gw.emitMessage({
+      id: gw.nextId(),
+      kind: 'tool_echo',
+      turn_id: gw.turnId,
+      ts: Date.now(),
+      body,
+    });
+  }
+}
+
+/**
  * Resolve the CLI/ACP/MCP working directory (cwd) for a group.
  *
  * Priority (2026-05-30):
@@ -331,6 +376,9 @@ async function runFanout(
                   if (gw && thinkingId && piece) {
                     gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: piece });
                   }
+                } else if (chunk.type === 'tool-use' || chunk.type === 'tool-result') {
+                  // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）
+                  emitToolChunk(gw, chunk);
                 } else if (chunk.type === 'error') {
                   errMsg = chunk.error?.message ?? 'stream error';
                   break;
@@ -442,6 +490,9 @@ async function runFanout(
             if (gw && thinkingId && piece) {
               gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: piece });
             }
+          } else if (chunk.type === 'tool-use' || chunk.type === 'tool-result') {
+            // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）
+            emitToolChunk(gw, chunk);
           } else if (chunk.type === 'error') {
             errMsg = chunk.error?.message ?? 'stream error';
             break;
