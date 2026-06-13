@@ -92,6 +92,48 @@ export function getDb(): Database.Database {
   );
   CREATE INDEX IF NOT EXISTS idx_run_index_conversation ON run_index(conversation_id);`);
 
+  // 后端合一·阶段1a（2026-06-12）— Node 侧群存储（storage/groups-store.ts），
+  // 与 Python shadowflow/api/groups.py 的 JSON-file 群记录逐字段等价。1a 只产数据层，
+  // 路由/开关由 1b 接入。蛇形列名对齐 Python record，list/dict 字段以 TEXT(JSON) 存。
+  //   groups：群/DM 会话头（kind='group'|'dm'）。archived INTEGER(0/1)；
+  //           agent_ids/member_emails/policy_matrix/user_settings 存 JSON 文本。
+  //   group_messages：每条消息一行（拆出 messages 数组）；reactions 存 JSON 文本，
+  //                   pinned INTEGER(0/1)；idx(group_id, timestamp) 支撑按时间升序读。
+  db.exec(`CREATE TABLE IF NOT EXISTS groups (
+    group_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    template_id TEXT NOT NULL DEFAULT '',
+    group_template_id TEXT NOT NULL DEFAULT '',
+    agent_ids TEXT NOT NULL DEFAULT '[]',
+    member_emails TEXT NOT NULL DEFAULT '[]',
+    policy_matrix TEXT NOT NULL DEFAULT '{}',
+    workspace_id TEXT,
+    workspace_dir TEXT,
+    team_id TEXT,
+    kind TEXT NOT NULL DEFAULT 'group',
+    conversation_id TEXT,
+    announcement TEXT,
+    archived INTEGER NOT NULL DEFAULT 0,
+    user_settings TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_groups_workspace ON groups(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_groups_kind ON groups(kind);
+
+  CREATE TABLE IF NOT EXISTS group_messages (
+    message_id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL,
+    sender_name TEXT NOT NULL DEFAULT 'user',
+    sender_kind TEXT NOT NULL DEFAULT 'user',
+    content TEXT NOT NULL DEFAULT '',
+    timestamp TEXT NOT NULL,
+    reply_to TEXT,
+    reactions TEXT NOT NULL DEFAULT '{}',
+    pinned INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_messages_group ON group_messages(group_id, timestamp);`);
+
   _db = db;
   _initialized = true;
   console.log(`[sqlite] db ${dbExisted ? 'loaded' : 'initialized'} at ${file}`);
