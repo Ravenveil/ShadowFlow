@@ -24,14 +24,7 @@ import {
   UnifiedComposer,
   type UnifiedComposerSubmitPayload,
 } from '../../components/composer/UnifiedComposer';
-
-// 与 StartPage SUGGESTIONS 同源的模板 chips（点击预填 goal）。
-const SUGGESTIONS: Array<[string, string]> = [
-  ['◇', '论文深读 — 找漏洞 + 写 review'],
-  ['◈', '新闻编辑部 — 抓 → 编 → 审'],
-  ['⬢', '创业速配 — BD/Dev/Marketing'],
-  ['☷', '咨询小队 — 调研 + 报告'],
-];
+import { StartGallery } from './StartGallery';
 
 /** 活跃 run 的 Timeline 线程 — 单独子组件，useRunSession 需要非空 sessionId。 */
 function ActiveRunThread({ sessionId }: { sessionId: string }) {
@@ -165,25 +158,13 @@ export function NewTaskComposer() {
           <ActiveRunThread sessionId={sessionId} />
         </>
       ) : (
-        /* 空态 — 轻引导，不是整页 hero；聊天框在底部常驻 */
-        <div className="pcv-empty" style={{ flex: 1 }}>
+        /* start 形态（clawsgo 式）：hero 标题 + 真实 skill 模板画廊；composer 常驻底部。
+           滚动容器——画廊卡多时不挤压底部输入框。 */
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 24px 16px' }}>
           <div className="pcv-empty-glyph"><Sparkles size={26} strokeWidth={1.75} /></div>
-          {/* start 语义吸收——同款大标题,聊天即开始页 */}
           <div className="pcv-empty-title" style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.01em' }}>今天要做什么？</div>
-          <div className="pcv-empty-sub">下面直接发消息——组建团队、执行、产出，全过程就在这里流式展开</div>
-          <div className="pcv-empty-hints">
-            {SUGGESTIONS.map(([glyph, label]) => (
-              <button
-                key={label}
-                type="button"
-                className="pcv-hint"
-                onClick={() => setPrefill(label)}
-                style={{ cursor: 'pointer', border: 'none', font: 'inherit' }}
-              >
-                <span aria-hidden style={{ color: 'var(--t-accent)' }}>{glyph}</span> {label}
-              </button>
-            ))}
-          </div>
+          <div className="pcv-empty-sub">描述一个目标直接开干，或从下面选一个模板——全过程在这里流式展开</div>
+          <StartGallery onPick={(token) => setPrefill(token)} />
         </div>
       )}
 
