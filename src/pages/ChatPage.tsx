@@ -551,10 +551,9 @@ function ChatDrawer({ groupId, group, metrics }: { groupId?: string; group?: Gro
 export default function ChatPage() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
-  // M3c start 吸收 — /chat?new=1 在中栏渲染「新任务」台（StartPage 薄版），
-  // auto-pick 放行避免被强跳进群。
+  // M3c/2026-06-13 — start 落地：bare /chat 或 /chat?new=1 都落 start 表单。
+  // startLanding 真值在 dmAgentId 声明后计算（需排除内嵌单聊）。
   const [chatSearchParams] = useSearchParams();
-  const newTaskMode = !groupId && chatSearchParams.get('new') === '1';
   const groups = useInboxStore(s => s.groups);
   const agentDMs = useInboxStore(s => s.agentDMs);
   const fetchWorkspaceInbox = useInboxStore(s => s.fetchWorkspaceInbox);
@@ -636,29 +635,11 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId]);
 
-  // 2026-05-28 — /chat 落地 auto-pick：
-  //  1) 若 URL 已带 :groupId 则保留
-  //  2) 否则恢复 localStorage 里的 sf.chat.lastGroupId（且该 id 在当前 workspace 列表里）
-  //  3) 再否则取列表第一项
-  //  4) 列表为空 → 留在空状态（不强跳）
-  // 依赖 groups —— 等列表实际加载完才决断，避免初始空数组就乱跳。
-  useEffect(() => {
-    if (groupId) return;
-    // M3c — 新任务台模式下不 auto-pick，让用户停留在 goal 输入。
-    if (newTaskMode) return;
-    // auto-pick 限定在当前 team 的会话内（teamGroups），避免跳到 team 外的会话。
-    // team 内无会话则留空（不强跳）。
-    if (teamGroups.length === 0) return;
-    let target: string | null = null;
-    try {
-      const last = typeof localStorage !== 'undefined' ? localStorage.getItem('sf.chat.lastGroupId') : null;
-      if (last && teamGroups.some(g => g.id === last)) target = last;
-    } catch {
-      // localStorage 不可用就直接走 fallback
-    }
-    if (!target) target = teamGroups[0].id;
-    navigate(`/chat/${target}`, { replace: true });
-  }, [groupId, teamGroups, navigate, newTaskMode]);
+  // 2026-06-13 — 进站即 start（clawsgo 形态，用户定形）：bare /chat 不再
+  // auto-pick 跳进上次的群，而是落在 start 表单（中栏 NewTaskComposer，下方
+  // startLanding 渲染）。左栏会话一键可进；新任务也走同一表单。
+  // 旧 auto-pick（恢复 sf.chat.lastGroupId / 跳第一个群）已移除——它与"进来
+  // 就是 start"直接冲突。lastGroupId 仍在切换时写入，供需要时复用。
 
   // 用户切换会话时把 groupId 存进 lastGroupId（包括 InboxPanel 点击 + URL 直接打开）
   useEffect(() => {
@@ -740,6 +721,8 @@ export default function ChatPage() {
   // + SSE 实时回复 + 刷新不丢。UI 不变（仍是下方那套内嵌单聊视图）。
   const [dmAgentId, setDmAgentId] = useState<string | null>(null);   // 当前单聊的 agent
   const [dmGroupId, setDmGroupId] = useState<string | null>(null);
+  // 进站即 start：无群且非内嵌单聊 → 中栏渲染 NewTaskComposer（start 表单）。
+  const startLanding = !groupId && !dmAgentId;
   // 2026-05-30 — DM 群的 CLI 工作目录(workspace_dir)。openDm 时 getGroup 拉取。
   const [dmWorkspaceDir, setDmWorkspaceDir] = useState<string | undefined>(undefined);  // DM 群的 CLI 工作目录
   // 2026-05-30 — 当前群聊的 CLI 工作目录(workspace_dir)。由 getGroup 同步填充。
@@ -1150,8 +1133,8 @@ export default function ChatPage() {
             composer 被推到 viewport 之下，底部 compFoot（send 按钮 + kbd hint）
             就看不见了。 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
-          {newTaskMode ? (
-            /* ── M3c · 新任务台（start 吸收）：goal → run-session，聊天即入口 ── */
+          {startLanding ? (
+            /* ── 进站即 start：goal/模板 → run-session，聊天即入口（不跳页） ── */
             <NewTaskComposer />
           ) : dmAgentId ? (
             /* ── 2026-05-29 · 内嵌单聊视图：轻量 header + 返回 + 复用 ChatFeedFB/ComposerFB ── */
@@ -1355,7 +1338,7 @@ export default function ChatPage() {
           )}
         </div>
 
-        {threadDrawerOpen && !dmAgentId && !newTaskMode && (
+        {threadDrawerOpen && !dmAgentId && !startLanding && (
           <ThreadDrawerFB
             groupId={groupId}
             group={group}
