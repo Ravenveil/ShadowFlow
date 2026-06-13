@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
 import { NewTaskComposer } from './NewTaskComposer';
@@ -45,30 +46,42 @@ export function PersonalChatView() {
   const workspaceId = useWorkspaceStore((s) => s.currentId);
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [q, setQ] = useState('');
-  const [agentId, setAgentId] = useState<string | null>(null);
+  // 选中助手接入 URL(?agent=<id>)——刷新/分享/后退可恢复(治"路由跳转没做好")。
+  const [searchParams, setSearchParams] = useSearchParams();
+  const agentId = searchParams.get('agent');
+  const selectAgent = (id: string | null) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('view', 'personal');
+      if (id) next.set('agent', id); else next.delete('agent');
+      return next;
+    });
+  };
   const [dmGroupId, setDmGroupId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    // 切工作区即重置选中——避免旧 agentId+新 workspaceId 触发跨区 find-or-create DM 落库
-    setAgentId(null);
+    // 仅加载当前工作区 agent 列表（不在此清 URL 的 ?agent=，workspace store 异步
+    // hydrate 会误触；改由下方 dmGroupId effect 校验 agent 是否在列表里）。
     void listAgents(workspaceId ?? undefined)
       .then((rows) => { if (alive) setAgents(rows); })
       .catch(() => { if (alive) setAgents([]); });
     return () => { alive = false; };
   }, [workspaceId]);
 
-  // 选中助手 → 解析其 dm conversation(kind='dm',群聊后端同一套:持久化+网关回复+SSE)
+  // 选中助手 → 解析其 dm conversation(kind='dm')。守卫:agent 必须在当前工作区
+  // 列表里才解析——挡住"切区后旧 ?agent= 触发跨区 find-or-create DM 落库"。
+  const agentInWs = !!agentId && agents.some((a) => a.agent_id === agentId);
   useEffect(() => {
-    if (!agentId) { setDmGroupId(null); return; }
+    if (!agentId || !agentInWs) { setDmGroupId(null); return; }
     let alive = true;
     setDmGroupId(null);
     void resolveDmConversation(agentId, workspaceId ?? undefined)
       .then((gid) => { if (alive) setDmGroupId(gid); })
       .catch(() => { if (alive) setDmGroupId(null); });
     return () => { alive = false; };
-  }, [agentId, workspaceId]);
+  }, [agentId, agentInWs, workspaceId]);
 
   const filtered = useMemo(
     () => agents.filter((a) => a.name.toLowerCase().includes(q.trim().toLowerCase())),
@@ -128,7 +141,7 @@ export function PersonalChatView() {
           {filtered.map((a) => {
             const active = a.agent_id === agentId;
             return (
-              <button key={a.agent_id} type="button" className={active ? 'pcv-row active' : 'pcv-row'} onClick={() => setAgentId(a.agent_id)}>
+              <button key={a.agent_id} type="button" className={active ? 'pcv-row active' : 'pcv-row'} onClick={() => selectAgent(a.agent_id)}>
                 <HfAvatar glyph={Array.from(a.name)[0] ?? '?'} color={a.avatar_color ?? 'var(--t-accent)'} size={32} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div className="pcv-row-name">{a.name}</div>
