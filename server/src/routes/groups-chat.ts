@@ -29,7 +29,8 @@ import { mkdirSync, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { homedir } from 'node:os';
 import { Router, type Request, type Response } from 'express';
-import { PYTHON_BACKEND_URL } from '../python-backend';
+import { getGroupsBackend } from '../storage/groups-backend';
+import { publishGroupEvent } from './groups-event-bus';
 import { resolveCallable } from '../transport/dispatcher';
 import { resolveProviderKey } from '../transport/byokKey';
 import { isProviderId } from '../transport/api-clients';
@@ -93,7 +94,23 @@ export function shouldRunTeamDag(group: Pick<GroupRecord, 'team_id'>): boolean {
   return !!group.team_id;
 }
 
+// 1b（2026-06-12）— 群读写经 getGroupsBackend() 抽象：SF_GROUPS_BACKEND==='node'
+// 直调 SQLite store，否则 HTTP 打 Python（现状）。下面三个薄封装保持原签名，
+// 让 runFanout / timeline 等调用点零改动。agent 读取仍走 Python HTTP（pyGetAgent）。
+
+import { PYTHON_BACKEND_URL } from '../python-backend';
+
+/** 读一个群（经群后端抽象）。返回蛇形 record（含 messages）或 null。 */
 async function pyGet<T>(path: string): Promise<T | null> {
+  // 兼容旧签名：本函数只用于群读取（path 形如 /api/groups/<id>）。提取 group_id
+  // 后走后端抽象。其余路径（agent）请用 pyGetAgent。
+  const m = /^\/api\/groups\/([^/]+)$/.exec(path);
+  if (m) {
+    const groupId = decodeURIComponent(m[1]);
+    const g = await getGroupsBackend().getGroup(groupId);
+    return (g as unknown as T) ?? null;
+  }
+  // 非群路径：HTTP 打 Python（agent 等）。
   try {
     const res = await fetch(`${PYTHON_BACKEND_URL}${path}`);
     if (!res.ok) return null;
@@ -104,23 +121,26 @@ async function pyGet<T>(path: string): Promise<T | null> {
   }
 }
 
-/** POST a message into a group via Python; returns the created MessageItem (or null). */
+/**
+ * 追加一条消息（经群后端抽象）。返回创建的 MessageItem（或 null）。
+ * node 模式：直调 store 持久化，并把 agent/system 消息 publish 到 Node SSE 总线
+ * （对齐 Python post_group_message 对 agent/system 的 publish_group_event）；user
+ * 消息不 publish（前端已乐观渲染）。python 模式：HTTP 打 Python，Python 自己 publish。
+ */
 async function pyPostMessage(
   groupId: string,
   body: { content: string; sender_name: string; sender_kind: string },
   opts: { noDispatch?: boolean } = {},
 ): Promise<unknown> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (opts.noDispatch) headers['X-SF-No-Dispatch'] = '1';
-  const res = await fetch(
-    `${PYTHON_BACKEND_URL}/api/groups/${encodeURIComponent(groupId)}/messages`,
-    { method: 'POST', headers, body: JSON.stringify(body) },
-  );
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`python persist failed ${res.status}: ${txt}`);
+  const created = await getGroupsBackend().appendMessage(groupId, body, opts);
+  if (
+    process.env.SF_GROUPS_BACKEND === 'node' &&
+    (body.sender_kind === 'agent' || body.sender_kind === 'system')
+  ) {
+    const type = body.sender_kind === 'system' ? 'system.notice' : 'agent.message';
+    publishGroupEvent(groupId, { type, data: created ?? body });
   }
-  return res.json().catch(() => null);
+  return created;
 }
 
 /** Map persisted group messages → dispatcher history (user/assistant; skip system). */

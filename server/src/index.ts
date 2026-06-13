@@ -18,6 +18,9 @@ import settingsRouter from './routes/settings';
 import cliRouter from './routes/cli';
 import acpRouter from './routes/acp';
 import { groupsChatRouter } from './routes/groups-chat';
+// 后端合一·阶段1b（2026-06-12）— Node 自服务 /api/groups（仅 SF_GROUPS_BACKEND==='node'
+// 时挂载，挂在 proxyFallback 之前）。默认（python / 未设）不挂 → 仍转 Python，现状零变化。
+import { groupsNodeRouter, handleDmResolve } from './routes/groups-node';
 // 2026-05-30 — 后端目录浏览器(给 CLI cwd 选工作目录;浏览器拿不到真实磁盘路径)
 import { fsBrowseRouter } from './routes/fs-browse';
 // Story 15.14 — POST /api/artifacts/lint
@@ -111,6 +114,16 @@ app.use('/api/conversations', conversationsRouter);
 // 2026-05-30 修：此前只 import 未 app.use，发消息漏过网关落到 Python chat-bridge，
 // 导致 CLI executor 永远走不通（Python spawn 不了 CLI）。
 app.use('/api/groups', groupsChatRouter);
+// 1b — Node 自服务 /api/groups（建群/list/get/patch/messages 读+兜底持久化/reactions/
+// pin/user-settings/SSE）。挂在 groupsChatRouter **之后**（POST /:id/messages +
+// GET /:id/timeline 仍先被网关拦截跑回复/聚合），proxyFallback **之前**。仅
+// SF_GROUPS_BACKEND==='node' 时挂载；默认（python/未设）不挂 → /api/groups/* 仍
+// 经 proxyFallback 转 Python，行为零变化。DM resolve 在 /api/chat/* 下单独挂。
+if (process.env.SF_GROUPS_BACKEND === 'node') {
+  app.use('/api/groups', groupsNodeRouter);
+  app.post('/api/chat/dm/:agent_id/resolve', handleDmResolve);
+  console.log('[groups] SF_GROUPS_BACKEND=node — /api/groups served by Node SQLite store');
+}
 // 后端目录浏览器(GET /api/fs/list|home|validate)。Node 读本机磁盘列目录,前端逐层
 // 点选 → 回传真实绝对路径当 CLI cwd。挂在 proxyFallback 之前,否则会被转去 Python。
 app.use('/api/fs', fsBrowseRouter);
