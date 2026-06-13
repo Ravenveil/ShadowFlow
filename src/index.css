@@ -1322,6 +1322,26 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .pcv-chat-name { font-size: 14px; font-weight: 700; color: var(--t-fg); }
 .pcv-chat-status { font-size: 11px; color: var(--t-fg-4); }
 
+/* ── DM 单聊 header（Cherry/Yuxi 式：头像+名字+人设+模型/状态）── */
+.dm-head { flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--t-border); background: var(--t-panel); }
+.dm-head-id { flex: 1; min-width: 0; }
+.dm-head-name { display: flex; align-items: center; gap: 8px; font-size: var(--fs-emph); font-weight: 700; color: var(--t-fg); }
+.dm-head-state { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-meta); font-weight: 600; color: var(--t-fg-4); }
+.dm-head-state .dm-head-dot { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--t-fg-5); }
+.dm-head-state[data-on] { color: var(--t-ok, #16a34a); }
+.dm-head-state[data-on] .dm-head-dot { background: var(--t-ok, #16a34a); animation: sf-pulse 1.6s ease-in-out infinite; }
+.dm-head-persona { margin-top: 2px; font-size: var(--fs-sub); color: var(--t-fg-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 540px; }
+.dm-head-actions { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+.dm-head-model { font-family: var(--font-mono, monospace); font-size: var(--fs-label); font-weight: 700; padding: 3px 9px; border-radius: var(--r-full); background: var(--t-panel-2); color: var(--t-fg-3); border: 1px solid var(--t-border); }
+
+/* ── DM 空对话引导态 ── */
+.dm-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; }
+.dm-empty-name { font-size: var(--fs-title); font-weight: 800; color: var(--t-fg); margin-top: 4px; }
+.dm-empty-persona { font-size: var(--fs-body); color: var(--t-fg-3); line-height: 1.6; max-width: 420px; }
+.dm-empty-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+.dm-empty-chip { padding: 7px 14px; border-radius: var(--r-full); border: 1px solid var(--t-border); background: var(--t-panel); color: var(--t-fg-2); font-size: var(--fs-sub); cursor: pointer; transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); }
+.dm-empty-chip:hover { border-color: var(--t-accent); background: var(--t-hover); }
+
 .pcv-composer { flex-shrink: 0; border-top: 1px solid var(--t-border); padding: 12px 18px; background: var(--t-panel); display: flex; align-items: flex-end; gap: 10px; }
 .pcv-composer textarea {
   flex: 1; min-height: 40px; max-height: 120px; padding: 10px 12px; resize: none;

@@ -75,6 +75,11 @@ export function PersonalChatView() {
     [agents, q],
   );
   const selected = agents.find((a) => a.agent_id === agentId) ?? null;
+  // 单聊 header 用：人设首行 + 当前模型标签（BYOK localStorage）
+  const personaLine = (selected?.soul ?? '').split('\n').map((s) => s.trim()).find(Boolean) ?? '';
+  const modelLabel = (() => {
+    try { return localStorage.getItem('sf.model') || 'Auto'; } catch { return 'Auto'; }
+  })();
 
   const { messages, send, error } = useChatStream({
     mode: 'group',
@@ -155,15 +160,42 @@ export function PersonalChatView() {
           </div>
         ) : (
           <>
-            <div className="pcv-chat-head">
-              <HfAvatar glyph={Array.from(selected.name)[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={28} />
-              <span className="pcv-chat-name">{selected.name}</span>
-              {!dmGroupId && <span className="pcv-chat-status">连接会话中…</span>}
+            {/* Cherry/Yuxi 式单聊 header：头像 + 名字 + 人设一行 + 模型/状态 */}
+            <div className="dm-head">
+              <HfAvatar glyph={Array.from(selected.name)[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={38} />
+              <div className="dm-head-id">
+                <div className="dm-head-name">
+                  {selected.name}
+                  <span className="dm-head-state" data-on={dmGroupId ? '1' : undefined}>
+                    <span className="dm-head-dot" /> {dmGroupId ? '在线' : '连接中…'}
+                  </span>
+                </div>
+                <div className="dm-head-persona">{personaLine || '你的 AI 同事 · 私密一对一'}</div>
+              </div>
+              <div className="dm-head-actions">
+                <span className="dm-head-model" title="当前模型">{modelLabel}</span>
+              </div>
             </div>
             {/* flex column 受限高度父容器:让 Timeline 自带的 .container(flex:1; min-height:0; overflow-y:auto)
                 成为真正的滚动容器,其内置智能自动滚动(流式跟随/滚底)才生效 */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '12px 16px' }}>
-              <Timeline messages={timelineMessages} />
+              {timelineMessages.length === 0 ? (
+                /* DM 空对话引导态——和该助手开始,给几个启动 prompt */
+                <div className="dm-empty">
+                  <HfAvatar glyph={Array.from(selected.name)[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={56} />
+                  <div className="dm-empty-name">和「{selected.name}」开始对话</div>
+                  {personaLine && <div className="dm-empty-persona">{personaLine}</div>}
+                  <div className="dm-empty-chips">
+                    {['介绍一下你自己', '你能帮我做什么？', '我们开始吧'].map((s) => (
+                      <button key={s} type="button" className="dm-empty-chip" onClick={() => { if (dmGroupId) void send(s); }}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <Timeline messages={timelineMessages} />
+              )}
               {error && <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>发送失败：{error}</div>}
             </div>
             {/* F1 — 完整 composer（@技能/附件/模型/知识库），与新任务/开始页同一组件 */}
