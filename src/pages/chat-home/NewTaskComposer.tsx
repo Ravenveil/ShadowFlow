@@ -12,7 +12,7 @@
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, ArrowUpRight, MessagesSquare } from 'lucide-react';
+import { ArrowUpRight, MessagesSquare } from 'lucide-react';
 import { getApiBase, authHeaders } from '../../api/_base';
 import { createRunSession } from '../../api/runSessions';
 import { createGroup } from '../../api/groupApi';
@@ -25,7 +25,7 @@ import {
   UnifiedComposer,
   type UnifiedComposerSubmitPayload,
 } from '../../components/composer/UnifiedComposer';
-import { StartGallery } from './StartGallery';
+import { StartLanding } from './StartLanding';
 
 function filenameOf(url: string): string | undefined {
   try {
@@ -206,14 +206,9 @@ export function NewTaskComposer() {
           <ActiveRunThread sessionId={sessionId} />
         </>
       ) : (
-        /* start 形态（clawsgo 式）：hero 标题 + 真实 skill 模板画廊；composer 常驻底部。
-           滚动容器——画廊卡多时不挤压底部输入框。 */
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 24px 16px' }}>
-          <div className="pcv-empty-glyph"><Sparkles size={26} strokeWidth={1.75} /></div>
-          <div className="pcv-empty-title" style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.01em' }}>今天要做什么？</div>
-          <div className="pcv-empty-sub">描述一个目标直接开干，或从下面选一个模板——全过程在这里流式展开</div>
-          <StartGallery onPick={(token) => setPrefill(token)} />
-        </div>
+        /* start 形态（港 v2-start-hifi 富设计）：点阵背景 + 渐变 hero + 模板画廊 +
+           真实最近 run；composer 由下方常驻。 */
+        <StartLanding onPickTemplate={(token) => setPrefill(token)} />
       )}
 
       {/* 完整 composer 常驻底部（F1：@技能/命令/附件/模型/知识库 全在聊天里，
