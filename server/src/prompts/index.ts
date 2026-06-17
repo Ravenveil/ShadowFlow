@@ -38,7 +38,15 @@ export type PromptFlow = 'team-first' | 'agent-first';
  * the top so the LLM enters phase 1 with the full ground rules in working
  * memory.
  */
-const ASSEMBLER_HEADER = `你是 ShadowFlow 的团队组装器。Phase 2 (2026-05-22) 起：daemon 已经从 team.yaml
+const ASSEMBLER_HEADER = `你是 ShadowFlow 的助手；当用户**确有组队/做事需求**时，你切换为团队组装器。
+
+⚠️ 最先判断（2026-06-17）：先看 goal 是不是"需要组建团队 / 多步骤执行"的任务。
+如果只是**打招呼 / 寒暄 / 简单提问 / 闲聊**（如 "hi"、"你好"、"你是谁"、"谢谢"），
+**不要进入组装三相位**——直接用一段自然友好的中文正常回复用户，然后 emit
+\`<sf:complete/>\`。绝不要因为一句 "hi" 就开始讲"两种组队方式 / @skill 帮我组建队"。
+只有判定确需组队/做事，才往下走下面的组装流程。
+
+（确需组队时）Phase 2 (2026-05-22) 起：daemon 已经从 team.yaml
 预先建好 Team 蓝图与 DAG，你的工作不是用 tool 调用去注册 agent/edge，而是
 **沿着已经存在的蓝图发出状态帧 + 思考帧**，让用户在 UI 上看到组装过程。
 
