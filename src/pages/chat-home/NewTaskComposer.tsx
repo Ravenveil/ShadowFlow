@@ -11,7 +11,7 @@
  * 右栏「工作区」tab 通过 window 'sf:run-created' 事件感知新 run 并刷新。
  */
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowUpRight, MessagesSquare } from 'lucide-react';
 import { getApiBase, authHeaders } from '../../api/_base';
 import { createRunSession } from '../../api/runSessions';
@@ -123,7 +123,16 @@ function ActiveRunThread({ sessionId }: { sessionId: string }) {
   );
 }
 
-export function NewTaskComposer() {
+/**
+ * @param centered      start 态 composer 居中(hero 正下方,clawsgo 式)而非沉底。
+ * @param navigateOnRun 发首条创建 run 后跳 /run-session/:id(个人态:对话后进 run 页)，
+ *                      而非就地 ActiveRunThread。默认 false=团队态现状(不跳页)。
+ */
+export function NewTaskComposer({ centered = false, navigateOnRun = false }: {
+  centered?: boolean;
+  navigateOnRun?: boolean;
+} = {}) {
+  const navigate = useNavigate();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [prefill, setPrefill] = useState('');
   // F3 — 新任务发首条消息即落成真会话（建群+B1 互链），左栏立刻有条目。
@@ -164,8 +173,13 @@ export function NewTaskComposer() {
           mode: p.mode === 'auto' ? undefined : p.mode,
           group_id: groupId,
         });
-        setSessionId(resp.session_id);
         window.dispatchEvent(new CustomEvent('sf:run-created'));
+        if (navigateOnRun) {
+          // 个人态：对话后进入 run-session 页（clawsgo:输入→跳执行视图）
+          navigate(`/run-session/${resp.session_id}?goal=${encodeURIComponent(text)}`);
+          return;
+        }
+        setSessionId(resp.session_id);
       } else {
         // 多轮接力 — daemon 对 follow-up 返回新 session_id，就地切换订阅
         const resp = await fetch(`${getApiBase()}/api/run-sessions/${sessionId}/messages`, {
@@ -187,6 +201,20 @@ export function NewTaskComposer() {
     }
   }
 
+  const composerEl = (variant: 'hero' | 'chat') => (
+    <UnifiedComposer
+      variant={variant}
+      onSubmit={handleSubmit}
+      initialText={prefill}
+      placeholder={sessionId ? '补充指令，AI 会接着干 · 试试 @ 提及 Skill' : '描述一个目标，直接开干 · 试试 @ 提及 Skill 或 / 命令'}
+    />
+  );
+  const bottomComposer = (
+    <div style={{ flexShrink: 0, padding: '10px 16px 14px', borderTop: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
+      {composerEl('chat')}
+    </div>
+  );
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
       {sessionId ? (
@@ -204,23 +232,18 @@ export function NewTaskComposer() {
             </div>
           )}
           <ActiveRunThread sessionId={sessionId} />
+          {bottomComposer}
         </>
+      ) : centered ? (
+        /* clawsgo 式：composer 居中嵌在 hero 正下方（个人态）。 */
+        <StartLanding onPickTemplate={(token) => setPrefill(token)} composer={composerEl('hero')} />
       ) : (
-        /* start 形态（港 v2-start-hifi 富设计）：点阵背景 + 渐变 hero + 模板画廊 +
-           真实最近 run；composer 由下方常驻。 */
-        <StartLanding onPickTemplate={(token) => setPrefill(token)} />
+        /* 团队态：composer 沉底（现状）。 */
+        <>
+          <StartLanding onPickTemplate={(token) => setPrefill(token)} />
+          {bottomComposer}
+        </>
       )}
-
-      {/* 完整 composer 常驻底部（F1：@技能/命令/附件/模型/知识库 全在聊天里，
-          不再需要"打开完整开始页"逃生链接；run 进行中也能继续发，多轮接力） */}
-      <div style={{ flexShrink: 0, padding: '10px 16px 14px', borderTop: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
-        <UnifiedComposer
-          variant="chat"
-          onSubmit={handleSubmit}
-          initialText={prefill}
-          placeholder={sessionId ? '补充指令，AI 会接着干 · 试试 @ 提及 Skill' : '描述一个目标，直接开干 · 试试 @ 提及 Skill 或 / 命令'}
-        />
-      </div>
     </div>
   );
 }

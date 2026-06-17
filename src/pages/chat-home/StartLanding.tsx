@@ -8,7 +8,7 @@
  *
  * 作为 NewTaskComposer 空态(start 形态)的内容区——composer 由 NewTaskComposer 常驻底部。
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { listRunSessions, type RunSessionSummary } from '../../api/runSessions';
@@ -84,7 +84,14 @@ function RecentRuns() {
   );
 }
 
-export function StartLanding({ onPickTemplate }: { onPickTemplate: (token: string) => void }) {
+export function StartLanding({
+  onPickTemplate,
+  composer,
+}: {
+  onPickTemplate: (token: string) => void;
+  /** clawsgo 式：传入则在 hero 正下方居中渲染 composer（个人态）。 */
+  composer?: ReactNode;
+}) {
   return (
     <div className="sl-wrap">
       {/* 点阵背景（radial-gradient + 顶部椭圆遮罩，对齐 v2-start-hifi） */}
@@ -100,6 +107,7 @@ export function StartLanding({ onPickTemplate }: { onPickTemplate: (token: strin
           </p>
         </div>
 
+        {composer && <div className="sl-composer">{composer}</div>}
         <StartGallery onPick={onPickTemplate} />
         <RecentRuns />
       </div>

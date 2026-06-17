@@ -1305,6 +1305,8 @@ input, textarea, select { font-family: inherit; color: inherit; }
   background-clip: text;
 }
 .sl-sub { font-size: 14px; color: var(--t-fg-3); margin: 13px auto 0; max-width: 560px; line-height: 1.6; }
+/* clawsgo 式居中 composer（hero 正下方） */
+.sl-composer { width: 100%; max-width: 720px; margin: 2px auto 4px; }
 
 .sl-recent { width: 100%; }
 .sl-recent-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }

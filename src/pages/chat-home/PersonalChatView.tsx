@@ -161,7 +161,8 @@ export function PersonalChatView() {
              composer 直接开干(NewTaskComposer=聊天内 start,发首条即建会话跑 run)。
              不再是"选择一个助手"的死引导;创建员工降为次级文字入口。 */
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
-            <NewTaskComposer />
+            {/* 个人态:composer 居中(clawsgo) + 对话后进 run-session 页 */}
+            <NewTaskComposer centered navigateOnRun />
             <div style={{ flexShrink: 0, textAlign: 'center', padding: '0 16px 10px', background: 'var(--t-panel)' }}>
               {/* 这行文案被 PersonalChatView.test.tsx 断言（空态语义锚点） */}
               <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>选择一个助手开始单聊，或创建一位新员工</span>
