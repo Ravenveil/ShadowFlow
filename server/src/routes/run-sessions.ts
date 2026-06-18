@@ -76,7 +76,7 @@ import {
 // `classify` frame within ~1ms of stream open (LLM's own <sf:classify .../>
 // arrives many seconds later, after parser extraction). Two frames coexist;
 // front-end may diff them for consistency (S5.2 future story).
-import { classifyTS, detectExplicitSingleAgent, SINGLE_AGENT_DIRECTIVE } from '../lib/intent-router';
+import { classifyTS, detectExplicitSingleAgent, hasExplicitTeamIntent, SINGLE_AGENT_DIRECTIVE } from '../lib/intent-router';
 import { loadTeam as loadGlobalTeam } from '../lib/team-yaml';
 // S2.3 (intent-workflow-design-v1 §4.4) — step artifact persistence + per-step
 // SSE frame. Parser fires node/edge/blueprint between `assemble:running` and
@@ -1257,11 +1257,20 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   // LLM warming up. LLM will later emit its own <sf:classify .../> via the
   // parser (which doesn't set a `source` attr — front-end treats unset as
   // 'llm'). Two frames coexist so the UI can surface a divergence warning.
+  // 2026-06-18 — 单 agent 裁决（一处计算，classify 帧 + roster 锁两处复用）。
+  // mode='single' 是既有语义（原 StartPage 单/团队开关；个人 start composer 的
+  // Auto 现默认传 'single'）。逃生门：显式 @skill 或 goal 含团队词 → 仍走团队。
+  // 团队态（mode≠'single'）完全不受影响。详 [[project_assembly_dimensionalization]]。
+  const explicitSingleIntent = detectExplicitSingleAgent(session.goal);
+  const wantSingleAgent =
+    explicitSingleIntent.single ||
+    (session.mode === 'single' && !session.explicit_skill && !hasExplicitTeamIntent(session.goal));
+
   try {
     const tsClassify = classifyTS(session.goal);
     sendEvent('classify', {
       output_type: tsClassify.kind === 'task' ? 'workflow' : tsClassify.kind,
-      mode: 'team',
+      mode: wantSingleAgent ? 'single' : 'team',
       confidence: tsClassify.confidence,
       complexity: 2,
       source: 'ts',
@@ -1432,15 +1441,15 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       console.log(`[run-sessions] no teamSpec → agent-first prompt flow`);
     }
 
-    // 2026-05-27 — respect literal "create one agent" intent. When the goal
-    // explicitly asks for a single agent (and not a team), hard-cap the roster
-    // at one node so "帮我创建一个开发工程师agent" no longer expands into a
-    // 3-agent squad. Deterministic detector lives in lib/intent-router.ts.
-    const singleAgentIntent = detectExplicitSingleAgent(session.goal);
-    if (singleAgentIntent.single) {
+    // 2026-05-27 / 2026-06-18 — 锁 roster 至 1：
+    //   · 显式 "一个 agent" 文字（detectExplicitSingleAgent）— 原有；
+    //   · mode='single'（个人态 Auto 默认 / 用户在 composer 选「单」）— 新增。
+    // 两者都已折进上方 wantSingleAgent（含团队词 / 显式 @skill 逃生门）。
+    // 避免 "帮我创建一个开发工程师agent" 扩成 3 人 squad；个人寒暄/单任务不组团队。
+    if (wantSingleAgent) {
       effectiveSystemPrompt += SINGLE_AGENT_DIRECTIVE;
       console.log(
-        `[run-sessions] explicit single-agent intent ("${singleAgentIntent.matched}") → roster capped at 1`,
+        `[run-sessions] single-agent roster cap (explicitText=${explicitSingleIntent.single} mode=${session.mode ?? '-'})`,
       );
     }
 

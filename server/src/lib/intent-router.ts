@@ -199,6 +199,16 @@ export interface SingleAgentIntent {
 
 // 前端孪生：src/lib/assemblyRules.ts（deriveRosterRule）。改正则两边同步。
 /**
+ * 2026-06-18 — 只读的"显式团队意图"判定。个人态默认按单 agent 跑（mode='single'）
+ * 时，用它做逃生门：goal 里出现 团队/小队/多个/几个/team 等词 → 仍升级为团队。
+ * **不改 TEAM_INTENT_PATTERN 本身**（孪生正则零改动），只暴露一个读取器，因此
+ * 不触发 assembly-rules-sync 的孪生同步约束。
+ */
+export function hasExplicitTeamIntent(goal: string): boolean {
+  return TEAM_INTENT_PATTERN.test((goal ?? '').trim());
+}
+
+/**
  * Detect an explicit "create exactly one agent" request in the goal.
  * Returns `{ single: true, matched }` only when a singular-agent phrase is
  * present AND no team phrase is present.

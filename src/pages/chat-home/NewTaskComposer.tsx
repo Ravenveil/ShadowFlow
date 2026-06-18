@@ -174,7 +174,12 @@ export function NewTaskComposer({ centered = false, navigateOnRun = false, onRun
         const resp = await createRunSession({
           goal: text,
           skill_name: p.skillName,
-          mode: p.mode === 'auto' ? undefined : p.mode,
+          // 2026-06-18 — 个人态(centered)默认按单 agent 跑：Auto → 'single'
+          // (后端据此锁 roster 至 1,除非显式 @skill/团队词)。用户在 composer
+          // 显式选「团队」仍走团队。团队态(非 centered)保持原样(Auto→undefined→团队)。
+          mode: centered
+            ? (p.mode && p.mode !== 'auto' ? p.mode : 'single')
+            : (p.mode === 'auto' ? undefined : p.mode),
           group_id: groupId,
         });
         window.dispatchEvent(new CustomEvent('sf:run-created'));
