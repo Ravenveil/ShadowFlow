@@ -228,11 +228,12 @@ export function PersonalChatView() {
         )}
       </div>
 
-      {/* 右:第三栏常驻——按 agent 重挂(key),每个助手进来默认看「员工」资料卡 */}
-      {/* 右栏：start 态 run 活跃 → run-session 完整标签页(Overview/Team/Agent/Preview)，
-          补齐"个人 run 只有一半"；否则 PersonalRightPane(DM 员工资料 / 工作区)。 */}
-      {agentId === null && personalRunId
-        ? <PersonalRunRightPane sessionId={personalRunId} />
+      {/* 右栏三态：
+          · START 落地页(未选 agent + 无活跃 run) → 无右栏,落地页全宽(clawsgo 居中体感)
+          · START 态 run 活跃 → run-session 完整标签页(仅真组队≥2节点才出现,见 PersonalRunRightPane)
+          · DM(已选 agent) → PersonalRightPane 设定卡 */}
+      {agentId === null
+        ? (personalRunId ? <PersonalRunRightPane sessionId={personalRunId} /> : null)
         : <PersonalRightPane key={selected?.agent_id ?? 'none'} agent={selected} groupId={dmGroupId} />}
 
       {showCreate && <PagePeekOverlay target="agents" onClose={handlePeekClose} />}
