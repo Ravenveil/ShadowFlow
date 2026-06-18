@@ -10,7 +10,7 @@
  * createRunSession（含 provider/generation/BYOK header 注入）。
  * 右栏「工作区」tab 通过 window 'sf:run-created' 事件感知新 run 并刷新。
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowUpRight, MessagesSquare } from 'lucide-react';
 import { getApiBase, authHeaders } from '../../api/_base';
@@ -128,13 +128,17 @@ function ActiveRunThread({ sessionId }: { sessionId: string }) {
  * @param navigateOnRun 发首条创建 run 后跳 /run-session/:id(个人态:对话后进 run 页)，
  *                      而非就地 ActiveRunThread。默认 false=团队态现状(不跳页)。
  */
-export function NewTaskComposer({ centered = false, navigateOnRun = false }: {
+export function NewTaskComposer({ centered = false, navigateOnRun = false, onRunActive }: {
   centered?: boolean;
   navigateOnRun?: boolean;
+  /** run 创建/清除时回调活跃 sessionId（个人态据此把右栏换成 run 标签页）。 */
+  onRunActive?: (sessionId: string | null) => void;
 } = {}) {
   const navigate = useNavigate();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [prefill, setPrefill] = useState('');
+  // 通知父级活跃 run 变化（个人态右栏联动）
+  useEffect(() => { onRunActive?.(sessionId); }, [sessionId, onRunActive]);
   // F3 — 新任务发首条消息即落成真会话（建群+B1 互链），左栏立刻有条目。
   const [taskGroup, setTaskGroup] = useState<{ id: string; name: string } | null>(null);
   const workspaceId = useWorkspaceStore((s) => s.currentId);

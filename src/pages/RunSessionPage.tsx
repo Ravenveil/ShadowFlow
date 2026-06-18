@@ -3308,7 +3308,7 @@ export default function RunSessionPage() {
 // replacement via useRunSession() when those land.
 type SaveState = 'idle' | 'saving' | 'ok' | 'failed' | 'need-workspace';
 
-interface RunSessionRightPaneProps {
+export interface RunSessionRightPaneProps {
   session: ReturnType<typeof useRunSession>;
   sessionId: string;
   onNavigate: ReturnType<typeof useNavigate>;
@@ -3322,7 +3322,7 @@ interface RunSessionRightPaneProps {
 
 // 2026-06-02 — 右下角常驻「去聊天」悬浮按钮加回（用户要求）。run 完成后从这里
 // 直接进入本次 run 关联的 chat 群（chatGroupId），无群时兜底跳 /chat。
-function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId, saveState }: RunSessionRightPaneProps) {
+export function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId, saveState }: RunSessionRightPaneProps) {
   const { t } = useI18n();
   const {
     activeTab,

@@ -11,6 +11,7 @@ import { useWorkspaceStore } from '../../store/workspaceStore';
 import { Timeline } from '../../components/run-session/timeline/Timeline';
 import type { TimelineMessage } from '../../components/run-session/timeline/types';
 import { PersonalRightPane } from './PersonalRightPane';
+import { PersonalRunRightPane } from './PersonalRunRightPane';
 import { ChatRail } from './ChatRailChrome';
 import { PagePeekOverlay } from './PagePeekOverlay';
 
@@ -59,6 +60,8 @@ export function PersonalChatView() {
   };
   const [dmGroupId, setDmGroupId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  // start 态活跃 run（NewTaskComposer 回调）——右栏据此换 run-session 标签页
+  const [personalRunId, setPersonalRunId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -161,8 +164,9 @@ export function PersonalChatView() {
              composer 直接开干(NewTaskComposer=聊天内 start,发首条即建会话跑 run)。
              不再是"选择一个助手"的死引导;创建员工降为次级文字入口。 */
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
-            {/* 个人态:composer 居中(clawsgo);run 就地在 /chat 壳内展开,不跳旧 run-session 页 */}
-            <NewTaskComposer centered />
+            {/* 个人态:composer 居中(clawsgo);run 就地在 /chat 壳内展开,不跳旧 run-session 页。
+                run 活跃时右栏换成 run-session 完整标签页(下方 personalRunId 联动)。 */}
+            <NewTaskComposer centered onRunActive={setPersonalRunId} />
             <div style={{ flexShrink: 0, textAlign: 'center', padding: '0 16px 10px', background: 'var(--t-panel)' }}>
               {/* 这行文案被 PersonalChatView.test.tsx 断言（空态语义锚点） */}
               <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>选择一个助手开始单聊，或创建一位新员工</span>
@@ -225,7 +229,11 @@ export function PersonalChatView() {
       </div>
 
       {/* 右:第三栏常驻——按 agent 重挂(key),每个助手进来默认看「员工」资料卡 */}
-      <PersonalRightPane key={selected?.agent_id ?? 'none'} agent={selected} groupId={dmGroupId} />
+      {/* 右栏：start 态 run 活跃 → run-session 完整标签页(Overview/Team/Agent/Preview)，
+          补齐"个人 run 只有一半"；否则 PersonalRightPane(DM 员工资料 / 工作区)。 */}
+      {agentId === null && personalRunId
+        ? <PersonalRunRightPane sessionId={personalRunId} />
+        : <PersonalRightPane key={selected?.agent_id ?? 'none'} agent={selected} groupId={dmGroupId} />}
 
       {showCreate && <PagePeekOverlay target="agents" onClose={handlePeekClose} />}
     </div>
