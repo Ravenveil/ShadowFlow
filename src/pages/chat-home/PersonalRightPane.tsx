@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { HfAvatar } from '../../components/hifi';
 import type { AgentRecord } from '../../api/agents';
@@ -7,34 +7,82 @@ import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
 import { RunWorkPane } from './RunWorkPane';
 
-type TabId = 'work' | 'employee' | 'tasks' | 'brief';
+// 2026-06-18 — DM 单聊右栏 = 该 agent 的「设定卡」(用户选定:prompt/模型/工具)。
+// 「设定」置首并默认,工作区/任务/Brief 降为次级 tab(保留,不删 — UI 保护规则)。
+type TabId = 'employee' | 'work' | 'tasks' | 'brief';
 const TABS: RightPaneTabDef<TabId>[] = [
+  { key: 'employee', label: '设定' },
   { key: 'work', label: '工作区' },
-  { key: 'employee', label: '员工' },
   { key: 'tasks', label: '任务' },
   { key: 'brief', label: 'Brief' },
 ];
 
 interface PersonalRightPaneProps {
-  /** 选中的助手；未选时第三栏仍常驻（设计稿），员工/任务/Brief 显示引导。 */
+  /** 选中的助手；未选时第三栏仍常驻（设计稿），设定/任务/Brief 显示引导。 */
   agent?: AgentRecord | null;
   /** dm conversation 的 groupId — 任务/Brief/工作区 面板直接复用群聊后端。 */
   groupId?: string | null;
 }
 
-/** 员工卡 — Cherry Studio 助手面板的薄版(头像/名字/soul)。M2 接执行指标。 */
-function EmployeeCard({ agent }: { agent: AgentRecord }) {
-  const soulLines = (agent.soul ?? '').split('\n').filter(Boolean);
+/** 设定卡里的分段标题。 */
+function SettingsSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: 18, overflow: 'auto' }}>
-      <HfAvatar glyph={Array.from(agent.name)[0] ?? '?'} color={agent.avatar_color ?? 'var(--t-accent)'} size={72} />
-      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--t-fg)' }}>{agent.name}</div>
-      <div style={{ width: '100%', borderTop: '1px dashed var(--t-border)', paddingTop: 12 }}>
-        {soulLines.slice(0, 8).map((line, i) => (
-          <div key={i} style={{ fontSize: 12, color: i === 0 ? 'var(--t-fg-2)' : 'var(--t-fg-4)', lineHeight: 1.6, fontWeight: i === 0 ? 600 : 400 }}>{line}</div>
-        ))}
-        {soulLines.length === 0 && <div style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>暂无人设</div>}
+    <div>
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--t-fg-5)', marginBottom: 7 }}>
+        {title}
       </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 设定卡 — DM 单聊右栏主体（对标 Cherry Studio 助手面板）：
+ *   头像 + 名字 + 模型徽章 · 系统 Prompt 全文 · 工具/知识库 chips。
+ * 模型/工具藏在 agent.blueprint（QuickCreateRequest.model/tools 落库处）。
+ */
+function AgentSettingsCard({ agent }: { agent: AgentRecord }) {
+  const bp = (agent.blueprint ?? {}) as Record<string, unknown>;
+  const model = typeof bp.model === 'string' && bp.model.trim() ? bp.model.trim() : null;
+  const tools = Array.isArray(bp.tools)
+    ? (bp.tools as unknown[]).filter((t): t is string => typeof t === 'string' && t.length > 0)
+    : [];
+  const soul = (agent.soul ?? '').trim();
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '18px 16px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {/* 头部：头像 + 名字 + 模型徽章 */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9 }}>
+        <HfAvatar glyph={Array.from(agent.name)[0] ?? '?'} color={agent.avatar_color ?? 'var(--t-accent)'} size={72} />
+        <div style={{ fontSize: 15.5, fontWeight: 700, color: 'var(--t-fg)' }}>{agent.name}</div>
+        {model && (
+          <span style={{ fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', padding: '2px 9px', borderRadius: 999, background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', border: '1px solid var(--t-accent)' }}>
+            {model}
+          </span>
+        )}
+      </div>
+
+      {/* 系统 Prompt 全文 */}
+      <SettingsSection title="系统 Prompt">
+        <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12, lineHeight: 1.65, color: 'var(--t-fg-2)', fontFamily: 'inherit', margin: 0, padding: '10px 12px', background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 8 }}>
+          {soul || '暂无人设'}
+        </pre>
+      </SettingsSection>
+
+      {/* 工具 / 知识库 */}
+      <SettingsSection title="工具 / 知识库">
+        {tools.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {tools.map((t) => (
+              <span key={t} style={{ fontSize: 11, fontFamily: 'var(--font-mono, monospace)', padding: '2px 8px', borderRadius: 6, background: 'var(--t-panel-2)', color: 'var(--t-fg-3)', border: '1px solid var(--t-border)' }}>
+                {t}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>默认工具集（未单独配置）</div>
+        )}
+      </SettingsSection>
     </div>
   );
 }
@@ -86,9 +134,7 @@ export function PersonalRightPane({ agent, groupId }: PersonalRightPaneProps) {
         panels={{
           work: <RunWorkPane groupId={groupId} />,
           employee: agent ? (
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-              <EmployeeCard agent={agent} />
-            </div>
+            <AgentSettingsCard agent={agent} />
           ) : (
             <NeedAgentHint />
           ),
