@@ -32,9 +32,8 @@ function maxWidth(): number {
 export function PersonalRunRightPane({ sessionId }: { sessionId: string }) {
   const navigate = useNavigate();
   const session = useRunSession(sessionId);
-  // 只有 run 真的组了团队（coordinator + agents ≥ 2 节点）才显示 run-session 团队栏。
-  // 个人寒暄 / 单 agent 任务（0~1 节点）不套团队框架 —— 治「右侧还是 team 侧边栏，不太对」。
-  const isTeamRun = session.nodes.length >= 2;
+  // 2026-06-18 — 活跃 run 一律显示 run-session 右栏（单 agent / 团队都显示），
+  // 治「runsession 的右侧栏没有」。是否 team 框架由面板内容自适应，不再前置 gate。
 
   const [width, setWidth] = useState<number>(() => {
     try {
@@ -62,8 +61,6 @@ export function PersonalRunRightPane({ sessionId }: { sessionId: string }) {
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     setWidth((w) => { try { localStorage.setItem(W_KEY, String(w)); } catch { /* ignore */ } return w; });
   }, []);
-
-  if (!isTeamRun) return null;
 
   return (
     <div style={{ width, flexShrink: 0, minHeight: 0, display: 'flex', position: 'relative' }}>

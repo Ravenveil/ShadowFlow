@@ -12,7 +12,7 @@
  */
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowUpRight, MessagesSquare } from 'lucide-react';
+import { MessagesSquare } from 'lucide-react';
 import { getApiBase, authHeaders } from '../../api/_base';
 import { createRunSession } from '../../api/runSessions';
 import { createGroup } from '../../api/groupApi';
@@ -69,12 +69,6 @@ function ActiveRunThread({ sessionId }: { sessionId: string }) {
         run #{sessionId.slice(0, 6)}
       </span>
       <span style={{ flex: 1 }} />
-      <Link
-        to={`/run-session/${sessionId}`}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--t-fg-4)', textDecoration: 'none' }}
-      >
-        完整视图 <ArrowUpRight size={11} aria-hidden />
-      </Link>
     </div>
   );
 
