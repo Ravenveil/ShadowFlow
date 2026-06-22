@@ -29,7 +29,9 @@ export interface NavEntry {
  * 「新建任务」收口到 /chat?new=1（聊天内新任务），替代旧的 /start「开始」入口。
  */
 export const PRIMARY_NAV: NavEntry[] = [
-  { key: 'newtask',  labelKey: 'shell.navNewTask',  Icon: Plus,         to: '/chat?new=1' },
+  // 「新建会话」明确落个人态新会话（view=personal）——否则无 view 参数时 /chat
+  // 默认落团队态，点了会跳到团队（2026-06-22 用户反馈 bug）。
+  { key: 'newtask',  labelKey: 'shell.navNewTask',  Icon: Plus,         to: '/chat?view=personal&new=1' },
   { key: 'inbox',    labelKey: 'shell.navInbox',    Icon: Inbox,        to: '/inbox' },
   { key: 'teams',    labelKey: 'shell.navTeams',    Icon: Users,        to: '/teams' },
   { key: 'agents',   labelKey: 'shell.navAgents',   Icon: Bot,          to: '/agents' },

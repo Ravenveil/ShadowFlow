@@ -5,9 +5,9 @@
  *   - ChatRail：容器（M3d 可收起——clawsgo/VSCode 式，收起成 48px 窄条，
  *     宽度 transition 丝滑过渡；收起状态 localStorage 持久化并通过
  *     onCollapsedChange 通知父级做「左收起↔右展开」互斥联动）
- *   - ChatRailHeader：顶部「个人 | 团队」切换 + 团队态「+ 新任务」+ 收起按钮
- *   - ChatRailFooter：底部图标行（开始/团队/员工/日历/项目/设置 + ⌘K 搜索）
- *     ——全局导航的低频去向，路由全部保留（UI 保护规则：只能加不能删）。
+ *   - ChatRailHeader：顶部「个人 | 团队」切换 + 搜索/设置工具 + 团队态「+ 新任务」+ 收起按钮
+ *   - PrimaryNavGroup：顶部带文字导航组（新建会话/消息/团队/员工/日历/产物），
+ *     取单一真相源 src/config/navConfig.ts。搜索/设置工具行已上移至 header。
  *
  * 团队态包 InboxPanelFB、个人态包助手列表，两边复用同一套 chrome。
  */
@@ -119,6 +119,13 @@ export function ChatRailHeader({
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <PersonalTeamToggle view={view} onChange={goChatView} />
           </div>
+          {/* 工具：搜索 + 设置（从底部 footer 上移到顶部，2026-06-22 用户要求） */}
+          <button type="button" title="搜索 ⌘K" aria-label="搜索" onClick={openQuickSwitcher} style={{ ...iconBtnStyle, padding: 4, flexShrink: 0 }}>
+            <Search size={15} strokeWidth={1.75} aria-hidden />
+          </button>
+          <Link to="/settings" title="设置 ⌘," aria-label="设置" data-testid="chatrail-settings" style={{ ...iconBtnStyle, padding: 4, flexShrink: 0 }}>
+            <HfSettingsIcon size={15} strokeWidth={1.75} />
+          </Link>
           {onCollapse && (
             <button
               type="button"
@@ -166,32 +173,6 @@ export function ChatRailHeader({
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-export function ChatRailFooter({ bordered = false }: { bordered?: boolean }) {
-  return (
-    <div
-      style={{
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        gap: 2,
-        padding: '6px 8px',
-        borderTop: '1px solid var(--t-border)',
-        borderRight: bordered ? '1px solid var(--t-border)' : undefined,
-        background: 'var(--t-panel)',
-      }}
-    >
-      {/* 工具行：搜索 + 设置（页面导航已上移到 PrimaryNavGroup）。 */}
-      <button type="button" title="搜索 ⌘K" aria-label="搜索" onClick={openQuickSwitcher} style={iconBtnStyle}>
-        <Search size={15} strokeWidth={1.75} aria-hidden />
-      </button>
-      <Link to="/settings" title="设置 ⌘," aria-label="设置" data-testid="chatrail-settings" style={iconBtnStyle}>
-        <HfSettingsIcon size={15} strokeWidth={1.75} />
-      </Link>
     </div>
   );
 }
@@ -280,6 +261,13 @@ export function ChatRail({
               compact
             />
           </div>
+          {/* 收起态工具：搜索 + 设置（上移，不放底部） */}
+          <button type="button" title="搜索 ⌘K" aria-label="搜索" onClick={openQuickSwitcher} style={iconBtnStyle}>
+            <Search size={15} strokeWidth={1.75} aria-hidden />
+          </button>
+          <Link to="/settings" title="设置 ⌘," aria-label="设置" data-testid="chatrail-settings" style={iconBtnStyle}>
+            <HfSettingsIcon size={15} strokeWidth={1.75} />
+          </Link>
           {/* 收起态竖排导航 — 走同一份 PRIMARY_NAV（图标 + tooltip） */}
           {PRIMARY_NAV.map(({ key, labelKey, Icon, to }) => (
             <Link key={key} to={to} title={t(labelKey)} aria-label={t(labelKey)} data-testid={`chatrail-${key}`} style={iconBtnStyle}>
@@ -287,19 +275,12 @@ export function ChatRail({
             </Link>
           ))}
           <div style={{ flex: 1 }} />
-          <button type="button" title="搜索 ⌘K" aria-label="搜索" onClick={openQuickSwitcher} style={iconBtnStyle}>
-            <Search size={15} strokeWidth={1.75} aria-hidden />
-          </button>
-          <Link to="/settings" title="设置 ⌘," aria-label="设置" data-testid="chatrail-settings" style={iconBtnStyle}>
-            <HfSettingsIcon size={15} strokeWidth={1.75} />
-          </Link>
         </div>
       ) : (
         <>
           <ChatRailHeader view={view} bordered={bordered} onCollapse={toggle} />
           <PrimaryNavGroup bordered={bordered} />
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{children}</div>
-          <ChatRailFooter bordered={bordered} />
         </>
       )}
     </div>
