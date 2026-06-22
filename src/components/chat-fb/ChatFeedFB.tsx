@@ -23,7 +23,7 @@ import { MsgReactionsFB, type MsgReactionItem, type ReactionIconKey } from './Ms
 import { SyscardFB, type SyscardKind } from './SyscardFB';
 import { InlineApprovalFB, type InlineApprovalStatus, type InlineApprovalChoice, type InlineApprovalMetric } from './InlineApprovalFB';
 import { IssueListFB } from './IssueListFB';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 
 // ─── Stream M 2026-05-29 · 后端 reactions(emoji→user[]) → MsgReactionItem[] ──────
 // auth 未落地，当前用户固定 'anonymous'（与后端 ReactionRequest 默认一致）。
@@ -99,16 +99,18 @@ function fmtTime(ts: string | undefined): string {
 function AgentMsg({
   m,
   onAction,
+  animateIn,
 }: {
   m: ChatMessage;
   onAction: (action: ChatFeedAction, id: string) => void;
+  animateIn?: boolean;
 }) {
   // 按 agent 显示名取色——和 DM 列表 / 群设置同 agent 同色
   const p = paletteFor(m.senderName ?? m.id);
   const letter = m.senderGlyph || initialOf(m.senderName);
 
   return (
-    <div className={`${styles.msg} ${styles.msgHoverHost}`} id={`msg-${m.id}`}>
+    <div className={`${styles.msg} ${styles.msgHoverHost}${animateIn ? ' sf-msg-in' : ''}`} id={`msg-${m.id}`}>
       <MessageHoverToolbarFB
         messageId={m.id}
         onReact={id => onAction('react', id)}
@@ -194,9 +196,11 @@ function AgentMsg({
 function UserMsg({
   m,
   onAction,
+  animateIn,
 }: {
   m: ChatMessage;
   onAction: (action: ChatFeedAction, id: string) => void;
+  animateIn?: boolean;
 }) {
   const p = paletteFor(m.senderName ?? 'me');
   // 用户消息头像：未显式设置 glyph 时用游客/人形图标，不再用「U」首字母占位
@@ -210,7 +214,7 @@ function UserMsg({
       }
     : undefined;
   return (
-    <div className={`${styles.usermsg} ${styles.msgHoverHost}`} id={`msg-${m.id}`}>
+    <div className={`${styles.usermsg} ${styles.msgHoverHost}${animateIn ? ' sf-msg-in' : ''}`} id={`msg-${m.id}`}>
       <MessageHoverToolbarFB
         messageId={m.id}
         onReact={id => onAction('react', id)}
@@ -295,6 +299,11 @@ export function ChatFeedFB({
   const today = new Date();
   const dayLabel = `今天 · ${today.getMonth() + 1} 月 ${today.getDate()} 日`;
 
+  // 只给「挂载后新增」的消息加入场动画，避免历史一次性全抖（对齐 Timeline 做法）。
+  const initialIds = useRef<Set<string> | null>(null);
+  if (initialIds.current === null) initialIds.current = new Set(messages.map(mm => mm.id));
+  const isNew = (id: string) => !initialIds.current!.has(id);
+
   // 缺省 callback —— 没接 handler 时落到 console，方便定位"哪个动作未接"
   const handleAction = (action: ChatFeedAction, id: string): void => {
     if (onMessageAction) onMessageAction(action, id);
@@ -374,8 +383,8 @@ export function ChatFeedFB({
           );
         }
         if (m.role === 'system') return <SystemMsg key={m.id} m={m} />;
-        if (m.role === 'user') return <UserMsg key={m.id} m={m} onAction={handleAction} />;
-        return <AgentMsg key={m.id} m={m} onAction={handleAction} />;
+        if (m.role === 'user') return <UserMsg key={m.id} m={m} onAction={handleAction} animateIn={isNew(m.id)} />;
+        return <AgentMsg key={m.id} m={m} onAction={handleAction} animateIn={isNew(m.id)} />;
       })}
 
       {/* Stream H · 末尾 TypingDots（chatStream.loading 时） */}
