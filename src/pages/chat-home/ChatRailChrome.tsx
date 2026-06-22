@@ -13,9 +13,7 @@
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Search, Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
-import { openQuickSwitcher } from '../../components/hifi/QuickSwitcher';
+import { Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { WorkspaceSelector } from '../../components/workspace/WorkspaceStrip';
 import { PersonalTeamToggle, type ChatHomeView } from './PersonalTeamToggle';
 import { useI18n } from '../../common/i18n';
@@ -119,13 +117,7 @@ export function ChatRailHeader({
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <PersonalTeamToggle view={view} onChange={goChatView} />
           </div>
-          {/* 工具：搜索 + 设置（从底部 footer 上移到顶部，2026-06-22 用户要求） */}
-          <button type="button" title="搜索 ⌘K" aria-label="搜索" onClick={openQuickSwitcher} style={{ ...iconBtnStyle, padding: 4, flexShrink: 0 }}>
-            <Search size={15} strokeWidth={1.75} aria-hidden />
-          </button>
-          <Link to="/settings" title="设置 ⌘," aria-label="设置" data-testid="chatrail-settings" style={{ ...iconBtnStyle, padding: 4, flexShrink: 0 }}>
-            <HfSettingsIcon size={15} strokeWidth={1.75} />
-          </Link>
+          {/* 搜索/设置已移至全局顶栏 HfTopBar（与主题/语言同处）。 */}
           {onCollapse && (
             <button
               type="button"
@@ -261,14 +253,8 @@ export function ChatRail({
               compact
             />
           </div>
-          {/* 收起态工具：搜索 + 设置（上移，不放底部） */}
-          <button type="button" title="搜索 ⌘K" aria-label="搜索" onClick={openQuickSwitcher} style={iconBtnStyle}>
-            <Search size={15} strokeWidth={1.75} aria-hidden />
-          </button>
-          <Link to="/settings" title="设置 ⌘," aria-label="设置" data-testid="chatrail-settings" style={iconBtnStyle}>
-            <HfSettingsIcon size={15} strokeWidth={1.75} />
-          </Link>
-          {/* 收起态竖排导航 — 走同一份 PRIMARY_NAV（图标 + tooltip） */}
+          {/* 收起态竖排导航 — 走同一份 PRIMARY_NAV（图标 + tooltip）。
+              搜索/设置已移至全局顶栏 HfTopBar。 */}
           {PRIMARY_NAV.map(({ key, labelKey, Icon, to }) => (
             <Link key={key} to={to} title={t(labelKey)} aria-label={t(labelKey)} data-testid={`chatrail-${key}`} style={iconBtnStyle}>
               <Icon size={15} strokeWidth={1.75} aria-hidden />

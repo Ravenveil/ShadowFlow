@@ -2,9 +2,12 @@
  * Hi-Fi v2 TopBar — 50px header inside the content column.
  * Workspace switching is handled by WorkspaceStrip in HfLayout (universal).
  */
-import { useEffect, useState, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { Search } from 'lucide-react';
+import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
 import { LanguageSwitcher } from '../../core/components/common/LanguageSwitcher';
+import { openQuickSwitcher } from './QuickSwitcher';
 import { useTheme } from './useTheme';
 import { useI18n } from '../../common/i18n';
 import { WorkspaceSelector } from '../workspace/WorkspaceStrip';
@@ -129,6 +132,38 @@ function ThemeToggle() {
   );
 }
 
+/**
+ * TopBarTools — 搜索 + 设置（2026-06-22 用户要求从侧栏移到全局顶栏，与主题/语言
+ * 同处右上角）。样式对齐 ThemeToggle 的 28×28 图标按钮。
+ */
+function TopBarTools() {
+  const { t } = useI18n();
+  const btn: CSSProperties = {
+    width: 28,
+    height: 28,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    border: '1px solid var(--t-border)',
+    background: 'var(--t-panel-2)',
+    color: 'var(--t-fg-2)',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    flexShrink: 0,
+  };
+  return (
+    <>
+      <button type="button" onClick={openQuickSwitcher} title="搜索 ⌘K" aria-label="搜索" data-testid="topbar-search" style={btn}>
+        <Search size={14} strokeWidth={1.9} aria-hidden />
+      </button>
+      <Link to="/settings" title={t('shell.navSettings')} aria-label={t('shell.navSettings')} data-testid="topbar-settings" style={btn}>
+        <HfSettingsIcon size={14} />
+      </Link>
+    </>
+  );
+}
+
 interface HfTopBarProps {
   right?: ReactNode;
   /** @deprecated 工作区选择器现在按路由自动显示（/chat 在内容区显示，其余页面在顶栏兜底）。 */
@@ -163,6 +198,7 @@ export function HfTopBar({ right }: HfTopBarProps) {
       <div style={{ flex: 1 }} />
       {right}
       <NetworkLatencyChip />
+      <TopBarTools />
       <ThemeToggle />
       <LanguageSwitcher />
     </header>
