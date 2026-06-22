@@ -393,10 +393,23 @@ export function AgentPage() {
             </div>
           )}
 
-          {/* Loading */}
+          {/* Loading — 骨架卡片网格（2026-06-22 motion polish #3），替代居中文字 */}
           {loadStatus === 'loading' && (
-            <div className="hf-meta" style={{ padding: '40px 0', textAlign: 'center' }}>
-              {t('agent.loading')}
+            <div
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}
+              role="status"
+              aria-label={t('agent.loading')}
+            >
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} style={{ border: '1px solid var(--t-border)', borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className="sf-skeleton" style={{ width: 36, height: 36, borderRadius: 8 }} aria-hidden />
+                    <div className="sf-skeleton" style={{ height: 13, flex: 1, borderRadius: 6 }} aria-hidden />
+                  </div>
+                  <div className="sf-skeleton" style={{ height: 10, width: '90%', borderRadius: 6 }} aria-hidden />
+                  <div className="sf-skeleton" style={{ height: 10, width: '60%', borderRadius: 6 }} aria-hidden />
+                </div>
+              ))}
             </div>
           )}
 

@@ -1029,9 +1029,7 @@ function Panel({ meta, onRename }: PanelProps) {
       {/* ── Artifacts area ── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '22px 28px 28px' }}>
         {artLoading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: 'var(--t-fg-4)', fontSize: 12 }}>
-            Loading…
-          </div>
+          <ArtifactsSkeleton />
         ) : artifacts.length === 0 ? (
           <div
             style={{
@@ -1439,6 +1437,54 @@ function EmptyPane() {
 }
 
 // ---------------------------------------------------------------------------
+// Skeletons (loading states — 2026-06-22 motion polish #3)
+// ---------------------------------------------------------------------------
+
+function SkeletonBlock({ h, w = '100%', r = 6 }: { h: number; w?: number | string; r?: number }) {
+  return <div className="sf-skeleton" style={{ height: h, width: w, borderRadius: r }} aria-hidden />;
+}
+
+/** 工件网格骨架——加载态替代空白 / "Loading…" 文字。 */
+function ArtifactsSkeleton() {
+  return (
+    <div
+      style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(272px, 1fr))', gap: 14 }}
+      role="status"
+      aria-label="加载工件"
+    >
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} style={{ border: '1px solid var(--t-border)', borderRadius: 8, overflow: 'hidden' }}>
+          <SkeletonBlock h={42} r={0} />
+          <div style={{ padding: '11px 14px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <SkeletonBlock h={13} w="80%" />
+            <SkeletonBlock h={10} w="42%" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 整页骨架（侧栏行 + 工件网格）——首载替代居中 "Loading…"。 */
+function ProjectsPageSkeleton() {
+  return (
+    <div
+      style={{ display: 'flex', height: '100%', minHeight: 0, background: 'var(--t-bg)', overflow: 'hidden' }}
+      data-testid="projects-page"
+      role="status"
+      aria-label="加载项目"
+    >
+      <div style={{ width: 240, flexShrink: 0, borderRight: '1px solid var(--t-border)', background: 'var(--t-panel)', padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {Array.from({ length: 8 }).map((_, i) => <SkeletonBlock key={i} h={28} />)}
+      </div>
+      <div style={{ flex: 1, padding: '22px 28px' }}>
+        <ArtifactsSkeleton />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page root
 // ---------------------------------------------------------------------------
 
@@ -1545,21 +1591,7 @@ export default function ProjectsPage() {
   }
 
   if (loading) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          color: 'var(--t-fg-4)',
-          fontSize: 13,
-        }}
-        data-testid="projects-page"
-      >
-        Loading…
-      </div>
-    );
+    return <ProjectsPageSkeleton />;
   }
 
   return (
