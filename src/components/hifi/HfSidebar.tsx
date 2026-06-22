@@ -44,7 +44,9 @@ interface NavItem {
 }
 
 const buildNavItems = (t: (key: string) => string, chatBadge: number, chatTo: string): NavItem[] => [
-  { k: 'start',     Icon: Home,           label: t('shell.navStart'),     hint: '⌘1', to: '/start' },
+  // 2026-06-22 侧栏统一 — 「开始」收口到聊天内新任务 /chat?new=1，与 ChatRail
+  // 的「新建任务」对齐，消除「同图标两去处」分叉（/start 降级为深链，路由仍保留）。
+  { k: 'start',     Icon: Home,           label: t('shell.navNewTask'),   hint: '⌘1', to: '/chat?new=1' },
   // 2026-05-19 — Chat link target is now data-driven (first real group_id),
   // not the hardcoded "/chat/default" that pointed at a non-existent group
   // and caused POST /api/groups/default/messages 404 → messages disappear

@@ -12,16 +12,14 @@
  * 团队态包 InboxPanelFB、个人态包助手列表，两边复用同一套 chrome。
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import {
-  Home, Users, Bot, CalendarDays, Folder, Search, Plus,
-  PanelLeftClose, PanelLeftOpen,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Search, Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
 import { openQuickSwitcher } from '../../components/hifi/QuickSwitcher';
 import { WorkspaceSelector } from '../../components/workspace/WorkspaceStrip';
 import { PersonalTeamToggle, type ChatHomeView } from './PersonalTeamToggle';
+import { useI18n } from '../../common/i18n';
+import { PRIMARY_NAV } from '../../config/navConfig';
 
 const RAIL_COLLAPSED_KEY = 'sf.chat.railCollapsed';
 
@@ -38,22 +36,57 @@ const iconBtnStyle: CSSProperties = {
   textDecoration: 'none',
 };
 
-interface FooterItem {
-  key: string;
-  Icon: LucideIcon;
-  label: string;
-  to: string;
-}
+// 2026-06-22 侧栏统一 — 导航从写死的 FOOTER_ITEMS 收口到单一真相源
+// src/config/navConfig.ts（PRIMARY_NAV），文案走 i18n。底部图标行升格为顶部
+// 带文字导航组（Hermes 式）。详见 docs/design/sidebar-unification-2026-06-22.md。
 
-const FOOTER_ITEMS: FooterItem[] = [
-  // F4 路由收口 — 「开始」指向聊天内新任务（UnifiedComposer 全能力已进聊天，
-  // /start 路由保留为金丝雀深链，不再是常规入口）。
-  { key: 'start', Icon: Home, label: '开始', to: '/chat?new=1' },
-  { key: 'teams', Icon: Users, label: '团队', to: '/teams' },
-  { key: 'agents', Icon: Bot, label: '员工', to: '/agents' },
-  { key: 'calendar', Icon: CalendarDays, label: '日历', to: '/calendar' },
-  { key: 'projects', Icon: Folder, label: '项目', to: '/projects' },
-];
+const railNavStyles = `
+.sf-rail-nav-row {
+  display:flex; align-items:center; gap:9px;
+  padding:6px 8px; border-radius:7px;
+  color:var(--t-fg-3); text-decoration:none;
+  font-size:12.5px;
+  transition:background var(--dur-1,120ms) ease, color var(--dur-1,120ms) ease;
+}
+.sf-rail-nav-row:hover { background:var(--t-panel-2); color:var(--t-fg); }
+.sf-rail-nav-row.on { background:var(--t-accent-tint); color:var(--t-accent); font-weight:600; }
+`;
+
+/**
+ * PrimaryNavGroup — Hermes 式「带文字」导航组（图标 + 文字 + i18n + 高亮）。
+ * 取 PRIMARY_NAV 单一数组渲染，一个图标只去一个地方。展开态紧贴 header 下方。
+ */
+function PrimaryNavGroup({ bordered = false }: { bordered?: boolean }) {
+  const { t } = useI18n();
+  return (
+    <nav
+      aria-label={t('shell.navigation')}
+      style={{
+        flexShrink: 0,
+        padding: '6px 8px',
+        borderBottom: '1px solid var(--t-border)',
+        borderRight: bordered ? '1px solid var(--t-border)' : undefined,
+        background: 'var(--t-panel)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1,
+      }}
+    >
+      <style>{railNavStyles}</style>
+      {PRIMARY_NAV.map(({ key, labelKey, Icon, to }) => (
+        <NavLink
+          key={key}
+          to={to}
+          data-testid={`chatrail-${key}`}
+          className={({ isActive }) => `sf-rail-nav-row${isActive ? ' on' : ''}`}
+        >
+          <Icon size={15} strokeWidth={1.75} aria-hidden />
+          <span>{t(labelKey)}</span>
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
 
 export function ChatRailHeader({
   view,
@@ -152,14 +185,10 @@ export function ChatRailFooter({ bordered = false }: { bordered?: boolean }) {
         background: 'var(--t-panel)',
       }}
     >
+      {/* 工具行：搜索 + 设置（页面导航已上移到 PrimaryNavGroup）。 */}
       <button type="button" title="搜索 ⌘K" aria-label="搜索" onClick={openQuickSwitcher} style={iconBtnStyle}>
         <Search size={15} strokeWidth={1.75} aria-hidden />
       </button>
-      {FOOTER_ITEMS.map(({ key, Icon, label, to }) => (
-        <Link key={key} to={to} title={label} aria-label={label} data-testid={`chatrail-${key}`} style={iconBtnStyle}>
-          <Icon size={15} strokeWidth={1.75} aria-hidden />
-        </Link>
-      ))}
       <Link to="/settings" title="设置 ⌘," aria-label="设置" data-testid="chatrail-settings" style={iconBtnStyle}>
         <HfSettingsIcon size={15} strokeWidth={1.75} />
       </Link>
@@ -190,6 +219,7 @@ export function ChatRail({
   children: ReactNode;
 }) {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem(RAIL_COLLAPSED_KEY) === '1';
@@ -250,15 +280,16 @@ export function ChatRail({
               compact
             />
           </div>
+          {/* 收起态竖排导航 — 走同一份 PRIMARY_NAV（图标 + tooltip） */}
+          {PRIMARY_NAV.map(({ key, labelKey, Icon, to }) => (
+            <Link key={key} to={to} title={t(labelKey)} aria-label={t(labelKey)} data-testid={`chatrail-${key}`} style={iconBtnStyle}>
+              <Icon size={15} strokeWidth={1.75} aria-hidden />
+            </Link>
+          ))}
           <div style={{ flex: 1 }} />
           <button type="button" title="搜索 ⌘K" aria-label="搜索" onClick={openQuickSwitcher} style={iconBtnStyle}>
             <Search size={15} strokeWidth={1.75} aria-hidden />
           </button>
-          {FOOTER_ITEMS.map(({ key, Icon, label, to }) => (
-            <Link key={key} to={to} title={label} aria-label={label} data-testid={`chatrail-${key}`} style={iconBtnStyle}>
-              <Icon size={15} strokeWidth={1.75} aria-hidden />
-            </Link>
-          ))}
           <Link to="/settings" title="设置 ⌘," aria-label="设置" data-testid="chatrail-settings" style={iconBtnStyle}>
             <HfSettingsIcon size={15} strokeWidth={1.75} />
           </Link>
@@ -266,6 +297,7 @@ export function ChatRail({
       ) : (
         <>
           <ChatRailHeader view={view} bordered={bordered} onCollapse={toggle} />
+          <PrimaryNavGroup bordered={bordered} />
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{children}</div>
           <ChatRailFooter bordered={bordered} />
         </>
