@@ -5,7 +5,7 @@
  *   - ChatRail：容器（M3d 可收起——clawsgo/VSCode 式，收起成 48px 窄条，
  *     宽度 transition 丝滑过渡；收起状态 localStorage 持久化并通过
  *     onCollapsedChange 通知父级做「左收起↔右展开」互斥联动）
- *   - ChatRailHeader：顶部「个人 | 团队」切换 + 搜索/设置工具 + 团队态「+ 新任务」+ 收起按钮
+ *   - ChatRailHeader：顶部「个人 | 团队」切换 + 收起按钮（团队态另带工作区选择器）
  *   - PrimaryNavGroup：顶部带文字导航组（新建会话/消息/团队/员工/日历/产物），
  *     取单一真相源 src/config/navConfig.ts。搜索/设置工具行已上移至 header。
  *
@@ -13,7 +13,7 @@
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { WorkspaceSelector } from '../../components/workspace/WorkspaceStrip';
 import { PersonalTeamToggle, type ChatHomeView } from './PersonalTeamToggle';
 import { useI18n } from '../../common/i18n';
@@ -138,32 +138,8 @@ export function ChatRailHeader({
             <WorkspaceSelector />
           </div>
         )}
-        {/* M3c start 吸收 — 团队态「+ 新任务」：goal → run-session 的聊天内入口。
-            个人态列表区已有「+ 新员工」，不重复放。 */}
-        {view === 'team' && (
-          <button
-            type="button"
-            data-testid="chatrail-newtask"
-            onClick={() => navigate('/chat?new=1')}
-            style={{
-              width: '100%',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              padding: '9px 0',
-              borderRadius: 10,
-              border: 'none',
-              cursor: 'pointer',
-              background: 'var(--t-accent)',
-              color: 'var(--t-accent-ink)',
-              fontWeight: 700,
-              fontSize: 13,
-            }}
-          >
-            <Plus size={15} aria-hidden /> 新任务
-          </button>
-        )}
+        {/* 团队态「+ 新任务」按钮已删（2026-06-22 用户要求）——「新建会话」入口
+            已在 PrimaryNavGroup 顶部导航组，不重复放。 */}
       </div>
     </div>
   );
