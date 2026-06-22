@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useModalAnimation } from '../../../common/hooks/useModalAnimation';
 
 interface ConfirmModalProps {
   open: boolean;
@@ -17,14 +18,15 @@ export function ConfirmModal({
 }: ConfirmModalProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
   const TITLE_ID = 'confirm-modal-title';
+  const { closing, beginClose } = useModalAnimation(onCancel);
 
-  // P19: Esc key dismisses modal
+  // P19: Esc key dismisses modal（走 beginClose 带退场动画）
   useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') beginClose(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, onCancel]);
+  }, [open, beginClose]);
 
   // P19: Auto-focus confirm button when modal opens (accessibility)
   useEffect(() => { if (open) confirmRef.current?.focus(); }, [open]);
@@ -35,17 +37,21 @@ export function ConfirmModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={TITLE_ID}
+      className="sf-modal-backdrop"
+      data-closing={closing ? '1' : undefined}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-      onClick={onCancel}
+      onClick={beginClose}
     >
       <div
+        className="sf-modal-card"
+        data-closing={closing ? '1' : undefined}
         style={{ background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 14, padding: '28px 32px', minWidth: 360, boxShadow: '0 24px 64px rgba(0,0,0,.5)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id={TITLE_ID} style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 800, color: 'var(--t-fg)', letterSpacing: '-.02em' }}>{title}</h2>
         <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--t-fg-3)', lineHeight: 1.5 }}>{message}</p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button onClick={onCancel} style={{ padding: '7px 16px', borderRadius: 8, background: 'var(--t-panel-3)', border: '1px solid var(--t-border)', color: 'var(--t-fg-2)', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+          <button onClick={beginClose} style={{ padding: '7px 16px', borderRadius: 8, background: 'var(--t-panel-3)', border: '1px solid var(--t-border)', color: 'var(--t-fg-2)', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
             {cancelLabel}
           </button>
           <button ref={confirmRef} onClick={onConfirm} style={{ padding: '7px 16px', borderRadius: 8, background: 'var(--status-reject)', border: 'none', color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>

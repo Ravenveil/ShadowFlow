@@ -217,6 +217,28 @@ input, textarea, select { font-family: inherit; color: inherit; }
   animation: sf-toast-in 200ms var(--ease-out) forwards;
 }
 
+/* ── Motion polish (2026-06-22) ─────────────────────────────────────────────
+   弹层进退场 + 消息入场。退场靠 data-closing="1" 切换到 *-out 关键帧，由
+   useModalAnimation hook 在卸载前延迟一帧（见 src/common/hooks/useModalAnimation.ts）。 */
+@keyframes sf-modal-backdrop-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sf-modal-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sf-modal-card-in  { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes sf-modal-card-out { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(6px) scale(.98); } }
+.sf-modal-backdrop { animation: sf-modal-backdrop-in 160ms var(--ease-out) both; }
+.sf-modal-backdrop[data-closing="1"] { animation: sf-modal-backdrop-out 150ms var(--ease-out) both; }
+.sf-modal-card { animation: sf-modal-card-in 200ms var(--ease-out) both; }
+.sf-modal-card[data-closing="1"] { animation: sf-modal-card-out 150ms var(--ease-out) both; }
+
+/* 消息入场 — 群聊 ChatFeedFB / 收件箱 MessageList（对齐 Timeline tl-slide-in）。
+   只给「挂载后新增」的消息加，避免历史一次性全抖（见各组件的 mount-id 守卫）。 */
+@keyframes sf-msg-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.sf-msg-in { animation: sf-msg-in var(--dur-1, 130ms) var(--ease-out) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-modal-backdrop, .sf-modal-card, .sf-msg-in,
+  .sf-modal-backdrop[data-closing="1"], .sf-modal-card[data-closing="1"] { animation: none !important; }
+}
+
 /* Run-session resend button: hover-revealed on parent .group */
 .group:hover > .sf-resend-hover { opacity: 1 !important; }
 /* Chat-bubble hover action row (Copy / Retry / placeholders).

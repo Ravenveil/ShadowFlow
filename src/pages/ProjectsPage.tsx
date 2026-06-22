@@ -47,6 +47,7 @@ import {
 } from '../api/projects';
 import { listSkills, type SkillInfo } from '../api/skills';
 import { useI18n } from '../common/i18n';
+import { useModalAnimation } from '../common/hooks/useModalAnimation';
 import { useWorkspaceStore } from '../store/workspaceStore';
 
 // ---------------------------------------------------------------------------
@@ -1135,6 +1136,7 @@ interface CreateModalProps {
 
 function CreateModal({ onClose, onCreate }: CreateModalProps) {
   const { t } = useI18n();
+  const { closing, beginClose } = useModalAnimation(onClose);
   const [name, setName] = useState('');
   const [path, setPath] = useState('');
   const [skillId, setSkillId] = useState('');
@@ -1173,10 +1175,14 @@ function CreateModal({ onClose, onCreate }: CreateModalProps) {
 
   return (
     <div
+      className="sf-modal-backdrop"
+      data-closing={closing ? '1' : undefined}
       style={MODAL_BACKDROP}
-      onClick={() => !creating && onClose()}
+      onClick={() => !creating && beginClose()}
     >
       <div
+        className="sf-modal-card"
+        data-closing={closing ? '1' : undefined}
         onClick={(e) => e.stopPropagation()}
         style={MODAL_CARD}
         data-testid="project-create-modal"
@@ -1198,7 +1204,7 @@ function CreateModal({ onClose, onCreate }: CreateModalProps) {
             data-testid="project-create-name"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && nameValid && !creating) handleCreate();
-              if (e.key === 'Escape') onClose();
+              if (e.key === 'Escape') beginClose();
             }}
           />
           {!nameValid && name.length > 0 && (
@@ -1248,7 +1254,7 @@ function CreateModal({ onClose, onCreate }: CreateModalProps) {
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button
             type="button"
-            onClick={onClose}
+            onClick={beginClose}
             disabled={creating}
             style={{
               padding: '6px 14px',
@@ -1301,6 +1307,7 @@ interface DeleteModalProps {
 
 function DeleteModal({ target, onClose, onDeleted }: DeleteModalProps) {
   const { t } = useI18n();
+  const { closing, beginClose } = useModalAnimation(onClose);
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1320,8 +1327,15 @@ function DeleteModal({ target, onClose, onDeleted }: DeleteModalProps) {
   }
 
   return (
-    <div style={MODAL_BACKDROP} onClick={() => !deleting && onClose()}>
+    <div
+      className="sf-modal-backdrop"
+      data-closing={closing ? '1' : undefined}
+      style={MODAL_BACKDROP}
+      onClick={() => !deleting && beginClose()}
+    >
       <div
+        className="sf-modal-card"
+        data-closing={closing ? '1' : undefined}
         onClick={(e) => e.stopPropagation()}
         style={MODAL_CARD}
         data-testid="project-delete-modal"
@@ -1353,7 +1367,7 @@ function DeleteModal({ target, onClose, onDeleted }: DeleteModalProps) {
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button
             type="button"
-            onClick={onClose}
+            onClick={beginClose}
             disabled={deleting}
             style={{
               padding: '6px 14px',
