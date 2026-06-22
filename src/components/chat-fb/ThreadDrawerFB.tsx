@@ -19,11 +19,15 @@ import { RightPaneTabs } from '../run-session/RightPaneTabs';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
 import { RunWorkPane } from '../../pages/chat-home/RunWorkPane';
+import { EmbeddedPage } from '../run-session/EmbeddedPage';
+import CalendarPage from '../../pages/CalendarPage';
+import ProjectsPage from '../../pages/ProjectsPage';
 import { fetchRecentMessages } from '../../api/groupApi';
 import type { GroupItem, GroupMetrics, Message } from '../../common/types/inbox';
 import styles from './chatFB.module.css';
 
-type DrawerTab = 'thread' | 'work' | 'tasks' | 'docs' | 'brief';
+// 2026-06-22 — 日历/项目整页塞进右栏标签页(三处右栏统一)。
+type DrawerTab = 'thread' | 'work' | 'tasks' | 'docs' | 'brief' | 'calendar' | 'projects';
 
 export interface ThreadSourceMessage {
   id: string;
@@ -141,6 +145,8 @@ export function ThreadDrawerFB({
     { k: 'tasks', label: tr('chat.tabTasks', '任务'), n: metrics.pendingApprovalsCount },
     { k: 'docs', label: tr('chat.tabDocs', '文档') },
     { k: 'brief', label: 'Brief' },
+    { k: 'calendar', label: '日历' },
+    { k: 'projects', label: '项目' },
   ];
 
   // Stream G — 提交回复
@@ -462,6 +468,8 @@ export function ThreadDrawerFB({
           tasks: tasksPane,
           docs: docsPane,
           brief: briefPane,
+          calendar: <EmbeddedPage><CalendarPage /></EmbeddedPage>,
+          projects: <EmbeddedPage><ProjectsPage /></EmbeddedPage>,
         }}
       />
     </div>

@@ -58,7 +58,10 @@ import { MessageActions } from '../components/MessageActions';
 // 2026-05-18 agent-0 — right-pane tab shell + follow-mode chip + 4 stub panels.
 // The stubs are placeholders that agent-1/2/3 will replace with real
 // implementations (each replacement keeps the same default-export signature).
-import { RightPaneTabs, type TabId } from '../components/run-session/RightPaneTabs';
+import { RightPaneTabs, type TabId, type RightPaneTabDef } from '../components/run-session/RightPaneTabs';
+import { EmbeddedPage } from '../components/run-session/EmbeddedPage';
+import CalendarPage from './CalendarPage';
+import ProjectsPage from './ProjectsPage';
 import { FollowChip } from '../components/run-session/FollowChip';
 import { useFollowMode } from '../core/hooks/useFollowMode';
 import OverviewPanel from '../components/run-session/OverviewPanel';
@@ -3320,6 +3323,17 @@ export interface RunSessionRightPaneProps {
   saveState: SaveState;
 }
 
+// 2026-06-22 — run-session 右栏 tab 集 = run 流的 4 个 tab + 日历/项目两个页面级 tab。
+type RsTab = TabId | 'calendar' | 'projects';
+const RS_TABS: RightPaneTabDef<RsTab>[] = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'team', label: 'Team' },
+  { key: 'agent', label: 'Agent' },
+  { key: 'preview', label: 'Preview' },
+  { key: 'calendar', label: '日历' },
+  { key: 'projects', label: '项目' },
+];
+
 // 2026-06-02 — 右下角常驻「去聊天」悬浮按钮加回（用户要求）。run 完成后从这里
 // 直接进入本次 run 关联的 chat 群（chatGroupId），无群时兜底跳 /chat。
 export function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupId, saveState }: RunSessionRightPaneProps) {
@@ -3380,6 +3394,20 @@ export function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupI
   // auto-follow effect in useFollowMode keeps the default unlocked path.
   const handleTabChange = (next: TabId) => setActiveTab(next, { lock: true });
 
+  // 2026-06-22 — 日历/项目整页标签页。这两个是「页面级」tab，与 run 步骤流无关，
+  // 故不进 useFollowMode 的 TabId 路由(避免污染 STEP_TO_TAB / followedTab 类型)，
+  // 用本地 pageTab 旁路：选中其一时 effectiveTab 指向它，切回前 4 个 tab 时清空。
+  const [pageTab, setPageTab] = React.useState<'calendar' | 'projects' | null>(null);
+  const effectiveTab: RsTab = pageTab ?? activeTab;
+  const handleRsTabChange = (next: RsTab) => {
+    if (next === 'calendar' || next === 'projects') {
+      setPageTab(next);
+    } else {
+      setPageTab(null);
+      handleTabChange(next);
+    }
+  };
+
   // "去聊天 →" — jump to this run's chat conversation. When the run completed
   // and auto-persist created a chat group, navigate straight to
   // /chat/<groupId>; otherwise fall back to /chat.
@@ -3393,7 +3421,7 @@ export function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupI
     onNavigate('/chat');
   };
 
-  const panels: Record<TabId, React.ReactNode> = {
+  const panels: Record<RsTab, React.ReactNode> = {
     overview: (
       <OverviewPanel
         session={session}
@@ -3416,6 +3444,9 @@ export function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupI
         onOpenEditor={() => onNavigate(`/editor?session=${sessionId}`)}
       />
     ),
+    // 日历 / 项目 — 整页直接塞入(三处右栏统一，2026-06-22)
+    calendar: <EmbeddedPage><CalendarPage /></EmbeddedPage>,
+    projects: <EmbeddedPage><ProjectsPage /></EmbeddedPage>,
   };
 
   return (
@@ -3429,9 +3460,10 @@ export function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupI
         height: '100%',
       }}
     >
-      <RightPaneTabs
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
+      <RightPaneTabs<RsTab>
+        activeTab={effectiveTab}
+        onTabChange={handleRsTabChange}
+        tabs={RS_TABS}
         followChip={
           <FollowChip
             mode={followMode}
