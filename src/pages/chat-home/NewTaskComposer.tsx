@@ -11,8 +11,7 @@
  * 右栏「工作区」tab 通过 window 'sf:run-created' 事件感知新 run 并刷新。
  */
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { MessagesSquare } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { getApiBase, authHeaders } from '../../api/_base';
 import { createRunSession } from '../../api/runSessions';
 import { createGroup } from '../../api/groupApi';
@@ -133,8 +132,6 @@ export function NewTaskComposer({ centered = false, navigateOnRun = false, onRun
   const [prefill, setPrefill] = useState('');
   // 通知父级活跃 run 变化（个人态右栏联动）
   useEffect(() => { onRunActive?.(sessionId); }, [sessionId, onRunActive]);
-  // F3 — 新任务发首条消息即落成真会话（建群+B1 互链），左栏立刻有条目。
-  const [taskGroup, setTaskGroup] = useState<{ id: string; name: string } | null>(null);
   const workspaceId = useWorkspaceStore((s) => s.currentId);
 
   // F1 — 提交逻辑注入 UnifiedComposer（完整能力：@技能/附件/模型/知识库都在聊天里）。
@@ -159,8 +156,8 @@ export function NewTaskComposer({ centered = false, navigateOnRun = false, onRun
             workspaceId: workspaceId ?? undefined,
           });
           groupId = g.groupId;
-          setTaskGroup({ id: g.groupId, name: g.name });
-          // 左栏立刻刷出新会话条目
+          // F3 — 新任务发首条消息即落成真会话（建群+B1 互链）；左栏立刻刷出新会话条目
+          // （用户无需提示，统一侧栏会实时显示这条新会话）。
           void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
         } catch {
           // Python 后端未启等 — 静默降级为匿名 run 会话
@@ -222,18 +219,6 @@ export function NewTaskComposer({ centered = false, navigateOnRun = false, onRun
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
       {sessionId ? (
         <>
-          {taskGroup && (
-            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px 0' }}>
-              <MessagesSquare size={12} aria-hidden style={{ color: 'var(--t-fg-4)' }} />
-              <span style={{ fontSize: 11, color: 'var(--t-fg-4)' }}>会话已落地左栏：</span>
-              <Link
-                to={`/chat/${taskGroup.id}?timeline=1`}
-                style={{ fontSize: 11, fontWeight: 600, color: 'var(--t-accent)', textDecoration: 'none' }}
-              >
-                {taskGroup.name} →
-              </Link>
-            </div>
-          )}
           <ActiveRunThread sessionId={sessionId} />
           {bottomComposer}
         </>
