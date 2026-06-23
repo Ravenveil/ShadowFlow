@@ -181,4 +181,17 @@ describe('chatMessagesToTimeline — group MessageItem adaptation', () => {
     expect(out[1]).toMatchObject({ id: 'chat_idx_1', kind: 'assistant_text', ts: 0 });
     expect(out[1].turn_id).toBe('chat_idx_0'); // threaded under the legacy user turn
   });
+
+  it('U0 绑角色：agent 消息的 agent_id 透传到 assistant_text；user/无 agent_id 不带该字段', () => {
+    const out = chatMessagesToTimeline([
+      { message_id: 'u1', sender_kind: 'user', content: 'hi', timestamp: '2026-06-23T08:00:00+00:00' },
+      { message_id: 'a1', sender_kind: 'agent', sender_name: 'PM', agent_id: 'agent-123', content: '收到', timestamp: '2026-06-23T08:00:01+00:00' },
+      { message_id: 'a2', sender_kind: 'agent', sender_name: 'Legacy', content: '老记录无 agent_id', timestamp: '2026-06-23T08:00:02+00:00' },
+    ]);
+    expect(out[1]).toMatchObject({ kind: 'assistant_text', sender_name: 'PM', agent_id: 'agent-123' });
+    // user_turn 不带 agent_id
+    expect('agent_id' in out[0]).toBe(false);
+    // 老 agent 记录无 agent_id 字段（不写 undefined 键）
+    expect('agent_id' in out[2]).toBe(false);
+  });
 });

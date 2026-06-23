@@ -92,6 +92,11 @@ export type TimelineMessage =
        * no header rendered, run-session page unaffected.
        */
       sender_name?: string;
+      /**
+       * U0 绑角色（2026-06-23 消息引擎归一）— 发送者 agent_id 真源。sender_name 仅
+       * 展示（可重名）；agent_id 用于 color/avatar/权限确定性归属。run 产出的消息无此字段。
+       */
+      agent_id?: string;
     })
   | (TimelineMessageBase & {
       kind: 'raw';
@@ -101,6 +106,8 @@ export type TimelineMessage =
       source?: string;
       /** F2 — optional speaker attribution (see assistant_text.sender_name). */
       sender_name?: string;
+      /** U0 绑角色 — 发送者 agent_id（见 assistant_text.agent_id）。 */
+      agent_id?: string;
     })
   | (TimelineMessageBase & { kind: 'rationale'; bullets: string[] })
   | (TimelineMessageBase & {

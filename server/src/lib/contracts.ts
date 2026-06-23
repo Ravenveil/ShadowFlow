@@ -192,6 +192,8 @@ export type TimelineMessage =
        * unaffected.
        */
       sender_name?: string;
+      /** U0 绑角色（2026-06-23）— 发送者 agent_id 真源（sender_name 仅展示）。 */
+      agent_id?: string;
     })
   | (TimelineMessageBase & {
       kind: 'raw';
@@ -201,6 +203,8 @@ export type TimelineMessage =
       source?: string;
       /** B2 — optional speaker attribution (see assistant_text.sender_name). */
       sender_name?: string;
+      /** U0 绑角色 — 发送者 agent_id（见 assistant_text.agent_id）。 */
+      agent_id?: string;
     })
   | (TimelineMessageBase & {
       kind: 'step_panel';

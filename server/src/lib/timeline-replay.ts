@@ -164,6 +164,8 @@ export interface ChatMessageItem {
   sender_kind?: string;
   content?: string;
   timestamp?: string;
+  /** U0 绑角色（2026-06-23）— agent 发送者 agent_id；透传到 TimelineMessage。 */
+  agent_id?: string | null;
 }
 
 /**
@@ -193,6 +195,7 @@ export function chatMessagesToTimeline(messages: ChatMessageItem[]): TimelineMes
         ts,
         body: content,
         ...(m.sender_name ? { sender_name: m.sender_name } : {}),
+        ...(m.agent_id ? { agent_id: m.agent_id } : {}),
       });
     } else {
       // system (and any unknown sender_kind — raw is the safe bucket)

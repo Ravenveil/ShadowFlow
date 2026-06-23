@@ -130,7 +130,7 @@ async function pyGet<T>(path: string): Promise<T | null> {
  */
 async function pyPostMessage(
   groupId: string,
-  body: { content: string; sender_name: string; sender_kind: string },
+  body: { content: string; sender_name: string; sender_kind: string; agent_id?: string },
   opts: { noDispatch?: boolean } = {},
 ): Promise<unknown> {
   const created = await getGroupsBackend().appendMessage(groupId, body, opts);
@@ -416,6 +416,8 @@ async function runFanout(
               content: m.content,
               sender_name: m.sender_name,
               sender_kind: m.sender_kind,
+              // U0 绑角色 — 透传 agent 回话的发送者 agent_id（system 消息无）。
+              ...(m.agent_id ? { agent_id: m.agent_id } : {}),
             }).catch(() => {});
           },
         };

@@ -113,6 +113,8 @@ export function sseFrameToTimeline(
   if (eventType === 'agent.message' || eventType === 'agent.complete') {
     const senderName =
       (payload.sender_name as string) ?? (payload.agent_name as string) ?? undefined;
+    // U0 绑角色 — Python SSE 帧的 msg.agent_id 透传（agent 消息有，system 无）。
+    const agentId = typeof payload.agent_id === 'string' ? payload.agent_id : undefined;
     return {
       id,
       kind: 'assistant_text',
@@ -121,6 +123,7 @@ export function sseFrameToTimeline(
       body: content,
       streaming: eventType === 'agent.message' && payload.streaming === true,
       ...(senderName ? { sender_name: senderName } : {}),
+      ...(agentId ? { agent_id: agentId } : {}),
     };
   }
 

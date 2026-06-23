@@ -19,7 +19,7 @@ export interface UpstreamMsg { from: string; text: string }
 export interface RunTeamDagDeps {
   getAgent: (agentId: string) => Promise<{ name: string; soul: string } | null>;
   callAgent: (args: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[]; signal: AbortSignal }) => Promise<{ text: string; error?: string }>;
-  postMessage: (msg: { content: string; sender_name: string; sender_kind: 'agent' | 'system' }) => Promise<void>;
+  postMessage: (msg: { content: string; sender_name: string; sender_kind: 'agent' | 'system'; agent_id?: string }) => Promise<void>;
 }
 
 export type AgentOutcome = 'ok' | 'error' | 'empty' | 'timeout' | 'aborted';
@@ -138,7 +138,8 @@ export async function runTeamDagFanout(
       }
       outputs.set(agentId, reply);
       perAgent[agentId] = 'ok';
-      await deps.postMessage({ content: reply, sender_name: agent.name, sender_kind: 'agent' });
+      // U0 绑角色 — 带上发送者 agent_id（agentId 即 map key，恒在作用域）。
+      await deps.postMessage({ content: reply, sender_name: agent.name, sender_kind: 'agent', agent_id: agentId });
     });
     ranLayers++;
   }

@@ -36,6 +36,8 @@ export interface BackendGroup {
     content?: string;
     timestamp?: string;
     reply_to?: string | null;
+    /** U0 绑角色（2026-06-23）— agent 消息发送者 agent_id 真源；user/system 为 null。 */
+    agent_id?: string | null;
   }>;
   kind?: string;
   workspace_dir?: string | null;
@@ -47,6 +49,8 @@ export interface AppendMessageBody {
   content: string;
   sender_name: string;
   sender_kind: string;
+  /** U0 绑角色 — agent 消息发送者 agent_id（Python 持久化；Node store 暂未落该列，见 nodeBackend）。 */
+  agent_id?: string;
 }
 
 export interface AppendMessageOpts {
@@ -112,6 +116,8 @@ const nodeBackend: GroupsBackend = {
     // Node 无 Python 回复桥，noDispatch 无意义（网关本就是唯一回复来源）。
     // 群不存在时 groups-store.appendGroupMessage 抛错，与 Python 502 语义一致
     // （网关 catch → PERSIST_FAILED）。
+    // U0 绑角色 TODO：Node SQLite store 暂未落 agent_id 列（默认后端是 Python，
+    // 'node'/'dual' 模式才走这里）；待加 agent_id 列后透传 body.agent_id。
     return store.appendGroupMessage(groupId, {
       content: body.content,
       sender_name: body.sender_name,

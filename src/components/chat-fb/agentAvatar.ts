@@ -95,6 +95,10 @@ function loadRegistry(): Record<string, string> {
 }
 
 let _colorByName: Record<string, string> = loadRegistry();
+// U0 绑角色（2026-06-23）— agent_id → color 注册表。消息上线了 agent_id 后，
+// 取色优先按 agent_id（确定性、不撞名），回退按显示名。仅内存（agent_id 不入
+// localStorage 首屏缓存；listAgents() 回来即重灌，开销可忽略）。
+let _colorById: Record<string, string> = {};
 
 function persistRegistry(): void {
   try {
@@ -123,13 +127,21 @@ export function registerAgentColor(name: string, color: string | null): void {
  * 用后端 agents 列表批量同步注册表（listAgents() 每次都会调）。
  * 有 avatar_color → 记；无 → 删（让后端清除颜色也能传导到前端）。
  */
-export function registerAgentColors(list: Array<{ name?: string | null; avatar_color?: string | null }>): void {
+export function registerAgentColors(
+  list: Array<{ name?: string | null; avatar_color?: string | null; agent_id?: string | null }>,
+): void {
   if (!Array.isArray(list)) return;
   let changed = false;
   for (const a of list) {
     const k = (a?.name ?? '').trim();
-    if (!k) continue;
     const c = a?.avatar_color;
+    // U0 — 同步 agent_id → color（仅内存，不持久化）。
+    const id = (a?.agent_id ?? '').trim();
+    if (id) {
+      if (typeof c === 'string' && c) _colorById[id] = c;
+      else delete _colorById[id];
+    }
+    if (!k) continue;
     if (typeof c === 'string' && c) {
       if (_colorByName[k] !== c) { _colorByName[k] = c; changed = true; }
     } else if (k in _colorByName) {
@@ -148,6 +160,20 @@ export function paletteFor(key: string): AvatarPalette {
   const c = getAgentColor(key);
   if (c) return paletteFromColor(c);
   return AGENT_PALETTE[hashIndex(key || '?', AGENT_PALETTE.length)];
+}
+
+/**
+ * U0 绑角色（2026-06-23）— 优先按 agent_id 取色（确定性、不撞名），回退到显示名。
+ * 消息上线 agent_id 后，渲染器（ChatFeedFB/Timeline 气泡头像）应改用本函数：
+ * paletteForAgent(msg.agent_id, msg.sender_name)。agent_id 缺省时与 paletteFor 等价。
+ */
+export function paletteForAgent(agentId: string | undefined | null, name: string): AvatarPalette {
+  const id = (agentId ?? '').trim();
+  if (id) {
+    const c = _colorById[id];
+    if (typeof c === 'string' && c) return paletteFromColor(c);
+  }
+  return paletteFor(name);
 }
 
 /** 取名字首字：中文取首字，英文取首字母大写。 */

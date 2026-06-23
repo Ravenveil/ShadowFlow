@@ -200,6 +200,10 @@ class MessageItem(BaseModel):
     sender_kind: str = "user"
     content: str
     timestamp: str
+    # 2026-06-23 · 消息引擎归一 U0（绑角色）— agent 消息的发送者 agent_id 真源。
+    # sender_name 仅作展示（可重名）；agent_id 用于 color/avatar/权限的确定性归属。
+    # user/system 消息无 agent_id（None）。老记录无该字段时 Pydantic 用默认值。
+    agent_id: Optional[str] = None
     # Stream G — thread reply support. Stored on each message; nullable when the
     # message is a top-level post (not a reply). Carrying the source message_id
     # lets us query a thread via /api/groups/{gid}/messages/{mid}/thread.
@@ -220,6 +224,8 @@ class PostMessageRequest(BaseModel):
     # Stream G — optional thread anchor. When provided, this message is a reply
     # to the message whose `message_id` equals `reply_to`.
     reply_to: Optional[str] = None
+    # 2026-06-23 · U0 绑角色 — agent 回话时 Node 网关透传发送者 agent_id（见 MessageItem）。
+    agent_id: Optional[str] = None
 
 
 class GroupMessagesResponse(BaseModel):
@@ -520,6 +526,8 @@ async def post_group_message(
         # back via get_group_messages (Pydantic treats the field as Optional).
         "message_id": uuid4().hex,
         "reply_to": body.reply_to,
+        # U0 绑角色 — 持久化发送者 agent_id；随 msg 一并经 SSE publish 推给前端。
+        "agent_id": body.agent_id,
     }
     messages = rec.get("messages", [])
     messages.append(msg)
