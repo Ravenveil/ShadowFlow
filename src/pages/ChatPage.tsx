@@ -41,8 +41,9 @@ import { useChatStream } from '../core/hooks/useChatStream';
 import { useGroupTimeline } from '../core/hooks/useGroupTimeline';
 import { Timeline } from '../components/run-session/timeline/Timeline';
 // ── Stream D 2026-05-28 · 接入 chat-fb FB-HiFi 组件 ─────────────────────────
+import { createPortal } from 'react-dom';
 import InboxPanelFB from '../components/chat-fb/InboxPanelFB';
-import { ChatRail } from './chat-home/ChatRailChrome';
+import { useSidebarSlotEl } from './chat-home/SidebarSlotContext';
 import { NewTaskComposer } from './chat-home/NewTaskComposer';
 import ConvHeaderFB from '../components/chat-fb/ConvHeaderFB';
 import PinnedBriefFB from '../components/chat-fb/PinnedBriefFB';
@@ -551,6 +552,8 @@ function ChatDrawer({ groupId, group, metrics }: { groupId?: string; group?: Gro
 export default function ChatPage() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
+  // 统一侧栏(路B)：拿 HfLayout 那条常驻 ChatRail 的列表槽，portal 注入团队收件箱。
+  const slotEl = useSidebarSlotEl();
   // M3c/2026-06-13 — start 落地：bare /chat 或 /chat?new=1 都落 start 表单。
   // startLanding 真值在 dmAgentId 声明后计算（需排除内嵌单聊）。
   const [chatSearchParams] = useSearchParams();
@@ -1098,12 +1101,10 @@ export default function ChatPage() {
             顶部个人/团队切换 + InboxPanelFB + 底部低频导航图标行。
             /chat 下全局 HfSidebar 由 HfLayout 隐藏。
             M3d — ChatRail 可收起(48px 窄条)，收起时自动展开右栏(互斥联动)。 */}
-        <ChatRail
-          view="team"
-          width={296}
-          bordered
-          onCollapsedChange={(c) => { if (c && !dmAgentId) setThreadDrawerOpen(true); }}
-        >
+        {/* 统一侧栏(路B)：团队态收件箱 portal 注入 HfLayout 那条常驻 ChatRail 的槽。
+            原 onCollapsedChange「左收起→右自动展开」联动随 ChatRail 移出页面去掉
+            （折叠本身仍工作，记为小回归）。 */}
+        {slotEl && createPortal(
           <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
             {/* Stream D · FB-HiFi InboxPanel — chat-fb.html 行 878-1014 */}
             <InboxPanelFB
@@ -1124,8 +1125,9 @@ export default function ChatPage() {
                 noMatched: t('chat.noMatchedGroups'),
               }}
             />
-          </div>
-        </ChatRail>
+          </div>,
+          slotEl,
+        )}
 
         {/* ─ Center column ─
             2026-05-28 修 composer 显示不全：column flex 父容器必须 minHeight:0，

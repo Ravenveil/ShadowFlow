@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
@@ -12,7 +13,7 @@ import { Timeline } from '../../components/run-session/timeline/Timeline';
 import type { TimelineMessage } from '../../components/run-session/timeline/types';
 import { PersonalRightPane } from './PersonalRightPane';
 import { PersonalRunRightPane } from './PersonalRunRightPane';
-import { ChatRail } from './ChatRailChrome';
+import { useSidebarSlotEl } from './SidebarSlotContext';
 import { PagePeekOverlay } from './PagePeekOverlay';
 
 /**
@@ -45,6 +46,8 @@ function toTimelineMessages(messages: ChatMessage[]): TimelineMessage[] {
  */
 export function PersonalChatView() {
   const workspaceId = useWorkspaceStore((s) => s.currentId);
+  // 统一侧栏(路B)：拿 HfLayout 那条常驻 ChatRail 的列表槽，portal 注入助手列表。
+  const slotEl = useSidebarSlotEl();
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [q, setQ] = useState('');
   // 选中助手接入 URL(?agent=<id>)——刷新/分享/后退可恢复(治"路由跳转没做好")。
@@ -123,39 +126,39 @@ export function PersonalChatView() {
 
   return (
     <div style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0 }}>
-      {/* 左:助手列表 + 新员工（M3b：顶部个人/团队切换 + 底部低频导航图标行；
-          M3d：ChatRail 可收起成 48px 窄条） */}
-      <ChatRail
-        view="personal"
-        width={264}
-        containerStyle={{ borderRight: '1px solid var(--t-border)', background: 'var(--t-panel)' }}
-      >
-        <div className="pcv-rail-head">
-          <button type="button" className="pcv-new" onClick={() => setShowCreate(true)} aria-label="+ 新员工">
-            <Plus size={15} /> 新员工
-          </button>
-          <div className="pcv-search">
-            <Search size={14} />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索助手" aria-label="搜索助手" />
+      {/* 左:助手列表 + 新员工 —— 2026-06-23 统一侧栏(路B)：不再自己渲染 ChatRail，
+          改用 createPortal 把这段列表注入 HfLayout 那条常驻 ChatRail 的槽（纹丝不动）。
+          列表是活的 React 子树，搜索框/选中高亮/点击回调照常用页面 state。 */}
+      {slotEl && createPortal(
+        <>
+          <div className="pcv-rail-head">
+            <button type="button" className="pcv-new" onClick={() => setShowCreate(true)} aria-label="+ 新员工">
+              <Plus size={15} /> 新员工
+            </button>
+            <div className="pcv-search">
+              <Search size={14} />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索助手" aria-label="搜索助手" />
+            </div>
           </div>
-        </div>
-        <div className="pcv-list">
-          <div className="pcv-sec">助手</div>
-          {filtered.map((a) => {
-            const active = a.agent_id === agentId;
-            return (
-              <button key={a.agent_id} type="button" className={active ? 'pcv-row active' : 'pcv-row'} onClick={() => selectAgent(a.agent_id)}>
-                <HfAvatar glyph={Array.from(a.name)[0] ?? '?'} color={a.avatar_color ?? 'var(--t-accent)'} size={32} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div className="pcv-row-name">{a.name}</div>
-                  <div className="pcv-row-sub">{a.soul?.split('\n')[0] ?? ''}</div>
-                </div>
-              </button>
-            );
-          })}
-          {filtered.length === 0 && <div style={{ fontSize: 11.5, color: 'var(--t-fg-4)', padding: '4px 6px' }}>暂无助手</div>}
-        </div>
-      </ChatRail>
+          <div className="pcv-list">
+            <div className="pcv-sec">助手</div>
+            {filtered.map((a) => {
+              const active = a.agent_id === agentId;
+              return (
+                <button key={a.agent_id} type="button" className={active ? 'pcv-row active' : 'pcv-row'} onClick={() => selectAgent(a.agent_id)}>
+                  <HfAvatar glyph={Array.from(a.name)[0] ?? '?'} color={a.avatar_color ?? 'var(--t-accent)'} size={32} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="pcv-row-name">{a.name}</div>
+                    <div className="pcv-row-sub">{a.soul?.split('\n')[0] ?? ''}</div>
+                  </div>
+                </button>
+              );
+            })}
+            {filtered.length === 0 && <div style={{ fontSize: 11.5, color: 'var(--t-fg-4)', padding: '4px 6px' }}>暂无助手</div>}
+          </div>
+        </>,
+        slotEl,
+      )}
 
       {/* 中:DM 单聊(Timeline 渲染) */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
