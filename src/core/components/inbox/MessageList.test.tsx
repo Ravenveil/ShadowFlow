@@ -82,9 +82,18 @@ describe('MessageList', () => {
 
   it('switches active tab on click', () => {
     render(<MemoryRouter><MessageList /></MemoryRouter>);
-    const teamTab = screen.getByRole('tab', { name: /群聊/ });
-    fireEvent.click(teamTab);
-    expect(teamTab).toHaveAttribute('aria-selected', 'true');
+    const unreadTab = screen.getByRole('tab', { name: /未读/ });
+    fireEvent.click(unreadTab);
+    expect(unreadTab).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('no longer renders 单聊/群聊 type filters (carried by 个人/团队 switch)', () => {
+    render(<MemoryRouter><MessageList /></MemoryRouter>);
+    expect(screen.queryByRole('tab', { name: /单聊/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /群聊/ })).not.toBeInTheDocument();
+    // 全部 + 未读 仍在
+    expect(screen.getByRole('tab', { name: /全部/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /未读/ })).toBeInTheDocument();
   });
 
   it('shows both TEAM RUNS and AGENT DMs sections on "全部" tab', () => {
@@ -95,22 +104,13 @@ describe('MessageList', () => {
     expect(screen.getByText('Reviewer')).toBeInTheDocument();
   });
 
-  it('filters to only AGENT DMs section on "单聊" tab', () => {
+  it('keeps both TEAM RUNS and AGENT DMs mixed on "全部" (no type filter)', () => {
     render(<MemoryRouter><MessageList /></MemoryRouter>);
-    fireEvent.click(screen.getByRole('tab', { name: /单聊/ }));
-    expect(screen.queryByText('TEAM RUNS')).not.toBeInTheDocument();
-    expect(screen.getByText('AGENT DMs')).toBeInTheDocument();
-    expect(screen.queryByText('Research Team')).not.toBeInTheDocument();
-    expect(screen.getByText('Reviewer')).toBeInTheDocument();
-  });
-
-  it('filters to only TEAM RUNS section on "群聊" tab', () => {
-    render(<MemoryRouter><MessageList /></MemoryRouter>);
-    fireEvent.click(screen.getByRole('tab', { name: /群聊/ }));
+    // 取消单聊/群聊切换后，全部 = 群聊 + 单聊 混合，两段都在
     expect(screen.getByText('TEAM RUNS')).toBeInTheDocument();
-    expect(screen.queryByText('AGENT DMs')).not.toBeInTheDocument();
+    expect(screen.getByText('AGENT DMs')).toBeInTheDocument();
     expect(screen.getByText('Research Team')).toBeInTheDocument();
-    expect(screen.queryByText('Reviewer')).not.toBeInTheDocument();
+    expect(screen.getByText('Reviewer')).toBeInTheDocument();
   });
 
   it('shows only items with unread > 0 on "未读" tab', () => {
@@ -193,15 +193,16 @@ describe('MessageList', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<MemoryRouter><MessageList /></MemoryRouter>);
 
-    await user.click(screen.getByRole('tab', { name: /群聊/ }));
+    await user.click(screen.getByRole('tab', { name: /未读/ }));
     await user.type(screen.getByPlaceholderText('搜索群聊 / agent / 消息…'), 'PI');
     await act(async () => { vi.advanceTimersByTime(300); });
 
-    // "PI Sync" name contains "PI" → text split by HighlightText, use getByRole
-    expect(screen.getByRole('button', { name: /PI Sync/ })).toBeInTheDocument();
-    // Planner is an agent DM, excluded by tab filter
-    expect(screen.queryByRole('button', { name: /Planner/ })).not.toBeInTheDocument();
-    // Research Team doesn't contain "PI"
+    // 未读 tab: Research Team(unread=2) + Planner(unread=1) 才在候选内；
+    // 再 AND 搜索 "PI"：Planner.lastMessage "PI summary is ready" 命中。
+    expect(screen.getByRole('button', { name: /Planner/ })).toBeInTheDocument();
+    // Research Team 文本不含 "PI" → 被搜索排除
     expect(screen.queryByRole('button', { name: /Research Team/ })).not.toBeInTheDocument();
+    // Reviewer(unread=0) 被未读 tab 排除
+    expect(screen.queryByRole('button', { name: /Reviewer/ })).not.toBeInTheDocument();
   });
 });

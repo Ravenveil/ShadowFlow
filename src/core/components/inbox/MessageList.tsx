@@ -9,7 +9,10 @@ import { useDebounce } from '../../../common/hooks/useDebounce';
 import { useI18n } from '../../../common/i18n';
 import { useWorkspaceStore } from '../../../store/workspaceStore';
 
-type TabKey = 'all' | 'dm' | 'team' | 'unread';
+// 2026-06-11 — 取消「单聊/群聊」过滤：个人/团队 的区分已由 /chat 顶部
+// 个人|团队 切换承载（个人=单聊、团队=单聊+群聊混合），收件箱不再重复一套
+// 会话类型过滤。仅保留 全部 / 未读 两个读状态过滤。
+type TabKey = 'all' | 'unread';
 
 const PLACEHOLDER_TEMPLATE_ID = 'academic-paper';
 
@@ -17,8 +20,6 @@ export function MessageList() {
   const { t } = useI18n();
   const TABS: Array<{ key: TabKey; label: string }> = [
     { key: 'all', label: t('inbox.tabAll') },
-    { key: 'dm', label: t('inbox.tabDM') },
-    { key: 'team', label: t('inbox.tabTeam') },
     { key: 'unread', label: t('inbox.tabUnread') },
   ];
   const [activeTab, setActiveTab] = useState<TabKey>('all');
@@ -59,8 +60,6 @@ export function MessageList() {
     const allItems = [...groups, ...agentDMs];
     return {
       all: groups.length + agentDMs.length,
-      dm: agentDMs.length,
-      team: groups.length,
       unread: allItems.filter((item) => item.unreadCount > 0).length,
     };
   }, [agentDMs, groups]);
@@ -71,22 +70,21 @@ export function MessageList() {
   };
 
   const matchesGroup = (group: GroupItem): boolean => {
-    const matchesTab =
-      activeTab === 'all' || activeTab === 'team' || (activeTab === 'unread' && group.unreadCount > 0);
+    const matchesTab = activeTab === 'all' || (activeTab === 'unread' && group.unreadCount > 0);
     return matchesTab && (matchesSearch(group.name) || matchesSearch(group.lastMessage));
   };
 
   const matchesAgent = (agent: AgentDMItem): boolean => {
-    const matchesTab =
-      activeTab === 'all' || activeTab === 'dm' || (activeTab === 'unread' && agent.unreadCount > 0);
+    const matchesTab = activeTab === 'all' || (activeTab === 'unread' && agent.unreadCount > 0);
     return matchesTab && (matchesSearch(agent.agentName) || matchesSearch(agent.lastMessage));
   };
 
   const filteredGroups = groups.filter(matchesGroup);
   const filteredDMs = agentDMs.filter(matchesAgent);
   const hasResults = filteredGroups.length > 0 || filteredDMs.length > 0;
-  const showTeamSection = activeTab !== 'dm' && filteredGroups.length > 0;
-  const showDMSection = activeTab !== 'team' && filteredDMs.length > 0;
+  // 团队(群聊) + 单聊(DM) 两段都展示 = 混合视图，不再按会话类型互斥过滤。
+  const showTeamSection = filteredGroups.length > 0;
+  const showDMSection = filteredDMs.length > 0;
 
   return (
     <>
