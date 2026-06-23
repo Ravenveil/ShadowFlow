@@ -9,6 +9,8 @@ import { listAgents, type AgentRecord } from '../../api/agents';
 import { resolveDmConversation } from '../../api/groupApi';
 import { useChatStream, type ChatMessage } from '../../core/hooks/useChatStream';
 import { useWorkspaceStore } from '../../store/workspaceStore';
+import { useInboxStore } from '../../core/store/useInboxStore';
+import { paletteForAgent, initialOf } from '../../components/chat-fb/agentAvatar';
 import { Timeline } from '../../components/run-session/timeline/Timeline';
 import type { TimelineMessage } from '../../components/run-session/timeline/types';
 import { PersonalRightPane } from './PersonalRightPane';
@@ -44,6 +46,19 @@ function toTimelineMessages(messages: ChatMessage[]): TimelineMessage[] {
  *      渲染用 run 的 Timeline(自然融合:过程事件 M2 点亮)
  *   右:PersonalRightPane(run 式标签:员工/任务/Brief,可收起)
  */
+/** 会话记录行的相对时间（刚刚/分/时/天，再久回退日期）。 */
+function relTime(iso?: string): string {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  const diff = Date.now() - t;
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}分钟前`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}小时前`;
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}天前`;
+  try { return new Date(t).toLocaleDateString(); } catch { return ''; }
+}
+
 export function PersonalChatView() {
   const workspaceId = useWorkspaceStore((s) => s.currentId);
   // 统一侧栏(路B)：拿 HfLayout 那条常驻 ChatRail 的列表槽，portal 注入助手列表。
@@ -75,6 +90,20 @@ export function PersonalChatView() {
       .catch(() => { if (alive) setAgents([]); });
     return () => { alive = false; };
   }, [workspaceId]);
+
+  // 会话记录（U3）— 拉收件箱拿最近单聊会话，渲染成左栏「会话记录」段。
+  // Python 没起时为空（503 → store error），降级为空态，不报 JS 错。
+  const agentDMs = useInboxStore((s) => s.agentDMs);
+  useEffect(() => {
+    void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
+  }, [workspaceId]);
+  // 按最近活动倒序；最多 12 条（够覆盖「最近聊过谁」，再多走上方搜索/助手段）。
+  const recentDMs = useMemo(
+    () => [...agentDMs]
+      .sort((a, b) => Date.parse(b.lastActivityAt ?? '') - Date.parse(a.lastActivityAt ?? ''))
+      .slice(0, 12),
+    [agentDMs],
+  );
 
   // 选中助手 → 解析其 dm conversation(kind='dm')。守卫:agent 必须在当前工作区
   // 列表里才解析——挡住"切区后旧 ?agent= 触发跨区 find-or-create DM 落库"。
@@ -141,6 +170,33 @@ export function PersonalChatView() {
             </div>
           </div>
           <div className="pcv-list">
+            {/* 会话记录（U3 · 2026-06-23）— 最近单聊会话，点击恢复（group 模式自带
+                历史加载）。头像按 agent_id 取色（消费 U0 paletteForAgent）。搜索时隐藏，
+                聚焦助手检索。Python 没起 → recentDMs 空 → 整段不渲染。 */}
+            {q.trim() === '' && recentDMs.length > 0 && (
+              <>
+                <div className="pcv-sec">会话记录</div>
+                {recentDMs.map((d) => {
+                  const active = d.agentId === agentId;
+                  const pal = paletteForAgent(d.agentId, d.agentName);
+                  return (
+                    <button key={`dm_${d.agentId}`} type="button" className={active ? 'pcv-row active' : 'pcv-row'} onClick={() => selectAgent(d.agentId)}>
+                      <HfAvatar glyph={initialOf(d.agentName)} color={pal.accent} size={32} />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                          <div className="pcv-row-name" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.agentName}</div>
+                          <span style={{ flexShrink: 0, fontSize: 10.5, color: 'var(--t-fg-5)' }}>{relTime(d.lastActivityAt)}</span>
+                        </div>
+                        <div className="pcv-row-sub">{d.lastMessage || '—'}</div>
+                      </div>
+                      {d.unreadCount > 0 && (
+                        <span style={{ flexShrink: 0, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: 'var(--t-accent)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{d.unreadCount}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </>
+            )}
             <div className="pcv-sec">助手</div>
             {filtered.map((a) => {
               const active = a.agent_id === agentId;
