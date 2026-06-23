@@ -209,6 +209,30 @@ export function hasExplicitTeamIntent(goal: string): boolean {
 }
 
 /**
+ * 2026-06-23 — 普通对话直通路判定（investigate 根因修复）。个人态默认 mode='single'
+ * 且本轮**不是组装意图**时，应由一个普通对话/编码 agent 直接回答，而不是套
+ * 「团队组装指挥官」人格走组装三相位。纯函数、可单测；不改孪生正则
+ * （SINGLE_AGENT_PATTERNS / TEAM_INTENT_PATTERN），故不触发 assembly-rules-sync。
+ *
+ * 返回 true（走普通对话）当且仅当：
+ *   - mode === 'single'（个人 start composer 的 Auto 默认 / 用户显式选「单」）
+ *   - 非显式 @skill / skill_name（那是复现/组装意图）
+ *   - 非显式「建 1 个 agent」（detectExplicitSingleAgent —— 那仍是组装意图，组装器锁 1 节点）
+ *   - goal 无团队词（hasExplicitTeamIntent —— 有就该组队）
+ */
+export function shouldUsePlainConversation(args: {
+  mode?: string | null;
+  explicit_skill?: boolean;
+  goal: string;
+}): boolean {
+  if (args.mode !== 'single') return false;
+  if (args.explicit_skill) return false;
+  if (detectExplicitSingleAgent(args.goal).single) return false;
+  if (hasExplicitTeamIntent(args.goal)) return false;
+  return true;
+}
+
+/**
  * Detect an explicit "create exactly one agent" request in the goal.
  * Returns `{ single: true, matched }` only when a singular-agent phrase is
  * present AND no team phrase is present.

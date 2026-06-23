@@ -34,6 +34,7 @@ import { SKILLS } from '../skills';
 import { DESIGN_SYSTEMS } from '../design-systems';
 import { composeSystemPrompt, type LayerToggles } from '../prompt-assembly';
 import { composeMultiTurnPrompt } from '../prompts';
+import { CONVERSATIONAL_AGENT_PROMPT } from '../prompts/conversational';
 import { loadSkillSideFiles } from '../loaders/skill-side-files';
 import {
   PROVIDER_IDS,
@@ -76,7 +77,7 @@ import {
 // `classify` frame within ~1ms of stream open (LLM's own <sf:classify .../>
 // arrives many seconds later, after parser extraction). Two frames coexist;
 // front-end may diff them for consistency (S5.2 future story).
-import { classifyTS, detectExplicitSingleAgent, hasExplicitTeamIntent, SINGLE_AGENT_DIRECTIVE } from '../lib/intent-router';
+import { classifyTS, detectExplicitSingleAgent, hasExplicitTeamIntent, shouldUsePlainConversation, SINGLE_AGENT_DIRECTIVE } from '../lib/intent-router';
 import { loadTeam as loadGlobalTeam } from '../lib/team-yaml';
 // S2.3 (intent-workflow-design-v1 §4.4) — step artifact persistence + per-step
 // SSE frame. Parser fires node/edge/blueprint between `assemble:running` and
@@ -1265,11 +1266,26 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   const wantSingleAgent =
     explicitSingleIntent.single ||
     (session.mode === 'single' && !session.explicit_skill && !hasExplicitTeamIntent(session.goal));
+  // 2026-06-23 — 普通对话直通路（investigate 根因修复）。判定抽到 intent-router 的
+  // 纯函数 shouldUsePlainConversation（可单测）：个人态默认 mode='single' 且既不是显式
+  // @skill、又不是显式「建 1 个 agent」、又无团队词 → 这是一句寒暄/单步问答/写代码，
+  // 应由普通对话/编码 agent 直接回答，而不是套「团队组装指挥官」人格走组装三相位。
+  const wantPlainConversation = shouldUsePlainConversation({
+    mode: session.mode,
+    explicit_skill: session.explicit_skill,
+    goal: session.goal,
+  });
 
   try {
     const tsClassify = classifyTS(session.goal);
     sendEvent('classify', {
-      output_type: tsClassify.kind === 'task' ? 'workflow' : tsClassify.kind,
+      // 普通对话直通路：单人直接回答，统一标 'answer'（否则 classifyTS 把"写段代码"
+      // 之类判成 task→workflow，UI 误显"工作流"）。
+      output_type: wantPlainConversation
+        ? 'answer'
+        : tsClassify.kind === 'task'
+          ? 'workflow'
+          : tsClassify.kind,
       mode: wantSingleAgent ? 'single' : 'team',
       confidence: tsClassify.confidence,
       complexity: 2,
@@ -1365,15 +1381,28 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       `[run-sessions] injecting conversation_history (chars=${conversationHistoryBlock.length})`,
     );
   }
-  const compose = composeSystemPrompt({
-    ds_injection: ds?.injection_prompt,
-    skill_system_prompt: skillForPrompt?.system_prompt,
-    skill_mode: skillForPrompt?.mode,
-    project_meta: session.project_meta ?? null,
-    conversation_history: conversationHistoryBlock,
-    side_files: sideFilesAuto.prompt || undefined,
-    layer_toggles: session.layer_toggles,
-  });
+  // 普通对话直通路（investigate 根因修复）：skill 层换成普通对话/编码 agent 人设，
+  // 并关掉 discovery（强制"复述意图+计划"，组装味）与 framework（mode 专属指令），
+  // 不加载组装 skill 的 side files。保留 identity（反 AI 味）+ conversation_history（多轮）。
+  const compose = wantPlainConversation
+    ? composeSystemPrompt({
+        ds_injection: ds?.injection_prompt,
+        skill_system_prompt: CONVERSATIONAL_AGENT_PROMPT,
+        skill_mode: undefined,
+        project_meta: session.project_meta ?? null,
+        conversation_history: conversationHistoryBlock,
+        side_files: undefined,
+        layer_toggles: { ...(session.layer_toggles ?? {}), discovery: false, framework: false },
+      })
+    : composeSystemPrompt({
+        ds_injection: ds?.injection_prompt,
+        skill_system_prompt: skillForPrompt?.system_prompt,
+        skill_mode: skillForPrompt?.mode,
+        project_meta: session.project_meta ?? null,
+        conversation_history: conversationHistoryBlock,
+        side_files: sideFilesAuto.prompt || undefined,
+        layer_toggles: session.layer_toggles,
+      });
   // Emit compose event BEFORE the assembler kicks off so the front-end /
   // inspector sees the layer manifest first. Payload is metadata-only —
   // never the prompt text itself (avoids SSE bloat + prompt leakage).
@@ -1432,7 +1461,9 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     // 注意：当前 system_prompt 已 layer-composed，含 team-first phase-1。
     // agent-first 时需要把 phase-1 重组，所以 reassemble。
     let effectiveSystemPrompt = compose.prompt;
-    if (!teamSpec && skillForPrompt?.system_prompt === composeMultiTurnPrompt('team-first')) {
+    // 普通对话直通路：compose.prompt 已是普通对话人设，绝不做 agent-first 重组、
+    // 也不追加 SINGLE_AGENT_DIRECTIVE（那是组装路的 roster 锁，对对话无意义且会泄"建节点"措辞）。
+    if (!wantPlainConversation && !teamSpec && skillForPrompt?.system_prompt === composeMultiTurnPrompt('team-first')) {
       // 通用 agent-team-blueprint skill + 无 team yaml → agent-first 流
       effectiveSystemPrompt = compose.prompt.replace(
         composeMultiTurnPrompt('team-first'),
@@ -1446,7 +1477,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     //   · mode='single'（个人态 Auto 默认 / 用户在 composer 选「单」）— 新增。
     // 两者都已折进上方 wantSingleAgent（含团队词 / 显式 @skill 逃生门）。
     // 避免 "帮我创建一个开发工程师agent" 扩成 3 人 squad；个人寒暄/单任务不组团队。
-    if (wantSingleAgent) {
+    if (wantSingleAgent && !wantPlainConversation) {
       effectiveSystemPrompt += SINGLE_AGENT_DIRECTIVE;
       console.log(
         `[run-sessions] single-agent roster cap (explicitText=${explicitSingleIntent.single} mode=${session.mode ?? '-'})`,
@@ -1478,6 +1509,9 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           // dispatches into llm-providers/. CLI / ACP runners ignore them.
           provider: session.provider,
           api_key: session.api_key,
+          // 2026-06-23 — 普通对话直通：assembler 据此跳过组装路由，verbatim 用上面
+          // 的 conversational system_prompt 单轮 turn()，不注入「组装指挥官」directive。
+          conversational: wantPlainConversation,
         });
     if (teamSpec && wantSyntheticFallback) {
       console.log(

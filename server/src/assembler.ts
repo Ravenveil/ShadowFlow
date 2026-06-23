@@ -412,6 +412,15 @@ export interface SkillAssemblerOptions {
    * (workspace = opts.cwd || projectDir)。
    */
   cwd?: string;
+  /**
+   * 2026-06-23 — 个人态「普通对话 / 编码 agent」直通路（investigate 根因修复）。
+   * 上游路由（routes/run-sessions.ts）判定本轮是「单人闲聊/单步问答/写代码」而非组装
+   * 意图时置 true。为 true 时：**完全跳过组装路由**（不看 recipe / compiled team /
+   * loadAssemblyDirective），直接用调用方给的 `system_prompt`（CONVERSATIONAL_AGENT_PROMPT
+   * 组成）单轮 `callable.turn()`。这样默认 skill 在 `shouldOrchestrate===true` 下被强制注入
+   * 「团队组装指挥官」directive 的覆盖路被绕开——普通对话不再扮演组装器。
+   */
+  conversational?: boolean;
 }
 
 // 2026-06-01 — 组装意图指令。读 `.shadowflow/skills/agent-team-assembly` 的
@@ -641,6 +650,26 @@ export async function* runSkillAssembler(
       `[skill-assembler] artifact written: ${filePath} (${content.length} bytes)`,
     );
   };
+
+  // 2026-06-23 — 普通对话直通路（investigate 根因修复）。个人态「单人闲聊/单步问答/
+  // 写代码」既不该走 recipe，也不该 orchestrate（默认 skill 会被 shouldOrchestrate===true
+  // 强制注入「团队组装指挥官」directive）。这里在任何组装判定之前短路：用调用方给的
+  // conversational system_prompt 单轮 turn()，工具能力由 executor 决定（CLI 自带工具循环）。
+  if (opts.conversational) {
+    console.log(`[skill-assembler] session=${session_id} conversational pass-through (no orchestration)`);
+    const chunkStream = callable.turn({
+      system: effectiveSystemPrompt,
+      prompt: goal,
+      history: [],
+      workspace,
+      signal: effectiveSignal,
+      model: opts.model,
+      maxTokens: opts.max_tokens,
+      temperature: opts.temperature,
+    });
+    yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
+    return;
+  }
 
   // Round 4 PR-C — compile-driven branch selection.
   //
