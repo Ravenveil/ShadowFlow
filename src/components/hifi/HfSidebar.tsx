@@ -10,12 +10,12 @@
  * now shows only a minimalist brand bar to reclaim vertical space for
  * navigation. Search / NAV / Settings / user card unchanged.
  */
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { openQuickSwitcher } from './QuickSwitcher';
-import { Home, MessageCircle, Users, Bot, Search, PanelLeftClose, PanelLeftOpen, Folder, CalendarDays } from 'lucide-react';
+import { Search, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { PersonalTeamToggle } from '../../pages/chat-home/PersonalTeamToggle';
-import type { LucideIcon } from 'lucide-react';
+import { PRIMARY_NAV } from '../../config/navConfig';
 import { HfDot } from './HfAtoms';
 import { useI18n } from '../../common/i18n';
 import { Settings as HfSettingsIcon, User as HfUserIcon } from '../../common/icons/iconRegistry';
@@ -34,33 +34,13 @@ export type HfSidebarActive =
   | 'projects'
   | 'settings';
 
-interface NavItem {
-  k: HfSidebarActive;
-  Icon: LucideIcon;
-  label: string;
-  hint: string;
-  to: string;
-  badge?: number;
+// 2026-06-22 侧栏统一 — 全局侧栏导航改读单一真相源 PRIMARY_NAV（src/config/
+// navConfig.ts），与 /chat 的 ChatRail 逐字一致；换页时左侧 nav 纹丝不动。
+// 当前路由是否命中某 nav —— 按 to 的 path 部分（忽略 query）前缀匹配。
+function navItemActive(to: string, pathname: string): boolean {
+  const path = to.split('?')[0];
+  return path === '/chat' ? pathname.startsWith('/chat') : pathname.startsWith(path);
 }
-
-const buildNavItems = (t: (key: string) => string, chatBadge: number, chatTo: string): NavItem[] => [
-  // 2026-06-22 侧栏统一 — 「开始」收口到聊天内新任务 /chat?new=1，与 ChatRail
-  // 的「新建任务」对齐，消除「同图标两去处」分叉（/start 降级为深链，路由仍保留）。
-  { k: 'start',     Icon: Home,           label: t('shell.navNewTask'),   hint: '⌘1', to: '/chat?new=1' },
-  // 2026-05-19 — Chat link target is now data-driven (first real group_id),
-  // not the hardcoded "/chat/default" that pointed at a non-existent group
-  // and caused POST /api/groups/default/messages 404 → messages disappear
-  // on refresh. Badge reflects real unread count from useInboxStore.
-  { k: 'chat',      Icon: MessageCircle,  label: t('shell.navChat'),      hint: '⌘2', to: chatTo, badge: chatBadge > 0 ? chatBadge : undefined },
-  { k: 'teams',     Icon: Users,          label: t('shell.navTeams'),     hint: '⌘3', to: '/teams' },
-  { k: 'agents',    Icon: Bot,            label: t('shell.navAgents'),    hint: '⌘4', to: '/agents' },
-  // 2026-05-20 — "模板" 入口下架。旧 /templates 跳 /editor:alias 走的是已删的
-  // Skill Studio 编辑器；Skill Pack 时代的库放在 /start。⌘5 编号空出来留给
-  // 后续新的一等公民页面（projects 仍是 ⌘7 以保持肌肉记忆）。
-  { k: 'calendar',  Icon: CalendarDays,  label: t('shell.navCalendar'),  hint: '⌘6', to: '/calendar' },
-  // Story 15.24 — Projects nav entry (Project + Conversation history page).
-  { k: 'projects',  Icon: Folder,        label: t('projects.navLabel'),  hint: '⌘7', to: '/projects' },
-];
 
 interface HfSidebarProps {
   active?: HfSidebarActive;
@@ -161,17 +141,10 @@ function UserCard({ user, status, collapsed, onOpen }: UserCardProps) {
 
 export function HfSidebar({ active = 'start' }: HfSidebarProps) {
   const { t } = useI18n();
-  // Real unread count for the chat badge — sum of unreadCount across groups.
+  // 未读计数 → 「消息」项徽标（全 app 未读求和）。
   const chatUnread = useInboxStore((s) =>
     s.groups.reduce((acc, g) => acc + (g.unreadCount ?? 0), 0),
   );
-  // First available real group_id for the chat link target. When the inbox
-  // hasn't been populated yet (or user has no groups), fall back to plain
-  // /chat so ChatPage renders its empty state instead of trying to POST
-  // to a non-existent group_id.
-  const firstGroupId = useInboxStore((s) => s.groups[0]?.id);
-  const chatTo = firstGroupId ? `/chat/${firstGroupId}` : '/chat';
-  const NAV_ITEMS = useMemo(() => buildNavItems(t, chatUnread, chatTo), [t, chatUnread, chatTo]);
   const [collapsed, setCollapsed] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const { user, status } = useAuth();
@@ -291,15 +264,17 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
         </div>
       )}
 
-      {NAV_ITEMS.map((it) => {
-        const on = it.k === active;
+      {PRIMARY_NAV.map((it) => {
+        const on = navItemActive(it.to, location.pathname);
+        const label = t(it.labelKey);
+        const badge = it.key === 'inbox' && chatUnread > 0 ? chatUnread : undefined;
         if (collapsed) {
           return (
             <Link
-              key={it.k}
+              key={it.key}
               to={it.to}
-              title={it.label}
-              data-testid={`sidenav-${it.k}`}
+              title={label}
+              data-testid={`sidenav-${it.key}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -317,7 +292,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
               <span style={{ color: on ? 'var(--t-accent)' : 'var(--t-fg-3)', display: 'inline-flex' }}>
                 <it.Icon size={16} strokeWidth={1.75} aria-hidden />
               </span>
-              {it.badge ? (
+              {badge ? (
                 <span style={{
                   position: 'absolute',
                   top: 5,
@@ -334,14 +309,14 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
                   justifyContent: 'center',
                   fontFamily: 'var(--font-mono)',
                 }}>
-                  {it.badge}
+                  {badge}
                 </span>
               ) : null}
             </Link>
           );
         }
         return (
-          <Link key={it.k} to={it.to} data-testid={`sidenav-${it.k}`} style={rowStyle(on)}>
+          <Link key={it.key} to={it.to} data-testid={`sidenav-${it.key}`} style={rowStyle(on)}>
             {on && <span style={activeBar} />}
             <span
               style={{
@@ -362,9 +337,9 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
                 color: on ? 'var(--t-fg)' : 'var(--t-fg-2)',
               }}
             >
-              {it.label}
+              {label}
             </span>
-            {it.badge ? (
+            {badge ? (
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
@@ -376,19 +351,9 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
                   color: 'var(--t-accent-ink)',
                 }}
               >
-                {it.badge}
+                {badge}
               </span>
-            ) : (
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 9,
-                  color: 'var(--t-fg-5)',
-                }}
-              >
-                {it.hint}
-              </span>
-            )}
+            ) : null}
           </Link>
         );
       })}
