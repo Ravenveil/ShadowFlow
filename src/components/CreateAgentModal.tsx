@@ -138,7 +138,7 @@ export function CreateAgentModal({
       }}
     >
       <div
-        className="hf-card"
+        className="hf-card sf-anim-scale-in"
         style={{
           position: 'relative',
           width: '100%',
@@ -149,7 +149,7 @@ export function CreateAgentModal({
           border: '1px solid color-mix(in oklab, var(--t-accent) 24%, var(--t-border))',
           boxShadow:
             '0 24px 64px -24px color-mix(in oklab, var(--t-accent) 40%, transparent), 0 8px 24px -12px rgba(0,0,0,.4)',
-          animation: 'sf-modal-card-in 220ms cubic-bezier(.2,.8,.2,1)',
+          // Entrance handled by the round-1 .sf-anim-scale-in utility (spring pop).
         }}
       >
         {/* Decorative accent glow behind the header */}
@@ -401,7 +401,7 @@ export function CreateAgentModal({
           onClick={() => void handleCreate()}
           disabled={busy}
           data-testid="create-agent-submit"
-          className="hf-btn hf-btn-pri"
+          className="hf-btn hf-btn-pri sf-press sf-focus-ring"
           style={{
             position: 'relative',
             zIndex: 1,

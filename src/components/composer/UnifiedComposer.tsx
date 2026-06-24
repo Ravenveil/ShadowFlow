@@ -96,6 +96,12 @@ export interface UnifiedComposerProps {
   autoFocus?: boolean;
   /** 可选受控初始文本（模板 chips 预填用）。变化时覆盖当前草稿。 */
   initialText?: string;
+  /**
+   * 模板填充时高亮的占位符区间（如 `【主题】`）。配合 `initialText` 使用：
+   * 当 initialText 变化且带 selectRange 时，textarea 聚焦并选中 [start,end)，
+   * 用户可立即覆写第一个占位符。additive — 不传则行为不变。
+   */
+  selectRange?: { start: number; end: number };
 }
 
 
@@ -165,6 +171,7 @@ function ChipBtn({
       onMouseLeave={() => setHover(false)}
       data-testid={testId}
       title={title}
+      className="sf-press sf-focus-ring"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -239,6 +246,7 @@ export function UnifiedComposer({
   variant = 'hero',
   autoFocus = false,
   initialText,
+  selectRange,
 }: UnifiedComposerProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -285,6 +293,25 @@ export function UnifiedComposer({
   // open. Folds the old SkillDropdown overlay into a CommandMenu row badge.
   const [skillStatusById, setSkillStatusById] = useState<Record<string, CompileStatus>>({});
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  // 模板占位符高亮：当 selectRange 随 initialText 一起到来时，聚焦 textarea 并选中
+  // 第一个占位符（如 `【主题】`），让用户落地即可直接覆写。additive — selectRange
+  // 缺省时不触发。依赖 initialText 以便同一模板重复点击（seedKey 强制重渲染）也生效。
+  useEffect(() => {
+    if (!selectRange) return;
+    const el = composerRef.current;
+    if (!el) return;
+    const { start, end } = selectRange;
+    const id = window.setTimeout(() => {
+      try {
+        el.focus();
+        el.setSelectionRange(start, end);
+      } catch {
+        /* setSelectionRange 在区间越界等极端情形下抛错，忽略即可 */
+      }
+    }, 0);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectRange, initialText]);
   // Lazy-load installed skills the first time either trigger opens — both
   // `@` and `/` list the same skill set as "skill-pack → agent/team物化"
   // entries, just sorted differently per the user's mental model.
@@ -908,6 +935,7 @@ export function UnifiedComposer({
               title={pickCwd ? `CLI 工作目录: ${pickCwd}` : '选择 CLI 工作目录'}
               onClick={() => setShowDirPicker((v) => !v)}
               data-testid="start-chip-dir"
+              className="sf-press sf-focus-ring"
               style={{
                 width: 28, height: 28, display: 'inline-flex', alignItems: 'center',
                 justifyContent: 'center', borderRadius: 6, cursor: 'pointer',
@@ -1155,7 +1183,7 @@ export function UnifiedComposer({
             type="button"
             onClick={() => void handleSubmit()}
             disabled={submitting}
-            className="hf-btn hf-btn-pri"
+            className="hf-btn hf-btn-pri sf-press sf-focus-ring"
             style={{
               fontSize: 12,
               fontWeight: 800,

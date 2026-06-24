@@ -604,9 +604,15 @@ export default function StartPage() {
   const [showCreateAgent, setShowCreateAgent] = useState(false);
   const [composerSeed, setComposerSeed] = useState<string | undefined>(undefined);
   const [seedKey, setSeedKey] = useState(0);
+  // 模板占位符高亮区间（如 【主题】）→ 传给 UnifiedComposer.selectRange，
+  // 用户点击模板后 textarea 自动选中第一个占位符，可立即覆写。
+  const [composerSelect, setComposerSelect] = useState<{ start: number; end: number } | undefined>(
+    undefined,
+  );
 
-  function fillComposer(text: string) {
+  function fillComposer(text: string, selectRange?: { start: number; end: number }) {
     setComposerSeed(text);
+    setComposerSelect(selectRange);
     setSeedKey((k) => k + 1);
     // Scroll the composer into view so the filled prompt is visible.
     requestAnimationFrame(() => {
@@ -617,10 +623,26 @@ export default function StartPage() {
   }
 
   // Branded onboarding — no dedicated create API yet, so we seed the composer
-  // with a first-run goal and let the existing run-session flow take over.
-  function handleCreateAgent(name: string) {
+  // with a first-run goal AND auto-submit it through the existing run-session
+  // pipeline (handleComposerSubmit) so the ceremony actually kicks off a session
+  // instead of just prefilling text. The seed still lands in the composer first
+  // (visible + recoverable if the POST fails — the composer shows its own error
+  // bar, but the auto-submit below surfaces it through StartPage's submitError).
+  async function handleCreateAgent(name: string) {
+    const goal = `请帮我创建一个名为「${name}」的数字伙伴：先了解我的工作场景与偏好，再准备好它的能力与工作流，然后开始为我工作。`;
     setShowCreateAgent(false);
-    fillComposer(`请帮我创建一个名为「${name}」的数字伙伴：先了解我的工作场景与偏好，再准备好它的能力与工作流，然后开始为我工作。`);
+    fillComposer(goal);
+    // Drive the real pipeline. Throwing here propagates back to the modal's
+    // onCreate await → its inline error bar; but since we already closed the
+    // modal, we also surface via the page-level submitError as a fallback.
+    try {
+      await handleComposerSubmit({ text: goal, mode: 'auto', knowledge: [], attachments: [] });
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : String(err));
+      // Re-open so the user sees the ceremony failed and can retry naming.
+      setShowCreateAgent(true);
+      throw err;
+    }
   }
 
   // Auto-open wizard via ?wizard=1 (Story 13.4)
@@ -848,6 +870,7 @@ export default function StartPage() {
             variant="hero"
             onSubmit={handleComposerSubmit}
             initialText={composerSeed}
+            selectRange={composerSelect}
           />
 
           {/* Create-Agent ceremony trigger — opens the branded onboarding modal
@@ -890,7 +913,11 @@ export default function StartPage() {
 
           {/* Task-template wall — clawsgo's one-click template grid. Clicking a
               card fills the composer above (additive hero section). */}
-          <TaskTemplateWall onPick={(prompt) => fillComposer(prompt)} />
+          <TaskTemplateWall
+            onPick={(prompt, _tpl, placeholder) =>
+              fillComposer(prompt, placeholder ?? undefined)
+            }
+          />
 
 
           {/* Suggestion chips */}

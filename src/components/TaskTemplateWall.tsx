@@ -12,7 +12,7 @@
  * Style convention matches the repo: inline styles + CSS vars
  * (--t-fg / --t-accent / --t-panel / --t-panel-2 / --t-border / --t-accent-tint …).
  */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Telescope,
   FlaskConical,
@@ -20,7 +20,9 @@ import {
   FileText,
   Globe,
   Presentation,
+  Sparkles,
 } from 'lucide-react';
+import { listSkills, type SkillInfo } from '../api/skills';
 
 export interface TaskTemplate {
   id: string;
@@ -30,6 +32,24 @@ export interface TaskTemplate {
   tag: string;
   /** Prompt text injected into the composer when the card is clicked. */
   prompt: string;
+}
+
+/** [start,end) range of the first literal placeholder in the prompt. */
+export interface PlaceholderRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * Locate the first literal placeholder in a prompt so the composer can
+ * select+highlight it for immediate editing. Recognises the 全角【…】 token
+ * used by the template copy (e.g. 【主题】, 【论文标题/链接】). Returns null
+ * when the prompt has no placeholder.
+ */
+export function firstPlaceholderRange(prompt: string): PlaceholderRange | null {
+  const match = /【[^】]*】/.exec(prompt);
+  if (!match) return null;
+  return { start: match.index, end: match.index + match[0].length };
 }
 
 export const TASK_TEMPLATES: TaskTemplate[] = [
@@ -90,28 +110,62 @@ export const TASK_TEMPLATES: TaskTemplate[] = [
 ];
 
 export interface TaskTemplateWallProps {
-  /** Called with the template's prompt when a card is clicked. */
-  onPick: (prompt: string, template: TaskTemplate) => void;
+  /**
+   * Called with the template's prompt when a card is clicked. The third arg
+   * carries the first placeholder range (e.g. 【主题】) so the parent can
+   * focus + select it in the composer for immediate editing — null when the
+   * prompt has no placeholder. Additive: existing 2-arg callers still type-check.
+   */
+  onPick: (
+    prompt: string,
+    template: TaskTemplate,
+    placeholder: PlaceholderRange | null,
+  ) => void;
   /** Optional section label override. */
   label?: string;
   templates?: TaskTemplate[];
+  /**
+   * When true (default), augment the const list with templates derived from the
+   * live skills registry (listSkills). Set false to render only `templates`.
+   */
+  useLiveSkills?: boolean;
+}
+
+// Map a live skill into a template card. Skills without an example_prompt are
+// skipped by the caller (a template with no prompt can't fill the composer).
+function skillToTemplate(s: SkillInfo): TaskTemplate | null {
+  const prompt = s.example_prompt?.trim();
+  if (!prompt) return null;
+  return {
+    id: `skill:${s.skill_id}`,
+    icon: <Sparkles size={18} strokeWidth={1.8} />,
+    title: s.name,
+    desc: s.description || s.name,
+    tag: s.kind === 'workflow' ? '工作流' : s.kind === 'generator' ? '生成' : 'Skill',
+    prompt,
+  };
 }
 
 function TemplateCard({
   tpl,
   onPick,
+  index = 0,
 }: {
   tpl: TaskTemplate;
   onPick: TaskTemplateWallProps['onPick'];
+  index?: number;
 }) {
   const [hover, setHover] = useState(false);
   return (
     <button
       type="button"
       data-testid={`task-template-${tpl.id}`}
-      onClick={() => onPick(tpl.prompt, tpl)}
-      className="hf-card"
+      onClick={() => onPick(tpl.prompt, tpl, firstPlaceholderRange(tpl.prompt))}
+      className="hf-card sf-anim-slide-up"
       style={{
+        // Stagger the entrance so cards cascade in (clawsgo motion). Capped so a
+        // long live-skills list doesn't drag the last card in too late.
+        animationDelay: `${Math.min(index, 8) * 45}ms`,
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
@@ -178,7 +232,41 @@ export function TaskTemplateWall({
   onPick,
   label = '从一个任务模板开始',
   templates = TASK_TEMPLATES,
+  useLiveSkills = true,
 }: TaskTemplateWallProps) {
+  // Live skills registry → template cards. Prefer the same listSkills source
+  // StartPage's composer uses, falling back to the curated const list when the
+  // backend is unreachable (listSkills already returns LOCAL_SKILLS on failure).
+  // The const `templates` always lead so the hand-tuned hero cards stay first;
+  // live skills (deduped by id) append after.
+  const [liveTemplates, setLiveTemplates] = useState<TaskTemplate[] | null>(null);
+  useEffect(() => {
+    if (!useLiveSkills) return;
+    let cancelled = false;
+    listSkills()
+      .then((skills) => {
+        if (cancelled) return;
+        const mapped = skills
+          .filter((s) => s.enabled !== false)
+          .map(skillToTemplate)
+          .filter((t): t is TaskTemplate => t !== null);
+        setLiveTemplates(mapped);
+      })
+      .catch(() => {
+        if (!cancelled) setLiveTemplates([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [useLiveSkills]);
+
+  const merged: TaskTemplate[] = (() => {
+    if (!liveTemplates || liveTemplates.length === 0) return templates;
+    const seen = new Set(templates.map((t) => t.id));
+    const extra = liveTemplates.filter((t) => !seen.has(t.id));
+    return [...templates, ...extra];
+  })();
+
   return (
     <section style={{ width: '100%' }} data-testid="task-template-wall" data-section="task-templates">
       <div className="hf-label" style={{ marginBottom: 10 }}>
@@ -191,8 +279,8 @@ export function TaskTemplateWall({
           gap: 10,
         }}
       >
-        {templates.map((tpl) => (
-          <TemplateCard key={tpl.id} tpl={tpl} onPick={onPick} />
+        {merged.map((tpl, i) => (
+          <TemplateCard key={tpl.id} tpl={tpl} onPick={onPick} index={i} />
         ))}
       </div>
     </section>
