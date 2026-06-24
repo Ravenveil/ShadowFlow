@@ -5,22 +5,17 @@ import type { AgentRecord } from '../../api/agents';
 import { RightPaneTabs, type RightPaneTabDef } from '../../components/run-session/RightPaneTabs';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
-import { RunWorkPane } from './RunWorkPane';
-import { EmbeddedPage } from '../../components/run-session/EmbeddedPage';
-import CalendarPage from '../CalendarPage';
-import ProjectsPage from '../ProjectsPage';
+import { AgentWorkspacePane } from './AgentWorkspacePane';
 
 // 2026-06-18 — DM 单聊右栏 = 该 agent 的「设定卡」(用户选定:prompt/模型/工具)。
 // 「设定」置首并默认,工作区/任务/Brief 降为次级 tab(保留,不删 — UI 保护规则)。
-// 2026-06-22 — 用户要求把「日历」「项目」整页塞进右栏标签页(三处右栏统一)。
-type TabId = 'employee' | 'work' | 'tasks' | 'brief' | 'calendar' | 'projects';
+// 2026-06-24 — 删「日历」「项目」两个整页 tab（重复入口，全局左栏已有）；工作区换 AgentWorkspacePane。
+type TabId = 'employee' | 'work' | 'tasks' | 'brief';
 const TABS: RightPaneTabDef<TabId>[] = [
   { key: 'employee', label: '设定' },
   { key: 'work', label: '工作区' },
   { key: 'tasks', label: '任务' },
   { key: 'brief', label: 'Brief' },
-  { key: 'calendar', label: '日历' },
-  { key: 'projects', label: '项目' },
 ];
 
 interface PersonalRightPaneProps {
@@ -138,7 +133,7 @@ export function PersonalRightPane({ agent, groupId }: PersonalRightPaneProps) {
           </button>
         }
         panels={{
-          work: <RunWorkPane groupId={groupId} />,
+          work: <AgentWorkspacePane groupId={groupId} />,
           employee: agent ? (
             <AgentSettingsCard agent={agent} />
           ) : (
@@ -158,9 +153,6 @@ export function PersonalRightPane({ agent, groupId }: PersonalRightPaneProps) {
           ) : (
             <NeedAgentHint />
           ),
-          // 日历 / 项目 — 整页直接塞入(自带布局,EmbeddedPage 只负责撑满高度)
-          calendar: <EmbeddedPage><CalendarPage /></EmbeddedPage>,
-          projects: <EmbeddedPage><ProjectsPage /></EmbeddedPage>,
         }}
       />
     </div>
