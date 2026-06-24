@@ -17,7 +17,7 @@
  * Pure presentational + minimal local state for the per-row retry cooldown.
  */
 import React, { useState } from 'react';
-import { Check, Eye, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Check, Eye, RotateCcw, AlertTriangle, Wrench } from 'lucide-react';
 import ToolCallCard from './ToolCallCard';
 import type { RunSessionToolCall } from '../../core/hooks/useRunSession';
 
@@ -176,6 +176,50 @@ const StepRowRetry: React.FC<{
       )}
       {pending ? (missing ? '未实现' : '已发送') : '重跑'}
     </ActionButton>
+  );
+};
+
+// ── Tool-call group header ────────────────────────────────────────────────────
+// Compact "工具调用 · N" label above a step's nested ToolCallCards. Surfaces
+// per-step tool progress (running vs settled) the way clawsgo shows live tool
+// activity. Pure derived display from the step's toolCalls — additive only.
+const ToolCallGroupHeader: React.FC<{ calls: RunSessionToolCall[] }> = ({ calls }) => {
+  const total = calls.length;
+  const running = calls.filter((c) => c.status === 'running').length;
+  const failed = calls.filter((c) => c.status === 'failed').length;
+  const done = total - running - failed;
+  // Aggregate the real result count across settled search-style calls so the
+  // step header echoes clawsgo's "找到 N 个结果" when the runtime announced hits.
+  const settledLinks = calls.reduce((n, c) => n + (c.links?.length ?? 0), 0);
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        paddingLeft: 1,
+        fontSize: 10,
+        color: 'var(--t-fg-5)',
+        fontWeight: 600,
+        letterSpacing: '.02em',
+      }}
+    >
+      <Wrench size={10} color="var(--t-accent-bright, var(--t-accent, #1890FF))" />
+      <span>工具调用</span>
+      <span style={{ color: 'var(--t-fg-4)' }}>·</span>
+      {running > 0 ? (
+        <span style={{ color: 'var(--t-accent-bright, var(--t-accent))' }}>
+          {`${done + failed}/${total} 进行中`}
+        </span>
+      ) : (
+        <span style={{ color: failed > 0 ? 'var(--t-err, #EF4444)' : 'var(--t-ok, #10B981)' }}>
+          {failed > 0 ? `${done} 完成 · ${failed} 失败` : `${total} 完成`}
+        </span>
+      )}
+      {settledLinks > 0 && (
+        <span style={{ color: 'var(--t-fg-4)' }}>{`· ${settledLinks} 个链接`}</span>
+      )}
+    </div>
   );
 };
 
@@ -385,6 +429,11 @@ const StepList: React.FC<StepListProps> = ({ steps, onStepView, onStepRetry }) =
                   marginBottom: 4,
                 }}
               >
+                {/* Tool-call group header — at-a-glance tool activity for the
+                    step (clawsgo per-step progress). Additive: a small label
+                    above the existing nested cards; counts running vs done so
+                    an in-flight step reads "工具调用 · 2/3". */}
+                <ToolCallGroupHeader calls={step.toolCalls} />
                 {step.toolCalls.map((tc) => (
                   <ToolCallCard key={tc.id} call={tc} />
                 ))}

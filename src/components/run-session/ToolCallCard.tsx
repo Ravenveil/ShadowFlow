@@ -28,6 +28,7 @@ import {
   ExternalLink,
   FolderSearch,
   Download,
+  Check,
 } from 'lucide-react';
 import type { RunSessionToolCall } from '../../core/hooks/useRunSession';
 
@@ -92,9 +93,47 @@ function prettyTool(tool: string): string {
   return tool.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * clawsgo "找到 N 个结果" — derive the real result count for the links header.
+ *
+ * The backend tool-call projection now parses a structured `result_count` from
+ * the runtime output (run-sessions.ts parseResultCount) and also surfaces it in
+ * the result summary text. Because the SSE→hook reducer only forwards a fixed
+ * field set, we re-parse the same count phrases out of `resultSummary` here so
+ * the card shows the REAL hit count (e.g. "找到 12 个结果") rather than the bare
+ * number of extracted links — which is capped at 5 and only counts URLs. When
+ * no count phrase is present we fall back to the link count (still real data).
+ *
+ * Returns undefined only when there is neither a parsed count nor any links.
+ */
+function resolveResultCount(
+  resultSummary: string | undefined,
+  linkCount: number,
+): number | undefined {
+  if (resultSummary) {
+    const patterns: RegExp[] = [
+      /found\s+(\d[\d,]*)\s+(?:results?|matches|hits|items|files?|rows?)/i,
+      /(\d[\d,]*)\s+(?:results?|matches|hits|items|files?|rows?)\b/i,
+      /找到\s*(\d[\d,]*)\s*(?:个|条)?\s*(?:结果|匹配|项|条目|文件|行)/,
+      /(\d[\d,]*)\s*(?:个|条)\s*(?:结果|匹配|项|条目|文件)/,
+      /(\d[\d,]*)\s*行/,
+    ];
+    for (const re of patterns) {
+      const m = resultSummary.match(re);
+      if (m && m[1]) {
+        const n = Number(m[1].replace(/,/g, ''));
+        if (Number.isFinite(n) && n >= 0) return n;
+      }
+    }
+  }
+  return linkCount > 0 ? linkCount : undefined;
+}
+
 const ToolCallCard: React.FC<ToolCallCardProps> = ({ call }) => {
   const [expanded, setExpanded] = useState(false);
   const links = call.links ?? [];
+  // clawsgo "找到 N 个结果" beat — the real hit count when known, else link count.
+  const resultCount = resolveResultCount(call.resultSummary, links.length);
   // Expandable iff there is something worth revealing.
   const hasDetail =
     !!call.inputSummary || !!call.resultSummary || links.length > 0;
@@ -183,6 +222,25 @@ const ToolCallCard: React.FC<ToolCallCardProps> = ({ call }) => {
           >
             {call.title}
           </span>
+          {/* clawsgo beat — "search term → 找到 N 个结果". Shown inline (collapsed)
+              once the call is done and a real count is known, so the left pane
+              reads like a search log without needing to expand. */}
+          {call.status === 'done' && resultCount != null && (
+            <span
+              style={{
+                fontSize: 10.5,
+                color: 'var(--t-ok, #10B981)',
+                fontWeight: 600,
+                lineHeight: 1.2,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+              }}
+            >
+              <Check size={10} strokeWidth={2.5} />
+              {`找到 ${resultCount} 个结果`}
+            </span>
+          )}
         </span>
         <span
           aria-hidden
@@ -229,8 +287,22 @@ const ToolCallCard: React.FC<ToolCallCardProps> = ({ call }) => {
           )}
           {links.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 1 }}>
-              <span style={{ fontSize: 10, color: 'var(--t-fg-5)', fontWeight: 600 }}>
-                {`${links.length} 个结果链接`}
+              <span
+                style={{
+                  fontSize: 10,
+                  color: 'var(--t-ok, #10B981)',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Check size={10} strokeWidth={2.5} />
+                {/* Real hit count when the runtime announced one ("找到 N 个结果"),
+                    else the number of clickable links surfaced. */}
+                {resultCount != null && resultCount !== links.length
+                  ? `找到 ${resultCount} 个结果 · ${links.length} 个链接`
+                  : `找到 ${resultCount ?? links.length} 个结果`}
               </span>
               {links.map((lnk, i) => (
                 <a
