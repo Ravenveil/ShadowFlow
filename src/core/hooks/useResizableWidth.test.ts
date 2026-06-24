@@ -161,4 +161,28 @@ describe('useResizableWidth — drag behavior', () => {
     // width = 312 + 200 = 512
     expect(localStorage.getItem(KEY)).toBe('512');
   });
+
+  // M-1: mouseup 后 mousemove 监听已解绑，width 不再变化
+  it('mouseup unbinds mousemove listener — subsequent moves have no effect', () => {
+    const { result } = renderHook(() => useResizableWidth(KEY, 312));
+    act(() => {
+      result.current.onDragStart({ clientX: 500, preventDefault: vi.fn() } as unknown as React.MouseEvent);
+    });
+    // 拖拽中：向左 50px
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 450 }));
+    });
+    expect(result.current.width).toBe(362); // 312 + 50
+    // mouseup 结束拖拽
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mouseup'));
+    });
+    expect(result.current.dragging).toBe(false);
+    const widthAfterUp = result.current.width;
+    // mouseup 后再 mousemove，宽度不再变化
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 200 }));
+    });
+    expect(result.current.width).toBe(widthAfterUp);
+  });
 });

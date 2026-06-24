@@ -53,13 +53,19 @@ export function useResizableWidth(
   // 拖拽时的起点 x 和起点宽度
   const dragStart = useRef<{ startX: number; startWidth: number } | null>(null);
 
+  // ref 快照：避免 onDragStart 的 useCallback 依赖 width 导致拖拽中每帧重建
+  const widthRef = useRef(width);
+  useEffect(() => {
+    widthRef.current = width;
+  }, [width]);
+
   const onDragStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      dragStart.current = { startX: e.clientX, startWidth: width };
+      dragStart.current = { startX: e.clientX, startWidth: widthRef.current };
       setDragging(true);
     },
-    [width],
+    [], // 空依赖：通过 widthRef 读取最新宽度，无需把 width 列为依赖
   );
 
   useEffect(() => {

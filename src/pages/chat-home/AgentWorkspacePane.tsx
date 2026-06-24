@@ -1,5 +1,6 @@
 // src/pages/chat-home/AgentWorkspacePane.tsx
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { RightPaneTabs, type RightPaneTabDef } from '../../components/run-session/RightPaneTabs';
 import { useWorkspaceRun } from '../../core/hooks/useWorkspaceRun';
 import { RunOverviewView } from './RunOverviewView';
@@ -18,6 +19,7 @@ const TABS: RightPaneTabDef<WsTab>[] = [
 
 export function AgentWorkspacePane({ groupId }: { groupId?: string | null }) {
   const [tab, setTab] = useState<WsTab>('overview');
+  const navigate = useNavigate();
   const { session, latest, history, loading, reload, runCwd } = useWorkspaceRun(groupId);
 
   return (
@@ -34,7 +36,14 @@ export function AgentWorkspacePane({ groupId }: { groupId?: string | null }) {
             loading={loading}
             onReload={reload}
             reloading={loading}
-            onOpenRun={() => setTab('preview')}
+            onOpenRun={(sid) => {
+              // 最新 run 主卡 → 就地切到产物 tab；历史 run 行 → 跳整页
+              if (latest && sid === latest.session_id) {
+                setTab('preview');
+              } else {
+                navigate(`/run-session/${sid}`);
+              }
+            }}
           />
         ),
         preview: <PreviewPanel session={session} />,

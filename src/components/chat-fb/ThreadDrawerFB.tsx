@@ -347,7 +347,13 @@ export function ThreadDrawerFB({
   return (
     <div
       className={styles.drawer}
-      style={{ width: drawerWidth, position: 'relative', userSelect: drawerDragging ? 'none' : undefined }}
+      style={{
+        width: drawerWidth,
+        position: 'relative',
+        userSelect: drawerDragging ? 'none' : undefined,
+        // 拖拽过程中关闭 CSS transition，避免每帧宽度更新产生 160ms 延迟感
+        transition: drawerDragging ? 'none' : undefined,
+      }}
     >
       {/* 左边缘拖拽手柄 */}
       <div
