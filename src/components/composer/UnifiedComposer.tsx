@@ -380,6 +380,10 @@ export function UnifiedComposer({
         knowledge,
         attachments,
       });
+      // 2026-06-24 — skill 只在「当轮 @ 或显式选中」时生效，提交后清掉 pendingSkill，
+      // 不再静默粘住（修「敲 hi 却触发上次选的 bmad 团队装配」根因）。对齐产品模型：
+      // 默认走单 agent 对话（hermes 式），仅 @skill / 明确组队意图才触发装配。
+      setPendingSkill(null);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -479,7 +483,7 @@ export function UnifiedComposer({
         setSkillPickerOpen(true);
         break;
       case 'help':
-        setToast('快捷键: ⏎ 发送 · Shift+⏎ 换行 · @ 提及 Skill · / 命令');
+        setToast('快捷键: @ 提及 Skill · / 命令');
         break;
       case 'inspect':
         navigate('/runs');
@@ -1123,7 +1127,6 @@ export function UnifiedComposer({
 
 
           <div style={{ flex: 1, minWidth: 6 }} />
-          <span className="hf-kbd">⏎ 发送 · Shift+⏎ 换行</span>
           <button
             type="button"
             onClick={() => void handleSubmit()}
