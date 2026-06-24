@@ -307,5 +307,124 @@ router.get('/pick-native', (_req: Request, res: Response) => {
   });
 });
 
+/**
+ * GET /api/fs/raw?path=<absFile>&root=<absDir> — 原样返回文件字节（带 root 白名单守卫）。
+ *
+ * Workbench FileViewer 预览图片（<img src>）/ WorkspacePane 预览 .html（iframe）需要直链
+ * 拿到字节流，read 接口只回 utf8 文本不行。复用 read 接口同款 root 守卫 + symlink 校验，
+ * 按扩展名设 Content-Type，限 8MB。
+ */
+const MAX_RAW_BYTES = 8 * 1024 * 1024; // 8MB
+const RAW_MIME: Record<string, string> = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+  '.webp': 'image/webp', '.bmp': 'image/bmp', '.ico': 'image/x-icon', '.svg': 'image/svg+xml',
+  '.avif': 'image/avif', '.pdf': 'application/pdf', '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
+};
+
+router.get('/raw', (req: Request, res: Response) => {
+  const file = typeof req.query.path === 'string' ? sanitizePath(req.query.path) : '';
+  const root = typeof req.query.root === 'string' ? sanitizePath(req.query.root) : '';
+
+  if (!file) {
+    res.status(400).json({ error: { code: 'NO_PATH', message: 'path 必填' } });
+    return;
+  }
+  if (!root) {
+    res.status(400).json({ error: { code: 'NO_ROOT', message: 'root 必填（限定可读子树）' } });
+    return;
+  }
+  if (!path.isAbsolute(file)) {
+    res.status(400).json({ error: { code: 'NOT_ABSOLUTE', message: 'path 必须是绝对路径' } });
+    return;
+  }
+
+  const absFile = path.resolve(file);
+  const absRoot = path.resolve(root);
+  if (!isInside(absFile, absRoot)) {
+    res.status(403).json({ error: { code: 'FORBIDDEN', message: '路径越权：仅允许读工作目录内文件' } });
+    return;
+  }
+
+  let realFile: string;
+  try {
+    realFile = realpathSync(absFile);
+  } catch {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: '路径不存在' } });
+    return;
+  }
+  if (!isInside(realFile, absRoot)) {
+    res.status(403).json({ error: { code: 'FORBIDDEN', message: '符号链接越权' } });
+    return;
+  }
+
+  let size: number;
+  try {
+    const st = statSync(realFile);
+    if (!st.isFile()) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: '不是文件' } });
+      return;
+    }
+    size = st.size;
+  } catch (e) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: e instanceof Error ? e.message : String(e) } });
+    return;
+  }
+  if (size > MAX_RAW_BYTES) {
+    res.status(413).json({ error: { code: 'TOO_LARGE', message: '文件超过 8MB，无法预览' } });
+    return;
+  }
+  const ext = path.extname(realFile).toLowerCase();
+  res.setHeader('Content-Type', RAW_MIME[ext] ?? 'application/octet-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.send(readFileSync(realFile));
+});
+
+/**
+ * GET /api/fs/open-native?path=<absFile> — 用系统默认程序打开文件（Open-in-editor）。
+ *
+ * Workbench FileViewer 的「在编辑器中打开」按钮 + 二进制兜底用。daemon 跑在用户本机，
+ * 调 OS 的「打开」命令交给默认程序（编辑器/看图/PDF 阅读器）。只读打开，不写文件。
+ */
+router.get('/open-native', (req: Request, res: Response) => {
+  const file = typeof req.query.path === 'string' ? sanitizePath(req.query.path) : '';
+  if (!file || !path.isAbsolute(file)) {
+    res.status(400).json({ error: { code: 'NO_PATH', message: 'path 必填且须为绝对路径' } });
+    return;
+  }
+  const abs = path.resolve(file);
+  try {
+    if (!statSync(abs).isFile()) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: '不是文件' } });
+      return;
+    }
+  } catch {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: '路径不存在' } });
+    return;
+  }
+
+  const os = platform();
+  let cmd: string;
+  let args: string[];
+  if (os === 'win32') {
+    cmd = 'cmd.exe';
+    args = ['/c', 'start', '', abs];
+  } else if (os === 'darwin') {
+    cmd = 'open';
+    args = [abs];
+  } else {
+    cmd = 'xdg-open';
+    args = [abs];
+  }
+
+  execFile(cmd, args, { timeout: 15_000, windowsHide: true }, (err) => {
+    if (err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+      res.status(503).json({ error: { code: 'UNSUPPORTED', message: `本机没有可用的打开命令(${cmd} 缺失)` } });
+      return;
+    }
+    res.json({ data: { opened: true } });
+  });
+});
+
 export { router as fsBrowseRouter };
 export default router;

@@ -58,6 +58,28 @@ export async function listDirs(path?: string): Promise<FsListDirsResult | null> 
 }
 
 /**
+ * 用系统默认程序打开文件（Open-in-editor）。daemon 跑在本机，调 OS「打开」命令。
+ * 返回 true = 已发起打开；false = 失败 / 503 不支持。
+ */
+export async function openInEditor(file: string): Promise<boolean> {
+  try {
+    const r = await fetch(`${getApiBase()}/api/fs/open-native?path=${encodeURIComponent(file)}`);
+    if (!r.ok) return false;
+    const j = await r.json();
+    return j.data?.opened === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 文件原始字节直链（图片 <img src> / .html iframe 预览用），带 root 白名单守卫。
+ */
+export function rawUrl(file: string, root: string): string {
+  return `${getApiBase()}/api/fs/raw?path=${encodeURIComponent(file)}&root=${encodeURIComponent(root)}`;
+}
+
+/**
  * 弹出操作系统原生文件夹选择框（由后端在本机弹出）。
  * 返回用户选中的绝对路径；null = 取消 / 503 不支持。
  */
