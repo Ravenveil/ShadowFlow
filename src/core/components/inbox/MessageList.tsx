@@ -90,7 +90,7 @@ export function MessageList() {
     <>
       <aside
         data-testid="message-list"
-        className="flex w-[360px] flex-none flex-col overflow-y-auto border-r border-white/5 bg-shadowflow-surface"
+        className="flex w-full flex-1 flex-col overflow-y-auto bg-shadowflow-surface"
       >
         <div className="sticky top-0 z-10 border-b border-white/5 bg-shadowflow-surface/95 px-5 pb-4 pt-5 backdrop-blur">
           <div className="flex h-14 items-center justify-between">
@@ -177,8 +177,7 @@ export function MessageList() {
                     key={g.id}
                     item={g}
                     selected={g.id === selectedGroupId}
-                    onClick={() => selectGroup(g.id)}
-                    onDoubleClick={() => navigate(`/chat/${g.id}`)}
+                    onClick={() => { selectGroup(g.id); navigate(`/chat/${g.id}`); }}
                     highlightKeyword={effectiveSearchText}
                   />
                 ))}
