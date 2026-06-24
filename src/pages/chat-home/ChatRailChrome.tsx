@@ -13,7 +13,7 @@
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Layers } from 'lucide-react';
 import { WorkspaceSelector } from '../../components/workspace/WorkspaceStrip';
 import { PersonalTeamToggle, type ChatHomeView } from './PersonalTeamToggle';
 import { useI18n } from '../../common/i18n';
@@ -99,6 +99,7 @@ export function ChatRailHeader({
   const navigate = useNavigate();
   const goChatView = (v: ChatHomeView) =>
     navigate(v === 'personal' ? '/chat?view=personal' : '/chat');
+  const goWorkbench = () => navigate('/chat?view=workbench');
   return (
     <div
       style={{
@@ -138,6 +139,35 @@ export function ChatRailHeader({
             <WorkspaceSelector />
           </div>
         )}
+        {/* 工作台入口（2026-06-24 三栏改造）——既有 chat 体验的进化态：
+            左挑 Agent/Team · 中对话 · 右项目文件。additive，不替换个人/团队切换。 */}
+        <button
+          type="button"
+          onClick={goWorkbench}
+          data-testid="chatrail-workbench-entry"
+          className="sf-rail-nav-row sf-press"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 9,
+            padding: '6px 8px',
+            borderRadius: 7,
+            border: '1px solid var(--t-border)',
+            background: 'var(--t-panel-2)',
+            color: 'var(--t-fg-3)',
+            cursor: 'pointer',
+            fontSize: 12.5,
+            fontWeight: 600,
+            width: '100%',
+          }}
+          title="三栏工作台：左挑 Agent/Team · 中对话 · 右项目文件"
+        >
+          <Layers size={15} strokeWidth={1.9} aria-hidden style={{ color: 'var(--t-accent)' }} />
+          <span>工作台</span>
+          <span style={{ marginLeft: 'auto', fontSize: 9.5, fontFamily: 'var(--font-mono)', color: 'var(--t-fg-5)', letterSpacing: '.06em' }}>
+            3-COL
+          </span>
+        </button>
         {/* 团队态「+ 新任务」按钮已删（2026-06-22 用户要求）——「新建会话」入口
             已在 PrimaryNavGroup 顶部导航组，不重复放。 */}
       </div>
@@ -157,6 +187,7 @@ export function ChatRail({
   bordered = false,
   containerStyle,
   onCollapsedChange,
+  forceCollapsed = false,
   children,
 }: {
   view: ChatHomeView;
@@ -165,17 +196,26 @@ export function ChatRail({
   bordered?: boolean;
   containerStyle?: CSSProperties;
   onCollapsedChange?: (collapsed: boolean) => void;
+  /**
+   * 强制折叠成 48px 细导轨（不写 localStorage，不动用户偏好）。
+   * 三栏工作台（?view=workbench）用：内容区自带 AgentTeamRail 左栏，此时全局 ChatRail
+   * 收成 hermes 风的细 app 侧栏，避免双左栏。退出 workbench 视图自动恢复用户偏好。
+   */
+  forceCollapsed?: boolean;
   children: ReactNode;
 }) {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
+  const [collapsedPref, setCollapsedPref] = useState<boolean>(() => {
     try {
       return localStorage.getItem(RAIL_COLLAPSED_KEY) === '1';
     } catch {
       return false;
     }
   });
+  // forceCollapsed 覆盖用户偏好（只在渲染期生效，不持久化）。
+  const collapsed = forceCollapsed || collapsedPref;
+  const setCollapsed = setCollapsedPref;
 
   useEffect(() => {
     onCollapsedChange?.(collapsed);

@@ -31,7 +31,12 @@ export function HfLayout() {
   useTheme();
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
-  const needsLayoutTopBar = LAYOUT_TOPBAR_PREFIXES.some(p => pathname.startsWith(p));
+  // 三栏工作台（/chat?view=workbench）：内容区自带 AgentTeamRail 左栏 + 三栏外壳，
+  // 不注入全局 HfTopBar——否则三栏会被顶到 topbar 下方溢出/截断（REVIEWER 扣分项）。
+  const isWorkbench =
+    pathname.startsWith('/chat') && searchParams.get('view') === 'workbench';
+  const needsLayoutTopBar =
+    !isWorkbench && LAYOUT_TOPBAR_PREFIXES.some(p => pathname.startsWith(p));
   // PagePeekOverlay 以同源 iframe 弹出原页面——iframe 内隐藏侧栏/宠物栏，只留页面本体。
   const embedded = typeof window !== 'undefined' && window.self !== window.top;
 
@@ -41,6 +46,10 @@ export function HfLayout() {
   const railView: 'personal' | 'team' =
     pathname.startsWith('/chat') && searchParams.get('view') === 'personal' ? 'personal' : 'team';
 
+  // 三栏工作台（/chat?view=workbench）：内容区自带 AgentTeamRail 左栏，全局 ChatRail
+  // 收成 48px 细 app 侧栏（hermes 形态），避免双左栏。其余视图不受影响。
+  const railForceCollapsed = isWorkbench;
+
   // zoom-shell:height 抵消全局 --app-zoom,放大后内容不超物理视口(见 index.css)。
   return (
     <div className="hf-root zoom-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -49,6 +58,7 @@ export function HfLayout() {
           <ChatRail
             view={railView}
             width={SIDEBAR_W}
+            forceCollapsed={railForceCollapsed}
             containerStyle={{ borderRight: '1px solid var(--t-border)', background: 'var(--t-panel)' }}
           >
             <SidebarSlotMount />
@@ -64,7 +74,9 @@ export function HfLayout() {
           }}
         >
           {needsLayoutTopBar && <HfTopBar />}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
+          {/* 工作台三栏自管溢出 (内部 sf-scroll)，外层用 hidden 避免冗余滚动条；
+              其余页面保持 auto 以纵向滚动。 */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: isWorkbench ? 'hidden' : 'auto' }}>
             <Outlet />
           </div>
           {!embedded && <PetRail />}
