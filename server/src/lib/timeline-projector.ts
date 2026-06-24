@@ -74,7 +74,7 @@ function nowMs(): number {
  * gap #2 — 工具结果摘要（对齐 Hermes 工具卡的 "3 files" / "527 elements"）。
  * 无逐工具语义解析，按通用启发：多行→"N 行"；JSON 数组→"N 项"；单行短→原文；否则字符数。
  */
-function summarizeToolResult(body: string): string | undefined {
+export function summarizeToolResult(body: string): string | undefined {
   const b = (body ?? '').trim();
   if (!b) return undefined;
   // JSON 数组 → "N 项"

@@ -43,7 +43,8 @@ import {
   replayTimeline,
   type ChatMessageItem,
 } from '../lib/timeline-replay';
-import type { TimelineMessage } from '../lib/contracts';
+import type { TimelineMessage, MessagePatch } from '../lib/contracts';
+import { summarizeToolResult } from '../lib/timeline-projector';
 import type { TurnChunk } from '../workflow/types';
 // B1 互链：group → conversation；B2：conversation → run sessions → 事件日志。
 import { getConversationByGroup } from '../storage/conversations';
@@ -198,10 +199,26 @@ function sseWireToText(value: string): string {
  * 映射与 timeline-projector.onToolUse/onToolResult 一致(args 截 200、空 result 跳过)。
  * gw 为 null（startGatewayRun 失败）时整体 no-op，不影响聊天主链路。
  */
-export function emitToolChunk(
-  gw: { nextId(): string; turnId: string; emitMessage(m: TimelineMessage): void } | null,
-  chunk: TurnChunk,
-): void {
+/** 网关 gw 接口（emitPatch 可选——老调用方/测试可能只给 emitMessage）。 */
+type ToolGw = {
+  nextId(): string;
+  turnId: string;
+  emitMessage(m: TimelineMessage): void;
+  emitPatch?(p: MessagePatch): void;
+} | null;
+
+// gap #2（2026-06-24）— 按 gw 记当前未落定的 tool_call（id + 开始时间），
+// 用于 tool-result 时发 tool_finalize（耗时 + 成功/失败 + 结果摘要）。WeakMap
+// 随 gw 生命周期自动回收，不污染 gw 类型。
+const _openToolByGw = new WeakMap<object, { id: string; startMs: number }>();
+
+/** body 看起来像错误？（与 timeline-projector.onToolResult 同启发）。 */
+function looksLikeToolError(body: string): boolean {
+  return /^\s*(error|exception|traceback|failed|enoent|permission denied)/i.test(body)
+    || (/\b(error|failed)\b/i.test(body.slice(0, 80)) && body.length < 200);
+}
+
+export function emitToolChunk(gw: ToolGw, chunk: TurnChunk): void {
   if (!gw) return;
   if (chunk.type === 'tool-use') {
     let argsSummary = '';
@@ -214,16 +231,36 @@ export function emitToolChunk(
       argsSummary = String(chunk.tool.tool_input);
     }
     if (argsSummary.length > 200) argsSummary = argsSummary.slice(0, 200) + '…';
+    // 前一个 tool 没收到 result 就被顶替 → 先落定为 ok（防永久转圈）。
+    const prev = _openToolByGw.get(gw);
+    if (prev && gw.emitPatch) {
+      gw.emitPatch({ id: prev.id, op: 'tool_finalize', status: 'ok', duration_ms: Math.max(0, Date.now() - prev.startMs) });
+    }
+    const id = gw.nextId();
+    _openToolByGw.set(gw, { id, startMs: Date.now() });
     gw.emitMessage({
-      id: gw.nextId(),
+      id,
       kind: 'tool_call',
       turn_id: gw.turnId,
       ts: Date.now(),
       name: chunk.tool.tool_name,
       args_summary: argsSummary,
+      status: 'running',
     });
   } else if (chunk.type === 'tool-result') {
     const body = (chunk.result.output ?? '').trim();
+    // gap #2 — 落定最近未结的 tool_call（耗时 + 成功/失败 + 结果摘要）。
+    const open = _openToolByGw.get(gw);
+    if (open && gw.emitPatch) {
+      gw.emitPatch({
+        id: open.id,
+        op: 'tool_finalize',
+        status: looksLikeToolError(body) ? 'error' : 'ok',
+        duration_ms: Math.max(0, Date.now() - open.startMs),
+        result_summary: summarizeToolResult(body),
+      });
+      _openToolByGw.delete(gw);
+    }
     if (!body) return;
     gw.emitMessage({
       id: gw.nextId(),
