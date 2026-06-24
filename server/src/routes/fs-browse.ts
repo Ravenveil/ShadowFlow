@@ -13,7 +13,7 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { execFile } from 'node:child_process';
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync, statSync, readFileSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import path from 'node:path';
 
@@ -149,6 +149,62 @@ router.get('/files', (req: Request, res: Response) => {
   }
   files.sort((a, b) => a.name.localeCompare(b.name));
   res.json({ data: { path: target, files } });
+});
+
+/**
+ * GET /api/fs/read?path=<absFile>&root=<absDir> — 读文件内容（带 root 白名单守卫），2026-06-24。
+ *
+ * 安全要点：
+ *   - `root` 必填；`path` 必须在 root 子树内（防路径穿越）。
+ *   - 使用 path.resolve + path.relative 判断，不依赖字符串前缀匹配（避免大小写/符号链接欺骗）。
+ *   - 文件大小上限 1MB；超出截断前 1MB 并设 truncated:true。
+ *
+ * 返回 200 { data: { content, size, truncated } }
+ *      400 { error: { code: 'NO_ROOT', ... } }         root 未提供
+ *      403 { error: { code: 'FORBIDDEN', ... } }       路径越权
+ *      404 { error: { code: 'NOT_FOUND', ... } }       文件不存在
+ */
+const MAX_READ_BYTES = 1024 * 1024; // 1MB
+
+function isInside(child: string, parent: string): boolean {
+  const rel = path.relative(parent, child);
+  // rel 为空 → child===parent（允许读单个文件直接作为 root 时）
+  // rel 以 '..' 开头 → 越出父目录
+  // path.isAbsolute(rel) → Windows 不同盘符时 relative 返回绝对路径
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+router.get('/read', (req: Request, res: Response) => {
+  const file = typeof req.query.path === 'string' ? sanitizePath(req.query.path) : '';
+  const root = typeof req.query.root === 'string' ? sanitizePath(req.query.root) : '';
+  if (!root) {
+    res.status(400).json({ error: { code: 'NO_ROOT', message: 'root 必填（限定可读子树）' } });
+    return;
+  }
+  const absFile = path.resolve(file);
+  const absRoot = path.resolve(root);
+  if (!isInside(absFile, absRoot)) {
+    res.status(403).json({ error: { code: 'FORBIDDEN', message: '路径越权：仅允许读工作目录内文件' } });
+    return;
+  }
+  let size: number;
+  try {
+    const st = statSync(absFile);
+    if (!st.isFile()) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: '不是文件' } });
+      return;
+    }
+    size = st.size;
+  } catch (e) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: e instanceof Error ? e.message : String(e) } });
+    return;
+  }
+  if (size > MAX_READ_BYTES) {
+    const buf = readFileSync(absFile).subarray(0, MAX_READ_BYTES).toString('utf8');
+    res.json({ data: { content: buf, size, truncated: true } });
+    return;
+  }
+  res.json({ data: { content: readFileSync(absFile, 'utf8'), size, truncated: false } });
 });
 
 /** Validate a candidate cwd: must be an existing absolute directory. */
