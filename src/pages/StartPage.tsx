@@ -33,6 +33,7 @@ import {
   CheckCircle2,
   XCircle,
   Trash2,
+  Sparkles,
 } from 'lucide-react';
 import { getApiBase } from '../api/_base';
 import { useSecretsStore } from '../core/hooks/useSecretsStore';
@@ -47,6 +48,8 @@ import {
   UnifiedComposer,
   type UnifiedComposerSubmitPayload,
 } from '../components/composer/UnifiedComposer';
+import { CreateAgentModal } from '../components/CreateAgentModal';
+import { TaskTemplateWall } from '../components/TaskTemplateWall';
 
 // ---------------------------------------------------------------------------
 // Recent drafts helpers
@@ -595,6 +598,30 @@ export default function StartPage() {
   // the composer's own submit lifecycle lives inside UnifiedComposer (F1).
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Create-Agent ceremony + task-template wall (clawsgo first impression).
+  // composerSeed feeds UnifiedComposer's `initialText`; bumping seedKey forces
+  // the controlled overwrite even when a user clicks the same template twice.
+  const [showCreateAgent, setShowCreateAgent] = useState(false);
+  const [composerSeed, setComposerSeed] = useState<string | undefined>(undefined);
+  const [seedKey, setSeedKey] = useState(0);
+
+  function fillComposer(text: string) {
+    setComposerSeed(text);
+    setSeedKey((k) => k + 1);
+    // Scroll the composer into view so the filled prompt is visible.
+    requestAnimationFrame(() => {
+      document
+        .querySelector('[data-testid="unified-composer"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
+
+  // Branded onboarding — no dedicated create API yet, so we seed the composer
+  // with a first-run goal and let the existing run-session flow take over.
+  function handleCreateAgent(name: string) {
+    setShowCreateAgent(false);
+    fillComposer(`请帮我创建一个名为「${name}」的数字伙伴：先了解我的工作场景与偏好，再准备好它的能力与工作流，然后开始为我工作。`);
+  }
 
   // Auto-open wizard via ?wizard=1 (Story 13.4)
   useEffect(() => {
@@ -816,7 +843,54 @@ export default function StartPage() {
               knowledge + mode + toast + SkillPickerModal) moved wholesale into
               UnifiedComposer. variant="hero" keeps the exact /start visuals;
               POST submit stays here in handleComposerSubmit. */}
-          <UnifiedComposer variant="hero" onSubmit={handleComposerSubmit} />
+          <UnifiedComposer
+            key={seedKey}
+            variant="hero"
+            onSubmit={handleComposerSubmit}
+            initialText={composerSeed}
+          />
+
+          {/* Create-Agent ceremony trigger — opens the branded onboarding modal
+              (clawsgo「你的常驻数字伙伴」). Additive: sits just under the composer,
+              does not replace any existing CTA. */}
+          <div style={{ textAlign: 'center', marginTop: -12 }}>
+            <button
+              type="button"
+              data-testid="create-agent-trigger"
+              onClick={() => setShowCreateAgent(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '8px 16px',
+                borderRadius: 999,
+                cursor: 'pointer',
+                fontSize: 12.5,
+                fontWeight: 600,
+                fontFamily: 'inherit',
+                color: 'var(--t-accent)',
+                background: 'var(--t-accent-tint)',
+                border: '1px solid color-mix(in oklab, var(--t-accent) 32%, transparent)',
+                transition: 'background 140ms ease, transform 140ms ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.background =
+                  'color-mix(in oklab, var(--t-accent) 18%, var(--t-accent-tint))';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.background = 'var(--t-accent-tint)';
+              }}
+            >
+              <Sparkles size={14} strokeWidth={2} aria-hidden />
+              创建你的数字伙伴
+            </button>
+          </div>
+
+          {/* Task-template wall — clawsgo's one-click template grid. Clicking a
+              card fills the composer above (additive hero section). */}
+          <TaskTemplateWall onPick={(prompt) => fillComposer(prompt)} />
 
 
           {/* Suggestion chips */}
@@ -969,6 +1043,14 @@ export default function StartPage() {
         </div>
       </div>
       {/* SkillPickerModal — moved into UnifiedComposer (F1, 2026-06-11). */}
+
+      {/* Create-Agent ceremony — branded onboarding modal. Presentational +
+          callback; handleCreateAgent seeds the composer (no create API yet). */}
+      <CreateAgentModal
+        open={showCreateAgent}
+        onClose={() => setShowCreateAgent(false)}
+        onCreate={handleCreateAgent}
+      />
     </div>
   );
 }

@@ -855,12 +855,15 @@ export function UnifiedComposer({
           </div>
         )}
 
-        {/* ── Chip row · single layer · 5 chips + spacer + ⌘⏎ + ✦ go ── */}
+        {/* ── Chip row · single layer · 5 chips + spacer + ⌘⏎ + ✦ go ──
+            Micro-polish (clawsgo modular composer): the left config chips group
+            into a soft pill rail so skill/model/dir/mode/knowledge read as one
+            modular control set, with consistent ghost-hover + line icons. */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
+            gap: 2,
             flexWrap: 'nowrap',
             marginTop: isChat ? 6 : 12,
             paddingTop: isChat ? 6 : 10,
@@ -894,19 +897,40 @@ export function UnifiedComposer({
             />
           </div>
 
-          {/* 2026-05-30 — CLI 工作目录(cwd)。选了 CLI executor 才真生效。 */}
+          {/* 2026-05-30 — CLI 工作目录(cwd)。选了 CLI executor 才真生效。
+              Micro-polish (clawsgo modular row): match the ghost ChipBtn visual
+              language — borderless h28 ghost, accent-tint when configured, soft
+              panel-2 hover — so the whole row reads as one coherent control set. */}
           <div style={{ flexShrink: 0, position: 'relative' }}>
             <button
               ref={dirAnchorRef}
               type="button"
               title={pickCwd ? `CLI 工作目录: ${pickCwd}` : '选择 CLI 工作目录'}
               onClick={() => setShowDirPicker((v) => !v)}
+              data-testid="start-chip-dir"
               style={{
-                width: 32, height: 32, display: 'inline-flex', alignItems: 'center',
-                justifyContent: 'center', borderRadius: 8, cursor: 'pointer',
-                background: pickCwd ? 'var(--t-accent-tint)' : 'transparent',
-                border: `1px solid ${pickCwd ? 'var(--t-accent)' : 'var(--t-border)'}`,
-                color: pickCwd ? 'var(--t-accent-bright)' : 'var(--t-fg-4)',
+                width: 28, height: 28, display: 'inline-flex', alignItems: 'center',
+                justifyContent: 'center', borderRadius: 6, cursor: 'pointer',
+                background: showDirPicker
+                  ? 'var(--t-accent-tint)'
+                  : pickCwd
+                    ? 'var(--t-bg-elev-2, var(--t-panel-2))'
+                    : 'transparent',
+                border: 'none',
+                color: showDirPicker || pickCwd ? 'var(--t-accent)' : 'var(--t-fg-3)',
+                transition: 'background 120ms ease, color 120ms ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!showDirPicker && !pickCwd) {
+                  e.currentTarget.style.background = 'var(--t-panel-2)';
+                  e.currentTarget.style.color = 'var(--t-fg-2)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!showDirPicker && !pickCwd) {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'var(--t-fg-3)';
+                }
               }}
             >
               <FolderOpen size={14} strokeWidth={1.8} />
