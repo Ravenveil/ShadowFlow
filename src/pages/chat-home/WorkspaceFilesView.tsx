@@ -10,20 +10,40 @@ function formatBytes(n: number): string {
 
 export function WorkspaceFilesView({ root }: { root: string | null }) {
   const [files, setFiles] = useState<FsFile[]>([]);
+  /** Absolute directory returned by the backend (path.resolve'd). Used as root for readFile. */
+  const [absDir, setAbsDir] = useState<string>('');
   const [sel, setSel] = useState<FsFile | null>(null);
   const [body, setBody] = useState<string>('');
 
+  // When root (relative path prop) changes, re-fetch file list and reset selection.
   useEffect(() => {
-    if (!root) { setFiles([]); return; }
-    listFiles(root).then(setFiles).catch(() => setFiles([]));
+    if (!root) {
+      setFiles([]);
+      setAbsDir('');
+      setSel(null);
+      setBody('');
+      return;
+    }
+    setSel(null);
+    setBody('');
+    listFiles(root)
+      .then(({ dir, files: fs }) => {
+        setAbsDir(dir);
+        setFiles(fs);
+      })
+      .catch(() => {
+        setAbsDir('');
+        setFiles([]);
+      });
   }, [root]);
 
+  // When selection changes, read the file using the backend-resolved absolute directory.
   useEffect(() => {
-    if (!sel || !root) { setBody(''); return; }
-    readFile(sel.path, root)
+    if (!sel || !absDir) { setBody(''); return; }
+    readFile(sel.path, absDir)
       .then((r) => setBody(r.content))
       .catch(() => setBody('（无法预览此文件）'));
-  }, [sel, root]);
+  }, [sel, absDir]);
 
   if (!root) {
     return (

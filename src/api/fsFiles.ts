@@ -8,11 +8,16 @@ export interface FsFile {
   ext: string;
 }
 
-export async function listFiles(dir: string): Promise<FsFile[]> {
+export async function listFiles(
+  dir: string,
+): Promise<{ dir: string; files: FsFile[] }> {
   const r = await fetch(`${getApiBase()}/api/fs/files?path=${encodeURIComponent(dir)}`);
-  if (!r.ok) return [];
+  if (!r.ok) return { dir: '', files: [] };
   const j = await r.json();
-  return j.data?.files ?? [];
+  return {
+    dir: (j.data?.path as string) ?? '',
+    files: (j.data?.files as FsFile[]) ?? [],
+  };
 }
 
 export async function readFile(
