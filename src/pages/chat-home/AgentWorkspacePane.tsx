@@ -5,6 +5,7 @@ import { useWorkspaceRun } from '../../core/hooks/useWorkspaceRun';
 import { RunOverviewView } from './RunOverviewView';
 import PreviewPanel from '../../components/run-session/PreviewPanel';
 import BlueprintCanvas from '../../components/run-session/BlueprintCanvas';
+import { WorkspaceFilesView } from './WorkspaceFilesView';
 
 type WsTab = 'overview' | 'preview' | 'canvas' | 'files';
 
@@ -17,7 +18,7 @@ const TABS: RightPaneTabDef<WsTab>[] = [
 
 export function AgentWorkspacePane({ groupId }: { groupId?: string | null }) {
   const [tab, setTab] = useState<WsTab>('overview');
-  const { session, latest, history, loading, reload } = useWorkspaceRun(groupId);
+  const { session, latest, history, loading, reload, runCwd } = useWorkspaceRun(groupId);
 
   return (
     <RightPaneTabs<WsTab>
@@ -45,19 +46,7 @@ export function AgentWorkspacePane({ groupId }: { groupId?: string | null }) {
             />
           </div>
         ),
-        files: (
-          <div
-            style={{
-              flex: 1,
-              display: 'grid',
-              placeItems: 'center',
-              color: 'var(--t-fg-4)',
-              fontSize: 12,
-            }}
-          >
-            文件视图（M3）
-          </div>
-        ),
+        files: <WorkspaceFilesView root={runCwd} />,
       }}
     />
   );

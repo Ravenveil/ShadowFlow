@@ -49,7 +49,7 @@ export function useWorkspaceRun(groupId?: string | null): WorkspaceRun {
     session,
     latest,
     history: runs?.slice(1) ?? [],
-    runCwd: null, // M3 接 run 详情后填真实 cwd
+    runCwd: latest ? `.shadowflow/projects/${latest.session_id}` : null,
     loading,
     reload: load,
   };
