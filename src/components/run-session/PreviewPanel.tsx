@@ -21,7 +21,7 @@
  * paper.review.v1 yaml.
  */
 import React, { useEffect, useRef } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, FileText, Code2, FileJson, FileCode } from 'lucide-react';
 import type { UseRunSessionReturn, RunSessionStep } from '../../core/hooks/useRunSession';
 import PreviewIframe from './PreviewIframe';
 import PreviewMarkdown from './PreviewMarkdown';
@@ -144,6 +144,116 @@ function highlightYamlLine(line: string, key: string | number): React.ReactNode 
   );
 }
 
+// Intentional empty-state shown before any artifact bytes have streamed.
+// Replaces the bare gray "等待 …" line with a centered, branded placeholder
+// that reads as "the workspace is ready, the product will build here" rather
+// than looking broken. Driven entirely by props (mime + current step) — no
+// mock content. icon + accent shift per mime so each preview type feels
+// purpose-built.
+const PreviewEmptyState: React.FC<{
+  mime: PreviewMime;
+  stepName: string | undefined;
+  isStreaming: boolean;
+}> = ({ mime, stepName, isStreaming }) => {
+  const meta: Record<PreviewMime, { icon: React.ReactNode; kind: string }> = {
+    'text/yaml': { icon: <Code2 size={26} strokeWidth={1.5} />, kind: 'YAML 蓝图' },
+    'text/html': { icon: <FileCode size={26} strokeWidth={1.5} />, kind: '网页' },
+    'text/markdown': { icon: <FileText size={26} strokeWidth={1.5} />, kind: '文档' },
+    'application/json': { icon: <FileJson size={26} strokeWidth={1.5} />, kind: 'JSON 数据' },
+  };
+  const { icon, kind } = meta[mime];
+  return (
+    <div
+      data-component="preview-empty"
+      style={{
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+          gap: 10,
+          maxWidth: 360,
+          padding: '32px 28px',
+          borderRadius: 14,
+          border: '1.5px dashed var(--t-border-2, var(--border-strong))',
+          background: 'var(--t-panel-2, var(--bg-elev-2))',
+        }}
+      >
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: isStreaming ? 'var(--t-accent, #A855F7)' : 'var(--t-fg-4)',
+            background: isStreaming
+              ? 'var(--t-accent-tint, rgba(168,85,247,.12))'
+              : 'var(--t-panel-3, var(--bg-elev-3))',
+            border: `1px solid ${isStreaming ? 'var(--t-accent, #A855F7)' : 'var(--t-border, var(--border))'}`,
+            animation: isStreaming ? 'sf-pulse 1.8s ease-in-out infinite' : undefined,
+          }}
+        >
+          {icon}
+        </div>
+        <div style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--t-fg, #FAFAFA)' }}>
+          产物将在这里生成
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--t-fg-4)', lineHeight: 1.55 }}>
+          {stepName ? (
+            <>
+              当前步骤{' '}
+              <code style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11, color: 'var(--t-fg-2)' }}>
+                {stepName}
+              </code>{' '}
+              完成后，{kind}会实时流式渲染在此面板。
+            </>
+          ) : (
+            <>团队开始工作后，{kind}会实时流式渲染在此面板。</>
+          )}
+        </div>
+        {isStreaming && (
+          <div
+            style={{
+              marginTop: 4,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 10.5,
+              fontFamily: 'var(--font-mono, monospace)',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: 'var(--t-accent, #A855F7)',
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: '50%',
+                background: 'var(--t-accent, #A855F7)',
+                animation: 'sf-pulse 1.4s ease-in-out infinite',
+              }}
+            />
+            生成中
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) => {
   const yaml = session.blueprintYaml ?? '';
   const filename = session.blueprintFile;
@@ -256,7 +366,10 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
       </div>
 
       {/* Body — branches by mime. */}
-      {mime === 'text/yaml' && (
+      {mime === 'text/yaml' && empty && (
+        <PreviewEmptyState mime={mime} stepName={currentStep?.name} isStreaming={isStreaming} />
+      )}
+      {mime === 'text/yaml' && !empty && (
         <pre
           ref={preRef}
           style={{
@@ -273,11 +386,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
             whiteSpace: 'pre',
           }}
         >
-          {empty ? (
-            <span style={{ color: 'var(--t-fg-5)' }}>
-              {currentStep ? `等待 "${currentStep.name}" 步骤产出 YAML…` : '等待 YAML 流开始…'}
-            </span>
-          ) : (
+          {(
             lines.map((ln, i) => {
               // 2026-06-02 (Trae 式跟随) — highlight the line currently being
               // streamed so the eye locks onto where YAML is being written.
@@ -343,18 +452,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
           }}
         >
           {empty ? (
-            <div
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--t-fg-5)',
-                fontSize: 12,
-              }}
-            >
-              {currentStep ? `等待 "${currentStep.name}" 步骤产出 HTML…` : '等待 HTML 流开始…'}
-            </div>
+            <PreviewEmptyState mime={mime} stepName={currentStep?.name} isStreaming={isStreaming} />
           ) : (
             <PreviewIframe html={yaml} title={filename ?? 'artifact.html'} />
           )}
@@ -367,7 +465,9 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
             flex: 1,
             minHeight: 0,
             overflow: 'auto',
-            padding: '20px 24px',
+            padding: empty ? 0 : '20px 24px',
+            display: empty ? 'flex' : undefined,
+            flexDirection: empty ? 'column' : undefined,
             background: 'var(--t-bg)',
             color: 'var(--t-fg-2)',
             fontSize: 13.5,
@@ -375,9 +475,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
           }}
         >
           {empty ? (
-            <div style={{ color: 'var(--t-fg-5)', fontSize: 12 }}>
-              {currentStep ? `等待 "${currentStep.name}" 步骤产出 Markdown…` : '等待 Markdown 流开始…'}
-            </div>
+            <PreviewEmptyState mime={mime} stepName={currentStep?.name} isStreaming={isStreaming} />
           ) : (
             <PreviewMarkdown source={yaml} />
           )}
@@ -390,7 +488,9 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
             flex: 1,
             minHeight: 0,
             overflow: 'auto',
-            padding: '16px 20px',
+            padding: empty ? 0 : '16px 20px',
+            display: empty ? 'flex' : undefined,
+            flexDirection: empty ? 'column' : undefined,
             background: 'var(--t-bg)',
             fontFamily: 'var(--font-mono, monospace)',
             fontSize: 12,
@@ -399,9 +499,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
           }}
         >
           {empty ? (
-            <span style={{ color: 'var(--t-fg-5)' }}>
-              {currentStep ? `等待 "${currentStep.name}" 步骤产出 JSON…` : '等待 JSON 流开始…'}
-            </span>
+            <PreviewEmptyState mime={mime} stepName={currentStep?.name} isStreaming={isStreaming} />
           ) : (
             <PreviewJson source={yaml} />
           )}

@@ -157,7 +157,9 @@ export function RightPaneTabs<T extends string = TabId>({
               >
                 {label}
                 {typeof count === 'number' && count > 0 && (
-                  <span className="rs-tab-ct">{count}</span>
+                  // key=count → remount on change so the pop keyframe replays,
+                  // giving a small "+1 landed" beat when a node/artifact arrives.
+                  <span key={count} className="rs-tab-ct">{count}</span>
                 )}
                 {isFollowed && <span aria-hidden className="rs-tab-dot" />}
               </button>
@@ -263,12 +265,19 @@ const toolbarStyles = `
 /* tab 内容切换淡入（纯透明度，不位移） */
 @keyframes rs-pane-fade-in { from { opacity: 0; } to { opacity: 1; } }
 .rs-pane-fade { animation: rs-pane-fade-in var(--dur-1) var(--ease-out); }
+@keyframes rs-tab-ct-pop {
+  0% { transform: scale(.7); opacity: .4; }
+  55% { transform: scale(1.18); }
+  100% { transform: scale(1); opacity: 1; }
+}
 .rs-tab-ct {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 9px;
   padding: 1px 5px; border-radius: 4px;
   background: var(--t-panel-3, var(--t-bg-elev-3));
   color: var(--t-fg-4);
+  display: inline-block;
+  animation: rs-tab-ct-pop var(--dur-2, .3s) var(--ease-spring, cubic-bezier(.34,1.56,.64,1));
 }
 .rs-tab.on .rs-tab-ct {
   background: var(--t-accent-tint);

@@ -42,6 +42,35 @@ const OverviewPanel: React.FC<OverviewPanelProps> = ({ session, onSelectAgent, o
     error: session.error != null,
   };
 
+  // ── hermes-style observability — all derived from existing session state.
+  // Step progress: count done vs total announced steps.
+  const totalSteps = session.steps.length;
+  const doneSteps = session.steps.filter((s) => s.status === 'done').length;
+  const runningStep = session.steps.find((s) => s.status === 'running');
+  const progressPct = totalSteps > 0 ? Math.round((doneSteps / totalSteps) * 100) : 0;
+
+  // Elapsed: sum of per-step elapsed strings (e.g. "1.4s"). The hook stores
+  // elapsed as a formatted string; parse the leading number back to seconds so
+  // we can present a single run total without touching the backend.
+  const elapsedSec = session.steps.reduce((acc, s) => {
+    if (!s.elapsed) return acc;
+    const n = parseFloat(s.elapsed);
+    return Number.isFinite(n) ? acc + n : acc;
+  }, 0);
+  const elapsedLabel = elapsedSec > 0
+    ? elapsedSec < 60
+      ? `${elapsedSec.toFixed(1)}s`
+      : `${Math.floor(elapsedSec / 60)}m ${Math.round(elapsedSec % 60)}s`
+    : null;
+
+  // Artifact count — blueprint + any persisted per-step artifacts.
+  const stepArtifactCount = Object.keys(session.stepArtifacts).length;
+  const artifactCount = (session.blueprintFile ? 1 : 0) + stepArtifactCount;
+
+  // Reasoning + roster size for the observability strip.
+  const thinkingCount = session.thinkingStream.length;
+  const readyNodes = session.nodes.filter((n) => n.status === 'ready').length;
+
   return (
     <div
       style={{
@@ -91,6 +120,131 @@ const OverviewPanel: React.FC<OverviewPanelProps> = ({ session, onSelectAgent, o
         <Flag label="已完成" active={flagsState.complete} />
         <Flag label="出错" active={flagsState.error} tone="warn" />
       </div>
+
+      {/* hermes-style observability — calm run summary. Output type / mode /
+          step progress / elapsed / tokens / artifacts. Every value comes
+          straight from session state; nothing rendered when truly empty. */}
+      <SectionLabel>运行概览</SectionLabel>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+          gap: 8,
+          marginBottom: 14,
+        }}
+      >
+        <Stat label="输出类型" value={session.outputType ?? '推断中…'} />
+        <Stat label="模式" value={session.mode ?? '—'} />
+        <Stat
+          label="Agents"
+          value={
+            session.nodes.length === 0
+              ? '—'
+              : `${readyNodes}/${session.nodes.length} 就绪`
+          }
+          accent={readyNodes > 0 && readyNodes === session.nodes.length}
+        />
+        <Stat
+          label="Tokens"
+          value={session.tokenCount > 0 ? session.tokenCount.toLocaleString() : '0'}
+          mono
+        />
+        <Stat label="耗时" value={elapsedLabel ?? '—'} mono />
+        <Stat label="产物" value={artifactCount > 0 ? `${artifactCount}` : '—'} mono />
+      </div>
+
+      {/* Step progress — a single calm bar with done/total + current step. */}
+      {totalSteps > 0 && (
+        <div
+          style={{
+            padding: '12px 14px',
+            background: 'var(--t-panel-2, var(--bg-elev-2))',
+            borderRadius: 8,
+            border: '1px solid var(--t-border, var(--border))',
+            marginBottom: 14,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 8,
+              fontSize: 12,
+            }}
+          >
+            <span aria-hidden style={statusDot(isStreaming ? 'run' : 'ok')} />
+            <span style={{ color: 'var(--t-fg-2)', fontWeight: 500 }}>步骤进度</span>
+            <span style={{ flex: 1 }} />
+            <span
+              style={{
+                fontFamily: 'var(--font-mono, monospace)',
+                fontSize: 11,
+                color: 'var(--t-fg-4)',
+              }}
+            >
+              {doneSteps}/{totalSteps} · {progressPct}%
+            </span>
+          </div>
+          <div
+            style={{
+              height: 5,
+              borderRadius: 3,
+              background: 'var(--t-panel-3, var(--bg-elev-3))',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                width: `${progressPct}%`,
+                height: '100%',
+                borderRadius: 3,
+                background: session.error
+                  ? 'var(--t-warn, #F59E0B)'
+                  : isStreaming
+                  ? 'var(--t-run, #3B82F6)'
+                  : 'var(--t-ok, #10B981)',
+                transition: 'width var(--dur-2, .3s) var(--ease-out, ease)',
+              }}
+            />
+          </div>
+          {runningStep && (
+            <div
+              style={{
+                marginTop: 8,
+                fontSize: 11.5,
+                color: 'var(--t-fg-3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                minWidth: 0,
+              }}
+            >
+              <span style={{ color: 'var(--t-fg-5)' }}>正在执行</span>
+              <code
+                style={{
+                  fontFamily: 'var(--font-mono, monospace)',
+                  fontSize: 11,
+                  color: 'var(--t-fg-2)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {runningStep.name}
+              </code>
+              {thinkingCount > 0 && (
+                <>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5 }}>
+                    {thinkingCount} 条推理
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Open in Editor */}
       {session.artifactUrl && (
@@ -177,6 +331,65 @@ const OverviewPanel: React.FC<OverviewPanelProps> = ({ session, onSelectAgent, o
     </div>
   );
 };
+
+const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div
+    style={{
+      fontSize: 10.5,
+      letterSpacing: '0.08em',
+      color: 'var(--t-fg-5)',
+      textTransform: 'uppercase',
+      fontWeight: 600,
+      marginBottom: 8,
+    }}
+  >
+    {children}
+  </div>
+);
+
+const Stat: React.FC<{ label: string; value: string; mono?: boolean; accent?: boolean }> = ({
+  label,
+  value,
+  mono,
+  accent,
+}) => (
+  <div
+    style={{
+      padding: '9px 11px',
+      background: 'var(--t-panel-2, var(--bg-elev-2))',
+      borderRadius: 8,
+      border: '1px solid var(--t-border, var(--border))',
+      minWidth: 0,
+    }}
+  >
+    <div
+      style={{
+        fontSize: 9.5,
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+        color: 'var(--t-fg-5)',
+        fontWeight: 600,
+        marginBottom: 4,
+      }}
+    >
+      {label}
+    </div>
+    <div
+      style={{
+        fontSize: 14,
+        fontWeight: 600,
+        color: accent ? 'var(--t-ok, #10B981)' : 'var(--t-fg, #FAFAFA)',
+        fontFamily: mono ? 'var(--font-mono, monospace)' : 'inherit',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}
+      title={value}
+    >
+      {value}
+    </div>
+  </div>
+);
 
 const Flag: React.FC<{ label: string; active: boolean; tone?: 'normal' | 'warn' }> = ({
   label,
