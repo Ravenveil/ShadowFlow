@@ -15,8 +15,10 @@ import { Timeline } from '../../components/run-session/timeline/Timeline';
 import type { TimelineMessage } from '../../components/run-session/timeline/types';
 import { PersonalRightPane } from './PersonalRightPane';
 import { PersonalRunRightPane } from './PersonalRunRightPane';
+import { AgentSettingsCard } from './AgentSettingsCard';
 import { useSidebarSlotEl } from './SidebarSlotContext';
 import { PagePeekOverlay } from './PagePeekOverlay';
+import { X } from 'lucide-react';
 
 /**
  * ChatMessage → TimelineMessage 适配层(融合M1)。
@@ -78,6 +80,8 @@ export function PersonalChatView() {
   };
   const [dmGroupId, setDmGroupId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  // 人设抽屉（设定卡）— 点 DM 头部打开（对齐 ClawsGO：右栏纯工作台，人设=agent 详情在头部）
+  const [showPersona, setShowPersona] = useState(false);
   // start 态活跃 run（NewTaskComposer 回调）——右栏据此换 run-session 标签页
   const [personalRunId, setPersonalRunId] = useState<string | null>(null);
 
@@ -237,18 +241,26 @@ export function PersonalChatView() {
           </div>
         ) : (
           <>
-            {/* Cherry/Yuxi 式单聊 header：头像 + 名字 + 人设一行 + 模型/状态 */}
+            {/* Cherry/Yuxi 式单聊 header：头像 + 名字 + 人设一行 + 模型/状态。
+                点头像/名字 → 打开人设（agent 详情，对齐 ClawsGO 右栏纯工作台）。 */}
             <div className="dm-head">
-              <HfAvatar glyph={Array.from(selected.name)[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={38} />
-              <div className="dm-head-id">
-                <div className="dm-head-name">
-                  {selected.name}
-                  <span className="dm-head-state" data-on={dmGroupId ? '1' : undefined}>
-                    <span className="dm-head-dot" /> {dmGroupId ? '在线' : '连接中…'}
-                  </span>
+              <button
+                type="button"
+                onClick={() => setShowPersona(true)}
+                title="查看角色 / agent 详情"
+                style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+              >
+                <HfAvatar glyph={Array.from(selected.name)[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={38} />
+                <div className="dm-head-id">
+                  <div className="dm-head-name">
+                    {selected.name}
+                    <span className="dm-head-state" data-on={dmGroupId ? '1' : undefined}>
+                      <span className="dm-head-dot" /> {dmGroupId ? '在线' : '连接中…'}
+                    </span>
+                  </div>
+                  <div className="dm-head-persona">{personaLine || '你的 AI 同事 · 私密一对一'} · 点看角色</div>
                 </div>
-                <div className="dm-head-persona">{personaLine || '你的 AI 同事 · 私密一对一'}</div>
-              </div>
+              </button>
               <div className="dm-head-actions">
                 <span className="dm-head-model" title="当前模型">{modelLabel}</span>
               </div>
@@ -283,6 +295,28 @@ export function PersonalChatView() {
                 placeholder={`发给「${selected.name}」 · 试试 @ 提及 Skill`}
               />
             </div>
+
+            {/* 人设抽屉 — 点 DM 头部打开（agent 详情 / 设定卡）。左侧滑入，点遮罩关闭。 */}
+            {showPersona && (
+              <div
+                onClick={() => setShowPersona(false)}
+                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.38)', zIndex: 60, display: 'flex', justifyContent: 'flex-start' }}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: 380, maxWidth: '92vw', height: '100%', background: 'var(--t-panel)', borderRight: '1px solid var(--t-border)', display: 'flex', flexDirection: 'column', boxShadow: '8px 0 28px -12px rgba(0,0,0,.5)' }}
+                >
+                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid var(--t-border)' }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--t-fg-2)', flex: 1 }}>角色 · agent 详情</span>
+                    <button type="button" aria-label="关闭" onClick={() => setShowPersona(false)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', padding: 4, display: 'inline-flex' }}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <AgentSettingsCard agent={selected} />
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
