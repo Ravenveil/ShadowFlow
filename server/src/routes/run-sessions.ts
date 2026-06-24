@@ -2002,6 +2002,32 @@ router.post('/:id/steps/:n/retry', (req: Request, res: Response) => {
   });
 });
 
+// ── GET /api/run-sessions/:id/steps/:n ───────────────────────────────────────
+//
+// Task 1 — read a single step artifact (补 fetchStepArtifact 缺失后端端点).
+//
+// Returns the persisted StepArtifact for step n of session id.
+// If the artifact is not in memory (e.g. after a Node restart), attempts to
+// hydrate from disk first (idempotent). Returns 404 if still not found.
+router.get('/:id/steps/:n', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const n = Number(req.params.n);
+  if (!Number.isInteger(n) || n < 0) {
+    res.status(400).json({ error: { code: 'BAD_STEP', message: `非法步骤序号: ${req.params.n}` } });
+    return;
+  }
+  // 重启后内存为空 → 先从磁盘 hydrate（幂等）
+  if (!stepStoreSingleton.get(id, n)) {
+    await stepStoreSingleton.loadSession(id).catch(() => {});
+  }
+  const art = stepStoreSingleton.get(id, n);
+  if (!art) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: '该步骤产物尚未落盘' } });
+    return;
+  }
+  res.json({ data: art });
+});
+
 // ── POST /api/run-sessions/:id/resume ────────────────────────────────────────
 //
 // S4.2 (intent-workflow-design-v1 §4.5) — resume from the last completed step.
