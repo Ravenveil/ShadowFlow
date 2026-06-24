@@ -48,7 +48,9 @@ export function AgentWorkspacePane({ groupId }: { groupId?: string | null }) {
         ),
         preview: <PreviewPanel session={session} />,
         canvas: (
-          <div style={{ flex: 1, minHeight: 0 }}>
+          // position:relative 必须 — BlueprintCanvas 内部用 position:absolute inset:0，
+          // 没有定位父容器会逃逸盖住上方标签栏（导致 tab 点不动）。2026-06-24 浏览器亲验抓到。
+          <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
             <BlueprintCanvas
               nodes={session.nodes}
               edges={session.edges}
