@@ -822,7 +822,7 @@ export default function StartPage() {
               Decorative purple glow sits behind, accent-tint eyebrow, sf-display-l
               scale heading (clamp for responsive), single-line lead. Additive only:
               all original copy preserved, no sections removed. */}
-          <div style={{ textAlign: 'center', position: 'relative' }}>
+          <div className="sf-anim-slide-up" style={{ textAlign: 'center', position: 'relative', animationDelay: '20ms' }}>
             {/* Decorative glow ornament — pointer-events none, sits behind text */}
             <div
               aria-hidden
@@ -865,18 +865,20 @@ export default function StartPage() {
               knowledge + mode + toast + SkillPickerModal) moved wholesale into
               UnifiedComposer. variant="hero" keeps the exact /start visuals;
               POST submit stays here in handleComposerSubmit. */}
-          <UnifiedComposer
-            key={seedKey}
-            variant="hero"
-            onSubmit={handleComposerSubmit}
-            initialText={composerSeed}
-            selectRange={composerSelect}
-          />
+          <div className="sf-anim-slide-up" style={{ animationDelay: '110ms' }}>
+            <UnifiedComposer
+              key={seedKey}
+              variant="hero"
+              onSubmit={handleComposerSubmit}
+              initialText={composerSeed}
+              selectRange={composerSelect}
+            />
+          </div>
 
           {/* Create-Agent ceremony trigger — opens the branded onboarding modal
               (clawsgo「你的常驻数字伙伴」). Additive: sits just under the composer,
               does not replace any existing CTA. */}
-          <div style={{ textAlign: 'center', marginTop: -12 }}>
+          <div className="sf-anim-slide-up" style={{ textAlign: 'center', marginTop: -12, animationDelay: '200ms' }}>
             <button
               type="button"
               data-testid="create-agent-trigger"
@@ -922,11 +924,13 @@ export default function StartPage() {
 
           {/* Suggestion chips */}
           <div
+            className="sf-anim-slide-up"
             style={{
               display: 'flex',
               flexWrap: 'wrap',
               gap: 8,
               justifyContent: 'center',
+              animationDelay: '290ms',
             }}
           >
             {SUGGESTIONS.map(([g, t]) => (
