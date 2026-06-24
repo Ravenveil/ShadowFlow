@@ -46,7 +46,7 @@ function roleLine(node: RunSessionNode): string {
 type StatusKind = 'building' | 'ready' | 'pending';
 
 const STATUS_META: Record<StatusKind, { label: string; color: string; pulse: boolean }> = {
-  building: { label: 'BUILDING', color: 'var(--t-accent, #A855F7)', pulse: true },
+  building: { label: 'BUILDING', color: 'var(--t-accent, #1890FF)', pulse: true },
   ready: { label: 'READY', color: 'var(--t-ok, #10B981)', pulse: false },
   pending: { label: 'PENDING', color: 'var(--t-fg-5, #6b7280)', pulse: false },
 };
@@ -94,7 +94,7 @@ export const TeamRoster: React.FC<TeamRosterProps> = ({ agents, edges, isStreami
             width: 7,
             height: 7,
             borderRadius: '50%',
-            background: isStreaming ? 'var(--t-accent, #A855F7)' : 'var(--t-ok, #10B981)',
+            background: isStreaming ? 'var(--t-accent, #1890FF)' : 'var(--t-ok, #10B981)',
             animation: isStreaming ? 'sf-pulse 1.4s ease-in-out infinite' : undefined,
             flexShrink: 0,
           }}
@@ -114,6 +114,7 @@ export const TeamRoster: React.FC<TeamRosterProps> = ({ agents, edges, isStreami
 
       {/* Roster cards */}
       <div
+        className="sf-scroll"
         style={{
           flex: 1,
           minHeight: 0,
@@ -149,6 +150,7 @@ const RosterCard: React.FC<{ node: RunSessionNode; onSelect?: (id: string) => vo
       type="button"
       onClick={onSelect ? () => onSelect(node.id) : undefined}
       disabled={!clickable}
+      className={clickable ? 'sf-hoverable sf-press sf-focus-ring' : undefined}
       style={{
         textAlign: 'left',
         width: '100%',
@@ -162,7 +164,11 @@ const RosterCard: React.FC<{ node: RunSessionNode; onSelect?: (id: string) => vo
         color: 'inherit',
         fontFamily: 'inherit',
         cursor: clickable ? 'pointer' : 'default',
-        transition: 'border-color var(--dur-1, .15s) ease, background var(--dur-1, .15s) ease',
+        // sf-hoverable / sf-press own the interactive transition when clickable;
+        // keep a calm border/background transition only for the static case.
+        transition: clickable
+          ? undefined
+          : 'border-color var(--dur-1, .15s) ease, background var(--dur-1, .15s) ease',
       }}
     >
       {/* Identity row */}
@@ -180,9 +186,9 @@ const RosterCard: React.FC<{ node: RunSessionNode; onSelect?: (id: string) => vo
             fontFamily: 'var(--font-mono, monospace)',
             fontSize: 13,
             fontWeight: 800,
-            background: 'var(--t-accent-tint, rgba(168,85,247,.14))',
-            border: `1.5px solid ${isCoordinator ? meta.color : 'var(--t-accent, #A855F7)'}`,
-            color: 'var(--t-accent, #A855F7)',
+            background: 'var(--t-accent-tint, rgba(24,144,255,.14))',
+            border: `1.5px solid ${isCoordinator ? meta.color : 'var(--t-accent, #1890FF)'}`,
+            color: 'var(--t-accent, #1890FF)',
           }}
         >
           {node.avatarChar || node.title.charAt(0) || '?'}
@@ -279,9 +285,9 @@ const Chip: React.FC<{ kind: 'model' | 'tool' | 'more'; label: string }> = ({ ki
       <span
         style={{
           ...base,
-          color: 'var(--t-accent, #A855F7)',
-          background: 'var(--t-accent-tint, rgba(168,85,247,.14))',
-          border: '1px solid var(--t-accent, #A855F7)',
+          color: 'var(--t-accent, #1890FF)',
+          background: 'var(--t-accent-tint, rgba(24,144,255,.14))',
+          border: '1px solid var(--t-accent, #1890FF)',
           fontWeight: 600,
         }}
         title={label}

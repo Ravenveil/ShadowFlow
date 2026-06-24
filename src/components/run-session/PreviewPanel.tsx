@@ -119,7 +119,7 @@ function highlightYamlLine(line: string, key: string | number): React.ReactNode 
       );
     } else {
       valueTokens.push(
-        <span key={`n${i++}`} style={{ color: 'var(--t-accent-bright, #D8B4FE)' }}>
+        <span key={`n${i++}`} style={{ color: 'var(--t-accent-bright, #69B4FF)' }}>
           {tok}
         </span>,
       );
@@ -137,7 +137,7 @@ function highlightYamlLine(line: string, key: string | number): React.ReactNode 
   return (
     <span key={key}>
       <span style={{ color: 'var(--t-fg-3)' }}>{indent}</span>
-      <span style={{ color: 'var(--t-accent, #A855F7)', fontWeight: 500 }}>{kkey}</span>
+      <span style={{ color: 'var(--t-accent, #1890FF)', fontWeight: 500 }}>{kkey}</span>
       <span style={{ color: 'var(--t-fg-3)' }}>:</span>
       {valueTokens}
     </span>
@@ -175,16 +175,13 @@ const PreviewEmptyState: React.FC<{
       }}
     >
       <div
+        className="sf-empty"
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
           gap: 10,
           maxWidth: 360,
           padding: '32px 28px',
-          borderRadius: 14,
-          border: '1.5px dashed var(--t-border-2, var(--border-strong))',
+          borderWidth: '1.5px',
+          borderColor: 'var(--t-border-2, var(--border-strong))',
           background: 'var(--t-panel-2, var(--bg-elev-2))',
         }}
       >
@@ -196,11 +193,11 @@ const PreviewEmptyState: React.FC<{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: isStreaming ? 'var(--t-accent, #A855F7)' : 'var(--t-fg-4)',
+            color: isStreaming ? 'var(--t-accent, #1890FF)' : 'var(--t-fg-4)',
             background: isStreaming
-              ? 'var(--t-accent-tint, rgba(168,85,247,.12))'
+              ? 'var(--t-accent-tint, rgba(24,144,255,.12))'
               : 'var(--t-panel-3, var(--bg-elev-3))',
-            border: `1px solid ${isStreaming ? 'var(--t-accent, #A855F7)' : 'var(--t-border, var(--border))'}`,
+            border: `1px solid ${isStreaming ? 'var(--t-accent, #1890FF)' : 'var(--t-border, var(--border))'}`,
             animation: isStreaming ? 'sf-pulse 1.8s ease-in-out infinite' : undefined,
           }}
         >
@@ -233,7 +230,7 @@ const PreviewEmptyState: React.FC<{
               fontFamily: 'var(--font-mono, monospace)',
               letterSpacing: '0.08em',
               textTransform: 'uppercase',
-              color: 'var(--t-accent, #A855F7)',
+              color: 'var(--t-accent, #1890FF)',
             }}
           >
             <span
@@ -242,7 +239,7 @@ const PreviewEmptyState: React.FC<{
                 width: 5,
                 height: 5,
                 borderRadius: '50%',
-                background: 'var(--t-accent, #A855F7)',
+                background: 'var(--t-accent, #1890FF)',
                 animation: 'sf-pulse 1.4s ease-in-out infinite',
               }}
             />
@@ -341,11 +338,11 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
             background: isStreaming
-              ? 'var(--t-accent-tint, rgba(168,85,247,.14))'
+              ? 'var(--t-accent-tint, rgba(24,144,255,.14))'
               : 'var(--t-panel-3, var(--bg-elev-3))',
-            color: isStreaming ? 'var(--t-accent, #A855F7)' : 'var(--t-fg-4)',
+            color: isStreaming ? 'var(--t-accent, #1890FF)' : 'var(--t-fg-4)',
             border: `1px solid ${
-              isStreaming ? 'var(--t-accent, #A855F7)' : 'var(--t-border, var(--border))'
+              isStreaming ? 'var(--t-accent, #1890FF)' : 'var(--t-border, var(--border))'
             }`,
             animation: isStreaming ? 'sf-pulse 1.4s ease-in-out infinite' : undefined,
           }}
@@ -372,6 +369,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
       {mime === 'text/yaml' && !empty && (
         <pre
           ref={preRef}
+          className="sf-scroll"
           style={{
             flex: 1,
             minHeight: 0,
@@ -399,8 +397,8 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
                 style={{
                   display: 'flex',
                   minWidth: 0,
-                  background: isActiveLine ? 'var(--t-accent-tint, rgba(168,85,247,.10))' : undefined,
-                  boxShadow: isActiveLine ? 'inset 2px 0 0 var(--t-accent, #A855F7)' : undefined,
+                  background: isActiveLine ? 'var(--t-accent-tint, rgba(24,144,255,.10))' : undefined,
+                  boxShadow: isActiveLine ? 'inset 2px 0 0 var(--t-accent, #1890FF)' : undefined,
                   borderRadius: isActiveLine ? 2 : undefined,
                 }}
               >
@@ -411,7 +409,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
                     width: 36,
                     paddingRight: 10,
                     textAlign: 'right',
-                    color: isActiveLine ? 'var(--t-accent, #A855F7)' : 'var(--t-fg-6)',
+                    color: isActiveLine ? 'var(--t-accent, #1890FF)' : 'var(--t-fg-6)',
                     flexShrink: 0,
                     userSelect: 'none',
                   }}
@@ -428,7 +426,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
                       width: 7,
                       height: 13,
                       marginLeft: 2,
-                      background: 'var(--t-accent, #A855F7)',
+                      background: 'var(--t-accent, #1890FF)',
                       verticalAlign: 'text-bottom',
                       animation: 'sf-cur 1s steps(2) infinite',
                     }}
@@ -461,6 +459,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
 
       {mime === 'text/markdown' && (
         <div
+          className="sf-scroll"
           style={{
             flex: 1,
             minHeight: 0,
@@ -484,6 +483,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
 
       {mime === 'application/json' && (
         <div
+          className="sf-scroll"
           style={{
             flex: 1,
             minHeight: 0,
@@ -526,7 +526,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
             width: 7,
             height: 7,
             borderRadius: '50%',
-            background: isStreaming ? 'var(--t-accent, #A855F7)' : 'var(--t-fg-5)',
+            background: isStreaming ? 'var(--t-accent, #1890FF)' : 'var(--t-fg-5)',
             animation: isStreaming ? 'sf-pulse 1.4s ease-in-out infinite' : undefined,
             flexShrink: 0,
           }}

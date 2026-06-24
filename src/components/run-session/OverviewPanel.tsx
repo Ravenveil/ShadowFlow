@@ -73,6 +73,7 @@ const OverviewPanel: React.FC<OverviewPanelProps> = ({ session, onSelectAgent, o
 
   return (
     <div
+      className="sf-scroll"
       style={{
         flex: 1,
         minHeight: 0,
@@ -187,26 +188,9 @@ const OverviewPanel: React.FC<OverviewPanelProps> = ({ session, onSelectAgent, o
             </span>
           </div>
           <div
-            style={{
-              height: 5,
-              borderRadius: 3,
-              background: 'var(--t-panel-3, var(--bg-elev-3))',
-              overflow: 'hidden',
-            }}
+            className={`sf-bar ${session.error ? 'sf-bar--warn' : !isStreaming ? 'sf-bar--ok' : ''}`}
           >
-            <div
-              style={{
-                width: `${progressPct}%`,
-                height: '100%',
-                borderRadius: 3,
-                background: session.error
-                  ? 'var(--t-warn, #F59E0B)'
-                  : isStreaming
-                  ? 'var(--t-run, #3B82F6)'
-                  : 'var(--t-ok, #10B981)',
-                transition: 'width var(--dur-2, .3s) var(--ease-out, ease)',
-              }}
-            />
+            <span className="sf-bar-fill" style={{ width: `${progressPct}%` }} />
           </div>
           {runningStep && (
             <div
@@ -246,8 +230,10 @@ const OverviewPanel: React.FC<OverviewPanelProps> = ({ session, onSelectAgent, o
         </div>
       )}
 
-      {/* Open in Editor */}
-      {session.artifactUrl && (
+      {/* Open in Editor — shown when a live artifact URL exists OR the run has
+          finished with a produced blueprint file, so completed runs always
+          offer the editor jump even before artifactUrl is wired. */}
+      {(session.artifactUrl || (session.isComplete && session.blueprintFile)) && (
         <div
           style={{
             display: 'flex',

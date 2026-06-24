@@ -3439,7 +3439,12 @@ export function RunSessionRightPane({ session, sessionId, onNavigate, chatGroupI
         onOpenEditor={() => onNavigate(`/editor?session=${sessionId}`)}
       />
     ),
-    team: <TeamPanel session={session} />,
+    team: (
+      <TeamPanel
+        session={session}
+        onSelectAgent={() => setActiveTab('agent', { lock: true })}
+      />
+    ),
     agent: (
       <AgentPanel
         session={session}
