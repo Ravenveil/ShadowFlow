@@ -27,7 +27,6 @@ import { ScheduleDrawer, describeSchedule } from '../components/briefboard/Sched
 import { listSchedules, type Schedule } from '../api/schedules';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { getTemplate } from '../api/templates';
-import { buildChatBuilderUrl } from '../core/utils/builderNavigation';
 import { fetchRecentMessages, patchGroup, getGroup, resolveDmConversation } from '../api/groupApi';
 import { getTeam } from '../api/teams';
 import { listAgents, type AgentRecord } from '../api/agents';
@@ -49,6 +48,9 @@ import ConvHeaderFB from '../components/chat-fb/ConvHeaderFB';
 import PinnedBriefFB from '../components/chat-fb/PinnedBriefFB';
 import ComposerFB from '../components/chat-fb/ComposerFB';
 import { ChatFeedFB, type ChatFeedAction } from '../components/chat-fb/ChatFeedFB';
+// 对话框统一（chat-unify）：群聊 / 内嵌 DM 也用 StudioMessageRow 的统一回合气泡。
+import { UnifiedChatFeed, chatMessagesToStudio } from '../components/workbench/UnifiedChatFeed';
+import { useUnifiedBubble } from './chat-home/useUnifiedBubble';
 import { ThreadDrawerFB, type ThreadSourceMessage } from '../components/chat-fb/ThreadDrawerFB';
 import FeedSearchbarFB, { type FeedSearchFilterKey } from '../components/chat-fb/FeedSearchbarFB';
 import GroupSettingsModalFB from '../components/chat-fb/GroupSettingsModalFB';
@@ -840,7 +842,6 @@ export default function ChatPage() {
     } catch (err) { console.warn('[ChatPage] send failed:', err); }
   }, [composer, chatStream, groupExists, timelineGray, groupTimeline]);
 
-  const builderUrl = buildChatBuilderUrl({ chatId: groupId ?? '', goalText: groupName });
   const isRunning = group?.status === 'running' || (group?.metrics?.activeRuns ?? 0) > 0;
 
   // ── Stream D · Thread Drawer 显隐 (chat-fb.html .drawer.hide 行 604) ───────
@@ -1078,6 +1079,18 @@ export default function ChatPage() {
     return lastAgent?.senderName ?? 'Agent';
   })();
 
+  // ── 对话框统一（chat-unify）— 群聊 / 内嵌 DM 的消息映射成 StudioMessage[]。
+  // 开关默认开（用户「把对话框统一」诉求）；?unifiedBubble=0 可对照旧 ChatFeedFB。
+  const unifiedBubble = useUnifiedBubble();
+  const studioGroupMessages = useMemo(
+    () => chatMessagesToStudio(chatStream.messages),
+    [chatStream.messages],
+  );
+  const studioDmMessages = useMemo(
+    () => chatMessagesToStudio(dmStream.messages),
+    [dmStream.messages],
+  );
+
   return (
     // 2026-05-28 修 composer 截断 (round 3)：父容器 (HfLayout.tsx:58) 是
     // overflow:auto，会让我们的 flex 高度计算"软绑定"，子内容可以撑大整页超出
@@ -1166,19 +1179,27 @@ export default function ChatPage() {
                   </div>
                 </div>
               </div>
-              <div style={{ flex: 1, overflow: 'auto', minHeight: 0, background: T.bg }}>
-                {dmStream.messages.length === 0 ? (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, background: T.bg }}>
+                {dmStream.messages.length === 0 && !dmStream.loading ? (
                   <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
                     <p style={{ fontSize: 13, color: T.fg5, margin: 0 }}>{t('chat.noMessages') || '暂无消息记录'}</p>
                   </div>
-                ) : (
-                  <ChatFeedFB
-                    messages={dmStream.messages}
-                    groupName={dmAgent?.agentName}
-                    onMessageAction={handleMessageAction}
-                    typing={dmStream.loading}
-                    typingAgentName={dmAgent?.agentName ?? ''}
+                ) : unifiedBubble ? (
+                  /* 对话框统一：StudioMessageRow 回合气泡（一个回合一个头像）。 */
+                  <UnifiedChatFeed
+                    messages={studioDmMessages}
+                    typingName={dmStream.loading ? (dmAgent?.agentName ?? 'Agent') : undefined}
                   />
+                ) : (
+                  <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                    <ChatFeedFB
+                      messages={dmStream.messages}
+                      groupName={dmAgent?.agentName}
+                      onMessageAction={handleMessageAction}
+                      typing={dmStream.loading}
+                      typingAgentName={dmAgent?.agentName ?? ''}
+                    />
+                  </div>
                 )}
               </div>
               <ComposerFB
@@ -1285,8 +1306,8 @@ export default function ChatPage() {
                   )}
                 </div>
               ) : (
-              <div ref={chatScrollRef} style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-                {chatStream.messages.length === 0 ? (
+              <div ref={chatScrollRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+                {chatStream.messages.length === 0 && !chatStream.loading ? (
                   <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, padding: 32 }}>
                     {!groupId ? (
                       <>
@@ -1302,14 +1323,24 @@ export default function ChatPage() {
                       <p style={{ fontSize: 13, color: T.fg5, margin: 0 }}>{t('chat.noMessages')}</p>
                     )}
                   </div>
-                ) : (
-                  <ChatFeedFB
-                    messages={chatStream.messages}
-                    groupName={group?.name}
-                    onMessageAction={handleMessageAction}
-                    typing={chatStream.loading}
-                    typingAgentName={typingAgentName}
+                ) : unifiedBubble ? (
+                  /* 对话框统一：群聊也用 StudioMessageRow 回合气泡（一个回合一个头像）。
+                     hover 工具条 / reactions 等次级动作暂随旧 ChatFeedFB（?unifiedBubble=0 可切回）。 */
+                  <UnifiedChatFeed
+                    messages={studioGroupMessages}
+                    typingName={chatStream.loading ? typingAgentName : undefined}
                   />
+                ) : (
+                  /* 旧 FB feed 走自带滚动容器（父级现为 overflow:hidden 的 flex column）。 */
+                  <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                    <ChatFeedFB
+                      messages={chatStream.messages}
+                      groupName={group?.name}
+                      onMessageAction={handleMessageAction}
+                      typing={chatStream.loading}
+                      typingAgentName={typingAgentName}
+                    />
+                  </div>
                 )}
               </div>
               )}

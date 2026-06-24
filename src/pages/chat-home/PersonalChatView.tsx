@@ -13,6 +13,9 @@ import { useInboxStore } from '../../core/store/useInboxStore';
 import { paletteForAgent, initialOf } from '../../components/chat-fb/agentAvatar';
 import { Timeline } from '../../components/run-session/timeline/Timeline';
 import type { TimelineMessage } from '../../components/run-session/timeline/types';
+// 对话框统一（chat-unify）：个人单聊也用 StudioMessageRow 的统一回合气泡。
+import { UnifiedChatFeed, timelineMessagesToStudio } from '../../components/workbench/UnifiedChatFeed';
+import { useUnifiedBubble } from './useUnifiedBubble';
 import { PersonalRightPane } from './PersonalRightPane';
 import { PersonalRunRightPane } from './PersonalRunRightPane';
 import { useSidebarSlotEl } from './SidebarSlotContext';
@@ -137,6 +140,12 @@ export function PersonalChatView() {
     sseChannel: 'group',
   });
   const timelineMessages = useMemo(() => toTimelineMessages(messages), [messages]);
+  // 对话框统一：把同一份 Timeline 消息映射成统一回合气泡（StudioMessageRow）。
+  const unifiedBubble = useUnifiedBubble();
+  const studioMessages = useMemo(
+    () => timelineMessagesToStudio(timelineMessages),
+    [timelineMessages],
+  );
 
   // F1 — DM 也用完整 composer。dmGroupId 未就绪时抛错（组件错误条提示,草稿不丢）。
   async function handleDmSubmit(p: { text: string }) {
@@ -280,6 +289,9 @@ export function PersonalChatView() {
                     ))}
                   </div>
                 </div>
+              ) : unifiedBubble ? (
+                /* 对话框统一（chat-unify）：StudioMessageRow 回合气泡（一个回合一个头像）。 */
+                <UnifiedChatFeed messages={studioMessages} typingName={undefined} padding="0" />
               ) : (
                 <Timeline messages={timelineMessages} variant="chat" />
               )}
