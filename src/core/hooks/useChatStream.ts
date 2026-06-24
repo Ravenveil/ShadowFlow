@@ -13,9 +13,8 @@
  *     - POST /api/chat/completions  (BYOK via `src/api/chat.ts`) — single-turn
  *
  * The contract intentionally hides which path is taken so pages (ChatPage,
- * AgentDMPage) stay agnostic. If any backend call fails the hook falls back
- * to a small mock conversation so the UI never goes blank — failures surface
- * in `error` for an optional banner.
+ * AgentDMPage) stay agnostic. If any backend call fails the hook leaves the
+ * thread empty (no mock injection) — failures surface in `error` for a banner.
  *
  * NOTE: PB landed `ChatMessage` in `src/core/components/chat/ChatStream.tsx`;
  * we re-export that type so callers don't have to import two places.
@@ -70,55 +69,6 @@ export interface UseChatStreamResult {
 
 // Re-export so consumers only need `useChatStream`'s module
 export type { ChatMessage } from '../components/chat/ChatStream';
-
-// ---------------------------------------------------------------------------
-// Mock fallback (UI never goes blank when the backend is unreachable)
-// ---------------------------------------------------------------------------
-
-function buildMockConversation(mode: ChatStreamMode): ChatMessage[] {
-  const now = new Date().toISOString();
-  const senderName = mode === 'group' ? 'Atlas' : 'Agent';
-  return [
-    {
-      id: 'mock-sys-1',
-      role: 'system',
-      content: 'offline · mock conversation',
-      timestamp: now,
-    },
-    {
-      id: 'mock-1',
-      role: 'agent',
-      content:
-        mode === 'group'
-          ? 'Welcome to the group. Backend stream is unreachable; showing a placeholder thread.'
-          : 'Hi — backend chat is unreachable. Showing a placeholder so the UI stays usable.',
-      timestamp: now,
-      senderName,
-      senderGlyph: senderName.charAt(0),
-    },
-    {
-      id: 'mock-2',
-      role: 'user',
-      content: 'Got it. I will retry once the backend is back.',
-      timestamp: now,
-      status: 'sent',
-    },
-    {
-      id: 'mock-3',
-      role: 'agent',
-      content: 'No rush — every send is queued client-side until then.',
-      timestamp: now,
-      senderName,
-      senderGlyph: senderName.charAt(0),
-    },
-    {
-      id: 'mock-4',
-      role: 'system',
-      content: 'mock — connect the API server to load real messages',
-      timestamp: now,
-    },
-  ];
-}
 
 // ---------------------------------------------------------------------------
 // Conversion helpers
@@ -188,9 +138,10 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'history fetch failed';
       // eslint-disable-next-line no-console
-      console.warn('[useChatStream] history fetch failed → mock fallback:', msg);
+      console.warn('[useChatStream] history fetch failed:', msg);
       setError(msg);
-      setMessages(buildMockConversation(mode));
+      // 后端不可达时留空（不再注入 mock 假对话）；错误经 `error` 暴露给上层 banner。
+      setMessages([]);
     } finally {
       setLoading(false);
     }

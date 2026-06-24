@@ -57,16 +57,8 @@ export interface ConvHeaderFBProps {
   onMoreClick?: () => void;
 }
 
-// ── 成员头像 mock 数据（设计稿固定 5 个色块）────────────────────────────
-// TODO Stream D 接 API: 用 group.metrics.members + 真实 agent 列表换掉这段
-const STUB_MEMBERS: Array<{ ch: string; color: string; fg: string }> = [
-  { ch: '读', color: '#A855F7', fg: '#7C3AED' },
-  { ch: '批', color: '#F59E0B', fg: '#B45309' },
-  { ch: '查', color: '#22D3EE', fg: '#0891B2' },
-  { ch: '写', color: '#EF4444', fg: '#B91C1C' },
-  { ch: '审', color: '#10B981', fg: '#059669' },
-];
-
+// 2026-06-24 — 删除成员头像 mock（STUB_MEMBERS 固定 5 色块）。无真实 members
+// 传入时不再渲染假头像栈（留空，等真实成员）。
 // ChatPage 用 'b'|'r'|'g'|'p'|'o' 5 色给成员上色（hashColor）；这里映射回 hex。
 const MEMBER_COLOR: Record<string, { color: string; fg: string }> = {
   b: { color: '#3B82F6', fg: '#2563EB' },
@@ -220,19 +212,7 @@ export default function ConvHeaderFB({
                       </span>
                     );
                   })
-                : STUB_MEMBERS.map((m, i) => (
-                    <span
-                      key={i}
-                      className={styles.avMini}
-                      style={{
-                        background: `color-mix(in oklab, ${m.color} 14%, var(--skin-panel))`,
-                        borderColor: `color-mix(in oklab, ${m.color} 35%, transparent)`,
-                        color: m.fg,
-                      }}
-                    >
-                      {m.ch}
-                    </span>
-                  ))}
+                : null}
               {useReal && realMembers.length > MAX_AV && (
                 <span
                   className={styles.avMini}

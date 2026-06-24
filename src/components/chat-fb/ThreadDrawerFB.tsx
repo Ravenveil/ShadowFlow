@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { X, Pencil, Plus, Upload, FileText, FileCode, FileImage, User } from 'lucide-react';
+import { X, Pencil, Plus, Upload, User } from 'lucide-react';
 import { paletteFor, initialOf } from './agentAvatar';
 import { RightPaneTabs } from '../run-session/RightPaneTabs';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
@@ -61,48 +61,8 @@ export interface ThreadDrawerFBProps {
 
 // 头像配色统一从 agentAvatar 取（单一事实来源，跨页面同 agent 同色）
 
-// ─────────────────────────────────────────────────────────────
-// Mock docs（Stream G）— 等后端 GET /api/groups/{id}/docs endpoint
-// 上线后改成 useEffect + fetch。此处先用本地 mock 让 UI 不空。
-// ─────────────────────────────────────────────────────────────
-type MockDocKind = 'md' | 'pdf' | 'img' | 'code';
-interface MockDoc {
-  id: string;
-  name: string;
-  type: MockDocKind;
-  editedAt: string;
-  editedBy: string;
-}
-const MOCK_DOCS: MockDoc[] = [
-  { id: '1', name: 'methodology.md', type: 'md', editedAt: '2 hours ago', editedBy: 'reader' },
-  { id: '2', name: 'review-v3.pdf', type: 'pdf', editedAt: 'yesterday', editedBy: 'critic' },
-  { id: '3', name: 'figures.png', type: 'img', editedAt: '3 days ago', editedBy: 'reader' },
-];
-function docIcon(type: MockDocKind) {
-  // lucide-react 单色线性，不使用 emoji
-  switch (type) {
-    case 'pdf':
-      return <FileText size={16} strokeWidth={2} />;
-    case 'img':
-      return <FileImage size={16} strokeWidth={2} />;
-    case 'code':
-      return <FileCode size={16} strokeWidth={2} />;
-    default:
-      return <FileText size={16} strokeWidth={2} />;
-  }
-}
-function docTypeChip(type: MockDocKind): string {
-  switch (type) {
-    case 'pdf':
-      return 'PDF';
-    case 'img':
-      return 'IMG';
-    case 'code':
-      return 'CODE';
-    default:
-      return 'MD';
-  }
-}
+// 2026-06-24 — 删除 Mock docs（Stream G）整段：MockDoc 类型 / MOCK_DOCS 假数据 /
+// docIcon / docTypeChip。DOCS pane 改为空态，等 GET /api/groups/{id}/docs 上线后接真数据。
 
 export function ThreadDrawerFB({
   groupId,
@@ -374,27 +334,10 @@ export function ThreadDrawerFB({
         <div className={styles.drPane}>
           {groupId ? (
             <div className={styles.drDocList}>
-              {MOCK_DOCS.map(doc => (
-                <div key={doc.id} className={styles.drDocItem}>
-                  <span className={styles.drDocIcon}>{docIcon(doc.type)}</span>
-                  <div className={styles.drDocBody}>
-                    <div className={styles.drDocName}>
-                      {doc.name}
-                      <span className={styles.drDocChip} data-kind={doc.type}>
-                        {docTypeChip(doc.type)}
-                      </span>
-                    </div>
-                    <div className={styles.drDocMeta}>
-                      {doc.editedBy} · edited {doc.editedAt}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <div className={styles.drDocTodo}>
-                {tr(
-                  'chat.docsMockNotice',
-                  '* mock 数据 · 等后端 GET /api/groups/{id}/docs endpoint',
-                )}
+              {/* 2026-06-24 — 删除 MOCK_DOCS 假文件列表。文档接口（GET
+                  /api/groups/{id}/docs）上线前显示空态，不再塞假数据。 */}
+              <div className={styles.drEmpty}>
+                {tr('chat.docsEmpty', '暂无文档')}
               </div>
             </div>
           ) : (
