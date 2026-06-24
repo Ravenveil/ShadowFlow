@@ -2,21 +2,24 @@
 // 2026-06-24 — 拍平为单排工作台（对齐 ClawsGO「Agent 的主机」）：一排 tab
 // 产物/文件/画布/任务/Brief + 顶部 run 状态细条。不再嵌套两排，「设定/人设」
 // 移到中栏 DM 头部点开（见 PersonalChatView）。
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Rocket, RefreshCw, ArrowUpRight } from 'lucide-react';
+import { Rocket, RefreshCw, ArrowUpRight, X } from 'lucide-react';
 import { RightPaneTabs, type RightPaneTabDef } from '../../components/run-session/RightPaneTabs';
 import { useWorkspaceRun } from '../../core/hooks/useWorkspaceRun';
 import PreviewPanel from '../../components/run-session/PreviewPanel';
 import BlueprintCanvas from '../../components/run-session/BlueprintCanvas';
 import { WorkspaceFilesView } from './WorkspaceFilesView';
+import { AgentSettingsCard } from './AgentSettingsCard';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
 import type { RunSessionSummary } from '../../api/runSessions';
+import type { AgentRecord } from '../../api/agents';
 
-type WsTab = 'preview' | 'files' | 'canvas' | 'tasks' | 'brief';
+type WsTab = 'role' | 'preview' | 'files' | 'canvas' | 'tasks' | 'brief';
 
-const TABS: RightPaneTabDef<WsTab>[] = [
+// 基础单排（对齐 ClawsGO）。「角色」tab 不常驻——点中栏头部才弹出（见 roleSignal）。
+const BASE_TABS: RightPaneTabDef<WsTab>[] = [
   { key: 'preview', label: '产物' },
   { key: 'files', label: '文件' },
   { key: 'canvas', label: '画布' },
@@ -89,10 +92,39 @@ function RunStatusBar({
  * AgentWorkspacePane — 聊天右栏「Agent 工作台」（个人态/群聊态共用）。
  * 单排 tab：产物/文件/画布/任务/Brief；顶部 run 状态细条。接 useWorkspaceRun 实时态。
  */
-export function AgentWorkspacePane({ groupId, trailing }: { groupId?: string | null; trailing?: ReactNode }) {
+export function AgentWorkspacePane({
+  groupId,
+  trailing,
+  agent,
+  roleSignal,
+}: {
+  groupId?: string | null;
+  trailing?: ReactNode;
+  /** 选中的 agent — 提供后「角色」tab 可弹出（点中栏头部触发）。 */
+  agent?: AgentRecord | null;
+  /** 中栏头部点击的递增信号 — 变化即弹出并激活「角色」tab。 */
+  roleSignal?: number;
+}) {
   const [tab, setTab] = useState<WsTab>('preview');
+  const [roleOpen, setRoleOpen] = useState(false);
   const navigate = useNavigate();
   const { session, latest, loading, reload, runCwd } = useWorkspaceRun(groupId);
+
+  // 点中栏头部（roleSignal 递增）→ 右栏弹出「角色」tab 并激活。
+  useEffect(() => {
+    if (roleSignal && roleSignal > 0 && agent) {
+      setRoleOpen(true);
+      setTab('role');
+    }
+  }, [roleSignal, agent]);
+
+  const closeRole = () => {
+    setRoleOpen(false);
+    setTab((t) => (t === 'role' ? 'preview' : t));
+  };
+
+  const tabs: RightPaneTabDef<WsTab>[] =
+    roleOpen && agent ? [{ key: 'role', label: '角色' }, ...BASE_TABS] : BASE_TABS;
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -105,10 +137,24 @@ export function AgentWorkspacePane({ groupId, trailing }: { groupId?: string | n
       <RightPaneTabs<WsTab>
         activeTab={tab}
         onTabChange={setTab}
-        tabs={TABS}
+        tabs={tabs}
         ariaLabel="工作台标签"
         trailing={trailing}
         panels={{
+          role: agent ? (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', padding: '6px 12px', borderBottom: '1px solid var(--t-border)' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--t-fg-4)', flex: 1 }}>角色 · agent 详情</span>
+                <button type="button" aria-label="关闭角色" title="关闭" onClick={closeRole}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', padding: 3, display: 'inline-flex' }}>
+                  <X size={13} />
+                </button>
+              </div>
+              <AgentSettingsCard agent={agent} />
+            </div>
+          ) : (
+            <div style={{ flex: 1 }} />
+          ),
           preview: <PreviewPanel session={session} />,
           files: <WorkspaceFilesView root={runCwd} />,
           // position:relative 必须 — BlueprintCanvas 内部 position:absolute inset:0，

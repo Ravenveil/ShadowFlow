@@ -8,16 +8,18 @@ import { AgentWorkspacePane } from './AgentWorkspacePane';
 //   右栏 = 外壳（可拖拽宽度 + 收起）+ AgentWorkspacePane（产物/文件/画布/任务/Brief 单排）。
 //   「设定/人设」不再占右栏 tab，移到中栏 DM 头部点开（见 PersonalChatView · AgentSettingsCard）。
 interface PersonalRightPaneProps {
-  /** 选中的助手 — 保留以兼容调用方；人设已移到 DM 头部，这里不再渲染设定卡。 */
+  /** 选中的助手 — 传给工作台，供「角色」tab 弹出时渲染设定卡。 */
   agent?: AgentRecord | null;
   /** dm conversation 的 groupId — 工作台 / 任务 / Brief 复用群聊后端。 */
   groupId?: string | null;
+  /** 中栏头部点击的递增信号 — 触发右栏弹出「角色」tab。 */
+  roleSignal?: number;
 }
 
 /**
  * PersonalRightPane — 个人态右栏（第三栏，常驻）。单排工作台外壳。可拖拽宽度、可收起。
  */
-export function PersonalRightPane({ groupId }: PersonalRightPaneProps) {
+export function PersonalRightPane({ groupId, agent, roleSignal }: PersonalRightPaneProps) {
   const [collapsed, setCollapsed] = useState(false);
   // 可拖拽宽度（只在展开态生效）
   const { width, dragging, onDragStart } = useResizableWidth('sf-rightpane-w', 312, { min: 280, max: 720 });
@@ -48,6 +50,8 @@ export function PersonalRightPane({ groupId }: PersonalRightPaneProps) {
       />
       <AgentWorkspacePane
         groupId={groupId}
+        agent={agent}
+        roleSignal={roleSignal}
         trailing={
           <button type="button" aria-label="收起右栏" title="收起右栏" onClick={() => setCollapsed(true)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', padding: 6, borderRadius: 6, display: 'inline-flex', alignItems: 'center' }}>
