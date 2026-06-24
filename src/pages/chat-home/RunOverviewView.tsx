@@ -11,7 +11,7 @@
  *   onOpenRun — 可选：点击 run 卡/历史行时的回调。不传则 navigate 到整页。
  */
 import { useNavigate } from 'react-router-dom';
-import { Rocket, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { Rocket, ArrowUpRight, RefreshCw, ExternalLink } from 'lucide-react';
 import type { RunSessionSummary } from '../../api/runSessions';
 
 // ────────────────────────────────────────
@@ -152,24 +152,53 @@ export function RunOverviewView({ latest, history, loading, onOpenRun, onReload,
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            data-testid="workpane-latest-run"
-            className="sf-wp-card"
-            onClick={() => openRun(latest.session_id)}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <StatusBadge status={latest.status} />
-              <span style={{ flex: 1 }} />
-              <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono, monospace)' }}>{fmtTime(latest.updated_at)}</span>
-            </div>
-            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--t-fg)', lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-              {latest.goal || '（无目标描述）'}
-            </div>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-sub)', fontWeight: 600, color: 'var(--t-accent)' }}>
-              打开 Run <ArrowUpRight size={12} aria-hidden />
-            </span>
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              data-testid="workpane-latest-run"
+              className="sf-wp-card"
+              onClick={() => openRun(latest.session_id)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <StatusBadge status={latest.status} />
+                <span style={{ flex: 1 }} />
+                <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--t-fg-5)', fontFamily: 'var(--font-mono, monospace)' }}>{fmtTime(latest.updated_at)}</span>
+              </div>
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--t-fg)', lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                {latest.goal || '（无目标描述）'}
+              </div>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-sub)', fontWeight: 600, color: 'var(--t-accent)' }}>
+                就地查看 <ArrowUpRight size={12} aria-hidden />
+              </span>
+            </button>
+            {/* 整页打开小按钮：始终走 navigate，与 onOpenRun 回调无关 */}
+            <button
+              type="button"
+              data-testid="workpane-open-fullpage"
+              aria-label="整页打开 Run"
+              title="整页打开 Run"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/run-session/${latest.session_id}`);
+              }}
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--t-fg-4)',
+                padding: 4,
+                borderRadius: 5,
+                display: 'inline-flex',
+                alignItems: 'center',
+                opacity: 0.7,
+              }}
+            >
+              <ExternalLink size={11} strokeWidth={2} aria-hidden />
+            </button>
+          </div>
         )}
       </div>
 

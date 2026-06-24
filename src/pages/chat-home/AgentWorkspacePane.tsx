@@ -34,6 +34,7 @@ export function AgentWorkspacePane({ groupId }: { groupId?: string | null }) {
             loading={loading}
             onReload={reload}
             reloading={loading}
+            onOpenRun={() => setTab('preview')}
           />
         ),
         preview: <PreviewPanel session={session} />,

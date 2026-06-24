@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, Pencil, Plus, User } from 'lucide-react';
+import { useResizableWidth } from '../../core/hooks/useResizableWidth';
 import { paletteFor, initialOf } from './agentAvatar';
 import { RightPaneTabs } from '../run-session/RightPaneTabs';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
@@ -79,6 +80,9 @@ export function ThreadDrawerFB({
   const [tab, setTab] = useState<DrawerTab>('thread');
   const [threads, setThreads] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // 可拖拽宽度（与 PersonalRightPane 共享同一 localStorage key）
+  const { width: drawerWidth, dragging: drawerDragging, onDragStart: drawerDragStart } = useResizableWidth('sf-rightpane-w', 360, { min: 280, max: 720 });
 
   // Stream G — composer state
   const [replyText, setReplyText] = useState('');
@@ -341,7 +345,26 @@ export function ThreadDrawerFB({
   );
 
   return (
-    <div className={styles.drawer}>
+    <div
+      className={styles.drawer}
+      style={{ width: drawerWidth, position: 'relative', userSelect: drawerDragging ? 'none' : undefined }}
+    >
+      {/* 左边缘拖拽手柄 */}
+      <div
+        onMouseDown={drawerDragStart}
+        title="拖拽调整宽度"
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          cursor: 'col-resize',
+          zIndex: 10,
+          background: drawerDragging ? 'var(--t-accent-tint, rgba(99,102,241,0.12))' : 'transparent',
+          transition: 'background 120ms',
+        }}
+      />
       <RightPaneTabs<DrawerTab>
         activeTab={tab}
         onTabChange={setTab}

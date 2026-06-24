@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from 'react';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { useResizableWidth } from '../../core/hooks/useResizableWidth';
 import { HfAvatar } from '../../components/hifi';
 import type { AgentRecord } from '../../api/agents';
 import { RightPaneTabs, type RightPaneTabDef } from '../../components/run-session/RightPaneTabs';
@@ -108,6 +109,9 @@ export function PersonalRightPane({ agent, groupId }: PersonalRightPaneProps) {
   const [tab, setTab] = useState<TabId>(agent ? 'employee' : 'work');
   const [collapsed, setCollapsed] = useState(false);
 
+  // 可拖拽宽度（只在展开态生效）
+  const { width, dragging, onDragStart } = useResizableWidth('sf-rightpane-w', 312, { min: 280, max: 720 });
+
   if (collapsed) {
     return (
       <div style={{ width: 40, flexShrink: 0, borderLeft: '1px solid var(--t-border)', background: 'var(--t-panel)', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 10 }}>
@@ -120,7 +124,23 @@ export function PersonalRightPane({ agent, groupId }: PersonalRightPaneProps) {
   }
 
   return (
-    <div style={{ width: 312, flexShrink: 0, borderLeft: '1px solid var(--t-border)', background: 'var(--t-panel)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ width, flexShrink: 0, borderLeft: '1px solid var(--t-border)', background: 'var(--t-panel)', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', userSelect: dragging ? 'none' : undefined }}>
+      {/* 左边缘拖拽手柄 */}
+      <div
+        onMouseDown={onDragStart}
+        title="拖拽调整宽度"
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          cursor: 'col-resize',
+          zIndex: 10,
+          background: dragging ? 'var(--t-accent-tint)' : 'transparent',
+          transition: 'background 120ms',
+        }}
+      />
       <RightPaneTabs<TabId>
         activeTab={tab}
         onTabChange={setTab}
