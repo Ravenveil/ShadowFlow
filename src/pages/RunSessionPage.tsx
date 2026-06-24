@@ -2290,6 +2290,15 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                   }
                 }
               }
+              // Tool-call visualization (clawsgo parity) — attach the real tool
+              // invocations the agent made during this step. Backend tags each
+              // tool-call with the owning step_index; calls that arrived with no
+              // open step (stepIndex === null) fall back to the last step so
+              // they're still surfaced rather than dropped.
+              const lastStepIdx = session.steps.length - 1;
+              const toolCalls = (session.toolCalls ?? []).filter((tc) =>
+                tc.stepIndex === i || (tc.stepIndex == null && i === lastStepIdx),
+              );
               return {
                 index: i,
                 name: s.name,
@@ -2297,6 +2306,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                 elapsedMs,
                 hasArtifact: session.stepArtifacts?.[i] != null,
                 substeps,
+                toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
               };
             })}
             onStepView={(idx) => setDrawerStep(idx)}

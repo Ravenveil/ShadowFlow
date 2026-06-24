@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { subscribeRunSession, abortRunSession } from '../../api/runSessions';
-import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent, AgentPersonaEvent, StepArtifact, StepArtifactEvent } from '../../api/runSessions';
+import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent, AgentPersonaEvent, StepArtifact, StepArtifactEvent, ToolCallEvent } from '../../api/runSessions';
 import type { TimelineMessage, MessagePatch } from '../../components/run-session/timeline/types';
 import { applyPatch } from '../../components/run-session/timeline/types';
 import { classifyClientError, isErrorCode } from '../errors/classifyError';
@@ -20,6 +20,29 @@ export interface RunSessionSubstep {
   tokens?: number;
   cached?: boolean;
   /** ms-since-epoch the running event arrived. Used by StepList to sort. */
+  startedAt: number;
+}
+
+/**
+ * Tool-call visualization (clawsgo parity) — a single tool invocation surfaced
+ * in the left step list. Driven by SSE `tool-call` frames (see ToolCallEvent):
+ * the running frame creates the entry, the result frame (same `id`) upserts it
+ * to done/failed with a result summary, links, and elapsed time. Real data
+ * only — sourced from the runtime's own structured tool chunks.
+ */
+export interface RunSessionToolCall {
+  id: string;
+  tool: string;
+  title: string;
+  inputSummary: string;
+  status: 'running' | 'done' | 'failed';
+  resultSummary?: string;
+  links?: Array<{ label: string; url: string }>;
+  elapsedMs?: number;
+  /** Owning step index (null when the call ran outside any open step). */
+  stepIndex: number | null;
+  nodeId?: string;
+  /** ms-since-epoch first seen — used to preserve insertion order. */
   startedAt: number;
 }
 
@@ -180,6 +203,13 @@ export interface RunSessionState {
   // GET /steps/:n if the cached entry is missing (page reload mid-session).
   stepArtifacts: Record<number, StepArtifact>;
   /**
+   * Tool-call visualization (clawsgo parity) — ordered list of tool invocations
+   * surfaced from SSE `tool-call` frames. Upserted by id (running → done/failed).
+   * StepList groups these by `stepIndex` to nest them under the owning step row,
+   * rendering each via ToolCallCard. Insertion order preserved by `startedAt`.
+   */
+  toolCalls: RunSessionToolCall[];
+  /**
    * 2026-05-20 (S6.5) — currently-running substep ({node_id, name}) used by
    * useFollowMode to anchor-scroll the right pane to the matching section.
    * null when no substep is running.
@@ -249,6 +279,7 @@ type Action =
   | { type: 'RATIONALE'; payload: RationaleEvent }
   | { type: 'YAML_LINE'; payload: YamlLineEvent }
   | { type: 'SUBSTEP'; payload: SubstepEvent }
+  | { type: 'TOOL_CALL'; payload: ToolCallEvent }
   | { type: 'ERROR'; message: string; code?: string; hint?: string }
   | { type: 'RETRYING'; attempt: number; delayMs: number }
   | { type: 'CRITIQUE_PROGRESS'; payload: CritiqueProgressEvent }
@@ -607,6 +638,51 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
           action.payload,
         ],
       };
+    case 'TOOL_CALL': {
+      // Tool-call visualization — upsert by id. The `running` frame creates the
+      // entry; the `result` frame (same id) flips status + attaches result
+      // summary / links / elapsed. We preserve the original stepIndex / title /
+      // inputSummary captured at invocation when the result frame omits them
+      // (the backend sends an empty input_summary on the result). Insertion
+      // order is kept via startedAt so StepList renders calls chronologically.
+      const p = action.payload;
+      const idx = state.toolCalls.findIndex((t) => t.id === p.id);
+      if (idx === -1) {
+        const entry: RunSessionToolCall = {
+          id: p.id,
+          tool: p.tool,
+          title: p.title || p.tool,
+          inputSummary: p.input_summary ?? '',
+          status: p.status,
+          resultSummary: p.result_summary,
+          links: p.links,
+          elapsedMs: p.elapsed_ms,
+          stepIndex: typeof p.step_index === 'number' ? p.step_index : null,
+          nodeId: p.node_id,
+          startedAt: Date.now(),
+        };
+        return { ...state, toolCalls: [...state.toolCalls, entry] };
+      }
+      const prev = state.toolCalls[idx];
+      const merged: RunSessionToolCall = {
+        ...prev,
+        // tool/title/inputSummary stay from the running frame unless the new
+        // frame supplies a non-empty value (result frame sends empties).
+        tool: p.tool || prev.tool,
+        title: p.title && p.title !== p.tool ? p.title : prev.title,
+        inputSummary: p.input_summary || prev.inputSummary,
+        status: p.status,
+        resultSummary: p.result_summary ?? prev.resultSummary,
+        links: p.links ?? prev.links,
+        elapsedMs: p.elapsed_ms ?? prev.elapsedMs,
+        stepIndex: typeof p.step_index === 'number' ? p.step_index : prev.stepIndex,
+        nodeId: p.node_id ?? prev.nodeId,
+      };
+      return {
+        ...state,
+        toolCalls: state.toolCalls.map((t, i) => (i === idx ? merged : t)),
+      };
+    }
     case 'ERROR': {
       // Prefer server-classified code (`subscribeRunSession` forwards it via
       // onServerError); fall back to client-side regex sweep on the message
@@ -787,6 +863,7 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     critiqueResult: null, critiqueProgress: null,
     chatReply: '',
     stepArtifacts: {},
+    toolCalls: [],
     activeAgentSubstep: null,
     pendingQuestionForm: null,
     messages: [],
@@ -817,6 +894,9 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
       onRationale: (d) => dispatch({ type: 'RATIONALE', payload: d }),
       onYamlLine:  (d) => dispatch({ type: 'YAML_LINE', payload: d }),
       onSubstep:   (d) => dispatch({ type: 'SUBSTEP', payload: d }),
+      // Tool-call visualization — clawsgo left-pane parity. Upserted by id so a
+      // running tool row flips to done/failed when its result frame arrives.
+      onToolCall:  (d) => dispatch({ type: 'TOOL_CALL', payload: d }),
       onCritiqueProgress: (d) => dispatch({ type: 'CRITIQUE_PROGRESS', payload: d }),
       onCritiqueResult:   (d) => dispatch({ type: 'CRITIQUE_RESULT', payload: d }),
       onText:          (d) => dispatch({ type: 'TEXT', payload: d }),

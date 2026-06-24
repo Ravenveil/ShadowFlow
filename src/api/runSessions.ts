@@ -174,6 +174,39 @@ export interface SubstepEvent {
 }
 
 /**
+ * Tool-call visualization (clawsgo parity) — normalized projection of the
+ * runtime's structured `tool-use` / `tool-result` frames. The backend SSE
+ * handler (server/src/routes/run-sessions.ts) derives this from the agent's
+ * own typed tool chunks, so every field is REAL (no fabrication):
+ *   - on invocation: status='running' with input_summary
+ *   - on result:     status='done'|'failed' with result_summary + links + elapsed
+ * The two frames share the same `id` (the tool_use call id) so the reducer can
+ * upsert in place — the running row flips to done/failed when the result lands.
+ * `step_index` (when present) attaches the tool call to the owning StepList row.
+ */
+export interface ToolCallEvent {
+  /** Stable id shared by the running + completed frames (tool_use call id). */
+  id: string;
+  /** Raw tool name, e.g. 'web_search' / 'read_file' / 'bash'. */
+  tool: string;
+  /** Short human title (usually the salient input, e.g. "query: …"). */
+  title: string;
+  /** One-line input summary; empty on the result frame. */
+  input_summary: string;
+  status: 'running' | 'done' | 'failed';
+  /** One-line result summary; present on the result frame. */
+  result_summary?: string;
+  /** Clickable links pulled out of the tool output (deduped, capped). */
+  links?: Array<{ label: string; url: string }>;
+  /** Wall-clock duration in ms (present on the result frame). */
+  elapsed_ms?: number;
+  /** Owning StepList step index, when the call ran inside an open step. */
+  step_index?: number;
+  /** Owning DAG node id, when scoped to a parallel agent. */
+  node_id?: string;
+}
+
+/**
  * 2026-05-11 Layer 1 — Claude Code-style conversation mode.
  * When the LLM decides the user's goal is trivial (e.g. "hi") and replies
  * in plain natural language, server-side parser emits incremental `text`
@@ -397,6 +430,12 @@ export function subscribeRunSession(
     onRationale?: (data: RationaleEvent) => void;
     onYamlLine?: (data: YamlLineEvent) => void;
     onSubstep?: (data: SubstepEvent) => void;
+    /**
+     * Tool-call visualization — normalized tool invocation/result frame. Fires
+     * once on invocation (status='running') and once on result (status='done'
+     * |'failed'), sharing the same `id`. See ToolCallEvent.
+     */
+    onToolCall?: (data: ToolCallEvent) => void;
     onCritiqueProgress?: (data: CritiqueProgressEvent) => void;
     onCritiqueResult?: (data: CritiqueResultEvent) => void;
     onText?: (data: TextEvent) => void;
@@ -517,6 +556,10 @@ export function subscribeRunSession(
     es.addEventListener('rationale', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onRationale?.(d); });
     es.addEventListener('yaml-line', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onYamlLine?.(d); });
     es.addEventListener('substep',   (e) => { const d = parse(e as MessageEvent); if (d) handlers.onSubstep?.(d); });
+    // Tool-call visualization — clawsgo left-pane parity. Backend projects the
+    // runtime's structured tool-use / tool-result frames into this normalized
+    // shape; the reducer upserts by id so the running row flips to done/failed.
+    es.addEventListener('tool-call', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onToolCall?.(d); });
     // Story 15.14 — critique events
     es.addEventListener('critique-progress', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onCritiqueProgress?.(d); });
     es.addEventListener('critique-result',   (e) => { const d = parse(e as MessageEvent); if (d) handlers.onCritiqueResult?.(d); });

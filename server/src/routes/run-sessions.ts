@@ -1314,6 +1314,87 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   const openSteps = new Map<number, OpenStep>();
   let currentStepIndex: number | null = null;
 
+  // ── Tool-call visualization (clawsgo parity) ─────────────────────────────
+  // The agent runtime already surfaces FIRST-CLASS `tool-use` / `tool-result`
+  // SSE frames (assembler.ts pipeChunksToSse — sourced from typed TurnChunks,
+  // never re-parsed from text). They drive the timeline tool card, but the
+  // legacy left-pane <StepList> never saw them. Here we additionally project
+  // each tool invocation into a normalized `tool-call` frame the StepList can
+  // nest under the owning step:
+  //   { id, node_id?, step_index?, tool, title, input_summary,
+  //     status: 'running' | 'done' | 'failed', result_summary?, links?, elapsed_ms? }
+  // This is REAL data (every field is derived from the runtime's own tool-use /
+  // tool-result payload) — no fabrication. We keep an in-flight map keyed by
+  // the tool_use call id so the matching `tool-result` can flip status + attach
+  // a result summary + elapsed timing.
+  interface InFlightToolCall {
+    id: string;
+    tool: string;
+    step_index: number | null;
+    node_id?: string;
+    started_at: number;
+  }
+  const inFlightToolCalls = new Map<string, InFlightToolCall>();
+  let toolCallSeq = 0;
+
+  /** Collapse an arbitrary tool input object into a one-line human summary. */
+  const summarizeToolInput = (input: unknown): string => {
+    if (input == null) return '';
+    if (typeof input === 'string') return input.slice(0, 160);
+    if (typeof input !== 'object') return String(input).slice(0, 160);
+    const obj = input as Record<string, unknown>;
+    // Prefer the fields users care about most for common tools.
+    for (const key of ['query', 'q', 'search', 'url', 'path', 'file_path', 'command', 'cmd', 'pattern', 'prompt']) {
+      const v = obj[key];
+      if (typeof v === 'string' && v.trim()) return `${key}: ${v.trim()}`.slice(0, 160);
+    }
+    try {
+      return JSON.stringify(obj).slice(0, 160);
+    } catch {
+      return '';
+    }
+  };
+
+  /** Collapse a tool result payload into a one-line summary. */
+  const summarizeToolResult = (output: unknown): string => {
+    if (output == null) return '';
+    const text = typeof output === 'string' ? output : (() => {
+      try { return JSON.stringify(output); } catch { return String(output); }
+    })();
+    const firstLine = text.replace(/\s+/g, ' ').trim();
+    return firstLine.slice(0, 200);
+  };
+
+  /**
+   * Extract clickable result links from a tool output. Pulls http(s) URLs out
+   * of the result text (deduped, capped) so the StepList can render
+   * "found N results → clickable links" the way clawsgo does. Only real URLs
+   * that actually appeared in the runtime output are surfaced.
+   */
+  const extractToolLinks = (output: unknown): Array<{ label: string; url: string }> => {
+    const text = typeof output === 'string' ? output : (() => {
+      try { return JSON.stringify(output); } catch { return ''; }
+    })();
+    if (!text) return [];
+    const urls = text.match(/https?:\/\/[^\s"'<>)\]]+/g);
+    if (!urls) return [];
+    const seen = new Set<string>();
+    const links: Array<{ label: string; url: string }> = [];
+    for (const url of urls) {
+      const clean = url.replace(/[.,;]+$/, '');
+      if (seen.has(clean)) continue;
+      seen.add(clean);
+      let label = clean;
+      try {
+        const u = new URL(clean);
+        label = u.hostname.replace(/^www\./, '') + (u.pathname !== '/' ? u.pathname : '');
+      } catch { /* keep raw */ }
+      links.push({ label: label.slice(0, 60), url: clean });
+      if (links.length >= 5) break;
+    }
+    return links;
+  };
+
   // Story 15.8 — capture run outcome for persistence after generator drains.
   let artifactInfo: {
     type: ArtifactType | null;
@@ -1713,6 +1794,60 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
         // never pollutes step payload.
         const open = openSteps.get(currentStepIndex);
         if (open) open.classify = data;
+      }
+
+      // ── Tool-call projection → `tool-call` SSE (clawsgo left-pane parity) ──
+      // Translate the runtime's structured tool-use / tool-result frames into a
+      // normalized tool-call shape nested under the currently-open step. Wrapped
+      // defensively so a malformed payload never blocks the main event forward.
+      try {
+        if (event === 'tool-use' && data && typeof data === 'object') {
+          const d = data as { name?: unknown; input?: unknown; id?: unknown; node_id?: unknown };
+          const tool = typeof d.name === 'string' && d.name ? d.name : 'tool';
+          const callId =
+            typeof d.id === 'string' && d.id ? d.id : `tc-${id.slice(0, 6)}-${toolCallSeq++}`;
+          const node_id = typeof d.node_id === 'string' ? d.node_id : undefined;
+          inFlightToolCalls.set(callId, {
+            id: callId,
+            tool,
+            step_index: currentStepIndex,
+            node_id,
+            started_at: Date.now(),
+          });
+          sendEvent('tool-call', {
+            id: callId,
+            tool,
+            // Title is a short human label; the StepList renders tool + title.
+            title: summarizeToolInput(d.input) || tool,
+            input_summary: summarizeToolInput(d.input),
+            status: 'running',
+            ...(currentStepIndex !== null ? { step_index: currentStepIndex } : {}),
+            ...(node_id ? { node_id } : {}),
+          });
+        } else if (event === 'tool-result' && data && typeof data === 'object') {
+          const d = data as { for?: unknown; output?: unknown; is_error?: unknown; node_id?: unknown };
+          const callId = typeof d.for === 'string' ? d.for : undefined;
+          const tracked = callId ? inFlightToolCalls.get(callId) : undefined;
+          const isError = d.is_error === true;
+          const links = extractToolLinks(d.output);
+          sendEvent('tool-call', {
+            id: callId ?? `tc-${id.slice(0, 6)}-${toolCallSeq++}`,
+            tool: tracked?.tool ?? 'tool',
+            title: tracked?.tool ?? 'tool',
+            input_summary: '',
+            status: isError ? 'failed' : 'done',
+            result_summary: summarizeToolResult(d.output),
+            ...(links.length > 0 ? { links } : {}),
+            ...(tracked ? { elapsed_ms: Date.now() - tracked.started_at } : {}),
+            ...(tracked?.step_index != null ? { step_index: tracked.step_index } : {}),
+            ...((typeof d.node_id === 'string' ? d.node_id : tracked?.node_id)
+              ? { node_id: (typeof d.node_id === 'string' ? d.node_id : tracked?.node_id) as string }
+              : {}),
+          });
+          if (callId) inFlightToolCalls.delete(callId);
+        }
+      } catch (toolCallErr) {
+        console.error(`[run-sessions] tool-call projection error on event=${event}:`, toolCallErr);
       }
 
       // Capture latest artifact info (last blueprint wins — usually only one).

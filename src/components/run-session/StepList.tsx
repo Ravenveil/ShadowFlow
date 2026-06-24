@@ -18,6 +18,8 @@
  */
 import React, { useState } from 'react';
 import { Check, Eye, RotateCcw, AlertTriangle } from 'lucide-react';
+import ToolCallCard from './ToolCallCard';
+import type { RunSessionToolCall } from '../../core/hooks/useRunSession';
 
 export interface StepSubstepRow {
   /** e.g. "reader · identity + persona" — left column display text. */
@@ -40,6 +42,14 @@ export interface StepRow {
    * parent row auto-expands.
    */
   substeps?: StepSubstepRow[];
+  /**
+   * Tool-call visualization (clawsgo parity) — real tool invocations the agent
+   * made during this step (search / fetch / read-write / shell / …). Rendered
+   * as nested ToolCallCard rows beneath the step row, additively (existing
+   * step rows + actions + substeps stay intact). Empty / undefined → nothing
+   * extra renders, so legacy steps without tool data look exactly as before.
+   */
+  toolCalls?: RunSessionToolCall[];
 }
 
 export interface StepListProps {
@@ -358,6 +368,25 @@ const StepList: React.FC<StepListProps> = ({ steps, onStepView, onStepRetry }) =
                       {formatElapsed(sub.elapsedMs, sub.status)}
                     </span>
                   </div>
+                ))}
+              </div>
+            )}
+            {/* Tool-call visualization — clawsgo parity. Real tool invocations
+                made during this step, nested as compact ToolCallCard rows.
+                Additive: renders only when the step carries tool calls. */}
+            {step.toolCalls && step.toolCalls.length > 0 && (
+              <div
+                style={{
+                  paddingLeft: 26,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                  marginTop: 2,
+                  marginBottom: 4,
+                }}
+              >
+                {step.toolCalls.map((tc) => (
+                  <ToolCallCard key={tc.id} call={tc} />
                 ))}
               </div>
             )}
