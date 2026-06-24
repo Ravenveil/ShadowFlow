@@ -32,8 +32,6 @@ function maxWidth(): number {
 export function PersonalRunRightPane({ sessionId }: { sessionId: string }) {
   const navigate = useNavigate();
   const session = useRunSession(sessionId);
-  // 2026-06-18 — 活跃 run 一律显示 run-session 右栏（单 agent / 团队都显示），
-  // 治「runsession 的右侧栏没有」。是否 team 框架由面板内容自适应，不再前置 gate。
 
   const [width, setWidth] = useState<number>(() => {
     try {
@@ -61,6 +59,15 @@ export function PersonalRunRightPane({ sessionId }: { sessionId: string }) {
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     setWidth((w) => { try { localStorage.setItem(W_KEY, String(w)); } catch { /* ignore */ } return w; });
   }, []);
+
+  // 2026-06-24 — 普通对话（hermes 式单 agent 直答）不显示团队装配右栏：中栏 Timeline
+  // 聊天全宽即可。只有**真装配**才出 run-session 右栏：classify 判 report/review/workflow
+  // （非 answer），或已 emit ≥1 个 agent 节点（团队 /「建一个 agent」组装）。
+  // 守卫放在所有 hooks 之后（遵守 hooks 规则）。
+  const isAssembly =
+    (session.outputType != null && session.outputType !== 'answer') ||
+    session.nodes.length >= 1;
+  if (!isAssembly) return null;
 
   return (
     <div style={{ width, flexShrink: 0, minHeight: 0, display: 'flex', position: 'relative' }}>
