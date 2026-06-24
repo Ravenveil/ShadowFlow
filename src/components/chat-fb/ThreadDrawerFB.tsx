@@ -13,21 +13,17 @@
  */
 
 import { useEffect, useState } from 'react';
-import { X, Pencil, Plus, Upload, User } from 'lucide-react';
+import { X, Pencil, Plus, User } from 'lucide-react';
 import { paletteFor, initialOf } from './agentAvatar';
 import { RightPaneTabs } from '../run-session/RightPaneTabs';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
 import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
-import { RunWorkPane } from '../../pages/chat-home/RunWorkPane';
-import { EmbeddedPage } from '../run-session/EmbeddedPage';
-import CalendarPage from '../../pages/CalendarPage';
-import ProjectsPage from '../../pages/ProjectsPage';
+import { AgentWorkspacePane } from '../../pages/chat-home/AgentWorkspacePane';
 import { fetchRecentMessages } from '../../api/groupApi';
 import type { GroupItem, GroupMetrics, Message } from '../../common/types/inbox';
 import styles from './chatFB.module.css';
 
-// 2026-06-22 — 日历/项目整页塞进右栏标签页(三处右栏统一)。
-type DrawerTab = 'thread' | 'work' | 'tasks' | 'docs' | 'brief' | 'calendar' | 'projects';
+type DrawerTab = 'thread' | 'work' | 'tasks' | 'brief';
 
 export interface ThreadSourceMessage {
   id: string;
@@ -100,13 +96,9 @@ export function ThreadDrawerFB({
 
   const tabs: Array<{ k: DrawerTab; label: string; n?: number }> = [
     { k: 'thread', label: 'Thread' },
-    // M3 三栏融合 — 「工作区」= run-session 右半部分进聊天（按群关联 run）
     { k: 'work', label: tr('chat.tabWork', '工作区') },
     { k: 'tasks', label: tr('chat.tabTasks', '任务'), n: metrics.pendingApprovalsCount },
-    { k: 'docs', label: tr('chat.tabDocs', '文档') },
     { k: 'brief', label: 'Brief' },
-    { k: 'calendar', label: '日历' },
-    { k: 'projects', label: '项目' },
   ];
 
   // Stream G — 提交回复
@@ -329,29 +321,6 @@ export function ThreadDrawerFB({
         </div>
   );
 
-  // DOCS pane — Stream G mock 文件列表（TODO: 接 /api/groups/{id}/docs）
-  const docsPane = (
-        <div className={styles.drPane}>
-          {groupId ? (
-            <div className={styles.drDocList}>
-              {/* 2026-06-24 — 删除 MOCK_DOCS 假文件列表。文档接口（GET
-                  /api/groups/{id}/docs）上线前显示空态，不再塞假数据。 */}
-              <div className={styles.drEmpty}>
-                {tr('chat.docsEmpty', '暂无文档')}
-              </div>
-            </div>
-          ) : (
-            <div className={styles.drEmpty}>{tr('chat.pickTeamFirst', '请先选择一个群组')}</div>
-          )}
-          <div className={styles.drActbar}>
-            <button className={styles.drActBtn} type="button" disabled>
-              <Upload size={13} strokeWidth={2} />
-              上传 · 拖入或链接文件
-            </button>
-          </div>
-        </div>
-  );
-
   // BRIEF pane — 复用 BriefBoardView
   const briefPane = (
         <div className={styles.drPane}>
@@ -405,14 +374,11 @@ export function ThreadDrawerFB({
           thread: threadPane,
           work: (
             <div className={styles.drPane}>
-              <RunWorkPane groupId={groupId} />
+              <AgentWorkspacePane groupId={groupId} />
             </div>
           ),
           tasks: tasksPane,
-          docs: docsPane,
           brief: briefPane,
-          calendar: <EmbeddedPage><CalendarPage /></EmbeddedPage>,
-          projects: <EmbeddedPage><ProjectsPage /></EmbeddedPage>,
         }}
       />
     </div>
