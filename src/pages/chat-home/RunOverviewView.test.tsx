@@ -1,5 +1,5 @@
 // src/pages/chat-home/RunOverviewView.test.tsx
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { RunOverviewView } from './RunOverviewView';
@@ -14,5 +14,17 @@ describe('RunOverviewView', () => {
   it('renders empty state when no run', () => {
     render(<MemoryRouter><RunOverviewView latest={null} history={[]} loading={false} /></MemoryRouter>);
     expect(screen.getByText(/还没有运行记录/)).toBeInTheDocument();
+  });
+  it('renders refresh button in section header when onReload is provided', () => {
+    const onReload = vi.fn();
+    render(
+      <MemoryRouter>
+        <RunOverviewView latest={null} history={[]} loading={false} onReload={onReload} />
+      </MemoryRouter>,
+    );
+    const btn = screen.getByRole('button', { name: /刷新/ });
+    expect(btn).toBeInTheDocument();
+    (btn as HTMLButtonElement).click();
+    expect(onReload).toHaveBeenCalledTimes(1);
   });
 });

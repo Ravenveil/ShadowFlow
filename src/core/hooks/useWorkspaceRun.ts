@@ -13,10 +13,10 @@ export interface WorkspaceRun {
 
 export function useWorkspaceRun(groupId?: string | null): WorkspaceRun {
   const [runs, setRuns] = useState<RunSessionSummary[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!groupId);
 
   const load = () => {
-    if (!groupId) { setRuns([]); return; }
+    if (!groupId) { setRuns([]); setLoading(false); return; }
     setLoading(true);
     listRunSessions(groupId)
       .then(setRuns)

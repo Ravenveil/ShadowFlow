@@ -11,7 +11,7 @@
  *   onOpenRun — 可选：点击 run 卡/历史行时的回调。不传则 navigate 到整页。
  */
 import { useNavigate } from 'react-router-dom';
-import { Rocket, ArrowUpRight } from 'lucide-react';
+import { Rocket, ArrowUpRight, RefreshCw } from 'lucide-react';
 import type { RunSessionSummary } from '../../api/runSessions';
 
 // ────────────────────────────────────────
@@ -86,12 +86,16 @@ export interface RunOverviewViewProps {
    * 不传则降级为 navigate('/run-session/:id')，保持现有跳转行为。
    */
   onOpenRun?: (sessionId: string) => void;
+  /** 提供时，在 Overview section-header 行右侧渲染刷新按钮。 */
+  onReload?: () => void;
+  /** true 时刷新按钮显示旋转动画。 */
+  reloading?: boolean;
 }
 
 // ────────────────────────────────────────
 // 主组件
 // ────────────────────────────────────────
-export function RunOverviewView({ latest, history, loading, onOpenRun }: RunOverviewViewProps) {
+export function RunOverviewView({ latest, history, loading, onOpenRun, onReload, reloading }: RunOverviewViewProps) {
   const navigate = useNavigate();
 
   const openRun = (sid: string) => {
@@ -115,6 +119,17 @@ export function RunOverviewView({ latest, history, loading, onOpenRun }: RunOver
             Overview{latest ? ` · Run #${latest.session_id.slice(0, 4)}` : ''}
           </SectionLabel>
           <div style={{ flex: 1 }} />
+          {onReload && (
+            <button
+              type="button"
+              aria-label="刷新"
+              title="刷新"
+              className="sf-wp-refresh"
+              onClick={onReload}
+            >
+              <RefreshCw size={12} strokeWidth={2} aria-hidden className={reloading ? 'sf-spin' : undefined} />
+            </button>
+          )}
         </div>
 
         {initialLoading ? (
