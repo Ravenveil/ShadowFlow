@@ -23,17 +23,13 @@
 import React, { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus,
   Sparkles,
   User,
   Users,
-  Workflow,
   BookOpen,
   Paperclip,
   Link2,
   Hash,
-  Clipboard,
-  History,
   Download,
   ArrowRight,
   CheckCircle2,
@@ -102,7 +98,6 @@ export interface UnifiedComposerProps {
   initialText?: string;
 }
 
-const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.userAgent);
 
 // ---------------------------------------------------------------------------
 // ChipBtn — unified ghost/hover/active/configured chip button (moved verbatim
@@ -316,20 +311,17 @@ export function UnifiedComposer({
   const [modeOpen, setModeOpen] = useState(false);
   const modeRef = useRef<HTMLDivElement | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
   const knowledgeRef = useRef<HTMLDivElement | null>(null);
-  const addRef = useRef<HTMLDivElement | null>(null);
   // Close popovers on outside click
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       const t = e.target as Node;
       if (knowledgeOpen && knowledgeRef.current && !knowledgeRef.current.contains(t)) setKnowledgeOpen(false);
       if (modeOpen && modeRef.current && !modeRef.current.contains(t)) setModeOpen(false);
-      if (addOpen && addRef.current && !addRef.current.contains(t)) setAddOpen(false);
     }
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [knowledgeOpen, modeOpen, addOpen]);
+  }, [knowledgeOpen, modeOpen]);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -337,30 +329,6 @@ export function UnifiedComposer({
     const id = setTimeout(() => setToast(null), 1800);
     return () => clearTimeout(id);
   }, [toast]);
-
-  function notImpl(label: string) {
-    setToast(`${label} · ${t('common.comingSoon')}`);
-  }
-
-  // Add attachment (📎 file / 🔗 url / ⛓ cid). Prompts the user, pushes a chip
-  // into the visible attachments list. TODO: replace mock prompt with real
-  // file picker / URL input / 0G CID resolver once those flows ship.
-  function addAttachment(type: AttachmentType) {
-    const ask = type === 'file'
-      ? t('start.filenameMock')
-      : type === 'url'
-        ? 'URL'
-        : '0G CID';
-    const value = typeof window !== 'undefined' ? window.prompt(ask, '') : null;
-    if (!value || !value.trim()) return;
-    const id = `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const label = value.trim();
-    let meta: string | undefined;
-    if (type === 'file') meta = `${(Math.random() * 4 + 0.5).toFixed(1)}MB`;
-    else if (type === 'url') meta = 'feed';
-    else meta = '0G';
-    setAttachments((prev) => [...prev, { id, type, label, meta }]);
-  }
 
   function removeAttachment(id: string) {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
@@ -423,6 +391,12 @@ export function UnifiedComposer({
     // When the command menu is open, ↑↓↵ esc are owned by CommandMenu's
     // global keydown listener — don't double-submit on ↵.
     if (commandMenu && (e.key === 'Enter' || e.key === 'Escape' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Tab')) {
+      return;
+    }
+    // Enter = 发送，Shift+Enter = 换行（旧 Ctrl/Cmd+Enter 保留为备用快捷键）。
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      void handleSubmit();
       return;
     }
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -505,7 +479,7 @@ export function UnifiedComposer({
         setSkillPickerOpen(true);
         break;
       case 'help':
-        setToast('快捷键: ⌘↵ 发送 · @ 提及 Skill · / 命令');
+        setToast('快捷键: ⏎ 发送 · Shift+⏎ 换行 · @ 提及 Skill · / 命令');
         break;
       case 'inspect':
         navigate('/runs');
@@ -889,162 +863,14 @@ export function UnifiedComposer({
             borderTop: '1px dashed var(--t-border)',
           }}
         >
-          {/* + Add ▾ — aggregates 5 attachment actions */}
-          <div ref={addRef} style={{ position: 'relative', flexShrink: 0 }}>
-            <ChipBtn
-              glyph={<Plus size={14} strokeWidth={2} />}
-              label={attachments.length > 0 ? undefined : t('common.add')}
-              badge={attachments.length > 0 ? attachments.length : undefined}
-              hasArrow
-              active={addOpen}
-              configured={attachments.length > 0}
-              onClick={() => setAddOpen((v) => !v)}
-              testId="start-chip-add"
-              title={t('start.addAttachment')}
-            />
-            {addOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: 'calc(100% + 6px)',
-                  left: 0,
-                  minWidth: 220,
-                  background: 'var(--t-panel)',
-                  border: '1px solid var(--t-border)',
-                  borderRadius: 8,
-                  padding: 4,
-                  boxShadow: '0 8px 24px -8px rgba(0,0,0,.35)',
-                  zIndex: 30,
-                }}
-              >
-                {(
-                  [
-                    {
-                      glyph: <Paperclip size={14} strokeWidth={2} />,
-                      label: t('start.uploadFile'),
-                      testId: 'start-chip-attach',
-                      onClick: () => {
-                        setAddOpen(false);
-                        addAttachment('file');
-                      },
-                    },
-                    {
-                      glyph: <Link2 size={14} strokeWidth={2} />,
-                      label: 'URL',
-                      testId: 'start-chip-url',
-                      onClick: () => {
-                        setAddOpen(false);
-                        addAttachment('url');
-                      },
-                    },
-                    {
-                      glyph: <Hash size={14} strokeWidth={2} />,
-                      label: '0G CID',
-                      testId: 'start-chip-cid',
-                      onClick: () => {
-                        setAddOpen(false);
-                        addAttachment('cid');
-                      },
-                    },
-                    {
-                      glyph: <Clipboard size={14} strokeWidth={2} />,
-                      label: t('start.pasteClipboard'),
-                      testId: 'start-chip-paste',
-                      onClick: () => {
-                        setAddOpen(false);
-                        notImpl(t('start.pasteClipboard'));
-                      },
-                    },
-                    {
-                      glyph: <History size={14} strokeWidth={2} />,
-                      label: t('start.recentPrompts'),
-                      testId: 'start-chip-history',
-                      onClick: () => {
-                        setAddOpen(false);
-                        notImpl(t('start.recentPrompts'));
-                      },
-                    },
-                    {
-                      glyph: <Download size={14} strokeWidth={2} />,
-                      label: t('start.importSkill'),
-                      testId: 'start-chip-import-skill',
-                      onClick: () => {
-                        setAddOpen(false);
-                        setSkillPickerOpen(true);
-                      },
-                      accent: true,
-                    },
-                    {
-                      glyph: <Workflow size={14} strokeWidth={2} />,
-                      label: t('start.importWorkflow'),
-                      testId: 'start-chip-import-workflow',
-                      onClick: () => {
-                        setAddOpen(false);
-                        notImpl(t('start.importWorkflow'));
-                      },
-                      accent: true,
-                    },
-                  ] as Array<{
-                    glyph: ReactNode;
-                    label: string;
-                    testId: string;
-                    onClick: () => void;
-                    accent?: boolean;
-                  }>
-                ).map((item, idx) => (
-                  <React.Fragment key={item.testId}>
-                    {idx === 5 && (
-                      <div style={{ height: 1, background: 'var(--t-border)', margin: '4px 6px' }} />
-                    )}
-                    <button
-                      type="button"
-                      onClick={item.onClick}
-                      data-testid={item.testId}
-                      style={{
-                        display: 'flex',
-                        width: '100%',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '8px 10px',
-                        background: 'transparent',
-                        color: item.accent ? 'var(--t-accent)' : 'var(--t-fg-2)',
-                        border: 'none',
-                        borderRadius: 5,
-                        fontSize: 12,
-                        fontFamily: 'inherit',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'background 120ms ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background =
-                          item.accent ? 'var(--t-accent-tint)' : 'var(--t-panel-2)';
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                      }}
-                    >
-                      <span
-                        aria-hidden
-                        style={{
-                          display: 'inline-flex',
-                          width: 18,
-                          height: 18,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 14,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {item.glyph}
-                      </span>
-                      <span style={{ flex: 1 }}>{item.label}</span>
-                    </button>
-                  </React.Fragment>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* 导入 Skill — 直接打开 SkillPickerModal（URL ingest 真实后端）*/}
+          <ChipBtn
+            glyph={<Download size={14} strokeWidth={2} />}
+            label={t('start.importSkill')}
+            onClick={() => setSkillPickerOpen(true)}
+            testId="start-chip-import-skill"
+            title={t('start.importSkill')}
+          />
 
           {/* 2026-05-29 — ModelPicker（CLI + API）。写 sf.defaultExecutor/sf.model，
               调用方提交时读它们拼进请求。 */}
@@ -1297,7 +1123,7 @@ export function UnifiedComposer({
 
 
           <div style={{ flex: 1, minWidth: 6 }} />
-          <span className="hf-kbd">{isMac ? '⌘ ⏎' : 'Ctrl ⏎'}</span>
+          <span className="hf-kbd">⏎ 发送 · Shift+⏎ 换行</span>
           <button
             type="button"
             onClick={() => void handleSubmit()}
