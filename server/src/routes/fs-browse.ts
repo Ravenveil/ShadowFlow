@@ -13,7 +13,7 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { execFile } from 'node:child_process';
-import { readdirSync, statSync, readFileSync } from 'node:fs';
+import { readdirSync, statSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import path from 'node:path';
 
@@ -177,19 +177,49 @@ function isInside(child: string, parent: string): boolean {
 router.get('/read', (req: Request, res: Response) => {
   const file = typeof req.query.path === 'string' ? sanitizePath(req.query.path) : '';
   const root = typeof req.query.root === 'string' ? sanitizePath(req.query.root) : '';
+
+  // C1: 空 path 必须在 isInside 守卫前就拒绝
+  if (!file) {
+    res.status(400).json({ error: { code: 'NO_PATH', message: 'path 必填' } });
+    return;
+  }
+
   if (!root) {
     res.status(400).json({ error: { code: 'NO_ROOT', message: 'root 必填（限定可读子树）' } });
     return;
   }
+
+  // M3: 绝对路径前置校验（校验原始 file，未 resolve）
+  if (!path.isAbsolute(file)) {
+    res.status(400).json({ error: { code: 'NOT_ABSOLUTE', message: 'path 必须是绝对路径' } });
+    return;
+  }
+
   const absFile = path.resolve(file);
   const absRoot = path.resolve(root);
+
+  // 第一道：resolve 后路径越权检查（防 ../.. 穿越）
   if (!isInside(absFile, absRoot)) {
     res.status(403).json({ error: { code: 'FORBIDDEN', message: '路径越权：仅允许读工作目录内文件' } });
     return;
   }
+
+  // I1: realpathSync 跟踪符号链接真实目标，再过一次 isInside（防 symlink 越权）
+  let realFile: string;
+  try {
+    realFile = realpathSync(absFile);
+  } catch {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: '路径不存在' } });
+    return;
+  }
+  if (!isInside(realFile, absRoot)) {
+    res.status(403).json({ error: { code: 'FORBIDDEN', message: '符号链接越权' } });
+    return;
+  }
+
   let size: number;
   try {
-    const st = statSync(absFile);
+    const st = statSync(realFile);
     if (!st.isFile()) {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: '不是文件' } });
       return;
@@ -200,11 +230,11 @@ router.get('/read', (req: Request, res: Response) => {
     return;
   }
   if (size > MAX_READ_BYTES) {
-    const buf = readFileSync(absFile).subarray(0, MAX_READ_BYTES).toString('utf8');
+    const buf = readFileSync(realFile).subarray(0, MAX_READ_BYTES).toString('utf8');
     res.json({ data: { content: buf, size, truncated: true } });
     return;
   }
-  res.json({ data: { content: readFileSync(absFile, 'utf8'), size, truncated: false } });
+  res.json({ data: { content: readFileSync(realFile, 'utf8'), size, truncated: false } });
 });
 
 /** Validate a candidate cwd: must be an existing absolute directory. */
