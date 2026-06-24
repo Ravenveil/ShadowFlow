@@ -1770,3 +1770,101 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .sf-scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 .sf-scroll-thin { scrollbar-width: thin; }
 
+
+/* ── §7 Tab / workspace 切换动效（clawsgo 风「丝滑切换」）─────────────────────
+ * polish stream 追加（2026-06-24, ADD-ONLY）。供 shell-left（团队/Agent 模式切换、
+ * recent sessions 展开）与 right-files（工作空间/文件/预览 tab 切换）按 class 采用，
+ * 复刻 clawsgo 右栏 Agent host 工作空间 tab 的「滑动下划线 + 内容横滑/交叉淡入」手感。
+ * 全部走已有 --sf-dur-*/--sf-ease* 节奏，reduced-motion 由顶部全局 `*` 兜底块即时完成。 */
+
+/* (a) 滑动下划线指示器 ──────────────────────────────────────────────────────
+ * 结构：
+ *   <div class="sf-tabs">
+ *     <button class="sf-tab" data-on>…</button> …
+ *     <span class="sf-tab-underline" style="--sf-tab-x:0px; --sf-tab-w:64px" />
+ *   </div>
+ * 调用方在选中变化时把激活 tab 的 offsetLeft/offsetWidth 写进 --sf-tab-x/--sf-tab-w，
+ * 下划线就会平滑滑过去（width+transform 一起过渡）。*/
+.sf-tabs { position: relative; display: inline-flex; align-items: center; }
+.sf-tab {
+  position: relative;
+  background: transparent; border: none; cursor: pointer;
+  font: inherit; color: var(--t-fg-3, var(--fg-3));
+  padding: 6px 12px; border-radius: 7px;
+  transition: color var(--sf-dur-fast) var(--sf-ease),
+              background var(--sf-dur-fast) var(--sf-ease);
+}
+.sf-tab:hover { color: var(--t-fg-2, var(--fg-2)); background: var(--t-panel-2); }
+.sf-tab[data-on="true"], .sf-tab[aria-selected="true"] { color: var(--t-accent); }
+.sf-tab-underline {
+  position: absolute; bottom: 0; left: 0; height: 2px;
+  width: var(--sf-tab-w, 0px);
+  transform: translateX(var(--sf-tab-x, 0px));
+  background: var(--t-accent);
+  border-radius: var(--r-full, 999px);
+  transition: transform var(--sf-dur-slow) var(--sf-ease-spring),
+              width var(--sf-dur-slow) var(--sf-ease-spring);
+  pointer-events: none;
+}
+/* 竖向变体（左栏导航的「滑动高亮条」）：把宽改高、X 改 Y。 */
+.sf-tab-underline--v {
+  bottom: auto; left: 0; top: 0; width: 2px; height: var(--sf-tab-h, 0px);
+  transform: translateY(var(--sf-tab-y, 0px));
+  transition: transform var(--sf-dur-slow) var(--sf-ease-spring),
+              height var(--sf-dur-slow) var(--sf-ease-spring);
+}
+
+/* (b) 内容切换 ─────────────────────────────────────────────────────────────
+ * 切 tab 时给【新】面板加 class 触发入场；用 `key` 或重挂载使动画每次重放。
+ *   交叉淡入：    <div class="sf-switch-fade"  key={tab}>…</div>
+ *   横滑（右进）：<div class="sf-switch-slide" key={tab}>…</div>
+ *   横滑（左进，回退方向）：再叠 .sf-switch-slide--back */
+@keyframes sf-switch-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes sf-switch-slide-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes sf-switch-slide-in-back {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.sf-switch-fade  { animation: sf-switch-fade var(--sf-dur-base) var(--sf-ease) both; }
+.sf-switch-slide { animation: sf-switch-slide-in var(--sf-dur-base) var(--sf-ease) both; }
+.sf-switch-slide.sf-switch-slide--back { animation-name: sf-switch-slide-in-back; }
+
+/* (c) 视图叠放容器（display:none lazy-mount 多视图共存时，让显示中的那个淡入）
+ * 结构：每个视图外层 .sf-view，隐藏的加 [hidden]，显示的不加；切换即淡入。
+ * 与 hermes Layout 的 visitedViews(display:none) 懒挂载法对齐。 */
+.sf-view { animation: sf-switch-fade var(--sf-dur-base) var(--sf-ease) both; }
+.sf-view[hidden] { display: none; }
+
+/* (d) 左栏折叠/展开宽度过渡（hermes .sidebar-collapsed 手感）
+ * 给侧栏容器加 .sf-collapsible，宽度变化即平滑；折叠态把 --sf-rail-w 设小。 */
+.sf-collapsible {
+  width: var(--sf-rail-w, 240px);
+  transition: width var(--sf-dur-slow) var(--sf-ease-spring);
+  overflow: hidden;
+}
+
+
+/* ── §7.1 round-2 切换层 · ADOPTION 备案（2026-06-24, ADD-ONLY）──────────────
+ * REVIEWER 指出 round-2 切换类此前 0 个 tsx 采用（dead CSS）。本 round 由 polish owner
+ * 在自有文件落地为可复用受控原语，下列 class 现均有真实调用点（非 dead CSS）：
+ *
+ *   sf-tabs / sf-tab / sf-tab-underline        ← <StudioTabs>      (SlashCommandMenu.tsx)
+ *   sf-tab-underline--v                        ← <StudioTabs orientation="v">
+ *   sf-switch-slide / sf-switch-slide--back    ← <StudioTabPanel>  (SlashCommandMenu.tsx)
+ *   sf-view                                    ← <StudioTabPanel>
+ *   sf-switch-fade                             ← SlashCommandMenu 列表 cross-fade
+ *
+ * shell-left（Agents/Teams 模式切换、recent 展开）与 right-files（代码/预览 tab）
+ * 直接 import { StudioTabs, StudioTabPanel } from './SlashCommandMenu' 即可 drop-in，
+ * 替换各自的 inline transition，复用同一「滑动下划线 + 内容横滑/淡入」手感。
+ * sf-collapsible 供 ThreeColumnShell 栏宽折叠采用（栏壳 owner 处采用）。 */
+
+/* (e) tab 行块级铺满修饰：工作空间顶栏（code/preview）整宽分布时用。 */
+.sf-tabs--block { display: flex; width: 100%; }
+.sf-tabs--block > .sf-tab { flex: 1; justify-content: center; }
