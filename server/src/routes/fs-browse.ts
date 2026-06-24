@@ -110,6 +110,43 @@ router.get('/list', (req: Request, res: Response) => {
   res.json({ data: { path: target, parent, isRoot: false, entries } });
 });
 
+/**
+ * GET /api/fs/files?path=<absDir> — 列出某目录下的文件（隐藏目录与 dotfile），2026-06-24。
+ *
+ * 返回 200 { data: { path, files: Array<{ name, path, size, mtime, ext }> } }
+ *      400 { error: { code: 'NOT_A_DIR', ... } }
+ *      404 { error: { code: 'NOT_FOUND', ... } }
+ */
+router.get('/files', (req: Request, res: Response) => {
+  const raw = typeof req.query.path === 'string' ? sanitizePath(req.query.path) : '';
+  const target = raw ? path.resolve(raw) : homedir();
+  let names: string[];
+  try {
+    const st = statSync(target);
+    if (!st.isDirectory()) {
+      res.status(400).json({ error: { code: 'NOT_A_DIR', message: `${target} 不是目录` } });
+      return;
+    }
+    names = readdirSync(target);
+  } catch (e) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: e instanceof Error ? e.message : String(e), path: target } });
+    return;
+  }
+  const files: Array<{ name: string; path: string; size: number; mtime: number; ext: string }> = [];
+  for (const name of names) {
+    if (name.startsWith('.')) continue;
+    const full = path.join(target, name);
+    try {
+      const st = statSync(full);
+      if (st.isFile()) {
+        files.push({ name, path: full, size: st.size, mtime: st.mtimeMs, ext: path.extname(name).toLowerCase() });
+      }
+    } catch { /* skip unreadable */ }
+  }
+  files.sort((a, b) => a.name.localeCompare(b.name));
+  res.json({ data: { path: target, files } });
+});
+
 /** Validate a candidate cwd: must be an existing absolute directory. */
 router.get('/validate', (req: Request, res: Response) => {
   const raw = typeof req.query.path === 'string' ? sanitizePath(req.query.path) : '';
