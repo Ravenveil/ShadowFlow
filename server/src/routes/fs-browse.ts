@@ -119,7 +119,11 @@ router.get('/list', (req: Request, res: Response) => {
  */
 router.get('/files', (req: Request, res: Response) => {
   const raw = typeof req.query.path === 'string' ? sanitizePath(req.query.path) : '';
-  const target = raw ? path.resolve(raw) : homedir();
+  if (!raw) {
+    res.status(400).json({ error: { code: 'NO_PATH', message: 'path 必填' } });
+    return;
+  }
+  const target = path.resolve(raw);
   let names: string[];
   try {
     const st = statSync(target);

@@ -35,4 +35,17 @@ describe('GET /api/fs/files', () => {
     const res = await request(app()).get('/api/fs/files').query({ path: path.join(dir, 'nope') });
     expect(res.status).toBe(404);
   });
+
+  it('400 NOT_A_DIR when path points to a file', async () => {
+    const filePath = path.join(dir, 'a.md');
+    const res = await request(app()).get('/api/fs/files').query({ path: filePath });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('NOT_A_DIR');
+  });
+
+  it('400 NO_PATH when path is not provided', async () => {
+    const res = await request(app()).get('/api/fs/files');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('NO_PATH');
+  });
 });
