@@ -10,12 +10,27 @@
  * 不臆造 clawsgo 卡片上的「交付X · 约N分钟」——那是我们数据里没有的字段，
  * 编造即 mock。只渲染 skill 的真实字段。
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Sparkles, Workflow, FileCode, FileText, Boxes, Bot, Wrench,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { listSkills, type SkillInfo } from '../../api/skills';
+
+/** 过滤掉测试/演示 skill（id 或 name 含测试关键词）。 */
+function isTestSkill(s: SkillInfo): boolean {
+  const id = s.skill_id ?? '';
+  const name = (s.name ?? '').toLowerCase();
+  const desc = (s.description ?? '').toLowerCase();
+  // id 以 test- / demo- 开头
+  if (/^(test|demo)-/i.test(id)) return true;
+  // 已知测试 id
+  if (['editor-export-demo', 'test-15-28-from-browser', 'test-15-28-skill'].includes(id)) return true;
+  // name/desc 含测试关键词
+  if (name.includes('15.28') || desc.includes('15.28')) return true;
+  if (desc.includes('e2e test') || desc.includes('verification') || desc.includes('从 editor 导出')) return true;
+  return false;
+}
 
 // domain → 友好中文 + 配图标（缺失 domain 回落 kind / 其他）。
 const DOMAIN_LABEL: Record<string, string> = {
@@ -51,11 +66,32 @@ function iconOf(s: SkillInfo): LucideIcon {
 export function StartGallery({ onPick }: { onPick: (token: string) => void }) {
   const [skills, setSkills] = useState<SkillInfo[] | null>(null);
   const [cat, setCat] = useState<string>('全部');
+  // 滑动下划线指示条（参照 RightPaneTabs.tsx .rs-tab-ind 实现）
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+  const activeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [ind, setInd] = useState<{ x: number; w: number } | null>(null);
+  const measure = () => {
+    const btn = activeBtnRef.current;
+    if (!btn || !btn.offsetWidth) { setInd(null); return; }
+    const next = { x: btn.offsetLeft, w: btn.offsetWidth };
+    setInd((prev) => (prev && prev.x === next.x && prev.w === next.w ? prev : next));
+  };
+  const measureRef = useRef(measure);
+  measureRef.current = measure;
+  useLayoutEffect(() => { measureRef.current(); });
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measureRef.current());
+    if (tabsRef.current) ro.observe(tabsRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     let alive = true;
     listSkills()
-      .then((rows) => { if (alive) setSkills(rows.filter((s) => s.enabled !== false)); })
+      .then((rows) => {
+        if (alive) setSkills(rows.filter((s) => s.enabled !== false && !isTestSkill(s)));
+      })
       .catch(() => { if (alive) setSkills([]); });
     return () => { alive = false; };
   }, []);
@@ -89,21 +125,38 @@ export function StartGallery({ onPick }: { onPick: (token: string) => void }) {
 
   return (
     <div className="sg-wrap">
-      <div className="sg-tabs" role="tablist" aria-label="模板分类">
-        {cats.map((c) => (
-          <button
-            key={c}
-            type="button"
-            role="tab"
-            aria-selected={cat === c}
-            className={`sg-tab${cat === c ? ' on' : ''}`}
-            onClick={() => setCat(c)}
-          >
-            {c}
-          </button>
-        ))}
+      <div
+        className={`sg-tabs${ind ? ' has-ind' : ''}`}
+        role="tablist"
+        aria-label="模板分类"
+        ref={tabsRef}
+      >
+        {cats.map((c) => {
+          const isActive = cat === c;
+          return (
+            <button
+              key={c}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={`sg-tab${isActive ? ' on' : ''}`}
+              onClick={() => setCat(c)}
+              ref={isActive ? (el) => { activeBtnRef.current = el; } : undefined}
+            >
+              {c}
+            </button>
+          );
+        })}
+        {/* 滑动指示条 — 测量成功才渲染；失败时 .sg-tab.on 的 border 兜底 */}
+        {ind && (
+          <span
+            aria-hidden
+            className="sg-tab-ind"
+            style={{ transform: `translateX(${ind.x}px)`, width: ind.w }}
+          />
+        )}
       </div>
-      <div className="sg-grid">
+      <div key={cat} className="sg-grid sg-grid-fade">
         {shown.map((s) => {
           const Icon = iconOf(s);
           return (

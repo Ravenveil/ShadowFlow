@@ -1349,14 +1349,37 @@ input, textarea, select { font-family: inherit; color: inherit; }
 
 /* ── StartGallery — clawsgo 式开始页模板画廊（2026-06-13，真实 skills）── */
 .sg-wrap { width: 100%; max-width: 760px; margin: 18px auto 0; }
-.sg-tabs { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-bottom: 14px; }
-.sg-tab {
-  padding: 5px 13px; border-radius: var(--r-full); border: 1px solid transparent;
-  background: none; cursor: pointer; font-size: var(--fs-sub); color: var(--t-fg-4);
-  transition: color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
+/* 单行滑动分类 tab 行（2026-06-24 升级，对标 RightPaneTabs .rs-tabs 指示条） */
+.sg-tabs {
+  position: relative;
+  display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+  gap: 0; justify-content: center;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--t-border);
 }
-.sg-tab:hover { color: var(--t-fg-2); background: var(--t-hover); }
-.sg-tab.on { color: var(--t-accent); background: var(--t-accent-tint); font-weight: 600; }
+.sg-tabs::-webkit-scrollbar { display: none; }
+.sg-tab {
+  position: relative; flex-shrink: 0;
+  padding: 6px 14px; border-radius: 0; border: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: none; cursor: pointer; font-size: var(--fs-sub); color: var(--t-fg-4);
+  transition: color var(--dur-1) var(--ease-out);
+  white-space: nowrap;
+}
+.sg-tab:hover { color: var(--t-fg-2); }
+.sg-tab.on { color: var(--t-accent); font-weight: 600; border-bottom-color: var(--t-accent); }
+/* 滑动指示条接管后，关掉 per-tab border */
+.sg-tabs.has-ind .sg-tab.on { border-bottom-color: transparent; }
+.sg-tab-ind {
+  position: absolute; bottom: 0; left: 0;
+  height: 2px; border-radius: 1px;
+  background: var(--t-accent);
+  pointer-events: none;
+  transition: transform var(--dur-2) var(--ease-spring), width var(--dur-2) var(--ease-spring);
+}
+/* 切换分类时卡片网格淡入 */
+@keyframes sg-grid-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.sg-grid-fade { animation: sg-grid-fade-in var(--dur-1) var(--ease-out); }
 .sg-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
   gap: 10px;
