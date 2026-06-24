@@ -115,6 +115,15 @@ export type TimelineMessage =
       name: string;
       args_summary: string;
       link?: { label: string; href: string };
+      /**
+       * gap #2（2026-06-24，对齐 Hermes 工具卡）— per-tool 执行状态与耗时。
+       * status: 调用中 / 成功 / 失败；duration_ms: 从 tool_use 到 tool_result 的耗时；
+       * result_summary: 结果摘要（如 "3 files" / "527 elements" / 首行）。
+       * 由 projector 的 onToolUse(running) → onToolResult(tool_finalize patch) 填充。
+       */
+      status?: 'running' | 'ok' | 'error';
+      duration_ms?: number;
+      result_summary?: string;
     })
   | (TimelineMessageBase & { kind: 'tool_echo'; body: string })
   | (TimelineMessageBase & {
@@ -172,6 +181,8 @@ export type MessagePatch =
     }
   | { id: string; op: 'thinking_append_body'; chunk: string }
   | { id: string; op: 'thinking_finalize'; tokens?: number; duration_ms?: number }
+  // gap #2 — tool_call 终态：tool_result 回来时把对应 tool_call 从 running 落定。
+  | { id: string; op: 'tool_finalize'; status: 'ok' | 'error'; duration_ms?: number; result_summary?: string }
   | { id: string; op: 'diff_append_line'; line: DiffLine }
   | {
       id: string;
@@ -247,6 +258,15 @@ export function applyPatch(
         status: 'done',
         tokens: patch.tokens ?? msg.tokens,
         duration_ms: patch.duration_ms ?? msg.duration_ms,
+      };
+    }
+    case 'tool_finalize': {
+      if (msg.kind !== 'tool_call') return msg;
+      return {
+        ...msg,
+        status: patch.status,
+        duration_ms: patch.duration_ms ?? msg.duration_ms,
+        result_summary: patch.result_summary ?? msg.result_summary,
       };
     }
     case 'diff_append_line': {

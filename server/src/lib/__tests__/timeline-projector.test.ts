@@ -478,14 +478,43 @@ console.log('\n[18] onToolUse/onToolResult → tool_call + tool_echo');
   assert('emits tool_call', !!call);
   check('tool_call name', 'Bash', call?.name);
   assert('args_summary carries input', (call?.args_summary ?? '').includes('pytest'));
+  // gap #2 — tool_call 起始 status:'running'
+  check('tool_call starts running', 'running', call?.status);
   const r2 = p.onToolResult('All tests passed');
   const echo = r2.messages.find((m) => m.kind === 'tool_echo') as
     | Extract<TimelineMessage, { kind: 'tool_echo' }>
     | undefined;
   assert('emits tool_echo', !!echo);
   check('tool_echo body', 'All tests passed', echo?.body);
-  // blank result is a no-op
-  check('blank tool result no-op', 0, p.onToolResult('  ').messages.length);
+  // gap #2 — onToolResult 发 tool_finalize patch（ok + duration + summary）
+  const fin = r2.patches.find((x) => x.op === 'tool_finalize') as
+    | Extract<MessagePatch, { op: 'tool_finalize' }>
+    | undefined;
+  assert('emits tool_finalize patch', !!fin);
+  check('finalize targets the tool_call', call?.id, fin?.id);
+  check('finalize status ok', 'ok', fin?.status);
+  assert('finalize has duration_ms', typeof fin?.duration_ms === 'number');
+  check('finalize result_summary (single short line)', 'All tests passed', fin?.result_summary);
+  // gap #2 — 错误结果 → status:'error'
+  {
+    const pe = createTimelineProjector({ idSeed: 'sess-tool-err' });
+    pe.onUserMessage('q');
+    pe.onToolUse('read_file', { path: 'x' });
+    const re = pe.onToolResult('Error: ENOENT no such file');
+    const finE = re.patches.find((x) => x.op === 'tool_finalize') as
+      | Extract<MessagePatch, { op: 'tool_finalize' }>
+      | undefined;
+    check('error result → status error', 'error', finE?.status);
+  }
+  // blank result still finalizes the open tool_call, no tool_echo message
+  {
+    const pb = createTimelineProjector({ idSeed: 'sess-tool-blank' });
+    pb.onUserMessage('q');
+    pb.onToolUse('Bash', {});
+    const rb = pb.onToolResult('  ');
+    check('blank result → no tool_echo msg', 0, rb.messages.length);
+    assert('blank result still finalizes', rb.patches.some((x) => x.op === 'tool_finalize'));
+  }
 }
 
 // ── Test 19: usage chain — onUsage accumulates tokens onto msg_foot ─────────

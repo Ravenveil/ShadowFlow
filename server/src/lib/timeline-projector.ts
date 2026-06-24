@@ -70,6 +70,27 @@ function nowMs(): number {
   return Date.now();
 }
 
+/**
+ * gap #2 — 工具结果摘要（对齐 Hermes 工具卡的 "3 files" / "527 elements"）。
+ * 无逐工具语义解析，按通用启发：多行→"N 行"；JSON 数组→"N 项"；单行短→原文；否则字符数。
+ */
+function summarizeToolResult(body: string): string | undefined {
+  const b = (body ?? '').trim();
+  if (!b) return undefined;
+  // JSON 数组 → "N 项"
+  if (b.startsWith('[')) {
+    try {
+      const arr = JSON.parse(b);
+      if (Array.isArray(arr)) return `${arr.length} 项`;
+    } catch { /* 非合法 JSON，落到行/字符摘要 */ }
+  }
+  const lines = b.split('\n').filter((l) => l.trim().length > 0);
+  if (lines.length > 1) return `${lines.length} 行`;
+  const one = lines[0] ?? b;
+  if (one.length <= 48) return one;
+  return `${one.length} 字符`;
+}
+
 // ─── projector ──────────────────────────────────────────────────────────────
 
 export interface TimelineProjector {
@@ -206,6 +227,11 @@ export function createTimelineProjector(
   let openDiffPanelId: string | null = null;
   let diffLineNo = 0;
   let diffAdded = 0;
+
+  // gap #2 — 当前未落定的 tool_call（等 onToolResult 来 finalize）+ 其开始时间。
+  // 顺序配对启发：CLI tool_use 后紧跟 tool_result，按"最近未落定"配。
+  let openToolCallId: string | null = null;
+  let toolStartMs = 0;
 
   // Substep tracking — outer key is nodeId. Each node maps to a `step_index`
   // (which step_panel row owns it) and the array of substeps it currently
@@ -639,13 +665,24 @@ export function createTimelineProjector(
         argsSummary = String(input);
       }
       if (argsSummary.length > 200) argsSummary = argsSummary.slice(0, 200) + '…';
+      // gap #2 — 上一个 tool 若没收到 result（无 tool_result 事件）就被新 tool 顶替，
+      // 先把它落定为 ok（避免永远转圈）。
+      if (openToolCallId) {
+        out.patches.push({ id: openToolCallId, op: 'tool_finalize', status: 'ok', duration_ms: Math.max(0, nowMs() - toolStartMs) });
+        openToolCallId = null;
+      }
+      // tool_call 以 status:'running' 起，记开始时间与 id；等 onToolResult 落定。
+      const toolCallId = newId('msg');
+      openToolCallId = toolCallId;
+      toolStartMs = nowMs();
       out.messages.push({
-        id: newId('msg'),
+        id: toolCallId,
         kind: 'tool_call',
         turn_id: turnId,
         ts: nowMs(),
         name,
         args_summary: argsSummary,
+        status: 'running',
       });
       toolsRun += 1;
       bumpStatusLine(out, `Running · ${name}`, toolsRun);
@@ -656,6 +693,19 @@ export function createTimelineProjector(
     onToolResult(output: string): ProjectorEmit {
       const out = emit();
       const body = (output ?? '').trim();
+      // gap #2 — 落定最近未结的 tool_call：耗时 + 成功/失败 + 结果摘要。
+      if (openToolCallId) {
+        const isError = /^\s*(error|exception|traceback|failed|enoent|permission denied)/i.test(body)
+          || /\b(error|failed)\b/i.test(body.slice(0, 80)) && body.length < 200;
+        out.patches.push({
+          id: openToolCallId,
+          op: 'tool_finalize',
+          status: isError ? 'error' : 'ok',
+          duration_ms: Math.max(0, nowMs() - toolStartMs),
+          result_summary: summarizeToolResult(body),
+        });
+        openToolCallId = null;
+      }
       if (!body) return out;
       out.messages.push({
         id: newId('msg'),
@@ -685,6 +735,11 @@ export function createTimelineProjector(
       const out = emit();
       closeOpenThinking(out);
       closeOpenText(out);
+      // gap #2 — 收尾落定任何仍在 running 的 tool_call。
+      if (openToolCallId) {
+        out.patches.push({ id: openToolCallId, op: 'tool_finalize', status: 'ok', duration_ms: Math.max(0, nowMs() - toolStartMs) });
+        openToolCallId = null;
+      }
       if (msgFootId) {
         bumpMsgFoot(out, { status: 'done' });
       }

@@ -88,6 +88,15 @@ export function applyPatch(msg: TimelineMessage, patch: MessagePatch): TimelineM
         duration_ms: patch.duration_ms ?? msg.duration_ms,
       };
     }
+    case 'tool_finalize': {
+      if (msg.kind !== 'tool_call') return msg;
+      return {
+        ...msg,
+        status: patch.status,
+        duration_ms: patch.duration_ms ?? msg.duration_ms,
+        result_summary: patch.result_summary ?? msg.result_summary,
+      };
+    }
     case 'diff_append_line': {
       if (msg.kind !== 'diff_panel') return msg;
       return { ...msg, lines: [...msg.lines, patch.line] };

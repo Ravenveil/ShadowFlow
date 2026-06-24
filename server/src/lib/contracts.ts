@@ -176,6 +176,10 @@ export type TimelineMessage =
       name: string;
       args_summary: string;
       link?: { label: string; href: string };
+      /** gap #2（2026-06-24）— per-tool 状态/耗时/结果摘要（对齐 Hermes 工具卡）。 */
+      status?: 'running' | 'ok' | 'error';
+      duration_ms?: number;
+      result_summary?: string;
     })
   | (TimelineMessageBase & {
       kind: 'tool_echo';
@@ -257,6 +261,8 @@ export type MessagePatch =
     }
   | { id: string; op: 'thinking_append_body'; chunk: string }
   | { id: string; op: 'thinking_finalize'; tokens?: number; duration_ms?: number }
+  // gap #2（2026-06-24）— tool_call 终态：tool_result 回来时落定 running → ok/error。
+  | { id: string; op: 'tool_finalize'; status: 'ok' | 'error'; duration_ms?: number; result_summary?: string }
   // 2026-05-24 P0-1 — append a streamed chunk to an open assistant_text
   // message. The projector batches token-level deltas onto a single
   // assistant_text message until something orthogonal (tool call, thinking,
