@@ -135,12 +135,19 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
   return out;
 }
 
-function MarkdownLite({ text }: { text: string }) {
+function MarkdownLite({ text, trailingCursor }: { text: string; trailingCursor?: boolean }) {
   // 按行渲染：- / * / 1. 视为列表项（缩进圆点），其余为段落。空行保留间距。
   const lines = text.split('\n');
+  const lastNonEmptyIdx = (() => {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].trim() !== '') return i;
+    }
+    return lines.length - 1;
+  })();
   return (
     <>
       {lines.map((line, idx) => {
+        const isLast = idx === lastNonEmptyIdx;
         const listMatch = /^\s*([-*]|\d+\.)\s+(.*)$/.exec(line);
         if (listMatch) {
           return (
@@ -148,12 +155,20 @@ function MarkdownLite({ text }: { text: string }) {
               <span aria-hidden style={{ color: 'var(--t-fg-4)', flexShrink: 0 }}>
                 {/^\d/.test(listMatch[1]) ? listMatch[1] : '•'}
               </span>
-              <span>{renderInline(listMatch[2], `l${idx}`)}</span>
+              <span>
+                {renderInline(listMatch[2], `l${idx}`)}
+                {trailingCursor && isLast && <span className="sf-blink-cursor" aria-hidden />}
+              </span>
             </div>
           );
         }
         if (line.trim() === '') return <div key={idx} style={{ height: 6 }} />;
-        return <div key={idx}>{renderInline(line, `p${idx}`)}</div>;
+        return (
+          <div key={idx}>
+            {renderInline(line, `p${idx}`)}
+            {trailingCursor && isLast && <span className="sf-blink-cursor" aria-hidden />}
+          </div>
+        );
       })}
     </>
   );
@@ -165,7 +180,9 @@ function AvatarSpacer() {
 }
 
 function Avatar({ m }: { m: StudioMessage }) {
-  const color = m.senderColor || 'var(--t-accent)';
+  // 头像底色：优先发言者自带色；缺省时 user 用主品牌紫、agent/team 用 clawsgo 软蓝，
+  // 让用户回合与 AI 回合的色温一眼可分（clawsgo 冷静蓝 vs 主品牌紫）。
+  const color = m.senderColor || (m.role === 'user' ? 'var(--t-accent)' : 'var(--sf-blue, #1890FF)');
   let icon: ReactNode;
   if (m.senderGlyph) icon = m.senderGlyph;
   else if (m.role === 'user') icon = <User size={15} strokeWidth={2} aria-hidden />;
@@ -195,10 +212,16 @@ function Avatar({ m }: { m: StudioMessage }) {
 
 // ── 工具行 / 推理行 ────────────────────────────────────────────────────────────
 function ToolRow({ t }: { t: StudioToolRow }) {
+  // 状态色温对齐 clawsgo：running=软蓝、done=辅助绿、failed=红。
   const tone =
-    t.status === 'failed' ? 'var(--t-danger, #e5484d)' : t.status === 'running' ? 'var(--t-accent)' : 'var(--t-fg-4)';
+    t.status === 'failed'
+      ? 'var(--t-danger, #e5484d)'
+      : t.status === 'running'
+        ? 'var(--sf-blue, #1890FF)'
+        : 'var(--sf-green, #21A678)';
   return (
     <div
+      className="sf-toolrow"
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -207,7 +230,7 @@ function ToolRow({ t }: { t: StudioToolRow }) {
         fontSize: 11,
         color: 'var(--t-fg-3)',
         padding: '3px 8px',
-        borderRadius: 6,
+        borderRadius: 7,
         background: 'var(--t-panel-2)',
         border: '1px solid var(--t-border)',
       }}
@@ -382,7 +405,8 @@ export const StudioMessageRow = memo(function StudioMessageRow({
       {/* 气泡 */}
       {(m.text || m.streaming) && (
         <div
-          className={`chat-bubble-${m.role}`}
+          key={m.id + (m.streaming ? '-s' : '-d')}
+          className={`chat-bubble-${m.role}${!isUser && !m.streaming ? ' sf-bubble-settle' : ''}`}
           style={{
             // user 圆角偏向左下、agent 偏向右下 —— 气泡尾巴指向各自头像侧，回合归属一眼可辨。
             maxWidth: '100%',
@@ -405,7 +429,7 @@ export const StudioMessageRow = memo(function StudioMessageRow({
             </div>
           )}
           {m.text ? (
-            <MarkdownLite text={m.text} />
+            <MarkdownLite text={m.text} trailingCursor={!isUser && m.streaming} />
           ) : (
             // 流式刚开始、文本未到 —— 显示「思考中」三点占位，避免空气泡。
             m.streaming && (
@@ -417,33 +441,18 @@ export const StudioMessageRow = memo(function StudioMessageRow({
                   <span
                     key={i}
                     aria-hidden
-                    className="sf-dot-run"
+                    className="sf-typing-dot"
                     style={{
                       width: 5,
                       height: 5,
                       borderRadius: '50%',
-                      background: 'var(--t-accent)',
+                      background: 'var(--sf-blue, #1890FF)',
                       animationDelay: `${i * 0.16}s`,
                     }}
                   />
                 ))}
               </span>
             )
-          )}
-          {m.streaming && m.text && (
-            <span
-              aria-hidden
-              className="sf-dot-run"
-              style={{
-                display: 'inline-block',
-                width: 2,
-                height: '0.95em',
-                marginLeft: 2,
-                verticalAlign: 'text-bottom',
-                background: 'var(--t-accent)',
-                borderRadius: 1,
-              }}
-            />
           )}
         </div>
       )}

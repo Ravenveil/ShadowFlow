@@ -14,13 +14,20 @@
  * 复用：src/api/fsFiles.ts.pickNativeFolder（后端弹原生文件夹对话框）。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Code2, Eye, FolderOpen } from 'lucide-react';
+import { Code2, Eye, FolderOpen, FolderTree } from 'lucide-react';
 import { pickNativeFolder } from '../../api/fsFiles';
 import { getApiBase } from '../../api/_base';
 import { ProjectFileTree } from './ProjectFileTree';
 import { FileViewer } from './FileViewer';
 
 const LS_ROOT = 'sf.studio.workspace.root';
+
+/** Returns the last N segments of any path (Windows or Unix). */
+function lastSegments(p: string, n = 2): string {
+  const parts = p.replace(/\\/g, '/').split('/').filter(Boolean);
+  const tail = parts.slice(-n).join('/');
+  return parts.length > n ? `…/${tail}` : tail;
+}
 
 type ViewMode = 'code' | 'preview';
 const PREVIEWABLE = /\.(html?|svg)$/i;
@@ -85,6 +92,11 @@ export function WorkspacePane({ root: controlledRoot, onRootChange }: WorkspaceP
     setMode(PREVIEWABLE.test(p) ? 'preview' : 'code');
   }, []);
 
+  // 未选目录 → clawsgo 风格的 hero 空态：插画 + 突出 CTA（不是一条灰按钮）。
+  if (!root) {
+    return <NoFolderHero onPick={() => void pick()} />;
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* folder picker bar */}
@@ -93,6 +105,8 @@ export function WorkspacePane({ root: controlledRoot, onRootChange }: WorkspaceP
           type="button"
           className="sf-press"
           onClick={() => void pick()}
+          title={`切换项目文件夹\n${root}`}
+          aria-label="切换项目文件夹"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -108,8 +122,34 @@ export function WorkspacePane({ root: controlledRoot, onRootChange }: WorkspaceP
             color: 'var(--t-fg-2)',
           }}
         >
-          <FolderOpen size={14} strokeWidth={2} style={{ color: 'var(--t-accent)' }} />
-          {root ? '切换项目文件夹' : '打开项目文件夹'}
+          <FolderOpen size={14} strokeWidth={2} style={{ color: 'var(--t-accent)', flexShrink: 0 }} />
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              textAlign: 'left',
+            }}
+          >
+            {lastSegments(root)}
+          </span>
+          {openFile && (
+            <span
+              style={{
+                flexShrink: 0,
+                maxWidth: '45%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                color: 'var(--t-accent)',
+                fontWeight: 500,
+              }}
+            >
+              {openFile.replace(/\\/g, '/').split('/').pop()}
+            </span>
+          )}
         </button>
       </div>
 
@@ -129,34 +169,46 @@ export function WorkspacePane({ root: controlledRoot, onRootChange }: WorkspaceP
               flexDirection: 'column',
             }}
           >
-            {/* clawsgo 风格 code/preview tab —— 仅可预览文件显示切换 */}
+            {/* clawsgo 风格 code/preview tab —— 仅可预览文件显示切换，底部滑动下划线 */}
             {canPreview && (
               <div
                 style={{
                   display: 'flex',
-                  gap: 4,
+                  alignItems: 'center',
                   padding: '5px 8px',
                   borderBottom: '1px solid var(--t-border)',
                   flexShrink: 0,
                 }}
               >
-                <TabBtn active={effectiveMode === 'code'} onClick={() => setMode('code')} icon={<Code2 size={12} strokeWidth={2} />} label="代码" />
-                <TabBtn active={effectiveMode === 'preview'} onClick={() => setMode('preview')} icon={<Eye size={12} strokeWidth={2} />} label="预览" />
+                <div className="sf-tabs" style={{ gap: 2 }}>
+                  <TabBtn active={effectiveMode === 'code'} onClick={() => setMode('code')} icon={<Code2 size={12} strokeWidth={2} />} label="代码" />
+                  <TabBtn active={effectiveMode === 'preview'} onClick={() => setMode('preview')} icon={<Eye size={12} strokeWidth={2} />} label="预览" />
+                  <span
+                    className="sf-tab-underline"
+                    style={{
+                      // 两个 tab 等宽 ~58px；下划线随选中态平滑滑动。
+                      ['--sf-tab-x' as string]: effectiveMode === 'code' ? '0px' : '60px',
+                      ['--sf-tab-w' as string]: '58px',
+                    }}
+                  />
+                </div>
               </div>
             )}
 
             <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
               {effectiveMode === 'preview' && canPreview ? (
                 <iframe
-                  key={openFile}
+                  key={`prev-${openFile}`}
                   title="预览"
                   src={`${getApiBase()}/api/fs/raw?path=${encodeURIComponent(openFile)}&root=${encodeURIComponent(root)}`}
                   sandbox="allow-scripts allow-same-origin"
-                  className="sf-anim-fade"
+                  className="sf-switch-fade"
                   style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }}
                 />
               ) : (
-                <FileViewer filePath={openFile} root={root} onClose={() => setOpenFile(null)} />
+                <div key={`code-${openFile}-${effectiveMode}`} className="sf-switch-fade" style={{ height: '100%' }}>
+                  <FileViewer filePath={openFile} root={root} onClose={() => setOpenFile(null)} />
+                </div>
               )}
             </div>
           </div>
@@ -170,26 +222,144 @@ function TabBtn({ active, onClick, icon, label }: { active: boolean; onClick: ()
   return (
     <button
       type="button"
-      className="sf-press"
+      className="sf-tab sf-press"
       onClick={onClick}
+      aria-selected={active}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: 5,
-        padding: '4px 10px',
-        borderRadius: 6,
+        width: 58,
+        padding: '5px 0 7px',
         fontSize: 11.5,
         fontWeight: 600,
         cursor: 'pointer',
-        border: '1px solid',
-        borderColor: active ? 'color-mix(in oklab, var(--t-accent) 40%, var(--t-border))' : 'transparent',
-        background: active ? 'color-mix(in oklab, var(--t-accent) 12%, transparent)' : 'transparent',
+        border: 'none',
+        background: 'transparent',
         color: active ? 'var(--t-accent)' : 'var(--t-fg-4)',
+        transition: 'color var(--sf-dur-fast, .14s) var(--sf-ease, ease)',
       }}
     >
       {icon}
       {label}
     </button>
+  );
+}
+
+/**
+ * NoFolderHero — 未选工作目录时的 clawsgo 风格欢迎态：
+ * 柔和蓝渐变插画 + 大标题 + 突出 CTA + 三条能力提示。不是一条灰按钮。
+ */
+function NoFolderHero({ onPick }: { onPick: () => void }) {
+  return (
+    <div
+      className="sf-anim-fade"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        padding: '28px 22px',
+        textAlign: 'center',
+        gap: 4,
+      }}
+    >
+      {/* 渐变插画图标 */}
+      <div
+        className="sf-anim-scale-in"
+        style={{
+          width: 76,
+          height: 76,
+          borderRadius: 20,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 14,
+          background:
+            'linear-gradient(145deg, color-mix(in oklab, var(--t-accent) 22%, transparent), color-mix(in oklab, var(--t-accent) 6%, transparent))',
+          border: '1px solid color-mix(in oklab, var(--t-accent) 28%, var(--t-border))',
+          boxShadow: '0 8px 24px -10px color-mix(in oklab, var(--t-accent) 45%, transparent)',
+        }}
+      >
+        <FolderTree size={34} strokeWidth={1.6} style={{ color: 'var(--t-accent)' }} />
+      </div>
+
+      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--t-fg)', letterSpacing: 0.2 }}>
+        打开你的项目工作区
+      </div>
+      <p style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--t-fg-4)', maxWidth: 240, margin: '4px 0 16px' }}>
+        选择一个本地文件夹，浏览目录树、查看代码与图片，并让对话以它为工作目录。
+      </p>
+
+      {/* 突出 CTA */}
+      <button
+        type="button"
+        className="sf-press sf-focus-ring"
+        onClick={onPick}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '10px 20px',
+          borderRadius: 10,
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: 'pointer',
+          border: 'none',
+          color: '#fff',
+          background: 'var(--t-accent)',
+          boxShadow: '0 6px 18px -6px color-mix(in oklab, var(--t-accent) 65%, transparent)',
+        }}
+      >
+        <FolderOpen size={16} strokeWidth={2.2} />
+        打开项目文件夹
+      </button>
+
+      {/* 能力提示行 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 22, width: '100%', maxWidth: 232 }}>
+        {[
+          { icon: <FolderTree size={13} strokeWidth={2} />, label: '递归目录树 · 懒加载展开' },
+          { icon: <Code2 size={13} strokeWidth={2} />, label: '语法高亮代码查看' },
+          { icon: <Eye size={13} strokeWidth={2} />, label: '.html / 图片 即时预览' },
+        ].map((it) => (
+          <div
+            key={it.label}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 9,
+              padding: '7px 11px',
+              borderRadius: 9,
+              fontSize: 11.5,
+              fontWeight: 500,
+              textAlign: 'left',
+              color: 'var(--t-fg-3)',
+              border: '1px solid var(--t-border)',
+              background: 'var(--t-panel-2)',
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-flex',
+                width: 22,
+                height: 22,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 6,
+                flexShrink: 0,
+                color: 'var(--t-accent)',
+                background: 'color-mix(in oklab, var(--t-accent) 12%, transparent)',
+              }}
+            >
+              {it.icon}
+            </span>
+            {it.label}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

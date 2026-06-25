@@ -127,12 +127,15 @@ function ResizeHandle({
     [onMove, onUp],
   );
 
+  const [hover, setHover] = useState(false);
   return (
     <div
       role="separator"
       aria-orientation="vertical"
       aria-label={side === 'left' ? '调整左栏宽度' : '调整右栏宽度'}
       onMouseDown={onDown}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         position: 'absolute',
         top: 0,
@@ -141,16 +144,30 @@ function ResizeHandle({
         width: 6,
         cursor: 'col-resize',
         zIndex: 5,
-        background: 'transparent',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: hover
+          ? 'color-mix(in oklab, var(--t-accent) 22%, transparent)'
+          : 'transparent',
+        transition: 'background var(--sf-dur-fast, 140ms) var(--sf-ease)',
       }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background =
-          'color-mix(in oklab, var(--t-accent) 35%, transparent)';
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = 'transparent';
-      }}
-    />
+    >
+      {/* 居中竖向 grip：hover 才显，给出可拖拽的实体感（clawsgo 手感）。 */}
+      <span
+        aria-hidden
+        style={{
+          width: 2,
+          height: 26,
+          borderRadius: 2,
+          background: 'var(--t-accent)',
+          opacity: hover ? 0.9 : 0,
+          transform: hover ? 'scaleY(1)' : 'scaleY(0.4)',
+          transition:
+            'opacity var(--sf-dur-fast, 140ms) var(--sf-ease), transform var(--sf-dur-fast, 140ms) var(--sf-ease)',
+        }}
+      />
+    </div>
   );
 }
 
@@ -195,6 +212,85 @@ function CollapseToggle({
       }}
     >
       <Icon size={15} strokeWidth={2} />
+    </button>
+  );
+}
+
+/**
+ * 折叠后的窄导轨：整条可点击展开（hermes/clawsgo 手感），顶部一个明确的展开按钮，
+ * 下方竖排标签。hover 时整条轻微提亮 + 标签变 accent，给出「点我展开」的暗示。
+ */
+function CollapsedRail({
+  side,
+  label,
+  onExpand,
+}: {
+  side: 'left' | 'right';
+  label: string;
+  onExpand: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      className="sf-anim-fade sf-focus-ring"
+      aria-label={`展开${side === 'left' ? '左' : '右'}栏`}
+      title={`展开${side === 'left' ? '左' : '右'}栏`}
+      onClick={onExpand}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 10,
+        width: '100%',
+        height: '100%',
+        paddingTop: 12,
+        border: 'none',
+        cursor: 'pointer',
+        background: hover
+          ? 'color-mix(in oklab, var(--t-accent) 7%, transparent)'
+          : 'transparent',
+        transition: 'background var(--sf-dur-fast, 140ms) var(--sf-ease)',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 28,
+          height: 28,
+          borderRadius: 7,
+          border: '1px solid var(--t-border)',
+          background: 'var(--t-panel-2)',
+          color: hover ? 'var(--t-accent)' : 'var(--t-fg-3)',
+          flexShrink: 0,
+          transition: 'color var(--sf-dur-fast, 140ms) var(--sf-ease)',
+        }}
+      >
+        {side === 'left' ? (
+          <PanelLeftOpen size={15} strokeWidth={2} />
+        ) : (
+          <PanelRightOpen size={15} strokeWidth={2} />
+        )}
+      </span>
+      <span
+        style={{
+          writingMode: 'vertical-rl',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: hover ? 'var(--t-accent)' : 'var(--t-fg-4)',
+          marginTop: 4,
+          transition: 'color var(--sf-dur-fast, 140ms) var(--sf-ease)',
+        }}
+      >
+        {label}
+      </span>
     </button>
   );
 }
@@ -309,38 +405,14 @@ export function ThreeColumnShell({
         }}
       >
         {leftCollapsed ? (
-          <div
-            className="sf-anim-fade"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 10,
-              paddingTop: 12,
+          <CollapsedRail
+            side="left"
+            label={leftRailLabel}
+            onExpand={() => {
+              enableAnim();
+              toggleLeft();
             }}
-          >
-            <CollapseToggle
-              side="left"
-              collapsed
-              onToggle={() => {
-                enableAnim();
-                toggleLeft();
-              }}
-            />
-            <span
-              style={{
-                writingMode: 'vertical-rl',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color: 'var(--t-fg-4)',
-                marginTop: 4,
-              }}
-            >
-              {leftRailLabel}
-            </span>
-          </div>
+          />
         ) : (
           <>
             <div
@@ -394,6 +466,77 @@ export function ThreeColumnShell({
           background: 'var(--t-bg)',
         }}
       >
+        {/* ── Context indicator bar — always in DOM for flex-layout stability ── */}
+        {(leftRailLabel || rightRailLabel) ? (
+          <div
+            style={{
+              height: 28,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '0 12px',
+              borderBottom: '1px solid var(--t-border)',
+              background: 'color-mix(in oklab, var(--t-accent) 4%, var(--t-bg))',
+              opacity: (leftCollapsed && rightCollapsed) ? 0.3 : 1,
+              transition: 'opacity var(--sf-dur-fast, 140ms) var(--sf-ease)',
+            }}
+          >
+            {leftRailLabel && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '0 7px',
+                  height: 18,
+                  borderRadius: 9,
+                  border: '1px solid var(--t-border)',
+                  fontSize: 11,
+                  fontFamily: 'var(--font-mono)',
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  lineHeight: 1,
+                  background: 'var(--t-panel-2)',
+                  color: 'var(--t-fg-4)',
+                  opacity: leftCollapsed ? 0.4 : 1,
+                  transition: 'opacity var(--sf-dur-fast, 140ms) var(--sf-ease)',
+                }}
+              >
+                {leftRailLabel}
+              </span>
+            )}
+            {leftRailLabel && rightRailLabel && (
+              <span style={{ color: 'var(--t-fg-4, var(--t-fg-3))', fontSize: 10 }}>·</span>
+            )}
+            {rightRailLabel && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '0 7px',
+                  height: 18,
+                  borderRadius: 9,
+                  border: '1px solid var(--t-border)',
+                  fontSize: 11,
+                  fontFamily: 'var(--font-mono)',
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  lineHeight: 1,
+                  background: 'var(--t-panel-2)',
+                  color: 'var(--t-fg-4)',
+                  opacity: rightCollapsed ? 0.4 : 1,
+                  transition: 'opacity var(--sf-dur-fast, 140ms) var(--sf-ease)',
+                }}
+              >
+                {rightRailLabel}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div style={{ height: 0, flexShrink: 0, borderBottom: 'none' }} />
+        )}
         {center}
       </main>
 
@@ -415,38 +558,14 @@ export function ThreeColumnShell({
         }}
       >
         {rightCollapsed ? (
-          <div
-            className="sf-anim-fade"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 10,
-              paddingTop: 12,
+          <CollapsedRail
+            side="right"
+            label={rightRailLabel}
+            onExpand={() => {
+              enableAnim();
+              toggleRight();
             }}
-          >
-            <CollapseToggle
-              side="right"
-              collapsed
-              onToggle={() => {
-                enableAnim();
-                toggleRight();
-              }}
-            />
-            <span
-              style={{
-                writingMode: 'vertical-rl',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color: 'var(--t-fg-4)',
-                marginTop: 4,
-              }}
-            >
-              {rightRailLabel}
-            </span>
-          </div>
+          />
         ) : (
           <>
             <div

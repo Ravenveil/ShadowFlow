@@ -1868,3 +1868,143 @@ input, textarea, select { font-family: inherit; color: inherit; }
 /* (e) tab 行块级铺满修饰：工作空间顶栏（code/preview）整宽分布时用。 */
 .sf-tabs--block { display: flex; width: 100%; }
 .sf-tabs--block > .sf-tab { flex: 1; justify-content: center; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * §批3 — Workbench 视觉对齐 clawsgo / hermes（append-only，2026-06-24，owner: visual）
+ *
+ * 目标：给 in-place 三栏工作台「clawsgo 级」观感 —— 柔和蓝 #1890FF 强调、
+ * 圆角卡片、一致 hover-lift、平滑入场、干净气泡。全部新增 utility，不改既有规则，
+ * 不覆盖全局 --t-accent（避免污染全站紫色主题）。
+ *
+ * clawsgo 的视觉灵魂是「柔和蓝」：这里引一组 workbench 作用域的 --sf-blue* 变量，
+ * 供 StudioMessageRow / ComposerTokenMeter / 模板墙等组件按需取用（流式光标、
+ * agent 气泡描边、token 计正常态等），与紫色主品牌并存而不冲突。
+ * ──────────────────────────────────────────────────────────────────────────── */
+:root,
+[data-theme="dark"],
+[data-theme="day"],
+[data-theme="light"] {
+  --sf-blue:        #1890FF;   /* clawsgo soft blue —— 主强调 */
+  --sf-blue-strong: #0E73E6;   /* hover / 强调态 */
+  --sf-blue-tint:   color-mix(in srgb, #1890FF 12%, transparent);
+  --sf-blue-tint-2: color-mix(in srgb, #1890FF 20%, transparent);
+  --sf-green:       #21A678;   /* clawsgo 辅助绿（成功 / 完成态点缀） */
+}
+
+/* ── 气泡阴影 / 描边：clawsgo「圆角卡片 + 柔影」气泡观感 ─────────────────────
+ * StudioMessageRow 的 .chat-bubble-* 自带背景/边框；这里只补「软影 + 入场」，
+ * 让 agent 气泡像浮起的卡片、user 气泡带一抹蓝色质感，对比清晰却都很干净。 */
+.chat-bubble-user,
+.chat-bubble-assistant {
+  box-shadow: 0 1px 2px -1px color-mix(in srgb, var(--t-fg, #000) 22%, transparent),
+              0 2px 8px -6px color-mix(in srgb, var(--t-fg, #000) 30%, transparent);
+  transition: box-shadow var(--sf-dur-fast, 120ms) var(--sf-ease, ease),
+              transform  var(--sf-dur-fast, 120ms) var(--sf-ease, ease);
+}
+/* user 气泡：柔和蓝薄发光内缘，回合归属一眼可辨（不改既有 bg/border） */
+.chat-bubble-user {
+  box-shadow: inset 0 0 0 1px var(--sf-blue-tint),
+              0 1px 2px -1px color-mix(in srgb, var(--sf-blue) 28%, transparent),
+              0 3px 10px -6px color-mix(in srgb, var(--sf-blue) 32%, transparent);
+}
+/* 整回合 hover 时气泡极轻微浮起（clawsgo hover-lift 一致性），不抢注意力 */
+.chat-message-user:hover   .chat-bubble-user,
+.chat-message-assistant:hover .chat-bubble-assistant {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px -1px color-mix(in srgb, var(--t-fg, #000) 26%, transparent),
+              0 6px 18px -8px color-mix(in srgb, var(--t-fg, #000) 34%, transparent);
+}
+.chat-message-user:hover .chat-bubble-user {
+  box-shadow: inset 0 0 0 1px var(--sf-blue-tint-2),
+              0 2px 4px -1px color-mix(in srgb, var(--sf-blue) 30%, transparent),
+              0 6px 18px -8px color-mix(in srgb, var(--sf-blue) 36%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble-user, .chat-bubble-assistant,
+  .chat-message-user:hover .chat-bubble-user,
+  .chat-message-assistant:hover .chat-bubble-assistant { transform: none; transition: none; }
+}
+
+/* ── 工具行 hover：hermes 实时 tool-row 的克制反馈 ─────────────────────────── */
+.sf-toolrow {
+  transition: background var(--sf-dur-fast, 120ms) var(--sf-ease, ease),
+              border-color var(--sf-dur-fast, 120ms) var(--sf-ease, ease);
+}
+.sf-toolrow:hover {
+  background: var(--t-hover, color-mix(in srgb, var(--t-fg, #fff) 6%, transparent));
+  border-color: var(--t-border-2, var(--border-strong));
+}
+
+/* ── 流式「打字」点：比通用 sf-dot-run 更接近 clawsgo 蓝、三点波浪相位 ──────── */
+@keyframes sf-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0);     opacity: .45; }
+  30%           { transform: translateY(-3px);  opacity: 1;   }
+}
+.sf-typing-dot {
+  animation: sf-typing-bounce 1.1s var(--ease-in-out, ease-in-out) infinite both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-typing-dot { animation: sf-anim-fade var(--sf-dur-base) var(--sf-ease) both; }
+}
+
+/* ── sf-blink-cursor：流式输出末尾内联光标（StudioMessageRow trailingCursor） ── */
+@keyframes sf-blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+.sf-blink-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 0.9em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: var(--sf-blue, #1890FF);
+  border-radius: 1px;
+  animation: sf-blink 1s step-end infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-blink-cursor { animation: none; }
+}
+
+/* ── sf-bubble-settle：流式完成时气泡微弹落地动画（assistant 气泡 key 切换触发） ── */
+@keyframes sf-bubble-settle {
+  0%   { transform: scaleY(0.97); }
+  60%  { transform: scaleY(1.01); }
+  100% { transform: scaleY(1); }
+}
+.sf-bubble-settle {
+  transform-origin: top left;
+  animation: sf-bubble-settle 200ms var(--ease-out, ease-out) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-bubble-settle { animation: none; }
+}
+
+/* ── token 计正常态走 clawsgo 蓝（而非紫），与 hermes ContextGauge 同色温 ───── */
+.sf-bar--blue .sf-bar-fill { background: var(--sf-blue); }
+
+/* ── clawsgo 软蓝 hover-lift（卡片/模板墙片复用，与 sf-hoverable 同骨架但蓝调）─ */
+.sf-hoverable-blue {
+  transition:
+    transform   var(--sf-dur-fast) var(--sf-ease),
+    box-shadow  var(--sf-dur-fast) var(--sf-ease),
+    border-color var(--sf-dur-fast) var(--sf-ease);
+}
+.sf-hoverable-blue:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--sf-blue) 45%, transparent);
+  box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--sf-blue) 40%, transparent);
+}
+.sf-hoverable-blue:active { transform: translateY(0); box-shadow: none; }
+
+/* ── sf-cursor-blink：streaming text cursor（流式输出末尾跳动光标，2026-06-25）── */
+.sf-cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--t-accent);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: sf-blink 1s step-start infinite;
+}
+@keyframes sf-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

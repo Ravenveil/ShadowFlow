@@ -20,7 +20,7 @@
  *  - ComposerTokenMeter / SlashCommandMenu / studioTokens（polish owner）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Slash, Bot, Users, FolderOpen } from 'lucide-react';
+import { Slash, Bot, Users, FolderOpen, Square } from 'lucide-react';
 import { UnifiedComposer, type UnifiedComposerSubmitPayload } from '../composer/UnifiedComposer';
 import { ComposerTokenMeter } from './ComposerTokenMeter';
 import {
@@ -30,6 +30,11 @@ import {
 } from './SlashCommandMenu';
 import { estimateTokens, currentModelWindow } from './studioTokens';
 import { StudioMessageRow, isContinuation, type StudioMessage, type StudioToolRow } from './StudioMessageRow';
+import {
+  TaskTemplateWall,
+  type PlaceholderRange,
+  type TaskTemplate,
+} from '../TaskTemplateWall';
 import {
   createRunSession,
   subscribeRunSession,
@@ -67,6 +72,7 @@ function nowTime(): string {
 export function StudioChat({ target, contextFolder, onSend }: StudioChatProps) {
   const [messages, setMessages] = useState<StudioMessage[]>([]);
   const [seedText, setSeedText] = useState<string | undefined>(undefined);
+  const [seedSelect, setSeedSelect] = useState<{ start: number; end: number } | undefined>(undefined);
   const [seedKey, setSeedKey] = useState(0);
   const [slashOpen, setSlashOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -259,6 +265,25 @@ export function StudioChat({ target, contextFolder, onSend }: StudioChatProps) {
     [busy, onSend, target, runViaSse],
   );
 
+  // 模板墙点击 → 把 prompt 灌进 composer，并把第一个占位符（如 【主题】）
+  // 选中高亮，用户落地即可直接覆写。复用 composer 的 initialText + selectRange，
+  // seedKey 自增强制受控覆写（同一模板重复点击也生效）。
+  const fillComposer = useCallback(
+    (text: string, range?: { start: number; end: number }) => {
+      setSeedText(text);
+      setSeedSelect(range);
+      setSeedKey((k) => k + 1);
+    },
+    [],
+  );
+
+  const handleTemplatePick = useCallback(
+    (prompt: string, _tpl: TaskTemplate, placeholder: PlaceholderRange | null) => {
+      fillComposer(prompt, placeholder ?? undefined);
+    },
+    [fillComposer],
+  );
+
   // 斜杠命令真实动作分发。
   const handleSlashPick = useCallback((cmd: SlashCommand) => {
     setSlashOpen(false);
@@ -273,11 +298,13 @@ export function StudioChat({ target, contextFolder, onSend }: StudioChatProps) {
         break;
       case 'web':
         setSeedText('/web ');
+        setSeedSelect(undefined);
         setSeedKey((k) => k + 1);
         setToast('联网搜索模式');
         break;
       case 'code':
         setSeedText('/code ');
+        setSeedSelect(undefined);
         setSeedKey((k) => k + 1);
         setToast('代码模式');
         break;
@@ -336,11 +363,65 @@ export function StudioChat({ target, contextFolder, onSend }: StudioChatProps) {
             {target.kind}
           </span>
         )}
+        {/* 流式状态徽标：busy 时显示「生成中」脉冲 pill */}
+        {busy && (
+          <span className="sf-pill-live" style={{ marginLeft: target ? 6 : 'auto' }}>
+            生成中
+          </span>
+        )}
+
+        {/* 中止按钮：busy 且有活跃 session 时显示 */}
+        {busy && activeSessionRef.current && !onSend && (
+          <button
+            type="button"
+            className="sf-press sf-focus-ring"
+            aria-label="停止生成"
+            data-testid="studio-abort-btn"
+            onClick={() => {
+              unsubRef.current?.();
+              unsubRef.current = null;
+              if (activeSessionRef.current) {
+                void abortRunSession(activeSessionRef.current);
+                activeSessionRef.current = null;
+              }
+              setBusy(false);
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              height: 24,
+              padding: '0 8px',
+              borderRadius: 6,
+              border: '1px solid var(--t-border)',
+              background: 'var(--t-panel-2)',
+              color: 'var(--t-fg-3)',
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              marginLeft: busy && !contextFolder ? 'auto' : undefined,
+              transition: 'color 120ms, border-color 120ms',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--t-danger)';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-danger)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--t-fg-3)';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-border)';
+            }}
+          >
+            <Square size={13} strokeWidth={2} aria-hidden />
+            停止
+          </button>
+        )}
+
         {contextFolder && (
           <span
             className="sf-bar"
             style={{
-              marginLeft: 'auto',
+              marginLeft: busy ? 6 : 'auto',
               display: 'inline-flex',
               alignItems: 'center',
               gap: 4,
@@ -374,11 +455,63 @@ export function StudioChat({ target, contextFolder, onSend }: StudioChatProps) {
         style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 18px 18px' }}
       >
         {messages.length === 0 ? (
-          <div className="sf-empty" style={{ marginTop: 60 }}>
-            <div className="sf-empty-title">开始对话</div>
-            <p className="sf-empty-sub">
-              {target ? `与 ${target.name} 开始工作` : '从左栏选择一个 Agent 或 Team'}
-            </p>
+          // 富空态（clawsgo / start 级）：上下文化大标题 + 引导语 + 一键任务模板墙。
+          // 点击模板卡片把 prompt 灌进 composer（带占位符高亮），不再是一条空白行。
+          <div
+            className="sf-anim-fade"
+            style={{
+              maxWidth: 760,
+              margin: '0 auto',
+              padding: '32px 4px 8px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 24,
+            }}
+          >
+            <header className="sf-anim-slide-up" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <span
+                aria-hidden
+                style={{
+                  alignSelf: 'center',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 48,
+                  height: 48,
+                  borderRadius: 14,
+                  background: 'var(--t-accent-tint)',
+                  color: 'var(--t-accent)',
+                  marginBottom: 2,
+                }}
+              >
+                {target?.kind === 'team' ? (
+                  <Users size={24} strokeWidth={1.9} />
+                ) : (
+                  <Bot size={24} strokeWidth={1.9} />
+                )}
+              </span>
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: 26,
+                  lineHeight: 1.2,
+                  fontWeight: 800,
+                  letterSpacing: '-.01em',
+                  color: 'var(--t-fg)',
+                }}
+              >
+                {target ? `让 ${target.name} 帮你` : '今天要做什么？'}
+              </h1>
+              <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: 'var(--t-fg-3)' }}>
+                {target
+                  ? '挑一个任务模板一键开始，或在下方直接描述你的需求。'
+                  : '挑一个任务模板一键开始 —— 也可以先在左栏选一个 Agent 或 Team，再描述需求。'}
+              </p>
+            </header>
+
+            <div className="sf-anim-slide-up" style={{ animationDelay: '60ms' }}>
+              <TaskTemplateWall onPick={handleTemplatePick} label="从一个任务模板开始" />
+            </div>
           </div>
         ) : (
           messages.map((m, idx) => (
@@ -434,17 +567,27 @@ export function StudioChat({ target, contextFolder, onSend }: StudioChatProps) {
           </div>
         </div>
 
-        <UnifiedComposer
-          variant="chat"
-          onSubmit={handleSubmit}
-          placeholder={
-            target
-              ? `给 ${target.name} 一个任务…（试试 / 命令 · @ 提及 Skill）`
-              : '给 Studio 一个任务…（试试 / 命令 · @ 提及 Skill）'
-          }
-          initialText={seedText}
-          key={`studio-composer-${seedKey}`}
-        />
+        {/* busy 时视觉置灰：pointer-events 已由 handleSubmit 守卫，这里仅改外观 */}
+        <div
+          style={{
+            opacity: busy ? 0.45 : 1,
+            pointerEvents: busy ? 'none' : 'auto',
+            transition: 'opacity 160ms',
+          }}
+        >
+          <UnifiedComposer
+            variant="chat"
+            onSubmit={handleSubmit}
+            placeholder={
+              target
+                ? `给 ${target.name} 一个任务…（试试 / 命令 · @ 提及 Skill）`
+                : '给 Studio 一个任务…（试试 / 命令 · @ 提及 Skill）'
+            }
+            initialText={seedText}
+            selectRange={seedSelect}
+            key={`studio-composer-${seedKey}`}
+          />
+        </div>
       </div>
 
       {/* toast — 斜杠命令反馈 */}

@@ -95,6 +95,10 @@ export function AgentTeamRail({
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [teams, setTeams] = useState<TeamRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    setSearch('');
+  }, [mode]);
 
   // ── workspace 选择器：与现有 WorkspaceSelector 同源（切 workspace = 换数据源）──
   const workspaces = useWorkspaceStore((s) => s.workspaces);
@@ -154,6 +158,13 @@ export function AgentTeamRail({
   }, [effectiveWid]);
 
   const items = mode === 'agents' ? agents : teams;
+  const filteredItems = search.trim()
+    ? items.filter((item) => item.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : items;
+  const filteredAgents = filteredItems as AgentRecord[];
+  const filteredTeams = filteredItems as TeamRecord[];
+  // 在线 agent 计数（status==='running'）→ segmented Agents tab 旁的小徽标。
+  const runningCount = agents.filter((a) => a.status === 'running').length;
 
   // ── 选中行为 ──────────────────────────────────────────────────────────
   const chatWithAgent = (a: AgentRecord) => {
@@ -270,6 +281,7 @@ export function AgentTeamRail({
           {(['agents', 'teams'] as RailMode[]).map((m) => {
             const on = mode === m;
             const Icon = m === 'agents' ? Bot : Users;
+            const count = m === 'agents' ? agents.length : teams.length;
             return (
               <button
                 key={m}
@@ -297,11 +309,82 @@ export function AgentTeamRail({
               >
                 <Icon size={13} strokeWidth={2} />
                 {m === 'agents' ? 'Agents' : 'Teams'}
+                {count > 0 && (
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      padding: '2px 5px',
+                      borderRadius: 999,
+                      color: on ? 'var(--t-accent)' : 'var(--t-fg-4)',
+                      background: on
+                        ? 'color-mix(in oklab, var(--t-accent) 18%, transparent)'
+                        : 'var(--t-panel)',
+                      transition: 'color var(--sf-dur-fast, 120ms) var(--sf-ease)',
+                    }}
+                  >
+                    {count}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
+        {/* 在线汇总：直接由真实 agent.status 驱动（运行中 = 脉冲绿点）。 */}
+        {mode === 'agents' && runningCount > 0 && (
+          <div
+            className="sf-anim-fade"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 4px 0',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: 'var(--t-fg-4)',
+            }}
+          >
+            <span
+              aria-hidden
+              className="sf-anim-pulse"
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: 'var(--status-ok, #10B981)',
+                flexShrink: 0,
+              }}
+            />
+            <span>{runningCount} 个 agent 运行中</span>
+          </div>
+        )}
       </div>
+
+      {/* ── 搜索过滤输入（仅当列表 >= 3 条时显示，避免小列表杂乱）── */}
+      {items.length >= 3 && (
+        <div style={{ padding: '0 8px 6px' }}>
+          <input
+            type="search"
+            placeholder={mode === 'agents' ? 'Filter agents...' : 'Filter teams...'}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="sf-focus-ring"
+            style={{
+              width: '100%',
+              boxSizing: 'border-box',
+              padding: '5px 8px',
+              borderRadius: 7,
+              border: '1px solid var(--t-border)',
+              background: 'var(--t-panel-2)',
+              color: 'var(--t-fg-1)',
+              fontSize: 12,
+              outline: 'none',
+            }}
+          />
+        </div>
+      )}
 
       {/* ── 列表（mode 切换走 scale-in；key=mode 让动画重放）── */}
       <div
@@ -309,7 +392,7 @@ export function AgentTeamRail({
         className="sf-anim-scale-in sf-scroll"
         style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 8px 4px' }}
       >
-        {loading && items.length === 0 ? (
+        {loading && filteredItems.length === 0 ? (
           <div
             style={{
               padding: 12,
@@ -320,18 +403,22 @@ export function AgentTeamRail({
           >
             加载中…
           </div>
-        ) : items.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <div className="sf-empty">
             <span className="sf-empty-icon">
               {mode === 'agents' ? <Bot size={22} /> : <Users size={22} />}
             </span>
             <div className="sf-empty-title">{mode === 'agents' ? '还没有 Agent' : '还没有团队'}</div>
             <p className="sf-empty-sub">
-              {mode === 'agents' ? '去 /start 招募一个 agent' : '去 /teams 组建一个团队'}
+              {mode === 'agents' ? (
+                <>去 <a href="/start" style={{ color: 'var(--t-accent)' }}>+ /start</a> 招募一个 agent</>
+              ) : (
+                <>去 <a href="/teams" style={{ color: 'var(--t-accent)' }}>+ /teams</a> 组建一个团队</>
+              )}
             </p>
           </div>
         ) : mode === 'agents' ? (
-          agents.map((a) => {
+          filteredAgents.map((a) => {
             const on = a.agent_id === selectedAgentId;
             return (
               <AgentRow
@@ -343,7 +430,7 @@ export function AgentTeamRail({
             );
           })
         ) : (
-          teams.map((tm) => {
+          filteredTeams.map((tm) => {
             const on = tm.team_id === selectedTeamId;
             return (
               <TeamRow key={tm.team_id} team={tm} on={on} onChatWith={() => chatWithTeam(tm)} />
@@ -544,6 +631,7 @@ function AgentRow({
   // 头像配色：与全 app 统一（后端 avatar_color → paletteFromColor；否则按名字 hash）。
   const pal = agent.avatar_color ? paletteFromColor(agent.avatar_color) : paletteFor(agent.name);
   const color = pal.accent;
+  const st = statusMeta(agent.status);
   return (
     <div
       role="button"
@@ -562,14 +650,47 @@ function AgentRow({
       style={{ ...rowWrapStyle(on, color), cursor: 'pointer' }}
     >
       <SelectIndicator on={on} color={color} />
-      <span style={avatarStyle(pal)}>{initialOf(agent.name)}</span>
+      <span style={{ position: 'relative', flexShrink: 0 }}>
+        <span style={avatarStyle(pal)}>{initialOf(agent.name)}</span>
+        {/* 状态点：覆在头像右下角（在线=脉冲绿，其余=对应色）。 */}
+        <span
+          aria-hidden
+          className={agent.status === 'running' ? 'sf-anim-pulse' : undefined}
+          style={{
+            position: 'absolute',
+            right: -2,
+            bottom: -2,
+            width: 9,
+            height: 9,
+            borderRadius: '50%',
+            background: st.color,
+            border: '2px solid var(--t-panel)',
+            boxSizing: 'content-box',
+          }}
+        />
+      </span>
       <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
         <span style={nameStyle(on)}>{agent.name}</span>
-        <span style={subStyle}>{agent.status}</span>
+        <span style={{ ...subStyle, color: st.color }}>{st.label}</span>
       </span>
       <ChatWithCta show={hover || on} onClick={onChatWith} />
     </div>
   );
+}
+
+/** agent.status → 状态点颜色 + 中文标签（与全 app 状态语义对齐）。 */
+function statusMeta(status: AgentRecord['status']): { color: string; label: string } {
+  switch (status) {
+    case 'running':
+      return { color: 'var(--status-ok, #10B981)', label: '运行中' };
+    case 'paused':
+      return { color: 'var(--status-warn, #F59E0B)', label: '已暂停' };
+    case 'error':
+      return { color: 'var(--status-reject, #EF4444)', label: '错误' };
+    case 'idle':
+    default:
+      return { color: 'var(--t-fg-4)', label: '空闲' };
+  }
 }
 
 function TeamRow({
