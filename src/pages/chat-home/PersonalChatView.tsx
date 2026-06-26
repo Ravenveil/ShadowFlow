@@ -128,11 +128,20 @@ export function PersonalChatView() {
     [agents, q],
   );
   const selected = agents.find((a) => a.agent_id === agentId) ?? null;
-  // 单聊 header 用：人设首行 + 当前模型标签（BYOK localStorage）
+  // 单聊 header 用：人设首行 + 当前模型标签（BYOK localStorage，响应式）
   const personaLine = (selected?.soul ?? '').split('\n').map((s) => s.trim()).find(Boolean) ?? '';
-  const modelLabel = (() => {
+  const [modelLabel, setModelLabel] = useState<string>(() => {
     try { return localStorage.getItem('sf.model') || 'Auto'; } catch { return 'Auto'; }
-  })();
+  });
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === 'sf.model') {
+        setModelLabel(e.newValue || 'Auto');
+      }
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const { messages, send, cancel, streaming, error } = useChatStream({
     mode: 'group',
