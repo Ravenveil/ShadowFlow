@@ -301,23 +301,48 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
     }
     if (bl < s.length) pushItalic(s.slice(bl));
   };
+  const isImageUrl = (u: string) =>
+    /^data:image\//.test(u) || /\.(png|jpe?g|gif|webp|svg|avif)(\?[^\s]*)?$/i.test(u);
+  const pushImg = (src: string, alt: string) =>
+    out.push(
+      <img
+        key={`${keyBase}-img${i++}`}
+        src={src}
+        alt={alt}
+        loading="lazy"
+        style={{ maxWidth: '100%', maxHeight: 280, borderRadius: 8, margin: '4px 0', display: 'block', border: '1px solid var(--t-border)' }}
+      />,
+    );
+  // 顺序：markdown 图片 ![alt](url) → markdown 链接 [text](url) → 裸 URL（图片 ext / data:image → <img>，否则 <a>）。
   const pushLinks = (s: string) => {
-    const urlRe = /(https?:\/\/[^\s)]+)/g;
+    // 复合正则：依次匹配 md 图片、md 链接、裸 URL。
+    const tokenRe = /!\[([^\]]*)\]\(([^)\s]+)\)|\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s)]+|data:image\/[^\s)]+)/g;
     let ul = 0;
     let um: RegExpExecArray | null;
-    while ((um = urlRe.exec(s)) !== null) {
+    while ((um = tokenRe.exec(s)) !== null) {
       if (um.index > ul) out.push(s.slice(ul, um.index));
-      out.push(
-        <a
-          key={`${keyBase}-l${i++}`}
-          href={um[1]}
-          target="_blank"
-          rel="noreferrer noopener"
-          style={{ color: 'var(--t-accent)', textDecoration: 'underline' }}
-        >
-          {um[1]}
-        </a>,
-      );
+      if (um[2] !== undefined) {
+        // markdown 图片 ![alt](url)
+        pushImg(um[2], um[1] ?? '');
+      } else if (um[4] !== undefined) {
+        // markdown 链接 [text](url)
+        out.push(
+          <a key={`${keyBase}-ml${i++}`} href={um[4]} target="_blank" rel="noreferrer noopener"
+            style={{ color: 'var(--t-accent)', textDecoration: 'underline' }}>
+            {um[3]}
+          </a>,
+        );
+      } else {
+        // 裸 URL
+        const url = um[5]!;
+        if (isImageUrl(url)) pushImg(url, '');
+        else out.push(
+          <a key={`${keyBase}-l${i++}`} href={url} target="_blank" rel="noreferrer noopener"
+            style={{ color: 'var(--t-accent)', textDecoration: 'underline' }}>
+            {url}
+          </a>,
+        );
+      }
       ul = um.index + um[0].length;
     }
     if (ul < s.length) out.push(s.slice(ul));
