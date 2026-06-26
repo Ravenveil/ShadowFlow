@@ -717,10 +717,23 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     // Only user messages trigger an agent reply.
     if (senderKind !== 'user') return;
 
-    const executor =
-      typeof body.executor === 'string' && body.executor.trim()
-        ? body.executor.trim()
-        : 'anthropic-direct';
+    // Executor selection: explicit > BYOK (from forwarded X-LLM-* headers or server env) > cli:claude.
+    // When no BYOK key is configured anywhere, fall back to the local claude CLI so chat
+    // works out-of-the-box on a fresh install (no settings required).
+    const executor = (() => {
+      if (typeof body.executor === 'string' && body.executor.trim()) return body.executor.trim();
+      // Check forwarded browser BYOK headers (X-LLM-Provider + X-LLM-Key)
+      const llmKey = req.headers['x-llm-key'];
+      const llmProvider = req.headers['x-llm-provider'];
+      if (typeof llmKey === 'string' && llmKey.trim() && typeof llmProvider === 'string' && llmProvider.trim()) {
+        const prov = llmProvider.trim().toLowerCase() === 'claude' ? 'anthropic' : llmProvider.trim().toLowerCase();
+        return prov === 'anthropic' ? 'anthropic-direct' : `byok:${prov}`;
+      }
+      // Check server-side Anthropic key (env var or byok settings)
+      if (resolveProviderKey('anthropic', req.headers)) return 'anthropic-direct';
+      // No BYOK key available → use local Claude CLI
+      return 'cli:claude';
+    })();
     const model =
       typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
 
