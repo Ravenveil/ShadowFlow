@@ -229,6 +229,36 @@ export async function resolveDmConversation(
   return (json.data?.group_id ?? json.group_id ?? null) as string | null;
 }
 
+/**
+ * 2026-06-26 · 强制创建一条全新的 DM conversation，不做 find-or-create。
+ * 用于「新对话」按钮：保留历史的同时开一条干净会话。
+ * 直接 POST /api/groups with kind='dm'，绕过 /api/chat/dm/:id/resolve 的查重逻辑。
+ */
+export async function createFreshDmConversation(
+  agentId: string,
+  workspaceId?: string | null,
+): Promise<string | null> {
+  const res = await fetch(`${getApiBase()}/api/groups`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      kind: 'dm',
+      agent_ids: [agentId],
+      workspace_id: workspaceId ?? undefined,
+      name: `dm-${agentId}`,
+      template_id: '',
+      group_template_id: '',
+      member_emails: [],
+      policy_matrix: {},
+    }),
+  });
+  await _checkPythonStatus(res);
+  if (!res.ok) return null;
+  const json = await res.json().catch(() => null);
+  if (!json) return null;
+  return (json.group_id ?? json.data?.group_id ?? null) as string | null;
+}
+
 export async function patchGroup(
   groupId: string,
   body: PatchGroupRequest,

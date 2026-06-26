@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Search, Square } from 'lucide-react';
+import { Plus, Search, Square, SquarePen } from 'lucide-react';
 import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
 import { NewTaskComposer } from './NewTaskComposer';
 import { HfAvatar } from '../../components/hifi';
 import { listAgents, type AgentRecord } from '../../api/agents';
-import { resolveDmConversation } from '../../api/groupApi';
+import { resolveDmConversation, createFreshDmConversation } from '../../api/groupApi';
 import { useChatStream, type ChatMessage } from '../../core/hooks/useChatStream';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { useInboxStore } from '../../core/store/useInboxStore';
@@ -156,6 +156,14 @@ export function PersonalChatView() {
   // Fix #1: memoize content strings to prevent O(n) re-renders on every SSE streaming tick.
   const messageTexts = useMemo(() => messages.map((m) => m.content), [messages]);
 
+  // 「新对话」—— 强制创建全新 DM conversation，保留历史，从空白开始。
+  async function handleNewChat() {
+    if (!agentId || !agentInWs) return;
+    setDmGroupId(null);
+    const newId = await createFreshDmConversation(agentId, workspaceId);
+    if (newId) setDmGroupId(newId);
+  }
+
   // F1 — DM 也用完整 composer。dmGroupId 未就绪时（resolveDmConversation 仍在
   // 飞行），send() 会把消息暂存到 pendingQueueRef；targetId 就绪后 drain effect
   // 自动补发。不再提前 return —— 那样会静默丢弃消息且注释与行为矛盾。
@@ -280,6 +288,27 @@ export function PersonalChatView() {
               </button>
               <div className="dm-head-actions">
                 <span className="dm-head-model" title="当前模型">{modelLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => { void handleNewChat(); }}
+                  title="新对话（保留历史）"
+                  aria-label="新对话"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    border: '1px solid var(--t-border)',
+                    background: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--t-fg-3)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <SquarePen size={14} />
+                </button>
               </div>
             </div>
             {/* flex column 受限高度父容器:让 Timeline 自带的 .container(flex:1; min-height:0; overflow-y:auto)
