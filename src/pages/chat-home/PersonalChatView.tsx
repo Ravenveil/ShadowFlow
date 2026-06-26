@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { Check, MoreHorizontal, Pencil, Plus, Search, Square, SquarePen, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, MoreHorizontal, Pencil, Plus, Search, Square, SquarePen, Trash2 } from 'lucide-react';
 import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
 import { NewTaskComposer } from './NewTaskComposer';
 import { HfAvatar } from '../../components/hifi';
@@ -92,13 +92,34 @@ export function PersonalChatView() {
   useEffect(() => {
     void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
   }, [workspaceId]);
-  // 按最近活动倒序；最多 12 条（够覆盖「最近聊过谁」，再多走上方搜索/助手段）。
-  const recentDMs = useMemo(
-    () => [...agentDMs]
-      .sort((a, b) => Date.parse(b.lastActivityAt ?? '') - Date.parse(a.lastActivityAt ?? ''))
-      .slice(0, 12),
+  // 分页：默认展示 12 条，每次「更多」追加 12 条。
+  const PAGE_SIZE = 12;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // 重置分页当工作区切换
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [workspaceId]);
+
+  // 按最近活动倒序排好的全量列表（不裁剪）。
+  const sortedDMs = useMemo(
+    () => [...agentDMs].sort((a, b) => Date.parse(b.lastActivityAt ?? '') - Date.parse(a.lastActivityAt ?? '')),
     [agentDMs],
   );
+  // 当前窗口可见的那一页。
+  const recentDMs = useMemo(() => sortedDMs.slice(0, visibleCount), [sortedDMs, visibleCount]);
+  const hasMore = sortedDMs.length > visibleCount;
+
+  // IntersectionObserver：当最后一行进入视口时自动加载下一批。
+  const lastDmRowRef = useRef<HTMLDivElement | null>(null);
+  const loadMore = useCallback(() => setVisibleCount((n) => n + PAGE_SIZE), []);
+  useEffect(() => {
+    const el = lastDmRowRef.current;
+    if (!el || !hasMore) return;
+    const obs = new IntersectionObserver(
+      (entries) => { if (entries[0]?.isIntersecting) loadMore(); },
+      { threshold: 0.1 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasMore, loadMore, recentDMs.length]); // re-attach when the last row changes
 
   // 选中助手 → 解析其 dm conversation(kind='dm')。守卫:agent 必须在当前工作区
   // 列表里才解析——挡住"切区后旧 ?agent= 触发跨区 find-or-create DM 落库"。
@@ -303,14 +324,15 @@ export function PersonalChatView() {
             {q.trim() === '' && recentDMs.length > 0 && (
               <>
                 <div className="pcv-sec">会话记录</div>
-                {recentDMs.map((d) => {
+                {recentDMs.map((d, idx) => {
+                  const isLastRow = idx === recentDMs.length - 1;
                   const active = d.agentId === agentId;
                   const pal = paletteForAgent(d.agentId, d.agentName);
                   const menuOpen = menuAgentId === d.agentId;
                   // 重命名内联态
                   if (renaming === d.agentId) {
                     return (
-                      <div key={`dm_${d.agentId}`} className={active ? 'pcv-row active' : 'pcv-row'}>
+                      <div key={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={active ? 'pcv-row active' : 'pcv-row'}>
                         <HfAvatar glyph={initialOf(d.agentName)} color={pal.accent} size={32} />
                         <input
                           value={renameValue}
@@ -337,7 +359,7 @@ export function PersonalChatView() {
                   }
                   // 正常行 + hover 显示 "..." 按钮
                   return (
-                    <div key={`dm_${d.agentId}`} className={active ? 'pcv-row active' : 'pcv-row'}>
+                    <div key={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={active ? 'pcv-row active' : 'pcv-row'}>
                       {/* 主点击区域 */}
                       <button
                         type="button"
@@ -418,6 +440,23 @@ export function PersonalChatView() {
                     </div>
                   );
                 })}
+                {hasMore && (
+                  <button
+                    type="button"
+                    onClick={loadMore}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      width: '100%', padding: '5px 8px', background: 'none', border: 'none',
+                      borderRadius: 5, cursor: 'pointer', fontSize: 11.5, color: 'var(--t-fg-4)',
+                      fontFamily: 'inherit',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-panel-2)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                  >
+                    <ChevronDown size={13} />
+                    更多对话（{sortedDMs.length - visibleCount}）
+                  </button>
+                )}
               </>
             )}
             <div className="pcv-sec">助手</div>
