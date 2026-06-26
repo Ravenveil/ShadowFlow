@@ -1239,16 +1239,19 @@ input, textarea, select { font-family: inherit; color: inherit; }
    ────────────────────────────────────────────────────────────────────── */
 .pcv-rail-head { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 
+/* R8 clawsgo 化：「新员工」从弱 tint 钮升级为渐变主 CTA + hover 上浮辉光（对齐设计稿
+   主按钮）。渐变用 accent→暗 accent，避免暗主题亮端(accent-bright 偏粉)白字对比差。 */
 .pcv-new {
   width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   height: 36px; border-radius: 9px; cursor: pointer;
-  background: var(--t-accent-tint); color: var(--t-accent-bright);
-  border: 1px solid color-mix(in srgb, var(--t-accent) 32%, transparent);
-  font-weight: 600; font-size: 13px; letter-spacing: .01em;
-  transition: background 130ms ease, border-color 130ms ease, transform 130ms cubic-bezier(.2,.8,.2,1);
+  background: linear-gradient(135deg, var(--t-accent), color-mix(in srgb, var(--t-accent) 64%, #000));
+  color: #fff; border: none;
+  font-weight: 700; font-size: 13px; letter-spacing: .01em;
+  box-shadow: 0 2px 10px -3px color-mix(in srgb, var(--t-accent) 55%, transparent);
+  transition: transform 150ms var(--ease-spring), box-shadow 150ms ease, filter 150ms ease;
 }
-.pcv-new:hover { background: color-mix(in srgb, var(--t-accent) 20%, transparent); border-color: var(--t-accent); }
-.pcv-new:active { transform: translateY(1px); }
+.pcv-new:hover { transform: translateY(-1px); box-shadow: 0 8px 22px -6px color-mix(in srgb, var(--t-accent) 65%, transparent); filter: brightness(1.06); }
+.pcv-new:active { transform: translateY(0); }
 
 .pcv-search { position: relative; }
 .pcv-search > svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--t-fg-4); pointer-events: none; }
@@ -1333,6 +1336,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
   .pcv-row { transition: background var(--dur-1) ease !important; }
   .pcv-row:active, .sf-rail-icon:active { transform: none !important; }
   .pcv-row::before, .sf-rail-toggle > svg { transition: none !important; }
+  .pcv-new:hover, .pcv-new:active { transform: none !important; }
 }
 
 /* "Load more" button below DM list */
