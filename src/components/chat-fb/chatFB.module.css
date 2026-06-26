@@ -272,6 +272,10 @@
 .row:hover .nm {
   color: var(--accent);
 }
+/* R11 — 选中行名字常亮 accent，与个人态 .pcv-row.active .pcv-row-name 对称。 */
+.rowActive .nm {
+  color: var(--accent);
+}
 .rowUnread .nm {
   font-weight: 700;
 }
