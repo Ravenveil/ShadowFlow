@@ -18,6 +18,7 @@ import { memo, useState, useEffect, useRef, useMemo, type ReactNode } from 'reac
 import { User, Bot, Users, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import hljs from 'highlight.js/lib/common';
 import './fileViewerHljs.css';
+import { relTime } from '../../core/utils/relTime';
 
 // Module-level constant: fenced-code regex (fix: allocation + trailing-space edge case + trailing newline).
 // (\w*)[^\n]* → language token + any trailing chars on the fence line (handles ` ```ts \n`).
@@ -665,7 +666,19 @@ export const StudioMessageRow = memo(function StudioMessageRow({
           <span style={{ fontWeight: 600, color: 'var(--t-fg-2)' }}>
             {m.senderName ?? (isUser ? '我' : 'Agent')}
           </span>
-          {m.timestamp && <span style={{ color: 'var(--t-fg-4)' }}>{m.timestamp}</span>}
+          {m.timestamp && (
+            <span
+              title={m.timestamp}
+              style={{
+                color: 'var(--t-fg-4)',
+                opacity: bubbleHovered ? 1 : 0,
+                transition: 'opacity 0.15s',
+                pointerEvents: bubbleHovered ? undefined : 'none',
+              }}
+            >
+              {relTime(m.timestamp) || m.timestamp}
+            </span>
+          )}
         </div>
       )}
 

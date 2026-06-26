@@ -20,6 +20,7 @@ import { PersonalRightPane } from './PersonalRightPane';
 import { PersonalRunRightPane } from './PersonalRunRightPane';
 import { useSidebarSlotEl } from './SidebarSlotContext';
 import { PagePeekOverlay } from './PagePeekOverlay';
+import { relTime } from '../../core/utils/relTime';
 
 /**
  * ChatMessage → TimelineMessage 适配层(融合M1)。
@@ -49,19 +50,6 @@ function toTimelineMessages(messages: ChatMessage[]): TimelineMessage[] {
  *      渲染用 run 的 Timeline(自然融合:过程事件 M2 点亮)
  *   右:PersonalRightPane(run 式标签:员工/任务/Brief,可收起)
  */
-/** 会话记录行的相对时间（刚刚/分/时/天，再久回退日期）。 */
-function relTime(iso?: string): string {
-  if (!iso) return '';
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return '';
-  const diff = Date.now() - t;
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}分钟前`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}小时前`;
-  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}天前`;
-  try { return new Date(t).toLocaleDateString(); } catch { return ''; }
-}
-
 export function PersonalChatView() {
   const workspaceId = useWorkspaceStore((s) => s.currentId);
   // 统一侧栏(路B)：拿 HfLayout 那条常驻 ChatRail 的列表槽，portal 注入助手列表。
