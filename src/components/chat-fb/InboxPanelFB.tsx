@@ -201,6 +201,10 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
     return ids.sort().join(',');
   }, [props.groups, props.agentDMs]);
   const prevRunningRef = useRef<Set<string>>(new Set());
+  // 待清绿勾 timer 按 id 存 ref Map —— 关键修复(reviewer-I)：不在 effect cleanup 里清
+  // 它们，否则下一次 runningKey 变化时会误杀「还在显示、尚未到 2.4s」的绿勾 timer，
+  // 导致先结束的那项绿勾永久卡住。只在「同 id 再次完成」重置、卸载时清全部。
+  const doneTimersRef = useRef<Map<string, number>>(new Map());
   const [justDone, setJustDone] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     const cur = new Set(runningKey ? runningKey.split(',') : []);
@@ -208,13 +212,21 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
     prevRunningRef.current = cur;
     if (finished.length === 0) return;
     setJustDone((s) => { const n = new Set(s); finished.forEach((id) => n.add(id)); return n; });
-    const timers = finished.map((id) =>
-      window.setTimeout(() => {
+    finished.forEach((id) => {
+      const existing = doneTimersRef.current.get(id);
+      if (existing) window.clearTimeout(existing); // 同 id 再次完成 → 重置计时
+      const t = window.setTimeout(() => {
+        doneTimersRef.current.delete(id);
         setJustDone((s) => { const n = new Set(s); n.delete(id); return n; });
-      }, 2400),
-    );
-    return () => { timers.forEach((t) => window.clearTimeout(t)); };
+      }, 2400);
+      doneTimersRef.current.set(id, t);
+    });
   }, [runningKey]);
+  // 卸载时清所有待清绿勾 timer（避免泄漏 / 卸载后 setState）。
+  useEffect(() => {
+    const timers = doneTimersRef.current;
+    return () => { timers.forEach((t) => window.clearTimeout(t)); };
+  }, []);
 
   // ── 计数（chips 上的徽章） ────────────────────────────────────────────────
   const unreadGroupCount = useMemo(

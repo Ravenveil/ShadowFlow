@@ -427,7 +427,7 @@ export function PersonalChatView() {
                   }
                   // 正常行 + hover 显示 "..." 按钮
                   return (
-                    <div key={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={`pcv-row sf-rail-in${active ? ' active' : ''}${removingIds.has(d.agentId) ? ' sf-rail-out' : ''}`} style={{ animationDelay: `${Math.min(idx, 8) * 22}ms` }}>
+                    <div key={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={`pcv-row sf-rail-in${active ? ' active' : ''}${removingIds.has(d.agentId) ? ' sf-rail-out' : ''}`} style={{ animationDelay: removingIds.has(d.agentId) ? '0ms' : `${Math.min(idx, 8) * 22}ms` }}>
                       {/* 主点击区域 */}
                       <button
                         type="button"
