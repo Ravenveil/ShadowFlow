@@ -361,7 +361,9 @@ export function PersonalChatView() {
           改用 createPortal 把这段列表注入 HfLayout 那条常驻 ChatRail 的槽（纹丝不动）。
           列表是活的 React 子树，搜索框/选中高亮/点击回调照常用页面 state。 */}
       {slotEl && createPortal(
-        <>
+        // R2 — 切个人/团队时列表内容整体淡入（clawsgo 招牌「切换淡入」）。
+        // ChatHomePage 按 ?view= 条件渲染 → 切换即重挂 → .sf-rail-fade 随挂载播放。
+        <div className="sf-rail-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
           <div className="pcv-rail-head">
             <button type="button" className="pcv-new" onClick={() => setShowCreate(true)} aria-label="+ 新员工">
               <Plus size={15} /> 新员工
@@ -521,7 +523,7 @@ export function PersonalChatView() {
             })}
             {filtered.length === 0 && <div style={{ fontSize: 11.5, color: 'var(--t-fg-4)', padding: '4px 6px' }}>暂无助手</div>}
           </div>
-        </>,
+        </div>,
         slotEl,
       )}
 

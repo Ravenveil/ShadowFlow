@@ -1119,7 +1119,8 @@ export default function ChatPage() {
             原 onCollapsedChange「左收起→右自动展开」联动随 ChatRail 移出页面去掉
             （折叠本身仍工作，记为小回归）。 */}
         {slotEl && createPortal(
-          <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+          // R2 — 切团队/个人时列表整体淡入（clawsgo 招牌「切换淡入」），与个人态对称。
+          <div className="sf-rail-fade" style={{ flex: 1, minHeight: 0, display: 'flex' }}>
             {/* Stream D · FB-HiFi InboxPanel — chat-fb.html 行 878-1014 */}
             <InboxPanelFB
               groups={teamGroups}
