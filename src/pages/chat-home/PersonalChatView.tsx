@@ -188,8 +188,12 @@ export function PersonalChatView() {
   // DM 侧栏行上下文菜单（重命名 / 删除）。
   const [menuAgentId, setMenuAgentId] = useState<string | null>(null);
   const [menuGroupId, setMenuGroupId] = useState<string | null>(null);
+  // true while resolveDmConversation is in-flight for the menu item
+  const [menuGroupIdLoading, setMenuGroupIdLoading] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  // 二步确认删除：点第一次变成 'confirm' 态，再点才真删
+  const [deleteConfirmAgentId, setDeleteConfirmAgentId] = useState<string | null>(null);
   // 弹出菜单的 DOM 容器 ref — 用于点外自动关闭
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -200,6 +204,8 @@ export function PersonalChatView() {
       if (menuRef.current && menuRef.current.contains(e.target as Node)) return;
       setMenuAgentId(null);
       setMenuGroupId(null);
+      setMenuGroupIdLoading(false);
+      setDeleteConfirmAgentId(null);
     }
     document.addEventListener('click', onDocClick);
     return () => document.removeEventListener('click', onDocClick);
@@ -210,14 +216,19 @@ export function PersonalChatView() {
     if (menuAgentId === d.agentId) {
       setMenuAgentId(null);
       setMenuGroupId(null);
+      setMenuGroupIdLoading(false);
+      setDeleteConfirmAgentId(null);
       return;
     }
     setMenuAgentId(d.agentId);
     setMenuGroupId(null);
+    setDeleteConfirmAgentId(null);
     // 优先复用已解析的 dmGroupId（当前选中的 agent）；否则按需解析。
     let gid: string | null = d.agentId === agentId ? (dmGroupId ?? null) : null;
     if (!gid) {
+      setMenuGroupIdLoading(true);
       gid = await resolveDmConversation(d.agentId, workspaceId ?? undefined).catch(() => null);
+      setMenuGroupIdLoading(false);
     }
     setMenuGroupId(gid);
   }
@@ -241,7 +252,12 @@ export function PersonalChatView() {
   }
 
   async function handleDmDelete(d: AgentDMItem) {
-    if (!window.confirm(`删除与「${d.agentName}」的对话？此操作不可撤销。`)) return;
+    // 第一次点击进入「确认」态，第二次才真删（inline 二步确认，替代 window.confirm）。
+    if (deleteConfirmAgentId !== d.agentId) {
+      setDeleteConfirmAgentId(d.agentId);
+      return;
+    }
+    setDeleteConfirmAgentId(null);
     useInboxStore.getState().removeAgentDM(d.agentId);
     setMenuAgentId(null);
     if (agentId === d.agentId) selectAgent(null);
@@ -356,26 +372,46 @@ export function PersonalChatView() {
                             position: 'absolute', right: 0, top: '100%', zIndex: 200,
                             background: 'var(--t-panel)', border: '1px solid var(--t-border)',
                             borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.22)',
-                            padding: 4, minWidth: 120, marginTop: 2,
+                            padding: 4, minWidth: 130, marginTop: 2,
                           }}>
+                            {/* 加载态：resolveDmConversation 仍在飞行时禁用所有操作 */}
+                            {menuGroupIdLoading && (
+                              <div style={{ padding: '6px 10px', fontSize: 11.5, color: 'var(--t-fg-5)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid var(--t-fg-5)', borderTopColor: 'transparent', animation: 'spin 0.6s linear infinite' }} />
+                                加载中…
+                              </div>
+                            )}
                             <button
                               type="button"
-                              onClick={() => { setRenaming(d.agentId); setRenameValue(d.agentName); setMenuAgentId(null); }}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: 'none', border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 12.5, color: 'var(--t-fg-3)', textAlign: 'left', fontFamily: 'inherit' }}
-                              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-panel-2)'; }}
+                              disabled={menuGroupIdLoading}
+                              onClick={() => { if (!menuGroupIdLoading) { setRenaming(d.agentId); setRenameValue(d.agentName); setMenuAgentId(null); setDeleteConfirmAgentId(null); } }}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: 'none', border: 'none', borderRadius: 5, cursor: menuGroupIdLoading ? 'not-allowed' : 'pointer', fontSize: 12.5, color: menuGroupIdLoading ? 'var(--t-fg-5)' : 'var(--t-fg-3)', textAlign: 'left', fontFamily: 'inherit', opacity: menuGroupIdLoading ? 0.5 : 1 }}
+                              onMouseEnter={(e) => { if (!menuGroupIdLoading) (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-panel-2)'; }}
                               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
                             >
                               <Pencil size={13} /> 重命名
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleDmDelete(d)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: 'none', border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 12.5, color: 'var(--t-err, #ef4444)', textAlign: 'left', fontFamily: 'inherit' }}
-                              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,.08)'; }}
-                              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
-                            >
-                              <Trash2 size={13} /> 删除
-                            </button>
+                            {/* 二步删除确认：第一次点「删除」→ 变为「确认删除？」；再点才真删 */}
+                            {deleteConfirmAgentId === d.agentId ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleDmDelete(d)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: 'rgba(239,68,68,.12)', border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 12.5, color: 'var(--t-err, #ef4444)', textAlign: 'left', fontFamily: 'inherit', fontWeight: 600 }}
+                              >
+                                <Trash2 size={13} /> 确认删除？
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={menuGroupIdLoading}
+                                onClick={() => void handleDmDelete(d)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: 'none', border: 'none', borderRadius: 5, cursor: menuGroupIdLoading ? 'not-allowed' : 'pointer', fontSize: 12.5, color: menuGroupIdLoading ? 'var(--t-fg-5)' : 'var(--t-err, #ef4444)', textAlign: 'left', fontFamily: 'inherit', opacity: menuGroupIdLoading ? 0.5 : 1 }}
+                                onMouseEnter={(e) => { if (!menuGroupIdLoading) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,.08)'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                              >
+                                <Trash2 size={13} /> 删除
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

@@ -759,6 +759,26 @@ class UserGroupSetting(BaseModel):
     my_nickname: Optional[str] = Field(None, max_length=80)
 
 
+@router.delete("/api/groups/{group_id}", status_code=204)
+async def delete_group(group_id: str) -> None:
+    """Delete a group / DM conversation record and its persisted JSON file.
+
+    Returns 204 No Content on success. Returns 404 when the group does not
+    exist. This endpoint covers both kind='group' and kind='dm' records so
+    the frontend's 'delete DM conversation' feature works correctly.
+    """
+    p = _group_path(group_id)  # validates group_id format and path traversal
+    if not p.exists():
+        raise _group_not_found(group_id)
+    try:
+        p.unlink()
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": {"code": "DELETE_FAILED", "message": str(exc)}},
+        ) from exc
+
+
 @router.patch("/api/groups/{group_id}")
 async def patch_group(group_id: str, body: PatchGroupRequest) -> Dict[str, Any]:
     """Update group-level metadata (name / announcement).

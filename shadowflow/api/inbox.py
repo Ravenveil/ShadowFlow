@@ -222,9 +222,41 @@ async def get_workspace_inbox(
     # 2026-05-29 — 填充 agent_dms：列出该 workspace 的 agents 作为单聊入口。
     # 之前写死 []，导致 team 建好后 chat 左侧看不到任何 agent，没法单聊。
     # agent 记录来自 .shadowflow/agents/*.json（quick-hire / 落库 agent）。
+    #
+    # 2026-06-26 — 修复重命名回退：inbox 聚合时优先使用最新 DM 会话记录的 name
+    # 字段（patchGroup PATCH 写入 group JSON），而非 agent 记录的 name（只读）。
+    # 这样用户重命名后 fetchWorkspaceInbox 重拉也能持久保留新名字。
     agent_dms: List[AgentDMItem] = []
     try:
         from shadowflow.api.agents import _list_agents  # local import avoids cycles
+        from shadowflow.api.groups import _list_groups_records  # local import avoids cycles
+
+        # 预建 agent_id → 最新 DM group name 映射（按 created_at 取最新，name 为已改名）。
+        dm_name_by_agent: Dict[str, str] = {}
+        dm_last_activity: Dict[str, str] = {}
+        dm_last_message: Dict[str, str] = {}
+        try:
+            for dm_rec in _list_groups_records(workspace_id, kinds=["dm"]):
+                ids = dm_rec.get("agent_ids") or []
+                if len(ids) == 1:
+                    aid = ids[0]
+                    # 取 created_at 最新的 DM group name（同一 agent 可能有多条 DM）
+                    rec_ts = dm_rec.get("updated_at") or dm_rec.get("created_at") or ""
+                    if aid not in dm_name_by_agent or rec_ts > (dm_rec.get("created_at") or ""):
+                        dm_name_by_agent[aid] = dm_rec.get("name") or ""
+                        # 最后活跃时间：最后一条消息时间 or created_at
+                        msgs = dm_rec.get("messages") or []
+                        last_dm_msg = msgs[-1] if msgs else None
+                        dm_last_activity[aid] = (
+                            (last_dm_msg.get("timestamp") if isinstance(last_dm_msg, dict) else None)
+                            or dm_rec.get("created_at")
+                            or datetime.now(timezone.utc).isoformat()
+                        )
+                        dm_last_message[aid] = (
+                            last_dm_msg.get("content", "")[:140] if isinstance(last_dm_msg, dict) else ""
+                        )
+        except Exception:
+            pass  # DM lookup failure should not block agent list
 
         for arec in _list_agents():
             rec_ws = arec.get("workspace_id")
@@ -232,15 +264,23 @@ async def get_workspace_inbox(
             # 不传（管理/无 scope 场景）则全收。
             if workspace_id is not None and rec_ws != workspace_id:
                 continue
+            agent_id = arec.get("agent_id", "")
+            # 优先使用 DM group 记录的 name（patchGroup 写的），回退到 agent name。
+            display_name = (
+                dm_name_by_agent.get(agent_id)
+                or arec.get("name")
+                or agent_id
+                or "Agent"
+            )
             agent_dms.append(
                 AgentDMItem(
-                    agentId=arec.get("agent_id", ""),
-                    agentName=arec.get("name") or arec.get("agent_id", "") or "Agent",
+                    agentId=agent_id,
+                    agentName=display_name,
                     kind=arec.get("source") or "local",
                     status=arec.get("status") if arec.get("status") in ("running", "blocked", "idle", "pending_approval") else "idle",
                     unreadCount=0,
-                    lastMessage=(arec.get("soul") or "")[:140],
-                    lastActivityAt=arec.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                    lastMessage=dm_last_message.get(agent_id) or (arec.get("soul") or "")[:140],
+                    lastActivityAt=dm_last_activity.get(agent_id) or arec.get("created_at") or datetime.now(timezone.utc).isoformat(),
                 )
             )
     except Exception:
