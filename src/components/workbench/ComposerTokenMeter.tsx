@@ -11,7 +11,19 @@
  *    调用方不传或传 0 时本组件兜底用 currentModelWindow()。
  */
 import { useMemo, useState } from 'react';
-import { sfBarTone, currentModelWindow } from './studioTokens';
+import { currentModelWindow } from './studioTokens';
+
+/**
+ * 用量百分比 → sf-bar 语义类。对齐 clawsgo / hermes 色温：
+ * 正常态（<70%）走柔和蓝 `sf-bar--blue`（而非绿），70%+ 转琥珀警示、90%+ 转红。
+ * 与 studioTokens.sfBarTone 的区别仅在「正常态色」——本计是上下文「占用」而非
+ * 「成功率」，蓝色比绿色更贴近 hermes ContextGauge 的中性观感。
+ */
+function gaugeTone(pct: number): string {
+  if (pct >= 90) return 'sf-bar--reject';
+  if (pct >= 70) return 'sf-bar--warn';
+  return 'sf-bar--blue';
+}
 
 export interface ComposerTokenMeterProps {
   /** 当前已用 context tokens。 */
@@ -35,7 +47,7 @@ export function ComposerTokenMeter({ used, window: win, compact }: ComposerToken
   // window<=0 → 用当前选中模型的窗口兜底，保证永远有一个真实分母。
   const effWindow = useMemo(() => (win > 0 ? win : currentModelWindow()), [win]);
   const pct = effWindow > 0 ? Math.min(100, Math.round((used / effWindow) * 100)) : 0;
-  const tone = sfBarTone(pct);
+  const tone = gaugeTone(pct);
 
   return (
     <div

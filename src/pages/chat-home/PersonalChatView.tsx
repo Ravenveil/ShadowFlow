@@ -330,6 +330,7 @@ export function PersonalChatView() {
                   variant="chat"
                   onSubmit={handleDmSubmit}
                   placeholder={`发给「${selected.name}」 · 试试 @ 提及 Skill`}
+                  messages={messages.map((m) => m.content)}
                 />
               )}
             </div>

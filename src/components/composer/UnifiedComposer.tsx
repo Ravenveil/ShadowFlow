@@ -21,6 +21,8 @@
  * E2E 脚本断链。
  */
 import React, { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { ComposerTokenMeter } from '../workbench/ComposerTokenMeter';
+import { estimateTokens } from '../workbench/studioTokens';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles,
@@ -102,6 +104,11 @@ export interface UnifiedComposerProps {
    * 用户可立即覆写第一个占位符。additive — 不传则行为不变。
    */
   selectRange?: { start: number; end: number };
+  /**
+   * variant='chat' 时用于计算 ComposerTokenMeter 已用量。
+   * 传入会话历史消息文本（plain string），组件内累加 estimateTokens 估算 contextTokens。
+   */
+  messages?: string[];
 }
 
 
@@ -247,10 +254,17 @@ export function UnifiedComposer({
   autoFocus = false,
   initialText,
   selectRange,
+  messages,
 }: UnifiedComposerProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
   const isChat = variant === 'chat';
+
+  // variant='chat' — 累加历史消息文本估算 contextTokens，喂给 ComposerTokenMeter。
+  const usedTokens = useMemo(
+    () => (messages ?? []).reduce((sum, text) => sum + estimateTokens(text), 0),
+    [messages],
+  );
 
   const [composer, setComposer] = useState(initialText ?? '');
   // 受控初始文本：变化时覆盖草稿（模板 chips 预填场景）。
@@ -1178,6 +1192,9 @@ export function UnifiedComposer({
           </div>
 
 
+          {isChat && (
+            <ComposerTokenMeter used={usedTokens} window={0} compact />
+          )}
           <div style={{ flex: 1, minWidth: 6 }} />
           <button
             type="button"
