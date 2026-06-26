@@ -213,10 +213,27 @@ export function PersonalChatView() {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [showModelPicker]);
 
+  // 模型标签 → 网关 executor + model。让头部模型选择器真正生效（此前只换 label）。
+  //   Auto (CLI) / claude-*  → cli:claude（订阅鉴权，CN 可达；claude-* 传 --model）
+  //   gpt-*                  → byok:openai
+  //   deepseek-*             → byok:deepseek
+  //   其它                    → 不显式指定，后端默认 cli:claude
+  const { dmExecutor, dmModel } = useMemo(() => {
+    const label = modelLabel;
+    if (label === 'Auto (CLI)' || label === 'Auto') return { dmExecutor: undefined, dmModel: undefined };
+    if (label.startsWith('claude-')) return { dmExecutor: 'cli:claude', dmModel: label };
+    if (label.startsWith('gpt-')) return { dmExecutor: 'byok:openai', dmModel: label };
+    if (label.startsWith('deepseek')) return { dmExecutor: 'byok:deepseek', dmModel: label };
+    if (label.startsWith('glm')) return { dmExecutor: 'byok:zhipu', dmModel: label };
+    return { dmExecutor: undefined, dmModel: undefined };
+  }, [modelLabel]);
+
   const { messages, send, cancel, streaming, error, pendingCount } = useChatStream({
     mode: 'group',
     targetId: dmGroupId,
     sseChannel: 'group',
+    executor: dmExecutor,
+    model: dmModel,
   });
   // 对话框统一：把 ChatMessage[] 映射成统一回合气泡（StudioMessageRow）。
   const studioMessages = useMemo(
