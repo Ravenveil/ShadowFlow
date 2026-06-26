@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 const PAGE_SIZE = 12;
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { Check, ChevronDown, Download, MoreHorizontal, Pencil, Plus, Search, Square, SquarePen, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, Download, MoreHorizontal, Pencil, Plus, Search, Settings, Square, SquarePen, Trash2, X } from 'lucide-react';
 import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
 import { NewTaskComposer } from './NewTaskComposer';
 import { HfAvatar } from '../../components/hifi';
@@ -22,6 +22,7 @@ import { useSidebarSlotEl } from './SidebarSlotContext';
 import { PagePeekOverlay } from './PagePeekOverlay';
 import { relTime } from '../../core/utils/relTime';
 import { KEY_STORAGE, PROVIDER_IDS } from '../../api/_base';
+import { SettingsModal } from '../../components/SettingsModal';
 
 /**
  * 模型快速选择器的选项列表（module scope — 避免每次 render 重建数组）。
@@ -261,6 +262,13 @@ export function PersonalChatView() {
     await send(t);
   }
 
+  // Settings modal state
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Onboarding banner: show once per session when no API key is set and a 403 error occurs.
+  // sessionStorage flag 'sf-ob-dismissed' prevents re-showing after dismissal.
+  const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
+
   // Export modal state
   const [showExport, setShowExport] = useState(false);
 
@@ -279,6 +287,20 @@ export function PersonalChatView() {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [showExport]);
+
+  // Onboarding banner trigger: show when a 403 error fires and no BYOK key is configured,
+  // but only once per session (guarded by sessionStorage flag).
+  useEffect(() => {
+    if (!error) return;
+    if (hasByokKey) return; // user already has a key, no need to nag
+    if (/(403|unauthorized|not configured|api.{0,4}key)/i.test(error)) {
+      try {
+        if (!sessionStorage.getItem('sf-ob-dismissed')) {
+          setShowOnboardingBanner(true);
+        }
+      } catch { /* ignore private-mode sessionStorage errors */ }
+    }
+  }, [error, hasByokKey]);
 
   function handleExport(fmt: 'markdown' | 'plain') {
     const agentName = selected?.name ?? 'Agent';
@@ -727,6 +749,28 @@ export function PersonalChatView() {
                 >
                   <Download size={14} />
                 </button>
+                {/* 设置快捷入口 — 方便用户直接配置 BYOK API Key */}
+                <button
+                  type="button"
+                  onClick={() => setShowSettings(true)}
+                  title="设置 · 配置 API Key"
+                  aria-label="打开设置"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    border: '1px solid var(--t-border)',
+                    background: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--t-fg-3)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Settings size={14} />
+                </button>
                 {/* Fix: disabled when isCreating to prevent double-click orphaned DM groups.
                     title communicates ephemeral-conversation semantics (fix #3): switching
                     agents restores the original conversation, not this fresh one. */}
@@ -758,6 +802,44 @@ export function PersonalChatView() {
             {/* flex column 受限高度父容器：让 UnifiedChatFeed 内的滚动容器
                 成为真正的滚动容器，流式跟随/滚底生效 */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '12px 16px' }}>
+              {/* Onboarding banner — shown once per session when no API key + 403 error */}
+              {showOnboardingBanner && (
+                <div style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 12px',
+                  marginBottom: 10,
+                  borderRadius: 8,
+                  background: 'rgba(var(--t-accent-rgb, 99,102,241), 0.08)',
+                  border: '1px solid rgba(var(--t-accent-rgb, 99,102,241), 0.22)',
+                  fontSize: 12.5,
+                  color: 'var(--t-fg-2)',
+                }}>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    使用 CLI 模式运行中。在设置中添加 API Key 可获得更快响应。
+                    <button
+                      type="button"
+                      onClick={() => { setShowSettings(true); }}
+                      style={{ marginLeft: 6, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--t-accent)', fontSize: 12.5, fontWeight: 600, padding: 0, fontFamily: 'inherit' }}
+                    >
+                      配置 →
+                    </button>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowOnboardingBanner(false);
+                      try { sessionStorage.setItem('sf-ob-dismissed', '1'); } catch { /* ignore */ }
+                    }}
+                    aria-label="关闭提示"
+                    style={{ flexShrink: 0, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', display: 'inline-flex', alignItems: 'center', padding: 2, borderRadius: 4 }}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              )}
               {studioMessages.length === 0 ? (
                 /* DM 空对话引导态——和该助手开始,给几个启动 prompt */
                 <div className="dm-empty">
@@ -872,6 +954,8 @@ export function PersonalChatView() {
           />}
 
       {showCreate && <PagePeekOverlay target="agents" onClose={handlePeekClose} />}
+
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} initialTab="byok" />}
 
       {showExport && (
         <div
