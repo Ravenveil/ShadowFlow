@@ -260,17 +260,18 @@ export function UnifiedComposer({
   const { t } = useI18n();
   const isChat = variant === 'chat';
 
-  // variant='chat' — 累加历史消息文本估算 contextTokens，喂给 ComposerTokenMeter。
-  const usedTokens = useMemo(
-    () => (messages ?? []).reduce((sum, text) => sum + estimateTokens(text), 0),
-    [messages],
-  );
-
   const [composer, setComposer] = useState(initialText ?? '');
   // 受控初始文本：变化时覆盖草稿（模板 chips 预填场景）。
   useEffect(() => {
     if (initialText !== undefined) setComposer(initialText);
   }, [initialText]);
+
+  // variant='chat' — 累加历史消息文本估算 contextTokens，喂给 ComposerTokenMeter。
+  // Fix #2: include current draft so the meter updates while typing, not only after send.
+  const usedTokens = useMemo(
+    () => (messages ?? []).reduce((sum, text) => sum + estimateTokens(text), 0) + estimateTokens(composer),
+    [messages, composer],
+  );
 
   // 2026-05-29 — ModelPicker 选择（与 run-session/chat 共享 sf.defaultExecutor +
   // sf.model）。调用方提交时读这俩 localStorage key，onChange 写入即生效。

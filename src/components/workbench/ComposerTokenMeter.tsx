@@ -127,7 +127,7 @@ export function ComposerTokenMeter({ used, window: win, compact }: ComposerToken
                     ? 'var(--status-reject, #EF4444)'
                     : pct >= 70
                       ? 'var(--status-warn, #F59E0B)'
-                      : 'var(--status-ok, #10B981)',
+                      : 'var(--status-blue, #3B82F6)',
               }}
             >
               {pct}%

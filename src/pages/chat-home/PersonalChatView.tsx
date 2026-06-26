@@ -147,6 +147,9 @@ export function PersonalChatView() {
     [timelineMessages],
   );
 
+  // Fix #1: memoize content strings to prevent O(n) re-renders on every SSE streaming tick.
+  const messageTexts = useMemo(() => messages.map((m) => m.content), [messages]);
+
   // F1 — DM 也用完整 composer。dmGroupId 未就绪时抛错（组件错误条提示,草稿不丢）。
   async function handleDmSubmit(p: { text: string }) {
     const t = p.text.trim();
@@ -330,7 +333,7 @@ export function PersonalChatView() {
                   variant="chat"
                   onSubmit={handleDmSubmit}
                   placeholder={`发给「${selected.name}」 · 试试 @ 提及 Skill`}
-                  messages={messages.map((m) => m.content)}
+                  messages={messageTexts}
                 />
               )}
             </div>

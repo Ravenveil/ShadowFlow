@@ -3,13 +3,6 @@
  * 纯函数，无副作用，供 polish / right-files owner 复用。
  */
 
-/** 用量百分比 → sf-bar 语义类（绿/黄/红）。 */
-export function sfBarTone(pct: number): string {
-  if (pct >= 90) return 'sf-bar--reject';
-  if (pct >= 70) return 'sf-bar--warn';
-  return 'sf-bar--ok';
-}
-
 /**
  * 选中 executor/model（localStorage sf.defaultExecutor / sf.model）→ 上下文窗口大小（tokens）。
  * 与 hermes ContextGauge 同思路：用「模型族」推窗口，没命中给一个保守默认。
