@@ -641,6 +641,8 @@ export const StudioMessageRow = memo(function StudioMessageRow({
 
   const content = (
     <div
+      onMouseEnter={() => setBubbleHovered(true)}
+      onMouseLeave={() => setBubbleHovered(false)}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -696,10 +698,7 @@ export const StudioMessageRow = memo(function StudioMessageRow({
 
       {/* 气泡 */}
       {(m.text || m.streaming) && (
-        <div
-          onMouseEnter={() => setBubbleHovered(true)}
-          onMouseLeave={() => setBubbleHovered(false)}
-        >
+        <div>
           <div
             key={m.id + (m.streaming ? '-s' : '-d')}
             className={`chat-bubble-${m.role}${!isUser && !m.streaming ? ' sf-bubble-settle' : ''}`}
