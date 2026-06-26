@@ -717,23 +717,24 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     // Only user messages trigger an agent reply.
     if (senderKind !== 'user') return;
 
-    // Executor selection: explicit > BYOK (from forwarded X-LLM-* headers or server env) > cli:claude.
-    // When no BYOK key is configured anywhere, fall back to the local claude CLI so chat
-    // works out-of-the-box on a fresh install (no settings required).
-    const executor = (() => {
-      if (typeof body.executor === 'string' && body.executor.trim()) return body.executor.trim();
-      // Check forwarded browser BYOK headers (X-LLM-Provider + X-LLM-Key)
-      const llmKey = req.headers['x-llm-key'];
-      const llmProvider = req.headers['x-llm-provider'];
-      if (typeof llmKey === 'string' && llmKey.trim() && typeof llmProvider === 'string' && llmProvider.trim()) {
-        const prov = llmProvider.trim().toLowerCase() === 'claude' ? 'anthropic' : llmProvider.trim().toLowerCase();
-        return prov === 'anthropic' ? 'anthropic-direct' : `byok:${prov}`;
-      }
-      // Check server-side Anthropic key (env var or byok settings)
-      if (resolveProviderKey('anthropic', req.headers)) return 'anthropic-direct';
-      // No BYOK key available → use local Claude CLI
-      return 'cli:claude';
-    })();
+    // Executor selection. Priority:
+    //   1. Explicit body.executor — the UI model picker's choice always wins
+    //      (e.g. `byok:zhipu`, `anthropic-direct`, `cli:codex`).
+    //   2. cli:claude — the default. The local Claude CLI authenticates through the user's
+    //      Claude subscription (OAuth) and handles its own networking.
+    //
+    // Why cli:claude is the default rather than a BYOK/direct path:
+    //   - `anthropic-direct` calls api.anthropic.com via the SDK, which is network-blocked in
+    //     some regions (China returns HTTP 403 "Request not allowed" without an HTTPS proxy).
+    //   - Auto-picking a forwarded BYOK key is fragile: a configured-but-wrong key fails with
+    //     401, and the browser auto-forwards whatever provider it discovers first (often the
+    //     blocked anthropic key).
+    //   The CLI works where those fail and gives the best quality, so it's the safe default.
+    //   Users who want a specific BYOK provider select it in the model picker (→ body.executor).
+    const executor =
+      typeof body.executor === 'string' && body.executor.trim()
+        ? body.executor.trim()
+        : 'cli:claude';
     const model =
       typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
 
