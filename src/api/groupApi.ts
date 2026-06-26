@@ -263,6 +263,8 @@ export async function postGroupMessage(
      *  executor（cli:* / byok:*）生成回复。executor 空时网关默认 anthropic-direct。 */
     executor?: string;
     model?: string;
+    /** AbortSignal — allows cancelling an in-flight POST. */
+    signal?: AbortSignal;
   },
 ): Promise<Message> {
   const res = await fetch(`${getApiBase()}/api/groups/${groupId}/messages`, {
@@ -278,6 +280,7 @@ export async function postGroupMessage(
       executor: options?.executor,
       model: options?.model,
     }),
+    signal: options?.signal,
   });
   await _checkPythonStatus(res);
   if (!res.ok) {

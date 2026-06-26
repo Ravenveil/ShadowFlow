@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Square } from 'lucide-react';
 import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
 import { NewTaskComposer } from './NewTaskComposer';
 import { HfAvatar } from '../../components/hifi';
@@ -134,7 +134,7 @@ export function PersonalChatView() {
     try { return localStorage.getItem('sf.model') || 'Auto'; } catch { return 'Auto'; }
   })();
 
-  const { messages, send, error } = useChatStream({
+  const { messages, send, cancel, streaming, error } = useChatStream({
     mode: 'group',
     targetId: dmGroupId,
     sseChannel: 'group',
@@ -297,13 +297,41 @@ export function PersonalChatView() {
               )}
               {error && <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>发送失败：{error}</div>}
             </div>
-            {/* F1 — 完整 composer（@技能/附件/模型/知识库），与新任务/开始页同一组件 */}
+            {/* F1 — 完整 composer（@技能/附件/模型/知识库），与新任务/开始页同一组件。
+                streaming=true 时替换为 Stop 按钮（agent 回复中，用户可中止）。 */}
             <div style={{ flexShrink: 0, padding: '10px 16px 14px', borderTop: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
-              <UnifiedComposer
-                variant="chat"
-                onSubmit={handleDmSubmit}
-                placeholder={`发给「${selected.name}」 · 试试 @ 提及 Skill`}
-              />
+              {streaming ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 2px' }}>
+                  <button
+                    type="button"
+                    onClick={cancel}
+                    data-testid="dm-stop-btn"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '7px 20px',
+                      borderRadius: 8,
+                      border: '1px solid rgba(239,68,68,.3)',
+                      background: 'rgba(239,68,68,.1)',
+                      color: 'var(--t-err, #ef4444)',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    <Square size={13} fill="currentColor" strokeWidth={0} />
+                    停止
+                  </button>
+                </div>
+              ) : (
+                <UnifiedComposer
+                  variant="chat"
+                  onSubmit={handleDmSubmit}
+                  placeholder={`发给「${selected.name}」 · 试试 @ 提及 Skill`}
+                />
+              )}
             </div>
           </>
         )}

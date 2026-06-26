@@ -59,10 +59,12 @@ export interface UseChatStreamResult {
   messages: ChatMessage[];
   loading: boolean;
   error: string | null;
-  /** True while the SSE connection is open. */
+  /** True while a sent message is awaiting the agent reply (POST in-flight or waiting for SSE response). */
   streaming: boolean;
   /** Send a user message → optimistic append + assistant reply. */
   send: (content: string) => Promise<void>;
+  /** Abort the current in-flight send and reset streaming state. */
+  cancel: () => void;
   /** Force-reload history from the backend. */
   refresh: () => Promise<void>;
 }
@@ -113,6 +115,8 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
 
   // ---- internal refs --------------------------------------------------------
   const sseHandleRef = useRef<SseClientHandle | null>(null);
+  // AbortController for the currently in-flight postGroupMessage / chatCompletion POST.
+  const abortCtrlRef = useRef<AbortController | null>(null);
   // Track the latest target so async fetches don't write into a switched-away view
   const activeTargetRef = useRef<string | null>(targetId);
   activeTargetRef.current = targetId;
@@ -167,7 +171,6 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
     if (!url) return;
 
     let alive = true;
-    setStreaming(true);
 
     try {
       const handle = startSseClient({
@@ -202,6 +205,8 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
                 },
               ];
             });
+            // Agent replied — send cycle complete.
+            setStreaming(false);
             return;
           }
 
@@ -226,6 +231,8 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
                 },
               ];
             });
+            // Gateway notice (e.g. missing key, dangling member) ends the send cycle.
+            setStreaming(false);
             return;
           }
 
@@ -277,6 +284,10 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
       const text = content.trim();
       if (!text || !targetId) return;
 
+      // Each send gets its own AbortController so cancel() can abort it.
+      const ctrl = new AbortController();
+      abortCtrlRef.current = ctrl;
+
       const optimisticId = `local-${Date.now()}`;
       const optimistic: ChatMessage = {
         id: optimisticId,
@@ -287,6 +298,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
       };
       setMessages((prev) => [...prev, optimistic]);
       setError(null);
+      setStreaming(true);
 
       try {
         if (mode === 'group') {
@@ -294,7 +306,8 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
           // The backend chat-bridge then dispatches agent replies asynchronously
           // and pushes them back over the group SSE channel (sseChannel:'group'),
           // so we do NOT append the reply here — the SSE handler does.
-          await postGroupMessage(targetId, text, { senderName: 'user', senderKind: 'user', executor, model });
+          // streaming stays true until the SSE agent reply resets it.
+          await postGroupMessage(targetId, text, { senderName: 'user', senderKind: 'user', executor, model, signal: ctrl.signal });
           setMessages((prev) =>
             prev.map((m) => (m.id === optimisticId ? { ...m, status: 'delivered' as const } : m)),
           );
@@ -315,11 +328,19 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
             timestamp: new Date().toISOString(),
           },
         ]);
+        // DM: reply arrived directly (no SSE), cycle complete.
+        setStreaming(false);
       } catch (err) {
+        // AbortError = user cancelled deliberately; no error banner needed.
+        if (err instanceof Error && err.name === 'AbortError') {
+          setStreaming(false);
+          return;
+        }
         const msg = err instanceof Error ? err.message : 'send failed';
         // eslint-disable-next-line no-console
         console.warn('[useChatStream] send failed → marking message error:', msg);
         setError(msg);
+        setStreaming(false);
         // Mark the user bubble as errored but DO NOT remove it
         setMessages((prev) =>
           prev.map((m) =>
@@ -333,13 +354,20 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
     [mode, targetId, executor, model]
   );
 
+  // ---- cancel ---------------------------------------------------------------
+  const cancel = useCallback(() => {
+    abortCtrlRef.current?.abort();
+    abortCtrlRef.current = null;
+    setStreaming(false);
+  }, []);
+
   // ---- refresh --------------------------------------------------------------
   const refresh = useCallback(async () => {
     await loadHistory();
   }, [loadHistory]);
 
   return useMemo(
-    () => ({ messages, loading, error, streaming, send, refresh }),
-    [messages, loading, error, streaming, send, refresh]
+    () => ({ messages, loading, error, streaming, send, cancel, refresh }),
+    [messages, loading, error, streaming, send, cancel, refresh]
   );
 }
