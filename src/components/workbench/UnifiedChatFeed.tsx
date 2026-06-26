@@ -83,7 +83,13 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
     messages[messages.length - 1].role === 'assistant' &&
     (messages[messages.length - 1].senderName ?? '') === (typingName ?? '');
 
+  const scrollToBottom = () => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  };
+
   return (
+    <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
     <div ref={scrollRef} className="sf-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding }}>
       {showEmpty
         ? empty ?? null
@@ -115,6 +121,29 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
             {typingMsg && <StudioMessageRow message={typingMsg} grouped={typingGrouped} />}
           </>
         )}
+    </div>
+    {/* 回底部按钮：用户上滚（!stick）且有消息时浮现，点击平滑滚到最新。 */}
+    {!stick && messages.length > 0 && (
+      <button
+        type="button"
+        onClick={scrollToBottom}
+        aria-label="滚动到最新消息"
+        data-testid="scroll-to-bottom"
+        style={{
+          position: 'absolute', right: 18, bottom: 14, zIndex: 5,
+          width: 32, height: 32, borderRadius: '50%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'var(--t-panel)', color: 'var(--t-fg-2)',
+          border: '1px solid var(--t-border)', cursor: 'pointer',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+          animation: 'sf-msg-in var(--dur-2, 180ms) var(--ease-out, ease)',
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M12 5v14M19 12l-7 7-7-7" />
+        </svg>
+      </button>
+    )}
     </div>
   );
 });
