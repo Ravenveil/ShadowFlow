@@ -46,6 +46,18 @@ export function PersonalChatView() {
       return next;
     });
   };
+  // ?new=1 → 强制 NewTaskComposer 重挂（清空旧 sessionId）并清除 agent 选中
+  const [newTaskKey, setNewTaskKey] = useState(0);
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    setNewTaskKey((k) => k + 1);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('new');
+      next.delete('agent');
+      return next;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [dmGroupId, setDmGroupId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -522,7 +534,7 @@ export function PersonalChatView() {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
             {/* 个人态:composer 居中(clawsgo);run 就地在 /chat 壳内展开,不跳旧 run-session 页。
                 run 活跃时右栏换成 run-session 完整标签页(下方 personalRunId 联动)。 */}
-            <NewTaskComposer centered onRunActive={setPersonalRunId} />
+            <NewTaskComposer key={newTaskKey} centered onRunActive={setPersonalRunId} />
             <div style={{ flexShrink: 0, textAlign: 'center', padding: '0 16px 10px', background: 'var(--t-panel)' }}>
               {/* 这行文案被 PersonalChatView.test.tsx 断言（空态语义锚点） */}
               <span style={{ fontSize: 11, color: 'var(--t-fg-5)' }}>选择一个助手开始单聊，或创建一位新员工</span>
