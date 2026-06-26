@@ -15,7 +15,7 @@
  * 纯展示组件：无副作用、无数据获取。由 StudioChat 投喂 StudioMessage[]。
  */
 import { memo, useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
-import { User, Bot, Users, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { User, Bot, Users, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import hljs from 'highlight.js/lib/common';
 import './fileViewerHljs.css';
 import { relTime } from '../../core/utils/relTime';
@@ -80,6 +80,8 @@ export interface StudioMessage {
   streaming?: boolean;
   /** error 态气泡（红色描边 + 警示图标）。 */
   error?: boolean;
+  /** 用户侧发送状态；'error' 时在气泡旁显示重试按钮。 */
+  status?: 'sent' | 'delivered' | 'read' | 'error';
   /** 推理 / 思考折叠预览行（assistant）。 */
   reasoning?: string;
   /** 工具调用行（assistant）。 */
@@ -549,6 +551,8 @@ export interface StudioMessageRowProps {
   grouped: boolean;
   /** 入场动画（仅新增消息）。 */
   animateIn?: boolean;
+  /** 重试回调：用户气泡 status==='error' 时显示重试按钮，点击后调用。 */
+  onRetry?: (text: string) => void;
 }
 
 /**
@@ -584,6 +588,7 @@ export const StudioMessageRow = memo(function StudioMessageRow({
   message: m,
   grouped,
   animateIn,
+  onRetry,
 }: StudioMessageRowProps) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -790,6 +795,33 @@ export const StudioMessageRow = memo(function StudioMessageRow({
             )}
           </div>
         </div>
+      )}
+
+      {/* 重试按钮：user 气泡发送失败（status==='error'）时显示 */}
+      {isUser && m.status === 'error' && onRetry && (
+        <button
+          type="button"
+          onClick={() => onRetry(m.text)}
+          aria-label="重试"
+          title="重试"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '3px 8px',
+            borderRadius: 6,
+            border: '1px solid var(--t-danger, #e5484d)',
+            background: 'color-mix(in oklab, var(--t-danger, #e5484d) 10%, var(--t-panel))',
+            color: 'var(--t-danger, #e5484d)',
+            cursor: 'pointer',
+            fontSize: 11,
+            fontFamily: 'var(--font-sans)',
+            transition: 'opacity 0.15s',
+          }}
+        >
+          <RotateCcw size={11} strokeWidth={2} aria-hidden />
+          <span>重试</span>
+        </button>
       )}
 
       {/* 附件 chip */}

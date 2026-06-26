@@ -38,7 +38,7 @@ interface MockMessage {
   role: 'user' | 'agent';
   content: string;
   timestamp: string;
-  status?: 'sent' | 'delivered' | 'read';
+  status?: 'sent' | 'delivered' | 'read' | 'error';
   toolCall?: { name: string; args?: string };
 }
 
@@ -114,10 +114,11 @@ function MessageBubble({ msg, agentName, agentGlyph }: BubbleProps) {
     textAlign: isUser ? 'right' : 'left',
   };
 
-  const statusGlyph = (s?: 'sent' | 'delivered' | 'read') => {
+  const statusGlyph = (s?: 'sent' | 'delivered' | 'read' | 'error') => {
     if (!s) return '';
     if (s === 'sent') return '✓';
     if (s === 'delivered') return '✓✓';
+    if (s === 'error') return '!';
     return '✓✓·';
   };
 

@@ -406,7 +406,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
         setMessages((prev) =>
           prev.map((m) =>
             m.id === optimisticId
-              ? { ...m, status: 'sent', content: m.content }
+              ? { ...m, status: 'error' as const }
               : m
           )
         );

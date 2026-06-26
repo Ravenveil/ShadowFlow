@@ -1190,6 +1190,7 @@ export default function ChatPage() {
                   <UnifiedChatFeed
                     messages={studioDmMessages}
                     typingName={dmStream.loading ? (dmAgent?.agentName ?? 'Agent') : undefined}
+                    onRetry={(text) => void dmStream.send(text)}
                   />
                 ) : (
                   <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
@@ -1330,6 +1331,7 @@ export default function ChatPage() {
                   <UnifiedChatFeed
                     messages={studioGroupMessages}
                     typingName={chatStream.loading ? typingAgentName : undefined}
+                    onRetry={(text) => void chatStream.send(text)}
                   />
                 ) : (
                   /* 旧 FB feed 走自带滚动容器（父级现为 overflow:hidden 的 flex column）。 */

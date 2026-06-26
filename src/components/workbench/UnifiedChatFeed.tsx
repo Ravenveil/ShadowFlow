@@ -29,6 +29,8 @@ export interface UnifiedChatFeedProps {
   padding?: string;
   /** 空态（messages.length === 0 且无 typing）渲染内容；不传则什么都不渲染。 */
   empty?: React.ReactNode;
+  /** 重试回调：用户气泡 status==='error' 时触发。参数为消息文本。 */
+  onRetry?: (text: string) => void;
 }
 
 /**
@@ -40,6 +42,7 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
   typingName,
   padding = '12px 18px 18px',
   empty,
+  onRetry,
 }: UnifiedChatFeedProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [stick, setStick] = useState(true);
@@ -92,6 +95,7 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
                 message={m}
                 grouped={grouped[i]}
                 animateIn={isNew(m.id) && !m.streaming}
+                onRetry={onRetry}
               />
             ))}
             {typingMsg && <StudioMessageRow message={typingMsg} grouped={typingGrouped} />}
@@ -117,6 +121,7 @@ interface ChatMessageLike {
   streaming?: boolean;
   toolCall?: { name: string; args?: string };
   kind?: 'syscard' | 'inline-approval';
+  status?: 'sent' | 'delivered' | 'read' | 'error';
 }
 
 /**
@@ -142,6 +147,7 @@ export function chatMessagesToStudio(list: readonly ChatMessageLike[]): StudioMe
       senderColor: m.senderColor || (role === 'assistant' ? pal.accent : undefined),
       timestamp: m.timestamp,
       streaming: m.streaming,
+      status: m.status,
       tools: m.toolCall
         ? [{ id: `${m.id}-tool`, tool: m.toolCall.name, title: m.toolCall.args, status: 'done' as const }]
         : undefined,

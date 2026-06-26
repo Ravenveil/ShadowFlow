@@ -39,7 +39,7 @@ export interface ChatMessage {
   /** "2m ago" — already-formatted, displayed below bubble. */
   timestamp?: string;
   /** User-side delivery state — only rendered for `role === 'user'`. */
-  status?: 'sent' | 'delivered' | 'read';
+  status?: 'sent' | 'delivered' | 'read' | 'error';
   /** Agent-side tool call inset — only rendered for `role === 'agent'`. */
   toolCall?: { name: string; args?: string };
   /** When true, append a blinking caret to the bubble tail. */
