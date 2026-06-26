@@ -110,6 +110,8 @@ interface RowProps {
   locked?: boolean;
   active?: boolean;
   onClick?: () => void;
+  /** R3 — 列表入场 stagger 序号（clawsgo 化，配合全局 .sf-rail-in）。 */
+  animIndex?: number;
 }
 
 function IbxRow(props: RowProps) {
@@ -118,12 +120,17 @@ function IbxRow(props: RowProps) {
 
   const rowCls = [
     styles.row,
+    'sf-rail-in',
     isUnread ? styles.rowUnread : '',
     props.active ? styles.rowActive : '',
   ].filter(Boolean).join(' ');
 
   return (
-    <div className={rowCls} onClick={props.onClick}>
+    <div
+      className={rowCls}
+      onClick={props.onClick}
+      style={props.animIndex !== undefined ? { animationDelay: `${Math.min(props.animIndex, 8) * 22}ms` } : undefined}
+    >
       <span
         className={styles.av}
         style={{
@@ -307,7 +314,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
           </div>
         ) : (
           <>
-            {visibleGroups.map(g => {
+            {visibleGroups.map((g, i) => {
               // 文献综述-机密 这种命名带"机密"/"lock"的当作 locked
               const locked = /机密|secret|lock/i.test(g.name);
               return (
@@ -323,6 +330,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
                   timeLabel={formatRelativeTime(g.lastActivityAt)}
                   locked={locked}
                   active={g.id === props.groupId}
+                  animIndex={i}
                   onClick={() => props.onGroup(g.id)}
                 />
               );
@@ -337,7 +345,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
                   </span>
                   <span className={styles.labN}>{visibleDMs.length}</span>
                 </div>
-                {visibleDMs.map(d => (
+                {visibleDMs.map((d, i) => (
                   <IbxRow
                     key={d.agentId}
                     name={d.agentName}
@@ -348,6 +356,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
                     unread={d.unreadCount}
                     timeLabel={formatRelativeTime(d.lastActivityAt)}
                     active={d.agentId === props.dmId}
+                    animIndex={i}
                     onClick={() => props.onDm(d.agentId)}
                   />
                 ))}

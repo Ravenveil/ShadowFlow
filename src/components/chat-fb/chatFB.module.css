@@ -131,16 +131,35 @@
   padding: 7px 10px;
   border-radius: 7px;
   cursor: pointer;
-  border-left: 2px solid transparent;
   position: relative;
-  margin-left: -2px;
+  transition: background var(--dur-1, 120ms) ease, transform var(--dur-1, 120ms) var(--ease-out, ease);
+}
+/* R3 clawsgo 化：选中左条改 ::before 常驻 + scaleY 弹性生长（对齐个人态 .pcv-row），
+   替代原本静态 border-left-color，选中/切换更顺滑。 */
+.row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 2.5px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform var(--dur-2, 180ms) var(--ease-spring, cubic-bezier(.2, .8, .2, 1));
 }
 .row:hover {
   background: var(--skin-panel);
 }
+.row:active {
+  transform: scale(.985);
+}
 .rowActive {
   background: var(--accent-tint);
-  border-left-color: var(--accent);
+}
+.rowActive::before {
+  transform: scaleY(1);
 }
 .rowActive:hover {
   background: var(--accent-tint);
