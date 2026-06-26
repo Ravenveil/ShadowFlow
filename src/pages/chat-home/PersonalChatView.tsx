@@ -241,9 +241,9 @@ export function PersonalChatView() {
       messages
         .filter((m) => (m.content ?? '').trim().length > 0)
         .map((m, i) => {
-          if (m.role === 'user') return { id: m.id, kind: 'user_turn' as const, turn_id: m.id, ts: i, text: m.content, status: m.status };
-          if (m.role === 'system') return { id: m.id, kind: 'raw' as const, turn_id: m.id, ts: i, body: m.content, source: 'chat-gateway' };
-          return { id: m.id, kind: 'assistant_text' as const, turn_id: m.id, ts: i, body: m.content, streaming: m.streaming };
+          if (m.role === 'user') return { id: m.id, kind: 'user_turn' as const, turn_id: m.id, ts: i, text: m.content, status: m.status, timestamp: m.timestamp };
+          if (m.role === 'system') return { id: m.id, kind: 'raw' as const, turn_id: m.id, ts: i, body: m.content, source: 'chat-gateway', timestamp: m.timestamp };
+          return { id: m.id, kind: 'assistant_text' as const, turn_id: m.id, ts: i, body: m.content, streaming: m.streaming, timestamp: m.timestamp };
         }),
     ),
     [messages],

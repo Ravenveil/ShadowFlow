@@ -15,11 +15,29 @@
  *
  * 纯展示：不取数据、不发消息。父页保留各自的 composer / header / 抽屉。
  */
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { StudioMessageRow, groupMessages, type StudioMessage } from './StudioMessageRow';
 import { paletteForAgent, initialOf } from '../chat-fb/agentAvatar';
 
 const STICK_THRESHOLD_PX = 100;
+
+/** ISO ts → 本地「YYYY年M月D日」日键；解析失败返回空串。 */
+function dayKey(ts?: string): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+function DateDivider({ label }: { label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 4px 6px', userSelect: 'none' }}>
+      <div style={{ flex: 1, height: 1, background: 'var(--t-border)' }} />
+      <span style={{ fontSize: 10.5, color: 'var(--t-fg-5)', fontWeight: 600, whiteSpace: 'nowrap' }}>{label}</span>
+      <div style={{ flex: 1, height: 1, background: 'var(--t-border)' }} />
+    </div>
+  );
+}
 
 export interface UnifiedChatFeedProps {
   messages: StudioMessage[];
@@ -107,15 +125,21 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
                   }
                 }
               }
+              // 日期分隔符：本条与前一条跨天（或首条且有时间戳）时插入。
+              const dk = dayKey(m.timestamp);
+              const prevDk = i > 0 ? dayKey(messages[i - 1].timestamp) : '';
+              const showDivider = !!dk && dk !== prevDk;
               return (
-                <StudioMessageRow
-                  key={m.id}
-                  message={m}
-                  grouped={grouped[i]}
-                  animateIn={isNew(m.id) && !m.streaming}
-                  onRetry={onRetry}
-                  retryText={retryText}
-                />
+                <Fragment key={m.id}>
+                  {showDivider && <DateDivider label={dk} />}
+                  <StudioMessageRow
+                    message={m}
+                    grouped={showDivider ? false : grouped[i]}
+                    animateIn={isNew(m.id) && !m.streaming}
+                    onRetry={onRetry}
+                    retryText={retryText}
+                  />
+                </Fragment>
               );
             })}
             {typingMsg && <StudioMessageRow message={typingMsg} grouped={typingGrouped} />}
@@ -208,6 +232,8 @@ interface TimelineMessageLike {
   sender_name?: string;
   agent_id?: string;
   source?: string;
+  /** ISO 时间戳；透传给 StudioMessage 供悬停相对时间 + 日期分隔符。 */
+  timestamp?: string;
   /** 用户消息发送状态；'error' 时映射出 status==='error' 触发重试按钮。 */
   status?: 'sent' | 'delivered' | 'read' | 'error';
 }
@@ -222,7 +248,7 @@ export function timelineMessagesToStudio(list: readonly TimelineMessageLike[]): 
   const out: StudioMessage[] = [];
   for (const m of list) {
     if (m.kind === 'user_turn') {
-      out.push({ id: m.id, role: 'user', text: m.text ?? '', senderName: '我', status: m.status });
+      out.push({ id: m.id, role: 'user', text: m.text ?? '', senderName: '我', status: m.status, timestamp: m.timestamp });
     } else if (m.kind === 'assistant_text') {
       const name = m.sender_name ?? 'Agent';
       const pal = paletteForAgent(m.agent_id, name);
@@ -234,6 +260,7 @@ export function timelineMessagesToStudio(list: readonly TimelineMessageLike[]): 
         senderGlyph: initialOf(name),
         senderColor: pal.accent,
         streaming: m.streaming,
+        timestamp: m.timestamp,
       });
     } else if (m.kind === 'raw') {
       // 网关失败反馈（缺 key/403/悬空成员）→ error 气泡，决不静默吞掉。
