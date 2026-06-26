@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 const PAGE_SIZE = 12;
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { Check, ChevronDown, MoreHorizontal, Pencil, Plus, Search, Square, SquarePen, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Download, MoreHorizontal, Pencil, Plus, Search, Square, SquarePen, Trash2, X } from 'lucide-react';
 import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
 import { NewTaskComposer } from './NewTaskComposer';
 import { HfAvatar } from '../../components/hifi';
@@ -216,6 +216,36 @@ export function PersonalChatView() {
     const t = p.text.trim();
     if (!t) return;
     await send(t);
+  }
+
+  // Export modal state
+  const [showExport, setShowExport] = useState(false);
+
+  function handleExport(fmt: 'markdown' | 'plain') {
+    const agentName = selected?.name ?? 'Agent';
+    const nonSystem = messages.filter((m) => m.role !== 'system');
+    let content: string;
+    if (fmt === 'markdown') {
+      content = nonSystem.map((m) => {
+        const label = m.role === 'user' ? '**我:**' : `**${agentName}:**`;
+        return `${label}\n\n${m.content}`;
+      }).join('\n\n---\n\n');
+    } else {
+      content = nonSystem.map((m) => {
+        const label = m.role === 'user' ? '我:' : `${agentName}:`;
+        return `${label}\n${m.content}`;
+      }).join('\n\n');
+    }
+    const ext = fmt === 'markdown' ? 'md' : 'txt';
+    const filename = `chat-${agentName}-${new Date().toISOString().slice(0, 10)}.${ext}`;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExport(false);
   }
 
   // DM 侧栏行上下文菜单（重命名 / 删除）。
@@ -526,6 +556,27 @@ export function PersonalChatView() {
               </button>
               <div className="dm-head-actions">
                 <span className="dm-head-model" title="当前模型">{modelLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => setShowExport(true)}
+                  title="导出对话"
+                  aria-label="导出对话"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    border: '1px solid var(--t-border)',
+                    background: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--t-fg-3)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Download size={14} />
+                </button>
                 {/* Fix: disabled when isCreating to prevent double-click orphaned DM groups.
                     title communicates ephemeral-conversation semantics (fix #3): switching
                     agents restores the original conversation, not this fresh one. */}
@@ -653,6 +704,83 @@ export function PersonalChatView() {
           />}
 
       {showCreate && <PagePeekOverlay target="agents" onClose={handlePeekClose} />}
+
+      {showExport && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onClick={() => setShowExport(false)}
+        >
+          <div
+            style={{
+              background: 'var(--t-panel)',
+              border: '1px solid var(--t-border)',
+              borderRadius: 12,
+              padding: '20px 24px',
+              minWidth: 280,
+              boxShadow: '0 8px 32px rgba(0,0,0,.3)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)' }}>导出对话</span>
+              <button
+                type="button"
+                onClick={() => setShowExport(false)}
+                aria-label="关闭"
+                style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', display: 'inline-flex', alignItems: 'center', padding: 2, borderRadius: 4 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => handleExport('markdown')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 14px', borderRadius: 8,
+                  border: '1px solid var(--t-border)',
+                  background: 'var(--t-panel-2)',
+                  cursor: 'pointer', color: 'var(--t-fg)',
+                  fontSize: 13, fontFamily: 'inherit', textAlign: 'left',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-accent)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-border)'; }}
+              >
+                <Download size={14} style={{ flexShrink: 0, color: 'var(--t-accent)' }} />
+                <div>
+                  <div style={{ fontWeight: 600 }}>Markdown</div>
+                  <div style={{ fontSize: 11, color: 'var(--t-fg-4)', marginTop: 2 }}>**我:** / **{selected?.name ?? 'Agent'}:** 粗体标题</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExport('plain')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 14px', borderRadius: 8,
+                  border: '1px solid var(--t-border)',
+                  background: 'var(--t-panel-2)',
+                  cursor: 'pointer', color: 'var(--t-fg)',
+                  fontSize: 13, fontFamily: 'inherit', textAlign: 'left',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-accent)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-border)'; }}
+              >
+                <Download size={14} style={{ flexShrink: 0, color: 'var(--t-fg-3)' }} />
+                <div>
+                  <div style={{ fontWeight: 600 }}>纯文本</div>
+                  <div style={{ fontSize: 11, color: 'var(--t-fg-4)', marginTop: 2 }}>我: / {selected?.name ?? 'Agent'}: 普通标签</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
