@@ -221,9 +221,27 @@ export function PersonalChatView() {
   // Export modal state
   const [showExport, setShowExport] = useState(false);
 
+  // Fix: compute exportable messages (exclude system + any in-flight streaming messages)
+  const exportableMessages = useMemo(
+    () => messages.filter((m) => m.role !== 'system' && !m.streaming),
+    [messages],
+  );
+
+  // Fix: Escape key closes export modal (consistent with other modals in codebase)
+  useEffect(() => {
+    if (!showExport) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowExport(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [showExport]);
+
   function handleExport(fmt: 'markdown' | 'plain') {
     const agentName = selected?.name ?? 'Agent';
-    const nonSystem = messages.filter((m) => m.role !== 'system');
+    // Fix: sanitize agent name to prevent malformed filenames
+    const safeAgentName = agentName.replace(/[/\\:*?"<>|]/g, '-');
+    const nonSystem = exportableMessages;
     let content: string;
     if (fmt === 'markdown') {
       content = nonSystem.map((m) => {
@@ -237,7 +255,7 @@ export function PersonalChatView() {
       }).join('\n\n');
     }
     const ext = fmt === 'markdown' ? 'md' : 'txt';
-    const filename = `chat-${agentName}-${new Date().toISOString().slice(0, 10)}.${ext}`;
+    const filename = `chat-${safeAgentName}-${new Date().toISOString().slice(0, 10)}.${ext}`;
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -559,7 +577,8 @@ export function PersonalChatView() {
                 <button
                   type="button"
                   onClick={() => setShowExport(true)}
-                  title="导出对话"
+                  disabled={exportableMessages.length === 0 || streaming}
+                  title={exportableMessages.length === 0 ? '暂无可导出的消息' : streaming ? '流式输出中，请等待完成后导出' : '导出对话'}
                   aria-label="导出对话"
                   style={{
                     display: 'inline-flex',
@@ -570,8 +589,9 @@ export function PersonalChatView() {
                     borderRadius: 6,
                     border: '1px solid var(--t-border)',
                     background: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--t-fg-3)',
+                    cursor: exportableMessages.length === 0 || streaming ? 'not-allowed' : 'pointer',
+                    color: exportableMessages.length === 0 || streaming ? 'var(--t-fg-5, var(--t-fg-4))' : 'var(--t-fg-3)',
+                    opacity: exportableMessages.length === 0 || streaming ? 0.45 : 1,
                     flexShrink: 0,
                   }}
                 >
