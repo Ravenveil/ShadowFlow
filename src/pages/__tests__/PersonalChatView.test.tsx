@@ -2,7 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, waitFor } from '../../test/utils';
 
 const sendMock = vi.fn();
+const cancelMock = vi.fn();
 const resolveDmMock = vi.fn().mockResolvedValue('dm-g1');
+
+const defaultMessages = [
+  { id: 'm1', role: 'user', content: '你好' },
+  { id: 'm2', role: 'agent', content: '收到' },
+  { id: 'm3', role: 'system', content: '[chat] 出错：403' }, // 网关失败反馈 → raw 卡(可见)
+  { id: 'm4', role: 'agent', content: '' }, // tool_call 占位空消息 → 过滤
+];
+
 vi.mock('../../api/agents', () => ({
   listAgents: vi.fn().mockResolvedValue([
     { agent_id: 'a1', name: '写写', soul: '写手', avatar_color: '#888' },
@@ -13,13 +22,10 @@ vi.mock('../../api/groupApi', () => ({
 }));
 vi.mock('../../core/hooks/useChatStream', () => ({
   useChatStream: vi.fn(() => ({
-    messages: [
-      { id: 'm1', role: 'user', content: '你好' },
-      { id: 'm2', role: 'agent', content: '收到' },
-      { id: 'm3', role: 'system', content: '[chat] 出错：403' }, // 网关失败反馈 → raw 卡(可见)
-      { id: 'm4', role: 'agent', content: '' }, // tool_call 占位空消息 → 过滤
-    ],
+    messages: defaultMessages,
     send: sendMock,
+    cancel: cancelMock,
+    streaming: false,
     error: null,
   })),
 }));
@@ -50,7 +56,20 @@ const click = (el: HTMLElement) => act(() => { el.click(); });
 const view = () => <MemoryRouter initialEntries={['/chat?view=personal']}><PersonalChatView /></MemoryRouter>;
 
 describe('PersonalChatView (融合M1)', () => {
-  beforeEach(() => { sendMock.mockClear(); resolveDmMock.mockClear(); });
+  beforeEach(() => {
+    sendMock.mockClear();
+    cancelMock.mockClear();
+    resolveDmMock.mockClear();
+    // Reset useChatStream to the default (streaming=false) before each test so
+    // individual tests that override with streaming=true don't bleed state.
+    (useChatStream as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      messages: defaultMessages,
+      send: sendMock,
+      cancel: cancelMock,
+      streaming: false,
+      error: null,
+    }));
+  });
 
   it('选中助手 → resolveDmConversation 被调 + useChatStream 走 group 模式吃 dmGroupId', async () => {
     render(view());
@@ -97,5 +116,22 @@ describe('PersonalChatView (融合M1)', () => {
     render(view());
     await screen.findByText('写写');
     expect(screen.getByText('选择一个助手开始单聊，或创建一位新员工')).toBeInTheDocument();
+  });
+
+  it('streaming=true → 渲染停止按钮；点击调用 cancel', async () => {
+    // Override hook to simulate an in-flight agent reply.
+    (useChatStream as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      messages: [{ id: 'm1', role: 'user', content: '你好' }],
+      send: sendMock,
+      cancel: cancelMock,
+      streaming: true,
+      error: null,
+    }));
+    render(view());
+    click(await screen.findByText('写写'));
+    const stopBtn = await screen.findByTestId('dm-stop-btn');
+    expect(stopBtn).toBeInTheDocument();
+    click(stopBtn);
+    expect(cancelMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -117,6 +117,11 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
   const sseHandleRef = useRef<SseClientHandle | null>(null);
   // AbortController for the currently in-flight postGroupMessage / chatCompletion POST.
   const abortCtrlRef = useRef<AbortController | null>(null);
+  // Epoch ms when cancel() was last called; 0 = not cancelled.
+  // SSE replies arriving within 8 s of cancel are suppressed (the group POST
+  // typically completes in milliseconds, so the agent reply is already queued
+  // server-side when the user presses Stop). Cleared on next send().
+  const cancelledAtRef = useRef<number>(0);
   // Track the latest target so async fetches don't write into a switched-away view
   const activeTargetRef = useRef<string | null>(targetId);
   activeTargetRef.current = targetId;
@@ -179,8 +184,13 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
           if (!alive) return;
           const payload = (data ?? {}) as Record<string, unknown>;
 
+          // Suppress SSE replies that race in after a client-side cancel.
+          // cancelledAtRef is set in cancel(), cleared at the next send().
+          const isCancelledReply = cancelledAtRef.current > 0 && Date.now() - cancelledAtRef.current < 8_000;
+
           // agent.message / agent.complete → append assistant bubble
           if (eventType === 'agent.message' || eventType === 'agent.complete') {
+            if (isCancelledReply) { setStreaming(false); return; }
             const content = String(payload.content ?? payload.message ?? '');
             if (!content) return;
             const senderName = (payload.sender_name as string) ?? (payload.agent_name as string) ?? 'Agent';
@@ -213,6 +223,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
           // system.notice → centered system row (chat-bridge feedback, e.g.
           // missing BYOK key or a dangling agent member).
           if (eventType === 'system.notice') {
+            if (isCancelledReply) { setStreaming(false); return; }
             const content = String(payload.content ?? '');
             if (!content) return;
             const msgId = String(payload.message_id ?? `sse-sys-${Date.now()}`);
@@ -287,6 +298,8 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
       // Each send gets its own AbortController so cancel() can abort it.
       const ctrl = new AbortController();
       abortCtrlRef.current = ctrl;
+      // Clear any prior cancel suppression — this is a fresh send.
+      cancelledAtRef.current = 0;
 
       const optimisticId = `local-${Date.now()}`;
       const optimistic: ChatMessage = {
@@ -315,10 +328,12 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
         }
 
         // ---- dm mode: BYOK chat completion ---------------------------------
-        const reply = await chatCompletion({
-          messages: [{ role: 'user', content: text }],
-          agent_id: targetId,
-        });
+        // Pass the AbortController signal so cancel() actually terminates the
+        // in-flight HTTP request (not just flipping streaming=false in the UI).
+        const reply = await chatCompletion(
+          { messages: [{ role: 'user', content: text }], agent_id: targetId },
+          { signal: ctrl.signal },
+        );
         setMessages((prev) => [
           ...prev.map((m) => (m.id === optimisticId ? { ...m, status: 'delivered' as const } : m)),
           {
@@ -332,8 +347,11 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
         setStreaming(false);
       } catch (err) {
         // AbortError = user cancelled deliberately; no error banner needed.
+        // Remove the orphaned optimistic bubble — leaving it at status:'sent'
+        // with no agent reply is an ambiguous dangling state.
         if (err instanceof Error && err.name === 'AbortError') {
           setStreaming(false);
+          setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
           return;
         }
         const msg = err instanceof Error ? err.message : 'send failed';
@@ -358,6 +376,10 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
   const cancel = useCallback(() => {
     abortCtrlRef.current?.abort();
     abortCtrlRef.current = null;
+    // Record when cancel was pressed so the SSE handler can suppress agent
+    // replies that are already in-flight (group mode: the POST completed in
+    // milliseconds but the server-side reply will still arrive over SSE).
+    cancelledAtRef.current = Date.now();
     setStreaming(false);
   }, []);
 
