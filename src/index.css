@@ -1291,6 +1291,8 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .pcv-row.active::before { transform: scaleY(1); }
 .pcv-row-name { font-size: 13px; font-weight: 600; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--dur-1) var(--ease-out); }
 .pcv-row.active .pcv-row-name { color: var(--t-accent-bright); }
+/* R10 — hover 时名字向 accent 高亮（clawsgo hover 文字/图标变色招牌反馈）。 */
+.pcv-row:hover .pcv-row-name { color: var(--t-accent-bright); }
 .pcv-row-sub { font-size: 11px; color: var(--t-fg-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 /* DM row context-menu button — hidden until row hovered or menu open */
 .pcv-dm-dots { opacity: 0; transition: opacity 120ms ease; }

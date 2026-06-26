@@ -266,6 +266,11 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color var(--dur-1, 120ms) ease;
+}
+/* R10 — hover 名字向 accent 高亮（与个人态 .pcv-row-name 对称，clawsgo 招牌）。 */
+.row:hover .nm {
+  color: var(--accent);
 }
 .rowUnread .nm {
   font-weight: 700;
