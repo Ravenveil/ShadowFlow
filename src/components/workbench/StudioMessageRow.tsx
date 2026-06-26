@@ -14,8 +14,8 @@
  *
  * 纯展示组件：无副作用、无数据获取。由 StudioChat 投喂 StudioMessage[]。
  */
-import { memo, type ReactNode } from 'react';
-import { User, Bot, Users, Wrench, Brain, AlertTriangle, Paperclip } from 'lucide-react';
+import { memo, useState, type ReactNode } from 'react';
+import { User, Bot, Users, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check } from 'lucide-react';
 
 export type StudioRole = 'user' | 'assistant' | 'system';
 
@@ -329,6 +329,15 @@ export const StudioMessageRow = memo(function StudioMessageRow({
   grouped,
   animateIn,
 }: StudioMessageRowProps) {
+  const [copied, setCopied] = useState(false);
+  const [bubbleHovered, setBubbleHovered] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(m.text).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   if (m.role === 'system') {
     // 系统行居中、低存在感，不参与回合分组。
     return (
@@ -405,54 +414,87 @@ export const StudioMessageRow = memo(function StudioMessageRow({
       {/* 气泡 */}
       {(m.text || m.streaming) && (
         <div
-          key={m.id + (m.streaming ? '-s' : '-d')}
-          className={`chat-bubble-${m.role}${!isUser && !m.streaming ? ' sf-bubble-settle' : ''}`}
-          style={{
-            // user 圆角偏向左下、agent 偏向右下 —— 气泡尾巴指向各自头像侧，回合归属一眼可辨。
-            maxWidth: '100%',
-            padding: '8px 12px',
-            borderRadius: 12,
-            borderTopRightRadius: isUser ? 4 : 12,
-            borderTopLeftRadius: !isUser ? 4 : 12,
-            fontSize: 13,
-            lineHeight: 1.6,
-            wordBreak: 'break-word',
-            background: bubbleBg,
-            border: `1px solid ${bubbleBorder}`,
-            color: 'var(--t-fg)',
-          }}
+          style={{ position: 'relative' }}
+          onMouseEnter={() => setBubbleHovered(true)}
+          onMouseLeave={() => setBubbleHovered(false)}
         >
-          {m.error && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, color: 'var(--t-danger, #e5484d)' }}>
-              <AlertTriangle size={12} strokeWidth={2} aria-hidden />
-              <span style={{ fontSize: 11, fontWeight: 600 }}>出错</span>
-            </div>
-          )}
-          {m.text ? (
-            <MarkdownLite text={m.text} trailingCursor={!isUser && m.streaming} />
-          ) : (
-            // 流式刚开始、文本未到 —— 显示「思考中」三点占位，避免空气泡。
-            m.streaming && (
-              <span
-                aria-label="生成中"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--t-fg-4)' }}
-              >
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    aria-hidden
-                    className="sf-typing-dot"
-                    style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: '50%',
-                      background: 'var(--sf-blue, #1890FF)',
-                      animationDelay: `${i * 0.16}s`,
-                    }}
-                  />
-                ))}
-              </span>
-            )
+          <div
+            key={m.id + (m.streaming ? '-s' : '-d')}
+            className={`chat-bubble-${m.role}${!isUser && !m.streaming ? ' sf-bubble-settle' : ''}`}
+            style={{
+              // user 圆角偏向左下、agent 偏向右下 —— 气泡尾巴指向各自头像侧，回合归属一眼可辨。
+              maxWidth: '100%',
+              padding: '8px 12px',
+              borderRadius: 12,
+              borderTopRightRadius: isUser ? 4 : 12,
+              borderTopLeftRadius: !isUser ? 4 : 12,
+              fontSize: 13,
+              lineHeight: 1.6,
+              wordBreak: 'break-word',
+              background: bubbleBg,
+              border: `1px solid ${bubbleBorder}`,
+              color: 'var(--t-fg)',
+            }}
+          >
+            {m.error && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, color: 'var(--t-danger, #e5484d)' }}>
+                <AlertTriangle size={12} strokeWidth={2} aria-hidden />
+                <span style={{ fontSize: 11, fontWeight: 600 }}>出错</span>
+              </div>
+            )}
+            {m.text ? (
+              <MarkdownLite text={m.text} trailingCursor={!isUser && m.streaming} />
+            ) : (
+              // 流式刚开始、文本未到 —— 显示「思考中」三点占位，避免空气泡。
+              m.streaming && (
+                <span
+                  aria-label="生成中"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--t-fg-4)' }}
+                >
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      aria-hidden
+                      className="sf-typing-dot"
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: '50%',
+                        background: 'var(--sf-blue, #1890FF)',
+                        animationDelay: `${i * 0.16}s`,
+                      }}
+                    />
+                  ))}
+                </span>
+              )
+            )}
+          </div>
+          {/* 悬浮复制按钮：hover 或刚复制后可见，仅有文本时显示 */}
+          {(bubbleHovered || copied) && m.text && (
+            <button
+              onClick={handleCopy}
+              aria-label={copied ? '已复制' : '复制'}
+              title={copied ? '已复制' : '复制'}
+              style={{
+                position: 'absolute',
+                top: 4,
+                [isUser ? 'left' : 'right']: -28,
+                width: 22,
+                height: 22,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 6,
+                border: '1px solid var(--t-border)',
+                background: 'var(--t-panel)',
+                color: copied ? 'var(--sf-green, #21A678)' : 'var(--t-fg-3)',
+                cursor: 'pointer',
+                padding: 0,
+                transition: 'color 0.15s',
+              }}
+            >
+              {copied ? <Check size={12} strokeWidth={2.5} aria-hidden /> : <Copy size={12} strokeWidth={2} aria-hidden />}
+            </button>
           )}
         </div>
       )}
