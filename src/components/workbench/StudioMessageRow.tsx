@@ -15,7 +15,7 @@
  * 纯展示组件：无副作用、无数据获取。由 StudioChat 投喂 StudioMessage[]。
  */
 import { memo, useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
-import { User, Bot, Users, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check } from 'lucide-react';
+import { User, Bot, Users, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import hljs from 'highlight.js/lib/common';
 import './fileViewerHljs.css';
 
@@ -23,6 +23,13 @@ import './fileViewerHljs.css';
 // (\w*)[^\n]* → language token + any trailing chars on the fence line (handles ` ```ts \n`).
 // \n?          → optional newline before closing fence (avoids capturing a blank last line in <pre>).
 const FENCED_CODE_RE = /```(\w*)[^\n]*\n([\s\S]*?)\n?```/g;
+
+// Module-scoped expansion state for collapsible code blocks.
+// Key = messageId + ":" + blockIndex.  Persists across remounts during streaming
+// without triggering re-renders in other components.
+const expandedBlocks = new Set<string>();
+const COLLAPSE_LINE_THRESHOLD = 15;
+const COLLAPSE_CHAR_THRESHOLD = 800;
 
 export type StudioRole = 'user' | 'assistant' | 'system';
 
@@ -74,7 +81,14 @@ const AVATAR_GAP = 10;
 const BUBBLE_MAX_WIDTH = '78%';
 
 // ── 围栏代码块（triple-backtick）渲染：hljs 高亮 + 语言 chip + 复制按钮 ─────────
-function FencedCodeBlock({ lang, code }: { lang: string; code: string }) {
+// blockKey: messageId + ":" + blockIndex — used to persist expansion state across remounts.
+function FencedCodeBlock({ lang, code, blockKey }: { lang: string; code: string; blockKey?: string }) {
+  const lineCount = code.split('\n').length;
+  const collapsible = blockKey != null && (lineCount > COLLAPSE_LINE_THRESHOLD || code.length > COLLAPSE_CHAR_THRESHOLD);
+
+  const [expanded, setExpanded] = useState<boolean>(() =>
+    !collapsible || expandedBlocks.has(blockKey ?? ''),
+  );
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -105,6 +119,15 @@ function FencedCodeBlock({ lang, code }: { lang: string; code: string }) {
       .catch(() => {});
   };
 
+  const handleToggle = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (blockKey) {
+      if (next) expandedBlocks.add(blockKey);
+      else expandedBlocks.delete(blockKey);
+    }
+  };
+
   return (
     <div
       style={{
@@ -119,14 +142,14 @@ function FencedCodeBlock({ lang, code }: { lang: string; code: string }) {
         lineHeight: 1.55,
       }}
     >
-      {/* 语言 chip + 复制按钮 */}
+      {/* 语言 chip + 行数 + 复制按钮 + 折叠切换 */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '3px 10px',
-          borderBottom: '1px solid var(--t-border)',
+          borderBottom: expanded ? '1px solid var(--t-border)' : 'none',
           background: 'color-mix(in oklab, var(--t-panel-2) 80%, var(--t-border))',
         }}
       >
@@ -140,41 +163,74 @@ function FencedCodeBlock({ lang, code }: { lang: string; code: string }) {
         >
           {lang || 'code'}
         </span>
-        <button
-          type="button"
-          onClick={handleCopyCode}
-          aria-label={copied ? '已复制' : '复制'}
-          title={copied ? '已复制' : '复制'}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '2px 7px',
-            borderRadius: 5,
-            border: '1px solid var(--t-border)',
-            background: 'var(--t-panel)',
-            color: copied ? 'var(--sf-green, #21A678)' : 'var(--t-fg-3)',
-            cursor: 'pointer',
-            fontSize: 11,
-            transition: 'color 0.15s',
-          }}
-        >
-          {copied ? (
-            <Check size={11} strokeWidth={2.5} aria-hidden />
-          ) : (
-            <Copy size={11} strokeWidth={2} aria-hidden />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {collapsible && (
+            <span style={{ fontSize: 10, color: 'var(--t-fg-4)' }}>{lineCount} 行</span>
           )}
-          <span>{copied ? '已复制' : '复制'}</span>
-        </button>
+          <button
+            type="button"
+            onClick={handleCopyCode}
+            aria-label={copied ? '已复制' : '复制'}
+            title={copied ? '已复制' : '复制'}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '2px 7px',
+              borderRadius: 5,
+              border: '1px solid var(--t-border)',
+              background: 'var(--t-panel)',
+              color: copied ? 'var(--sf-green, #21A678)' : 'var(--t-fg-3)',
+              cursor: 'pointer',
+              fontSize: 11,
+              transition: 'color 0.15s',
+            }}
+          >
+            {copied ? (
+              <Check size={11} strokeWidth={2.5} aria-hidden />
+            ) : (
+              <Copy size={11} strokeWidth={2} aria-hidden />
+            )}
+            <span>{copied ? '已复制' : '复制'}</span>
+          </button>
+          {collapsible && (
+            <button
+              type="button"
+              onClick={handleToggle}
+              aria-label={expanded ? '折叠' : '展开'}
+              title={expanded ? '折叠' : '展开'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '2px 5px',
+                borderRadius: 5,
+                border: '1px solid var(--t-border)',
+                background: 'var(--t-panel)',
+                color: 'var(--t-fg-3)',
+                cursor: 'pointer',
+                fontSize: 11,
+                transition: 'color 0.15s',
+              }}
+            >
+              {expanded ? (
+                <ChevronUp size={11} strokeWidth={2} aria-hidden />
+              ) : (
+                <ChevronDown size={11} strokeWidth={2} aria-hidden />
+              )}
+            </button>
+          )}
+        </div>
       </div>
-      {/* 代码区 */}
-      <pre style={{ margin: 0, padding: '8px 12px', overflowX: 'auto' }}>
-        <code
-          className={`hljs${lang ? ` language-${lang}` : ''}`}
-          style={{ background: 'transparent', padding: 0 }}
-          dangerouslySetInnerHTML={{ __html: highlighted }}
-        />
-      </pre>
+      {/* 代码区：折叠时隐藏 */}
+      {expanded && (
+        <pre style={{ margin: 0, padding: '8px 12px', overflowX: 'auto' }}>
+          <code
+            className={`hljs${lang ? ` language-${lang}` : ''}`}
+            style={{ background: 'transparent', padding: 0 }}
+            dangerouslySetInnerHTML={{ __html: highlighted }}
+          />
+        </pre>
+      )}
     </div>
   );
 }
@@ -248,7 +304,7 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
   return out;
 }
 
-function MarkdownLite({ text, trailingCursor }: { text: string; trailingCursor?: boolean }) {
+function MarkdownLite({ text, trailingCursor, messageId }: { text: string; trailingCursor?: boolean; messageId?: string }) {
   // 先按围栏代码块边界（```lang\n...\n```）切分；其余段落按行渲染。
   type Seg = { type: 'text'; content: string } | { type: 'code'; lang: string; code: string };
   const segments: Seg[] = [];
@@ -296,9 +352,12 @@ function MarkdownLite({ text, trailingCursor }: { text: string; trailingCursor?:
   })();
 
   const nodes: ReactNode[] = [];
+  let codeBlockIdx = 0;
   segments.forEach((seg, si) => {
     if (seg.type === 'code') {
-      nodes.push(<FencedCodeBlock key={`code-${si}`} lang={seg.lang} code={seg.code} />);
+      const blockKey = messageId ? `${messageId}:${codeBlockIdx}` : undefined;
+      codeBlockIdx++;
+      nodes.push(<FencedCodeBlock key={`code-${si}`} lang={seg.lang} code={seg.code} blockKey={blockKey} />);
       return;
     }
     const lines = seg.content.split('\n');
@@ -632,7 +691,7 @@ export const StudioMessageRow = memo(function StudioMessageRow({
               </div>
             )}
             {m.text ? (
-              <MarkdownLite text={m.text} trailingCursor={!isUser && m.streaming} />
+              <MarkdownLite text={m.text} trailingCursor={!isUser && m.streaming} messageId={m.id} />
             ) : (
               // 流式刚开始、文本未到 —— 显示「思考中」三点占位，避免空气泡。
               m.streaming && (
