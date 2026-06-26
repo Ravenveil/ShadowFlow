@@ -14,7 +14,7 @@
  *
  * 纯展示组件：无副作用、无数据获取。由 StudioChat 投喂 StudioMessage[]。
  */
-import { memo, useState, type ReactNode } from 'react';
+import { memo, useState, useEffect, useRef, type ReactNode } from 'react';
 import { User, Bot, Users, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check } from 'lucide-react';
 
 export type StudioRole = 'user' | 'assistant' | 'system';
@@ -330,12 +330,27 @@ export const StudioMessageRow = memo(function StudioMessageRow({
   animateIn,
 }: StudioMessageRowProps) {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
   const [bubbleHovered, setBubbleHovered] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cancel any pending timer on unmount to avoid setState on unmounted component.
+  useEffect(() => () => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+  }, []);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(m.text).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    navigator.clipboard.writeText(m.text).then(() => {
+      setCopyError(false);
+      setCopied(true);
+      // Cancel any previous timer before scheduling a new one to prevent flicker.
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      setCopyError(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopyError(false), 2000);
+    });
   };
 
   if (m.role === 'system') {
@@ -414,7 +429,6 @@ export const StudioMessageRow = memo(function StudioMessageRow({
       {/* 气泡 */}
       {(m.text || m.streaming) && (
         <div
-          style={{ position: 'relative' }}
           onMouseEnter={() => setBubbleHovered(true)}
           onMouseLeave={() => setBubbleHovered(false)}
         >
@@ -423,6 +437,7 @@ export const StudioMessageRow = memo(function StudioMessageRow({
             className={`chat-bubble-${m.role}${!isUser && !m.streaming ? ' sf-bubble-settle' : ''}`}
             style={{
               // user 圆角偏向左下、agent 偏向右下 —— 气泡尾巴指向各自头像侧，回合归属一眼可辨。
+              position: 'relative',
               maxWidth: '100%',
               padding: '8px 12px',
               borderRadius: 12,
@@ -468,34 +483,44 @@ export const StudioMessageRow = memo(function StudioMessageRow({
                 </span>
               )
             )}
+            {/* 悬浮复制按钮：放在气泡内部 position:absolute，避免依赖外层无 overflow:hidden 假设 */}
+            {(bubbleHovered || copied || copyError) && m.text && (
+              <button
+                onClick={handleCopy}
+                aria-label={copied ? '已复制' : copyError ? '复制失败' : '复制'}
+                title={copied ? '已复制' : copyError ? '复制失败' : '复制'}
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  [isUser ? 'left' : 'right']: 4,
+                  width: 22,
+                  height: 22,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 6,
+                  border: '1px solid var(--t-border)',
+                  background: 'var(--t-panel)',
+                  color: copied
+                    ? 'var(--sf-green, #21A678)'
+                    : copyError
+                      ? 'var(--t-danger, #e5484d)'
+                      : 'var(--t-fg-3)',
+                  cursor: 'pointer',
+                  padding: 0,
+                  transition: 'color 0.15s',
+                }}
+              >
+                {copied ? (
+                  <Check size={12} strokeWidth={2.5} aria-hidden />
+                ) : copyError ? (
+                  <AlertTriangle size={12} strokeWidth={2} aria-hidden />
+                ) : (
+                  <Copy size={12} strokeWidth={2} aria-hidden />
+                )}
+              </button>
+            )}
           </div>
-          {/* 悬浮复制按钮：hover 或刚复制后可见，仅有文本时显示 */}
-          {(bubbleHovered || copied) && m.text && (
-            <button
-              onClick={handleCopy}
-              aria-label={copied ? '已复制' : '复制'}
-              title={copied ? '已复制' : '复制'}
-              style={{
-                position: 'absolute',
-                top: 4,
-                [isUser ? 'left' : 'right']: -28,
-                width: 22,
-                height: 22,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 6,
-                border: '1px solid var(--t-border)',
-                background: 'var(--t-panel)',
-                color: copied ? 'var(--sf-green, #21A678)' : 'var(--t-fg-3)',
-                cursor: 'pointer',
-                padding: 0,
-                transition: 'color 0.15s',
-              }}
-            >
-              {copied ? <Check size={12} strokeWidth={2.5} aria-hidden /> : <Copy size={12} strokeWidth={2} aria-hidden />}
-            </button>
-          )}
         </div>
       )}
 
