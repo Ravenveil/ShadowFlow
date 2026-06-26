@@ -271,11 +271,13 @@ export function ChatRail({
           <div style={{ flex: 1 }} />
         </div>
       ) : (
-        <>
+        // R9 — 展开态内容整体淡入（与 R5 折叠列淡入对称），消除展开瞬间内容「啪」一下
+        // 出现的突兀；宽度 --dur-3 过渡与内容 --dur-2 淡入错峰，折叠/展开都顺滑。
+        <div className="sf-rail-fade" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <ChatRailHeader view={view} bordered={bordered} onCollapse={toggle} />
           <PrimaryNavGroup bordered={bordered} />
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{children}</div>
-        </>
+        </div>
       )}
     </div>
   );
