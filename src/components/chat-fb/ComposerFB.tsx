@@ -27,6 +27,11 @@ export interface ComposerFBProps {
   t?: (k: string) => string;
   placeholder?: string;
   /**
+   * Called when the user presses Escape while the slash-command menu is closed.
+   * Lets parent pages cancel an in-flight send (group abort / DM stream stop).
+   */
+  onCancel?: () => void;
+  /**
    * 2026-05-29 · 模型/执行器选择器。状态由父（ChatPage）持有——发送时要把
    * executor/model 拼进请求。未传则不渲染（保持向后兼容）。
    */
@@ -63,6 +68,7 @@ export default function ComposerFB({
   placeholder,
   modelPicker,
   dirPicker,
+  onCancel,
 }: ComposerFBProps) {
   const tr = (k: string, fb: string) => {
     if (!t) return fb;
@@ -98,7 +104,11 @@ export default function ComposerFB({
       setSlashOpen(true);
     }
     if (e.key === 'Escape') {
-      setSlashOpen(false);
+      if (slashOpen) {
+        setSlashOpen(false);
+      } else {
+        onCancel?.();
+      }
     }
   };
 

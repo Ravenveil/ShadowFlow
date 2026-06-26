@@ -15,7 +15,7 @@
  * 完全由 props 驱动，方便 Stream D 在 ChatPage 整合时按需注入。
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Search, Pin, MessageSquare, Lock, Hash, Bot, Check } from 'lucide-react';
 import type { GroupItem, AgentDMItem } from '../../common/types/inbox';
 import { AGENT_PALETTE, ACCENT_PALETTE, hashIndex, initialOf } from './agentAvatar';
@@ -35,6 +35,12 @@ export interface InboxPanelFBProps {
   dmId?: string;
   onGroup: (id: string) => void;
   onDm: (id: string) => void;
+  /**
+   * Optional external ref forwarded to the search input.
+   * Lets parent pages focus the search box via Cmd+K or other shortcuts
+   * without InboxPanelFB needing to know about the shortcut.
+   */
+  searchInputRef?: RefObject<HTMLInputElement>;
   /** 占位文本 i18n 注入；未提供则用中文默认值，便于独立 mount */
   i18n?: {
     searchPlaceholder?: string;
@@ -191,6 +197,14 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
 
   const [filter, setFilter] = useState<FilterKey>('all');
 
+  // ── 搜索 ──────────────────────────────────────────────────────────────────
+  const [query, setQuery] = useState('');
+  const internalSearchRef = useRef<HTMLInputElement>(null);
+  // Use the caller-supplied ref if provided, otherwise fall back to the internal one.
+  // This allows ChatPage (or other parents) to focus the box via Cmd+K without
+  // InboxPanelFB needing to know about that shortcut.
+  const resolvedSearchRef = (props.searchInputRef ?? internalSearchRef) as RefObject<HTMLInputElement>;
+
   // ── R6 任务完成反馈：running→结束 的瞬时绿勾（clawsgo「已完成」） ──────────────
   // 无持久「completed」状态（InboxItemStatus 结束即回 idle），故在前端追踪「上一帧
   // 在跑、这一帧不跑」的转变，给该行 2.4s 绿勾 pop 后自动清除。
@@ -264,6 +278,40 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
 
   const visibleDMs = useMemo(() => props.agentDMs.filter(filterDM), [props.agentDMs, filter]);
 
+  // ── 搜索过滤：在 chip filter 之上叠加文字匹配 ─────────────────────────────────
+  const filteredPinned = useMemo(() => {
+    if (!query.trim() || !pinnedGroup) return pinnedGroup;
+    return pinnedGroup.name.toLowerCase().includes(query.trim().toLowerCase()) ? pinnedGroup : null;
+  }, [pinnedGroup, query]);
+
+  const filteredGroups = useMemo(() => {
+    if (!query.trim()) return visibleGroups;
+    const lq = query.trim().toLowerCase();
+    return visibleGroups.filter(g => g.name.toLowerCase().includes(lq));
+  }, [visibleGroups, query]);
+
+  const filteredDMs = useMemo(() => {
+    if (!query.trim()) return visibleDMs;
+    const lq = query.trim().toLowerCase();
+    return visibleDMs.filter(d => d.agentName.toLowerCase().includes(lq));
+  }, [visibleDMs, query]);
+
+  // ── Cmd+F shortcut → focus search input (matches the ⌘F hint in the UI) ──
+  useEffect(() => {
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        const active = document.activeElement as HTMLElement | null;
+        // Don't steal focus from other text inputs (e.g. the composer textarea)
+        if (active && active !== resolvedSearchRef.current && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT')) return;
+        e.preventDefault();
+        resolvedSearchRef.current?.focus();
+        resolvedSearchRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []); // resolvedSearchRef is a stable object, no deps needed
+
   // ── status 映射 ────────────────────────────────────────────────────────────
   function groupStatus(g: GroupItem): 'run' | 'warn' | null {
     if (g.status === 'running') return 'run';
@@ -286,12 +334,37 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
 
   return (
     <div className={styles.inbox}>
-      {/* 搜索 (chat-fb.html 行 879-885) */}
+      {/* 搜索 (chat-fb.html 行 879-885) — real input with live filtering */}
       <div className={styles.searchWrap}>
-        <div className={styles.input}>
+        <div
+          className={styles.input}
+          onClick={() => resolvedSearchRef.current?.focus()}
+        >
           <Search />
-          <span className={styles.inputPh}>{L.searchPlaceholder}</span>
-          <span className={styles.kbd}>⌘F</span>
+          <input
+            ref={resolvedSearchRef}
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Escape') {
+                setQuery('');
+                e.currentTarget.blur();
+              }
+            }}
+            placeholder={L.searchPlaceholder}
+            style={{
+              flex: 1,
+              background: 'none',
+              border: 'none',
+              outline: 'none',
+              minWidth: 0,
+              color: 'inherit',
+              fontSize: 'inherit',
+              fontFamily: 'inherit',
+            }}
+          />
+          {!query && <span className={styles.kbd}>⌘F</span>}
         </div>
       </div>
 
@@ -312,8 +385,8 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
         })}
       </div>
 
-      {/* 置顶区 (chat-fb.html 行 894-910) */}
-      {pinnedGroup && filter !== 'agent' && (
+      {/* 置顶区 (chat-fb.html 行 894-910) — uses filteredPinned so it disappears when query doesn't match */}
+      {filteredPinned && filter !== 'agent' && (
         <>
           <div className={styles.labRow}>
             <span className={styles.lab}>
@@ -323,18 +396,18 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
           </div>
           <div className={styles.listInner}>
             <IbxRow
-              name={pinnedGroup.name}
-              letter={initialOf(pinnedGroup.name)}
-              hueKey={pinnedGroup.id}
+              name={filteredPinned.name}
+              letter={initialOf(filteredPinned.name)}
+              hueKey={filteredPinned.id}
               forcedPalette={ACCENT_PALETTE}
-              countBadge={pinnedGroup.metrics?.members}
-              statusKind={groupStatus(pinnedGroup)}
-              live={pinnedGroup.status === 'running'}
-              unread={pinnedGroup.unreadCount}
-              timeLabel={pinnedGroup.status === 'running' ? 'now' : formatRelativeTime(pinnedGroup.lastActivityAt)}
-              active={pinnedGroup.id === props.groupId}
-              done={justDone.has('g:' + pinnedGroup.id)}
-              onClick={() => props.onGroup(pinnedGroup.id)}
+              countBadge={filteredPinned.metrics?.members}
+              statusKind={groupStatus(filteredPinned)}
+              live={filteredPinned.status === 'running'}
+              unread={filteredPinned.unreadCount}
+              timeLabel={filteredPinned.status === 'running' ? 'now' : formatRelativeTime(filteredPinned.lastActivityAt)}
+              active={filteredPinned.id === props.groupId}
+              done={justDone.has('g:' + filteredPinned.id)}
+              onClick={() => props.onGroup(filteredPinned.id)}
             />
           </div>
         </>
@@ -346,22 +419,22 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
           <MessageSquare />
           {L.sectionRecent}
         </span>
-        <span className={styles.labN}>{visibleGroups.length + visibleDMs.length}</span>
+        <span className={styles.labN}>{filteredGroups.length + filteredDMs.length}</span>
       </div>
 
       <div className={styles.list}>
-        {visibleGroups.length === 0 && visibleDMs.length === 0 ? (
+        {filteredGroups.length === 0 && filteredDMs.length === 0 ? (
           <div className={styles.empty}>
             <div className={styles.emptyIcon}>
               <Hash size={15} strokeWidth={1.7} />
             </div>
             <p className={styles.emptyText}>
-              {filter === 'all' ? L.emptyGroups : L.noMatched}
+              {filter === 'all' && !query.trim() ? L.emptyGroups : L.noMatched}
             </p>
           </div>
         ) : (
           <>
-            {visibleGroups.map((g, i) => {
+            {filteredGroups.map((g, i) => {
               // 文献综述-机密 这种命名带"机密"/"lock"的当作 locked
               const locked = /机密|secret|lock/i.test(g.name);
               return (
@@ -384,16 +457,16 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
               );
             })}
 
-            {visibleDMs.length > 0 && (
+            {filteredDMs.length > 0 && (
               <>
                 <div className={styles.labRow} style={{ marginTop: 10 }}>
                   <span className={styles.lab}>
                     <Bot />
                     {L.sectionDMs}
                   </span>
-                  <span className={styles.labN}>{visibleDMs.length}</span>
+                  <span className={styles.labN}>{filteredDMs.length}</span>
                 </div>
-                {visibleDMs.map((d, i) => (
+                {filteredDMs.map((d, i) => (
                   <IbxRow
                     key={d.agentId}
                     name={d.agentName}

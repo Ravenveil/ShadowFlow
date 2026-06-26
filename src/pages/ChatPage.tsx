@@ -1366,7 +1366,8 @@ export default function ChatPage() {
             onChange={setComposer}
             onSend={() => void handleSend()}
             onRunSkill={() => { const goal = composer.trim(); if (goal) navigate(`/run-session?goal=${encodeURIComponent(goal)}`); }}
-            loading={chatStream.loading}
+            loading={chatStream.loading || chatStream.streaming}
+            onCancel={() => chatStream.cancel()}
             t={t}
             modelPicker={modelPickerProps}
             dirPicker={groupDirPicker}

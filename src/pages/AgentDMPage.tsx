@@ -339,7 +339,7 @@ export default function AgentDMPage() {
   // ---- Composer + real DM message stream (useChatStream `dm` mode) --------
   // POSTs to /api/chat/completions (BYOK) with agent_id so the backend injects
   // this agent's `soul` as the system prompt. Single-turn, synchronous, no SSE.
-  const { messages: chatMessages, send, error: dmError } = useChatStream({
+  const { messages: chatMessages, send, cancel: dmCancel, streaming: dmStreaming, error: dmError } = useChatStream({
     mode: 'dm',
     targetId: agentId ?? null,
   });
@@ -371,6 +371,20 @@ export default function AgentDMPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages.length]);
+
+  // Global Escape → cancel in-flight DM send.
+  // Runs at the window level so it works even when the composer textarea is not focused
+  // (e.g. the user scrolled up to read history and then wants to stop the reply).
+  useEffect(() => {
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape' && dmStreaming) {
+        e.preventDefault();
+        dmCancel();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [dmStreaming, dmCancel]);
 
   const sendMessage = () => {
     const text = draft.trim();
