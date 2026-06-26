@@ -156,11 +156,12 @@ export function PersonalChatView() {
   // Fix #1: memoize content strings to prevent O(n) re-renders on every SSE streaming tick.
   const messageTexts = useMemo(() => messages.map((m) => m.content), [messages]);
 
-  // F1 — DM 也用完整 composer。dmGroupId 未就绪时抛错（组件错误条提示,草稿不丢）。
+  // F1 — DM 也用完整 composer。dmGroupId 未就绪时静默忽略（连接建立中，用户
+  // 发送的消息会在 streaming 结束后经 pendingQueue 自动补发）。
   async function handleDmSubmit(p: { text: string }) {
     const t = p.text.trim();
     if (!t) return;
-    if (!dmGroupId) throw new Error('会话连接中，请稍候再发');
+    if (!dmGroupId) return;
     await send(t);
   }
 
@@ -306,11 +307,11 @@ export function PersonalChatView() {
               )}
               {error && <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>发送失败：{error}</div>}
             </div>
-            {/* F1 — 完整 composer（@技能/附件/模型/知识库），与新任务/开始页同一组件。
-                streaming=true 时替换为 Stop 按钮（agent 回复中，用户可中止）。 */}
+            {/* F1 — 完整 composer（@技能/附件/模型/知识库），streaming 时保持可输入
+                以便用户提前排队下一条消息；Stop 按钮作为附加操作出现在 composer 上方。 */}
             <div style={{ flexShrink: 0, padding: '10px 16px 14px', borderTop: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
-              {streaming ? (
-                <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 2px' }}>
+              {streaming && (
+                <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 6 }}>
                   <button
                     type="button"
                     onClick={cancel}
@@ -319,29 +320,28 @@ export function PersonalChatView() {
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 6,
-                      padding: '7px 20px',
+                      padding: '5px 16px',
                       borderRadius: 8,
                       border: '1px solid rgba(239,68,68,.3)',
                       background: 'rgba(239,68,68,.1)',
                       color: 'var(--t-err, #ef4444)',
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: 600,
                       cursor: 'pointer',
                       fontFamily: 'inherit',
                     }}
                   >
-                    <Square size={13} fill="currentColor" strokeWidth={0} />
+                    <Square size={12} fill="currentColor" strokeWidth={0} />
                     停止
                   </button>
                 </div>
-              ) : (
-                <UnifiedComposer
-                  variant="chat"
-                  onSubmit={handleDmSubmit}
-                  placeholder={`发给「${selected.name}」 · 试试 @ 提及 Skill`}
-                  messages={messageTexts}
-                />
               )}
+              <UnifiedComposer
+                variant="chat"
+                onSubmit={handleDmSubmit}
+                placeholder={`发给「${selected.name}」 · 试试 @ 提及 Skill`}
+                messages={messageTexts}
+              />
             </div>
           </>
         )}

@@ -125,6 +125,13 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
   // Track the latest target so async fetches don't write into a switched-away view
   const activeTargetRef = useRef<string | null>(targetId);
   activeTargetRef.current = targetId;
+  // Mirror streaming state as a ref so send() can read the current value
+  // without needing streaming in its useCallback dependency array.
+  const streamingRef = useRef(false);
+  streamingRef.current = streaming;
+  // Queue of messages typed while an agent reply is in-flight.
+  // Drained sequentially after each agent.complete / DM reply.
+  const pendingQueueRef = useRef<string[]>([]);
 
   // ---- history loading ------------------------------------------------------
   const loadHistory = useCallback(async () => {
@@ -295,6 +302,13 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
       const text = content.trim();
       if (!text || !targetId) return;
 
+      // If a response is already in-flight, buffer the message and return.
+      // The drain effect below will call send() again once streaming ends.
+      if (streamingRef.current) {
+        pendingQueueRef.current = [...pendingQueueRef.current, text];
+        return;
+      }
+
       // Each send gets its own AbortController so cancel() can abort it.
       const ctrl = new AbortController();
       abortCtrlRef.current = ctrl;
@@ -371,6 +385,18 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
     },
     [mode, targetId, executor, model]
   );
+
+  // ---- drain pending queue --------------------------------------------------
+  // Fires when streaming transitions from true → false.
+  // Dequeues one message and sends it; that send sets streaming=true again,
+  // so the next drain fires only after the subsequent agent reply.
+  useEffect(() => {
+    if (!streaming && pendingQueueRef.current.length > 0) {
+      const [next, ...rest] = pendingQueueRef.current;
+      pendingQueueRef.current = rest;
+      void send(next);
+    }
+  }, [streaming, send]);
 
   // ---- cancel ---------------------------------------------------------------
   const cancel = useCallback(() => {
