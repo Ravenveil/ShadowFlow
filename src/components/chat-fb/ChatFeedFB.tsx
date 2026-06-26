@@ -95,6 +95,33 @@ function fmtTime(ts: string | undefined): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/**
+ * 从消息 timestamp 提取"日期键"（用于比较相邻消息是否同天）。
+ * 仅解析 ISO 字符串（长度 ≥ 16），已格式化的短字符串返回 null（不插分割线）。
+ */
+function getDayKey(ts: string | undefined): string | null {
+  if (!ts) return null;
+  if (/^\d{1,2}:\d{2}$/.test(ts) || ts.length < 16) return null;
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toDateString(); // 稳定的日期标识符，如 "Thu Jun 26 2026"
+}
+
+/**
+ * 把日期键格式化为 "今天 · 6月26日" / "昨天 · 6月25日" / "2026年6月24日"。
+ */
+function fmtDayLabel(ts: string): string {
+  const d = new Date(ts);
+  const today = new Date();
+  const yest = new Date(today);
+  yest.setDate(today.getDate() - 1);
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  if (d.toDateString() === today.toDateString()) return `今天 · ${m}月${day}日`;
+  if (d.toDateString() === yest.toDateString()) return `昨天 · ${m}月${day}日`;
+  return `${d.getFullYear()}年${m}月${day}日`;
+}
+
 // ─── Agent 消息（左侧）─────────────────────────────────────────────────────────
 function AgentMsg({
   m,
@@ -296,9 +323,6 @@ export function ChatFeedFB({
   typing,
   typingAgentName,
 }: ChatFeedFBProps) {
-  const today = new Date();
-  const dayLabel = `今天 · ${today.getMonth() + 1} 月 ${today.getDate()} 日`;
-
   // 只给「挂载后新增」的消息加入场动画，避免历史一次性全抖（对齐 Timeline 做法）。
   const initialIds = useRef<Set<string> | null>(null);
   if (initialIds.current === null) initialIds.current = new Set(messages.map(mm => mm.id));
@@ -311,81 +335,99 @@ export function ChatFeedFB({
     else console.log(`[ChatFeedFB] action ${action} on ${id} (no parent handler)`);
   };
 
+  // ── 动态日期分割线 ──────────────────────────────────────────────────────────
+  // 遍历消息列表，在相邻两条消息日期不同时插入 dayDiv 分割线。
+  // 仅对有 ISO 时间戳（长度≥16）的消息生效；无法解析的短字符串不插分割线。
+  const messageItems: ReactNode[] = [];
+  let lastDayKey = '';
+  for (const m of messages) {
+    const dayKey = getDayKey(m.timestamp);
+    if (dayKey && dayKey !== lastDayKey) {
+      lastDayKey = dayKey;
+      messageItems.push(
+        <div key={`day-sep-${dayKey}`} className={styles.dayDiv}>
+          <div className={styles.dayLn} />
+          <div className={styles.dayLb}>{fmtDayLabel(m.timestamp!)}</div>
+          <div className={styles.dayLn} />
+        </div>,
+      );
+    }
+
+    // Stream H · 系统决策卡（待 SSE schema 定下来后由 useChatStream 投递）
+    if (m.kind === 'syscard') {
+      const p = (m.payload ?? {}) as {
+        kind?: SyscardKind;
+        title?: string;
+        meta?: Record<string, string>;
+      };
+      messageItems.push(
+        <SyscardFB
+          key={m.id}
+          kind={p.kind ?? 'system-event'}
+          title={p.title}
+          reason={m.content}
+          timestamp={m.timestamp}
+          meta={p.meta}
+        />,
+      );
+      continue;
+    }
+    // Stream H · 行内 Approval Gate
+    if (m.kind === 'inline-approval') {
+      const p = (m.payload ?? {}) as {
+        gateId?: string;
+        agentName?: string;
+        agentGlyph?: string;
+        agentColor?: string;
+        agentRole?: string;
+        title?: string;
+        metrics?: InlineApprovalMetric[];
+        choices?: InlineApprovalChoice[];
+        status?: InlineApprovalStatus;
+        waitText?: string;
+      };
+      messageItems.push(
+        <InlineApprovalFB
+          key={m.id}
+          gateId={p.gateId ?? m.id}
+          agentName={p.agentName ?? m.senderName}
+          agentGlyph={p.agentGlyph ?? m.senderGlyph}
+          agentColor={p.agentColor}
+          agentRole={p.agentRole}
+          title={p.title}
+          description={m.content}
+          metrics={p.metrics}
+          choices={
+            p.choices ?? [
+              { key: 'approve', label: '批准', kind: 'approve' },
+              { key: 'reject', label: '驳回', kind: 'reject' },
+            ]
+          }
+          status={p.status ?? 'pending'}
+          waitText={p.waitText}
+          onChoose={key => handleAction(key === 'approve' ? 'pin' : 'more', m.id)}
+        />,
+      );
+      continue;
+    }
+    if (m.role === 'system') {
+      messageItems.push(<SystemMsg key={m.id} m={m} />);
+    } else if (m.role === 'user') {
+      messageItems.push(<UserMsg key={m.id} m={m} onAction={handleAction} animateIn={isNew(m.id)} />);
+    } else {
+      messageItems.push(<AgentMsg key={m.id} m={m} onAction={handleAction} animateIn={isNew(m.id)} />);
+    }
+  }
+
   return (
     <div className={styles.feed}>
-      {/* 日期分割线 — chat-fb.html 行 1142 */}
-      <div className={styles.dayDiv}>
-        <div className={styles.dayLn} />
-        <div className={styles.dayLb}>{dayLabel}</div>
-        <div className={styles.dayLn} />
-      </div>
-
       {groupName && messages.length > 0 && (
         <div className={styles.sysnote}>
           <span>会话已恢复 · {groupName}</span>
         </div>
       )}
 
-      {messages.map(m => {
-        // Stream H · 系统决策卡（待 SSE schema 定下来后由 useChatStream 投递）
-        if (m.kind === 'syscard') {
-          const p = (m.payload ?? {}) as {
-            kind?: SyscardKind;
-            title?: string;
-            meta?: Record<string, string>;
-          };
-          return (
-            <SyscardFB
-              key={m.id}
-              kind={p.kind ?? 'system-event'}
-              title={p.title}
-              reason={m.content}
-              timestamp={m.timestamp}
-              meta={p.meta}
-            />
-          );
-        }
-        // Stream H · 行内 Approval Gate
-        if (m.kind === 'inline-approval') {
-          const p = (m.payload ?? {}) as {
-            gateId?: string;
-            agentName?: string;
-            agentGlyph?: string;
-            agentColor?: string;
-            agentRole?: string;
-            title?: string;
-            metrics?: InlineApprovalMetric[];
-            choices?: InlineApprovalChoice[];
-            status?: InlineApprovalStatus;
-            waitText?: string;
-          };
-          return (
-            <InlineApprovalFB
-              key={m.id}
-              gateId={p.gateId ?? m.id}
-              agentName={p.agentName ?? m.senderName}
-              agentGlyph={p.agentGlyph ?? m.senderGlyph}
-              agentColor={p.agentColor}
-              agentRole={p.agentRole}
-              title={p.title}
-              description={m.content}
-              metrics={p.metrics}
-              choices={
-                p.choices ?? [
-                  { key: 'approve', label: '批准', kind: 'approve' },
-                  { key: 'reject', label: '驳回', kind: 'reject' },
-                ]
-              }
-              status={p.status ?? 'pending'}
-              waitText={p.waitText}
-              onChoose={key => handleAction(key === 'approve' ? 'pin' : 'more', m.id)}
-            />
-          );
-        }
-        if (m.role === 'system') return <SystemMsg key={m.id} m={m} />;
-        if (m.role === 'user') return <UserMsg key={m.id} m={m} onAction={handleAction} animateIn={isNew(m.id)} />;
-        return <AgentMsg key={m.id} m={m} onAction={handleAction} animateIn={isNew(m.id)} />;
-      })}
+      {messageItems}
 
       {/* Stream H · 末尾 TypingDots（chatStream.loading 时） */}
       {typing && <TypingDotsFB agentName={typingAgentName} />}

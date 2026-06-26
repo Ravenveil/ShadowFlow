@@ -48,6 +48,36 @@
 .inputPh {
   color: var(--fg-4);
 }
+/* 搜索框真实 <input> — 替换静态 .inputPh 占位，实现实时过滤 */
+.inputReal {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg-1);
+  font-family: inherit;
+  font-size: 11.5px;
+}
+.inputReal::placeholder {
+  color: var(--fg-4);
+}
+/* 清除搜索 × 按钮 */
+.inputClear {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--fg-4);
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+}
+.inputClear:hover {
+  color: var(--fg-2);
+}
 .kbd {
   margin-left: auto;
   font-family: var(--font-mono);

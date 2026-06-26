@@ -278,22 +278,34 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
 
   const visibleDMs = useMemo(() => props.agentDMs.filter(filterDM), [props.agentDMs, filter]);
 
-  // ── 搜索过滤：在 chip filter 之上叠加文字匹配 ─────────────────────────────────
+  // ── 搜索过滤：在 chip filter 之上叠加文字匹配（名称 + 最后消息）──────────────
   const filteredPinned = useMemo(() => {
     if (!query.trim() || !pinnedGroup) return pinnedGroup;
-    return pinnedGroup.name.toLowerCase().includes(query.trim().toLowerCase()) ? pinnedGroup : null;
+    const lq = query.trim().toLowerCase();
+    return (
+      pinnedGroup.name.toLowerCase().includes(lq) ||
+      pinnedGroup.lastMessage.toLowerCase().includes(lq)
+    ) ? pinnedGroup : null;
   }, [pinnedGroup, query]);
 
   const filteredGroups = useMemo(() => {
     if (!query.trim()) return visibleGroups;
     const lq = query.trim().toLowerCase();
-    return visibleGroups.filter(g => g.name.toLowerCase().includes(lq));
+    return visibleGroups.filter(
+      g =>
+        g.name.toLowerCase().includes(lq) ||
+        g.lastMessage.toLowerCase().includes(lq),
+    );
   }, [visibleGroups, query]);
 
   const filteredDMs = useMemo(() => {
     if (!query.trim()) return visibleDMs;
     const lq = query.trim().toLowerCase();
-    return visibleDMs.filter(d => d.agentName.toLowerCase().includes(lq));
+    return visibleDMs.filter(
+      d =>
+        d.agentName.toLowerCase().includes(lq) ||
+        d.lastMessage.toLowerCase().includes(lq),
+    );
   }, [visibleDMs, query]);
 
   // ── Cmd+F shortcut → focus search input (matches the ⌘F hint in the UI) ──
@@ -344,6 +356,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
           <input
             ref={resolvedSearchRef}
             type="text"
+            className={styles.inputReal}
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => {
@@ -353,18 +366,20 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
               }
             }}
             placeholder={L.searchPlaceholder}
-            style={{
-              flex: 1,
-              background: 'none',
-              border: 'none',
-              outline: 'none',
-              minWidth: 0,
-              color: 'inherit',
-              fontSize: 'inherit',
-              fontFamily: 'inherit',
-            }}
+            aria-label={L.searchPlaceholder}
           />
-          {!query && <span className={styles.kbd}>⌘F</span>}
+          {query ? (
+            <button
+              type="button"
+              className={styles.inputClear}
+              onClick={() => { setQuery(''); resolvedSearchRef.current?.focus(); }}
+              aria-label="清除搜索"
+            >
+              ×
+            </button>
+          ) : (
+            <span className={styles.kbd}>⌘F</span>
+          )}
         </div>
       </div>
 
