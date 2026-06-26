@@ -856,10 +856,21 @@ export function PersonalChatView() {
                   </div>
                 </div>
               ) : (
-                /* 对话框统一（chat-unify）：StudioMessageRow 回合气泡（一个回合一个头像）。 */
+                /* 对话框统一（chat-unify）：StudioMessageRow 回合气泡（一个回合一个头像）。
+                   typingName：streaming 中且末条不是 agent 流式文本时，显示「正在输入」三点占位
+                   （DM 回复经网关整条到达，token 不分片，此占位填补「已发送→回复到达」的空窗）。 */
                 <UnifiedChatFeed
                   messages={studioMessages}
-                  typingName={undefined}
+                  typingName={
+                    streaming &&
+                    (() => {
+                      const last = studioMessages[studioMessages.length - 1];
+                      // 末条已是 agent 流式气泡 → 不再叠加占位（StudioMessageRow 自带流式态）。
+                      return !last || last.role === 'user' || (last.role === 'assistant' && !last.text);
+                    })()
+                      ? selected.name
+                      : undefined
+                  }
                   padding="0"
                   onRetry={(text) => { void send(text); }}
                 />
