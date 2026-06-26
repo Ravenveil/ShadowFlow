@@ -10,41 +10,17 @@ import { HfAvatar } from '../../components/hifi';
 import { listAgents, type AgentRecord } from '../../api/agents';
 import { resolveDmConversation, createFreshDmConversation, patchGroup, deleteGroup } from '../../api/groupApi';
 import type { AgentDMItem } from '../../common/types/inbox';
-import { useChatStream, type ChatMessage } from '../../core/hooks/useChatStream';
+import { useChatStream } from '../../core/hooks/useChatStream';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { useInboxStore } from '../../core/store/useInboxStore';
 import { paletteForAgent, initialOf } from '../../components/chat-fb/agentAvatar';
-import { Timeline } from '../../components/run-session/timeline/Timeline';
-import type { TimelineMessage } from '../../components/run-session/timeline/types';
 // 对话框统一（chat-unify）：个人单聊也用 StudioMessageRow 的统一回合气泡。
 import { UnifiedChatFeed, timelineMessagesToStudio } from '../../components/workbench/UnifiedChatFeed';
-import { useUnifiedBubble } from './useUnifiedBubble';
 import { PersonalRightPane } from './PersonalRightPane';
 import { PersonalRunRightPane } from './PersonalRunRightPane';
 import { useSidebarSlotEl } from './SidebarSlotContext';
 import { PagePeekOverlay } from './PagePeekOverlay';
 import { relTime } from '../../core/utils/relTime';
-
-/**
- * ChatMessage → TimelineMessage 适配层(融合M1)。
- * 纯文本两种卡;M2 过程事件(thinking/tool_call)落库后在此扩展映射即点亮富卡。
- */
-function toTimelineMessages(messages: ChatMessage[]): TimelineMessage[] {
-  return messages
-    // 过滤空 content(如 SSE tool_call 占位消息)——否则渲染成空白 .item 行
-    .filter((m) => (m.content ?? '').trim().length > 0)
-    .map((m, i) => {
-      if (m.role === 'user') {
-        return { id: m.id, kind: 'user_turn', turn_id: m.id, ts: i, text: m.content } as TimelineMessage;
-      }
-      if (m.role === 'system') {
-        // system = 网关失败反馈(缺 key/403/悬空成员等)→ raw 卡(折叠 mono 块)。
-        // 决不能过滤:否则环境问题表现为「发了没人理」的静默失败。
-        return { id: m.id, kind: 'raw', turn_id: m.id, ts: i, body: m.content, source: 'chat-gateway' } as TimelineMessage;
-      }
-      return { id: m.id, kind: 'assistant_text', turn_id: m.id, ts: i, body: m.content, streaming: m.streaming } as TimelineMessage;
-    });
-}
 
 /**
  * PersonalChatView — 个人态(Cherry Studio 式三栏,融合M1):
@@ -180,12 +156,18 @@ export function PersonalChatView() {
     targetId: dmGroupId,
     sseChannel: 'group',
   });
-  const timelineMessages = useMemo(() => toTimelineMessages(messages), [messages]);
-  // 对话框统一：把同一份 Timeline 消息映射成统一回合气泡（StudioMessageRow）。
-  const unifiedBubble = useUnifiedBubble();
+  // 对话框统一：把 ChatMessage[] 映射成统一回合气泡（StudioMessageRow）。
   const studioMessages = useMemo(
-    () => timelineMessagesToStudio(timelineMessages),
-    [timelineMessages],
+    () => timelineMessagesToStudio(
+      messages
+        .filter((m) => (m.content ?? '').trim().length > 0)
+        .map((m, i) => {
+          if (m.role === 'user') return { id: m.id, kind: 'user_turn' as const, turn_id: m.id, ts: i, text: m.content };
+          if (m.role === 'system') return { id: m.id, kind: 'raw' as const, turn_id: m.id, ts: i, body: m.content, source: 'chat-gateway' };
+          return { id: m.id, kind: 'assistant_text' as const, turn_id: m.id, ts: i, body: m.content, streaming: m.streaming };
+        }),
+    ),
+    [messages],
   );
 
   // Fix #1: memoize content strings to prevent O(n) re-renders on every SSE streaming tick.
@@ -625,10 +607,10 @@ export function PersonalChatView() {
                 </button>
               </div>
             </div>
-            {/* flex column 受限高度父容器:让 Timeline 自带的 .container(flex:1; min-height:0; overflow-y:auto)
-                成为真正的滚动容器,其内置智能自动滚动(流式跟随/滚底)才生效 */}
+            {/* flex column 受限高度父容器：让 UnifiedChatFeed 内的滚动容器
+                成为真正的滚动容器，流式跟随/滚底生效 */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '12px 16px' }}>
-              {timelineMessages.length === 0 ? (
+              {studioMessages.length === 0 ? (
                 /* DM 空对话引导态——和该助手开始,给几个启动 prompt */
                 <div className="dm-empty">
                   <HfAvatar glyph={Array.from(selected.name)[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={56} />
@@ -642,11 +624,9 @@ export function PersonalChatView() {
                     ))}
                   </div>
                 </div>
-              ) : unifiedBubble ? (
+              ) : (
                 /* 对话框统一（chat-unify）：StudioMessageRow 回合气泡（一个回合一个头像）。 */
                 <UnifiedChatFeed messages={studioMessages} typingName={undefined} padding="0" />
-              ) : (
-                <Timeline messages={timelineMessages} variant="chat" />
               )}
               {error && <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>发送失败：{error}</div>}
             </div>
