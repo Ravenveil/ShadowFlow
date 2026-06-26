@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Search, Square, SquarePen } from 'lucide-react';
+import { Check, MoreHorizontal, Pencil, Plus, Search, Square, SquarePen, Trash2 } from 'lucide-react';
 import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
 import { NewTaskComposer } from './NewTaskComposer';
 import { HfAvatar } from '../../components/hifi';
 import { listAgents, type AgentRecord } from '../../api/agents';
-import { resolveDmConversation, createFreshDmConversation } from '../../api/groupApi';
+import { resolveDmConversation, createFreshDmConversation, patchGroup, deleteGroup } from '../../api/groupApi';
+import type { AgentDMItem } from '../../common/types/inbox';
 import { useChatStream, type ChatMessage } from '../../core/hooks/useChatStream';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { useInboxStore } from '../../core/store/useInboxStore';
@@ -184,6 +185,76 @@ export function PersonalChatView() {
     await send(t);
   }
 
+  // DM 侧栏行上下文菜单（重命名 / 删除）。
+  const [menuAgentId, setMenuAgentId] = useState<string | null>(null);
+  const [menuGroupId, setMenuGroupId] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  // 弹出菜单的 DOM 容器 ref — 用于点外自动关闭
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // 点页面其他区域关闭菜单（stopPropagation 在 "..." 按钮里处理）。
+  useEffect(() => {
+    if (!menuAgentId) return;
+    function onDocClick(e: MouseEvent) {
+      if (menuRef.current && menuRef.current.contains(e.target as Node)) return;
+      setMenuAgentId(null);
+      setMenuGroupId(null);
+    }
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, [menuAgentId]);
+
+  async function handleOpenDmMenu(d: AgentDMItem, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (menuAgentId === d.agentId) {
+      setMenuAgentId(null);
+      setMenuGroupId(null);
+      return;
+    }
+    setMenuAgentId(d.agentId);
+    setMenuGroupId(null);
+    // 优先复用已解析的 dmGroupId（当前选中的 agent）；否则按需解析。
+    let gid: string | null = d.agentId === agentId ? (dmGroupId ?? null) : null;
+    if (!gid) {
+      gid = await resolveDmConversation(d.agentId, workspaceId ?? undefined).catch(() => null);
+    }
+    setMenuGroupId(gid);
+  }
+
+  async function handleDmRename(d: AgentDMItem) {
+    const newName = renameValue.trim();
+    if (!newName) { setRenaming(null); return; }
+    const prev = d.agentName;
+    // 乐观更新侧栏显示名
+    useInboxStore.getState().renameAgentDM(d.agentId, newName);
+    setRenaming(null);
+    setMenuAgentId(null);
+    if (menuGroupId) {
+      try {
+        await patchGroup(menuGroupId, { name: newName });
+      } catch {
+        // 后端失败 → 回滚
+        useInboxStore.getState().renameAgentDM(d.agentId, prev);
+      }
+    }
+  }
+
+  async function handleDmDelete(d: AgentDMItem) {
+    if (!window.confirm(`删除与「${d.agentName}」的对话？此操作不可撤销。`)) return;
+    useInboxStore.getState().removeAgentDM(d.agentId);
+    setMenuAgentId(null);
+    if (agentId === d.agentId) selectAgent(null);
+    if (menuGroupId) {
+      try {
+        await deleteGroup(menuGroupId);
+      } catch {
+        // 后端失败 → 重拉恢复列表
+        void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
+      }
+    }
+  }
+
   // 「新员工」= 弹出原 /agents 页面（PagePeekOverlay，完整设计含 Quick Hire）。
   // 关闭弹层时重拉助手列表，弹层里新建的员工立刻出现在左栏。
   function handlePeekClose() {
@@ -219,20 +290,96 @@ export function PersonalChatView() {
                 {recentDMs.map((d) => {
                   const active = d.agentId === agentId;
                   const pal = paletteForAgent(d.agentId, d.agentName);
-                  return (
-                    <button key={`dm_${d.agentId}`} type="button" className={active ? 'pcv-row active' : 'pcv-row'} onClick={() => selectAgent(d.agentId)}>
-                      <HfAvatar glyph={initialOf(d.agentName)} color={pal.accent} size={32} />
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                          <div className="pcv-row-name" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.agentName}</div>
-                          <span style={{ flexShrink: 0, fontSize: 10.5, color: 'var(--t-fg-5)' }}>{relTime(d.lastActivityAt)}</span>
-                        </div>
-                        <div className="pcv-row-sub">{d.lastMessage || '—'}</div>
+                  const menuOpen = menuAgentId === d.agentId;
+                  // 重命名内联态
+                  if (renaming === d.agentId) {
+                    return (
+                      <div key={`dm_${d.agentId}`} className={active ? 'pcv-row active' : 'pcv-row'}>
+                        <HfAvatar glyph={initialOf(d.agentName)} color={pal.accent} size={32} />
+                        <input
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') void handleDmRename(d);
+                            if (e.key === 'Escape') setRenaming(null);
+                          }}
+                          onBlur={() => { if (renaming === d.agentId) setRenaming(null); }}
+                          // eslint-disable-next-line jsx-a11y/no-autofocus
+                          autoFocus
+                          style={{ flex: 1, minWidth: 0, background: 'var(--t-panel-2)', border: '1px solid var(--t-accent)', borderRadius: 5, padding: '3px 7px', color: 'var(--t-fg)', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}
+                        />
+                        <button
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); void handleDmRename(d); }}
+                          aria-label="确认重命名"
+                          style={{ flexShrink: 0, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--t-accent)', padding: '2px 3px', display: 'inline-flex', alignItems: 'center' }}
+                        >
+                          <Check size={14} />
+                        </button>
                       </div>
-                      {d.unreadCount > 0 && (
-                        <span style={{ flexShrink: 0, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: 'var(--t-accent)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{d.unreadCount}</span>
-                      )}
-                    </button>
+                    );
+                  }
+                  // 正常行 + hover 显示 "..." 按钮
+                  return (
+                    <div key={`dm_${d.agentId}`} className={active ? 'pcv-row active' : 'pcv-row'}>
+                      {/* 主点击区域 */}
+                      <button
+                        type="button"
+                        onClick={() => selectAgent(d.agentId)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                      >
+                        <HfAvatar glyph={initialOf(d.agentName)} color={pal.accent} size={32} />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                            <div className="pcv-row-name" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.agentName}</div>
+                            <span style={{ flexShrink: 0, fontSize: 10.5, color: 'var(--t-fg-5)' }}>{relTime(d.lastActivityAt)}</span>
+                          </div>
+                          <div className="pcv-row-sub">{d.lastMessage || '—'}</div>
+                        </div>
+                        {d.unreadCount > 0 && (
+                          <span style={{ flexShrink: 0, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8, background: 'var(--t-accent)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{d.unreadCount}</span>
+                        )}
+                      </button>
+                      {/* "..." 菜单触发器 + 弹出面板 */}
+                      <div ref={menuOpen ? menuRef : undefined} style={{ position: 'relative', flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => { void handleOpenDmMenu(d, e); }}
+                          aria-label="更多操作"
+                          className={menuOpen ? 'pcv-dm-dots open' : 'pcv-dm-dots'}
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', padding: '2px 4px', borderRadius: 4, display: 'inline-flex', alignItems: 'center' }}
+                        >
+                          <MoreHorizontal size={14} />
+                        </button>
+                        {menuOpen && (
+                          <div style={{
+                            position: 'absolute', right: 0, top: '100%', zIndex: 200,
+                            background: 'var(--t-panel)', border: '1px solid var(--t-border)',
+                            borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.22)',
+                            padding: 4, minWidth: 120, marginTop: 2,
+                          }}>
+                            <button
+                              type="button"
+                              onClick={() => { setRenaming(d.agentId); setRenameValue(d.agentName); setMenuAgentId(null); }}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: 'none', border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 12.5, color: 'var(--t-fg-3)', textAlign: 'left', fontFamily: 'inherit' }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-panel-2)'; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                            >
+                              <Pencil size={13} /> 重命名
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDmDelete(d)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', background: 'none', border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 12.5, color: 'var(--t-err, #ef4444)', textAlign: 'left', fontFamily: 'inherit' }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,.08)'; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                            >
+                              <Trash2 size={13} /> 删除
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
               </>

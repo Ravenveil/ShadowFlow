@@ -259,6 +259,21 @@ export async function createFreshDmConversation(
   return (json.group_id ?? json.data?.group_id ?? null) as string | null;
 }
 
+/**
+ * 2026-06-26 · DELETE /api/groups/{groupId} — 彻底删除一个群/DM 会话。
+ * Python 后端需支持 DELETE endpoint；后端未上线时抛 HTTP 404/405，调用方应 try/catch。
+ */
+export async function deleteGroup(groupId: string): Promise<void> {
+  const res = await fetch(
+    `${getApiBase()}/api/groups/${encodeURIComponent(groupId)}`,
+    { method: 'DELETE' },
+  );
+  await _checkPythonStatus(res);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+}
+
 export async function patchGroup(
   groupId: string,
   body: PatchGroupRequest,

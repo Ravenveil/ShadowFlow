@@ -35,6 +35,16 @@ interface InboxState {
    * 配合 patchGroup() — 不论后端是否上线，FE 都先 flip 本地状态。
    */
   updateGroupMeta: (groupId: string, partial: Partial<GroupItem>) => void;
+  /**
+   * 2026-06-26 · DM 会话重命名乐观更新 — 把侧栏里对应 agentId 的显示名改为 newName。
+   * 配合 patchGroup() PATCH，后端失败时调用方应用原名回滚。
+   */
+  renameAgentDM: (agentId: string, newName: string) => void;
+  /**
+   * 2026-06-26 · DM 会话删除乐观移除 — 从 agentDMs 列表里删去对应条目。
+   * 配合 deleteGroup() DELETE；后端失败时调用方应重拉 fetchWorkspaceInbox 恢复。
+   */
+  removeAgentDM: (agentId: string) => void;
   updateGroupMetrics: (groupId: string, partial: Partial<GroupMetrics>) => void;
   updateActiveRuns: (groupId: string, delta: number) => void;
   markRead: (groupId: string) => void;
@@ -122,6 +132,20 @@ export const useInboxStore = create<InboxState>((set, get) => ({
       groups: state.groups.map((g) =>
         g.id === groupId ? { ...g, ...partial } : g
       ),
+    }));
+  },
+
+  renameAgentDM: (agentId: string, newName: string) => {
+    set((state) => ({
+      agentDMs: state.agentDMs.map((d) =>
+        d.agentId === agentId ? { ...d, agentName: newName } : d
+      ),
+    }));
+  },
+
+  removeAgentDM: (agentId: string) => {
+    set((state) => ({
+      agentDMs: state.agentDMs.filter((d) => d.agentId !== agentId),
     }));
   },
 

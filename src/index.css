@@ -1280,6 +1280,9 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .pcv-row-name { font-size: 13px; font-weight: 600; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pcv-row.active .pcv-row-name { color: var(--t-accent-bright); }
 .pcv-row-sub { font-size: 11px; color: var(--t-fg-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+/* DM row context-menu button — hidden until row hovered or menu open */
+.pcv-dm-dots { opacity: 0; transition: opacity 120ms ease; }
+.pcv-row:hover .pcv-dm-dots, .pcv-dm-dots.open { opacity: 1; }
 
 .pcv-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
 .pcv-empty-glyph { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: var(--t-accent-tint); color: var(--t-accent-bright); margin-bottom: 18px; }
