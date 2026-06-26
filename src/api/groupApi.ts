@@ -245,7 +245,7 @@ export async function createFreshDmConversation(
       kind: 'dm',
       agent_ids: [agentId],
       workspace_id: workspaceId ?? undefined,
-      name: `dm-${agentId}`,
+      name: `dm-${agentId}-${Date.now()}`,
       template_id: '',
       group_template_id: '',
       member_emails: [],

@@ -68,6 +68,7 @@ export function PersonalChatView() {
     });
   };
   const [dmGroupId, setDmGroupId] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   // 角色弹出信号 — 点 DM 头部递增，右栏据此弹出「角色」tab（对齐用户要求：放右边不是左抽屉）
   const [roleSignal, setRoleSignal] = useState(0);
@@ -157,11 +158,21 @@ export function PersonalChatView() {
   const messageTexts = useMemo(() => messages.map((m) => m.content), [messages]);
 
   // 「新对话」—— 强制创建全新 DM conversation，保留历史，从空白开始。
+  // Fix: isCreating guard prevents double-click race condition (two concurrent
+  // createFreshDmConversation calls each resolving to different group IDs).
+  // prevId restore ensures we never get stuck in '连接中…' on API error.
   async function handleNewChat() {
-    if (!agentId || !agentInWs) return;
+    if (!agentId || !agentInWs || isCreating) return;
+    const prevId = dmGroupId;
+    setIsCreating(true);
     setDmGroupId(null);
-    const newId = await createFreshDmConversation(agentId, workspaceId);
-    if (newId) setDmGroupId(newId);
+    try {
+      const newId = await createFreshDmConversation(agentId, workspaceId);
+      if (newId) setDmGroupId(newId);
+      else setDmGroupId(prevId); // restore previous group on API error / Python down
+    } finally {
+      setIsCreating(false);
+    }
   }
 
   // F1 — DM 也用完整 composer。dmGroupId 未就绪时（resolveDmConversation 仍在
@@ -288,10 +299,14 @@ export function PersonalChatView() {
               </button>
               <div className="dm-head-actions">
                 <span className="dm-head-model" title="当前模型">{modelLabel}</span>
+                {/* Fix: disabled when isCreating to prevent double-click orphaned DM groups.
+                    title communicates ephemeral-conversation semantics (fix #3): switching
+                    agents restores the original conversation, not this fresh one. */}
                 <button
                   type="button"
                   onClick={() => { void handleNewChat(); }}
-                  title="新对话（保留历史）"
+                  disabled={isCreating}
+                  title="新对话 · 切换助手后恢复原会话（本次对话不会消失，在历史记录中可查）"
                   aria-label="新对话"
                   style={{
                     display: 'inline-flex',
@@ -302,9 +317,10 @@ export function PersonalChatView() {
                     borderRadius: 6,
                     border: '1px solid var(--t-border)',
                     background: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--t-fg-3)',
+                    cursor: isCreating ? 'not-allowed' : 'pointer',
+                    color: isCreating ? 'var(--t-fg-5)' : 'var(--t-fg-3)',
                     flexShrink: 0,
+                    opacity: isCreating ? 0.5 : 1,
                   }}
                 >
                   <SquarePen size={14} />
