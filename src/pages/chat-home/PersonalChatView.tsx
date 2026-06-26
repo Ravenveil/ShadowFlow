@@ -290,9 +290,10 @@ export function PersonalChatView() {
 
   // Onboarding banner trigger: show when a 403 error fires and no BYOK key is configured,
   // but only once per session (guarded by sessionStorage flag).
+  // Also auto-dismisses when hasByokKey transitions to true (user configures key mid-session).
   useEffect(() => {
+    if (hasByokKey) { setShowOnboardingBanner(false); return; } // auto-dismiss once key is set
     if (!error) return;
-    if (hasByokKey) return; // user already has a key, no need to nag
     if (/(403|unauthorized|not configured|api.{0,4}key)/i.test(error)) {
       try {
         if (!sessionStorage.getItem('sf-ob-dismissed')) {
