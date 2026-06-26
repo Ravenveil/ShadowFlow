@@ -61,6 +61,8 @@ export interface UseChatStreamResult {
   error: string | null;
   /** True while a sent message is awaiting the agent reply (POST in-flight or waiting for SSE response). */
   streaming: boolean;
+  /** Number of messages buffered in the pending queue (typed while streaming or targetId was null). */
+  pendingCount: number;
   /** Send a user message → optimistic append + assistant reply. */
   send: (content: string) => Promise<void>;
   /** Abort the current in-flight send and reset streaming state. */
@@ -112,6 +114,8 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
+  // Mirrors the pending queue length as React state so the UI can show a badge.
+  const [pendingCount, setPendingCount] = useState(0);
 
   // ---- internal refs --------------------------------------------------------
   const sseHandleRef = useRef<SseClientHandle | null>(null);
@@ -129,9 +133,11 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
   // without needing streaming in its useCallback dependency array.
   const streamingRef = useRef(false);
   streamingRef.current = streaming;
-  // Queue of messages typed while an agent reply is in-flight.
-  // Drained sequentially after each agent.complete / DM reply.
+  // Queue of messages typed while an agent reply is in-flight OR while targetId is null.
+  // Drained sequentially after each agent.complete / DM reply (or once targetId resolves).
   const pendingQueueRef = useRef<string[]>([]);
+  // Tracks previous targetId so Fix 2 can distinguish agent-switch from initial connection.
+  const prevTargetIdRef = useRef<string | null>(targetId);
 
   // ---- history loading ------------------------------------------------------
   const loadHistory = useCallback(async () => {
@@ -166,6 +172,19 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  // ---- Fix 2: clear pending queue on agent switch --------------------------
+  // Fires whenever targetId changes. We only clear when switching FROM a
+  // non-null target (genuine agent-switch) to avoid discarding messages that
+  // were buffered while targetId was still null during the initial connection.
+  useEffect(() => {
+    const prev = prevTargetIdRef.current;
+    prevTargetIdRef.current = targetId;
+    if (prev !== null && prev !== targetId) {
+      pendingQueueRef.current = [];
+      setPendingCount(0);
+    }
+  }, [targetId]);
 
   // ---- SSE subscription -----------------------------------------------------
   useEffect(() => {
@@ -300,12 +319,22 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
   const send = useCallback(
     async (content: string) => {
       const text = content.trim();
-      if (!text || !targetId) return;
+      if (!text) return;
+
+      // targetId not yet resolved (e.g. resolveDmConversation still in-flight).
+      // Buffer for delivery once targetId becomes non-null and the drain effect fires.
+      if (!targetId) {
+        pendingQueueRef.current.push(text);
+        setPendingCount((c) => c + 1);
+        return;
+      }
 
       // If a response is already in-flight, buffer the message and return.
       // The drain effect below will call send() again once streaming ends.
+      // Fix 5: use push() instead of spread — ref mutation doesn't need a new array.
       if (streamingRef.current) {
-        pendingQueueRef.current = [...pendingQueueRef.current, text];
+        pendingQueueRef.current.push(text);
+        setPendingCount((c) => c + 1);
         return;
       }
 
@@ -387,13 +416,16 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
   );
 
   // ---- drain pending queue --------------------------------------------------
-  // Fires when streaming transitions from true → false.
+  // Fires when streaming transitions from true → false, OR when send reference
+  // changes (i.e. targetId changed from null → value, enabling buffered messages
+  // to be delivered once the connection is established).
   // Dequeues one message and sends it; that send sets streaming=true again,
   // so the next drain fires only after the subsequent agent reply.
   useEffect(() => {
     if (!streaming && pendingQueueRef.current.length > 0) {
       const [next, ...rest] = pendingQueueRef.current;
       pendingQueueRef.current = rest;
+      setPendingCount((c) => Math.max(0, c - 1));
       void send(next);
     }
   }, [streaming, send]);
@@ -406,6 +438,11 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
     // replies that are already in-flight (group mode: the POST completed in
     // milliseconds but the server-side reply will still arrive over SSE).
     cancelledAtRef.current = Date.now();
+    // Fix 1: clear pending queue BEFORE flipping streaming to false.
+    // Without this, the drain useEffect would immediately fire and start
+    // sending queued messages, contradicting the user's intent to stop.
+    pendingQueueRef.current = [];
+    setPendingCount(0);
     setStreaming(false);
   }, []);
 
@@ -415,7 +452,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
   }, [loadHistory]);
 
   return useMemo(
-    () => ({ messages, loading, error, streaming, send, cancel, refresh }),
-    [messages, loading, error, streaming, send, cancel, refresh]
+    () => ({ messages, loading, error, streaming, pendingCount, send, cancel, refresh }),
+    [messages, loading, error, streaming, pendingCount, send, cancel, refresh]
   );
 }
