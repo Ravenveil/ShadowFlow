@@ -174,7 +174,7 @@ export function PersonalChatView() {
       messages
         .filter((m) => (m.content ?? '').trim().length > 0)
         .map((m, i) => {
-          if (m.role === 'user') return { id: m.id, kind: 'user_turn' as const, turn_id: m.id, ts: i, text: m.content };
+          if (m.role === 'user') return { id: m.id, kind: 'user_turn' as const, turn_id: m.id, ts: i, text: m.content, status: m.status };
           if (m.role === 'system') return { id: m.id, kind: 'raw' as const, turn_id: m.id, ts: i, body: m.content, source: 'chat-gateway' };
           return { id: m.id, kind: 'assistant_text' as const, turn_id: m.id, ts: i, body: m.content, streaming: m.streaming };
         }),
@@ -652,9 +652,29 @@ export function PersonalChatView() {
                 </div>
               ) : (
                 /* 对话框统一（chat-unify）：StudioMessageRow 回合气泡（一个回合一个头像）。 */
-                <UnifiedChatFeed messages={studioMessages} typingName={undefined} padding="0" />
+                <UnifiedChatFeed
+                  messages={studioMessages}
+                  typingName={undefined}
+                  padding="0"
+                  onRetry={(text) => { void send(text); }}
+                />
               )}
-              {error && <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>发送失败：{error}</div>}
+              {error && (
+                <div style={{ flexShrink: 0, textAlign: 'center', fontSize: 11, color: 'var(--t-err)', paddingTop: 6 }}>
+                  发送失败：{error}
+                  {/(api.{0,4}key|401|403|unauthorized|not configured)/i.test(error) && (
+                    <span>
+                      {' · '}
+                      <a
+                        href="/settings"
+                        style={{ color: 'var(--t-accent)', textDecoration: 'underline', cursor: 'pointer' }}
+                      >
+                        在设置中配置 API Key
+                      </a>
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             {/* F1 — 完整 composer（@技能/附件/模型/知识库），streaming 时保持可输入
                 以便用户提前排队下一条消息；Stop 按钮作为附加操作出现在 composer 上方。 */}

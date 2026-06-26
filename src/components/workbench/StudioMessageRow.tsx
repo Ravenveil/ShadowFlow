@@ -551,8 +551,11 @@ export interface StudioMessageRowProps {
   grouped: boolean;
   /** 入场动画（仅新增消息）。 */
   animateIn?: boolean;
-  /** 重试回调：用户气泡 status==='error' 时显示重试按钮，点击后调用。 */
+  /** 重试回调：用户气泡 status==='error' 或 assistant error 气泡时显示重试按钮，点击后调用。 */
   onRetry?: (text: string) => void;
+  /** 要重试的文本；仅用于 assistant error 气泡。来自触发此错误的最近一条用户消息。
+   *  传入后在 assistant error 气泡底部渲染重试按钮（由 UnifiedChatFeed 计算并传入）。 */
+  retryText?: string;
 }
 
 /**
@@ -589,6 +592,7 @@ export const StudioMessageRow = memo(function StudioMessageRow({
   grouped,
   animateIn,
   onRetry,
+  retryText,
 }: StudioMessageRowProps) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -759,6 +763,19 @@ export const StudioMessageRow = memo(function StudioMessageRow({
                 </span>
               )
             )}
+            {/* API Key 提示：非用户 error 气泡、且错误内容含 API key / 401 / 403 特征时显示 */}
+            {!isUser && isErrorState && /(api.{0,4}key|401|403|unauthorized|not configured)/i.test(m.text) && (
+              <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--t-fg-4)', lineHeight: 1.45 }}>
+                提示：请在{' '}
+                <a
+                  href="/settings"
+                  style={{ color: 'var(--t-accent)', textDecoration: 'underline', cursor: 'pointer' }}
+                >
+                  设置
+                </a>
+                {' '}中配置 API Key。
+              </p>
+            )}
             {/* 悬浮复制按钮：放在气泡内部 position:absolute，避免依赖外层无 overflow:hidden 假设 */}
             {(bubbleHovered || copied || copyError) && m.text && (
               <button
@@ -810,6 +827,40 @@ export const StudioMessageRow = memo(function StudioMessageRow({
             if (retrying) return;
             setRetrying(true);
             onRetry(m.text);
+          }}
+          aria-label={retrying ? '重试中…' : '重试'}
+          title={retrying ? '重试中…' : '重试'}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '3px 8px',
+            borderRadius: 6,
+            border: '1px solid var(--t-danger, #e5484d)',
+            background: 'color-mix(in oklab, var(--t-danger, #e5484d) 10%, var(--t-panel))',
+            color: 'var(--t-danger, #e5484d)',
+            cursor: retrying ? 'not-allowed' : 'pointer',
+            opacity: retrying ? 0.5 : 1,
+            fontSize: 11,
+            fontFamily: 'var(--font-sans)',
+            transition: 'opacity 0.15s',
+          }}
+        >
+          <RotateCcw size={11} strokeWidth={2} aria-hidden style={retrying ? { animation: 'spin 0.8s linear infinite' } : undefined} />
+          <span>{retrying ? '重试中…' : '重试'}</span>
+        </button>
+      )}
+
+      {/* 重试按钮：assistant error 气泡（如 SSE system.notice 缺 API key 错误）时显示。
+          retryText 由 UnifiedChatFeed 从前驱用户消息中提取并传入。 */}
+      {!isUser && isErrorState && !!retryText && onRetry && (
+        <button
+          type="button"
+          disabled={retrying}
+          onClick={() => {
+            if (retrying) return;
+            setRetrying(true);
+            onRetry(retryText);
           }}
           aria-label={retrying ? '重试中…' : '重试'}
           title={retrying ? '重试中…' : '重试'}

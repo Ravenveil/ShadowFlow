@@ -89,15 +89,29 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
         ? empty ?? null
         : (
           <>
-            {messages.map((m, i) => (
-              <StudioMessageRow
-                key={m.id}
-                message={m}
-                grouped={grouped[i]}
-                animateIn={isNew(m.id) && !m.streaming}
-                onRetry={onRetry}
-              />
-            ))}
+            {messages.map((m, i) => {
+              // 为 assistant error 气泡查找最近的前驱用户消息文本，供重试按钮使用。
+              // user error 气泡自带 m.text，无需此逻辑。
+              let retryText: string | undefined;
+              if (m.role === 'assistant' && (m.error || m.status === 'error')) {
+                for (let j = i - 1; j >= 0; j--) {
+                  if (messages[j].role === 'user' && messages[j].text) {
+                    retryText = messages[j].text;
+                    break;
+                  }
+                }
+              }
+              return (
+                <StudioMessageRow
+                  key={m.id}
+                  message={m}
+                  grouped={grouped[i]}
+                  animateIn={isNew(m.id) && !m.streaming}
+                  onRetry={onRetry}
+                  retryText={retryText}
+                />
+              );
+            })}
             {typingMsg && <StudioMessageRow message={typingMsg} grouped={typingGrouped} />}
           </>
         )}
@@ -165,6 +179,8 @@ interface TimelineMessageLike {
   sender_name?: string;
   agent_id?: string;
   source?: string;
+  /** 用户消息发送状态；'error' 时映射出 status==='error' 触发重试按钮。 */
+  status?: 'sent' | 'delivered' | 'read' | 'error';
 }
 
 /**
@@ -177,7 +193,7 @@ export function timelineMessagesToStudio(list: readonly TimelineMessageLike[]): 
   const out: StudioMessage[] = [];
   for (const m of list) {
     if (m.kind === 'user_turn') {
-      out.push({ id: m.id, role: 'user', text: m.text ?? '', senderName: '我' });
+      out.push({ id: m.id, role: 'user', text: m.text ?? '', senderName: '我', status: m.status });
     } else if (m.kind === 'assistant_text') {
       const name = m.sender_name ?? 'Agent';
       const pal = paletteForAgent(m.agent_id, name);
