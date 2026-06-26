@@ -218,6 +218,35 @@
 .statWarn {
   background: var(--status-warn);
 }
+/* R6 — 任务完成反馈（clawsgo「已完成」绿勾）：running→结束时短暂弹出绿勾，
+   pop 过冲入场，2.4s 后随 justDone 清除消失。 */
+.statDone {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--t-ok, #10b981);
+  border: 2px solid var(--bg-elev-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  animation: chatFbPop 0.34s cubic-bezier(.34, 1.56, .64, 1);
+}
+.statDone svg {
+  width: 9px;
+  height: 9px;
+}
+@keyframes chatFbPop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.18); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .statDone { animation: none !important; }
+}
 
 /* ---- 元数据 (行 241-259) ---- */
 .meta {

@@ -15,8 +15,8 @@
  * 完全由 props 驱动，方便 Stream D 在 ChatPage 整合时按需注入。
  */
 
-import { useMemo, useState } from 'react';
-import { Search, Pin, MessageSquare, Lock, Hash, Bot } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Search, Pin, MessageSquare, Lock, Hash, Bot, Check } from 'lucide-react';
 import type { GroupItem, AgentDMItem } from '../../common/types/inbox';
 import { AGENT_PALETTE, ACCENT_PALETTE, hashIndex, initialOf } from './agentAvatar';
 import styles from './chatFB.module.css';
@@ -112,6 +112,8 @@ interface RowProps {
   onClick?: () => void;
   /** R3 — 列表入场 stagger 序号（clawsgo 化，配合全局 .sf-rail-in）。 */
   animIndex?: number;
+  /** R6 — running→结束的瞬时「已完成」绿勾（clawsgo 任务完成反馈），覆盖状态点。 */
+  done?: boolean;
 }
 
 function IbxRow(props: RowProps) {
@@ -143,8 +145,15 @@ function IbxRow(props: RowProps) {
         {props.countBadge !== undefined && props.countBadge > 0 && (
           <span className={styles.cnt}>×{props.countBadge}</span>
         )}
-        {props.statusKind === 'run' && <span className={`${styles.stat} ${styles.statRun}`} />}
-        {props.statusKind === 'warn' && <span className={`${styles.stat} ${styles.statWarn}`} />}
+        {/* R6 — 完成绿勾优先于运行/警告状态点 */}
+        {props.done ? (
+          <span className={styles.statDone}><Check strokeWidth={3.5} /></span>
+        ) : (
+          <>
+            {props.statusKind === 'run' && <span className={`${styles.stat} ${styles.statRun}`} />}
+            {props.statusKind === 'warn' && <span className={`${styles.stat} ${styles.statWarn}`} />}
+          </>
+        )}
       </span>
 
       <div className={styles.meta}>
@@ -181,6 +190,31 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
   };
 
   const [filter, setFilter] = useState<FilterKey>('all');
+
+  // ── R6 任务完成反馈：running→结束 的瞬时绿勾（clawsgo「已完成」） ──────────────
+  // 无持久「completed」状态（InboxItemStatus 结束即回 idle），故在前端追踪「上一帧
+  // 在跑、这一帧不跑」的转变，给该行 2.4s 绿勾 pop 后自动清除。
+  const runningKey = useMemo(() => {
+    const ids: string[] = [];
+    for (const g of props.groups) if (g.status === 'running') ids.push('g:' + g.id);
+    for (const d of props.agentDMs) if (d.status === 'running') ids.push('d:' + d.agentId);
+    return ids.sort().join(',');
+  }, [props.groups, props.agentDMs]);
+  const prevRunningRef = useRef<Set<string>>(new Set());
+  const [justDone, setJustDone] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    const cur = new Set(runningKey ? runningKey.split(',') : []);
+    const finished = [...prevRunningRef.current].filter((id) => !cur.has(id));
+    prevRunningRef.current = cur;
+    if (finished.length === 0) return;
+    setJustDone((s) => { const n = new Set(s); finished.forEach((id) => n.add(id)); return n; });
+    const timers = finished.map((id) =>
+      window.setTimeout(() => {
+        setJustDone((s) => { const n = new Set(s); n.delete(id); return n; });
+      }, 2400),
+    );
+    return () => { timers.forEach((t) => window.clearTimeout(t)); };
+  }, [runningKey]);
 
   // ── 计数（chips 上的徽章） ────────────────────────────────────────────────
   const unreadGroupCount = useMemo(
@@ -287,6 +321,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
               unread={pinnedGroup.unreadCount}
               timeLabel={pinnedGroup.status === 'running' ? 'now' : formatRelativeTime(pinnedGroup.lastActivityAt)}
               active={pinnedGroup.id === props.groupId}
+              done={justDone.has('g:' + pinnedGroup.id)}
               onClick={() => props.onGroup(pinnedGroup.id)}
             />
           </div>
@@ -331,6 +366,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
                   locked={locked}
                   active={g.id === props.groupId}
                   animIndex={i}
+                  done={justDone.has('g:' + g.id)}
                   onClick={() => props.onGroup(g.id)}
                 />
               );
@@ -357,6 +393,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
                     timeLabel={formatRelativeTime(d.lastActivityAt)}
                     active={d.agentId === props.dmId}
                     animIndex={i}
+                    done={justDone.has('d:' + d.agentId)}
                     onClick={() => props.onDm(d.agentId)}
                   />
                 ))}
