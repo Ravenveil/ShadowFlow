@@ -16,6 +16,12 @@ export default defineConfig({
   server: {
     port: 3007,
     open: true,
+    watch: {
+      // 忽略 .claude 下的 agent worktree / skill 资源 —— 这些目录文件海量，且个别
+      // 路径会让 chokidar 在 Windows 上抛 watch UNKNOWN(-4094) 直接崩溃 dev server。
+      // 同理排除 .git / 产物截图 / node_modules，缩小监听面、加速热更。
+      ignored: ['**/.claude/**', '**/.git/**', '**/_evidence/**', '**/node_modules/**'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8002',

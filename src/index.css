@@ -1272,17 +1272,51 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .pcv-row {
   width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 8px;
   border-radius: 8px; border: none; cursor: pointer; text-align: left; background: transparent;
-  position: relative; transition: background 120ms ease;
+  position: relative; transition: background var(--dur-1) ease, transform var(--dur-1) var(--ease-out);
 }
 .pcv-row:hover { background: var(--t-panel-2); }
+.pcv-row:active { transform: scale(.985); }
 .pcv-row.active { background: var(--t-accent-tint); }
-.pcv-row.active::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2.5px; border-radius: 0 3px 3px 0; background: var(--t-accent); }
-.pcv-row-name { font-size: 13px; font-weight: 600; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* clawsgo 化（2026-06-26 R1）：选中左条常驻渲染，用 scaleY 弹性生长，替代
+   原本 .active 时瞬时出现，切换更顺滑。 */
+.pcv-row::before {
+  content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 2.5px;
+  border-radius: 0 3px 3px 0; background: var(--t-accent);
+  transform: scaleY(0); transform-origin: center;
+  transition: transform var(--dur-2) var(--ease-spring);
+}
+.pcv-row.active::before { transform: scaleY(1); }
+.pcv-row-name { font-size: 13px; font-weight: 600; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--dur-1) var(--ease-out); }
 .pcv-row.active .pcv-row-name { color: var(--t-accent-bright); }
 .pcv-row-sub { font-size: 11px; color: var(--t-fg-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 /* DM row context-menu button — hidden until row hovered or menu open */
 .pcv-dm-dots { opacity: 0; transition: opacity 120ms ease; }
 .pcv-row:hover .pcv-dm-dots, .pcv-dm-dots.open { opacity: 1; }
+
+/* ───────────────────────────────────────────────────────────────
+   clawsgo 化侧栏动效词汇（2026-06-26 R1）—— 只增不删。
+   一组可复用的侧栏列表「进出场 / 切换淡入」动画，供个人态 .pcv-row
+   与后续 R3 团队态 IbxRow 共用（共用的是这些 sf-rail-* 类，不是 .pcv-row 本身）。
+   状态点不在此处造轮子：直接用 HfAvatar 自带的 status 角标（见 HfAtoms.tsx）。
+   重点参考 clawsgo：列表项进出场、切换列表内容淡入。
+   ─────────────────────────────────────────────────────────────── */
+@keyframes sf-rail-in   { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sf-rail-out  { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-10px); } }
+@keyframes sf-rail-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* 列表项入场：进入时上浮淡入。stagger 由内联 animation-delay 控制。 */
+.sf-rail-in  { animation: sf-rail-in var(--dur-3) var(--ease-out) both; }
+/* 列表项退场：左滑淡出（R4 删除时套用，配合 JS 延后卸载）。 */
+.sf-rail-out { animation: sf-rail-out var(--dur-2) var(--ease-in-out) both; pointer-events: none; }
+/* 列表内容随个人/团队切换淡入（R2 用）。 */
+.sf-rail-fade { animation: sf-rail-fade var(--dur-2) var(--ease-out) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-rail-in, .sf-rail-out, .sf-rail-fade { animation: none !important; }
+  .pcv-row { transition: background var(--dur-1) ease !important; }
+  .pcv-row:active { transform: none !important; }
+  .pcv-row::before { transition: none !important; }
+}
 
 /* "Load more" button below DM list */
 .pcv-more-btn {

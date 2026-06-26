@@ -413,14 +413,14 @@ export function PersonalChatView() {
                   }
                   // 正常行 + hover 显示 "..." 按钮
                   return (
-                    <div key={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={active ? 'pcv-row active' : 'pcv-row'}>
+                    <div key={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={`pcv-row sf-rail-in${active ? ' active' : ''}`} style={{ animationDelay: `${Math.min(idx, 8) * 22}ms` }}>
                       {/* 主点击区域 */}
                       <button
                         type="button"
                         onClick={() => selectAgent(d.agentId)}
                         style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
                       >
-                        <HfAvatar glyph={initialOf(d.agentName)} color={pal.accent} size={32} />
+                        <HfAvatar glyph={initialOf(d.agentName)} color={pal.accent} size={32} status="ok" />
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                             <div className="pcv-row-name" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.agentName}</div>
@@ -507,11 +507,11 @@ export function PersonalChatView() {
               </>
             )}
             <div className="pcv-sec">助手</div>
-            {filtered.map((a) => {
+            {filtered.map((a, i) => {
               const active = a.agent_id === agentId;
               return (
-                <button key={a.agent_id} type="button" className={active ? 'pcv-row active' : 'pcv-row'} onClick={() => selectAgent(a.agent_id)}>
-                  <HfAvatar glyph={Array.from(a.name)[0] ?? '?'} color={a.avatar_color ?? 'var(--t-accent)'} size={32} />
+                <button key={a.agent_id} type="button" className={`pcv-row sf-rail-in${active ? ' active' : ''}`} style={{ animationDelay: `${Math.min(i, 8) * 22}ms` }} onClick={() => selectAgent(a.agent_id)}>
+                  <HfAvatar glyph={Array.from(a.name)[0] ?? '?'} color={a.avatar_color ?? 'var(--t-accent)'} size={32} status="ok" />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="pcv-row-name">{a.name}</div>
                     <div className="pcv-row-sub">{a.soul?.split('\n')[0] ?? ''}</div>
