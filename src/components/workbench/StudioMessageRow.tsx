@@ -14,8 +14,10 @@
  *
  * 纯展示组件：无副作用、无数据获取。由 StudioChat 投喂 StudioMessage[]。
  */
-import { memo, useState, useEffect, useRef, type ReactNode } from 'react';
+import { memo, useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { User, Bot, Users, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check } from 'lucide-react';
+import hljs from 'highlight.js/lib/common';
+import './fileViewerHljs.css';
 
 export type StudioRole = 'user' | 'assistant' | 'system';
 
@@ -65,6 +67,109 @@ const AVATAR_GAP = 10;
 // 气泡最大宽度占内容列比例 —— 长行不铺满整宽，保持 hermes / cherry「单内容列」的
 // 干净观感（user / agent 都收口，不会一条消息横贯到底）。
 const BUBBLE_MAX_WIDTH = '78%';
+
+// ── 围栏代码块（triple-backtick）渲染：hljs 高亮 + 语言 chip + 复制按钮 ─────────
+function FencedCodeBlock({ lang, code }: { lang: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    },
+    [],
+  );
+
+  const highlighted = useMemo(() => {
+    if (lang && hljs.getLanguage(lang)) {
+      return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+    }
+    return hljs.highlightAuto(code).value;
+  }, [lang, code]);
+
+  const handleCopyCode = () => {
+    navigator.clipboard
+      .writeText(code)
+      .then(() => {
+        setCopied(true);
+        if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => {});
+  };
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        borderRadius: 8,
+        border: '1px solid var(--t-border)',
+        background: 'var(--t-panel-2)',
+        overflow: 'hidden',
+        margin: '4px 0',
+        fontSize: 12,
+        fontFamily: 'var(--font-mono)',
+        lineHeight: 1.55,
+      }}
+    >
+      {/* 语言 chip + 复制按钮 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '3px 10px',
+          borderBottom: '1px solid var(--t-border)',
+          background: 'color-mix(in oklab, var(--t-panel-2) 80%, var(--t-border))',
+        }}
+      >
+        <span
+          style={{
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--t-fg-4)',
+            fontWeight: 500,
+          }}
+        >
+          {lang || 'code'}
+        </span>
+        <button
+          onClick={handleCopyCode}
+          aria-label={copied ? '已复制' : '复制'}
+          title={copied ? '已复制' : '复制'}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '2px 7px',
+            borderRadius: 5,
+            border: '1px solid var(--t-border)',
+            background: 'var(--t-panel)',
+            color: copied ? 'var(--sf-green, #21A678)' : 'var(--t-fg-3)',
+            cursor: 'pointer',
+            fontSize: 11,
+            transition: 'color 0.15s',
+          }}
+        >
+          {copied ? (
+            <Check size={11} strokeWidth={2.5} aria-hidden />
+          ) : (
+            <Copy size={11} strokeWidth={2} aria-hidden />
+          )}
+          <span>{copied ? '已复制' : '复制'}</span>
+        </button>
+      </div>
+      {/* 代码区 */}
+      <pre style={{ margin: 0, padding: '8px 12px', overflowX: 'auto' }}>
+        <code
+          className={`hljs${lang ? ` language-${lang}` : ''}`}
+          style={{ background: 'transparent', padding: 0 }}
+          dangerouslySetInnerHTML={{ __html: highlighted }}
+        />
+      </pre>
+    </div>
+  );
+}
 
 // ── 极简 markdown 渲染：**bold** / `code` / 链接 / 换行。无第三方依赖，避免在
 //    中栏引入重型 markdown 包；复杂排版交给右栏 FileViewer。──────────────────────
@@ -136,42 +241,73 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
 }
 
 function MarkdownLite({ text, trailingCursor }: { text: string; trailingCursor?: boolean }) {
-  // 按行渲染：- / * / 1. 视为列表项（缩进圆点），其余为段落。空行保留间距。
-  const lines = text.split('\n');
-  const lastNonEmptyIdx = (() => {
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (lines[i].trim() !== '') return i;
+  // 先按围栏代码块边界（```lang\n...\n```）切分；其余段落按行渲染。
+  type Seg = { type: 'text'; content: string } | { type: 'code'; lang: string; code: string };
+  const segments: Seg[] = [];
+  const fencedRe = /```(\w*)\n([\s\S]*?)```/g;
+  let lastIdx = 0;
+  let fm: RegExpExecArray | null;
+  while ((fm = fencedRe.exec(text)) !== null) {
+    if (fm.index > lastIdx) segments.push({ type: 'text', content: text.slice(lastIdx, fm.index) });
+    segments.push({ type: 'code', lang: fm[1], code: fm[2] });
+    lastIdx = fm.index + fm[0].length;
+  }
+  if (lastIdx < text.length) segments.push({ type: 'text', content: text.slice(lastIdx) });
+  if (segments.length === 0) segments.push({ type: 'text', content: text });
+
+  // trailing cursor 只附加到最后一个文本段的最后一行
+  const lastTextSegIdx = (() => {
+    for (let i = segments.length - 1; i >= 0; i--) {
+      if (segments[i].type === 'text') return i;
     }
-    return lines.length - 1;
+    return -1;
   })();
-  return (
-    <>
-      {lines.map((line, idx) => {
-        const isLast = idx === lastNonEmptyIdx;
-        const listMatch = /^\s*([-*]|\d+\.)\s+(.*)$/.exec(line);
-        if (listMatch) {
-          return (
-            <div key={idx} style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
-              <span aria-hidden style={{ color: 'var(--t-fg-4)', flexShrink: 0 }}>
-                {/^\d/.test(listMatch[1]) ? listMatch[1] : '•'}
-              </span>
-              <span>
-                {renderInline(listMatch[2], `l${idx}`)}
-                {trailingCursor && isLast && <span className="sf-blink-cursor" aria-hidden />}
-              </span>
-            </div>
-          );
-        }
-        if (line.trim() === '') return <div key={idx} style={{ height: 6 }} />;
-        return (
-          <div key={idx}>
-            {renderInline(line, `p${idx}`)}
-            {trailingCursor && isLast && <span className="sf-blink-cursor" aria-hidden />}
-          </div>
+
+  const nodes: ReactNode[] = [];
+  segments.forEach((seg, si) => {
+    if (seg.type === 'code') {
+      nodes.push(<FencedCodeBlock key={`code-${si}`} lang={seg.lang} code={seg.code} />);
+      return;
+    }
+    const lines = seg.content.split('\n');
+    const lastNonEmptyIdx = (() => {
+      for (let i = lines.length - 1; i >= 0; i--) {
+        if (lines[i].trim() !== '') return i;
+      }
+      return lines.length - 1;
+    })();
+    const isLastSeg = si === lastTextSegIdx;
+    lines.forEach((line, idx) => {
+      const isLast = isLastSeg && idx === lastNonEmptyIdx;
+      const listMatch = /^\s*([-*]|\d+\.)\s+(.*)$/.exec(line);
+      if (listMatch) {
+        nodes.push(
+          <div key={`${si}-${idx}`} style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
+            <span aria-hidden style={{ color: 'var(--t-fg-4)', flexShrink: 0 }}>
+              {/^\d/.test(listMatch[1]) ? listMatch[1] : '•'}
+            </span>
+            <span>
+              {renderInline(listMatch[2], `l${si}-${idx}`)}
+              {trailingCursor && isLast && <span className="sf-blink-cursor" aria-hidden />}
+            </span>
+          </div>,
         );
-      })}
-    </>
-  );
+        return;
+      }
+      if (line.trim() === '') {
+        nodes.push(<div key={`${si}-${idx}`} style={{ height: 6 }} />);
+        return;
+      }
+      nodes.push(
+        <div key={`${si}-${idx}`}>
+          {renderInline(line, `p${si}-${idx}`)}
+          {trailingCursor && isLast && <span className="sf-blink-cursor" aria-hidden />}
+        </div>,
+      );
+    });
+  });
+
+  return <>{nodes}</>;
 }
 
 // ── 头像 / 占位 ────────────────────────────────────────────────────────────────
