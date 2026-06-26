@@ -27,7 +27,23 @@ const FENCED_CODE_RE = /```(\w*)[^\n]*\n([\s\S]*?)\n?```/g;
 // Module-scoped expansion state for collapsible code blocks.
 // Key = messageId + ":" + blockIndex.  Persists across remounts during streaming
 // without triggering re-renders in other components.
-const expandedBlocks = new Set<string>();
+// Bounded LRU (max 500 entries) to prevent unbounded growth over long sessions.
+class BoundedSet<T> {
+  private readonly _map: Map<T, true>;
+  private readonly _max: number;
+  constructor(max: number) { this._map = new Map(); this._max = max; }
+  has(key: T): boolean { return this._map.has(key); }
+  add(key: T): void {
+    if (this._map.has(key)) { this._map.delete(key); }
+    else if (this._map.size >= this._max) {
+      const oldest = this._map.keys().next().value as T;
+      this._map.delete(oldest);
+    }
+    this._map.set(key, true);
+  }
+  delete(key: T): void { this._map.delete(key); }
+}
+const expandedBlocks = new BoundedSet<string>(500);
 const COLLAPSE_LINE_THRESHOLD = 15;
 const COLLAPSE_CHAR_THRESHOLD = 800;
 
@@ -87,7 +103,7 @@ function FencedCodeBlock({ lang, code, blockKey }: { lang: string; code: string;
   const collapsible = blockKey != null && (lineCount > COLLAPSE_LINE_THRESHOLD || code.length > COLLAPSE_CHAR_THRESHOLD);
 
   const [expanded, setExpanded] = useState<boolean>(() =>
-    !collapsible || expandedBlocks.has(blockKey ?? ''),
+    !collapsible || expandedBlocks.has(blockKey!),
   );
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -99,14 +115,17 @@ function FencedCodeBlock({ lang, code, blockKey }: { lang: string; code: string;
     [],
   );
 
+  // Deferred: only compute when expanded so collapsed blocks pay no hljs cost.
+  // (hljs.highlight benchmarks at 3–109 ms depending on language and code size)
   const highlighted = useMemo(() => {
+    if (!expanded) return '';
     if (lang && hljs.getLanguage(lang)) {
       return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
     }
     // Skip auto-detection (benchmarks at 109 ms on 6k chars vs 3 ms for named lang).
     // Escape HTML and render as plain text — 36x faster, no visible difference for unknown languages.
     return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }, [lang, code]);
+  }, [expanded, lang, code]);
 
   const handleCopyCode = () => {
     navigator.clipboard
@@ -142,8 +161,9 @@ function FencedCodeBlock({ lang, code, blockKey }: { lang: string; code: string;
         lineHeight: 1.55,
       }}
     >
-      {/* 语言 chip + 行数 + 复制按钮 + 折叠切换 */}
+      {/* 语言 chip + 行数 + 复制按钮 + 折叠切换 — 整行可点击切换展开/折叠 */}
       <div
+        onClick={collapsible ? handleToggle : undefined}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -151,6 +171,7 @@ function FencedCodeBlock({ lang, code, blockKey }: { lang: string; code: string;
           padding: '3px 10px',
           borderBottom: expanded ? '1px solid var(--t-border)' : 'none',
           background: 'color-mix(in oklab, var(--t-panel-2) 80%, var(--t-border))',
+          cursor: collapsible ? 'pointer' : undefined,
         }}
       >
         <span
@@ -169,7 +190,7 @@ function FencedCodeBlock({ lang, code, blockKey }: { lang: string; code: string;
           )}
           <button
             type="button"
-            onClick={handleCopyCode}
+            onClick={(e) => { e.stopPropagation(); handleCopyCode(); }}
             aria-label={copied ? '已复制' : '复制'}
             title={copied ? '已复制' : '复制'}
             style={{
@@ -196,8 +217,9 @@ function FencedCodeBlock({ lang, code, blockKey }: { lang: string; code: string;
           {collapsible && (
             <button
               type="button"
-              onClick={handleToggle}
+              onClick={(e) => { e.stopPropagation(); handleToggle(); }}
               aria-label={expanded ? '折叠' : '展开'}
+              aria-expanded={expanded}
               title={expanded ? '折叠' : '展开'}
               style={{
                 display: 'inline-flex',
