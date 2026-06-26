@@ -21,18 +21,8 @@ import { PRIMARY_NAV } from '../../config/navConfig';
 
 const RAIL_COLLAPSED_KEY = 'sf.chat.railCollapsed';
 
-const iconBtnStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: 7,
-  borderRadius: 7,
-  border: 'none',
-  background: 'none',
-  cursor: 'pointer',
-  color: 'var(--t-fg-4)',
-  textDecoration: 'none',
-};
+// R5 — 折叠态图标按钮样式收口到 index.css 的 .sf-rail-icon/.sf-rail-toggle
+// （inline style 会压制 class 的 :hover，故改用 class 才能有 hover/按压反馈）。
 
 // 2026-06-22 侧栏统一 — 导航从写死的 FOOTER_ITEMS 收口到单一真相源
 // src/config/navConfig.ts（PRIMARY_NAV），文案走 i18n。底部图标行升格为顶部
@@ -126,7 +116,8 @@ export function ChatRailHeader({
               title="收起侧边栏"
               data-testid="chatrail-collapse"
               onClick={onCollapse}
-              style={{ ...iconBtnStyle, padding: 4, flexShrink: 0 }}
+              className="sf-rail-icon sf-rail-toggle"
+              style={{ padding: 4, flexShrink: 0 }}
             >
               <PanelLeftClose size={14} strokeWidth={1.75} aria-hidden />
             </button>
@@ -251,14 +242,15 @@ export function ChatRail({
       }}
     >
       {collapsed ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 4px' }}>
+        // R5 — 折叠态图标轨随宽度收起淡入（clawsgo 折叠手感），不再瞬切。
+        <div className="sf-rail-fade" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 4px' }}>
           <button
             type="button"
             aria-label="展开侧边栏"
             title="展开侧边栏"
             data-testid="chatrail-expand"
             onClick={toggle}
-            style={iconBtnStyle}
+            className="sf-rail-icon sf-rail-toggle"
           >
             <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden />
           </button>
@@ -272,7 +264,7 @@ export function ChatRail({
           {/* 收起态竖排导航 — 走同一份 PRIMARY_NAV（图标 + tooltip）。
               搜索/设置已移至全局顶栏 HfTopBar。 */}
           {PRIMARY_NAV.map(({ key, labelKey, Icon, to }) => (
-            <Link key={key} to={to} title={t(labelKey)} aria-label={t(labelKey)} data-testid={`chatrail-${key}`} style={iconBtnStyle}>
+            <Link key={key} to={to} title={t(labelKey)} aria-label={t(labelKey)} data-testid={`chatrail-${key}`} className="sf-rail-icon">
               <Icon size={15} strokeWidth={1.75} aria-hidden />
             </Link>
           ))}

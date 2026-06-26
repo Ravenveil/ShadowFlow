@@ -1314,11 +1314,25 @@ input, textarea, select { font-family: inherit; color: inherit; }
 /* 列表内容随个人/团队切换淡入（R2 用）。 */
 .sf-rail-fade { animation: sf-rail-fade var(--dur-2) var(--ease-out) both; }
 
+/* 折叠态侧栏图标按钮（R5）—— 收进 class 才能让 :hover 生效（inline style 会压制
+   class 的 hover 颜色/底色）。base 复刻原 iconBtnStyle，叠加 hover 底色 + 按压缩放。 */
+.sf-rail-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 7px; border-radius: 7px; border: none; background: none; cursor: pointer;
+  color: var(--t-fg-4); text-decoration: none;
+  transition: background var(--dur-1) ease, color var(--dur-1) ease, transform var(--dur-1) var(--ease-out);
+}
+.sf-rail-icon:hover { background: var(--t-panel-2); color: var(--t-fg); }
+.sf-rail-icon:active { transform: scale(.9); }
+/* 折叠/展开把手：图标随 hover 微缩放，chevron 式 delight（clawsgo 折叠手感）。 */
+.sf-rail-toggle > svg { transition: transform var(--dur-2) var(--ease-spring); }
+.sf-rail-toggle:hover > svg { transform: scale(1.14); }
+
 @media (prefers-reduced-motion: reduce) {
   .sf-rail-in, .sf-rail-out, .sf-rail-fade { animation: none !important; }
   .pcv-row { transition: background var(--dur-1) ease !important; }
-  .pcv-row:active { transform: none !important; }
-  .pcv-row::before { transition: none !important; }
+  .pcv-row:active, .sf-rail-icon:active { transform: none !important; }
+  .pcv-row::before, .sf-rail-toggle > svg { transition: none !important; }
 }
 
 /* "Load more" button below DM list */
