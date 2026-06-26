@@ -21,6 +21,21 @@ import { PersonalRunRightPane } from './PersonalRunRightPane';
 import { useSidebarSlotEl } from './SidebarSlotContext';
 import { PagePeekOverlay } from './PagePeekOverlay';
 import { relTime } from '../../core/utils/relTime';
+import { KEY_STORAGE, PROVIDER_IDS } from '../../api/_base';
+
+/**
+ * 模型快速选择器的选项列表（module scope — 避免每次 render 重建数组）。
+ * 第一项 'Auto (CLI)' 是默认态：无 sf.model 存储时的回退值 / checkmark 基准。
+ */
+const MODEL_OPTIONS = [
+  'Auto (CLI)',
+  'claude-opus-4',
+  'claude-sonnet-4-5',
+  'claude-haiku-4-5',
+  'gpt-4o',
+  'gpt-4o-mini',
+  'deepseek-chat',
+] as const;
 
 /**
  * PersonalChatView — 个人态(Cherry Studio 式三栏,融合M1):
@@ -142,18 +157,18 @@ export function PersonalChatView() {
   // 单聊 header 用：人设首行 + 当前模型标签（BYOK localStorage，响应式）
   const personaLine = (selected?.soul ?? '').split('\n').map((s) => s.trim()).find(Boolean) ?? '';
   const [modelLabel, setModelLabel] = useState<string>(() => {
-    try { return localStorage.getItem('sf.model') || 'Auto'; } catch { return 'Auto'; }
+    try { return localStorage.getItem('sf.model') || 'Auto (CLI)'; } catch { return 'Auto (CLI)'; }
   });
   useEffect(() => {
     // Cross-tab: storage event only fires for OTHER tabs — guard storageArea.
     function onStorage(e: StorageEvent) {
       if (e.key === 'sf.model' && e.storageArea === window.localStorage) {
-        setModelLabel(e.newValue || 'Auto');
+        setModelLabel(e.newValue || 'Auto (CLI)');
       }
     }
     // Same-tab: custom event dispatched by every localStorage.setItem('sf.model', …) call.
     function onModelChanged() {
-      try { setModelLabel(localStorage.getItem('sf.model') || 'Auto'); } catch { /* ignore */ }
+      try { setModelLabel(localStorage.getItem('sf.model') || 'Auto (CLI)'); } catch { /* ignore */ }
     }
     window.addEventListener('storage', onStorage);
     window.addEventListener('sf-model-changed', onModelChanged);
@@ -162,6 +177,40 @@ export function PersonalChatView() {
       window.removeEventListener('sf-model-changed', onModelChanged);
     };
   }, []);
+
+  // BYOK key status indicator — true if any provider has a key stored.
+  // Responds to both cross-tab (native `storage` event) AND same-tab saves
+  // (sf-byok-changed dispatched by setStoredApiKey / clearStoredApiKey in _base.ts).
+  const [hasByokKey, setHasByokKey] = useState<boolean>(() => {
+    try { return PROVIDER_IDS.some((id) => !!localStorage.getItem(KEY_STORAGE[id])); } catch { return false; }
+  });
+  useEffect(() => {
+    function checkByok() {
+      try { setHasByokKey(PROVIDER_IDS.some((id) => !!localStorage.getItem(KEY_STORAGE[id]))); } catch { /* ignore */ }
+    }
+    function onByokStorage(e: StorageEvent) {
+      if (e.storageArea === window.localStorage) checkByok();
+    }
+    window.addEventListener('storage', onByokStorage);
+    window.addEventListener('sf-byok-changed', checkByok);
+    return () => {
+      window.removeEventListener('storage', onByokStorage);
+      window.removeEventListener('sf-byok-changed', checkByok);
+    };
+  }, []);
+
+  // 模型快速选择下拉框（DM header 右侧 dm-head-model 按钮控制）。
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const modelPickerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!showModelPicker) return;
+    function onDocClick(e: MouseEvent) {
+      if (modelPickerRef.current && modelPickerRef.current.contains(e.target as Node)) return;
+      setShowModelPicker(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [showModelPicker]);
 
   const { messages, send, cancel, streaming, error, pendingCount } = useChatStream({
     mode: 'group',
@@ -581,7 +630,80 @@ export function PersonalChatView() {
                 </div>
               </button>
               <div className="dm-head-actions">
-                <span className="dm-head-model" title="当前模型">{modelLabel}</span>
+                {/* 模型快速选择器：BYOK 状态点 + 当前模型标签 + 下拉 */}
+                <div ref={modelPickerRef} style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    className="dm-head-model"
+                    title={hasByokKey ? 'API Key 已配置 · 点击切换模型' : '未配置 API Key（将使用 CLI）· 点击切换'}
+                    onClick={() => setShowModelPicker((v) => !v)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', background: 'none', border: '1px solid var(--t-border)' }}
+                  >
+                    {/* BYOK 状态点：绿=有 key，灰=无 key */}
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        background: hasByokKey ? 'var(--t-ok, #16a34a)' : 'var(--t-fg-5)',
+                        flexShrink: 0,
+                      }}
+                    />
+                    {modelLabel}
+                    <ChevronDown size={9} strokeWidth={2.5} style={{ flexShrink: 0, opacity: 0.6 }} />
+                  </button>
+                  {showModelPicker && (
+                    <div
+                      className="sf-anim-fade"
+                      style={{
+                        position: 'absolute',
+                        right: 0,
+                        bottom: 'calc(100% + 6px)',
+                        background: 'var(--t-panel)',
+                        border: '1px solid var(--t-border)',
+                        borderRadius: 9,
+                        boxShadow: '0 8px 24px -4px rgba(0,0,0,.26)',
+                        padding: '4px 0',
+                        minWidth: 154,
+                        zIndex: 200,
+                      }}
+                    >
+                      {MODEL_OPTIONS.map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            localStorage.setItem('sf.model', opt);
+                            setModelLabel(opt);
+                            window.dispatchEvent(new Event('sf-model-changed'));
+                            setShowModelPicker(false);
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 8,
+                            width: '100%',
+                            padding: '6px 12px',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            fontFamily: 'inherit',
+                            color: modelLabel === opt ? 'var(--t-accent)' : 'var(--t-fg-2)',
+                            textAlign: 'left',
+                          }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-panel-2)'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                        >
+                          <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12 }}>{opt}</span>
+                          {modelLabel === opt && <Check size={11} strokeWidth={2.5} style={{ flexShrink: 0, color: 'var(--t-accent)' }} />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowExport(true)}

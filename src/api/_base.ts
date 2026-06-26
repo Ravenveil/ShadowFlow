@@ -235,6 +235,9 @@ export function getStoredApiKey(provider: ProviderId = 'anthropic'): string | nu
 export function setStoredApiKey(key: string, provider: ProviderId = 'anthropic'): void {
   try {
     localStorage.setItem(KEY_STORAGE[provider], key);
+    // Notify same-tab listeners (e.g. PersonalChatView BYOK status dot) that a
+    // key was added. Cross-tab is handled by the native `storage` event.
+    window.dispatchEvent(new Event('sf-byok-changed'));
   } catch {
     // ignore quota / unavailable errors — UI surfaces failure separately
   }
@@ -244,6 +247,7 @@ export function setStoredApiKey(key: string, provider: ProviderId = 'anthropic')
 export function clearStoredApiKey(provider: ProviderId = 'anthropic'): void {
   try {
     localStorage.removeItem(KEY_STORAGE[provider]);
+    window.dispatchEvent(new Event('sf-byok-changed'));
   } catch {
     // ignore
   }
