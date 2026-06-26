@@ -269,13 +269,29 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
+  const pushItalic = (s: string) => {
+    // 处理 *italic* 与 _italic_（单星号/单下划线，不与 **bold** 冲突——bold 已先剥离）。
+    const itRe = /(?:\*([^*\n]+)\*|_([^_\n]+)_)/g;
+    let il = 0;
+    let im: RegExpExecArray | null;
+    while ((im = itRe.exec(s)) !== null) {
+      if (im.index > il) pushLinks(s.slice(il, im.index));
+      out.push(
+        <em key={`${keyBase}-i${i++}`} style={{ fontStyle: 'italic' }}>
+          {im[1] ?? im[2]}
+        </em>,
+      );
+      il = im.index + im[0].length;
+    }
+    if (il < s.length) pushLinks(s.slice(il));
+  };
   const pushPlain = (s: string) => {
-    // 处理 **bold**
+    // 处理 **bold**（先剥离 bold，剩余片段再交给 italic→links）。
     const boldRe = /\*\*([^*]+)\*\*/g;
     let bl = 0;
     let bm: RegExpExecArray | null;
     while ((bm = boldRe.exec(s)) !== null) {
-      if (bm.index > bl) pushLinks(s.slice(bl, bm.index));
+      if (bm.index > bl) pushItalic(s.slice(bl, bm.index));
       out.push(
         <strong key={`${keyBase}-b${i++}`} style={{ fontWeight: 650 }}>
           {bm[1]}
@@ -283,7 +299,7 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
       );
       bl = bm.index + bm[0].length;
     }
-    if (bl < s.length) pushLinks(s.slice(bl));
+    if (bl < s.length) pushItalic(s.slice(bl));
   };
   const pushLinks = (s: string) => {
     const urlRe = /(https?:\/\/[^\s)]+)/g;
@@ -395,6 +411,54 @@ function MarkdownLite({ text, trailingCursor, messageId }: { text: string; trail
     const isLastSeg = si === lastTextSegIdx;
     lines.forEach((line, idx) => {
       const isLast = isLastSeg && idx === lastNonEmptyIdx;
+      // ATX 标题 #..###### — 渲染成分级加粗标题（GFM 最常见、缺失最显眼的一类）。
+      const headingMatch = /^(#{1,6})\s+(.*)$/.exec(line);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const fontSize = [17, 15.5, 14.5, 13.5, 13, 12.5][level - 1] ?? 13;
+        nodes.push(
+          <div
+            key={`${si}-${idx}`}
+            style={{
+              fontWeight: 700,
+              fontSize,
+              lineHeight: 1.35,
+              margin: idx === 0 ? '0 0 3px' : '8px 0 3px',
+              color: 'var(--t-fg-1, var(--t-fg-2))',
+            }}
+          >
+            {renderInline(headingMatch[2], `h${si}-${idx}`)}
+            {trailingCursor && isLast && <span className="sf-blink-cursor" aria-hidden />}
+          </div>,
+        );
+        return;
+      }
+      // 引用块 > text — 左竖线 + 淡色（GFM blockquote）。
+      const quoteMatch = /^>\s?(.*)$/.exec(line);
+      if (quoteMatch) {
+        nodes.push(
+          <div
+            key={`${si}-${idx}`}
+            style={{
+              borderLeft: '3px solid var(--t-border)',
+              paddingLeft: 9,
+              color: 'var(--t-fg-3)',
+              margin: '1px 0',
+            }}
+          >
+            {renderInline(quoteMatch[1], `q${si}-${idx}`)}
+            {trailingCursor && isLast && <span className="sf-blink-cursor" aria-hidden />}
+          </div>,
+        );
+        return;
+      }
+      // 分隔线 --- / *** / ___（整行）。
+      if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
+        nodes.push(
+          <hr key={`${si}-${idx}`} style={{ border: 'none', borderTop: '1px solid var(--t-border)', margin: '8px 0' }} />,
+        );
+        return;
+      }
       const listMatch = /^\s*([-*]|\d+\.)\s+(.*)$/.exec(line);
       if (listMatch) {
         nodes.push(
