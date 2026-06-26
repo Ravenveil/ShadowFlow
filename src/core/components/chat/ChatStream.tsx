@@ -137,8 +137,9 @@ function ensureBlinkKeyframes() {
   w[KEYFRAMES_INJECTED_FLAG] = true;
 }
 
-function statusGlyph(s?: 'sent' | 'delivered' | 'read'): string {
+function statusGlyph(s?: 'sent' | 'delivered' | 'read' | 'error'): string {
   if (!s) return '';
+  if (s === 'error') return '!';
   if (s === 'sent') return '✓';
   if (s === 'delivered') return '✓✓';
   return '✓✓·'; // read
@@ -233,11 +234,13 @@ export function MessageBubble({ message, showSenderHeader = false }: MessageBubb
   const senderColor = message.senderColor ?? 'var(--t-accent)';
 
   const statusTitle =
-    message.status === 'read'
-      ? T('已读', 'Read')
-      : message.status === 'delivered'
-        ? T('已送达', 'Delivered')
-        : T('已发送', 'Sent');
+    message.status === 'error'
+      ? T('发送失败', 'Failed')
+      : message.status === 'read'
+        ? T('已读', 'Read')
+        : message.status === 'delivered'
+          ? T('已送达', 'Delivered')
+          : T('已发送', 'Sent');
 
   return (
     <div style={rowStyle}>

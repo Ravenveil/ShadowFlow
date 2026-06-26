@@ -352,7 +352,12 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamResul
         timestamp: new Date().toISOString(),
         status: 'sent',
       };
-      setMessages((prev) => [...prev, optimistic]);
+      // Remove any prior error bubble with the same text so retry doesn't
+      // leave a duplicate "error" bubble alongside the new "sent" one.
+      setMessages((prev) => [
+        ...prev.filter((m) => !(m.role === 'user' && m.status === 'error' && m.content === text)),
+        optimistic,
+      ]);
       setError(null);
       setStreaming(true);
 

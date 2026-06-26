@@ -593,6 +593,7 @@ export const StudioMessageRow = memo(function StudioMessageRow({
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
   const [bubbleHovered, setBubbleHovered] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cancel any pending timer on unmount to avoid setState on unmounted component.
@@ -633,12 +634,15 @@ export const StudioMessageRow = memo(function StudioMessageRow({
   }
 
   const isUser = m.role === 'user';
-  const bubbleBg = m.error
+  // Treat status==='error' the same as m.error for visual purposes so the
+  // failure state is immediately discoverable even when only status is set.
+  const isErrorState = m.error || m.status === 'error';
+  const bubbleBg = isErrorState
     ? 'color-mix(in oklab, var(--t-danger, #e5484d) 12%, var(--t-panel))'
     : isUser
       ? 'color-mix(in oklab, var(--t-accent) 16%, var(--t-panel))'
       : 'var(--t-panel-2)';
-  const bubbleBorder = m.error
+  const bubbleBorder = isErrorState
     ? 'color-mix(in oklab, var(--t-danger, #e5484d) 40%, transparent)'
     : 'var(--t-border)';
 
@@ -723,7 +727,7 @@ export const StudioMessageRow = memo(function StudioMessageRow({
               color: 'var(--t-fg)',
             }}
           >
-            {m.error && (
+            {isErrorState && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, color: 'var(--t-danger, #e5484d)' }}>
                 <AlertTriangle size={12} strokeWidth={2} aria-hidden />
                 <span style={{ fontSize: 11, fontWeight: 600 }}>出错</span>
@@ -801,9 +805,14 @@ export const StudioMessageRow = memo(function StudioMessageRow({
       {isUser && m.status === 'error' && onRetry && (
         <button
           type="button"
-          onClick={() => onRetry(m.text)}
-          aria-label="重试"
-          title="重试"
+          disabled={retrying}
+          onClick={() => {
+            if (retrying) return;
+            setRetrying(true);
+            onRetry(m.text);
+          }}
+          aria-label={retrying ? '重试中…' : '重试'}
+          title={retrying ? '重试中…' : '重试'}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -813,14 +822,15 @@ export const StudioMessageRow = memo(function StudioMessageRow({
             border: '1px solid var(--t-danger, #e5484d)',
             background: 'color-mix(in oklab, var(--t-danger, #e5484d) 10%, var(--t-panel))',
             color: 'var(--t-danger, #e5484d)',
-            cursor: 'pointer',
+            cursor: retrying ? 'not-allowed' : 'pointer',
+            opacity: retrying ? 0.5 : 1,
             fontSize: 11,
             fontFamily: 'var(--font-sans)',
             transition: 'opacity 0.15s',
           }}
         >
-          <RotateCcw size={11} strokeWidth={2} aria-hidden />
-          <span>重试</span>
+          <RotateCcw size={11} strokeWidth={2} aria-hidden style={retrying ? { animation: 'spin 0.8s linear infinite' } : undefined} />
+          <span>{retrying ? '重试中…' : '重试'}</span>
         </button>
       )}
 
