@@ -97,6 +97,7 @@ export function AgentWorkspacePane({
   trailing,
   agent,
   roleSignal,
+  onAgentUpdated,
 }: {
   groupId?: string | null;
   trailing?: ReactNode;
@@ -104,6 +105,8 @@ export function AgentWorkspacePane({
   agent?: AgentRecord | null;
   /** 中栏头部点击的递增信号 — 变化即弹出并激活「角色」tab。 */
   roleSignal?: number;
+  /** soul 保存成功后回调父组件刷新 selected agent state。 */
+  onAgentUpdated?: (updated: AgentRecord) => void;
 }) {
   const [tab, setTab] = useState<WsTab>('preview');
   const [roleOpen, setRoleOpen] = useState(false);
@@ -150,7 +153,7 @@ export function AgentWorkspacePane({
                   <X size={13} />
                 </button>
               </div>
-              <AgentSettingsCard agent={agent} />
+              <AgentSettingsCard agent={agent} onAgentUpdated={onAgentUpdated} />
             </div>
           ) : (
             <div style={{ flex: 1 }} />

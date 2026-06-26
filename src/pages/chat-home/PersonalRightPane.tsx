@@ -14,12 +14,14 @@ interface PersonalRightPaneProps {
   groupId?: string | null;
   /** 中栏头部点击的递增信号 — 触发右栏弹出「角色」tab。 */
   roleSignal?: number;
+  /** soul 保存成功后回调父组件刷新 selected agent state。 */
+  onAgentUpdated?: (updated: AgentRecord) => void;
 }
 
 /**
  * PersonalRightPane — 个人态右栏（第三栏，常驻）。单排工作台外壳。可拖拽宽度、可收起。
  */
-export function PersonalRightPane({ groupId, agent, roleSignal }: PersonalRightPaneProps) {
+export function PersonalRightPane({ groupId, agent, roleSignal, onAgentUpdated }: PersonalRightPaneProps) {
   const [collapsed, setCollapsed] = useState(false);
   // 可拖拽宽度（只在展开态生效）
   const { width, dragging, onDragStart } = useResizableWidth('sf-rightpane-w', 312, { min: 280, max: 720 });
@@ -52,6 +54,7 @@ export function PersonalRightPane({ groupId, agent, roleSignal }: PersonalRightP
         groupId={groupId}
         agent={agent}
         roleSignal={roleSignal}
+        onAgentUpdated={onAgentUpdated}
         trailing={
           <button type="button" aria-label="收起右栏" title="收起右栏" onClick={() => setCollapsed(true)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t-fg-4)', padding: 6, borderRadius: 6, display: 'inline-flex', alignItems: 'center' }}>

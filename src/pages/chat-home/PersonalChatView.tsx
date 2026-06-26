@@ -642,7 +642,15 @@ export function PersonalChatView() {
           · DM(已选 agent) → PersonalRightPane 设定卡 */}
       {agentId === null
         ? (personalRunId ? <PersonalRunRightPane sessionId={personalRunId} /> : null)
-        : <PersonalRightPane key={selected?.agent_id ?? 'none'} agent={selected} groupId={dmGroupId} roleSignal={roleSignal} />}
+        : <PersonalRightPane
+            key={selected?.agent_id ?? 'none'}
+            agent={selected}
+            groupId={dmGroupId}
+            roleSignal={roleSignal}
+            onAgentUpdated={(updated) => {
+              setAgents((prev) => prev.map((a) => a.agent_id === updated.agent_id ? updated : a));
+            }}
+          />}
 
       {showCreate && <PagePeekOverlay target="agents" onClose={handlePeekClose} />}
     </div>
