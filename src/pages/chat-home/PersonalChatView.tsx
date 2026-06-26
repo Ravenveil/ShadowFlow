@@ -134,13 +134,22 @@ export function PersonalChatView() {
     try { return localStorage.getItem('sf.model') || 'Auto'; } catch { return 'Auto'; }
   });
   useEffect(() => {
+    // Cross-tab: storage event only fires for OTHER tabs — guard storageArea.
     function onStorage(e: StorageEvent) {
-      if (e.key === 'sf.model') {
+      if (e.key === 'sf.model' && e.storageArea === window.localStorage) {
         setModelLabel(e.newValue || 'Auto');
       }
     }
+    // Same-tab: custom event dispatched by every localStorage.setItem('sf.model', …) call.
+    function onModelChanged() {
+      try { setModelLabel(localStorage.getItem('sf.model') || 'Auto'); } catch { /* ignore */ }
+    }
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener('sf-model-changed', onModelChanged);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('sf-model-changed', onModelChanged);
+    };
   }, []);
 
   const { messages, send, cancel, streaming, error } = useChatStream({

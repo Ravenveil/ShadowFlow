@@ -2617,6 +2617,7 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
                   setSelectedExecutor(next.executor);
                   if (next.executor.startsWith('byok:') && next.model) {
                     localStorage.setItem('sf.model', next.model);
+                    window.dispatchEvent(new Event('sf-model-changed'));
                     setSelectedModel(next.model);
                   }
                 }}

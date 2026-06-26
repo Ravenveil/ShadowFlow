@@ -687,6 +687,7 @@ export default function ChatPage() {
         setPickExecutor(next.executor);
         if (next.executor.startsWith('byok:') && next.model) {
           localStorage.setItem('sf.model', next.model);
+          window.dispatchEvent(new Event('sf-model-changed'));
           setPickModel(next.model);
         }
       },
