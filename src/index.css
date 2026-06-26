@@ -1304,8 +1304,11 @@ input, textarea, select { font-family: inherit; color: inherit; }
 @keyframes sf-rail-out  { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-10px); } }
 @keyframes sf-rail-fade { from { opacity: 0; } to { opacity: 1; } }
 
-/* 列表项入场：进入时上浮淡入。stagger 由内联 animation-delay 控制。 */
-.sf-rail-in  { animation: sf-rail-in var(--dur-3) var(--ease-out) both; }
+/* 列表项入场：进入时上浮淡入。stagger 由内联 animation-delay 控制。
+   fill-mode 用 backwards（非 both）：延迟期套 from 隐藏未启动的行，但动画结束后
+   释放 transform，不把行锁在 translateY(0)，从而不压制 .pcv-row/.row 的 :active 按压
+   缩放（R4 修 reviewer-H）。to 帧的 translateY(0) 与自然态等价，无视觉跳变。 */
+.sf-rail-in  { animation: sf-rail-in var(--dur-3) var(--ease-out) backwards; }
 /* 列表项退场：左滑淡出（R4 删除时套用，配合 JS 延后卸载）。 */
 .sf-rail-out { animation: sf-rail-out var(--dur-2) var(--ease-in-out) both; pointer-events: none; }
 /* 列表内容随个人/团队切换淡入（R2 用）。 */

@@ -269,6 +269,9 @@ export function PersonalChatView() {
   const [renameValue, setRenameValue] = useState('');
   // 二步确认删除：点第一次变成 'confirm' 态，再点才真删
   const [deleteConfirmAgentId, setDeleteConfirmAgentId] = useState<string | null>(null);
+  // R4 — 删除退场动画（clawsgo）：真删前先把行标记 removing → 套 .sf-rail-out 左滑淡出，
+  // 200ms 后再从 store 卸载（React 立即卸载会跳过退场动画，需延后）。
+  const [removingIds, setRemovingIds] = useState<Set<string>>(() => new Set());
   // 弹出菜单的 DOM 容器 ref — 用于点外自动关闭
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -333,9 +336,18 @@ export function PersonalChatView() {
       return;
     }
     setDeleteConfirmAgentId(null);
-    useInboxStore.getState().removeAgentDM(d.agentId);
     setMenuAgentId(null);
     if (agentId === d.agentId) selectAgent(null);
+    // R4 — 退场动画：先标 removing（行套 .sf-rail-out 左滑淡出），200ms 后真删。
+    setRemovingIds((prev) => new Set(prev).add(d.agentId));
+    window.setTimeout(() => {
+      useInboxStore.getState().removeAgentDM(d.agentId);
+      setRemovingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(d.agentId);
+        return next;
+      });
+    }, 200);
     if (menuGroupId) {
       try {
         await deleteGroup(menuGroupId);
@@ -415,7 +427,7 @@ export function PersonalChatView() {
                   }
                   // 正常行 + hover 显示 "..." 按钮
                   return (
-                    <div key={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={`pcv-row sf-rail-in${active ? ' active' : ''}`} style={{ animationDelay: `${Math.min(idx, 8) * 22}ms` }}>
+                    <div key={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={`pcv-row sf-rail-in${active ? ' active' : ''}${removingIds.has(d.agentId) ? ' sf-rail-out' : ''}`} style={{ animationDelay: `${Math.min(idx, 8) * 22}ms` }}>
                       {/* 主点击区域 */}
                       <button
                         type="button"
