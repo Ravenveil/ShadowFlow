@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+const PAGE_SIZE = 12;
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, MoreHorizontal, Pencil, Plus, Search, Square, SquarePen, Trash2 } from 'lucide-react';
@@ -92,8 +94,7 @@ export function PersonalChatView() {
   useEffect(() => {
     void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
   }, [workspaceId]);
-  // 分页：默认展示 12 条，每次「更多」追加 12 条。
-  const PAGE_SIZE = 12;
+  // 分页：默认展示 PAGE_SIZE 条，每次「更多」追加 PAGE_SIZE 条。
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   // 重置分页当工作区切换
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [workspaceId]);
@@ -107,15 +108,26 @@ export function PersonalChatView() {
   const recentDMs = useMemo(() => sortedDMs.slice(0, visibleCount), [sortedDMs, visibleCount]);
   const hasMore = sortedDMs.length > visibleCount;
 
-  // IntersectionObserver：当最后一行进入视口时自动加载下一批。
+  // IntersectionObserver：当最后一行进入滚动容器时自动加载下一批。
   const lastDmRowRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const isFiringRef = useRef(false);
   const loadMore = useCallback(() => setVisibleCount((n) => n + PAGE_SIZE), []);
   useEffect(() => {
     const el = lastDmRowRef.current;
     if (!el || !hasMore) return;
     const obs = new IntersectionObserver(
-      (entries) => { if (entries[0]?.isIntersecting) loadMore(); },
-      { threshold: 0.1 },
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        // Guard: disconnect immediately before state update to prevent double-fire
+        // within the same observer cycle (before React re-renders and cleans up).
+        if (isFiringRef.current) return;
+        isFiringRef.current = true;
+        obs.disconnect();
+        loadMore();
+        setTimeout(() => { isFiringRef.current = false; }, 200);
+      },
+      { root: listRef.current, threshold: 0.1 },
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -317,7 +329,7 @@ export function PersonalChatView() {
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索助手" aria-label="搜索助手" />
             </div>
           </div>
-          <div className="pcv-list">
+          <div className="pcv-list" ref={listRef}>
             {/* 会话记录（U3 · 2026-06-23）— 最近单聊会话，点击恢复（group 模式自带
                 历史加载）。头像按 agent_id 取色（消费 U0 paletteForAgent）。搜索时隐藏，
                 聚焦助手检索。Python 没起 → recentDMs 空 → 整段不渲染。 */}
@@ -443,15 +455,8 @@ export function PersonalChatView() {
                 {hasMore && (
                   <button
                     type="button"
+                    className="pcv-more-btn"
                     onClick={loadMore}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                      width: '100%', padding: '5px 8px', background: 'none', border: 'none',
-                      borderRadius: 5, cursor: 'pointer', fontSize: 11.5, color: 'var(--t-fg-4)',
-                      fontFamily: 'inherit',
-                    }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-panel-2)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
                   >
                     <ChevronDown size={13} />
                     更多对话（{sortedDMs.length - visibleCount}）
