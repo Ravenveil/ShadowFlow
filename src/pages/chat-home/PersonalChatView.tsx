@@ -95,7 +95,9 @@ export function PersonalChatView() {
 
   // 会话记录（U3）— 拉收件箱拿最近单聊会话，渲染成左栏「会话记录」段。
   // Python 没起时为空（503 → store error），降级为空态，不报 JS 错。
-  const agentDMs = useInboxStore((s) => s.agentDMs);
+  // ?? [] 守卫：Python 后端宕机时 store agentDMs 可能为 undefined，下游 [...agentDMs]
+  // 会抛「undefined is not iterable」崩掉整个个人态（注释声称"降级为空态"，此守卫兑现它）。
+  const agentDMs = useInboxStore((s) => s.agentDMs) ?? [];
   useEffect(() => {
     void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
   }, [workspaceId]);
@@ -152,7 +154,7 @@ export function PersonalChatView() {
   }, [agentId, agentInWs, workspaceId]);
 
   const filtered = useMemo(
-    () => agents.filter((a) => a.name.toLowerCase().includes(q.trim().toLowerCase())),
+    () => agents.filter((a) => (a.name ?? '').toLowerCase().includes(q.trim().toLowerCase())),
     [agents, q],
   );
   // FLIP 重排：列表顺序/成员变化(删除补位、未读跳顶)时下方行平滑滑动补位而非瞬跳
@@ -639,7 +641,7 @@ export function PersonalChatView() {
               const active = a.agent_id === agentId;
               return (
                 <button key={a.agent_id} data-flip-id={`ag_${a.agent_id}`} type="button" className={`pcv-row sf-rail-in${active ? ' active' : ''}`} style={{ animationDelay: `${Math.min(i, 8) * 22}ms` }} onClick={() => selectAgent(a.agent_id)}>
-                  <HfAvatar glyph={Array.from(a.name)[0] ?? '?'} color={a.avatar_color ?? 'var(--t-accent)'} size={32} status="ok" />
+                  <HfAvatar glyph={Array.from(a.name ?? '')[0] ?? '?'} color={a.avatar_color ?? 'var(--t-accent)'} size={32} status="ok" />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="pcv-row-name">{a.name}</div>
                     <div className="pcv-row-sub">{a.soul?.split('\n')[0] ?? ''}</div>
@@ -683,7 +685,7 @@ export function PersonalChatView() {
                 title="查看角色 / agent 详情"
                 style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
               >
-                <HfAvatar glyph={Array.from(selected.name)[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={38} />
+                <HfAvatar glyph={Array.from(selected.name ?? '')[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={38} />
                 <div className="dm-head-id">
                   <div className="dm-head-name">
                     {selected.name}
@@ -886,7 +888,7 @@ export function PersonalChatView() {
               {studioMessages.length === 0 ? (
                 /* DM 空对话引导态——和该助手开始,给几个启动 prompt */
                 <div className="dm-empty">
-                  <HfAvatar glyph={Array.from(selected.name)[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={56} />
+                  <HfAvatar glyph={Array.from(selected.name ?? '')[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={56} />
                   <div className="dm-empty-name">和「{selected.name}」开始对话</div>
                   {personaLine && <div className="dm-empty-persona">{personaLine}</div>}
                   <div className="dm-empty-chips">
