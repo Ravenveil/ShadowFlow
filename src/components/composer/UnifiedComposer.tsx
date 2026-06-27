@@ -34,6 +34,7 @@ import {
   Hash,
   Download,
   ArrowRight,
+  ArrowUp,
   CheckCircle2,
   XCircle,
   Loader2,
@@ -1208,30 +1209,65 @@ export function UnifiedComposer({
           )}
           <div style={{ flex: 1, minWidth: 6 }} />
           {streaming ? (
-            /* 流式中：发送按钮原地变为「停止」按钮（同位切换，对齐竞品）。 */
+            /* 流式中：发送按钮原地变为「停止」按钮（同位切换，对齐竞品）。
+               chat 变体用 32px 圆角方钮（■ 图标）；hero 用带文字的红钮。 */
+            isChat ? (
+              <button
+                type="button"
+                onClick={() => onStop?.()}
+                className="sf-press sf-focus-ring"
+                style={{
+                  width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  border: 'none', cursor: 'pointer',
+                  color: '#fff', background: 'var(--t-err, #dc3545)',
+                }}
+                data-testid="composer-stop"
+                aria-label="停止生成"
+                title="停止生成"
+              >
+                <span aria-hidden style={{ width: 11, height: 11, borderRadius: 2.5, background: 'currentColor', display: 'inline-block' }} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onStop?.()}
+                className="sf-press sf-focus-ring"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 12, fontWeight: 800, padding: '7px 14px', height: 28, borderRadius: 8,
+                  border: '1px solid var(--t-err, #dc3545)', color: 'var(--t-err, #dc3545)',
+                  background: 'color-mix(in oklab, var(--t-err, #dc3545) 8%, transparent)', cursor: 'pointer',
+                }}
+                data-testid="composer-stop"
+                aria-label="停止生成"
+              >
+                <span aria-hidden style={{ width: 9, height: 9, borderRadius: 2, background: 'currentColor', display: 'inline-block' }} />
+                停止
+              </button>
+            )
+          ) : isChat ? (
+            /* chat 变体：竞品式 32px 圆角方形发送钮（↑ 箭头），空文本时禁用变灰。 */
             <button
               type="button"
-              onClick={() => onStop?.()}
+              onClick={() => void handleSubmit()}
+              disabled={submitting || !composer.trim()}
               className="sf-press sf-focus-ring"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 12,
-                fontWeight: 800,
-                padding: '7px 14px',
-                height: 28,
-                borderRadius: 8,
-                border: '1px solid var(--t-err, #dc3545)',
-                color: 'var(--t-err, #dc3545)',
-                background: 'color-mix(in oklab, var(--t-err, #dc3545) 8%, transparent)',
-                cursor: 'pointer',
+                width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                border: 'none',
+                color: '#fff',
+                background: composer.trim() ? 'var(--t-accent)' : 'var(--t-border)',
+                boxShadow: composer.trim() ? '0 6px 16px -6px color-mix(in oklab, var(--t-accent) 60%, transparent)' : 'none',
+                cursor: submitting ? 'wait' : composer.trim() ? 'pointer' : 'not-allowed',
+                transition: 'background 140ms ease, box-shadow 140ms ease',
               }}
-              data-testid="composer-stop"
-              aria-label="停止生成"
+              data-testid="start-submit"
+              aria-label={t('start.submit')}
+              title={t('start.submit')}
             >
-              <span aria-hidden style={{ width: 9, height: 9, borderRadius: 2, background: 'currentColor', display: 'inline-block' }} />
-              停止
+              {submitting ? <Loader2 size={15} className="sf-spin" /> : <ArrowUp size={17} strokeWidth={2.4} />}
             </button>
           ) : (
             <button
