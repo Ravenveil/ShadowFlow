@@ -147,6 +147,8 @@
   flex: 1;
   overflow: auto;
   min-height: 0;
+  /* position:relative — FLIP(useFlipReorder) offsetTop 锚点收敛到本容器(reviewer-C)。 */
+  position: relative;
 }
 .listInner {
   padding: 0 8px;

@@ -156,12 +156,8 @@ export function PersonalChatView() {
     [agents, q],
   );
   // FLIP 重排：列表顺序/成员变化(删除补位、未读跳顶)时下方行平滑滑动补位而非瞬跳
-  // (clawsgo)。容器复用 listRef(.pcv-list)，行带 data-flip-id；dep = 渲染顺序指纹。
-  const flipDep = useMemo(
-    () => recentDMs.map((d) => d.agentId).join(',') + '|' + filtered.map((a) => a.agent_id).join(','),
-    [recentDMs, filtered],
-  );
-  useFlipReorder(listRef, flipDep);
+  // (clawsgo)。容器复用 listRef(.pcv-list)，行带 data-flip-id；每次 commit 自测量。
+  useFlipReorder(listRef);
   const selected = agents.find((a) => a.agent_id === agentId) ?? null;
   // 单聊 header 用：人设首行 + 当前模型标签（BYOK localStorage，响应式）
   const personaLine = (selected?.soul ?? '').split('\n').map((s) => s.trim()).find(Boolean) ?? '';
