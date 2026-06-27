@@ -21,6 +21,7 @@ import { PersonalRunRightPane } from './PersonalRunRightPane';
 import { useSidebarSlotEl } from './SidebarSlotContext';
 import { PagePeekOverlay } from './PagePeekOverlay';
 import { relTime } from '../../core/utils/relTime';
+import { useFlipReorder } from '../../core/hooks/useFlipReorder';
 import { KEY_STORAGE, PROVIDER_IDS } from '../../api/_base';
 import { SettingsModal } from '../../components/SettingsModal';
 
@@ -154,6 +155,13 @@ export function PersonalChatView() {
     () => agents.filter((a) => a.name.toLowerCase().includes(q.trim().toLowerCase())),
     [agents, q],
   );
+  // FLIP 重排：列表顺序/成员变化(删除补位、未读跳顶)时下方行平滑滑动补位而非瞬跳
+  // (clawsgo)。容器复用 listRef(.pcv-list)，行带 data-flip-id；dep = 渲染顺序指纹。
+  const flipDep = useMemo(
+    () => recentDMs.map((d) => d.agentId).join(',') + '|' + filtered.map((a) => a.agent_id).join(','),
+    [recentDMs, filtered],
+  );
+  useFlipReorder(listRef, flipDep);
   const selected = agents.find((a) => a.agent_id === agentId) ?? null;
   // 单聊 header 用：人设首行 + 当前模型标签（BYOK localStorage，响应式）
   const personaLine = (selected?.soul ?? '').split('\n').map((s) => s.trim()).find(Boolean) ?? '';
@@ -516,7 +524,7 @@ export function PersonalChatView() {
                   }
                   // 正常行 + hover 显示 "..." 按钮
                   return (
-                    <div key={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={`pcv-row sf-rail-in${active ? ' active' : ''}${removingIds.has(d.agentId) ? ' sf-rail-out' : ''}`} style={{ animationDelay: removingIds.has(d.agentId) ? '0ms' : `${Math.min(idx, 8) * 22}ms` }}>
+                    <div key={`dm_${d.agentId}`} data-flip-id={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={`pcv-row sf-rail-in${active ? ' active' : ''}${removingIds.has(d.agentId) ? ' sf-rail-out' : ''}`} style={{ animationDelay: removingIds.has(d.agentId) ? '0ms' : `${Math.min(idx, 8) * 22}ms` }}>
                       {/* 主点击区域 */}
                       <button
                         type="button"
@@ -613,7 +621,7 @@ export function PersonalChatView() {
             {filtered.map((a, i) => {
               const active = a.agent_id === agentId;
               return (
-                <button key={a.agent_id} type="button" className={`pcv-row sf-rail-in${active ? ' active' : ''}`} style={{ animationDelay: `${Math.min(i, 8) * 22}ms` }} onClick={() => selectAgent(a.agent_id)}>
+                <button key={a.agent_id} data-flip-id={`ag_${a.agent_id}`} type="button" className={`pcv-row sf-rail-in${active ? ' active' : ''}`} style={{ animationDelay: `${Math.min(i, 8) * 22}ms` }} onClick={() => selectAgent(a.agent_id)}>
                   <HfAvatar glyph={Array.from(a.name)[0] ?? '?'} color={a.avatar_color ?? 'var(--t-accent)'} size={32} status="ok" />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="pcv-row-name">{a.name}</div>

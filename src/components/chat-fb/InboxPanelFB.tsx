@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Search, Pin, MessageSquare, Lock, Hash, Bot, Check } from 'lucide-react';
 import type { GroupItem, AgentDMItem } from '../../common/types/inbox';
 import { AGENT_PALETTE, ACCENT_PALETTE, hashIndex, initialOf } from './agentAvatar';
+import { useFlipReorder } from '../../core/hooks/useFlipReorder';
 import styles from './chatFB.module.css';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,6 +121,8 @@ interface RowProps {
   animIndex?: number;
   /** R6 — running→结束的瞬时「已完成」绿勾（clawsgo 任务完成反馈），覆盖状态点。 */
   done?: boolean;
+  /** FLIP — 重排补位动画用的稳定 id（配合 useFlipReorder 的 [data-flip-id]）。 */
+  flipId?: string;
 }
 
 function IbxRow(props: RowProps) {
@@ -136,6 +139,7 @@ function IbxRow(props: RowProps) {
   return (
     <div
       className={rowCls}
+      data-flip-id={props.flipId}
       onClick={props.onClick}
       style={props.animIndex !== undefined ? { animationDelay: `${Math.min(props.animIndex, 8) * 22}ms` } : undefined}
     >
@@ -308,6 +312,15 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
     );
   }, [visibleDMs, query]);
 
+  // FLIP 重排：群组/DM 顺序或成员变化(删除补位、未读跳顶)时，下方行平滑滑动补位而非
+  // 瞬跳(clawsgo)。容器 = .list，行带 data-flip-id；dep = 渲染顺序指纹。
+  const listElRef = useRef<HTMLDivElement>(null);
+  const flipDep = useMemo(
+    () => filteredGroups.map((g) => g.id).join(',') + '|' + filteredDMs.map((d) => d.agentId).join(','),
+    [filteredGroups, filteredDMs],
+  );
+  useFlipReorder(listElRef, flipDep);
+
   // ── Cmd+F shortcut → focus search input (matches the ⌘F hint in the UI) ──
   useEffect(() => {
     const handler = (e: globalThis.KeyboardEvent) => {
@@ -437,7 +450,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
         <span className={styles.labN}>{filteredGroups.length + filteredDMs.length}</span>
       </div>
 
-      <div className={styles.list}>
+      <div className={styles.list} ref={listElRef}>
         {filteredGroups.length === 0 && filteredDMs.length === 0 ? (
           <div className={styles.empty}>
             <div className={styles.emptyIcon}>
@@ -467,6 +480,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
                   active={g.id === props.groupId}
                   animIndex={i}
                   done={justDone.has('g:' + g.id)}
+                  flipId={'g:' + g.id}
                   onClick={() => props.onGroup(g.id)}
                 />
               );
@@ -494,6 +508,7 @@ export default function InboxPanelFB(props: InboxPanelFBProps) {
                     active={d.agentId === props.dmId}
                     animIndex={i}
                     done={justDone.has('d:' + d.agentId)}
+                    flipId={'d:' + d.agentId}
                     onClick={() => props.onDm(d.agentId)}
                   />
                 ))}
