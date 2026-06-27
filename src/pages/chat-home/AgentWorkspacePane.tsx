@@ -1,10 +1,10 @@
 // src/pages/chat-home/AgentWorkspacePane.tsx
 // 2026-06-24 — 拍平为单排工作台（对齐 ClawsGO「Agent 的主机」）：一排 tab
-// 产物/文件/画布/任务/Brief + 顶部 run 状态细条。不再嵌套两排，「设定/人设」
-// 移到中栏 DM 头部点开（见 PersonalChatView）。
-import { useEffect, useState, type ReactNode } from 'react';
+// 产物/文件/任务/Brief + 顶部 run 状态细条。不再嵌套两排，「设定/人设」
+// 移到中栏 DM 头部点开（见 PersonalChatView）。2026-06-27 精简移除「画布」tab。
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Rocket, RefreshCw, ArrowUpRight, X } from 'lucide-react';
+import { Rocket, RefreshCw, ArrowUpRight, X, CheckCircle2 } from 'lucide-react';
 import { RightPaneTabs, type RightPaneTabDef } from '../../components/run-session/RightPaneTabs';
 import { useWorkspaceRun } from '../../core/hooks/useWorkspaceRun';
 import PreviewPanel from '../../components/run-session/PreviewPanel';
@@ -39,11 +39,14 @@ const STATUS_META: Record<string, { label: string; fg: string; pulse?: boolean }
 function RunStatusBar({
   latest,
   reloading,
+  celebrate = false,
   onReload,
   onOpen,
 }: {
   latest: RunSessionSummary | null;
   reloading: boolean;
+  /** R2 — 刚从 running→succeeded 时为 true，绿勾过冲弹入（clawsgo 任务完成）。 */
+  celebrate?: boolean;
   onReload: () => void;
   onOpen: (sid: string) => void;
 }) {
@@ -63,8 +66,15 @@ function RunStatusBar({
     >
       {latest && meta ? (
         <>
-          <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: meta.fg, flexShrink: 0 }}
-            className={meta.pulse ? 'sf-pulse' : undefined} />
+          {/* R2 — 完成态用绿勾 ✓（clawsgo 任务完成），刚转变时过冲弹入；运行态脉冲点。 */}
+          {latest.status === 'succeeded' ? (
+            <CheckCircle2 size={13} aria-hidden strokeWidth={2.4}
+              style={{ color: meta.fg, flexShrink: 0 }}
+              className={celebrate ? 'sf-pop-in' : undefined} />
+          ) : (
+            <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: meta.fg, flexShrink: 0 }}
+              className={meta.pulse ? 'sf-pulse' : undefined} />
+          )}
           <span style={{ fontSize: 11, fontWeight: 600, color: meta.fg, flexShrink: 0 }}>{meta.label}</span>
           <span style={{ fontSize: 11, color: 'var(--t-fg-3)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {latest.goal || `Run #${latest.session_id.slice(0, 4)}`}
@@ -113,6 +123,20 @@ export function AgentWorkspacePane({
   const navigate = useNavigate();
   const { session, latest, loading, reload, runCwd } = useWorkspaceRun(groupId);
 
+  // R2 — 追踪 running→succeeded 转变，给状态条绿勾 2.6s 庆祝弹入（clawsgo 任务完成）。
+  const [celebrate, setCelebrate] = useState(false);
+  const prevStatusRef = useRef<string | undefined>(latest?.status);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    const cur = latest?.status;
+    prevStatusRef.current = cur;
+    if (prev === 'running' && cur === 'succeeded') {
+      setCelebrate(true);
+      const t = window.setTimeout(() => setCelebrate(false), 2600);
+      return () => window.clearTimeout(t);
+    }
+  }, [latest?.status]);
+
   // 点中栏头部（roleSignal 递增）→ 右栏弹出「角色」tab 并激活。
   useEffect(() => {
     if (roleSignal && roleSignal > 0 && agent) {
@@ -134,6 +158,7 @@ export function AgentWorkspacePane({
       <RunStatusBar
         latest={latest}
         reloading={loading}
+        celebrate={celebrate}
         onReload={reload}
         onOpen={(sid) => navigate(`/run-session/${sid}`)}
       />

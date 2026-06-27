@@ -1344,6 +1344,30 @@ input, textarea, select { font-family: inherit; color: inherit; }
   .pcv-new:hover, .pcv-new:active { transform: none !important; }
 }
 
+/* ───────────────────────────────────────────────────────────────
+   右栏 clawsgo 化动效（2026-06-27 R2+）—— 只增不删。
+   sf-pop-in：状态图标「运行→完成」绿勾的过冲弹入（clawsgo 任务完成 ✓）；
+   产物/卡片整块进场可复用。同时补右栏既有动效的 reduced-motion 守卫。
+   ─────────────────────────────────────────────────────────────── */
+@keyframes sf-pop-in {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.18); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.sf-pop-in { animation: sf-pop-in 0.34s cubic-bezier(.34, 1.56, .64, 1) both; }
+
+/* 产物/面板整块进场：淡入 + 轻微上滑（clawsgo 产物出现）。 */
+@keyframes sf-rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.sf-rise-in { animation: sf-rise-in var(--dur-3) var(--ease-out) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* 右栏 tab 框架(RightPaneTabs inline <style>) + 产物流式光标(PreviewPanel) +
+     本轮新增 —— 全局类，可从此处统一中和。 */
+  .rs-tab-ind, .rs-pane-fade, .rs-tab-ct, .rs-tab-dot,
+  .sf-cur, .sf-pop-in, .sf-rise-in { animation: none !important; }
+  .rs-tab-ind { transition: none !important; }
+}
+
 /* "Load more" button below DM list */
 .pcv-more-btn {
   display: flex; align-items: center; justify-content: center; gap: 5px;

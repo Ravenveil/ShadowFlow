@@ -22,6 +22,11 @@ vi.mock('../../core/hooks/useWorkspaceRun', () => ({
 vi.mock('../../components/run-session/PreviewPanel', () => ({
   default: () => <div data-testid="preview-panel-mock">Preview</div>,
 }));
+// 非 preview 面板 mock 成哑组件——tab 切换单测只验切换逻辑，面板内部(用 i18n/fetch)
+// 不在范围内（避免 ApprovalGatePanel 等需 I18nProvider 而抛错）。
+vi.mock('./WorkspaceFilesView', () => ({ WorkspaceFilesView: () => <div data-testid="files-mock">Files</div> }));
+vi.mock('../../core/components/inbox/ApprovalGatePanel', () => ({ ApprovalGatePanel: () => <div data-testid="tasks-mock">Tasks</div> }));
+vi.mock('../../core/components/inbox/BriefBoardView', () => ({ BriefBoardView: () => <div data-testid="brief-mock">Brief</div> }));
 
 describe('AgentWorkspacePane', () => {
   it('单排工作台 tab：产物/文件/任务/Brief，默认产物，可切换', () => {
