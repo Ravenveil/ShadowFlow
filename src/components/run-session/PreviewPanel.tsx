@@ -21,7 +21,7 @@
  * paper.review.v1 yaml.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { ExternalLink, FileText, Code2, FileJson, FileCode, Copy, Check, AlertTriangle, Download } from 'lucide-react';
+import { ExternalLink, FileText, Code2, FileJson, FileCode, Copy, Check, AlertTriangle, Download, Maximize2, Minimize2 } from 'lucide-react';
 import type { UseRunSessionReturn, RunSessionStep } from '../../core/hooks/useRunSession';
 import PreviewIframe from './PreviewIframe';
 import PreviewMarkdown from './PreviewMarkdown';
@@ -309,6 +309,15 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
 
   const empty = yaml.length === 0;
 
+  // 全屏/展开产物（clawsgo/hermes 通用：右栏窄，长产物可展开看）。ESC 退出。
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fullscreen]);
+
   // 复制产物到剪贴板（clawsgo/hermes 通用：产物查看器都带 copy）。复制后 1.4s 显示 ✓。
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<number | undefined>(undefined);
@@ -348,13 +357,15 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
 
   return (
     <div
-      style={{
-        flex: 1,
-        minHeight: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        background: 'var(--t-bg)',
-      }}
+      style={
+        fullscreen
+          ? {
+              position: 'fixed', inset: 0, zIndex: 1000,
+              display: 'flex', flexDirection: 'column', background: 'var(--t-bg)',
+              animation: 'sf-rail-fade var(--dur-2) var(--ease-out) both',
+            }
+          : { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--t-bg)' }
+      }
       data-component="preview-panel"
     >
       {/* Top bar */}
@@ -452,6 +463,17 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
             <Download size={13} strokeWidth={2} />
           </button>
         )}
+        {/* 全屏/收起产物（clawsgo/hermes 通用）。 */}
+        <button
+          type="button"
+          onClick={() => setFullscreen((v) => !v)}
+          aria-label={fullscreen ? '退出全屏' : '全屏'}
+          title={fullscreen ? '退出全屏 (Esc)' : '全屏'}
+          className="sf-rail-icon"
+          style={{ padding: 5, flexShrink: 0, color: 'var(--t-fg-4)' }}
+        >
+          {fullscreen ? <Minimize2 size={13} strokeWidth={2} /> : <Maximize2 size={13} strokeWidth={2} />}
+        </button>
       </div>
 
       {/* Body — branches by mime. */}
