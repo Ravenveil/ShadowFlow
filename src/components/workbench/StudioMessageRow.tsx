@@ -14,7 +14,7 @@
  *
  * 纯展示组件：无副作用、无数据获取。由 StudioChat 投喂 StudioMessage[]。
  */
-import { memo, useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
+import { memo, useState, useEffect, useRef, useMemo, type ReactNode, type CSSProperties } from 'react';
 import { User, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import hljs from 'highlight.js/lib/common';
 import './fileViewerHljs.css';
@@ -651,6 +651,8 @@ export interface StudioMessageRowProps {
   grouped: boolean;
   /** 入场动画（仅新增消息）。 */
   animateIn?: boolean;
+  /** 同批新增消息的错峰序号（0 起）；驱动 --sf-stagger 让多条消息逐条入场。缺省 0。 */
+  staggerIndex?: number;
   /** 重试回调：用户气泡 status==='error' 或 assistant error 气泡时显示重试按钮，点击后调用。 */
   onRetry?: (text: string) => void;
   /** 要重试的文本；仅用于 assistant error 气泡。来自触发此错误的最近一条用户消息。
@@ -691,6 +693,7 @@ export const StudioMessageRow = memo(function StudioMessageRow({
   message: m,
   grouped,
   animateIn,
+  staggerIndex = 0,
   onRetry,
   retryText,
 }: StudioMessageRowProps) {
@@ -719,12 +722,20 @@ export const StudioMessageRow = memo(function StudioMessageRow({
     });
   };
 
+  // 错峰入场延迟：同批新增的多条消息逐条 45ms 递进（封顶 6 档 = 270ms），
+  // 单条新增时为 0、与即时入场无异。仅 animateIn 时透传给 --sf-stagger。
+  const staggerMs = animateIn ? Math.min(Math.max(staggerIndex, 0), 6) * 45 : 0;
+  const staggerVar = staggerMs > 0
+    ? ({ '--sf-stagger': `${staggerMs}ms` } as CSSProperties)
+    : undefined;
+
   if (m.role === 'system') {
     // 系统行居中、低存在感，不参与回合分组。
     return (
       <div
         className={animateIn ? 'sf-msg-in' : undefined}
         style={{
+          ...staggerVar,
           display: 'flex',
           justifyContent: 'center',
           margin: '8px 0',
@@ -996,10 +1007,15 @@ export const StudioMessageRow = memo(function StudioMessageRow({
     </div>
   );
 
+  // 方向性入场：用户气泡自右滑入（sf-msg-in-r）、助手自左滑入（sf-msg-in-l），
+  // 方向暗示「谁在说」。仅新增消息播放（animateIn）。
+  const enterClass = animateIn ? (isUser ? ' sf-msg-in-r' : ' sf-msg-in-l') : '';
+
   return (
     <div
-      className={`chat-message-${m.role}${grouped ? ' chat-message--grouped' : ''}${animateIn ? ' sf-msg-in' : ''}`}
+      className={`chat-message-${m.role}${grouped ? ' chat-message--grouped' : ''}${enterClass}`}
       style={{
+        ...staggerVar,
         display: 'flex',
         gap: AVATAR_GAP,
         alignItems: 'flex-start',

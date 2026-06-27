@@ -95,6 +95,10 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
   const grouped = groupMessages(messages);
   const showEmpty = messages.length === 0 && !typingName;
 
+  // 错峰序号：同一批新增（挂载后才出现）的消息逐条递进，让一次到达多条时逐行入场
+  // 而非一齐抖动；单条新增 → 序号 0、与即时入场无异。每次渲染重置。
+  let newSeq = 0;
+
   // 「正在输入」= 一个临时流式 assistant 行，复用 StudioMessageRow 的三点占位。
   // 头像色/首字按发言名取（paletteFor=avatar_color 注册表），与正式 agent 气泡同色同字，
   // 避免「typing 用默认蓝、回复用 avatar_color」造成图标中途跳色。
@@ -140,13 +144,17 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
               const dk = dayKey(m.timestamp);
               const prevDk = i > 0 ? dayKey(messages[i - 1].timestamp) : '';
               const showDivider = !!dk && dk !== prevDk;
+              const animateIn = isNew(m.id) && !m.streaming;
+              // 仅对真正新增（且非流式）的消息分配错峰序号，历史/流式不占号。
+              const staggerIndex = animateIn ? newSeq++ : 0;
               return (
                 <Fragment key={m.id}>
                   {showDivider && <DateDivider label={dk} />}
                   <StudioMessageRow
                     message={m}
                     grouped={showDivider ? false : grouped[i]}
-                    animateIn={isNew(m.id) && !m.streaming}
+                    animateIn={animateIn}
+                    staggerIndex={staggerIndex}
                     onRetry={onRetry}
                     retryText={retryText}
                   />
