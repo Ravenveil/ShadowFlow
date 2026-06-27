@@ -74,6 +74,12 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
   if (initialIds.current === null) initialIds.current = new Set(messages.map((m) => m.id));
   const isNew = (id: string) => !initialIds.current!.has(id);
 
+  // 已动画过的 id：每条消息一生只入场一次。仅靠 isNew 不够——initialIds 挂载后永不更新，
+  // 导致挂载后到达的每条消息永远 isNew=true，错峰序号会跨整个会话累积（第 7 轮起单条
+  // 回复也要先隐身 ~270ms 再滑入）。这里用一个一次性 Set 记录「已播放入场」的 id，
+  // animateIn = isNew && !streaming && 未播放过；newSeq 因此只覆盖本次真正首现的批次。
+  const animatedIds = useRef<Set<string>>(new Set());
+
   // 用户上滚 > 100px 暂停跟随；回到底部恢复。
   useEffect(() => {
     const el = scrollRef.current;
@@ -96,8 +102,11 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
   const showEmpty = messages.length === 0 && !typingName;
 
   // 错峰序号：同一批新增（挂载后才出现）的消息逐条递进，让一次到达多条时逐行入场
-  // 而非一齐抖动；单条新增 → 序号 0、与即时入场无异。每次渲染重置。
+  // 而非一齐抖动；单条新增 → 序号 0、与即时入场无异。每次渲染重置，且只对「未播放过
+  // 入场」的消息递进——配合 animatedIds 守卫，newSeq 不会跨会话累积。
   let newSeq = 0;
+  // 本次渲染真正首播入场的 id（render 期间填充，commit 后由 effect 标记为已动画）。
+  const freshThisRender: string[] = [];
 
   // 「正在输入」= 一个临时流式 assistant 行，复用 StudioMessageRow 的三点占位。
   // 头像色/首字按发言名取（paletteFor=avatar_color 注册表），与正式 agent 气泡同色同字，
@@ -121,9 +130,18 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   };
 
+  // commit 后把本次首播的 id 记为「已动画」，下次渲染不再入场、不再占错峰序号。
+  // 无依赖数组、每次渲染都跑，但仅在有新增时写入，开销可忽略。
+  useEffect(() => {
+    if (freshThisRender.length === 0) return;
+    for (const id of freshThisRender) animatedIds.current.add(id);
+  });
+
   return (
     <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
-    <div ref={scrollRef} className="sf-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding }}>
+    {/* overflowX: 'hidden' — 方向性入场 sf-msg-in-r/l 对满宽整行做 ±14px 水平位移，
+        入场 ~180ms 内会溢出容器 14px；不锁横向会闪现 .sf-scroll 的 8px 横向滚动条。 */}
+    <div ref={scrollRef} className="sf-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding }}>
       {showEmpty
         ? empty ?? null
         : (
@@ -144,8 +162,10 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
               const dk = dayKey(m.timestamp);
               const prevDk = i > 0 ? dayKey(messages[i - 1].timestamp) : '';
               const showDivider = !!dk && dk !== prevDk;
-              const animateIn = isNew(m.id) && !m.streaming;
-              // 仅对真正新增（且非流式）的消息分配错峰序号，历史/流式不占号。
+              const animateIn = isNew(m.id) && !m.streaming && !animatedIds.current.has(m.id);
+              if (animateIn) freshThisRender.push(m.id);
+              // 仅对真正首播（新增、非流式、未播放过）的消息分配错峰序号，历史/流式/
+              // 已播放不占号——避免单条新增也拿到一个随会话增长的延迟。
               const staggerIndex = animateIn ? newSeq++ : 0;
               return (
                 <Fragment key={m.id}>
