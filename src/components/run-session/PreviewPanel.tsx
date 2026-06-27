@@ -21,7 +21,7 @@
  * paper.review.v1 yaml.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { ExternalLink, FileText, Code2, FileJson, FileCode, Copy, Check } from 'lucide-react';
+import { ExternalLink, FileText, Code2, FileJson, FileCode, Copy, Check, AlertTriangle, Download } from 'lucide-react';
 import type { UseRunSessionReturn, RunSessionStep } from '../../core/hooks/useRunSession';
 import PreviewIframe from './PreviewIframe';
 import PreviewMarkdown from './PreviewMarkdown';
@@ -251,6 +251,43 @@ const PreviewEmptyState: React.FC<{
   );
 };
 
+/**
+ * PreviewErrorState — 产物运行出错态（clawsgo 设计过的错误态）。
+ * 替代「出错时仍显示通用空态『产物将在这里生成』」——把真实错误信息 + hint 呈现出来。
+ */
+function PreviewErrorState({ error }: { error: { message: string; hint?: string; occurrences?: number } }) {
+  return (
+    <div
+      className="sf-rise-in"
+      style={{
+        flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 14, padding: 28, textAlign: 'center',
+      }}
+    >
+      <div style={{
+        width: 56, height: 56, borderRadius: 16, display: 'grid', placeItems: 'center',
+        background: 'var(--t-err-tint, rgba(239,68,68,.12))',
+        border: '1px solid var(--t-err, #ef4444)', color: 'var(--t-err, #ef4444)',
+      }}>
+        <AlertTriangle size={24} strokeWidth={2} />
+      </div>
+      <div style={{ maxWidth: 360 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-fg)' }}>运行出错</div>
+        <div style={{
+          fontSize: 12.5, color: 'var(--t-fg-3)', marginTop: 8, lineHeight: 1.6,
+          fontFamily: 'var(--font-mono, monospace)', wordBreak: 'break-word',
+        }}>
+          {error.message}
+          {error.occurrences && error.occurrences > 1 ? `（已重试 ${error.occurrences} 次）` : ''}
+        </div>
+        {error.hint && (
+          <div style={{ fontSize: 11.5, color: 'var(--t-fg-4)', marginTop: 8, lineHeight: 1.5 }}>{error.hint}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) => {
   const yaml = session.blueprintYaml ?? '';
   const filename = session.blueprintFile;
@@ -284,6 +321,22 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
     }).catch(() => { /* 剪贴板不可用：静默 */ });
   };
   useEffect(() => () => { if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current); }, []);
+
+  // 下载产物到文件（clawsgo/hermes 通用：产物查看器都带 download）。
+  const handleDownload = () => {
+    if (!yaml) return;
+    try {
+      const blob = new Blob([yaml], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename ?? 'artifact.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch { /* 浏览器不支持：静默 */ }
+  };
 
   // Status-bar mime label — short, monospaced, sits beside the filename.
   const mimeLabel: Record<PreviewMime, string> = {
@@ -386,10 +439,27 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
             {copied ? <Check size={14} strokeWidth={2.6} className="sf-pop-in" /> : <Copy size={13} strokeWidth={2} />}
           </button>
         )}
+        {/* 下载产物（clawsgo/hermes 通用）。 */}
+        {!empty && (
+          <button
+            type="button"
+            onClick={handleDownload}
+            aria-label="下载产物"
+            title="下载产物"
+            className="sf-rail-icon"
+            style={{ padding: 5, flexShrink: 0, color: 'var(--t-fg-4)' }}
+          >
+            <Download size={13} strokeWidth={2} />
+          </button>
+        )}
       </div>
 
       {/* Body — branches by mime. */}
-      {mime === 'text/yaml' && empty && (
+      {/* R4 — 出错优先于空态：错误时显示设计过的错误态而非通用「产物将在这里生成」。 */}
+      {mime === 'text/yaml' && empty && session.error && (
+        <PreviewErrorState error={session.error} />
+      )}
+      {mime === 'text/yaml' && empty && !session.error && (
         <PreviewEmptyState mime={mime} stepName={currentStep?.name} isStreaming={isStreaming} />
       )}
       {mime === 'text/yaml' && !empty && (
@@ -475,7 +545,9 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
             background: 'var(--t-bg)',
           }}
         >
-          {empty ? (
+          {empty && session.error ? (
+            <PreviewErrorState error={session.error} />
+          ) : empty ? (
             <PreviewEmptyState mime={mime} stepName={currentStep?.name} isStreaming={isStreaming} />
           ) : (
             <PreviewIframe html={yaml} title={filename ?? 'artifact.html'} />
@@ -499,7 +571,9 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
             lineHeight: 1.7,
           }}
         >
-          {empty ? (
+          {empty && session.error ? (
+            <PreviewErrorState error={session.error} />
+          ) : empty ? (
             <PreviewEmptyState mime={mime} stepName={currentStep?.name} isStreaming={isStreaming} />
           ) : (
             <PreviewMarkdown source={yaml} />
@@ -524,7 +598,9 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
             color: 'var(--t-fg-3)',
           }}
         >
-          {empty ? (
+          {empty && session.error ? (
+            <PreviewErrorState error={session.error} />
+          ) : empty ? (
             <PreviewEmptyState mime={mime} stepName={currentStep?.name} isStreaming={isStreaming} />
           ) : (
             <PreviewJson source={yaml} />
