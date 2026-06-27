@@ -252,6 +252,9 @@ export function PersonalChatView() {
     model: dmModel,
   });
   // 对话框统一：把 ChatMessage[] 映射成统一回合气泡（StudioMessageRow）。
+  // 1:1 单聊里 agent 消息一律归属当前 selected agent —— 用其 name/agent_id 锁定
+  // 名字+头像色，避免某条回复缺 sender_name 时退化成「Agent / A」，与 typing 指示器
+  // (selected.name) 名字/图标中途跳变（用户 2026-06-27 报告）。
   const studioMessages = useMemo(
     () => timelineMessagesToStudio(
       messages
@@ -259,10 +262,16 @@ export function PersonalChatView() {
         .map((m, i) => {
           if (m.role === 'user') return { id: m.id, kind: 'user_turn' as const, turn_id: m.id, ts: i, text: m.content, status: m.status, timestamp: m.timestamp };
           if (m.role === 'system') return { id: m.id, kind: 'raw' as const, turn_id: m.id, ts: i, body: m.content, source: 'chat-gateway', timestamp: m.timestamp };
-          return { id: m.id, kind: 'assistant_text' as const, turn_id: m.id, ts: i, body: m.content, streaming: m.streaming, timestamp: m.timestamp };
+          return {
+            id: m.id, kind: 'assistant_text' as const, turn_id: m.id, ts: i, body: m.content,
+            streaming: m.streaming, timestamp: m.timestamp,
+            // 锁定为当前 DM 的 agent 身份（缺 sender_name 时不再退化成「Agent」）。
+            sender_name: selected?.name ?? m.senderName,
+            agent_id: selected?.agent_id,
+          };
         }),
     ),
-    [messages],
+    [messages, selected?.name, selected?.agent_id],
   );
 
   // Fix #1: memoize content strings to prevent O(n) re-renders on every SSE streaming tick.

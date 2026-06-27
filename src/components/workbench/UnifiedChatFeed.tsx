@@ -92,8 +92,14 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
   const showEmpty = messages.length === 0 && !typingName;
 
   // 「正在输入」= 一个临时流式 assistant 行，复用 StudioMessageRow 的三点占位。
+  // 头像色/首字按发言名取（paletteFor=avatar_color 注册表），与正式 agent 气泡同色同字，
+  // 避免「typing 用默认蓝、回复用 avatar_color」造成图标中途跳色。
   const typingMsg: StudioMessage | null = typingName
-    ? { id: '__typing__', role: 'assistant', text: '', senderName: typingName, streaming: true }
+    ? {
+        id: '__typing__', role: 'assistant', text: '', senderName: typingName, streaming: true,
+        senderGlyph: initialOf(typingName),
+        senderColor: paletteForAgent(undefined, typingName).accent,
+      }
     : null;
   const typingGrouped =
     !!typingMsg &&
