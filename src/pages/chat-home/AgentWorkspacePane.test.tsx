@@ -24,17 +24,19 @@ vi.mock('../../components/run-session/PreviewPanel', () => ({
 }));
 
 describe('AgentWorkspacePane', () => {
-  it('单排工作台 tab：产物/文件/画布/任务/Brief，默认产物，可切换', () => {
+  it('单排工作台 tab：产物/文件/任务/Brief，默认产物，可切换', () => {
     render(<MemoryRouter><AgentWorkspacePane groupId="g" /></MemoryRouter>);
-    for (const name of ['产物', '文件', '画布', '任务', 'Brief']) {
+    for (const name of ['产物', '文件', '任务', 'Brief']) {
       expect(screen.getByRole('tab', { name })).toBeInTheDocument();
     }
+    // 2026-06-27 精简：「画布」tab 已移除（DAG 已在中栏头部可达，右栏冗余）。
+    expect(screen.queryByRole('tab', { name: '画布' })).not.toBeInTheDocument();
     // 不应再有「概览」/「设定」tab（拍平后概览→状态条、设定→中栏头部）
     expect(screen.queryByRole('tab', { name: '概览' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: '设定' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '产物' })).toHaveAttribute('aria-selected', 'true');
-    fireEvent.click(screen.getByRole('tab', { name: '画布' }));
-    expect(screen.getByRole('tab', { name: '画布' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: '任务' }));
+    expect(screen.getByRole('tab', { name: '任务' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('run 状态条显示最近 run，点「打开 Run」跳整页', () => {

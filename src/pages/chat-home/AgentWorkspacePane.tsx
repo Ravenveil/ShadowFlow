@@ -8,7 +8,6 @@ import { Rocket, RefreshCw, ArrowUpRight, X } from 'lucide-react';
 import { RightPaneTabs, type RightPaneTabDef } from '../../components/run-session/RightPaneTabs';
 import { useWorkspaceRun } from '../../core/hooks/useWorkspaceRun';
 import PreviewPanel from '../../components/run-session/PreviewPanel';
-import BlueprintCanvas from '../../components/run-session/BlueprintCanvas';
 import { WorkspaceFilesView } from './WorkspaceFilesView';
 import { AgentSettingsCard } from './AgentSettingsCard';
 import { ApprovalGatePanel } from '../../core/components/inbox/ApprovalGatePanel';
@@ -16,13 +15,14 @@ import { BriefBoardView } from '../../core/components/inbox/BriefBoardView';
 import type { RunSessionSummary } from '../../api/runSessions';
 import type { AgentRecord } from '../../api/agents';
 
-type WsTab = 'role' | 'preview' | 'files' | 'canvas' | 'tasks' | 'brief';
+type WsTab = 'role' | 'preview' | 'files' | 'tasks' | 'brief';
 
-// 基础单排（对齐 ClawsGO）。「角色」tab 不常驻——点中栏头部才弹出（见 roleSignal）。
+// 基础单排（对齐 ClawsGO + 设计稿右栏）。「角色」tab 不常驻——点中栏头部才弹出
+// （见 roleSignal）。2026-06-27 精简：移除「画布」tab —— DAG 蓝图已在中栏头部 DAG
+// 按钮可达，右栏重复入口冗余（对标设计稿右栏只有 文件/工作区，clawsgo 无画布）。
 const BASE_TABS: RightPaneTabDef<WsTab>[] = [
   { key: 'preview', label: '产物' },
   { key: 'files', label: '文件' },
-  { key: 'canvas', label: '画布' },
   { key: 'tasks', label: '任务' },
   { key: 'brief', label: 'Brief' },
 ];
@@ -160,13 +160,6 @@ export function AgentWorkspacePane({
           ),
           preview: <PreviewPanel session={session} />,
           files: <WorkspaceFilesView root={runCwd} />,
-          // position:relative 必须 — BlueprintCanvas 内部 position:absolute inset:0，
-          // 无定位父容器会逃逸盖住标签栏（2026-06-24 浏览器亲验抓到）。
-          canvas: (
-            <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-              <BlueprintCanvas nodes={session.nodes} edges={session.edges} isComplete={session.isComplete} />
-            </div>
-          ),
           tasks: groupId ? (
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 }}>
               <ApprovalGatePanel groupId={groupId} />
