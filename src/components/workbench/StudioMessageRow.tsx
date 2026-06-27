@@ -15,10 +15,11 @@
  * 纯展示组件：无副作用、无数据获取。由 StudioChat 投喂 StudioMessage[]。
  */
 import { memo, useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
-import { User, Bot, Users, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { User, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import hljs from 'highlight.js/lib/common';
 import './fileViewerHljs.css';
 import { relTime } from '../../core/utils/relTime';
+import { AgentAvatar } from '../chat-fb/agentAvatar';
 
 // Module-level constant: fenced-code regex (fix: allocation + trailing-space edge case + trailing newline).
 // (\w*)[^\n]* → language token + any trailing chars on the fence line (handles ` ```ts \n`).
@@ -74,6 +75,8 @@ export interface StudioMessage {
   senderGlyph?: string;
   /** 头像底色 token / #rrggbb；缺省用 --t-accent。 */
   senderColor?: string;
+  /** 生成式头像种子：优先 agent_id（确定性、不撞名），缺省回退 senderName。 */
+  senderSeed?: string;
   /** 该回合的发言主体类型，用于默认头像图标（agent=Bot / team=Users）。 */
   kind?: 'agent' | 'team';
   /** 仍在流式输出 → 追加闪烁光标。 */
@@ -527,33 +530,41 @@ function AvatarSpacer() {
 }
 
 function Avatar({ m }: { m: StudioMessage }) {
-  // 头像底色：优先发言者自带色；缺省时 user 用主品牌紫、agent/team 用 clawsgo 软蓝，
-  // 让用户回合与 AI 回合的色温一眼可分（clawsgo 冷静蓝 vs 主品牌紫）。
-  const color = m.senderColor || (m.role === 'user' ? 'var(--t-accent)' : 'var(--sf-blue, #1890FF)');
-  let icon: ReactNode;
-  if (m.senderGlyph) icon = m.senderGlyph;
-  else if (m.role === 'user') icon = <User size={15} strokeWidth={2} aria-hidden />;
-  else if (m.kind === 'team') icon = <Users size={15} strokeWidth={2} aria-hidden />;
-  else icon = <Bot size={15} strokeWidth={2} aria-hidden />;
+  // 用户回合保留「图标色块」（暖色品牌紫），与 AI 回合的生成式渐变头像一眼分色温
+  // （clawsgo 冷静 AI 头像 vs 主品牌紫用户块）。
+  if (m.role === 'user') {
+    const color = m.senderColor || 'var(--t-accent)';
+    const icon: ReactNode = m.senderGlyph ? m.senderGlyph : <User size={15} strokeWidth={2} aria-hidden />;
+    return (
+      <span
+        style={{
+          width: AVATAR_SIZE,
+          height: AVATAR_SIZE,
+          borderRadius: 8,
+          flexShrink: 0,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 13,
+          fontWeight: 700,
+          background: `color-mix(in oklab, ${color} 16%, var(--t-panel))`,
+          border: `1px solid color-mix(in oklab, ${color} 32%, transparent)`,
+          color,
+        }}
+      >
+        {icon}
+      </span>
+    );
+  }
+  // AI / 团队回合 → 生成式 SVG 头像（确定性、独一无二、深色协调），首字叠加做身份锚点。
+  // 种子优先 senderSeed(=agent_id)，回退发言名；基色取 senderColor(avatar_color)。
   return (
-    <span
-      style={{
-        width: AVATAR_SIZE,
-        height: AVATAR_SIZE,
-        borderRadius: 8,
-        flexShrink: 0,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: 13,
-        fontWeight: 700,
-        background: `color-mix(in oklab, ${color} 16%, var(--t-panel))`,
-        border: `1px solid color-mix(in oklab, ${color} 32%, transparent)`,
-        color,
-      }}
-    >
-      {icon}
-    </span>
+    <AgentAvatar
+      seed={m.senderSeed ?? m.senderName}
+      name={m.senderName}
+      color={m.senderColor}
+      size={AVATAR_SIZE}
+    />
   );
 }
 

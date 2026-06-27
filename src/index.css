@@ -234,8 +234,13 @@ input, textarea, select { font-family: inherit; color: inherit; }
 @keyframes sf-msg-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .sf-msg-in { animation: sf-msg-in var(--dur-1, 130ms) var(--ease-out) both; }
 
+/* 生成式 SVG 头像（AgentAvatar）入场 — 轻微 scale-up + 淡入，挂载即播放一次。
+   纹样是确定性的，这层只给「出现」一个柔和的弹入手感，不持续动画（省电、不分心）。 */
+@keyframes sf-avatar-in { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
+.sf-avatar { animation: sf-avatar-in var(--dur-2) var(--ease-out) both; will-change: transform; }
+
 @media (prefers-reduced-motion: reduce) {
-  .sf-modal-backdrop, .sf-modal-card, .sf-msg-in,
+  .sf-modal-backdrop, .sf-modal-card, .sf-msg-in, .sf-avatar,
   .sf-modal-backdrop[data-closing="1"], .sf-modal-card[data-closing="1"] { animation: none !important; }
 }
 

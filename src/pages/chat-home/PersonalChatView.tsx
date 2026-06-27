@@ -6,14 +6,13 @@ import { useSearchParams } from 'react-router-dom';
 import { Check, ChevronDown, Download, MoreHorizontal, Pencil, Plus, Search, Settings, SquarePen, Trash2, X } from 'lucide-react';
 import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
 import { NewTaskComposer } from './NewTaskComposer';
-import { HfAvatar } from '../../components/hifi';
 import { listAgents, type AgentRecord } from '../../api/agents';
 import { resolveDmConversation, createFreshDmConversation, patchGroup, deleteGroup } from '../../api/groupApi';
 import type { AgentDMItem } from '../../common/types/inbox';
 import { useChatStream } from '../../core/hooks/useChatStream';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { useInboxStore } from '../../core/store/useInboxStore';
-import { paletteForAgent, initialOf } from '../../components/chat-fb/agentAvatar';
+import { paletteForAgent, AgentAvatar } from '../../components/chat-fb/agentAvatar';
 // 对话框统一（chat-unify）：个人单聊也用 StudioMessageRow 的统一回合气泡。
 import { UnifiedChatFeed, timelineMessagesToStudio } from '../../components/workbench/UnifiedChatFeed';
 import { PersonalRightPane } from './PersonalRightPane';
@@ -517,7 +516,7 @@ export function PersonalChatView() {
                   if (renaming === d.agentId) {
                     return (
                       <div key={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={active ? 'pcv-row active' : 'pcv-row'}>
-                        <HfAvatar glyph={initialOf(d.agentName)} color={pal.accent} size={32} />
+                        <AgentAvatar seed={d.agentId} name={d.agentName} color={pal.accent} size={32} />
                         <input
                           value={renameValue}
                           onChange={(e) => setRenameValue(e.target.value)}
@@ -550,7 +549,7 @@ export function PersonalChatView() {
                         onClick={() => selectAgent(d.agentId)}
                         style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
                       >
-                        <HfAvatar glyph={initialOf(d.agentName)} color={pal.accent} size={32} status="ok" />
+                        <AgentAvatar seed={d.agentId} name={d.agentName} color={pal.accent} size={32} status="ok" />
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                             <div className="pcv-row-name" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.agentName}</div>
@@ -641,7 +640,7 @@ export function PersonalChatView() {
               const active = a.agent_id === agentId;
               return (
                 <button key={a.agent_id} data-flip-id={`ag_${a.agent_id}`} type="button" className={`pcv-row sf-rail-in${active ? ' active' : ''}`} style={{ animationDelay: `${Math.min(i, 8) * 22}ms` }} onClick={() => selectAgent(a.agent_id)}>
-                  <HfAvatar glyph={Array.from(a.name ?? '')[0] ?? '?'} color={a.avatar_color ?? 'var(--t-accent)'} size={32} status="ok" />
+                  <AgentAvatar seed={a.agent_id} name={a.name} color={a.avatar_color} size={32} status="ok" />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="pcv-row-name">{a.name}</div>
                     <div className="pcv-row-sub">{a.soul?.split('\n')[0] ?? ''}</div>
@@ -685,7 +684,7 @@ export function PersonalChatView() {
                 title="查看角色 / agent 详情"
                 style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
               >
-                <HfAvatar glyph={Array.from(selected.name ?? '')[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={38} />
+                <AgentAvatar seed={selected.agent_id} name={selected.name} color={selected.avatar_color} size={38} />
                 <div className="dm-head-id">
                   <div className="dm-head-name">
                     {selected.name}
@@ -888,7 +887,7 @@ export function PersonalChatView() {
               {studioMessages.length === 0 ? (
                 /* DM 空对话引导态——和该助手开始,给几个启动 prompt */
                 <div className="dm-empty">
-                  <HfAvatar glyph={Array.from(selected.name ?? '')[0] ?? '?'} color={selected.avatar_color ?? 'var(--t-accent)'} size={56} />
+                  <AgentAvatar seed={selected.agent_id} name={selected.name} color={selected.avatar_color} size={56} />
                   <div className="dm-empty-name">和「{selected.name}」开始对话</div>
                   {personaLine && <div className="dm-empty-persona">{personaLine}</div>}
                   <div className="dm-empty-chips">
@@ -905,6 +904,7 @@ export function PersonalChatView() {
                    （DM 回复经网关整条到达，token 不分片，此占位填补「已发送→回复到达」的空窗）。 */
                 <UnifiedChatFeed
                   messages={studioMessages}
+                  typingSeed={selected.agent_id}
                   typingName={
                     streaming &&
                     (() => {

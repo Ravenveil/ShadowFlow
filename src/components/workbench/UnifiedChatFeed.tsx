@@ -43,6 +43,9 @@ export interface UnifiedChatFeedProps {
   messages: StudioMessage[];
   /** 末尾「正在输入」气泡的发言名；传入即渲染一个流式占位行。 */
   typingName?: string;
+  /** 「正在输入」头像的生成式种子（优先 agent_id）；缺省回退 typingName。
+   *  与回复气泡用同一种子，避免 typing→回复 头像纹样跳变。 */
+  typingSeed?: string;
   /** 顶部留白 / 列表内边距覆盖。 */
   padding?: string;
   /** 空态（messages.length === 0 且无 typing）渲染内容；不传则什么都不渲染。 */
@@ -58,6 +61,7 @@ export interface UnifiedChatFeedProps {
 export const UnifiedChatFeed = memo(function UnifiedChatFeed({
   messages,
   typingName,
+  typingSeed,
   padding = '12px 18px 18px',
   empty,
   onRetry,
@@ -98,7 +102,8 @@ export const UnifiedChatFeed = memo(function UnifiedChatFeed({
     ? {
         id: '__typing__', role: 'assistant', text: '', senderName: typingName, streaming: true,
         senderGlyph: initialOf(typingName),
-        senderColor: paletteForAgent(undefined, typingName).accent,
+        senderColor: paletteForAgent(typingSeed, typingName).accent,
+        senderSeed: typingSeed || typingName,
       }
     : null;
   const typingGrouped =
@@ -265,6 +270,8 @@ export function timelineMessagesToStudio(list: readonly TimelineMessageLike[]): 
         senderName: name,
         senderGlyph: initialOf(name),
         senderColor: pal.accent,
+        // 生成式头像种子：优先 agent_id（确定性、不撞名），缺省回退发言名。
+        senderSeed: m.agent_id || name,
         streaming: m.streaming,
         timestamp: m.timestamp,
       });
