@@ -109,6 +109,13 @@ export interface UnifiedComposerProps {
    * 传入会话历史消息文本（plain string），组件内累加 estimateTokens 估算 contextTokens。
    */
   messages?: string[];
+  /**
+   * 流式进行中（agent 正在回复）。传 true 时「✦ go」发送按钮原地变为「停止」按钮
+   * （对齐 ChatGPT/Claude/Cherry Studio：发送↔停止同位切换，不另浮一个按钮）。
+   */
+  streaming?: boolean;
+  /** 流式中点击停止按钮的回调（仅 streaming=true 时生效）。 */
+  onStop?: () => void;
 }
 
 
@@ -255,6 +262,8 @@ export function UnifiedComposer({
   initialText,
   selectRange,
   messages,
+  streaming = false,
+  onStop,
 }: UnifiedComposerProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -1198,25 +1207,53 @@ export function UnifiedComposer({
             <ComposerTokenMeter used={usedTokens} window={0} compact />
           )}
           <div style={{ flex: 1, minWidth: 6 }} />
-          <button
-            type="button"
-            onClick={() => void handleSubmit()}
-            disabled={submitting}
-            className="hf-btn hf-btn-pri sf-press sf-focus-ring"
-            style={{
-              fontSize: 12,
-              fontWeight: 800,
-              padding: '7px 14px',
-              height: 28,
-              boxShadow:
-                '0 8px 20px -6px color-mix(in oklab, var(--t-accent) 55%, transparent)',
-              opacity: submitting ? 0.7 : 1,
-              cursor: submitting ? 'wait' : 'pointer',
-            }}
-            data-testid="start-submit"
-          >
-            {submitting ? t('start.submitting') : t('start.submit')}
-          </button>
+          {streaming ? (
+            /* 流式中：发送按钮原地变为「停止」按钮（同位切换，对齐竞品）。 */
+            <button
+              type="button"
+              onClick={() => onStop?.()}
+              className="sf-press sf-focus-ring"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12,
+                fontWeight: 800,
+                padding: '7px 14px',
+                height: 28,
+                borderRadius: 8,
+                border: '1px solid var(--t-err, #dc3545)',
+                color: 'var(--t-err, #dc3545)',
+                background: 'color-mix(in oklab, var(--t-err, #dc3545) 8%, transparent)',
+                cursor: 'pointer',
+              }}
+              data-testid="composer-stop"
+              aria-label="停止生成"
+            >
+              <span aria-hidden style={{ width: 9, height: 9, borderRadius: 2, background: 'currentColor', display: 'inline-block' }} />
+              停止
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={submitting}
+              className="hf-btn hf-btn-pri sf-press sf-focus-ring"
+              style={{
+                fontSize: 12,
+                fontWeight: 800,
+                padding: '7px 14px',
+                height: 28,
+                boxShadow:
+                  '0 8px 20px -6px color-mix(in oklab, var(--t-accent) 55%, transparent)',
+                opacity: submitting ? 0.7 : 1,
+                cursor: submitting ? 'wait' : 'pointer',
+              }}
+              data-testid="start-submit"
+            >
+              {submitting ? t('start.submitting') : t('start.submit')}
+            </button>
+          )}
         </div>
 
         {/* Submit error bar — shown when onSubmit throws (F1 contract). Same

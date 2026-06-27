@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 const PAGE_SIZE = 12;
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { Check, ChevronDown, Download, MoreHorizontal, Pencil, Plus, Search, Settings, Square, SquarePen, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, Download, MoreHorizontal, Pencil, Plus, Search, Settings, SquarePen, Trash2, X } from 'lucide-react';
 import { UnifiedComposer } from '../../components/composer/UnifiedComposer';
 import { NewTaskComposer } from './NewTaskComposer';
 import { HfAvatar } from '../../components/hifi';
@@ -926,49 +926,24 @@ export function PersonalChatView() {
               )}
             </div>
             {/* F1 — 完整 composer（@技能/附件/模型/知识库），streaming 时保持可输入
-                以便用户提前排队下一条消息；Stop 按钮作为附加操作出现在 composer 上方。 */}
+                以便用户提前排队下一条消息。停止按钮已并入 composer 的发送按钮位
+                （流式时「✦ go」原地变「停止」，对齐竞品）；此处仅留「待发」徽标。 */}
             <div style={{ flexShrink: 0, padding: '10px 16px 14px', borderTop: '1px solid var(--t-border)', background: 'var(--t-panel)' }}>
-              {(streaming || pendingCount > 0) && (
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, paddingBottom: 6 }}>
-                  {streaming && (
-                    <button
-                      type="button"
-                      onClick={cancel}
-                      data-testid="dm-stop-btn"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '5px 16px',
-                        borderRadius: 8,
-                        border: '1px solid rgba(239,68,68,.3)',
-                        background: 'rgba(239,68,68,.1)',
-                        color: 'var(--t-err, #ef4444)',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                      }}
-                    >
-                      <Square size={12} fill="currentColor" strokeWidth={0} />
-                      停止
-                    </button>
-                  )}
-                  {pendingCount > 0 && (
-                    <span
-                      data-testid="dm-pending-badge"
-                      style={{
-                        fontSize: 11,
-                        color: 'var(--t-fg-4)',
-                        background: 'var(--t-border)',
-                        borderRadius: 10,
-                        padding: '2px 8px',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {pendingCount} 条待发
-                    </span>
-                  )}
+              {pendingCount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingBottom: 6 }}>
+                  <span
+                    data-testid="dm-pending-badge"
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--t-fg-4)',
+                      background: 'var(--t-border)',
+                      borderRadius: 10,
+                      padding: '2px 8px',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {pendingCount} 条待发
+                  </span>
                 </div>
               )}
               <UnifiedComposer
@@ -976,6 +951,8 @@ export function PersonalChatView() {
                 onSubmit={handleDmSubmit}
                 placeholder={`发给「${selected.name}」 · 试试 @ 提及 Skill`}
                 messages={messageTexts}
+                streaming={streaming}
+                onStop={cancel}
               />
             </div>
           </>
