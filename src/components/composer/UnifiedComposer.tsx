@@ -432,6 +432,10 @@ export function UnifiedComposer({
         knowledge,
         attachments,
       });
+      // 提交成功后清空输入框 + 附件（对齐 ChatGPT/Claude/ClawsGO：发出即清，不残留）。
+      // 失败则保留文字，方便用户重发（catch 分支不清）。
+      setComposer('');
+      setAttachments([]);
       // 2026-06-24 — skill 只在「当轮 @ 或显式选中」时生效，提交后清掉 pendingSkill，
       // 不再静默粘住（修「敲 hi 却触发上次选的 bmad 团队装配」根因）。对齐产品模型：
       // 默认走单 agent 对话（hermes 式），仅 @skill / 明确组队意图才触发装配。
