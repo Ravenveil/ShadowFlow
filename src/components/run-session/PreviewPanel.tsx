@@ -20,8 +20,8 @@
  * No mocked content — empty session shows an empty state, not the demo
  * paper.review.v1 yaml.
  */
-import React, { useEffect, useRef } from 'react';
-import { ExternalLink, FileText, Code2, FileJson, FileCode } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ExternalLink, FileText, Code2, FileJson, FileCode, Copy, Check } from 'lucide-react';
 import type { UseRunSessionReturn, RunSessionStep } from '../../core/hooks/useRunSession';
 import PreviewIframe from './PreviewIframe';
 import PreviewMarkdown from './PreviewMarkdown';
@@ -272,6 +272,19 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
 
   const empty = yaml.length === 0;
 
+  // 复制产物到剪贴板（clawsgo/hermes 通用：产物查看器都带 copy）。复制后 1.4s 显示 ✓。
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<number | undefined>(undefined);
+  const handleCopy = () => {
+    if (!yaml) return;
+    void navigator.clipboard?.writeText(yaml).then(() => {
+      setCopied(true);
+      if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 1400);
+    }).catch(() => { /* 剪贴板不可用：静默 */ });
+  };
+  useEffect(() => () => { if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current); }, []);
+
   // Status-bar mime label — short, monospaced, sits beside the filename.
   const mimeLabel: Record<PreviewMime, string> = {
     'text/yaml': 'yaml',
@@ -360,6 +373,19 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ session, onOpenEditor }) =>
           {mime === 'text/yaml' ? `${lines.length} 行 · ` : ''}
           {session.tokenCount.toLocaleString()} tokens
         </span>
+        {/* 复制产物（clawsgo/hermes 通用）——复制后绿勾过冲弹入。 */}
+        {!empty && (
+          <button
+            type="button"
+            onClick={handleCopy}
+            aria-label={copied ? '已复制' : '复制产物'}
+            title={copied ? '已复制' : '复制产物'}
+            className="sf-rail-icon"
+            style={{ padding: 5, flexShrink: 0, color: copied ? 'var(--t-ok, #10b981)' : 'var(--t-fg-4)' }}
+          >
+            {copied ? <Check size={14} strokeWidth={2.6} className="sf-pop-in" /> : <Copy size={13} strokeWidth={2} />}
+          </button>
+        )}
       </div>
 
       {/* Body — branches by mime. */}
