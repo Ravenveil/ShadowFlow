@@ -161,10 +161,10 @@ function FencedCodeBlock({ lang, code, blockKey }: { lang: string; code: string;
         border: '1px solid var(--t-border)',
         background: 'var(--t-panel-2)',
         overflow: 'hidden',
-        margin: '4px 0',
+        margin: '7px 0',
         fontSize: 12,
         fontFamily: 'var(--font-mono)',
-        lineHeight: 1.55,
+        lineHeight: 1.6,
       }}
     >
       {/* 语言 chip + 行数 + 复制按钮 + 折叠切换 — 整行可点击切换展开/折叠 */}
@@ -451,7 +451,8 @@ function MarkdownLite({ text, trailingCursor, messageId }: { text: string; trail
               fontWeight: 700,
               fontSize,
               lineHeight: 1.35,
-              margin: idx === 0 ? '0 0 3px' : '8px 0 3px',
+              letterSpacing: '-0.01em',
+              margin: idx === 0 ? '1px 0 5px' : '12px 0 5px',
               color: 'var(--t-fg-1, var(--t-fg-2))',
             }}
           >
@@ -468,10 +469,10 @@ function MarkdownLite({ text, trailingCursor, messageId }: { text: string; trail
           <div
             key={`${si}-${idx}`}
             style={{
-              borderLeft: '3px solid var(--t-border)',
-              paddingLeft: 9,
+              borderLeft: '3px solid color-mix(in oklab, var(--t-accent) 45%, var(--t-border))',
+              paddingLeft: 11,
               color: 'var(--t-fg-3)',
-              margin: '1px 0',
+              margin: '5px 0',
             }}
           >
             {renderInline(quoteMatch[1], `q${si}-${idx}`)}
@@ -483,15 +484,15 @@ function MarkdownLite({ text, trailingCursor, messageId }: { text: string; trail
       // 分隔线 --- / *** / ___（整行）。
       if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
         nodes.push(
-          <hr key={`${si}-${idx}`} style={{ border: 'none', borderTop: '1px solid var(--t-border)', margin: '8px 0' }} />,
+          <hr key={`${si}-${idx}`} style={{ border: 'none', borderTop: '1px solid var(--t-border)', margin: '12px 0' }} />,
         );
         return;
       }
       const listMatch = /^\s*([-*]|\d+\.)\s+(.*)$/.exec(line);
       if (listMatch) {
         nodes.push(
-          <div key={`${si}-${idx}`} style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
-            <span aria-hidden style={{ color: 'var(--t-fg-4)', flexShrink: 0 }}>
+          <div key={`${si}-${idx}`} style={{ display: 'flex', gap: 8, alignItems: 'baseline', margin: '2px 0' }}>
+            <span aria-hidden style={{ color: 'var(--t-fg-4)', flexShrink: 0, fontWeight: 600 }}>
               {/^\d/.test(listMatch[1]) ? listMatch[1] : '•'}
             </span>
             <span>
@@ -503,7 +504,7 @@ function MarkdownLite({ text, trailingCursor, messageId }: { text: string; trail
         return;
       }
       if (line.trim() === '') {
-        nodes.push(<div key={`${si}-${idx}`} style={{ height: 6 }} />);
+        nodes.push(<div key={`${si}-${idx}`} style={{ height: 8 }} />);
         return;
       }
       nodes.push(
@@ -770,7 +771,7 @@ export const StudioMessageRow = memo(function StudioMessageRow({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 5,
+        gap: 6,
         minWidth: 0,
         // 整回合（工具行 / 推理行 / 气泡）共用同一收口宽度，对齐 hermes 单内容列。
         maxWidth: BUBBLE_MAX_WIDTH,
@@ -830,12 +831,14 @@ export const StudioMessageRow = memo(function StudioMessageRow({
               // user 圆角偏向左下、agent 偏向右下 —— 气泡尾巴指向各自头像侧，回合归属一眼可辨。
               position: 'relative',
               maxWidth: '100%',
-              padding: '8px 12px',
-              borderRadius: 12,
-              borderTopRightRadius: isUser ? 4 : 12,
-              borderTopLeftRadius: !isUser ? 4 : 12,
+              // 更舒展的内边距（对齐 cherry / hermes 的呼吸感），垂直略大于水平让多行文本不贴边。
+              padding: '9px 13px',
+              borderRadius: 14,
+              borderTopRightRadius: isUser ? 5 : 14,
+              borderTopLeftRadius: !isUser ? 5 : 14,
               fontSize: 13,
-              lineHeight: 1.6,
+              // 1.65 行高 + 下面 markdown 的块间距，让长回答读起来有节奏不挤。
+              lineHeight: 1.65,
               wordBreak: 'break-word',
               background: bubbleBg,
               border: `1px solid ${bubbleBorder}`,
@@ -1020,8 +1023,9 @@ export const StudioMessageRow = memo(function StudioMessageRow({
         gap: AVATAR_GAP,
         alignItems: 'flex-start',
         flexDirection: isUser ? 'row-reverse' : 'row',
-        // 续行紧贴上一行（同回合一块），回合首行留出回合间距。
-        marginTop: grouped ? 2 : 12,
+        // 续行紧贴上一行（同回合一块）、回合首行留出更明显的回合间距，
+        // 让「谁说完一段、轮到下一个」的边界一眼可分（cherry / hermes 回合留白）。
+        marginTop: grouped ? 3 : 16,
       }}
     >
       {avatarCol}
