@@ -3,14 +3,13 @@
  * Workspace switching is handled by WorkspaceStrip in HfLayout (universal).
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { Settings as HfSettingsIcon } from '../../common/icons/iconRegistry';
 import { LanguageSwitcher } from '../../core/components/common/LanguageSwitcher';
 import { openQuickSwitcher } from './QuickSwitcher';
 import { useTheme } from './useTheme';
 import { useI18n } from '../../common/i18n';
-import { WorkspaceSelector } from '../workspace/WorkspaceStrip';
 
 function tierColor(latency: number): string {
   if (latency < 100) return 'var(--t-ok)';
@@ -171,12 +170,9 @@ interface HfTopBarProps {
 }
 
 export function HfTopBar({ right }: HfTopBarProps) {
-  const { pathname } = useLocation();
-  // /chat 把工作区选择器放在内容区顶部（见 ChatHomePage），其余页面在顶栏兜底，
-  // 因为个人/团队切换占用了原侧栏顶部的工作区选择器位置。
-  // /agent-dm 同属聊天类视图（且自带 HfTopBar），排除以免重复显示。
-  const isChatLike = pathname.startsWith('/chat') || pathname.startsWith('/agent-dm');
-  const showWorkspace = !isChatLike;
+  // 工作区/团队选择器现在唯一地住在常驻左侧栏（ChatRail，HfLayout 全站渲染）。
+  // 顶栏此前在非 /chat 页兜底再渲一个，导致与侧栏的同一张「未命名团队」卡重复
+  // （用户 2026-06-27 报告）。彻底移除顶栏这份，侧栏成为唯一真源。
   return (
     <header
       style={{
@@ -190,11 +186,6 @@ export function HfTopBar({ right }: HfTopBarProps) {
         background: 'var(--t-panel)',
       }}
     >
-      {showWorkspace && (
-        <div style={{ width: 240, flexShrink: 0 }}>
-          <WorkspaceSelector />
-        </div>
-      )}
       <div style={{ flex: 1 }} />
       {right}
       <NetworkLatencyChip />

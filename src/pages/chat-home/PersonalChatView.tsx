@@ -221,16 +221,28 @@ export function PersonalChatView() {
   //   Auto (CLI) / claude-*  → cli:claude（订阅鉴权，CN 可达；claude-* 传 --model）
   //   gpt-*                  → byok:openai
   //   deepseek-*             → byok:deepseek
-  //   其它                    → 不显式指定，后端默认 cli:claude
+  //
+  // 关键守卫（2026-06-27）：只对本 DM 选择器**自己提供**的模型(MODEL_OPTIONS)路由到
+  // BYOK。其它来源泄漏进 sf.model 的模型（如 composer 选的 glm-5.1，且其 key 无效会 401）
+  // 一律回退到可靠的 cli:claude——避免「我没在这选 glm 却被 glm 的坏 key 401」。
   const { dmExecutor, dmModel } = useMemo(() => {
     const label = modelLabel;
     if (label === 'Auto (CLI)' || label === 'Auto') return { dmExecutor: undefined, dmModel: undefined };
+    // 非本选择器选项 → 不信任，走 cli:claude 默认（最稳）。
+    if (!MODEL_OPTIONS.includes(label as (typeof MODEL_OPTIONS)[number])) {
+      return { dmExecutor: undefined, dmModel: undefined };
+    }
     if (label.startsWith('claude-')) return { dmExecutor: 'cli:claude', dmModel: label };
     if (label.startsWith('gpt-')) return { dmExecutor: 'byok:openai', dmModel: label };
     if (label.startsWith('deepseek')) return { dmExecutor: 'byok:deepseek', dmModel: label };
-    if (label.startsWith('glm')) return { dmExecutor: 'byok:zhipu', dmModel: label };
     return { dmExecutor: undefined, dmModel: undefined };
   }, [modelLabel]);
+
+  // 头部显示用：模型不在 DM 选项里（如泄漏的 glm-5.1）实际走 cli:claude，
+  // 故显示 'Auto (CLI)' 而非误导性的原标签。
+  const dmModelDisplay = MODEL_OPTIONS.includes(modelLabel as (typeof MODEL_OPTIONS)[number])
+    ? modelLabel
+    : 'Auto (CLI)';
 
   const { messages, send, cancel, streaming, error, pendingCount } = useChatStream({
     mode: 'group',
@@ -694,7 +706,7 @@ export function PersonalChatView() {
                         flexShrink: 0,
                       }}
                     />
-                    {modelLabel}
+                    {dmModelDisplay}
                     <ChevronDown size={9} strokeWidth={2.5} style={{ flexShrink: 0, opacity: 0.6 }} />
                   </button>
                   {showModelPicker && (
@@ -735,14 +747,14 @@ export function PersonalChatView() {
                             cursor: 'pointer',
                             fontSize: 12,
                             fontFamily: 'inherit',
-                            color: modelLabel === opt ? 'var(--t-accent)' : 'var(--t-fg-2)',
+                            color: dmModelDisplay === opt ? 'var(--t-accent)' : 'var(--t-fg-2)',
                             textAlign: 'left',
                           }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--t-panel-2)'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
                         >
                           <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12 }}>{opt}</span>
-                          {modelLabel === opt && <Check size={11} strokeWidth={2.5} style={{ flexShrink: 0, color: 'var(--t-accent)' }} />}
+                          {dmModelDisplay === opt && <Check size={11} strokeWidth={2.5} style={{ flexShrink: 0, color: 'var(--t-accent)' }} />}
                         </button>
                       ))}
                     </div>
