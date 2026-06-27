@@ -516,7 +516,7 @@ export function PersonalChatView() {
                   if (renaming === d.agentId) {
                     return (
                       <div key={`dm_${d.agentId}`} ref={isLastRow ? lastDmRowRef : undefined} className={active ? 'pcv-row active' : 'pcv-row'}>
-                        <AgentAvatar seed={d.agentId} name={d.agentName} color={pal.accent} size={32} />
+                        <AgentAvatar className="pcv-av" seed={d.agentId} name={d.agentName} color={pal.accent} size={32} />
                         <input
                           value={renameValue}
                           onChange={(e) => setRenameValue(e.target.value)}
@@ -549,7 +549,7 @@ export function PersonalChatView() {
                         onClick={() => selectAgent(d.agentId)}
                         style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
                       >
-                        <AgentAvatar seed={d.agentId} name={d.agentName} color={pal.accent} size={32} status="ok" />
+                        <AgentAvatar className="pcv-av" seed={d.agentId} name={d.agentName} color={pal.accent} size={32} status="ok" />
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                             <div className="pcv-row-name" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.agentName}</div>
@@ -640,7 +640,7 @@ export function PersonalChatView() {
               const active = a.agent_id === agentId;
               return (
                 <button key={a.agent_id} data-flip-id={`ag_${a.agent_id}`} type="button" className={`pcv-row sf-rail-in${active ? ' active' : ''}`} style={{ animationDelay: `${Math.min(i, 8) * 22}ms` }} onClick={() => selectAgent(a.agent_id)}>
-                  <AgentAvatar seed={a.agent_id} name={a.name} color={a.avatar_color} size={32} status="ok" />
+                  <AgentAvatar className="pcv-av" seed={a.agent_id} name={a.name} color={a.avatar_color} size={32} status="ok" />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="pcv-row-name">{a.name}</div>
                     <div className="pcv-row-sub">{a.soul?.split('\n')[0] ?? ''}</div>

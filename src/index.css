@@ -1282,29 +1282,55 @@ input, textarea, select { font-family: inherit; color: inherit; }
 
 .pcv-row {
   width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 8px;
-  border-radius: 8px; border: none; cursor: pointer; text-align: left; background: transparent;
-  position: relative; transition: background var(--dur-1) ease, transform var(--dur-1) var(--ease-out);
+  border-radius: 9px; border: none; cursor: pointer; text-align: left; background: transparent;
+  position: relative;
+  /* R12 clawsgo 化（2026-06-27 R2）：hover 位移走 spring，背景/阴影走 ease-out，
+     三条独立曲线 → 微动效更"活"而不晃。 */
+  transition: background var(--dur-2) var(--ease-out),
+              transform var(--dur-1) var(--ease-spring),
+              box-shadow var(--dur-2) var(--ease-out);
 }
-.pcv-row:hover { background: var(--t-panel-2); }
-.pcv-row:active { transform: scale(.985); }
-.pcv-row.active { background: var(--t-accent-tint); }
+/* R12 — hover：底色浮起 + 整行向右轻移 2px（clawsgo 列表项「迎向指针」招牌微动）。 */
+.pcv-row:hover { background: var(--t-panel-2); transform: translateX(2px); }
+/* 按压同时保留 hover 的 translateX，避免按下瞬间回弹抖动。 */
+.pcv-row:active { transform: translateX(2px) scale(.985); }
+/* R12 — 选中态：横向 accent 渐变 + 内描边一圈淡 accent（替代纯平 tint，
+   层次更立体，对齐 clawsgo 选中项）。 */
+.pcv-row.active {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--t-accent-tint) 160%, transparent),
+    color-mix(in srgb, var(--t-accent-tint) 55%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-accent) 20%, transparent);
+}
 /* clawsgo 化（2026-06-26 R1）：选中左条常驻渲染，用 scaleY 弹性生长，替代
    原本 .active 时瞬时出现，切换更顺滑。 */
 .pcv-row::before {
-  content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 2.5px;
+  content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px;
   border-radius: 0 3px 3px 0; background: var(--t-accent);
   transform: scaleY(0); transform-origin: center;
-  transition: transform var(--dur-2) var(--ease-spring);
+  transition: transform var(--dur-2) var(--ease-spring), box-shadow var(--dur-2) var(--ease-out);
 }
-.pcv-row.active::before { transform: scaleY(1); }
+/* R12 — 选中左条点亮时带 accent 光晕（clawsgo 选中发光）。 */
+.pcv-row.active::before { transform: scaleY(1); box-shadow: 0 0 9px color-mix(in srgb, var(--t-accent) 65%, transparent); }
 .pcv-row-name { font-size: 13px; font-weight: 600; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--dur-1) var(--ease-out); }
 .pcv-row.active .pcv-row-name { color: var(--t-accent-bright); }
 /* R10 — hover 时名字向 accent 高亮（clawsgo hover 文字/图标变色招牌反馈）。 */
 .pcv-row:hover .pcv-row-name { color: var(--t-accent-bright); }
-.pcv-row-sub { font-size: 11px; color: var(--t-fg-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.pcv-row-sub { font-size: 11px; color: var(--t-fg-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; transition: color var(--dur-1) var(--ease-out); }
+/* R12 — hover/选中时副行（人设）提亮一档，主次仍分明。 */
+.pcv-row:hover .pcv-row-sub, .pcv-row.active .pcv-row-sub { color: var(--t-fg-3); }
+
+/* R12 — 头像微动（clawsgo 列表项头像「呼吸」反馈）：hover 弹性放大，
+   选中时套一圈 accent 描边环（panel 色垫底 + accent 外环，干净不糊）。
+   消费方在 .pcv-row 内的 AgentAvatar 上加 className="pcv-av"。 */
+.pcv-av { transition: transform var(--dur-2) var(--ease-spring), box-shadow var(--dur-2) var(--ease-out); border-radius: 7px; }
+.pcv-row:hover .pcv-av { transform: scale(1.08); }
+.pcv-row.active .pcv-av { box-shadow: 0 0 0 2px var(--t-panel), 0 0 0 3.5px color-mix(in srgb, var(--t-accent) 50%, transparent); }
+
 /* DM row context-menu button — hidden until row hovered or menu open */
-.pcv-dm-dots { opacity: 0; transition: opacity 120ms ease; }
-.pcv-row:hover .pcv-dm-dots, .pcv-dm-dots.open { opacity: 1; }
+.pcv-dm-dots { opacity: 0; transform: scale(.85); transition: opacity var(--dur-1) ease, transform var(--dur-1) var(--ease-spring), color var(--dur-1) ease; }
+.pcv-row:hover .pcv-dm-dots, .pcv-dm-dots.open { opacity: 1; transform: scale(1); }
+.pcv-dm-dots:hover { color: var(--t-fg) !important; }
 
 /* ───────────────────────────────────────────────────────────────
    clawsgo 化侧栏动效词汇（2026-06-26 R1）—— 只增不删。
@@ -1313,7 +1339,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
    状态点不在此处造轮子：直接用 HfAvatar 自带的 status 角标（见 HfAtoms.tsx）。
    重点参考 clawsgo：列表项进出场、切换列表内容淡入。
    ─────────────────────────────────────────────────────────────── */
-@keyframes sf-rail-in   { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sf-rail-in   { from { opacity: 0; transform: translateY(7px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes sf-rail-out  { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-10px); } }
 @keyframes sf-rail-fade { from { opacity: 0; } to { opacity: 1; } }
 
@@ -1344,8 +1370,10 @@ input, textarea, select { font-family: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .sf-rail-in, .sf-rail-out, .sf-rail-fade { animation: none !important; }
   .pcv-row { transition: background var(--dur-1) ease !important; }
-  .pcv-row:active, .sf-rail-icon:active { transform: none !important; }
-  .pcv-row::before, .sf-rail-toggle > svg { transition: none !important; }
+  .pcv-row:hover, .pcv-row:active, .sf-rail-icon:active { transform: none !important; }
+  .pcv-row:hover .pcv-av, .pcv-row.active .pcv-av { transform: none !important; }
+  .pcv-row::before, .sf-rail-toggle > svg, .pcv-av { transition: none !important; }
+  .pcv-dm-dots { transition: opacity var(--dur-1) ease !important; }
   .pcv-new:hover, .pcv-new:active { transform: none !important; }
 }
 
