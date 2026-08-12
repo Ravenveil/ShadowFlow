@@ -6,7 +6,7 @@ const PROVIDERS: { key: keyof ProviderSecrets; label: string; placeholder: strin
   { key: 'anthropic', label: 'Claude (Anthropic)', placeholder: 'sk-ant-...' },
   { key: 'openai',    label: 'OpenAI',             placeholder: 'sk-...' },
   { key: 'gemini',    label: 'Gemini (Google)',     placeholder: 'AIza...' },
-  { key: 'zerog',     label: '0G Compute',          placeholder: '0x...' },
+  // 2026-08-11: '0G Compute' provider 条目停用（0G 组件先不用，代码保留可回退）
 ];
 
 interface SecretsModalProps {

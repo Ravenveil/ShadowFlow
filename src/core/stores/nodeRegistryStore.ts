@@ -643,14 +643,14 @@ const builtinNodes: INode[] = [
     id: 'checkpoint',
     type: 'builtin',
     name: { en: 'Checkpoint', zh: '检查点' },
-    description: { en: 'Saves a named snapshot to 0G Storage; enables fork and time-travel', zh: '将命名快照保存到 0G Storage，支持 fork 和时间回溯' },
+    description: { en: 'Saves a named snapshot to durable storage; enables fork and time-travel', zh: '将命名快照保存到持久存储，支持 fork 和时间回溯' },
     category: 'coordinate',
     icon: '◆',
     color: 'var(--t-gated, var(--t-accent))',
     accentColor: 'var(--t-gated, var(--t-accent))',
     inputs: [{ name: 'state', type: 'object', required: true, description: { en: 'State to snapshot', zh: '待快照状态' } }],
-    outputs: [{ name: 'cid', type: 'string', required: true, description: { en: '0G CID', zh: '0G CID' } }],
-    defaultConfig: { storage: '0g', label: '' },
+    outputs: [{ name: 'cid', type: 'string', required: true, description: { en: 'Snapshot CID', zh: '快照 CID' } }],
+    defaultConfig: { storage: 'local', label: '' },
   },
 ];
 

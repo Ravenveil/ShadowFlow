@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from shadowflow.runtime.checkpoint_store import BaseCheckpointStore
+from shadowflow.runtime.river_memory import RiverMemory
 from shadowflow.runtime.contracts import (
     ActivationCandidate,
     ActivationRecord,
@@ -28,6 +29,9 @@ from shadowflow.runtime.contracts import (
     CheckpointState,
     ExecutionFeedbackRecord,
     HandoffRef,
+    IterationRecord,
+    LoopFrame,
+    LoopRecord,
     MemoryRelationProjection,
     MemoryEvent,
     NodeDefinition,
@@ -82,6 +86,7 @@ class RuntimeService:
         request_context_store: Optional[Any] = None,
         chat_session_store: Optional[Any] = None,
         event_bus: Optional[Any] = None,
+        river_memory: Optional[RiverMemory] = None,
     ) -> None:
         self._runs: Dict[str, RunResult] = {}
         self._requests_by_run_id: Dict[str, RuntimeRequest] = {}
@@ -108,6 +113,9 @@ class RuntimeService:
         self._policy_locks: Dict[str, threading.Lock] = {}
         # SSE event bus (Story 4.1) — optional; set externally or via constructor
         self._event_bus = event_bus
+        # River Memory — cross-iteration/cross-run memory substrate (design §5.7).
+        # NOTE: use `is not None` (not truthiness) — an empty RiverMemory is falsy via __len__.
+        self._river = river_memory if river_memory is not None else RiverMemory()
         # Story 9.3: optional ContextBuilder for memory writeback
         self._context_builder: Optional[Any] = None
 
@@ -231,6 +239,135 @@ class RuntimeService:
                 reason=reason,
                 retarget_stage=retarget_stage,
             )
+
+    async def reject_loop_iteration(
+        self,
+        run_id: str,
+        reviewer_role: str,
+        loop_node_id: str,
+        target_iteration: int,
+        reason: str = "",
+    ) -> str:
+        """Iterative Policy reject (design §6.4): force a completed loop to REDO from
+        ``target_iteration``. Builds a snapshot checkpoint that retargets to the loop node
+        AND seeds ``loop_progress`` (plus restored ``controlled``) into shared_state so a
+        subsequent ``resume()`` re-enters the loop at that iteration instead of from zero.
+        Returns the new checkpoint id.
+        """
+        async with self._get_run_lock(run_id):
+            from shadowflow.runtime.errors import PolicyViolation
+            from shadowflow.runtime.events import (
+                NODE_INVALIDATED,
+                NODE_REJECTED,
+                POLICY_VIOLATION as POLICY_VIOLATION_EVT,
+            )
+            from shadowflow.runtime.policy_matrix import can_reject
+
+            request = self._requests_by_run_id.get(run_id)
+            if request is None:
+                raise ValueError(f"Unknown run_id: {run_id!r}")
+            policy_matrix = request.workflow.policy_matrix
+            if policy_matrix is not None and not can_reject(policy_matrix, reviewer_role, loop_node_id):
+                raise PolicyViolation(reviewer=reviewer_role, target=loop_node_id, reason=reason)
+
+            run = self._runs.get(run_id)
+            if run is None:
+                raise ValueError(f"Run {run_id!r} not found; the loop must have completed first")
+            loop_step = next((s for s in run.steps if s.node_id == loop_node_id), None)
+            if loop_step is None or "loop_record" not in (loop_step.output or {}):
+                raise ValueError(f"No completed loop record for node {loop_node_id!r} in run {run_id!r}")
+            iterations = loop_step.output["loop_record"].get("iterations", [])
+            total = len(iterations)
+            if target_iteration < 0 or target_iteration > total:
+                raise ValueError(f"target_iteration {target_iteration} out of range [0, {total}]")
+
+            latest = self._get_latest_checkpoint(run_id)
+            # Prefer the most-complete checkpoint (most visited nodes) so downstream nodes are
+            # captured in `invalidated`; _get_latest_checkpoint may return an earlier snapshot.
+            candidates = [c for c in self._checkpoints.values() if c.run_id == run_id]
+            if candidates:
+                latest = max(candidates, key=lambda c: len(c.state.visited_nodes))
+            if latest is None:
+                raise ValueError(f"No checkpoint for run {run_id!r}")
+            visited = list(latest.state.visited_nodes)
+            if loop_node_id not in visited:
+                raise ValueError(f"loop node {loop_node_id!r} not in visited_nodes")
+            target_idx = visited.index(loop_node_id)
+            invalidated = visited[target_idx:]
+
+            restored_iters = iterations[:target_iteration]
+            restored_controlled = {}
+            if restored_iters:
+                restored_controlled = (restored_iters[-1].get("evidence", {}) or {}).get("controlled", {}) or {}
+
+            # Inject loop_progress + invalidated_nodes into shared_state (the sub-dict resume reads).
+            payload = dict(latest.state.state) if isinstance(latest.state.state, dict) else {}
+            inner_shared = dict(payload.get("shared_state", {}))
+            inner_shared["loop_progress"] = {
+                loop_node_id: {
+                    "next_iteration": target_iteration,
+                    "iterations": restored_iters,
+                    "controlled": restored_controlled,
+                }
+            }
+            inner_shared["invalidated_nodes"] = list(invalidated)
+            payload["shared_state"] = inner_shared
+
+            new_checkpoint_id = f"ckpt-{uuid4().hex[:10]}"
+            new_cp = CheckpointRef(
+                checkpoint_id=new_checkpoint_id,
+                run_id=run_id,
+                step_id=latest.step_id,
+                state_ref=f"checkpoint://{run_id}/{new_checkpoint_id}",
+                state=CheckpointState(
+                    current_node_id=loop_node_id,
+                    next_node_id=loop_node_id,
+                    visited_nodes=visited[:target_idx],
+                    last_output=latest.state.last_output,
+                    state=payload,
+                ),
+                writeback=latest.writeback,
+                metadata={
+                    **(latest.metadata or {}),
+                    "retarget_stage": loop_node_id,
+                    "loop_target_iteration": target_iteration,
+                },
+            )
+            self._checkpoints[new_checkpoint_id] = new_cp
+            if self._checkpoint_store is not None:
+                await asyncio.get_event_loop().run_in_executor(None, self._checkpoint_store.put, new_cp)
+
+            now = utc_now().isoformat()
+            if self._event_bus is not None:
+                self._event_bus.publish(
+                    run_id,
+                    {
+                        "type": POLICY_VIOLATION_EVT,
+                        "sender": reviewer_role,
+                        "receiver": loop_node_id,
+                        "node_id": loop_node_id,
+                        "reason": reason,
+                        "timestamp": now,
+                    },
+                )
+                self._event_bus.publish_node_event(
+                    run_id, NODE_REJECTED, loop_node_id,
+                    {"reason": reason, "loop_target_iteration": target_iteration},
+                )
+                for nid in invalidated:
+                    self._event_bus.publish_node_event(
+                        run_id, NODE_INVALIDATED, nid, {"reason": reason, "retarget": loop_node_id}
+                    )
+            self._rejection_events.setdefault(run_id, []).append(
+                {
+                    "reviewer": reviewer_role,
+                    "node_id": loop_node_id,
+                    "reason": reason,
+                    "loop_target_iteration": target_iteration,
+                    "checkpoint_id": new_checkpoint_id,
+                }
+            )
+            return new_checkpoint_id
 
     async def _reject_locked(
         self,
@@ -1043,6 +1180,17 @@ class RuntimeService:
                             "reason": "approval_timeout",
                         })
                     break
+            elif node.type == "control.loop":
+                step_output = await self._execute_loop_node(
+                    request=request,
+                    run_id=run_id,
+                    task=task,
+                    step_id=step_id,
+                    node=node,
+                    step_input=effective_input,
+                    state=state,
+                    nodes_by_id=nodes_by_id,
+                )
             elif self._is_delegated_node(node):
                 step_output = await self._execute_delegated_node(
                     request=request,
@@ -3007,6 +3155,527 @@ class RuntimeService:
         )
         self._apply_gap_resolution_output(output, step_input)
         return output
+
+    async def _execute_loop_node(
+        self,
+        *,
+        request: RuntimeRequest,
+        run_id: str,
+        task: TaskRecord,
+        step_id: str,
+        node: NodeDefinition,
+        step_input: Dict[str, Any],
+        state: Dict[str, Any],
+        nodes_by_id: Dict[str, NodeDefinition],
+    ) -> Dict[str, Any]:
+        """Execute a control.loop node: iterate its subgraph in-run until convergence/budget.
+
+        The loop occupies a single main-walk step; body-node executions are captured as
+        IterationRecords (not StepRecords), so iterations do not exhaust `max_steps`.
+        LoopFrame push/pop tracks the fractal call-stack in `state["loop_frames"]`.
+        """
+        from shadowflow.runtime.events import NODE_RETRIED
+
+        config = node.config
+        loop_kind = config.get("kind", "until_converge")
+        iteration_budget = int(config.get("iteration_budget", 1))
+        subgraph_ids = [nid for nid in config.get("subgraph", []) if isinstance(nid, str)]
+        setpoint = config.get("setpoint") if isinstance(config.get("setpoint"), dict) else {}
+        role = config.get("role", node.type)
+        prompt = config.get("prompt", "")
+        max_depth = int(config.get("max_depth", 4))
+        depth_factor = float(config.get("depth_factor", 0.6))
+        watch = config.get("watch") if isinstance(config.get("watch"), list) else []
+
+        active_frames: List[LoopFrame] = state.setdefault("loop_frames", [])
+        current_depth = (active_frames[-1].depth + 1) if active_frames else 0
+        parent_loop_id = active_frames[-1].loop_id if active_frames else None
+
+        # Fractal depth bound (design §1.4 / §5.5): beyond max_depth a loop degrades to a
+        # single iteration; otherwise the budget shrinks by depth_factor per nesting level
+        # (Murray's-law analogue: deeper levels carry less computation).
+        if current_depth >= max_depth:
+            effective_budget = 1
+        else:
+            effective_budget = max(1, int(iteration_budget * (depth_factor ** current_depth)))
+
+        loop_record = LoopRecord(
+            run_id=run_id,
+            parent_loop_id=parent_loop_id,
+            kind=loop_kind,
+            setpoint=setpoint,
+            depth=current_depth,
+            sensor_binding=config.get("sensor_binding"),
+            actuator_binding=config.get("actuator_binding"),
+        )
+        frame = LoopFrame(
+            loop_id=loop_record.loop_id,
+            index=0,
+            setpoint=setpoint,
+            depth=current_depth,
+        )
+        active_frames.append(frame)
+
+        # LE-1 mid-loop resume: if this loop was interrupted, continue from the saved iteration.
+        progress_map = state.setdefault("loop_progress", {})
+        saved = progress_map.get(node.id)
+        start_iteration = 0
+        _resume_controlled: Optional[Dict[str, Any]] = None
+        if isinstance(saved, dict):
+            start_iteration = max(0, min(int(saved.get("next_iteration", 0)), effective_budget))
+            for ir in saved.get("iterations", []):
+                rec = IterationRecord.model_validate(ir) if isinstance(ir, dict) else ir
+                loop_record.iterations.append(rec)
+            loop_record.iteration_count = len(loop_record.iterations)
+            if isinstance(saved.get("controlled"), dict):
+                _resume_controlled = saved["controlled"]
+
+        signals_map = state.setdefault("loop_signals", {})
+        loop_local_visited: List[str] = []
+        last_output: Dict[str, Any] = dict(step_input)
+        converged = False
+        halted_by_watch = False
+        retried_count = 0
+
+        # LE-2 cybernetic core: Sensor (C) observes the response; Controller (A) closes the
+        # feedback loop by actuating variables that feed the next iteration's body.
+        sensor_cfg = config.get("sensor") if isinstance(config.get("sensor"), dict) else {}
+        controller_cfg = config.get("controller") if isinstance(config.get("controller"), dict) else {}
+        freeze_fields = config.get("freeze") if isinstance(config.get("freeze"), list) else []
+        attribution_cfg = config.get("attribution") if isinstance(config.get("attribution"), dict) else {}
+        coe_enabled = bool(attribution_cfg.get("coe"))
+        controlled: Dict[str, Any] = {}
+        if isinstance(controller_cfg.get("init"), dict):
+            controlled.update(controller_cfg["init"])
+        if _resume_controlled:
+            controlled.update(_resume_controlled)
+        metric_history: List[float] = []
+
+        # River Memory (design §5.7): recall settled patterns on entry (cross-iteration
+        # memory), settle a reusable pattern on convergence.
+        memory_cfg = config.get("memory") if isinstance(config.get("memory"), dict) else {}
+        river_enabled = bool(memory_cfg.get("river"))
+        recalled: List[Dict[str, Any]] = []
+        if river_enabled:
+            recalled = [
+                c.model_dump(mode="json")
+                for c in self._river.dredge(
+                    tags=memory_cfg.get("tags"), limit=int(memory_cfg.get("recall", 3))
+                )
+            ]
+
+        # SEED-lite (design §7.4): a memory_nudge controller warm-starts from a prior settled
+        # pattern — the A node learning from sedimented experience so later runs converge faster.
+        if controller_cfg.get("type") == "memory_nudge" and recalled:
+            field = controller_cfg.get("field") or setpoint.get("metric")
+            try:
+                factor = float(controller_cfg.get("warm_start_factor", 0.8))
+            except (TypeError, ValueError):
+                factor = 0.8
+            for chunk in recalled:
+                prior = (chunk.get("content") or {}).get("controlled") or {}
+                if field in prior:
+                    try:
+                        controlled[field] = round(float(prior[field]) * factor)
+                    except (TypeError, ValueError):
+                        pass
+                    break
+
+        try:
+            for iteration_index in range(start_iteration, effective_budget):
+                # LE-2 supervision (loops watching loops): halt if a watched loop already
+                # emitted a matching signal earlier in the run.
+                if self._loop_watch_triggered(watch, signals_map):
+                    halted_by_watch = True
+                    break
+
+                frame.index = iteration_index
+                iteration_outputs: Dict[str, Any] = {}
+                for body_node_id in subgraph_ids:
+                    body_node = nodes_by_id[body_node_id]
+                    body_input = {**last_output, **iteration_outputs, **controlled}
+                    if recalled:
+                        body_input["_river_recall"] = recalled
+                    if body_node.type == "control.loop":
+                        # Fractal nesting: a loop in the body recurses with growing depth.
+                        body_output = await self._execute_loop_node(
+                            request=request,
+                            run_id=run_id,
+                            task=task,
+                            step_id=step_id,
+                            node=body_node,
+                            step_input=body_input,
+                            state=state,
+                            nodes_by_id=nodes_by_id,
+                        )
+                    else:
+                        body_output = await self._execute_node(
+                            body_node, body_input, state, request.context
+                        )
+                    iteration_outputs[body_node_id] = body_output
+                    last_output = body_output
+                    loop_local_visited.append(body_node_id)
+
+                # C (Sensor): observe the system response — body output merged with the
+                # controller's actuated variables, so a passthrough body still exposes them.
+                measurement = {**last_output, **controlled}
+                metric_value = self._metric_value(measurement, setpoint)
+                if metric_value is not None:
+                    metric_history.append(metric_value)
+                sensor_result = self._sense(sensor_cfg, setpoint, measurement, metric_history)
+                metrics = self._extract_loop_metrics(measurement, setpoint)
+                iteration_record = IterationRecord(
+                    loop_id=loop_record.loop_id,
+                    run_id=run_id,
+                    index=iteration_index,
+                    evidence={
+                        "body_node_ids": list(subgraph_ids),
+                        "last_output": self._json_safe(last_output),
+                        "controlled": self._json_safe(controlled),
+                        "sensor": sensor_result,
+                        **({
+                            "claims": self._build_coe_claims(measurement, sensor_result, subgraph_ids)
+                        } if coe_enabled else {}),
+                    },
+                    metrics=metrics,
+                    verifier_score=sensor_result.get("value"),
+                    trace_id=run_id,
+                )
+                loop_record.iterations.append(iteration_record)
+                loop_record.iteration_count += 1
+
+                # Persist progress so an interrupted run can resume from this iteration.
+                progress_map[node.id] = {
+                    "next_iteration": iteration_index + 1,
+                    "iterations": [ir.model_dump(mode="json") for ir in loop_record.iterations],
+                    "controlled": self._json_safe(controlled),
+                }
+
+                if loop_kind == "until_converge" and sensor_result.get("converged"):
+                    converged = True
+                    break
+
+                # A (Controller): close the feedback loop — adjust the actuated variables
+                # for the next iteration based on the sensor's verdict (the C→A link).
+                controlled = self._control(
+                    controller_cfg, controlled, sensor_result, setpoint, freeze_fields
+                )
+
+                is_last = iteration_index >= effective_budget - 1
+                if not is_last:
+                    retried_count += 1
+                    if self._event_bus is not None:
+                        self._event_bus.publish_node_event(
+                            run_id,
+                            NODE_RETRIED,
+                            node.id,
+                            {
+                                "loop_id": loop_record.loop_id,
+                                "iteration": iteration_index,
+                                "step_id": step_id,
+                            },
+                        )
+        finally:
+            if active_frames and active_frames[-1].loop_id == loop_record.loop_id:
+                active_frames.pop()
+
+        if loop_kind != "until_converge" and not halted_by_watch:
+            converged = True
+
+        loop_record.status = "halted" if halted_by_watch else ("converged" if converged else "halted")
+
+        # River Memory: sediment a reusable pattern when the loop converges (SEED-style
+        # skill recall becomes dredge() on later runs).
+        settled = False
+        if river_enabled and converged and not halted_by_watch:
+            self._river.settle(
+                {
+                    "loop_id": loop_record.loop_id,
+                    "setpoint": setpoint,
+                    "controlled": self._json_safe(controlled),
+                    "iterations": loop_record.iteration_count,
+                },
+                run_id=run_id,
+                loop_id=loop_record.loop_id,
+                tags=list(memory_cfg.get("tags") or []) + [loop_kind],
+            )
+            settled = True
+
+        # Publish this loop's terminal signal for any supervisor watching it.
+        signals_map[node.id] = loop_record.status
+        # Loop completed: clear resumable progress so a fresh re-run starts from iteration 0.
+        progress_map.pop(node.id, None)
+
+        output: Dict[str, Any] = {
+            "message": config.get(
+                "message_template",
+                f"[{role}] loop {loop_record.loop_id} ran {loop_record.iteration_count} "
+                f"iteration(s); status={loop_record.status}",
+            ),
+            "node_id": node.id,
+            "node_type": node.type,
+            "handled_by": role,
+            "state": {
+                "last_loop_id": loop_record.loop_id,
+                "loop_status": loop_record.status,
+                "loop_iterations": loop_record.iteration_count,
+            },
+            "loop_id": loop_record.loop_id,
+            "loop_kind": loop_kind,
+            "loop_depth": current_depth,
+            "loop_iterations": loop_record.iteration_count,
+            "loop_status": loop_record.status,
+            "loop_converged": converged,
+            "loop_retried_count": retried_count,
+            "loop_halted_by_watch": halted_by_watch,
+            "loop_memory_recalled": len(recalled),
+            "loop_memory_settled": settled,
+            "loop_local_visited": loop_local_visited,
+            "loop_record": loop_record.model_dump(mode="json"),
+        }
+        if prompt:
+            output["prompt"] = prompt
+        return output
+
+    def _loop_watch_triggered(
+        self, watch: List[Dict[str, Any]], signals_map: Dict[str, Any]
+    ) -> bool:
+        """Return True if any watched loop has already emitted its expected signal."""
+        for entry in watch:
+            if not isinstance(entry, dict):
+                continue
+            watched = entry.get("loop")
+            expected = entry.get("signal")
+            if watched and expected and signals_map.get(watched) == expected:
+                return True
+        return False
+
+    def _extract_loop_metrics(
+        self, body_output: Dict[str, Any], setpoint: Dict[str, Any]
+    ) -> Dict[str, float]:
+        metric_name = setpoint.get("metric") if isinstance(setpoint, dict) else None
+        metrics: Dict[str, float] = {}
+        if metric_name and isinstance(body_output, dict):
+            raw = body_output.get(metric_name)
+            if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+                metrics[metric_name] = float(raw)
+        return metrics
+
+    def _check_loop_convergence(
+        self, setpoint: Dict[str, Any], body_output: Dict[str, Any]
+    ) -> bool:
+        if not isinstance(setpoint, dict) or not setpoint:
+            return False
+        metric = setpoint.get("metric")
+        op = setpoint.get("op", ">=")
+        target = setpoint.get("value")
+        if metric is None or target is None or not isinstance(body_output, dict):
+            return False
+        actual = body_output.get(metric)
+        if isinstance(actual, dict) and "metrics" in actual:
+            actual = actual["metrics"].get(metric)
+        if isinstance(actual, bool) or not isinstance(actual, (int, float)):
+            return False
+        if isinstance(target, bool):
+            # boolean convergence (e.g. review_approved == true)
+            return op == "==" and actual == (1 if target else 0)
+        if not isinstance(target, (int, float)):
+            return False
+        try:
+            if op == ">=":
+                return actual >= target
+            if op == ">":
+                return actual > target
+            if op == "<=":
+                return actual <= target
+            if op == "<":
+                return actual < target
+            if op == "==":
+                return actual == target
+            if op == "!=":
+                return actual != target
+        except Exception:
+            return False
+        return False
+
+    def _metric_value(
+        self, measurement: Dict[str, Any], setpoint: Dict[str, Any]
+    ) -> Optional[float]:
+        if not isinstance(setpoint, dict) or not isinstance(measurement, dict):
+            return None
+        metric = setpoint.get("metric")
+        if not metric:
+            return None
+        raw = measurement.get(metric)
+        if isinstance(raw, dict) and "metrics" in raw:
+            raw = raw["metrics"].get(metric)
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            return None
+        return float(raw)
+
+    def _sense(
+        self,
+        sensor_cfg: Dict[str, Any],
+        setpoint: Dict[str, Any],
+        measurement: Dict[str, Any],
+        metric_history: List[float],
+    ) -> Dict[str, Any]:
+        """C (Sensor): observe the response and return a structured verdict.
+
+        threshold (default) compares the metric against the setpoint; trajectory additionally
+        classifies the metric-series shape (causal-attribution method ②: converging /
+        oscillating / diverging / drifting).
+        """
+        sensor_type = sensor_cfg.get("type", "threshold") if isinstance(sensor_cfg, dict) else "threshold"
+        value = self._metric_value(measurement, setpoint)
+        converged = self._check_loop_convergence(setpoint, measurement)
+        result: Dict[str, Any] = {
+            "sensor_type": sensor_type,
+            "value": value,
+            "converged": converged,
+        }
+        if sensor_type == "trajectory":
+            result["classification"] = self._classify_trajectory(metric_history, setpoint, converged)
+        elif converged:
+            result["classification"] = "converged"
+        elif value is not None and isinstance(setpoint.get("value"), (int, float)):
+            result["classification"] = "above" if value > setpoint["value"] else "below"
+        else:
+            result["classification"] = "unknown"
+        return result
+
+    def _classify_trajectory(
+        self, metric_history: List[float], setpoint: Dict[str, Any], converged: bool
+    ) -> str:
+        """Classify the metric-series shape — the causal signal latent in loop dynamics."""
+        if converged:
+            return "converged"
+        if len(metric_history) < 2:
+            return "insufficient"
+        op = setpoint.get("op", ">=")
+        deltas = [metric_history[i] - metric_history[i - 1] for i in range(1, len(metric_history))]
+        recent = deltas[-3:]
+        sign_changes = sum(1 for i in range(1, len(recent)) if recent[i] * recent[i - 1] < 0)
+        if sign_changes >= max(1, len(recent) // 2):
+            return "oscillating"
+        increasing = all(d >= 0 for d in recent) and any(d > 0 for d in recent)
+        decreasing = all(d <= 0 for d in recent) and any(d < 0 for d in recent)
+        toward_target = increasing if op in (">=", ">") else decreasing
+        away_target = decreasing if op in (">=", ">") else increasing
+        if toward_target:
+            return "converging"
+        if away_target:
+            return "diverging"
+        return "drifting"
+
+    def _control(
+        self,
+        controller_cfg: Dict[str, Any],
+        controlled: Dict[str, Any],
+        sensor_result: Dict[str, Any],
+        setpoint: Dict[str, Any],
+        freeze_fields: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """A (Controller): close the feedback loop by actuating next-iteration variables.
+
+        setpoint_nudge ramps a field toward the setpoint by a fixed rate each non-converged
+        iteration. Frozen fields (counterfactual replay, attribution method ③) are never
+        actuated. With no controller config the loop is open (controlled unchanged) — the
+        backward-compatible default.
+        """
+        if not isinstance(controller_cfg, dict) or not controller_cfg.get("type"):
+            return controlled
+        if controller_cfg.get("type") in ("setpoint_nudge", "memory_nudge"):
+            field = controller_cfg.get("field") or setpoint.get("metric")
+            if not field or field in (freeze_fields or []):
+                return controlled
+            try:
+                rate = float(controller_cfg.get("rate", 1))
+            except (TypeError, ValueError):
+                rate = 1.0
+            try:
+                current = float(controlled.get(field, controller_cfg.get("init_value", 0)))
+            except (TypeError, ValueError):
+                current = 0.0
+            controlled = dict(controlled)
+            controlled[field] = current + rate
+            return controlled
+        return controlled
+
+    def _build_coe_claims(
+        self,
+        measurement: Dict[str, Any],
+        sensor_result: Dict[str, Any],
+        subgraph_ids: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Build Chain-of-Evidence claims (attribution method ①, Science One CoE).
+
+        Each claim binds a statement to the body node that produced its evidence, so every
+        recorded metric is auditable back to its source (completeness) and the sensor verdict
+        attaches correctness.
+        """
+        claims: List[Dict[str, Any]] = []
+        value = sensor_result.get("value")
+        source = subgraph_ids[-1] if subgraph_ids else "loop"
+        if value is not None:
+            claims.append({
+                "stmt": f"measured={value}",
+                "evidence_ref": f"body:{source}",
+                "verified": sensor_result.get("classification"),
+            })
+        for key, val in measurement.items():
+            if key.startswith("_") or isinstance(val, (dict, list)):
+                continue
+            claims.append({
+                "stmt": f"{key}={val}",
+                "evidence_ref": f"body:{source}",
+            })
+        return claims
+
+    async def attribute_factor(
+        self,
+        workflow: WorkflowDefinition,
+        input_data: Dict[str, Any],
+        factor_field: str,
+    ) -> Dict[str, Any]:
+        """Counterfactual attribution (method ③): freeze `factor_field` and re-run, then diff
+        against the factual run. The delta in iterations/metric is the field's causal
+        contribution to convergence — `causally_significant` is True when freezing the factor
+        flips the loop from converging to not.
+        """
+        factual = await self.run(RuntimeRequest(workflow=workflow, input=input_data))
+        cf_workflow = self._workflow_with_frozen_factor(workflow, factor_field)
+        counterfactual = await self.run(RuntimeRequest(workflow=cf_workflow, input=input_data))
+        f = self._loop_summary(factual.final_output)
+        c = self._loop_summary(counterfactual.final_output)
+        return {
+            "factor": factor_field,
+            "factual": f,
+            "counterfactual": c,
+            "delta_iterations": f["iterations"] - c["iterations"],
+            "delta_metric": (f["metric"] or 0) - (c["metric"] or 0),
+            "causally_significant": bool(f["converged"] and not c["converged"]),
+        }
+
+    def _loop_summary(self, loop_output: Dict[str, Any]) -> Dict[str, Any]:
+        iterations = int(loop_output.get("loop_iterations", 0))
+        converged = bool(loop_output.get("loop_converged"))
+        rec = loop_output.get("loop_record") or {}
+        iters = rec.get("iterations") or []
+        metric = iters[-1].get("verifier_score") if iters else None
+        return {"iterations": iterations, "converged": converged, "metric": metric}
+
+    def _workflow_with_frozen_factor(
+        self, workflow: WorkflowDefinition, factor_field: str
+    ) -> WorkflowDefinition:
+        clone = workflow.model_copy(deep=True)
+        for node in clone.nodes:
+            if node.type == "control.loop":
+                frozen = list(node.config.get("freeze") or [])
+                if factor_field not in frozen:
+                    frozen.append(factor_field)
+                node.config["freeze"] = frozen
+        return clone
 
     async def _execute_executor_node(
         self,

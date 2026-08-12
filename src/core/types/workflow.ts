@@ -17,6 +17,7 @@ export interface CheckpointState {
   visited_nodes?: string[];
   last_output?: Record<string, unknown>;
   state?: Record<string, unknown>;
+  loop_frames?: LoopFrame[];
 }
 
 export interface TaskRecord {
@@ -61,6 +62,8 @@ export interface StepRecord {
   error?: Record<string, unknown> | null;
   started_at: string;
   ended_at?: string | null;
+  attempt_number?: number;
+  iteration_ref?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -151,5 +154,45 @@ export interface WorkflowAssemblySpec {
   stages?: StageDef[];
   policy_matrix?: WorkflowPolicyMatrixSpec | null;
   defaults?: WorkflowDefaults;
+  metadata?: Record<string, unknown>;
+}
+
+export interface LoopFrame {
+  loop_id: string;
+  index?: number;
+  local_visited?: string[];
+  setpoint?: Record<string, unknown>;
+  iteration_ref?: string | null;
+  depth?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface IterationRecord {
+  iteration_id?: string;
+  loop_id: string;
+  run_id: string;
+  index: number;
+  evidence?: Record<string, unknown>;
+  changed_factors?: string[];
+  metrics?: Record<string, number>;
+  verifier_score?: number | null;
+  validated_by?: string | null;
+  trace_id?: string;
+  created_at?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface LoopRecord {
+  loop_id?: string;
+  run_id: string;
+  parent_loop_id?: string | null;
+  kind?: "while" | "foreach" | "until_converge" | "fixed_count";
+  setpoint?: Record<string, unknown>;
+  iteration_count?: number;
+  iterations?: IterationRecord[];
+  status?: "running" | "converged" | "oscillating" | "diverged" | "halted";
+  sensor_binding?: string | null;
+  actuator_binding?: string | null;
+  depth?: number;
   metadata?: Record<string, unknown>;
 }

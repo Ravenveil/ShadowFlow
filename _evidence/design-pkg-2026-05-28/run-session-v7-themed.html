@@ -1,0 +1,1225 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Run Session · 左栏 v7 — Codex statusline + Cherry Studio model pill + inline diff</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+/* ── Page chrome ──────────────────────────────────────────────── */
+html, body { background:#0A0A0A;color:#F5F4EE; }
+body { min-height:100vh;padding:32px 28px 80px;font-family:var(--font-sans); }
+
+.doc-hd { display:flex;align-items:center;gap:12px;margin-bottom:6px; }
+.doc-mark { width:28px;height:28px;border-radius:8px;background:#A855F7;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900; }
+.doc-word { font-size:15px;font-weight:700;letter-spacing:-.02em; }
+.doc-sep  { width:1px;height:18px;background:rgba(255,255,255,.12); }
+.doc-crumb{ font-family:var(--font-mono);font-size:11px;color:#8E8C84; }
+.doc-meta { margin-left:auto;font-family:var(--font-mono);font-size:10px;color:#5C5A54; }
+.doc-lead { max-width:1020px;font-size:13px;color:#8E8C84;line-height:1.65;margin:14px 0 8px; }
+.doc-lead b { color:#F5F4EE;font-weight:600; }
+.doc-lead em { color:#C084FC;font-style:normal; }
+.doc-lead s { text-decoration:line-through;color:#5C5A54; }
+.doc-lead code { font-family:var(--font-mono);font-size:11px;color:#C084FC;background:rgba(168,85,247,.08);padding:1px 5px;border-radius:3px; }
+
+.research-strip { max-width:1100px;display:flex;flex-wrap:wrap;gap:14px 22px;margin:14px 0 26px;font-family:var(--font-mono);font-size:10.5px;color:#8E8C84; }
+.research-strip > div { display:flex;align-items:baseline;gap:6px; }
+.research-strip .src { color:#C084FC;font-weight:700; }
+.research-strip .tag { color:#5C5A54;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase; }
+.research-strip .new { color:#10B981;font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;padding:1px 5px;background:rgba(16,185,129,.1);border-radius:3px;margin-left:2px; }
+
+/* ── Comparison grid · 2 cols × 2 rows ────────────────────────── */
+.cmp-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(440px,1fr));
+  grid-template-rows:auto auto;
+  gap:24px;
+  max-width:1100px;margin:0 auto;
+}
+.cmp-cell { display:flex;flex-direction:column;gap:10px; }
+.cmp-tag  { display:flex;align-items:center;gap:10px;padding:0 2px; }
+.cmp-tag .num {
+  width:22px;height:22px;border-radius:6px;
+  background:rgba(168,85,247,.16);color:#C084FC;
+  font-family:var(--font-mono);font-size:11px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+}
+.cmp-tag .ttl { font-size:13.5px;font-weight:700;letter-spacing:-.01em;color:#F5F4EE; }
+.cmp-tag .sub { font-family:var(--font-mono);font-size:10px;color:#5C5A54; }
+.cmp-tag .theme-badge {
+  margin-left:auto;
+  font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:#5C5A54;padding:3px 8px;border:1px solid rgba(255,255,255,.1);border-radius:5px;
+}
+.cmp-tag .theme-badge.light { color:#8a6240;border-color:rgba(217,119,87,.4);background:rgba(217,119,87,.06); }
+.cmp-note { font-size:11.5px;color:#8E8C84;line-height:1.55;padding:0 2px; }
+.cmp-note b { color:#C8C5BA;font-weight:600; }
+.cmp-note code { font-family:var(--font-mono);font-size:10.5px;color:#C084FC; }
+
+/* ── Frame container ─────────────────────────────────────────── */
+.frame {
+  background:var(--bg);
+  color:var(--fg-1);
+  border:1px solid var(--border);
+  border-radius:14px;
+  overflow:hidden;
+  display:flex;flex-direction:column;
+  height:780px;
+  font-family:var(--font-sans);
+}
+
+/* ── Pane header ─────────────────────────────────────────────── */
+.ph { padding:11px 16px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0; }
+.ph-mark { width:24px;height:24px;border-radius:7px;background:var(--accent-tint);display:flex;align-items:center;justify-content:center;color:var(--accent-bright);flex-shrink:0; }
+.ph-ttl  { font-size:12.5px;font-weight:600;letter-spacing:-.01em;color:var(--fg-1); }
+.ph-sub  { font-family:var(--font-mono);font-size:10px;color:var(--fg-4);margin-top:1px; }
+.ph-rt   { margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--fg-4); }
+.ph-pill {
+  font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--status-run);padding:2px 7px;border-radius:999px;
+  background:var(--status-run-tint);
+  display:inline-flex;align-items:center;gap:5px;
+}
+.ph-pill::before { content:"";width:5px;height:5px;border-radius:50%;background:var(--status-run);animation:sf-pulse 1.4s ease-in-out infinite; }
+.ph-x    { width:22px;height:22px;border-radius:6px;color:var(--fg-4);display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer; }
+.ph-x:hover { background:var(--bg-elev-2);color:var(--fg-1); }
+
+/* ── Composer ────────────────────────────────────────────────── */
+.cmp-bar { padding:10px 14px 6px;border-top:1px solid var(--border);flex-shrink:0; }
+.cmp-hint {
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.01em;
+  color:var(--fg-5);margin-bottom:6px;padding-left:2px;
+  display:flex;align-items:center;gap:6px;
+}
+.cmp-hint .cmd { color:var(--accent-bright);font-weight:600; }
+.cmp-hint .sep { color:var(--fg-5); }
+.cmp-hint .rt  { margin-left:auto;font-size:9.5px;color:var(--fg-5); }
+.cmp-box { border:1px solid var(--border-strong);border-radius:11px;background:var(--bg-elev-1);overflow:hidden; }
+.cmp-input { width:100%;padding:9px 12px 4px;background:transparent;border:none;color:var(--fg-1);font-size:12.5px;font-family:var(--font-sans);resize:none;outline:none;line-height:1.5;min-height:40px; }
+.cmp-input::placeholder { color:var(--fg-5); }
+.cmp-row { display:flex;align-items:center;padding:4px 8px 6px;gap:2px; }
+.cmp-ic  { width:24px;height:24px;border-radius:5px;color:var(--fg-4);display:flex;align-items:center;justify-content:center;cursor:pointer; }
+.cmp-ic:hover { background:var(--bg-elev-2);color:var(--fg-1); }
+.cmp-send{ margin-left:auto;width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;cursor:pointer; }
+.cmp-send:hover { background:var(--accent-bright); }
+
+/* === NEW · Codex bottom status line ============================ */
+/* `✻ Composing for 14s · 3 shells running · ⌥+↵ newline · esc cancel`           */
+.statusline {
+  padding:6px 16px 8px;
+  display:flex;align-items:center;gap:10px;
+  font-family:var(--font-mono);font-size:10px;color:var(--fg-5);
+  border-top:1px solid var(--border-subtle);
+  flex-shrink:0;
+  background:var(--bg);
+  letter-spacing:.01em;
+}
+.statusline .glyph { color:var(--accent-bright);animation:sf-pulse 1.6s ease-in-out infinite;font-size:11px; }
+/* 思考云 inline-SVG glyph · 影流 — 替代 Codex 的 ✻ sparkle；填充式聊天气泡 + 左下尾巴 → "thinking" 语义直接 */
+svg.glyph { width:13px;height:13px;display:inline-block;vertical-align:-2px;fill:currentColor;stroke:none;flex-shrink:0; }
+.tl-thinking-head svg.glyph { width:15px;height:15px;vertical-align:-3px; }
+.statusline .verb { color:var(--fg-2);font-weight:600;font-family:var(--font-sans);font-size:11px;letter-spacing:-.005em; }
+.statusline .num { color:var(--fg-3); }
+.statusline .num b { color:var(--fg-1);font-weight:600; }
+.statusline .sep { color:var(--fg-5); }
+.statusline .kbd-grp { margin-left:auto;display:flex;align-items:center;gap:8px; }
+.kbd { padding:1px 5px;border:1px solid var(--border-strong);border-radius:3px;color:var(--fg-4);font-size:9px;font-family:var(--font-mono); }
+
+/* ────────────────────────────────────────────────────────────── */
+/* SHARED · ConversationTimeline base                              */
+/* ────────────────────────────────────────────────────────────── */
+.tl { flex:1;min-height:0;overflow-y:auto;padding:8px 16px 8px; }
+.tl::-webkit-scrollbar { width:3px; }
+.tl::-webkit-scrollbar-thumb { background:var(--border-strong);border-radius:2px; }
+
+.tl-item { padding:10px 0 10px;position:relative; }
+.tl-item + .tl-item { border-top:1px solid var(--border-subtle); }
+
+/* === message footer — OpenDesign / Cherry Studio style ============ */
+/* lives at end of assistant turn, NOT pinned to top.                  */
+/* ● Done · 1m 14s · 3 tools · 632t · $0.04                            */
+.msg-foot {
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--font-mono);font-size:10px;color:var(--fg-4);
+  padding:2px 0 0;letter-spacing:.01em;
+  border-top:1px dashed var(--border-subtle);margin-top:6px;padding-top:6px;
+}
+.msg-foot .st { width:6px;height:6px;border-radius:50%;background:var(--status-ok);flex-shrink:0; }
+.msg-foot .st.run { background:var(--status-run);animation:sf-pulse 1.4s ease-in-out infinite; }
+.msg-foot .lab { color:var(--fg-2);font-weight:600;font-family:var(--font-sans);font-size:10.5px;letter-spacing:-.005em; }
+.msg-foot .sep { color:var(--fg-5);padding:0 1px; }
+.msg-foot .num { color:var(--fg-3); }
+.msg-foot .num b { color:var(--fg-2);font-weight:600; }
+.msg-foot .acc { color:var(--accent-bright);margin-left:auto;cursor:pointer; }
+
+/* === NEW · compact-mode separator (codex) ===================== */
+/* `─── 4 turns compacted · earlier context summarized ───`        */
+.tl-compact {
+  display:flex;align-items:center;gap:10px;
+  padding:8px 0 6px;
+  font-family:var(--font-mono);font-size:10px;color:var(--fg-4);
+  letter-spacing:.04em;
+}
+.tl-compact::before, .tl-compact::after { content:"";flex:1;height:1px;background:var(--border); }
+.tl-compact .txt { display:flex;align-items:baseline;gap:6px;text-transform:uppercase;letter-spacing:.12em; }
+.tl-compact .ct { color:var(--accent-bright);font-weight:600; }
+.tl-compact .link { color:var(--fg-3);text-decoration:underline dotted;cursor:pointer;text-transform:none;letter-spacing:0;font-size:10px; }
+
+.tl-meta {
+  font-family:var(--font-mono);font-size:10px;color:var(--fg-4);
+  display:flex;align-items:center;gap:8px;margin-bottom:6px;letter-spacing:.01em;flex-wrap:wrap;
+}
+.tl-meta .who { color:var(--fg-2);font-weight:600;font-family:var(--font-sans);font-size:11px;letter-spacing:-.005em; }
+.tl-meta .who.user { color:var(--accent-bright); }
+.tl-meta .who.thought { color:var(--fg-4);font-style:italic; }
+.tl-meta .dot { width:2.5px;height:2.5px;background:var(--fg-5);border-radius:50%;display:inline-block; }
+
+/* === Model identifier — plain text, no glyph, no swatch ========== */
+/* brand name + version, leads assistant turn meta                    */
+.model-pill {
+  display:inline-flex;align-items:baseline;gap:5px;
+  line-height:1;
+}
+.model-pill .brand { font-family:var(--font-sans);font-size:11px;color:var(--fg-1);font-weight:600;letter-spacing:-.005em; }
+.model-pill .sep   { font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.model-pill .ver   { font-family:var(--font-mono);font-size:10px;color:var(--fg-3);letter-spacing:0; }
+
+/* User · ❯ prefix */
+.tl-user {
+  display:flex;gap:10px;align-items:flex-start;
+  font-size:13.5px;line-height:1.6;color:var(--fg-1);font-weight:500;
+}
+.tl-user .caret { font-family:var(--font-mono);color:var(--accent);font-size:14px;font-weight:700;line-height:1.4;flex-shrink:0;user-select:none; }
+.tl-user .txt { padding-top:1px; }
+.tl-user .txt b { color:var(--accent-bright);font-weight:500; }
+
+/* sec-label (Shadow) */
+.sec-label {
+  font-family:var(--font-mono);font-size:10px;font-weight:600;
+  letter-spacing:.12em;text-transform:uppercase;
+  color:var(--fg-4);opacity:.85;
+  margin:8px 0 5px;
+  display:flex;align-items:center;gap:6px;
+}
+.sec-label .ct { font-family:var(--font-mono);font-size:9.5px;font-weight:500;color:var(--fg-5);letter-spacing:0;text-transform:none;margin-left:auto; }
+.sec-label .ct b { color:var(--accent-bright);font-weight:600; }
+
+/* reasoning recess (Shadow) */
+.tl-reason {
+  border-radius:10px;
+  padding:10px 14px 11px;
+  font-size:12.5px;line-height:1.65;color:var(--fg-1);
+  border:1px solid color-mix(in oklch, var(--accent) 30%, transparent);
+  background:color-mix(in oklch, var(--accent) 10%, transparent);
+  margin-bottom:4px;
+}
+.tl-reason b { font-weight:600; }
+.tl-reason em { color:var(--accent-bright);font-style:normal;font-weight:500; }
+.tl-reason .pre { font-family:var(--font-mono);font-size:11px;color:var(--accent-bright);font-weight:600;letter-spacing:.04em;display:block;margin-bottom:3px; }
+
+/* key-files chips (Shadow) */
+.tl-chips { display:flex;flex-wrap:wrap;gap:5px 6px; }
+.tl-chip {
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 8px 4px;border-radius:7px;
+  border:1px solid var(--border);
+  background:var(--bg-elev-1);
+  font-family:var(--font-mono);font-size:10.5px;color:var(--fg-2);
+  cursor:pointer;transition:border-color .12s,background .12s;
+}
+.tl-chip:hover { border-color:color-mix(in oklch, var(--accent) 50%, var(--border));background:color-mix(in oklch, var(--accent) 8%, var(--bg-elev-1)); }
+.tl-chip .ico { opacity:.5;font-size:9px; }
+.tl-chip .nm { color:var(--fg-1);font-weight:500; }
+.tl-chip .rl { color:var(--fg-5);font-size:9.5px;margin-left:2px; }
+.tl-chip.run { border-color:color-mix(in oklch, var(--status-run) 35%, var(--border));background:var(--status-run-tint); }
+.tl-chip.run .nm { color:var(--status-run); }
+
+/* next-steps */
+.tl-next { display:flex;flex-direction:column;gap:3px;padding-left:2px; }
+.tl-next .n { display:flex;align-items:baseline;gap:8px;font-size:11.5px;color:var(--fg-3);line-height:1.55; }
+.tl-next .n .num { font-family:var(--font-mono);font-size:10px;color:var(--fg-5);width:14px;flex-shrink:0; }
+.tl-next .n .pri { color:var(--accent-bright);font-weight:600;font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:var(--accent-tint);margin-left:auto;flex-shrink:0; }
+.tl-next .n .pri.dim { color:var(--fg-4);background:var(--bg-elev-1);border:1px solid var(--border-subtle); }
+
+/* tool-group collapse (kept) */
+.tl-toolgrp {
+  display:flex;align-items:center;gap:10px;
+  padding:6px 10px;border-radius:8px;
+  background:var(--bg-elev-1);border:1px solid var(--border-subtle);
+  font-family:var(--font-mono);font-size:11px;color:var(--fg-3);
+  cursor:pointer;transition:background .12s;
+}
+.tl-toolgrp:hover { background:var(--bg-elev-2); }
+.tl-toolgrp .chev { color:var(--fg-4);font-size:9px;flex-shrink:0;transition:transform .15s; }
+.tl-toolgrp.open .chev { transform:rotate(90deg); }
+.tl-toolgrp .nm { color:var(--fg-1);font-weight:600;font-family:var(--font-sans);font-size:11.5px; }
+.tl-toolgrp .ct { color:var(--accent-bright);font-weight:600;background:var(--accent-tint);padding:1px 6px;border-radius:4px;font-size:9.5px;letter-spacing:.04em; }
+.tl-toolgrp .stat { margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--status-ok);font-size:10px;letter-spacing:.04em;text-transform:uppercase; }
+.tl-toolgrp .stat::before { content:"";width:5px;height:5px;border-radius:50%;background:var(--status-ok); }
+.tl-toolgrp .diff { color:var(--fg-4); }
+.tl-toolgrp .diff .add { color:var(--status-ok); }
+.tl-toolgrp .diff .del { color:var(--status-reject); }
+.tl-toolgrp-expand { display:flex;flex-direction:column;gap:0;margin-top:5px;padding-left:12px;border-left:1.5px solid var(--border); }
+
+/* Tool chip */
+.tl-tool { font-family:var(--font-mono);font-size:11.5px;color:var(--fg-3);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap; }
+.tl-tool .lead { color:var(--fg-4);font-size:11px;user-select:none; }
+.tl-tool .nm { color:var(--fg-1);font-weight:600; }
+.tl-tool .args { color:var(--fg-3); }
+.tl-tool .sep { color:var(--fg-5);padding:0 1px; }
+.tl-tool .link { color:var(--accent-bright);text-decoration:none;margin-left:auto;font-family:var(--font-mono);font-size:10.5px;display:inline-flex;align-items:center;gap:3px; }
+.tl-tool .link:hover { color:var(--accent); }
+
+/* Tool echo · ⎿ continuation */
+.tl-echo { font-family:var(--font-mono);font-size:11px;color:var(--fg-4);padding:4px 0 0 14px;line-height:1.65;display:flex;gap:8px;align-items:flex-start; }
+.tl-echo .glyph { color:var(--fg-5);user-select:none;font-size:11px; }
+.tl-echo .body { flex:1;color:var(--fg-3); }
+.tl-echo .body .add { color:var(--status-ok); }
+.tl-echo .body .del { color:var(--status-reject); }
+
+/* === NEW · file:line clickable ref (Claude Code) =============== */
+.fref {
+  display:inline-flex;align-items:baseline;gap:1px;
+  font-family:var(--font-mono);font-size:10.5px;
+  color:var(--fg-1);
+  text-decoration:underline dotted;text-underline-offset:2px;
+  text-decoration-color:var(--fg-5);
+  cursor:pointer;
+}
+.fref:hover { text-decoration-color:var(--accent-bright);color:var(--accent-bright); }
+.fref .file { font-weight:600; }
+.fref .ln { color:var(--accent-bright);font-weight:500;padding-left:1px; }
+
+/* Thought · italic muted (post-answer reflection footnote — Trae 风) */
+.tl-thought {
+  font-style:italic;font-size:12px;line-height:1.65;color:var(--fg-4);
+  padding-left:14px;border-left:1.5px solid var(--border);
+}
+.tl-thought .focus { color:var(--fg-2);font-style:normal;font-weight:500; }
+
+/* Thinking node · Codex / Claude Code 风 pre-answer reasoning block
+   - sits between user msg and assistant answer
+   - collapsed head: `✻ Thought for 38s · 1.2k tokens`  (mono, accent ✻ gentle pulse)
+   - expanded body: italic muted paragraphs, no bg / no border / no shadow
+   - left rule 1.5px var(--border) anchors it to the rail */
+.tl-thinking { display:flex;flex-direction:column;gap:9px; }
+.tl-thinking-head {
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--font-mono);font-size:11px;color:var(--fg-3);
+  cursor:pointer;user-select:none;
+  padding-left:14px;border-left:1.5px solid var(--border);
+}
+.tl-thinking-head .glyph { width:13px;height:13px;color:var(--accent-bright);fill:currentColor;animation:sf-pulse 2.4s ease-in-out infinite;flex-shrink:0;margin-right:-1px; }
+.tl-thinking-head .lab { color:var(--fg-2);font-family:var(--font-sans);font-weight:500;letter-spacing:-.005em; }
+.tl-thinking-head .lab b { color:var(--fg-1);font-weight:600;font-family:var(--font-mono);font-size:10.5px;padding:0 1px; }
+.tl-thinking-head .num { color:var(--fg-4); }
+.tl-thinking-head .num b { color:var(--fg-2);font-weight:600; }
+.tl-thinking-head .sep { color:var(--fg-5); }
+.tl-thinking-head .chev { color:var(--fg-4);font-size:9px;margin-left:auto;transition:transform .15s;font-family:var(--font-mono); }
+.tl-thinking.open .tl-thinking-head .chev { transform:rotate(90deg); }
+.tl-thinking-body {
+  font-style:italic;font-size:12px;line-height:1.7;color:var(--fg-4);
+  padding-left:14px;border-left:1.5px solid var(--border);
+  display:flex;flex-direction:column;gap:7px;
+}
+.tl-thinking-body p { margin:0; }
+.tl-thinking-body em { color:var(--fg-2);font-style:normal;font-weight:500; }
+.tl-thinking-body b { color:var(--accent-bright);font-style:normal;font-weight:600;font-family:var(--font-mono);font-size:11.5px; }
+.tl-thinking-body code { font-family:var(--font-mono);font-size:11px;color:var(--fg-2);background:var(--bg-elev-1);padding:0 4px;border-radius:3px;font-style:normal; }
+.tl-thinking-body .hr { height:1px;background:var(--border);margin:2px 0; }
+
+/* Step group */
+.tl-steps { display:flex;flex-direction:column;gap:0; }
+.tl-step  { display:flex;align-items:center;gap:10px;padding:5px 0;font-size:12px;color:var(--fg-3); }
+.tl-step .ic {
+  width:14px;height:14px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-size:8px;
+  background:transparent;border:1px solid var(--border-strong);color:var(--fg-4);
+}
+.tl-step.done .ic { background:var(--status-ok-tint);border-color:var(--status-ok);color:var(--status-ok); }
+.tl-step.done .ic::before { content:"✓"; }
+.tl-step.run  .ic { background:var(--status-run-tint);border-color:var(--status-run);position:relative; }
+.tl-step.run  .ic::before { content:"";width:7px;height:7px;border-radius:50%;border:1.5px solid var(--status-run);border-top-color:transparent;animation:sf-spin .8s linear infinite; }
+.tl-step.run  .nm { color:var(--fg-1);font-weight:500; }
+.tl-step .nm.dim { color:var(--fg-5); }
+.tl-step .t  { margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.tl-step.run .t { color:var(--status-run); }
+.tl-substep { padding-left:24px;display:flex;flex-direction:column;gap:2px;padding-top:3px;padding-bottom:3px; }
+.tl-substep .sub { display:flex;align-items:center;gap:9px;font-family:var(--font-mono);font-size:10.5px;color:var(--fg-4); }
+.tl-substep .sub .d { width:5px;height:5px;border-radius:50%;background:var(--fg-5);flex-shrink:0; }
+.tl-substep .sub.done .d { background:var(--status-ok); }
+.tl-substep .sub.run  .d { background:var(--status-run);animation:sf-pulse 1.4s ease-in-out infinite; }
+.tl-substep .sub .nm { color:var(--fg-3); }
+.tl-substep .sub.run  .nm { color:var(--fg-1); }
+.tl-substep .sub.done .nm { color:var(--fg-2); }
+.tl-substep .sub .t  { margin-left:auto;font-size:9.5px;color:var(--fg-5); }
+
+@keyframes sf-spin { to { transform: rotate(360deg); } }
+@keyframes sf-cur { 50% { opacity: 0; } }
+
+/* Frame A · flat */
+.fa .step-cap { display:flex;align-items:baseline;gap:8px;margin-bottom:2px;font-size:11.5px;color:var(--fg-2); }
+.fa .step-cap .name { font-weight:600;color:var(--fg-1); }
+.fa .step-cap .ct { margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.fa .step-cap .ct b { color:var(--accent-bright);font-weight:600; }
+
+/* Frame B · surface panel */
+.fb .panel { background:var(--bg-elev-1);border-radius:8px;padding:10px 12px 10px;margin:2px 0 4px; }
+.fb .panel-hd {
+  display:flex;align-items:center;gap:8px;cursor:pointer;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--fg-4);font-weight:600;
+  margin-bottom:8px;padding-bottom:6px;
+  border-bottom:1px solid var(--border-subtle);
+}
+.fb .panel-hd .chev { color:var(--fg-4);font-size:9px;transition:transform .15s; }
+.fb .panel-hd .nm { color:var(--fg-2); }
+.fb .panel-hd .ct { font-family:var(--font-mono);font-size:9.5px;font-weight:500;color:var(--fg-4);margin-left:auto;letter-spacing:0;text-transform:none; }
+.fb .panel-hd .ct b { color:var(--accent-bright);font-weight:600; }
+
+/* === NEW · inline unified diff (Claude Code) ================== */
+.diff-block {
+  background:var(--bg);
+  border:1px solid var(--border-subtle);
+  border-radius:6px;
+  font-family:var(--font-mono);font-size:10.5px;line-height:1.7;
+  margin-top:6px;
+  overflow:hidden;
+}
+.diff-hd {
+  display:flex;align-items:center;gap:8px;
+  padding:5px 10px;
+  background:var(--bg-elev-1);
+  border-bottom:1px solid var(--border-subtle);
+  font-size:10px;color:var(--fg-4);letter-spacing:.04em;
+}
+.diff-hd .file { color:var(--fg-1);font-weight:600;font-size:10.5px;letter-spacing:0; }
+.diff-hd .stats { margin-left:auto;font-size:10px; }
+.diff-hd .stats .add { color:var(--status-ok); }
+.diff-hd .stats .del { color:var(--status-reject); }
+.diff-body { padding:6px 0; }
+.diff-line { display:flex;padding:0 10px;align-items:baseline;gap:8px; }
+.diff-line .gut { font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);width:28px;flex-shrink:0;text-align:right;user-select:none; }
+.diff-line .mark { width:10px;flex-shrink:0;font-weight:700; }
+.diff-line .code { color:var(--fg-2);white-space:pre; }
+.diff-line.add { background:color-mix(in oklch, var(--status-ok) 8%, transparent); }
+.diff-line.add .mark { color:var(--status-ok); }
+.diff-line.add .code { color:color-mix(in oklch, var(--status-ok) 70%, var(--fg-1)); }
+.diff-line.del { background:color-mix(in oklch, var(--status-reject) 7%, transparent); }
+.diff-line.del .mark { color:var(--status-reject); }
+.diff-line.del .code { color:color-mix(in oklch, var(--status-reject) 60%, var(--fg-2));text-decoration:line-through;text-decoration-thickness:.5px; }
+.diff-line.cur .mark::after { content:"";display:inline-block;width:1.5px;height:11px;background:var(--accent);vertical-align:text-bottom;animation:sf-cur 1s step-end infinite;margin-left:1px; }
+.diff-line .kw { color:var(--accent-bright); }
+.diff-line .str { color:var(--status-ok); }
+.diff-line .cmt { color:var(--fg-5); }
+
+/* Footer */
+.cmp-foot {
+  max-width:1100px;margin:44px auto 0;
+  padding:20px 24px;
+  border:1px solid rgba(255,255,255,.08);border-radius:12px;
+  background:#111113;
+}
+.cmp-foot h3 { font-size:12px;font-family:var(--font-mono);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#5C5A54;margin:0 0 14px; }
+.cmp-foot .grid { display:grid;grid-template-columns:1fr 1fr;gap:20px 28px;margin-bottom:18px; }
+.cmp-foot .col h4 { font-size:11.5px;font-weight:700;color:#F5F4EE;margin:0 0 8px;letter-spacing:-.01em;display:flex;align-items:baseline;gap:8px; }
+.cmp-foot .col h4 .src-tag { font-family:var(--font-mono);font-size:9px;color:#5C5A54;letter-spacing:.1em;text-transform:uppercase;font-weight:500; }
+.cmp-foot .col p  { font-size:11.5px;line-height:1.65;color:#8E8C84;margin:0 0 8px; }
+.cmp-foot .col p b { color:#C8C5BA;font-weight:600; }
+.cmp-foot .col p em { color:#C084FC;font-style:normal; }
+.cmp-foot .col code { font-family:var(--font-mono);font-size:10.5px;color:#C084FC;background:rgba(168,85,247,.08);padding:1px 6px;border-radius:4px; }
+.cmp-foot .row { display:flex;gap:12px;align-items:flex-start;padding-top:14px;border-top:1px solid rgba(255,255,255,.06);font-size:12px;color:#8E8C84;line-height:1.65; }
+.cmp-foot .row .lbl { font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#5C5A54;min-width:96px;padding-top:1px; }
+</style>
+</head>
+<body>
+
+<!-- ── Inline SVG symbol library ───────────────────────────────── -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Thought cloud · 4 overlapping discs + 1 detached trail bubble (filled) -->
+    <symbol id="think-cloud" viewBox="0 0 14 14">
+      <circle cx="4.2" cy="7.6" r="2.6"/>
+      <circle cx="7"   cy="5.6" r="3"/>
+      <circle cx="9.8" cy="7.6" r="2.6"/>
+      <circle cx="6.8" cy="8.4" r="2.4"/>
+      <circle cx="3"   cy="11.6" r="1"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ── Doc header ─────────────────────────────────────────────── -->
+<div class="doc-hd">
+  <div class="doc-mark">S</div>
+  <div class="doc-word">ShadowFlow</div>
+  <div class="doc-sep"></div>
+  <span class="doc-crumb">platform / run-session · 左栏 v7 — drops persona, adds statusline / diff / model-pill / thinking</span>
+  <span class="doc-meta">v7 · Cherry Studio model pill · Codex statusline · Claude Code inline diff · run-cap → msg-foot · 影流思考云 pulse（填充气泡+尾巴）</span>
+</div>
+<p class="doc-lead">
+  v7 在 v6 上做五件事：<b>(1)</b> <s>coordinator.v1</s> 全删 — assistant 身份不再是"虚构的 persona 角色名"，改成<em>纯文字模型标识</em>（<code>Claude · Sonnet 4.5</code>，无图标无色块），<b>看到的就是真在跑的模型</b>。
+  <b>(2)</b> 新增 <em>Codex 风 statusline</em> — composer 下面永远一行 <code>✻ Composing for 14s · 3 shells running · ⌥+↵ newline · esc cancel</code>，是 Codex / Claude Code 跟传统 chat 最大的视觉分水岭。verb 在 frame 间轮换（Composing / Pondering / Validating / Reconciling）—— 复刻 Claude Code 的"gerund verb 旋转"。
+  <b>(3)</b> 工具 echo 加 <em>Claude Code 风 <code>file:line</code> dotted-underline ref</em> — 鼠标 hover 跳定位，比"贴一段 path 字符串"信息密度高一档。
+  <b>(4)</b> B 方案的 code panel 从"YAML 语法高亮块"升级成 <em>真 unified diff</em>（带 gutter 行号 + <code>+</code>/<code>-</code> mark + 行级 add/del 底色），更贴 Claude Code 在 Edit 后输出的格式。同时演示 <em>compact 分隔条</em>（多轮折叠后的 `─── 4 turns compacted ───`）。
+  <b>(5)</b> 新增 <em>✻ thinking 节点</em> — Codex / Claude Code 风：放在 user msg 与 assistant 回答<em>之间</em>，折叠态 <code>✻ Thought for 38s · 1.2k tokens</code>，展开态多段斜体推理。<b>A 折叠 / B 展开</b>，两态各演示一次。这是 v6 仅有的"末尾反思"<code>tl-thought</code> 之外，真正的 pre-answer reasoning block。
+</p>
+<div class="research-strip">
+  <div><span class="tag">RESEARCH</span></div>
+  <div><span class="src">Cherry Studio</span> 纯文字模型标识（无图标无色块）</div>
+  <div><span class="src">Codex CLI</span> persistent statusline + compact 分隔 + gerund verb 轮换</div>
+  <div><span class="src">Claude Code</span> file:line dotted ref + 行级 diff + ✻ Thought for Ns 折叠块 <span class="new">v7 new</span></div>
+  <div><span class="src">Codex / Claude Code</span> pre-answer reasoning block（user msg → ✻ thinking → answer）<span class="new">v7 new</span></div>
+  <div><span class="src">OpenDesign</span> msg-foot + tool-group collapse</div>
+  <div><span class="src">Shadow</span> 3-layer evidence</div>
+</div>
+
+<div class="cmp-grid">
+
+  <!-- ════════════════════════════════════════════════════════════
+       FRAME A · DARK
+       ════════════════════════════════════════════════════════════ -->
+  <div class="cmp-cell">
+    <div class="cmp-tag">
+      <div class="num">A</div>
+      <div>
+        <div class="ttl">Flat 单列 · 多轮 + 压缩条</div>
+        <div class="sub">Codex 前缀 + Shadow 三层 + statusline · 零容器</div>
+      </div>
+      <span class="theme-badge">dark</span>
+    </div>
+    <p class="cmp-note">演示<b>第二轮</b> assistant — 上一段被 <code>─── 4 turns compacted ───</code> 收掉。模型 pill 出现在 assistant meta 行首位。</p>
+
+    <div class="frame" data-theme="dark">
+      <header class="ph">
+        <div class="ph-mark"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg></div>
+        <div>
+          <div class="ph-ttl">Run Session</div>
+          <div class="ph-sub">run_2026_05_21 · 14:22</div>
+        </div>
+        <div class="ph-rt"><span class="ph-pill">live</span><div class="ph-x">‹</div></div>
+      </header>
+
+      <div class="tl">
+
+        <!-- compact separator -->
+        <div class="tl-item" style="border-top:none;padding:4px 0 6px;">
+          <div class="tl-compact">
+            <span class="txt"><span class="ct">4 turns</span> compacted · <span class="link">view summary</span></span>
+          </div>
+        </div>
+
+        <!-- user turn 2 -->
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who user">你</span><span class="dot"></span><span>14:24:18</span></div>
+          <div class="tl-user">
+            <span class="caret">❯</span>
+            <span class="txt">把 critic 的 retry threshold 改成 <b>0.65</b>，并加一个 deescalation policy</span>
+          </div>
+        </div>
+
+        <!-- ✻ THINKING · Codex / Claude Code 风 · 折叠态 -->
+        <div class="tl-item">
+          <div class="tl-thinking">
+            <div class="tl-thinking-head">
+              <svg class="glyph" aria-hidden="true"><use href="#think-cloud"/></svg>
+              <span class="lab">Thought for <b>38s</b></span>
+              <span class="sep">·</span>
+              <span class="num"><b>1.2k</b> tokens</span>
+              <span class="chev">›</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- assistant turn 2 · Cherry Studio model pill leads -->
+        <div class="tl-item">
+          <div class="tl-meta">
+            <span class="model-pill">
+              <span class="brand">Claude</span>
+              <span class="sep">·</span>
+              <span class="ver">Sonnet 4.5</span>
+            </span>
+            <span class="dot"></span><span>1.1s · 484t · $0.012</span>
+          </div>
+
+          <div class="sec-label">主线结论 <span class="ct">2 处改动 · serial</span></div>
+          <div class="tl-reason">
+            阈值从 <em>0.70 → 0.65</em>，等于把"过 critic"的门拉低 5%。新增 <em>de-escalation policy</em> 在第 2 次 retry 失败后强制降级到 <em>writer.minor</em> 而非二次 reject — 防止 retry 死循环。
+          </div>
+
+          <div class="sec-label">关键文件</div>
+          <div class="tl-chips">
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">agents/critic.yml</span><span class="rl">retry_gate.threshold</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">policies/de-escalation.yml</span><span class="rl">new</span></span>
+          </div>
+
+          <div class="sec-label">下一步</div>
+          <div class="tl-next">
+            <div class="n"><span class="num">01</span><span>跑一次 dry-run 验证 de-escalation 触发路径</span><span class="pri">P0</span></div>
+            <div class="n"><span class="num">02</span><span>把 0.65 写进 spec acceptance 测试集</span><span class="pri dim">P1</span></div>
+          </div>
+        </div>
+
+        <!-- tool: edit with file:line ref -->
+        <div class="tl-item">
+          <div class="tl-tool">
+            <span class="lead">●</span>
+            <span class="nm">edit</span>
+            <span class="args">(</span>
+            <span class="fref"><span class="file">agents/critic.yml</span>:<span class="ln">14</span></span>
+            <span class="args">)</span>
+          </div>
+          <div class="tl-echo">
+            <span class="glyph">⎿</span>
+            <span class="body"><span class="del">−</span> <code style="color:var(--fg-3)">threshold: 0.70</code> &nbsp;<span class="add">+</span> <code style="color:var(--fg-3)">threshold: 0.65</code></span>
+          </div>
+        </div>
+
+        <!-- tool: create policy + file:line -->
+        <div class="tl-item">
+          <div class="tl-tool">
+            <span class="lead">●</span>
+            <span class="nm">write</span>
+            <span class="args">(</span>
+            <span class="fref"><span class="file">policies/de-escalation.yml</span></span>
+            <span class="args">)</span>
+            <a class="link" href="#">↗ 预览</a>
+          </div>
+          <div class="tl-echo"><span class="glyph">⎿</span><span class="body"><span class="add">+18 lines</span> · 已写入 · 自动注入 team.yml `policies` 列表</span></div>
+        </div>
+
+        <!-- tool group collapsed -->
+        <div class="tl-item">
+          <div class="tl-toolgrp">
+            <span class="chev">▸</span>
+            <span class="nm">Validating</span>
+            <span class="ct">×4</span>
+            <span class="diff">spec · schema · dry-run · graph</span>
+            <span class="stat">done</span>
+          </div>
+        </div>
+
+        <!-- step group -->
+        <div class="tl-item fa">
+          <div class="step-cap">
+            <span class="name">应用变更</span>
+            <span class="ct"><b>2</b> / 3 · 1.4s</span>
+          </div>
+          <div class="tl-steps">
+            <div class="tl-step done"><span class="ic"></span><span class="nm">写入 yml</span><span class="t">0.4s</span></div>
+            <div class="tl-step done"><span class="ic"></span><span class="nm">注册 policy</span><span class="t">0.2s</span></div>
+            <div class="tl-step run"><span class="ic"></span><span class="nm">运行 dry-run 验证</span><span class="t">0.8s</span></div>
+          </div>
+        </div>
+
+        <!-- thought -->
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who thought">Thought</span><span class="dot"></span><span>328t</span></div>
+          <div class="tl-thought">
+            考虑过把 threshold 改 0.6，<span class="focus">最终回到 0.65</span> — 0.6 会让 false-positive 的 review 也通过，得不偿失。
+          </div>
+        </div>
+
+        <!-- message footer · OpenDesign / Cherry Studio 风 — 消息末尾、非顶部 -->
+        <div class="tl-item" style="border-top:none;padding:6px 0 2px;">
+          <div class="msg-foot">
+            <span class="st"></span>
+            <span class="lab">Done</span>
+            <span class="sep">·</span><span class="num"><b>1m 14s</b></span>
+            <span class="sep">·</span><span class="num"><b>3</b> tools</span>
+            <span class="sep">·</span><span class="num"><b>632</b>t · <b>$0.04</b></span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cmp-bar">
+        <div class="cmp-hint">
+          <span class="cmd">/plan</span><span class="sep">·</span>
+          <span class="cmd">/spec</span><span class="sep">·</span>
+          <span class="cmd">/run</span>
+          <span class="rt">2 active shells · auto-approve off</span>
+        </div>
+        <div class="cmp-box">
+          <textarea class="cmp-input" rows="2" placeholder="补充指令 · 或保持沉默让 AI 完成"></textarea>
+          <div class="cmp-row">
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></div>
+            <div class="cmp-send"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ╳ NEW · Codex 风 statusline ╳ -->
+      <div class="statusline">
+                <span class="verb">Composing</span>
+        <span class="num">for <b>14s</b></span>
+        <span class="sep">·</span>
+        <span class="num"><b>3</b> shells running</span>
+        <span class="sep">·</span>
+        <span class="num">claude-sonnet-4-5</span>
+        <span class="kbd-grp">
+          <span class="kbd">⌥</span><span class="kbd">↵</span><span>newline</span>
+          <span class="sep">·</span>
+          <span class="kbd">esc</span><span>cancel</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       FRAME B · DARK · panel + 真 unified diff
+       ════════════════════════════════════════════════════════════ -->
+  <div class="cmp-cell">
+    <div class="cmp-tag">
+      <div class="num">B</div>
+      <div>
+        <div class="ttl">Surface panel · 行级 diff</div>
+        <div class="sub">Trae panel + Claude Code 真 unified diff</div>
+      </div>
+      <span class="theme-badge">dark</span>
+    </div>
+    <p class="cmp-note">code panel 从"YAML 高亮 pre"升级到 <b>真 unified diff</b> — gutter 行号 + <code>+</code>/<code>-</code> mark + 行级底色。<code>tool-group</code> 展开态。</p>
+
+    <div class="frame" data-theme="dark">
+      <header class="ph">
+        <div class="ph-mark"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg></div>
+        <div><div class="ph-ttl">Run Session</div><div class="ph-sub">run_2026_05_21 · 14:22</div></div>
+        <div class="ph-rt"><span class="ph-pill">live</span><div class="ph-x">‹</div></div>
+      </header>
+
+      <div class="tl">
+
+        <!-- user turn 1 -->
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who user">你</span><span class="dot"></span><span>14:22:01</span></div>
+          <div class="tl-user">
+            <span class="caret">❯</span>
+            <span class="txt">把 critic 的 retry threshold 改成 <b>0.65</b></span>
+          </div>
+        </div>
+
+        <!-- ✻ THINKING · 展开态 · Codex/Claude Code 在 answer 之前展示推理 -->
+        <div class="tl-item">
+          <div class="tl-thinking open">
+            <div class="tl-thinking-head">
+              <svg class="glyph" aria-hidden="true"><use href="#think-cloud"/></svg>
+              <span class="lab">Thought for <b>42s</b></span>
+              <span class="sep">·</span>
+              <span class="num"><b>1.4k</b> tokens</span>
+              <span class="chev">›</span>
+            </div>
+            <div class="tl-thinking-body">
+              <p>用户要把 <em>retry_gate.threshold</em> 从 <b>0.70</b> 调到 <b>0.65</b> — 等价于把 critic 拒答率往下降 ~5pp。</p>
+              <p>风险在于 <em>false-positive 通过率</em>：阈值越低，<em>本应 reject</em> 但 score 落在 [0.65, 0.70) 区间的 case 会被放过去。看了 <code>agents/critic.yml</code> 现有 retry_gate 配置，它在 <em>retry &gt; 1</em> 时才生效，所以影响面只在二次 retry 上 — 可接受。</p>
+              <p>另外考虑过 <em>0.60</em>，但 0.60 会让边缘 case 大量漏过；<em>0.68</em> 又跟原来差别太小。<b>0.65</b> 是合理折中。</p>
+              <p>边界：检查了 <code>policies/de-escalation.yml</code> 是否引用 threshold — 没引用，单点改动安全。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- assistant · Cherry pill -->
+        <div class="tl-item">
+          <div class="tl-meta">
+            <span class="model-pill">
+              <span class="brand">Claude</span>
+              <span class="sep">·</span>
+              <span class="ver">Sonnet 4.5</span>
+            </span>
+            <span class="dot"></span><span>0.8s · 484t · $0.012</span>
+          </div>
+
+          <div class="sec-label">主线结论</div>
+          <div class="tl-reason">
+            把 <em>retry_gate.threshold</em> 从 0.70 改到 0.65。等于把"过 critic"的门拉低 5%。
+          </div>
+        </div>
+
+        <!-- tool · edit with file:line -->
+        <div class="tl-item">
+          <div class="tl-tool">
+            <span class="lead">●</span>
+            <span class="nm">edit</span>
+            <span class="args">(</span>
+            <span class="fref"><span class="file">agents/critic.yml</span>:<span class="ln">14</span></span>
+            <span class="args">)</span>
+          </div>
+        </div>
+
+        <!-- tool group · 展开态 + 多个 file:line -->
+        <div class="tl-item">
+          <div class="tl-toolgrp open">
+            <span class="chev">▸</span>
+            <span class="nm">Validating</span>
+            <span class="ct">×3</span>
+            <span class="diff"><span class="add">+18</span> <span class="del">−1</span></span>
+            <span class="stat">done</span>
+          </div>
+          <div class="tl-toolgrp-expand">
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body">spec_check &nbsp;<span class="fref"><span class="file">agents/critic.yml</span>:<span class="ln">14</span></span> &nbsp;<span style="color:var(--status-ok)">ok</span></span></div>
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body">dry_run &nbsp;<span class="fref"><span class="file">paper-review-team.yml</span></span> &nbsp;<span style="color:var(--status-ok)">3 / 3 passed</span></span></div>
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body">graph_diff &nbsp;<span class="fref"><span class="file">policies/de-escalation.yml</span></span> &nbsp;<span class="add">+1 edge</span></span></div>
+          </div>
+        </div>
+
+        <!-- step group · B panel -->
+        <div class="tl-item fb">
+          <div class="panel">
+            <div class="panel-hd">
+              <span class="chev">▾</span>
+              <span class="nm">任务</span>
+              <span class="ct"><b>2</b> / 3 · 1.4s</span>
+            </div>
+            <div class="tl-steps">
+              <div class="tl-step done"><span class="ic"></span><span class="nm">写入 yml</span><span class="t">0.4s</span></div>
+              <div class="tl-step done"><span class="ic"></span><span class="nm">注册 policy</span><span class="t">0.2s</span></div>
+              <div class="tl-step run"><span class="ic"></span><span class="nm">运行 dry-run 验证</span><span class="t">0.8s</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- code panel · 真 unified diff -->
+        <div class="tl-item fb">
+          <div class="panel" style="padding:8px 10px 10px;">
+            <div class="panel-hd">
+              <span class="chev">▾</span>
+              <span class="nm">diff</span>
+              <span class="ct"><span class="fref" style="font-size:9.5px;"><span class="file">agents/critic.yml</span></span></span>
+            </div>
+            <div class="diff-block">
+              <div class="diff-hd">
+                <span class="file">agents/critic.yml</span>
+                <span style="font-family:var(--font-mono);font-size:9.5px;letter-spacing:0;color:var(--fg-5);">@@ -12,3 +12,4 @@</span>
+                <span class="stats"><span class="add">+2</span> <span class="del">−1</span></span>
+              </div>
+              <div class="diff-body">
+                <div class="diff-line"><span class="gut">12</span><span class="mark">&nbsp;</span><span class="code">  <span class="kw">retry_gate</span>:</span></div>
+                <div class="diff-line"><span class="gut">13</span><span class="mark">&nbsp;</span><span class="code">    <span class="kw">enabled</span>: <span class="str">true</span></span></div>
+                <div class="diff-line del"><span class="gut">14</span><span class="mark">−</span><span class="code">    <span class="kw">threshold</span>: 0.70</span></div>
+                <div class="diff-line add"><span class="gut">14</span><span class="mark">+</span><span class="code">    <span class="kw">threshold</span>: 0.65  <span class="cmt"># tighter pass-band</span></span></div>
+                <div class="diff-line add cur"><span class="gut">15</span><span class="mark">+</span><span class="code">    <span class="kw">on_double_fail</span>: <span class="str">de-escalate</span></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- message footer · OpenDesign / Cherry Studio 风 — 消息末尾、非顶部 -->
+        <div class="tl-item" style="border-top:none;padding:6px 0 2px;">
+          <div class="msg-foot">
+            <span class="st"></span>
+            <span class="lab">Done</span>
+            <span class="sep">·</span><span class="num"><b>1m 14s</b></span>
+            <span class="sep">·</span><span class="num"><b>3</b> tools</span>
+            <span class="sep">·</span><span class="num"><b>632</b>t · <b>$0.04</b></span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cmp-bar">
+        <div class="cmp-hint">
+          <span class="cmd">/plan</span><span class="sep">·</span>
+          <span class="cmd">/spec</span><span class="sep">·</span>
+          <span class="cmd">/run</span>
+          <span class="rt">2 active shells</span>
+        </div>
+        <div class="cmp-box">
+          <textarea class="cmp-input" rows="2" placeholder="补充指令"></textarea>
+          <div class="cmp-row">
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></div>
+            <div class="cmp-send"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="statusline">
+                <span class="verb">Validating</span>
+        <span class="num">for <b>2.4s</b></span>
+        <span class="sep">·</span>
+        <span class="num">dry-run <b>3/3</b></span>
+        <span class="sep">·</span>
+        <span class="num">claude-sonnet-4-5</span>
+        <span class="kbd-grp">
+          <span class="kbd">⌥</span><span class="kbd">↵</span><span>newline</span>
+          <span class="sep">·</span>
+          <span class="kbd">esc</span><span>cancel</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       FRAME A · LIGHT
+       ════════════════════════════════════════════════════════════ -->
+  <div class="cmp-cell">
+    <div class="cmp-tag">
+      <div class="num">A</div>
+      <div>
+        <div class="ttl">Flat 单列 · 暖白</div>
+        <div class="sub">accent #d97757 · model 名以纯文字呈现</div>
+      </div>
+      <span class="theme-badge light">light</span>
+    </div>
+    <p class="cmp-note">model 标识在暖白下保持纯文字 — <code>Claude · Sonnet 4.5</code>，无图标无色块，靠字号 + 字重和 mono · 区分。</p>
+
+    <div class="frame" data-theme="light">
+      <header class="ph">
+        <div class="ph-mark"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg></div>
+        <div><div class="ph-ttl">Run Session</div><div class="ph-sub">run_2026_05_21 · 14:22</div></div>
+        <div class="ph-rt"><span class="ph-pill">live</span><div class="ph-x">‹</div></div>
+      </header>
+
+      <div class="tl">
+
+        <div class="tl-item" style="border-top:none;padding:4px 0 6px;">
+          <div class="tl-compact">
+            <span class="txt"><span class="ct">4 turns</span> compacted · <span class="link">view summary</span></span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who user">你</span><span class="dot"></span><span>14:24:18</span></div>
+          <div class="tl-user">
+            <span class="caret">❯</span>
+            <span class="txt">把 critic threshold 改成 <b>0.65</b>，加一个 de-escalation policy</span>
+          </div>
+        </div>
+
+        <!-- ✻ THINKING · 折叠态（light) -->
+        <div class="tl-item">
+          <div class="tl-thinking">
+            <div class="tl-thinking-head">
+              <svg class="glyph" aria-hidden="true"><use href="#think-cloud"/></svg>
+              <span class="lab">Thought for <b>38s</b></span>
+              <span class="sep">·</span>
+              <span class="num"><b>1.2k</b> tokens</span>
+              <span class="chev">›</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-meta">
+            <span class="model-pill">
+              <span class="brand">Claude</span>
+              <span class="sep">·</span>
+              <span class="ver">Sonnet 4.5</span>
+            </span>
+            <span class="dot"></span><span>1.1s · 484t · $0.012</span>
+          </div>
+
+          <div class="sec-label">主线结论 <span class="ct">2 处改动</span></div>
+          <div class="tl-reason">
+            阈值 <em>0.70 → 0.65</em>。新增 <em>de-escalation</em> 在二次 retry 失败后降级到 <em>writer.minor</em>，防 retry 死循环。
+          </div>
+
+          <div class="sec-label">关键文件</div>
+          <div class="tl-chips">
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">agents/critic.yml</span><span class="rl">retry_gate.threshold</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">policies/de-escalation.yml</span><span class="rl">new</span></span>
+          </div>
+
+          <div class="sec-label">下一步</div>
+          <div class="tl-next">
+            <div class="n"><span class="num">01</span><span>跑 dry-run 验证触发路径</span><span class="pri">P0</span></div>
+            <div class="n"><span class="num">02</span><span>把 0.65 写进 acceptance test</span><span class="pri dim">P1</span></div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-tool">
+            <span class="lead">●</span>
+            <span class="nm">edit</span>
+            <span class="args">(</span>
+            <span class="fref"><span class="file">agents/critic.yml</span>:<span class="ln">14</span></span>
+            <span class="args">)</span>
+          </div>
+          <div class="tl-echo"><span class="glyph">⎿</span><span class="body"><span class="del">−</span> threshold: 0.70 &nbsp;<span class="add">+</span> threshold: 0.65</span></div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-toolgrp">
+            <span class="chev">▸</span>
+            <span class="nm">Validating</span>
+            <span class="ct">×4</span>
+            <span class="diff">spec · schema · dry-run · graph</span>
+            <span class="stat">done</span>
+          </div>
+        </div>
+
+        <div class="tl-item fa">
+          <div class="step-cap">
+            <span class="name">应用变更</span>
+            <span class="ct"><b>2</b> / 3 · 1.4s</span>
+          </div>
+          <div class="tl-steps">
+            <div class="tl-step done"><span class="ic"></span><span class="nm">写入 yml</span><span class="t">0.4s</span></div>
+            <div class="tl-step done"><span class="ic"></span><span class="nm">注册 policy</span><span class="t">0.2s</span></div>
+            <div class="tl-step run"><span class="ic"></span><span class="nm">运行 dry-run</span><span class="t">0.8s</span></div>
+          </div>
+        </div>
+
+        <!-- message footer · OpenDesign / Cherry Studio 风 — 消息末尾、非顶部 -->
+        <div class="tl-item" style="border-top:none;padding:6px 0 2px;">
+          <div class="msg-foot">
+            <span class="st"></span>
+            <span class="lab">Done</span>
+            <span class="sep">·</span><span class="num"><b>1m 14s</b></span>
+            <span class="sep">·</span><span class="num"><b>3</b> tools</span>
+            <span class="sep">·</span><span class="num"><b>632</b>t · <b>$0.04</b></span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cmp-bar">
+        <div class="cmp-hint">
+          <span class="cmd">/plan</span><span class="sep">·</span>
+          <span class="cmd">/spec</span><span class="sep">·</span>
+          <span class="cmd">/run</span>
+          <span class="rt">2 active shells</span>
+        </div>
+        <div class="cmp-box">
+          <textarea class="cmp-input" rows="2" placeholder="补充指令"></textarea>
+          <div class="cmp-row">
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></div>
+            <div class="cmp-send"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="statusline">
+                <span class="verb">Pondering</span>
+        <span class="num">for <b>9s</b></span>
+        <span class="sep">·</span>
+        <span class="num"><b>2</b> shells running</span>
+        <span class="sep">·</span>
+        <span class="num">claude-sonnet-4-5</span>
+        <span class="kbd-grp">
+          <span class="kbd">⌥</span><span class="kbd">↵</span><span>newline</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       FRAME B · LIGHT
+       ════════════════════════════════════════════════════════════ -->
+  <div class="cmp-cell">
+    <div class="cmp-tag">
+      <div class="num">B</div>
+      <div>
+        <div class="ttl">Surface panel · 暖白 · 行级 diff</div>
+        <div class="sub">panel = #f5f3ec · diff add/del 用淡绿淡红 wash</div>
+      </div>
+      <span class="theme-badge light">light</span>
+    </div>
+    <p class="cmp-note">diff 在浅色下用 <b>极淡 alpha wash</b>（add 用 oklch ok 8%、del 用 oklch reject 7%），不靠强色块。</p>
+
+    <div class="frame" data-theme="light">
+      <header class="ph">
+        <div class="ph-mark"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg></div>
+        <div><div class="ph-ttl">Run Session</div><div class="ph-sub">run_2026_05_21 · 14:22</div></div>
+        <div class="ph-rt"><span class="ph-pill">live</span><div class="ph-x">‹</div></div>
+      </header>
+
+      <div class="tl">
+
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who user">你</span><span class="dot"></span><span>14:22:01</span></div>
+          <div class="tl-user">
+            <span class="caret">❯</span>
+            <span class="txt">把 critic 的 retry threshold 改成 <b>0.65</b></span>
+          </div>
+        </div>
+
+        <!-- ✻ THINKING · 展开态（light）-->
+        <div class="tl-item">
+          <div class="tl-thinking open">
+            <div class="tl-thinking-head">
+              <svg class="glyph" aria-hidden="true"><use href="#think-cloud"/></svg>
+              <span class="lab">Thought for <b>42s</b></span>
+              <span class="sep">·</span>
+              <span class="num"><b>1.4k</b> tokens</span>
+              <span class="chev">›</span>
+            </div>
+            <div class="tl-thinking-body">
+              <p>用户要把 <em>retry_gate.threshold</em> 从 <b>0.70</b> 调到 <b>0.65</b> — 等价于把 critic 拒答率往下降 ~5pp。</p>
+              <p>风险在于 <em>false-positive 通过率</em>：阈值越低，<em>本应 reject</em> 但 score 落在 [0.65, 0.70) 区间的 case 会被放过去。看了 <code>agents/critic.yml</code> 现有 retry_gate 配置，它在 <em>retry &gt; 1</em> 时才生效，所以影响面只在二次 retry 上 — 可接受。</p>
+              <p>另外考虑过 <em>0.60</em>，但 0.60 会让边缘 case 大量漏过；<em>0.68</em> 又跟原来差别太小。<b>0.65</b> 是合理折中。</p>
+              <p>边界：检查了 <code>policies/de-escalation.yml</code> 是否引用 threshold — 没引用，单点改动安全。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-meta">
+            <span class="model-pill">
+              <span class="brand">Claude</span>
+              <span class="sep">·</span>
+              <span class="ver">Sonnet 4.5</span>
+            </span>
+            <span class="dot"></span><span>0.8s · 484t · $0.012</span>
+          </div>
+
+          <div class="sec-label">主线结论</div>
+          <div class="tl-reason">
+            把 <em>retry_gate.threshold</em> 从 0.70 改到 0.65。
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-tool">
+            <span class="lead">●</span>
+            <span class="nm">edit</span>
+            <span class="args">(</span>
+            <span class="fref"><span class="file">agents/critic.yml</span>:<span class="ln">14</span></span>
+            <span class="args">)</span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-toolgrp open">
+            <span class="chev">▸</span>
+            <span class="nm">Validating</span>
+            <span class="ct">×3</span>
+            <span class="diff"><span class="add">+18</span> <span class="del">−1</span></span>
+            <span class="stat">done</span>
+          </div>
+          <div class="tl-toolgrp-expand">
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body">spec_check &nbsp;<span class="fref"><span class="file">agents/critic.yml</span>:<span class="ln">14</span></span> &nbsp;<span style="color:var(--status-ok)">ok</span></span></div>
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body">dry_run &nbsp;<span class="fref"><span class="file">paper-review-team.yml</span></span> &nbsp;<span style="color:var(--status-ok)">3 / 3 passed</span></span></div>
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body">graph_diff &nbsp;<span class="fref"><span class="file">policies/de-escalation.yml</span></span> &nbsp;<span class="add">+1 edge</span></span></div>
+          </div>
+        </div>
+
+        <div class="tl-item fb">
+          <div class="panel">
+            <div class="panel-hd">
+              <span class="chev">▾</span>
+              <span class="nm">任务</span>
+              <span class="ct"><b>2</b> / 3 · 1.4s</span>
+            </div>
+            <div class="tl-steps">
+              <div class="tl-step done"><span class="ic"></span><span class="nm">写入 yml</span><span class="t">0.4s</span></div>
+              <div class="tl-step done"><span class="ic"></span><span class="nm">注册 policy</span><span class="t">0.2s</span></div>
+              <div class="tl-step run"><span class="ic"></span><span class="nm">运行 dry-run</span><span class="t">0.8s</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tl-item fb">
+          <div class="panel" style="padding:8px 10px 10px;">
+            <div class="panel-hd">
+              <span class="chev">▾</span>
+              <span class="nm">diff</span>
+              <span class="ct"><span class="fref" style="font-size:9.5px;"><span class="file">agents/critic.yml</span></span></span>
+            </div>
+            <div class="diff-block">
+              <div class="diff-hd">
+                <span class="file">agents/critic.yml</span>
+                <span style="font-family:var(--font-mono);font-size:9.5px;letter-spacing:0;color:var(--fg-5);">@@ -12,3 +12,4 @@</span>
+                <span class="stats"><span class="add">+2</span> <span class="del">−1</span></span>
+              </div>
+              <div class="diff-body">
+                <div class="diff-line"><span class="gut">12</span><span class="mark">&nbsp;</span><span class="code">  <span class="kw">retry_gate</span>:</span></div>
+                <div class="diff-line"><span class="gut">13</span><span class="mark">&nbsp;</span><span class="code">    <span class="kw">enabled</span>: <span class="str">true</span></span></div>
+                <div class="diff-line del"><span class="gut">14</span><span class="mark">−</span><span class="code">    <span class="kw">threshold</span>: 0.70</span></div>
+                <div class="diff-line add"><span class="gut">14</span><span class="mark">+</span><span class="code">    <span class="kw">threshold</span>: 0.65  <span class="cmt"># tighter pass-band</span></span></div>
+                <div class="diff-line add cur"><span class="gut">15</span><span class="mark">+</span><span class="code">    <span class="kw">on_double_fail</span>: <span class="str">de-escalate</span></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- message footer · OpenDesign / Cherry Studio 风 — 消息末尾、非顶部 -->
+        <div class="tl-item" style="border-top:none;padding:6px 0 2px;">
+          <div class="msg-foot">
+            <span class="st"></span>
+            <span class="lab">Done</span>
+            <span class="sep">·</span><span class="num"><b>1m 14s</b></span>
+            <span class="sep">·</span><span class="num"><b>3</b> tools</span>
+            <span class="sep">·</span><span class="num"><b>632</b>t · <b>$0.04</b></span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cmp-bar">
+        <div class="cmp-hint">
+          <span class="cmd">/plan</span><span class="sep">·</span>
+          <span class="cmd">/spec</span><span class="sep">·</span>
+          <span class="cmd">/run</span>
+          <span class="rt">2 active shells</span>
+        </div>
+        <div class="cmp-box">
+          <textarea class="cmp-input" rows="2" placeholder="补充指令"></textarea>
+          <div class="cmp-row">
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></div>
+            <div class="cmp-send"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="statusline">
+                <span class="verb">Reconciling</span>
+        <span class="num">for <b>3.1s</b></span>
+        <span class="sep">·</span>
+        <span class="num">diff <b>2 files</b></span>
+        <span class="sep">·</span>
+        <span class="num">claude-sonnet-4-5</span>
+        <span class="kbd-grp">
+          <span class="kbd">⌥</span><span class="kbd">↵</span><span>newline</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Footer · v7 升级 ────────────────────────────────────────── -->
+<div class="cmp-foot">
+  <h3>v7 升级 · 删 persona · 加 statusline / diff / model-pill</h3>
+  <div class="grid">
+    <div class="col">
+      <h4>Cherry Studio <span class="src-tag">★ NEW · model 标识</span></h4>
+      <p>替换 <code>coordinator.v1</code>。assistant 身份不再是"虚构 persona"，<b>看到的就是真在跑的模型</b> — 纯文字 <em>brand 名</em> + mono · 分隔 + <em>版本号</em>。Cherry Studio 自身在消息顶挂 <code>Claude 3.5 Sonnet</code> 那种 chip，我们吸语义但不吸<em>图标/色块</em>：让模型名以排版分量而非装饰获得权重，留下颜色预算给真正的语义信号（status dot、diff add/del）。</p>
+      <p>语义价值：多模型 IDE（用户可能在 Claude / GPT / DeepSeek 间切）下，这是<b>唯一可信</b>的身份标识；而 persona 名字（"coordinator.v1"）让人产生它有自我的错觉，反而干扰。</p>
+    </div>
+    <div class="col">
+      <h4>Codex CLI <span class="src-tag">★ NEW · persistent statusline</span></h4>
+      <p>Codex 在 composer 下永远有一行 <code>✻ Composing for 14s · 3 shells running · ⌥+↵ newline · esc cancel</code> — <em>gerund verb</em>（Composing / Validating / Diffing / Sautéed 这种创造性词）+ <em>耗时</em> + <em>并行 shell 数</em> + <em>键位提示</em>。这是 Codex 跟传统 chat 视觉上最大的分水岭：永远在工作，永远在告诉你它在哪。</p>
+      <p>v7 实现：<code>.statusline</code> = mono 10px + accent <code>✻</code> 闪烁 + 三段 num 数据 + 右侧 kbd 群。<b>每个 frame 底部都有它。</b></p>
+    </div>
+    <div class="col">
+      <h4>Claude Code <span class="src-tag">★ NEW · file:line + unified diff</span></h4>
+      <p><b>(1) <code>file:line</code> dotted-underline ref</b> — 不是裸文本路径，是 <code>.fref</code>：<em>file 加粗</em> + <em>冒号 + 行号 accent</em> + dotted underline，hover 整体高亮。出现在 tool args、tool echo、panel header 三处。</p>
+      <p><b>(2) 真 unified diff</b> — B 方案 code panel 从 YAML 语法高亮升级到 <code>+</code> / <code>-</code> mark + gutter 行号 + 行级 add/del wash（<code>color-mix(in oklch, var(--status-ok) 8%, transparent)</code>）。@@ 头出现真实 hunk 坐标。</p>
+    </div>
+    <div class="col">
+      <h4>Codex compact mode <span class="src-tag">turn separator</span></h4>
+      <p>多轮跑久了 Codex 会把早期 turn 折叠成 <code>─── 4 turns compacted ───</code> 分隔条，两侧 hairline 拉满。A 方案演示该条 — 上一段 4 个 turn 被收掉，view summary 弹一个 hover panel。</p>
+      <p>这把"长 session 怎么不让左栏滚到爆"这个根本问题解了。配合 sf-text 协议里的 <code>&lt;sf:compact&gt;</code> 标签，可以在 model 主动 emit 时触发。</p>
+    </div>
+    <div class="col" style="grid-column:1 / -1;">
+      <h4>Codex &amp; Claude Code <span class="src-tag">★ NEW · ✻ thinking node（pre-answer reasoning）</span></h4>
+      <p>之前 v7 只在 assistant 末尾挂了一条 <code>.tl-thought</code>（Trae 风末尾反思）。Codex / Claude Code 实际的 reasoning 不在末尾 — 它在 <em>user msg 与 answer 之间</em>。Claude Code 会显示 <code>✻ Sautéed for 38s</code>（gerund verb 由用户/模型挑）+ <em>耗时</em> + <em>tokens</em>，点开是多段斜体灰色推理；Codex 也是同样的<em>位置 + 折叠</em>形态。</p>
+      <p>v7 实现 <code>.tl-thinking</code>：折叠态一行 <code>☁ Thought for 38s · 1.2k tokens ›</code>（mono 11px，accent <em>思考云 SVG</em> 缓慢 pulse — 把 Codex / Claude Code 的 ✻ sparkle 换成<em>填充式思考气泡 + 左下小尾巴（命名为「影流」）</em>，currentColor 继承），展开态是多段 <em>italic var(--fg-4)</em>，<b>无 bg / 无 border / 无 shadow</b>，只用 1.5px 左 rule 锚定到时间线，跟 <code>.tl-thought</code> 共享视觉语言但<em>位置不同、语义不同</em>。<b>A 折叠 · B 展开</b>，两态各演示一次。</p>
+      <p>语义价值：① 解释"模型为什么这么选"而不只展示结果（前文 0.65 的对比选项、边界检查都在 thought 里）；② 折叠态默认收起，<em>不挤占主线</em>；③ 用真实 tokens 数告诉用户"思考成本是多少" — 跟 msg-foot 的 cost 形成 <em>thinking cost + output cost</em> 双指标。</p>
+      <p>落地：新增 <code>ThinkingBlock</code> 组件（受控折叠态）+ <code>&lt;sf:thinking duration tokens&gt;</code> 标签 — 这是新增 sf-text 标签的第 3 个。</p>
+    </div>
+  </div>
+  <div class="row">
+    <span class="lbl">推荐 · 落地</span>
+    <span>
+      接 v6 的推荐方向不变（<b>方案 B + Shadow 三层</b>），v7 在它之上钉死五个 token 级新规：(1) <em>每条 assistant turn meta 行首位是纯文字 model 标识（brand · ver），不是 persona 名、不是图标 chip</em>；(2) <em>每个 RunSessionPage 底部钉一个 statusline，永远在跑，verb 随阶段轮换</em>；(3) <em>所有 file path 渲染为 <code>.fref</code>，不写裸字符串</em>；(4) <em>所有 edit/write tool 的结果用 <code>.diff-block</code>，不用 YAML 高亮</em>；(5) <em>有 reasoning 的 turn 在 user msg 与 answer 之间渲染一个 <code>.tl-thinking</code> 折叠块，默认收起；末尾反思仍用 <code>.tl-thought</code></em>。
+      <br><br>
+      落地：<em>S6.10（左栏 timeline）</em>→ 加入 <code>ModelPill</code>、<code>StatusLine</code>、<code>FRef</code>、<code>DiffBlock</code>、<code>ThinkingBlock</code> 五个新组件；<em>S6.11（sf-text 扩展）</em>→ 新增 <code>&lt;sf:compact&gt;</code>、<code>&lt;sf:file-ref&gt;</code>、<code>&lt;sf:thinking&gt;</code> 三个标签（其它两个已在 v6 范围）。预计 +0.5 天，<b>总 5.5 天</b>。
+    </span>
+  </div>
+</div>
+
+</body>
+</html>

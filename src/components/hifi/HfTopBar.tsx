@@ -37,14 +37,13 @@ function NetworkLatencyChip() {
     return () => window.clearInterval(id);
   }, []);
 
+  // 2026-08-11: 原为 0G chainscan 外链 + "0G TESTNET" 文案；实际 ping 的是本地 /health，
+  // 改为本地服务状态指示（去 0G），外链一并移除。
   return (
-    <a
-      href="https://chainscan-newton.0g.ai"
-      target="_blank"
-      rel="noopener noreferrer"
+    <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      title={latency != null ? t('shell.networkTitle', { latency }) : '0G TESTNET · connecting…'}
+      title={latency != null ? t('shell.networkTitle', { latency }) : 'LOCAL SERVER · connecting…'}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -74,8 +73,8 @@ function NetworkLatencyChip() {
           animation: 'hf-pulse 1.4s ease-in-out infinite',
         }}
       />
-      <span>0G TESTNET · {latency != null ? `${latency}ms` : '…'}</span>
-    </a>
+      <span>LOCAL · {latency != null ? `${latency}ms` : '…'}</span>
+    </div>
   );
 }
 

@@ -9,9 +9,9 @@ export const VS_COMPARE_DATA: VsCompareItem[] = [
   {
     id: 'chatgpt',
     target: 'ChatGPT',
-    oneLiner: '单 Agent 聊天 vs 多 Agent 协作团队 + 链上传承',
+    oneLiner: '单 Agent 聊天 vs 多 Agent 协作团队 + 证据沉淀传承',
     detail:
-      'ChatGPT 是一对一对话模型——你问它，它回答，没有团队结构，没有角色分工。ShadowFlow 构建的是一支有编制的协作团队：CEO 批准、QA 拒绝、写手执行、评审把关。每个角色的权限由运行时 Policy Matrix 强制执行，不靠 prompt 约定，靠代码约束。整个运行轨迹上链到 0G Storage，任何人都可以 fork 这支团队并验证溯源链——ChatGPT 的对话历史无法做到这一点。',
+      'ChatGPT 是一对一对话模型——你问它，它回答，没有团队结构，没有角色分工。ShadowFlow 构建的是一支有编制的协作团队：CEO 批准、QA 拒绝、写手执行、评审把关。每个角色的权限由运行时 Policy Matrix 强制执行，不靠 prompt 约定，靠代码约束。整个运行轨迹原子落盘、可回放审计，任何人都可以 fork 这支团队并验证溯源链——ChatGPT 的对话历史无法做到这一点。',
   },
   {
     id: 'cherry-studio',
@@ -39,28 +39,28 @@ export const VS_COMPARE_DATA: VsCompareItem[] = [
     target: 'AutoGen',
     oneLiner: '对话式 agent 框架 vs 确定性 workflow + checkpoint 可回放',
     detail:
-      'AutoGen 通过 Agent 之间的对话循环来协作——Agent A 说一句，Agent B 回一句，直到任务完成。这种方式灵活但不稳定：对话可以无限循环，中间状态难以观测，出错后无法精确回滚。ShadowFlow 使用确定性的有向无环图（DAG），每个节点有明确的输入输出契约，每次 handoff 都生成 Checkpoint 保存到 0G Storage。运行失败可以精确回放到任意历史节点继续执行。对比赛评委而言：AutoGen 的运行是黑盒，ShadowFlow 的运行是完全可审计的链上轨迹。',
+      'AutoGen 通过 Agent 之间的对话循环来协作——Agent A 说一句，Agent B 回一句，直到任务完成。这种方式灵活但不稳定：对话可以无限循环，中间状态难以观测，出错后无法精确回滚。ShadowFlow 使用确定性的有向无环图（DAG），每个节点有明确的输入输出契约，每次 handoff 都生成 Checkpoint 原子落盘。运行失败可以精确回放到任意历史节点继续执行。对比赛评委而言：AutoGen 的运行是黑盒，ShadowFlow 的运行是完全可审计的执行轨迹。',
   },
   {
     id: 'crewai',
     target: 'CrewAI',
-    oneLiner: 'Role-based 协作 vs Role + Policy + 链上传承三位一体',
+    oneLiner: 'Role-based 协作 vs Role + Policy + 证据传承三位一体',
     detail:
-      'CrewAI 是同类工具中最接近 ShadowFlow 的：它也有 Role（角色）、Task（任务）、Crew（团队）的概念。关键差异在两个地方：第一，CrewAI 没有 Policy Matrix——角色之间的审批关系靠 prompt 描述，不是代码约束，LLM 可以绕过。ShadowFlow 的 Policy Matrix 是运行时强制执行的。第二，CrewAI 没有链上传承——团队运行完就结束，无法被他人 fork 或验证溯源。ShadowFlow 把团队（Agent + 策略 + 历史轨迹）作为 CID 发布到 0G Storage，实现真正的知识传承。',
+      'CrewAI 是同类工具中最接近 ShadowFlow 的：它也有 Role（角色）、Task（任务）、Crew（团队）的概念。关键差异在两个地方：第一，CrewAI 没有 Policy Matrix——角色之间的审批关系靠 prompt 描述，不是代码约束，LLM 可以绕过。ShadowFlow 的 Policy Matrix 是运行时强制执行的。第二，CrewAI 没有证据传承——团队运行完就结束，无法被他人 fork 或验证溯源。ShadowFlow 把团队（Agent + 策略 + 历史轨迹）打包为可验证的 CID 包，实现真正的知识传承。',
   },
   {
     id: 'edict',
     target: 'Edict',
     oneLiner: 'Agent 指令分发 vs Workflow 编排 + 跨 persona CID 克隆',
     detail:
-      'Edict 专注于将指令分发给多个 Agent 执行——它是一个调度层，解决"谁来做"的问题。ShadowFlow 解决的是更完整的问题：不只是"谁来做"，还有"按什么制度做"（Policy Matrix）、"出错后怎么办"（Checkpoint Resume）、"做完后如何传承"（CID + author_lineage）。特别是跨 persona CID 克隆：一个团队的知识可以被另一个团队 fork 并在链上验证溯源链——这是 ShadowFlow 独有的 INFT 级别的知识传承机制，Edict 没有对应概念。',
+      'Edict 专注于将指令分发给多个 Agent 执行——它是一个调度层，解决"谁来做"的问题。ShadowFlow 解决的是更完整的问题：不只是"谁来做"，还有"按什么制度做"（Policy Matrix）、"出错后怎么办"（Checkpoint Resume）、"做完后如何传承"（CID + author_lineage）。特别是跨 persona 克隆：一个团队的知识可以被另一个团队 fork 并验证完整溯源链——这是 ShadowFlow 独有的知识传承机制，Edict 没有对应概念。',
   },
   {
     id: 'aiverse',
     target: 'AIverse',
-    oneLiner: 'Agent marketplace 展示 vs INFT-ready 传承链（Phase 3）',
+    oneLiner: 'Agent marketplace 展示 vs 可验证传承链（Phase 3）',
     detail:
-      'AIverse 是 Agent 的展示橱窗——你可以浏览发现社区 Agent，但 Agent 的内部逻辑、运行历史、权限矩阵都是黑盒。ShadowFlow 的 Phase 3 目标是 INFT（Intelligent NFT）：把整个团队（包括 Agent 配置、Policy Matrix、完整运行轨迹）铸造成链上可交易资产。任何人可以 fork 任何团队并在链上验证其血统——这不是 Agent 的展示，而是 Agent 知识的链上确权与可组合继承。两者的差异本质上是"展示市场"和"知识产权市场"的区别。',
+      'AIverse 是 Agent 的展示橱窗——你可以浏览发现社区 Agent，但 Agent 的内部逻辑、运行历史、权限矩阵都是黑盒。ShadowFlow 的 Phase 3 目标是团队知识资产化：把整个团队（包括 Agent 配置、Policy Matrix、完整运行轨迹）打包为可验证、可组合的资产。任何人可以 fork 任何团队并验证其血统——这不是 Agent 的展示，而是 Agent 知识的确权与可组合继承。两者的差异本质上是"展示市场"和"知识产权市场"的区别。',
   },
   {
     id: 'dify',

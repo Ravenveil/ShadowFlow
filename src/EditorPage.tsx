@@ -40,13 +40,16 @@ const YamlEditor = lazy(() =>
   import('./core/components/editor/YamlEditor').then((m) => ({ default: m.YamlEditor })),
 );
 
+// 2026-08-11: 链上发布/导入功能停用开关（0G 组件先不用，代码保留可回退）
+const SHOW_CHAIN_PUBLISH = false;
+
 // ── palette data — id must match nodeRegistryStore ────────────────────────────
 const PALETTE_AGENTS = [
   { id: 'planner',    t: 'Planner',    m: 'claude · plan' },
-  { id: 'writer',     t: 'Writer',     m: '0g · gpt-oss' },
+  { id: 'writer',     t: 'Writer',     m: 'glm · draft' },
   { id: 'researcher', t: 'Researcher', m: 'claude · research' },
   { id: 'critic',     t: 'Critic',     m: 'claude · review' },
-  { id: 'advisor',    t: 'Advisor',    m: '0g · verify' },
+  { id: 'advisor',    t: 'Advisor',    m: 'glm · verify' },
   { id: 'editor',     t: 'Editor',     m: 'claude · polish' },
 ];
 const PALETTE_GATES = [
@@ -1528,7 +1531,7 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
     const secretsStore = useZerogSecretsStore.getState();
     if (!secretsStore.hasEncryptedBlob) {
       setShowSecrets(true);
-      setFlashOk(zh ? '请先设置 0G 私钥' : 'Set your 0G private key first');
+      setFlashOk(zh ? '请先设置存储私钥' : 'Set your storage private key first');
       setTimeout(() => setFlashOk(null), 3000);
       return;
     }
@@ -1549,7 +1552,7 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
     // address. Without it we cannot compute a correct fingerprint, and writing
     // a placeholder fingerprint into immutable storage is a permanent data bug.
     const passphrase = window.prompt(
-      zh ? '输入 0G 密钥口令以签名上传' : 'Enter 0G key passphrase to sign upload',
+      zh ? '输入密钥口令以签名上传' : 'Enter key passphrase to sign upload',
     );
     if (!passphrase) return;
 
@@ -1679,12 +1682,16 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
           {zh ? 'Save as Skill' : 'Save as Skill'}
         </button>
 
+        {/* 2026-08-11: 链上发布组件停用（0G 相关组件先不用）。代码保留，
+            恢复时把 SHOW_CHAIN_PUBLISH 置 true 即可。 */}
+        {SHOW_CHAIN_PUBLISH && (
         <button onClick={doPublish} disabled={publishBusy}
-          title={zh ? '发布到 0G Storage（上传前扫描 PII）' : 'Publish to 0G Storage (PII scan before upload)'}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: V.mono, fontSize: 11, color: 'var(--t-accent)', background: 'var(--t-accent-tint)', border: '1px solid rgba(168,85,247,.4)' /* fixme: token */, borderRadius: 6, padding: '4px 10px', cursor: publishBusy ? 'wait' : 'pointer', opacity: publishBusy ? 0.6 : 1 }}>
+          title={zh ? '发布到链上存储（上传前扫描 PII）' : 'Publish to chain storage (PII scan before upload)'}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: V.mono, fontSize: 11, color: 'var(--t-accent)', background: 'var(--t-accent-tint)', border: '1px solid rgba(24,144,255,.4)', borderRadius: 6, padding: '4px 10px', cursor: publishBusy ? 'wait' : 'pointer', opacity: publishBusy ? 0.6 : 1 }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20V4m0 0-4 4m4-4 4 4M4 20h16"/></svg>
-          {publishBusy ? (zh ? '扫描中…' : 'Scanning…') : (zh ? '发布 0G' : 'Publish 0G')}
+          {publishBusy ? (zh ? '扫描中…' : 'Scanning…') : (zh ? '发布' : 'Publish')}
         </button>
+        )}
 
         <button onClick={() => setImportOpen(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: V.mono, fontSize: 11, color: V.fg3, background: 'transparent', border: `1px solid ${V.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
@@ -1818,8 +1825,8 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ fontFamily: V.mono, fontSize: 11, color: V.fg4, lineHeight: 1.55 }}>
               {zh
-                ? '粘贴 0G CID 或工作流 JSON（schema: shadowflow-workflow/v1）。'
-                : 'Paste a 0G CID or a workflow JSON (schema: shadowflow-workflow/v1).'}
+                ? '粘贴 CID 或工作流 JSON（schema: shadowflow-workflow/v1）。'
+                : 'Paste a CID or a workflow JSON (schema: shadowflow-workflow/v1).'}
             </div>
             <textarea autoFocus value={importText}
               onChange={e => { setImportText(e.target.value); setImportErr(null); }}

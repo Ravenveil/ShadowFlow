@@ -10,7 +10,9 @@ const LandingPage = lazy(() => import('./pages/LandingPage'));
 const InboxPage = lazy(() => import('./pages/InboxPage'));
 // 2026-05-20 — EditorPage / TemplatesPage / CatalogPage 模块不再被 lazy import
 // （路由全部 redirect 到 /start 或 /agents）。源文件保留，等后续 audit 决定彻删时机。
-const ImportPage = lazy(() => import('./pages/ImportPage'));
+// 2026-08-11 — ImportPage 同样下架（0G 组件停用），lazy import 一并注释，
+// 避免未使用变量报错；恢复时取消注释并把 /import 路由改回 <ImportPage />。
+// const ImportPage = lazy(() => import('./pages/ImportPage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
 const ChatHomePage = lazy(() => import('./pages/ChatHomePage'));
 const AgentDMPage = lazy(() => import('./pages/AgentDMPage'));
@@ -73,7 +75,9 @@ export function AppRoutes() {
                 时代统一从 /start 进入；旧 TemplatesPage / EditorPage / CatalogPage
                 组件文件保留只是不再可达，避免误删的副作用（UI 保护规则）。 */}
             <Route path="/templates" element={<Navigate to="/start" replace />} />
-            <Route path="/import" element={<ImportPage />} />
+            {/* 2026-08-11 — /import 下架（0G CID 轨迹导入组件停用，组件先不用）。
+                ImportPage 源文件保留，与上方 /templates /editor 同一处理惯例。 */}
+            <Route path="/import" element={<Navigate to="/start" replace />} />
             <Route path="/editor" element={<Navigate to="/start" replace />} />
             <Route path="/editor/:templateId" element={<Navigate to="/start" replace />} />
             <Route path="/runs" element={<RunsListPage />} />

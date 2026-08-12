@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ShadowFlow · Platform · 日夜两态全景</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    font-family: var(--font-sans);
+    background: #1a1817;
+    min-height: 100vh;
+  }
+  body { padding: 48px 32px 80px; }
+
+  .page {
+    max-width: 1560px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
+  }
+
+  .page-head {
+    color: #d8d5cb;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  .page-head h1 { font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .page-head p  { font-size: 11px; font-family: var(--font-mono); color: #8e8c84; margin: 0; letter-spacing: 0.04em; }
+
+  .stage {
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .stage-label {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: #8e8c84;
+  }
+  .stage-label .swatch { width: 12px; height: 12px; border-radius: 3px; }
+  .stage-label .tag {
+    padding: 2px 7px;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 4px;
+    font-size: 9.5px;
+    color: #c8c5ba;
+    letter-spacing: 0.08em;
+  }
+
+  /* ============================================================
+     Board — single Chat artboard, 3 columns.
+     All inner colors come from the [data-theme] tokens.
+     ============================================================ */
+  .board {
+    width: 1480px;
+    height: 920px;
+    background: var(--bg);
+    color: var(--fg-1);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 280px 1fr 360px;
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,.55);
+  }
+
+  /* ───────── Left sidebar (merged social-software feed) ───────── */
+  .sb {
+    display: flex; flex-direction: column;
+    height: 100%;
+    border-right: 1px solid var(--border);
+    background: var(--bg-elev-1);
+  }
+  .ws-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .ws-tile {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: var(--accent); color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 13px;
+    letter-spacing: -0.02em;
+  }
+  .ws-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: var(--fg-1); }
+  .ws-meta { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); letter-spacing: 0.04em; margin-top: 2px; }
+  .ws-kbd  { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); padding: 2px 5px; border: 1px solid var(--border); border-radius: 4px; }
+
+  .search {
+    margin: 10px 14px 6px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 11px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 9px;
+  }
+  .search .glyph { color: var(--fg-4); font-size: 12px; }
+  .search .ph    { font-size: 12px; color: var(--fg-4); }
+
+  .feed { flex: 1; overflow: hidden; padding: 6px 0 0; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    align-items: center;
+    column-gap: 12px;
+    padding: 9px 14px;
+    position: relative;
+    cursor: pointer;
+    transition: background var(--dur-1) var(--ease-out);
+  }
+  .row:hover { background: color-mix(in oklab, var(--fg-1) 4%, transparent); }
+  .row.active {
+    background: color-mix(in oklab, var(--accent) 12%, transparent);
+  }
+  .row.active::before {
+    content: "";
+    position: absolute; left: 0; top: 6px; bottom: 6px;
+    width: 2.5px; border-radius: 0 2px 2px 0;
+    background: var(--accent);
+  }
+
+  .avatar {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800;
+    position: relative;
+    flex-shrink: 0;
+    letter-spacing: -0.02em;
+  }
+  .avatar.team {
+    background: var(--bg-elev-3);
+    border: 1px solid var(--border);
+    color: var(--fg-2);
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+  .avatar.dm  { color: #ffffff; font-size: 15px; }
+  .avatar .status-dot {
+    position: absolute;
+    bottom: -2px; right: -2px;
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-elev-1);
+  }
+
+  .row-body { min-width: 0; }
+  .row-name {
+    font-size: 14px; font-weight: 600;
+    color: var(--fg-1);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .row.active .row-name { font-weight: 700; }
+  .row-tag {
+    font-family: var(--font-mono);
+    font-size: 8.5px; font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    background: var(--bg-elev-3);
+    color: var(--fg-3);
+    border: 1px solid var(--border-subtle);
+  }
+  .row-tag.live {
+    background: color-mix(in oklab, var(--status-run) 18%, transparent);
+    border-color: color-mix(in oklab, var(--status-run) 40%, transparent);
+    color: var(--status-run);
+  }
+
+  .row-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+  .row-time {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--fg-4);
+    letter-spacing: 0.02em;
+  }
+  .row.active .row-time { color: var(--accent); }
+  .badge {
+    min-width: 18px; height: 18px;
+    padding: 0 6px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 10px; font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .badge-spacer { width: 18px; height: 18px; visibility: hidden; }
+
+  .me {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-elev-1);
+  }
+  .me-tile {
+    width: 30px; height: 30px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  .me-info { flex: 1; min-width: 0; }
+  .me-name { font-size: 12px; font-weight: 600; color: var(--fg-1); }
+  .me-meta { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); margin-top: 1px; }
+  .gear { color: var(--fg-3); font-size: 13px; }
+
+  /* status dots */
+  .dot-run    { background: var(--status-run); animation: pulse 1.6s var(--ease-out) infinite; }
+  .dot-warn   { background: var(--status-warn); }
+  .dot-idle   { background: var(--status-idle); }
+  .dot-ok     { background: var(--status-ok); }
+  .dot-reject { background: var(--status-reject); }
+
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--status-run) 50%, transparent); }
+    70%  { box-shadow: 0 0 0 6px color-mix(in oklab, var(--status-run) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--status-run) 0%, transparent); }
+  }
+
+  /* ───────── Middle conversation ───────── */
+  .mid { display: flex; flex-direction: column; height: 100%; background: var(--bg); min-width: 0; }
+  .mid-head {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .mid-tile {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 11px; font-weight: 700;
+    color: var(--fg-2);
+  }
+  .mid-title { font-size: 14px; font-weight: 700; color: var(--fg-1); }
+  .mid-sub   { font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); margin-top: 3px; letter-spacing: 0.03em; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-family: var(--font-mono);
+    font-size: 9.5px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .pill.run {
+    background: color-mix(in oklab, var(--status-run) 16%, transparent);
+    color: var(--status-run);
+    border: 1px solid color-mix(in oklab, var(--status-run) 30%, transparent);
+  }
+  .pill.dim {
+    background: var(--bg-elev-2);
+    color: var(--fg-3);
+    border: 1px solid var(--border);
+  }
+  .pill.warn {
+    background: color-mix(in oklab, var(--status-warn) 16%, transparent);
+    color: var(--status-warn);
+    border: 1px solid color-mix(in oklab, var(--status-warn) 35%, transparent);
+  }
+  .pill .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: currentColor;
+  }
+  .btn-ghost {
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg-3);
+    font-size: 11px;
+    font-family: var(--font-mono);
+    cursor: pointer;
+  }
+
+  .msgs { flex: 1; overflow: hidden; padding: 18px 22px; }
+
+  .sys {
+    display: flex; justify-content: center;
+    margin-bottom: 18px;
+  }
+  .sys-inner {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--fg-4);
+    letter-spacing: 0.04em;
+    padding: 4px 10px;
+    background: var(--bg-elev-1);
+    border-radius: 6px;
+    border: 1px dashed var(--border);
+  }
+
+  .bubble {
+    display: flex; gap: 10px;
+    margin-bottom: 18px;
+  }
+  .bubble .av {
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .bubble .body { flex: 1; min-width: 0; }
+  .bubble .head {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-bottom: 4px;
+  }
+  .bubble .from { font-size: 12px; font-weight: 700; color: var(--fg-1); }
+  .bubble .role { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); letter-spacing: 0.04em; }
+  .bubble .time { font-family: var(--font-mono); font-size: 9px; color: var(--fg-5); margin-left: auto; }
+  .bubble .card {
+    background: var(--bg-elev-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--fg-1);
+  }
+  .bubble.gated .card {
+    background: color-mix(in oklab, var(--status-warn) 10%, var(--bg-elev-1));
+    border: 1px solid color-mix(in oklab, var(--status-warn) 50%, transparent);
+  }
+
+  .ref { color: var(--accent-bright); font-family: var(--font-mono); font-size: 11.5px; }
+
+  .issue-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .issue {
+    display: flex; gap: 10px;
+    padding: 7px 10px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .issue-sec { font-family: var(--font-mono); font-size: 10px; color: var(--status-warn); font-weight: 700; min-width: 36px; }
+  .issue-txt { font-size: 11.5px; color: var(--fg-2); }
+
+  .gate-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .gate-head .pause { font-weight: 700; color: var(--status-warn); }
+
+  .tool-tag {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--fg-1);
+    background: var(--bg-elev-3);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .recipient { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-1); }
+
+  .gate-policy { margin-top: 8px; font-size: 11px; color: var(--fg-4); }
+  .gate-policy .warn { color: var(--status-warn); }
+
+  /* Composer */
+  .composer {
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-elev-1);
+  }
+  .composer-box {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .composer-ph { font-size: 12px; color: var(--fg-5); min-height: 38px; }
+  .composer-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 6px; padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .composer-tools { display: flex; gap: 6px; }
+  .composer-tools span {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--fg-4);
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .composer-actions { display: flex; align-items: center; gap: 8px; }
+  .composer-hint { font-family: var(--font-mono); font-size: 9px; color: var(--fg-5); }
+  .composer-send {
+    padding: 5px 12px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  /* ───────── Right Approval panel ───────── */
+  .rt {
+    display: flex; flex-direction: column;
+    height: 100%;
+    border-left: 1px solid var(--border);
+    background: var(--bg-elev-1);
+  }
+  .rt-head {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .rt-head .label {
+    font-family: var(--font-mono);
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+  }
+  .rt-head .pill { margin-left: auto; }
+
+  .gate {
+    margin: 14px;
+    padding: 14px;
+    border-radius: 12px;
+    background: color-mix(in oklab, var(--status-warn) 8%, var(--bg-elev-2));
+    border: 1px solid color-mix(in oklab, var(--status-warn) 60%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--status-warn) 12%, transparent), 0 8px 24px -8px rgba(245,158,11,.3);
+    position: relative;
+  }
+  .gate .tag {
+    position: absolute; top: -9px; left: 14px;
+    padding: 2px 8px;
+    background: var(--status-warn);
+    color: #0A0A0A;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+  .gate-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .gate-av {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: #EF4444;
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 14px;
+  }
+  .gate-title { font-size: 13px; font-weight: 700; color: var(--fg-1); }
+  .gate-sub   { font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); margin-top: 2px; }
+
+  .kv { display: grid; grid-template-columns: 56px 1fr; gap: 8px; font-size: 11.5px; margin-bottom: 6px; }
+  .kv .k { font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); letter-spacing: 0.04em; text-transform: uppercase; padding-top: 1px; }
+  .kv .v { color: var(--fg-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kv .v.accent { color: var(--accent-bright); font-family: var(--font-mono); }
+  .kv .v.mono   { font-family: var(--font-mono); }
+  .kv .v.danger { color: var(--status-reject); }
+
+  .trigger {
+    margin-top: 12px;
+    padding: 8px 10px;
+    background: var(--bg);
+    border-radius: 6px;
+    border: 1px dashed var(--border);
+  }
+  .trigger .t-head {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--fg-4);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .trigger .t-body { font-size: 11px; color: var(--fg-2); }
+  .trigger .t-body .warn { color: var(--status-warn); }
+
+  .actions {
+    display: flex; gap: 8px;
+    margin-top: 12px;
+  }
+  .btn {
+    flex: 1;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .btn-approve { background: var(--accent); color: var(--accent-ink); border: none; }
+  .btn-reject  {
+    background: transparent;
+    color: var(--status-reject);
+    border-color: color-mix(in oklab, var(--status-reject) 40%, transparent);
+  }
+  .hint {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 8px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--fg-4);
+  }
+
+  .rt-section {
+    padding: 4px 16px 6px;
+    margin-top: 6px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .rt-section .label {
+    font-family: var(--font-mono);
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+  }
+  .rt-section .count { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); }
+
+  .history { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .h-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .h-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .h-who { font-size: 11px; font-weight: 600; min-width: 28px; color: var(--fg-1); }
+  .h-what {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--fg-3);
+    flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .h-time { font-family: var(--font-mono); font-size: 9px; color: var(--fg-5); }
+  .h-state { font-family: var(--font-mono); font-size: 9px; font-weight: 700; min-width: 22px; text-align: right; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-head">
+    <h1>Platform · P0a Chat · 日夜两态全景</h1>
+    <p>3 列布局 / 侧栏改为社交软件式合并时间线 / 同一套 token, 仅切 data-theme</p>
+  </div>
+
+  <!-- ========================== DARK ========================== -->
+  <div class="stage">
+    <div class="stage-label">
+      <span class="swatch" style="background:#0A0A0A;border:1px solid rgba(255,255,255,.18);"></span>
+      <span>黑夜 · Dark</span>
+      <span class="tag">accent · purple</span>
+      <span class="tag">1480 × 920</span>
+    </div>
+    <div class="board" data-theme="dark" id="board-dark"></div>
+  </div>
+
+  <!-- ========================== LIGHT ========================== -->
+  <div class="stage">
+    <div class="stage-label">
+      <span class="swatch" style="background:#faf9f5;border:1px solid rgba(0,0,0,.18);"></span>
+      <span>白天 · Light</span>
+      <span class="tag">accent · warm orange</span>
+      <span class="tag">1480 × 920</span>
+    </div>
+    <div class="board" data-theme="light" id="board-light"></div>
+  </div>
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   Single merged feed — like WeChat/Telegram. No descriptions.
+   Teams vs DMs only distinguished by avatar style.
+   ───────────────────────────────────────────────────────────── */
+const FEED = [
+  { kind:'team', glyph:'×5', name:'论文深读小队', time:'09:21', unread:2, live:true,  active:true  },
+  { kind:'dm',   glyph:'读', name:'读读',         time:'09:18', unread:1, color:'#A855F7', status:'warn' },
+  { kind:'team', glyph:'×4', name:'文献综述',     time:'昨天',  unread:5, status:'warn' },
+  { kind:'dm',   glyph:'阿', name:'阿批',         time:'昨天',  unread:0, color:'#F59E0B' },
+  { kind:'team', glyph:'×3', name:'Rebuttal 起草', time:'昨天',  unread:0 },
+  { kind:'dm',   glyph:'查', name:'查查',         time:'周一',  unread:0, color:'#22D3EE' },
+  { kind:'dm',   glyph:'写', name:'写写',         time:'周一',  unread:0, color:'#EF4444' },
+  { kind:'dm',   glyph:'重', name:'重重',         time:'上周',  unread:0, color:'#10B981' },
+];
+
+function rowHTML(item) {
+  const isTeam = item.kind === 'team';
+  const dotClass = item.live ? 'dot-run' : item.status ? `dot-${item.status}` : '';
+  const avatar = isTeam
+    ? `<div class="avatar team">
+         <span>${item.glyph}</span>
+         ${dotClass ? `<span class="status-dot ${dotClass}"></span>` : ''}
+       </div>`
+    : `<div class="avatar dm" style="background:${item.color}">
+         <span>${item.glyph}</span>
+         ${dotClass ? `<span class="status-dot ${dotClass}"></span>` : ''}
+       </div>`;
+
+  const liveTag = item.live ? `<span class="row-tag live">LIVE</span>` : '';
+  const badge   = item.unread > 0
+    ? `<span class="badge">${item.unread}</span>`
+    : `<span class="badge-spacer"></span>`;
+
+  return `
+    <div class="row ${item.active ? 'active' : ''}">
+      ${avatar}
+      <div class="row-body">
+        <div class="row-name">
+          <span>${item.name}</span>
+          ${liveTag}
+        </div>
+      </div>
+      <div class="row-meta">
+        <span class="row-time">${item.time}</span>
+        ${badge}
+      </div>
+    </div>
+  `;
+}
+
+const HISTORY = [
+  {who:'读读', what:'fetch arxiv.org/2410.11215',  t:'09:14', state:'auto', tone:'var(--status-ok)'},
+  {who:'阿批', what:'read · 47 sources',           t:'09:16', state:'auto', tone:'var(--status-ok)'},
+  {who:'查查', what:'http.get · 47 DOIs',          t:'09:18', state:'ok',   tone:'var(--status-ok)'},
+  {who:'写写', what:'fs.write review-draft.md',    t:'09:20', state:'ok',   tone:'var(--status-ok)'},
+  {who:'写写', what:'email.send (尝试)',           t:'09:11', state:'拒',   tone:'var(--status-reject)'},
+];
+
+function boardHTML() {
+  const rows  = FEED.map(rowHTML).join('');
+  const hist  = HISTORY.map(h => `
+    <div class="h-row">
+      <span class="h-dot" style="background:${h.tone}"></span>
+      <span class="h-who">${h.who}</span>
+      <span class="h-what">${h.what}</span>
+      <span class="h-time">${h.t}</span>
+      <span class="h-state" style="color:${h.tone}">${h.state}</span>
+    </div>
+  `).join('');
+
+  return `
+    <!-- ── Sidebar ── -->
+    <div class="sb">
+      <div class="ws-bar">
+        <div class="ws-tile">P</div>
+        <div style="flex:1;min-width:0">
+          <div class="ws-name">paper-lab</div>
+          <div class="ws-meta">WORKSPACE · 7 AGENTS · 3 TEAMS</div>
+        </div>
+        <span class="ws-kbd">⌘K</span>
+      </div>
+      <div class="search">
+        <span class="glyph">⌕</span>
+        <span class="ph">搜索 agent / team / 消息</span>
+      </div>
+      <div class="feed">${rows}</div>
+      <div class="me">
+        <div class="me-tile">张</div>
+        <div class="me-info">
+          <div class="me-name">张明 · Owner</div>
+          <div class="me-meta">monthly · $42.18 / $200</div>
+        </div>
+        <span class="gear">⚙</span>
+      </div>
+    </div>
+
+    <!-- ── Middle conversation ── -->
+    <div class="mid">
+      <div class="mid-head">
+        <div class="mid-tile">×5</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="mid-title">论文深读小队</span>
+            <span class="pill run"><span class="dot"></span>RUNNING</span>
+            <span class="pill dim">POLICY · L2-Strict</span>
+          </div>
+          <div class="mid-sub">paper-lab / 论文深读小队 · 5 agents · run #042 · started 09:14</div>
+        </div>
+        <button class="btn-ghost">工作流 →</button>
+        <button class="btn-ghost">策略</button>
+      </div>
+
+      <div class="msgs">
+        <div class="sys"><div class="sys-inner">09:14 · 张明 启动 run #042 · 输入：arXiv:2410.11215</div></div>
+
+        <div class="bubble">
+          <div class="av" style="background:#A855F7">读</div>
+          <div class="body">
+            <div class="head"><span class="from">读读</span><span class="role">READER · L1</span><span class="time">09:14</span></div>
+            <div class="card">已抓取 PDF · 38 页 / 12 节 / 47 引用。建议优先阅读 <span class="ref">§4 方法</span> 与 <span class="ref">§6 实验</span>。</div>
+          </div>
+        </div>
+
+        <div class="bubble">
+          <div class="av" style="background:#F59E0B">阿</div>
+          <div class="body">
+            <div class="head"><span class="from">阿批</span><span class="role">CRITIC · L2</span><span class="time">09:16</span></div>
+            <div class="card">
+              发现潜在问题 3 处：
+              <div class="issue-list">
+                <div class="issue"><span class="issue-sec">§4.2</span><span class="issue-txt">基线选择避开了 ICLR-24 的更强基线 RetroCorr</span></div>
+                <div class="issue"><span class="issue-sec">§5.1</span><span class="issue-txt">消融未覆盖 BatchSize × Dropout 联合效应</span></div>
+                <div class="issue"><span class="issue-sec">§6.3</span><span class="issue-txt">与 Tab.2 数据不一致（73.4 vs 71.8）</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bubble">
+          <div class="av" style="background:#22D3EE">查</div>
+          <div class="body">
+            <div class="head"><span class="from">查查</span><span class="role">CITE-CHECKER · L1</span><span class="time">09:18</span></div>
+            <div class="card">引用核对：47 / 47 ✓ · DOI 全部可达 · 自引比例 18%（正常）</div>
+          </div>
+        </div>
+
+        <div class="sys"><div class="sys-inner">09:21 · 写写（Writer · L3）请求执行：发送 review 邮件至 ICLR PC</div></div>
+
+        <div class="bubble gated">
+          <div class="av" style="background:#EF4444">写</div>
+          <div class="body">
+            <div class="head"><span class="from">写写</span><span class="role">WRITER · L3</span><span class="time">09:21</span></div>
+            <div class="card">
+              <div class="gate-head">
+                <span style="font-size:14px">✋</span>
+                <span class="pause">已暂停 · 等待审批</span>
+              </div>
+              我准备调用 <span class="tool-tag">email.send</span> 工具，将 review 草稿发往 <span class="recipient">iclr-pc@iclr.cc</span>。
+              <div class="gate-policy">该工具被策略 <span class="warn">L3-Strict</span> 标为「需人工审批」。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="composer-box">
+          <div class="composer-ph">@阿批 把第 3 处不一致写成详细的 issue...</div>
+          <div class="composer-bar">
+            <div class="composer-tools"><span>@</span><span>/</span><span>📎</span></div>
+            <div class="composer-actions">
+              <span class="composer-hint">⏎ 发送 · ⇧⏎ 换行</span>
+              <button class="composer-send">发送</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Right Approval ── -->
+    <div class="rt">
+      <div class="rt-head">
+        <span class="label">审批队列</span>
+        <span class="pill warn">1 PENDING</span>
+      </div>
+
+      <div class="gate">
+        <span class="tag">APPROVAL GATE</span>
+        <div class="gate-row">
+          <div class="gate-av">写</div>
+          <div style="flex:1;min-width:0">
+            <div class="gate-title">写写 想发邮件</div>
+            <div class="gate-sub">WRITER · L3 · 09:21:34</div>
+          </div>
+        </div>
+
+        <div class="kv"><span class="k">工具</span><span class="v accent">email.send</span></div>
+        <div class="kv"><span class="k">收件人</span><span class="v mono">iclr-pc@iclr.cc</span></div>
+        <div class="kv"><span class="k">主题</span><span class="v">[Review] arXiv:2410.11215</span></div>
+        <div class="kv"><span class="k">正文</span><span class="v">…经阿批/查查复核后, 建…</span></div>
+        <div class="kv"><span class="k">风险</span><span class="v danger">外发 · 不可撤销</span></div>
+
+        <div class="trigger">
+          <div class="t-head">触发策略</div>
+          <div class="t-body">L3 + 外发邮件 + 第三方收件人 → <span class="warn">需 Owner 审批</span></div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-approve">批准</button>
+          <button class="btn btn-reject">驳回</button>
+        </div>
+        <div class="hint">
+          <span>Y · N · ⌘↵ 批准</span>
+          <span>本次 / 总是 / 仅此团队</span>
+        </div>
+      </div>
+
+      <div class="rt-section">
+        <span class="label">最近审批</span>
+        <span class="count">今日 12</span>
+      </div>
+      <div class="history">${hist}</div>
+    </div>
+  `;
+}
+
+document.getElementById('board-dark').innerHTML  = boardHTML();
+document.getElementById('board-light').innerHTML = boardHTML();
+</script>
+</body>
+</html>

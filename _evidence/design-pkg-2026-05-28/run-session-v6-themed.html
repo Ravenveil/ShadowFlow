@@ -1,0 +1,1051 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Run Session · 左栏 v6 — Codex + OpenDesign + Shadow distillation</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+/* ── Page chrome ──────────────────────────────────────────────── */
+html, body { background: #0A0A0A; color: #F5F4EE; }
+body { min-height: 100vh; padding: 32px 28px 80px; font-family: var(--font-sans); }
+
+.doc-hd { display:flex;align-items:center;gap:12px;margin-bottom:6px; }
+.doc-mark { width:28px;height:28px;border-radius:8px;background:#A855F7;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900; }
+.doc-word { font-size:15px;font-weight:700;letter-spacing:-.02em; }
+.doc-sep  { width:1px;height:18px;background:rgba(255,255,255,.12); }
+.doc-crumb{ font-family:var(--font-mono);font-size:11px;color:#8E8C84; }
+.doc-meta { margin-left:auto;font-family:var(--font-mono);font-size:10px;color:#5C5A54; }
+.doc-lead { max-width:980px;font-size:13px;color:#8E8C84;line-height:1.65;margin:14px 0 8px; }
+.doc-lead b { color:#F5F4EE;font-weight:600; }
+.doc-lead em { color:#C084FC;font-style:normal; }
+.doc-lead s { text-decoration:line-through;color:#5C5A54; }
+
+.research-strip { max-width:1040px;display:flex;flex-wrap:wrap;gap:14px 22px;margin:14px 0 26px;font-family:var(--font-mono);font-size:10.5px;color:#8E8C84; }
+.research-strip > div { display:flex;align-items:baseline;gap:6px; }
+.research-strip .src { color:#C084FC;font-weight:700; }
+.research-strip .tag { color:#5C5A54;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase; }
+
+/* ── Comparison grid · 2 cols × 2 rows ────────────────────────── */
+.cmp-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(440px,1fr));
+  grid-template-rows:auto auto;
+  gap:24px;
+  max-width:1100px;margin:0 auto;
+}
+.cmp-cell { display:flex;flex-direction:column;gap:10px; }
+.cmp-tag  { display:flex;align-items:center;gap:10px;padding:0 2px; }
+.cmp-tag .num {
+  width:22px;height:22px;border-radius:6px;
+  background:rgba(168,85,247,.16);color:#C084FC;
+  font-family:var(--font-mono);font-size:11px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+}
+.cmp-tag .ttl { font-size:13.5px;font-weight:700;letter-spacing:-.01em;color:#F5F4EE; }
+.cmp-tag .sub { font-family:var(--font-mono);font-size:10px;color:#5C5A54; }
+.cmp-tag .theme-badge {
+  margin-left:auto;
+  font-family:var(--font-mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:#5C5A54;padding:3px 8px;border:1px solid rgba(255,255,255,.1);border-radius:5px;
+}
+.cmp-tag .theme-badge.light { color:#8a6240;border-color:rgba(217,119,87,.4);background:rgba(217,119,87,.06); }
+.cmp-note { font-size:11.5px;color:#8E8C84;line-height:1.55;padding:0 2px; }
+.cmp-note b { color:#C8C5BA;font-weight:600; }
+
+/* ── Frame container ─────────────────────────────────────────── */
+.frame {
+  background: var(--bg);
+  color: var(--fg-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  height: 740px;
+  font-family: var(--font-sans);
+}
+
+/* ── Pane header ─────────────────────────────────────────────── */
+.ph { padding:11px 16px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0; }
+.ph-mark { width:24px;height:24px;border-radius:7px;background:var(--accent-tint);display:flex;align-items:center;justify-content:center;color:var(--accent-bright);flex-shrink:0; }
+.ph-ttl  { font-size:12.5px;font-weight:600;letter-spacing:-.01em;color:var(--fg-1); }
+.ph-sub  { font-family:var(--font-mono);font-size:10px;color:var(--fg-4);margin-top:1px; }
+.ph-rt   { margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--fg-4); }
+.ph-pill {
+  font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--status-run);padding:2px 7px;border-radius:999px;
+  background:var(--status-run-tint);
+  display:inline-flex;align-items:center;gap:5px;
+}
+.ph-pill::before { content:"";width:5px;height:5px;border-radius:50%;background:var(--status-run);animation:sf-pulse 1.4s ease-in-out infinite; }
+.ph-x    { width:22px;height:22px;border-radius:6px;color:var(--fg-4);display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer; }
+.ph-x:hover { background:var(--bg-elev-2);color:var(--fg-1); }
+
+/* ── Composer — name row dropped (no @SOLO Agent) ─────────────── */
+.cmp-bar { padding:10px 14px 12px;border-top:1px solid var(--border);flex-shrink:0; }
+.cmp-hint {
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.01em;
+  color:var(--fg-5);margin-bottom:6px;padding-left:2px;
+  display:flex;align-items:center;gap:6px;
+}
+.cmp-hint .cmd { color:var(--accent-bright);font-weight:600; }
+.cmp-hint .sep { color:var(--fg-5); }
+.cmp-hint .rt  { margin-left:auto;font-size:9.5px;color:var(--fg-5); }
+.cmp-box { border:1px solid var(--border-strong);border-radius:11px;background:var(--bg-elev-1);overflow:hidden; }
+.cmp-input { width:100%;padding:9px 12px 4px;background:transparent;border:none;color:var(--fg-1);font-size:12.5px;font-family:var(--font-sans);resize:none;outline:none;line-height:1.5;min-height:40px; }
+.cmp-input::placeholder { color:var(--fg-5); }
+.cmp-row { display:flex;align-items:center;padding:4px 8px 6px;gap:2px; }
+.cmp-ic  { width:24px;height:24px;border-radius:5px;color:var(--fg-4);display:flex;align-items:center;justify-content:center;cursor:pointer; }
+.cmp-ic:hover { background:var(--bg-elev-2);color:var(--fg-1); }
+.cmp-send{ margin-left:auto;width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;cursor:pointer; }
+.cmp-send:hover { background:var(--accent-bright); }
+.cmp-kbd { display:flex;align-items:center;gap:4px;padding:6px 4px 0;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5); }
+.kbd { padding:1px 5px;border:1px solid var(--border-strong);border-radius:3px;color:var(--fg-4);font-size:9px; }
+
+/* ────────────────────────────────────────────────────────────── */
+/* SHARED · ConversationTimeline base                              */
+/* ────────────────────────────────────────────────────────────── */
+.tl { flex:1;min-height:0;overflow-y:auto;padding:8px 16px 8px; }
+.tl::-webkit-scrollbar { width:3px; }
+.tl::-webkit-scrollbar-thumb { background:var(--border-strong);border-radius:2px; }
+
+.tl-item { padding:10px 0 10px;position:relative; }
+.tl-item + .tl-item { border-top:1px solid var(--border-subtle); }
+
+/* === NEW · run summary capsule (top of every session) ========== */
+/* 取自 OpenDesign 本身：● Done 5m 40s · 26634 out · $1.3946       */
+.tl-runcap {
+  display:flex;align-items:center;gap:10px;
+  font-family:var(--font-mono);font-size:10.5px;color:var(--fg-3);
+  padding:7px 10px;border-radius:8px;
+  background:var(--bg-elev-1);border:1px solid var(--border-subtle);
+  margin:2px 0 4px;letter-spacing:.01em;
+}
+.tl-runcap .st {
+  width:7px;height:7px;border-radius:50%;background:var(--status-run);
+  animation:sf-pulse 1.4s ease-in-out infinite;flex-shrink:0;
+}
+.tl-runcap .st.ok { background:var(--status-ok);animation:none; }
+.tl-runcap .lab { color:var(--fg-1);font-weight:600;font-family:var(--font-sans);font-size:11.5px;letter-spacing:-.005em; }
+.tl-runcap .sep { color:var(--fg-5);padding:0 1px; }
+.tl-runcap .num { color:var(--fg-2); }
+.tl-runcap .num b { color:var(--fg-1);font-weight:600; }
+.tl-runcap .acc { color:var(--accent-bright);margin-left:auto;cursor:pointer; }
+
+.tl-meta {
+  font-family:var(--font-mono);font-size:10px;color:var(--fg-4);
+  display:flex;align-items:center;gap:8px;margin-bottom:5px;letter-spacing:.01em;
+}
+.tl-meta .who { color:var(--fg-2);font-weight:600;font-family:var(--font-sans);font-size:11px;letter-spacing:-.005em; }
+.tl-meta .who.user { color:var(--accent-bright); }
+.tl-meta .who.thought { color:var(--fg-4);font-style:italic; }
+.tl-meta .dot { width:2.5px;height:2.5px;background:var(--fg-5);border-radius:50%;display:inline-block; }
+.tl-meta .role { color:var(--fg-4);font-family:var(--font-mono);font-size:9.5px; }
+
+/* User · ❯ prefix */
+.tl-user {
+  display:flex;gap:10px;align-items:flex-start;
+  font-size:13.5px;line-height:1.6;color:var(--fg-1);
+  font-weight:500;
+}
+.tl-user .caret { font-family:var(--font-mono);color:var(--accent);font-size:14px;font-weight:700;line-height:1.4;flex-shrink:0;user-select:none; }
+.tl-user .txt { padding-top:1px; }
+
+/* Assistant text · ● bullet */
+.tl-ai {
+  display:flex;gap:10px;align-items:flex-start;
+  font-size:12.5px;line-height:1.65;color:var(--fg-2);
+}
+.tl-ai .bullet { width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:8px;flex-shrink:0; }
+.tl-ai .txt { flex:1; }
+.tl-ai b  { color:var(--fg-1);font-weight:600; }
+.tl-ai em { color:var(--accent-bright);font-style:normal;font-weight:500; }
+
+/* === NEW · sec-label (Shadow) ================================= */
+/* UPPERCASE tracking-wider 10px opacity-60. 任何 section 都用它打头. */
+.sec-label {
+  font-family:var(--font-mono);font-size:10px;font-weight:600;
+  letter-spacing:.12em;text-transform:uppercase;
+  color:var(--fg-4);opacity:.85;
+  margin:8px 0 5px;
+  display:flex;align-items:center;gap:6px;
+}
+.sec-label .ct { font-family:var(--font-mono);font-size:9.5px;font-weight:500;color:var(--fg-5);letter-spacing:0;text-transform:none;margin-left:auto; }
+.sec-label .ct b { color:var(--accent-bright);font-weight:600; }
+
+/* === NEW · reasoning recess (Shadow ReasoningBlock) =========== */
+/* accent-tinted; ONE per session. 用 30%/10% alpha — 不画 shadow      */
+.tl-reason {
+  border-radius:10px;
+  padding:10px 14px 11px;
+  font-size:12.5px;line-height:1.65;
+  color:var(--fg-1);
+  border:1px solid color-mix(in oklch, var(--accent) 30%, transparent);
+  background:color-mix(in oklch, var(--accent) 10%, transparent);
+  margin-bottom:4px;
+}
+.tl-reason b { font-weight:600; }
+.tl-reason em { color:var(--accent-bright);font-style:normal;font-weight:500; }
+.tl-reason .pre { font-family:var(--font-mono);font-size:11px;color:var(--accent-bright);font-weight:600;letter-spacing:.04em;display:block;margin-bottom:3px; }
+
+/* === NEW · key-files chip row (Shadow KeyFilesBlock) ========== */
+.tl-chips { display:flex;flex-wrap:wrap;gap:5px 6px; }
+.tl-chip {
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 8px 4px;border-radius:7px;
+  border:1px solid var(--border);
+  background:var(--bg-elev-1);
+  font-family:var(--font-mono);font-size:10.5px;color:var(--fg-2);
+  cursor:pointer;transition:border-color .12s,background .12s;
+}
+.tl-chip:hover { border-color:color-mix(in oklch, var(--accent) 50%, var(--border));background:color-mix(in oklch, var(--accent) 8%, var(--bg-elev-1)); }
+.tl-chip .ico { opacity:.5;font-size:9px; }
+.tl-chip .nm { color:var(--fg-1);font-weight:500; }
+.tl-chip .rl { color:var(--fg-5);font-size:9.5px;margin-left:2px; }
+.tl-chip.run { border-color:color-mix(in oklch, var(--status-run) 35%, var(--border));background:var(--status-run-tint); }
+.tl-chip.run .nm { color:var(--status-run); }
+
+/* === NEW · next-steps list (Shadow next_steps) ================ */
+.tl-next { display:flex;flex-direction:column;gap:3px;padding-left:2px; }
+.tl-next .n {
+  display:flex;align-items:baseline;gap:8px;font-size:11.5px;color:var(--fg-3);line-height:1.55;
+}
+.tl-next .n .num { font-family:var(--font-mono);font-size:10px;color:var(--fg-5);width:14px;flex-shrink:0; }
+.tl-next .n .pri { color:var(--accent-bright);font-weight:600;font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:var(--accent-tint);margin-left:auto;flex-shrink:0; }
+.tl-next .n .pri.dim { color:var(--fg-4);background:var(--bg-elev-1);border:1px solid var(--border-subtle); }
+
+/* === NEW · tool group collapse (OpenDesign 'Editing ×3') ====== */
+.tl-toolgrp {
+  display:flex;align-items:center;gap:10px;
+  padding:6px 10px;border-radius:8px;
+  background:var(--bg-elev-1);border:1px solid var(--border-subtle);
+  font-family:var(--font-mono);font-size:11px;color:var(--fg-3);
+  cursor:pointer;transition:background .12s;
+}
+.tl-toolgrp:hover { background:var(--bg-elev-2); }
+.tl-toolgrp .chev { color:var(--fg-4);font-size:9px;flex-shrink:0;transition:transform .15s; }
+.tl-toolgrp.open .chev { transform:rotate(90deg); }
+.tl-toolgrp .nm { color:var(--fg-1);font-weight:600;font-family:var(--font-sans);font-size:11.5px; }
+.tl-toolgrp .ct {
+  color:var(--accent-bright);font-weight:600;
+  background:var(--accent-tint);padding:1px 6px;border-radius:4px;
+  font-size:9.5px;letter-spacing:.04em;
+}
+.tl-toolgrp .stat {
+  margin-left:auto;display:flex;align-items:center;gap:6px;
+  color:var(--status-ok);font-size:10px;letter-spacing:.04em;text-transform:uppercase;
+}
+.tl-toolgrp .stat::before { content:"";width:5px;height:5px;border-radius:50%;background:var(--status-ok); }
+.tl-toolgrp .diff { color:var(--fg-4); }
+.tl-toolgrp .diff .add { color:var(--status-ok); }
+.tl-toolgrp .diff .del { color:var(--status-reject); }
+
+.tl-toolgrp-expand {
+  display:flex;flex-direction:column;gap:0;
+  margin-top:5px;padding-left:12px;
+  border-left:1.5px solid var(--border);
+}
+
+/* Tool chip · single line (kept from v5, lightened) */
+.tl-tool {
+  font-family:var(--font-mono);font-size:11.5px;color:var(--fg-3);
+  display:flex;align-items:baseline;gap:8px;
+}
+.tl-tool .lead { color:var(--fg-4);font-size:11px;user-select:none; }
+.tl-tool .nm { color:var(--fg-1);font-weight:600; }
+.tl-tool .args { color:var(--fg-3); }
+.tl-tool .sep { color:var(--fg-5);padding:0 1px; }
+.tl-tool .link {
+  color:var(--accent-bright);text-decoration:none;
+  margin-left:auto;font-family:var(--font-mono);font-size:10.5px;
+  display:inline-flex;align-items:center;gap:3px;
+}
+.tl-tool .link:hover { color:var(--accent); }
+
+/* Tool echo · ⎿ continuation */
+.tl-echo {
+  font-family:var(--font-mono);font-size:11px;color:var(--fg-4);
+  padding:4px 0 0 14px;line-height:1.65;
+  display:flex;gap:8px;align-items:flex-start;
+}
+.tl-echo .glyph { color:var(--fg-5);user-select:none;font-size:11px; }
+.tl-echo .body { flex:1;color:var(--fg-3); }
+.tl-echo .body .add { color:var(--status-ok); }
+.tl-echo .body .del { color:var(--status-reject); }
+
+/* Thought · italic muted (Trae) */
+.tl-thought {
+  font-style:italic;
+  font-size:12px;line-height:1.65;color:var(--fg-4);
+  padding-left:14px;border-left:1.5px solid var(--border);
+}
+.tl-thought .focus { color:var(--fg-2);font-style:normal;font-weight:500; }
+
+/* Step group (kept from v5) */
+.tl-steps { display:flex;flex-direction:column;gap:0; }
+.tl-step  { display:flex;align-items:center;gap:10px;padding:5px 0;font-size:12px;color:var(--fg-3); }
+.tl-step .ic {
+  width:14px;height:14px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-size:8px;
+  background:transparent;border:1px solid var(--border-strong);color:var(--fg-4);
+}
+.tl-step.done .ic { background:var(--status-ok-tint);border-color:var(--status-ok);color:var(--status-ok); }
+.tl-step.done .ic::before { content:"✓"; }
+.tl-step.run  .ic { background:var(--status-run-tint);border-color:var(--status-run);position:relative; }
+.tl-step.run  .ic::before {
+  content:"";width:7px;height:7px;border-radius:50%;
+  border:1.5px solid var(--status-run);border-top-color:transparent;
+  animation:sf-spin .8s linear infinite;
+}
+.tl-step.run  .nm { color:var(--fg-1);font-weight:500; }
+.tl-step .nm.dim { color:var(--fg-5); }
+.tl-step .t  { margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.tl-step.run .t { color:var(--status-run); }
+
+.tl-substep { padding-left:24px;display:flex;flex-direction:column;gap:2px;padding-top:3px;padding-bottom:3px; }
+.tl-substep .sub { display:flex;align-items:center;gap:9px;font-family:var(--font-mono);font-size:10.5px;color:var(--fg-4); }
+.tl-substep .sub .d { width:5px;height:5px;border-radius:50%;background:var(--fg-5);flex-shrink:0; }
+.tl-substep .sub.done .d { background:var(--status-ok); }
+.tl-substep .sub.run  .d { background:var(--status-run);animation:sf-pulse 1.4s ease-in-out infinite; }
+.tl-substep .sub .nm { color:var(--fg-3); }
+.tl-substep .sub.run  .nm { color:var(--fg-1); }
+.tl-substep .sub.done .nm { color:var(--fg-2); }
+.tl-substep .sub .t  { margin-left:auto;font-size:9.5px;color:var(--fg-5); }
+
+@keyframes sf-spin { to { transform: rotate(360deg); } }
+@keyframes sf-cur { 50% { opacity: 0; } }
+
+/* ── Frame A · Codex/Trae 风 flat 单列 ─────────────────────────── */
+.fa .step-cap {
+  display:flex;align-items:baseline;gap:8px;margin-bottom:2px;
+  font-size:11.5px;color:var(--fg-2);
+}
+.fa .step-cap .name { font-weight:600;color:var(--fg-1); }
+.fa .step-cap .ct { margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.fa .step-cap .ct b { color:var(--accent-bright);font-weight:600; }
+
+/* ── Frame B · Trae 任务 panel 内嵌块 ──────────────────────────── */
+.fb .panel {
+  background: var(--bg-elev-1);
+  border-radius: 8px;
+  padding: 10px 12px 10px;
+  margin: 2px 0 4px;
+}
+.fb .panel-hd {
+  display:flex;align-items:center;gap:8px;cursor:pointer;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--fg-4);font-weight:600;
+  margin-bottom:8px;padding-bottom:6px;
+  border-bottom:1px solid var(--border-subtle);
+}
+.fb .panel-hd .chev { color:var(--fg-4);font-size:9px;transition:transform .15s; }
+.fb .panel-hd .nm { color:var(--fg-2); }
+.fb .panel-hd .ct { font-family:var(--font-mono);font-size:9.5px;font-weight:500;color:var(--fg-4);margin-left:auto;letter-spacing:0;text-transform:none; }
+.fb .panel-hd .ct b { color:var(--accent-bright);font-weight:600; }
+
+.fb .code-pre {
+  background:var(--bg);
+  border:1px solid var(--border-subtle);
+  border-radius:6px;
+  padding:8px 10px;
+  font-family:var(--font-mono);font-size:10.5px;line-height:1.65;
+  color:var(--fg-3);
+  overflow:hidden;
+  white-space:pre;
+  margin-top:6px;
+}
+.fb .code-pre .k  { color:var(--accent-bright); }
+.fb .code-pre .s  { color:var(--status-ok); }
+.fb .code-pre .c  { color:var(--fg-5); }
+.fb .code-pre .ad { color:var(--status-ok); }
+.fb .code-pre .cur { display:inline-block;width:1.5px;height:11px;background:var(--accent);vertical-align:text-bottom;animation:sf-cur 1s step-end infinite; }
+
+/* ── Footer · research distillation ──────────────────────────── */
+.cmp-foot {
+  max-width:1100px;margin:44px auto 0;
+  padding:20px 24px;
+  border:1px solid rgba(255,255,255,.08);border-radius:12px;
+  background:#111113;
+}
+.cmp-foot h3 { font-size:12px;font-family:var(--font-mono);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#5C5A54;margin:0 0 14px; }
+.cmp-foot .grid { display:grid;grid-template-columns:1fr 1fr;gap:20px 28px;margin-bottom:18px; }
+.cmp-foot .col h4 { font-size:11.5px;font-weight:700;color:#F5F4EE;margin:0 0 8px;letter-spacing:-.01em;display:flex;align-items:baseline;gap:8px; }
+.cmp-foot .col h4 .src-tag { font-family:var(--font-mono);font-size:9px;color:#5C5A54;letter-spacing:.1em;text-transform:uppercase;font-weight:500; }
+.cmp-foot .col p  { font-size:11.5px;line-height:1.65;color:#8E8C84;margin:0 0 8px; }
+.cmp-foot .col p b { color:#C8C5BA;font-weight:600; }
+.cmp-foot .col p em { color:#C084FC;font-style:normal; }
+.cmp-foot .col code { font-family:var(--font-mono);font-size:10.5px;color:#C084FC;background:rgba(168,85,247,.08);padding:1px 6px;border-radius:4px; }
+.cmp-foot .row {
+  display:flex;gap:12px;align-items:flex-start;padding-top:14px;border-top:1px solid rgba(255,255,255,.06);
+  font-size:12px;color:#8E8C84;line-height:1.65;
+}
+.cmp-foot .row .lbl { font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#5C5A54;min-width:96px;padding-top:1px; }
+</style>
+</head>
+<body>
+
+<!-- ── Doc header ─────────────────────────────────────────────── -->
+<div class="doc-hd">
+  <div class="doc-mark">S</div>
+  <div class="doc-word">ShadowFlow</div>
+  <div class="doc-sep"></div>
+  <span class="doc-crumb">platform / run-session · 左栏 v6 — A/B × 黑/白</span>
+  <span class="doc-meta">v6 · drops @SOLO · folds in OpenDesign + Shadow patterns</span>
+</div>
+<p class="doc-lead">
+  v6 在 v5 基础上做三件事：<b>(1)</b> <s>@SOLO Agent</s> 全删，换成多 agent 语境下真正有信息的 persona（<code style="font-family:var(--font-mono);color:#C084FC">coordinator.v1</code> · <code style="font-family:var(--font-mono);color:#C084FC">reader.v1</code>）；
+  <b>(2)</b> 引入 <em>OpenDesign 自身</em>已经在用的两个模式 — <em>run-summary capsule</em>（<code style="font-family:var(--font-mono);color:#C084FC">● Done · time · tokens · cost</code> 头条）+ <em>tool-group collapse</em>（<code style="font-family:var(--font-mono);color:#C084FC">Editing ×3 · Done</code> 单行折叠）；
+  <b>(3)</b> 引入 <em>Shadow</em> 的 ShadowclawResponseLayer 三层结构 — <em>主线结论</em>（accent-tinted recess）+ <em>关键文件</em>（chip row）+ <em>下一步</em>（编号列表），每段顶部用 <code style="font-family:var(--font-mono);color:#C084FC">sec-label</code> 区隔。
+</p>
+<div class="research-strip">
+  <div><span class="tag">RESEARCH</span></div>
+  <div><span class="src">Codex CLI</span> 单列 · <code>❯</code>/<code>●</code>/<code>⎿</code> 字符前缀语义</div>
+  <div><span class="src">Claude Code</span> 同前缀 · default-collapsed tool calls</div>
+  <div><span class="src">Trae</span> 任务 panel = 消息流里的 surface 内嵌块</div>
+  <div><span class="src">OpenDesign</span> ★ run-cap + tool-group collapse</div>
+  <div><span class="src">Shadow</span> ★ 3-layer evidence (reasoning + chips + next)</div>
+</div>
+
+<div class="cmp-grid">
+
+  <!-- ════════════════════════════════════════════════════════════
+       FRAME A · DARK · flat 单列 + Shadow 3 层吸入主体
+       ════════════════════════════════════════════════════════════ -->
+  <div class="cmp-cell">
+    <div class="cmp-tag">
+      <div class="num">A</div>
+      <div>
+        <div class="ttl">Flat 单列</div>
+        <div class="sub">Codex 前缀 + Shadow 三层结构 · 零容器</div>
+      </div>
+      <span class="theme-badge">dark</span>
+    </div>
+    <p class="cmp-note">主线结论 / 关键文件 / 下一步 用 <b>sec-label</b> 区隔，<b>不</b>套 panel。<code style="font-family:var(--font-mono);color:#C084FC">主线结论</code>用一次 accent-tinted recess。</p>
+
+    <div class="frame" data-theme="dark">
+      <header class="ph">
+        <div class="ph-mark">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg>
+        </div>
+        <div>
+          <div class="ph-ttl">Run Session</div>
+          <div class="ph-sub">run_2026_05_21 · 14:22</div>
+        </div>
+        <div class="ph-rt">
+          <span class="ph-pill">live</span>
+          <div class="ph-x">‹</div>
+        </div>
+      </header>
+
+      <div class="tl">
+
+        <!-- NEW: run summary capsule (OpenDesign-style) -->
+        <div class="tl-item" style="border-top:none;padding-top:6px;">
+          <div class="tl-runcap">
+            <span class="st"></span>
+            <span class="lab">Working</span>
+            <span class="sep">·</span>
+            <span class="num"><b>1m 14s</b> elapsed</span>
+            <span class="sep">·</span>
+            <span class="num"><b>3</b> tools</span>
+            <span class="sep">·</span>
+            <span class="num"><b>632</b>t</span>
+            <span class="sep">·</span>
+            <span class="num"><b>$0.04</b></span>
+            <span class="acc">详细 →</span>
+          </div>
+        </div>
+
+        <!-- user -->
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who user">你</span><span class="dot"></span><span>14:22:01</span></div>
+          <div class="tl-user">
+            <span class="caret">❯</span>
+            <span class="txt">帮我搭一个论文深读 + 写 review 的 Agent Team</span>
+          </div>
+        </div>
+
+        <!-- Assistant 三层结构 · 主线结论 (Shadow ReasoningBlock) -->
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who">coordinator.v1</span><span class="dot"></span><span class="role">claude-sonnet-4</span><span class="dot"></span><span>analysed · 0.8s · 632t</span></div>
+
+          <div class="sec-label">主线结论 <span class="ct"><b>Team</b> 模式 · serial</span></div>
+          <div class="tl-reason">
+            <span class="pre">✶ identified</span>
+            任务有<b>「深读 + 输出 review」</b>两个独立心智阶段。
+            引入 <em>Critic</em> 做 retry-gate，<em>Coordinator</em> 串行编排，policy 命中 <em>double-reject</em>。
+          </div>
+
+          <div class="sec-label">角色配置 <span class="ct"><b>5</b> agents · 12 tools</span></div>
+          <div class="tl-chips">
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">reader.v1</span><span class="rl">PDF 提取 · 概念抽取</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">writer.v1</span><span class="rl">review 起草</span></span>
+            <span class="tl-chip run"><span class="ico">◆</span><span class="nm">critic.v1</span><span class="rl">retry-gate · 配置中</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">coordinator.v1</span><span class="rl">编排</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">indexer.v1</span><span class="rl">引用图谱</span></span>
+          </div>
+
+          <div class="sec-label">下一步</div>
+          <div class="tl-next">
+            <div class="n"><span class="num">01</span><span>给 reader 配 PDF/arXiv/SemanticScholar 工具池</span><span class="pri">P0</span></div>
+            <div class="n"><span class="num">02</span><span>定义 critic 的 retry-gate threshold (默认 0.7)</span><span class="pri">P0</span></div>
+            <div class="n"><span class="num">03</span><span>挂载知识库 (academic-paper-rag)</span><span class="pri dim">P1</span></div>
+          </div>
+        </div>
+
+        <!-- tool: fork -->
+        <div class="tl-item">
+          <div class="tl-tool">
+            <span class="lead">●</span>
+            <span class="nm">fork_template</span>
+            <span class="args">(academic-paper, @ravenveil)</span>
+            <a class="link" href="#">↗ 模板</a>
+          </div>
+          <div class="tl-echo">
+            <span class="glyph">⎿</span>
+            <span class="body">已 fork · 5 agents · 12 tools · 2 policies</span>
+          </div>
+        </div>
+
+        <!-- NEW: tool group collapse (OpenDesign-style) — 3 个连续 edit 折叠 -->
+        <div class="tl-item">
+          <div class="tl-toolgrp">
+            <span class="chev">▸</span>
+            <span class="nm">Editing</span>
+            <span class="ct">×3</span>
+            <span class="diff"><span class="add">+42</span> <span class="del">−4</span></span>
+            <span class="stat">done</span>
+          </div>
+        </div>
+
+        <!-- step group · A flat -->
+        <div class="tl-item fa">
+          <div class="step-cap">
+            <span class="name">构建 Agent Team</span>
+            <span class="ct"><b>3</b> / 5 · 5.4s</span>
+          </div>
+          <div class="tl-steps">
+            <div class="tl-step done"><span class="ic"></span><span class="nm">分析目标需求</span><span class="t">0.8s</span></div>
+            <div class="tl-step done"><span class="ic"></span><span class="nm">挑选 Team 蓝图</span><span class="t">1.2s</span></div>
+            <div class="tl-step run"><span class="ic"></span><span class="nm">配置 Agent 角色</span><span class="t">3.4s</span></div>
+            <div class="tl-substep">
+              <div class="sub done"><span class="d"></span><span class="nm">reader · identity + persona</span><span class="t">0.6s</span></div>
+              <div class="sub done"><span class="d"></span><span class="nm">reader · model claude-sonnet-4</span><span class="t">0.4s</span></div>
+              <div class="sub run"><span class="d"></span><span class="nm">reader · tools (4 / 8 候选)</span><span class="t">…</span></div>
+            </div>
+            <div class="tl-step"><span class="ic">4</span><span class="nm dim">设置工具集</span><span class="t">pending</span></div>
+            <div class="tl-step"><span class="ic">5</span><span class="nm dim">Policy 协作规则</span><span class="t">pending</span></div>
+          </div>
+        </div>
+
+        <!-- thought -->
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who thought">Thought</span><span class="dot"></span><span>1.2k tokens</span></div>
+          <div class="tl-thought">
+            候选池 8 个搜索类工具，<span class="focus">选定第 3 个：semanticscholar_lookup</span> — 比 google_scholar 命中率高且免 captcha。
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cmp-bar">
+        <div class="cmp-hint">
+          <span class="cmd">/plan</span><span class="sep">·</span>
+          <span class="cmd">/spec</span><span class="sep">·</span>
+          <span class="cmd">/run</span>
+          <span class="rt">coordinator.v1 编排中</span>
+        </div>
+        <div class="cmp-box">
+          <textarea class="cmp-input" rows="2" placeholder="补充指令 · 或保持沉默让 AI 完成"></textarea>
+          <div class="cmp-row">
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></div>
+            <div class="cmp-send"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+          </div>
+        </div>
+        <div class="cmp-kbd"><span class="kbd">⌘</span><span class="kbd">↵</span><span>send</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       FRAME B · DARK · Trae panel + tool-group expanded
+       ════════════════════════════════════════════════════════════ -->
+  <div class="cmp-cell">
+    <div class="cmp-tag">
+      <div class="num">B</div>
+      <div>
+        <div class="ttl">Surface 内嵌块</div>
+        <div class="sub">Trae 风 panel · tool-group 展开态</div>
+      </div>
+      <span class="theme-badge">dark</span>
+    </div>
+    <p class="cmp-note">同上三层结构，但 step / code 升格为 <b>surface 内嵌 panel</b>。tool-group 这里演示<b>展开态</b> — 三条 edit 显示成 ⎿ 续行串。</p>
+
+    <div class="frame" data-theme="dark">
+      <header class="ph">
+        <div class="ph-mark">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg>
+        </div>
+        <div>
+          <div class="ph-ttl">Run Session</div>
+          <div class="ph-sub">run_2026_05_21 · 14:22</div>
+        </div>
+        <div class="ph-rt">
+          <span class="ph-pill">live</span>
+          <div class="ph-x">‹</div>
+        </div>
+      </header>
+
+      <div class="tl">
+
+        <div class="tl-item" style="border-top:none;padding-top:6px;">
+          <div class="tl-runcap">
+            <span class="st"></span>
+            <span class="lab">Working</span>
+            <span class="sep">·</span>
+            <span class="num"><b>1m 14s</b></span>
+            <span class="sep">·</span>
+            <span class="num"><b>3</b> tools</span>
+            <span class="sep">·</span>
+            <span class="num"><b>632</b>t · <b>$0.04</b></span>
+            <span class="acc">详细 →</span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who user">你</span><span class="dot"></span><span>14:22:01</span></div>
+          <div class="tl-user">
+            <span class="caret">❯</span>
+            <span class="txt">帮我搭一个论文深读 + 写 review 的 Agent Team</span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who">coordinator.v1</span><span class="dot"></span><span class="role">claude-sonnet-4</span><span class="dot"></span><span>0.8s · 632t</span></div>
+
+          <div class="sec-label">主线结论</div>
+          <div class="tl-reason">
+            识别为 <b>Team 模式</b> · 引入 <em>Critic</em> 做 retry-gate，<em>Coordinator</em> 串行编排。
+          </div>
+
+          <div class="sec-label">角色配置 <span class="ct"><b>5</b> agents</span></div>
+          <div class="tl-chips">
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">reader.v1</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">writer.v1</span></span>
+            <span class="tl-chip run"><span class="ico">◆</span><span class="nm">critic.v1</span><span class="rl">配置中</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">coordinator.v1</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">indexer.v1</span></span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-tool">
+            <span class="lead">●</span>
+            <span class="nm">fork_template</span>
+            <span class="args">(academic-paper, @ravenveil)</span>
+            <a class="link" href="#">↗</a>
+          </div>
+        </div>
+
+        <!-- tool group · 展开态 -->
+        <div class="tl-item">
+          <div class="tl-toolgrp open">
+            <span class="chev">▸</span>
+            <span class="nm">Editing</span>
+            <span class="ct">×3</span>
+            <span class="diff"><span class="add">+42</span> <span class="del">−4</span></span>
+            <span class="stat">done</span>
+          </div>
+          <div class="tl-toolgrp-expand">
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body"><span style="color:var(--fg-1);font-weight:600;">paper-review-team.yml</span> · <span class="add">+18</span> <span class="del">−0</span> · agents.reader.tools</span></div>
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body"><span style="color:var(--fg-1);font-weight:600;">agents/critic.yml</span> · <span class="add">+12</span> <span class="del">−2</span> · retry_gate.threshold</span></div>
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body"><span style="color:var(--fg-1);font-weight:600;">policies/double-reject.yml</span> · <span class="add">+12</span> <span class="del">−2</span></span></div>
+          </div>
+        </div>
+
+        <!-- step group · B = Surface 内嵌块 -->
+        <div class="tl-item fb">
+          <div class="panel">
+            <div class="panel-hd">
+              <span class="chev">▾</span>
+              <span class="nm">任务</span>
+              <span class="ct"><b>3</b> / 5 · 5.4s</span>
+            </div>
+            <div class="tl-steps">
+              <div class="tl-step done"><span class="ic"></span><span class="nm">分析目标需求</span><span class="t">0.8s</span></div>
+              <div class="tl-step done"><span class="ic"></span><span class="nm">挑选 Team 蓝图</span><span class="t">1.2s</span></div>
+              <div class="tl-step run"><span class="ic"></span><span class="nm">配置 Agent 角色</span><span class="t">3.4s</span></div>
+              <div class="tl-substep">
+                <div class="sub done"><span class="d"></span><span class="nm">reader · identity + persona</span><span class="t">0.6s</span></div>
+                <div class="sub run"><span class="d"></span><span class="nm">reader · tools (4 / 8 候选)</span><span class="t">…</span></div>
+              </div>
+              <div class="tl-step"><span class="ic">4</span><span class="nm dim">设置工具集</span><span class="t">pending</span></div>
+              <div class="tl-step"><span class="ic">5</span><span class="nm dim">Policy 协作规则</span><span class="t">pending</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- code panel · B -->
+        <div class="tl-item fb">
+          <div class="panel">
+            <div class="panel-hd">
+              <span class="chev">▾</span>
+              <span class="nm">edit · paper-review-team.yml</span>
+              <span class="ct"><span style="color:var(--status-ok)">+18</span> · <span style="color:var(--status-reject)">−0</span></span>
+            </div>
+<pre class="code-pre"><span class="c"># auto-generated by ShadowFlow</span>
+<span class="k">team</span>: paper.review.v1
+<span class="k">mode</span>: serial
+<span class="k">policy</span>: <span class="s">strict</span>  <span class="c">· retry 3</span>
+<span class="k">agents</span>:
+  - <span class="k">id</span>: paper.reader.v1
+    <span class="k">tools</span>:
+      <span class="ad">+ pdf_extract</span>
+      <span class="ad">+ arxiv_search</span><span class="cur"></span></pre>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cmp-bar">
+        <div class="cmp-hint">
+          <span class="cmd">/plan</span><span class="sep">·</span>
+          <span class="cmd">/spec</span><span class="sep">·</span>
+          <span class="cmd">/run</span>
+          <span class="rt">coordinator.v1 编排中</span>
+        </div>
+        <div class="cmp-box">
+          <textarea class="cmp-input" rows="2" placeholder="补充指令 · 或保持沉默让 AI 完成"></textarea>
+          <div class="cmp-row">
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></div>
+            <div class="cmp-send"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+          </div>
+        </div>
+        <div class="cmp-kbd"><span class="kbd">⌘</span><span class="kbd">↵</span><span>send</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       FRAME A · LIGHT
+       ════════════════════════════════════════════════════════════ -->
+  <div class="cmp-cell">
+    <div class="cmp-tag">
+      <div class="num">A</div>
+      <div>
+        <div class="ttl">Flat 单列 · 暖白</div>
+        <div class="sub">accent #d97757 · surface #faf9f5</div>
+      </div>
+      <span class="theme-badge light">light</span>
+    </div>
+    <p class="cmp-note">同结构。accent-tinted recess 在暖白下读作淡橘卡片，<b>不</b>需要加 shadow。chip row 用暖灰描边。</p>
+
+    <div class="frame" data-theme="light">
+      <header class="ph">
+        <div class="ph-mark">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg>
+        </div>
+        <div>
+          <div class="ph-ttl">Run Session</div>
+          <div class="ph-sub">run_2026_05_21 · 14:22</div>
+        </div>
+        <div class="ph-rt">
+          <span class="ph-pill">live</span>
+          <div class="ph-x">‹</div>
+        </div>
+      </header>
+
+      <div class="tl">
+
+        <div class="tl-item" style="border-top:none;padding-top:6px;">
+          <div class="tl-runcap">
+            <span class="st"></span>
+            <span class="lab">Working</span>
+            <span class="sep">·</span>
+            <span class="num"><b>1m 14s</b> elapsed</span>
+            <span class="sep">·</span>
+            <span class="num"><b>3</b> tools</span>
+            <span class="sep">·</span>
+            <span class="num"><b>632</b>t · <b>$0.04</b></span>
+            <span class="acc">详细 →</span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who user">你</span><span class="dot"></span><span>14:22:01</span></div>
+          <div class="tl-user">
+            <span class="caret">❯</span>
+            <span class="txt">帮我搭一个论文深读 + 写 review 的 Agent Team</span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who">coordinator.v1</span><span class="dot"></span><span class="role">claude-sonnet-4</span><span class="dot"></span><span>0.8s · 632t</span></div>
+
+          <div class="sec-label">主线结论 <span class="ct"><b>Team</b> 模式</span></div>
+          <div class="tl-reason">
+            任务有<b>「深读 + 输出 review」</b>两个独立心智阶段。引入 <em>Critic</em> 做 retry-gate，<em>Coordinator</em> 串行编排。
+          </div>
+
+          <div class="sec-label">角色配置</div>
+          <div class="tl-chips">
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">reader.v1</span><span class="rl">PDF</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">writer.v1</span></span>
+            <span class="tl-chip run"><span class="ico">◆</span><span class="nm">critic.v1</span><span class="rl">配置中</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">coordinator.v1</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">indexer.v1</span></span>
+          </div>
+
+          <div class="sec-label">下一步</div>
+          <div class="tl-next">
+            <div class="n"><span class="num">01</span><span>给 reader 配 PDF / arXiv 工具池</span><span class="pri">P0</span></div>
+            <div class="n"><span class="num">02</span><span>定义 critic retry-gate threshold</span><span class="pri">P0</span></div>
+            <div class="n"><span class="num">03</span><span>挂载知识库 academic-paper-rag</span><span class="pri dim">P1</span></div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-toolgrp">
+            <span class="chev">▸</span>
+            <span class="nm">Editing</span>
+            <span class="ct">×3</span>
+            <span class="diff"><span class="add">+42</span> <span class="del">−4</span></span>
+            <span class="stat">done</span>
+          </div>
+        </div>
+
+        <div class="tl-item fa">
+          <div class="step-cap">
+            <span class="name">构建 Agent Team</span>
+            <span class="ct"><b>3</b> / 5 · 5.4s</span>
+          </div>
+          <div class="tl-steps">
+            <div class="tl-step done"><span class="ic"></span><span class="nm">分析目标需求</span><span class="t">0.8s</span></div>
+            <div class="tl-step done"><span class="ic"></span><span class="nm">挑选 Team 蓝图</span><span class="t">1.2s</span></div>
+            <div class="tl-step run"><span class="ic"></span><span class="nm">配置 Agent 角色</span><span class="t">3.4s</span></div>
+            <div class="tl-substep">
+              <div class="sub done"><span class="d"></span><span class="nm">reader · identity + persona</span><span class="t">0.6s</span></div>
+              <div class="sub run"><span class="d"></span><span class="nm">reader · tools (4 / 8 候选)</span><span class="t">…</span></div>
+            </div>
+            <div class="tl-step"><span class="ic">4</span><span class="nm dim">设置工具集</span><span class="t">pending</span></div>
+            <div class="tl-step"><span class="ic">5</span><span class="nm dim">Policy 协作规则</span><span class="t">pending</span></div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who thought">Thought</span><span class="dot"></span><span>1.2k tokens</span></div>
+          <div class="tl-thought">
+            <span class="focus">选定 semanticscholar_lookup</span> — 比 google_scholar 命中率高且免 captcha。
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cmp-bar">
+        <div class="cmp-hint">
+          <span class="cmd">/plan</span><span class="sep">·</span>
+          <span class="cmd">/spec</span><span class="sep">·</span>
+          <span class="cmd">/run</span>
+          <span class="rt">coordinator.v1 编排中</span>
+        </div>
+        <div class="cmp-box">
+          <textarea class="cmp-input" rows="2" placeholder="补充指令 · 或保持沉默让 AI 完成"></textarea>
+          <div class="cmp-row">
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></div>
+            <div class="cmp-send"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+          </div>
+        </div>
+        <div class="cmp-kbd"><span class="kbd">⌘</span><span class="kbd">↵</span><span>send</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       FRAME B · LIGHT
+       ════════════════════════════════════════════════════════════ -->
+  <div class="cmp-cell">
+    <div class="cmp-tag">
+      <div class="num">B</div>
+      <div>
+        <div class="ttl">Surface 内嵌块 · 暖白</div>
+        <div class="sub">panel = #f5f3ec · tool-group 展开</div>
+      </div>
+      <span class="theme-badge light">light</span>
+    </div>
+    <p class="cmp-note">浅色下 surface 内嵌块靠 <b>极淡的暖灰底</b>（#f5f3ec）与正文 #faf9f5 拉开；不靠 shadow 也不靠粗边。</p>
+
+    <div class="frame" data-theme="light">
+      <header class="ph">
+        <div class="ph-mark">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg>
+        </div>
+        <div>
+          <div class="ph-ttl">Run Session</div>
+          <div class="ph-sub">run_2026_05_21 · 14:22</div>
+        </div>
+        <div class="ph-rt">
+          <span class="ph-pill">live</span>
+          <div class="ph-x">‹</div>
+        </div>
+      </header>
+
+      <div class="tl">
+
+        <div class="tl-item" style="border-top:none;padding-top:6px;">
+          <div class="tl-runcap">
+            <span class="st"></span>
+            <span class="lab">Working</span>
+            <span class="sep">·</span>
+            <span class="num"><b>1m 14s</b></span>
+            <span class="sep">·</span>
+            <span class="num"><b>3</b> tools</span>
+            <span class="sep">·</span>
+            <span class="num"><b>632</b>t · <b>$0.04</b></span>
+            <span class="acc">详细 →</span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who user">你</span><span class="dot"></span><span>14:22:01</span></div>
+          <div class="tl-user">
+            <span class="caret">❯</span>
+            <span class="txt">帮我搭一个论文深读 + 写 review 的 Agent Team</span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-meta"><span class="who">coordinator.v1</span><span class="dot"></span><span class="role">claude-sonnet-4</span></div>
+
+          <div class="sec-label">主线结论</div>
+          <div class="tl-reason">
+            识别为 <b>Team 模式</b> · 引入 <em>Critic</em> retry-gate，<em>Coordinator</em> 串行编排。
+          </div>
+
+          <div class="sec-label">角色配置 <span class="ct"><b>5</b> agents</span></div>
+          <div class="tl-chips">
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">reader.v1</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">writer.v1</span></span>
+            <span class="tl-chip run"><span class="ico">◆</span><span class="nm">critic.v1</span><span class="rl">配置中</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">coordinator.v1</span></span>
+            <span class="tl-chip"><span class="ico">◆</span><span class="nm">indexer.v1</span></span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-toolgrp open">
+            <span class="chev">▸</span>
+            <span class="nm">Editing</span>
+            <span class="ct">×3</span>
+            <span class="diff"><span class="add">+42</span> <span class="del">−4</span></span>
+            <span class="stat">done</span>
+          </div>
+          <div class="tl-toolgrp-expand">
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body"><span style="color:var(--fg-1);font-weight:600;">paper-review-team.yml</span> · <span class="add">+18</span> <span class="del">−0</span></span></div>
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body"><span style="color:var(--fg-1);font-weight:600;">agents/critic.yml</span> · <span class="add">+12</span> <span class="del">−2</span></span></div>
+            <div class="tl-echo"><span class="glyph">⎿</span><span class="body"><span style="color:var(--fg-1);font-weight:600;">policies/double-reject.yml</span> · <span class="add">+12</span> <span class="del">−2</span></span></div>
+          </div>
+        </div>
+
+        <div class="tl-item fb">
+          <div class="panel">
+            <div class="panel-hd">
+              <span class="chev">▾</span>
+              <span class="nm">任务</span>
+              <span class="ct"><b>3</b> / 5 · 5.4s</span>
+            </div>
+            <div class="tl-steps">
+              <div class="tl-step done"><span class="ic"></span><span class="nm">分析目标需求</span><span class="t">0.8s</span></div>
+              <div class="tl-step done"><span class="ic"></span><span class="nm">挑选 Team 蓝图</span><span class="t">1.2s</span></div>
+              <div class="tl-step run"><span class="ic"></span><span class="nm">配置 Agent 角色</span><span class="t">3.4s</span></div>
+              <div class="tl-substep">
+                <div class="sub done"><span class="d"></span><span class="nm">reader · identity + persona</span><span class="t">0.6s</span></div>
+                <div class="sub run"><span class="d"></span><span class="nm">reader · tools (4 / 8 候选)</span><span class="t">…</span></div>
+              </div>
+              <div class="tl-step"><span class="ic">4</span><span class="nm dim">设置工具集</span><span class="t">pending</span></div>
+              <div class="tl-step"><span class="ic">5</span><span class="nm dim">Policy 协作规则</span><span class="t">pending</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tl-item fb">
+          <div class="panel">
+            <div class="panel-hd">
+              <span class="chev">▾</span>
+              <span class="nm">edit · paper-review-team.yml</span>
+              <span class="ct"><span style="color:var(--status-ok)">+18</span> · <span style="color:var(--status-reject)">−0</span></span>
+            </div>
+<pre class="code-pre"><span class="c"># auto-generated</span>
+<span class="k">team</span>: paper.review.v1
+<span class="k">mode</span>: serial
+<span class="k">agents</span>:
+  - <span class="k">id</span>: paper.reader.v1
+    <span class="k">tools</span>:
+      <span class="ad">+ pdf_extract</span>
+      <span class="ad">+ arxiv_search</span><span class="cur"></span></pre>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cmp-bar">
+        <div class="cmp-hint">
+          <span class="cmd">/plan</span><span class="sep">·</span>
+          <span class="cmd">/spec</span><span class="sep">·</span>
+          <span class="cmd">/run</span>
+          <span class="rt">coordinator.v1 编排中</span>
+        </div>
+        <div class="cmp-box">
+          <textarea class="cmp-input" rows="2" placeholder="补充指令 · 或保持沉默让 AI 完成"></textarea>
+          <div class="cmp-row">
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></div>
+            <div class="cmp-send"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+          </div>
+        </div>
+        <div class="cmp-kbd"><span class="kbd">⌘</span><span class="kbd">↵</span><span>send</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Footer · v6 升级要点 ────────────────────────────────────── -->
+<div class="cmp-foot">
+  <h3>v6 升级 · 四家 Agent IDE 的设计借鉴</h3>
+  <div class="grid">
+    <div class="col">
+      <h4>OpenDesign <span class="src-tag">★ NEW · 自身已有</span></h4>
+      <p>用户截图里的 <em>● Done 5m 40s · 26634 out · $1.3946</em> — 这是<b>run-summary capsule</b>，把整个 session 的总状态（status dot + duration + tokens + cost）收成一行 mono 行头，放在时间线最顶。一眼知道"花了多少 / 是否完成"。</p>
+      <p>同截图里 <em>Editing ×3, Done</em> 的折叠 chip — N 个同名连续 tool call 折叠成单行（diff 累加 + 状态点 + 展开 chev），点开变 <code>⎿</code> 续行串。v6 在 A 用折叠态、B 用展开态演示。</p>
+    </div>
+    <div class="col">
+      <h4>Shadow <span class="src-tag">★ NEW · ShadowclawResponseLayer</span></h4>
+      <p>核心是<b>结构化证据三层</b>：<em>主线结论</em>（accent-tinted recess，<code>accent/30</code> border + <code>accent/10</code> bg，<b>不加 shadow</b>）+ <em>关键文件</em>（chip row，文件图标 + name + role hint）+ <em>下一步</em>（编号列表 + P0/P1 优先级 pill）。</p>
+      <p>每层用 <b>UPPERCASE tracking-wider 10px <code>opacity-60</code></b> sec-label 打头（取自 <code>ShadowclawResponseLayer.tsx</code> 的 <code>text-xs font-medium uppercase tracking-wider opacity-60</code>）。v6 全部 sec-label 沿用这套字体规格。</p>
+    </div>
+    <div class="col">
+      <h4>Codex CLI / Claude Code <span class="src-tag">字符前缀语义</span></h4>
+      <p><code>❯</code> = user，<code>●</code> = assistant bullet，<code>⎿</code> = tool 输出续行 — 把"谁在说话"和"工具回声"在零容器下分得很清。v6 保留 v5 决定。</p>
+      <p>额外：tool call 默认折叠（claude code 风格） + tool group 同名连续合并（OpenDesign 风格）。两者结合 = v6 默认<b>简约态</b>，展开按需。</p>
+    </div>
+    <div class="col">
+      <h4>Trae <span class="src-tag">任务 panel surface</span></h4>
+      <p>任务面板 = 消息流里的 <b>surface 内嵌块</b>（暖灰底 + 顶部 mono UPPERCASE label「任务 · 0/3 已完成」），不是描边卡也不是独立侧栏。Thought 用斜体灰阶纯文本。</p>
+      <p>v6 方案 B 沿用：<code>.fb .panel</code> = <code>bg-elev-1</code> + 8px 圆角 + 内 padding，无边框无 shadow。</p>
+    </div>
+  </div>
+  <div class="row">
+    <span class="lbl">推荐 · 下一步</span>
+    <span>
+      推 <b>方案 B + Shadow 三层吸入 assistant block</b> 替换 v3 左栏：(1) run-cap 永远在顶；(2) assistant 主结论用 sec-label + reasoning recess 一次（每 turn ≤ 1）；(3) 角色/文件/触达资源用 chip row；(4) step / code 走 surface panel；(5) 连续同名 tool 自动合并成 tool-group。
+      <br><br>
+      落地：<code>RunSessionPage.LeftPane</code> 重构为 <code>&lt;ConversationTimeline&gt;</code>，item kind = <code>run_cap · user_msg · assistant_block · tool_chip · tool_group · step_panel · code_panel · thought</code>。<em>assistant_block</em> 内部支持 <code>{ reasoning, files, next_steps }</code> 子段，对应 sf-text 协议里新增的 <code>&lt;sf:reasoning&gt;</code> / <code>&lt;sf:key-files&gt;</code> / <code>&lt;sf:next-steps&gt;</code> 三个标签（这部分需要扩 sf-text spec）。预计 <em>S6.10（左栏 timeline）</em>+ <em>S6.11（sf-text 三标签扩展）</em>，4 天落地。
+    </span>
+  </div>
+</div>
+
+</body>
+</html>

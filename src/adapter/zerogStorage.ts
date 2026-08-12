@@ -1,6 +1,16 @@
-import { Blob as ZgBlob, Indexer } from '@0glabs/0g-ts-sdk';
+// 2026-08-11: SDK 顶层 import 会在浏览器端加载即崩溃（SDK 依赖 fs/path/vm 等 Node 内建模块，
+// vite 只能 externalize 成空壳，页面一 import 本模块就炸）。改为函数内动态 import，
+// 模块加载不再触发 SDK 求值；0G 功能停用期间页面可正常打开，调用时才会报清晰错误。
 import { ethers } from 'ethers';
 import { useZerogSecretsStore } from '@/core/hooks/useZerogSecretsStore';
+
+const ZEROG_DISABLED_MSG = '0G 存储功能已停用（2026-08-11 起）：相关组件暂不可用';
+
+async function loadSdk() {
+  // 动态 import，避免模块加载期触发 Node 内建模块外部化崩溃
+  const sdk = await import('@0glabs/0g-ts-sdk');
+  return sdk;
+}
 
 const VITE_ENV = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
 const STORAGE_INDEXER = VITE_ENV.VITE_ZEROG_STORAGE_INDEXER ?? 'https://indexer-storage-testnet-turbo.0g.ai';
@@ -61,6 +71,7 @@ export async function downloadTrajectory(cid: string): Promise<DownloadResult> {
 
   _downloadsInFlight.add(cid);
   try {
+    const { Indexer } = await loadSdk();
     const indexer = new Indexer(STORAGE_INDEXER);
 
     const downloadPromise = (async () => {
@@ -144,6 +155,7 @@ export async function uploadTrajectory(
   const store = useZerogSecretsStore.getState();
   const pk = await store.getPrivateKey(passphrase);
 
+  const { Blob: ZgBlob, Indexer } = await loadSdk();
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const signer = new ethers.Wallet(pk, provider);
   const indexer = new Indexer(STORAGE_INDEXER);

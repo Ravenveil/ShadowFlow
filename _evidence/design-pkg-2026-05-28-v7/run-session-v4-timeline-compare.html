@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Run Session · 左栏 v4 — ConversationTimeline 三方案对比</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+/* ── Page chrome ──────────────────────────────────────────────── */
+html, body { background: var(--bg); color: var(--fg-1); }
+body { min-height: 100vh; padding: 32px 28px 80px; }
+
+.doc-hd { display:flex;align-items:center;gap:12px;margin-bottom:6px; }
+.doc-mark { width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:900; }
+.doc-word { font-size:15px;font-weight:700;letter-spacing:-.02em; }
+.doc-sep  { width:1px;height:18px;background:var(--border); }
+.doc-crumb{ font-family:var(--font-mono);font-size:11px;color:var(--fg-3); }
+.doc-meta { margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.doc-lead { max-width:880px;font-size:13px;color:var(--fg-3);line-height:1.65;margin:14px 0 26px; }
+.doc-lead b { color:var(--fg-1);font-weight:600; }
+.doc-lead em { color:var(--accent-bright);font-style:normal; }
+
+/* ── Comparison grid ──────────────────────────────────────────── */
+.cmp-grid { display:grid;grid-template-columns:repeat(3,minmax(420px,1fr));gap:24px;max-width:1400px;margin:0 auto; }
+
+.cmp-cell { display:flex;flex-direction:column;gap:12px; }
+.cmp-tag  { display:flex;align-items:center;gap:8px;padding:0 2px; }
+.cmp-tag .num { width:22px;height:22px;border-radius:6px;background:var(--accent-tint);color:var(--accent-bright);font-family:var(--font-mono);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center; }
+.cmp-tag .ttl { font-size:13.5px;font-weight:700;letter-spacing:-.01em;color:var(--fg-1); }
+.cmp-tag .sub { font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.cmp-note { font-size:11.5px;color:var(--fg-3);line-height:1.55;padding:0 2px; }
+.cmp-note b { color:var(--fg-2);font-weight:600; }
+.cmp-note .neg::before { content:"− ";color:var(--status-warn); }
+.cmp-note .pos::before { content:"+ ";color:var(--status-ok); }
+
+.frame {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  height: 760px;
+}
+
+/* ── Pane header (shared by all 3 frames) ─────────────────────── */
+.ph { padding:11px 14px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0; }
+.ph-mark { width:26px;height:26px;border-radius:7px;background:var(--accent-tint);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;color:var(--accent-bright);flex-shrink:0; }
+.ph-ttl  { font-size:12.5px;font-weight:600;letter-spacing:-.01em;color:var(--fg-1); }
+.ph-sub  { font-family:var(--font-mono);font-size:10px;color:var(--fg-4);margin-top:1px; }
+.ph-rt   { margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--fg-4); }
+.ph-pill { font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--status-run);padding:2px 7px;border-radius:999px;background:var(--status-run-tint);border:1px solid rgba(59,130,246,.35);display:inline-flex;align-items:center;gap:5px; }
+.ph-pill::before { content:"";width:5px;height:5px;border-radius:50%;background:var(--status-run);animation:sf-pulse 1.4s ease-in-out infinite; }
+.ph-x    { width:22px;height:22px;border-radius:6px;color:var(--fg-4);display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer; }
+.ph-x:hover { background:var(--bg-elev-2);color:var(--fg-1); }
+
+/* ── Composer (shared by all 3 frames) ────────────────────────── */
+.cmp-bar { padding:10px 12px 10px;border-top:1px solid var(--border);flex-shrink:0; }
+.cmp-name { font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-4);margin-bottom:6px;padding-left:2px;display:flex;align-items:center;gap:6px; }
+.cmp-name .nm { color:var(--accent-bright); }
+.cmp-name .hint { color:var(--fg-5);margin-left:auto;letter-spacing:0;text-transform:none;font-size:10px; }
+.cmp-box { border:1px solid var(--border-strong);border-radius:11px;background:var(--bg-elev-1);overflow:hidden; }
+.cmp-input { width:100%;padding:9px 12px 4px;background:transparent;border:none;color:var(--fg-1);font-size:12.5px;font-family:var(--font-sans);resize:none;outline:none;line-height:1.5;min-height:44px; }
+.cmp-input::placeholder { color:var(--fg-5); }
+.cmp-row { display:flex;align-items:center;padding:4px 8px 6px;gap:2px; }
+.cmp-ic  { width:24px;height:24px;border-radius:5px;color:var(--fg-4);display:flex;align-items:center;justify-content:center;cursor:pointer; }
+.cmp-ic:hover { background:var(--bg-elev-2);color:var(--fg-1); }
+.cmp-send{ margin-left:auto;width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;cursor:pointer; }
+.cmp-send:hover { background:var(--accent-bright); }
+.cmp-kbd { display:flex;align-items:center;gap:4px;padding:6px 4px 0;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5); }
+.kbd { padding:1px 5px;border:1px solid var(--border-strong);border-radius:3px;color:var(--fg-4);font-size:9px; }
+
+/* ────────────────────────────────────────────────────────────── */
+/* SHARED · ConversationTimeline base (used by A / B / C)
+   Single rail. All items hang off it.                           */
+/* ────────────────────────────────────────────────────────────── */
+.tl { flex:1;min-height:0;overflow-y:auto;padding:14px 0 8px;position:relative; }
+.tl::-webkit-scrollbar { width:3px; }
+.tl::-webkit-scrollbar-thumb { background:var(--border-strong);border-radius:2px; }
+
+/* Timeline item: 28px gutter on left for marker + rail */
+.tl-item { position:relative;padding:0 16px 0 44px;margin:0 0 12px; }
+.tl-item::before {
+  content:""; position:absolute;
+  left:21px; top:18px; bottom:-12px;
+  width:1px; background:var(--border);
+}
+.tl-item:last-child::before { display:none; }
+.tl-item:last-child { margin-bottom:4px; }
+
+/* Marker (avatar dot anchored to the rail) */
+.tl-m {
+  position:absolute; left:14px; top:6px;
+  width:16px; height:16px; border-radius:50%;
+  background:var(--bg); border:1px solid var(--border-strong);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-mono); font-size:8.5px; font-weight:700;
+  color:var(--fg-3); flex-shrink:0; z-index:1;
+}
+.tl-m.user  { background:var(--accent-tint);border-color:var(--accent);color:var(--accent-bright); }
+.tl-m.ai    { background:var(--accent);border-color:var(--accent);color:var(--accent-ink); }
+.tl-m.tool  { background:var(--bg-elev-2);border-color:var(--border-strong);color:var(--fg-3); }
+.tl-m.think { background:var(--bg);border:1px dashed var(--border-strong);color:var(--fg-4); }
+.tl-m.steps { background:var(--status-ok-tint);border-color:var(--status-ok);color:var(--status-ok); }
+
+/* Header line for every item: who · meta */
+.tl-hd { display:flex;align-items:center;gap:8px;font-size:11px;color:var(--fg-4);margin-bottom:4px;line-height:1; }
+.tl-hd .who { color:var(--fg-2);font-weight:600;font-size:11.5px; }
+.tl-hd .who.user { color:var(--accent-bright); }
+.tl-hd .dot { width:2px;height:2px;background:var(--fg-5);border-radius:50%; }
+.tl-hd .meta{ font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5); }
+
+/* User message: indented text, NO bubble */
+.tl-user-text { font-size:13px;line-height:1.6;color:var(--fg-1); }
+
+/* Assistant text */
+.tl-ai-text { font-size:12.5px;line-height:1.65;color:var(--fg-2); }
+.tl-ai-text b  { color:var(--fg-1);font-weight:600; }
+.tl-ai-text em { color:var(--accent-bright);font-style:normal; }
+
+/* Tool chip — single line, low-key */
+.tl-chip {
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--font-mono);font-size:11px;
+  color:var(--fg-3);
+}
+.tl-chip .ic { width:13px;height:13px;color:var(--fg-4); }
+.tl-chip .nm { color:var(--fg-2); }
+.tl-chip .sp { color:var(--fg-5);padding:0 1px; }
+.tl-chip .diff-add { color:var(--status-ok); }
+.tl-chip .diff-del { color:var(--status-reject); }
+.tl-chip .ext{ color:var(--accent-bright);margin-left:4px;text-decoration:none; }
+.tl-chip:hover .nm { color:var(--fg-1); }
+
+/* Thought */
+.tl-thought {
+  font-size:11.5px;line-height:1.6;color:var(--fg-3);
+  padding:6px 10px;border-left:1.5px solid var(--border-strong);
+  background:transparent;
+}
+.tl-thought .focus { color:var(--fg-1);font-weight:500; }
+.tl-thought .meta  { font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);margin-left:6px; }
+
+/* Step group · default = inline list, no card */
+.tl-steps { display:flex;flex-direction:column;gap:0; }
+.tl-step  { display:flex;align-items:center;gap:9px;padding:5px 0;font-size:12px;color:var(--fg-3); }
+.tl-step .ic {
+  width:14px;height:14px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-size:8px;
+  background:var(--bg-elev-2);border:1px solid var(--border-strong);color:var(--fg-4);
+}
+.tl-step.done .ic { background:var(--status-ok-tint);border-color:var(--status-ok);color:var(--status-ok); }
+.tl-step.done .ic::before { content:"✓"; }
+.tl-step.run  .ic { background:var(--status-run-tint);border-color:var(--status-run);position:relative; }
+.tl-step.run  .ic::before {
+  content:"";width:7px;height:7px;border-radius:50%;
+  border:1.5px solid var(--status-run);border-top-color:transparent;
+  animation:sf-spin .8s linear infinite;
+}
+.tl-step.run  .nm { color:var(--fg-1);font-weight:500; }
+.tl-step .nm.dim { color:var(--fg-5); }
+.tl-step .t  { margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.tl-step.run .t { color:var(--status-run); }
+
+.tl-substep { padding-left:23px;display:flex;flex-direction:column;gap:2px;padding-top:4px;padding-bottom:4px; }
+.tl-substep .sub { display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:10.5px;color:var(--fg-4); }
+.tl-substep .sub .d { width:5px;height:5px;border-radius:50%;background:var(--fg-5);flex-shrink:0; }
+.tl-substep .sub.done .d { background:var(--status-ok); }
+.tl-substep .sub.run  .d { background:var(--status-run);animation:sf-pulse 1.4s ease-in-out infinite; }
+.tl-substep .sub .nm { color:var(--fg-3); }
+.tl-substep .sub.run  .nm { color:var(--fg-1); }
+.tl-substep .sub.done .nm { color:var(--fg-2); }
+.tl-substep .sub .t  { margin-left:auto;font-size:9.5px;color:var(--fg-5); }
+
+@keyframes sf-spin { to { transform: rotate(360deg); } }
+
+/* ── Frame A · pure Trae timeline ─────────────────────────────── */
+/* Steps are just rows on the same rail. Tool chips inline.       */
+.fa .tl-steps { padding-top:2px; }
+
+/* ── Frame B · timeline + inline collapsible panels ───────────── */
+/* Step group + code panel become FLUSH inline panels: no rounded
+   card border, just hairline border-top/bottom and a left border-
+   left accent that aligns with the rail so it reads as part of   */
+.fb .panel {
+  margin:6px 0 4px;
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  padding:10px 0 10px 12px;
+  position:relative;
+}
+.fb .panel::before {
+  content:""; position:absolute; left:0; top:8px; bottom:8px;
+  width:2px; background:var(--accent);
+  border-radius:1px;
+}
+.fb .panel.dim::before { background:var(--border-strong); }
+.fb .panel-hd {
+  display:flex;align-items:center;gap:8px;cursor:pointer;
+  font-size:11.5px;color:var(--fg-2);font-weight:600;
+  margin-bottom:6px;
+}
+.fb .panel-hd .chev { color:var(--fg-4);font-size:10px;transition:transform .15s; }
+.fb .panel-hd .ct   { font-family:var(--font-mono);font-size:10px;font-weight:500;color:var(--fg-4);margin-left:auto; }
+.fb .panel-hd .ct b { color:var(--accent-bright);font-weight:600; }
+.fb .panel-bd { padding-top:2px; }
+
+/* Code preview inside panel */
+.fb .code-pre {
+  background:var(--bg-elev-1);
+  border-radius:6px;
+  padding:8px 10px;
+  font-family:var(--font-mono);font-size:10.5px;line-height:1.6;
+  color:var(--fg-3);
+  margin-top:4px;
+  overflow:hidden;
+  white-space:pre;
+}
+.fb .code-pre .k  { color:var(--accent-bright); }
+.fb .code-pre .s  { color:var(--status-ok); }
+.fb .code-pre .c  { color:var(--fg-5); }
+.fb .code-pre .ad { color:var(--status-ok); }
+.fb .code-pre .cur { display:inline-block;width:1.5px;height:11px;background:var(--accent);vertical-align:text-bottom;animation:sf-cur 1s step-end infinite; }
+@keyframes sf-cur { 50% { opacity: 0; } }
+
+/* ── Frame C · timeline + left rail (history) ─────────────────── */
+.fc { display:flex;flex-direction:column; }
+.fc-body { flex:1;min-height:0;display:grid;grid-template-columns:52px 1fr;overflow:hidden; }
+.fc-rail {
+  background:var(--bg-elev-1);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;align-items:center;
+  padding:10px 0;gap:4px;
+  overflow-y:auto;
+}
+.fc-rail::-webkit-scrollbar { display:none; }
+.fc-rail-lbl { font-family:var(--font-mono);font-size:8px;letter-spacing:.12em;color:var(--fg-5);text-transform:uppercase;writing-mode:vertical-rl;transform:rotate(180deg);padding:4px 0 8px; }
+.fc-rail-item {
+  width:36px;padding:8px 0;border-radius:8px;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  color:var(--fg-4);cursor:pointer;position:relative;
+  transition:background .12s;
+}
+.fc-rail-item:hover { background:var(--bg-elev-2); }
+.fc-rail-item.on   { background:var(--accent-tint);color:var(--accent-bright); }
+.fc-rail-item.on::before {
+  content:"";position:absolute;left:-1px;top:8px;bottom:8px;
+  width:2px;background:var(--accent);border-radius:0 2px 2px 0;
+}
+.fc-rail-item .mark {
+  width:24px;height:24px;border-radius:7px;
+  background:var(--bg-elev-2);border:1px solid var(--border-strong);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--fg-3);
+}
+.fc-rail-item.on .mark { background:var(--accent);color:var(--accent-ink);border-color:var(--accent); }
+.fc-rail-item .t {
+  font-family:var(--font-mono);font-size:8px;color:var(--fg-5);
+}
+.fc-rail-item .d {
+  position:absolute;top:7px;right:5px;
+  width:6px;height:6px;border-radius:50%;
+}
+.fc-rail-item .d.run    { background:var(--status-run);animation:sf-pulse 1.4s ease-in-out infinite; }
+.fc-rail-item .d.ok     { background:var(--status-ok); }
+.fc-rail-item .d.reject { background:var(--status-reject); }
+.fc-rail-item .d.warn   { background:var(--status-warn); }
+.fc-rail-sep { width:24px;height:1px;background:var(--border);margin:4px 0; }
+.fc-rail-new {
+  width:32px;height:32px;border-radius:8px;border:1px dashed var(--border-strong);
+  display:flex;align-items:center;justify-content:center;color:var(--fg-4);
+  cursor:pointer;margin-top:auto;font-size:14px;
+}
+.fc-rail-new:hover { color:var(--accent);border-color:var(--accent); }
+
+.fc-stream { display:flex;flex-direction:column;min-height:0; }
+.fc-stream .tl { flex:1; }
+
+/* ── Side-by-side comparison footer notes ─────────────────────── */
+.cmp-foot { max-width:1400px;margin:48px auto 0;padding:18px 22px;border:1px solid var(--border);border-radius:12px;background:var(--bg-elev-1); }
+.cmp-foot h3 { font-size:12px;font-family:var(--font-mono);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-4);margin:0 0 12px; }
+.cmp-foot ul { margin:0;padding-left:18px;color:var(--fg-3);font-size:12.5px;line-height:1.75; }
+.cmp-foot ul b { color:var(--fg-1); }
+.cmp-foot ul em { color:var(--accent-bright);font-style:normal; }
+.cmp-foot .row { display:flex;gap:8px;align-items:flex-start;margin-top:8px;font-size:12px;color:var(--fg-3); }
+.cmp-foot .row .lbl { font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--fg-4);min-width:64px; }
+</style>
+</head>
+<body>
+
+<!-- ── Doc header ─────────────────────────────────────────────── -->
+<div class="doc-hd">
+  <div class="doc-mark">S</div>
+  <div class="doc-word">ShadowFlow</div>
+  <div class="doc-sep"></div>
+  <span class="doc-crumb">platform / run-session · 左栏 v4 — ConversationTimeline 三方案</span>
+  <span class="doc-meta">Dark only · 420 × 760 frames</span>
+</div>
+<p class="doc-lead">
+  对照 Trae、Cherry Studio、Codex 的运行视图，v3 左栏每个 item（user msg / rationale / steps / yaml / thought）都是<b>独立圆角描边卡</b>，
+  形成视觉割裂。这里把 item 拆成时间线 item kind = <em>user_msg · ai_text · tool_chip · step_group · code_panel · thought</em>，
+  共享同一条垂直 rail。三方案差异：<b>A</b> 全部行级；<b>B</b> step / code 升格为内嵌 panel；<b>C</b> 加左 rail 任务列表（多 run 切换）。
+</p>
+
+<div class="cmp-grid">
+
+  <!-- ════════════════════════════════════════════════════════════
+       FRAME A · Trae-style pure timeline
+       ════════════════════════════════════════════════════════════ -->
+  <div class="cmp-cell">
+    <div class="cmp-tag">
+      <div class="num">A</div>
+      <div>
+        <div class="ttl">单列时间线</div>
+        <div class="sub">trae-style · zero card · single rail</div>
+      </div>
+    </div>
+    <p class="cmp-note"><b>所有 item 都是 rail 上的一行。</b>无气泡、无卡片、无背景色。视觉最轻、节奏最快，但 step 多了会拉长。</p>
+
+    <div class="frame fa">
+      <header class="ph">
+        <div class="ph-mark">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg>
+        </div>
+        <div>
+          <div class="ph-ttl">Run Session</div>
+          <div class="ph-sub">run_2026_05_08 · 14:22</div>
+        </div>
+        <div class="ph-rt">
+          <span class="ph-pill">live</span>
+          <div class="ph-x">‹</div>
+        </div>
+      </header>
+
+      <div class="tl">
+
+        <!-- 1 · user msg -->
+        <div class="tl-item">
+          <div class="tl-m user">JY</div>
+          <div class="tl-hd"><span class="who user">你</span><span class="dot"></span><span class="meta">14:22:01</span></div>
+          <div class="tl-user-text">帮我搭一个论文深读 + 写 review 的 Agent Team</div>
+        </div>
+
+        <!-- 2 · assistant text -->
+        <div class="tl-item">
+          <div class="tl-m ai">S</div>
+          <div class="tl-hd"><span class="who">SOLO Agent</span><span class="dot"></span><span class="meta">analysed · 0.8s · 632t</span></div>
+          <div class="tl-ai-text">识别为 <b>Team 模式</b> · 任务有「深读 + 输出 review」两个独立心智阶段。引入 <em>Critic</em> 做 retry-gate，<em>Coordinator</em> 串行编排，policy 命中 <em>double-reject</em>。</div>
+        </div>
+
+        <!-- 3 · tool chip · fork template -->
+        <div class="tl-item">
+          <div class="tl-m tool">
+            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 14V8a3 3 0 0 1 6 0v6"/><circle cx="5" cy="3" r="2"/><circle cx="11" cy="3" r="2"/></svg>
+          </div>
+          <div class="tl-chip">
+            <span class="nm">fork_template</span>
+            <span class="sp">·</span>
+            <span>academic-paper</span>
+            <span class="sp">·</span>
+            <span>@ravenveil</span>
+            <a class="ext" href="#">↗</a>
+          </div>
+        </div>
+
+        <!-- 4 · step group — inline rows on the rail -->
+        <div class="tl-item">
+          <div class="tl-m steps">
+            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="3 8 7 12 13 4"/></svg>
+          </div>
+          <div class="tl-hd"><span class="who">构建 Agent Team</span><span class="dot"></span><span class="meta">3 / 5 · 5.4s</span></div>
+          <div class="tl-steps">
+            <div class="tl-step done"><span class="ic"></span><span class="nm">分析目标需求</span><span class="t">0.8s</span></div>
+            <div class="tl-step done"><span class="ic"></span><span class="nm">挑选 Team 蓝图</span><span class="t">1.2s</span></div>
+            <div class="tl-step run"><span class="ic"></span><span class="nm">配置 Agent 角色</span><span class="t">3.4s</span></div>
+            <div class="tl-substep">
+              <div class="sub done"><span class="d"></span><span class="nm">reader · identity + persona</span><span class="t">0.6s</span></div>
+              <div class="sub done"><span class="d"></span><span class="nm">reader · model claude-sonnet-4</span><span class="t">0.4s</span></div>
+              <div class="sub run"><span class="d"></span><span class="nm">reader · tools (4 / 8 候选)</span><span class="t">…</span></div>
+            </div>
+            <div class="tl-step"><span class="ic">4</span><span class="nm dim">设置工具集</span><span class="t">pending</span></div>
+            <div class="tl-step"><span class="ic">5</span><span class="nm dim">Policy 协作规则</span><span class="t">pending</span></div>
+          </div>
+        </div>
+
+        <!-- 5 · tool chip · edit yaml -->
+        <div class="tl-item">
+          <div class="tl-m tool">
+            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 2L14 5L5 14H2v-3z"/></svg>
+          </div>
+          <div class="tl-chip">
+            <span class="nm">edit</span>
+            <span class="sp">·</span>
+            <span>paper-review-team.yml</span>
+            <span class="sp">·</span>
+            <span class="diff-add">+18</span>
+            <span class="diff-del">−0</span>
+            <a class="ext" href="#">查看变更</a>
+          </div>
+        </div>
+
+        <!-- 6 · thought -->
+        <div class="tl-item">
+          <div class="tl-m think">?</div>
+          <div class="tl-hd"><span class="who">Thought</span><span class="dot"></span><span class="meta">1.2k tokens</span></div>
+          <div class="tl-thought">
+            候选池 8 个搜索类工具，<span class="focus">选定第 3 个：semanticscholar_lookup</span> — 比 google_scholar 命中率高且免 captcha。
+            <span class="meta">+ 2 lines</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Composer -->
+      <div class="cmp-bar">
+        <div class="cmp-name">
+          <span class="nm">@SOLO Agent</span>
+          <span class="hint">/plan · /spec · /run</span>
+        </div>
+        <div class="cmp-box">
+          <textarea class="cmp-input" rows="2" placeholder="补充指令 · 或保持沉默让 AI 完成"></textarea>
+          <div class="cmp-row">
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></div>
+            <div class="cmp-send"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+          </div>
+        </div>
+        <div class="cmp-kbd"><span class="kbd">⌘</span><span class="kbd">↵</span><span>send</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       FRAME B · timeline + inline collapsible panels
+       ════════════════════════════════════════════════════════════ -->
+  <div class="cmp-cell">
+    <div class="cmp-tag">
+      <div class="num">B</div>
+      <div>
+        <div class="ttl">时间线 + 内嵌 panel</div>
+        <div class="sub">step / code = flush panel · 可折叠</div>
+      </div>
+    </div>
+    <p class="cmp-note"><b>Step 组与代码流升格为内嵌 panel</b>，flush 排版 + accent 竖条而非圆角描边，仍属时间线一员。<span class="pos">能容长 step 而不冗长</span>。</p>
+
+    <div class="frame fb">
+      <header class="ph">
+        <div class="ph-mark">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg>
+        </div>
+        <div>
+          <div class="ph-ttl">Run Session</div>
+          <div class="ph-sub">run_2026_05_08 · 14:22</div>
+        </div>
+        <div class="ph-rt">
+          <span class="ph-pill">live</span>
+          <div class="ph-x">‹</div>
+        </div>
+      </header>
+
+      <div class="tl">
+
+        <div class="tl-item">
+          <div class="tl-m user">JY</div>
+          <div class="tl-hd"><span class="who user">你</span><span class="dot"></span><span class="meta">14:22:01</span></div>
+          <div class="tl-user-text">帮我搭一个论文深读 + 写 review 的 Agent Team</div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-m ai">S</div>
+          <div class="tl-hd"><span class="who">SOLO Agent</span><span class="dot"></span><span class="meta">analysed · 0.8s · 632t</span></div>
+          <div class="tl-ai-text">识别为 <b>Team 模式</b> · 任务有「深读 + 输出 review」两个独立心智阶段。引入 <em>Critic</em> 做 retry-gate，<em>Coordinator</em> 串行编排。</div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-m tool">
+            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 14V8a3 3 0 0 1 6 0v6"/><circle cx="5" cy="3" r="2"/><circle cx="11" cy="3" r="2"/></svg>
+          </div>
+          <div class="tl-chip">
+            <span class="nm">fork_template</span><span class="sp">·</span><span>academic-paper</span><span class="sp">·</span><span>@ravenveil</span>
+            <a class="ext" href="#">↗</a>
+          </div>
+        </div>
+
+        <!-- Step group · inline panel -->
+        <div class="tl-item">
+          <div class="tl-m steps">
+            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="3 8 7 12 13 4"/></svg>
+          </div>
+          <div class="panel">
+            <div class="panel-hd">
+              <span class="chev">▾</span>
+              <span>构建 Agent Team</span>
+              <span class="ct"><b>3</b> / 5 · 5.4s</span>
+            </div>
+            <div class="panel-bd">
+              <div class="tl-steps">
+                <div class="tl-step done"><span class="ic"></span><span class="nm">分析目标需求</span><span class="t">0.8s</span></div>
+                <div class="tl-step done"><span class="ic"></span><span class="nm">挑选 Team 蓝图</span><span class="t">1.2s</span></div>
+                <div class="tl-step run"><span class="ic"></span><span class="nm">配置 Agent 角色</span><span class="t">3.4s</span></div>
+                <div class="tl-substep">
+                  <div class="sub done"><span class="d"></span><span class="nm">reader · identity + persona</span><span class="t">0.6s</span></div>
+                  <div class="sub done"><span class="d"></span><span class="nm">reader · model claude-sonnet-4</span><span class="t">0.4s</span></div>
+                  <div class="sub run"><span class="d"></span><span class="nm">reader · tools (4 / 8 候选)</span><span class="t">…</span></div>
+                </div>
+                <div class="tl-step"><span class="ic">4</span><span class="nm dim">设置工具集</span><span class="t">pending</span></div>
+                <div class="tl-step"><span class="ic">5</span><span class="nm dim">Policy 协作规则</span><span class="t">pending</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Code panel · inline -->
+        <div class="tl-item">
+          <div class="tl-m tool">
+            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 2L14 5L5 14H2v-3z"/></svg>
+          </div>
+          <div class="panel dim">
+            <div class="panel-hd">
+              <span class="chev">▾</span>
+              <span>edit · paper-review-team.yml</span>
+              <span class="ct"><b>+18</b> · <span style="color:var(--status-reject)">−0</span></span>
+            </div>
+            <div class="panel-bd">
+<pre class="code-pre"><span class="c"># auto-generated by ShadowFlow</span>
+<span class="k">team</span>: paper.review.v1
+<span class="k">mode</span>: serial
+<span class="k">policy</span>: <span class="s">strict</span>  <span class="c">· retry 3</span>
+<span class="k">agents</span>:
+  - <span class="k">id</span>: paper.reader.v1
+    <span class="k">model</span>: claude-sonnet-4
+    <span class="k">tools</span>:
+      <span class="ad">+ pdf_extract</span>
+      <span class="ad">+ arxiv_search</span><span class="cur"></span></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-m think">?</div>
+          <div class="tl-hd"><span class="who">Thought</span><span class="dot"></span><span class="meta">1.2k tokens</span></div>
+          <div class="tl-thought">
+            候选池 8 个搜索类工具，<span class="focus">选定第 3 个：semanticscholar_lookup</span> — 比 google_scholar 命中率高且免 captcha。
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cmp-bar">
+        <div class="cmp-name">
+          <span class="nm">@SOLO Agent</span>
+          <span class="hint">/plan · /spec · /run</span>
+        </div>
+        <div class="cmp-box">
+          <textarea class="cmp-input" rows="2" placeholder="补充指令 · 或保持沉默让 AI 完成"></textarea>
+          <div class="cmp-row">
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+            <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></div>
+            <div class="cmp-send"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+          </div>
+        </div>
+        <div class="cmp-kbd"><span class="kbd">⌘</span><span class="kbd">↵</span><span>send</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════
+       FRAME C · timeline + left history rail
+       ════════════════════════════════════════════════════════════ -->
+  <div class="cmp-cell">
+    <div class="cmp-tag">
+      <div class="num">C</div>
+      <div>
+        <div class="ttl">时间线 + 左 rail 任务列表</div>
+        <div class="sub">B + run history sidebar · 52px</div>
+      </div>
+    </div>
+    <p class="cmp-note">在 B 之上加 <b>52px 左 rail</b>，承载多 run 切换 / new-run。<span class="neg">挤压主时间线宽度</span>，但 18+ 历史 run 场景下不可缺。</p>
+
+    <div class="frame fc">
+      <header class="ph">
+        <div class="ph-mark">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg>
+        </div>
+        <div>
+          <div class="ph-ttl">Paper Review</div>
+          <div class="ph-sub">5 active · 13 archived</div>
+        </div>
+        <div class="ph-rt">
+          <span class="ph-pill">live</span>
+          <div class="ph-x">‹</div>
+        </div>
+      </header>
+
+      <div class="fc-body">
+
+        <!-- Left rail: run history -->
+        <aside class="fc-rail">
+          <div class="fc-rail-item">
+            <span class="d run"></span>
+            <span class="mark">R</span>
+            <span class="t">14:22</span>
+          </div>
+          <div class="fc-rail-item on">
+            <span class="d run"></span>
+            <span class="mark">R</span>
+            <span class="t">now</span>
+          </div>
+          <div class="fc-rail-item">
+            <span class="d ok"></span>
+            <span class="mark">R</span>
+            <span class="t">13:08</span>
+          </div>
+          <div class="fc-rail-item">
+            <span class="d warn"></span>
+            <span class="mark">R</span>
+            <span class="t">11:51</span>
+          </div>
+          <div class="fc-rail-item">
+            <span class="d reject"></span>
+            <span class="mark">R</span>
+            <span class="t">10:34</span>
+          </div>
+          <div class="fc-rail-sep"></div>
+          <div class="fc-rail-item">
+            <span class="mark">R</span>
+            <span class="t">昨</span>
+          </div>
+          <div class="fc-rail-item">
+            <span class="mark">R</span>
+            <span class="t">昨</span>
+          </div>
+          <div class="fc-rail-item">
+            <span class="mark">R</span>
+            <span class="t">周一</span>
+          </div>
+          <div class="fc-rail-new" title="new run">＋</div>
+        </aside>
+
+        <!-- Right: thread (uses B's panel pattern) -->
+        <div class="fc-stream fb">
+          <div class="tl">
+
+            <div class="tl-item">
+              <div class="tl-m user">JY</div>
+              <div class="tl-hd"><span class="who user">你</span><span class="dot"></span><span class="meta">14:22:01</span></div>
+              <div class="tl-user-text">帮我搭一个论文深读 + 写 review 的 Agent Team</div>
+            </div>
+
+            <div class="tl-item">
+              <div class="tl-m ai">S</div>
+              <div class="tl-hd"><span class="who">SOLO Agent</span><span class="dot"></span><span class="meta">0.8s · 632t</span></div>
+              <div class="tl-ai-text">识别为 <b>Team 模式</b> · 引入 <em>Critic</em> 做 retry-gate。</div>
+            </div>
+
+            <div class="tl-item">
+              <div class="tl-m tool">
+                <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 14V8a3 3 0 0 1 6 0v6"/><circle cx="5" cy="3" r="2"/><circle cx="11" cy="3" r="2"/></svg>
+              </div>
+              <div class="tl-chip">
+                <span class="nm">fork_template</span><span class="sp">·</span><span>academic-paper</span>
+                <a class="ext" href="#">↗</a>
+              </div>
+            </div>
+
+            <div class="tl-item">
+              <div class="tl-m steps">
+                <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="3 8 7 12 13 4"/></svg>
+              </div>
+              <div class="panel">
+                <div class="panel-hd">
+                  <span class="chev">▾</span>
+                  <span>构建 Agent Team</span>
+                  <span class="ct"><b>3</b> / 5 · 5.4s</span>
+                </div>
+                <div class="panel-bd">
+                  <div class="tl-steps">
+                    <div class="tl-step done"><span class="ic"></span><span class="nm">分析目标需求</span><span class="t">0.8s</span></div>
+                    <div class="tl-step done"><span class="ic"></span><span class="nm">挑选 Team 蓝图</span><span class="t">1.2s</span></div>
+                    <div class="tl-step run"><span class="ic"></span><span class="nm">配置 Agent 角色</span><span class="t">3.4s</span></div>
+                    <div class="tl-substep">
+                      <div class="sub done"><span class="d"></span><span class="nm">reader · persona</span><span class="t">0.6s</span></div>
+                      <div class="sub done"><span class="d"></span><span class="nm">reader · model</span><span class="t">0.4s</span></div>
+                      <div class="sub run"><span class="d"></span><span class="nm">reader · tools (4/8)</span><span class="t">…</span></div>
+                    </div>
+                    <div class="tl-step"><span class="ic">4</span><span class="nm dim">设置工具集</span><span class="t">pending</span></div>
+                    <div class="tl-step"><span class="ic">5</span><span class="nm dim">Policy 规则</span><span class="t">pending</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tl-item">
+              <div class="tl-m tool">
+                <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 2L14 5L5 14H2v-3z"/></svg>
+              </div>
+              <div class="tl-chip">
+                <span class="nm">edit</span><span class="sp">·</span><span>paper-review-team.yml</span><span class="sp">·</span>
+                <span class="diff-add">+18</span><span class="diff-del">−0</span>
+              </div>
+            </div>
+
+            <div class="tl-item">
+              <div class="tl-m think">?</div>
+              <div class="tl-hd"><span class="who">Thought</span><span class="dot"></span><span class="meta">1.2k tokens</span></div>
+              <div class="tl-thought">
+                <span class="focus">选定第 3 个工具：semanticscholar_lookup</span> — 比 google_scholar 命中率高。
+              </div>
+            </div>
+
+          </div>
+
+          <div class="cmp-bar">
+            <div class="cmp-name">
+              <span class="nm">@SOLO Agent</span>
+              <span class="hint">/plan · /spec</span>
+            </div>
+            <div class="cmp-box">
+              <textarea class="cmp-input" rows="2" placeholder="补充指令…"></textarea>
+              <div class="cmp-row">
+                <div class="cmp-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+                <div class="cmp-send"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Footer · how to read this ──────────────────────────────── -->
+<div class="cmp-foot">
+  <h3>三方案差异速读</h3>
+  <ul>
+    <li><b>共同点：</b>所有 item（user_msg / ai_text / tool_chip / step_group / code_panel / thought）共享一条垂直 <em>rail</em>，由 16px 圆形 marker 锚定。User 消息无气泡，直接缩进文本 + 头像点 — 这是 Trae / Codex / Cherry 的共识。</li>
+    <li><b>A · 单列时间线：</b>step 直接以行级 rail item 渲染，最快最轻；适合 step ≤ 5 且 substep 浅。<em>问题：</em>step 一多就让整个 thread 视觉拉得过长。</li>
+    <li><b>B · 时间线 + 内嵌 panel：</b>step / code 升级为 flush panel —— 没有圆角描边卡，只有 hairline 上下边 + 2px accent 竖条。仍是时间线一员，但可折叠收纳。<em>推荐项</em> · 与 v3 现有 step / yaml 信息结构兼容、改动量最小。</li>
+    <li><b>C · 加左 rail 任务列表：</b>B 之上加 52px 历史 rail，承载多 run 切换。<em>代价：</em>主 stream 宽度从 420 缩到 ~368，长 step 名会被截。建议当 active run ≥ 3 时才启用。</li>
+  </ul>
+  <div class="row"><span class="lbl">下一步 / S6.10</span><span>把 <code style="font-family:var(--font-mono);color:var(--accent-bright)">RunSessionPage.LeftPane</code> 重构为 <code style="font-family:var(--font-mono);color:var(--accent-bright)">&lt;ConversationTimeline&gt;</code>，item kind 见上。建议先实现 B；C 等到出 history 视图时再叠。</span></div>
+</div>
+
+</body>
+</html>

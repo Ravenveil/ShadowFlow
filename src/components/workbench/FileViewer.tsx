@@ -57,9 +57,17 @@ function looksBinary(s: string): boolean {
   return ctrl / sample.length > 0.06;
 }
 
+function fmtSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function FileViewer({ filePath, root, onClose }: FileViewerProps) {
   const [content, setContent] = useState('');
   const [truncated, setTruncated] = useState(false);
+  const [size, setSize] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -73,6 +81,7 @@ export function FileViewer({ filePath, root, onClose }: FileViewerProps) {
     if (!filePath || isImage || isKnownBinary) {
       setContent('');
       setTruncated(false);
+      setSize(null);
       setErr(null);
       return;
     }
@@ -84,6 +93,7 @@ export function FileViewer({ filePath, root, onClose }: FileViewerProps) {
         if (!alive) return;
         setContent(r.content);
         setTruncated(r.truncated);
+        setSize(typeof r.size === 'number' ? r.size : null);
       })
       .catch((e) => {
         if (alive) setErr(e instanceof Error ? e.message : String(e));
@@ -145,6 +155,13 @@ export function FileViewer({ filePath, root, onClose }: FileViewerProps) {
   const name = filePath.split(/[\\/]/).pop() ?? filePath;
   const rawUrl = `${getApiBase()}/api/fs/raw?path=${encodeURIComponent(filePath)}&root=${encodeURIComponent(root)}`;
 
+  // 相对 root 的路径（去掉 root 前缀），头部副标题展示更干净。
+  let relPath = filePath;
+  if (root && filePath.startsWith(root)) {
+    relPath = filePath.slice(root.length).replace(/^[\\/]/, '') || name;
+  }
+  const sizeLabel = size != null ? fmtSize(size) : '';
+
   return (
     <div
       className="sf-anim-fade"
@@ -155,43 +172,67 @@ export function FileViewer({ filePath, root, onClose }: FileViewerProps) {
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          padding: '8px 10px',
+          padding: '7px 10px',
           borderBottom: '1px solid var(--t-border)',
           flexShrink: 0,
         }}
       >
-        <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'var(--t-fg)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-          title={filePath}
-        >
-          {name}
-        </span>
-        {ext && (
-          <span
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span
+              style={{
+                minWidth: 0,
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: 'var(--t-fg)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={filePath}
+            >
+              {name}
+            </span>
+            {ext && (
+              <span
+                style={{
+                  flexShrink: 0,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  color: 'var(--t-accent)',
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  background: 'color-mix(in oklab, var(--t-accent) 12%, transparent)',
+                  border: '1px solid color-mix(in oklab, var(--t-accent) 25%, var(--t-border))',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.3,
+                }}
+              >
+                {ext}
+              </span>
+            )}
+          </div>
+          {/* 副标题：相对路径 · 大小 */}
+          <div
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 10.5,
               fontFamily: 'var(--font-mono)',
-              fontSize: 9.5,
-              color: 'var(--t-fg-4)',
-              padding: '1px 6px',
-              borderRadius: 4,
-              background: 'var(--t-panel-2)',
-              border: '1px solid var(--t-border)',
-              textTransform: 'uppercase',
-              letterSpacing: 0.3,
+              color: 'var(--t-fg-5)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
+            title={relPath}
           >
-            {ext}
-          </span>
-        )}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', direction: 'rtl', textAlign: 'left' }}>
+              {relPath}
+            </span>
+            {sizeLabel && <span style={{ flexShrink: 0, opacity: 0.85 }}>· {sizeLabel}</span>}
+          </div>
+        </div>
         <button
           type="button"
           className="sf-press"

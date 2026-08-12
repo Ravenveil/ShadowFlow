@@ -5,7 +5,7 @@
  *   - PRESETS 模板（官方）→ 「套用」=onPick(alias) → /editor/:alias
  *   - QUICK_DEMO_PROMPTS → 「预览/Quick Demo」=onQuickDemo(alias) → /editor/:alias?quickDemo=1
  *   - listUserTemplates / deleteUserTemplate (localStorage) → 「我的 fork」
- *   - listTemplates() Builder-origin templates → 「社区 (0G)」+ workflow_id 路由
+ *   - listTemplates() Builder-origin templates → 「社区」+ workflow_id 路由
  *   - 「↗ 粘贴 CID」→ /import 路由
  *   - 「⑂ fork」→ 触发本地 fork（直接打开模板的 editor 入口）
  *   - 「当前」pill → URL ?current=alias 时高亮
@@ -479,7 +479,7 @@ function TemplateCard({
           </span>
         )}
         {tpl.star !== undefined && <HfPill>★ {tpl.star}</HfPill>}
-        {tpl.source === 'community' && <HfPill color="var(--t-run)">0G</HfPill>}
+        {tpl.source === 'community' && <HfPill color="var(--t-run)">社区</HfPill>}
         {tpl.source === 'mine' && <HfPill color="var(--t-warn)">MINE</HfPill>}
       </div>
 

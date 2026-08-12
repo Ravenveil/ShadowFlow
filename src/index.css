@@ -1,6 +1,6 @@
 /* ============================================================================
  * ShadowFlow · Global styles
- * Dark terminal/IDE aesthetic · purple accent · 三声部字体系统
+ * Dark terminal/IDE aesthetic · blue accent · 三声部字体系统
  *
  * 2026-05-28 字体升级 (三声部 — 设计稿"terminal + 编辑出版"双气质):
  *   - Display: Bricolage Grotesque — 可变字体, 编辑出版风, 独特字形(g/a/?),
@@ -48,7 +48,7 @@
   --skin-panel:      #0F0F12;
   --skin-fg:         #FAFAFA;
   --skin-muted:      #A1A1AA;
-  --skin-accent:     #A855F7;
+  --skin-accent:     #3B82F6;
   --skin-accent-ink: #0A0A0A;
   --skin-border:     #27272A;
 
@@ -59,7 +59,7 @@
   --bg-elev-3:       #1A1A1A;
   --bg-elev-4:       #1F1F23;
   --bg-node:         #1A1A1A;
-  --bg-accent-tint:  #140A1F;
+  --bg-accent-tint:  #0B1728;
 
   --fg-0:            #FFFFFF;
   --fg-1:            var(--skin-fg);
@@ -75,8 +75,8 @@
 
   --accent:          var(--skin-accent);
   --accent-tint:     var(--bg-accent-tint);
-  --accent-dim:      #6B21A8;
-  --accent-bright:   #D8B4FE;
+  --accent-dim:      #1D4ED8;
+  --accent-bright:   #93C5FD;
   --accent-ink:      var(--skin-accent-ink);
 
   --status-run:      #3B82F6;
@@ -118,10 +118,10 @@
   --fs-title: 17px;
 
   /* ---- Shadows ------------------------------------------- */
-  --shadow-pop:  0 0 0 1px rgba(168,85,247,.35), 0 8px 24px -8px rgba(168,85,247,.4);
+  --shadow-pop:  0 0 0 1px rgba(59,130,246,.35), 0 8px 24px -8px rgba(59,130,246,.4);
   --shadow-card: 0 1px 2px rgba(0,0,0,.4);
   --shadow-hud:  0 10px 30px -10px rgba(0,0,0,.6);
-  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(168,85,247,.5);
+  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(59,130,246,.5);
   --glow-ok:     0 0 0 1px var(--status-ok), 0 0 16px -4px rgba(16,185,129,.4);
   --glow-reject: 0 0 0 1px var(--status-reject), 0 0 20px -4px rgba(239,68,68,.5);
   /* 2026-06-11 F6 批1 — 阴影语义三档（frontend-polish-plan §3.5）。
@@ -322,7 +322,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
 
 /* Chips */
 .sf-chip { height: 22px; padding: 0 8px; border-radius: 6px; background: var(--bg-elev-2); border: 1px solid var(--border); color: var(--fg-3); font-family: var(--font-mono); font-size: 10px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
-.sf-chip-accent { background: var(--accent-tint); border-color: rgba(168,85,247,.35); color: var(--accent-bright); }
+.sf-chip-accent { background: var(--accent-tint); border-color: rgba(59,130,246,.35); color: var(--accent-bright); }
 .sf-chip-ok     { background: var(--status-ok-tint);     border-color: rgba(16,185,129,.35); color: var(--status-ok); }
 .sf-chip-warn   { background: var(--status-warn-tint);   border-color: rgba(245,158,11,.35);  color: var(--status-warn); }
 .sf-chip-run    { background: var(--status-run-tint);    border-color: rgba(59,130,246,.35);  color: var(--status-run); }
@@ -344,7 +344,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
 
 /* Inputs */
 .sf-input { height: 32px; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 8px; color: var(--fg-1); font-size: 13px; padding: 0 10px; width: 100%; transition: border-color var(--dur-1); }
-.sf-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(168,85,247,.25); }
+.sf-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(59,130,246,.25); }
 
 /* DAG nodes */
 .sf-node { width: 160px; min-height: 64px; background: var(--bg-node); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; position: relative; transition: border-color var(--dur-1); }
@@ -378,7 +378,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
 
 /* ============ Animations ============ */
 @keyframes sf-pulse     { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
-@keyframes sf-breathe   { 0%,100% { box-shadow: 0 0 0 4px rgba(168,85,247,.12), 0 0 28px -2px rgba(168,85,247,.55); } 50% { box-shadow: 0 0 0 8px rgba(168,85,247,.08), 0 0 44px -2px rgba(168,85,247,.75); } }
+@keyframes sf-breathe   { 0%,100% { box-shadow: 0 0 0 4px rgba(59,130,246,.12), 0 0 28px -2px rgba(59,130,246,.55); } 50% { box-shadow: 0 0 0 8px rgba(59,130,246,.08), 0 0 44px -2px rgba(59,130,246,.75); } }
 @keyframes sf-ripple    { 0% { transform: scale(1); opacity: .5; } 100% { transform: scale(1.6); opacity: 0; } }
 @keyframes sf-float     { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 @keyframes sf-marquee   { from { transform: translateX(0); } to { transform: translateX(-50%); } }
@@ -431,8 +431,8 @@ input, textarea, select { font-family: inherit; color: inherit; }
  * 像盯着光标落点。RunSessionPage 的 anchor-scroll effect 在滚动后给元素
  * 加 .sf-spotlight，1.6s 后移除（动画结束即视觉归零）。 */
 @keyframes sf-spotlight {
-  0%   { box-shadow: 0 0 0 2px var(--accent), 0 0 22px -2px rgba(168,85,247,.65); background-color: rgba(168,85,247,.10); }
-  60%  { box-shadow: 0 0 0 2px var(--accent), 0 0 22px -2px rgba(168,85,247,.45); background-color: rgba(168,85,247,.06); }
+  0%   { box-shadow: 0 0 0 2px var(--accent), 0 0 22px -2px rgba(59,130,246,.65); background-color: rgba(59,130,246,.10); }
+  60%  { box-shadow: 0 0 0 2px var(--accent), 0 0 22px -2px rgba(59,130,246,.45); background-color: rgba(59,130,246,.06); }
   100% { box-shadow: 0 0 0 0 transparent;                                         background-color: transparent; }
 }
 .sf-spotlight {
@@ -471,13 +471,13 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .react-flow__handle     { width: 10px !important; height: 10px !important; border-radius: 50%; border-width: 1.5px !important; background: var(--bg-elev-1) !important; transition: transform 150ms var(--ease-out), box-shadow 150ms var(--ease-out); }
 .react-flow__handle-left  { left: -5px !important; }
 .react-flow__handle-right { right: -5px !important; }
-.react-flow__handle:hover { transform: translate(0, -50%) scale(1.3); box-shadow: 0 0 0 3px rgba(168,85,247,.18); }
+.react-flow__handle:hover { transform: translate(0, -50%) scale(1.3); box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
 .react-flow__handle-connecting { background: var(--status-reject) !important; border-color: var(--status-reject) !important; transform: translate(0, -50%) scale(1.3); }
 .react-flow__handle-valid      { background: var(--status-ok) !important; border-color: var(--status-ok) !important; }
 .react-flow__attribution { display: none; }
 
 /* Selection box */
-.react-flow__selection  { background: rgba(168,85,247,.08); border: 1px solid rgba(168,85,247,.5); }
+.react-flow__selection  { background: rgba(59,130,246,.08); border: 1px solid rgba(59,130,246,.5); }
 
 /* Controls — dark chrome */
 .react-flow__controls-button {
@@ -514,9 +514,9 @@ input, textarea, select { font-family: inherit; color: inherit; }
   --t-fg-6:      #3F3F46;
   --t-border:    #27272A;
   --t-border-2:  #3F3F46;
-  --t-accent:    #A855F7;
-  --t-accent-bright: #D8B4FE;
-  --t-accent-tint: rgba(168,85,247,.14);
+  --t-accent:    #3B82F6;
+  --t-accent-bright: #93C5FD;
+  --t-accent-tint: rgba(59,130,246,.14);
   --t-accent-ink: #0A0A0A;
   --t-ok:        #10B981;
   --t-warn:      #F59E0B;
@@ -546,8 +546,8 @@ input, textarea, select { font-family: inherit; color: inherit; }
 
 [data-theme="day"] {
   /* 2026-05-28 — clean white day theme (replaces the cream/beige paper palette
-     the user rejected). Mirror of the design package's dark/purple skin: same
-     7-slot semantic structure with bg↔fg inverted, accent shifts to purple-600
+     the user rejected). Mirror of the design package's dark/blue skin: same
+     7-slot semantic structure with bg↔fg inverted, accent shifts to #1890FF
      for legibility on white, status colors deepen one Tailwind step, borders
      use neutral zinc hairlines. NO warm/sepia cast — neutral cool grays
      throughout so it reads as "modern dashboard" not "vintage paper". */
@@ -566,9 +566,9 @@ input, textarea, select { font-family: inherit; color: inherit; }
   --t-fg-6:      #D4D4D8;
   --t-border:    #ECECEA;            /* near-invisible hairline */
   --t-border-2:  #DCDCD9;
-  --t-accent:    #7C3AED;            /* purple-600 — darker than dark-theme 500 for white-bg legibility */
-  --t-accent-bright: #6D28D9;        /* purple-700 — emphasized/strong (vs pastel #D8B4FE on dark) */
-  --t-accent-tint: rgba(168,85,247,.08);
+  --t-accent:    #1890FF;            /* clawsgo/workbuddy blue — white-bg legibility */
+  --t-accent-bright: #1D4ED8;        /* blue-700 — emphasized/strong (vs pastel #93C5FD on dark) */
+  --t-accent-tint: rgba(59,130,246,.08);
   --t-accent-ink: #FFFFFF;
   --t-ok:        #059669;
   --t-warn:      #D97706;
@@ -587,7 +587,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
   --skin-panel:      #FFFFFF;
   --skin-fg:         #0A0A0A;
   --skin-muted:      #52525B;
-  --skin-accent:     #7C3AED;
+  --skin-accent:     #1890FF;
   --skin-accent-ink: #FFFFFF;
   --skin-border:     #ECECEA;
 
@@ -596,7 +596,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
   --bg-elev-3:       #F0F0EE;
   --bg-elev-4:       #DCDCD9;
   --bg-node:         #FFFFFF;
-  --bg-accent-tint:  rgba(168,85,247,.06);
+  --bg-accent-tint:  rgba(59,130,246,.06);
 
   --fg-0:            #000000;
   --fg-2:            #27272A;
@@ -607,8 +607,8 @@ input, textarea, select { font-family: inherit; color: inherit; }
   --border-strong:   #DCDCD9;
   --border-subtle:   #F4F4F1;
 
-  --accent-dim:      #5B21B6;
-  --accent-bright:   #6D28D9;
+  --accent-dim:      #1E40AF;
+  --accent-bright:   #1D4ED8;
 
   --status-reject-tint: #FEE2E2;
   --status-ok-tint:     #D1FAE5;
@@ -617,10 +617,10 @@ input, textarea, select { font-family: inherit; color: inherit; }
 
   /* Neutral cool shadows (no sepia/warm cast) — reads as "elevated surface on
      clean dashboard" not "paper on paper". */
-  --shadow-pop:  0 0 0 1px rgba(124,58,237,.25), 0 8px 24px -8px rgba(124,58,237,.25);
+  --shadow-pop:  0 0 0 1px rgba(24,144,255,.25), 0 8px 24px -8px rgba(24,144,255,.25);
   --shadow-card: 0 1px 2px rgba(0,0,0,.06);
   --shadow-hud:  0 24px 60px -20px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.04);
-  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(124,58,237,.30);
+  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(24,144,255,.30);
 
   /* 2026-05-19 agent-3 aliases (day overrides — paper palette).
      See matching block in :root,[data-theme="night"] for rationale. */
@@ -633,9 +633,9 @@ input, textarea, select { font-family: inherit; color: inherit; }
 /* ============================================================================
  * Paper skin pack (third theme, opt-in via sf-theme='paper').
  *
- * 2026-05-28 — preserved as a named skin alongside `night` (dark/purple)
+ * 2026-05-28 — preserved as a named skin alongside `night` (dark/blue)
  * and `day` (clean soft-white). Warm cream/sepia "paper on paper" aesthetic
- * with darker purple-700 accent for legibility on cream. Aligns with the
+ * with darker blue-700 accent for legibility on cream. Aligns with the
  * design package's 7-slot Skin Pack model (README: "swap them, reskin the
  * product"). User can pick this via Settings → Appearance.
  * ============================================================================ */
@@ -652,9 +652,9 @@ input, textarea, select { font-family: inherit; color: inherit; }
   --t-fg-6:      #B0AEA5;
   --t-border:    #E8E6DC;
   --t-border-2:  #D1CFC5;
-  --t-accent:    #7C3AED;
-  --t-accent-bright: #6D28D9;
-  --t-accent-tint: rgba(124,58,237,.10);
+  --t-accent:    #1890FF;
+  --t-accent-bright: #1D4ED8;
+  --t-accent-tint: rgba(24,144,255,.10);
   --t-accent-ink: #FFFFFF;
   --t-ok:        #047857;
   --t-warn:      #B45309;
@@ -671,7 +671,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
   --skin-panel:      #FAF9F5;
   --skin-fg:         #141413;
   --skin-muted:      #4D4C48;
-  --skin-accent:     #7C3AED;
+  --skin-accent:     #1890FF;
   --skin-accent-ink: #FFFFFF;
   --skin-border:     #E8E6DC;
 
@@ -680,7 +680,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
   --bg-elev-3:       #E8E6DC;
   --bg-elev-4:       #D1CFC5;
   --bg-node:         #FAF9F5;
-  --bg-accent-tint:  rgba(124,58,237,.08);
+  --bg-accent-tint:  rgba(24,144,255,.08);
 
   --fg-0:            #0A0A09;
   --fg-2:            #2A2A27;
@@ -691,8 +691,8 @@ input, textarea, select { font-family: inherit; color: inherit; }
   --border-strong:   #D1CFC5;
   --border-subtle:   #F0EEE6;
 
-  --accent-dim:      #5B21B6;
-  --accent-bright:   #6D28D9;
+  --accent-dim:      #1E40AF;
+  --accent-bright:   #1D4ED8;
 
   --status-reject-tint: #FCE7E7;
   --status-ok-tint:     #D9F1E1;
@@ -700,10 +700,10 @@ input, textarea, select { font-family: inherit; color: inherit; }
   --status-run-tint:    #D7E4F9;
 
   /* Warm sepia shadows — reads as "paper on paper", not "glass". */
-  --shadow-pop:  0 0 0 1px rgba(124,58,237,.30), 0 8px 24px -8px rgba(124,58,237,.30);
+  --shadow-pop:  0 0 0 1px rgba(24,144,255,.30), 0 8px 24px -8px rgba(24,144,255,.30);
   --shadow-card: 0 1px 2px rgba(40,30,20,.08);
   --shadow-hud:  0 24px 60px -20px rgba(40,30,20,.18), 0 0 0 1px rgba(20,20,19,.04);
-  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(124,58,237,.35);
+  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(24,144,255,.35);
 
   --t-bg-elev-2:     var(--t-panel-2);
   --t-bg-elev-3:     var(--t-panel-3);
@@ -1001,7 +1001,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
   height: 6px;
   border-radius: 999px;
   background: var(--t-accent);
-  box-shadow: 0 0 6px rgba(168,85,247,.6);
+  box-shadow: 0 0 6px rgba(59,130,246,.6);
   flex-shrink: 0;
 }
 .cmp-chip-meta {
@@ -2010,8 +2010,8 @@ input, textarea, select { font-family: inherit; color: inherit; }
  * §批3 — Workbench 视觉对齐 clawsgo / hermes（append-only，2026-06-24，owner: visual）
  *
  * 目标：给 in-place 三栏工作台「clawsgo 级」观感 —— 柔和蓝 #1890FF 强调、
- * 圆角卡片、一致 hover-lift、平滑入场、干净气泡。全部新增 utility，不改既有规则，
- * 不覆盖全局 --t-accent（避免污染全站紫色主题）。
+ * 圆角卡片、一致 hover-lift、平滑入场、干净气泡。全部新增 utility，不改既有规则。
+ * 2026-08-11：全局 --t-accent 已收敛为蓝（#1890FF/#3B82F6），本组 --sf-blue* 与全局同色系。
  *
  * clawsgo 的视觉灵魂是「柔和蓝」：这里引一组 workbench 作用域的 --sf-blue* 变量，
  * 供 StudioMessageRow / ComposerTokenMeter / 模板墙等组件按需取用（流式光标、
@@ -2155,4 +2155,108 @@ input, textarea, select { font-family: inherit; color: inherit; }
 @keyframes sf-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * UI 3.0（2026-08-11，owner: frontend）— 全站观感向 workbuddy / clawsgo 收敛
+ *
+ * 背景：accent 已全局紫→蓝；本批做「质感层」——更软的圆角与阴影、统一 hover /
+ * focus / selection 反馈、字体渲染优化。全部 append-only，不改既有规则；
+ * 同名令牌按层叠覆盖（本块在最后，天然生效）。
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* UI 3.0 圆角刻度：比 2.0 更圆润一档（chip 6→8、row/input 8→10、modal 14→16） */
+  --r-chip: 8px;
+  --r-row: 10px;
+  --r-input: 10px;
+  --r-modal: 16px;
+
+  /* UI 3.0 软阴影（workbuddy 式：低透明、多层、无脏边） */
+  --ui30-shadow-sm: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 3px rgba(15, 23, 42, .06);
+  --ui30-shadow-md: 0 2px 6px rgba(15, 23, 42, .06), 0 8px 20px -8px rgba(15, 23, 42, .12);
+  --ui30-shadow-lg: 0 4px 12px rgba(15, 23, 42, .08), 0 16px 40px -12px rgba(15, 23, 42, .16);
+}
+
+/* day 主题：dropdown / modal 阴影降浊（原 .35/.12 在浅底上太重） */
+[data-theme="day"] {
+  --shadow-2: var(--ui30-shadow-md);
+  --shadow-hud: var(--ui30-shadow-lg);
+  --shadow-pop: 0 0 0 1px rgba(24,144,255,.22), var(--ui30-shadow-md);
+}
+
+/* 文字选中 → 品牌蓝浅底（全站生效） */
+::selection {
+  background: color-mix(in srgb, var(--t-accent) 22%, transparent);
+  color: inherit;
+}
+
+/* 输入占位符统一降档 */
+::placeholder { color: var(--t-fg-4, #A1A1AA); opacity: 1; }
+
+/* 全局 focus-visible 软聚焦环（不设裸 outline 的默认观感；组件级特化规则优先） */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--t-accent) 65%, transparent);
+  outline-offset: 1px;
+  border-radius: var(--r-4);
+}
+
+/* 链接与可点元素的过渡基线 */
+a, button, [role="button"] {
+  transition: background-color var(--dur-1) var(--ease-out),
+              color var(--dur-1) var(--ease-out),
+              border-color var(--dur-1) var(--ease-out),
+              box-shadow var(--dur-1) var(--ease-out),
+              transform var(--dur-1) var(--ease-out);
+}
+
+/* 字体渲染：浅底下更干净（workbuddy/clawsgo 的共同底子） */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* 共享按钮质感升级：hover 轻浮起 + active 回压（.sf-btn 全站通用） */
+.sf-btn { transition: background var(--dur-1) var(--ease-out),
+                      border-color var(--dur-1) var(--ease-out),
+                      box-shadow var(--dur-1) var(--ease-out),
+                      transform var(--dur-0) var(--ease-out); }
+.sf-btn:hover { transform: translateY(-1px); box-shadow: var(--ui30-shadow-sm); }
+.sf-btn:active { transform: translateY(0); box-shadow: none; }
+
+/* UI 3.0 侧栏导航行：hover 浅底 + active 品牌蓝浅底（HfSidebar 采用，
+ * 背景从 inline style 迁到此类以获得 hover 态） */
+.ui30-navrow {
+  border-radius: var(--r-row);
+  transition: background-color var(--dur-1) var(--ease-out);
+}
+.ui30-navrow:hover { background: var(--t-hover); }
+.ui30-navrow.on { background: var(--t-accent-tint); }
+.ui30-navrow.on:hover { background: color-mix(in srgb, var(--t-accent-tint) 130%, transparent); }
+
+/* UI 3.0 搜索胶囊（侧栏 ⌘K 入口）：hover 提亮 + 边框加深 */
+.ui30-searchpill { transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
+.ui30-searchpill:hover {
+  border-color: var(--t-border-2) !important;
+  box-shadow: var(--ui30-shadow-sm);
+}
+
+/* UI 3.0 用户卡 hover */
+.ui30-usercard { transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
+.ui30-usercard:hover { border-color: var(--t-border-2) !important; box-shadow: var(--ui30-shadow-sm); }
+
+/* UI 3.0 kbd 键帽：更浅的底 + 更圆 */
+.hf-kbd, .sf-kbd {
+  border-radius: 5px;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--t-fg-4) 25%, transparent);
+}
+
+/* 减动效偏好兜底（无障碍 WCAG 2.1）：全局动画/过渡收敛 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }

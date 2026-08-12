@@ -15,7 +15,7 @@
  * 纯展示组件：无副作用、无数据获取。由 StudioChat 投喂 StudioMessage[]。
  */
 import { memo, useState, useEffect, useRef, useMemo, type ReactNode, type CSSProperties } from 'react';
-import { User, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { User, Wrench, Brain, AlertTriangle, Paperclip, Copy, Check, ChevronDown, ChevronUp, RotateCcw, MoreHorizontal } from 'lucide-react';
 import hljs from 'highlight.js/lib/common';
 import './fileViewerHljs.css';
 import { relTime } from '../../core/utils/relTime';
@@ -702,12 +702,31 @@ export const StudioMessageRow = memo(function StudioMessageRow({
   const [copyError, setCopyError] = useState(false);
   const [bubbleHovered, setBubbleHovered] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const actionsRef = useRef<HTMLDivElement | null>(null);
 
   // Cancel any pending timer on unmount to avoid setState on unmounted component.
   useEffect(() => () => {
     if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
   }, []);
+
+  // 「更多」菜单：点击外部 / Esc 关闭。
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(m.text).then(() => {
@@ -761,6 +780,12 @@ export const StudioMessageRow = memo(function StudioMessageRow({
   const bubbleBorder = isErrorState
     ? 'color-mix(in oklab, var(--t-danger, #e5484d) 40%, transparent)'
     : 'var(--t-border)';
+
+  // 「重试 / 重新生成」可用性：error 态已有专属醒目 CTA（下方），故菜单里的重试只在
+  // 非 error 态出现，避免重复。user → 重发自身文本；assistant → 重发前驱用户文本(retryText)。
+  const dedicatedErrorRetry = (isUser && m.status === 'error') || (!isUser && isErrorState && !!retryText);
+  const retrySource = isUser ? m.text : retryText;
+  const canRetryFromMenu = !!onRetry && !!retrySource && !dedicatedErrorRetry;
 
   const avatarCol = grouped ? <AvatarSpacer /> : <Avatar m={m} />;
 
@@ -890,43 +915,80 @@ export const StudioMessageRow = memo(function StudioMessageRow({
                 {' '}中配置 API Key。
               </p>
             )}
-            {/* 悬浮复制按钮：放在气泡内部 position:absolute，避免依赖外层无 overflow:hidden 假设 */}
-            {(bubbleHovered || copied || copyError) && m.text && (
-              <button
-                type="button"
-                onClick={handleCopy}
-                aria-label={copied ? '已复制' : copyError ? '复制失败' : '复制'}
-                title={copied ? '已复制' : copyError ? '复制失败' : '复制'}
-                style={{
-                  position: 'absolute',
-                  top: 4,
-                  [isUser ? 'left' : 'right']: 4,
-                  width: 22,
-                  height: 22,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 6,
-                  border: '1px solid var(--t-border)',
-                  background: 'var(--t-panel)',
-                  color: copied
-                    ? 'var(--sf-green, #21A678)'
-                    : copyError
-                      ? 'var(--t-danger, #e5484d)'
-                      : 'var(--t-fg-3)',
-                  cursor: 'pointer',
-                  padding: 0,
-                  transition: 'color 0.15s',
-                }}
+          </div>
+        </div>
+      )}
+
+      {/* ── 悬停操作栏（hover action bar，对齐 Hermes / ChatGPT）──────────────
+          气泡下方浮现一排小操作：时间戳 + 复制（带成功反馈动画）+ 更多菜单。
+          续行（grouped）本无头部时间戳，这里补上 hover 时间显示。 */}
+      {m.text && (bubbleHovered || copied || copyError || menuOpen) && (
+        <div
+          className="sf-actionbar-in"
+          style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', width: '100%' }}
+        >
+          <div ref={actionsRef} className="sf-msg-actions" style={{ position: 'relative' }}>
+            {m.timestamp && (
+              <span className="sf-msg-actions__time" title={m.timestamp}>
+                {relTime(m.timestamp) || m.timestamp}
+              </span>
+            )}
+            {/* 复制 */}
+            <button
+              type="button"
+              className={`sf-msg-action${copied ? ' is-ok' : copyError ? ' is-err' : ''}`}
+              onClick={handleCopy}
+              aria-label={copied ? '已复制' : copyError ? '复制失败' : '复制'}
+              title={copied ? '已复制' : copyError ? '复制失败' : '复制'}
+            >
+              {copied ? (
+                <Check key="ok" size={13} strokeWidth={2.5} aria-hidden className="sf-action-pop" />
+              ) : copyError ? (
+                <AlertTriangle size={13} strokeWidth={2} aria-hidden />
+              ) : (
+                <Copy size={13} strokeWidth={2} aria-hidden />
+              )}
+            </button>
+            {/* 更多 */}
+            <button
+              type="button"
+              className="sf-msg-action"
+              aria-label="更多操作"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              title="更多"
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              <MoreHorizontal size={14} strokeWidth={2} aria-hidden />
+            </button>
+
+            {menuOpen && (
+              <div
+                role="menu"
+                className="sf-msg-menu sf-actionbar-in"
+                style={{ top: 'calc(100% + 5px)', [isUser ? 'right' : 'left']: 0 }}
               >
-                {copied ? (
-                  <Check size={12} strokeWidth={2.5} aria-hidden />
-                ) : copyError ? (
-                  <AlertTriangle size={12} strokeWidth={2} aria-hidden />
-                ) : (
-                  <Copy size={12} strokeWidth={2} aria-hidden />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="sf-msg-menu__item"
+                  onClick={() => { handleCopy(); setMenuOpen(false); }}
+                >
+                  <Copy size={13} strokeWidth={2} aria-hidden />
+                  <span>复制全文</span>
+                </button>
+                {canRetryFromMenu && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="sf-msg-menu__item"
+                    onClick={() => { setMenuOpen(false); onRetry!(retrySource!); }}
+                  >
+                    <RotateCcw size={13} strokeWidth={2} aria-hidden />
+                    <span>{isUser ? '重新发送' : '重新生成'}</span>
+                  </button>
                 )}
-              </button>
+              </div>
             )}
           </div>
         </div>

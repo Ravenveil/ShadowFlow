@@ -17,7 +17,7 @@ export const ACADEMIC_PAPERS: AcademicPaper[] = [
     venue: 'CVPR 2016 · arXiv 1511.02799',
     url: 'https://arxiv.org/abs/1511.02799',
     shadowflowRelevance:
-      'ShadowFlow 的工程范式祖师爷。NMN 证明"按任务语法动态组合可复用神经模块"可以解决复杂视觉问答。ShadowFlow 把这一范式抬升到工作流层级——用 Agent 积木代替神经模块，用 Policy Matrix 约束组合规则，用 0G Storage 保存激活轨迹。',
+      'ShadowFlow 的工程范式祖师爷。NMN 证明"按任务语法动态组合可复用神经模块"可以解决复杂视觉问答。ShadowFlow 把这一范式抬升到工作流层级——用 Agent 积木代替神经模块，用 Policy Matrix 约束组合规则，用持久化轨迹保存激活证据。',
   },
   {
     id: 'voyager',

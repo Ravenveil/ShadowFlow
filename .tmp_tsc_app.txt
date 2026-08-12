@@ -1,0 +1,447 @@
+src/api/workflow.ts(5,44): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/common/lib/analyzer/task-analyzer.ts(350,11): error TS6133: 'normalized' is declared but its value is never read.
+src/common/lib/analyzer/task-analyzer.ts(415,48): error TS6133: 'analysis' is declared but its value is never read.
+src/common/lib/analyzer/task-analyzer.ts(439,21): error TS6133: 'text' is declared but its value is never read.
+src/common/lib/analyzer/task-analyzer.ts(462,5): error TS6133: 'text' is declared but its value is never read.
+src/common/lib/analyzer/task-analyzer.ts(476,21): error TS2352: Conversion of type 'number' to type '"small" | "medium" | "large"' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/common/lib/analyzer/task-analyzer.ts(500,11): error TS6133: 'normalized' is declared but its value is never read.
+src/common/lib/analyzer/task-analyzer.ts(525,25): error TS6133: 'text' is declared but its value is never read.
+src/common/lib/analyzer/task-analyzer.ts(599,11): error TS6133: 'normalized' is declared but its value is never read.
+src/common/lib/analyzer/task-analyzer.ts(665,28): error TS6133: 'rule' is declared but its value is never read.
+src/common/lib/analyzer/task-analyzer.ts(665,39): error TS6133: 'features' is declared but its value is never read.
+src/common/lib/analyzer/task-analyzer.ts(665,63): error TS6133: 'text' is declared but its value is never read.
+src/common/lib/analyzer/task-analyzer.ts(673,27): error TS6133: 'rule' is declared but its value is never read.
+src/common/lib/analyzer/task-analyzer.ts(673,38): error TS6133: 'features' is declared but its value is never read.
+src/common/lib/examples/basic-usage.ts(8,3): error TS6133: 'TaskAnalyzer' is declared but its value is never read.
+src/common/lib/examples/basic-usage.ts(9,3): error TS6133: 'WorkflowGenerator' is declared but its value is never read.
+src/common/lib/generator/rule-engine.ts(8,1): error TS6133: 'path' is declared but its value is never read.
+src/common/lib/generator/rule-engine.ts(9,23): error TS7016: Could not find a declaration file for module 'js-yaml'. 'D:/VScode/TotalProject/ShadowFlow/node_modules/js-yaml/dist/js-yaml.mjs' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/js-yaml` if it exists or add a new declaration (.d.ts) file containing `declare module 'js-yaml';`
+src/common/lib/generator/rule-engine.ts(19,3): error TS6133: 'NodeDefinition' is declared but its value is never read.
+src/common/lib/generator/rule-engine.ts(20,3): error TS6133: 'EdgeDefinition' is declared but its value is never read.
+src/common/lib/generator/rule-engine.ts(146,41): error TS6133: 'features' is declared but its value is never read.
+src/common/lib/generator/rule-engine.ts(216,41): error TS6133: 'features' is declared but its value is never read.
+src/common/lib/generator/rule-engine.ts(249,41): error TS6133: 'features' is declared but its value is never read.
+src/common/lib/generator/rule-engine.ts(787,34): error TS2352: Conversion of type 'NodeDefinition' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'NodeDefinition'.
+src/common/lib/generator/workflow-generator.ts(15,22): error TS6133: 'createRuleEngine' is declared but its value is never read.
+src/common/types/index.ts(204,3): error TS7010: 'off', which lacks return-type annotation, implicitly has an 'any' return type.
+src/common/types/index.ts(331,3): error TS2305: Module '"./river"' has no exported member 'Branch'.
+src/common/types/index.ts(332,3): error TS2305: Module '"./river"' has no exported member 'BranchConfig'.
+src/common/types/index.ts(333,3): error TS2305: Module '"./river"' has no exported member 'BranchMessage'.
+src/common/types/index.ts(334,3): error TS2305: Module '"./river"' has no exported member 'BranchStatus'.
+src/common/types/index.ts(335,3): error TS2305: Module '"./river"' has no exported member 'SyncPoint'.
+src/common/types/index.ts(336,3): error TS2305: Module '"./river"' has no exported member 'SyncPointConfig'.
+src/common/types/index.ts(337,3): error TS2305: Module '"./river"' has no exported member 'SyncPointStatus'.
+src/common/types/index.ts(338,3): error TS2305: Module '"./river"' has no exported member 'Conflict'.
+src/common/types/index.ts(339,3): error TS2305: Module '"./river"' has no exported member 'ConflictType'.
+src/common/types/index.ts(340,3): error TS2305: Module '"./river"' has no exported member 'ConflictResolution'.
+src/common/types/index.ts(341,3): error TS2305: Module '"./river"' has no exported member 'ConflictDetectionOptions'.
+src/common/types/index.ts(342,3): error TS2305: Module '"./river"' has no exported member 'Decision'.
+src/common/types/index.ts(343,3): error TS2305: Module '"./river"' has no exported member 'DecisionType'.
+src/common/types/index.ts(344,3): error TS2305: Module '"./river"' has no exported member 'Dependency'.
+src/common/types/index.ts(345,3): error TS2305: Module '"./river"' has no exported member 'Agreement'.
+src/common/types/index.ts(346,3): error TS2305: Module '"./river"' has no exported member 'Message'.
+src/common/types/index.ts(347,3): error TS2305: Module '"./river"' has no exported member 'MessageType'.
+src/common/types/index.ts(348,3): error TS2305: Module '"./river"' has no exported member 'Subscription'.
+src/common/types/index.ts(349,3): error TS2305: Module '"./river"' has no exported member 'RiverNetworkAccess'.
+src/common/types/index.ts(355,1): error TS2308: Module './role' has already exported a member named 'MemoryType'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(355,1): error TS2308: Module './role' has already exported a member named 'Role'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(360,1): error TS2308: Module './role' has already exported a member named 'PermissionConfig'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(360,1): error TS2308: Module './role' has already exported a member named 'RoleConfig'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(365,1): error TS2308: Module './node-core' has already exported a member named 'ConfigFieldDefinition'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(365,1): error TS2308: Module './node-core' has already exported a member named 'I18nText'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(365,1): error TS2308: Module './node-core' has already exported a member named 'IEventEmitter'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(365,1): error TS2308: Module './node-core' has already exported a member named 'ILogger'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(365,1): error TS2308: Module './node-core' has already exported a member named 'INodeExecutor'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(365,1): error TS2308: Module './node-core' has already exported a member named 'NodeConfigSchema'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(365,1): error TS2308: Module './node-core' has already exported a member named 'NodeType'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(366,1): error TS2308: Module './memory' has already exported a member named 'IMemoryChunk'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(366,1): error TS2308: Module './node-core' has already exported a member named 'NodeConfigSchema'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/index.ts(366,1): error TS2308: Module './role' has already exported a member named 'MemoryType'. Consider explicitly re-exporting to resolve the ambiguity.
+src/common/types/memory.ts(89,28): error TS2304: Cannot find name 'INodeResult'.
+src/common/utils/nodeUtils.ts(6,33): error TS2307: Cannot find module '../stores/nodeRegistryStore' or its corresponding type declarations.
+src/common/utils/nodeUtils.ts(25,5): error TS2353: Object literal may only specify known properties, and 'accentColor' does not exist in type 'NodeData'.
+src/common/utils/nodeUtils.ts(107,24): error TS18048: 'nodeDef.configSchema.properties' is possibly 'undefined'.
+src/components/ComposerSettingsPopup.tsx(27,7): error TS2740: Type '{ anthropic: string; openai: string; deepseek: string; zhipu: string; }' is missing the following properties from type 'Record<ProviderId, string>': google, qwen, moonshot, mistral, and 5 more.
+src/components/GenerationSettings.tsx(67,7): error TS2740: Type '{ anthropic: string; openai: string; deepseek: string; zhipu: string; }' is missing the following properties from type 'Record<ProviderId, string>': google, qwen, moonshot, mistral, and 5 more.
+src/core/components/builder/kits/ReviewApprovalWizard.tsx(129,7): error TS6133: 'cs' is declared but its value is never read.
+src/core/components/builder/kits/ReviewApprovalWizard.tsx(633,9): error TS2322: Type 'string' is not assignable to type '"markdown" | "json" | "plain_text" | undefined'.
+src/core/components/builder/SceneCanvasShell.tsx(39,10): error TS6133: 'centerX' is declared but its value is never read.
+src/core/components/editor/YamlEditor.tsx(3,30): error TS2307: Cannot find module 'monaco-editor' or its corresponding type declarations.
+src/core/components/inspector/ApprovalGateForm.tsx(2,35): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/components/inspector/NodeInspector.tsx(1,35): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/components/Node/AgentNode.tsx(14,31): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/components/Node/ApprovalGateNode.tsx(3,31): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/components/Node/BarrierNode.tsx(3,31): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/components/Node/BaseNode.tsx(5,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/Node/BaseNode.tsx(7,26): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/components/Node/BaseNode.tsx(40,25): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/core/components/Node/BaseNode.tsx(40,32): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/BaseNode.tsx(98,28): error TS7006: Parameter 'output' implicitly has an 'any' type.
+src/core/components/Node/BaseNode.tsx(98,36): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Coordinate.tsx(5,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/Node/Coordinate.tsx(6,39): error TS2614: Module '"reactflow"' has no exported member 'NodeData'. Did you mean to use 'import NodeData from "reactflow"' instead?
+src/core/components/Node/Coordinate.tsx(64,25): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/core/components/Node/Coordinate.tsx(64,32): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Coordinate.tsx(219,26): error TS7006: Parameter 'output' implicitly has an 'any' type.
+src/core/components/Node/Coordinate.tsx(219,34): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Decision.tsx(5,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/Node/Decision.tsx(6,39): error TS2614: Module '"reactflow"' has no exported member 'NodeData'. Did you mean to use 'import NodeData from "reactflow"' instead?
+src/core/components/Node/Decision.tsx(61,25): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/core/components/Node/Decision.tsx(61,32): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Decision.tsx(172,26): error TS7006: Parameter 'output' implicitly has an 'any' type.
+src/core/components/Node/Decision.tsx(172,34): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Execution.tsx(5,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/Node/Execution.tsx(6,39): error TS2614: Module '"reactflow"' has no exported member 'NodeData'. Did you mean to use 'import NodeData from "reactflow"' instead?
+src/core/components/Node/Execution.tsx(60,25): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/core/components/Node/Execution.tsx(60,32): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Execution.tsx(163,26): error TS7006: Parameter 'output' implicitly has an 'any' type.
+src/core/components/Node/Execution.tsx(163,34): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Input.tsx(5,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/Node/Input.tsx(6,39): error TS2614: Module '"reactflow"' has no exported member 'NodeData'. Did you mean to use 'import NodeData from "reactflow"' instead?
+src/core/components/Node/Input.tsx(57,25): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/core/components/Node/Input.tsx(57,32): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Input.tsx(133,26): error TS7006: Parameter 'output' implicitly has an 'any' type.
+src/core/components/Node/Input.tsx(133,34): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Output.tsx(5,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/Node/Output.tsx(6,39): error TS2614: Module '"reactflow"' has no exported member 'NodeData'. Did you mean to use 'import NodeData from "reactflow"' instead?
+src/core/components/Node/Output.tsx(62,25): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/core/components/Node/Output.tsx(62,32): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Planning.tsx(5,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/Node/Planning.tsx(6,39): error TS2614: Module '"reactflow"' has no exported member 'NodeData'. Did you mean to use 'import NodeData from "reactflow"' instead?
+src/core/components/Node/Planning.tsx(61,25): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/core/components/Node/Planning.tsx(61,32): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Planning.tsx(150,26): error TS7006: Parameter 'output' implicitly has an 'any' type.
+src/core/components/Node/Planning.tsx(150,34): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Review.tsx(5,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/Node/Review.tsx(6,39): error TS2614: Module '"reactflow"' has no exported member 'NodeData'. Did you mean to use 'import NodeData from "reactflow"' instead?
+src/core/components/Node/Review.tsx(60,25): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/core/components/Node/Review.tsx(60,32): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/Review.tsx(186,26): error TS7006: Parameter 'output' implicitly has an 'any' type.
+src/core/components/Node/Review.tsx(186,34): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Node/SfNode.tsx(3,26): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/components/Panel/ConfigPanel.tsx(5,1): error TS6192: All imports in import declaration are unused.
+src/core/components/Panel/ConfigPanel.tsx(56,8): error TS6133: 'fieldKey' is declared but its value is never read.
+src/core/components/Panel/DamTimeline.tsx(3,31): error TS2307: Cannot find module '../../types/river' or its corresponding type declarations.
+src/core/components/Panel/DamTimeline.tsx(37,27): error TS7006: Parameter 'dam' implicitly has an 'any' type.
+src/core/components/Panel/DamTimeline.tsx(37,32): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/components/Panel/LiveDashboard.tsx(8,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/Panel/LiveDashboard.tsx(9,23): error TS6133: 'NodeState' is declared but its value is never read.
+src/core/components/Panel/NodePanel.tsx(8,30): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/components/Panel/NodePanel.tsx(174,75): error TS18046: 'nodes' is of type 'unknown'.
+src/core/components/Panel/RiverInspector.tsx(4,29): error TS2307: Cannot find module '../../types/river' or its corresponding type declarations.
+src/core/components/Panel/RiverInspector.tsx(33,33): error TS7006: Parameter 'chunk' implicitly has an 'any' type.
+src/core/components/Panel/RiverInspector.tsx(42,31): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/core/components/Panel/RiverInspector.tsx(69,7): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ context: string; execution: string; working: string; knowledge: string; }'.
+src/core/components/pet/PetPickerModal.tsx(98,10): error TS6133: 'BuiltinCard' is declared but its value is never read.
+src/core/components/settings/AdvancedSection.tsx(13,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/settings/AdvancedSection.tsx(127,32): error TS6133: 'agentName' is declared but its value is never read.
+src/core/components/settings/LanguageSection.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/core/components/settings/MediaProvidersSection.tsx(11,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/settings/NotificationsSection.tsx(14,8): error TS6133: 'React' is declared but its value is never read.
+src/core/components/Toolbar/Toolbar.tsx(11,47): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/components/Toolbar/Toolbar.tsx(83,31): error TS6133: 'error' is declared but its value is never read.
+src/core/components/Toolbar/Toolbar.tsx(184,35): error TS2339: Property 'setZoom' does not exist on type '{ nodes: WorkflowNode[]; edges: WorkflowEdge[]; selectedNodeIds: string[]; selectedEdgeIds: string[]; isRunning: boolean; runProgress: number; ui: any; river: RiverState; addNode: (nodeType: string, position: { x: number; y: number; }) => any; ... 35 more ...; setRunProgress: (progress: number) => void; }'.
+src/core/components/Toolbar/Toolbar.tsx(189,35): error TS2339: Property 'setZoom' does not exist on type '{ nodes: WorkflowNode[]; edges: WorkflowEdge[]; selectedNodeIds: string[]; selectedEdgeIds: string[]; isRunning: boolean; runProgress: number; ui: any; river: RiverState; addNode: (nodeType: string, position: { x: number; y: number; }) => any; ... 35 more ...; setRunProgress: (progress: number) => void; }'.
+src/core/components/Toolbar/Toolbar.tsx(194,35): error TS2339: Property 'setZoom' does not exist on type '{ nodes: WorkflowNode[]; edges: WorkflowEdge[]; selectedNodeIds: string[]; selectedEdgeIds: string[]; isRunning: boolean; runProgress: number; ui: any; river: RiverState; addNode: (nodeType: string, position: { x: number; y: number; }) => any; ... 35 more ...; setRunProgress: (progress: number) => void; }'.
+src/core/components/Toolbar/Toolbar.tsx(294,33): error TS2339: Property 'setLanguage' does not exist on type '{ nodes: WorkflowNode[]; edges: WorkflowEdge[]; selectedNodeIds: string[]; selectedEdgeIds: string[]; isRunning: boolean; runProgress: number; ui: any; river: RiverState; addNode: (nodeType: string, position: { x: number; y: number; }) => any; ... 35 more ...; setRunProgress: (progress: number) => void; }'.
+src/core/executors/base-executor.ts(12,8): error TS2307: Cannot find module '../types/node' or its corresponding type declarations.
+src/core/executors/base-node-executor.ts(10,3): error TS6133: 'PortDefinition' is declared but its value is never read.
+src/core/executors/base-node-executor.ts(11,3): error TS6133: 'WorkflowState' is declared but its value is never read.
+src/core/executors/base-node-executor.ts(19,8): error TS2307: Cannot find module '../types/node.types' or its corresponding type declarations.
+src/core/executors/coordinate/aggregate-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/coordinate/assign-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/coordinate/assign-executor.ts(135,5): error TS6133: 'context' is declared but its value is never read.
+src/core/executors/coordinate/assign-executor.ts(186,5): error TS6133: 'taskId' is declared but its value is never read.
+src/core/executors/coordinate/assign-executor.ts(242,45): error TS6133: 'agentPool' is declared but its value is never read.
+src/core/executors/coordinate/barrier-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/coordinate/barrier-executor.ts(137,52): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/core/executors/coordinate/negotiate-executor.ts(7,60): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/coordinate/negotiate-executor.ts(129,5): error TS6133: 'timeout' is declared but its value is never read.
+src/core/executors/coordinate/negotiate-executor.ts(231,5): error TS6133: 'maxRounds' is declared but its value is never read.
+src/core/executors/coordinate/negotiate-executor.ts(274,5): error TS6133: 'context' is declared but its value is never read.
+src/core/executors/coordinate/negotiate-executor.ts(285,5): error TS6133: 'participants' is declared but its value is never read.
+src/core/executors/coordinate/negotiate-executor.ts(286,5): error TS6133: 'context' is declared but its value is never read.
+src/core/executors/coordinate/parallel-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/coordinate/sequence-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/decision/branch-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/decision/loop-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/decision/merge-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/execution/code-executor.ts(7,63): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/execution/code-executor.ts(399,11): error TS2740: Type '{ javascript: (task: string) => string; typescript: (task: string) => string; python: (task: string) => string; java: (task: string) => string; go: (task: string) => string; rust: (task: string) => string; }' is missing the following properties from type 'Record<ProgrammingLanguage, (task: string) => string>': ruby, c, cpp, csharp, and 3 more.
+src/core/executors/execution/generate-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/execution/generate-executor.ts(120,5): error TS6133: 'code' is declared but its value is never read.
+src/core/executors/execution/generate-executor.ts(199,48): error TS6133: 'format' is declared but its value is never read.
+src/core/executors/execution/test-executor.ts(7,58): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/execution/test-executor.ts(166,5): error TS6133: 'design' is declared but its value is never read.
+src/core/executors/execution/test-executor.ts(236,5): error TS6133: 'code' is declared but its value is never read.
+src/core/executors/execution/test-executor.ts(238,5): error TS6133: 'framework' is declared but its value is never read.
+src/core/executors/execution/test-executor.ts(239,5): error TS6133: 'timeout' is declared but its value is never read.
+src/core/executors/execution/test-executor.ts(240,5): error TS6133: 'context' is declared but its value is never read.
+src/core/executors/execution/transform-executor.ts(7,58): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/execution/transform-executor.ts(185,5): error TS6133: 'context' is declared but its value is never read.
+src/core/executors/execution/transform-executor.ts(308,35): error TS6133: 'config' is declared but its value is never read.
+src/core/executors/input/clarify-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/input/clarify-executor.ts(142,33): error TS6133: 'index' is declared but its value is never read.
+src/core/executors/input/receive-executor.ts(7,35): error TS6133: 'NodeTypeId' is declared but its value is never read.
+src/core/executors/input/receive-executor.ts(7,53): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/input/receive-executor.ts(54,11): error TS6133: 'startTime' is declared but its value is never read.
+src/core/executors/input/understand-executor.ts(7,60): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/node-definitions.ts(6,65): error TS2307: Cannot find module '../types/node.types' or its corresponding type declarations.
+src/core/executors/node-executor-registry.ts(6,36): error TS6196: 'NodeTypeId' is declared but never used.
+src/core/executors/node-executor-registry.ts(6,54): error TS2307: Cannot find module '../types/node.types' or its corresponding type declarations.
+src/core/executors/node-executor-registry.ts(7,46): error TS2307: Cannot find module '../types/node.types' or its corresponding type declarations.
+src/core/executors/node-registry.ts(7,46): error TS6133: 'NodeTypeId' is declared but its value is never read.
+src/core/executors/node-registry.ts(7,64): error TS2307: Cannot find module '../types/node-core' or its corresponding type declarations.
+src/core/executors/node-registry.ts(385,17): error TS6133: 'nodeId' is declared but its value is never read.
+src/core/executors/output/notify-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/output/report-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/output/report-executor.ts(144,59): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/core/executors/output/report-executor.ts(145,59): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/core/executors/output/report-executor.ts(146,61): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/core/executors/output/report-executor.ts(146,66): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/core/executors/output/store-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/output/store-executor.ts(133,11): error TS6133: 'append' is declared but its value is never read.
+src/core/executors/output/store-executor.ts(259,13): error TS6133: 'response' is declared but its value is never read.
+src/core/executors/planning/analyze-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/planning/analyze-executor.ts(365,5): error TS6133: 'detailLevel' is declared but its value is never read.
+src/core/executors/planning/decompose-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/planning/decompose-executor.ts(335,11): error TS6133: 'taskMap' is declared but its value is never read.
+src/core/executors/planning/design-executor.ts(7,58): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/planning/design-executor.ts(393,33): error TS7006: Parameter 'model' implicitly has an 'any' type.
+src/core/executors/planning/design-executor.ts(401,39): error TS7006: Parameter 'rel' implicitly has an 'any' type.
+src/core/executors/planning/design-executor.ts(410,33): error TS7006: Parameter 'iface' implicitly has an 'any' type.
+src/core/executors/planning/design-executor.ts(443,42): error TS7006: Parameter 'lib' implicitly has an 'any' type.
+src/core/executors/planning/design-executor.ts(450,43): error TS7006: Parameter 'step' implicitly has an 'any' type.
+src/core/executors/planning/design-executor.ts(450,49): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/core/executors/planning/spec-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/planning/spec-executor.ts(146,11): error TS6133: 'llmClient' is declared but its value is never read.
+src/core/executors/planning/spec-executor.ts(177,5): error TS6133: 'understanding' is declared but its value is never read.
+src/core/executors/planning/spec-executor.ts(178,5): error TS6133: 'design' is declared but its value is never read.
+src/core/executors/review/review-executor.ts(7,68): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/review/review-executor.ts(241,63): error TS6133: 'strictness' is declared but its value is never read.
+src/core/executors/review/security-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/review/validate-executor.ts(7,41): error TS2307: Cannot find module '../../types/node.types' or its corresponding type declarations.
+src/core/executors/review/validate-executor.ts(8,37): error TS6133: 'SafeExpressionError' is declared but its value is never read.
+src/core/executors/review/validate-executor.ts(352,57): error TS6133: 'context' is declared but its value is never read.
+src/core/executors/review/validate-executor.ts(383,67): error TS6133: 'context' is declared but its value is never read.
+src/core/hooks/useAutoLayout.ts(6,33): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/core/hooks/useAutoLayout.ts(73,13): error TS6133: 'verticalGap' is declared but its value is never read.
+src/core/hooks/useAutoLayout.ts(107,13): error TS6133: 'positions' is declared but its value is never read.
+src/core/hooks/useExecution.ts(7,49): error TS2307: Cannot find module '../api/workflow' or its corresponding type declarations.
+src/core/hooks/useExecution.ts(8,1): error TS6133: 'MemoryType' is declared but its value is never read.
+src/core/hooks/useExecution.ts(8,28): error TS2307: Cannot find module '../types/river' or its corresponding type declarations.
+src/core/hooks/useSecretsStore.ts(30,23): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(algorithm: AlgorithmIdentifier | EcdhKeyDeriveParams | HkdfParams | Pbkdf2Params, baseKey: CryptoKey, derivedKeyType: AlgorithmIdentifier | ... 3 more ... | AesDerivedKeyParams, extractable: boolean, keyUsages: Iterable<...>): Promise<...>', gave the following error.
+    Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
+      Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+        Types of property 'buffer' are incompatible.
+          Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+            Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+              Types of property '[Symbol.toStringTag]' are incompatible.
+                Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+  Overload 2 of 2, '(algorithm: AlgorithmIdentifier | EcdhKeyDeriveParams | HkdfParams | Pbkdf2Params, baseKey: CryptoKey, derivedKeyType: AlgorithmIdentifier | ... 3 more ... | AesDerivedKeyParams, extractable: boolean, keyUsages: KeyUsage[]): Promise<...>', gave the following error.
+    Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
+      Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+        Types of property 'buffer' are incompatible.
+          Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+            Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+              Types of property '[Symbol.toStringTag]' are incompatible.
+                Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+src/core/hooks/useSecretsStore.ts(58,48): error TS2345: Argument of type 'Uint8Array<ArrayBuffer>' is not assignable to parameter of type 'ArrayBuffer'.
+  Types of property '[Symbol.toStringTag]' are incompatible.
+    Type '"Uint8Array"' is not assignable to type '"ArrayBuffer"'.
+src/core/hooks/useSecretsStore.ts(58,68): error TS2345: Argument of type 'Uint8Array<ArrayBuffer>' is not assignable to parameter of type 'ArrayBuffer'.
+  Types of property '[Symbol.toStringTag]' are incompatible.
+    Type '"Uint8Array"' is not assignable to type '"ArrayBuffer"'.
+src/core/hooks/useSecretsStore.ts(63,62): error TS2322: Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
+  Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+    Types of property 'buffer' are incompatible.
+      Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+        Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+          Types of property '[Symbol.toStringTag]' are incompatible.
+            Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+src/core/hooks/useWorkflow.ts(5,23): error TS6133: 'useMemo' is declared but its value is never read.
+src/core/hooks/useWorkflow.ts(8,48): error TS6133: 'INode' is declared but its value is never read.
+src/core/hooks/useWorkflow.ts(8,75): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/core/hooks/useWorkflowStore.ts(8,10): error TS2459: Module '"./useWorkflow"' declares 'useWorkflow' locally, but it is not exported.
+src/core/hooks/useWorkflowStore.ts(10,10): error TS2459: Module '"./useWorkflow"' declares 'useWorkflow' locally, but it is not exported.
+src/core/hooks/useWorkflowStore.ts(16,22): error TS7006: Parameter 'n' implicitly has an 'any' type.
+src/core/hooks/useZerogSecretsStore.ts(22,23): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(algorithm: AlgorithmIdentifier | EcdhKeyDeriveParams | HkdfParams | Pbkdf2Params, baseKey: CryptoKey, derivedKeyType: AlgorithmIdentifier | ... 3 more ... | AesDerivedKeyParams, extractable: boolean, keyUsages: Iterable<...>): Promise<...>', gave the following error.
+    Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
+      Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+        Types of property 'buffer' are incompatible.
+          Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+            Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+              Types of property '[Symbol.toStringTag]' are incompatible.
+                Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+  Overload 2 of 2, '(algorithm: AlgorithmIdentifier | EcdhKeyDeriveParams | HkdfParams | Pbkdf2Params, baseKey: CryptoKey, derivedKeyType: AlgorithmIdentifier | ... 3 more ... | AesDerivedKeyParams, extractable: boolean, keyUsages: KeyUsage[]): Promise<...>', gave the following error.
+    Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
+      Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+        Types of property 'buffer' are incompatible.
+          Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+            Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+              Types of property '[Symbol.toStringTag]' are incompatible.
+                Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+src/core/hooks/useZerogSecretsStore.ts(52,18): error TS2345: Argument of type 'Uint8Array<ArrayBuffer>' is not assignable to parameter of type 'ArrayBuffer'.
+  Types of property '[Symbol.toStringTag]' are incompatible.
+    Type '"Uint8Array"' is not assignable to type '"ArrayBuffer"'.
+src/core/hooks/useZerogSecretsStore.ts(53,20): error TS2345: Argument of type 'Uint8Array<ArrayBuffer>' is not assignable to parameter of type 'ArrayBuffer'.
+  Types of property '[Symbol.toStringTag]' are incompatible.
+    Type '"Uint8Array"' is not assignable to type '"ArrayBuffer"'.
+src/core/hooks/useZerogSecretsStore.ts(63,24): error TS2322: Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.
+  Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+    Types of property 'buffer' are incompatible.
+      Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+        Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+          Types of property '[Symbol.toStringTag]' are incompatible.
+            Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+src/core/lib/yamlSerializer.ts(25,49): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/core/memory/branch.ts(1,92): error TS2307: Cannot find module '../types/memory' or its corresponding type declarations.
+src/core/memory/conflict-detector.ts(7,8): error TS2307: Cannot find module '../types/memory' or its corresponding type declarations.
+src/core/memory/conflict-detector.ts(348,46): error TS6133: 'd' is declared but its value is never read.
+src/core/memory/conflict-detector.ts(349,9): error TS2552: Cannot find name 'decision'. Did you mean 'decisions'?
+src/core/memory/conflict-detector.ts(349,50): error TS2552: Cannot find name 'decision'. Did you mean 'decisions'?
+src/core/memory/conflict-detector.ts(376,35): error TS6133: 'conflict' is declared but its value is never read.
+src/core/memory/dam.ts(23,3): error TS6133: 'IMemoryChange' is declared but its value is never read.
+src/core/memory/dam.ts(24,3): error TS6133: 'MemoryType' is declared but its value is never read.
+src/core/memory/dam.ts(25,3): error TS6133: 'INodeResult' is declared but its value is never read.
+src/core/memory/dam.ts(26,8): error TS2307: Cannot find module '../types/memory' or its corresponding type declarations.
+src/core/memory/dam.ts(116,14): error TS6133: 'checkpoint' is declared but its value is never read.
+src/core/memory/dam.ts(119,16): error TS6133: 'checkpointId' is declared but its value is never read.
+src/core/memory/dam.ts(353,11): error TS6133: 'now' is declared but its value is never read.
+src/core/memory/dam.ts(501,24): error TS6133: 'key' is declared but its value is never read.
+src/core/memory/dam.ts(514,23): error TS6133: 'key' is declared but its value is never read.
+src/core/memory/index.ts(23,3): error TS1205: Re-exporting a type when 'isolatedModules' is enabled requires using 'export type'.
+src/core/memory/index.ts(24,3): error TS1205: Re-exporting a type when 'isolatedModules' is enabled requires using 'export type'.
+src/core/memory/index.ts(25,3): error TS1205: Re-exporting a type when 'isolatedModules' is enabled requires using 'export type'.
+src/core/memory/index.ts(32,3): error TS2724: '"./sediment"' has no exported member named 'SedimentManager'. Did you mean 'SedimentLayer'?
+src/core/memory/index.ts(33,3): error TS2724: '"./sediment"' has no exported member named 'SedimentConfig'. Did you mean 'ISedimentConfig'?
+src/core/memory/index.ts(34,3): error TS1205: Re-exporting a type when 'isolatedModules' is enabled requires using 'export type'.
+src/core/memory/index.ts(35,3): error TS1205: Re-exporting a type when 'isolatedModules' is enabled requires using 'export type'.
+src/core/memory/index.ts(36,3): error TS2305: Module '"./sediment"' has no exported member 'createSedimentManager'.
+src/core/memory/index.ts(42,3): error TS1205: Re-exporting a type when 'isolatedModules' is enabled requires using 'export type'.
+src/core/memory/index.ts(43,3): error TS2614: Module '"./purifier"' has no exported member 'PurificationResult'. Did you mean to use 'import PurificationResult from "./purifier"' instead?
+src/core/memory/index.ts(44,3): error TS2724: '"./purifier"' has no exported member named 'ConflictInfo'. Did you mean 'Conflict'?
+src/core/memory/index.ts(45,3): error TS1205: Re-exporting a type when 'isolatedModules' is enabled requires using 'export type'.
+src/core/memory/index.ts(46,3): error TS2614: Module '"./purifier"' has no exported member 'createPurifier'. Did you mean to use 'import createPurifier from "./purifier"' instead?
+src/core/memory/index.ts(79,15): error TS2307: Cannot find module '../types/memory' or its corresponding type declarations.
+src/core/memory/index.ts(83,17): error TS2614: Module '"./river"' has no exported member 'IRiverMemoryAccess'. Did you mean to use 'import IRiverMemoryAccess from "./river"' instead?
+src/core/memory/index.ts(84,10): error TS2724: '"./sediment"' has no exported member named 'SedimentManager'. Did you mean 'SedimentLayer'?
+src/core/memory/index.ts(84,27): error TS2305: Module '"./sediment"' has no exported member 'createSedimentManager'.
+src/core/memory/index.ts(85,40): error TS2459: Module '"./dam"' declares 'ICheckpoint' locally, but it is not exported.
+src/core/memory/index.ts(85,53): error TS2459: Module '"./dam"' declares 'CheckpointTrigger' locally, but it is not exported.
+src/core/memory/index.ts(86,20): error TS2614: Module '"./purifier"' has no exported member 'createPurifier'. Did you mean to use 'import createPurifier from "./purifier"' instead?
+src/core/memory/index.ts(91,8): error TS2307: Cannot find module '../types/memory' or its corresponding type declarations.
+src/core/memory/index.ts(149,11): error TS6133: 'config' is declared but its value is never read.
+src/core/memory/index.ts(169,7): error TS2353: Object literal may only specify known properties, and 'defaultTTL' does not exist in type 'DamConfig'.
+src/core/memory/index.ts(217,17): error TS2339: Property 'associatedNodes' does not exist on type 'IPattern'.
+src/core/memory/index.ts(217,43): error TS2339: Property 'associatedNodes' does not exist on type 'IPattern'.
+src/core/memory/index.ts(218,22): error TS2339: Property 'associatedNodes' does not exist on type 'IPattern'.
+src/core/memory/index.ts(219,19): error TS2339: Property 'associatedNodes' does not exist on type 'IPattern'.
+src/core/memory/index.ts(227,37): error TS2551: Property 'createSnapshot' does not exist on type 'River'. Did you mean 'getSnapshot'?
+src/core/memory/index.ts(231,11): error TS2559: Type '"node_complete"' has no properties in common with type 'Partial<CheckpointMetadata>'.
+src/core/memory/index.ts(234,27): error TS2339: Property 'id' does not exist on type 'string'.
+src/core/memory/index.ts(240,22): error TS2551: Property 'restoreSnapshot' does not exist on type 'River'. Did you mean 'getSnapshot'?
+src/core/memory/index.ts(261,16): error TS2339: Property 'merged' does not exist on type 'Promise<IMemorySnapshot>'.
+src/core/memory/index.ts(261,42): error TS2339: Property 'removed' does not exist on type 'Promise<IMemorySnapshot>'.
+src/core/memory/index.ts(274,33): error TS2551: Property 'createSnapshot' does not exist on type 'River'. Did you mean 'getSnapshot'?
+src/core/memory/index.ts(288,18): error TS2551: Property 'restoreSnapshot' does not exist on type 'River'. Did you mean 'getSnapshot'?
+src/core/memory/index.ts(299,23): error TS2551: Property 'createSnapshot' does not exist on type 'River'. Did you mean 'getSnapshot'?
+src/core/memory/index.ts(331,33): error TS2551: Property 'createSnapshot' does not exist on type 'River'. Did you mean 'getSnapshot'?
+src/core/memory/index.ts(342,16): error TS6133: 'removedId' is declared but its value is never read.
+src/core/memory/main-flow.ts(1,25): error TS6196: 'IMemoryChunk' is declared but never used.
+src/core/memory/main-flow.ts(1,45): error TS2307: Cannot find module '../types/memory' or its corresponding type declarations.
+src/core/memory/message-bus.ts(1,88): error TS2307: Cannot find module '../types/memory' or its corresponding type declarations.
+src/core/memory/purifier.ts(17,8): error TS2307: Cannot find module '../types/memory' or its corresponding type declarations.
+src/core/memory/purifier.ts(527,21): error TS2339: Property 'add' does not exist on type 'Map<string, IMemoryChunk>'.
+src/core/memory/purifier.ts(659,11): error TS6133: 'result' is declared but its value is never read.
+src/core/memory/river-network.ts(4,8): error TS2307: Cannot find module '../types/memory' or its corresponding type declarations.
+src/core/memory/river-network.ts(9,28): error TS2459: Module '"./conflict-detector"' declares 'ConflictContext' locally, but it is not exported.
+src/core/memory/river-network.ts(22,11): error TS6133: 'currentBranchId' is declared but its value is never read.
+src/core/memory/river-network.ts(317,46): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/core/memory/river.ts(23,8): error TS2307: Cannot find module '../types/memory' or its corresponding type declarations.
+src/core/memory/river.ts(291,60): error TS18048: 'filter.minImportance' is possibly 'undefined'.
+src/core/memory/river.ts(441,41): error TS2561: Object literal may only specify known properties, but 'patterns' does not exist in type 'Partial<RiverEventData>'. Did you mean to write 'pattern'?
+src/core/memory/river.ts(707,17): error TS6133: 'type' is declared but its value is never read.
+src/core/memory/sediment.ts(352,7): error TS2741: Property 'content' is missing in type '{ id: string; type: PatternType; reason: string; stats: { occurrences: number; successRate: number; lastUsedAt: Date; createdAt: Date; }; importance: number; }' but required in type 'IPattern'.
+src/core/memory/sediment.ts(406,26): error TS6133: 'content' is declared but its value is never read.
+src/core/memory/sediment.ts(431,17): error TS6133: 'id' is declared but its value is never read.
+src/core/memory/sync-point.ts(1,69): error TS2307: Cannot find module '../types/memory' or its corresponding type declarations.
+src/core/memory/sync-point.ts(2,33): error TS2459: Module '"./conflict-detector"' declares 'ConflictContext' locally, but it is not exported.
+src/core/memory/sync-point.ts(154,11): error TS6133: 'conflicts' is declared but its value is never read.
+src/core/memory/sync-point.ts(157,11): error TS6133: 'autoResolved' is declared but its value is never read.
+src/core/memory/sync-point.ts(165,7): error TS2322: Type 'Agreement | null' is not assignable to type 'Agreement | undefined'.
+  Type 'null' is not assignable to type 'Agreement | undefined'.
+src/core/nodes/base.ts(10,8): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/core/nodes/base.ts(41,3): error TS2416: Property 'type' in type 'BaseNode' is not assignable to the same property in base type 'IExecutableNode'.
+  Type '"custom" | "builtin" | "composite"' is not assignable to type '"custom" | "builtin"'.
+    Type '"composite"' is not assignable to type '"custom" | "builtin"'.
+src/core/nodes/builtin/coordinate.ts(6,46): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/nodes/builtin/coordinate.ts(34,17): error TS6133: 'context' is declared but its value is never read.
+src/core/nodes/builtin/decision.ts(6,46): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/nodes/builtin/execution.ts(6,46): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/nodes/builtin/execution.ts(34,17): error TS6133: 'context' is declared but its value is never read.
+src/core/nodes/builtin/input.ts(6,46): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/nodes/builtin/output.ts(6,46): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/nodes/builtin/output.ts(34,17): error TS6133: 'context' is declared but its value is never read.
+src/core/nodes/builtin/planning.ts(6,46): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/nodes/builtin/planning.ts(34,17): error TS6133: 'context' is declared but its value is never read.
+src/core/nodes/builtin/review.ts(6,46): error TS2307: Cannot find module '../../types' or its corresponding type declarations.
+src/core/nodes/builtin/review.ts(34,17): error TS6133: 'context' is declared but its value is never read.
+src/core/nodes/registry.ts(5,35): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/core/nodes/registry.ts(6,38): error TS2307: Cannot find module '../types/node' or its corresponding type declarations.
+src/core/nodes/registry.ts(211,29): error TS7006: Parameter 'tag' implicitly has an 'any' type.
+src/core/permission/checker.ts(5,1): error TS6133: 'PermissionConfig' is declared but its value is never read.
+src/core/permission/checker.ts(5,39): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/core/permission/matrix.ts(5,39): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/core/permission/matrix.ts(6,47): error TS6196: 'MemoryType' is declared but never used.
+src/core/permission/matrix.ts(6,59): error TS6196: 'DecisionType' is declared but never used.
+src/core/permission/matrix.ts(210,17): error TS6133: 'name' is declared but its value is never read.
+src/core/permission/matrix.ts(285,45): error TS2698: Spread types may only be created from object types.
+src/core/permission/matrix.ts(293,28): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'Permission'.
+src/core/role/index.ts(7,1): error TS2308: Module './registry' has already exported a member named 'BUILTIN_ROLES'. Consider explicitly re-exporting to resolve the ambiguity.
+src/core/role/permission-manager.ts(15,8): error TS2307: Cannot find module '../types/role' or its corresponding type declarations.
+src/core/role/permission-manager.ts(474,53): error TS7006: Parameter 'allowedPath' implicitly has an 'any' type.
+src/core/role/registry.ts(5,53): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/core/role/registry.ts(241,17): error TS6133: 'id' is declared but its value is never read.
+src/core/role/role-manager.ts(13,3): error TS6133: 'Capability' is declared but its value is never read.
+src/core/role/role-manager.ts(15,8): error TS2307: Cannot find module '../types/role' or its corresponding type declarations.
+src/core/role/role-manager.ts(58,17): error TS6133: 'roleKey' is declared but its value is never read.
+src/core/role/role-manager.ts(59,22): error TS18046: 'role' is of type 'unknown'.
+src/core/role/role-manager.ts(163,68): error TS18046: 'r' is of type 'unknown'.
+src/core/role/role-manager.ts(214,5): error TS2322: Type 'void' is not assignable to type 'boolean'.
+src/core/role/role-manager.ts(432,70): error TS18046: 'r' is of type 'unknown'.
+src/core/role/types.ts(5,35): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/core/security/safeExpression.ts(15,5): error TS2353: Object literal may only specify known properties, and ''not in'' does not exist in type '{ add?: boolean | undefined; comparison?: boolean | undefined; concatenate?: boolean | undefined; conditional?: boolean | undefined; divide?: boolean | undefined; factorial?: boolean | undefined; ... 39 more ...; log2?: boolean | undefined; }'.
+src/core/security/safeExpression.ts(71,34): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'Value | undefined'.
+src/core/security/safeExpression.ts(91,36): error TS2322: Type 'Record<string, unknown>' is not assignable to type 'Value'.
+src/core/security/safeExpression.ts(113,26): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'Value | undefined'.
+src/core/stores/nodeRegistryStore.ts(6,37): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/core/stores/workflowStore.ts(7,98): error TS2307: Cannot find module '../types' or its corresponding type declarations.
+src/core/stores/workflowStore.ts(8,38): error TS6133: 'PatternSediment' is declared but its value is never read.
+src/core/stores/workflowStore.ts(8,85): error TS2307: Cannot find module '../types/river' or its corresponding type declarations.
+src/core/stores/workflowStore.ts(104,10): error TS6133: 'generateEdgeId' is declared but its value is never read.
+src/core/stores/workflowStore.ts(163,44): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/core/stores/workflowStore.ts(189,43): error TS7006: Parameter 'd' implicitly has an 'any' type.
+src/core/stores/workflowStore.ts(213,49): error TS7006: Parameter 'n' implicitly has an 'any' type.
+src/core/stores/workflowStore.ts(225,49): error TS7006: Parameter 'n' implicitly has an 'any' type.
+src/core/stores/workflowStore.ts(231,13): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/core/stores/workflowStore.ts(245,39): error TS7006: Parameter 'n' implicitly has an 'any' type.
+src/core/stores/workflowStore.ts(264,11): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/core/stores/workflowStore.ts(279,49): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/core/stores/workflowStore.ts(291,49): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/core/stores/workflowStore.ts(401,22): error TS6133: 'format' is declared but its value is never read.
+src/core/stores/workflowStore.ts(413,31): error TS6133: 'format' is declared but its value is never read.
+src/EditorPage.tsx(892,10): error TS6133: 'KV' is declared but its value is never read.
+src/EditorPage.tsx(1007,9): error TS2322: Type 'string' is not assignable to type '{ en: string; zh: string; }'.
+src/pages/ChatPage.tsx(843,9): error TS6133: 'builderUrl' is declared but its value is never read.
+src/test/setup.ts(4,15): error TS2345: Argument of type 'TestingLibraryMatchers<any, void>' is not assignable to parameter of type 'MatchersObject<MatcherState>'.
+  Type 'TestingLibraryMatchers<any, void>' is not assignable to type '{ [x: string]: RawMatcherFn<MatcherState, unknown[]> | undefined; toBeInTheDOM?: RawMatcherFn<MatcherState, [container?: SVGElement | HTMLElement | undefined]> | undefined; ... 25 more ...; toHaveErrorMessage?: RawMatcherFn<...> | undefined; }'.
+    The types returned by 'toBeInTheDOM(...)' are incompatible between these types.
+      Type 'void' is not assignable to type 'ExpectationResult'.
+src/test/setup.ts(43,1): error TS2322: Type 'typeof IntersectionObserver' is not assignable to type '{ new (callback: IntersectionObserverCallback, options?: IntersectionObserverInit | undefined): IntersectionObserver; prototype: IntersectionObserver; }'.
+  Types of property 'prototype' are incompatible.
+    Type 'IntersectionObserver' is missing the following properties from type 'IntersectionObserver': root, rootMargin, thresholds, takeRecords

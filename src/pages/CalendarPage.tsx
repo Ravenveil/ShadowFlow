@@ -1105,14 +1105,14 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
       </div>
 
       {/*
-        ── 订阅 · 0G CID ──
+        ── 订阅 · CID ──
         2026-05-20: 此区块前后端均未接入（无 /api/subscriptions、无 client API
         模块、两个示例订阅项为 hardcode 数组、订阅按钮只清空输入框）。按
         CLAUDE.md "只能加不能删" 规则保留 DOM 结构，但整体加 WIP 锁：
           - opacity 降到 .45 + pointerEvents:'none'  → 视觉提示+禁用交互
           - 右上角加 "未接入" 角标
           - 输入框/按钮 disabled
-        待后端实装 0G 订阅接口后移除这层 wrapper。
+        待后端实装订阅接口后移除这层 wrapper。
       */}
       <div style={{ position:'relative', opacity:.45, pointerEvents:'none', flexShrink:0 }} aria-disabled="true">
         <div style={{
@@ -1128,7 +1128,7 @@ function CalSidebar({ year, month, eventsByDate, schedules, groupNames, slotOf, 
         </div>
         <div style={{ padding:'0 6px' }}>
           {[
-            { glyph:'0G', name:'0G Testnet Epoch',   cid:'0xa3…f912' },
+            { glyph:'团', name:'团队 · Sprint 计划', cid:'0xa3…f912' },
             { glyph:'社', name:'社区 · NeurIPS 周历', cid:'cid://…rev3' },
           ].map((s, i) => (
             <div key={i} style={{ display:'flex', alignItems:'center', gap:9, padding:'6px 10px', borderRadius:7, cursor:'not-allowed' }}>

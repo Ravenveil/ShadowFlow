@@ -281,13 +281,13 @@ export function ThreadDrawerFB({
                   />
                   <span>{tr('chat.alsoPostToMain', '同时发到主频道')}</span>
                 </label>
-                {/* Stream L 2026-05-28 — 0G synced 角标 (v7 line 1559)
+                {/* Stream L 2026-05-28 — 同步状态角标 (v7 line 1559)；2026-08-11 去 0G 文案
                     syncStatus 不传时此 span 完全不渲染 */}
                 {syncStatus && (
                   <span className={styles.drCompSyncRight}>
                     {syncStatus.synced && <span className={styles.drCompSyncDot} aria-hidden />}
                     <span className={styles.drCompSyncText}>
-                      {syncStatus.synced ? '0G synced' : '0G pending'}
+                      {syncStatus.synced ? '已同步' : '同步中'}
                       {syncStatus.txHash ? ` · ${syncStatus.txHash}` : ''}
                     </span>
                   </span>

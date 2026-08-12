@@ -234,7 +234,7 @@ export default function ComposerFB({
               {tr('chat.composerHint', '⏎ 发送 · ⇧⏎ 换行 · / 命令')}
             </span>
             <span className={styles.dotOk} />
-            <span className={styles.compSaved}>已保存草稿 · 0G synced</span>
+            <span className={styles.compSaved}>已保存草稿</span>
           </div>
           <button
             type="button"

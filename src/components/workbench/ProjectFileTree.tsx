@@ -12,7 +12,7 @@
  *       src/api/fsFiles.ts  → listFiles(dir)（列文件）
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight, File as FileIcon, Folder, RefreshCw, Search, X } from 'lucide-react';
+import { ChevronRight, File as FileIcon, Folder, FolderOpen, RefreshCw, Search, X } from 'lucide-react';
 import { fsList } from '../../api/fsBrowse';
 import { listFiles } from '../../api/fsFiles';
 
@@ -254,9 +254,10 @@ function TreeNode({ dir, name, depth, tree, expanded, query, onToggle, onOpenFil
       {!isRoot && (
         <button
           type="button"
-          className="sf-hoverable"
           style={treeRow(false, indent)}
           onClick={() => onToggle(dir)}
+          onMouseEnter={hoverOn}
+          onMouseLeave={hoverOff}
         >
           <ChevronRight
             size={12}
@@ -264,12 +265,16 @@ function TreeNode({ dir, name, depth, tree, expanded, query, onToggle, onOpenFil
             style={{
               color: 'var(--t-fg-5)',
               flexShrink: 0,
-              transition: 'transform .15s ease',
+              transition: 'transform .18s var(--sf-ease, cubic-bezier(.4,0,.2,1))',
               transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
             }}
           />
-          <Folder size={14} strokeWidth={2} style={{ color: 'var(--t-accent)', flexShrink: 0 }} />
-          <span style={ellip}>{name}</span>
+          {isOpen ? (
+            <FolderOpen size={14} strokeWidth={2} style={{ color: 'var(--t-accent)', flexShrink: 0 }} />
+          ) : (
+            <Folder size={14} strokeWidth={2} style={{ color: 'var(--t-accent)', flexShrink: 0 }} />
+          )}
+          <span style={{ ...ellip, fontWeight: 500 }}>{name}</span>
         </button>
       )}
 
@@ -302,16 +307,18 @@ function TreeNode({ dir, name, depth, tree, expanded, query, onToggle, onOpenFil
                 <button
                   key={f.path}
                   type="button"
-                  className="sf-hoverable"
                   style={treeRow(on, indent + (isRoot ? 0 : 12))}
                   onClick={() => onOpenFile?.(f.path)}
+                  onMouseEnter={on ? undefined : hoverOn}
+                  onMouseLeave={on ? undefined : hoverOff}
                 >
+                  {on && <span aria-hidden style={activeRail} />}
                   <FileIcon
                     size={14}
                     strokeWidth={2}
                     style={{ color: on ? 'var(--t-accent)' : extColor(f.ext), flexShrink: 0, marginLeft: 14 }}
                   />
-                  <span style={{ ...ellip, color: on ? 'var(--t-accent)' : 'var(--t-fg-2)' }}>{f.name}</span>
+                  <span style={{ ...ellip, color: on ? 'var(--t-accent)' : 'var(--t-fg-2)', fontWeight: on ? 600 : 400 }}>{f.name}</span>
                 </button>
               );
             })}
@@ -370,6 +377,7 @@ function extColor(ext: string): string {
 
 function treeRow(on: boolean, paddingLeft: number): React.CSSProperties {
   return {
+    position: 'relative',
     display: 'flex',
     alignItems: 'center',
     gap: 6,
@@ -381,8 +389,28 @@ function treeRow(on: boolean, paddingLeft: number): React.CSSProperties {
     cursor: 'pointer',
     textAlign: 'left',
     border: '1px solid transparent',
-    background: on ? 'color-mix(in oklab, var(--t-accent) 12%, transparent)' : 'transparent',
+    background: on ? 'color-mix(in oklab, var(--t-accent) 13%, transparent)' : 'transparent',
+    transition: 'background var(--sf-dur-fast, .14s) var(--sf-ease, ease)',
   };
+}
+
+/** 软蓝高亮竖条，标记当前打开的文件行（clawsgo 风格 active rail）。 */
+const activeRail: React.CSSProperties = {
+  position: 'absolute',
+  left: 0,
+  top: 3,
+  bottom: 3,
+  width: 2.5,
+  borderRadius: 2,
+  background: 'var(--t-accent)',
+};
+
+/** 行 hover：软填充背景（不抬升，避免密集列表抖动）。 */
+function hoverOn(e: React.MouseEvent<HTMLButtonElement>) {
+  e.currentTarget.style.background = 'color-mix(in oklab, var(--t-fg) 7%, transparent)';
+}
+function hoverOff(e: React.MouseEvent<HTMLButtonElement>) {
+  e.currentTarget.style.background = 'transparent';
 }
 
 const ellip: React.CSSProperties = {

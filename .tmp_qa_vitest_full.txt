@@ -1,0 +1,2794 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90mD:/VScode/TotalProject/ShadowFlow[39m
+
+ [31m❯[39m src/adapter/__tests__/zerogStorage.test.ts [2m([22m[2m4 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[32m 101[2mms[22m[39m
+[31m     [31m×[31m returns cid and txHash on successful upload[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m closes ZgFile in finally block even on success[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m closes ZgFile when merkle tree generation fails[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m closes ZgFile when upload returns error tuple[39m[32m 1[2mms[22m[39m
+ [31m❯[39m src/components/ConversationHistoryPanel.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/components/ConversationPicker.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/components/DesignSystemPicker.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/components/SkillPicker.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/pages/ProjectsPage.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/components/ProjectListPanel.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+[90mstderr[2m | src/components/ApiKeySettings.test.tsx[2m > [22m[2m<ApiKeySettings/>[2m > [22m[2mrenders empty input when no key stored
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/components/GenerationSettings.test.tsx[2m > [22m[2m<GenerationSettings />[2m > [22m[2mrenders all six controls
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/components/GenerationSettings.test.tsx[2m > [22m[2m<GenerationSettings />[2m > [22m[2mrenders all six controls
+[22m[39mWarning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+
+[90mstderr[2m | src/components/GenerationSettings.test.tsx[2m > [22m[2m<GenerationSettings />[2m > [22m[2mpersists max_tokens to localStorage when slider changes
+[22m[39mWarning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+
+[90mstderr[2m | src/components/GenerationSettings.test.tsx[2m > [22m[2m<GenerationSettings />[2m > [22m[2mpersists temperature when slider changes
+[22m[39mWarning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+
+[90mstderr[2m | src/components/GenerationSettings.test.tsx[2m > [22m[2m<GenerationSettings />[2m > [22m[2mpersists auto-critique toggle
+[22m[39mWarning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+
+[90mstderr[2m | src/components/GenerationSettings.test.tsx[2m > [22m[2m<GenerationSettings />[2m > [22m[2mpersists default skill and DS selections
+[22m[39mWarning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to GenerationSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at GenerationSettings (D:/VScode/TotalProject/ShadowFlow/src/components/GenerationSettings.tsx:62:50)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+
+ [31m❯[39m src/components/ApiKeySettings.test.tsx [2m([22m[2m35 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[33m 304[2mms[22m[39m
+       [32m✓[39m masks long key keeping first 15 + last 4[32m 2[2mms[22m[39m
+       [32m✓[39m collapses short key to ****[32m 0[2mms[22m[39m
+       [32m✓[39m returns null when nothing stored[32m 0[2mms[22m[39m
+       [32m✓[39m stores and retrieves the key[32m 0[2mms[22m[39m
+       [32m✓[39m clearStoredApiKey removes it[32m 0[2mms[22m[39m
+       [32m✓[39m returns empty object when no key[32m 1[2mms[22m[39m
+       [32m✓[39m returns X-Anthropic-Key when stored[32m 0[2mms[22m[39m
+       [32m✓[39m is spread-safe: merges with other headers[32m 0[2mms[22m[39m
+     [32m✓[39m renders empty input when no key stored[32m 75[2mms[22m[39m
+     [32m✓[39m rejects keys not starting with sk-ant-[32m 33[2mms[22m[39m
+     [32m✓[39m saves valid key, switches to masked view, fires onChange[32m 31[2mms[22m[39m
+     [32m✓[39m clear removes the stored key[32m 21[2mms[22m[39m
+     [32m✓[39m trims whitespace before validating[32m 19[2mms[22m[39m
+[31m       [31m×[31m exposes all 4 provider ids[39m[32m 7[2mms[22m[39m
+       [32m✓[39m every provider has a localStorage slot + header[32m 1[2mms[22m[39m
+       [32m✓[39m keeps Story 15.7 ANTHROPIC_KEY_STORAGE constant intact[32m 0[2mms[22m[39m
+       [32m✓[39m round-trips anthropic key[32m 0[2mms[22m[39m
+       [32m✓[39m round-trips openai key[32m 0[2mms[22m[39m
+       [32m✓[39m round-trips deepseek key[32m 0[2mms[22m[39m
+       [32m✓[39m round-trips zhipu key[32m 0[2mms[22m[39m
+       [32m✓[39m keys are independent — clearing one leaves others intact[32m 0[2mms[22m[39m
+       [32m✓[39m emits no headers when nothing stored[32m 0[2mms[22m[39m
+[31m       [31m×[31m emits only the headers whose keys are present[39m[32m 2[2mms[22m[39m
+[31m       [31m×[31m emits all 4 when all 4 are stored[39m[32m 1[2mms[22m[39m
+       [32m✓[39m Story 15.7 single-anthropic contract still holds[32m 0[2mms[22m[39m
+       [32m✓[39m defaults to anthropic when nothing stored[32m 0[2mms[22m[39m
+       [32m✓[39m round-trips a valid provider id[32m 0[2mms[22m[39m
+       [32m✓[39m rejects unknown ids and keeps the previous value[32m 0[2mms[22m[39m
+       [32m✓[39m falls back to anthropic when localStorage is corrupted[32m 0[2mms[22m[39m
+       [32m✓[39m renders the default-provider radio + all 4 cards in non-compact mode[32m 20[2mms[22m[39m
+       [32m✓[39m compact mode keeps the Story 15.7 single-card layout[32m 6[2mms[22m[39m
+       [32m✓[39m saves an OpenAI key via its own card, leaves Anthropic untouched[32m 20[2mms[22m[39m
+       [32m✓[39m zhipu accepts arbitrary non-empty key (no prefix check)[32m 19[2mms[22m[39m
+       [32m✓[39m default-provider radio writes sf_default_provider[32m 22[2mms[22m[39m
+       [32m✓[39m clearing one provider does not affect the others[32m 18[2mms[22m[39m
+ [31m❯[39m src/components/GenerationSettings.test.tsx [2m([22m[2m23 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 198[2mms[22m[39m
+     [32m✓[39m returns empty object when nothing is stored[32m 1[2mms[22m[39m
+     [32m✓[39m returns max_tokens when valid integer in range[32m 0[2mms[22m[39m
+     [32m✓[39m drops max_tokens when out of range (too low)[32m 0[2mms[22m[39m
+     [32m✓[39m drops max_tokens when out of range (too high)[32m 0[2mms[22m[39m
+     [32m✓[39m drops max_tokens when NaN[32m 0[2mms[22m[39m
+     [32m✓[39m returns temperature when in range[32m 0[2mms[22m[39m
+     [32m✓[39m drops temperature when out of range[32m 0[2mms[22m[39m
+     [32m✓[39m combines max_tokens and temperature when both valid[32m 0[2mms[22m[39m
+[31m     [31m×[31m does not include model (reserved for future opt-in)[39m[32m 4[2mms[22m[39m
+     [32m✓[39m respects the boundary values (1024 and 32768)[32m 0[2mms[22m[39m
+     [32m✓[39m returns null when missing[32m 0[2mms[22m[39m
+     [32m✓[39m round-trips a string[32m 0[2mms[22m[39m
+     [32m✓[39m persists lastSkill / lastDS for RunSessionPage handoff[32m 0[2mms[22m[39m
+     [32m✓[39m forwards max_tokens=4096 from localStorage to the POST body[32m 1[2mms[22m[39m
+     [32m✓[39m forwards temperature when stored[32m 0[2mms[22m[39m
+     [32m✓[39m omits max_tokens when stored value is invalid[32m 0[2mms[22m[39m
+     [32m✓[39m caller-supplied fields win over localStorage[32m 0[2mms[22m[39m
+     [32m✓[39m renders all six controls[32m 74[2mms[22m[39m
+     [32m✓[39m persists max_tokens to localStorage when slider changes[32m 27[2mms[22m[39m
+     [32m✓[39m persists temperature when slider changes[32m 17[2mms[22m[39m
+     [32m✓[39m persists auto-critique toggle[32m 22[2mms[22m[39m
+     [32m✓[39m persists default skill and DS selections[32m 24[2mms[22m[39m
+     [32m✓[39m shows the "locked by env" hint and disables Model select when overrides.model_locked[32m 24[2mms[22m[39m
+Error: useAuth must be used within <AuthProvider>
+    at useAuth (D:/VScode/TotalProject/ShadowFlow/src/core/auth/AuthContext.tsx:171:19)
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:175:28)
+    at renderWithHooks (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+Error: useAuth must be used within <AuthProvider>
+    at useAuth (D:/VScode/TotalProject/ShadowFlow/src/core/auth/AuthContext.tsx:171:19)
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:175:28)
+    at renderWithHooks (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+ [31m❯[39m src/pages/BuilderPage.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+[90mstderr[2m | src/AppRoutes.test.tsx[2m > [22m[2mAppRoutes — new routes[2m > [22m[2m/chat/:groupId renders ChatPage
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+The above error occurred in the <HfSidebar> component:
+
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:170:22)
+    at div
+    at HfLayout (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfLayout.tsx:43:37)
+    at RenderedRoute (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:539:7)
+    at Routes (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1273:7)
+    at Suspense
+    at ErrorBoundary (D:/VScode/TotalProject/ShadowFlow/src/core/components/common/ErrorBoundary.tsx:10:1)
+    at AppRoutes
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary.
+[ErrorBoundary] Error: useAuth must be used within <AuthProvider>
+    at useAuth (D:/VScode/TotalProject/ShadowFlow/src/core/auth/AuthContext.tsx:171:19)
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:175:28)
+    at renderWithHooks [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:15486:18[90m)[39m
+    at mountIndeterminateComponent [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:20103:13[90m)[39m
+    at beginWork [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:21626:16[90m)[39m
+    at beginWork$1 [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:27465:14[90m)[39m
+    at performUnitOfWork [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:26599:12[90m)[39m
+    at workLoopSync [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:26505:5[90m)[39m
+    at renderRootSync [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:26473:7[90m)[39m
+    at recoverFromConcurrentError [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:25889:20[90m)[39m 
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:170:22)
+    at div
+    at HfLayout (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfLayout.tsx:43:37)
+    at RenderedRoute (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:539:7)
+    at Routes (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1273:7)
+    at Suspense
+    at ErrorBoundary (D:/VScode/TotalProject/ShadowFlow/src/core/components/common/ErrorBoundary.tsx:10:1)
+    at AppRoutes
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+ [31m❯[39m src/pages/CatalogPage.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/pages/StartPage.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/pages/RunsPage.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/__tests__/components/BlueprintModal.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/pages/TeamPage.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/pages/ChatPage.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+[90mstderr[2m | src/pages/__tests__/skill-studio-entries.test.tsx[2m > [22m[2mStory 15.28 — Skill Studio entries[2m > [22m[2mStartPage renders the Skill Studio primitive card
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+[90mstderr[2m | src/pages/InboxPage.test.tsx[2m > [22m[2mInboxPage[2m > [22m[2mrenders the three-column inbox shell
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+[90mstderr[2m | src/pages/InboxPage.test.tsx[2m > [22m[2mInboxPage[2m > [22m[2mrenders the three-column inbox shell
+[22m[39mWarning: An update to MessageList inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at MessageList (D:/VScode/TotalProject/ShadowFlow/src/core/components/inbox/MessageList.tsx:24:50)
+    at div
+    at InboxPage
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+Error: useAuth must be used within <AuthProvider>
+    at useAuth (D:/VScode/TotalProject/ShadowFlow/src/core/auth/AuthContext.tsx:171:19)
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:175:28)
+    at renderWithHooks (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+Error: useAuth must be used within <AuthProvider>
+    at useAuth (D:/VScode/TotalProject/ShadowFlow/src/core/auth/AuthContext.tsx:171:19)
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:175:28)
+    at renderWithHooks (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+[90mstderr[2m | src/pages/InboxPage.test.tsx[2m > [22m[2mInboxPage[2m > [22m[2mmatches the /inbox route
+[22m[39mThe above error occurred in the <HfSidebar> component:
+
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:170:22)
+    at div
+    at HfLayout (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfLayout.tsx:43:37)
+    at RenderedRoute (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:539:7)
+    at Routes (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1273:7)
+    at Suspense
+    at ErrorBoundary (D:/VScode/TotalProject/ShadowFlow/src/core/components/common/ErrorBoundary.tsx:10:1)
+    at AppRoutes
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary.
+[ErrorBoundary] Error: useAuth must be used within <AuthProvider>
+    at useAuth (D:/VScode/TotalProject/ShadowFlow/src/core/auth/AuthContext.tsx:171:19)
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:175:28)
+    at renderWithHooks [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:15486:18[90m)[39m
+    at mountIndeterminateComponent [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:20103:13[90m)[39m
+    at beginWork [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:21626:16[90m)[39m
+    at beginWork$1 [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:27465:14[90m)[39m
+    at performUnitOfWork [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:26599:12[90m)[39m
+    at workLoopSync [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:26505:5[90m)[39m
+    at renderRootSync [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:26473:7[90m)[39m
+    at recoverFromConcurrentError [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:25889:20[90m)[39m 
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:170:22)
+    at div
+    at HfLayout (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfLayout.tsx:43:37)
+    at RenderedRoute (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:539:7)
+    at Routes (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1273:7)
+    at Suspense
+    at ErrorBoundary (D:/VScode/TotalProject/ShadowFlow/src/core/components/common/ErrorBoundary.tsx:10:1)
+    at AppRoutes
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+Error: useAuth must be used within <AuthProvider>
+    at useAuth (D:/VScode/TotalProject/ShadowFlow/src/core/auth/AuthContext.tsx:171:19)
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:175:28)
+    at renderWithHooks (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+Error: useAuth must be used within <AuthProvider>
+    at useAuth (D:/VScode/TotalProject/ShadowFlow/src/core/auth/AuthContext.tsx:171:19)
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:175:28)
+    at renderWithHooks (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:20103:13)
+    at beginWork (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback (D:\VScode\TotalProject\ShadowFlow\node_modules\react-dom\cjs\react-dom.development.js:4164:14)
+    at HTMLUnknownElement.callTheUserObjectsOperation (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\generated\idl\EventListener.js:26:30)
+    at innerInvokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:360:16)
+    at invokeEventListeners (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:296:3)
+    at HTMLUnknownElementImpl._dispatch (D:\VScode\TotalProject\ShadowFlow\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:243:9)
+[90mstderr[2m | src/AppRoutes.test.tsx[2m > [22m[2mAppRoutes — new routes[2m > [22m[2m/agent-dm/:agentId renders AgentDMPage
+[22m[39mThe above error occurred in the <HfSidebar> component:
+
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:170:22)
+    at div
+    at HfLayout (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfLayout.tsx:43:37)
+    at RenderedRoute (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:539:7)
+    at Routes (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1273:7)
+    at Suspense
+    at ErrorBoundary (D:/VScode/TotalProject/ShadowFlow/src/core/components/common/ErrorBoundary.tsx:10:1)
+    at AppRoutes
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary.
+[ErrorBoundary] Error: useAuth must be used within <AuthProvider>
+    at useAuth (D:/VScode/TotalProject/ShadowFlow/src/core/auth/AuthContext.tsx:171:19)
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:175:28)
+    at renderWithHooks [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:15486:18[90m)[39m
+    at mountIndeterminateComponent [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:20103:13[90m)[39m
+    at beginWork [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:21626:16[90m)[39m
+    at beginWork$1 [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:27465:14[90m)[39m
+    at performUnitOfWork [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:26599:12[90m)[39m
+    at workLoopSync [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:26505:5[90m)[39m
+    at renderRootSync [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:26473:7[90m)[39m
+    at recoverFromConcurrentError [90m(D:\VScode\TotalProject\ShadowFlow\[39mnode_modules\[4mreact-dom[24m\cjs\react-dom.development.js:25889:20[90m)[39m 
+    at HfSidebar (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfSidebar.tsx:170:22)
+    at div
+    at HfLayout (D:/VScode/TotalProject/ShadowFlow/src/components/hifi/HfLayout.tsx:43:37)
+    at RenderedRoute (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:539:7)
+    at Routes (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1273:7)
+    at Suspense
+    at ErrorBoundary (D:/VScode/TotalProject/ShadowFlow/src/core/components/common/ErrorBoundary.tsx:10:1)
+    at AppRoutes
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+ [31m❯[39m src/core/components/builder/KitSmokeRunPanel.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/core/components/builder/GoalClarityWizard.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/pages/InboxPage.test.tsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1118[2mms[22m[39m
+     [32m✓[39m renders the three-column inbox shell[32m 49[2mms[22m[39m
+[31m     [31m×[31m matches the /inbox route[39m[33m 1068[2mms[22m[39m
+ [31m❯[39m src/core/components/builder/SceneCanvasShell.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/core/components/builder/KnowledgeDock.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/core/components/builder/SceneTree.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/core/components/builder/SmokeRunPanel.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/AppRoutes.test.tsx [2m([22m[2m2 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 2124[2mms[22m[39m
+[31m     [31m×[31m /chat/:groupId renders ChatPage[39m[33m 1090[2mms[22m[39m
+[31m     [31m×[31m /agent-dm/:agentId renders AgentDMPage[39m[33m 1032[2mms[22m[39m
+ [31m❯[39m src/core/components/inbox/MessageList.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/pages/__tests__/skill-studio-entries.test.tsx [2m([22m[2m2 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 2164[2mms[22m[39m
+[31m     [31m×[31m StartPage renders the Skill Studio primitive card[39m[33m 1108[2mms[22m[39m
+[31m     [31m×[31m StartPage Skill Studio card shows the i18n title text[39m[33m 1054[2mms[22m[39m
+ [31m❯[39m src/core/components/builder/inspector/RoleInspector.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/core/components/inbox/NarrowNav.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/core/components/builder/__tests__/SceneMode.integration.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m src/core/components/builder/inspector/__tests__/RoleProfilePanel.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+[90mstderr[2m | src/pages/LandingPage.test.tsx[2m > [22m[2mLandingPage[2m > [22m[2mrenders ShadowFlow branding and primary CTA at /
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+[90mstderr[2m | src/__tests__/components/workspace/TabAgents.test.tsx[2m > [22m[2mTabAgents[2m > [22m[2mshows loading then renders agents from listAgents()
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/components/chat-fb/GroupSettingsModalFB.test.tsx[2m > [22m[2mGroupSettingsModalFB[2m > [22m[2m5 区段都 mount：card / members / KV / toggles / danger
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/pages/AgentDMPage.test.tsx[2m > [22m[2mAgentDMPage — Create Agent button (AC1, Story 7.8)[2m > [22m[2mrenders breadcrumb with agent name
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ [32m✓[39m src/__tests__/components/workspace/TabAgents.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 517[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/workspace/TabChat.test.tsx[2m > [22m[2mTabChat[2m > [22m[2mrenders without crashing
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/__tests__/components/workspace/TabChat.test.tsx[2m > [22m[2mTabChat[2m > [22m[2mrenders without crashing
+[22m[39mWarning: An update to OrgSwitcher inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at OrgSwitcher (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/OrgSwitcher.tsx:17:61)
+    at div
+    at ChatInbox (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/ChatInbox.tsx:190:22)
+    at TabChat (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabChat.tsx:36:67)
+
+ [32m✓[39m src/components/chat-fb/GroupSettingsModalFB.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 646[2mms[22m[39m
+     [33m[2m✓[22m[39m ✕ 按钮关闭 modal [33m 340[2mms[22m[39m
+ [32m✓[39m src/pages/AgentDMPage.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 522[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/workspace/TabChat.test.tsx[2m > [22m[2mTabChat[2m > [22m[2mREGRESSION: switching conversation switches messages list
+[22m[39mWarning: An update to OrgSwitcher inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at OrgSwitcher (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/OrgSwitcher.tsx:17:61)
+    at div
+    at ChatInbox (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/ChatInbox.tsx:190:22)
+    at TabChat (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabChat.tsx:36:67)
+
+[90mstderr[2m | src/__tests__/components/workspace/TabTeams.test.tsx[2m > [22m[2mTabTeams[2m > [22m[2mshows loading then renders teams from listTeams()
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/__tests__/components/workspace/TabChat.test.tsx[2m > [22m[2mTabChat[2m > [22m[2mshows slash popup when typing /
+[22m[39mWarning: An update to OrgSwitcher inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at OrgSwitcher (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/OrgSwitcher.tsx:17:61)
+    at div
+    at ChatInbox (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/ChatInbox.tsx:190:22)
+    at TabChat (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabChat.tsx:36:67)
+
+[90mstderr[2m | src/core/components/settings/ByokSection.test.tsx[2m > [22m[2mByokSection — API key field[2m > [22m[2meager-loads the full plaintext key and renders it masked (type=password)
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/__tests__/components/workspace/TabChat.test.tsx[2m > [22m[2mTabChat[2m > [22m[2mhides slash popup when text does not start with /
+[22m[39mWarning: An update to OrgSwitcher inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at OrgSwitcher (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/OrgSwitcher.tsx:17:61)
+    at div
+    at ChatInbox (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/ChatInbox.tsx:190:22)
+    at TabChat (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabChat.tsx:36:67)
+
+[90mstderr[2m | src/__tests__/components/workspace/TabTeams.test.tsx[2m > [22m[2mTabTeams[2m > [22m[2mclicking 文献综述 switches canvas header title
+[22m[39mWarning: An update to TabTeams inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TabTeams (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabTeams.tsx:76:63)
+Warning: An update to TabTeams inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TabTeams (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabTeams.tsx:76:63)
+
+[90mstderr[2m | src/__tests__/components/workspace/TabTeams.test.tsx[2m > [22m[2mTabTeams[2m > [22m[2mclicking 文献综述 switches canvas header title
+[22m[39mWarning: An update to TabTeams inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TabTeams (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabTeams.tsx:76:63)
+Warning: An update to TabTeams inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TabTeams (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabTeams.tsx:76:63)
+
+[90mstderr[2m | src/__tests__/components/workspace/TabChat.test.tsx[2m > [22m[2mTabChat[2m > [22m[2msends a message and appends it to the current conversation
+[22m[39mWarning: An update to OrgSwitcher inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at OrgSwitcher (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/OrgSwitcher.tsx:17:61)
+    at div
+    at ChatInbox (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/ChatInbox.tsx:190:22)
+    at TabChat (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabChat.tsx:36:67)
+Warning: An update to TabChat inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TabChat (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabChat.tsx:36:67)
+
+ [32m✓[39m src/pages/LandingPage.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 980[2mms[22m[39m
+     [33m[2m✓[22m[39m renders ShadowFlow branding and primary CTA at / [33m 709[2mms[22m[39m
+[90mstderr[2m | src/core/components/settings/ByokSection.test.tsx[2m > [22m[2mByokSection — API key field[2m > [22m[2meye toggle flips the input type to reveal the full key
+[22m[39mWarning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+
+[90mstderr[2m | src/__tests__/components/workspace/TabChat.test.tsx[2m > [22m[2mTabChat[2m > [22m[2msend is disabled when text is empty
+[22m[39mWarning: An update to OrgSwitcher inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at OrgSwitcher (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/OrgSwitcher.tsx:17:61)
+    at div
+    at ChatInbox (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/ChatInbox.tsx:190:22)
+    at TabChat (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabChat.tsx:36:67)
+
+[90mstderr[2m | src/core/components/inbox/CreateGroupDialog.test.tsx[2m > [22m[2mCreateGroupDialog[2m > [22m[2mdoes not render when open=false
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+[90mstderr[2m | src/__tests__/components/workspace/TabTeams.test.tsx[2m > [22m[2mTabTeams[2m > [22m[2mopens Create Team modal on + click
+[22m[39mWarning: An update to TabTeams inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TabTeams (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabTeams.tsx:76:63)
+
+[90mstderr[2m | src/__tests__/components/workspace/TabTeams.test.tsx[2m > [22m[2mTabTeams[2m > [22m[2mopens Create Team modal on + click
+[22m[39mWarning: An update to TabTeams inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TabTeams (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabTeams.tsx:76:63)
+
+[90mstderr[2m | src/__tests__/components/workspace/TabChat.test.tsx[2m > [22m[2mTabChat[2m > [22m[2mdrawer close button hides the drawer
+[22m[39mWarning: An update to OrgSwitcher inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at OrgSwitcher (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/OrgSwitcher.tsx:17:61)
+    at div
+    at ChatInbox (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/ChatInbox.tsx:190:22)
+    at TabChat (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/TabChat.tsx:36:67)
+
+ [32m✓[39m src/__tests__/components/workspace/TabChat.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 903[2mms[22m[39m
+     [33m[2m✓[22m[39m renders without crashing [33m 345[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/workspace/TabTeams.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 506[2mms[22m[39m
+[90mstderr[2m | src/core/components/settings/ByokSection.test.tsx[2m > [22m[2mByokSection — API key field[2m > [22m[2mleaves the field empty (placeholder visible) when no key is saved
+[22m[39mWarning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ByokSection inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ByokSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/settings/ByokSection.tsx:956:57)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+
+ [32m✓[39m src/core/components/settings/ByokSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 595[2mms[22m[39m
+     [33m[2m✓[22m[39m eager-loads the full plaintext key and renders it masked (type=password) [33m 349[2mms[22m[39m
+[90mstderr[2m | src/core/components/inbox/CreateGroupDialog.test.tsx[2m > [22m[2mCreateGroupDialog[2m > [22m[2mrenders Step 1 with step indicator on open
+[22m[39mWarning: An update to CreateGroupDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at CreateGroupDialog (D:/VScode/TotalProject/ShadowFlow/src/core/components/inbox/CreateGroupDialog.tsx:338:30)
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+[90mstderr[2m | src/core/components/inbox/CreateGroupDialog.test.tsx[2m > [22m[2mCreateGroupDialog[2m > [22m[2mStep 1: clicking next without selection shows error
+[22m[39mWarning: An update to CreateGroupDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at CreateGroupDialog (D:/VScode/TotalProject/ShadowFlow/src/core/components/inbox/CreateGroupDialog.tsx:338:30)
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+[90mstderr[2m | src/core/components/inbox/CreateGroupDialog.test.tsx[2m > [22m[2mCreateGroupDialog[2m > [22m[2msubmit calls POST /api/groups with correct payload
+[22m[39mWarning: An update to CreateGroupDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at CreateGroupDialog (D:/VScode/TotalProject/ShadowFlow/src/core/components/inbox/CreateGroupDialog.tsx:338:30)
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+Warning: An update to MemoryRouter inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+Warning: An update to CreateGroupDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at CreateGroupDialog (D:/VScode/TotalProject/ShadowFlow/src/core/components/inbox/CreateGroupDialog.tsx:338:30)
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+ [32m✓[39m src/core/components/inbox/CreateGroupDialog.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[32m 281[2mms[22m[39m
+[90mstderr[2m | src/core/components/inbox/ChatBriefBoardToggle.test.tsx[2m > [22m[2mChatBriefBoardToggle[2m > [22m[2mrenders Chat and briefBoardAlias segments
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/components/chat/CrystallizedBadge.test.tsx[2m > [22m[2mCrystallizedBadge[2m > [22m[2mrenders the badge text
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/core/components/inbox/ApprovalGatePanel.test.tsx[2m > [22m[2mApprovalGatePanel[2m > [22m[2mrenders 2 items from GET pending approvals
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/core/components/inbox/ApprovalGatePanel.test.tsx[2m > [22m[2mApprovalGatePanel[2m > [22m[2mshows empty state when no pending approvals
+[22m[39mWarning: An update to ApprovalGatePanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApprovalGatePanel (D:/VScode/TotalProject/ShadowFlow/src/core/components/inbox/ApprovalGatePanel.tsx:19:30)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+ [32m✓[39m src/core/components/inbox/ChatBriefBoardToggle.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 364[2mms[22m[39m
+[90mstderr[2m | src/components/briefboard/ScheduleDrawer.test.tsx[2m > [22m[2mScheduleDrawer[2m > [22m[2mrenders the drawer header
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/components/CliDetectPanel.test.tsx[2m > [22m[2mCliDetectPanel[2m > [22m[2mrenders all rows with correct status icons
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/pages/__tests__/PersonalRightPane.test.tsx[2m > [22m[2mPersonalRightPane[2m > [22m[2m默认显示「员工」标签 = 员工卡(名字+soul 首行)
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/components/chat/CrystallizedBadge.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 447[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/GapDetectedModal.test.tsx[2m > [22m[2mGapDetectedModal[2m > [22m[2mrenders description and three actions
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/components/CliDetectPanel.test.tsx[2m > [22m[2mCliDetectPanel[2m > [22m[2mcopies install_cmd when button clicked
+[22m[39mWarning: An update to CliDetectPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at CliDetectPanel (D:/VScode/TotalProject/ShadowFlow/src/components/CliDetectPanel.tsx:12:63)
+
+[90mstderr[2m | src/components/ArtifactPreview.test.tsx[2m > [22m[2m<ArtifactPreview />[2m > [22m[2mrenders an iframe + skeleton for html artifacts (AC2 + AC5)
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/__tests__/components/GapDetectedModal.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 453[2mms[22m[39m
+ [32m✓[39m src/components/briefboard/ScheduleDrawer.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 445[2mms[22m[39m
+ [32m✓[39m src/components/CliDetectPanel.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 392[2mms[22m[39m
+[90mstderr[2m | src/pages/__tests__/PersonalChatView.test.tsx[2m > [22m[2mPersonalChatView (融合M1)[2m > [22m[2m选中助手 → resolveDmConversation 被调 + useChatStream 走 group 模式吃 dmGroupId
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/core/components/inbox/ApprovalGatePanel.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 510[2mms[22m[39m
+ [32m✓[39m src/pages/__tests__/PersonalRightPane.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 631[2mms[22m[39m
+     [33m[2m✓[22m[39m 默认显示「员工」标签 = 员工卡(名字+soul 首行) [33m 313[2mms[22m[39m
+ [32m✓[39m src/components/ArtifactPreview.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[32m 294[2mms[22m[39m
+ [32m✓[39m src/pages/__tests__/PersonalChatView.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 445[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/RejectionToast.test.tsx[2m > [22m[2mRejectionToastContainer[2m > [22m[2mrenders nothing when no toasts
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/__tests__/components/RejectionToast.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 280[2mms[22m[39m
+[90mstderr[2m | src/pages/__tests__/PersonalTeamToggle.test.tsx[2m > [22m[2mPersonalTeamToggle[2m > [22m[2m渲染「个人」「团队」两个选项
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/pages/__tests__/PersonalTeamToggle.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 335[2mms[22m[39m
+[90mstderr[2m | src/components/run-session/timeline/messages/__tests__/ToolGroup.test.tsx[2m > [22m[2mToolGroup collapse[2m > [22m[2mis collapsed by default — header shown, body absent
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/components/run-session/timeline/messages/__tests__/ToolGroup.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 260[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/PolicyMatrixPanel.test.tsx[2m > [22m[2mPolicyMatrixPanel (Story 4.5)[2m > [22m[2mrenders an N×N grid of cell buttons
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/components/AcpAgentsPanel.test.tsx[2m > [22m[2mAcpAgentsPanel[2m > [22m[2mrenders rows for online and offline agents
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/__tests__/components/PolicyMatrixPanel.test.tsx[2m > [22m[2mPolicyMatrixPanel (Story 4.5)[2m > [22m[2mSave triggers onSave callback and clears dirty state
+[22m[39mWarning: An update to PolicyMatrixPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at PolicyMatrixPanel (D:/VScode/TotalProject/ShadowFlow/src/core/components/Panel/PolicyMatrixPanel.tsx:19:3)
+
+ [32m✓[39m src/__tests__/components/PolicyMatrixPanel.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 200[2mms[22m[39m
+ [32m✓[39m src/components/AcpAgentsPanel.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 215[2mms[22m[39m
+[90mstderr[2m | src/components/chat-fb/InlineApprovalFB.test.tsx[2m > [22m[2mInlineApprovalFB[2m > [22m[2mpending 状态显示所有按钮 + wait 文案
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/components/chat-fb/InlineApprovalFB.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 250[2mms[22m[39m
+[90mstderr[2m | src/components/CodeBlockToolbar.test.tsx[2m > [22m[2m<CodeBlockToolbar>[2m > [22m[2mrenders the language label and code body
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/core/components/builder/CatalogImportSidebar.test.tsx[2m > [22m[2mCatalogImportSidebar[2m > [22m[2m列表加载[2m > [22m[2m加载中显示 skeleton 行
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/components/CritiqueResult.test.tsx[2m > [22m[2m<CritiqueResult />[2m > [22m[2mrenders the 5 base axes (Goal / Completeness / Structure / Grounding / Anti-pattern)
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/components/CritiqueResult.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 170[2mms[22m[39m
+ [32m✓[39m src/components/CodeBlockToolbar.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[32m 247[2mms[22m[39m
+[90mstderr[2m | src/core/components/builder/CatalogImportSidebar.test.tsx[2m > [22m[2mCatalogImportSidebar[2m > [22m[2mDrawer 标题与 testid[2m > [22m[2m渲染标题「从 Catalog 引入 Agent」
+[22m[39mWarning: An update to CatalogImportSidebar inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at CatalogImportSidebar (D:/VScode/TotalProject/ShadowFlow/src/core/components/builder/CatalogImportSidebar.tsx:45:3)
+Warning: An update to CatalogImportSidebar inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at CatalogImportSidebar (D:/VScode/TotalProject/ShadowFlow/src/core/components/builder/CatalogImportSidebar.tsx:45:3)
+
+ [32m✓[39m src/core/components/builder/CatalogImportSidebar.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[32m 209[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/ApprovalGateNode.test.tsx[2m > [22m[2mApprovalGateNode[2m > [22m[2mrenders without crashing
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/__tests__/components/ApprovalGateNode.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 173[2mms[22m[39m
+ [32m✓[39m src/core/hooks/__tests__/useZerogSecretsStore.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 205[2mms[22m[39m
+[90mstderr[2m | src/components/chat-fb/MsgReactionsFB.test.tsx[2m > [22m[2mMsgReactionsFB[2m > [22m[2mreactions 渲染计数
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/components/chat-fb/MsgReactionsFB.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 164[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/TraceView.test.tsx[2m > [22m[2mTraceView (Story 4.4)[2m > [22m[2mrenders nothing meaningful until a node is selected
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/__tests__/components/TraceView.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 182[2mms[22m[39m
+[90mstderr[2m | src/components/ModelPicker.test.tsx[2m > [22m[2mModelPicker dropdown[2m > [22m[2mrenders the open dropdown as a portal child of document.body
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+Warning: An update to ModelPicker inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ModelPicker (D:/VScode/TotalProject/ShadowFlow/src/components/ModelPicker.tsx:19:3)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+
+[90mstderr[2m | src/components/ModelPicker.test.tsx[2m > [22m[2mModelPicker dropdown[2m > [22m[2mrenders the open dropdown as a portal child of document.body
+[22m[39mWarning: An update to ModelPicker inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ModelPicker (D:/VScode/TotalProject/ShadowFlow/src/components/ModelPicker.tsx:19:3)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ModelPicker inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ModelPicker (D:/VScode/TotalProject/ShadowFlow/src/components/ModelPicker.tsx:19:3)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+
+[90mstderr[2m | src/components/ModelPicker.test.tsx[2m > [22m[2mModelPicker dropdown[2m > [22m[2mrenders the open dropdown as a portal child of document.body
+[22m[39mWarning: An update to ModelPicker inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ModelPicker (D:/VScode/TotalProject/ShadowFlow/src/components/ModelPicker.tsx:19:3)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ModelPicker inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ModelPicker (D:/VScode/TotalProject/ShadowFlow/src/components/ModelPicker.tsx:19:3)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+Warning: An update to ModelPicker inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ModelPicker (D:/VScode/TotalProject/ShadowFlow/src/components/ModelPicker.tsx:19:3)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+
+[90mstderr[2m | src/components/ModelPicker.test.tsx[2m > [22m[2mModelPicker dropdown[2m > [22m[2mrenders the open dropdown as a portal child of document.body
+[22m[39mWarning: An update to ModelPicker inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ModelPicker (D:/VScode/TotalProject/ShadowFlow/src/components/ModelPicker.tsx:19:3)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+
+ [32m✓[39m src/components/ModelPicker.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 151[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/PolicyHeatmap.test.tsx[2m > [22m[2mPolicyHeatmap renders rows + stage columns + selection[2m > [22m[2mrenders a cell per (policy, stage)
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/core/components/landing/QuadrantChart.test.tsx[2m > [22m[2mQuadrantChart[2m > [22m[2mrenders SVG with accessible label
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/core/components/landing/QuadrantChart.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 203[2mms[22m[39m
+ [32m✓[39m src/__tests__/components/PolicyHeatmap.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[32m 173[2mms[22m[39m
+[90mstderr[2m | src/core/hooks/useSettings.test.ts[2m > [22m[2museSetting (Story 15.17)[2m > [22m[2mhydrates synchronously from localStorage when present
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/core/hooks/useSettings.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 177[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/NodePalette.test.tsx[2m > [22m[2mNodePalette[2m > [22m[2mrenders default agent items
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/__tests__/components/NodePalette.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 163[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/workspace/OrgSwitcher.test.tsx[2m > [22m[2mOrgSwitcher[2m > [22m[2mrenders trigger but not dropdown by default
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/__tests__/components/workspace/OrgSwitcher.test.tsx[2m > [22m[2mOrgSwitcher[2m > [22m[2mrenders trigger but not dropdown by default
+[22m[39mWarning: An update to OrgSwitcher inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at OrgSwitcher (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/OrgSwitcher.tsx:17:61)
+
+[90mstderr[2m | src/__tests__/components/workspace/OrgSwitcher.test.tsx[2m > [22m[2mOrgSwitcher[2m > [22m[2mopens dropdown on trigger click
+[22m[39mWarning: An update to OrgSwitcher inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at OrgSwitcher (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/OrgSwitcher.tsx:17:61)
+
+[90mstderr[2m | src/__tests__/components/workspace/OrgSwitcher.test.tsx[2m > [22m[2mOrgSwitcher[2m > [22m[2mcloses dropdown on second trigger click
+[22m[39mWarning: An update to OrgSwitcher inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at OrgSwitcher (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/OrgSwitcher.tsx:17:61)
+
+[90mstderr[2m | src/__tests__/components/workspace/OrgSwitcher.test.tsx[2m > [22m[2mOrgSwitcher[2m > [22m[2mcloses dropdown on outside click (regression: click-outside cleanup)
+[22m[39mWarning: An update to OrgSwitcher inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at OrgSwitcher (D:/VScode/TotalProject/ShadowFlow/src/components/workspace/chat/OrgSwitcher.tsx:17:61)
+
+ [32m✓[39m src/__tests__/components/workspace/OrgSwitcher.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 161[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/PolicyMatrixPanel.rerun.test.tsx[2m > [22m[2mPolicyMatrixPanel re-run / save-template (Story 4.6)[2m > [22m[2mSave as Template never calls onReRun
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/__tests__/components/PolicyMatrixPanel.rerun.test.tsx[2m > [22m[2mPolicyMatrixPanel re-run / save-template (Story 4.6)[2m > [22m[2mSave & Re-run calls onReRun only when dirty
+[22m[39mWarning: An update to PolicyMatrixPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at PolicyMatrixPanel (D:/VScode/TotalProject/ShadowFlow/src/core/components/Panel/PolicyMatrixPanel.tsx:19:3)
+
+ [32m✓[39m src/__tests__/components/PolicyMatrixPanel.rerun.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 152[2mms[22m[39m
+[90mstderr[2m | src/core/components/builder/PromoteToTeamWizard.integration.test.tsx[2m > [22m[2mStory 13.6 — Promote-to-Team integration[2m > [22m[2mend-to-end: Catalog click → API → store.setBlueprint → /builder?promote=1 → Wizard mounts
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ [32m✓[39m src/core/components/builder/PromoteToTeamWizard.integration.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 143[2mms[22m[39m
+[90mstderr[2m | src/core/components/builder/inspector/ExecutionModeSection.test.tsx[2m > [22m[2mExecutionModeSection[2m > [22m[2m默认显示 ReAct 模式（无 executionMode prop）
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+[90mstderr[2m | src/core/components/builder/inspector/ExecutionModeSection.test.tsx[2m > [22m[2mExecutionModeSection[2m > [22m[2mL1 follow-up: 前往 Workflow Editor 用 React Router Link（href 不全页跳转）
+[22m[39mWarning: An update to WorkflowRefSelect inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at WorkflowRefSelect (D:/VScode/TotalProject/ShadowFlow/src/core/components/builder/inspector/ExecutionModeSection.tsx:10:30)
+    at div
+    at ExecutionModeSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/builder/inspector/ExecutionModeSection.tsx:157:33)
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+
+[90mstderr[2m | src/core/components/builder/inspector/ExecutionModeSection.test.tsx[2m > [22m[2mExecutionModeSection[2m > [22m[2mL1 follow-up: 前往 Workflow Editor 用 React Router Link（href 不全页跳转）
+[22m[39mWarning: An update to WorkflowRefSelect inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at WorkflowRefSelect (D:/VScode/TotalProject/ShadowFlow/src/core/components/builder/inspector/ExecutionModeSection.tsx:10:30)
+    at div
+    at ExecutionModeSection (D:/VScode/TotalProject/ShadowFlow/src/core/components/builder/inspector/ExecutionModeSection.tsx:157:33)
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+
+ [32m✓[39m src/core/components/builder/inspector/ExecutionModeSection.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[32m 164[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/ApprovalGateForm.test.tsx[2m > [22m[2mApprovalGateForm[2m > [22m[2mrenders without crashing
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/__tests__/components/ApprovalGateForm.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 171[2mms[22m[39m
+[90mstderr[2m | src/components/chat-fb/ComposerFB.test.tsx[2m > [22m[2mComposerFB slash menu[2m > [22m[2mcloses on outside (blank area) click
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/components/chat-fb/ComposerFB.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 186[2mms[22m[39m
+[90mstderr[2m | src/core/components/builder/inspector/ScopeSectionCard.test.tsx[2m > [22m[2mScopeSectionCard[2m > [22m[2m默认显示独立助手（无 collaboration_contract）
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/core/components/builder/inspector/ScopeSectionCard.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[32m 151[2mms[22m[39m
+ [32m✓[39m src/__tests__/lib/yamlSerializer.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 109[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/OperationsPage.test.tsx[2m > [22m[2mOperationsPage (Story 4.7)[2m > [22m[2mrenders the 4 KPI cards and calls every endpoint
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/__tests__/components/StatusBadge.test.tsx[2m > [22m[2mStatusBadge[2m > [22m[2mrenders idle status
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/__tests__/components/StatusBadge.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 105[2mms[22m[39m
+[90mstderr[2m | src/components/chat/MemoryRecallRow.test.tsx[2m > [22m[2mMemoryRecallRow[2m > [22m[2mrenders nothing when memories is 0
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/core/components/builder/PublishSuccessPanel.test.tsx[2m > [22m[2mPublishSuccessPanel[2m > [22m[2mrenders success panel with data-testid
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ [32m✓[39m src/__tests__/components/OperationsPage.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 166[2mms[22m[39m
+ [32m✓[39m src/components/chat/MemoryRecallRow.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 112[2mms[22m[39m
+[90mstderr[2m | src/core/components/builder/inspector/__tests__/InspectorPanels.test.tsx[2m > [22m[2mEmptyInspector[2m > [22m[2mrenders empty state with data-testid
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/core/components/builder/PublishSuccessPanel.test.tsx[2m > [22m[2mPublishSuccessPanel[2m > [22m[2mcopy button calls navigator.clipboard.writeText with full templateId
+[22m[39mWarning: An update to PublishSuccessPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at PublishSuccessPanel (D:/VScode/TotalProject/ShadowFlow/src/core/components/builder/PublishSuccessPanel.tsx:10:32)
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+
+ [32m✓[39m src/core/components/builder/PublishSuccessPanel.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[32m 185[2mms[22m[39m
+ [32m✓[39m src/core/components/builder/inspector/__tests__/InspectorPanels.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[32m 165[2mms[22m[39m
+ [32m✓[39m src/adapter/__tests__/zerogStorage.download.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+[90mstderr[2m | src/core/components/builder/PromoteToTeamWizard.test.tsx[2m > [22m[2mPromoteToTeamWizard[2m > [22m[2mStep 1 shows anchor info and proceeds to Step 2
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/lib/__tests__/skillToken.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m src/core/components/builder/PromoteToTeamWizard.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 166[2mms[22m[39m
+ [32m✓[39m src/common/lib/pickerOverrides.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 70[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/StageTimeline.test.tsx[2m > [22m[2mStageTimeline[2m > [22m[2mrenders 5 stage dots in canonical order
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/__tests__/components/StageTimeline.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 105[2mms[22m[39m
+[90mstderr[2m | src/components/SkillDropdown.test.tsx[2m > [22m[2mSkillDropdown[2m > [22m[2mrenders nothing when composer has no @ token
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/components/SkillDropdown.test.tsx[2m > [22m[2mSkillDropdown[2m > [22m[2mrenders nothing when composer has no @ token
+[22m[39mWarning: An update to SkillDropdown inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SkillDropdown (D:/VScode/TotalProject/ShadowFlow/src/components/SkillDropdown.tsx:96:3)
+Warning: An update to SkillDropdown inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SkillDropdown (D:/VScode/TotalProject/ShadowFlow/src/components/SkillDropdown.tsx:96:3)
+
+[90mstderr[2m | src/components/SkillDropdown.test.tsx[2m > [22m[2mSkillDropdown[2m > [22m[2mshows filtered rows matching @bma
+[22m[39mWarning: An update to SkillDropdown inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SkillDropdown (D:/VScode/TotalProject/ShadowFlow/src/components/SkillDropdown.tsx:96:3)
+Warning: An update to SkillDropdown inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SkillDropdown (D:/VScode/TotalProject/ShadowFlow/src/components/SkillDropdown.tsx:96:3)
+
+[90mstderr[2m | src/components/chat-fb/TypingDotsFB.test.tsx[2m > [22m[2mTypingDotsFB[2m > [22m[2m无 props 也能 mount
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/components/chat-fb/TypingDotsFB.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 94[2mms[22m[39m
+ [32m✓[39m src/components/SkillDropdown.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 134[2mms[22m[39m
+ [32m✓[39m src/core/lib/lineage.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 55[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/EditorLayout.test.tsx[2m > [22m[2mEditorLayout[2m > [22m[2mrenders toolbar, sidebar, canvas, inspector slots
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/__tests__/components/EditorLayout.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 89[2mms[22m[39m
+ [32m✓[39m src/core/constants/quickDemoPrompts.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 66[2mms[22m[39m
+[90mstderr[2m | src/core/components/inbox/StatusPill.test.tsx[2m > [22m[2mStatusPill[2m > [22m[2mrenders Running for running status
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/core/components/inbox/StatusPill.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 107[2mms[22m[39m
+ [32m✓[39m src/core/security/__tests__/leakGuard.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 82[2mms[22m[39m
+ [32m✓[39m src/pages/runSession/__tests__/persistAssembledTeam.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 68[2mms[22m[39m
+ [32m✓[39m src/__tests__/stores/useSecretsStore.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 71[2mms[22m[39m
+ [32m✓[39m src/adapter/sseClient.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 89[2mms[22m[39m
+ [32m✓[39m src/common/lib/draftCache.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+ [32m✓[39m src/core/security/__tests__/safeExpression.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 83[2mms[22m[39m
+ [32m✓[39m src/lib/__tests__/assemblyRules.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 73[2mms[22m[39m
+ [32m✓[39m src/core/utils/builderNavigation.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 85[2mms[22m[39m
+[90mstderr[2m | src/components/chat-fb/SyscardFB.test.tsx[2m > [22m[2mSyscardFB[2m > [22m[2mpolicy-reject kind 渲染默认 REJECT 标签
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/components/chat-fb/SyscardFB.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 97[2mms[22m[39m
+[90mstderr[2m | src/__tests__/components/LiveDashboard.test.tsx[2m > [22m[2mLiveDashboard[2m > [22m[2mshows placeholder when no run_id
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/__tests__/components/LiveDashboard.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 115[2mms[22m[39m
+ [32m✓[39m src/api/builder.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 65[2mms[22m[39m
+ [32m✓[39m src/__tests__/sseClient.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 62[2mms[22m[39m
+[90mstderr[2m | src/components/run-session/timeline/messages/rows/__tests__/AssistantText.render.test.tsx[2m > [22m[2mAssistantText (Round 2.5 chip rendering)[2m > [22m[2mrenders a bash fence as a BashChip with $ Bash header
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/components/run-session/timeline/messages/rows/__tests__/AssistantText.render.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 67[2mms[22m[39m
+ [32m✓[39m src/components/run-session/timeline/messages/rows/__tests__/extractRows.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m src/api/__tests__/teams-persistence.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 50[2mms[22m[39m
+ [32m✓[39m src/core/stores/builderStore.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+ [32m✓[39m src/lib/teamGovernance.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+ [32m✓[39m src/store/workspaceStore.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 45[2mms[22m[39m
+ [32m✓[39m src/__tests__/stores/useRunStore.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+[90mstderr[2m | src/core/components/inbox/MessageItem.test.tsx[2m > [22m[2mMessageItem — GroupItem[2m > [22m[2mrenders group name and last message preview
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/core/components/inbox/MessageItem.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[32m 59[2mms[22m[39m
+[90mstderr[2m | src/core/components/inbox/BriefBoardView.test.tsx[2m > [22m[2mBriefBoardView[2m > [22m[2mrenders per-agent feed after data loads
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/__tests__/stores/timeline-build.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m src/core/components/inbox/BriefBoardView.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m src/__tests__/stores/usePolicyStore.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m src/__tests__/stores/useYamlEditorStore.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+[90mstderr[2m | src/pages/__tests__/ChatHomePage.test.tsx[2m > [22m[2mChatHomePage[2m > [22m[2m默认（无 ?view）渲染团队视图 + 顶部工作区选择器
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ [32m✓[39m src/pages/__tests__/ChatHomePage.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+[90mstderr[2m | src/core/components/inbox/PreviewPane.test.tsx[2m > [22m[2mPreviewPane[2m > [22m[2mshows the empty state without a selected group
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+[90mstderr[2m | src/core/components/inbox/PreviewPane.test.tsx[2m > [22m[2mPreviewPane[2m > [22m[2mhides the empty state and shows 3 slots when a group is selected
+[22m[39mWarning: An update to ApprovalGatePanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ApprovalGatePanel (D:/VScode/TotalProject/ShadowFlow/src/core/components/inbox/ApprovalGatePanel.tsx:19:30)
+    at div
+    at main
+    at PreviewPane (D:/VScode/TotalProject/ShadowFlow/src/core/components/inbox/PreviewPane.tsx:27:50)
+    at Router (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1207:17)
+    at MemoryRouter (D:\VScode\TotalProject\ShadowFlow\node_modules\react-router\dist\umd\react-router.development.js:1101:7)
+    at I18nProvider (D:/VScode/TotalProject/ShadowFlow/src/common/i18n/index.tsx:47:25)
+    at AllProviders (D:/VScode/TotalProject/ShadowFlow/src/test/utils.tsx:10:25)
+
+ [32m✓[39m src/core/components/inbox/PreviewPane.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 24 [49m[22m[31m⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/ConversationHistoryPanel.test.tsx[2m [ src/components/ConversationHistoryPanel.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/components/ConversationPicker.test.tsx[2m [ src/components/ConversationPicker.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/components/DesignSystemPicker.test.tsx[2m [ src/components/DesignSystemPicker.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/components/ProjectListPanel.test.tsx[2m [ src/components/ProjectListPanel.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/components/SkillPicker.test.tsx[2m [ src/components/SkillPicker.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/pages/BuilderPage.test.tsx[2m [ src/pages/BuilderPage.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/pages/CatalogPage.test.tsx[2m [ src/pages/CatalogPage.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/pages/ChatPage.test.tsx[2m [ src/pages/ChatPage.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/pages/ProjectsPage.test.tsx[2m [ src/pages/ProjectsPage.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/pages/RunsPage.test.tsx[2m [ src/pages/RunsPage.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/pages/StartPage.test.tsx[2m [ src/pages/StartPage.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/pages/TeamPage.test.tsx[2m [ src/pages/TeamPage.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/__tests__/components/BlueprintModal.test.tsx[2m [ src/__tests__/components/BlueprintModal.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/core/components/builder/GoalClarityWizard.test.tsx[2m [ src/core/components/builder/GoalClarityWizard.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/core/components/builder/KitSmokeRunPanel.test.tsx[2m [ src/core/components/builder/KitSmokeRunPanel.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/core/components/builder/KnowledgeDock.test.tsx[2m [ src/core/components/builder/KnowledgeDock.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/core/components/builder/SceneCanvasShell.test.tsx[2m [ src/core/components/builder/SceneCanvasShell.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/core/components/builder/SceneTree.test.tsx[2m [ src/core/components/builder/SceneTree.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/core/components/builder/SmokeRunPanel.test.tsx[2m [ src/core/components/builder/SmokeRunPanel.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/core/components/inbox/MessageList.test.tsx[2m [ src/core/components/inbox/MessageList.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/core/components/inbox/NarrowNav.test.tsx[2m [ src/core/components/inbox/NarrowNav.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/core/components/builder/inspector/RoleInspector.test.tsx[2m [ src/core/components/builder/inspector/RoleInspector.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/core/components/builder/__tests__/SceneMode.integration.test.tsx[2m [ src/core/components/builder/__tests__/SceneMode.integration.test.tsx ][22m
+[41m[1m FAIL [22m[49m src/core/components/builder/inspector/__tests__/RoleProfilePanel.test.tsx[2m [ src/core/components/builder/inspector/__tests__/RoleProfilePanel.test.tsx ][22m
+[31m[1mError[22m: Cannot find package '@testing-library/dom' imported from D:\VScode\TotalProject\ShadowFlow\node_modules\@testing-library\user-event\dist\esm\event\wrapEvent.js[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/37]⎯[22m[39m
+
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 13 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/AppRoutes.test.tsx[2m > [22mAppRoutes — new routes[2m > [22m/chat/:groupId renders ChatPage
+[31m[1mTestingLibraryElementError[22m: Unable to find an element by: [data-testid="chat-page"]
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mstyle[31m=[32m"display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; padding: 32px; text-align: center; background: var(--t-bg); color: var(--t-fg-2);"[31m
+    [36m>[31m
+      [36m<span[31m
+        [33mstyle[31m=[32m"display: inline-flex; align-items: center; justify-content: center; color: var(--t-warn, #F59E0B);"[31m
+      [36m>[31m
+        [36m<svg[31m
+          [33maria-hidden[31m=[32m"true"[31m
+          [33mclass[31m=[32m"lucide lucide-triangle-alert"[31m
+          [33mfill[31m=[32m"none"[31m
+          [33mheight[31m=[32m"32"[31m
+          [33mstroke[31m=[32m"currentColor"[31m
+          [33mstroke-linecap[31m=[32m"round"[31m
+          [33mstroke-linejoin[31m=[32m"round"[31m
+          [33mstroke-width[31m=[32m"2"[31m
+          [33mviewBox[31m=[32m"0 0 24 24"[31m
+          [33mwidth[31m=[32m"32"[31m
+          [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+        [36m>[31m
+          [36m<path[31m
+            [33md[31m=[32m"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 9v4"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 17h.01"[31m
+          [36m/>[31m
+        [36m</svg>[31m
+      [36m</span>[31m
+      [36m<div>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-weight: 700; font-size: 13px; color: var(--t-fg); margin-bottom: 4px;"[31m
+        [36m>[31m
+          [0m组件加载出错[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-size: 11px; color: var(--t-fg-4); font-family: var(--font-mono);"[31m
+        [36m>[31m
+          [0museAuth must be used within &lt;AuthProvider&gt;[0m
+        [36m</p>[31m
+      [36m</div>[31m
+      [36m<button[31m
+        [33mstyle[31m=[32m"padding: 6px 16px; border-radius: 8px; background: var(--t-accent); color: rgb(255, 255, 255); border: medium; cursor: pointer; font-size: 12px; font-weight: 600;"[31m
+      [36m>[31m
+        [0m重试（剩余 [0m
+        [0m3[0m
+        [0m 次）[0m
+      [36m</button>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mstyle[31m=[32m"display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; padding: 32px; text-align: center; background: var(--t-bg); color: var(--t-fg-2);"[31m
+    [36m>[31m
+      [36m<span[31m
+        [33mstyle[31m=[32m"display: inline-flex; align-items: center; justify-content: center; color: var(--t-warn, #F59E0B);"[31m
+      [36m>[31m
+        [36m<svg[31m
+          [33maria-hidden[31m=[32m"true"[31m
+          [33mclass[31m=[32m"lucide lucide-triangle-alert"[31m
+          [33mfill[31m=[32m"none"[31m
+          [33mheight[31m=[32m"32"[31m
+          [33mstroke[31m=[32m"currentColor"[31m
+          [33mstroke-linecap[31m=[32m"round"[31m
+          [33mstroke-linejoin[31m=[32m"round"[31m
+          [33mstroke-width[31m=[32m"2"[31m
+          [33mviewBox[31m=[32m"0 0 24 24"[31m
+          [33mwidth[31m=[32m"32"[31m
+          [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+        [36m>[31m
+          [36m<path[31m
+            [33md[31m=[32m"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 9v4"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 17h.01"[31m
+          [36m/>[31m
+        [36m</svg>[31m
+      [36m</span>[31m
+      [36m<div>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-weight: 700; font-size: 13px; color: var(--t-fg); margin-bottom: 4px;"[31m
+        [36m>[31m
+          [0m组件加载出错[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-size: 11px; color: var(--t-fg-4); font-family: var(--font-mono);"[31m
+        [36m>[31m
+          [0museAuth must be used within &lt;AuthProvider&gt;[0m
+        [36m</p>[31m
+      [36m</div>[31m
+      [36m<button[31m
+        [33mstyle[31m=[32m"padding: 6px 16px; border-radius: 8px; background: var(--t-accent); color: rgb(255, 255, 255); border: medium; cursor: pointer; font-size: 12px; font-weight: 600;"[31m
+      [36m>[31m
+        [0m重试（剩余 [0m
+        [0m3[0m
+        [0m 次）[0m
+      [36m</button>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+[90m [2m❯[22m waitForWrapper node_modules/@testing-library/react/node_modules/@testing-library/dom/dist/wait-for.js:[2m166:27[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/react/node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m src/AppRoutes.test.tsx:[2m39:25[22m[39m
+    [90m 37| [39m      [33m<[39m[33m/[39m[33mMemoryRouter[39m[33m>[39m
+    [90m 38| [39m    )[33m;[39m
+    [90m 39| [39m    [34mexpect[39m([35mawait[39m screen[33m.[39m[34mfindByTestId[39m([32m'chat-page'[39m))[33m.[39m[34mtoBeInTheDocument[39m()[33m;[39m
+    [90m   | [39m                        [31m^[39m
+    [90m 40| [39m  })[33m;[39m
+    [90m 41| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/AppRoutes.test.tsx[2m > [22mAppRoutes — new routes[2m > [22m/agent-dm/:agentId renders AgentDMPage
+[31m[1mTestingLibraryElementError[22m: Unable to find an element by: [data-testid="agent-dm-page"]
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mstyle[31m=[32m"display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; padding: 32px; text-align: center; background: var(--t-bg); color: var(--t-fg-2);"[31m
+    [36m>[31m
+      [36m<span[31m
+        [33mstyle[31m=[32m"display: inline-flex; align-items: center; justify-content: center; color: var(--t-warn, #F59E0B);"[31m
+      [36m>[31m
+        [36m<svg[31m
+          [33maria-hidden[31m=[32m"true"[31m
+          [33mclass[31m=[32m"lucide lucide-triangle-alert"[31m
+          [33mfill[31m=[32m"none"[31m
+          [33mheight[31m=[32m"32"[31m
+          [33mstroke[31m=[32m"currentColor"[31m
+          [33mstroke-linecap[31m=[32m"round"[31m
+          [33mstroke-linejoin[31m=[32m"round"[31m
+          [33mstroke-width[31m=[32m"2"[31m
+          [33mviewBox[31m=[32m"0 0 24 24"[31m
+          [33mwidth[31m=[32m"32"[31m
+          [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+        [36m>[31m
+          [36m<path[31m
+            [33md[31m=[32m"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 9v4"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 17h.01"[31m
+          [36m/>[31m
+        [36m</svg>[31m
+      [36m</span>[31m
+      [36m<div>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-weight: 700; font-size: 13px; color: var(--t-fg); margin-bottom: 4px;"[31m
+        [36m>[31m
+          [0m组件加载出错[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-size: 11px; color: var(--t-fg-4); font-family: var(--font-mono);"[31m
+        [36m>[31m
+          [0museAuth must be used within &lt;AuthProvider&gt;[0m
+        [36m</p>[31m
+      [36m</div>[31m
+      [36m<button[31m
+        [33mstyle[31m=[32m"padding: 6px 16px; border-radius: 8px; background: var(--t-accent); color: rgb(255, 255, 255); border: medium; cursor: pointer; font-size: 12px; font-weight: 600;"[31m
+      [36m>[31m
+        [0m重试（剩余 [0m
+        [0m3[0m
+        [0m 次）[0m
+      [36m</button>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mstyle[31m=[32m"display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; padding: 32px; text-align: center; background: var(--t-bg); color: var(--t-fg-2);"[31m
+    [36m>[31m
+      [36m<span[31m
+        [33mstyle[31m=[32m"display: inline-flex; align-items: center; justify-content: center; color: var(--t-warn, #F59E0B);"[31m
+      [36m>[31m
+        [36m<svg[31m
+          [33maria-hidden[31m=[32m"true"[31m
+          [33mclass[31m=[32m"lucide lucide-triangle-alert"[31m
+          [33mfill[31m=[32m"none"[31m
+          [33mheight[31m=[32m"32"[31m
+          [33mstroke[31m=[32m"currentColor"[31m
+          [33mstroke-linecap[31m=[32m"round"[31m
+          [33mstroke-linejoin[31m=[32m"round"[31m
+          [33mstroke-width[31m=[32m"2"[31m
+          [33mviewBox[31m=[32m"0 0 24 24"[31m
+          [33mwidth[31m=[32m"32"[31m
+          [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+        [36m>[31m
+          [36m<path[31m
+            [33md[31m=[32m"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 9v4"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 17h.01"[31m
+          [36m/>[31m
+        [36m</svg>[31m
+      [36m</span>[31m
+      [36m<div>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-weight: 700; font-size: 13px; color: var(--t-fg); margin-bottom: 4px;"[31m
+        [36m>[31m
+          [0m组件加载出错[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-size: 11px; color: var(--t-fg-4); font-family: var(--font-mono);"[31m
+        [36m>[31m
+          [0museAuth must be used within &lt;AuthProvider&gt;[0m
+        [36m</p>[31m
+      [36m</div>[31m
+      [36m<button[31m
+        [33mstyle[31m=[32m"padding: 6px 16px; border-radius: 8px; background: var(--t-accent); color: rgb(255, 255, 255); border: medium; cursor: pointer; font-size: 12px; font-weight: 600;"[31m
+      [36m>[31m
+        [0m重试（剩余 [0m
+        [0m3[0m
+        [0m 次）[0m
+      [36m</button>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+[90m [2m❯[22m waitForWrapper node_modules/@testing-library/react/node_modules/@testing-library/dom/dist/wait-for.js:[2m166:27[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/react/node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m src/AppRoutes.test.tsx:[2m48:25[22m[39m
+    [90m 46| [39m      [33m<[39m[33m/[39m[33mMemoryRouter[39m[33m>[39m
+    [90m 47| [39m    )[33m;[39m
+    [90m 48| [39m    expect(await screen.findByTestId('agent-dm-page')).toBeInTheDocume…
+    [90m   | [39m                        [31m^[39m
+    [90m 49| [39m  })[33m;[39m
+    [90m 50| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/ApiKeySettings.test.tsx[2m > [22mStory 15.18 — multi-provider BYOK[2m > [22mKEY_STORAGE / HEADER_NAME tables[2m > [22mexposes all 4 provider ids
+[31m[1mAssertionError[22m: expected [ 'anthropic', 'azure', …(11) ] to deeply equal [ 'anthropic', 'deepseek', …(2) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "anthropic",[22m
+[31m+   "azure",[39m
+[2m    "deepseek",[22m
+[31m+   "google",[39m
+[31m+   "groq",[39m
+[31m+   "lmstudio",[39m
+[31m+   "mistral",[39m
+[31m+   "moonshot",[39m
+[31m+   "ollama",[39m
+[2m    "openai",[22m
+[31m+   "openrouter",[39m
+[31m+   "qwen",[39m
+[2m    "zhipu",[22m
+[2m  ][22m
+
+[36m [2m❯[22m src/components/ApiKeySettings.test.tsx:[2m173:40[22m[39m
+    [90m171| [39m  [34mdescribe[39m([32m'KEY_STORAGE / HEADER_NAME tables'[39m[33m,[39m () [33m=>[39m {
+    [90m172| [39m    [34mit[39m([32m'exposes all 4 provider ids'[39m[33m,[39m () [33m=>[39m {
+    [90m173| [39m      [34mexpect[39m([[33m...[39m[33mPROVIDER_IDS[39m][33m.[39m[34msort[39m())[33m.[39m[34mtoEqual[39m(
+    [90m   | [39m                                       [31m^[39m
+    [90m174| [39m        [[32m'anthropic'[39m[33m,[39m [32m'deepseek'[39m[33m,[39m [32m'openai'[39m[33m,[39m [32m'zhipu'[39m][33m.[39m[34msort[39m()[33m,[39m
+    [90m175| [39m      )[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/ApiKeySettings.test.tsx[2m > [22mStory 15.18 — multi-provider BYOK[2m > [22mauthHeaders multi-provider[2m > [22memits only the headers whose keys are present
+[31m[1mAssertionError[22m: expected { Object (X-Anthropic-Key) } to deeply equal { …(2) }[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[2m    "X-Anthropic-Key": "sk-ant-api03-1234567890abcdef-XYZA",[22m
+[32m-   "X-Zhipu-Key": "abcdef.0123456789abcdef0123456789",[39m
+[2m  }[22m
+
+[36m [2m❯[22m src/components/ApiKeySettings.test.tsx:[2m228:17[22m[39m
+    [90m226| [39m      [34msetStoredApiKey[39m([33mZHIPU_KEY[39m[33m,[39m [32m'zhipu'[39m)[33m;[39m
+    [90m227| [39m      [35mconst[39m h [33m=[39m [34mauthHeaders[39m()[33m;[39m
+    [90m228| [39m      [34mexpect[39m(h)[33m.[39m[34mtoEqual[39m({
+    [90m   | [39m                [31m^[39m
+    [90m229| [39m        [32m'X-Anthropic-Key'[39m[33m:[39m [33mVALID_KEY[39m[33m,[39m
+    [90m230| [39m        [32m'X-Zhipu-Key'[39m[33m:[39m [33mZHIPU_KEY[39m[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/ApiKeySettings.test.tsx[2m > [22mStory 15.18 — multi-provider BYOK[2m > [22mauthHeaders multi-provider[2m > [22memits all 4 when all 4 are stored
+[31m[1mAssertionError[22m: expected { Object (X-Anthropic-Key) } to deeply equal { …(4) }[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[2m    "X-Anthropic-Key": "sk-ant-api03-1234567890abcdef-XYZA",[22m
+[32m-   "X-DeepSeek-Key": "sk-deepseek-1234567890abcdef-AB",[39m
+[32m-   "X-OpenAI-Key": "sk-openai-1234567890abcdef-XYZA",[39m
+[32m-   "X-Zhipu-Key": "abcdef.0123456789abcdef0123456789",[39m
+[2m  }[22m
+
+[36m [2m❯[22m src/components/ApiKeySettings.test.tsx:[2m241:29[22m[39m
+    [90m239| [39m      [34msetStoredApiKey[39m([33mDEEPSEEK_KEY[39m[33m,[39m [32m'deepseek'[39m)[33m;[39m
+    [90m240| [39m      [34msetStoredApiKey[39m([33mZHIPU_KEY[39m[33m,[39m [32m'zhipu'[39m)[33m;[39m
+    [90m241| [39m      [34mexpect[39m([34mauthHeaders[39m())[33m.[39m[34mtoEqual[39m({
+    [90m   | [39m                            [31m^[39m
+    [90m242| [39m        [32m'X-Anthropic-Key'[39m[33m:[39m [33mVALID_KEY[39m[33m,[39m
+    [90m243| [39m        [32m'X-OpenAI-Key'[39m[33m:[39m [33mOPENAI_KEY[39m[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/GenerationSettings.test.tsx[2m > [22mgetGenerationSettings[2m > [22mdoes not include model (reserved for future opt-in)
+[31m[1mAssertionError[22m: expected 'claude-opus-4' to be undefined[39m
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"claude-opus-4"
+
+[36m [2m❯[22m src/components/GenerationSettings.test.tsx:[2m84:23[22m[39m
+    [90m 82| [39m    localStorage[33m.[39m[34msetItem[39m([32m'sf.model'[39m[33m,[39m [32m'claude-opus-4'[39m)[33m;[39m
+    [90m 83| [39m    [35mconst[39m got [33m=[39m [34mgetGenerationSettings[39m()[33m;[39m
+    [90m 84| [39m    [34mexpect[39m(got[33m.[39mmodel)[33m.[39m[34mtoBeUndefined[39m()[33m;[39m
+    [90m   | [39m                      [31m^[39m
+    [90m 85| [39m  })[33m;[39m
+    [90m 86| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/InboxPage.test.tsx[2m > [22mInboxPage[2m > [22mmatches the /inbox route
+[31m[1mTestingLibraryElementError[22m: Unable to find an element by: [data-testid="narrow-nav"]
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mstyle[31m=[32m"display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; padding: 32px; text-align: center; background: var(--t-bg); color: var(--t-fg-2);"[31m
+    [36m>[31m
+      [36m<span[31m
+        [33mstyle[31m=[32m"display: inline-flex; align-items: center; justify-content: center; color: var(--t-warn, #F59E0B);"[31m
+      [36m>[31m
+        [36m<svg[31m
+          [33maria-hidden[31m=[32m"true"[31m
+          [33mclass[31m=[32m"lucide lucide-triangle-alert"[31m
+          [33mfill[31m=[32m"none"[31m
+          [33mheight[31m=[32m"32"[31m
+          [33mstroke[31m=[32m"currentColor"[31m
+          [33mstroke-linecap[31m=[32m"round"[31m
+          [33mstroke-linejoin[31m=[32m"round"[31m
+          [33mstroke-width[31m=[32m"2"[31m
+          [33mviewBox[31m=[32m"0 0 24 24"[31m
+          [33mwidth[31m=[32m"32"[31m
+          [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+        [36m>[31m
+          [36m<path[31m
+            [33md[31m=[32m"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 9v4"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 17h.01"[31m
+          [36m/>[31m
+        [36m</svg>[31m
+      [36m</span>[31m
+      [36m<div>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-weight: 700; font-size: 13px; color: var(--t-fg); margin-bottom: 4px;"[31m
+        [36m>[31m
+          [0m组件加载出错[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-size: 11px; color: var(--t-fg-4); font-family: var(--font-mono);"[31m
+        [36m>[31m
+          [0museAuth must be used within &lt;AuthProvider&gt;[0m
+        [36m</p>[31m
+      [36m</div>[31m
+      [36m<button[31m
+        [33mstyle[31m=[32m"padding: 6px 16px; border-radius: 8px; background: var(--t-accent); color: rgb(255, 255, 255); border: medium; cursor: pointer; font-size: 12px; font-weight: 600;"[31m
+      [36m>[31m
+        [0m重试（剩余 [0m
+        [0m3[0m
+        [0m 次）[0m
+      [36m</button>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mstyle[31m=[32m"display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; padding: 32px; text-align: center; background: var(--t-bg); color: var(--t-fg-2);"[31m
+    [36m>[31m
+      [36m<span[31m
+        [33mstyle[31m=[32m"display: inline-flex; align-items: center; justify-content: center; color: var(--t-warn, #F59E0B);"[31m
+      [36m>[31m
+        [36m<svg[31m
+          [33maria-hidden[31m=[32m"true"[31m
+          [33mclass[31m=[32m"lucide lucide-triangle-alert"[31m
+          [33mfill[31m=[32m"none"[31m
+          [33mheight[31m=[32m"32"[31m
+          [33mstroke[31m=[32m"currentColor"[31m
+          [33mstroke-linecap[31m=[32m"round"[31m
+          [33mstroke-linejoin[31m=[32m"round"[31m
+          [33mstroke-width[31m=[32m"2"[31m
+          [33mviewBox[31m=[32m"0 0 24 24"[31m
+          [33mwidth[31m=[32m"32"[31m
+          [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+        [36m>[31m
+          [36m<path[31m
+            [33md[31m=[32m"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 9v4"[31m
+          [36m/>[31m
+          [36m<path[31m
+            [33md[31m=[32m"M12 17h.01"[31m
+          [36m/>[31m
+        [36m</svg>[31m
+      [36m</span>[31m
+      [36m<div>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-weight: 700; font-size: 13px; color: var(--t-fg); margin-bottom: 4px;"[31m
+        [36m>[31m
+          [0m组件加载出错[0m
+        [36m</p>[31m
+        [36m<p[31m
+          [33mstyle[31m=[32m"font-size: 11px; color: var(--t-fg-4); font-family: var(--font-mono);"[31m
+        [36m>[31m
+          [0museAuth must be used within &lt;AuthProvider&gt;[0m
+        [36m</p>[31m
+      [36m</div>[31m
+      [36m<button[31m
+        [33mstyle[31m=[32m"padding: 6px 16px; border-radius: 8px; background: var(--t-accent); color: rgb(255, 255, 255); border: medium; cursor: pointer; font-size: 12px; font-weight: 600;"[31m
+      [36m>[31m
+        [0m重试（剩余 [0m
+        [0m3[0m
+        [0m 次）[0m
+      [36m</button>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+[90m [2m❯[22m waitForWrapper node_modules/@testing-library/react/node_modules/@testing-library/dom/dist/wait-for.js:[2m166:27[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/react/node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m src/pages/InboxPage.test.tsx:[2m24:25[22m[39m
+    [90m 22| [39m    )[33m;[39m
+    [90m 23| [39m
+    [90m 24| [39m    expect(await screen.findByTestId('narrow-nav')).toBeInTheDocument(…
+    [90m   | [39m                        [31m^[39m
+    [90m 25| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByTestId[39m([32m'message-list'[39m))[33m.[39m[34mtoBeInTheDocument[39m()[33m;[39m
+    [90m 26| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/adapter/__tests__/zerogStorage.test.ts[2m > [22muploadTrajectory[2m > [22mreturns cid and txHash on successful upload
+[31m[1mError[22m: [vitest] No "Blob" export is defined on the "@0glabs/0g-ts-sdk" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+[39m
+vi.mock(import("@0glabs/0g-ts-sdk"), async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    // your mocked methods
+  }
+})
+
+[36m [2m❯[22m uploadTrajectory src/adapter/zerogStorage.ts:[2m156:20[22m[39m
+    [90m154| [39m  const safeBuf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffse…
+    [90m155| [39m  const nativeFile = new File([safeBuf], 'trajectory.json', { type: 'a…
+    [90m156| [39m  [35mconst[39m file [33m=[39m [35mnew[39m [33mZgBlob[39m(nativeFile)[33m;[39m
+    [90m   | [39m                   [31m^[39m
+    [90m157| [39m  // ZgBlob does not have a close() method (no OS handle), so no final…
+    [90m158| [39m  [35mconst[39m [tree[33m,[39m treeErr] [33m=[39m [35mawait[39m file[33m.[39m[34mmerkleTree[39m()[33m;[39m
+[90m [2m❯[22m src/adapter/__tests__/zerogStorage.test.ts:[2m51:20[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/adapter/__tests__/zerogStorage.test.ts[2m > [22muploadTrajectory[2m > [22mcloses ZgFile in finally block even on success
+[31m[1mError[22m: [vitest] No "Blob" export is defined on the "@0glabs/0g-ts-sdk" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+[39m
+vi.mock(import("@0glabs/0g-ts-sdk"), async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    // your mocked methods
+  }
+})
+
+[36m [2m❯[22m uploadTrajectory src/adapter/zerogStorage.ts:[2m156:20[22m[39m
+    [90m154| [39m  const safeBuf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffse…
+    [90m155| [39m  const nativeFile = new File([safeBuf], 'trajectory.json', { type: 'a…
+    [90m156| [39m  [35mconst[39m file [33m=[39m [35mnew[39m [33mZgBlob[39m(nativeFile)[33m;[39m
+    [90m   | [39m                   [31m^[39m
+    [90m157| [39m  // ZgBlob does not have a close() method (no OS handle), so no final…
+    [90m158| [39m  [35mconst[39m [tree[33m,[39m treeErr] [33m=[39m [35mawait[39m file[33m.[39m[34mmerkleTree[39m()[33m;[39m
+[90m [2m❯[22m src/adapter/__tests__/zerogStorage.test.ts:[2m59:5[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/adapter/__tests__/zerogStorage.test.ts[2m > [22muploadTrajectory[2m > [22mcloses ZgFile when merkle tree generation fails
+[31m[1mAssertionError[22m: expected [Function] to throw error including 'Merkle tree generation failed' but got '[vitest] No "Blob" export is defined …'[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Merkle tree generation failed[39m
+[31m+ [vitest] No "Blob" export is defined on the "@0glabs/0g-ts-sdk" mock. Did you forget to return it from "vi.mock"?[39m
+[31m+ If you need to partially mock a module, you can use "importOriginal" helper inside:[39m
+[31m+[39m
+
+[36m [2m❯[22m src/adapter/__tests__/zerogStorage.test.ts:[2m66:5[22m[39m
+    [90m 64| [39m    mockMerkleTree[33m.[39m[34mmockResolvedValueOnce[39m([[35mnull[39m[33m,[39m [32m'merkle error'[39m])[33m;[39m
+    [90m 65| [39m    [35mconst[39m data [33m=[39m [35mnew[39m [33mUint8Array[39m([[34m7[39m[33m,[39m [34m8[39m[33m,[39m [34m9[39m])[33m;[39m
+    [90m 66| [39m    await expect(uploadTrajectory(data, 'testpass')).rejects.toThrow('…
+    [90m   | [39m    [31m^[39m
+    [90m 67| [39m    [34mexpect[39m(mockClose)[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m 68| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/adapter/__tests__/zerogStorage.test.ts[2m > [22muploadTrajectory[2m > [22mcloses ZgFile when upload returns error tuple
+[31m[1mAssertionError[22m: expected [Function] to throw error including '0G Storage upload failed' but got '[vitest] No "Blob" export is defined …'[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0G Storage upload failed[39m
+[31m+ [vitest] No "Blob" export is defined on the "@0glabs/0g-ts-sdk" mock. Did you forget to return it from "vi.mock"?[39m
+[31m+ If you need to partially mock a module, you can use "importOriginal" helper inside:[39m
+[31m+[39m
+
+[36m [2m❯[22m src/adapter/__tests__/zerogStorage.test.ts:[2m73:5[22m[39m
+    [90m 71| [39m    mockUpload.mockResolvedValueOnce([null, new Error('network failure…
+    [90m 72| [39m    [35mconst[39m data [33m=[39m [35mnew[39m [33mUint8Array[39m([[34m10[39m[33m,[39m [34m11[39m])[33m;[39m
+    [90m 73| [39m    await expect(uploadTrajectory(data, 'testpass')).rejects.toThrow('…
+    [90m   | [39m    [31m^[39m
+    [90m 74| [39m    [34mexpect[39m(mockClose)[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m 75| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/__tests__/skill-studio-entries.test.tsx[2m > [22mStory 15.28 — Skill Studio entries[2m > [22mStartPage renders the Skill Studio primitive card
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="primitive-card-skill-studio"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"start-page"[39m
+      [33mstyle[39m=[32m"flex: 1 1 0%; display: flex; flex-direction: column; min-width: 0px; background: var(--t-bg); color: var(--t-fg);"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mstyle[39m=[32m"height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0px 22px 0px 8px; border-bottom: 1px solid var(--t-border); background: var(--t-panel);"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"width: 240px; flex-shrink: 0;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"position: relative; width: 100%;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"org-switcher-trigger"[39m
+              [33mstyle[39m=[32m"display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px; background: var(--t-panel-2); border: 1px solid var(--t-border); cursor: pointer; width: 100%;"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mstyle[39m=[32m"width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 10px; background: color-mix(in oklab, var(--t-accent) 22%, var(--t-panel-2)); border: 1px solid color-mix(in oklab, var(--t-accent) 50%, transparent); color: var(--t-accent); letter-spacing: -0.03em;"[39m
+              [36m>[39m
+                [0mSh[0m
+              [36m</span>[39m
+              [36m<div[39m
+                [33mstyle[39m=[32m"flex: 1 1 0%; min-width: 0px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"font-size: 12.5px; font-weight: 700; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                [36m>[39m
+                  [0mShadowFlow[0m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"font-family: var(--font-mono); font-size: 9.5px; color: var(--t-fg-4); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                [36m>[39m
+                  [0m选择或新建工作区[0m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-down"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"13"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mstyle[39m=[32m"color: var(--t-fg-4); flex-shrink: 0; transition: transform 150ms; transform: none;"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"13"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 9 6 6 6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"flex: 1 1 0%;"[39m
+        [36m/>[39m
+        [36m<a[39m
+          [33mhref[39m=[32m"https://chainscan-newton.0g.ai"[39m
+          [33mrel[39m=[32m"noopener noreferrer"[39m
+          [33mstyle[39m=[32m"display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--t-panel-2); border: 1px solid var(--t-border); color: var(--t-fg-3); font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; margin-right: 12px; cursor: pointer; transition: background 120ms ease;"[39m
+          [33mtarget[39m=[32m"_blank"[39m
+          [33mtitle[39m=[32m"0G TESTNET · connecting…"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mstyle[39m=[32m"width: 7px; height: 7px; border-radius: 50%; background: var(--t-fg-3); animation: hf-pulse 1.4s ease-in-out infinite;"[39m
+          [36m/>[39m
+          [36m<span>[39m
+            [0m0G TESTNET · [0m
+            [0m…[0m
+          [36m</span>[39m
+        [36m</a>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"切到浅色"[39m
+          [33mstyle[39m=[32m"width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); cursor: pointer; transition: background 140ms ease, color 140ms ease, border-color 140ms ease; flex-shrink: 0;"[39m
+          [33mtitle[39m=[32m"切到浅色"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"14"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"14"[39m
+          [36m>[39m
+            [36m<circle[39m
+              [33mcx[39m=[32m"12"[39m
+              [33mcy[39m=[32m"12"[39m
+              [33mr[39m=[32m"4"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Switch to English"[39m
+          [33mstyle[39m=[32m"padding: 4px 10px; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; transition: all .15s; white-space: nowrap;"[39m
+          [33mtitle[39m=[32m"Switch to English"[39m
+        [36m>[39m
+          [0mEN / 中[0m
+        [36m</button>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mstyle[39m=[32m"flex: 1 1 0%; overflow: auto; display: flex; flex-direction: column; align-items: center; padding: 48px 32px 60px;"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 32px;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32...
+
+Ignored nodes: comments, script, style
+[36m<html[39m
+  [33mdata-theme[39m=[32m"night"[39m
+  [33mstyle[39m=[32m"--app-zoom: 1;"[39m
+[36m>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"start-page"[39m
+        [33mstyle[39m=[32m"flex: 1 1 0%; display: flex; flex-direction: column; min-width: 0px; background: var(--t-bg); color: var(--t-fg);"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mstyle[39m=[32m"height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0px 22px 0px 8px; border-bottom: 1px solid var(--t-border); background: var(--t-panel);"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"width: 240px; flex-shrink: 0;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mstyle[39m=[32m"position: relative; width: 100%;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mdata-testid[39m=[32m"org-switcher-trigger"[39m
+                [33mstyle[39m=[32m"display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px; background: var(--t-panel-2); border: 1px solid var(--t-border); cursor: pointer; width: 100%;"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mstyle[39m=[32m"width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 10px; background: color-mix(in oklab, var(--t-accent) 22%, var(--t-panel-2)); border: 1px solid color-mix(in oklab, var(--t-accent) 50%, transparent); color: var(--t-accent); letter-spacing: -0.03em;"[39m
+                [36m>[39m
+                  [0mSh[0m
+                [36m</span>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"flex: 1 1 0%; min-width: 0px;"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mstyle[39m=[32m"font-size: 12.5px; font-weight: 700; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                  [36m>[39m
+                    [0mShadowFlow[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mstyle[39m=[32m"font-family: var(--font-mono); font-size: 9.5px; color: var(--t-fg-4); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                  [36m>[39m
+                    [0m选择或新建工作区[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-chevron-down"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"13"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mstyle[39m=[32m"color: var(--t-fg-4); flex-shrink: 0; transition: transform 150ms; transform: none;"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"13"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"m6 9 6 6 6-6"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"flex: 1 1 0%;"[39m
+          [36m/>[39m
+          [36m<a[39m
+            [33mhref[39m=[32m"https://chainscan-newton.0g.ai"[39m
+            [33mrel[39m=[32m"noopener noreferrer"[39m
+            [33mstyle[39m=[32m"display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--t-panel-2); border: 1px solid var(--t-border); color: var(--t-fg-3); font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; margin-right: 12px; cursor: pointer; transition: background 120ms ease;"[39m
+            [33mtarget[39m=[32m"_blank"[39m
+            [33mtitle[39m=[32m"0G TESTNET · connecting…"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mstyle[39m=[32m"width: 7px; height: 7px; border-radius: 50%; background: var(--t-fg-3); animation: hf-pulse 1.4s ease-in-out infinite;"[39m
+            [36m/>[39m
+            [36m<span>[39m
+              [0m0G TESTNET · [0m
+              [0m…[0m
+            [36m</span>[39m
+          [36m</a>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"切到浅色"[39m
+            [33mstyle[39m=[32m"width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); cursor: pointer; transition: background 140ms ease, color 140ms ease, border-color 140ms ease; flex-shrink: 0;"[39m
+            [33mtitle[39m=[32m"切到浅色"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+            [36m>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"12"[39m
+                [33mcy[39m=[32m"12"[39m
+                [33mr[39m=[32m"4"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Switch to English"[39m
+            [33mstyle[39m=[32m"padding: 4px 10px; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; transition: all .15s; white-space: nowrap;"[39m
+            [33mtitle[39m=[32m"Switch to English"[39m
+          [36m>[39m
+            [0mEN / 中[0m
+          [36m</button>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mstyle[39m=...
+[90m [2m❯[22m Proxy.waitForWrapper node_modules/@testing-library/react/node_modules/@testing-library/dom/dist/wait-for.js:[2m166:27[22m[39m
+[36m [2m❯[22m src/pages/__tests__/skill-studio-entries.test.tsx:[2m45:11[22m[39m
+    [90m 43| [39m  [34mit[39m([32m'StartPage renders the Skill Studio primitive card'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m 44| [39m    [34mrender[39m([34mwrap[39m([33m<[39m[33mStartPage[39m [33m/[39m[33m>[39m))[33m;[39m
+    [90m 45| [39m    [35mawait[39m [34mwaitFor[39m(() [33m=>[39m {
+    [90m   | [39m          [31m^[39m
+    [90m 46| [39m      expect(screen.getByTestId('primitive-card-skill-studio')).toBeTr…
+    [90m 47| [39m    })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/37]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/__tests__/skill-studio-entries.test.tsx[2m > [22mStory 15.28 — Skill Studio entries[2m > [22mStartPage Skill Studio card shows the i18n title text
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="primitive-card-skill-studio"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"start-page"[39m
+      [33mstyle[39m=[32m"flex: 1 1 0%; display: flex; flex-direction: column; min-width: 0px; background: var(--t-bg); color: var(--t-fg);"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mstyle[39m=[32m"height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0px 22px 0px 8px; border-bottom: 1px solid var(--t-border); background: var(--t-panel);"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"width: 240px; flex-shrink: 0;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"position: relative; width: 100%;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"org-switcher-trigger"[39m
+              [33mstyle[39m=[32m"display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px; background: var(--t-panel-2); border: 1px solid var(--t-border); cursor: pointer; width: 100%;"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mstyle[39m=[32m"width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 10px; background: color-mix(in oklab, var(--t-accent) 22%, var(--t-panel-2)); border: 1px solid color-mix(in oklab, var(--t-accent) 50%, transparent); color: var(--t-accent); letter-spacing: -0.03em;"[39m
+              [36m>[39m
+                [0mSh[0m
+              [36m</span>[39m
+              [36m<div[39m
+                [33mstyle[39m=[32m"flex: 1 1 0%; min-width: 0px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"font-size: 12.5px; font-weight: 700; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                [36m>[39m
+                  [0mShadowFlow[0m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"font-family: var(--font-mono); font-size: 9.5px; color: var(--t-fg-4); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                [36m>[39m
+                  [0m选择或新建工作区[0m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-down"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"13"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mstyle[39m=[32m"color: var(--t-fg-4); flex-shrink: 0; transition: transform 150ms; transform: none;"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"13"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 9 6 6 6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"flex: 1 1 0%;"[39m
+        [36m/>[39m
+        [36m<a[39m
+          [33mhref[39m=[32m"https://chainscan-newton.0g.ai"[39m
+          [33mrel[39m=[32m"noopener noreferrer"[39m
+          [33mstyle[39m=[32m"display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--t-panel-2); border: 1px solid var(--t-border); color: var(--t-fg-3); font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; margin-right: 12px; cursor: pointer; transition: background 120ms ease;"[39m
+          [33mtarget[39m=[32m"_blank"[39m
+          [33mtitle[39m=[32m"0G TESTNET · connecting…"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mstyle[39m=[32m"width: 7px; height: 7px; border-radius: 50%; background: var(--t-fg-3); animation: hf-pulse 1.4s ease-in-out infinite;"[39m
+          [36m/>[39m
+          [36m<span>[39m
+            [0m0G TESTNET · [0m
+            [0m…[0m
+          [36m</span>[39m
+        [36m</a>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"切到浅色"[39m
+          [33mstyle[39m=[32m"width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); cursor: pointer; transition: background 140ms ease, color 140ms ease, border-color 140ms ease; flex-shrink: 0;"[39m
+          [33mtitle[39m=[32m"切到浅色"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"14"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"14"[39m
+          [36m>[39m
+            [36m<circle[39m
+              [33mcx[39m=[32m"12"[39m
+              [33mcy[39m=[32m"12"[39m
+              [33mr[39m=[32m"4"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Switch to English"[39m
+          [33mstyle[39m=[32m"padding: 4px 10px; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; transition: all .15s; white-space: nowrap;"[39m
+          [33mtitle[39m=[32m"Switch to English"[39m
+        [36m>[39m
+          [0mEN / 中[0m
+        [36m</button>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mstyle[39m=[32m"flex: 1 1 0%; overflow: auto; display: flex; flex-direction: column; align-items: center; padding: 48px 32px 60px;"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 32px;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32...
+
+Ignored nodes: comments, script, style
+[36m<html[39m
+  [33mdata-theme[39m=[32m"night"[39m
+  [33mstyle[39m=[32m"--app-zoom: 1;"[39m
+[36m>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"start-page"[39m
+        [33mstyle[39m=[32m"flex: 1 1 0%; display: flex; flex-direction: column; min-width: 0px; background: var(--t-bg); color: var(--t-fg);"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mstyle[39m=[32m"height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0px 22px 0px 8px; border-bottom: 1px solid var(--t-border); background: var(--t-panel);"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"width: 240px; flex-shrink: 0;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mstyle[39m=[32m"position: relative; width: 100%;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mdata-testid[39m=[32m"org-switcher-trigger"[39m
+                [33mstyle[39m=[32m"display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px; background: var(--t-panel-2); border: 1px solid var(--t-border); cursor: pointer; width: 100%;"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mstyle[39m=[32m"width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 10px; background: color-mix(in oklab, var(--t-accent) 22%, var(--t-panel-2)); border: 1px solid color-mix(in oklab, var(--t-accent) 50%, transparent); color: var(--t-accent); letter-spacing: -0.03em;"[39m
+                [36m>[39m
+                  [0mSh[0m
+                [36m</span>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"flex: 1 1 0%; min-width: 0px;"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mstyle[39m=[32m"font-size: 12.5px; font-weight: 700; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                  [36m>[39m
+                    [0mShadowFlow[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mstyle[39m=[32m"font-family: var(--font-mono); font-size: 9.5px; color: var(--t-fg-4); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                  [36m>[39m
+                    [0m选择或新建工作区[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-chevron-down"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"13"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mstyle[39m=[32m"color: var(--t-fg-4); flex-shrink: 0; transition: transform 150ms; transform: none;"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"13"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"m6 9 6 6 6-6"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"flex: 1 1 0%;"[39m
+          [36m/>[39m
+          [36m<a[39m
+            [33mhref[39m=[32m"https://chainscan-newton.0g.ai"[39m
+            [33mrel[39m=[32m"noopener noreferrer"[39m
+            [33mstyle[39m=[32m"display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--t-panel-2); border: 1px solid var(--t-border); color: var(--t-fg-3); font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; margin-right: 12px; cursor: pointer; transition: background 120ms ease;"[39m
+            [33mtarget[39m=[32m"_blank"[39m
+            [33mtitle[39m=[32m"0G TESTNET · connecting…"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mstyle[39m=[32m"width: 7px; height: 7px; border-radius: 50%; background: var(--t-fg-3); animation: hf-pulse 1.4s ease-in-out infinite;"[39m
+            [36m/>[39m
+            [36m<span>[39m
+              [0m0G TESTNET · [0m
+              [0m…[0m
+            [36m</span>[39m
+          [36m</a>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"切到浅色"[39m
+            [33mstyle[39m=[32m"width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); cursor: pointer; transition: background 140ms ease, color 140ms ease, border-color 140ms ease; flex-shrink: 0;"[39m
+            [33mtitle[39m=[32m"切到浅色"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+            [36m>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"12"[39m
+                [33mcy[39m=[32m"12"[39m
+                [33mr[39m=[32m"4"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Switch to English"[39m
+            [33mstyle[39m=[32m"padding: 4px 10px; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; transition: all .15s; white-space: nowrap;"[39m
+            [33mtitle[39m=[32m"Switch to English"[39m
+          [36m>[39m
+            [0mEN / 中[0m
+          [36m</button>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mstyle[39m=...
+[90m [2m❯[22m Proxy.waitForWrapper node_modules/@testing-library/react/node_modules/@testing-library/dom/dist/wait-for.js:[2m166:27[22m[39m
+[36m [2m❯[22m src/pages/__tests__/skill-studio-entries.test.tsx:[2m52:11[22m[39m
+    [90m 50| [39m  it('StartPage Skill Studio card shows the i18n title text', async ()…
+    [90m 51| [39m    [34mrender[39m([34mwrap[39m([33m<[39m[33mStartPage[39m [33m/[39m[33m>[39m))[33m;[39m
+    [90m 52| [39m    [35mawait[39m [34mwaitFor[39m(() [33m=>[39m {
+    [90m   | [39m          [31m^[39m
+    [90m 53| [39m      [35mconst[39m card [33m=[39m screen[33m.[39m[34mgetByTestId[39m([32m'primitive-card-skill-studio'[39m)[33m;[39m
+    [90m 54| [39m      [34mexpect[39m(card[33m.[39mtextContent)[33m.[39m[34mtoMatch[39m([36m/Skill Studio/i[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/37]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m30 failed[39m[22m[2m | [22m[1m[32m85 passed[39m[22m[90m (115)[39m
+[2m      Tests [22m [1m[31m13 failed[39m[22m[2m | [22m[1m[32m673 passed[39m[22m[90m (686)[39m
+[2m   Start at [22m 21:55:35
+[2m   Duration [22m 20.59s[2m (transform 6.72s, setup 49.44s, import 86.83s, tests 23.27s, environment 155.41s)[22m
+

@@ -30,7 +30,10 @@ from shadowflow.runtime.contracts import (  # noqa: E402
     BlockDef,
     CheckpointRef,
     HandoffRef,
+    IterationRecord,
     LaneDef,
+    LoopFrame,
+    LoopRecord,
     MemoryEvent,
     RunRecord,
     StageDef,
@@ -59,6 +62,10 @@ CORE_MODELS = [
     WorkflowDefaults,
     WorkflowPolicyMatrixSpec,
     WorkflowAssemblySpec,
+    # Loop Engine types (LE-0: cybernetic loop / PDCA fractal)
+    LoopFrame,
+    IterationRecord,
+    LoopRecord,
 ]
 
 OUTPUT_PATH = PROJECT_ROOT / "src" / "core" / "types" / "workflow.ts"

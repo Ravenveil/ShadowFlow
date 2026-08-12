@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ShadowFlow · 行内段头 bar — 升级版（dark + light）</title>
+<style>
+:root {
+  --mono:'JetBrains Mono','IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+  --serif:'Iowan Old Style','Charter',Georgia,serif;
+}
+*,*::before,*::after { box-sizing:border-box; }
+html,body { margin:0;padding:0;font-family:var(--sans);-webkit-font-smoothing:antialiased; }
+body { background:#080808;color:#f5f5f5;padding:48px 24px 96px; }
+
+/* page header */
+.page-hd { max-width:1480px;margin:0 auto 36px; }
+.page-hd h1 { font-size:22px;font-weight:700;letter-spacing:-.015em;margin:0 0 6px; }
+.page-hd .sub { font-size:13.5px;color:#a3a3a3;line-height:1.55;max-width:760px; }
+.page-hd .sub b { color:#fafafa;font-weight:600; }
+.page-hd .meta { display:flex;gap:24px;margin-top:14px;font-family:var(--mono);font-size:10.5px;color:#737373;letter-spacing:.05em;text-transform:uppercase; }
+.page-hd .meta b { font-weight:700;color:#c084fc; }
+
+/* split layout */
+.split { max-width:1480px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:28px; }
+.frame { border-radius:18px;padding:36px 32px;position:relative;overflow:hidden; }
+.frame-hd { display:flex;align-items:center;gap:10px;margin-bottom:24px;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase; }
+.frame-hd .dot { width:9px;height:9px;border-radius:50%; }
+
+/* ================================ DARK ================================ */
+.frame-dark {
+  --bg:#0a0a0a; --surface:#111; --surface-2:#161616; --surface-3:#1c1c1c;
+  --fg:#fafafa; --fg-2:#d4d4d4; --fg-3:#a3a3a3; --fg-4:#737373; --fg-5:#525252;
+  --border:rgba(255,255,255,.08); --border-s:rgba(255,255,255,.14); --border-x:rgba(255,255,255,.04);
+  --accent:#A855F7; --accent-b:#C084FC; --accent-tint:rgba(168,85,247,.14);
+  --ok:#34d399; --ok-tint:rgba(52,211,153,.14);
+  --run:#60a5fa; --run-tint:rgba(96,165,250,.14);
+  background:#0a0a0a;
+  color:var(--fg);
+}
+.frame-dark .frame-hd { color:#737373; }
+.frame-dark .frame-hd .dot { background:#1c1c1c;border:1px solid rgba(255,255,255,.18); }
+
+/* ================================ LIGHT ================================ */
+.frame-light {
+  --bg:#faf9f5; --surface:#fffefb; --surface-2:#f5f3eb; --surface-3:#efece1;
+  --fg:#1a1612; --fg-2:#3a3530; --fg-3:#605852; --fg-4:#8a8278; --fg-5:#b0a89c;
+  --border:rgba(26,22,18,.09); --border-s:rgba(26,22,18,.16); --border-x:rgba(26,22,18,.04);
+  --accent:#d97757; --accent-b:#c66744; --accent-tint:rgba(217,119,87,.12);
+  --ok:#059669; --ok-tint:rgba(5,150,105,.10);
+  --run:#2563eb; --run-tint:rgba(37,99,235,.10);
+  background:#f1efe6;
+  color:var(--fg);
+}
+.frame-light .frame-hd { color:#8a8278; }
+.frame-light .frame-hd .dot { background:#fff;border:1px solid rgba(26,22,18,.18); }
+
+/* ============================================================
+   THE CARD — single archive, one surface, typography-led sections
+   ============================================================ */
+.archive-card {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:14px;
+  overflow:hidden;
+}
+.frame-light .archive-card {
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.6) inset,
+    0 8px 24px -16px rgba(26,22,18,.10);
+}
+
+/* outer file identity — single quiet strip */
+.ar-meta {
+  display:flex;align-items:center;gap:10px;
+  padding:14px 28px;
+  background:var(--surface-2);
+  border-bottom:1px solid var(--border);
+}
+.ar-meta .av { width:22px;height:22px;border-radius:5px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10.5px;font-weight:700; }
+.ar-meta .nm { font-size:13px;font-weight:600;letter-spacing:-.005em; }
+.ar-meta .sub { font-family:var(--mono);font-size:10.5px;color:var(--fg-4);margin-left:2px; }
+.ar-meta .pill { margin-left:auto;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border-radius:4px;background:var(--run-tint);color:var(--run);display:flex;align-items:center;gap:5px; }
+.ar-meta .pill::before { content:'';width:5px;height:5px;border-radius:50%;background:currentColor;animation:cardPulse 1.4s ease-in-out infinite; }
+@keyframes cardPulse { 0%,100% { opacity:1;transform:scale(1) } 50% { opacity:.4;transform:scale(.7) } }
+
+/* SECTION — flowing, divided only by typography + hairlines */
+.sec {
+  position:relative;
+  padding:22px 28px 24px;
+}
+.sec + .sec {
+  border-top:1px solid var(--border-x);
+}
+
+/* header: single inline row, no background, no stripe */
+.sec-hd {
+  display:flex;align-items:baseline;gap:14px;
+  margin-bottom:16px;
+}
+.sec-num {
+  font-family:var(--mono);
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.06em;
+  color:var(--fg-4);
+  font-feature-settings:'tnum' 1;
+  flex:none;
+}
+.sec-title {
+  font-size:15px;font-weight:600;letter-spacing:-.005em;color:var(--fg);
+  flex:none;white-space:nowrap;
+}
+.sec-status {
+  font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--fg-4);display:flex;align-items:center;gap:5px;flex:none;
+}
+.sec-status .dot { width:6px;height:6px;border-radius:50%;background:var(--fg-5); }
+.sec[data-state="done"] .sec-num { color:var(--ok); }
+.sec[data-state="done"] .sec-status { color:var(--ok); }
+.sec[data-state="done"] .sec-status .dot { background:var(--ok); }
+.sec[data-state="run"] .sec-num { color:var(--run); }
+.sec[data-state="run"] .sec-status { color:var(--run); }
+.sec[data-state="run"] .sec-status .dot { background:var(--run);box-shadow:0 0 0 0 var(--run);animation:secPulse 1.6s ease-out infinite; }
+.sec[data-state="pending"] .sec-num { color:var(--fg-5); }
+@keyframes secPulse {
+  0% { box-shadow:0 0 0 0 var(--run); }
+  70% { box-shadow:0 0 0 4px rgba(96,165,250,0); }
+  100% { box-shadow:0 0 0 0 rgba(96,165,250,0); }
+}
+/* flatten the original nested DOM into one inline row */
+.sec-num-col, .sec-title-col, .sec-meta, .sec-body { display:contents; }
+.sec-blurb { display:none; }
+.sec-num    { order:1; }
+.sec-title  { order:2; }
+.sec-status { order:3; }
+.sec-meta .src {
+  order:4;
+  font-family:var(--mono);font-size:9.5px;color:var(--fg-5);letter-spacing:0;
+  margin-left:auto;
+}
+
+/* click-to-edit affordance — applies to every body item */
+.m-persona-body, .m-io-cell, .m-model-cell, .m-tool, .m-memory-row {
+  cursor:text;position:relative;transition:background .15s ease, box-shadow .15s ease;
+}
+.m-persona-body:hover, .m-io-cell:hover, .m-model-cell:hover, .m-memory-row:hover {
+  background:var(--surface-2);
+  box-shadow:inset 0 0 0 1px var(--border-s);
+}
+.m-tool:hover { box-shadow:inset 0 0 0 1px var(--border-s); }
+.m-persona-body::after, .m-io-cell::after, .m-model-cell::after, .m-memory-row::after {
+  content:"✎";position:absolute;top:6px;right:8px;
+  font-size:10px;color:var(--fg-5);opacity:0;transition:opacity .15s ease;pointer-events:none;
+}
+.m-persona-body:hover::after, .m-io-cell:hover::after, .m-model-cell:hover::after, .m-memory-row:hover::after {
+  opacity:1;
+}
+
+/* body container is just the section padding now — no extra indent */
+.sec-body { display:contents; }
+
+/* ============================================================
+   shared module pieces — chrome stripped, hierarchy preserved
+   ============================================================ */
+
+/* PERSONA — single quiet code block */
+.m-persona-body {
+  font-family:var(--mono);font-size:11.5px;line-height:1.75;color:var(--fg-2);white-space:pre-wrap;
+  padding:14px 16px;background:var(--bg);border-radius:8px;
+}
+.m-persona-body .cmt { color:var(--fg-4); }
+.m-persona-body .kw  { color:var(--accent-b);font-weight:600; }
+.m-persona-body .str { color:var(--ok); }
+
+/* I/O — borderless inline definition list */
+.m-io {
+  margin-top:14px;
+  padding:14px 16px;
+  background:var(--bg);
+  border-radius:8px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.m-io-cell {
+  display:grid;grid-template-columns:130px 1fr;align-items:baseline;gap:14px;
+  padding:0;background:none;border:none;border-radius:0;
+}
+.m-io-cell:hover { background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--border-s);padding:6px 10px;margin:-6px -10px; }
+.m-io-lbl { font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-4);margin-bottom:0; }
+.m-io-val { font-family:var(--mono);font-size:11px;color:var(--fg-2); }
+
+/* MODEL — inline label·value pairs, no cells */
+.m-model {
+  display:flex;flex-wrap:wrap;gap:8px 22px;
+  padding:14px 16px;background:var(--bg);border-radius:8px;
+}
+.m-model-cell {
+  display:flex;align-items:baseline;gap:8px;
+  padding:0;background:none;border:none;border-radius:0;
+}
+.m-model-cell:hover { background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--border-s);padding:4px 8px;margin:-4px -8px; }
+.m-model-key { font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-4);margin-bottom:0; }
+.m-model-val { font-family:var(--mono);font-size:12px;font-weight:600;color:var(--fg); }
+
+/* TOOLS */
+.m-tools-head {
+  display:flex;align-items:center;gap:8px;margin:14px 0 8px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-4);
+}
+.m-tools-head b { color:var(--accent-b);font-weight:700; }
+.m-tools { display:grid;grid-template-columns:1fr 1fr;gap:6px; }
+.m-tool {
+  padding:8px 11px;border-radius:6px;
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:11px;
+}
+.m-tool.sel { background:var(--bg);border:1px solid var(--border-s);color:var(--fg); }
+.m-tool.run { background:var(--run-tint);border:1px solid var(--run);color:var(--fg); }
+.m-tool.cand { background:transparent;border:1px dashed var(--border-s);color:var(--fg-3); }
+.m-tool .name { flex:1; }
+.m-tool .tag { font-size:8.5px;font-weight:700;letter-spacing:.1em;padding:2px 5px;border-radius:3px;text-transform:uppercase; }
+.m-tool.sel .tag { background:var(--accent-tint);color:var(--accent-b); }
+.frame-light .m-tool.sel .tag { color:var(--accent); }
+.m-tool.run .tag { background:rgba(96,165,250,.25);color:var(--run); }
+.frame-light .m-tool.run .tag { background:rgba(37,99,235,.15);color:var(--run); }
+
+/* MEMORY — borderless rows, hairlines between */
+.m-memory-list {
+  background:var(--bg);
+  border-radius:8px;
+  padding:4px 0;
+  display:flex;flex-direction:column;
+}
+.m-memory-row {
+  display:grid;grid-template-columns:1fr auto auto;gap:14px;
+  padding:10px 16px;background:none;border:none;border-radius:0;
+  font-family:var(--mono);font-size:11.5px;align-items:center;
+}
+.m-memory-row + .m-memory-row { border-top:1px solid var(--border-x); }
+.m-memory-ns { color:var(--fg); }
+.m-memory-scope { font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:var(--surface-2);color:var(--fg-3); }
+.m-memory-perm { font-size:10px;color:var(--fg-4); }
+
+/* responsive — stack on narrow */
+@media (max-width: 1100px) {
+  .split { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="page-hd">
+  <h1>行内段头 bar — 升级版</h1>
+  <div class="sub">
+    在原 <b>V1（整卡 + 行内段头 bar）</b>基础上把 header bar 重做。numeral 拉大、加状态点、顶部一条 accent 渐变线、body hanging indent 与 numeral 列对齐。dark / light 同一份 markup，仅 token 变体。
+  </div>
+  <div class="meta">
+    <span>agent · <b>R Reader</b></span>
+    <span>state · <b>running</b></span>
+    <span>step · <b>tools 4/8</b></span>
+  </div>
+</div>
+
+<div class="split">
+
+  <!-- ============================= DARK ============================= -->
+  <div class="frame frame-dark">
+    <div class="frame-hd"><span class="dot"></span><span>dark · 0a0a0a</span></div>
+
+    <div class="archive-card">
+
+      <!-- outer file identity -->
+      <div class="ar-meta">
+        <span class="av">R</span>
+        <span class="nm">reader.skill.yaml</span>
+        <span class="sub">· paper.reader.v1</span>
+        <span class="pill">running</span>
+      </div>
+
+      <!-- 01 角色 -->
+      <section class="sec" data-state="done">
+        <div class="sec-hd">
+          <div class="sec-num-col">
+            <div class="sec-num">01</div>
+            <div class="sec-status"><span class="dot"></span><span>done · 1.5s</span></div>
+          </div>
+          <div class="sec-title-col">
+            <div class="sec-title">角色</div>
+            <div class="sec-blurb">命名 · 形象 · 系统提示 · 输入输出契约</div>
+          </div>
+          <div class="sec-meta">
+            <span class="src">from reader.skill.yaml#persona</span>
+          </div>
+        </div>
+        <div class="sec-body">
+          <div class="m-persona-body"><span class="cmt"># reader.persona — 论文深读 Agent</span>
+你是一名学术论文<span class="kw">深读</span> Agent。任务：
+  · 抽取 abstract / methodology / key_findings
+  · 引用必须包含 <span class="str">"DOI"</span> 或 <span class="str">"arXiv-id"</span>
+  · 失败 ≤ 3 次必须升级到 <span class="kw">critic.retry_gate</span></div>
+          <div class="m-io">
+            <div class="m-io-cell">
+              <div class="m-io-lbl">→ Input · expects</div>
+              <div class="m-io-val">paper_url · arxiv_id? · focus_sections[]</div>
+            </div>
+            <div class="m-io-cell">
+              <div class="m-io-lbl">→ Output · produces</div>
+              <div class="m-io-val">{ abstract, methodology, key_findings, citations[] }</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 02 模型 · 工具 -->
+      <section class="sec" data-state="run">
+        <div class="sec-hd">
+          <div class="sec-num-col">
+            <div class="sec-num">02</div>
+            <div class="sec-status"><span class="dot"></span><span>running · 0:06.4</span></div>
+          </div>
+          <div class="sec-title-col">
+            <div class="sec-title">模型 · 工具</div>
+            <div class="sec-blurb">模型参数 · 工具集（已选 / 候选）</div>
+          </div>
+          <div class="sec-meta">
+            <span class="src">from reader.skill.yaml#model</span>
+          </div>
+        </div>
+        <div class="sec-body">
+          <div class="m-model">
+            <div class="m-model-cell"><div class="m-model-key">model</div><div class="m-model-val">claude-sonnet-4</div></div>
+            <div class="m-model-cell"><div class="m-model-key">temperature</div><div class="m-model-val">0.2</div></div>
+            <div class="m-model-cell"><div class="m-model-key">max_tokens</div><div class="m-model-val">8192</div></div>
+            <div class="m-model-cell"><div class="m-model-key">context</div><div class="m-model-val">200k</div></div>
+          </div>
+          <div class="m-tools-head">
+            <span>Tools <b>4</b> selected · <b>4</b> candidates</span>
+            <span style="margin-left:auto;color:var(--fg-5)">点击候选加入 · 拖拽排序</span>
+          </div>
+          <div class="m-tools">
+            <div class="m-tool sel"><span class="name">pdf_extract</span><span class="tag">sel</span></div>
+            <div class="m-tool sel"><span class="name">arxiv_search</span><span class="tag">sel</span></div>
+            <div class="m-tool sel"><span class="name">semanticscholar_lookup</span><span class="tag">sel</span></div>
+            <div class="m-tool run"><span class="name">crossref_doi</span><span class="tag">adding</span></div>
+            <div class="m-tool cand"><span class="name">openreview_fetch</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">google_scholar</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">pubmed_search</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">core_api</span><span class="tag">+</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 03 记忆 -->
+      <section class="sec" data-state="pending">
+        <div class="sec-hd">
+          <div class="sec-num-col">
+            <div class="sec-num">03</div>
+            <div class="sec-status"><span class="dot"></span><span>pending</span></div>
+          </div>
+          <div class="sec-title-col">
+            <div class="sec-title">记忆</div>
+            <div class="sec-blurb">命名空间 · 作用域 · 读写权限</div>
+          </div>
+          <div class="sec-meta">
+            <span class="src">from reader.skill.yaml#memory</span>
+          </div>
+        </div>
+        <div class="sec-body">
+          <div class="m-memory-list">
+            <div class="m-memory-row"><span class="m-memory-ns">papers.vec</span><span class="m-memory-scope">session</span><span class="m-memory-perm">rw</span></div>
+            <div class="m-memory-row"><span class="m-memory-ns">scratch.run</span><span class="m-memory-scope">run</span><span class="m-memory-perm">rw</span></div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ============================= LIGHT ============================= -->
+  <div class="frame frame-light">
+    <div class="frame-hd"><span class="dot"></span><span>light · faf9f5</span></div>
+
+    <div class="archive-card">
+
+      <div class="ar-meta">
+        <span class="av">R</span>
+        <span class="nm">reader.skill.yaml</span>
+        <span class="sub">· paper.reader.v1</span>
+        <span class="pill">running</span>
+      </div>
+
+      <section class="sec" data-state="done">
+        <div class="sec-hd">
+          <div class="sec-num-col">
+            <div class="sec-num">01</div>
+            <div class="sec-status"><span class="dot"></span><span>done · 1.5s</span></div>
+          </div>
+          <div class="sec-title-col">
+            <div class="sec-title">角色</div>
+            <div class="sec-blurb">命名 · 形象 · 系统提示 · 输入输出契约</div>
+          </div>
+          <div class="sec-meta">
+            <span class="src">from reader.skill.yaml#persona</span>
+          </div>
+        </div>
+        <div class="sec-body">
+          <div class="m-persona-body"><span class="cmt"># reader.persona — 论文深读 Agent</span>
+你是一名学术论文<span class="kw">深读</span> Agent。任务：
+  · 抽取 abstract / methodology / key_findings
+  · 引用必须包含 <span class="str">"DOI"</span> 或 <span class="str">"arXiv-id"</span>
+  · 失败 ≤ 3 次必须升级到 <span class="kw">critic.retry_gate</span></div>
+          <div class="m-io">
+            <div class="m-io-cell">
+              <div class="m-io-lbl">→ Input · expects</div>
+              <div class="m-io-val">paper_url · arxiv_id? · focus_sections[]</div>
+            </div>
+            <div class="m-io-cell">
+              <div class="m-io-lbl">→ Output · produces</div>
+              <div class="m-io-val">{ abstract, methodology, key_findings, citations[] }</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec" data-state="run">
+        <div class="sec-hd">
+          <div class="sec-num-col">
+            <div class="sec-num">02</div>
+            <div class="sec-status"><span class="dot"></span><span>running · 0:06.4</span></div>
+          </div>
+          <div class="sec-title-col">
+            <div class="sec-title">模型 · 工具</div>
+            <div class="sec-blurb">模型参数 · 工具集（已选 / 候选）</div>
+          </div>
+          <div class="sec-meta">
+            <span class="src">from reader.skill.yaml#model</span>
+          </div>
+        </div>
+        <div class="sec-body">
+          <div class="m-model">
+            <div class="m-model-cell"><div class="m-model-key">model</div><div class="m-model-val">claude-sonnet-4</div></div>
+            <div class="m-model-cell"><div class="m-model-key">temperature</div><div class="m-model-val">0.2</div></div>
+            <div class="m-model-cell"><div class="m-model-key">max_tokens</div><div class="m-model-val">8192</div></div>
+            <div class="m-model-cell"><div class="m-model-key">context</div><div class="m-model-val">200k</div></div>
+          </div>
+          <div class="m-tools-head">
+            <span>Tools <b>4</b> selected · <b>4</b> candidates</span>
+            <span style="margin-left:auto;color:var(--fg-5)">点击候选加入 · 拖拽排序</span>
+          </div>
+          <div class="m-tools">
+            <div class="m-tool sel"><span class="name">pdf_extract</span><span class="tag">sel</span></div>
+            <div class="m-tool sel"><span class="name">arxiv_search</span><span class="tag">sel</span></div>
+            <div class="m-tool sel"><span class="name">semanticscholar_lookup</span><span class="tag">sel</span></div>
+            <div class="m-tool run"><span class="name">crossref_doi</span><span class="tag">adding</span></div>
+            <div class="m-tool cand"><span class="name">openreview_fetch</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">google_scholar</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">pubmed_search</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">core_api</span><span class="tag">+</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec" data-state="pending">
+        <div class="sec-hd">
+          <div class="sec-num-col">
+            <div class="sec-num">03</div>
+            <div class="sec-status"><span class="dot"></span><span>pending</span></div>
+          </div>
+          <div class="sec-title-col">
+            <div class="sec-title">记忆</div>
+            <div class="sec-blurb">命名空间 · 作用域 · 读写权限</div>
+          </div>
+          <div class="sec-meta">
+            <span class="src">from reader.skill.yaml#memory</span>
+          </div>
+        </div>
+        <div class="sec-body">
+          <div class="m-memory-list">
+            <div class="m-memory-row"><span class="m-memory-ns">papers.vec</span><span class="m-memory-scope">session</span><span class="m-memory-perm">rw</span></div>
+            <div class="m-memory-row"><span class="m-memory-ns">scratch.run</span><span class="m-memory-scope">run</span><span class="m-memory-perm">rw</span></div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

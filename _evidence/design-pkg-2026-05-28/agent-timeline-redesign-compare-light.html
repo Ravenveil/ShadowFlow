@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Agent timeline · 4 方案对比 · Reader · 白天版</title>
+<style>
+:root{
+  --bg:#faf9f5;--bg-elev-1:#fff;--bg-elev-2:#f5f3ed;--bg-elev-3:#ede9e0;--bg-elev-4:#e5e0d5;--bg-elev-5:#dbd5c8;
+  --fg-1:#1a1612;--fg-2:#3d3629;--fg-3:#6b5e4a;--fg-4:#9c8a72;--fg-5:#b8a88e;
+  --border:rgba(26,22,18,.09);--border-strong:rgba(26,22,18,.18);--border-subtle:rgba(26,22,18,.05);
+  --accent:#d97757;--accent-bright:#c4623e;--accent-tint:rgba(217,119,87,.12);--accent-ink:#fff;
+  --status-run:#2563eb;--status-run-tint:rgba(37,99,235,.1);
+  --status-ok:#059669;--status-ok-tint:rgba(5,150,105,.1);
+  --mono:ui-monospace,'JetBrains Mono','SF Mono',Menlo,monospace;
+  --body:-apple-system,BlinkMacSystemFont,'Inter','SF Pro Text',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg-1);font-family:var(--body);font-size:14px;line-height:1.5}
+body{padding:48px 40px 80px;max-width:1480px;margin:0 auto}
+
+/* Page header */
+.head{margin-bottom:48px;border-bottom:1px solid var(--border);padding-bottom:24px}
+.head .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-4);margin-bottom:10px}
+.head h1{font-size:28px;font-weight:500;letter-spacing:-.01em;margin-bottom:6px}
+.head .sub{color:var(--fg-3);font-size:14px;max-width:760px}
+.head .meta{margin-top:14px;display:flex;gap:18px;font-family:var(--mono);font-size:11px;color:var(--fg-4)}
+.head .meta b{color:var(--fg-2);font-weight:500;letter-spacing:.04em}
+
+/* Approach section */
+.section{margin-top:48px;padding-top:32px;border-top:1px solid var(--border-subtle)}
+.section:first-of-type{margin-top:0;padding-top:0;border-top:0}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+.sec-tag{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--accent);background:var(--accent-tint);
+  padding:3px 9px;border-radius:3px;text-transform:uppercase}
+.sec-head h2{font-size:20px;font-weight:500;letter-spacing:-.005em}
+.sec-head .ref{font-family:var(--mono);font-size:11px;color:var(--fg-4);margin-left:auto}
+.sec-desc{color:var(--fg-3);max-width:860px;margin-bottom:24px;line-height:1.6}
+
+.tradeoff{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;padding:18px 20px;
+  background:var(--bg-elev-1);border:1px solid var(--border-subtle);border-radius:8px}
+.tradeoff h4{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-4);margin-bottom:8px}
+.tradeoff ul{list-style:none;display:flex;flex-direction:column;gap:5px}
+.tradeoff li{color:var(--fg-2);font-size:13px;padding-left:14px;position:relative}
+.tradeoff li::before{content:'';position:absolute;left:0;top:9px;width:6px;height:1.5px;background:var(--fg-4)}
+.tradeoff .pro li::before{background:var(--status-ok)}
+.tradeoff .con li::before{background:var(--status-run)}
+
+/* Sandbox shell — emulates the right pane in run-session */
+.stage{margin-top:6px;padding:24px;background:var(--bg-elev-1);border:1px solid var(--border);border-radius:10px;
+  position:relative;overflow:hidden}
+
+/* =================================================================
+   Shared atoms — identity card, status pill (used by A/B/C/D)
+================================================================= */
+.ag-id{display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--bg-elev-2);
+  border:1px solid var(--border);border-radius:8px;margin-bottom:18px}
+.ag-id-mark{width:32px;height:32px;border-radius:50%;background:var(--accent);color:var(--accent-ink);
+  display:grid;place-items:center;font-weight:600;font-size:14px;flex-shrink:0}
+.ag-id-meta{flex:1;min-width:0}
+.ag-id-title{font-weight:500;font-size:15px}
+.ag-id-sub{font-family:var(--mono);font-size:11px;color:var(--fg-4);margin-top:1px}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:3px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.pill-run{background:var(--status-run-tint);color:var(--status-run)}
+.pill-ok{background:var(--status-ok-tint);color:var(--status-ok)}
+.pill-pend{color:var(--fg-4);background:var(--bg-elev-3)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill-run .dot{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes spotglow{0%,100%{box-shadow:0 0 0 0 var(--accent-tint),0 0 24px -4px rgba(217,119,87,.25)}
+  50%{box-shadow:0 0 0 3px var(--accent-tint),0 0 28px -4px rgba(217,119,87,.42)}}
+
+/* =================================================================
+   APPROACH A — Linear vertical rail
+================================================================= */
+.a-rail{display:flex;flex-direction:column;gap:0;background:var(--bg-elev-2);border:1px solid var(--border);
+  border-radius:8px;overflow:hidden}
+.a-row{display:grid;grid-template-columns:32px 1fr auto auto;align-items:center;gap:14px;
+  padding:14px 18px;border-bottom:1px solid var(--border-subtle);cursor:pointer;transition:background .15s}
+.a-row:last-child{border-bottom:0}
+.a-row:hover{background:var(--bg-elev-3)}
+.a-row[data-state="run"]{background:linear-gradient(90deg,var(--accent-tint) 0%,transparent 60%)}
+.a-row[data-state="pend"]{opacity:.42}
+.a-step{font-family:var(--mono);font-size:11px;color:var(--fg-5);font-weight:500}
+.a-row[data-state="ok"] .a-step{color:var(--status-ok)}
+.a-row[data-state="run"] .a-step{color:var(--accent-bright)}
+.a-mid .a-title{font-weight:500;font-size:14px;margin-bottom:2px}
+.a-mid .a-sub{font-family:var(--mono);font-size:11px;color:var(--fg-3)}
+.a-time{font-family:var(--mono);font-size:11px;color:var(--fg-4)}
+.a-row[data-state="run"] .a-time{color:var(--accent-bright)}
+.a-chev{color:var(--fg-5);font-size:14px;transform:rotate(0);transition:transform .2s}
+.a-row.open .a-chev{transform:rotate(90deg)}
+.a-detail{grid-column:1/-1;display:none;padding:14px 0 4px;border-top:1px solid var(--border-subtle);margin-top:14px}
+.a-row.open .a-detail{display:block}
+.a-detail .tool-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.a-tool{padding:8px 10px;background:var(--bg-elev-3);border:1px solid var(--border);border-radius:5px;
+  font-family:var(--mono);font-size:11px;color:var(--fg-2)}
+.a-tool.on{border-color:var(--accent);background:var(--accent-tint);color:var(--accent-bright)}
+.a-tool.adding{border-color:var(--accent);color:var(--accent-bright);
+  background:linear-gradient(90deg,var(--accent-tint) 0%,transparent 50%,var(--accent-tint) 100%);
+  background-size:200% 100%;animation:shimmer 1.6s linear infinite}
+.a-tool.cand{border-style:dashed;color:var(--fg-4)}
+
+/* =================================================================
+   APPROACH B — Horizontal pipeline + sub-progress + timing
+================================================================= */
+.b-pipe{display:grid;grid-template-columns:repeat(5,1fr);gap:0;position:relative}
+.b-cell{position:relative;padding:14px 14px 16px;background:var(--bg-elev-2);border:1px solid var(--border);
+  border-radius:6px;transition:all .25s}
+.b-cell + .b-cell{margin-left:14px}
+/* Connector lines between cells */
+.b-cell + .b-cell::before{content:'';position:absolute;left:-15px;top:50%;width:14px;height:1px;
+  background:var(--border-strong)}
+.b-cell + .b-cell::after{content:'';position:absolute;left:-4px;top:50%;transform:translateY(-50%);
+  width:0;height:0;border-left:4px solid var(--border-strong);border-top:3px solid transparent;border-bottom:3px solid transparent}
+.b-cell[data-state="ok"]{border-color:rgba(5,150,105,.3)}
+.b-cell[data-state="ok"] + .b-cell::before,.b-cell[data-state="ok"] + .b-cell::after{background:var(--status-ok);border-left-color:var(--status-ok)}
+.b-cell[data-state="run"]{border-color:var(--accent);background:var(--bg-elev-3);transform:scale(1.025);z-index:2;
+  animation:spotglow 2.4s ease-in-out infinite}
+.b-cell[data-state="pend"]{opacity:.45;border-style:dashed}
+
+.b-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.b-step{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--fg-5);text-transform:uppercase;font-weight:600}
+.b-cell[data-state="ok"] .b-step{color:var(--status-ok)}
+.b-cell[data-state="run"] .b-step{color:var(--accent-bright)}
+.b-elapsed{font-family:var(--mono);font-size:10px;color:var(--fg-4);font-variant-numeric:tabular-nums}
+.b-cell[data-state="run"] .b-elapsed{color:var(--accent-bright)}
+.b-title{font-weight:500;font-size:13.5px;margin-bottom:4px}
+.b-body{font-family:var(--mono);font-size:11px;color:var(--fg-3);line-height:1.4;min-height:30px}
+.b-cell[data-state="pend"] .b-body{color:var(--fg-5)}
+/* live shimmer line under running cell */
+.b-live{margin-top:8px;font-family:var(--mono);font-size:10.5px;color:var(--accent-bright);
+  background:linear-gradient(90deg,transparent 0%,var(--accent-tint) 50%,transparent 100%);
+  background-size:200% 100%;animation:shimmer 2s linear infinite;padding:3px 6px;border-radius:3px}
+.b-cell:not([data-state="run"]) .b-live{display:none}
+.b-progress{position:absolute;left:8px;right:8px;bottom:6px;height:2px;background:var(--bg-elev-4);border-radius:1px;overflow:hidden;display:none}
+.b-cell[data-state="run"] .b-progress{display:block}
+.b-progress > i{display:block;height:100%;background:var(--accent);width:50%;transition:width .4s ease;border-radius:1px;
+  box-shadow:0 0 8px var(--accent)}
+
+/* =================================================================
+   APPROACH C — Raycast spotlight + folded stack
+================================================================= */
+.c-stage{display:grid;grid-template-columns:1fr 220px;gap:18px}
+.c-spot{padding:22px;background:var(--bg-elev-2);border:1px solid var(--accent);border-radius:10px;
+  position:relative;animation:spotglow 2.4s ease-in-out infinite}
+.c-spot::before{content:'STEP 04 · TOOLS';position:absolute;top:14px;left:22px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--accent-bright);font-weight:600}
+.c-spot h3{margin-top:24px;font-size:18px;font-weight:500;letter-spacing:-.005em}
+.c-spot-sub{font-family:var(--mono);font-size:11.5px;color:var(--fg-3);margin-top:4px;margin-bottom:14px}
+.c-spot-tools{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.c-spot .b-progress{position:static;margin-top:14px;height:2.5px;display:block}
+.c-spot .b-live{margin-top:10px}
+.c-spot-elapsed{position:absolute;top:14px;right:22px;font-family:var(--mono);font-size:10.5px;
+  color:var(--accent-bright);font-variant-numeric:tabular-nums}
+
+.c-mini{display:flex;flex-direction:column;gap:6px}
+.c-pill{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg-elev-2);
+  border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .15s}
+.c-pill:hover{background:var(--bg-elev-3);border-color:var(--border-strong)}
+.c-pill[data-state="pend"]{opacity:.5;border-style:dashed}
+.c-pill .c-num{font-family:var(--mono);font-size:10px;color:var(--fg-5);font-weight:600;letter-spacing:.06em}
+.c-pill[data-state="ok"] .c-num{color:var(--status-ok)}
+.c-pill .c-name{font-size:12.5px;font-weight:500}
+.c-pill .c-tail{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--fg-4)}
+
+/* =================================================================
+   APPROACH D — Tab pages
+================================================================= */
+.d-tabs{display:flex;gap:0;background:var(--bg-elev-2);border:1px solid var(--border);
+  border-radius:8px 8px 0 0;border-bottom:0;overflow:hidden}
+.d-tab{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:3px;
+  padding:12px 16px;background:transparent;border:0;border-right:1px solid var(--border-subtle);
+  cursor:pointer;color:var(--fg-3);text-align:left;transition:background .15s;font-family:inherit}
+.d-tab:last-child{border-right:0}
+.d-tab:hover{background:var(--bg-elev-3);color:var(--fg-2)}
+.d-tab[data-state="active"]{background:var(--bg-elev-3);color:var(--fg-1);
+  box-shadow:inset 0 -2px 0 var(--accent)}
+.d-tab[data-state="pend"]{opacity:.45}
+.d-tab .d-step{font-family:var(--mono);font-size:10px;letter-spacing:.1em;font-weight:600;color:var(--fg-5)}
+.d-tab[data-state="active"] .d-step{color:var(--accent-bright)}
+.d-tab[data-state="ok"] .d-step{color:var(--status-ok)}
+.d-tab .d-name{font-size:13px;font-weight:500}
+.d-tab .d-badge{font-family:var(--mono);font-size:10px;color:var(--fg-4);margin-left:auto;
+  position:absolute;right:14px;top:14px;font-variant-numeric:tabular-nums}
+.d-tab{position:relative}
+
+.d-pane{background:var(--bg-elev-2);border:1px solid var(--border);border-top:0;
+  border-radius:0 0 8px 8px;padding:22px}
+.d-pane-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}
+.d-pane-title{font-size:16px;font-weight:500}
+.d-pane-from{font-family:var(--mono);font-size:11px;color:var(--fg-4)}
+.d-pane-from b{color:var(--accent-bright);font-weight:500}
+.d-pane-live{margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--accent-bright);
+  background:linear-gradient(90deg,transparent,var(--accent-tint) 50%,transparent);
+  background-size:200% 100%;animation:shimmer 2s linear infinite;padding:5px 9px;border-radius:4px;display:inline-block}
+.d-pane-tools{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px}
+
+/* Footnote */
+.foot{margin-top:64px;padding-top:24px;border-top:1px solid var(--border-subtle);color:var(--fg-4);
+  font-size:12.5px;line-height:1.6}
+.foot b{color:var(--fg-2);font-weight:500}
+</style>
+</head>
+<body>
+
+<header class="head">
+  <div class="kicker">design / agent-timeline · light · 2026-05-19</div>
+  <h1>Agent timeline · 4 方案对比 · 白天版</h1>
+  <p class="sub">同一组数据（Reader agent · 进度跑到 Tools · 已加 4/8 工具 · 已用时 8.2s）四种呈现方式并排。下方每节注明出处、关键差异、取舍。挑一个或挑几个组合再告诉我。</p>
+  <div class="meta">
+    <span>data · <b>reader.skill.yaml</b></span>
+    <span>state · <b>tools · 4/8 · running</b></span>
+    <span>elapsed · <b>0:08.2</b></span>
+  </div>
+</header>
+
+<!-- ====================================================== APPROACH A -->
+<section class="section">
+  <div class="sec-head">
+    <span class="sec-tag">A · vertical</span>
+    <h2>Linear 风 · 竖向 rail + 行内折叠</h2>
+    <span class="ref">ref · linear.app / trigger.dev</span>
+  </div>
+  <p class="sec-desc">5 步竖向排列，每行 = 步序号 + 标题 + 子标题 + 耗时 + chevron。点开当前步显示 detail（其余收起）。读起来像运维 timeline。</p>
+
+  <div class="stage">
+    <div class="ag-id">
+      <div class="ag-id-mark">R</div>
+      <div class="ag-id-meta">
+        <div class="ag-id-title">Reader</div>
+        <div class="ag-id-sub">paper.reader.v1 · substep 4/5</div>
+      </div>
+      <span class="pill pill-run"><span class="dot"></span>running</span>
+    </div>
+
+    <div class="a-rail">
+      <div class="a-row" data-state="ok"><span class="a-step">01</span>
+        <div class="a-mid"><div class="a-title">命名 · 形象</div><div class="a-sub">Reader · academic</div></div>
+        <span class="a-time">0.4s</span><span class="a-chev">›</span></div>
+      <div class="a-row" data-state="ok"><span class="a-step">02</span>
+        <div class="a-mid"><div class="a-title">角色性格</div><div class="a-sub">深读 · 摘录 · 引用</div></div>
+        <span class="a-time">1.1s</span><span class="a-chev">›</span></div>
+      <div class="a-row" data-state="ok"><span class="a-step">03</span>
+        <div class="a-mid"><div class="a-title">模型 · 参数</div><div class="a-sub">claude-sonnet-4 · T=0.2</div></div>
+        <span class="a-time">0.3s</span><span class="a-chev">›</span></div>
+      <div class="a-row open" data-state="run"><span class="a-step">04</span>
+        <div class="a-mid"><div class="a-title">工具集</div><div class="a-sub">adding semanticscholar_lookup… · 4/8</div></div>
+        <span class="a-time">0:06.4</span><span class="a-chev">›</span>
+        <div class="a-detail">
+          <div class="tool-grid">
+            <div class="a-tool on">pdf_extract</div>
+            <div class="a-tool on">arxiv_search</div>
+            <div class="a-tool on">cite_resolve</div>
+            <div class="a-tool adding">semanticscholar →</div>
+            <div class="a-tool cand">+ openreview</div>
+            <div class="a-tool cand">+ scholar_graph</div>
+            <div class="a-tool cand">+ pdf_diff</div>
+            <div class="a-tool cand">+ md_export</div>
+          </div>
+        </div>
+      </div>
+      <div class="a-row" data-state="pend"><span class="a-step">05</span>
+        <div class="a-mid"><div class="a-title">记忆</div><div class="a-sub">papers.vec · scratch.run</div></div>
+        <span class="a-time">—</span><span class="a-chev">›</span></div>
+    </div>
+  </div>
+
+  <div class="tradeoff">
+    <div class="pro"><h4>赢在哪</h4><ul>
+      <li>信息层级最清晰，扫读最快</li>
+      <li>step + detail 在同一行，点哪展开哪，无跳转感</li>
+      <li>耗时 / 状态 / 子标题三件套对齐 Linear 心智模型</li>
+    </ul></div>
+    <div class="con"><h4>代价</h4><ul>
+      <li>占垂直空间多（5 行 + 展开后大概 380–460px）</li>
+      <li>"管线"感弱，5 步看起来像 5 条独立任务</li>
+      <li>右 pane 整体节奏偏文档而不是流程</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- ====================================================== APPROACH B -->
+<section class="section">
+  <div class="sec-head">
+    <span class="sec-tag">B · pipeline</span>
+    <h2>n8n / Vercel 风 · 水平管线 + 子进度 + 时间 <span style="font-size:12px;color:var(--accent-bright);letter-spacing:.06em;margin-left:8px;font-family:var(--mono);">★ recommended</span></h2>
+    <span class="ref">ref · n8n.io / vercel deploy</span>
+  </div>
+  <p class="sec-desc">保留水平 5 cell，cell 之间加 `→` 管线，running cell 底部 1.5px 进度条 + 顶角 live 计时 + shimmer log 行 + scale 1.025 spotlight。"管线 + 节奏 + 子进度" 三件事一次到位。</p>
+
+  <div class="stage">
+    <div class="ag-id">
+      <div class="ag-id-mark">R</div>
+      <div class="ag-id-meta">
+        <div class="ag-id-title">Reader</div>
+        <div class="ag-id-sub">paper.reader.v1 · substep 4/5</div>
+      </div>
+      <span class="pill pill-run"><span class="dot"></span>running</span>
+    </div>
+
+    <div class="b-pipe">
+      <div class="b-cell" data-state="ok">
+        <div class="b-head"><span class="b-step">01 IDENTITY</span><span class="b-elapsed">0.4s</span></div>
+        <div class="b-title">命名 · 形象</div><div class="b-body">Reader · academic</div>
+      </div>
+      <div class="b-cell" data-state="ok">
+        <div class="b-head"><span class="b-step">02 PERSONA</span><span class="b-elapsed">1.1s</span></div>
+        <div class="b-title">角色性格</div><div class="b-body">深读 · 摘录 · 引用</div>
+      </div>
+      <div class="b-cell" data-state="ok">
+        <div class="b-head"><span class="b-step">03 MODEL</span><span class="b-elapsed">0.3s</span></div>
+        <div class="b-title">模型 · 参数</div><div class="b-body">claude-sonnet-4 · T=0.2</div>
+      </div>
+      <div class="b-cell" data-state="run">
+        <div class="b-head"><span class="b-step">04 TOOLS</span><span class="b-elapsed">0:06.4</span></div>
+        <div class="b-title">工具集</div>
+        <div class="b-body">pdf_extract · arxiv · cite_resolve</div>
+        <div class="b-live">▸ adding semanticscholar_lookup…</div>
+        <div class="b-progress"><i style="width:50%"></i></div>
+      </div>
+      <div class="b-cell" data-state="pend">
+        <div class="b-head"><span class="b-step">05 MEMORY</span><span class="b-elapsed">—</span></div>
+        <div class="b-title">记忆</div><div class="b-body">papers.vec · scratch.run</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tradeoff">
+    <div class="pro"><h4>赢在哪</h4><ul>
+      <li>"管线"感最强 — 连接线 + 箭头让 5 步是一个流</li>
+      <li>子进度条 + 实时计时把"现在干什么、还差多少"摆到桌面</li>
+      <li>shimmer log 行带运维感（仿 Vercel build preview）</li>
+      <li>改动最小，detail 区结构不动</li>
+    </ul></div>
+    <div class="con"><h4>代价</h4><ul>
+      <li>cell body 仍要展开到下方 detail 看完整 system prompt</li>
+      <li>5 cell 等宽，每格 body 仍有截断风险</li>
+      <li>light 主题下 spotlight glow 已调浅；强对比仍以 accent border + scale 1.025 为主</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- ====================================================== APPROACH C -->
+<section class="section">
+  <div class="sec-head">
+    <span class="sec-tag">C · spotlight</span>
+    <h2>Raycast / Apple Music 风 · 聚光 + 折叠堆</h2>
+    <span class="ref">ref · raycast.com / apple music sidebar</span>
+  </div>
+  <p class="sec-desc">running step 占左侧 70% 直接展开 detail；其余 4 步退成右侧 mini pill 列表，点谁切换聚光对象。雷达上始终只有一个主角。</p>
+
+  <div class="stage">
+    <div class="ag-id">
+      <div class="ag-id-mark">R</div>
+      <div class="ag-id-meta">
+        <div class="ag-id-title">Reader</div>
+        <div class="ag-id-sub">paper.reader.v1 · substep 4/5</div>
+      </div>
+      <span class="pill pill-run"><span class="dot"></span>running</span>
+    </div>
+
+    <div class="c-stage">
+      <div class="c-spot">
+        <div class="c-spot-elapsed">0:06.4</div>
+        <h3>工具集</h3>
+        <div class="c-spot-sub">从 reader.skill.yaml#tools 拉取，4/8 已加</div>
+        <div class="c-spot-tools">
+          <div class="a-tool on">pdf_extract</div>
+          <div class="a-tool on">arxiv_search</div>
+          <div class="a-tool on">cite_resolve</div>
+          <div class="a-tool adding">semanticscholar →</div>
+          <div class="a-tool cand">+ openreview</div>
+          <div class="a-tool cand">+ scholar_graph</div>
+          <div class="a-tool cand">+ pdf_diff</div>
+          <div class="a-tool cand">+ md_export</div>
+        </div>
+        <div class="b-live">▸ adding semanticscholar_lookup…</div>
+        <div class="b-progress"><i style="width:50%"></i></div>
+      </div>
+      <div class="c-mini">
+        <div class="c-pill" data-state="ok"><span class="c-num">01</span><span class="c-name">命名 · 形象</span><span class="c-tail">0.4s</span></div>
+        <div class="c-pill" data-state="ok"><span class="c-num">02</span><span class="c-name">角色性格</span><span class="c-tail">1.1s</span></div>
+        <div class="c-pill" data-state="ok"><span class="c-num">03</span><span class="c-name">模型 · 参数</span><span class="c-tail">0.3s</span></div>
+        <div class="c-pill" data-state="pend"><span class="c-num">05</span><span class="c-name">记忆</span><span class="c-tail">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tradeoff">
+    <div class="pro"><h4>赢在哪</h4><ul>
+      <li>最优雅 — running step 即 detail，不需要往下翻</li>
+      <li>聚光天然对应"实时跟随"语义，注意力归一</li>
+      <li>右侧 mini 堆压缩到 220px，省空间</li>
+    </ul></div>
+    <div class="con"><h4>代价</h4><ul>
+      <li>"5 步全景"丢了 — 一眼看不全 timeline 形状</li>
+      <li>切换 step 要点右侧 mini pill，多一次交互</li>
+      <li>发明感强，离 Linear/n8n 心智模型最远</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- ====================================================== APPROACH D -->
+<section class="section">
+  <div class="sec-head">
+    <span class="sec-tag">D · tabs</span>
+    <h2>你的方案 · 把 5 步做成 tab 页 <span style="font-size:12px;color:var(--accent-bright);letter-spacing:.06em;margin-left:8px;font-family:var(--mono);">⟵ user proposal</span></h2>
+    <span class="ref">ref · stripe workbench / chrome devtools</span>
+  </div>
+  <p class="sec-desc">5 步 = 5 个 tab，点哪个 tab 整块 pane 切到那一步的完整页面。每个 tab 在 header 显示状态色 + 耗时，"实时跟随"会自动把 tab 切到当前 running step。每一步独占一屏、内容能写多就写多。</p>
+
+  <div class="stage">
+    <div class="ag-id">
+      <div class="ag-id-mark">R</div>
+      <div class="ag-id-meta">
+        <div class="ag-id-title">Reader</div>
+        <div class="ag-id-sub">paper.reader.v1 · substep 4/5</div>
+      </div>
+      <span class="pill pill-run"><span class="dot"></span>running</span>
+    </div>
+
+    <nav class="d-tabs">
+      <button class="d-tab" data-state="ok">
+        <span class="d-step">01 · IDENTITY</span><span class="d-name">命名 · 形象</span>
+        <span class="d-badge">0.4s</span>
+      </button>
+      <button class="d-tab" data-state="ok">
+        <span class="d-step">02 · PERSONA</span><span class="d-name">角色性格</span>
+        <span class="d-badge">1.1s</span>
+      </button>
+      <button class="d-tab" data-state="ok">
+        <span class="d-step">03 · MODEL</span><span class="d-name">模型 · 参数</span>
+        <span class="d-badge">0.3s</span>
+      </button>
+      <button class="d-tab" data-state="active">
+        <span class="d-step">04 · TOOLS</span><span class="d-name">工具集</span>
+        <span class="d-badge" style="color:var(--accent-bright)">0:06.4</span>
+      </button>
+      <button class="d-tab" data-state="pend">
+        <span class="d-step">05 · MEMORY</span><span class="d-name">记忆</span>
+        <span class="d-badge">—</span>
+      </button>
+    </nav>
+
+    <div class="d-pane">
+      <div class="d-pane-head">
+        <div class="d-pane-title">工具集 · 4/8 已加</div>
+        <div class="d-pane-from">from <b>reader.skill.yaml#tools</b></div>
+      </div>
+      <p style="color:var(--fg-3);font-size:13px;margin-bottom:8px">每个 tab 页能写得更展开 — 这里可以放工具说明 / 入参 schema / 自定义按钮 / 候选工具市场入口。</p>
+      <div class="d-pane-tools">
+        <div class="a-tool on">pdf_extract</div>
+        <div class="a-tool on">arxiv_search</div>
+        <div class="a-tool on">cite_resolve</div>
+        <div class="a-tool adding">semanticscholar →</div>
+        <div class="a-tool cand">+ openreview</div>
+        <div class="a-tool cand">+ scholar_graph</div>
+        <div class="a-tool cand">+ pdf_diff</div>
+        <div class="a-tool cand">+ md_export</div>
+      </div>
+      <div class="d-pane-live">▸ adding semanticscholar_lookup…</div>
+    </div>
+  </div>
+
+  <div class="tradeoff">
+    <div class="pro"><h4>赢在哪</h4><ul>
+      <li>每步独占一屏，能展开最多内容（system prompt 全文 / 工具市场 / 模型参数 schema）</li>
+      <li>用户切换成本最低 — 点 tab 即跳，符合 Chrome/Stripe 心智模型</li>
+      <li>"实时跟随"和 tab 天然耦合：自动切 tab vs 用户手动切，主从关系清晰</li>
+      <li>tab header 自带状态 + 耗时，5 步全景仍在</li>
+    </ul></div>
+    <div class="con"><h4>代价</h4><ul>
+      <li>"管线"感弱 — 5 个 tab 看起来像平行页面，不是顺序流（需要在 tab 之间画 `›` 分隔符弥补）</li>
+      <li>页面层级翻了一倍 — 右 pane 内已经有 Overview/Team/Agent/Preview 四 tab，现在 Agent 内再嵌 5 tab，<b>tab 嵌 tab 反模式</b></li>
+      <li>切到 done step 看不到 running 进度，跟随感弱化</li>
+    </ul></div>
+  </div>
+</section>
+
+<footer class="foot">
+  <p><b>我的偏好</b> — B（pipeline）打底；如果你觉得 detail 区还是太远，可以叠加 C 的"running cell 内嵌 detail" 行为做 hybrid。</p>
+  <p style="margin-top:10px"><b>关于 D（你的方案）</b> — tab 嵌 tab 是这个方案最大的隐患：右 pane 已经有 Overview / Team / Agent / Preview 4 tab，再在 Agent 内塞 5 tab，用户会困惑"现在我点的是外层 tab 还是内层 tab"。如果想保留 tab 形态，建议把 5 步当 D 来做，但**取消右 pane 外层 4 tab**，把 Overview/Team/Agent/Preview 改成右上角下拉或左侧导航——让 tab 只在一个层级出现。这是 D 真正成立的前提。</p>
+  <p style="margin-top:10px"><b>挑一个告诉我</b>，或者告诉我 "B + C 行内展开 / D 但去掉外层 tab / B 但更紧凑" 之类的组合。</p>
+</footer>
+
+</body>
+</html>

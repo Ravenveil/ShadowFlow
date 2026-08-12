@@ -13,10 +13,10 @@ export interface PaletteItem {
 
 const DEFAULT_AGENTS: PaletteItem[] = [
   { id: 'planner',    label: 'Planner',    meta: 'claude · plan',     group: 'agent' },
-  { id: 'writer',     label: 'Writer',     meta: '0g · gpt-oss',      group: 'agent' },
+  { id: 'writer',     label: 'Writer',     meta: 'glm · draft',        group: 'agent' },
   { id: 'researcher', label: 'Researcher', meta: 'claude · research',  group: 'agent' },
   { id: 'critic',     label: 'Critic',     meta: 'claude · review',    group: 'agent' },
-  { id: 'advisor',    label: 'Advisor',    meta: '0g · verify',        group: 'agent' },
+  { id: 'advisor',    label: 'Advisor',    meta: 'glm · verify',       group: 'agent' },
   { id: 'editor',     label: 'Editor',     meta: 'claude · polish',    group: 'agent' },
 ];
 

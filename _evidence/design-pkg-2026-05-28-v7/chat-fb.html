@@ -1,0 +1,2064 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ShadowFlow · Chat · 论文深读小队（FB-HiFi · 白天 / 黑夜）</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap');
+
+  *,*::before,*::after{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Geist',system-ui,sans-serif;font-size:13px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+    background:#faf9f5;color:#18181B;padding:32px 28px 80px;
+  }
+
+  :root{
+    --font-sans:'Geist',ui-sans-serif,system-ui,sans-serif;
+    --font-mono:'Geist Mono',ui-monospace,'SF Mono',Menlo,monospace;
+    --ease-out:cubic-bezier(.16,.84,.44,1);
+
+    /* FB-HiFi LIGHT — primary palette */
+    --bg:#FAFAF9;
+    --skin-panel:#FFFFFF;
+    --bg-elev-1:#FAFAF9;
+    --bg-elev-2:#F4F4F5;
+    --bg-elev-3:#E4E4E7;
+    --bg-elev-4:#D4D4D8;
+
+    --fg-1:#09090B;
+    --fg-2:#27272A;
+    --fg-3:#3F3F46;
+    --fg-4:#71717A;
+    --fg-5:#A1A1AA;
+    --fg-6:#D4D4D8;
+
+    --border:#E4E4E7;
+    --border-strong:#D4D4D8;
+    --border-subtle:#F4F4F5;
+
+    --accent:#7C3AED;
+    --accent-bright:#6D28D9;
+    --accent-tint:#F4ECFE;
+    --accent-ink:#FFFFFF;
+
+    --status-run:#2563EB;
+    --status-ok:#059669;
+    --status-warn:#D97706;
+    --status-reject:#DC2626;
+    --status-gated:#0891B2;
+    --status-run-tint:#EFF6FF;
+    --status-ok-tint:#ECFDF5;
+    --status-warn-tint:#FEF3C7;
+    --status-reject-tint:#FEE2E2;
+
+    --cream:#faf9f5;
+    --cream-strong:#f0eee5;
+
+    --shadow-pop:0 24px 48px -20px rgba(24,24,27,.15),0 8px 16px -10px rgba(24,24,27,.08);
+    --glow-accent:0 0 0 1px var(--accent),0 0 24px -8px rgba(124,58,237,.35);
+
+    --sb-thumb:rgba(0,0,0,.22);
+    --sb-thumb-hover:rgba(0,0,0,.30);
+    --sb-thumb-active:rgba(0,0,0,.04);
+  }
+  .frame[data-theme="night"]{
+    --sb-thumb:rgba(255,255,255,.20);
+    --sb-thumb-hover:rgba(255,255,255,.28);
+    --sb-thumb-active:rgba(255,255,255,.03);
+  }
+
+  .frame ::-webkit-scrollbar{width:4px;height:4px;}
+  .frame ::-webkit-scrollbar-track{background:transparent;}
+  .frame ::-webkit-scrollbar-button{width:0;height:0;display:none;}
+  .frame ::-webkit-scrollbar-thumb{
+    background:transparent;border-radius:2px;
+    min-height:10px;max-height:48px;
+    transition:background .18s ease;
+  }
+  .frame ::-webkit-scrollbar-corner{background:transparent;}
+  .frame *{scrollbar-width:thin;scrollbar-color:transparent transparent;}
+  .frame *:hover>::-webkit-scrollbar-thumb,
+  .frame *:hover::-webkit-scrollbar-thumb{background:var(--sb-thumb);}
+  .frame ::-webkit-scrollbar-thumb:hover{background:var(--sb-thumb-hover);}
+  .frame ::-webkit-scrollbar-thumb:active{background:var(--sb-thumb-active);}
+  .ibx-list:hover, .feed:hover, .dr-replies:hover{scrollbar-color:var(--sb-thumb) transparent;}
+
+  .frame{
+    width:1480px;height:880px;background:var(--bg);color:var(--fg-1);
+    border-radius:14px;border:1px solid var(--border);overflow:hidden;
+    display:flex;flex-direction:column;position:relative;
+    font-family:var(--font-sans);margin:0 auto;
+    box-shadow:0 40px 80px -40px rgba(24,24,27,.22),0 0 0 1px var(--border);
+  }
+
+  .titlebar{
+    height:54px;display:flex;align-items:center;gap:14px;padding:0 20px;
+    background:var(--skin-panel);border-bottom:1px solid var(--border);flex-shrink:0;
+  }
+  .logo{
+    width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--accent-ink);
+    display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;letter-spacing:-.04em;
+  }
+  .bread{display:flex;align-items:center;gap:8px;font-size:13px;}
+  .bread .app{font-weight:700;color:var(--fg-1);}
+  .bread .sep{color:var(--fg-5);}
+  .bread .ws{color:var(--fg-3);font-family:var(--font-mono);font-size:11px;}
+  .bread .cur{color:var(--fg-1);font-weight:600;}
+  .bread .dirty{width:6px;height:6px;border-radius:50%;background:var(--status-warn);display:inline-block;margin-left:4px;}
+
+  .omnibar{
+    flex:1;max-width:420px;height:32px;padding:0 12px;
+    background:var(--bg-elev-2);border:1px solid var(--border);border-radius:8px;
+    display:flex;align-items:center;gap:10px;color:var(--fg-4);font-size:12px;cursor:pointer;
+  }
+  .omnibar .hint{font-family:var(--font-mono);font-size:11px;}
+  .omnibar .kbd{margin-left:auto;font-family:var(--font-mono);font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;color:var(--fg-3);background:var(--skin-panel);}
+
+  .tools{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+  .btn{
+    height:32px;padding:0 12px;border-radius:8px;font-size:12px;font-weight:600;
+    display:inline-flex;align-items:center;gap:6px;white-space:nowrap;cursor:pointer;
+    border:0;background:transparent;color:var(--fg-2);font-family:var(--font-sans);
+  }
+  .btn-primary{background:var(--accent);color:var(--accent-ink);}
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-ghost{background:transparent;color:var(--fg-2);border:1px solid var(--border);}
+  .btn-ghost:hover{background:var(--bg-elev-2);border-color:var(--border-strong);}
+  .btn-reject{background:transparent;color:var(--status-reject);border:1px solid color-mix(in oklab,var(--status-reject) 35%,transparent);}
+  .btn-icon{width:32px;height:32px;padding:0;justify-content:center;border-radius:8px;color:var(--fg-3);border:1px solid transparent;position:relative;}
+  .btn-icon:hover{background:var(--bg-elev-2);color:var(--fg-1);}
+  .btn-icon.active{
+    background:var(--accent-tint);color:var(--accent-bright);
+    border-color:color-mix(in oklab,var(--accent) 35%,transparent);
+  }
+  .btn-icon .badge{
+    position:absolute;top:-3px;right:-3px;
+    min-width:14px;height:14px;padding:0 3px;border-radius:7px;
+    background:var(--status-reject);color:#fff;
+    font-family:var(--font-mono);font-size:8.5px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;
+    border:1.5px solid var(--skin-panel);
+  }
+  .btn-icon.active .badge{background:var(--accent);border-color:var(--accent-tint);}
+  .btn-icon .pulse-dot{
+    position:absolute;top:-1px;right:-1px;width:6px;height:6px;border-radius:50%;
+    background:var(--status-run);box-shadow:0 0 0 1.5px var(--skin-panel);
+    animation:pulse 1.4s infinite;
+  }
+  .btn-sm{height:26px;padding:0 9px;font-size:11px;border-radius:6px;}
+
+  /* header overflow menu — Feishu / DingTalk group ⋯ popover */
+  .hdr-menu-wrap{position:relative;display:inline-flex;}
+  .hdr-menu{
+    position:absolute;top:calc(100% + 6px);right:0;width:232px;
+    background:var(--skin-panel);border:1px solid var(--border);border-radius:10px;
+    box-shadow:var(--shadow-pop);padding:6px;z-index:50;
+    opacity:0;transform:translateY(-4px) scale(.98);pointer-events:none;transform-origin:top right;
+    transition:opacity 140ms var(--ease-out),transform 140ms var(--ease-out);
+  }
+  .hdr-menu.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+  .hdr-menu-item{
+    display:flex;align-items:center;gap:10px;height:32px;padding:0 9px;border-radius:6px;
+    cursor:pointer;font-size:12.5px;color:var(--fg-2);user-select:none;
+  }
+  .hdr-menu-item:hover{background:var(--bg-elev-2);color:var(--fg-1);}
+  .hdr-menu-item svg{width:14px;height:14px;color:var(--fg-4);flex-shrink:0;stroke-width:1.6;}
+  .hdr-menu-item:hover svg{color:var(--fg-2);}
+  .hdr-menu-item .label{flex:1;}
+  .hdr-menu-item .hint{
+    font-family:var(--font-mono);font-size:10px;color:var(--fg-5);
+    padding:1px 5px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:4px;
+  }
+  .hdr-menu-item .chev{width:11px;height:11px;color:var(--fg-5);}
+  .hdr-menu-item .sw{
+    width:24px;height:14px;border-radius:8px;background:var(--bg-elev-3);
+    position:relative;flex-shrink:0;transition:background 140ms ease;
+  }
+  .hdr-menu-item .sw::after{
+    content:'';position:absolute;top:1.5px;left:1.5px;width:11px;height:11px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.18);transition:left 140ms var(--ease-out);
+  }
+  .hdr-menu-item.on .sw{background:var(--accent);}
+  .hdr-menu-item.on .sw::after{left:11px;}
+  .hdr-menu-sep{height:1px;background:var(--border-subtle);margin:5px 4px;}
+  .hdr-menu-item.danger{color:var(--status-reject);}
+  .hdr-menu-item.danger svg{color:var(--status-reject);}
+  .hdr-menu-item.danger:hover{background:color-mix(in oklab,var(--status-reject) 8%,transparent);color:var(--status-reject);}
+
+  /* ── Group settings · right-side drawer — WeChat slide-in + Telegram accent band + Linear card grouping ─── */
+  .gset-overlay{
+    position:absolute;inset:0;z-index:80;
+    background:rgba(0,0,0,0);
+    pointer-events:none;
+    transition:background 200ms var(--ease-out);
+  }
+  .gset-overlay.open{pointer-events:auto;background:rgba(0,0,0,.12);}
+  .frame[data-theme="night"] .gset-overlay.open{background:rgba(0,0,0,.32);}
+  .gset-dialog{
+    position:absolute;top:0;right:0;bottom:0;
+    width:380px;background:var(--bg);
+    border-left:1px solid var(--border);
+    box-shadow:-16px 0 40px -16px rgba(0,0,0,.22),-1px 0 0 0 var(--border);
+    display:flex;flex-direction:column;overflow:hidden;
+    transform:translateX(100%);
+    transition:transform 260ms var(--ease-out);
+  }
+  .gset-overlay.open .gset-dialog{transform:translateX(0);}
+  .gset-hd{
+    height:52px;padding:0 10px 0 20px;display:flex;align-items:center;
+    flex-shrink:0;
+    position:relative;z-index:2;
+    background:transparent;
+  }
+  .gset-title{
+    font-size:14px;font-weight:600;color:var(--fg-1);flex:1;letter-spacing:.005em;
+  }
+  .gset-x{
+    width:32px;height:32px;border-radius:8px;border:none;background:transparent;
+    cursor:pointer;color:var(--fg-3);
+    display:flex;align-items:center;justify-content:center;
+    transition:background 140ms ease,color 140ms ease;
+  }
+  .gset-x svg{width:15px;height:15px;stroke-width:1.8;}
+  .gset-x:hover{background:color-mix(in oklab,var(--fg-1) 8%,transparent);color:var(--fg-1);}
+  .gset-bd{
+    flex:1;overflow-y:auto;
+    position:relative;
+    padding:0 16px 20px;
+  }
+/* group identity hero — bigger avatar, softer rim glow */
+  .gset-card{
+    display:flex;gap:16px;padding:20px 4px 22px;align-items:center;
+  }
+  .gset-card-av{
+    width:64px;height:64px;border-radius:16px;flex-shrink:0;
+    background:var(--skin-panel);
+    border:1px solid color-mix(in oklab,var(--accent) 38%,transparent);
+    color:var(--accent-bright);font-family:var(--font-serif);
+    font-size:30px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:
+      0 1px 0 0 rgba(255,255,255,.6) inset,
+      0 6px 18px -6px color-mix(in oklab,var(--accent) 38%,transparent),
+      0 0 0 4px color-mix(in oklab,var(--accent) 8%,transparent);
+  }
+  .frame[data-theme="night"] .gset-card-av{
+    box-shadow:
+      0 1px 0 0 rgba(255,255,255,.05) inset,
+      0 6px 22px -4px color-mix(in oklab,var(--accent) 40%,transparent),
+      0 0 0 4px color-mix(in oklab,var(--accent) 10%,transparent);
+  }
+  .gset-card-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px;}
+  .gset-card-nm{
+    font-size:17px;font-weight:600;color:var(--fg-1);letter-spacing:-.005em;
+    display:flex;align-items:center;gap:8px;
+  }
+  .gset-card-nm .live{
+    font-family:var(--font-mono);font-size:9px;font-weight:800;letter-spacing:.07em;
+    padding:2px 6px;border-radius:4px;
+    background:var(--status-run);color:#fff;
+    box-shadow:0 0 0 3px color-mix(in oklab,var(--status-run) 18%,transparent);
+  }
+  .gset-card-sub{
+    font-size:11.5px;color:var(--fg-3);display:flex;align-items:center;gap:8px;
+    font-family:var(--font-mono);
+  }
+  .gset-card-sub .dot{
+    width:6px;height:6px;border-radius:50%;background:var(--status-run);
+    box-shadow:0 0 0 3px color-mix(in oklab,var(--status-run) 22%,transparent);
+    animation:pulse 1.4s infinite;
+  }
+  .gset-card-sub .gset-pill{
+    padding:2px 7px;border-radius:10px;
+    background:color-mix(in oklab,var(--fg-1) 6%,transparent);
+    color:var(--fg-2);font-size:10px;letter-spacing:.01em;
+    border:none;
+  }
+  .gset-card-stats{
+    font-size:11px;color:var(--fg-4);font-family:var(--font-mono);letter-spacing:.01em;
+    line-height:1.4;
+  }
+  /* section spacing — soft 14px gap, no hard line */
+  .gset-sep{height:14px;}
+  /* section grouped as elevated card (Linear style) */
+  .gset-sec{
+    padding:14px 16px 12px;
+    background:var(--skin-panel);
+    border:1px solid var(--border-subtle);
+    border-radius:12px;
+    box-shadow:0 1px 2px -1px rgba(0,0,0,.04);
+  }
+  .frame[data-theme="night"] .gset-sec{
+    background:color-mix(in oklab,var(--skin-panel) 92%,#fff);
+    border-color:color-mix(in oklab,var(--border) 60%,transparent);
+  }
+  .gset-sec-hd{
+    display:flex;align-items:center;gap:8px;padding:2px 4px 12px;
+  }
+  .gset-sec-ttl{
+    font-size:10.5px;font-weight:700;color:var(--fg-4);
+    letter-spacing:.08em;text-transform:uppercase;
+  }
+  .gset-sec-cnt{
+    font-family:var(--font-mono);font-size:10px;color:var(--fg-3);
+    padding:1px 7px;background:color-mix(in oklab,var(--fg-1) 7%,transparent);
+    border-radius:9px;line-height:16px;font-weight:500;
+  }
+  .gset-spacer{flex:1;}
+  .gset-link{
+    border:none;background:transparent;color:var(--accent-bright);
+    font-size:11.5px;cursor:pointer;padding:3px 8px;border-radius:6px;
+    font-family:inherit;font-weight:500;
+    transition:background 120ms ease;
+  }
+  .gset-link:hover{background:var(--accent-tint);}
+  /* members grid — bigger avatars, ring, online pip */
+  .gset-members{
+    display:grid;grid-template-columns:repeat(6,1fr);gap:14px 2px;
+    padding:2px 0 4px;
+  }
+  .gset-m{
+    display:flex;flex-direction:column;align-items:center;gap:7px;
+    cursor:pointer;padding:4px 2px;border-radius:10px;
+    transition:transform 140ms var(--ease-out);
+  }
+  .gset-m:hover{transform:translateY(-1px);}
+  .gset-m:hover .gset-m-av{
+    box-shadow:0 4px 10px -2px rgba(0,0,0,.18),
+               0 0 0 3px color-mix(in oklab,var(--fg-1) 5%,transparent);
+  }
+  .gset-m-av{
+    width:44px;height:44px;border-radius:12px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-serif);font-size:17px;font-weight:600;color:#fff;
+    position:relative;
+    box-shadow:0 1px 2px rgba(0,0,0,.08);
+    transition:box-shadow 160ms ease;
+  }
+  .gset-m-av[data-c="r"]{background:linear-gradient(135deg,#ef4444 0%,#dc2626 100%);}
+  .gset-m-av[data-c="b"]{background:linear-gradient(135deg,#3b82f6 0%,#2563eb 100%);}
+  .gset-m-av[data-c="g"]{background:linear-gradient(135deg,#10b981 0%,#059669 100%);}
+  .gset-m-av[data-c="o"]{background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);}
+  .gset-m-av[data-c="p"]{background:linear-gradient(135deg,#a855f7 0%,#7c3aed 100%);}
+  .gset-m-av .on-dot{
+    position:absolute;bottom:-2px;right:-2px;
+    width:11px;height:11px;border-radius:50%;background:var(--status-ok);
+    border:2px solid var(--skin-panel);
+  }
+  .gset-m-av-add{
+    background:transparent !important;border:1.5px dashed var(--border-strong);
+    color:var(--fg-4) !important;font-family:var(--font-sans);font-size:22px;font-weight:300;
+    box-shadow:none !important;
+  }
+  .gset-m-nm{font-size:12px;color:var(--fg-1);line-height:1.2;text-align:center;font-weight:500;}
+  .gset-m-role{
+    font-size:9.5px;color:var(--fg-4);font-family:var(--font-mono);
+    letter-spacing:.02em;line-height:1.2;text-align:center;
+  }
+  /* editable + toggle rows — tighter, hairline only between siblings */
+  .gset-row{
+    display:flex;align-items:center;gap:12px;
+    padding:11px 6px;margin:0 -6px;border-radius:8px;
+    border-bottom:1px solid var(--border-subtle);
+    cursor:pointer;
+    transition:background 120ms ease;
+  }
+  .gset-row:last-child{border-bottom:none;}
+  .gset-row:hover{background:color-mix(in oklab,var(--fg-1) 4%,transparent);}
+  .gset-row.gset-row-sw{cursor:pointer;}
+  .gset-row.gset-row-sw:hover{background:transparent;}
+  .gset-row-k{font-size:12.5px;color:var(--fg-1);flex-shrink:0;min-width:88px;font-weight:500;}
+  .gset-row-v{
+    flex:1;font-size:12px;color:var(--fg-2);
+    display:flex;align-items:center;gap:6px;
+    overflow:hidden;justify-content:flex-end;text-align:right;
+  }
+  .gset-row-v > span:first-child{
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .gset-row-v-mute{color:var(--fg-4);}
+  .gset-row-chev{color:var(--fg-5);font-size:15px;flex-shrink:0;line-height:1;}
+  .gset-tag-owner{
+    font-family:var(--font-mono);font-size:9px;font-weight:800;
+    padding:2px 5px;border-radius:3.5px;
+    background:var(--accent-tint);color:var(--accent-bright);
+    letter-spacing:.06em;flex-shrink:0;border:none;
+  }
+  /* toggle switch — bigger, smoother */
+  .gset-row-sw .sw{
+    width:34px;height:20px;border-radius:11px;
+    background:color-mix(in oklab,var(--fg-1) 14%,transparent);
+    position:relative;flex-shrink:0;
+    transition:background 220ms var(--ease-out);
+  }
+  .gset-row-sw .sw::after{
+    content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 2.5px rgba(0,0,0,.22),0 0 0 .5px rgba(0,0,0,.04);
+    transition:left 220ms cubic-bezier(.34,1.56,.64,1);
+  }
+  .gset-row-sw.on .sw{background:var(--accent);}
+  .gset-row-sw.on .sw::after{left:16px;}
+  /* danger group — different button hierarchy */
+  .gset-danger{display:flex;gap:10px;padding:6px 4px 10px;}
+  .gset-danger-btn{
+    flex:1;height:38px;border-radius:10px;border:1px solid var(--border);
+    background:var(--skin-panel);color:var(--fg-2);font-size:12.5px;cursor:pointer;
+    font-family:inherit;font-weight:500;
+    transition:background 140ms ease,color 140ms ease,border-color 140ms ease;
+  }
+  .gset-danger-btn:hover{
+    background:color-mix(in oklab,var(--fg-1) 5%,transparent);
+    color:var(--fg-1);
+  }
+  .gset-danger-btn-red{color:var(--status-reject);}
+  .gset-danger-btn-red:hover{
+    background:color-mix(in oklab,var(--status-reject) 8%,transparent);
+    color:var(--status-reject);
+    border-color:color-mix(in oklab,var(--status-reject) 35%,var(--border));
+  }
+
+  .body{flex:1;display:flex;min-height:0;}
+
+  /* inbox */
+  .inbox{
+    width:296px;border-right:1px solid var(--border);background:var(--bg-elev-2);
+    display:flex;flex-direction:column;min-height:0;flex-shrink:0;
+  }
+  .inbox-search{padding:12px 12px 8px;}
+  .input{
+    height:32px;padding:0 10px;background:var(--skin-panel);border:1px solid var(--border);border-radius:8px;
+    color:var(--fg-1);font-size:11.5px;display:flex;align-items:center;gap:8px;
+  }
+  .input svg{color:var(--fg-4);width:14px;height:14px;}
+  .input .ph{color:var(--fg-4);}
+  .input .kbd{margin-left:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);}
+
+  .chips{padding:0 12px 10px;display:flex;gap:5px;flex-wrap:wrap;}
+  .chip{
+    padding:3px 9px;border-radius:11px;font-size:10.5px;font-weight:600;
+    background:var(--skin-panel);color:var(--fg-3);border:1px solid var(--border);cursor:pointer;
+  }
+  .chip.on{background:var(--accent-tint);color:var(--accent-bright);border-color:color-mix(in oklab,var(--accent) 30%,transparent);}
+
+  .lab-row{display:flex;align-items:center;justify-content:space-between;padding:8px 16px 4px;}
+  .lab{font-family:var(--font-mono);font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-4);}
+  .lab-n{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);}
+
+  .ibx-list{padding:0 8px 12px;display:flex;flex-direction:column;flex:1;overflow:auto;}
+  .ibx-row{
+    display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;cursor:pointer;
+    border-left:2px solid transparent;position:relative;margin-left:-2px;
+  }
+  .ibx-row:hover{background:var(--skin-panel);}
+  .ibx-row.active{background:var(--accent-tint);border-left-color:var(--accent);}
+  .ibx-av{
+    width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:13px;letter-spacing:-.02em;flex-shrink:0;position:relative;border:1px solid;
+  }
+  .ibx-av .cnt{
+    position:absolute;right:-4px;bottom:-4px;min-width:15px;height:13px;padding:0 3px;border-radius:3px;
+    background:var(--skin-panel);border:1px solid var(--border);
+    font-family:var(--font-mono);font-size:8.5px;font-weight:700;color:var(--fg-3);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .ibx-av .stat{
+    position:absolute;right:-2px;top:-2px;width:9px;height:9px;border-radius:50%;
+    border:2px solid var(--bg-elev-2);
+  }
+  .ibx-av .stat.run{background:var(--status-run);animation:pulse 1.4s infinite;}
+  .ibx-av .stat.warn{background:var(--status-warn);}
+  .ibx-row .meta{flex:1;min-width:0;}
+  .ibx-row .top{display:flex;align-items:center;gap:5px;}
+  .ibx-row .nm{font-size:13px;font-weight:500;color:var(--fg-1);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ibx-row.unread .nm{font-weight:700;}
+  .ibx-row .live{
+    font-family:var(--font-mono);font-size:8.5px;font-weight:800;letter-spacing:.06em;
+    padding:1px 4px;border-radius:3px;color:var(--status-run);
+    background:color-mix(in oklab,var(--status-run) 12%,transparent);
+    border:1px solid color-mix(in oklab,var(--status-run) 28%,transparent);
+  }
+  .ibx-row .t{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);}
+  .ibx-row.unread .t{color:var(--accent-bright);font-weight:600;}
+  .ibx-row .at{font-family:var(--font-mono);font-size:9px;font-weight:800;color:var(--status-reject);
+    padding:0 4px;border-radius:3px;background:var(--status-reject-tint);
+    border:1px solid color-mix(in oklab,var(--status-reject) 25%,transparent);}
+  .ibx-row .unr{
+    min-width:16px;height:16px;padding:0 5px;border-radius:8px;background:var(--status-reject);color:#fff;
+    font-size:9px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;
+  }
+
+  /* main */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg);min-height:0;}
+
+  .hdr{
+    padding:11px 18px;border-bottom:1px solid var(--border);
+    display:flex;align-items:center;gap:12px;background:var(--skin-panel);flex-shrink:0;
+  }
+  .hdr-av{
+    width:36px;height:36px;border-radius:8px;background:var(--bg-elev-2);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;color:var(--accent);
+  }
+  .hdr-av svg{width:18px;height:18px;}
+  .hdr-top{display:flex;align-items:center;gap:8px;}
+  .hdr-nm{font-size:14px;font-weight:700;color:var(--fg-1);}
+  .hdr-meta{font-family:var(--font-mono);font-size:10px;color:var(--fg-5);}
+  .pill-live{
+    padding:2px 9px;border-radius:999px;
+    background:color-mix(in oklab,var(--status-run) 12%,transparent);
+    border:1px solid color-mix(in oklab,var(--status-run) 35%,transparent);
+    color:var(--status-run);font-family:var(--font-mono);font-size:9.5px;font-weight:700;
+    letter-spacing:.12em;text-transform:uppercase;display:inline-flex;align-items:center;gap:5px;
+  }
+  .pill-live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--status-run);animation:pulse 1.4s infinite;}
+  .pill{
+    display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:6px;
+    font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:.04em;border:1px solid;
+    color:var(--fg-4);background:var(--bg-elev-2);border-color:var(--border);
+  }
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0;}
+  .dot-ok{background:var(--status-ok);}
+  .dot-warn{background:var(--status-warn);}
+  .dot-run{background:var(--status-run);animation:pulse 1.4s infinite;}
+  .av-stack{display:flex;}
+  .av-stack .av{margin-left:-6px;}
+  .av-stack .av:first-child{margin-left:0;}
+  .av{
+    display:inline-flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:-.02em;
+    border-radius:5px;border:1px solid;
+  }
+
+  /* pinned brief — uses cream as secondary band */
+  .brief{
+    padding:10px 18px;border-bottom:1px solid var(--border);
+    background:var(--cream);
+    display:flex;align-items:flex-start;gap:10px;flex-shrink:0;
+  }
+  .brief .pin{color:var(--accent);width:14px;height:14px;margin-top:1px;}
+  .brief .tag{font-family:var(--font-mono);font-size:9.5px;font-weight:700;color:var(--accent-bright);letter-spacing:.08em;text-transform:uppercase;}
+  .brief .pinned-by{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4);margin-left:8px;}
+  .brief .body{font-size:11.5px;color:var(--fg-2);margin-top:3px;line-height:1.45;}
+  .brief .body b{margin-left:6px;color:var(--fg-1);font-weight:600;}
+  .brief .body b:first-child{margin-left:0;}
+  .brief .more{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4);cursor:pointer;}
+
+  .feed{flex:1;overflow:auto;padding:22px 24px 8px;display:flex;flex-direction:column;gap:14px;}
+
+  .day-div{display:flex;align-items:center;gap:10px;margin:4px 0;}
+  .day-div .ln{flex:1;height:1px;background:var(--border);}
+  .day-div .lb{
+    font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4);padding:2px 10px;border-radius:10px;
+    background:var(--skin-panel);border:1px solid var(--border);font-weight:600;
+  }
+
+  .sysnote{text-align:center;}
+  .sysnote span{
+    font-family:var(--font-mono);font-size:10px;color:var(--fg-4);
+    padding:4px 10px;background:var(--bg-elev-2);border-radius:6px;border:1px dashed var(--border-strong);
+  }
+
+  .syscard{display:flex;justify-content:center;}
+  .syscard .box{
+    display:flex;gap:10px;padding:11px 13px;border-radius:9px;max-width:560px;
+    background:var(--status-reject-tint);
+    border:1px solid color-mix(in oklab,var(--status-reject) 30%,transparent);
+  }
+  .syscard .tag{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--status-reject);margin-bottom:3px;}
+  .syscard .b{font-size:11.5px;color:var(--fg-2);line-height:1.5;}
+  .syscard .b .mono{font-family:var(--font-mono);}
+  .syscard .b .reject{font-family:var(--font-mono);color:var(--status-reject);font-weight:600;}
+
+  /* agent message */
+  .msg{display:flex;gap:10px;position:relative;}
+  .msg .agent-av{position:relative;flex-shrink:0;}
+  .msg .agent-av .bot{
+    position:absolute;right:-3px;bottom:-3px;width:14px;height:14px;border-radius:4px;
+    background:var(--skin-panel);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .msg .agent-av .bot svg{width:9px;height:9px;}
+  .msg .body-wrap{flex:1;min-width:0;max-width:720px;padding-left:12px;border-left:2px solid;}
+  .msg .hd{display:flex;align-items:baseline;gap:7px;margin-bottom:4px;flex-wrap:wrap;}
+  .msg .nm{font-size:13px;font-weight:700;color:var(--fg-1);}
+  .msg .role{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4);}
+  .msg .ag-pill{
+    font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.05em;
+    padding:1px 5px;border-radius:3px;border:1px solid;
+  }
+  .msg .model{
+    font-family:var(--font-mono);font-size:9px;color:var(--fg-4);
+    padding:1px 5px;border-radius:3px;background:var(--bg-elev-2);border:1px solid var(--border);
+  }
+  .msg .t{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);}
+  .msg .ed{font-family:var(--font-mono);font-size:9px;color:var(--fg-5);}
+  .msg .text{font-size:13px;line-height:1.55;color:var(--fg-2);}
+  .msg .text .ref{font-family:var(--font-mono);color:var(--accent-bright);}
+
+  .issue-list{display:flex;flex-direction:column;gap:5px;margin-top:8px;}
+  .issue{
+    display:flex;gap:8px;padding:7px 10px;background:var(--skin-panel);
+    border-radius:6px;border:1px solid var(--border);
+  }
+  .issue .sec{font-family:var(--font-mono);font-size:10px;color:var(--status-warn);font-weight:700;min-width:30px;}
+  .issue .desc{font-size:12px;color:var(--fg-2);}
+
+  .tool-chip{
+    margin-top:7px;display:inline-flex;align-items:center;gap:8px;padding:5px 9px;border-radius:6px;
+    background:var(--skin-panel);border:1px solid var(--border);
+  }
+  .tool-chip svg{width:11px;height:11px;color:var(--fg-4);}
+  .tool-chip .n{font-family:var(--font-mono);font-size:10px;color:var(--fg-2);font-weight:600;}
+  .tool-chip .m{font-family:var(--font-mono);font-size:10px;color:var(--fg-4);}
+  .tool-chip .ok{font-family:var(--font-mono);font-size:9.5px;color:var(--status-ok);font-weight:600;}
+  .tool-chip .ex{font-family:var(--font-mono);font-size:9px;color:var(--fg-4);cursor:pointer;}
+
+  .reactions{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;}
+  .react{
+    display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:11px;
+    background:var(--skin-panel);border:1px solid var(--border);
+    font-size:11px;color:var(--fg-3);font-weight:600;cursor:pointer;
+  }
+  .react .n{font-family:var(--font-mono);font-size:9.5px;}
+  .react.mine{background:var(--accent-tint);color:var(--accent-bright);border-color:color-mix(in oklab,var(--accent) 30%,transparent);}
+  .react.add{
+    width:24px;height:20px;display:inline-flex;align-items:center;justify-content:center;border-radius:11px;
+    background:var(--skin-panel);border:1px dashed var(--border-strong);color:var(--fg-4);
+  }
+  .react.add svg{width:11px;height:11px;}
+
+  .thread-chip{
+    display:inline-flex;align-items:center;gap:7px;margin-top:8px;padding:4px 9px;border-radius:6px;
+    background:var(--accent-tint);border:1px solid color-mix(in oklab,var(--accent) 25%,transparent);
+    color:var(--accent-bright);cursor:pointer;
+  }
+  .thread-chip svg{width:11px;height:11px;}
+  .thread-chip .c{font-family:var(--font-mono);font-size:10px;font-weight:700;}
+  .thread-chip .last{font-family:var(--font-mono);font-size:10px;color:var(--fg-4);}
+  .thread-chip .arr{font-family:var(--font-mono);font-size:10px;}
+
+  .read-by{font-family:var(--font-mono);font-size:9px;color:var(--fg-5);margin-top:6px;}
+
+  /* hover toolbar (Lark-style) — appears on every message hover */
+  .hover-tb{
+    position:absolute;top:-13px;right:10px;z-index:5;display:flex;
+    background:var(--skin-panel);border:1px solid var(--border);
+    border-radius:8px;padding:2px;box-shadow:var(--shadow-pop);
+    opacity:0;transform:translateY(3px);pointer-events:none;
+    transition:opacity .12s ease, transform .12s ease;
+  }
+  .msg:hover > .hover-tb,
+  .usermsg:hover > .hover-tb,
+  .dr-reply:hover > .hover-tb,
+  .hover-tb.show{
+    opacity:1;transform:translateY(0);pointer-events:auto;
+  }
+  /* user-msg toolbar sits to the LEFT of the avatar, hovering above the green bubble's left edge */
+  .usermsg > .hover-tb{right:54px;}
+  /* drawer reply toolbar is compact */
+  .dr-reply{position:relative;}
+  .dr-reply > .hover-tb{top:-11px;right:6px;padding:1px;border-radius:6px;}
+  .dr-reply > .hover-tb .it{width:20px;height:20px;border-radius:4px;}
+  .dr-reply > .hover-tb svg{width:11px;height:11px;}
+  .dr-reply.user > .hover-tb{right:auto;left:6px;}
+
+  .hover-tb .it{
+    width:26px;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;
+    color:var(--fg-3);cursor:pointer;
+  }
+  .hover-tb .it:hover{background:var(--bg-elev-2);color:var(--fg-1);}
+  .hover-tb .sep{width:1px;height:14px;background:var(--border);margin:6px 2px;align-self:center;}
+  .hover-tb svg{width:14px;height:14px;}
+
+  /* user msg — wechat green bubble */
+  .usermsg{display:flex;gap:10px;justify-content:flex-end;position:relative;}
+  .usermsg .col{max-width:560px;display:flex;flex-direction:column;align-items:flex-end;}
+  .usermsg .hd{display:flex;align-items:baseline;gap:7px;margin-bottom:4px;}
+  .usermsg .nm{font-size:13px;font-weight:700;color:var(--fg-1);}
+  .usermsg .t{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);}
+  .usermsg .reply{
+    font-size:11px;padding:5px 9px;border-radius:5px;margin-bottom:5px;
+    background:var(--bg-elev-2);border-left:2px solid var(--fg-5);color:var(--fg-4);max-width:100%;
+  }
+  .usermsg .reply .who{font-weight:700;color:var(--fg-3);}
+  .usermsg .bubble{
+    padding:9px 13px;border-radius:12px 4px 12px 12px;
+    background:color-mix(in oklab,var(--status-ok) 16%,var(--skin-panel));
+    border:1px solid color-mix(in oklab,var(--status-ok) 28%,transparent);
+    font-size:13px;line-height:1.5;color:var(--fg-1);
+  }
+  .usermsg .delivered{font-family:var(--font-mono);font-size:9px;color:var(--fg-5);margin-top:4px;}
+
+  /* approval gate */
+  .gate-wrap{display:flex;justify-content:center;margin:6px 0;}
+  .gate{
+    width:100%;max-width:640px;padding:14px 15px 13px;border-radius:11px;position:relative;
+    background:var(--skin-panel);
+    border:1px solid color-mix(in oklab,var(--accent) 38%,transparent);
+    box-shadow:var(--glow-accent);
+  }
+  .gate .tag{
+    position:absolute;top:-10px;left:14px;padding:2px 9px;background:var(--accent);color:var(--accent-ink);
+    border-radius:4px;font-family:var(--font-mono);font-size:9.5px;font-weight:800;letter-spacing:.08em;
+  }
+  .gate .row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+  .gate .nm{font-size:12.5px;font-weight:700;color:var(--fg-1);}
+  .gate .role{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4);}
+  .gate .wait{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);margin-left:auto;}
+  .gate .body{font-size:13px;color:var(--fg-2);margin-bottom:9px;line-height:1.5;}
+  .gate .body .ref{font-family:var(--font-mono);color:var(--accent-bright);}
+  .gate .kv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;}
+  .gate .kv .cell{padding:6px 9px;background:var(--bg-elev-2);border-radius:6px;border:1px solid var(--border);}
+  .gate .kv .k{font-family:var(--font-mono);font-size:9px;color:var(--fg-4);letter-spacing:.06em;text-transform:uppercase;}
+  .gate .kv .v{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--fg-1);margin-top:2px;}
+  .gate .ctas{display:flex;gap:7px;align-items:center;}
+  .gate .kbd{margin-left:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4);}
+
+  /* typing */
+  .typing{display:flex;gap:10px;align-items:center;padding-left:2px;}
+  .typing .nm{font-size:11.5px;color:var(--fg-4);}
+  .typing .dots{display:flex;gap:3px;}
+  .typing .dots span{
+    width:5px;height:5px;border-radius:50%;background:var(--fg-4);
+    animation:pulse 1.2s ease-in-out infinite;
+  }
+  .typing .dots span:nth-child(2){animation-delay:.18s;}
+  .typing .dots span:nth-child(3){animation-delay:.36s;}
+  .typing .meta{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);margin-left:6px;}
+
+  /* composer */
+  .composer{padding:11px 20px 14px;border-top:1px solid var(--border);background:var(--bg-elev-2);position:relative;flex-shrink:0;}
+  .slash-pop{
+    position:absolute;bottom:88px;left:20px;width:360px;z-index:10;
+    background:var(--skin-panel);border:1px solid var(--border);border-radius:10px;
+    box-shadow:var(--shadow-pop);padding:5px;
+  }
+  .slash-pop .h{padding:6px 9px;display:flex;align-items:center;gap:6px;}
+  .slash-pop .h .lab{font-family:var(--font-mono);font-size:10px;color:var(--fg-4);letter-spacing:.06em;}
+  .slash-pop .h .hint{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);margin-left:auto;}
+  .slash-pop .it{display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:6px;}
+  .slash-pop .it.sel{background:var(--accent-tint);}
+  .slash-pop .it .cmd{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--fg-2);min-width:68px;}
+  .slash-pop .it.sel .cmd{color:var(--accent-bright);}
+  .slash-pop .it .d{font-size:11.5px;color:var(--fg-3);flex:1;}
+
+  .comp-shell{
+    background:var(--skin-panel);border:1px solid var(--border-strong);border-radius:11px;overflow:hidden;
+  }
+  .comp-tools{display:flex;align-items:center;gap:2px;padding:5px 9px;border-bottom:1px solid var(--border-subtle);}
+  .comp-tools .it{
+    width:26px;height:24px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;
+    color:var(--fg-4);cursor:pointer;
+  }
+  .comp-tools .it:hover{background:var(--bg-elev-2);color:var(--fg-2);}
+  .comp-tools .it svg{width:14px;height:14px;}
+  .comp-tools .md{margin-left:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);padding:0 6px;}
+  .comp-area{padding:11px 13px;min-height:50px;font-size:13px;color:var(--fg-2);}
+  .comp-area .at{
+    padding:2px 6px;margin-right:5px;border-radius:4px;
+    background:var(--accent-tint);color:var(--accent-bright);font-weight:700;font-size:12.5px;
+  }
+  .comp-area .caret{border-left:1.5px solid var(--accent);margin-left:1px;animation:pulse 1s infinite;display:inline-block;width:0;height:14px;}
+  .comp-foot{display:flex;align-items:center;justify-content:space-between;padding:7px 12px 8px;border-top:1px solid var(--border-subtle);background:var(--bg-elev-2);}
+  .comp-foot .lh{display:flex;align-items:center;gap:10px;}
+  .comp-foot .kbd{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);}
+  .comp-foot .saved{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4);}
+
+  /* page header */
+  .page-hdr{
+    max-width:1480px;margin:0 auto 18px;padding:6px 6px 18px;
+    border-bottom:1px dashed var(--border-strong);color:var(--fg-1);
+  }
+  .page-hdr h1{margin:0;font-size:26px;font-weight:800;letter-spacing:-.02em;}
+  .page-hdr .sub{margin-top:6px;font-family:var(--font-mono);font-size:11px;color:var(--fg-4);letter-spacing:.02em;}
+
+  .stage-title{
+    max-width:1480px;margin:0 auto 14px;
+    display:flex;align-items:baseline;gap:12px;padding:0 6px;
+  }
+  .stage-title .num{
+    font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--accent-bright);
+  }
+  .stage-title .name{font-size:18px;font-weight:700;letter-spacing:-.01em;color:var(--fg-1);}
+  .stage-title .hint{font-family:var(--font-mono);font-size:11px;color:var(--fg-4);}
+
+  /* searchbar — inline drop under header (DingTalk / Feishu pattern) */
+  .searchbar{
+    max-height:0;overflow:hidden;background:var(--skin-panel);
+    border-bottom:1px solid transparent;flex-shrink:0;
+    transition:max-height 180ms ease,border-bottom-color 180ms ease;
+  }
+  .searchbar.open{max-height:96px;border-bottom-color:var(--border);}
+  .sb-inner{padding:9px 18px 11px;display:flex;flex-direction:column;gap:7px;}
+  .sb-row{display:flex;align-items:center;gap:10px;}
+  .sb-input{
+    flex:1;height:30px;padding:0 11px;background:var(--bg);border:1px solid var(--border);
+    border-radius:7px;display:flex;align-items:center;gap:8px;
+  }
+  .sb-input:focus-within{border-color:color-mix(in oklab,var(--accent) 50%,var(--border));}
+  .sb-input svg{width:13px;height:13px;color:var(--fg-4);flex-shrink:0;}
+  .sb-input input{
+    flex:1;border:0;background:transparent;color:var(--fg-1);outline:none;
+    font-family:var(--font-sans);font-size:12px;
+  }
+  .sb-count{
+    font-family:var(--font-mono);font-size:10px;color:var(--fg-4);
+    white-space:nowrap;display:flex;align-items:center;gap:6px;
+  }
+  .sb-count b{color:var(--fg-1);font-weight:700;}
+  .sb-nav{display:inline-flex;align-items:center;gap:2px;margin-left:4px;}
+  .sb-count .k{
+    padding:1px 5px;background:var(--bg-elev-2);border:1px solid var(--border);
+    border-radius:4px;font-size:9.5px;color:var(--fg-3);font-family:var(--font-mono);
+  }
+  .sb-count .sb-num{color:var(--fg-1);font-weight:600;}
+  .sb-close{
+    width:24px;height:24px;border-radius:6px;border:0;background:transparent;
+    color:var(--fg-4);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  }
+  .sb-close:hover{background:var(--bg-elev-2);color:var(--fg-1);}
+  .sb-close svg{width:11px;height:11px;}
+  .sb-chips{display:flex;gap:5px;flex-wrap:wrap;}
+  .sb-chips .chip{font-size:10px;padding:2px 8px;}
+
+  /* feed search highlight state */
+  .feed.searching > *:not(.sb-hit){opacity:.32;transition:opacity 120ms;}
+  .feed.searching .sb-hit{box-shadow:0 0 0 1.5px color-mix(in oklab,var(--status-warn) 55%,transparent);border-radius:8px;}
+
+  /* drawer — Thread / 任务 / 文档 / Brief */
+  .drawer{
+    width:320px;border-left:1px solid var(--border);background:var(--bg-elev-1);
+    display:flex;flex-direction:column;min-height:0;flex-shrink:0;
+    transition:width 200ms ease,border-left-color 200ms ease;
+  }
+  .drawer.hide{width:0;border-left-color:transparent;}
+  .drawer.hide > *{opacity:0;pointer-events:none;transition:opacity 90ms ease;}
+  .dr-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 8px;flex-shrink:0;}
+  .dr-tab{
+    padding:10px 11px;font-size:11.5px;font-weight:600;color:var(--fg-4);
+    border-bottom:2px solid transparent;cursor:pointer;display:flex;align-items:center;gap:5px;
+  }
+  .dr-tab.on{color:var(--fg-1);font-weight:700;border-bottom-color:var(--accent);}
+  .dr-tab .n{
+    font-family:var(--font-mono);font-size:9px;color:var(--fg-4);padding:0 5px;
+    background:var(--bg-elev-2);border-radius:8px;border:1px solid var(--border);
+  }
+  .dr-close{padding:10px 8px;color:var(--fg-4);cursor:pointer;margin-left:auto;}
+  .dr-close svg{width:14px;height:14px;}
+
+  .dr-ctx{padding:12px 14px 10px;border-bottom:1px solid var(--border);}
+  .dr-ctx .row{display:flex;gap:8px;}
+  .dr-ctx .nm{font-size:11.5px;font-weight:700;}
+  .dr-ctx .meta{font-family:var(--font-mono);font-size:9px;color:var(--fg-4);}
+  .dr-ctx .excerpt{font-size:11px;color:var(--fg-3);margin-top:2px;line-height:1.45;}
+  .dr-ctx .count{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4);margin-top:8px;letter-spacing:.04em;}
+
+  .dr-replies{flex:1;overflow:auto;padding:16px 14px 10px;display:flex;flex-direction:column;gap:13px;}
+  .dr-reply{display:flex;gap:8px;}
+  .dr-reply .body{flex:1;min-width:0;}
+  .dr-reply.agent .body{border-left:2px solid;padding-left:7px;}
+  .dr-reply .hd{display:flex;align-items:baseline;gap:5px;}
+  .dr-reply .nm{font-size:11px;font-weight:700;}
+  .dr-reply .t{font-family:var(--font-mono);font-size:9px;color:var(--fg-5);}
+  .dr-reply .ag{
+    font-family:var(--font-mono);font-size:8.5px;font-weight:700;padding:0 4px;border-radius:3px;
+  }
+  .dr-reply .txt{font-size:11px;color:var(--fg-2);margin-top:3px;line-height:1.45;}
+  .dr-reply.user .bubble{
+    margin-top:3px;padding:5px 8px;border-radius:8px 3px 8px 8px;display:inline-block;
+    background:color-mix(in oklab,var(--status-ok) 12%,var(--bg-elev-1));
+    border:1px solid color-mix(in oklab,var(--status-ok) 25%,transparent);
+    font-size:11px;color:var(--fg-1);
+  }
+  .dr-reply .tool{
+    display:inline-flex;align-items:center;gap:5px;margin-top:4px;padding:2px 6px;border-radius:4px;
+    background:var(--bg-elev-2);border:1px solid var(--border);
+    font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3);
+  }
+  .dr-reply .tool svg{width:9px;height:9px;}
+  .dr-typing{text-align:center;padding:4px 0;}
+  .dr-typing span{font-family:var(--font-mono);font-size:9px;color:var(--fg-5);}
+
+  .dr-comp{padding:8px 12px 10px;border-top:1px solid var(--border);background:var(--bg-elev-2);flex-shrink:0;}
+  .dr-comp .box{
+    background:var(--skin-panel);border:1px solid var(--border);border-radius:7px;
+    padding:7px 9px;font-size:11px;color:var(--fg-5);display:flex;align-items:center;gap:6px;
+  }
+  .dr-comp .kbd{margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--fg-5);}
+  .dr-comp .opts{display:flex;align-items:center;gap:6px;margin-top:6px;}
+  .dr-comp .opts input{accent-color:var(--accent);width:11px;height:11px;}
+  .dr-comp .opts label{font-size:10.5px;color:var(--fg-4);}
+  .dr-comp .opts .right{margin-left:auto;display:flex;align-items:center;gap:6px;}
+  .dr-comp .opts .right .sync{font-family:var(--font-mono);font-size:9px;color:var(--fg-4);}
+
+  /* drawer pane switching */
+  .dr-pane{flex:1;display:none;flex-direction:column;min-height:0;}
+  .dr-pane.on{display:flex;}
+
+  /* drawer · filter chips bar (shared by Tasks + Docs) */
+  .dr-fbar{
+    display:flex;gap:4px;padding:10px 12px 9px;border-bottom:1px solid var(--border);
+    overflow-x:auto;flex-shrink:0;
+  }
+  .dr-chip{
+    padding:3px 9px;border-radius:11px;font-size:10.5px;font-weight:600;color:var(--fg-4);
+    background:transparent;border:1px solid transparent;white-space:nowrap;cursor:pointer;
+    transition:background .12s ease,color .12s ease,border-color .12s ease;
+  }
+  .dr-chip:hover{color:var(--fg-2);background:var(--bg-elev-2);}
+  .dr-chip.on{
+    background:var(--accent-tint);color:var(--accent-bright);
+    border-color:color-mix(in oklab,var(--accent) 28%,transparent);
+  }
+  .dr-chip .n{font-family:var(--font-mono);font-size:9px;margin-left:4px;opacity:.7;}
+
+  /* drawer · TASKS pane */
+  .dr-tasks{flex:1;overflow:auto;padding:2px 0;}
+  .dr-task{
+    display:flex;align-items:flex-start;gap:10px;padding:10px 13px 11px;
+    border-bottom:1px solid var(--border-subtle);cursor:pointer;
+  }
+  .dr-task:hover{background:var(--bg-elev-2);}
+  .dr-task .chk{
+    width:14px;height:14px;border-radius:4px;border:1.5px solid var(--border-strong);
+    flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;
+    color:transparent;
+  }
+  .dr-task.done .chk{background:var(--status-ok);border-color:var(--status-ok);color:#fff;}
+  .dr-task.done .chk svg{width:9px;height:9px;}
+  .dr-task .body{flex:1;min-width:0;}
+  .dr-task .ttl{font-size:12px;font-weight:600;color:var(--fg-1);line-height:1.4;}
+  .dr-task.done .ttl{text-decoration:line-through;color:var(--fg-4);text-decoration-color:var(--fg-5);}
+  .dr-task .meta{display:flex;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap;}
+  .dr-task .ow{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--fg-4);}
+  .dr-task .ow .avx{
+    width:15px;height:15px;border-radius:3px;display:inline-flex;align-items:center;
+    justify-content:center;font-size:8.5px;font-weight:700;border:1px solid transparent;
+  }
+  .dr-task .pill{
+    font-family:var(--font-mono);font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:3px;
+    letter-spacing:.06em;text-transform:uppercase;
+  }
+  .dr-task .pill.run{background:var(--status-run-tint);color:var(--status-run);}
+  .dr-task .pill.warn{background:var(--status-warn-tint);color:#b45309;}
+  .dr-task .pill.ok{background:var(--status-ok-tint);color:var(--status-ok);}
+  .dr-task .pill.idle{background:var(--bg-elev-2);color:var(--fg-4);border:1px solid var(--border);}
+  .dr-task .src{
+    font-family:var(--font-mono);font-size:9px;color:var(--accent-bright);
+    border-bottom:1px dashed color-mix(in oklab,var(--accent) 35%,transparent);
+  }
+  .dr-task .when{font-family:var(--font-mono);font-size:9px;color:var(--fg-5);margin-left:auto;}
+
+  /* drawer · DOCS pane */
+  .dr-docs{flex:1;overflow:auto;padding:2px 0;}
+  .dr-doc{
+    display:flex;align-items:center;gap:11px;padding:10px 13px;
+    border-bottom:1px solid var(--border-subtle);cursor:pointer;
+  }
+  .dr-doc:hover{background:var(--bg-elev-2);}
+  .dr-doc .ico{
+    width:36px;height:36px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-mono);font-size:9.5px;font-weight:800;letter-spacing:.04em;
+    flex-shrink:0;border:1px solid transparent;
+  }
+  .dr-doc .ico.pdf{background:color-mix(in oklab,#DC2626 14%,var(--bg-elev-2));color:#b91c1c;border-color:color-mix(in oklab,#DC2626 22%,transparent);}
+  .dr-doc .ico.md{background:color-mix(in oklab,#2563EB 14%,var(--bg-elev-2));color:#1d4ed8;border-color:color-mix(in oklab,#2563EB 22%,transparent);}
+  .dr-doc .ico.json{background:color-mix(in oklab,#059669 14%,var(--bg-elev-2));color:#047857;border-color:color-mix(in oklab,#059669 22%,transparent);}
+  .dr-doc .body{flex:1;min-width:0;}
+  .dr-doc .nm{
+    font-size:12px;font-weight:600;color:var(--fg-1);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    display:flex;align-items:center;gap:6px;
+  }
+  .dr-doc .nm .new{
+    font-family:var(--font-mono);font-size:8px;font-weight:800;letter-spacing:.08em;
+    background:var(--accent);color:var(--accent-ink);padding:1px 4px;border-radius:3px;
+  }
+  .dr-doc .sub{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4);margin-top:4px;}
+  .dr-doc .sub .who{color:var(--fg-3);font-weight:600;}
+  .dr-doc .when{font-family:var(--font-mono);font-size:9px;color:var(--fg-5);align-self:flex-start;margin-top:2px;}
+
+  /* drawer · BRIEF pane */
+  .dr-brief{flex:1;overflow:auto;padding:16px 16px 20px;}
+  .dr-brief-hd{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  .dr-brief-hd .tag{
+    font-family:var(--font-mono);font-size:9px;font-weight:800;letter-spacing:.1em;
+    color:var(--accent-bright);background:var(--accent-tint);padding:2px 6px;border-radius:3px;
+    border:1px solid color-mix(in oklab,var(--accent) 22%,transparent);
+  }
+  .dr-brief-hd .id{font-family:var(--font-mono);font-size:11px;color:var(--fg-3);}
+  .dr-brief-hd .sp{flex:1;}
+  .dr-brief-hd .runpill{
+    display:inline-flex;align-items:center;gap:4px;
+    font-family:var(--font-mono);font-size:8.5px;font-weight:800;letter-spacing:.08em;
+    padding:2px 6px;border-radius:3px;
+    background:color-mix(in oklab,var(--status-run) 14%,transparent);color:var(--status-run);
+  }
+  .dr-brief-hd .runpill .d{
+    width:5px;height:5px;border-radius:50%;background:currentColor;animation:pulse 1.5s ease-in-out infinite;
+  }
+  .dr-brief-kv{margin-bottom:13px;}
+  .dr-brief-kv .k{
+    font-family:var(--font-mono);font-size:9px;font-weight:800;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--fg-4);margin-bottom:4px;
+  }
+  .dr-brief-kv .v{font-size:12px;color:var(--fg-1);line-height:1.5;}
+  .dr-brief-kv .v .mono{font-family:var(--font-mono);font-size:11px;}
+  .dr-brief-kv .v .em{color:var(--accent-bright);font-weight:600;}
+  .dr-brief-bar{
+    height:5px;border-radius:3px;background:var(--bg-elev-2);overflow:hidden;margin-top:6px;
+    border:1px solid var(--border-subtle);
+  }
+  .dr-brief-bar .fill{height:100%;background:var(--accent);border-radius:3px;}
+  .dr-brief-roster{display:flex;flex-direction:column;gap:5px;margin-top:6px;}
+  .dr-brief-roster .r{
+    display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;
+    background:var(--bg-elev-2);border:1px solid var(--border-subtle);
+  }
+  .dr-brief-roster .r .avx{
+    width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;
+    font-size:9.5px;font-weight:700;flex-shrink:0;
+  }
+  .dr-brief-roster .r .nm{font-size:11.5px;font-weight:600;color:var(--fg-1);}
+  .dr-brief-roster .r .role{
+    font-family:var(--font-mono);font-size:8.5px;color:var(--fg-4);letter-spacing:.06em;
+    text-transform:uppercase;margin-left:auto;
+  }
+  .dr-brief-roster .r .level{
+    font-family:var(--font-mono);font-size:8.5px;font-weight:700;padding:1px 4px;border-radius:3px;
+    background:var(--bg-elev-3);color:var(--fg-3);margin-left:4px;
+  }
+  .dr-brief-trigs{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+  .dr-brief-trigs .t{
+    font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3);padding:3px 7px;
+    background:var(--bg-elev-2);border:1px solid var(--border);border-radius:3px;
+  }
+
+  /* drawer · action bar (per-pane footer, lighter than thread composer) */
+  .dr-actbar{
+    padding:9px 12px;border-top:1px solid var(--border);background:var(--bg-elev-2);flex-shrink:0;
+    display:flex;align-items:center;gap:8px;
+  }
+  .dr-actbar .btn{
+    flex:1;display:inline-flex;align-items:center;justify-content:center;gap:5px;
+    padding:7px 10px;border-radius:6px;border:1px dashed var(--border-strong);
+    background:transparent;color:var(--fg-3);font-size:11.5px;font-weight:600;cursor:pointer;
+  }
+  .dr-actbar .btn:hover{color:var(--accent-bright);border-color:color-mix(in oklab,var(--accent) 45%,transparent);background:var(--accent-tint);}
+  .dr-actbar .btn svg{width:13px;height:13px;}
+
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+  /* ── NIGHT — scoped on .frame[data-theme="night"], same tokens, dark values ─────────────── */
+  .frame[data-theme="night"]{
+    --bg:#0A0A0A;
+    --skin-panel:#111113;
+    --bg-elev-1:#111113;
+    --bg-elev-2:#18181b;
+    --bg-elev-3:#1e1e22;
+    --bg-elev-4:#27272c;
+
+    --fg-1:#F5F4EE;
+    --fg-2:#C8C5BA;
+    --fg-3:#8E8C84;
+    --fg-4:#5C5A54;
+    --fg-5:#3A3936;
+    --fg-6:#2A2926;
+
+    --border:rgba(255,255,255,.08);
+    --border-strong:rgba(255,255,255,.18);
+    --border-subtle:rgba(255,255,255,.04);
+
+    --accent:#A855F7;
+    --accent-bright:#C084FC;
+    --accent-tint:rgba(168,85,247,.14);
+    --accent-ink:#ffffff;
+
+    --status-run:#3B82F6;
+    --status-ok:#10B981;
+    --status-warn:#F59E0B;
+    --status-reject:#EF4444;
+    --status-gated:#38BDF8;
+    --status-run-tint:rgba(59,130,246,.14);
+    --status-ok-tint:rgba(16,185,129,.14);
+    --status-warn-tint:rgba(245,158,11,.14);
+    --status-reject-tint:rgba(239,68,68,.14);
+
+    --cream:#1a1916;
+    --cream-strong:#221f1a;
+
+    --shadow-pop:0 24px 48px -20px rgba(0,0,0,.6),0 8px 16px -10px rgba(0,0,0,.4);
+    --glow-accent:0 0 0 1px var(--accent),0 0 32px -6px rgba(168,85,247,.55);
+
+    box-shadow:0 40px 80px -40px rgba(0,0,0,.5),0 0 0 1px var(--border);
+  }
+</style>
+</head>
+<body>
+
+<div class="page-hdr">
+  <h1>ShadowFlow · Chat · 论文深读小队</h1>
+  <div class="sub">FB-HiFi 设计语言 · 白天（白底紫腔 + 米白外圈）/ 黑夜（近黑紫腔）双形态 · 飞书式 Inbox + 主对话 + 右侧 Thread 抽屉（任务 / 文档 / Brief）· 微信轻气泡 + Slack Thread + 钉钉 Approval Gate · 团队 / DM 合并按时间排序（无描述、无 last-message）。</div>
+</div>
+
+<template id="chat-body-tmpl">
+  <div class="body">
+
+    <!-- inbox -->
+    <div class="inbox">
+      <div class="inbox-search">
+        <div class="input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <span class="ph">搜索 / 跳转</span>
+          <span class="kbd">⌘F</span>
+        </div>
+      </div>
+
+      <div class="chips">
+        <span class="chip on">全部</span>
+        <span class="chip">未读·12</span>
+        <span class="chip">@我·3</span>
+        <span class="chip">Agent</span>
+      </div>
+
+      <div class="lab-row"><span class="lab">📌 置顶</span></div>
+      <div style="padding:0 8px;">
+        <div class="ibx-row active unread">
+          <div class="ibx-av" style="background:var(--accent-tint);border-color:color-mix(in oklab,var(--accent) 35%,transparent);color:var(--accent-bright);">论
+            <span class="cnt">×5</span>
+            <span class="stat run"></span>
+          </div>
+          <div class="meta">
+            <div class="top">
+              <span class="nm">论文深读小队</span>
+              <span class="live">LIVE</span>
+              <span class="t">now</span>
+            </div>
+          </div>
+          <span class="unr">2</span>
+        </div>
+      </div>
+
+      <div class="lab-row" style="margin-top:10px;">
+        <span class="lab">最近会话</span>
+        <span class="lab-n">9</span>
+      </div>
+      <div class="ibx-list">
+
+        <div class="ibx-row unread">
+          <div class="ibx-av" style="background:color-mix(in oklab,#F59E0B 16%,var(--skin-panel));border-color:color-mix(in oklab,#F59E0B 38%,transparent);color:#B45309;">批
+            <span class="cnt">×3</span>
+            <span class="stat warn"></span>
+          </div>
+          <div class="meta">
+            <div class="top">
+              <span class="nm">阿批</span>
+              <span class="at">@</span>
+              <span class="t">09:16</span>
+            </div>
+          </div>
+          <span class="unr">3</span>
+        </div>
+
+        <div class="ibx-row">
+          <div class="ibx-av" style="background:color-mix(in oklab,#A855F7 14%,var(--skin-panel));border-color:color-mix(in oklab,#A855F7 35%,transparent);color:#7C3AED;">读</div>
+          <div class="meta">
+            <div class="top">
+              <span class="nm">读读</span>
+              <span class="t">09:14</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="ibx-row unread">
+          <div class="ibx-av" style="background:color-mix(in oklab,#EF4444 14%,var(--skin-panel));border-color:color-mix(in oklab,#EF4444 35%,transparent);color:#B91C1C;">写
+            <span class="stat run"></span>
+          </div>
+          <div class="meta">
+            <div class="top">
+              <span class="nm">小写</span>
+              <span class="live">LIVE</span>
+              <span class="t">09:21</span>
+            </div>
+          </div>
+          <span class="unr">1</span>
+        </div>
+
+        <div class="ibx-row">
+          <div class="ibx-av" style="background:color-mix(in oklab,#0891B2 14%,var(--skin-panel));border-color:color-mix(in oklab,#0891B2 35%,transparent);color:#0891B2;">eng
+            <span class="cnt">×8</span>
+          </div>
+          <div class="meta">
+            <div class="top">
+              <span class="nm">engineering</span>
+              <span class="t">09:42</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="ibx-row">
+          <div class="ibx-av" style="background:color-mix(in oklab,#22D3EE 14%,var(--skin-panel));border-color:color-mix(in oklab,#22D3EE 35%,transparent);color:#0891B2;">查</div>
+          <div class="meta">
+            <div class="top">
+              <span class="nm">查查</span>
+              <span class="t">09:18</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="ibx-row unread">
+          <div class="ibx-av" style="background:var(--bg-elev-3);border-color:var(--border-strong);color:var(--fg-3);">🔒
+            <span class="cnt">×4</span>
+            <span class="stat warn"></span>
+          </div>
+          <div class="meta">
+            <div class="top">
+              <span class="nm">文献综述-机密</span>
+              <span class="t">昨日</span>
+            </div>
+          </div>
+          <span class="unr">5</span>
+        </div>
+
+        <div class="ibx-row">
+          <div class="ibx-av" style="background:color-mix(in oklab,#10B981 14%,var(--skin-panel));border-color:color-mix(in oklab,#10B981 35%,transparent);color:#059669;">审</div>
+          <div class="meta">
+            <div class="top">
+              <span class="nm">审审</span>
+              <span class="t">昨日</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="ibx-row">
+          <div class="ibx-av" style="background:color-mix(in oklab,#71717A 14%,var(--skin-panel));border-color:color-mix(in oklab,#71717A 35%,transparent);color:#52525B;">D</div>
+          <div class="meta">
+            <div class="top">
+              <span class="nm">Devon</span>
+              <span class="t">周一</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- main -->
+    <div class="main">
+
+      <div class="hdr">
+        <div class="hdr-av">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="hdr-top">
+            <span class="hdr-nm">论文深读小队</span>
+            <span class="hdr-meta">· 5 人</span>
+            <span class="dot dot-ok"></span>
+            <span class="hdr-meta">4 在线</span>
+            <span class="pill-live">RUNNING · #042</span>
+            <span class="pill">POLICY · L2-strict</span>
+          </div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-4);margin-top:3px;display:flex;align-items:center;gap:6px;">
+            <span class="av-stack" style="display:flex;">
+              <span class="av" style="width:18px;height:18px;font-size:9px;background:color-mix(in oklab,#A855F7 14%,var(--skin-panel));border-color:color-mix(in oklab,#A855F7 35%,transparent);color:#7C3AED;border-radius:4px;">读</span>
+              <span class="av" style="width:18px;height:18px;font-size:9px;background:color-mix(in oklab,#F59E0B 14%,var(--skin-panel));border-color:color-mix(in oklab,#F59E0B 35%,transparent);color:#B45309;border-radius:4px;margin-left:-6px;">批</span>
+              <span class="av" style="width:18px;height:18px;font-size:9px;background:color-mix(in oklab,#22D3EE 14%,var(--skin-panel));border-color:color-mix(in oklab,#22D3EE 35%,transparent);color:#0891B2;border-radius:4px;margin-left:-6px;">查</span>
+              <span class="av" style="width:18px;height:18px;font-size:9px;background:color-mix(in oklab,#EF4444 14%,var(--skin-panel));border-color:color-mix(in oklab,#EF4444 35%,transparent);color:#B91C1C;border-radius:4px;margin-left:-6px;">写</span>
+              <span class="av" style="width:18px;height:18px;font-size:9px;background:color-mix(in oklab,#10B981 14%,var(--skin-panel));border-color:color-mix(in oklab,#10B981 35%,transparent);color:#059669;border-radius:4px;margin-left:-6px;">审</span>
+            </span>
+            <span>started 09:14 · run 12m</span>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" data-action="dag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="13" height="13"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7 7l4 9M17 7l-4 9"/></svg> DAG</button>
+        <button class="btn btn-icon" title="搜索 ⌘F" data-action="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
+        <button class="btn btn-icon" title="任务 5" data-action="tasks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="badge">5</span></button>
+        <button class="btn btn-icon active" title="Thread · 7 条回复" data-action="thread"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg><span class="pulse-dot"></span></button>
+        <button class="btn btn-icon" title="群设置" data-action="more"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></button>
+      </div>
+
+      <!-- searchbar — slides down on search-button toggle -->
+      <div class="searchbar">
+        <div class="sb-inner">
+          <div class="sb-row">
+            <div class="sb-input">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input type="text" placeholder="在 #论文深读小队 内搜索 · 关键字 / @人 / 文件 / issue" />
+              <span class="sb-count"><span class="sb-num">0 条命中</span>
+                <span class="sb-nav"><span class="k">↑</span><span class="k">↓</span> 跳转</span>
+                · <span class="k">Esc</span> 关闭
+              </span>
+            </div>
+            <button class="sb-close" data-action="close-search" title="关闭搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+          <div class="sb-chips">
+            <span class="chip on">全部</span>
+            <span class="chip">来自 agent</span>
+            <span class="chip">含文件</span>
+            <span class="chip">含 issue</span>
+            <span class="chip">仅本 run #042</span>
+            <span class="chip">今天</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="brief">
+        <svg class="pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 17v5"/><path d="M9 10.76V6h6v4.76l3 5.24H6z"/></svg>
+        <div style="flex:1;min-width:0;">
+          <div>
+            <span class="tag">BRIEF · run #042</span>
+            <span class="pinned-by">由 张明 置顶 · 09:14</span>
+          </div>
+          <div class="body">
+            <b>目标</b> 深读 arXiv:2410.11215，找出方法/实验中的不一致，重写有问题段落 ·
+            <b>SLA</b> 30min ·
+            <b>预算</b> 5k tokens ·
+            <b>Gate</b> CRITIC → REVIEW
+          </div>
+        </div>
+        <span class="more">展开 ▾</span>
+      </div>
+
+      <div class="feed">
+
+        <div class="day-div"><div class="ln"></div><div class="lb">今天 · 10 月 28 日</div><div class="ln"></div></div>
+
+        <div class="sysnote"><span>张明 启动 run #042 · 输入：arXiv:2410.11215</span></div>
+
+        <!-- agent msg: 读读 -->
+        <div class="msg">
+          <span class="agent-av">
+            <span class="av" style="width:34px;height:34px;font-size:14px;border-radius:8px;background:color-mix(in oklab,#A855F7 14%,var(--skin-panel));border-color:color-mix(in oklab,#A855F7 35%,transparent);color:#7C3AED;">读</span>
+            <span class="bot" style="color:#7C3AED;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="8" width="16" height="11" rx="2"/><path d="M12 8V4M9 13h.01M15 13h.01M9 16h6"/></svg></span>
+          </span>
+          <div class="body-wrap" style="border-left-color:#A855F7;">
+            <div class="hd">
+              <span class="nm">读读</span>
+              <span class="ag-pill" style="color:#7C3AED;background:color-mix(in oklab,#A855F7 12%,transparent);border-color:color-mix(in oklab,#A855F7 28%,transparent);">AGENT</span>
+              <span class="role">READER · L1</span>
+              <span class="model">haiku-4.5</span>
+              <span class="t">09:14</span>
+            </div>
+            <div class="text">已抓 PDF · 38 页 / 12 节 / 47 引用。建议优先 <span class="ref">§4 方法</span> 与 <span class="ref">§6 实验</span>。</div>
+            <div class="tool-chip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              <span class="n">read_file</span>
+              <span class="m">arxiv-2410.11215.pdf · 38p · 142 KB</span>
+              <span class="ok">✓ 142ms</span>
+              <span class="ex">展开</span>
+            </div>
+            <div class="reactions">
+              <span class="react mine">👍 <span class="n">3</span></span>
+              <span class="react">📑 <span class="n">1</span></span>
+              <span class="react add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></span>
+            </div>
+            <div class="thread-chip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>
+              <span class="c">4 条回复</span>
+              <span class="last">最后 阿批 · 1 分钟前</span>
+              <span class="arr">›</span>
+            </div>
+            <div class="read-by">5/5 已读 · hover 查看名单</div>
+          </div>
+        </div>
+
+        <!-- agent msg: 阿批 with hover toolbar -->
+        <div class="msg">
+          <span class="agent-av">
+            <span class="av" style="width:34px;height:34px;font-size:14px;border-radius:8px;background:color-mix(in oklab,#F59E0B 14%,var(--skin-panel));border-color:color-mix(in oklab,#F59E0B 35%,transparent);color:#B45309;">批</span>
+            <span class="bot" style="color:#B45309;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="8" width="16" height="11" rx="2"/><path d="M12 8V4M9 13h.01M15 13h.01M9 16h6"/></svg></span>
+          </span>
+          <div class="body-wrap" style="border-left-color:#F59E0B;">
+            <div class="hd">
+              <span class="nm">阿批</span>
+              <span class="ag-pill" style="color:#B45309;background:color-mix(in oklab,#F59E0B 12%,transparent);border-color:color-mix(in oklab,#F59E0B 28%,transparent);">AGENT</span>
+              <span class="role">CRITIC · L2</span>
+              <span class="model">sonnet-4.5</span>
+              <span class="t">09:16</span>
+              <span class="ed">· 已编辑</span>
+            </div>
+            <div class="text">
+              发现潜在问题 3 处：
+              <div class="issue-list">
+                <div class="issue"><span class="sec">§4.2</span><span class="desc">基线选择避开了 ICLR-24 的更强基线 RetroCorr</span></div>
+                <div class="issue"><span class="sec">§5.1</span><span class="desc">消融未覆盖 BatchSize × Dropout 联合效应</span></div>
+                <div class="issue"><span class="sec">§6.3</span><span class="desc">与 Tab.2 数据不一致（73.4 vs 71.8）</span></div>
+              </div>
+            </div>
+            <div class="reactions">
+              <span class="react mine">🔥 <span class="n">2</span></span>
+              <span class="react">🚨 <span class="n">1</span></span>
+              <span class="react add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></span>
+            </div>
+            <div class="thread-chip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>
+              <span class="c">7 条回复</span>
+              <span class="last">最后 小写 · 30 秒前</span>
+              <span class="arr">›</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="syscard">
+          <div class="box">
+            <span class="dot" style="background:var(--status-reject);margin-top:6px;"></span>
+            <div style="flex:1;">
+              <div class="tag">⚑ POLICY MATRIX · REJECT</div>
+              <div class="b">
+                阿批 → 小写 · reason <span class="reject">"missing baseline data"</span><br>
+                rollback to <span class="mono">draft.v2</span> · ckpt.saved · awaiting retry <span class="mono">r2/3</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="usermsg">
+          <div class="col">
+            <div class="hd"><span class="t">09:20</span><span class="nm">张明</span></div>
+            <div class="reply"><span class="who">阿批</span><span style="margin-left:6px;">§6.3 与 Tab.2 数据不一致（73.4 vs 71.8）</span></div>
+            <div class="bubble"><span style="padding:2px 6px;border-radius:4px;background:var(--accent-tint);color:var(--accent-bright);font-weight:700;margin-right:5px;">@阿批</span>把第 3 处不一致写成详细 issue，附数据来源截图</div>
+            <div class="delivered">已送达 · 5/5 已读</div>
+          </div>
+          <span class="av" style="width:34px;height:34px;font-size:14px;border-radius:9px;background:color-mix(in oklab,#10B981 16%,var(--skin-panel));border-color:color-mix(in oklab,#10B981 38%,transparent);color:#059669;">张</span>
+        </div>
+
+        <div class="gate-wrap">
+          <div class="gate">
+            <div class="tag">⚑ APPROVAL GATE</div>
+            <div class="row">
+              <span class="av" style="width:26px;height:26px;font-size:11px;border-radius:6px;background:color-mix(in oklab,#EF4444 14%,var(--skin-panel));border-color:color-mix(in oklab,#EF4444 35%,transparent);color:#B91C1C;">写</span>
+              <span class="nm">小写</span>
+              <span class="role">WRITER · L3 · gate</span>
+              <span class="wait">09:21 · 等待 1m04s</span>
+            </div>
+            <div class="body">重写 §6 完成。新增 <span class="ref">RetroCorr</span> 基线对比 + 联合消融表。请审审过目。</div>
+            <div class="kv">
+              <div class="cell"><div class="k">diff</div><div class="v">+142 / -38</div></div>
+              <div class="cell"><div class="k">tokens</div><div class="v">2.1k / 5k</div></div>
+              <div class="cell"><div class="k">retry</div><div class="v">r2/3</div></div>
+            </div>
+            <div class="ctas">
+              <button class="btn btn-primary btn-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="m5 12 5 5L20 7"/></svg> 批准 · 进 Review</button>
+              <button class="btn btn-reject btn-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M18 6 6 18M6 6l12 12"/></svg> 驳回 · 重写</button>
+              <button class="btn btn-ghost btn-sm">看 diff</button>
+              <span class="kbd">Y / N · ⌘↵ 批准</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="typing">
+          <span class="av" style="width:24px;height:24px;font-size:11px;border-radius:5px;background:color-mix(in oklab,#10B981 14%,var(--skin-panel));border-color:color-mix(in oklab,#10B981 35%,transparent);color:#059669;">审</span>
+          <span class="nm">审审 正在思考</span>
+          <span class="dots"><span></span><span></span><span></span></span>
+          <span class="meta">~480 tokens · ~3.2s</span>
+        </div>
+
+      </div>
+
+      <div class="composer">
+        <div class="slash-pop">
+          <div class="h"><span class="lab">SLASH COMMANDS</span><span class="hint">↑↓ 选 · ↵ 用</span></div>
+          <div class="it sel"><span class="cmd">/run</span><span class="d">触发 team 跑一轮</span></div>
+          <div class="it"><span class="cmd">/approve</span><span class="d">批准当前 gate</span></div>
+          <div class="it"><span class="cmd">/retry</span><span class="d">让 agent 重写</span></div>
+          <div class="it"><span class="cmd">/assign</span><span class="d">把任务派给 agent</span></div>
+          <div class="it"><span class="cmd">/pin</span><span class="d">置顶为 brief 卡片</span></div>
+        </div>
+
+        <div class="comp-shell">
+          <div class="comp-tools">
+            <span class="it" title="@"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg></span>
+            <span class="it" title="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><line x1="19" y1="5" x2="5" y2="19"/></svg></span>
+            <span class="it" title="表情"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></span>
+            <span class="it" title="附件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></span>
+            <span class="it" title="截图"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg></span>
+            <span class="it" title="任务"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+            <span class="it" title="AI ⌘K"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="8" width="16" height="11" rx="2"/><path d="M12 8V4M9 13h.01M15 13h.01M9 16h6"/></svg></span>
+            <span class="md">Markdown</span>
+          </div>
+          <div class="comp-area">
+            <span class="at">@阿批</span>把第 3 处不一致写成详细 issue，附数据来源截图<span class="caret"></span>
+          </div>
+          <div class="comp-foot">
+            <div class="lh">
+              <span class="kbd">⏎ 发送 · ⇧⏎ 换行 · / 命令</span>
+              <span class="dot dot-ok"></span>
+              <span class="saved">已保存草稿 · 0G synced</span>
+            </div>
+            <button class="btn btn-primary btn-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="13" height="13"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg> 发送</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- drawer — Thread / 任务 / 文档 / Brief -->
+    <div class="drawer">
+      <div class="dr-tabs">
+        <span class="dr-tab on" data-pane="thread">Thread</span>
+        <span class="dr-tab" data-pane="tasks">任务 <span class="n">5</span></span>
+        <span class="dr-tab" data-pane="docs">文档 <span class="n">3</span></span>
+        <span class="dr-tab" data-pane="brief">Brief</span>
+        <span class="dr-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+      </div>
+
+      <!-- PANE · THREAD -->
+      <div class="dr-pane on" data-pane="thread">
+        <div class="dr-ctx">
+          <div class="row">
+            <span class="av" style="width:26px;height:26px;font-size:11px;border-radius:6px;background:color-mix(in oklab,#F59E0B 18%,var(--bg-elev-2));border-color:color-mix(in oklab,#F59E0B 45%,transparent);color:#b45309;">批</span>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:baseline;gap:6px;"><span class="nm">阿批</span><span class="meta">CRITIC · 09:16</span></div>
+              <div class="excerpt">发现潜在问题 3 处：§4.2 / §5.1 / §6.3 …</div>
+            </div>
+          </div>
+          <div class="count">7 条回复 · 4 人参与</div>
+        </div>
+
+        <div class="dr-replies">
+          <div class="dr-reply agent">
+            <span class="av" style="width:22px;height:22px;font-size:10px;border-radius:5px;background:color-mix(in oklab,#EF4444 18%,var(--bg-elev-2));border-color:color-mix(in oklab,#EF4444 45%,transparent);color:#b91c1c;">写</span>
+            <div class="body" style="border-left-color:#EF4444;">
+              <div class="hd"><span class="nm">小写</span><span class="ag" style="color:#b91c1c;background:color-mix(in oklab,#EF4444 15%,transparent);">AGENT</span><span class="t">09:17</span></div>
+              <div class="txt">§6.3 我去查 Tab.2 原始数据，1 分钟内出 diff</div>
+            </div>
+          </div>
+
+          <div class="dr-reply user">
+            <span class="av" style="width:22px;height:22px;font-size:10px;border-radius:5px;background:color-mix(in oklab,#10B981 18%,var(--bg-elev-2));border-color:color-mix(in oklab,#10B981 45%,transparent);color:#059669;">张</span>
+            <div class="body">
+              <div class="hd"><span class="nm">张明</span><span class="t">09:18</span></div>
+              <div class="bubble">同意，并把 §4.2 的 RetroCorr 一起加上</div>
+            </div>
+          </div>
+
+          <div class="dr-reply agent">
+            <span class="av" style="width:22px;height:22px;font-size:10px;border-radius:5px;background:color-mix(in oklab,#EF4444 18%,var(--bg-elev-2));border-color:color-mix(in oklab,#EF4444 45%,transparent);color:#b91c1c;">写</span>
+            <div class="body" style="border-left-color:#EF4444;">
+              <div class="hd"><span class="nm">小写</span><span class="ag" style="color:#b91c1c;background:color-mix(in oklab,#EF4444 15%,transparent);">AGENT</span><span class="t">09:19</span></div>
+              <div class="txt">好的。已 fork draft.v2 → v3</div>
+              <span class="tool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>edit_paper · ✓</span>
+            </div>
+          </div>
+
+          <div class="dr-typing"><span>—— 阿批 正在输入 ⋯ ——</span></div>
+        </div>
+
+        <div class="dr-comp">
+          <div class="box">
+            <span>回到 thread…</span>
+            <span class="kbd">⏎ 发送</span>
+          </div>
+          <div class="opts">
+            <input type="checkbox" checked>
+            <label>同时发到主频道</label>
+            <span class="right">
+              <span class="dot dot-ok"></span>
+              <span class="sync">0G synced · 0x3f7a…bc91</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANE · TASKS — 这次 run 实际开过的任务 -->
+      <div class="dr-pane" data-pane="tasks">
+        <div class="dr-fbar" data-bar="tasks">
+          <span class="dr-chip on" data-filter="all">全部 <span class="n">5</span></span>
+          <span class="dr-chip" data-filter="run">进行中 <span class="n">1</span></span>
+          <span class="dr-chip" data-filter="warn">等审批 <span class="n">1</span></span>
+          <span class="dr-chip" data-filter="idle">待开始 <span class="n">1</span></span>
+          <span class="dr-chip" data-filter="ok">已完成 <span class="n">2</span></span>
+        </div>
+        <div class="dr-tasks">
+          <div class="dr-task done" data-status="ok">
+            <div class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="body">
+              <div class="ttl">打开 draft.v2 PDF · 全文 24 页</div>
+              <div class="meta">
+                <span class="pill ok">DONE</span>
+                <span class="ow"><span class="avx" style="background:color-mix(in oklab,#3B82F6 18%,var(--bg-elev-2));color:#1d4ed8;border-color:color-mix(in oklab,#3B82F6 45%,transparent);">读</span>读读</span>
+                <span class="src">#sys-09:15</span>
+                <span class="when">09:14 → 09:14</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dr-task done" data-status="ok">
+            <div class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="body">
+              <div class="ttl">fork draft.v2 → v3 草稿分支</div>
+              <div class="meta">
+                <span class="pill ok">DONE</span>
+                <span class="ow"><span class="avx" style="background:color-mix(in oklab,#EF4444 18%,var(--bg-elev-2));color:#b91c1c;border-color:color-mix(in oklab,#EF4444 45%,transparent);">写</span>写写</span>
+                <span class="src">thread §6.3</span>
+                <span class="when">09:18 → 09:19</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dr-task" data-status="run">
+            <div class="chk"></div>
+            <div class="body">
+              <div class="ttl">校对 §6.3 Tab.2 · 引用 [12,15,18]</div>
+              <div class="meta">
+                <span class="pill run">RUNNING</span>
+                <span class="ow"><span class="avx" style="background:color-mix(in oklab,#06B6D4 18%,var(--bg-elev-2));color:#0e7490;border-color:color-mix(in oklab,#06B6D4 45%,transparent);">查</span>查查</span>
+                <span class="src">#msg-09:24</span>
+                <span class="when">09:24 · 2m</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dr-task" data-status="warn">
+            <div class="chk"></div>
+            <div class="body">
+              <div class="ttl">修正 §4.2 RetroCorr · 论证缺口</div>
+              <div class="meta">
+                <span class="pill warn">等审批</span>
+                <span class="ow"><span class="avx" style="background:color-mix(in oklab,#EF4444 18%,var(--bg-elev-2));color:#b91c1c;border-color:color-mix(in oklab,#EF4444 45%,transparent);">写</span>写写</span>
+                <span class="src">#gate-09:31</span>
+                <span class="when">09:31 · 18s</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dr-task" data-status="idle">
+            <div class="chk"></div>
+            <div class="body">
+              <div class="ttl">重审 §5.1 论证链 · 二次复核</div>
+              <div class="meta">
+                <span class="pill idle">待开始</span>
+                <span class="ow"><span class="avx" style="background:color-mix(in oklab,#A855F7 18%,var(--bg-elev-2));color:#6b21a8;border-color:color-mix(in oklab,#A855F7 45%,transparent);">审</span>审审</span>
+                <span class="src">从 #msg-09:16 派生</span>
+                <span class="when">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="dr-actbar">
+          <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>新建任务 · 指派给 agent</button>
+        </div>
+      </div>
+
+      <!-- PANE · DOCS — run 期间共享 / 产出的文件 -->
+      <div class="dr-pane" data-pane="docs">
+        <div class="dr-fbar" data-bar="docs">
+          <span class="dr-chip on" data-filter="all">全部 <span class="n">3</span></span>
+          <span class="dr-chip" data-filter="shared">共享 <span class="n">1</span></span>
+          <span class="dr-chip" data-filter="produced">产出 <span class="n">2</span></span>
+        </div>
+        <div class="dr-docs">
+          <div class="dr-doc" data-kind="produced">
+            <div class="ico pdf">PDF</div>
+            <div class="body">
+              <div class="nm">draft-v3-papermind-2026.pdf <span class="new">NEW</span></div>
+              <div class="sub">2.6 MB · <span class="who">写写</span> 产出 · 24 页 · 含 §4.2 / §6.3 diff</div>
+            </div>
+            <span class="when">09:19</span>
+          </div>
+          <div class="dr-doc" data-kind="produced">
+            <div class="ico md">MD</div>
+            <div class="body">
+              <div class="nm">critic-notes-§4.2-§5.1-§6.3.md</div>
+              <div class="sub">4.8 KB · <span class="who">阿批</span> 产出 · 3 处 issue 详述</div>
+            </div>
+            <span class="when">09:16</span>
+          </div>
+          <div class="dr-doc" data-kind="shared">
+            <div class="ico pdf">PDF</div>
+            <div class="body">
+              <div class="nm">draft-v2-papermind-2026.pdf</div>
+              <div class="sub">2.4 MB · <span class="who">张明</span> 共享 · 24 页 · 原稿</div>
+            </div>
+            <span class="when">09:14</span>
+          </div>
+        </div>
+        <div class="dr-actbar">
+          <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>上传 · 拖入或链接文件</button>
+        </div>
+      </div>
+
+      <!-- PANE · BRIEF — run #042 固定卡 -->
+      <div class="dr-pane" data-pane="brief">
+        <div class="dr-brief">
+          <div class="dr-brief-hd">
+            <span class="tag">BRIEF</span>
+            <span class="id">run #042</span>
+            <span class="sp"></span>
+            <span class="runpill"><span class="d"></span>RUNNING</span>
+          </div>
+
+          <div class="dr-brief-kv">
+            <div class="k">目标 · Goal</div>
+            <div class="v">复审 <span class="em">PaperMind 2026.10</span> 论文初稿 (draft.v2)，输出 <span class="em">可发版 v3</span>，附 issue 修复说明与引用核对结果。</div>
+          </div>
+
+          <div class="dr-brief-kv">
+            <div class="k">SLA · 截止</div>
+            <div class="v"><span class="mono">11:00 · ETA 0:42</span> · 11:00 前出最终版送审审 L2 终审。</div>
+          </div>
+
+          <div class="dr-brief-kv">
+            <div class="k">预算 · Budget</div>
+            <div class="v"><span class="mono">$2.50 / $5.00</span> · 50% 已用 · tokens 32k / 100k</div>
+            <div class="dr-brief-bar"><div class="fill" style="width:50%;"></div></div>
+          </div>
+
+          <div class="dr-brief-kv">
+            <div class="k">策略闸 · Policy Gate</div>
+            <div class="v"><span class="em">L2-strict</span> · 张明 单点审批 · 工具调用 / 外发邮件 / 文件修改 触发拦截</div>
+            <div class="dr-brief-trigs">
+              <span class="t">tool_call</span>
+              <span class="t">send_email</span>
+              <span class="t">edit_paper</span>
+              <span class="t">retry &gt; 2</span>
+            </div>
+          </div>
+
+          <div class="dr-brief-kv">
+            <div class="k">阵容 · Roster · 5 人</div>
+            <div class="dr-brief-roster">
+              <div class="r"><span class="avx" style="background:color-mix(in oklab,#3B82F6 18%,var(--bg-elev-2));color:#1d4ed8;">读</span><span class="nm">读读</span><span class="role">Reader</span><span class="level">L1</span></div>
+              <div class="r"><span class="avx" style="background:color-mix(in oklab,#F59E0B 18%,var(--bg-elev-2));color:#b45309;">批</span><span class="nm">阿批</span><span class="role">Critic</span><span class="level">L1</span></div>
+              <div class="r"><span class="avx" style="background:color-mix(in oklab,#06B6D4 18%,var(--bg-elev-2));color:#0e7490;">查</span><span class="nm">查查</span><span class="role">Cite-checker</span><span class="level">L1</span></div>
+              <div class="r"><span class="avx" style="background:color-mix(in oklab,#EF4444 18%,var(--bg-elev-2));color:#b91c1c;">写</span><span class="nm">写写</span><span class="role">Writer</span><span class="level">L2</span></div>
+              <div class="r"><span class="avx" style="background:color-mix(in oklab,#A855F7 18%,var(--bg-elev-2));color:#6b21a8;">审</span><span class="nm">审审</span><span class="role">Reviewer</span><span class="level">L2</span></div>
+            </div>
+          </div>
+
+          <div class="dr-brief-kv">
+            <div class="k">来源 · Source</div>
+            <div class="v"><span class="mono">0x3f7a…bc91</span> · 09:15 启动 · 张明 创建</div>
+          </div>
+        </div>
+        <div class="dr-actbar">
+          <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="m18.5 2.5 3 3L12 15l-4 1 1-4z"/></svg>编辑 Brief · 重启 run</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- group settings · DingTalk-style centered modal · opens on header ⋯ click -->
+    <div class="gset-overlay" data-overlay="gset">
+      <div class="gset-dialog" role="dialog" aria-label="群设置">
+        <div class="gset-hd">
+          <div class="gset-title">群设置</div>
+          <button class="gset-x" data-act="close" title="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div class="gset-bd">
+
+          <!-- group card · running state + L2-strict + members count -->
+          <div class="gset-card">
+            <div class="gset-card-av">📜</div>
+            <div class="gset-card-meta">
+              <div class="gset-card-nm">论文深读小队</div>
+              <div class="gset-card-stats">5 个 agent · 4 在线 · 启动于 09:14</div>
+            </div>
+          </div>
+
+          <div class="gset-sep"></div>
+
+          <!-- members grid · 5 agents + invite + 查看全部 -->
+          <div class="gset-sec">
+            <div class="gset-sec-hd">
+              <div class="gset-sec-ttl">群成员</div>
+              <div class="gset-sec-cnt">5 / 12</div>
+              <div class="gset-spacer"></div>
+              <button class="gset-link" data-act="members-all">查看全部 ▸</button>
+            </div>
+            <div class="gset-members">
+              <div class="gset-m"><div class="gset-m-av" data-c="b">读<span class="on-dot"></span></div><div class="gset-m-nm">读读</div><div class="gset-m-role">Reader</div></div>
+              <div class="gset-m"><div class="gset-m-av" data-c="r">批<span class="on-dot"></span></div><div class="gset-m-nm">阿批</div><div class="gset-m-role">Critic</div></div>
+              <div class="gset-m"><div class="gset-m-av" data-c="g">查<span class="on-dot"></span></div><div class="gset-m-nm">查查</div><div class="gset-m-role">Cite-checker</div></div>
+              <div class="gset-m"><div class="gset-m-av" data-c="p">写<span class="on-dot"></span></div><div class="gset-m-nm">写写</div><div class="gset-m-role">Writer</div></div>
+              <div class="gset-m"><div class="gset-m-av" data-c="o">审</div><div class="gset-m-nm">审审</div><div class="gset-m-role">Reviewer</div></div>
+              <div class="gset-m"><div class="gset-m-av-add">+</div><div class="gset-m-nm">邀请</div><div class="gset-m-role">&nbsp;</div></div>
+            </div>
+          </div>
+
+          <div class="gset-sep"></div>
+
+          <!-- editable KV rows · group name / brief / my name / search -->
+          <div class="gset-sec">
+            <div class="gset-row">
+              <div class="gset-row-k">群昵称</div>
+              <div class="gset-row-v"><span>论文深读小队</span></div>
+              <div class="gset-row-chev">›</div>
+            </div>
+            <div class="gset-row">
+              <div class="gset-row-k">群公告</div>
+              <div class="gset-row-v"><span>目标：复审 PaperMind 2026.10，输出可发版 v3</span></div>
+              <div class="gset-row-chev">›</div>
+            </div>
+            <div class="gset-row">
+              <div class="gset-row-k">我的昵称</div>
+              <div class="gset-row-v"><span>张明</span> <span class="gset-tag-owner">OWNER</span></div>
+              <div class="gset-row-chev">›</div>
+            </div>
+            <div class="gset-row">
+              <div class="gset-row-k">查找聊天内容</div>
+              <div class="gset-row-v gset-row-v-mute"><span>按关键字、agent、文件、issue 检索本 run</span></div>
+              <div class="gset-row-chev">›</div>
+            </div>
+          </div>
+
+          <div class="gset-sep"></div>
+
+          <!-- toggles · mute / pin / fold / show nickname -->
+          <div class="gset-sec">
+            <div class="gset-row gset-row-sw">
+              <div class="gset-row-k">消息免打扰</div>
+              <div class="gset-row-v"></div>
+              <span class="sw"></span>
+            </div>
+            <div class="gset-row gset-row-sw on">
+              <div class="gset-row-k">置顶聊天</div>
+              <div class="gset-row-v"></div>
+              <span class="sw"></span>
+            </div>
+            <div class="gset-row gset-row-sw">
+              <div class="gset-row-k">折叠该群</div>
+              <div class="gset-row-v gset-row-v-mute"><span>不显示在最近会话顶部</span></div>
+              <span class="sw"></span>
+            </div>
+            <div class="gset-row gset-row-sw on">
+              <div class="gset-row-k">显示成员昵称</div>
+              <div class="gset-row-v"></div>
+              <span class="sw"></span>
+            </div>
+          </div>
+
+          <div class="gset-sep"></div>
+
+          <!-- danger zone · archive + leave -->
+          <div class="gset-danger">
+            <button class="gset-danger-btn">归档群聊</button>
+            <button class="gset-danger-btn gset-danger-btn-red">退出群聊</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</template>
+
+<div class="stage-title">
+  <span class="num">01 · DAY</span>
+  <span class="name">FB-HiFi 白底 + 紫腔 + 米白外圈</span>
+  <span class="hint">white + purple · 1480 × 880</span>
+</div>
+<div class="frame"></div>
+
+<div class="stage-title" style="margin-top:56px;">
+  <span class="num">02 · NIGHT</span>
+  <span class="name">近黑 + 紫腔 · 同骨架</span>
+  <span class="hint">#0A0A0A + purple · 1480 × 880</span>
+</div>
+<div class="frame" data-theme="night"></div>
+
+<script>
+  /* hover toolbar SVG markup — 8 actions: 反应/回复/开thread/引用/AI改/翻译/Pin/转发 + 更多
+     extra separator before 更多 (per FB-HiFi reference) */
+  const HOVER_TB_HTML = `
+    <span class="it" title="反应"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></span>
+    <span class="it" title="回复"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg></span>
+    <span class="it" title="开 thread"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg></span>
+    <span class="it" title="引用"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/></svg></span>
+    <span class="it" title="AI 改写"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2.5l1.6 4.2 4.2 1.6-4.2 1.6L12 14.1l-1.6-4.2-4.2-1.6 4.2-1.6zM18 14l.9 2.3 2.3.9-2.3.9L18 20.5l-.9-2.4-2.3-.9 2.3-.9z"/></svg></span>
+    <span class="it" title="翻译"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 8h12M9 4h3M8 8c0 4-2 7-5 8M11 8c0 4 3 7 8 8M16 14h6M19 14l3 7M19 14l-3 7"/></svg></span>
+    <span class="it" title="Pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 17v5"/><path d="M9 10.76V6h6v4.76l3 5.24H6z"/></svg></span>
+    <span class="it" title="转发"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg></span>
+    <span class="sep"></span>
+    <span class="it" title="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></span>
+  `;
+
+  const tmpl = document.getElementById('chat-body-tmpl');
+  document.querySelectorAll('.frame').forEach(frame => {
+    frame.appendChild(tmpl.content.cloneNode(true));
+
+    /* inject hover toolbar into every visible message (agent / user / drawer reply) */
+    frame.querySelectorAll('.msg, .usermsg, .dr-reply').forEach(m => {
+      const tb = document.createElement('div');
+      tb.className = 'hover-tb';
+      tb.innerHTML = HOVER_TB_HTML;
+      m.appendChild(tb);
+    });
+
+    /* keep the second agent msg (阿批) toolbar visible by default so the affordance
+       is discoverable in the static design comp; others reveal on hover */
+    const msgs = frame.querySelectorAll('.msg');
+    if (msgs[1]) {
+      const tb = msgs[1].querySelector(':scope > .hover-tb');
+      if (tb) tb.classList.add('show');
+    }
+
+    /* drawer tab switching — Thread / 任务 / 文档 / Brief */
+    frame.querySelectorAll('.dr-tab[data-pane]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.pane;
+        frame.querySelectorAll('.dr-tab[data-pane]').forEach(t =>
+          t.classList.toggle('on', t.dataset.pane === target));
+        frame.querySelectorAll('.dr-pane').forEach(p =>
+          p.classList.toggle('on', p.dataset.pane === target));
+        if (typeof syncDrawerButtons === 'function') syncDrawerButtons();
+      });
+    });
+
+    /* filter chips inside Tasks / Docs panes */
+    frame.querySelectorAll('.dr-fbar').forEach(bar => {
+      const kind = bar.dataset.bar; // "tasks" | "docs"
+      const pane = bar.closest('.dr-pane');
+      bar.querySelectorAll('.dr-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          bar.querySelectorAll('.dr-chip').forEach(c => c.classList.remove('on'));
+          chip.classList.add('on');
+          const f = chip.dataset.filter;
+          if (kind === 'tasks') {
+            pane.querySelectorAll('.dr-task').forEach(t => {
+              t.style.display = (f === 'all' || t.dataset.status === f) ? '' : 'none';
+            });
+          } else if (kind === 'docs') {
+            pane.querySelectorAll('.dr-doc').forEach(d => {
+              d.style.display = (f === 'all' || d.dataset.kind === f) ? '' : 'none';
+            });
+          }
+        });
+      });
+    });
+
+    /* main-header buttons → search drop / drawer toggle (per-frame, scoped) */
+    const drawer  = frame.querySelector('.drawer');
+    const searchbar = frame.querySelector('.searchbar');
+    const feed = frame.querySelector('.feed');
+    const sbInput = frame.querySelector('.sb-input input');
+
+    const setActive = (action, on) => {
+      const btn = frame.querySelector(`.hdr [data-action="${action}"]`);
+      if (btn) btn.classList.toggle('active', !!on);
+    };
+
+    const openSearch = () => {
+      searchbar.classList.add('open');
+      setActive('search', true);
+      if (sbInput) setTimeout(() => sbInput.focus(), 60);
+    };
+    const closeSearch = () => {
+      searchbar.classList.remove('open');
+      setActive('search', false);
+      if (sbInput) sbInput.value = '';
+      feed.classList.remove('searching');
+      feed.querySelectorAll('.sb-hit').forEach(n => n.classList.remove('sb-hit'));
+    };
+
+    const isDrawerOpen = () => !drawer.classList.contains('hide');
+    const activePane = () => {
+      const on = frame.querySelector('.dr-tab.on');
+      return on ? on.dataset.pane : null;
+    };
+    const switchPane = (target) => {
+      frame.querySelectorAll('.dr-tab[data-pane]').forEach(t =>
+        t.classList.toggle('on', t.dataset.pane === target));
+      frame.querySelectorAll('.dr-pane').forEach(p =>
+        p.classList.toggle('on', p.dataset.pane === target));
+    };
+    const syncDrawerButtons = () => {
+      const open = isDrawerOpen();
+      const pane = activePane();
+      setActive('tasks',  open && pane === 'tasks');
+      setActive('thread', open && pane === 'thread');
+    };
+
+    /* search button */
+    const sBtn = frame.querySelector('.hdr [data-action="search"]');
+    if (sBtn) sBtn.addEventListener('click', () => {
+      searchbar.classList.contains('open') ? closeSearch() : openSearch();
+    });
+    frame.querySelector('.sb-close')?.addEventListener('click', closeSearch);
+
+    /* live filter — light highlight of feed children whose text matches */
+    const sbNum = frame.querySelector('.sb-num');
+    if (sbInput) sbInput.addEventListener('input', () => {
+      const q = sbInput.value.trim().toLowerCase();
+      feed.querySelectorAll('.sb-hit').forEach(n => n.classList.remove('sb-hit'));
+      if (!q) { feed.classList.remove('searching'); if (sbNum) sbNum.textContent = '0 条命中'; return; }
+      feed.classList.add('searching');
+      let n = 0;
+      feed.querySelectorAll(':scope > *').forEach(child => {
+        if ((child.textContent || '').toLowerCase().includes(q)) { child.classList.add('sb-hit'); n++; }
+      });
+      if (sbNum) sbNum.textContent = `${n} 条命中`;
+    });
+
+    /* tasks button — toggle drawer / switch to tasks pane */
+    frame.querySelector('.hdr [data-action="tasks"]')?.addEventListener('click', () => {
+      if (isDrawerOpen() && activePane() === 'tasks') {
+        drawer.classList.add('hide');
+      } else {
+        drawer.classList.remove('hide');
+        switchPane('tasks');
+      }
+      syncDrawerButtons();
+    });
+
+    /* thread button — toggle drawer / switch to thread pane */
+    frame.querySelector('.hdr [data-action="thread"]')?.addEventListener('click', () => {
+      if (isDrawerOpen() && activePane() === 'thread') {
+        drawer.classList.add('hide');
+      } else {
+        drawer.classList.remove('hide');
+        switchPane('thread');
+      }
+      syncDrawerButtons();
+    });
+
+    /* drawer ✕ — close drawer + sync */
+    frame.querySelector('.dr-close')?.addEventListener('click', () => {
+      drawer.classList.add('hide');
+      syncDrawerButtons();
+    });
+
+    /* more (⋯) — DingTalk-style centered group settings modal */
+    const moreBtn = frame.querySelector('.hdr [data-action="more"]');
+    const gset    = frame.querySelector('[data-overlay="gset"]');
+    const closeGset = () => { gset?.classList.remove('open'); moreBtn?.classList.remove('active'); };
+    const openGset  = () => { gset?.classList.add('open');    moreBtn?.classList.add('active');    };
+    if (moreBtn && gset) {
+      moreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        gset.classList.contains('open') ? closeGset() : openGset();
+      });
+      gset.addEventListener('click', (e) => {
+        /* click on backdrop (overlay itself) — close */
+        if (e.target === gset) { closeGset(); return; }
+        /* ✕ close button */
+        if (e.target.closest('[data-act="close"]')) { closeGset(); return; }
+        /* toggle rows — flip switch, keep modal open */
+        const swRow = e.target.closest('.gset-row-sw');
+        if (swRow) { swRow.classList.toggle('on'); return; }
+      });
+      frame.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeGset(); });
+    }
+
+    /* Esc inside search input closes the search bar */
+    if (sbInput) sbInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeSearch();
+    });
+
+    /* task checkbox toggle (visual only — flip done state on click) */
+    frame.querySelectorAll('.dr-task .chk').forEach(chk => {
+      chk.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const task = chk.closest('.dr-task');
+        task.classList.toggle('done');
+        if (task.classList.contains('done') && !chk.querySelector('svg')) {
+          chk.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+        }
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

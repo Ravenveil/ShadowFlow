@@ -11,9 +11,13 @@ import { useI18n } from '../common/i18n';
 
 type AnchorId = 'differentiation' | 'onchain' | 'roadmap';
 
+// 2026-08-11: 链上证据/钱包区块停用（0G 相关组件先不用，代码保留）。
+// 恢复时把 SHOW_CHAIN_SECTIONS 置 true，并恢复 NAV_ITEMS 中的 onchain 项。
+const SHOW_CHAIN_SECTIONS = false;
+
 const NAV_ITEMS: { id: AnchorId; label: string }[] = [
   { id: 'differentiation', label: '差异化对比' },
-  { id: 'onchain', label: '链上证据' },
+  ...(SHOW_CHAIN_SECTIONS ? [{ id: 'onchain' as AnchorId, label: '链上证据' }] : []),
   { id: 'roadmap', label: '路线图' },
 ];
 
@@ -317,10 +321,10 @@ export default function AboutPage() {
   return (
     <>
       <Helmet>
-        <title>About ShadowFlow — 差异化对比 · 链上证据 · 路线图</title>
+        <title>About ShadowFlow — 差异化对比 · 路线图</title>
         <meta
           name="description"
-          content="ShadowFlow 与 9 大同类工具的差异化对比、0G 链上轨迹证据、三阶段产品路线图与学术背书。"
+          content="ShadowFlow 与 9 大同类工具的差异化对比、运行轨迹证据、三阶段产品路线图与学术背书。"
         />
       </Helmet>
 
@@ -380,7 +384,7 @@ export default function AboutPage() {
             不是又一个 LLM Wrapper。
           </h1>
           <p className="text-sm text-sf-fg3 max-w-xl mx-auto leading-relaxed">
-            Runtime Contract + 0G 全栈原生 + INFT 路线图三栈闭环——这是我们与同类产品的根本差异。
+            Runtime Contract + 图式多 Agent 协作 + 经验沉淀三栈闭环——这是我们与同类产品的根本差异。
           </p>
         </div>
 
@@ -396,7 +400,7 @@ export default function AboutPage() {
             <span id="diff-heading">9 条差异化对比</span>
           </SectionHeading>
           <p className="text-sm text-sf-fg3 mb-8 leading-relaxed max-w-2xl">
-            ShadowFlow 不与这些工具竞争，而是在它们的上方新增了一层：多 Agent 协作制度设计 + 链上传承。
+            ShadowFlow 不与这些工具竞争，而是在它们的上方新增了一层：多 Agent 协作制度设计 + 经验沉淀传承。
           </p>
 
           <VsCompareAccordion />
@@ -413,7 +417,7 @@ export default function AboutPage() {
               />
             </div>
             <p className="text-xs text-sf-fg4 text-center mt-2">
-              横轴：单 Agent → 多 Agent 协作 · 纵轴：有状态本地 → 链上可传承
+              横轴：单 Agent → 多 Agent 协作 · 纵轴：有状态本地 → 经验可传承
             </p>
           </div>
         </section>
@@ -423,19 +427,21 @@ export default function AboutPage() {
           <div className="border-t" style={{ borderColor: 'var(--t-border)' }} />
         </div>
 
-        {/* ──────────────────────────────── SECTION 2: ON-CHAIN EVIDENCE ──────────────────────────────── */}
+        {/* ──────────────────────────────── SECTION 2: ON-CHAIN EVIDENCE ────────────────────────────────
+            2026-08-11: 整段停用（SHOW_CHAIN_SECTIONS=false），代码保留。 */}
+        {SHOW_CHAIN_SECTIONS && (
         <section
           id="onchain"
           ref={(el) => { sectionRefs.current.onchain = el; }}
           className="mx-auto max-w-4xl px-6 py-12 scroll-mt-16"
           aria-labelledby="onchain-heading"
         >
-          <SectionEyebrow text="0G on-chain evidence" />
+          <SectionEyebrow text="on-chain evidence" />
           <SectionHeading>
             <span id="onchain-heading">链上轨迹证据</span>
           </SectionHeading>
           <p className="text-sm text-sf-fg3 mb-8 leading-relaxed max-w-2xl">
-            真实运行轨迹已永久存储于 0G Storage 网络。点击 CID 可在 0G Explorer 独立验证数据完整性——不是 mock，是真实可查的链上数据。
+            真实运行轨迹持久化存储，点击 CID 可独立验证数据完整性——不是 mock，是真实可查的数据。
           </p>
 
           <OnChainEvidence />
@@ -444,6 +450,7 @@ export default function AboutPage() {
               4 KPI cards + recent on-chain activity table. Pure UI, additive. */}
           <WalletStatsPanel />
         </section>
+        )}
 
         {/* ──────────────────────────────── DIVIDER ──────────────────────────────── */}
         <div className="mx-auto max-w-4xl px-6">
@@ -462,7 +469,7 @@ export default function AboutPage() {
             <span id="roadmap-heading">三阶段路线图</span>
           </SectionHeading>
           <p className="text-sm text-sf-fg3 mb-8 leading-relaxed max-w-2xl">
-            Phase 1 已交付（当前版本）。Phase 2 目标桌面化 + 实时化。Phase 3 实现 INFT 链上知识资产市场。
+            Phase 1 已交付（当前版本）。Phase 2 目标桌面化 + 实时化。Phase 3 实现知识资产市场。
           </p>
 
           <RoadmapTimeline />
@@ -517,7 +524,7 @@ export default function AboutPage() {
           style={{ borderColor: 'var(--t-border)' }}
         >
           <p className="font-mono text-[10px] text-sf-fg5">
-            ShadowFlow · Ravenveil · MIT · 0G Hackathon 2026
+            ShadowFlow · Ravenveil · MIT · 2026
           </p>
         </footer>
       </div>

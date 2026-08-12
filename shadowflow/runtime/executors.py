@@ -126,6 +126,75 @@ class UnknownExecutorError(Exception):
         )
 
 
+class AgentTeamsExecutor(BaseExecutor):
+    """AgentTeams collaboration executor (LE-2 seam; design §6).
+
+    Maps a loop-body dispatch to an AgentTeams Manager-Worker team. Real dispatch
+    applies a Team CR to the agentteams-controller and bridges Matrix room events;
+    that requires a Kubernetes cluster + Matrix client and is gated behind
+    ``dry_run=False``. In dry_run (default) it returns a deterministic team plan so
+    loop workflows are executable and testable without those backends.
+    """
+
+    kind = "agentteams"
+
+    async def execute(self, config: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+        provider = config.get("provider", "default")
+        dry_run = bool(config.get("dry_run", True))
+        step_input = (payload or {}).get("step_input", {}) if isinstance(payload, dict) else {}
+        goal = (payload or {}).get("prompt") or step_input.get("goal") or step_input.get("message") or ""
+        team_spec = {
+            "provider": provider,
+            "runtime": config.get("runtime", "hermes"),
+            "workers": config.get("workers", []),
+            "skills": config.get("skills", []),
+        }
+        if not dry_run:
+            # Real dispatch: render Team CR + dispatch the goal to a Matrix room (the team's
+            # collaboration hub). Requires MATRIX_HOMESERVER (+ MATRIX_USER/MATRIX_PASSWORD or
+            # MATRIX_TOKEN); without it we fail fast rather than silently stub.
+            from shadowflow.runtime.agentteams_bridge import MatrixClient, render_team_cr
+
+            homeserver = os.environ.get("MATRIX_HOMESERVER")
+            if not homeserver:
+                raise RuntimeError(
+                    "AgentTeams real dispatch requires MATRIX_HOMESERVER "
+                    "(+ MATRIX_USER/MATRIX_PASSWORD or MATRIX_TOKEN). Set executor.dry_run=true "
+                    "for the deterministic stub. See loop-engine-design.md §6."
+                )
+            team_cr = render_team_cr(team_spec)
+            client = MatrixClient(
+                homeserver,
+                os.environ.get("MATRIX_USER", "shadowflow"),
+                password=os.environ.get("MATRIX_PASSWORD"),
+                token=os.environ.get("MATRIX_TOKEN"),
+            )
+            if client.token is None:
+                await client.login()
+            room_id = await client.create_room(name=f"shadowflow-{provider}", topic=str(goal)[:200])
+            event_id = await client.send_message(room_id, str(goal))
+            return {
+                "message": f"[agentteams:{provider}] dispatched team to room {room_id}",
+                "handled_by": f"agentteams:{provider}",
+                "node_type": "agentteams",
+                "team_spec": team_spec,
+                "team_cr": team_cr,
+                "matrix_room": room_id,
+                "dispatched_event": event_id,
+                "dry_run": False,
+                "result": f"delegated goal to AgentTeams team [{provider}] in room {room_id}",
+            }
+        return {
+            "message": f"[agentteams:{provider}] dry-run team plan for: {goal}",
+            "handled_by": f"agentteams:{provider}",
+            "node_type": "agentteams",
+            "team_spec": team_spec,
+            "matrix_room": f"!dryrun-{provider}:matrix.local",
+            "dry_run": True,
+            "result": f"(dry-run) delegated goal to AgentTeams team [{provider}]",
+        }
+
+
 class AgentExecutor(ABC):
     """Universal agent plugin contract (Story 2.1 / AR47).
 
@@ -614,7 +683,7 @@ class ExecutorRegistry:
         self._executors: Dict[str, BaseExecutor] = {}
         # (kind, provider) → AgentExecutor for the new plugin contract
         self._agent_executors: Dict[Tuple[str, str], AgentExecutor] = {}
-        for executor in executors or [CliExecutor(), ApiExecutor()]:
+        for executor in executors or [CliExecutor(), ApiExecutor(), AgentTeamsExecutor()]:
             self.register(executor)
         # Auto-register preset-driven CliAgentExecutors
         for agent_executor in _build_preset_cli_executors():

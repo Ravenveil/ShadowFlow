@@ -202,9 +202,12 @@ export function ArchivePage({ apiBase = '' }: { apiBase?: string } = {}): JSX.El
         <button type="button" data-testid="export-json" onClick={downloadJson} disabled={!trajectory} style={{ padding: '6px 10px', fontSize: 12, background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 8, cursor: trajectory ? 'pointer' : 'not-allowed', color: 'var(--t-fg-2)' }}>
           Download JSON
         </button>
-        <button type="button" data-testid="export-0g" disabled title="Configure 0G key in Settings first" style={{ padding: '6px 10px', fontSize: 12, background: 'var(--t-panel)', border: '1px solid rgba(160,122,255,0.3)', borderRadius: 8, cursor: 'not-allowed', color: 'var(--t-fg-5)' }}>
-          Upload to 0G Storage
+        {/* 2026-08-11: 链上上传按钮停用（0G 组件先不用，代码保留可回退） */}
+        {false && (
+        <button type="button" data-testid="export-0g" disabled title="Configure storage key in Settings first" style={{ padding: '6px 10px', fontSize: 12, background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 8, cursor: 'not-allowed', color: 'var(--t-fg-5)' }}>
+          Upload to Storage
         </button>
+        )}
 
         <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700 }}>Metrics</div>
         {selectedRun ? (

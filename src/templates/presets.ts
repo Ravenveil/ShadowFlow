@@ -52,7 +52,7 @@ export const PRESETS: Record<string, TemplatePreset> = {
       en: 'Planner decomposes the paper, LitReviewer + DataScout run in parallel, SectionWriter drafts under Advisor\'s veto. Reject twice → retry_gate opens a gap-analysis loop.',
       zh: 'Planner 拆解论文，LitReviewer + DataScout 并行调研，SectionWriter 在 Advisor 审查下起草。两次 reject → retry_gate 触发 gap-analysis 循环。',
     },
-    stats: { agents: 6, edges: 7, services: 'claude · 0g · serp', retryDepth: 3 },
+    stats: { agents: 6, edges: 7, services: 'claude · glm · serp', retryDepth: 3 },
     nodes: [
       { id: 'tpl_planner',      nodeType: 'planner',    position: { x: 80,   y: 240 },
         overrideName: { en: 'Planner',       zh: '选题官' },
@@ -161,7 +161,7 @@ export const PRESETS: Record<string, TemplatePreset> = {
       en: 'PM plans, UserResearch validates, Engineer builds, Designer polishes, GTM launches — fan-out execution, parallel delivery.',
       zh: 'PM 规划、用研验证、工程实现、设计打磨、GTM 上线。Fan-out 并行交付。',
     },
-    stats: { agents: 5, edges: 5, services: 'claude · 0g', retryDepth: 2 },
+    stats: { agents: 5, edges: 5, services: 'claude · glm', retryDepth: 2 },
     nodes: [
       { id: 'tpl_pm',          nodeType: 'planner',    position: { x: 100, y: 240 },
         overrideName: { en: 'PM',           zh: '产品经理' }, overrideIcon: '📋', overrideColor: '#A855F7',

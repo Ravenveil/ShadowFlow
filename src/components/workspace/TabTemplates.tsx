@@ -81,7 +81,7 @@ export function TabTemplates({ onNavigateToTeams }: TabTemplatesProps = {}) {
           </div>
           <div className="fb-input" style={{ width: 240 }}>
             <span className="x-icon" style={{ width: 14, height: 14, display: 'flex' }}>{FBIcons.search}</span>
-            <span style={{ color: 'var(--t-fg-4)' }}>搜模板 / 粘贴 0G CID</span>
+            <span style={{ color: 'var(--t-fg-4)' }}>搜模板 / 粘贴 CID</span>
           </div>
           <button className="fb-btn fb-btn-ghost" style={{ fontSize: 12 }} onClick={() => setImportOpen(true)}>从 CID 导入</button>
           <button className="fb-btn fb-btn-primary" style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 12 }} onClick={() => setPublishOpen(true)}>
@@ -218,7 +218,7 @@ export function TabTemplates({ onNavigateToTeams }: TabTemplatesProps = {}) {
           ))}
         </div>
 
-        <div style={{ padding: '0 16px 8px' }}><span className="fb-label">0G 血统 · lineage</span></div>
+        <div style={{ padding: '0 16px 8px' }}><span className="fb-label">版本血统 · lineage</span></div>
         <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 0 }}>
           {[
             { v: 'v3.1', who: '你 · fork', t: '09:14', d: 'L2-strict + retry_gate 3', cur: true },
@@ -267,7 +267,7 @@ export function TabTemplates({ onNavigateToTeams }: TabTemplatesProps = {}) {
       </div>
 
       {importOpen && <ImportTemplateModal onClose={() => setImportOpen(false)} />}
-      {publishOpen && <SimpleModal title="发布我的模板" hint="（开发中）选择当前 team，提交到 0G 后会获得 CID" placeholder="academic-paper-fork-v1" onClose={() => setPublishOpen(false)} />}
+      {publishOpen && <SimpleModal title="发布我的模板" hint="（开发中）选择当前 team，提交后会获得 CID" placeholder="academic-paper-fork-v1" onClose={() => setPublishOpen(false)} />}
       {dagPreviewOpen && <DagPreviewModal onClose={() => setDagPreviewOpen(false)} />}
 
       {forkErr && (
@@ -314,7 +314,7 @@ function ImportTemplateModal({ onClose }: { onClose: () => void }) {
         width: 540, background: 'var(--skin-panel)', border: '1px solid var(--t-border)',
         borderRadius: 10, padding: 20, boxShadow: 'var(--shadow-pop)',
       }}>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>从 0G CID 导入模板</div>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>从 CID 导入模板</div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--t-fg-4)', marginBottom: 12 }}>
           POST /templates/custom · 粘贴模板 YAML 内容
         </div>

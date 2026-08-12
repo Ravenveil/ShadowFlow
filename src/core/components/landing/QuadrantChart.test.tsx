@@ -30,7 +30,7 @@ describe('QuadrantChart', () => {
     const allText = container.textContent ?? '';
     expect(allText).toContain('单 Agent');
     expect(allText).toContain('多 Agent 协作');
-    expect(allText).toContain('链上可传承');
+    expect(allText).toContain('经验可传承');
     expect(allText).toContain('有状态本地');
   });
 });

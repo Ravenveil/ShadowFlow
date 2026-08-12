@@ -162,7 +162,7 @@ function IdentityCard({ user }: { user: UserProfile }) {
   const rows: Array<{ label: string; value: string; mono?: boolean; copyable?: boolean }> = [
     { label: 'DID',                          value: user.did ?? '—',                 mono: true },
     { label: t('settings.profile.fieldAddress'),  value: user.address,               mono: true, copyable: true },
-    { label: t('settings.profile.fieldNetwork'),  value: '0G Galileo Testnet · Chain 16600' },
+    { label: t('settings.profile.fieldNetwork'),  value: 'ShadowFlow Local · 本地优先' },
     { label: t('settings.profile.fieldAccountType'), value: 'Ethereum · EIP-4361 SIWE' },
   ];
 

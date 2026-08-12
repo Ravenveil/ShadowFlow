@@ -20,7 +20,7 @@ const PRODUCTS: Product[] = [
 
 const QUADRANT_LABELS: { text: string; x: number; y: number }[] = [
   { text: '低代码编排\n本地托管', x: 25, y: 25 },
-  { text: '真协作团队\n链上资产', x: 75, y: 25 },
+  { text: '真协作团队\n经验资产', x: 75, y: 25 },
   { text: '单体对话\n本地会话', x: 25, y: 75 },
   { text: '多 Agent 框架\n本地部署', x: 75, y: 75 },
 ];
@@ -45,11 +45,11 @@ export default function QuadrantChart({ className, style }: { className?: string
       className={className}
       style={style}
       role="img"
-      aria-label="ShadowFlow 四维象限定位图：横轴从单 Agent 到多 Agent 协作，纵轴从有状态本地到链上可传承"
+      aria-label="ShadowFlow 四维象限定位图：横轴从单 Agent 到多 Agent 协作，纵轴从有状态本地到经验可传承"
     >
       {/* quadrant background fills */}
-      <rect x={PAD} y={PAD} width={CX - PAD} height={CY - PAD} fill="#A855F710" rx={4} />
-      <rect x={CX} y={PAD} width={W - PAD - CX} height={CY - PAD} fill="#A855F720" rx={4} />
+      <rect x={PAD} y={PAD} width={CX - PAD} height={CY - PAD} fill="#3B82F610" rx={4} />
+      <rect x={CX} y={PAD} width={W - PAD - CX} height={CY - PAD} fill="#3B82F620" rx={4} />
       <rect x={PAD} y={CY} width={CX - PAD} height={H - PAD - CY} fill="#FFFFFF05" rx={4} />
       <rect x={CX} y={CY} width={W - PAD - CX} height={H - PAD - CY} fill="#FFFFFF08" rx={4} />
 
@@ -65,7 +65,7 @@ export default function QuadrantChart({ className, style }: { className?: string
         多 Agent 协作
       </text>
       <text x={CX + 6} y={PAD + 12} fill="#71717A" fontSize={10} fontFamily="var(--font-mono)">
-        链上可传承
+        经验可传承
       </text>
       <text x={CX + 6} y={H - PAD - 4} fill="#71717A" fontSize={10} fontFamily="var(--font-mono)">
         有状态本地

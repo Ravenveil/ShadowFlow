@@ -99,7 +99,7 @@ export function StartLanding({
       <div className="sl-inner">
         {/* 渐变 hero */}
         <div className="sl-hero">
-          <div className="sl-badge"><Sparkles size={11} aria-hidden style={{ color: 'var(--t-accent)' }} /> SHADOWFLOW · 0G-NATIVE</div>
+          <div className="sl-badge"><Sparkles size={11} aria-hidden style={{ color: 'var(--t-accent)' }} /> SHADOWFLOW · MULTI-AGENT</div>
           <h1 className="sl-title">今天要做什么？</h1>
           <p className="sl-sub">
             一句话目标 · 一份 skill · 一个模板都行 — ShadowFlow 把它孵成一支

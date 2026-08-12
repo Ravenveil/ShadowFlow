@@ -147,7 +147,7 @@ export function Toolbar() {
     <div className="h-16 bg-white border-b border-gray-200 flex items-center px-4 gap-4">
       {/* Logo */}
       <div className="flex items-center gap-2 pr-4 border-r border-gray-200">
-        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+        <div className="w-8 h-8 bg-gradient-to-br from-sky-400 to-blue-600 rounded-lg flex items-center justify-center">
           <span className="text-white font-bold text-sm">AG</span>
         </div>
         <div>

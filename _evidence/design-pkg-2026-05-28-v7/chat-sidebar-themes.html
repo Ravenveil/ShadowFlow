@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ShadowFlow · Chat Sidebar · 日夜两态</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; padding: 0; font-family: var(--font-sans); background: #1a1817; min-height: 100vh; }
+  body { padding: 48px 32px; }
+
+  .stage {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: start;
+  }
+
+  .stage-head {
+    grid-column: 1 / -1;
+    color: #d8d5cb;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  .stage-head h1 { font-size: 18px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .stage-head p  { font-size: 11px; font-family: var(--font-mono); color: #8e8c84; margin: 0; letter-spacing: 0.04em; }
+
+  .col-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #8e8c84;
+    margin-bottom: 12px;
+  }
+  .col-label .swatch { width: 10px; height: 10px; border-radius: 2px; }
+
+  /* Sidebar panel — uses [data-theme] tokens */
+  .sidebar {
+    width: 100%;
+    height: 720px;
+    background: var(--bg-elev-1);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    color: var(--fg-1);
+    box-shadow: 0 24px 60px -20px rgba(0,0,0,.5);
+  }
+
+  /* Workspace bar */
+  .ws-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .ws-tile {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 13px;
+    letter-spacing: -0.02em;
+  }
+  .ws-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: var(--fg-1); }
+  .ws-meta { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); letter-spacing: 0.04em; }
+  .ws-kbd  { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); padding: 2px 5px; border: 1px solid var(--border); border-radius: 4px; }
+
+  /* Search */
+  .search {
+    margin: 10px 14px 4px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 11px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 9px;
+  }
+  .search .glyph { color: var(--fg-4); font-size: 12px; }
+  .search .ph    { font-size: 12px; color: var(--fg-4); }
+
+  /* List */
+  .list { flex: 1; overflow: hidden; padding: 6px 0 0; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    align-items: center;
+    column-gap: 12px;
+    padding: 9px 14px;
+    cursor: pointer;
+    position: relative;
+    transition: background var(--dur-1) var(--ease-out);
+  }
+  .row:hover { background: color-mix(in oklab, var(--fg-1) 4%, transparent); }
+  .row.active {
+    background: color-mix(in oklab, var(--accent) 12%, transparent);
+  }
+  .row.active::before {
+    content: "";
+    position: absolute; left: 0; top: 6px; bottom: 6px;
+    width: 2.5px; border-radius: 0 2px 2px 0;
+    background: var(--accent);
+  }
+
+  /* Avatars */
+  .avatar {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800;
+    position: relative;
+    flex-shrink: 0;
+    letter-spacing: -0.02em;
+  }
+  .avatar.team {
+    background: var(--bg-elev-3);
+    border: 1px solid var(--border);
+    color: var(--fg-2);
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+  .avatar.team .count {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+  }
+  .avatar.dm  { color: #ffffff; font-size: 15px; }
+  .avatar .status-dot {
+    position: absolute;
+    bottom: -2px; right: -2px;
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-elev-1);
+  }
+
+  /* Row body */
+  .row-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .row-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--fg-1);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .row.active .row-name { font-weight: 700; }
+  .row-tag {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    background: var(--bg-elev-3);
+    color: var(--fg-3);
+    border: 1px solid var(--border-subtle);
+  }
+  .row-tag.live {
+    background: color-mix(in oklab, var(--status-run) 18%, transparent);
+    border-color: color-mix(in oklab, var(--status-run) 40%, transparent);
+    color: var(--status-run);
+  }
+
+  /* Right meta */
+  .row-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+  .row-time {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--fg-4);
+    letter-spacing: 0.02em;
+  }
+  .row.active .row-time { color: var(--accent); }
+  .badge {
+    min-width: 18px; height: 18px;
+    padding: 0 6px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 10px;
+    font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 0 color-mix(in oklab, var(--accent) 80%, black);
+  }
+  .badge.muted {
+    background: var(--bg-elev-3);
+    color: var(--fg-3);
+    box-shadow: none;
+    font-weight: 700;
+  }
+
+  /* Section divider — minimal, a single hairline between groups */
+  .divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 14px;
+  }
+
+  /* Footer */
+  .footer {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-elev-1);
+  }
+  .footer .me {
+    width: 30px; height: 30px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  .footer .me-info { flex: 1; min-width: 0; }
+  .footer .me-name { font-size: 12px; font-weight: 600; color: var(--fg-1); }
+  .footer .me-meta { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); margin-top: 1px; }
+  .footer .gear { color: var(--fg-3); font-size: 13px; cursor: pointer; }
+
+  /* status colors (dots) */
+  .dot-run    { background: var(--status-run); box-shadow: 0 0 0 0 color-mix(in oklab, var(--status-run) 50%, transparent); animation: pulse 1.6s var(--ease-out) infinite; }
+  .dot-warn   { background: var(--status-warn); }
+  .dot-idle   { background: var(--status-idle); }
+  .dot-ok     { background: var(--status-ok); }
+
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--status-run) 50%, transparent); }
+    70%  { box-shadow: 0 0 0 6px color-mix(in oklab, var(--status-run) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--status-run) 0%, transparent); }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="stage-head">
+    <h1>Chat Sidebar · 日夜两态</h1>
+    <p>团队 + 直接对话合并为单一时间线 · 像普通社交软件那样</p>
+  </div>
+
+  <!-- ========= DARK ========= -->
+  <div>
+    <div class="col-label">
+      <span class="swatch" style="background:#0A0A0A;border:1px solid rgba(255,255,255,.15);"></span>
+      <span>黑夜 · Dark</span>
+    </div>
+    <div class="sidebar" data-theme="dark" id="sb-dark"></div>
+  </div>
+
+  <!-- ========= LIGHT ========= -->
+  <div>
+    <div class="col-label">
+      <span class="swatch" style="background:#faf9f5;border:1px solid rgba(0,0,0,.15);"></span>
+      <span>白天 · Light</span>
+    </div>
+    <div class="sidebar" data-theme="light" id="sb-light"></div>
+  </div>
+</div>
+
+<script>
+/* Single merged conversation feed — sorted by recency, like WeChat/Telegram.
+   Teams and DMs are interleaved; only avatar shape distinguishes them. */
+const FEED = [
+  { kind:'team', glyph:'×5', name:'论文深读小队', time:'09:21', unread:2, live:true,  active:true  },
+  { kind:'dm',   glyph:'读', name:'读读',         time:'09:18', unread:1, color:'#A855F7', status:'warn' },
+  { kind:'team', glyph:'×4', name:'文献综述',     time:'昨天',  unread:5, status:'warn' },
+  { kind:'dm',   glyph:'阿', name:'阿批',         time:'昨天',  unread:0, color:'#F59E0B' },
+  { kind:'team', glyph:'×3', name:'Rebuttal 起草', time:'昨天',  unread:0 },
+  { kind:'dm',   glyph:'查', name:'查查',         time:'周一',  unread:0, color:'#22D3EE' },
+  { kind:'dm',   glyph:'写', name:'写写',         time:'周一',  unread:0, color:'#EF4444' },
+  { kind:'dm',   glyph:'重', name:'重重',         time:'上周',  unread:0, color:'#10B981' },
+];
+
+const STATUS_BORDER_FOR = {
+  warn: 'var(--status-warn)',
+  run:  'var(--status-run)',
+  ok:   'var(--status-ok)',
+  idle: 'var(--status-idle)',
+};
+
+function rowHTML(item) {
+  const isTeam = item.kind === 'team';
+  const avatar = isTeam
+    ? `<div class="avatar team">
+         <span class="count">${item.glyph}</span>
+         ${item.live ? `<span class="status-dot dot-run"></span>` : item.status ? `<span class="status-dot dot-${item.status}"></span>` : ''}
+       </div>`
+    : `<div class="avatar dm" style="background:${item.color}">
+         ${item.glyph}
+         ${item.status ? `<span class="status-dot dot-${item.status}"></span>` : ''}
+       </div>`;
+
+  const liveTag = item.live ? `<span class="row-tag live">LIVE</span>` : '';
+  const badge = item.unread > 0
+    ? `<span class="badge">${item.unread}</span>`
+    : `<span class="badge muted" style="visibility:hidden">0</span>`;
+
+  return `
+    <div class="row ${item.active ? 'active' : ''}">
+      ${avatar}
+      <div class="row-body">
+        <div class="row-name">
+          <span>${item.name}</span>
+          ${liveTag}
+        </div>
+      </div>
+      <div class="row-meta">
+        <span class="row-time">${item.time}</span>
+        ${badge}
+      </div>
+    </div>
+  `;
+}
+
+function paint(target) {
+  const rows = FEED.map(rowHTML).join('');
+  target.innerHTML = `
+    <div class="ws-bar">
+      <div class="ws-tile">P</div>
+      <div style="flex:1;min-width:0">
+        <div class="ws-name">paper-lab</div>
+        <div class="ws-meta">WORKSPACE · 7 AGENTS · 3 TEAMS</div>
+      </div>
+      <span class="ws-kbd">⌘K</span>
+    </div>
+
+    <div class="search">
+      <span class="glyph">⌕</span>
+      <span class="ph">搜索 agent / team / 消息</span>
+    </div>
+
+    <div class="list">
+      ${rows}
+    </div>
+
+    <div class="footer">
+      <div class="me">张</div>
+      <div class="me-info">
+        <div class="me-name">张明 · Owner</div>
+        <div class="me-meta">monthly · $42.18 / $200</div>
+      </div>
+      <span class="gear">⚙</span>
+    </div>
+  `;
+}
+
+paint(document.getElementById('sb-dark'));
+paint(document.getElementById('sb-light'));
+</script>
+</body>
+</html>

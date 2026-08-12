@@ -132,13 +132,8 @@ const STATIC_NAV_GROUPS: NavGroup[] = [
       { id: 'mcp-integrations',        label: 'MCP Integrations' },
     ],
   },
-  {
-    group: '0G',
-    items: [
-      { id: 'wallet',  label: 'Wallet' },
-      { id: 'onchain', label: 'On-chain', comingSoon: true },
-    ],
-  },
+  // 2026-08-11: 「0G」设置分组停用（0G 组件先不用，代码保留可回退）。
+  // 原条目：wallet（WalletSection，/api/wallet/*）、onchain（占位）。
   {
     group: 'Memory',
     items: [
@@ -191,13 +186,7 @@ function buildNavGroups(t: (key: string) => string): NavGroup[] {
         { id: 'mcp-integrations',        label: t('settings.navMcp') },
       ],
     },
-    {
-      group: t('settings.group0G'),
-      items: [
-        { id: 'wallet',  label: t('settings.navWallet') },
-        { id: 'onchain', label: t('settings.navOnchain'), comingSoon: true },
-      ],
-    },
+    // 2026-08-11: 0G 分组停用，同步移除 i18n 组（wallet/onchain 条目代码保留）
     {
       group: t('settings.groupMemory'),
       items: [
@@ -217,7 +206,7 @@ function buildNavGroups(t: (key: string) => string): NavGroup[] {
   ];
 }
 
-const DEFAULT_SECTION: SectionId = 'wallet';
+const DEFAULT_SECTION: SectionId = 'welcome';
 
 function readHashSection(): SectionId | null {
   if (typeof window === 'undefined') return null;

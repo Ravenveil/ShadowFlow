@@ -118,7 +118,7 @@ export function WalletLoginModal({ open, onClose }: WalletLoginModalProps) {
           Sign in to ShadowFlow
         </h2>
         <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--t-fg-4)' }}>
-          0G Chain (testnet · Chain ID 16600)
+          钱包签名登录 · SIWE (EIP-4361)
         </p>
 
         {/* Wallet button */}

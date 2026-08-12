@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ShadowFlow · Platform Quad-View · Hi-fi</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+  html, body { margin: 0; padding: 0; color: var(--fg-1); font-family: var(--font-sans); transition: background var(--dur-2) var(--ease-out); }
+  html[data-theme="dark"], html[data-theme="dark"] body { background: #050507; }
+  html[data-theme="light"], html[data-theme="light"] body { background: #e8e4d8; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="shared.jsx"></script>
+<script type="text/babel" src="board-chat.jsx"></script>
+<script type="text/babel" src="board-workspace.jsx"></script>
+<script type="text/babel" src="board-team.jsx"></script>
+<script type="text/babel" src="board-catalog.jsx"></script>
+<script type="text/babel">
+const TWEAKS_DEFAULT = /*EDITMODE-BEGIN*/{
+  "theme": "dark",
+  "skin": "amber",
+  "density": "compact",
+  "showLive": true,
+  "highlightApproval": true
+}/*EDITMODE-END*/;
+
+function App() {
+  const [tweaks, setTweak] = useTweaks(TWEAKS_DEFAULT);
+
+  // apply theme (day / night)
+  React.useEffect(() => {
+    document.documentElement.setAttribute('data-theme', tweaks.theme === 'light' ? 'light' : 'dark');
+  }, [tweaks.theme]);
+
+  // apply skin
+  React.useEffect(() => {
+    const root = document.documentElement;
+    if (tweaks.skin === "purple") {
+      root.style.setProperty('--skin-accent', '#A855F7');
+      root.style.setProperty('--accent-bright', '#D8B4FE');
+      root.style.setProperty('--bg-accent-tint', '#140A1F');
+    } else if (tweaks.skin === "indigo") {
+      root.style.setProperty('--skin-accent', '#6366F1');
+      root.style.setProperty('--accent-bright', '#C7D2FE');
+      root.style.setProperty('--bg-accent-tint', '#0E0F22');
+    } else if (tweaks.skin === "cyan") {
+      root.style.setProperty('--skin-accent', '#22D3EE');
+      root.style.setProperty('--accent-bright', '#A5F3FC');
+      root.style.setProperty('--bg-accent-tint', '#08191E');
+    } else if (tweaks.skin === "amber") {
+      root.style.setProperty('--skin-accent', '#F59E0B');
+      root.style.setProperty('--accent-bright', '#FCD34D');
+      root.style.setProperty('--bg-accent-tint', '#1F1810');
+    }
+  }, [tweaks.skin]);
+
+  return (
+    <>
+      <DesignCanvas title="ShadowFlow · Platform Quad-View" subtitle="Hackathon Demo · Hi-fi 主路径稿件 · Role-first 心智">
+        <DCSection id="p0" title="P0 · Hackathon Demo 主路径" subtitle="评委 30 秒看懂的两屏">
+          <DCArtboard id="chat" label="P0a · Chat（钉钉式三列 + Approval Gate）" width={1480} height={920}>
+            <BoardChat tweaks={tweaks}/>
+          </DCArtboard>
+          <DCArtboard id="workspace" label="P0b · Workspace 切换器组件状态" width={1100} height={920}>
+            <BoardWorkspace tweaks={tweaks}/>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="p1" title="P1 · Team Detail" subtitle="成员 + Policy Matrix 三态 + 工作流 DAG">
+          <DCArtboard id="team" label="P1 · Team Detail · 成员 / Policy Matrix / 工作流" width={1480} height={1040}>
+            <BoardTeam tweaks={tweaks}/>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="p2" title="P2 · Agent Catalog + Quick Hire" subtitle="Role-first 1 号命题：招人=给名字+灵魂→上岗">
+          <DCArtboard id="catalog" label="P2 · Agent Catalog + Quick Hire 弹窗" width={1480} height={1040}>
+            <BoardCatalog tweaks={tweaks}/>
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection label="主题">
+          <TweakRadio
+            label="模式"
+            value={tweaks.theme}
+            onChange={v => setTweak('theme', v)}
+            options={[
+              {value: 'dark',  label: '🌙 黑夜'},
+              {value: 'light', label: '☀ 白天'},
+            ]}/>
+          <TweakRadio
+            label="Skin"
+            value={tweaks.skin}
+            onChange={v => setTweak('skin', v)}
+            options={[
+              {value: 'purple', label: 'Purple'},
+              {value: 'indigo', label: 'Indigo'},
+              {value: 'cyan', label: 'Cyan'},
+              {value: 'amber', label: 'Amber'},
+            ]}/>
+          <TweakRadio
+            label="密度"
+            value={tweaks.density}
+            onChange={v => setTweak('density', v)}
+            options={[
+              {value: 'comfortable', label: '舒适'},
+              {value: 'compact', label: '紧凑'},
+            ]}/>
+        </TweakSection>
+        <TweakSection label="状态">
+          <TweakToggle label="显示 LIVE / running 状态" value={tweaks.showLive} onChange={v => setTweak('showLive', v)}/>
+          <TweakToggle label="Approval Gate 高亮拦截瞬间" value={tweaks.highlightApproval} onChange={v => setTweak('highlightApproval', v)}/>
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

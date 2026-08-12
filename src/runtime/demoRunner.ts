@@ -116,7 +116,7 @@ Retry gate evaluated for "${goal}":
 
     case 'checkpoint':
       return `${header}
-Checkpoint saved for "${goal}" — state pinned to 0G (cid://bafy…${Math.random().toString(36).slice(2, 8)}).`;
+Checkpoint saved for "${goal}" — snapshot pinned to local store (ckpt-${Math.random().toString(36).slice(2, 8)}).`;
 
     default:
       return `${header}

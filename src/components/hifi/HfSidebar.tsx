@@ -47,16 +47,16 @@ interface HfSidebarProps {
 }
 
 function rowStyle(on: boolean): CSSProperties {
+  // UI 3.0（2026-08-11）：背景迁出 inline，由 .ui30-navrow 类提供 hover/active 态
   return {
     display: 'flex',
     alignItems: 'center',
     gap: 10,
     padding: '7px 12px',
     marginBottom: 1,
-    borderRadius: 7,
+    borderRadius: 10,
     cursor: 'pointer',
     position: 'relative',
-    background: on ? 'var(--t-accent-tint)' : 'transparent',
     textDecoration: 'none',
     color: 'inherit',
   };
@@ -125,7 +125,8 @@ function UserCard({ user, status, collapsed, onOpen }: UserCardProps) {
   return (
     <div
       onClick={onOpen}
-      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', marginTop: 6, background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 8, cursor: 'pointer' }}
+      className="ui30-usercard"
+      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', marginTop: 6, background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', borderRadius: 10, cursor: 'pointer' }}
     >
       <div style={{ width: 24, height: 24, borderRadius: '50%', background: avatarBg, color: 'var(--t-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 10, flexShrink: 0, opacity: isLoading ? 0.5 : 1 }}>
         {isLoading ? '…' : guestIcon ? <HfUserIcon size={13} strokeWidth={2} /> : glyph}
@@ -219,6 +220,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
       {!collapsed && (
         <div
           onClick={openQuickSwitcher}
+          className="ui30-searchpill"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -227,7 +229,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
             marginBottom: 14,
             background: 'var(--t-bg)',
             border: '1px solid var(--t-border)',
-            borderRadius: 8,
+            borderRadius: 10,
             cursor: 'pointer',
           }}
         >
@@ -275,6 +277,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
               to={it.to}
               title={label}
               data-testid={`sidenav-${it.key}`}
+              className={`ui30-navrow${on ? ' on' : ''}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -282,8 +285,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
                 position: 'relative',
                 padding: '9px 0',
                 marginBottom: 1,
-                borderRadius: 7,
-                background: on ? 'var(--t-accent-tint)' : 'transparent',
+                borderRadius: 10,
                 textDecoration: 'none',
                 color: 'inherit',
               }}
@@ -316,7 +318,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
           );
         }
         return (
-          <Link key={it.key} to={it.to} data-testid={`sidenav-${it.key}`} style={rowStyle(on)}>
+          <Link key={it.key} to={it.to} data-testid={`sidenav-${it.key}`} className={`ui30-navrow${on ? ' on' : ''}`} style={rowStyle(on)}>
             {on && <span style={activeBar} />}
             <span
               style={{
@@ -366,6 +368,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
           <Link
             to="/settings"
             title={t('shell.settings')}
+            className={`ui30-navrow${active === 'settings' ? ' on' : ''}`}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -373,8 +376,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
               position: 'relative',
               padding: '9px 0',
               marginBottom: 6,
-              borderRadius: 7,
-              background: active === 'settings' ? 'var(--t-accent-tint)' : 'transparent',
+              borderRadius: 10,
               textDecoration: 'none',
               color: 'inherit',
             }}
@@ -385,7 +387,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
             </span>
           </Link>
         ) : (
-          <Link to="/settings" style={rowStyle(active === 'settings')}>
+          <Link to="/settings" className={`ui30-navrow${active === 'settings' ? ' on' : ''}`} style={rowStyle(active === 'settings')}>
             {active === 'settings' && <span style={activeBar} />}
             <span
               style={{

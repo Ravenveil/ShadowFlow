@@ -91,7 +91,7 @@ export function DesignSystemPicker({ value, onChange, skillId }: DesignSystemPic
               relative inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all
               ${
                 selected
-                  ? 'border-purple-500/60 bg-purple-500/15 text-white'
+                  ? 'border-blue-500/60 bg-blue-500/15 text-white'
                   : 'border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:text-white/90'
               }
             `}
@@ -100,7 +100,7 @@ export function DesignSystemPicker({ value, onChange, skillId }: DesignSystemPic
               aria-hidden="true"
               className={`
                 inline-block h-3 w-3 rounded-full border
-                ${selected ? 'border-purple-300 bg-purple-400' : 'border-white/30 bg-transparent'}
+                ${selected ? 'border-blue-300 bg-blue-400' : 'border-white/30 bg-transparent'}
               `}
             />
             <span className="font-medium">{ds.name}</span>

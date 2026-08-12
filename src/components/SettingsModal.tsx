@@ -71,13 +71,8 @@ const NAV_GROUPS: NavGroup[] = [
       { id: 'mcp',          label: 'MCP 集成' },
     ],
   },
-  {
-    label: '0G',
-    items: [
-      { id: 'zerog',   label: '钱包 · 0G Storage' },
-      { id: 'onchain', label: '链上', soon: true },
-    ],
-  },
+  // 2026-08-11: 「0G」设置分组整体停用（0G 组件先不用，代码保留可回退）。
+  // 原条目：zerog（钱包 · 0G Storage）→ ZerogStorageSection；onchain（链上, soon）。
   {
     label: '记忆',
     items: [

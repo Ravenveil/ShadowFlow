@@ -1,0 +1,303 @@
+{
+  "main": {
+    "id": "f744e203d2c295bf",
+    "type": "split",
+    "children": [
+      {
+        "id": "53ac16ae3fe5f779",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ff2078627d04b08a",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "prompt  前端重构 1.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "prompt  前端重构 1"
+            }
+          },
+          {
+            "id": "1419adb199a7c6ff",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "prompt  前端重构 1.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "prompt  前端重构 1"
+            }
+          },
+          {
+            "id": "73ae3b01fae6e097",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "prompt 前端重构竞品参考.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "prompt 前端重构竞品参考"
+            }
+          },
+          {
+            "id": "21a17b20a9eddc1c",
+            "type": "leaf",
+            "state": {
+              "type": "pdf",
+              "state": {
+                "file": "多智能体框架研究/参赛手册.pdf"
+              },
+              "icon": "lucide-file-text",
+              "title": "参赛手册"
+            }
+          },
+          {
+            "id": "a6e2a691fb13d5b8",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "多智能体框架研究/公众号文章/答案藏在压缩里.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "答案藏在压缩里"
+            }
+          },
+          {
+            "id": "f8460231b23a18d8",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "日常prompt/0731.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "0731"
+            }
+          }
+        ],
+        "currentTab": 4
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "9998f807b238b62a",
+    "type": "split",
+    "children": [
+      {
+        "id": "ec11a28d94834a20",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "76bf0b0b9abbfeb1",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "ecd214ec2ac3dc73",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "f8091a62038bab72",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "d2d3868b1bc19d41",
+    "type": "split",
+    "children": [
+      {
+        "id": "d30dc5cc0de7e8fb",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "2c89dda1570d732f",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "反向链接"
+            }
+          },
+          {
+            "id": "e5b1b855616fa76b",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "出链"
+            }
+          },
+          {
+            "id": "e2509018c94198c8",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "33138739bdaa5dd0",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "0c215d9fcf64448e",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "大纲"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:新建数据库": false
+    }
+  },
+  "active": "76bf0b0b9abbfeb1",
+  "lastOpenFiles": [
+    "vite.config.ts.timestamp-1786521288090-10862d58ac82a8.mjs",
+    "多智能体框架研究/参赛材料/~$ShadowFlow-GOAI初赛方案-v2.pptx",
+    "多智能体框架研究/参赛材料/__pycache__/build_pptx.cpython-312.pyc",
+    "多智能体框架研究/参赛材料/__pycache__",
+    "多智能体框架研究/参赛材料/preview",
+    "多智能体框架研究/参赛材料/export_png.py",
+    "多智能体框架研究/参赛材料/ShadowFlow-GOAI初赛方案-v2.pptx",
+    "多智能体框架研究/参赛材料/build_pptx.py",
+    "shadowflow/memory/__pycache__/base.cpython-311.pyc",
+    "shadowflow/runtime/__pycache__/lightrag_adapter.cpython-311.pyc",
+    "tests/__pycache__/test_memory_api.cpython-311-pytest-9.1.1.pyc",
+    "多智能体框架研究/参赛材料/unpacked/docProps/thumbnail.jpeg",
+    "docs/architecture/loop-engine-progress.md",
+    "多智能体框架研究/论文/README.md",
+    "多智能体框架研究/公众号文章/把知识库堆到 50 万份后，1994 年的老算法.md",
+    "多智能体框架研究/公众号文章/答案藏在压缩里.md",
+    "多智能体框架研究/公众号文章/第3期：分形的必要性——为什么深度不是越深越好.md",
+    "多智能体框架研究/公众号文章/Agent 的自进化 OPD 来了！清华大作.md",
+    "多智能体框架研究/公众号文章/Science One 框架：让 AI 科研可验证的「证据链」方案.md",
+    "多智能体框架研究/公众号文章/检索增强生成的图基础模型.md",
+    "多智能体框架研究/公众号文章/Stanford 提出 LLM-as-a-Verifier：把验证变成第四条 Scaling 轴，用概率分数挑出真正正确的 Agent 轨迹.md",
+    "多智能体框架研究/公众号文章/Cura 1T：让医疗模型从失败轨迹反推下一轮训练数据.md",
+    "日常prompt/prompt  前端重构.md",
+    "docs/architecture/loop-engine-design.md",
+    "日常prompt/prompt  前端重构 1.md",
+    "日常prompt/prompt 前端三栏布局重构方案.md",
+    "日常prompt/prompt 前端重构竞品参考.md",
+    "日常prompt/日常 prompt.md",
+    "日常prompt/0811.md",
+    "日常prompt/0731.md",
+    "多智能体框架研究/参赛材料/作品简介.md",
+    "docs/pm/项目现状与参赛路径-2026-08-11.md",
+    "多智能体框架研究/Graph Engineering 多Agent 生产化组织架构，真的学不完....md",
+    "多智能体框架研究/赛事赛道.md",
+    "日常prompt/prompt626.md",
+    "prompt 前端重构竞品参考.md",
+    "prompt626.md",
+    "_evidence/hi-plain-conversation.png",
+    "_evidence/inbox-cleaned.png",
+    "_evidence/landing-composer-skillgrid.png",
+    "_evidence/flat-workspace-and-role-drawer.png",
+    "_evidence/agent-workspace-switchback-ok.png",
+    "_evidence/agent-workspace-canvas-fixed.png",
+    "_evidence/agent-workspace-rightpane-personal.png",
+    "_evidence/g3-02-personal-run-inline-sidebar-kept.png",
+    "_evidence/g3-01-personal-centered-composer.png"
+  ]
+}

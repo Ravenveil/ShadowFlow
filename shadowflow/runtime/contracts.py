@@ -153,8 +153,8 @@ class WorkflowDefinition(BaseModel):
                 if not isinstance(executor_config, dict):
                     raise ValueError(f"node {node.id} executor must be an object")
                 executor_kind = executor_config.get("kind")
-                if executor_kind not in {"cli", "api"}:
-                    raise ValueError(f"node {node.id} executor.kind must be one of ['api', 'cli']")
+                if executor_kind not in {"cli", "api", "agentteams"}:
+                    raise ValueError(f"node {node.id} executor.kind must be one of ['api', 'cli', 'agentteams']")
 
             delegated_config = node.config.get("delegated")
             if delegated_config is not None:
@@ -222,6 +222,35 @@ class WorkflowDefinition(BaseModel):
             if invalid_roles:
                 raise ValueError(
                     f"policy_matrix references undeclared role ids: {sorted(invalid_roles)}"
+                )
+
+        for node in self.nodes:
+            if node.type != "control.loop":
+                continue
+
+            subgraph = node.config.get("subgraph")
+            if not isinstance(subgraph, list) or not subgraph:
+                raise ValueError(
+                    f"loop node {node.id} must define a non-empty config.subgraph list"
+                )
+            if len(subgraph) != len(set(subgraph)):
+                raise ValueError(f"loop node {node.id} subgraph entries must be unique")
+            for body_id in subgraph:
+                if not isinstance(body_id, str) or body_id not in node_ids:
+                    raise ValueError(
+                        f"loop node {node.id} subgraph references unknown node: {body_id}"
+                    )
+                if body_id == node.id:
+                    raise ValueError(f"loop node {node.id} subgraph cannot reference itself")
+            if node.config.get("kind") not in {"while", "foreach", "until_converge", "fixed_count"}:
+                raise ValueError(
+                    f"loop node {node.id} config.kind must be one of "
+                    "['while','foreach','until_converge','fixed_count']"
+                )
+            budget = node.config.get("iteration_budget", 1)
+            if not isinstance(budget, int) or isinstance(budget, bool) or budget <= 0:
+                raise ValueError(
+                    f"loop node {node.id} config.iteration_budget must be a positive integer"
                 )
 
         return self
@@ -316,12 +345,73 @@ class ArtifactRef(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+# ---------------------------------------------------------------------------
+# Loop Engine contracts (LE-0) — cybernetic loop / PDCA fractal / iterations.
+# Fills RUNTIME_CONTRACT_SPEC §5.3 (有限循环/重试节点) and the "真正循环恢复"
+# gap listed under WORKFLOW_SCHEMA §6. See docs/architecture/loop-engine-design.md.
+# ---------------------------------------------------------------------------
+
+LoopKind = Literal["while", "foreach", "until_converge", "fixed_count"]
+
+
+class LoopFrame(BaseModel):
+    """One frame on the loop call-stack; pushed when a control.loop body iterates."""
+
+    loop_id: str
+    index: int = 0
+    local_visited: List[str] = Field(default_factory=list)
+    setpoint: Dict[str, Any] = Field(default_factory=dict)
+    iteration_ref: Optional[str] = None
+    depth: int = 0
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class IterationRecord(BaseModel):
+    """Evidence for a single loop iteration — the atom of causal attribution."""
+
+    iteration_id: str = Field(default_factory=lambda: f"iter-{uuid4().hex[:12]}")
+    loop_id: str
+    run_id: str
+    index: int
+    evidence: Dict[str, Any] = Field(default_factory=dict)
+    changed_factors: List[str] = Field(default_factory=list)
+    metrics: Dict[str, float] = Field(default_factory=dict)
+    verifier_score: Optional[float] = None
+    validated_by: Optional[str] = None
+    trace_id: str = ""
+    created_at: datetime = Field(default_factory=utc_now)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class LoopRecord(BaseModel):
+    """First-class loop object; parent_loop_id forms the fractal nesting tree."""
+
+    loop_id: str = Field(default_factory=lambda: f"loop-{uuid4().hex[:12]}")
+    run_id: str
+    parent_loop_id: Optional[str] = None
+    kind: LoopKind = "until_converge"
+    setpoint: Dict[str, Any] = Field(default_factory=dict)
+    # Invariant (enforced by the LE-1 runtime write path): iteration_count ==
+    # len(iterations). Kept as a denormalized summary for cheap reads; the
+    # runtime must append to `iterations` and bump `iteration_count` in the
+    # same atomic write so causal-attribution / convergence consumers never
+    # see a stale count.
+    iteration_count: int = 0
+    iterations: List[IterationRecord] = Field(default_factory=list)
+    status: Literal["running", "converged", "oscillating", "diverged", "halted"] = "running"
+    sensor_binding: Optional[str] = None
+    actuator_binding: Optional[str] = None
+    depth: int = 0
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
 class CheckpointState(BaseModel):
     current_node_id: Optional[str] = None
     next_node_id: Optional[str] = None
     visited_nodes: List[str] = Field(default_factory=list)
     last_output: Dict[str, Any] = Field(default_factory=dict)
     state: Dict[str, Any] = Field(default_factory=dict)
+    loop_frames: List[LoopFrame] = Field(default_factory=list)
 
 
 class CheckpointRef(BaseModel):
@@ -348,6 +438,8 @@ class StepRecord(BaseModel):
     error: Optional[Dict[str, Any]] = None
     started_at: datetime
     ended_at: Optional[datetime] = None
+    attempt_number: int = 1
+    iteration_ref: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -764,6 +856,7 @@ class AgentCapabilities(BaseModel):
     approval_required: bool = False
     session_resume: bool = False
     tool_calls: bool = False
+    loop_capable: bool = False
 
 
 class AgentTask(BaseModel):

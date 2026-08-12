@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ShadowFlow · 三模块合并 — 4 个标题分割方案对比</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+:root {
+  --bg:#0a0a0a; --bg-1:#111; --bg-2:#161616; --bg-3:#1c1c1c; --bg-4:#222;
+  --fg-1:#f5f5f5; --fg-2:#d4d4d4; --fg-3:#a3a3a3; --fg-4:#737373; --fg-5:#525252;
+  --border:rgba(255,255,255,.08); --border-s:rgba(255,255,255,.16); --border-x:rgba(255,255,255,.04);
+  --accent:#A855F7; --accent-b:#C084FC; --accent-tint:rgba(168,85,247,.12);
+  --ok:#34d399; --ok-tint:rgba(52,211,153,.1);
+  --run:#60a5fa; --run-tint:rgba(96,165,250,.1);
+  --mono:'JetBrains Mono','IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+}
+*,*::before,*::after { box-sizing:border-box; }
+html,body { background:var(--bg);color:var(--fg-1);font-family:var(--sans);margin:0;padding:0; }
+body { padding:48px 0 96px;-webkit-font-smoothing:antialiased; }
+
+/* page header */
+.page-hd { max-width:920px;margin:0 auto 48px;padding:0 24px; }
+.page-hd h1 { font-size:24px;font-weight:700;letter-spacing:-.02em;margin:0 0 6px; }
+.page-hd .sub { font-size:13.5px;color:var(--fg-3);line-height:1.55;max-width:640px; }
+.page-hd .sub b { color:var(--fg-1);font-weight:600; }
+.page-hd .meta { display:flex;gap:24px;margin-top:14px;font-family:var(--mono);font-size:10.5px;color:var(--fg-4);letter-spacing:.05em;text-transform:uppercase; }
+.page-hd .meta b { color:var(--accent-b);font-weight:700; }
+
+/* variant section */
+.variant { max-width:920px;margin:0 auto 64px;padding:0 24px; }
+.v-hd { display:flex;align-items:baseline;gap:14px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px dashed rgba(255,255,255,.12); }
+.v-num { font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent-b);letter-spacing:.14em; }
+.v-name { font-size:16px;font-weight:700;letter-spacing:-.01em; }
+.v-blurb { font-size:12.5px;color:var(--fg-3);margin-left:auto; }
+.v-host { background:#0e0e0e;border:1px solid var(--border);border-radius:14px;padding:24px;position:relative; }
+.v-foot { margin-top:14px;padding:12px 14px;background:rgba(255,255,255,.025);border:1px dashed rgba(255,255,255,.1);border-radius:9px;display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:11.5px;line-height:1.5; }
+.v-foot .pros,.v-foot .cons { display:flex;flex-direction:column;gap:4px; }
+.v-foot .hd { font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-4);margin-bottom:4px; }
+.v-foot .pros .hd { color:var(--ok); }
+.v-foot .cons .hd { color:#f87171; }
+
+/* ====================================================================
+   shared module pieces — used by all variants
+   ==================================================================== */
+
+/* persona block (system prompt) */
+.m-persona-body { font-family:var(--mono);font-size:11.2px;line-height:1.7;color:var(--fg-2);white-space:pre-wrap; }
+.m-persona-body .cmt { color:var(--fg-4); }
+.m-persona-body .kw  { color:var(--accent-b);font-weight:600; }
+.m-persona-body .str { color:var(--ok); }
+
+/* I/O contract */
+.m-io { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+.m-io-cell { padding:9px 11px;background:rgba(255,255,255,.025);border:1px dashed rgba(255,255,255,.1);border-radius:6px; }
+.m-io-lbl { font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-4);margin-bottom:4px; }
+.m-io-val { font-family:var(--mono);font-size:11px;color:var(--fg-2); }
+
+/* model 4-grid */
+.m-model { display:grid;grid-template-columns:repeat(4,1fr);gap:10px; }
+.m-model-cell { padding:8px 10px;background:rgba(255,255,255,.025);border:1px dashed rgba(255,255,255,.08);border-radius:6px; }
+.m-model-key { font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-4);margin-bottom:3px; }
+.m-model-val { font-family:var(--mono);font-size:12px;font-weight:600;color:var(--fg-1); }
+
+/* tools */
+.m-tools-head { display:flex;align-items:center;gap:8px;margin:14px 0 8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-4); }
+.m-tools-head b { color:var(--accent-b);font-weight:700; }
+.m-tools { display:grid;grid-template-columns:1fr 1fr;gap:6px; }
+.m-tool { padding:7px 10px;border-radius:6px;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px; }
+.m-tool.sel { background:var(--accent-tint);border:1px solid rgba(168,85,247,.35);color:var(--fg-1); }
+.m-tool.run { background:var(--run-tint);border:1px solid rgba(96,165,250,.35);color:var(--fg-1); }
+.m-tool.cand { background:transparent;border:1px dashed rgba(255,255,255,.12);color:var(--fg-3); }
+.m-tool .name { flex:1; }
+.m-tool .tag { font-size:8.5px;font-weight:700;letter-spacing:.1em;padding:2px 5px;border-radius:3px;text-transform:uppercase; }
+.m-tool.sel .tag { background:rgba(168,85,247,.25);color:var(--accent-b); }
+.m-tool.run .tag { background:rgba(96,165,250,.25);color:var(--run); }
+
+/* memory */
+.m-memory-row { display:grid;grid-template-columns:1fr auto auto;gap:14px;padding:9px 11px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:11.2px;align-items:center; }
+.m-memory-ns { color:var(--fg-1); }
+.m-memory-scope { font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:rgba(255,255,255,.05);color:var(--fg-3); }
+.m-memory-perm { font-size:10px;color:var(--fg-4); }
+
+/* edit chip — reusable */
+.edit-chip { font-family:var(--mono);font-size:10px;color:var(--fg-4);padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer; }
+.edit-chip:hover { color:var(--fg-1);border-color:var(--border-s);background:rgba(255,255,255,.04); }
+.src-tag { font-family:var(--mono);font-size:9.5px;color:var(--fg-5); }
+
+
+/* ====================================================================
+   VARIANT 1 · 整卡 + 行内段标题（section header bar）
+   one outer card; each section starts with a full-width header row
+   ==================================================================== */
+.v1-card { background:#0a0a0a;border:1px solid var(--border);border-radius:11px;overflow:hidden; }
+.v1-sec-hd {
+  display:flex;align-items:center;gap:12px;
+  padding:14px 18px;background:rgba(255,255,255,.025);
+  border-top:1px solid var(--border);
+}
+.v1-card > .v1-sec-hd:first-child { border-top:0; }
+.v1-sec-num { font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--accent-b);text-transform:uppercase;padding:3px 8px;background:var(--accent-tint);border-radius:4px; }
+.v1-sec-title { font-size:14px;font-weight:600;letter-spacing:-.005em; }
+.v1-sec-sub { font-family:var(--mono);font-size:10.5px;color:var(--fg-4);margin-left:4px; }
+.v1-sec-meta { margin-left:auto;display:flex;align-items:center;gap:10px; }
+.v1-sec-body { padding:16px 18px 18px; }
+
+
+/* ====================================================================
+   VARIANT 2 · 左竖线 + 挂在脊柱上的标题（spine rail）
+   left vertical rail with section pills attached to it
+   ==================================================================== */
+.v2-card { position:relative;padding-left:90px; }
+.v2-card::before {
+  content:"";position:absolute;left:24px;top:14px;bottom:14px;width:1px;
+  background:linear-gradient(to bottom,transparent 0,var(--border-s) 8%,var(--border-s) 92%,transparent 100%);
+}
+.v2-sec { position:relative;margin-bottom:22px; }
+.v2-sec:last-child { margin-bottom:0; }
+.v2-sec-pin {
+  position:absolute;left:-90px;top:0;width:80px;
+  display:flex;flex-direction:column;align-items:flex-start;gap:4px;
+  padding-top:4px;
+}
+.v2-sec-pin::after {
+  content:"";position:absolute;right:-67px;top:9px;width:54px;height:1px;
+  background:linear-gradient(to right,var(--border-s),transparent);
+}
+.v2-sec-pin .num { font-family:var(--mono);font-size:10px;font-weight:700;color:var(--accent-b);letter-spacing:.14em; }
+.v2-sec-pin .ttl { font-size:14px;font-weight:600;color:var(--fg-1);letter-spacing:-.005em; }
+.v2-sec-pin .sub { font-family:var(--mono);font-size:9.5px;color:var(--fg-4);letter-spacing:.06em; }
+.v2-sec-body {
+  background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:9px;
+  padding:14px 16px;
+}
+.v2-sec-head { display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px dashed rgba(255,255,255,.1); }
+
+
+/* ====================================================================
+   VARIANT 3 · 分割线上浮动 chip（floating chip on cut)
+   inline horizontal divider with a centered/left-anchored title chip
+   ==================================================================== */
+.v3-card { background:transparent; }
+.v3-sec { position:relative;padding:18px 0 0;margin-top:18px; }
+.v3-sec:first-child { margin-top:0;padding-top:0; }
+.v3-sec:not(:first-child)::before {
+  content:"";position:absolute;left:0;right:0;top:0;height:1px;
+  background:linear-gradient(to right,transparent,var(--border-s) 80px,var(--border-s) calc(100% - 20px),transparent);
+}
+.v3-sec-chip {
+  position:relative;margin-bottom:14px;display:inline-flex;align-items:center;gap:8px;
+  padding:6px 14px 6px 10px;
+  background:#111;border:1px solid var(--border-s);border-radius:999px;
+  z-index:2;
+}
+.v3-sec:not(:first-child) > .v3-sec-chip { margin-top:-30px;background:var(--bg); }
+.v3-sec-chip .num { font-family:var(--mono);font-size:10px;font-weight:700;color:var(--accent-b);letter-spacing:.14em;padding:2px 7px;background:var(--accent-tint);border-radius:99px; }
+.v3-sec-chip .ttl { font-size:13.5px;font-weight:600;letter-spacing:-.005em; }
+.v3-sec-chip .sub { font-family:var(--mono);font-size:10px;color:var(--fg-4);margin-left:2px; }
+.v3-sec-meta { float:right;margin-top:-44px;display:flex;align-items:center;gap:10px;padding:6px 0; }
+
+
+/* ====================================================================
+   VARIANT 4 · 左侧大号数字版口（numbered gutter）
+   wide left gutter with a huge ghosted numeral + vertical title
+   ==================================================================== */
+.v4-card { display:flex;flex-direction:column;gap:1px;background:var(--border); }
+.v4-sec { display:grid;grid-template-columns:120px 1fr;background:#0a0a0a; }
+.v4-sec-gut {
+  position:relative;padding:18px 16px 18px 4px;
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;
+  min-height:120px;
+}
+.v4-sec-num {
+  font-family:var(--mono);font-size:56px;font-weight:800;line-height:.85;
+  color:var(--accent);opacity:.9;letter-spacing:-.04em;
+}
+.v4-sec-lbl {
+  display:flex;flex-direction:column;gap:3px;
+}
+.v4-sec-lbl .ttl { font-size:14px;font-weight:700;color:var(--fg-1);letter-spacing:-.005em; }
+.v4-sec-lbl .sub { font-family:var(--mono);font-size:10px;color:var(--fg-4);letter-spacing:.06em; }
+.v4-sec-body { padding:18px 18px 20px;min-width:0; }
+.v4-sec-head { display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px dashed rgba(255,255,255,.1); }
+
+/* shared head metadata row used by 2/3/4 */
+.head-name { font-size:13.5px;font-weight:600;color:var(--fg-1); }
+.head-sub  { font-family:var(--mono);font-size:10.5px;color:var(--fg-4); }
+.head-spacer { flex:1; }
+
+/* light frame demo (just the dark for now to keep file small) */
+</style>
+</head>
+<body>
+
+<div class="page-hd">
+  <h1>三模块合并 · 4 个标题分割方案</h1>
+  <div class="sub">
+    把 <b>角色 / 模型 · 工具 / 记忆</b> 合到一张连续的"管理卡"里，但靠不同的<b>标题分割形态</b>把节奏分开。
+    同一份 Reader agent 数据跑 4 个变体——选你最对眼的那个，我再回到 run-session-v3 应用。
+  </div>
+  <div class="meta">
+    <span>agent · <b>R Reader</b></span>
+    <span>state · <b>running</b></span>
+    <span>step · <b>tools 4/8</b></span>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     VARIANT 1 · 行内段头 bar
+     ════════════════════════════════════════════════════════════════ -->
+<section class="variant">
+  <div class="v-hd">
+    <span class="v-num">V1</span>
+    <span class="v-name">整卡 · 行内段头 bar</span>
+    <span class="v-blurb">一张大卡，每段顶部一条灰底 header bar 当分割</span>
+  </div>
+
+  <div class="v-host">
+    <div class="v1-card">
+
+      <!-- 01 角色 -->
+      <div class="v1-sec-hd">
+        <span class="v1-sec-num">01</span>
+        <span class="v1-sec-title">角色</span>
+        <span class="v1-sec-sub">· reader.persona</span>
+        <span class="v1-sec-meta">
+          <span class="src-tag">from reader.skill.yaml#persona</span>
+          <button class="edit-chip">✎ 编辑</button>
+        </span>
+      </div>
+      <div class="v1-sec-body">
+        <div class="m-persona-body"><span class="cmt"># reader.persona — 论文深读 Agent</span>
+你是一名学术论文<span class="kw">深读</span> Agent。任务：
+  · 抽取 abstract / methodology / key_findings
+  · 引用必须包含 <span class="str">"DOI"</span> 或 <span class="str">"arXiv-id"</span>
+  · 失败 ≤ 3 次必须升级到 <span class="kw">critic.retry_gate</span></div>
+        <div style="height:14px"></div>
+        <div class="m-io">
+          <div class="m-io-cell">
+            <div class="m-io-lbl">→ Input · expects</div>
+            <div class="m-io-val">paper_url · arxiv_id? · focus_sections[]</div>
+          </div>
+          <div class="m-io-cell">
+            <div class="m-io-lbl">→ Output · produces</div>
+            <div class="m-io-val">{ abstract, methodology, key_findings, citations[] }</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 02 模型 · 工具 -->
+      <div class="v1-sec-hd">
+        <span class="v1-sec-num">02</span>
+        <span class="v1-sec-title">模型 · 工具</span>
+        <span class="v1-sec-sub">· reader.kit</span>
+        <span class="v1-sec-meta">
+          <span class="src-tag">from reader.skill.yaml#model</span>
+          <button class="edit-chip">✎ 编辑</button>
+        </span>
+      </div>
+      <div class="v1-sec-body">
+        <div class="m-model">
+          <div class="m-model-cell"><div class="m-model-key">model</div><div class="m-model-val">claude-sonnet-4</div></div>
+          <div class="m-model-cell"><div class="m-model-key">temperature</div><div class="m-model-val">0.2</div></div>
+          <div class="m-model-cell"><div class="m-model-key">max_tokens</div><div class="m-model-val">8192</div></div>
+          <div class="m-model-cell"><div class="m-model-key">context</div><div class="m-model-val">200k</div></div>
+        </div>
+        <div class="m-tools-head">
+          <span>Tools <b>4</b> selected · <b>4</b> candidates</span>
+          <span style="margin-left:auto;color:var(--fg-5)">点击候选加入 · 拖拽排序</span>
+        </div>
+        <div class="m-tools">
+          <div class="m-tool sel"><span class="name">pdf_extract</span><span class="tag">sel</span></div>
+          <div class="m-tool sel"><span class="name">arxiv_search</span><span class="tag">sel</span></div>
+          <div class="m-tool sel"><span class="name">semanticscholar_lookup</span><span class="tag">sel</span></div>
+          <div class="m-tool run"><span class="name">crossref_doi</span><span class="tag">adding</span></div>
+          <div class="m-tool cand"><span class="name">openreview_fetch</span><span class="tag">+</span></div>
+          <div class="m-tool cand"><span class="name">google_scholar</span><span class="tag">+</span></div>
+          <div class="m-tool cand"><span class="name">pubmed_search</span><span class="tag">+</span></div>
+          <div class="m-tool cand"><span class="name">core_api</span><span class="tag">+</span></div>
+        </div>
+      </div>
+
+      <!-- 03 记忆 -->
+      <div class="v1-sec-hd">
+        <span class="v1-sec-num">03</span>
+        <span class="v1-sec-title">记忆</span>
+        <span class="v1-sec-sub">· reader.memory</span>
+        <span class="v1-sec-meta">
+          <span class="src-tag">from reader.skill.yaml#memory</span>
+          <button class="edit-chip">✎ 编辑</button>
+        </span>
+      </div>
+      <div class="v1-sec-body" style="display:flex;flex-direction:column;gap:6px;">
+        <div class="m-memory-row"><span class="m-memory-ns">papers.vec</span><span class="m-memory-scope">session</span><span class="m-memory-perm">rw</span></div>
+        <div class="m-memory-row"><span class="m-memory-ns">scratch.run</span><span class="m-memory-scope">run</span><span class="m-memory-perm">rw</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="v-foot">
+    <div class="pros">
+      <div class="hd">Pros</div>
+      <div>· 最像「一张卡」，外框唯一</div>
+      <div>· 段头 bar 视觉权重明确，扫读快</div>
+      <div>· 段头可承载 metadata + 编辑按钮</div>
+    </div>
+    <div class="cons">
+      <div class="hd">Cons</div>
+      <div>· header bar 占垂直空间，长卡更长</div>
+      <div>· bar 太"控制台"，少一点编辑感</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     VARIANT 2 · 左竖线 + 挂式标题（spine rail）
+     ════════════════════════════════════════════════════════════════ -->
+<section class="variant">
+  <div class="v-hd">
+    <span class="v-num">V2</span>
+    <span class="v-name">脊柱式 · 左竖线 + 挂式标题</span>
+    <span class="v-blurb">左侧一条贯穿的细线，三个标题挂在线上</span>
+  </div>
+
+  <div class="v-host">
+    <div class="v2-card">
+
+      <!-- 01 角色 -->
+      <div class="v2-sec">
+        <div class="v2-sec-pin">
+          <span class="num">01</span>
+          <span class="ttl">角色</span>
+          <span class="sub">PROFILE</span>
+        </div>
+        <div class="v2-sec-body">
+          <div class="v2-sec-head">
+            <span class="head-name">reader.persona</span>
+            <span class="head-sub">· 632 tokens · cached</span>
+            <span class="head-spacer"></span>
+            <span class="src-tag">from reader.skill.yaml#persona</span>
+            <button class="edit-chip">✎ 编辑</button>
+          </div>
+          <div class="m-persona-body"><span class="cmt"># reader.persona — 论文深读 Agent</span>
+你是一名学术论文<span class="kw">深读</span> Agent。任务：
+  · 抽取 abstract / methodology / key_findings
+  · 引用必须包含 <span class="str">"DOI"</span> 或 <span class="str">"arXiv-id"</span>
+  · 失败 ≤ 3 次必须升级到 <span class="kw">critic.retry_gate</span></div>
+          <div style="height:14px"></div>
+          <div class="m-io">
+            <div class="m-io-cell">
+              <div class="m-io-lbl">→ Input · expects</div>
+              <div class="m-io-val">paper_url · arxiv_id? · focus_sections[]</div>
+            </div>
+            <div class="m-io-cell">
+              <div class="m-io-lbl">→ Output · produces</div>
+              <div class="m-io-val">{ abstract, methodology, key_findings, citations[] }</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 02 模型 · 工具 -->
+      <div class="v2-sec">
+        <div class="v2-sec-pin">
+          <span class="num">02</span>
+          <span class="ttl">模型 · 工具</span>
+          <span class="sub">KIT</span>
+        </div>
+        <div class="v2-sec-body">
+          <div class="v2-sec-head">
+            <span class="head-name">reader.kit</span>
+            <span class="head-sub">· model + tools</span>
+            <span class="head-spacer"></span>
+            <span class="src-tag">from reader.skill.yaml#kit</span>
+            <button class="edit-chip">✎ 编辑</button>
+          </div>
+          <div class="m-model">
+            <div class="m-model-cell"><div class="m-model-key">model</div><div class="m-model-val">claude-sonnet-4</div></div>
+            <div class="m-model-cell"><div class="m-model-key">temperature</div><div class="m-model-val">0.2</div></div>
+            <div class="m-model-cell"><div class="m-model-key">max_tokens</div><div class="m-model-val">8192</div></div>
+            <div class="m-model-cell"><div class="m-model-key">context</div><div class="m-model-val">200k</div></div>
+          </div>
+          <div class="m-tools-head">
+            <span>Tools <b>4</b> selected · <b>4</b> candidates</span>
+            <span style="margin-left:auto;color:var(--fg-5)">点击候选加入 · 拖拽排序</span>
+          </div>
+          <div class="m-tools">
+            <div class="m-tool sel"><span class="name">pdf_extract</span><span class="tag">sel</span></div>
+            <div class="m-tool sel"><span class="name">arxiv_search</span><span class="tag">sel</span></div>
+            <div class="m-tool sel"><span class="name">semanticscholar_lookup</span><span class="tag">sel</span></div>
+            <div class="m-tool run"><span class="name">crossref_doi</span><span class="tag">adding</span></div>
+            <div class="m-tool cand"><span class="name">openreview_fetch</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">google_scholar</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">pubmed_search</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">core_api</span><span class="tag">+</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 03 记忆 -->
+      <div class="v2-sec">
+        <div class="v2-sec-pin">
+          <span class="num">03</span>
+          <span class="ttl">记忆</span>
+          <span class="sub">MEMORY</span>
+        </div>
+        <div class="v2-sec-body">
+          <div class="v2-sec-head">
+            <span class="head-name">reader.memory</span>
+            <span class="head-sub">· 2 namespaces</span>
+            <span class="head-spacer"></span>
+            <span class="src-tag">from reader.skill.yaml#memory</span>
+            <button class="edit-chip">✎ 编辑</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div class="m-memory-row"><span class="m-memory-ns">papers.vec</span><span class="m-memory-scope">session</span><span class="m-memory-perm">rw</span></div>
+            <div class="m-memory-row"><span class="m-memory-ns">scratch.run</span><span class="m-memory-scope">run</span><span class="m-memory-perm">rw</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="v-foot">
+    <div class="pros">
+      <div class="hd">Pros</div>
+      <div>· 三段强连接感，"同一份档案"心智</div>
+      <div>· 标题在外、组件本体干净</div>
+      <div>· 类似 Notion sidebar，编辑感强</div>
+    </div>
+    <div class="cons">
+      <div class="hd">Cons</div>
+      <div>· 占左侧 80–90px 宽，主体被挤窄</div>
+      <div>· 移动端窄屏要重排</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     VARIANT 3 · 分割线上浮动 chip（floating chip on cut）
+     ════════════════════════════════════════════════════════════════ -->
+<section class="variant">
+  <div class="v-hd">
+    <span class="v-num">V3</span>
+    <span class="v-name">浮动 chip · 跨在分割线上</span>
+    <span class="v-blurb">细横线分隔，标题做成 chip 浮在线的中间</span>
+  </div>
+
+  <div class="v-host">
+    <div class="v3-card">
+
+      <!-- 01 -->
+      <div class="v3-sec">
+        <span class="v3-sec-chip">
+          <span class="num">01</span>
+          <span class="ttl">角色</span>
+          <span class="sub">PROFILE</span>
+        </span>
+        <span class="v3-sec-meta">
+          <span class="src-tag">from reader.skill.yaml#persona</span>
+          <button class="edit-chip">✎ 编辑</button>
+        </span>
+        <div class="m-persona-body"><span class="cmt"># reader.persona — 论文深读 Agent</span>
+你是一名学术论文<span class="kw">深读</span> Agent。任务：
+  · 抽取 abstract / methodology / key_findings
+  · 引用必须包含 <span class="str">"DOI"</span> 或 <span class="str">"arXiv-id"</span>
+  · 失败 ≤ 3 次必须升级到 <span class="kw">critic.retry_gate</span></div>
+        <div style="height:14px"></div>
+        <div class="m-io">
+          <div class="m-io-cell">
+            <div class="m-io-lbl">→ Input · expects</div>
+            <div class="m-io-val">paper_url · arxiv_id? · focus_sections[]</div>
+          </div>
+          <div class="m-io-cell">
+            <div class="m-io-lbl">→ Output · produces</div>
+            <div class="m-io-val">{ abstract, methodology, key_findings, citations[] }</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 02 -->
+      <div class="v3-sec">
+        <span class="v3-sec-chip">
+          <span class="num">02</span>
+          <span class="ttl">模型 · 工具</span>
+          <span class="sub">KIT</span>
+        </span>
+        <span class="v3-sec-meta">
+          <span class="src-tag">from reader.skill.yaml#kit</span>
+          <button class="edit-chip">✎ 编辑</button>
+        </span>
+        <div class="m-model">
+          <div class="m-model-cell"><div class="m-model-key">model</div><div class="m-model-val">claude-sonnet-4</div></div>
+          <div class="m-model-cell"><div class="m-model-key">temperature</div><div class="m-model-val">0.2</div></div>
+          <div class="m-model-cell"><div class="m-model-key">max_tokens</div><div class="m-model-val">8192</div></div>
+          <div class="m-model-cell"><div class="m-model-key">context</div><div class="m-model-val">200k</div></div>
+        </div>
+        <div class="m-tools-head">
+          <span>Tools <b>4</b> selected · <b>4</b> candidates</span>
+          <span style="margin-left:auto;color:var(--fg-5)">点击候选加入 · 拖拽排序</span>
+        </div>
+        <div class="m-tools">
+          <div class="m-tool sel"><span class="name">pdf_extract</span><span class="tag">sel</span></div>
+          <div class="m-tool sel"><span class="name">arxiv_search</span><span class="tag">sel</span></div>
+          <div class="m-tool sel"><span class="name">semanticscholar_lookup</span><span class="tag">sel</span></div>
+          <div class="m-tool run"><span class="name">crossref_doi</span><span class="tag">adding</span></div>
+          <div class="m-tool cand"><span class="name">openreview_fetch</span><span class="tag">+</span></div>
+          <div class="m-tool cand"><span class="name">google_scholar</span><span class="tag">+</span></div>
+          <div class="m-tool cand"><span class="name">pubmed_search</span><span class="tag">+</span></div>
+          <div class="m-tool cand"><span class="name">core_api</span><span class="tag">+</span></div>
+        </div>
+      </div>
+
+      <!-- 03 -->
+      <div class="v3-sec">
+        <span class="v3-sec-chip">
+          <span class="num">03</span>
+          <span class="ttl">记忆</span>
+          <span class="sub">MEMORY</span>
+        </span>
+        <span class="v3-sec-meta">
+          <span class="src-tag">from reader.skill.yaml#memory</span>
+          <button class="edit-chip">✎ 编辑</button>
+        </span>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div class="m-memory-row"><span class="m-memory-ns">papers.vec</span><span class="m-memory-scope">session</span><span class="m-memory-perm">rw</span></div>
+          <div class="m-memory-row"><span class="m-memory-ns">scratch.run</span><span class="m-memory-scope">run</span><span class="m-memory-perm">rw</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="v-foot">
+    <div class="pros">
+      <div class="hd">Pros</div>
+      <div>· 最克制 · 没有 box 嵌套</div>
+      <div>· chip 当锚点，扫读 O(1) 找段</div>
+      <div>· 适合内容多、需要长卡的场景</div>
+    </div>
+    <div class="cons">
+      <div class="hd">Cons</div>
+      <div>· 没有外框，跟旁边的 panel 边界弱</div>
+      <div>· chip 偏装饰，权威感不足</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     VARIANT 4 · 左侧大号数字版口（numbered gutter）
+     ════════════════════════════════════════════════════════════════ -->
+<section class="variant">
+  <div class="v-hd">
+    <span class="v-num">V4</span>
+    <span class="v-name">数字版口 · 左侧大号 numeral</span>
+    <span class="v-blurb">左侧 120px gutter 显巨大数字 + 标题，编辑器范儿</span>
+  </div>
+
+  <div class="v-host">
+    <div class="v4-card">
+
+      <!-- 01 -->
+      <div class="v4-sec">
+        <div class="v4-sec-gut">
+          <span class="v4-sec-num">01</span>
+          <span class="v4-sec-lbl">
+            <span class="ttl">角色</span>
+            <span class="sub">PROFILE</span>
+          </span>
+        </div>
+        <div class="v4-sec-body">
+          <div class="v4-sec-head">
+            <span class="head-name">reader.persona</span>
+            <span class="head-sub">· 632 tokens · cached</span>
+            <span class="head-spacer"></span>
+            <span class="src-tag">from reader.skill.yaml#persona</span>
+            <button class="edit-chip">✎ 编辑</button>
+          </div>
+          <div class="m-persona-body"><span class="cmt"># reader.persona — 论文深读 Agent</span>
+你是一名学术论文<span class="kw">深读</span> Agent。任务：
+  · 抽取 abstract / methodology / key_findings
+  · 引用必须包含 <span class="str">"DOI"</span> 或 <span class="str">"arXiv-id"</span>
+  · 失败 ≤ 3 次必须升级到 <span class="kw">critic.retry_gate</span></div>
+          <div style="height:14px"></div>
+          <div class="m-io">
+            <div class="m-io-cell">
+              <div class="m-io-lbl">→ Input · expects</div>
+              <div class="m-io-val">paper_url · arxiv_id? · focus_sections[]</div>
+            </div>
+            <div class="m-io-cell">
+              <div class="m-io-lbl">→ Output · produces</div>
+              <div class="m-io-val">{ abstract, methodology, key_findings, citations[] }</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 02 -->
+      <div class="v4-sec">
+        <div class="v4-sec-gut">
+          <span class="v4-sec-num">02</span>
+          <span class="v4-sec-lbl">
+            <span class="ttl">模型 · 工具</span>
+            <span class="sub">KIT</span>
+          </span>
+        </div>
+        <div class="v4-sec-body">
+          <div class="v4-sec-head">
+            <span class="head-name">reader.kit</span>
+            <span class="head-sub">· model + tools</span>
+            <span class="head-spacer"></span>
+            <span class="src-tag">from reader.skill.yaml#kit</span>
+            <button class="edit-chip">✎ 编辑</button>
+          </div>
+          <div class="m-model">
+            <div class="m-model-cell"><div class="m-model-key">model</div><div class="m-model-val">claude-sonnet-4</div></div>
+            <div class="m-model-cell"><div class="m-model-key">temperature</div><div class="m-model-val">0.2</div></div>
+            <div class="m-model-cell"><div class="m-model-key">max_tokens</div><div class="m-model-val">8192</div></div>
+            <div class="m-model-cell"><div class="m-model-key">context</div><div class="m-model-val">200k</div></div>
+          </div>
+          <div class="m-tools-head">
+            <span>Tools <b>4</b> selected · <b>4</b> candidates</span>
+            <span style="margin-left:auto;color:var(--fg-5)">点击候选加入 · 拖拽排序</span>
+          </div>
+          <div class="m-tools">
+            <div class="m-tool sel"><span class="name">pdf_extract</span><span class="tag">sel</span></div>
+            <div class="m-tool sel"><span class="name">arxiv_search</span><span class="tag">sel</span></div>
+            <div class="m-tool sel"><span class="name">semanticscholar_lookup</span><span class="tag">sel</span></div>
+            <div class="m-tool run"><span class="name">crossref_doi</span><span class="tag">adding</span></div>
+            <div class="m-tool cand"><span class="name">openreview_fetch</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">google_scholar</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">pubmed_search</span><span class="tag">+</span></div>
+            <div class="m-tool cand"><span class="name">core_api</span><span class="tag">+</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 03 -->
+      <div class="v4-sec">
+        <div class="v4-sec-gut">
+          <span class="v4-sec-num">03</span>
+          <span class="v4-sec-lbl">
+            <span class="ttl">记忆</span>
+            <span class="sub">MEMORY</span>
+          </span>
+        </div>
+        <div class="v4-sec-body">
+          <div class="v4-sec-head">
+            <span class="head-name">reader.memory</span>
+            <span class="head-sub">· 2 namespaces</span>
+            <span class="head-spacer"></span>
+            <span class="src-tag">from reader.skill.yaml#memory</span>
+            <button class="edit-chip">✎ 编辑</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div class="m-memory-row"><span class="m-memory-ns">papers.vec</span><span class="m-memory-scope">session</span><span class="m-memory-perm">rw</span></div>
+            <div class="m-memory-row"><span class="m-memory-ns">scratch.run</span><span class="m-memory-scope">run</span><span class="m-memory-perm">rw</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="v-foot">
+    <div class="pros">
+      <div class="hd">Pros</div>
+      <div>· 大数字带强烈节奏 + 编辑器/期刊感</div>
+      <div>· 标题完全在外，主体最干净</div>
+      <div>· 段间是 1px line，分隔最克制</div>
+    </div>
+    <div class="cons">
+      <div class="hd">Cons</div>
+      <div>· 左侧 gutter 占 120px，主体被挤</div>
+      <div>· 大数字风格强烈，跟项目其他位置不一致</div>
+    </div>
+  </div>
+</section>
+
+
+</body>
+</html>

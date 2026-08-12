@@ -1,0 +1,550 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90mD:/VScode/TotalProject/ShadowFlow[39m
+
+[90mstderr[2m | src/pages/__tests__/PersonalTeamToggle.test.tsx[2m > [22m[2mPersonalTeamToggle[2m > [22m[2m渲染「个人」「团队」两个选项
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/pages/__tests__/PersonalTeamToggle.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 217[2mms[22m[39m
+[90mstderr[2m | src/pages/__tests__/ChatHomePage.test.tsx[2m > [22m[2mChatHomePage[2m > [22m[2m默认（无 ?view）渲染团队视图 + 顶部工作区选择器
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ [32m✓[39m src/pages/__tests__/ChatHomePage.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+[90mstderr[2m | src/pages/__tests__/PersonalChatView.test.tsx[2m > [22m[2mPersonalChatView (融合M1)[2m > [22m[2m选中助手 → resolveDmConversation 被调 + useChatStream 走 group 模式吃 dmGroupId
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+[90mstderr[2m | src/pages/__tests__/skill-studio-entries.test.tsx[2m > [22m[2mStory 15.28 — Skill Studio entries[2m > [22m[2mStartPage renders the Skill Studio primitive card
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+[90mstderr[2m | src/pages/__tests__/PersonalRightPane.test.tsx[2m > [22m[2mPersonalRightPane[2m > [22m[2m默认显示「员工」标签 = 员工卡(名字+soul 首行)
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m src/pages/__tests__/PersonalChatView.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 264[2mms[22m[39m
+ [32m✓[39m src/pages/__tests__/PersonalRightPane.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 317[2mms[22m[39m
+ [31m❯[39m src/pages/__tests__/skill-studio-entries.test.tsx [2m([22m[2m2 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 2120[2mms[22m[39m
+[31m     [31m×[31m StartPage renders the Skill Studio primitive card[39m[33m 1083[2mms[22m[39m
+[31m     [31m×[31m StartPage Skill Studio card shows the i18n title text[39m[33m 1037[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/pages/__tests__/skill-studio-entries.test.tsx[2m > [22mStory 15.28 — Skill Studio entries[2m > [22mStartPage renders the Skill Studio primitive card
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="primitive-card-skill-studio"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"start-page"[39m
+      [33mstyle[39m=[32m"flex: 1 1 0%; display: flex; flex-direction: column; min-width: 0px; background: var(--t-bg); color: var(--t-fg);"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mstyle[39m=[32m"height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0px 22px 0px 8px; border-bottom: 1px solid var(--t-border); background: var(--t-panel);"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"width: 240px; flex-shrink: 0;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"position: relative; width: 100%;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"org-switcher-trigger"[39m
+              [33mstyle[39m=[32m"display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px; background: var(--t-panel-2); border: 1px solid var(--t-border); cursor: pointer; width: 100%;"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mstyle[39m=[32m"width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 10px; background: color-mix(in oklab, var(--t-accent) 22%, var(--t-panel-2)); border: 1px solid color-mix(in oklab, var(--t-accent) 50%, transparent); color: var(--t-accent); letter-spacing: -0.03em;"[39m
+              [36m>[39m
+                [0mSh[0m
+              [36m</span>[39m
+              [36m<div[39m
+                [33mstyle[39m=[32m"flex: 1 1 0%; min-width: 0px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"font-size: 12.5px; font-weight: 700; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                [36m>[39m
+                  [0mShadowFlow[0m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"font-family: var(--font-mono); font-size: 9.5px; color: var(--t-fg-4); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                [36m>[39m
+                  [0m选择或新建工作区[0m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-down"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"13"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mstyle[39m=[32m"color: var(--t-fg-4); flex-shrink: 0; transition: transform 150ms; transform: none;"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"13"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 9 6 6 6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"flex: 1 1 0%;"[39m
+        [36m/>[39m
+        [36m<a[39m
+          [33mhref[39m=[32m"https://chainscan-newton.0g.ai"[39m
+          [33mrel[39m=[32m"noopener noreferrer"[39m
+          [33mstyle[39m=[32m"display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--t-panel-2); border: 1px solid var(--t-border); color: var(--t-fg-3); font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; margin-right: 12px; cursor: pointer; transition: background 120ms ease;"[39m
+          [33mtarget[39m=[32m"_blank"[39m
+          [33mtitle[39m=[32m"0G TESTNET · connecting…"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mstyle[39m=[32m"width: 7px; height: 7px; border-radius: 50%; background: var(--t-fg-3); animation: hf-pulse 1.4s ease-in-out infinite;"[39m
+          [36m/>[39m
+          [36m<span>[39m
+            [0m0G TESTNET · [0m
+            [0m…[0m
+          [36m</span>[39m
+        [36m</a>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"切到浅色"[39m
+          [33mstyle[39m=[32m"width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); cursor: pointer; transition: background 140ms ease, color 140ms ease, border-color 140ms ease; flex-shrink: 0;"[39m
+          [33mtitle[39m=[32m"切到浅色"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"14"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"14"[39m
+          [36m>[39m
+            [36m<circle[39m
+              [33mcx[39m=[32m"12"[39m
+              [33mcy[39m=[32m"12"[39m
+              [33mr[39m=[32m"4"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Switch to English"[39m
+          [33mstyle[39m=[32m"padding: 4px 10px; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; transition: all .15s; white-space: nowrap;"[39m
+          [33mtitle[39m=[32m"Switch to English"[39m
+        [36m>[39m
+          [0mEN / 中[0m
+        [36m</button>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mstyle[39m=[32m"flex: 1 1 0%; overflow: auto; display: flex; flex-direction: column; align-items: center; padding: 48px 32px 60px;"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 32px;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32...
+
+Ignored nodes: comments, script, style
+[36m<html[39m
+  [33mdata-theme[39m=[32m"night"[39m
+  [33mstyle[39m=[32m"--app-zoom: 1;"[39m
+[36m>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"start-page"[39m
+        [33mstyle[39m=[32m"flex: 1 1 0%; display: flex; flex-direction: column; min-width: 0px; background: var(--t-bg); color: var(--t-fg);"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mstyle[39m=[32m"height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0px 22px 0px 8px; border-bottom: 1px solid var(--t-border); background: var(--t-panel);"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"width: 240px; flex-shrink: 0;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mstyle[39m=[32m"position: relative; width: 100%;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mdata-testid[39m=[32m"org-switcher-trigger"[39m
+                [33mstyle[39m=[32m"display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px; background: var(--t-panel-2); border: 1px solid var(--t-border); cursor: pointer; width: 100%;"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mstyle[39m=[32m"width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 10px; background: color-mix(in oklab, var(--t-accent) 22%, var(--t-panel-2)); border: 1px solid color-mix(in oklab, var(--t-accent) 50%, transparent); color: var(--t-accent); letter-spacing: -0.03em;"[39m
+                [36m>[39m
+                  [0mSh[0m
+                [36m</span>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"flex: 1 1 0%; min-width: 0px;"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mstyle[39m=[32m"font-size: 12.5px; font-weight: 700; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                  [36m>[39m
+                    [0mShadowFlow[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mstyle[39m=[32m"font-family: var(--font-mono); font-size: 9.5px; color: var(--t-fg-4); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                  [36m>[39m
+                    [0m选择或新建工作区[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-chevron-down"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"13"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mstyle[39m=[32m"color: var(--t-fg-4); flex-shrink: 0; transition: transform 150ms; transform: none;"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"13"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"m6 9 6 6 6-6"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"flex: 1 1 0%;"[39m
+          [36m/>[39m
+          [36m<a[39m
+            [33mhref[39m=[32m"https://chainscan-newton.0g.ai"[39m
+            [33mrel[39m=[32m"noopener noreferrer"[39m
+            [33mstyle[39m=[32m"display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--t-panel-2); border: 1px solid var(--t-border); color: var(--t-fg-3); font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; margin-right: 12px; cursor: pointer; transition: background 120ms ease;"[39m
+            [33mtarget[39m=[32m"_blank"[39m
+            [33mtitle[39m=[32m"0G TESTNET · connecting…"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mstyle[39m=[32m"width: 7px; height: 7px; border-radius: 50%; background: var(--t-fg-3); animation: hf-pulse 1.4s ease-in-out infinite;"[39m
+            [36m/>[39m
+            [36m<span>[39m
+              [0m0G TESTNET · [0m
+              [0m…[0m
+            [36m</span>[39m
+          [36m</a>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"切到浅色"[39m
+            [33mstyle[39m=[32m"width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); cursor: pointer; transition: background 140ms ease, color 140ms ease, border-color 140ms ease; flex-shrink: 0;"[39m
+            [33mtitle[39m=[32m"切到浅色"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+            [36m>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"12"[39m
+                [33mcy[39m=[32m"12"[39m
+                [33mr[39m=[32m"4"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Switch to English"[39m
+            [33mstyle[39m=[32m"padding: 4px 10px; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; transition: all .15s; white-space: nowrap;"[39m
+            [33mtitle[39m=[32m"Switch to English"[39m
+          [36m>[39m
+            [0mEN / 中[0m
+          [36m</button>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mstyle[39m=...
+[90m [2m❯[22m Proxy.waitForWrapper node_modules/@testing-library/react/node_modules/@testing-library/dom/dist/wait-for.js:[2m166:27[22m[39m
+[36m [2m❯[22m src/pages/__tests__/skill-studio-entries.test.tsx:[2m45:11[22m[39m
+    [90m 43| [39m  [34mit[39m([32m'StartPage renders the Skill Studio primitive card'[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m 44| [39m    [34mrender[39m([34mwrap[39m([33m<[39m[33mStartPage[39m [33m/[39m[33m>[39m))[33m;[39m
+    [90m 45| [39m    [35mawait[39m [34mwaitFor[39m(() [33m=>[39m {
+    [90m   | [39m          [31m^[39m
+    [90m 46| [39m      expect(screen.getByTestId('primitive-card-skill-studio')).toBeTr…
+    [90m 47| [39m    })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/pages/__tests__/skill-studio-entries.test.tsx[2m > [22mStory 15.28 — Skill Studio entries[2m > [22mStartPage Skill Studio card shows the i18n title text
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="primitive-card-skill-studio"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"start-page"[39m
+      [33mstyle[39m=[32m"flex: 1 1 0%; display: flex; flex-direction: column; min-width: 0px; background: var(--t-bg); color: var(--t-fg);"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mstyle[39m=[32m"height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0px 22px 0px 8px; border-bottom: 1px solid var(--t-border); background: var(--t-panel);"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"width: 240px; flex-shrink: 0;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"position: relative; width: 100%;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"org-switcher-trigger"[39m
+              [33mstyle[39m=[32m"display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px; background: var(--t-panel-2); border: 1px solid var(--t-border); cursor: pointer; width: 100%;"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mstyle[39m=[32m"width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 10px; background: color-mix(in oklab, var(--t-accent) 22%, var(--t-panel-2)); border: 1px solid color-mix(in oklab, var(--t-accent) 50%, transparent); color: var(--t-accent); letter-spacing: -0.03em;"[39m
+              [36m>[39m
+                [0mSh[0m
+              [36m</span>[39m
+              [36m<div[39m
+                [33mstyle[39m=[32m"flex: 1 1 0%; min-width: 0px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"font-size: 12.5px; font-weight: 700; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                [36m>[39m
+                  [0mShadowFlow[0m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"font-family: var(--font-mono); font-size: 9.5px; color: var(--t-fg-4); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                [36m>[39m
+                  [0m选择或新建工作区[0m
+                [36m</div>[39m
+              [36m</div>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-down"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"13"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mstyle[39m=[32m"color: var(--t-fg-4); flex-shrink: 0; transition: transform 150ms; transform: none;"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"13"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 9 6 6 6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"flex: 1 1 0%;"[39m
+        [36m/>[39m
+        [36m<a[39m
+          [33mhref[39m=[32m"https://chainscan-newton.0g.ai"[39m
+          [33mrel[39m=[32m"noopener noreferrer"[39m
+          [33mstyle[39m=[32m"display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--t-panel-2); border: 1px solid var(--t-border); color: var(--t-fg-3); font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; margin-right: 12px; cursor: pointer; transition: background 120ms ease;"[39m
+          [33mtarget[39m=[32m"_blank"[39m
+          [33mtitle[39m=[32m"0G TESTNET · connecting…"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mstyle[39m=[32m"width: 7px; height: 7px; border-radius: 50%; background: var(--t-fg-3); animation: hf-pulse 1.4s ease-in-out infinite;"[39m
+          [36m/>[39m
+          [36m<span>[39m
+            [0m0G TESTNET · [0m
+            [0m…[0m
+          [36m</span>[39m
+        [36m</a>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"切到浅色"[39m
+          [33mstyle[39m=[32m"width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); cursor: pointer; transition: background 140ms ease, color 140ms ease, border-color 140ms ease; flex-shrink: 0;"[39m
+          [33mtitle[39m=[32m"切到浅色"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"14"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"14"[39m
+          [36m>[39m
+            [36m<circle[39m
+              [33mcx[39m=[32m"12"[39m
+              [33mcy[39m=[32m"12"[39m
+              [33mr[39m=[32m"4"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Switch to English"[39m
+          [33mstyle[39m=[32m"padding: 4px 10px; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; transition: all .15s; white-space: nowrap;"[39m
+          [33mtitle[39m=[32m"Switch to English"[39m
+        [36m>[39m
+          [0mEN / 中[0m
+        [36m</button>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mstyle[39m=[32m"flex: 1 1 0%; overflow: auto; display: flex; flex-direction: column; align-items: center; padding: 48px 32px 60px;"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 32px;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32...
+
+Ignored nodes: comments, script, style
+[36m<html[39m
+  [33mdata-theme[39m=[32m"night"[39m
+  [33mstyle[39m=[32m"--app-zoom: 1;"[39m
+[36m>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"start-page"[39m
+        [33mstyle[39m=[32m"flex: 1 1 0%; display: flex; flex-direction: column; min-width: 0px; background: var(--t-bg); color: var(--t-fg);"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mstyle[39m=[32m"height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0px 22px 0px 8px; border-bottom: 1px solid var(--t-border); background: var(--t-panel);"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"width: 240px; flex-shrink: 0;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mstyle[39m=[32m"position: relative; width: 100%;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mdata-testid[39m=[32m"org-switcher-trigger"[39m
+                [33mstyle[39m=[32m"display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px; background: var(--t-panel-2); border: 1px solid var(--t-border); cursor: pointer; width: 100%;"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mstyle[39m=[32m"width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 10px; background: color-mix(in oklab, var(--t-accent) 22%, var(--t-panel-2)); border: 1px solid color-mix(in oklab, var(--t-accent) 50%, transparent); color: var(--t-accent); letter-spacing: -0.03em;"[39m
+                [36m>[39m
+                  [0mSh[0m
+                [36m</span>[39m
+                [36m<div[39m
+                  [33mstyle[39m=[32m"flex: 1 1 0%; min-width: 0px;"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mstyle[39m=[32m"font-size: 12.5px; font-weight: 700; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                  [36m>[39m
+                    [0mShadowFlow[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mstyle[39m=[32m"font-family: var(--font-mono); font-size: 9.5px; color: var(--t-fg-4); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"[39m
+                  [36m>[39m
+                    [0m选择或新建工作区[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-chevron-down"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"13"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mstyle[39m=[32m"color: var(--t-fg-4); flex-shrink: 0; transition: transform 150ms; transform: none;"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"13"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"m6 9 6 6 6-6"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mstyle[39m=[32m"flex: 1 1 0%;"[39m
+          [36m/>[39m
+          [36m<a[39m
+            [33mhref[39m=[32m"https://chainscan-newton.0g.ai"[39m
+            [33mrel[39m=[32m"noopener noreferrer"[39m
+            [33mstyle[39m=[32m"display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--t-panel-2); border: 1px solid var(--t-border); color: var(--t-fg-3); font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; margin-right: 12px; cursor: pointer; transition: background 120ms ease;"[39m
+            [33mtarget[39m=[32m"_blank"[39m
+            [33mtitle[39m=[32m"0G TESTNET · connecting…"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mstyle[39m=[32m"width: 7px; height: 7px; border-radius: 50%; background: var(--t-fg-3); animation: hf-pulse 1.4s ease-in-out infinite;"[39m
+            [36m/>[39m
+            [36m<span>[39m
+              [0m0G TESTNET · [0m
+              [0m…[0m
+            [36m</span>[39m
+          [36m</a>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"切到浅色"[39m
+            [33mstyle[39m=[32m"width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); cursor: pointer; transition: background 140ms ease, color 140ms ease, border-color 140ms ease; flex-shrink: 0;"[39m
+            [33mtitle[39m=[32m"切到浅色"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+            [36m>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"12"[39m
+                [33mcy[39m=[32m"12"[39m
+                [33mr[39m=[32m"4"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Switch to English"[39m
+            [33mstyle[39m=[32m"padding: 4px 10px; border-radius: 6px; border: 1px solid var(--t-border); background: var(--t-panel-2); color: var(--t-fg-2); font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; transition: all .15s; white-space: nowrap;"[39m
+            [33mtitle[39m=[32m"Switch to English"[39m
+          [36m>[39m
+            [0mEN / 中[0m
+          [36m</button>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mstyle[39m=...
+[90m [2m❯[22m Proxy.waitForWrapper node_modules/@testing-library/react/node_modules/@testing-library/dom/dist/wait-for.js:[2m166:27[22m[39m
+[36m [2m❯[22m src/pages/__tests__/skill-studio-entries.test.tsx:[2m52:11[22m[39m
+    [90m 50| [39m  it('StartPage Skill Studio card shows the i18n title text', async ()…
+    [90m 51| [39m    [34mrender[39m([34mwrap[39m([33m<[39m[33mStartPage[39m [33m/[39m[33m>[39m))[33m;[39m
+    [90m 52| [39m    [35mawait[39m [34mwaitFor[39m(() [33m=>[39m {
+    [90m   | [39m          [31m^[39m
+    [90m 53| [39m      [35mconst[39m card [33m=[39m screen[33m.[39m[34mgetByTestId[39m([32m'primitive-card-skill-studio'[39m)[33m;[39m
+    [90m 54| [39m      [34mexpect[39m(card[33m.[39mtextContent)[33m.[39m[34mtoMatch[39m([36m/Skill Studio/i[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m4 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m14 passed[39m[22m[90m (16)[39m
+[2m   Start at [22m 21:53:14
+[2m   Duration [22m 4.55s[2m (transform 1.08s, setup 1.62s, import 4.40s, tests 2.95s, environment 4.07s)[22m
+

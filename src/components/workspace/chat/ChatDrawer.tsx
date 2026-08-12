@@ -117,7 +117,7 @@ export function ChatDrawer({ onClose, initialTab = 'Thread' }: ChatDrawerProps) 
           <span style={{ fontSize: 10.5, color: 'var(--t-fg-4)' }}>同时发到主频道</span>
           <span style={{ flex: 1 }} />
           <span className="fb-dot fb-dot-ok" />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-4)' }}>0G synced · 0x3f7a…bc91</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-4)' }}>已同步</span>
         </div>
       </div>
     </div>

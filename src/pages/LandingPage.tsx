@@ -26,12 +26,12 @@ const T = {
     h1c: 'We fix that.',
     lead: 'A multi-agent IDE with a runtime {policy} that decides who can approve, block, or retry whom. Drop agents on a canvas, wire the disagreements, and {cid} anyone can fork.',
     leadPolicy: 'Policy Matrix',
-    leadCid: 'publish the whole team to 0G as a CID',
+    leadCid: 'publish the whole team as a portable bundle',
     ctaPrimary: '▶ Quick Demo · 60s',
     ctaSecondary: '⎘ Import a team by CID',
     stats: [
       { k: 'Teams pinned', v: '2 384', d: '↗ +312 this week', up: true },
-      { k: 'Runs verified', v: '18.6k', d: '0g attest · ✓' },
+      { k: 'Runs verified', v: '18.6k', d: 'merkle verified · ✓' },
       { k: 'Avg SSE', v: '87ms', mono: true, d: 'claude-sonnet-4' },
       { k: 'Seed templates', v: '6', d: '+248 community' },
     ],
@@ -51,17 +51,17 @@ const T = {
       {
         icon: '◆',
         title: 'Checkpoint · Time-travel',
-        desc: 'Every handoff saves a checkpoint to 0G. Branch, rewind, or audit any decision in the run history.',
+        desc: 'Every handoff saves a checkpoint. Branch, rewind, or audit any decision in the run history.',
       },
       {
         icon: '⑂',
-        title: '0G · On-chain ownership',
-        desc: 'Pin the entire team (agents + policy + history) to 0G Storage as a CID. Anyone can fork and verify provenance.',
+        title: 'Ownership · Portable teams',
+        desc: 'Export the entire team (agents + policy + history) as a portable bundle. Anyone can fork and verify provenance.',
       },
     ],
     proofItems: [
       { k: 'TEAMS PINNED',    v: '2 384',  grad: true, d: '↗ +312 this week' },
-      { k: 'RUNS VERIFIED',   v: '18.6k',  d: '0g attest · ✓' },
+      { k: 'RUNS VERIFIED',   v: '18.6k',  d: 'merkle verified · ✓' },
       { k: 'AVG SSE LATENCY', v: '87ms',   mono: true, d: 'claude-sonnet-4 · temp 0.2' },
       { k: 'SEED TEMPLATES',  v: '6',      d: '+248 community forks' },
     ],
@@ -72,28 +72,28 @@ const T = {
     tplFooterPreview: '↗ Preview',
     importH2a: 'Fork any team.',
     importH2b: 'Verify its history.',
-    importDesc: 'Paste a 0G CID to fetch a community team, verify its on-chain lineage, and import it into your workspace in seconds.',
+    importDesc: 'Paste a CID to fetch a community team, verify its lineage, and import it into your workspace in seconds.',
     importPlaceholder: 'cid://0x3f7a…bc91',
     importBtn: 'Fetch & Verify',
     importSteps: [
-      'Resolve CID on 0G Storage',
-      'Verify Merkle root on-chain',
+      'Resolve CID from shared storage',
+      'Verify Merkle root integrity',
       'Import team + policy + checkpoints',
     ],
     ctaBandH2a: 'Build the team that',
     ctaBandH2b: 'disagrees correctly.',
-    ctaBandSub: 'Open-source · MIT · ships 2026-05-16 · 0G Hackathon build',
+    ctaBandSub: 'Open-source · MIT · ships 2026-05-16',
     ctaBandPrimary: '▶ Open Editor',
     ctaBandSecondary: 'GitHub · Ravenveil/ShadowFlow ↗',
-    footerCopy: 'ShadowFlow · Ravenveil · MIT · 0G Hackathon 2026',
-    footerLinks: ['GitHub', 'Docs', 'Templates', 'About', '0G Network ↗'],
+    footerCopy: 'ShadowFlow · Ravenveil · MIT · 2026',
+    footerLinks: ['GitHub', 'Docs', 'Templates', 'About'],
     rivals: [
       { name: 'CHATGPT',   them: '1 agent chatting to you',                         us: 'A team with rejection rules',                    note: 'no Policy Matrix · no retry gate',     stat: 'team enforcement' },
       { name: 'CREWAI',    them: 'role-play scripts that pretend to collaborate',    us: 'Runtime enforcement + checkpoint',               note: 'no checkpoint · no rollback',          stat: 'state persistence' },
       { name: 'N8N',       them: 'n8n routes data',                                 us: 'ShadowFlow routes decisions with policy',        note: 'no approval gate · no agent ownership', stat: 'decision routing' },
-      { name: 'AUTOGEN',   them: 'chat loop between agents',                         us: 'Policy Matrix with lane-level authority',        note: 'no lane authority · no 0G writeback',  stat: 'authority model' },
+      { name: 'AUTOGEN',   them: 'chat loop between agents',                         us: 'Policy Matrix with lane-level authority',        note: 'no lane authority · no evidence writeback', stat: 'authority model' },
       { name: 'LANGCHAIN', them: 'chain of LLM calls',                              us: 'DAG with gates, barriers, and retries',          note: 'no DAG · no gate types',               stat: 'flow control' },
-      { name: 'DIFY',      them: 'visual chatbot builder',                           us: 'Full team IDE, ships to blockchain',             note: 'no on-chain ownership',                stat: '0G provenance' },
+      { name: 'DIFY',      them: 'visual chatbot builder',                           us: 'Full team IDE, ships anywhere',                  note: 'no team ownership',                    stat: 'provenance' },
     ],
     templates: [
       { alias: 'solo_company',   title: 'Solo Company',   cjk: '单人公司',   desc: '9 agents · CEO to Intern. Full OODA loop, rejection matrix.' },
@@ -116,12 +116,12 @@ const T = {
     h1c: '我们来做。',
     lead: '多智能体工作流 IDE，内置运行时{policy}——在运行前声明谁可以批准、拦截或重试谁。把智能体拖到画布上，连好分歧规则，再把整个团队{cid}。',
     leadPolicy: 'Policy Matrix',
-    leadCid: '作为 CID 发布到 0G 链上，任何人都可以 fork',
+    leadCid: '打包为可移植的团队包，任何人都可以 fork',
     ctaPrimary: '▶ 60 秒快速演示',
     ctaSecondary: '⎘ 通过 CID 导入团队',
     stats: [
-      { k: '已上链团队',     v: '2 384',  d: '↗ 本周 +312',        up: true },
-      { k: '已验证运行次数', v: '18.6k',  d: '0g 链上认证 · ✓' },
+      { k: '已发布团队',     v: '2 384',  d: '↗ 本周 +312',        up: true },
+      { k: '已验证运行次数', v: '18.6k',  d: 'merkle 校验 · ✓' },
       { k: '平均 SSE 延迟',  v: '87ms',   mono: true, d: 'claude-sonnet-4' },
       { k: '种子模板',       v: '6',      d: '+248 社区模板' },
     ],
@@ -141,17 +141,17 @@ const T = {
       {
         icon: '◆',
         title: 'Checkpoint · 时间旅行',
-        desc: '每次任务交接都会向 0G 保存一个 checkpoint。可以分支、回滚，或审计运行历史中的任意决策。',
+        desc: '每次任务交接都会保存一个 checkpoint。可以分支、回滚，或审计运行历史中的任意决策。',
       },
       {
         icon: '⑂',
-        title: '0G · 链上所有权',
-        desc: '将整个团队（智能体 + 策略 + 历史）作为 CID 固定到 0G Storage。任何人都可以 fork 并验证溯源。',
+        title: '团队所有权 · 可移植',
+        desc: '将整个团队（智能体 + 策略 + 历史）导出为可移植包。任何人都可以 fork 并验证溯源。',
       },
     ],
     proofItems: [
-      { k: '已上链团队',    v: '2 384',  grad: true, d: '↗ 本周 +312' },
-      { k: '已验证运行',    v: '18.6k',  d: '0g 认证 · ✓' },
+      { k: '已发布团队',    v: '2 384',  grad: true, d: '↗ 本周 +312' },
+      { k: '已验证运行',    v: '18.6k',  d: 'merkle 校验 · ✓' },
       { k: '平均 SSE 延迟', v: '87ms',   mono: true, d: 'claude-sonnet-4 · temp 0.2' },
       { k: '种子模板',      v: '6',      d: '+248 社区 fork' },
     ],
@@ -162,28 +162,28 @@ const T = {
     tplFooterPreview: '↗ 预览',
     importH2a: 'Fork 任意团队。',
     importH2b: '验证其历史。',
-    importDesc: '粘贴一个 0G CID 来获取社区团队，验证其链上溯源，并在几秒内导入到你的工作区。',
+    importDesc: '粘贴一个 CID 来获取社区团队，验证其溯源，并在几秒内导入到你的工作区。',
     importPlaceholder: 'cid://0x3f7a…bc91',
     importBtn: '获取并验证',
     importSteps: [
-      '在 0G Storage 解析 CID',
-      '链上验证 Merkle root',
+      '从共享存储解析 CID',
+      '验证 Merkle root 完整性',
       '导入团队 + 策略 + checkpoints',
     ],
     ctaBandH2a: '组建一支能够',
     ctaBandH2b: '有效说不的团队。',
-    ctaBandSub: '开源 · MIT · 2026-05-16 发布 · 0G Hackathon 参赛作品',
+    ctaBandSub: '开源 · MIT · 2026-05-16 发布',
     ctaBandPrimary: '▶ 打开编辑器',
     ctaBandSecondary: 'GitHub · Ravenveil/ShadowFlow ↗',
-    footerCopy: 'ShadowFlow · Ravenveil · MIT · 0G Hackathon 2026',
-    footerLinks: ['GitHub', '文档', '模板', '关于', '0G 网络 ↗'],
+    footerCopy: 'ShadowFlow · Ravenveil · MIT · 2026',
+    footerLinks: ['GitHub', '文档', '模板', '关于'],
     rivals: [
       { name: 'CHATGPT',   them: '单个智能体与你对话',       us: '有拒绝规则的团队',           note: '无 Policy Matrix · 无重试门',   stat: '团队执法' },
       { name: 'CREWAI',    them: '假装协作的角色扮演脚本',   us: '运行时强制执行 + checkpoint', note: '无 checkpoint · 无回滚',        stat: '状态持久化' },
       { name: 'N8N',       them: 'n8n 路由数据',             us: 'ShadowFlow 用策略路由决策',   note: '无审批门 · 无智能体权属',      stat: '决策路由' },
-      { name: 'AUTOGEN',   them: '智能体间的聊天循环',       us: '带泳道级权限的 Policy Matrix', note: '无泳道权限 · 无 0G 写回',      stat: '权限模型' },
+      { name: 'AUTOGEN',   them: '智能体间的聊天循环',       us: '带泳道级权限的 Policy Matrix', note: '无泳道权限 · 无证据写回',      stat: '权限模型' },
       { name: 'LANGCHAIN', them: 'LLM 调用链',               us: '带门、屏障和重试的 DAG',      note: '无 DAG · 无门类型',            stat: '流程控制' },
-      { name: 'DIFY',      them: '可视化聊天机器人构建器',   us: '完整团队 IDE，发布到区块链',  note: '无链上所有权',                 stat: '0G 溯源' },
+      { name: 'DIFY',      them: '可视化聊天机器人构建器',   us: '完整团队 IDE，随处部署',     note: '无团队所有权',                 stat: '溯源能力' },
     ],
     templates: [
       { alias: 'solo_company',   title: '单人公司',   cjk: 'Solo Company',   desc: '9 个智能体 · CEO 到实习生。完整 OODA 循环，拒绝矩阵。' },
@@ -253,7 +253,7 @@ function LandingNavThemeToggle({ ariaLabel }: { ariaLabel: string }) {
 // ============ Ticker ============
 function Ticker({ t }: { t: typeof T.EN }) {
   const items = [
-    { text: '◆ 0G HACKATHON 2026', accent: true }, { text: '·', dim: true },
+    { text: '◆ MULTI-AGENT 2026', accent: true }, { text: '·', dim: true },
     { text: 'MIT LICENSE' }, { text: '·', dim: true },
     { text: 'SHIPS 2026-05-16' }, { text: '·', dim: true },
     { text: 'POLICY MATRIX', accent: true }, { text: '·', dim: true },
@@ -366,7 +366,7 @@ function HeroCanvas() {
       <OrbLabel label="Planner"       style={{ top: 'calc(30% + 32px)', left: '14%', transform: 'translateX(-50%)', width: 70 }} />
 
       {/* LitReviewer — L(38%,26%) */}
-      <Orb state="ok"  style={{ top: '26%', left: '38%', transform: 'translate(-50%,-50%)' }} glyph="L" badge="0G" badgeColor="#6366F1" />
+      <Orb state="ok"  style={{ top: '26%', left: '38%', transform: 'translate(-50%,-50%)' }} glyph="L" badge="AI" badgeColor="#3B82F6" />
       <OrbLabel label="LitReviewer"   style={{ top: 'calc(26% + 32px)', left: '38%', transform: 'translateX(-50%)', width: 80 }} />
 
       {/* DataScout — D(38%,55%) */}
@@ -521,7 +521,7 @@ export default function LandingPage() {
           <div className="sf-logo">
             <div className="sf-logo-mark">S</div>
             <div className="sf-logo-word">ShadowFlow</div>
-            <span className="sf-chip" style={{ marginLeft: 8, background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', borderColor: 'color-mix(in srgb, var(--t-accent) 50%, transparent)' }}>0G-native</span>
+            <span className="sf-chip" style={{ marginLeft: 8, background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', borderColor: 'color-mix(in srgb, var(--t-accent) 50%, transparent)' }}>multi-agent</span>
           </div>
           <nav style={{ display: 'flex', gap: 22 }}>
             {t.nav.map((item) => (

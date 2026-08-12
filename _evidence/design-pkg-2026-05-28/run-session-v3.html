@@ -1,0 +1,2810 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ShadowFlow · Run Session v3 — 角色 / 模型工具 / 记忆 上下排版</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+/* ── Page shell ─────────────────────────────────────────────── */
+html { background:#101010; }
+body { min-height:100vh; padding:0 0 80px; background:#101010; font-family:var(--font-sans); -webkit-font-smoothing:antialiased; }
+
+/* ── Doc header ─────────────────────────────────────────────── */
+.doc-hd {
+  position:sticky;top:0;z-index:200;height:44px;
+  background:rgba(16,16,16,.9);backdrop-filter:blur(12px) saturate(160%);
+  border-bottom:1px solid rgba(255,255,255,.07);
+  display:flex;align-items:center;gap:12px;padding:0 24px;
+}
+.doc-mark { width:22px;height:22px;background:#A855F7;border-radius:5px;display:grid;place-items:center;font-size:9px;font-weight:900;color:#fff;letter-spacing:-.03em;flex-shrink:0; }
+.doc-word { font-size:12.5px;font-weight:700;letter-spacing:-.02em;color:#f0f0f0; }
+.doc-sep  { width:1px;height:14px;background:rgba(255,255,255,.1);flex-shrink:0; }
+.doc-crumb{ font-family:var(--font-mono);font-size:10.5px;color:rgba(255,255,255,.35); }
+.doc-sp   { flex:1; }
+.doc-meta { font-family:var(--font-mono);font-size:9.5px;color:rgba(255,255,255,.22);letter-spacing:.06em;text-transform:uppercase; }
+
+/* ── Frame section ──────────────────────────────────────────── */
+.frame-section { max-width:1440px;margin:32px auto 0;padding:0 24px; }
+.frame-lbl {
+  display:flex;align-items:center;gap:9px;margin-bottom:10px;
+  font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.3);
+}
+.frame-lbl::before { content:"";display:block;width:7px;height:7px;border-radius:50%;background:var(--fl-accent); }
+.frame-wrap {
+  border-radius:10px;overflow:hidden;height:820px;
+  border:1px solid rgba(255,255,255,.08);
+  box-shadow:0 24px 60px -8px rgba(0,0,0,.6);
+  display:flex;flex-direction:column;
+}
+
+/* ── Dark frame tokens ──────────────────────────────────────── */
+.frame-dark {
+  --fl-accent:#A855F7;
+  --bg:#0a0a0a;--bg-elev-1:#111;--bg-elev-2:#161616;--bg-elev-3:#1c1c1c;--bg-elev-4:#222;--bg-elev-5:#282828;
+  --fg-1:#f5f5f5;--fg-2:#d4d4d4;--fg-3:#a3a3a3;--fg-4:#737373;--fg-5:#525252;
+  --border:rgba(255,255,255,.08);--border-strong:rgba(255,255,255,.16);--border-subtle:rgba(255,255,255,.04);
+  --accent:#A855F7;--accent-bright:#C084FC;--accent-tint:rgba(168,85,247,.12);--accent-ink:#fff;
+  --skin-panel:#0d0d0d;--glow-accent:0 0 0 3px rgba(168,85,247,.15);
+  --shadow-pop:0 8px 32px -4px rgba(0,0,0,.6);
+  --status-run:#60a5fa;--status-run-tint:rgba(96,165,250,.1);
+  --status-warn:#fbbf24;--status-warn-tint:rgba(251,191,36,.1);
+  --status-ok:#34d399;--status-ok-tint:rgba(52,211,153,.1);
+  --status-err:#f87171;--status-err-tint:rgba(248,113,113,.1);
+  color:var(--fg-1);background:var(--bg);
+}
+
+/* ── Light frame tokens ─────────────────────────────────────── */
+.frame-light {
+  --fl-accent:#d97757;
+  --bg:#faf9f5;--bg-elev-1:#fff;--bg-elev-2:#f5f3ed;--bg-elev-3:#ede9e0;--bg-elev-4:#e5e0d5;--bg-elev-5:#dbd5c8;
+  --fg-1:#1a1612;--fg-2:#3d3629;--fg-3:#6b5e4a;--fg-4:#9c8a72;--fg-5:#b8a88e;
+  --border:rgba(0,0,0,.09);--border-strong:rgba(0,0,0,.18);--border-subtle:rgba(0,0,0,.04);
+  --accent:#d97757;--accent-bright:#c4623e;--accent-tint:rgba(217,119,87,.12);--accent-ink:#fff;
+  --skin-panel:#f2f0ea;--glow-accent:0 0 0 3px rgba(217,119,87,.15);
+  --shadow-pop:0 8px 32px -4px rgba(0,0,0,.15);
+  --status-run:#3b82f6;--status-run-tint:rgba(59,130,246,.09);
+  --status-warn:#d97706;--status-warn-tint:rgba(217,119,6,.09);
+  --status-ok:#059669;--status-ok-tint:rgba(5,150,105,.09);
+  --status-err:#dc2626;--status-err-tint:rgba(220,38,38,.09);
+  color:var(--fg-1);background:var(--bg);
+}
+
+/* ── Browser chrome ─────────────────────────────────────────── */
+.bc { flex-shrink:0;height:36px;background:var(--bg-elev-2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:0; }
+.bc-dots { display:flex;gap:5.5px;margin-right:14px; }
+.bc-dot { width:11px;height:11px;border-radius:50%; }
+.bc-dot.r { background:#ff5f57; }.bc-dot.y { background:#febc2e; }.bc-dot.g { background:#28c840; }
+.bc-url { flex:1;height:20px;background:var(--bg-elev-3);border:1px solid var(--border);border-radius:5px;display:flex;align-items:center;padding:0 8px;font-family:var(--font-mono);font-size:10px;color:var(--fg-4);gap:5px; }
+.bc-url::before { content:"🔒";font-size:7px;opacity:.6; }
+
+/* ── App inner ──────────────────────────────────────────────── */
+.frame-inner { flex:1;min-height:0;display:flex;flex-direction:column;background:var(--bg);overflow:hidden; }
+
+/* ── Animations ─────────────────────────────────────────────── */
+@keyframes sf-spin  { to { transform:rotate(360deg); } }
+@keyframes sf-pulse { 0%,100%{opacity:1;}50%{opacity:.3;} }
+@keyframes sf-breath { 0%,100%{opacity:.18;transform:scale(1);} 50%{opacity:.5;transform:scale(1.04);} }
+@keyframes sf-halo   { 0%{opacity:.55;transform:scale(1);} 70%{opacity:0;transform:scale(2.4);} 100%{opacity:0;transform:scale(2.4);} }
+@keyframes sf-cur   { 0%,100%{opacity:1;}50%{opacity:0;} }
+
+/* ── App bar ─────────────────────────────────────────────────── */
+.app-bar { height:52px;flex-shrink:0;background:var(--skin-panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 18px;z-index:10; }
+.app-logo { display:flex;align-items:center;gap:8px;text-decoration:none; }
+.app-logo-mark { width:26px;height:26px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--accent-ink);font-weight:900;font-size:13px;letter-spacing:-.03em; }
+.app-logo-word { font-size:14px;font-weight:700;letter-spacing:-.02em;color:var(--fg-1); }
+.app-sep { width:1px;height:18px;background:var(--border); }
+.app-bread { display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px; }
+.app-bread .s { color:var(--fg-4); }.app-bread .c { color:var(--fg-1);font-weight:600; }
+.app-pill { padding:3px 9px;border-radius:999px;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;display:flex;align-items:center;gap:5px;background:var(--status-run-tint);border:1px solid rgba(59,130,246,.3);color:var(--status-run); }
+.app-pill::before { content:"";width:5px;height:5px;border-radius:50%;background:var(--status-run);animation:sf-pulse 1.4s ease-in-out infinite; }
+.app-run-meta { font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.app-sp { flex:1; }
+.app-btn { height:28px;border-radius:7px;font-family:var(--font-sans);font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--fg-3);display:inline-flex;align-items:center;gap:5px;padding:0 11px;white-space:nowrap; }
+.app-btn:hover { background:var(--bg-elev-2);color:var(--fg-1);border-color:var(--border-strong); }
+.app-btn-icon { width:28px;height:28px;padding:0;justify-content:center; }
+.app-btn-primary { background:var(--accent);color:var(--accent-ink);border-color:var(--accent); }
+.app-btn-primary:hover { filter:brightness(1.1); }
+
+/* ── App body ────────────────────────────────────────────────── */
+.app-body { flex:1;min-height:0;display:grid;grid-template-columns:420px 1fr;overflow:hidden; }
+
+/* ── Left pane ───────────────────────────────────────────────── */
+.pane-l { background:var(--bg);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0;overflow:hidden; }
+.pane-l-head { padding:12px 16px 10px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid var(--border); }
+.pane-mark { width:30px;height:30px;border-radius:8px;flex-shrink:0;background:var(--accent-tint);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;color:var(--accent-bright); }
+.pane-l-title { font-size:13px;font-weight:600;letter-spacing:-.01em; }
+.pane-l-sub { font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.pane-l-col { margin-left:auto;color:var(--fg-4);font-size:16px;cursor:pointer;padding:0 4px; }
+
+/* ── Stream ──────────────────────────────────────────────────── */
+.stream { flex:1;min-height:0;overflow-y:auto;padding:14px 14px 0; }
+.stream::-webkit-scrollbar { width:3px; }
+.stream::-webkit-scrollbar-thumb { background:var(--border-strong);border-radius:2px; }
+.row { display:flex;margin-bottom:8px; }
+.row.right { justify-content:flex-end; }
+.bubble-user { background:var(--accent);color:var(--accent-ink);font-size:12.5px;line-height:1.5;padding:9px 14px;border-radius:14px 14px 4px 14px;max-width:280px; }
+.frame-light .bubble-user { background:var(--accent-tint);color:var(--fg-1);border:1px solid var(--border); }
+.sys-divider { text-align:center;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-5);padding:6px 0;margin-bottom:4px;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle); }
+.rationale { background:var(--bg-elev-1);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-bottom:8px; }
+.rationale-h { display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;font-weight:600;color:var(--fg-2); }
+.rationale-h .ic { color:var(--status-ok);font-size:11px; }
+.rationale-h .meta { margin-left:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4); }
+.rationale ul { padding-left:14px;color:var(--fg-3);line-height:1.65;list-style:disc;font-size:12px; }
+.rationale li b { color:var(--fg-1); }.rationale li em { color:var(--accent-bright);font-style:normal; }
+.cite-card { background:var(--bg-elev-1);border:1px solid var(--border);border-radius:9px;padding:9px 12px;display:flex;align-items:center;gap:10px;margin-bottom:8px; }
+.cite-icon { color:var(--accent-bright);flex-shrink:0; }
+.cite-meta { font-family:var(--font-mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-4); }
+.cite-name { font-size:12.5px;font-weight:600;color:var(--fg-1); }
+.cite-ext { margin-left:auto;color:var(--fg-4);font-size:12px; }
+.steps { margin-bottom:8px; }
+.step { display:flex;align-items:center;gap:10px;padding:5px 0;font-size:12px;color:var(--fg-3);border-bottom:1px solid var(--border-subtle); }
+.step:last-child { border-bottom:none; }
+.step-icon { width:20px;height:20px;flex-shrink:0;border-radius:50%;background:var(--bg-elev-3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;color:var(--fg-4); }
+.step-icon.done { background:var(--status-ok-tint);border-color:var(--status-ok);color:var(--status-ok); }
+.step-icon.run { background:var(--status-run-tint);border-color:var(--status-run);position:relative;overflow:hidden; }
+.step-icon.run span { width:10px;height:10px;border-radius:50%;border:2px solid var(--status-run);border-top-color:transparent;animation:sf-spin .8s linear infinite; }
+.step-name.dim { color:var(--fg-5); }
+.step.active .step-name { color:var(--fg-1);font-weight:500; }
+.step-meta { margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.step-meta.run { color:var(--status-run); }
+.substeps { padding:4px 0 4px 30px;display:flex;flex-direction:column;gap:2px; }
+.sub { display:flex;align-items:center;gap:7px;font-size:11px;padding:2px 0; }
+.sub .ic { width:14px;height:14px;border-radius:50%;background:var(--bg-elev-3);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px; }
+.sub .ic.done { background:var(--status-ok-tint);color:var(--status-ok); }
+.sub .ic.done::after { content:"✓"; }
+.sub .ic.run { background:var(--status-run-tint); }
+.sub .ic.run::after { content:"";width:6px;height:6px;border-radius:50%;border:1.5px solid var(--status-run);border-top-color:transparent;animation:sf-spin .8s linear infinite; }
+.sub .nm { color:var(--fg-3); }.sub .nm.dim { color:var(--fg-5); }
+.sub .t { margin-left:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4); }
+.yaml-stream { background:var(--bg-elev-2);border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-bottom:8px; }
+.yaml-stream-h { display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-4); }
+.yaml-stream-h .file { color:var(--status-ok);font-weight:400; }
+.yaml-stream pre { padding:10px 14px;font-family:var(--font-mono);font-size:11px;line-height:1.7;margin:0;color:var(--fg-3);white-space:pre; }
+.yaml-stream pre .k { color:var(--accent-bright); }
+.yaml-stream pre .s { color:var(--status-ok); }
+.yaml-stream pre .c { color:var(--fg-5); }
+.yaml-stream pre .ad { color:var(--status-ok); }
+.cur { display:inline-block;width:2px;height:13px;background:var(--accent);vertical-align:text-bottom;animation:sf-cur 1s step-end infinite; }
+.thinking { display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--fg-4); }
+.loader { width:14px;height:14px;border-radius:50%;border:2px solid var(--border);border-top-color:var(--accent);animation:sf-spin .7s linear infinite;flex-shrink:0; }
+
+/* ── Composer ────────────────────────────────────────────────── */
+.composer { flex-shrink:0;padding:10px 12px 8px;border-top:1px solid var(--border); }
+.composer-inner { border:1px solid var(--border-strong);border-radius:11px;overflow:hidden;background:var(--bg-elev-1); }
+.composer-input { width:100%;padding:10px 14px 6px;background:transparent;border:none;color:var(--fg-1);font-size:12.5px;font-family:var(--font-sans);resize:none;outline:none;line-height:1.55; }
+.composer-input::placeholder { color:var(--fg-5); }
+.composer-bar { display:flex;align-items:center;padding:4px 10px 8px;border-top:1px solid var(--border-subtle); }
+.composer-bar-r { margin-left:auto; }
+.cmp-btn { width:26px;height:26px;border-radius:6px;background:none;border:none;color:var(--fg-4);cursor:pointer;display:flex;align-items:center;justify-content:center; }
+.cmp-btn:hover { background:var(--bg-elev-2);color:var(--fg-2); }
+.cmp-send { width:28px;height:28px;border-radius:7px;border:none;cursor:pointer;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center; }
+.composer-hint { display:flex;align-items:center;gap:4px;padding:4px 12px 0;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5); }
+.kb { padding:1px 5px;border:1px solid var(--border-strong);border-radius:3px;color:var(--fg-4);font-size:9px; }
+
+/* ── Right pane ──────────────────────────────────────────────── */
+.pane-r { display:flex;flex-direction:column;min-height:0;overflow:hidden;background:var(--bg); }
+.toolbar { height:44px;flex-shrink:0;background:var(--skin-panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 14px; }
+.view-tab { display:flex;align-items:center;gap:5px;padding:0 12px;height:44px;border:none;background:none;cursor:pointer;font-size:11.5px;font-family:var(--font-sans);color:var(--fg-4);border-bottom:2px solid transparent;margin-bottom:-1px; }
+.view-tab.on { color:var(--fg-1);border-bottom-color:var(--accent); }
+.view-tab:hover:not(.on) { color:var(--fg-2); }
+.view-tab .ct { font-family:var(--font-mono);font-size:9px;padding:1px 5px;border-radius:4px;background:var(--bg-elev-3);color:var(--fg-4); }
+.file-tab { font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.file-tab .lbl { color:var(--fg-5);margin-right:5px; }
+.file-tab .id { color:var(--fg-3); }
+.run-tag { display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--status-run); }
+.run-tag .dot { width:6px;height:6px;border-radius:50%;background:var(--status-run);animation:sf-pulse 1.2s ease-in-out infinite; }
+.tool-r { margin-left:auto;display:flex;align-items:center;gap:4px; }
+.tool-icon { width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--bg-elev-1);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--fg-4);cursor:pointer; }
+.tool-btn { height:24px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--fg-3);font-size:11px;padding:0 10px;cursor:pointer; }
+.tool-btn:hover { background:var(--bg-elev-2);color:var(--fg-1); }
+.tool-btn.primary { background:var(--accent);color:var(--accent-ink);border-color:var(--accent); }
+.canvas { flex:1;min-height:0;overflow:hidden;position:relative;background:var(--bg); }
+.vpane { position:absolute;inset:0;overflow:auto;display:none; }
+.vpane.on { display:block; }
+
+/* ── Team canvas (SVG dag) ─────────────────────────────────── */
+.team-canvas { width:100%;height:100%;position:relative;overflow:hidden; }
+.team-canvas::before { content:"";position:absolute;inset:0;background-image:linear-gradient(var(--border-subtle) 1px,transparent 1px),linear-gradient(90deg,var(--border-subtle) 1px,transparent 1px);background-size:24px 24px; }
+.node { position:absolute;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;min-width:140px;box-shadow:0 2px 12px -4px rgba(0,0,0,.3); }
+.node.coord { border-color:var(--accent);box-shadow:var(--glow-accent); }
+.node.running { border-color:var(--status-run); }
+.node.pending { opacity:.6; }
+.node-head { display:flex;align-items:center;gap:10px;margin-bottom:8px; }
+.node-avatar { width:32px;height:32px;border-radius:9px;background:var(--accent-tint);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:var(--accent);flex-shrink:0; }
+.node.running .node-avatar { background:var(--status-run-tint);border-color:var(--status-run);color:var(--status-run); }
+.node-title { font-size:13px;font-weight:600;color:var(--fg-1); }
+.node-sub { font-family:var(--font-mono);font-size:9px;color:var(--fg-4); }
+.node-meta { display:flex;gap:5px;flex-wrap:wrap; }
+.chip { font-family:var(--font-mono);font-size:9.5px;padding:2px 7px;border-radius:5px;background:var(--bg-elev-3);border:1px solid var(--border);color:var(--fg-4); }
+.chip.accent { background:var(--accent-tint);border-color:var(--accent);color:var(--accent-bright); }
+.zoom { position:absolute;bottom:14px;right:14px;height:28px;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;overflow:hidden; }
+.zoom button { height:100%;width:28px;background:none;border:none;color:var(--fg-3);cursor:pointer;font-size:14px; }
+.zoom button:hover { background:var(--bg-elev-3);color:var(--fg-1); }
+.zoom .pct { font-family:var(--font-mono);font-size:10px;color:var(--fg-4);padding:0 8px;border-left:1px solid var(--border);border-right:1px solid var(--border); }
+
+/* ── Overview pane ───────────────────────────────────────────── */
+.ov-scroll { padding:16px;max-width:640px;margin:0 auto; }
+.ov-h1 { font-size:22px;font-weight:700;letter-spacing:-.025em;margin-bottom:16px;color:var(--fg-1); }
+.ov-status { background:var(--bg-elev-1);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px; }
+.ov-status-desc { font-size:12.5px;color:var(--fg-3);line-height:1.6;margin-bottom:12px; }
+.ov-status-flags { display:flex;gap:12px;margin-bottom:10px; }
+.ov-flag { display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg-3);cursor:default; }
+.ov-check { width:16px;height:16px;border-radius:4px;background:var(--bg-elev-3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--fg-5); }
+.ov-check.on { background:var(--status-ok-tint);border-color:var(--status-ok);color:var(--status-ok); }
+.ov-status-row { display:flex;align-items:center;justify-content:space-between; }
+.ov-status-lbl { font-size:12px;color:var(--fg-3); }
+.ov-status-btn { height:26px;padding:0 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--fg-3);font-size:11px;cursor:pointer; }
+.ov-callout { display:flex;align-items:flex-start;gap:10px;background:var(--status-warn-tint);border:1px solid rgba(251,191,36,.25);border-radius:10px;padding:12px 14px;margin-bottom:12px; }
+.ov-callout-icon { font-size:14px;color:var(--status-warn);flex-shrink:0; }
+.ov-callout-title { font-size:12.5px;font-weight:600;color:var(--fg-1);margin-bottom:3px; }
+.ov-callout-desc { font-size:11.5px;color:var(--fg-3);line-height:1.5; }
+.ov-callout-btn { margin-left:auto;flex-shrink:0;height:26px;padding:0 10px;border-radius:6px;border:1px solid rgba(251,191,36,.35);background:transparent;color:var(--status-warn);font-size:11px;cursor:pointer; }
+.ov-section { margin-bottom:16px; }
+.ov-section-head { display:flex;align-items:center;gap:6px;margin-bottom:8px; }
+.ov-section-lbl { font-family:var(--font-mono);font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-4); }
+.ov-section-ct { font-family:var(--font-mono);font-size:9px;padding:1px 5px;border-radius:4px;background:var(--bg-elev-3);color:var(--fg-4); }
+.ov-review-card { background:var(--bg-elev-1);border:1px solid var(--border);border-radius:10px;padding:14px 16px; }
+.ov-review-name { font-family:var(--font-mono);font-size:11.5px;font-weight:600;margin-bottom:5px;color:var(--fg-1); }
+.ov-review-desc { font-size:12px;line-height:1.5;margin-bottom:9px;color:var(--fg-3); }
+.ov-review-actions { display:flex;gap:8px; }
+.ov-act { height:28px;padding:0 14px;border-radius:7px;font-size:11.5px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--fg-3); }
+.ov-act-good:hover { background:var(--status-ok-tint);border-color:var(--status-ok);color:var(--status-ok); }
+.ov-act-bad:hover  { background:var(--status-err-tint);border-color:var(--status-err);color:var(--status-err); }
+.ov-list { display:flex;flex-direction:column;gap:2px; }
+.ov-row { display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-elev-1);cursor:pointer;font-size:12px; }
+.ov-row:hover { background:var(--bg-elev-2); }
+.ov-row-chev { color:var(--fg-4);margin-right:2px; }
+.ov-row-name { color:var(--fg-1);font-weight:500; }
+.ov-row-meta { margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.ov-row-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+.ov-row-dot[data-s=run] { background:var(--status-run); }
+.ov-row-dot[data-s=ok]  { background:var(--status-ok); }
+
+/* ── Settings modal ──────────────────────────────────────────── */
+.modal-backdrop {
+  position:fixed;inset:0;z-index:1000;display:none;
+  background:rgba(0,0,0,.65);backdrop-filter:blur(8px);
+  align-items:center;justify-content:center;
+}
+.modal-backdrop.open { display:flex; }
+.modal {
+  width:540px;max-height:84vh;border-radius:14px;overflow:hidden;
+  display:flex;flex-direction:column;
+  box-shadow:0 32px 80px -8px rgba(0,0,0,.8);
+}
+.modal.dark-skin {
+  background:#111;border:1px solid rgba(255,255,255,.08);
+  --bg:#0a0a0a;--bg-elev-1:#111;--bg-elev-2:#161616;--bg-elev-3:#1c1c1c;
+  --fg-1:#f5f5f5;--fg-2:#d4d4d4;--fg-3:#a3a3a3;--fg-4:#737373;--fg-5:#525252;
+  --border:rgba(255,255,255,.08);--border-strong:rgba(255,255,255,.16);--border-subtle:rgba(255,255,255,.04);
+  --accent:#A855F7;--accent-bright:#C084FC;--accent-tint:rgba(168,85,247,.12);--accent-ink:#fff;
+  color:#f5f5f5;
+}
+.modal.light-skin {
+  background:#fff;border:1px solid rgba(0,0,0,.1);
+  --bg:#faf9f5;--bg-elev-1:#fff;--bg-elev-2:#f5f3ed;--bg-elev-3:#ede9e0;
+  --fg-1:#1a1612;--fg-2:#3d3629;--fg-3:#6b5e4a;--fg-4:#9c8a72;--fg-5:#b8a88e;
+  --border:rgba(0,0,0,.09);--border-strong:rgba(0,0,0,.18);--border-subtle:rgba(0,0,0,.04);
+  --accent:#d97757;--accent-bright:#c4623e;--accent-tint:rgba(217,119,87,.12);--accent-ink:#fff;
+  color:#1a1612;
+}
+.modal-head { padding:16px 18px 0;display:flex;align-items:center;gap:11px;flex-shrink:0; }
+.modal-icon { width:34px;height:34px;border-radius:9px;background:var(--accent-tint);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--accent-bright);flex-shrink:0; }
+.modal-title { font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--fg-1); }
+.modal-sub { font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.modal-x { margin-left:auto;width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--fg-4);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px; }
+.modal-x:hover { background:var(--bg-elev-2);color:var(--fg-1); }
+.modal-tabs { display:flex;padding:10px 18px 0;border-bottom:1px solid var(--border);flex-shrink:0; }
+.modal-tab { padding:6px 14px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;color:var(--fg-4);border-bottom:2px solid transparent;margin-bottom:-1px; }
+.modal-tab.on { color:var(--fg-1);border-bottom-color:var(--accent); }
+.modal-body { padding:18px;overflow-y:auto;flex:1;min-height:0; }
+.modal-body::-webkit-scrollbar { width:3px; }
+.modal-body::-webkit-scrollbar-thumb { background:var(--border-strong);border-radius:2px; }
+.modal-pane { display:none; }
+.modal-pane.on { display:block; }
+.set-sec { font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-4);margin-bottom:10px;margin-top:4px; }
+.set-group { background:var(--bg-elev-1);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px; }
+.set-row { display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border-subtle);gap:12px; }
+.set-row:last-child { border-bottom:none; }
+.set-lbl { min-width:0; }
+.set-lbl .k { display:block;font-size:12.5px;color:var(--fg-1); }
+.set-lbl .d { display:block;font-size:11px;color:var(--fg-4);margin-top:1px; }
+.set-ctrl { display:flex;align-items:center;gap:8px;flex-shrink:0; }
+.set-select { height:26px;padding:0 26px 0 9px;border-radius:6px;border:1px solid var(--border-strong);background:var(--bg-elev-2);color:var(--fg-1);font-size:11.5px;font-family:var(--font-sans);cursor:pointer;outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23737373' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center; }
+.set-num { height:26px;width:72px;padding:0 9px;border-radius:6px;border:1px solid var(--border-strong);background:var(--bg-elev-2);color:var(--fg-1);font-size:11.5px;font-family:var(--font-mono);outline:none;text-align:right; }
+.set-slider-wrap { display:flex;align-items:center;gap:8px; }
+.set-slider { width:100px;height:4px;border-radius:2px;cursor:pointer;accent-color:var(--accent); }
+.set-slider-val { font-family:var(--font-mono);font-size:11px;color:var(--fg-3);min-width:26px;text-align:right; }
+.sf-toggle { position:relative;cursor:pointer; }
+.sf-toggle input { opacity:0;width:0;height:0;position:absolute; }
+.sf-toggle-track { display:block;width:36px;height:20px;border-radius:10px;background:var(--bg-elev-4);transition:background .2s; }
+.sf-toggle input:checked + .sf-toggle-track { background:var(--accent); }
+.sf-toggle-thumb { position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:8px;background:#fff;transition:transform .2s;pointer-events:none; }
+.sf-toggle input:checked ~ * .sf-toggle-thumb,
+.sf-toggle input:checked + .sf-toggle-track .sf-toggle-thumb { transform:translateX(16px); }
+.sf-seg { display:flex;background:var(--bg-elev-2);border:1px solid var(--border);border-radius:7px;overflow:hidden; }
+.sf-seg button { height:26px;padding:0 11px;border:none;background:none;color:var(--fg-4);font-size:11.5px;font-family:var(--font-sans);cursor:pointer;white-space:nowrap; }
+.sf-seg button.on { background:var(--bg-elev-4);color:var(--fg-1);font-weight:500; }
+.modal-foot { padding:12px 18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0; }
+.modal-reset { background:none;border:none;color:var(--fg-4);font-size:11.5px;cursor:pointer;padding:0; }
+.modal-reset:hover { color:var(--fg-2); }
+.modal-btn { height:30px;padding:0 14px;border-radius:7px;font-size:12px;cursor:pointer; }
+.modal-btn-ghost { border:1px solid var(--border);background:transparent;color:var(--fg-3); }
+.modal-btn-ghost:hover { background:var(--bg-elev-2);color:var(--fg-1); }
+.modal-btn-primary { border:none;background:var(--accent);color:var(--accent-ink);font-weight:600;margin-left:auto; }
+
+/* ════════════════════════════════════════════════════════════════
+   v2 additions — 实时跟随 toolbar / collapsed thinking / preview
+   ════════════════════════════════════════════════════════════════ */
+
+/* Toolbar v2 — make room for the follow chip on the same row */
+.toolbar-v2 { gap:10px;padding:0 12px;height:46px; }
+.toolbar-v2 .tabs-row { display:flex;align-items:center;height:100%; }
+.toolbar-v2 .toolbar-sep { width:1px;height:22px;background:var(--border);flex-shrink:0; }
+.toolbar-v2 .view-tab { height:46px;padding:0 11px;font-size:11.5px;position:relative;gap:5px; }
+.toolbar-v2 .view-tab svg { flex-shrink:0; }
+.toolbar-v2 .file-tab { font-size:9.5px;letter-spacing:.04em; }
+
+/* Follow chip — left-aligned, prominent, pulsing while live */
+.follow-chip {
+  display:inline-flex;align-items:center;gap:7px;
+  height:26px;padding:0 10px;
+  border-radius:6px;
+  background:var(--accent-tint);
+  border:1px solid var(--accent);
+  color:var(--accent-bright);
+  font-family:var(--font-sans);
+  cursor:pointer;white-space:nowrap;
+  position:relative;flex-shrink:0;
+  transition:background .15s,border-color .15s;
+}
+.follow-chip::before {
+  content:"";width:6px;height:6px;border-radius:50%;
+  background:var(--accent);flex-shrink:0;
+  box-shadow:0 0 0 0 var(--accent);
+  animation:sf-follow-pulse 1.6s ease-out infinite;
+}
+@keyframes sf-follow-pulse {
+  0%   { box-shadow:0 0 0 0 currentColor; opacity:1; }
+  70%  { box-shadow:0 0 0 6px transparent; opacity:.55; }
+  100% { box-shadow:0 0 0 0 transparent; opacity:1; }
+}
+.follow-chip .lbl {
+  font-size:11.5px;font-weight:500;
+  color:var(--accent-bright);
+}
+
+/* Off state — user has locked a tab manually */
+.follow-chip.off {
+  background:transparent;
+  border-color:var(--border-strong);
+  color:var(--fg-3);
+}
+.follow-chip.off::before {
+  background:var(--fg-5);animation:none;box-shadow:none;
+}
+.follow-chip.off .lbl { display:none; }
+.follow-chip.off .resume {
+  display:inline-flex;align-items:center;
+  font-size:11.5px;font-weight:500;
+  color:var(--accent-bright);
+}
+.follow-chip:not(.off) .resume { display:none; }
+.follow-chip.off:hover { background:var(--accent-tint);border-color:var(--accent); }
+
+/* Tab being currently followed — subtle accent indicator */
+.view-tab[data-followed="1"]::after {
+  content:"";position:absolute;top:7px;right:5px;
+  width:6px;height:6px;border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 0 2px var(--skin-panel);
+  animation:sf-follow-pulse 1.6s ease-out infinite;
+}
+.follow-chip.off ~ .tabs-row .view-tab[data-followed="1"]::after,
+.toolbar-v2 .follow-chip.off + .toolbar-sep + .tabs-row .view-tab[data-followed="1"]::after {
+  /* When follow is off, dim the indicator on the previously-followed tab */
+  background:var(--fg-5);animation:none;
+}
+
+/* Compact "thinking" — folded card by default, per design doc principle 6 */
+.think-card {
+  background:var(--bg-elev-1);
+  border:1px solid var(--border);
+  border-radius:9px;
+  margin-bottom:8px;overflow:hidden;
+}
+.think-head {
+  display:flex;align-items:center;gap:8px;
+  padding:8px 12px;
+  font-size:11.5px;color:var(--fg-2);
+  cursor:pointer;user-select:none;
+}
+.think-head:hover { background:var(--bg-elev-2); }
+.think-head .ic { font-size:13px;opacity:.7;flex-shrink:0; }
+.think-head .focus { color:var(--fg-1);font-weight:500; }
+.think-head .meta {
+  margin-left:auto;display:flex;align-items:center;gap:8px;
+  font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5);
+}
+.think-head .chev {
+  display:inline-block;transition:transform .18s;
+  color:var(--fg-5);font-size:11px;line-height:1;
+}
+.think-card.open .think-head .chev { transform:rotate(90deg);color:var(--accent-bright); }
+.think-body {
+  display:none;
+  padding:6px 12px 12px 30px;
+  font-size:11.5px;color:var(--fg-3);line-height:1.65;
+  border-top:1px solid var(--border-subtle);
+}
+.think-card.open .think-body { display:block; }
+.think-line { display:flex;gap:10px;padding:4px 0; }
+.think-line .t {
+  font-family:var(--font-mono);font-size:10px;color:var(--fg-5);
+  flex-shrink:0;width:38px;line-height:1.65;
+}
+.think-line code {
+  font-family:var(--font-mono);font-size:10.5px;
+  padding:0 4px;border-radius:3px;
+  background:var(--bg-elev-3);color:var(--accent-bright);
+}
+
+/* Tiny "view artifact" link below each step row */
+.step-artifact {
+  display:flex;align-items:center;gap:6px;
+  margin-left:30px;padding:3px 0 6px;
+  font-family:var(--font-mono);font-size:10px;
+  color:var(--fg-4);
+  border-bottom:1px solid var(--border-subtle);
+}
+.step-artifact a {
+  color:var(--accent-bright);text-decoration:none;cursor:pointer;
+  padding:1px 6px;border-radius:4px;
+  border:1px solid var(--border);background:var(--bg-elev-2);
+}
+.step-artifact a:hover { background:var(--accent-tint);border-color:var(--accent); }
+.step-artifact .dim { color:var(--fg-5); }
+
+/* Preview pane (4th tab) */
+.preview-wrap { padding:18px 24px 32px;max-width:780px;margin:0 auto; }
+.preview-bar {
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:14px;
+}
+.preview-bar .nm {
+  font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--fg-1);
+}
+.preview-bar .badge {
+  font-family:var(--font-mono);font-size:9px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;
+  padding:2px 7px;border-radius:5px;
+  background:var(--status-run-tint);color:var(--status-run);
+  border:1px solid currentColor;
+  display:flex;align-items:center;gap:5px;
+}
+.preview-bar .badge::before {
+  content:"";width:5px;height:5px;border-radius:50%;
+  background:var(--status-run);animation:sf-pulse 1.4s ease-in-out infinite;
+}
+.preview-bar .sp { flex:1; }
+.preview-bar .meta { font-family:var(--font-mono);font-size:10px;color:var(--fg-4); }
+.preview-yaml {
+  background:var(--bg-elev-1);border:1px solid var(--border);
+  border-radius:10px;padding:14px 18px;margin:0;
+  font-family:var(--font-mono);font-size:12px;line-height:1.85;
+  color:var(--fg-3);
+  white-space:pre;overflow-x:auto;
+}
+.preview-yaml::-webkit-scrollbar { height:6px; }
+.preview-yaml::-webkit-scrollbar-thumb { background:var(--border-strong);border-radius:3px; }
+.preview-yaml .k  { color:var(--accent-bright);font-weight:600; }
+.preview-yaml .s  { color:var(--status-ok); }
+.preview-yaml .c  { color:var(--fg-5); }
+.preview-yaml .ad { color:var(--status-ok); }
+.preview-yaml .cur {
+  display:inline-block;width:2px;height:14px;
+  background:var(--accent);vertical-align:text-bottom;
+  animation:sf-cur 1s step-end infinite;
+}
+.preview-foot {
+  display:flex;align-items:center;gap:10px;
+  margin-top:14px;padding:10px 14px;
+  border-radius:9px;
+  background:var(--bg-elev-1);border:1px solid var(--border);
+  font-size:11.5px;color:var(--fg-3);
+}
+.preview-foot .ic { color:var(--status-run);flex-shrink:0; }
+.preview-foot strong { color:var(--fg-1);font-weight:600; }
+.preview-foot .open-editor {
+  margin-left:auto;height:24px;padding:0 10px;border-radius:6px;
+  background:var(--accent);color:var(--accent-ink);border:none;
+  font-size:11px;font-weight:600;cursor:pointer;
+}
+
+/* ── Agent pane v2 — 5-slot timeline + tools satellite + I/O ─ */
+.ag-wrap { padding:20px 22px 22px;display:flex;flex-direction:column;gap:14px; }
+.ag-id { display:grid;grid-template-columns:56px 1fr auto auto;gap:14px;align-items:center;
+  border:1px solid var(--accent);border-radius:14px;padding:14px 16px;
+  background:var(--bg-elev-1);box-shadow:var(--glow-accent,0 0 0 1px var(--accent-tint)); }
+.ag-id-mark { width:56px;height:56px;border-radius:14px;background:var(--accent-tint);
+  border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-size:22px;font-weight:800;letter-spacing:-.04em;
+  color:var(--accent);position:relative; }
+.ag-id-mark::after { content:"";position:absolute;inset:-5px;border-radius:17px;pointer-events:none;
+  box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 32%,transparent),
+             0 0 18px 2px color-mix(in oklab,var(--accent) 22%,transparent);
+  animation:sf-breath 2.4s ease-in-out infinite; }
+.ag-id-nm { font-size:17px;font-weight:700;letter-spacing:-.01em;color:var(--fg-1); }
+.ag-id-sub { font-family:var(--font-mono);font-size:10px;color:var(--fg-4);margin-top:3px; }
+.ag-id-sub .stp { color:var(--accent); }
+.ag-id-pill { padding:4px 10px;border-radius:999px;border:1px solid var(--status-run);
+  background:var(--status-run-tint);color:var(--status-run);
+  font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.1em; }
+/* Agent roster — scrollable rail + status rings + +N popover */
+.ag-sw { position:relative;display:flex;align-items:center;gap:6px;max-width:240px; }
+.ag-sw-rail { display:flex;gap:6px;align-items:center;
+  overflow-x:auto;scroll-behavior:smooth;scroll-snap-type:x proximity;
+  scrollbar-width:none;-ms-overflow-style:none;padding:3px 14px 3px 3px;
+  mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%);
+  -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%); }
+.ag-sw-rail::-webkit-scrollbar { display:none; }
+.ag-sw button.ag-sw-av { position:relative;flex:0 0 auto;width:30px;height:30px;border-radius:9px;
+  background:var(--bg-elev-2);border:1.5px solid var(--border);color:var(--fg-3);
+  font-family:var(--font-mono);font-weight:700;font-size:11px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;scroll-snap-align:start;
+  transition:background .14s,border-color .14s,color .14s,transform .12s; }
+.ag-sw button.ag-sw-av:hover { background:var(--bg-elev-3);color:var(--fg-1);transform:translateY(-1px); }
+.ag-sw button.ag-sw-av:active { transform:scale(.92); }
+.ag-sw button.ag-sw-av.on { background:var(--accent-tint);border-color:var(--accent);color:var(--accent-bright); }
+.ag-sw button.ag-sw-av[data-st="running"]::before {
+  content:"";position:absolute;right:-2px;top:-2px;width:7px;height:7px;border-radius:50%;
+  background:var(--accent);box-shadow:0 0 0 2px var(--bg-elev-1);z-index:2; }
+.ag-sw button.ag-sw-av[data-st="running"]::after {
+  content:"";position:absolute;right:-2px;top:-2px;width:7px;height:7px;border-radius:50%;
+  background:var(--accent);pointer-events:none;transform-origin:center;
+  animation:sf-halo 1.6s ease-out infinite; }
+.ag-sw button.ag-sw-av[data-st="ok"]::before {
+  content:"";position:absolute;right:-2px;top:-2px;width:7px;height:7px;border-radius:50%;
+  background:var(--status-ok);box-shadow:0 0 0 2px var(--bg-elev-1); }
+.ag-sw button.ag-sw-av[data-st="pending"] { opacity:.55;border-style:dashed; }
+.ag-sw button.ag-sw-av[data-st="idle"]    { opacity:.42; }
+.ag-sw button.ag-sw-av[data-st="idle"]:hover { opacity:.85; }
+
+.ag-sw-more { flex:0 0 auto;height:30px;padding:0 10px;border-radius:9px;
+  border:1px dashed var(--border);background:transparent;color:var(--fg-4);
+  font-family:var(--font-mono);font-size:10.5px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:4px;
+  transition:color .14s,border-color .14s,background .14s; }
+.ag-sw-more:hover { color:var(--fg-1);border-color:var(--fg-4);background:var(--bg-elev-2); }
+.ag-sw-more .chev { font-size:8px;opacity:.7; }
+
+.ag-sw-pop { position:absolute;top:calc(100% + 8px);right:0;z-index:30;
+  width:340px;padding:10px;border-radius:14px;
+  background:var(--bg-elev-1);border:1px solid var(--border);
+  box-shadow:0 18px 44px -8px rgba(0,0,0,.4),0 2px 6px -2px rgba(0,0,0,.25);
+  display:none; }
+.ag-sw-pop.open { display:block; }
+.ag-sw-pop-srch { width:100%;padding:8px 10px;border-radius:8px;
+  background:var(--bg-elev-2);border:1px solid var(--border);
+  color:var(--fg-1);font-size:11px;font-family:var(--font-mono);
+  outline:none;margin-bottom:8px;box-sizing:border-box; }
+.ag-sw-pop-srch::placeholder { color:var(--fg-5); }
+.ag-sw-pop-srch:focus { border-color:var(--accent);background:var(--bg-elev-1); }
+.ag-sw-pop-grid { display:grid;grid-template-columns:1fr 1fr;gap:5px;max-height:280px;overflow-y:auto; }
+.ag-sw-pop-row { display:grid;grid-template-columns:26px 1fr auto;gap:8px;align-items:center;
+  padding:6px 7px;border-radius:8px;border:1px solid transparent;
+  background:var(--bg-elev-2);cursor:pointer;text-align:left;
+  transition:background .12s,border-color .12s; }
+.ag-sw-pop-row:hover,.ag-sw-pop-row.hov { background:var(--bg-elev-3);border-color:var(--border); }
+.ag-sw-pop-row.on { background:var(--accent-tint);border-color:var(--accent); }
+.ag-sw-pop-mk { width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+  background:var(--bg-elev-3);color:var(--fg-2);font-family:var(--font-mono);
+  font-weight:700;font-size:10px;border:1px solid var(--border); }
+.ag-sw-pop-row.on .ag-sw-pop-mk { background:var(--accent-tint);color:var(--accent-bright);border-color:var(--accent); }
+.ag-sw-pop-tx { min-width:0; }
+.ag-sw-pop-tx .nm { font-size:11px;font-weight:600;color:var(--fg-1);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.ag-sw-pop-tx .rl { font-family:var(--font-mono);font-size:9px;color:var(--fg-4);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.ag-sw-pop-st { font-family:var(--font-mono);font-size:8.5px;text-transform:uppercase;
+  padding:2px 6px;border-radius:999px;background:var(--bg-elev-3);color:var(--fg-4);
+  letter-spacing:.04em; }
+.ag-sw-pop-st[data-st="running"] { color:var(--status-run);border:1px solid var(--status-run);background:transparent; }
+.ag-sw-pop-st[data-st="ok"]      { color:var(--status-ok);border:1px solid var(--status-ok);background:transparent; }
+.ag-sw-pop-st[data-st="pending"] { color:var(--fg-4);border:1px dashed var(--border);background:transparent; }
+.ag-sw-pop-st[data-st="idle"]    { opacity:.6; }
+.ag-sw-pop-kb { font-family:var(--font-mono);font-size:9px;color:var(--fg-5);text-align:right;
+  margin-top:8px;padding-top:8px;border-top:1px solid var(--border);letter-spacing:.05em; }
+.ag-sw-pop-kb kbd { padding:1px 4px;border-radius:3px;background:var(--bg-elev-3);
+  border:1px solid var(--border);color:var(--fg-3);margin:0 1px; }
+
+/* Placeholder panel (unconfigured agents) */
+.ag-empty { margin-top:16px;padding:28px 22px;border-radius:14px;
+  border:1.5px dashed var(--border);background:var(--bg-elev-1);
+  display:grid;place-items:center;text-align:center; }
+.ag-empty-h { font-size:15px;font-weight:700;color:var(--fg-2);margin-bottom:6px;letter-spacing:-.01em; }
+.ag-empty-b { font-size:12px;color:var(--fg-4);margin-bottom:16px;max-width:360px;line-height:1.5; }
+.ag-empty-cta { padding:8px 16px;border-radius:8px;border:1px solid var(--accent);
+  background:var(--accent);color:var(--accent-ink);font-size:12px;font-weight:600;cursor:pointer;
+  transition:filter .14s; }
+.ag-empty-cta:hover { filter:brightness(1.08); }
+
+/* 5 slots — Identity / Persona / Model / Tools / Memory (mirrors RunSessionPage.tsx 1156-1163) */
+.ag-tl { display:grid;grid-template-columns:repeat(3,1fr);gap:8px; }
+.ag-tl-cell { padding:11px 12px;border-radius:11px;border:1px solid var(--border);
+  background:var(--bg-elev-1);display:flex;flex-direction:column;gap:5px;min-width:0; }
+.ag-tl-cell.done { border-color:color-mix(in oklab,var(--status-ok) 45%,var(--border)); }
+.ag-tl-cell.run  { border-color:var(--accent);background:var(--accent-tint); }
+.ag-tl-cell.pending { border-style:dashed;opacity:.65; }
+.ag-tl-step { display:flex;align-items:center;gap:6px;
+  font-family:var(--font-mono);font-size:8.5px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--fg-4); }
+.ag-tl-cell.done .ag-tl-step { color:var(--status-ok); }
+.ag-tl-cell.run  .ag-tl-step { color:var(--accent); }
+.ag-tl-num { width:14px;height:14px;border-radius:50%;display:inline-flex;
+  align-items:center;justify-content:center;background:var(--bg-elev-3);color:var(--fg-4);
+  font-size:9px;font-weight:700;border:1px solid var(--border); }
+.ag-tl-cell.done .ag-tl-num { background:var(--status-ok);color:#fff;border-color:var(--status-ok); }
+.ag-tl-cell.run  .ag-tl-num { background:var(--accent);color:var(--accent-ink);border-color:var(--accent); }
+.ag-tl-title { font-size:12.5px;font-weight:600;color:var(--fg-1);letter-spacing:-.005em; }
+.ag-tl-cell.pending .ag-tl-title { color:var(--fg-3); }
+.ag-tl-body { font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3);line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  word-break:break-all;min-height:26px; }
+
+/* Tools satellite block — n8n-inspired typed sub-slots */
+.ag-tools { border:1px solid var(--border);border-radius:13px;padding:14px 16px;background:var(--bg-elev-1); }
+.ag-tools-h { display:flex;align-items:center;gap:8px;margin-bottom:10px; }
+.ag-tools-h .lbl { font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--fg-4);font-weight:700; }
+.ag-tools-h .ct { font-family:var(--font-mono);font-size:10px;color:var(--accent-bright);font-weight:600; }
+.ag-tools-h .sp { flex:1; }
+.ag-tools-h .hint { font-family:var(--font-mono);font-size:9.5px;color:var(--fg-5); }
+.ag-tool-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:6px; }
+.ag-tool { display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;
+  padding:7px 10px;border-radius:8px;background:var(--bg-elev-2);border:1px solid var(--border); }
+.ag-tool.sel { background:var(--accent-tint);border-color:var(--accent); }
+.ag-tool.cand { border-style:dashed;opacity:.7; }
+.ag-tool .dot { width:6px;height:6px;border-radius:50%;background:var(--fg-5); }
+.ag-tool.sel .dot { background:var(--accent);box-shadow:0 0 6px var(--accent); }
+.ag-tool.run .dot { background:var(--status-run);box-shadow:0 0 6px var(--status-run);
+  animation:sf-pulse 1.4s ease-in-out infinite; }
+.ag-tool .nm { font-family:var(--font-mono);font-size:11px;color:var(--fg-2);font-weight:500;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.ag-tool.sel .nm { color:var(--accent-bright); }
+.ag-tool .tag { font-family:var(--font-mono);font-size:8.5px;color:var(--fg-5);
+  letter-spacing:.06em;padding:1px 5px;border-radius:3px;background:var(--bg-elev-3); }
+.ag-tool.sel .tag { background:var(--accent);color:var(--accent-ink); }
+.ag-tool.cand .tag { color:var(--fg-4); }
+
+/* I/O sample */
+.ag-io { border:1px solid var(--border);border-radius:12px;background:var(--bg-elev-1);
+  padding:12px 0;display:grid;grid-template-columns:1fr 1fr;position:relative; }
+.ag-io::before { content:"";position:absolute;top:12px;bottom:12px;left:50%;width:1px;background:var(--border); }
+.ag-io-col { padding:0 16px; }
+.ag-io-h { font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--fg-4);font-weight:700;margin-bottom:6px;
+  display:flex;align-items:center;gap:5px; }
+.ag-io-h .arrow { color:var(--accent);font-weight:900; }
+.ag-io-body { font-family:var(--font-mono);font-size:10.5px;color:var(--fg-3);line-height:1.55; }
+.ag-io-body code { color:var(--accent-bright); }
+
+/* ── Agent panels (switchable per role) ──────────────────── */
+.ag-panel { display:none;flex-direction:column;gap:14px; }
+.ag-panel.on { display:flex; }
+.ag-id[data-state="ok"] { border-color:color-mix(in oklab,var(--status-ok) 65%,var(--border)); }
+.ag-id[data-state="ok"] .ag-id-mark { color:var(--status-ok);border-color:var(--status-ok);background:var(--status-ok-tint); }
+.ag-id[data-state="ok"] .ag-id-mark::after { animation:none;
+  box-shadow:0 0 0 2px color-mix(in oklab,var(--status-ok) 38%,transparent); opacity:.7; }
+.ag-id[data-state="ok"] .ag-id-pill { color:var(--status-ok);border-color:var(--status-ok);background:var(--status-ok-tint); }
+.ag-id[data-state="pending"] { border-color:var(--border);border-style:dashed;box-shadow:none; }
+.ag-id[data-state="pending"] .ag-id-mark { color:var(--fg-4);background:var(--bg-elev-2);border-color:var(--border);border-style:dashed; }
+.ag-id[data-state="pending"] .ag-id-mark::after { display:none; }
+.ag-id[data-state="pending"] .ag-id-pill { color:var(--fg-4);border-color:var(--border);background:var(--bg-elev-2);border-style:dashed; }
+.ag-sw button { transition:background .12s,border-color .12s,color .12s,transform .12s; }
+.ag-sw button:active { transform:scale(.92); }
+
+/* Persona system-prompt block — inline below timeline (per intent-workflow-design v1) */
+.ag-persona { border:1px solid var(--border);border-radius:13px;background:var(--bg-elev-1);overflow:hidden; }
+.ag-persona-h { display:flex;align-items:center;gap:8px;padding:8px 13px;
+  border-bottom:1px solid var(--border);background:var(--bg-elev-2);
+  font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--fg-4);font-weight:700; }
+.ag-persona-h .nm { color:var(--fg-2);letter-spacing:.08em; }
+.ag-persona-h .sp { flex:1; }
+.ag-persona-h .meta { color:var(--fg-5);font-weight:500;letter-spacing:.06em;text-transform:none; }
+.ag-persona-h .stream { color:var(--accent-bright);text-transform:none;letter-spacing:.04em;
+  font-weight:600;display:inline-flex;align-items:center;gap:5px; }
+.ag-persona-h .stream::before { content:"";width:5px;height:5px;border-radius:50%;
+  background:var(--accent);animation:sf-pulse 1.4s ease-in-out infinite; }
+.ag-persona-h .stream.idle { color:var(--fg-5); }
+.ag-persona-h .stream.idle::before { background:var(--fg-5);animation:none; }
+.ag-persona-body { padding:13px 16px;font-family:var(--font-mono);font-size:11.5px;
+  line-height:1.85;color:var(--fg-2);white-space:pre-wrap;margin:0; }
+.ag-persona-body .c  { color:var(--fg-5); }
+.ag-persona-body .k  { color:var(--accent-bright);font-weight:600; }
+.ag-persona-body .s  { color:var(--status-ok); }
+.ag-persona-body .v  { color:var(--fg-1);font-weight:500; }
+.ag-persona-body .b  { color:var(--fg-3); }
+.ag-persona-body .cur { display:inline-block;width:2px;height:13px;background:var(--accent);
+  vertical-align:text-bottom;animation:sf-cur 1s step-end infinite;margin-left:1px; }
+
+/* ── Compact policy matrix — floating top-right of team-canvas ── */
+.pm-mini { position:absolute;top:14px;right:14px;width:262px;z-index:5;
+  border:1px solid var(--border);border-radius:11px;background:var(--bg-elev-1);
+  box-shadow:0 8px 22px -10px rgba(0,0,0,.45),0 2px 6px -3px rgba(0,0,0,.25);overflow:hidden; }
+.pm-mini-h { display:flex;align-items:center;gap:7px;padding:7px 11px;
+  border-bottom:1px solid var(--border);background:var(--bg-elev-2); }
+.pm-mini-h .lbl { font-family:var(--font-mono);font-size:8.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--fg-4);font-weight:700; }
+.pm-mini-h .title { font-size:10.5px;font-weight:600;color:var(--fg-1);letter-spacing:-.005em; }
+.pm-mini-h .sp { flex:1; }
+.pm-mini-h .exp { background:none;border:none;color:var(--fg-4);font-size:11px;cursor:pointer;
+  font-family:var(--font-mono);padding:0;line-height:1; }
+.pm-mini-h .exp:hover { color:var(--accent-bright); }
+.pm-mini-rows { padding:5px 6px; }
+.pm-mini-row { display:grid;grid-template-columns:54px repeat(6,1fr);align-items:center;
+  padding:4px 4px;font-family:var(--font-mono);font-size:9px;color:var(--fg-3);
+  border-radius:5px;column-gap:2px; }
+.pm-mini-row.head { color:var(--fg-5);font-size:7.5px;letter-spacing:.1em;
+  text-transform:uppercase;font-weight:700;padding-bottom:5px; }
+.pm-mini-row.head .nm { color:var(--fg-5); }
+.pm-mini-row .nm { font-size:10px;color:var(--fg-2);font-weight:600;letter-spacing:-.01em;
+  font-family:inherit;text-align:left;padding-left:3px; }
+.pm-mini-row .ra { display:inline-flex;align-items:center;justify-content:center;
+  width:16px;height:16px;border-radius:3px;font-size:11px;font-weight:700;
+  line-height:1;margin:0 auto;font-family:var(--font-mono); }
+.pm-mini-row .ra.R { background:var(--accent);color:var(--accent-ink); }
+.pm-mini-row .ra.A { background:var(--status-ok-tint);color:var(--status-ok);border:1px solid var(--status-ok); }
+.pm-mini-row .ra.C { background:transparent;color:var(--fg-3);border:1px solid var(--border); }
+.pm-mini-row .ra.I { background:transparent;color:var(--fg-5);border:1px dashed var(--border);font-size:9px; }
+.pm-mini-row .dash { color:var(--fg-5);text-align:center;opacity:.4; }
+.pm-mini-foot { padding:6px 10px;border-top:1px solid var(--border);background:var(--bg-elev-2);
+  font-family:var(--font-mono);font-size:8.5px;color:var(--fg-4);letter-spacing:.04em;
+  display:flex;gap:5px;flex-wrap:wrap;align-items:center; }
+.pm-mini-foot .c { padding:1px 5px;border-radius:3px;background:var(--bg-elev-3);
+  border:1px solid var(--border); }
+.pm-mini-foot .c.on { background:var(--accent-tint);border-color:var(--accent);color:var(--accent-bright); }
+
+/* Team pane: drop the column stack — matrix floats now */
+.vpane[data-pane="team"] { display:none;overflow:auto; }
+.vpane[data-pane="team"].on { display:block; }
+.vpane[data-pane="team"] .team-canvas { height:100%;flex:none;position:relative; }
+
+/* ── Complete dock (右下角 已完成 → 去聊天 / 查看产物 / 重试) ── */
+.dk { position:absolute;right:18px;bottom:18px;z-index:6;
+  display:flex;align-items:center;gap:8px; }
+.dk-status { display:inline-flex;align-items:center;gap:6px;
+  font-family:var(--font-mono);font-size:10.5px;font-weight:600;color:var(--fg-3); }
+.dk-status .pulse { width:6px;height:6px;border-radius:50%;background:var(--status-run);
+  animation:sf-pulse 1.4s ease-in-out infinite;box-shadow:0 0 6px var(--status-run); }
+.dk-status .meta { color:var(--fg-5);font-weight:500; }
+.dk-status.done { color:var(--status-ok); }
+.dk-status.done .pulse { background:var(--status-ok);box-shadow:0 0 6px var(--status-ok);animation:none; }
+.dk-sep { width:1px;height:16px;background:var(--border); }
+.dk-btn { height:26px;padding:0 11px;border-radius:999px;border:1px solid var(--border);
+  background:var(--bg-elev-2);color:var(--fg-2);font-size:11px;font-weight:500;cursor:pointer;
+  display:inline-flex;align-items:center;gap:5px;transition:background .15s,border-color .15s,color .15s; }
+.dk-btn:hover { background:var(--bg-elev-3);border-color:var(--border-strong);color:var(--fg-1); }
+.dk-btn.primary { background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600; }
+.dk-btn.primary:hover { background:var(--accent-bright);border-color:var(--accent-bright);color:var(--accent-ink); }
+.dk-btn .ic { display:inline-flex;align-items:center;justify-content:center; }
+
+/* ══════════════════════════════════════════════════════════════════
+   D-MODE — slim tab strip + unified detail pane
+   Reference: platform/agent-timeline-redesign-compare.html (.d-tabs/.d-pane)
+   - Tab strip: 5 slim columns sharing one elevated bar, hairline dividers,
+     active = inset bottom accent line + elevated cell bg
+   - Pane: continuous bg-elev-1 surface flush under the strip, single
+     bottom-rounded container that hosts whichever detail block is active
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Hide non-active detail blocks; active one becomes the pane body */
+.ag-panel.d-mode > .ag-persona,
+.ag-panel.d-mode > .ag-tools,
+.ag-panel.d-mode > .ag-model,
+.ag-panel.d-mode > .ag-memory,
+.ag-panel.d-mode > .ag-io,
+.ag-panel.d-mode > .ag-empty { display:none; }
+.ag-panel.d-mode > .is-tab-active { display:block; }
+.ag-panel.d-mode > .ag-io.is-tab-active { display:grid; }
+.ag-panel.d-mode > .ag-empty.is-tab-active { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+
+/* The strip itself */
+.ag-panel.d-mode .ag-tl {
+  display:grid; grid-template-columns:repeat(3,1fr); gap:0;
+  background:var(--bg-elev-2);
+  border:1px solid var(--border); border-bottom:0;
+  border-radius:9px 9px 0 0;
+  overflow:hidden; padding:0;
+}
+
+/* Each cell = slim tab. Body hidden. Step + title only. Total height ≈ 46px. */
+.ag-panel.d-mode .ag-tl-cell {
+  position:relative;
+  flex:1; min-width:0;
+  display:flex; flex-direction:column; align-items:flex-start; justify-content:center;
+  gap:2px;
+  padding:7px 12px 8px;
+  min-height:46px;
+  background:transparent;
+  border:0; border-right:1px solid var(--border-subtle);
+  border-radius:0;
+  color:var(--fg-3);
+  transition:background .15s, color .15s;
+  cursor:pointer;
+}
+.ag-panel.d-mode .ag-tl-cell:last-child { border-right:0; }
+.ag-panel.d-mode .ag-tl-cell:hover { background:var(--bg-elev-3); color:var(--fg-2); box-shadow:none; }
+.ag-panel.d-mode .ag-tl-cell.is-tab-on { background:var(--bg-elev-1); color:var(--fg-1); }
+.ag-panel.d-mode .ag-tl-cell.is-tab-on::after {
+  content:""; position:absolute; left:0; right:0; bottom:-1px; height:2px;
+  background:var(--accent); border-radius:0; z-index:2;
+}
+
+/* Step prefix → "01 · IDENTITY" mono uppercase 9.5px */
+.ag-panel.d-mode .ag-tl-step {
+  font-family:var(--font-mono); font-size:9.5px; font-weight:600;
+  letter-spacing:.12em; text-transform:uppercase;
+  color:var(--fg-5);
+  display:flex; align-items:center; gap:4px;
+  line-height:1.1;
+}
+.ag-panel.d-mode .ag-tl-cell.is-tab-on .ag-tl-step { color:var(--accent-bright); }
+.ag-panel.d-mode .ag-tl-cell.done .ag-tl-step { color:var(--status-ok); }
+.ag-panel.d-mode .ag-tl-cell.pending { opacity:.5; }
+
+/* Hide the legacy circle indicator entirely; render data-idx instead */
+.ag-panel.d-mode .ag-tl-num {
+  display:inline; width:auto; height:auto; min-width:0; padding:0;
+  background:transparent !important; border:0; color:inherit !important;
+  font-family:var(--font-mono); font-size:0; font-weight:600; line-height:1;
+}
+.ag-panel.d-mode .ag-tl-num > * { display:none; }
+.ag-panel.d-mode .ag-tl-num::before {
+  content:attr(data-idx); font-size:9.5px;
+}
+
+/* Title — single line, primary tab label */
+.ag-panel.d-mode .ag-tl-title {
+  font-size:12.5px; font-weight:500; letter-spacing:-.005em;
+  color:inherit; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  max-width:100%; line-height:1.2;
+}
+
+/* Body line redundant with the pane below */
+.ag-panel.d-mode .ag-tl-body { display:none; }
+
+/* Top-right time badge — injected via data-time */
+.ag-panel.d-mode .ag-tl-cell::before {
+  content:attr(data-time);
+  position:absolute; right:10px; top:7px;
+  font-family:var(--font-mono); font-size:9.5px;
+  color:var(--fg-5); font-variant-numeric:tabular-nums; letter-spacing:.02em;
+  opacity:.85;
+}
+.ag-panel.d-mode .ag-tl-cell.run::before  { color:var(--accent-bright); opacity:1; }
+.ag-panel.d-mode .ag-tl-cell.done::before { color:var(--fg-5); }
+.ag-panel.d-mode .ag-tl-cell.pending::before { color:var(--fg-5); }
+
+/* Nav hint chip from legacy → hidden in d-mode (tabs convey the affordance) */
+.ag-panel.d-mode .ag-tl-cell .nav-hint { display:none; }
+.ag-panel.d-mode .ag-tl-cell.is-target { background:var(--bg-elev-1); border-color:transparent; }
+
+/* Active block(s) form the pane body. Multiple actives stack as one continuous pane
+   via :has() — only the FIRST gets top-of-pane treatment, only the LAST gets rounded bottom. */
+.ag-panel.d-mode > .is-tab-active {
+  background:var(--bg-elev-1) !important;
+  border-left:1px solid var(--border) !important;
+  border-right:1px solid var(--border) !important;
+  padding:16px 18px !important;
+  overflow:hidden;
+  animation:dm-pane-in .22s ease-out;
+}
+/* Last active in the group → bottom border + rounded corners */
+.ag-panel.d-mode > .is-tab-active:not(:has(~ .is-tab-active)) {
+  border-bottom:1px solid var(--border) !important;
+  border-radius:0 0 9px 9px !important;
+  padding-bottom:18px !important;
+}
+/* Intermediate actives → faint divider, smaller bottom padding */
+.ag-panel.d-mode > .is-tab-active:has(~ .is-tab-active) {
+  padding-bottom:14px !important;
+  border-bottom:1px dashed var(--border-subtle) !important;
+}
+/* IO contract → tighter padding (mono one-liner) */
+.ag-panel.d-mode > .ag-io.is-tab-active { padding-top:12px !important; padding-bottom:12px !important; }
+@keyframes dm-pane-in {
+  from { opacity:0; transform:translateY(-2px); }
+  to   { opacity:1; transform:none; }
+}
+
+/* Re-skin the inner header rows for visual consistency inside the pane */
+.ag-panel.d-mode .ag-persona,
+.ag-panel.d-mode .ag-tools,
+.ag-panel.d-mode .ag-model,
+.ag-panel.d-mode .ag-memory,
+.ag-panel.d-mode .ag-io {
+  border:0 !important; background:transparent !important; border-radius:0 !important;
+  padding:0 !important;
+}
+/* ag-io center divider gets re-added at pane level since its own border was zeroed */
+.ag-panel.d-mode .ag-io.is-tab-active::before {
+  background:var(--border-subtle);
+}
+.ag-panel.d-mode .ag-persona-h,
+.ag-panel.d-mode .ag-tools-h,
+.ag-panel.d-mode .ag-mh {
+  background:transparent !important; border:0 !important;
+  padding:0 0 9px !important;
+  margin:0 0 12px !important;
+  border-bottom:1px solid var(--border-subtle) !important;
+  display:flex !important; align-items:baseline !important; gap:8px !important;
+}
+/* Pane title — first child of every header row */
+.ag-panel.d-mode .ag-tools-h .lbl,
+.ag-panel.d-mode .ag-mh > span:first-child {
+  font-size:14px !important; font-weight:500 !important;
+  letter-spacing:-.005em !important; color:var(--fg-1) !important;
+  text-transform:none !important;
+}
+/* Persona pane uses .nm as the primary identifier (no separate title — tab already labels it) */
+.ag-panel.d-mode .ag-persona-h .nm {
+  font-size:13px !important; color:var(--fg-2) !important; letter-spacing:0 !important;
+}
+.ag-panel.d-mode .ag-persona-h .nm,
+.ag-panel.d-mode .ag-mh .nm {
+  font-family:var(--font-mono) !important; font-size:11px !important; color:var(--fg-4) !important;
+}
+.ag-panel.d-mode .ag-persona-body {
+  padding:12px 14px !important; border-radius:6px !important;
+  background:var(--bg-elev-0) !important;
+  border:1px solid var(--border-subtle) !important;
+  margin-top:0 !important;
+}
+.ag-panel.d-mode .ag-tool-grid { margin-top:0 !important; }
+.ag-panel.d-mode .ag-model-grid,
+.ag-panel.d-mode .ag-memory-list { margin-top:0 !important; }
+
+/* Subtle live shimmer below pane head — only when running */
+.ag-panel.d-mode .ag-pane-hint {
+  font-family:var(--font-mono); font-size:10.5px; color:var(--accent-bright);
+  margin-bottom:12px;
+  background:linear-gradient(90deg,transparent,var(--accent-tint) 50%,transparent);
+  background-size:200% 100%; animation:sf-shimmer 2s linear infinite;
+  padding:4px 9px; border-radius:4px; display:inline-block;
+  border:1px solid color-mix(in oklab,var(--accent) 30%,transparent);
+}
+@keyframes sf-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* ── Clickable 5-cell rail → jumps to matching detail block (legacy mode) ─────
+   Each .ag-tl-cell becomes a navigator: click → scroll + flash
+   the corresponding detail block (Identity / Persona / Model / Tools / Memory).
+   Cells get role="tab" + data-step at init; CSS handles the look. */
+.ag-tl-cell { cursor:pointer; transition:background .14s, border-color .14s, transform .12s, box-shadow .18s; }
+.ag-tl-cell:hover { border-color:color-mix(in oklab, var(--accent) 55%, var(--border));
+  box-shadow:0 1px 0 var(--accent-tint) inset, 0 0 0 2px color-mix(in oklab, var(--accent) 18%, transparent); }
+.ag-tl-cell:active { transform:translateY(1px); }
+.ag-tl-cell:focus-visible { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent); }
+.ag-tl-cell.is-target { border-color:var(--accent); background:var(--accent-tint); }
+.ag-tl-cell.is-target .ag-tl-step { color:var(--accent); }
+.ag-tl-cell .nav-hint { font-family:var(--font-mono); font-size:8px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--fg-5); margin-left:auto; opacity:0; transition:opacity .15s; }
+.ag-tl-cell:hover .nav-hint, .ag-tl-cell:focus-visible .nav-hint { opacity:.8; }
+
+/* Detail-block flash + scroll target ring (lasts 1.4s after click) */
+@keyframes sf-detail-flash {
+  0%   { box-shadow:0 0 0 0 var(--accent), 0 0 0 0 color-mix(in oklab, var(--accent) 50%, transparent); }
+  35%  { box-shadow:0 0 0 2px var(--accent), 0 0 0 8px color-mix(in oklab, var(--accent) 22%, transparent); }
+  100% { box-shadow:0 0 0 0 transparent, 0 0 0 0 transparent; }
+}
+.ag-detail-flash { animation:sf-detail-flash 1.4s ease-out; }
+.ag-id, .ag-persona, .ag-tools, .ag-model, .ag-memory { scroll-margin-top:80px; transition:border-color .25s; }
+
+/* Edit affordance — small ✎ chip in each detail header signals "you can modify" */
+.ag-edit { margin-left:auto; height:20px; padding:0 8px; border-radius:5px;
+  border:1px solid var(--border); background:var(--bg-elev-2); color:var(--fg-4);
+  font-family:var(--font-mono); font-size:9.5px; letter-spacing:.04em; text-transform:none;
+  font-weight:500; cursor:pointer; display:inline-flex; align-items:center; gap:4px;
+  transition:border-color .12s, color .12s, background .12s; }
+.ag-edit:hover { border-color:var(--accent); color:var(--accent-bright); background:var(--accent-tint); }
+.ag-edit .pen { font-size:10px; line-height:1; }
+
+/* Data-source mono label — "from reader.skill.yaml#persona" */
+.ag-src { font-family:var(--font-mono); font-size:9.5px; color:var(--fg-5);
+  font-weight:500; letter-spacing:.02em; text-transform:none; }
+.ag-src code { color:var(--accent-bright); font-weight:600; }
+
+/* ── New detail blocks: Model + Memory (parallel to ag-persona / ag-tools) ── */
+.ag-model, .ag-memory { border:1px solid var(--border); border-radius:13px;
+  background:var(--bg-elev-1); overflow:hidden; }
+.ag-mh { display:flex; align-items:center; gap:8px; padding:8px 13px;
+  border-bottom:1px solid var(--border); background:var(--bg-elev-2);
+  font-family:var(--font-mono); font-size:9px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--fg-4); font-weight:700; }
+.ag-mh .nm { color:var(--fg-2); letter-spacing:.08em; }
+.ag-mh .sp { flex:1; }
+
+.ag-mbody { padding:13px 16px; display:grid; grid-template-columns:repeat(4,1fr); gap:10px 14px; }
+.ag-mb-cell { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.ag-mb-lb { font-family:var(--font-mono); font-size:8.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--fg-5); font-weight:700; }
+.ag-mb-vl { font-family:var(--font-mono); font-size:11.5px; color:var(--fg-1); font-weight:600;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ag-mb-vl.muted { color:var(--fg-4); font-weight:500; }
+.ag-mb-vl .accent { color:var(--accent-bright); }
+.ag-mbody.pending .ag-mb-vl { color:var(--fg-4); font-weight:500; }
+
+.ag-memrows { padding:10px 14px; display:flex; flex-direction:column; gap:6px; }
+.ag-memrow { display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center;
+  padding:7px 11px; border-radius:8px; background:var(--bg-elev-2); border:1px solid var(--border); }
+.ag-memrow.pending { border-style:dashed; opacity:.72; }
+.ag-memrow .ns { font-family:var(--font-mono); font-size:11.5px; color:var(--fg-1); font-weight:600; }
+.ag-memrow .scope { font-family:var(--font-mono); font-size:9px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--fg-4); padding:2px 6px; border-radius:4px;
+  background:var(--bg-elev-3); border:1px solid var(--border); }
+.ag-memrow .perm { font-family:var(--font-mono); font-size:9.5px; color:var(--accent-bright);
+  font-weight:600; letter-spacing:.04em; }
+.ag-memrow.pending .perm { color:var(--fg-4); }
+
+/* Clickable substep — left pane → right pane jump */
+.sub { cursor:pointer; transition:background .12s, color .12s; border-radius:4px;
+  padding-left:4px; padding-right:4px; }
+.sub:hover { background:color-mix(in oklab, var(--accent) 10%, transparent); }
+.sub:hover .nm { color:var(--accent-bright); }
+.sub .arrow { margin-left:auto; opacity:0; font-family:var(--font-mono); font-size:9px;
+  color:var(--accent); transition:opacity .12s; }
+.sub:hover .arrow { opacity:.8; }
+.sub.dim { cursor:default; }
+.sub.dim:hover { background:transparent; }
+.sub.dim:hover .arrow { opacity:0; }
+.sub.dim:hover .nm { color:inherit; }
+
+/* yaml-stream-h .file & preview-bar .nm → clickable artifact deep-links */
+.yaml-stream-h .file, .preview-bar .nm { cursor:pointer; transition:color .12s; }
+.yaml-stream-h .file:hover, .preview-bar .nm:hover { color:var(--accent-bright); text-decoration:underline; }
+
+/* ════════════════════════════════════════════════════════════════
+   v3 — unified archive-card layer
+   .ag-wrap   → archive card (one surface, one border, one radius)
+   .ag-id     → file identity strip at top
+   .ag-panel  → section container (gap:0)
+   .ag-sec    → injected wrapper: Profile | Kit | Memory
+   ──────────────────────────────────────────────────────────────── */
+
+/* archive-card surface */
+.ag-wrap {
+  padding:0;
+  background:var(--bg-elev-1);
+  border:1px solid var(--border);
+  border-radius:14px;
+  overflow:hidden;
+  gap:0;
+}
+
+/* compact identity strip */
+.ag-id {
+  grid-template-columns:32px 1fr auto auto !important;
+  padding:13px 22px !important;
+  background:var(--bg-elev-2);
+  border:0 !important;
+  border-bottom:1px solid var(--border) !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+  gap:12px;
+}
+.ag-id-mark {
+  width:30px !important; height:30px !important;
+  border-radius:8px !important;
+  font-size:12px !important;
+}
+.ag-id-mark::after { display:none !important; }
+.ag-id-nm  { font-size:14px !important; }
+.ag-id-sub { font-size:10px !important; }
+.ag-id-pill { padding:3px 9px; font-size:9px; }
+
+/* panel + obsolete tab strip + edit chips */
+.ag-panel { gap:0; }
+.ag-panel.on { display:flex; }
+.ag-panel .ag-tl { display:none; }
+.ag-edit { display:none !important; }
+
+/* ── Section wrapper (injected by JS) ─────────────────────── */
+.ag-sec {
+  padding:18px 22px 20px;
+  position:relative;
+}
+.ag-sec + .ag-sec { border-top:1px solid var(--border); }
+
+.ag-sec-hd {
+  display:flex; align-items:baseline; gap:14px;
+  margin-bottom:14px;
+  flex-wrap:wrap;
+}
+.ag-sec-num {
+  font-family:var(--font-mono);
+  font-size:13px; font-weight:700; letter-spacing:.06em;
+  font-feature-settings:'tnum' 1;
+  color:var(--fg-4); flex:none;
+}
+.ag-sec-title {
+  font-size:15px; font-weight:600; letter-spacing:-.005em;
+  color:var(--fg-1); flex:none; white-space:nowrap;
+}
+.ag-sec-status {
+  font-family:var(--font-mono); font-size:9.5px; font-weight:700;
+  letter-spacing:.12em; text-transform:uppercase;
+  color:var(--fg-4);
+  display:flex; align-items:center; gap:5px;
+  flex:none;
+}
+.ag-sec-status::before {
+  content:""; width:6px; height:6px; border-radius:50%;
+  background:var(--fg-5);
+}
+.ag-sec-src {
+  font-family:var(--font-mono); font-size:9.5px;
+  color:var(--fg-5); letter-spacing:0;
+  margin-left:auto; flex:none;
+}
+.ag-sec-src code { color:var(--accent-bright); }
+
+/* state coloring */
+.ag-sec[data-state="done"] .ag-sec-num,
+.ag-sec[data-state="done"] .ag-sec-status { color:var(--status-ok); }
+.ag-sec[data-state="done"] .ag-sec-status::before { background:var(--status-ok); }
+.ag-sec[data-state="run"] .ag-sec-num,
+.ag-sec[data-state="run"] .ag-sec-status { color:var(--status-run); }
+.ag-sec[data-state="run"] .ag-sec-status::before {
+  background:var(--status-run);
+  animation:sf-pulse 1.4s ease-in-out infinite;
+}
+.ag-sec[data-state="pending"] .ag-sec-num { color:var(--fg-5); }
+.ag-sec[data-state="pending"] .ag-sec-status::before { background:var(--fg-5); }
+
+/* ── Strip internal block chrome ─────────────────────────── */
+.ag-sec .ag-persona,
+.ag-sec .ag-tools,
+.ag-sec .ag-model,
+.ag-sec .ag-memory,
+.ag-sec .ag-io {
+  border:0 !important;
+  background:transparent !important;
+  border-radius:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  overflow:visible !important;
+}
+.ag-sec .ag-persona::before,
+.ag-sec .ag-model::before,
+.ag-sec .ag-memory::before,
+.ag-sec .ag-persona::after,
+.ag-sec .ag-model::after,
+.ag-sec .ag-memory::after { display:none !important; }
+
+/* hide legacy in-block headers (replaced by .ag-sec-hd) */
+.ag-sec .ag-persona-h,
+.ag-sec .ag-tools-h,
+.ag-sec .ag-mh { display:none !important; }
+
+/* persona body */
+.ag-sec .ag-persona-body {
+  padding:13px 14px !important;
+  background:var(--bg-elev-2);
+  border-radius:8px;
+  line-height:1.75;
+  font-size:11px;
+  margin:0 !important;
+}
+
+/* I/O — borderless definition list inside Profile */
+.ag-sec .ag-io {
+  margin-top:12px !important;
+  padding:12px 14px !important;
+  background:var(--bg-elev-2) !important;
+  border-radius:8px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  grid-template-columns:none !important;
+  gap:8px;
+}
+.ag-sec .ag-io::before { display:none !important; }
+.ag-sec .ag-io-col {
+  padding:6px 8px !important;
+  margin:-6px -8px;
+  display:grid;
+  grid-template-columns:140px 1fr;
+  align-items:baseline;
+  gap:14px;
+  border-radius:6px;
+}
+.ag-sec .ag-io-h { margin:0 !important; }
+
+/* Model */
+.ag-sec .ag-model > .ag-mbody {
+  padding:12px 14px !important;
+  background:var(--bg-elev-2);
+  border-radius:8px;
+  display:flex !important;
+  flex-wrap:wrap;
+  gap:8px 22px;
+  grid-template-columns:none !important;
+}
+.ag-sec .ag-mb-cell {
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:baseline;
+  gap:8px;
+  padding:4px 8px;
+  margin:-4px -8px;
+  border-radius:5px;
+}
+.ag-sec .ag-mb-lb { font-size:9px; }
+.ag-sec .ag-mb-vl { font-size:11.5px; }
+
+/* Tools — below model inside Kit */
+.ag-sec .ag-tools { margin-top:12px !important; }
+.ag-sec .ag-tool-grid { padding:0 !important; }
+
+/* Memory — borderless rows with hairlines */
+.ag-sec .ag-memrows {
+  padding:0 !important;
+  background:var(--bg-elev-2);
+  border-radius:8px;
+  display:flex;
+  flex-direction:column;
+}
+.ag-sec .ag-memrow {
+  background:transparent !important;
+  border:0 !important;
+  border-radius:0 !important;
+  padding:10px 14px !important;
+}
+.ag-sec .ag-memrow + .ag-memrow { border-top:1px solid var(--border) !important; }
+.ag-sec .ag-memrow.pending { opacity:.65; }
+
+/* click-to-edit affordance */
+.ag-sec .ag-persona-body,
+.ag-sec .ag-io-col,
+.ag-sec .ag-mb-cell,
+.ag-sec .ag-tool,
+.ag-sec .ag-memrow {
+  cursor:text;
+  position:relative;
+  transition:background .15s, box-shadow .15s;
+}
+.ag-sec .ag-persona-body:hover,
+.ag-sec .ag-io-col:hover,
+.ag-sec .ag-mb-cell:hover,
+.ag-sec .ag-tool:hover,
+.ag-sec .ag-memrow:hover {
+  box-shadow:inset 0 0 0 1px var(--border-strong, var(--border));
+  background:var(--bg-elev-3);
+}
+.ag-sec .ag-persona-body::after,
+.ag-sec .ag-io-col::after,
+.ag-sec .ag-mb-cell::after,
+.ag-sec .ag-memrow::after {
+  content:"✎"; position:absolute; top:5px; right:8px;
+  font-size:10px; color:var(--fg-5); opacity:0;
+  transition:opacity .15s ease; pointer-events:none;
+}
+.ag-sec .ag-persona-body:hover::after,
+.ag-sec .ag-io-col:hover::after,
+.ag-sec .ag-mb-cell:hover::after,
+.ag-sec .ag-memrow:hover::after { opacity:1; }
+
+</style>
+</head>
+<body>
+
+<!-- ── Doc header ──────────────────────────────────────────── -->
+<div class="doc-hd">
+  <div class="doc-mark">S</div>
+  <div class="doc-word">ShadowFlow</div>
+  <div class="doc-sep"></div>
+  <span class="doc-crumb">platform / run-session · v3 — stacked</span>
+  <div class="doc-sp"></div>
+  <span class="doc-meta">Realtime Follow · Dark + Light</span>
+</div>
+
+<!-- ════════════════════════ FRAME 1: DARK ════════════════════ -->
+<div class="frame-section">
+  <div class="frame-lbl" style="--fl-accent:#A855F7">Dark — v3 stacked · #0A0A0A + Purple</div>
+  <div class="frame-wrap frame-dark" id="f-dark">
+    <div class="bc">
+      <div class="bc-dots"><div class="bc-dot r"></div><div class="bc-dot y"></div><div class="bc-dot g"></div></div>
+      <div class="bc-url">shadowflow.app/run/paper-review-team</div>
+    </div>
+    <div class="frame-inner">
+
+      <!-- App bar -->
+      <header class="app-bar">
+        <a class="app-logo" href="#">
+          <div class="app-logo-mark">S</div>
+          <div class="app-logo-word">ShadowFlow</div>
+        </a>
+        <div class="app-sep"></div>
+        <div class="app-bread"><span class="s">Projects</span><span class="s">›</span><span class="c">Paper Review</span><span class="s">›</span><span class="c">run_2026_05_08</span></div>
+        <div class="app-pill">构建中</div>
+        <span class="app-run-meta">3m 42s · ¥0.012</span>
+        <div class="app-sp"></div>
+        <button class="app-btn app-btn-icon" onclick="openSettings('dark')" title="Settings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <div class="app-sep"></div>
+              </header>
+
+      <!-- Body -->
+      <div class="app-body">
+        <!-- Left pane -->
+        <aside class="pane-l">
+          <div class="pane-l-head">
+            <div class="pane-mark">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg>
+            </div>
+            <div>
+              <div class="pane-l-title">Run Session</div>
+              <div class="pane-l-sub">run_2026_05_08_14_22 · 构建中</div>
+            </div>
+            <div class="pane-l-col">‹</div>
+          </div>
+          <div class="stream">
+            <div class="row right"><div class="bubble-user">帮我搭一个论文深读 + 写 review 的 Agent Team</div></div>
+            <div class="sys-divider">已识别 · Team 模式 · 3 个 Agent 角色</div>
+            <div class="rationale">
+              <div class="rationale-h"><span class="ic">✓</span><span>分析与决策</span><span class="meta">0.8s · 632 tokens</span></div>
+              <ul>
+                <li>任务包含 <b>深读 + 输出 review</b> 两个独立心智阶段 — 选 <em>Team 模式</em></li>
+                <li>引入 <b>Critic</b> 节点做 retry-gate，命中 <em>double-reject</em> 规约</li>
+                <li>Coordinator 串行编排，<em>policy_gate · retry 3</em> 保证草稿审完再传</li>
+              </ul>
+            </div>
+            <div class="cite-card">
+              <div class="cite-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="3" r="1.5" fill="currentColor" stroke="none"/><circle cx="11" cy="3" r="1.5" fill="currentColor" stroke="none"/><circle cx="8" cy="13" r="1.5" fill="currentColor" stroke="none"/><line x1="5" y1="4.5" x2="5" y2="7"/><path d="M5 7 Q5 11 8 11"/><path d="M11 4.5 Q11 11 8 11"/></svg></div>
+              <div style="flex:1;min-width:0"><div class="cite-meta">FORKED FROM TEMPLATE</div><div class="cite-name">Academic Paper · @ravenveil</div></div>
+              <div class="cite-ext">↗</div>
+            </div>
+            <div class="steps">
+              <div class="step"><div class="step-icon done">✓</div><div>分析目标需求</div><div class="step-meta">0.8s</div></div>
+              <div class="step"><div class="step-icon done">✓</div><div>挑选 Team 蓝图</div><div class="step-meta">1.2s</div></div>
+              <div class="step active"><div class="step-icon run"><span></span></div><div>配置 Agent 角色</div><div class="step-meta run">3.4s</div></div>
+              <div class="substeps">
+                <div class="sub"><span class="ic done"></span><span class="nm">reader · identity + persona</span><span class="t">0.6s</span></div>
+                <div class="sub"><span class="ic done"></span><span class="nm">reader · model claude-sonnet-4</span><span class="t">0.4s</span></div>
+                <div class="sub"><span class="ic run"></span><span class="nm">reader · tools (4 / 8 候选)</span><span class="t">…</span></div>
+                <div class="sub"><span class="ic"></span><span class="nm dim">critic · pending</span><span class="t">—</span></div>
+              </div>
+              <div class="step"><div class="step-icon">3</div><div class="step-name dim">设置工具集</div><div class="step-meta">pending</div></div>
+              <div class="step"><div class="step-icon">4</div><div class="step-name dim">Policy 协作规则</div><div class="step-meta">pending</div></div>
+            </div>
+            <div class="yaml-stream">
+              <div class="yaml-stream-h"><span>WRITING</span><span class="file">paper-review-team.yml · +18 / 0</span></div>
+<pre><span class="c"># auto-generated by ShadowFlow</span>
+<span class="k">team</span>: paper.review.v1
+<span class="k">mode</span>: serial
+<span class="k">policy</span>: <span class="s">strict</span>  <span class="c">· retry 3</span>
+<span class="k">agents</span>:
+  - <span class="k">id</span>: paper.reader.v1
+    <span class="k">model</span>: claude-sonnet-4
+    <span class="k">tools</span>:
+      <span class="ad">+ pdf_extract</span>
+      <span class="ad">+ arxiv_search</span><span class="cur"></span></pre>
+            </div>
+            <div class="think-card" onclick="this.classList.toggle('open')">
+              <div class="think-head">
+                <div class="loader" style="width:11px;height:11px;border-width:1.5px"></div>
+                <span>💭 思考中 · <span class="focus">选定第 3 个工具</span></span>
+                <span class="meta">1.2k tokens<span class="chev">›</span></span>
+              </div>
+              <div class="think-body" onclick="event.stopPropagation()">
+                <div class="think-line"><span class="t">0.3s</span><span>候选池 8 个搜索类工具，reader 已选 <code>pdf_extract</code> + <code>arxiv_search</code>。覆盖了"取原文"与"找一手论文"两条主路径。</span></div>
+                <div class="think-line"><span class="t">0.6s</span><span>缺一个"引用补全"——<code>semanticscholar_lookup</code> 能给 references 补元数据。比 <code>google_scholar</code> 命中率高且免 captcha。</span></div>
+                <div class="think-line"><span class="t">0.9s</span><span>装上后剩 5 候选未选，重新评估必要性 → <span class="dim" style="color:var(--fg-5)">等待 LLM 输出…</span></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="composer-inner">
+              <textarea class="composer-input" rows="2" placeholder="补充指令 · 或保持沉默让 AI 完成 · ⌘↵ 发送"></textarea>
+              <div class="composer-bar">
+                <div style="display:flex;gap:2px">
+                  <button class="cmp-btn" onclick="openSettings('dark')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+                  <button class="cmp-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+                </div>
+                <div class="composer-bar-r"><button class="cmp-send"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button></div>
+              </div>
+            </div>
+            <div class="composer-hint"><span class="kb">⌘</span><span class="kb">↵</span><span>send</span><span style="opacity:.4;padding:0 3px">·</span><span class="kb">⇧</span><span class="kb">↵</span><span>newline</span></div>
+          </div>
+        </aside>
+
+        <!-- Right pane -->
+        <section class="pane-r">
+          <div class="toolbar toolbar-v2">
+            <button class="follow-chip" onclick="toggleFollow(this)" title="跟随中 · 配置 Agent › reader · 模型 · 工具">
+              <span class="lbl">实时跟随</span>
+              <span class="resume">返回跟随</span>
+            </button>
+            <div class="toolbar-sep"></div>
+            <div class="tabs-row">
+              <button class="view-tab" data-tab="overview" onclick="switchTab(this,'overview')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1.2"/><rect x="9" y="2" width="5" height="5" rx="1.2"/><rect x="2" y="9" width="5" height="5" rx="1.2"/><rect x="9" y="9" width="5" height="5" rx="1.2"/></svg> Overview</button>
+              <button class="view-tab" data-tab="team" onclick="switchTab(this,'team')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5.5" r="2.5"/><path d="M1 14c0-2.76 2.24-4.5 5-4.5s5 1.74 5 4.5"/><circle cx="12" cy="5.5" r="2" opacity=".5"/><path d="M15 14c0-2-1.5-3.5-3-4" opacity=".5"/></svg> Team <span class="ct">3</span></button>
+              <button class="view-tab on" data-tab="agent" data-followed="1" onclick="switchTab(this,'agent')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="10" height="8" rx="2.5"/><circle cx="6" cy="9" r="1" fill="currentColor" stroke="none"/><circle cx="10" cy="9" r="1" fill="currentColor" stroke="none"/><line x1="8" y1="2.5" x2="8" y2="5"/><circle cx="8" cy="2" r="1" fill="currentColor" stroke="none"/></svg> Agent <span class="ct">1</span></button>
+              <button class="view-tab" data-tab="preview" onclick="switchTab(this,'preview')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M2 8h12M2 12h7"/></svg> Preview</button>
+            </div>
+            <div class="tool-r">
+              <div class="file-tab" title="paper-review-team.yml"><span class="lbl">Blueprint</span><span class="id">paper-review-team.yml</span></div>
+            </div>
+          </div>
+          <div class="canvas">
+            <!-- Overview -->
+            <div class="vpane" data-pane="overview">
+              <div class="ov-scroll">
+                <h1 class="ov-h1">Review run session</h1>
+                <section class="ov-status">
+                  <p class="ov-status-desc">Your AI team has produced a draft section. Approve to commit to the canvas, or send back for revision.</p>
+                  <div class="ov-status-flags">
+                    <label class="ov-flag"><span class="ov-check on">✓</span><span>Live</span></label>
+                    <label class="ov-flag"><span class="ov-check on">✓</span><span>On-chain</span></label>
+                    <label class="ov-flag"><span class="ov-check">○</span><span>Auto-approve</span></label>
+                  </div>
+                  <div class="ov-status-row"><span class="ov-status-lbl">Open this run</span><button class="ov-status-btn">↗ Open in Editor</button></div>
+                </section>
+                <div class="ov-callout">
+                  <span class="ov-callout-icon">⚠</span>
+                  <div class="ov-callout-body"><div class="ov-callout-title">Retry budget low</div><div class="ov-callout-desc">Reader is on round 2 of 3 — one more rejection will roll back to Draft.</div></div>
+                  <button class="ov-callout-btn">↻ Adjust</button>
+                </div>
+                <div class="ov-section">
+                  <div class="ov-section-head"><span class="ov-section-lbl">Needs review</span></div>
+                  <div class="ov-review-card">
+                    <div class="ov-review-name">section_writer · output draft</div>
+                    <div class="ov-review-desc">2.3k tokens · §3 Methodology rewritten. Awaiting Advisor approval.</div>
+                    <div class="ov-review-actions"><button class="ov-act ov-act-good">⌃ Looks good</button><button class="ov-act ov-act-bad">⌄ Needs work…</button></div>
+                  </div>
+                </div>
+                <div class="ov-section">
+                  <div class="ov-section-head"><span class="ov-section-lbl">Team</span><span class="ov-section-ct">3</span></div>
+                  <div class="ov-list">
+                    <button class="ov-row"><span class="ov-row-chev">›</span><span class="ov-row-name">workflow-dag</span><span class="ov-row-meta">canvas · 3 nodes</span><span class="ov-row-dot" data-s="run"></span></button>
+                    <button class="ov-row"><span class="ov-row-chev">›</span><span class="ov-row-name">paper.reader.v1</span><span class="ov-row-meta">step 3 / 8</span><span class="ov-row-dot" data-s="run"></span></button>
+                    <button class="ov-row"><span class="ov-row-chev">›</span><span class="ov-row-name">paper.critic.v1</span><span class="ov-row-meta">waiting</span><span class="ov-row-dot" data-s="ok"></span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Team -->
+            <div class="vpane" data-pane="team">
+              <div class="team-canvas">
+                <div class="node coord" style="left:60px;top:80px">
+                  <div class="node-head"><div class="node-avatar">C</div><div><div class="node-title">Coordinator</div><div class="node-sub">ORCHESTRATOR · RUNNING</div></div></div>
+                  <div class="node-meta"><span class="chip accent">claude-opus-4</span><span class="chip">serial</span></div>
+                </div>
+                <div class="node running" style="left:380px;top:40px">
+                  <div class="node-head"><div class="node-avatar">R</div><div><div class="node-title">Reader</div><div class="node-sub">paper.reader.v1</div></div></div>
+                  <div class="node-meta"><span class="chip">pdf_extract</span><span class="chip">arxiv_search</span></div>
+                </div>
+                <div class="node" style="left:380px;top:170px">
+                  <div class="node-head"><div class="node-avatar">K</div><div><div class="node-title">Critic</div><div class="node-sub">paper.critic.v1</div></div></div>
+                  <div class="node-meta"><span class="chip">retry-gate</span></div>
+                </div>
+                <div class="node pending" style="left:380px;top:295px">
+                  <div class="node-head"><div class="node-avatar">W</div><div><div class="node-title">Writer</div><div class="node-sub">paper.writer.v1</div></div></div>
+                  <div class="node-meta"><span class="chip">pending</span></div>
+                </div>
+                <div class="zoom"><button>−</button><span class="pct">100%</span><button>+</button></div>
+                <!-- 权责矩阵 · 压缩成右上角小卡片（RACI · 4×6） -->
+                <aside class="pm-mini" title="policy_matrix · RACI">
+                  <div class="pm-mini-h">
+                    <span class="lbl">policy</span>
+                    <span class="title">权责</span>
+                    <span class="sp"></span>
+                    <button class="exp" title="展开完整矩阵">⤢</button>
+                  </div>
+                  <div class="pm-mini-rows">
+                    <div class="pm-mini-row head">
+                      <span class="nm">Role</span>
+                      <span>Pln</span><span>Drf</span><span>Rev</span><span>Apv</span><span>Gate</span><span>Tool</span>
+                    </div>
+                    <div class="pm-mini-row"><span class="nm">Coord</span><span><span class="ra R" title="R · 主责">✓</span></span><span class="dash">·</span><span><span class="ra C" title="C · 协同">✓</span></span><span><span class="ra A" title="A · 决策">✓</span></span><span><span class="ra A" title="A · 决策">✓</span></span><span><span class="ra I" title="I · 知会">✓</span></span></div>
+                    <div class="pm-mini-row"><span class="nm">Reader</span><span><span class="ra I" title="I · 知会">✓</span></span><span><span class="ra R" title="R · 主责">✓</span></span><span class="dash">·</span><span class="dash">·</span><span><span class="ra C" title="C · 协同">✓</span></span><span><span class="ra R" title="R · 主责">✓</span></span></div>
+                    <div class="pm-mini-row"><span class="nm">Critic</span><span><span class="ra I" title="I · 知会">✓</span></span><span class="dash">·</span><span><span class="ra R" title="R · 主责">✓</span></span><span><span class="ra C" title="C · 协同">✓</span></span><span><span class="ra R" title="R · 主责">✓</span></span><span><span class="ra I" title="I · 知会">✓</span></span></div>
+                    <div class="pm-mini-row"><span class="nm">Writer</span><span><span class="ra I" title="I · 知会">✓</span></span><span><span class="ra R" title="R · 主责">✓</span></span><span class="dash">·</span><span class="dash">·</span><span><span class="ra I" title="I · 知会">✓</span></span><span><span class="ra R" title="R · 主责">✓</span></span></div>
+                  </div>
+                  <div class="pm-mini-foot">
+                    <span class="c on">retry 3</span>
+                    <span class="c on">double-reject</span>
+                    <span class="c">strict</span>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            <!-- Agent -->
+            <div class="vpane on" data-pane="agent">
+              <div class="ag-wrap">
+                <!-- Identity card with agent switcher (updated by switchAgent) -->
+                <div class="ag-id" data-state="running">
+                  <div class="ag-id-mark">R</div>
+                  <div>
+                    <div class="ag-id-nm">Reader</div>
+                    <div class="ag-id-sub">paper.reader.v1 · <span class="stp">substep 3 / 5</span> · academic-reader</div>
+                  </div>
+                  <div class="ag-id-pill">RUNNING</div>
+                  <div class="ag-sw" role="tablist" aria-label="Agent roster">
+                    <div class="ag-sw-rail">
+                      <button type="button" class="ag-sw-av"      data-role="coord"  data-st="ok"      onclick="switchAgent(this,'coord')"  title="Coordinator · ready">C</button>
+                      <button type="button" class="ag-sw-av on"   data-role="reader" data-st="running" onclick="switchAgent(this,'reader')" title="Reader · running">R</button>
+                      <button type="button" class="ag-sw-av"      data-role="summ"   data-st="pending" onclick="switchAgent(this,'summ')"   title="Summarizer · waiting">S</button>
+                      <button type="button" class="ag-sw-av"      data-role="critic" data-st="pending" onclick="switchAgent(this,'critic')" title="Critic · waiting">K</button>
+                      <button type="button" class="ag-sw-av"      data-role="writer" data-st="pending" onclick="switchAgent(this,'writer')" title="Writer · waiting">W</button>
+                      <button type="button" class="ag-sw-av"      data-role="trans"  data-st="idle"    onclick="switchAgent(this,'trans')"  title="Translator · idle">T</button>
+                      <button type="button" class="ag-sw-av"      data-role="fact"   data-st="idle"    onclick="switchAgent(this,'fact')"   title="Fact-checker · idle">F</button>
+                    </div>
+                    <button type="button" class="ag-sw-more" onclick="toggleAgentPop(this,event)" title="View all agents (⌘K)">+2<span class="chev">▾</span></button>
+                    <div class="ag-sw-pop" onclick="event.stopPropagation()">
+                      <input type="text" class="ag-sw-pop-srch" placeholder="Filter agents…    ⌘K" oninput="filterAgentPop(this)" onkeydown="navAgentPop(event,this)">
+                      <div class="ag-sw-pop-grid"></div>
+                      <div class="ag-sw-pop-kb"><kbd>↑↓</kbd> nav · <kbd>↵</kbd> select · <kbd>esc</kbd> close</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ═════ READER (active) ═════ -->
+                <div class="ag-panel on" data-role="reader">
+                  <div class="ag-tl">
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Profile</span></div><div class="ag-tl-title">角色</div><div class="ag-tl-body">Reader · 深读 · 摘录 · 引用</div></div>
+                    <div class="ag-tl-cell run"><div class="ag-tl-step"><span class="ag-tl-num">…</span><span>Kit</span></div><div class="ag-tl-title">模型 · 工具</div><div class="ag-tl-body">claude-sonnet-4 · 3 tools</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">3</span><span>Memory</span></div><div class="ag-tl-title">记忆</div><div class="ag-tl-body">papers.vec · scratch.run</div></div>
+                  </div>
+                  <div class="ag-persona">
+                    <div class="ag-persona-h"><span class="nm">reader.persona</span><span class="sp"></span><span class="meta">632 tokens</span><span class="stream idle">cached</span></div>
+<pre class="ag-persona-body"><span class="c"># reader.persona</span>
+你是 <span class="v">论文深读</span> Agent。
+你接收 <span class="k">paper_url</span> / <span class="k">arxiv_id</span>，输出结构化摘要 + 引用清单。
+<span class="c">- constraints</span>
+<span class="b">-</span> 只读论文文本，不做主观评价
+<span class="b">-</span> 每个 section 单独摘录，保留原文页码
+<span class="b">-</span> 引用必须含 <span class="s">DOI</span> 或 <span class="s">arXiv-id</span>
+<span class="b">-</span> 失败 ≤ 3 次必须升级到 <span class="k">critic.retry_gate</span></pre>
+                  </div>
+                  <div class="ag-tools">
+                    <div class="ag-tools-h"><span class="lbl">Tools</span><span class="ct">3 selected · 5 candidates</span><span class="sp"></span><span class="hint">点击候选加入 · 拖拽排序</span></div>
+                    <div class="ag-tool-grid">
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">pdf_extract</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">arxiv_search</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool sel run"><span class="dot"></span><span class="nm">semanticscholar_lookup</span><span class="tag">ADDING…</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">openreview_fetch</span><span class="tag">+</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">google_scholar</span><span class="tag">+</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">pubmed_search</span><span class="tag">+</span></div>
+                    </div>
+                  </div>
+                  <div class="ag-io">
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>INPUT · expects</div><div class="ag-io-body"><code>paper_url</code> · <code>arxiv_id?</code> · <code>focus_sections[]</code></div></div>
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>OUTPUT · produces</div><div class="ag-io-body"><code>{ abstract, methodology, key_findings, citations[] }</code></div></div>
+                  </div>
+                </div>
+
+                <!-- ═════ COORDINATOR (configured · routing) ═════ -->
+                <div class="ag-panel" data-role="coord">
+                  <div class="ag-tl">
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Profile</span></div><div class="ag-tl-title">角色</div><div class="ag-tl-body">Coordinator · 调度 · 决策 · 升级</div></div>
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Kit</span></div><div class="ag-tl-title">模型 · 工具</div><div class="ag-tl-body">claude-opus-4 · 3 tools</div></div>
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Memory</span></div><div class="ag-tl-title">记忆</div><div class="ag-tl-body">run.context · 全局共享</div></div>
+                  </div>
+                  <div class="ag-persona">
+                    <div class="ag-persona-h"><span class="nm">coord.persona</span><span class="sp"></span><span class="meta">412 tokens</span><span class="stream idle">cached</span></div>
+<pre class="ag-persona-body"><span class="c"># coord.persona</span>
+你是 <span class="v">编排</span> Agent，BMAD 的 Build 阶段总控。
+你接收用户意图，输出 <span class="k">role_plan</span> + 把任务路由给 reader / critic / writer。
+<span class="c">- constraints</span>
+<span class="b">-</span> 不直接读论文 / 不直接生成 review
+<span class="b">-</span> 任一 agent 双拒后升级到 <span class="k">approve_gate</span>
+<span class="b">-</span> 单步重试 ≤ <span class="s">3</span>，全局重试 ≤ <span class="s">5</span></pre>
+                  </div>
+                  <div class="ag-tools">
+                    <div class="ag-tools-h"><span class="lbl">Tools</span><span class="ct">3 selected · 1 candidates</span><span class="sp"></span><span class="hint">orchestrator built-ins</span></div>
+                    <div class="ag-tool-grid">
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">route_task</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">dispatch_agent</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">policy_gate_check</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">spawn_subteam</span><span class="tag">+</span></div>
+                    </div>
+                  </div>
+                  <div class="ag-io">
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>INPUT · expects</div><div class="ag-io-body"><code>user_intent</code> · <code>team_blueprint</code></div></div>
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>OUTPUT · produces</div><div class="ag-io-body"><code>{ plan, retry_gates, role_assignments[] }</code></div></div>
+                  </div>
+                </div>
+
+                <!-- ═════ CRITIC (configured · waiting on reader) ═════ -->
+                <div class="ag-panel" data-role="critic">
+                  <div class="ag-tl">
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Profile</span></div><div class="ag-tl-title">角色</div><div class="ag-tl-body">Critic · 审稿 · 拒稿 · 升级</div></div>
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Kit</span></div><div class="ag-tl-title">模型 · 工具</div><div class="ag-tl-body">claude-opus-4 · 2 tools</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">3</span><span>Memory</span></div><div class="ag-tl-title">记忆</div><div class="ag-tl-body">retry.log（待激活）</div></div>
+                  </div>
+                  <div class="ag-persona">
+                    <div class="ag-persona-h"><span class="nm">critic.persona</span><span class="sp"></span><span class="meta">524 tokens</span><span class="stream idle">waiting</span></div>
+<pre class="ag-persona-body"><span class="c"># critic.persona</span>
+你是 <span class="v">论文评审</span> Agent，给 reader 输出当 retry-gate。
+你接收 reader 的 <span class="k">extract</span>，输出 approval 或 retry 理由。
+<span class="c">- constraints</span>
+<span class="b">-</span> 不修改 reader 的产物，只产出 <span class="k">approve</span> / <span class="k">reject</span>
+<span class="b">-</span> reject 必须给 ≥ <span class="s">1</span> 条结构化理由
+<span class="b">-</span> 同稿件 reject ≥ <span class="s">2</span> 次 → <span class="k">approve_gate</span></pre>
+                  </div>
+                  <div class="ag-tools">
+                    <div class="ag-tools-h"><span class="lbl">Tools</span><span class="ct">2 selected · 2 candidates</span><span class="sp"></span><span class="hint">read-only checks</span></div>
+                    <div class="ag-tool-grid">
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">section_diff</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">citation_check</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">methodology_lint</span><span class="tag">+</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">factuality_score</span><span class="tag">+</span></div>
+                    </div>
+                  </div>
+                  <div class="ag-io">
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>INPUT · expects</div><div class="ag-io-body"><code>reader.output</code> · <code>retry_count</code></div></div>
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>OUTPUT · produces</div><div class="ag-io-body"><code>{ approved: bool, reasons[], next_retry?: hint }</code></div></div>
+                  </div>
+                </div>
+
+                <!-- ═════ WRITER (pending — config not started) ═════ -->
+                <div class="ag-panel" data-role="writer">
+                  <div class="ag-tl">
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">1</span><span>Profile</span></div><div class="ag-tl-title">角色</div><div class="ag-tl-body">— 待配置</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">2</span><span>Kit</span></div><div class="ag-tl-title">模型 · 工具</div><div class="ag-tl-body">markdown · bibtex · polish</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">3</span><span>Memory</span></div><div class="ag-tl-title">记忆</div><div class="ag-tl-body">draft.cache（待激活）</div></div>
+                  </div>
+                  <div class="ag-persona">
+                    <div class="ag-persona-h"><span class="nm">writer.persona</span><span class="sp"></span><span class="meta">— tokens</span><span class="stream idle">pending</span></div>
+<pre class="ag-persona-body"><span class="c"># writer.persona</span>
+<span class="c">// 待 Reader → Critic 通过后开始配置。</span>
+<span class="c">// 草稿模板（来自 BMAD writer.template）：</span>
+你是 <span class="v">review 撰写</span> Agent。
+你接收 critic 通过的 <span class="k">reader.output</span>，输出 <span class="k">review.md</span>。
+<span class="c">- constraints</span>
+<span class="b">-</span> 输出格式 = <span class="s">markdown</span> + bibtex 引用块
+<span class="b">-</span> 字数 ≤ <span class="s">1500</span>，每条 finding 必须带页码
+<span class="b">-</span> 不可凭空补 finding，缺失 → 抛回 reader</pre>
+                  </div>
+                  <div class="ag-tools">
+                    <div class="ag-tools-h"><span class="lbl">Tools</span><span class="ct">0 selected · 3 candidates</span><span class="sp"></span><span class="hint">draft skeleton</span></div>
+                    <div class="ag-tool-grid">
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">markdown_format</span><span class="tag">+</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">citation_bibtex</span><span class="tag">+</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">tone_polish</span><span class="tag">+</span></div>
+                    </div>
+                  </div>
+                  <div class="ag-io">
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>INPUT · expects</div><div class="ag-io-body"><code>critic.approved_output</code></div></div>
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>OUTPUT · produces</div><div class="ag-io-body"><code>review.md</code> · <code>{ bibtex, finding_count }</code></div></div>
+                  </div>
+                </div>
+
+                <!-- ═════ PLACEHOLDER (shown for summ/trans/fact — unconfigured agents) ═════ -->
+                <div class="ag-panel" data-role="__placeholder">
+                  <div class="ag-tl">
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">1</span><span>Profile</span></div><div class="ag-tl-title">角色</div><div class="ag-tl-body">— 待配置</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">2</span><span>Kit</span></div><div class="ag-tl-title">模型 · 工具</div><div class="ag-tl-body">— 待配置</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">3</span><span>Memory</span></div><div class="ag-tl-title">记忆</div><div class="ag-tl-body">— 待配置</div></div>
+                  </div>
+                  <div class="ag-empty">
+                    <div class="ag-empty-h">尚未配置</div>
+                    <div class="ag-empty-b">该 Agent 还未启用 —— 完成 5 步流水线（Identity → Persona → Model → Tools → Memory）即可让它加入团队，并出现在 workflow DAG 与权责矩阵中。</div>
+                    <button type="button" class="ag-empty-cta">配置 Agent →</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Preview (live YAML artifact) -->
+            <div class="vpane" data-pane="preview">
+              <div class="preview-wrap">
+                <div class="preview-bar">
+                  <span class="nm">paper-review-team.yml</span>
+                  <span class="badge">流式中</span>
+                  <span class="sp"></span>
+                  <span class="meta">+18 / 0 · 632 tokens</span>
+                </div>
+<pre class="preview-yaml"><span class="c"># auto-generated by ShadowFlow · run_2026_05_08_14_22</span>
+<span class="k">team</span>: paper.review.v1
+<span class="k">mode</span>: serial
+<span class="k">policy</span>: <span class="s">strict</span>  <span class="c">· retry 3</span>
+<span class="k">coordinator</span>:
+  <span class="k">id</span>: paper.coord.v1
+  <span class="k">model</span>: claude-opus-4
+<span class="k">agents</span>:
+  - <span class="k">id</span>: paper.reader.v1
+    <span class="k">model</span>: claude-sonnet-4
+    <span class="k">persona</span>: <span class="s">academic-reader</span>
+    <span class="k">tools</span>:
+      <span class="ad">+ pdf_extract</span>
+      <span class="ad">+ arxiv_search</span>
+      <span class="ad">+ semanticscholar_lookup</span><span class="cur"></span></pre>
+                <div class="preview-foot">
+                  <span class="ic">●</span>
+                  <span><strong>跟随中</strong> · Preview 跟着 "生成 YAML Blueprint" 步骤实时刷新。完成后可继续追加 <code style="font-family:var(--font-mono);font-size:11px">writer / critic</code> 段。</span>
+                  <button class="open-editor">Editor 打开 →</button>
+                </div>
+              </div>
+            </div>
+            <!-- Bottom-right dock: status + 完成 → 去聊天 CTAs (mirrors RunSessionPage.tsx 845-848 + composer.complete) -->
+            <div class="dk">
+              <button class="dk-btn primary" title="继续对话 · ⌘↵">
+                去聊天
+                <span class="ic"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="8" x2="13" y2="8"/><polyline points="9 4 13 8 9 12"/></svg></span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div><!-- /app-body -->
+
+    </div><!-- /frame-inner -->
+  </div><!-- /frame-wrap dark -->
+</div><!-- /frame-section -->
+
+<!-- ════════════════════════ FRAME 2: LIGHT ═══════════════════ -->
+<div class="frame-section" style="margin-top:32px">
+  <div class="frame-lbl" style="--fl-accent:#d97757">Light — v3 stacked · #faf9f5 + Orange</div>
+  <div class="frame-wrap frame-light" id="f-light">
+    <div class="bc">
+      <div class="bc-dots"><div class="bc-dot r"></div><div class="bc-dot y"></div><div class="bc-dot g"></div></div>
+      <div class="bc-url">shadowflow.app/run/paper-review-team</div>
+    </div>
+    <div class="frame-inner">
+
+      <!-- App bar -->
+      <header class="app-bar">
+        <a class="app-logo" href="#">
+          <div class="app-logo-mark">S</div>
+          <div class="app-logo-word">ShadowFlow</div>
+        </a>
+        <div class="app-sep"></div>
+        <div class="app-bread"><span class="s">Projects</span><span class="s">›</span><span class="c">Paper Review</span><span class="s">›</span><span class="c">run_2026_05_08</span></div>
+        <div class="app-pill">构建中</div>
+        <span class="app-run-meta">3m 42s · ¥0.012</span>
+        <div class="app-sp"></div>
+        <button class="app-btn app-btn-icon" onclick="openSettings('light')" title="Settings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <div class="app-sep"></div>
+              </header>
+
+      <!-- Body -->
+      <div class="app-body">
+        <!-- Left pane -->
+        <aside class="pane-l">
+          <div class="pane-l-head">
+            <div class="pane-mark"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13.5 4C7 4 5.5 8 10 10C14.5 12 13 16 6.5 16"/></svg></div>
+            <div>
+              <div class="pane-l-title">Run Session</div>
+              <div class="pane-l-sub">run_2026_05_08_14_22 · 构建中</div>
+            </div>
+            <div class="pane-l-col">‹</div>
+          </div>
+          <div class="stream">
+            <div class="row right"><div class="bubble-user">帮我搭一个论文深读 + 写 review 的 Agent Team</div></div>
+            <div class="sys-divider">已识别 · Team 模式 · 3 个 Agent 角色</div>
+            <div class="rationale">
+              <div class="rationale-h"><span class="ic">✓</span><span>分析与决策</span><span class="meta">0.8s · 632 tokens</span></div>
+              <ul>
+                <li>任务包含 <b>深读 + 输出 review</b> 两个独立心智阶段 — 选 <em>Team 模式</em></li>
+                <li>引入 <b>Critic</b> 节点做 retry-gate，命中 <em>double-reject</em> 规约</li>
+                <li>Coordinator 串行编排，<em>policy_gate · retry 3</em> 保证草稿审完再传</li>
+              </ul>
+            </div>
+            <div class="cite-card">
+              <div class="cite-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="3" r="1.5" fill="currentColor" stroke="none"/><circle cx="11" cy="3" r="1.5" fill="currentColor" stroke="none"/><circle cx="8" cy="13" r="1.5" fill="currentColor" stroke="none"/><line x1="5" y1="4.5" x2="5" y2="7"/><path d="M5 7 Q5 11 8 11"/><path d="M11 4.5 Q11 11 8 11"/></svg></div>
+              <div style="flex:1;min-width:0"><div class="cite-meta">FORKED FROM TEMPLATE</div><div class="cite-name">Academic Paper · @ravenveil</div></div>
+              <div class="cite-ext">↗</div>
+            </div>
+            <div class="steps">
+              <div class="step"><div class="step-icon done">✓</div><div>分析目标需求</div><div class="step-meta">0.8s</div></div>
+              <div class="step"><div class="step-icon done">✓</div><div>挑选 Team 蓝图</div><div class="step-meta">1.2s</div></div>
+              <div class="step active"><div class="step-icon run"><span></span></div><div>配置 Agent 角色</div><div class="step-meta run">3.4s</div></div>
+              <div class="substeps">
+                <div class="sub"><span class="ic done"></span><span class="nm">reader · identity + persona</span><span class="t">0.6s</span></div>
+                <div class="sub"><span class="ic done"></span><span class="nm">reader · model claude-sonnet-4</span><span class="t">0.4s</span></div>
+                <div class="sub"><span class="ic run"></span><span class="nm">reader · tools (4 / 8 候选)</span><span class="t">…</span></div>
+                <div class="sub"><span class="ic"></span><span class="nm dim">critic · pending</span><span class="t">—</span></div>
+              </div>
+              <div class="step"><div class="step-icon">3</div><div class="step-name dim">设置工具集</div><div class="step-meta">pending</div></div>
+              <div class="step"><div class="step-icon">4</div><div class="step-name dim">Policy 协作规则</div><div class="step-meta">pending</div></div>
+            </div>
+            <div class="yaml-stream">
+              <div class="yaml-stream-h"><span>WRITING</span><span class="file">paper-review-team.yml · +18 / 0</span></div>
+<pre><span class="c"># auto-generated by ShadowFlow</span>
+<span class="k">team</span>: paper.review.v1
+<span class="k">mode</span>: serial
+<span class="k">policy</span>: <span class="s">strict</span>  <span class="c">· retry 3</span>
+<span class="k">agents</span>:
+  - <span class="k">id</span>: paper.reader.v1
+    <span class="k">model</span>: claude-sonnet-4
+    <span class="k">tools</span>:
+      <span class="ad">+ pdf_extract</span>
+      <span class="ad">+ arxiv_search</span><span class="cur"></span></pre>
+            </div>
+            <div class="think-card" onclick="this.classList.toggle('open')">
+              <div class="think-head">
+                <div class="loader" style="width:11px;height:11px;border-width:1.5px"></div>
+                <span>💭 思考中 · <span class="focus">选定第 3 个工具</span></span>
+                <span class="meta">1.2k tokens<span class="chev">›</span></span>
+              </div>
+              <div class="think-body" onclick="event.stopPropagation()">
+                <div class="think-line"><span class="t">0.3s</span><span>候选池 8 个搜索类工具，reader 已选 <code>pdf_extract</code> + <code>arxiv_search</code>。覆盖了"取原文"与"找一手论文"两条主路径。</span></div>
+                <div class="think-line"><span class="t">0.6s</span><span>缺一个"引用补全"——<code>semanticscholar_lookup</code> 能给 references 补元数据。比 <code>google_scholar</code> 命中率高且免 captcha。</span></div>
+                <div class="think-line"><span class="t">0.9s</span><span>装上后剩 5 候选未选，重新评估必要性 → <span class="dim" style="color:var(--fg-5)">等待 LLM 输出…</span></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="composer-inner">
+              <textarea class="composer-input" rows="2" placeholder="补充指令 · 或保持沉默让 AI 完成 · ⌘↵ 发送"></textarea>
+              <div class="composer-bar">
+                <div style="display:flex;gap:2px">
+                  <button class="cmp-btn" onclick="openSettings('light')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+                  <button class="cmp-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+                </div>
+                <div class="composer-bar-r"><button class="cmp-send"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button></div>
+              </div>
+            </div>
+            <div class="composer-hint"><span class="kb">⌘</span><span class="kb">↵</span><span>send</span><span style="opacity:.4;padding:0 3px">·</span><span class="kb">⇧</span><span class="kb">↵</span><span>newline</span></div>
+          </div>
+        </aside>
+
+        <!-- Right pane -->
+        <section class="pane-r">
+          <div class="toolbar toolbar-v2">
+            <button class="follow-chip" onclick="toggleFollow(this)" title="跟随中 · 配置 Agent › reader · 模型 · 工具">
+              <span class="lbl">实时跟随</span>
+              <span class="resume">返回跟随</span>
+            </button>
+            <div class="toolbar-sep"></div>
+            <div class="tabs-row">
+              <button class="view-tab" data-tab="overview" onclick="switchTab(this,'overview')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1.2"/><rect x="9" y="2" width="5" height="5" rx="1.2"/><rect x="2" y="9" width="5" height="5" rx="1.2"/><rect x="9" y="9" width="5" height="5" rx="1.2"/></svg> Overview</button>
+              <button class="view-tab" data-tab="team" onclick="switchTab(this,'team')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5.5" r="2.5"/><path d="M1 14c0-2.76 2.24-4.5 5-4.5s5 1.74 5 4.5"/><circle cx="12" cy="5.5" r="2" opacity=".5"/><path d="M15 14c0-2-1.5-3.5-3-4" opacity=".5"/></svg> Team <span class="ct">3</span></button>
+              <button class="view-tab on" data-tab="agent" data-followed="1" onclick="switchTab(this,'agent')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="10" height="8" rx="2.5"/><circle cx="6" cy="9" r="1" fill="currentColor" stroke="none"/><circle cx="10" cy="9" r="1" fill="currentColor" stroke="none"/><line x1="8" y1="2.5" x2="8" y2="5"/><circle cx="8" cy="2" r="1" fill="currentColor" stroke="none"/></svg> Agent <span class="ct">1</span></button>
+              <button class="view-tab" data-tab="preview" onclick="switchTab(this,'preview')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M2 8h12M2 12h7"/></svg> Preview</button>
+            </div>
+            <div class="tool-r">
+              <div class="file-tab" title="paper-review-team.yml"><span class="lbl">Blueprint</span><span class="id">paper-review-team.yml</span></div>
+            </div>
+          </div>
+          <div class="canvas">
+            <div class="vpane" data-pane="overview">
+              <div class="ov-scroll">
+                <h1 class="ov-h1">Review run session</h1>
+                <section class="ov-status">
+                  <p class="ov-status-desc">Your AI team has produced a draft section. Approve to commit to the canvas, or send back for revision.</p>
+                  <div class="ov-status-flags">
+                    <label class="ov-flag"><span class="ov-check on">✓</span><span>Live</span></label>
+                    <label class="ov-flag"><span class="ov-check on">✓</span><span>On-chain</span></label>
+                    <label class="ov-flag"><span class="ov-check">○</span><span>Auto-approve</span></label>
+                  </div>
+                  <div class="ov-status-row"><span class="ov-status-lbl">Open this run</span><button class="ov-status-btn">↗ Open in Editor</button></div>
+                </section>
+                <div class="ov-callout">
+                  <span class="ov-callout-icon">⚠</span>
+                  <div><div class="ov-callout-title">Retry budget low</div><div class="ov-callout-desc">Reader is on round 2 of 3 — one more rejection will roll back.</div></div>
+                  <button class="ov-callout-btn">↻ Adjust</button>
+                </div>
+                <div class="ov-section">
+                  <div class="ov-section-head"><span class="ov-section-lbl">Team</span><span class="ov-section-ct">3</span></div>
+                  <div class="ov-list">
+                    <button class="ov-row"><span class="ov-row-chev">›</span><span class="ov-row-name">workflow-dag</span><span class="ov-row-meta">canvas · 3 nodes</span><span class="ov-row-dot" data-s="run"></span></button>
+                    <button class="ov-row"><span class="ov-row-chev">›</span><span class="ov-row-name">paper.reader.v1</span><span class="ov-row-meta">step 3 / 8</span><span class="ov-row-dot" data-s="run"></span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="vpane" data-pane="team">
+              <div class="team-canvas">
+                <div class="node coord" style="left:60px;top:80px">
+                  <div class="node-head"><div class="node-avatar">C</div><div><div class="node-title">Coordinator</div><div class="node-sub">ORCHESTRATOR · RUNNING</div></div></div>
+                  <div class="node-meta"><span class="chip accent">claude-opus-4</span><span class="chip">serial</span></div>
+                </div>
+                <div class="node running" style="left:380px;top:40px">
+                  <div class="node-head"><div class="node-avatar">R</div><div><div class="node-title">Reader</div><div class="node-sub">paper.reader.v1</div></div></div>
+                  <div class="node-meta"><span class="chip">pdf_extract</span><span class="chip">arxiv_search</span></div>
+                </div>
+                <div class="node" style="left:380px;top:170px">
+                  <div class="node-head"><div class="node-avatar">K</div><div><div class="node-title">Critic</div><div class="node-sub">paper.critic.v1</div></div></div>
+                  <div class="node-meta"><span class="chip">retry-gate</span></div>
+                </div>
+                <div class="node pending" style="left:380px;top:295px">
+                  <div class="node-head"><div class="node-avatar">W</div><div><div class="node-title">Writer</div><div class="node-sub">paper.writer.v1</div></div></div>
+                  <div class="node-meta"><span class="chip">pending</span></div>
+                </div>
+                <div class="zoom"><button>−</button><span class="pct">100%</span><button>+</button></div>
+                <!-- 权责矩阵 · 压缩成右上角小卡片（RACI · 4×6） -->
+                <aside class="pm-mini" title="policy_matrix · RACI">
+                  <div class="pm-mini-h">
+                    <span class="lbl">policy</span>
+                    <span class="title">权责</span>
+                    <span class="sp"></span>
+                    <button class="exp" title="展开完整矩阵">⤢</button>
+                  </div>
+                  <div class="pm-mini-rows">
+                    <div class="pm-mini-row head">
+                      <span class="nm">Role</span>
+                      <span>Pln</span><span>Drf</span><span>Rev</span><span>Apv</span><span>Gate</span><span>Tool</span>
+                    </div>
+                    <div class="pm-mini-row"><span class="nm">Coord</span><span><span class="ra R" title="R · 主责">✓</span></span><span class="dash">·</span><span><span class="ra C" title="C · 协同">✓</span></span><span><span class="ra A" title="A · 决策">✓</span></span><span><span class="ra A" title="A · 决策">✓</span></span><span><span class="ra I" title="I · 知会">✓</span></span></div>
+                    <div class="pm-mini-row"><span class="nm">Reader</span><span><span class="ra I" title="I · 知会">✓</span></span><span><span class="ra R" title="R · 主责">✓</span></span><span class="dash">·</span><span class="dash">·</span><span><span class="ra C" title="C · 协同">✓</span></span><span><span class="ra R" title="R · 主责">✓</span></span></div>
+                    <div class="pm-mini-row"><span class="nm">Critic</span><span><span class="ra I" title="I · 知会">✓</span></span><span class="dash">·</span><span><span class="ra R" title="R · 主责">✓</span></span><span><span class="ra C" title="C · 协同">✓</span></span><span><span class="ra R" title="R · 主责">✓</span></span><span><span class="ra I" title="I · 知会">✓</span></span></div>
+                    <div class="pm-mini-row"><span class="nm">Writer</span><span><span class="ra I" title="I · 知会">✓</span></span><span><span class="ra R" title="R · 主责">✓</span></span><span class="dash">·</span><span class="dash">·</span><span><span class="ra I" title="I · 知会">✓</span></span><span><span class="ra R" title="R · 主责">✓</span></span></div>
+                  </div>
+                  <div class="pm-mini-foot">
+                    <span class="c on">retry 3</span>
+                    <span class="c on">double-reject</span>
+                    <span class="c">strict</span>
+                  </div>
+                </aside>
+              </div>
+            </div>
+            <div class="vpane on" data-pane="agent">
+              <div class="ag-wrap">
+                <!-- Identity card with agent switcher (updated by switchAgent) -->
+                <div class="ag-id" data-state="running">
+                  <div class="ag-id-mark">R</div>
+                  <div>
+                    <div class="ag-id-nm">Reader</div>
+                    <div class="ag-id-sub">paper.reader.v1 · <span class="stp">substep 3 / 5</span> · academic-reader</div>
+                  </div>
+                  <div class="ag-id-pill">RUNNING</div>
+                  <div class="ag-sw" role="tablist" aria-label="Agent roster">
+                    <div class="ag-sw-rail">
+                      <button type="button" class="ag-sw-av"      data-role="coord"  data-st="ok"      onclick="switchAgent(this,'coord')"  title="Coordinator · ready">C</button>
+                      <button type="button" class="ag-sw-av on"   data-role="reader" data-st="running" onclick="switchAgent(this,'reader')" title="Reader · running">R</button>
+                      <button type="button" class="ag-sw-av"      data-role="summ"   data-st="pending" onclick="switchAgent(this,'summ')"   title="Summarizer · waiting">S</button>
+                      <button type="button" class="ag-sw-av"      data-role="critic" data-st="pending" onclick="switchAgent(this,'critic')" title="Critic · waiting">K</button>
+                      <button type="button" class="ag-sw-av"      data-role="writer" data-st="pending" onclick="switchAgent(this,'writer')" title="Writer · waiting">W</button>
+                      <button type="button" class="ag-sw-av"      data-role="trans"  data-st="idle"    onclick="switchAgent(this,'trans')"  title="Translator · idle">T</button>
+                      <button type="button" class="ag-sw-av"      data-role="fact"   data-st="idle"    onclick="switchAgent(this,'fact')"   title="Fact-checker · idle">F</button>
+                    </div>
+                    <button type="button" class="ag-sw-more" onclick="toggleAgentPop(this,event)" title="View all agents (⌘K)">+2<span class="chev">▾</span></button>
+                    <div class="ag-sw-pop" onclick="event.stopPropagation()">
+                      <input type="text" class="ag-sw-pop-srch" placeholder="Filter agents…    ⌘K" oninput="filterAgentPop(this)" onkeydown="navAgentPop(event,this)">
+                      <div class="ag-sw-pop-grid"></div>
+                      <div class="ag-sw-pop-kb"><kbd>↑↓</kbd> nav · <kbd>↵</kbd> select · <kbd>esc</kbd> close</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ═════ READER (active) ═════ -->
+                <div class="ag-panel on" data-role="reader">
+                  <div class="ag-tl">
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Profile</span></div><div class="ag-tl-title">角色</div><div class="ag-tl-body">Reader · 深读 · 摘录 · 引用</div></div>
+                    <div class="ag-tl-cell run"><div class="ag-tl-step"><span class="ag-tl-num">…</span><span>Kit</span></div><div class="ag-tl-title">模型 · 工具</div><div class="ag-tl-body">claude-sonnet-4 · 3 tools</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">3</span><span>Memory</span></div><div class="ag-tl-title">记忆</div><div class="ag-tl-body">papers.vec · scratch.run</div></div>
+                  </div>
+                  <div class="ag-persona">
+                    <div class="ag-persona-h"><span class="nm">reader.persona</span><span class="sp"></span><span class="meta">632 tokens</span><span class="stream idle">cached</span></div>
+<pre class="ag-persona-body"><span class="c"># reader.persona</span>
+你是 <span class="v">论文深读</span> Agent。
+你接收 <span class="k">paper_url</span> / <span class="k">arxiv_id</span>，输出结构化摘要 + 引用清单。
+<span class="c">- constraints</span>
+<span class="b">-</span> 只读论文文本，不做主观评价
+<span class="b">-</span> 每个 section 单独摘录，保留原文页码
+<span class="b">-</span> 引用必须含 <span class="s">DOI</span> 或 <span class="s">arXiv-id</span>
+<span class="b">-</span> 失败 ≤ 3 次必须升级到 <span class="k">critic.retry_gate</span></pre>
+                  </div>
+                  <div class="ag-tools">
+                    <div class="ag-tools-h"><span class="lbl">Tools</span><span class="ct">3 selected · 5 candidates</span><span class="sp"></span><span class="hint">点击候选加入 · 拖拽排序</span></div>
+                    <div class="ag-tool-grid">
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">pdf_extract</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">arxiv_search</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool sel run"><span class="dot"></span><span class="nm">semanticscholar_lookup</span><span class="tag">ADDING…</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">openreview_fetch</span><span class="tag">+</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">google_scholar</span><span class="tag">+</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">pubmed_search</span><span class="tag">+</span></div>
+                    </div>
+                  </div>
+                  <div class="ag-io">
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>INPUT · expects</div><div class="ag-io-body"><code>paper_url</code> · <code>arxiv_id?</code> · <code>focus_sections[]</code></div></div>
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>OUTPUT · produces</div><div class="ag-io-body"><code>{ abstract, methodology, key_findings, citations[] }</code></div></div>
+                  </div>
+                </div>
+
+                <!-- ═════ COORDINATOR (configured · routing) ═════ -->
+                <div class="ag-panel" data-role="coord">
+                  <div class="ag-tl">
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Profile</span></div><div class="ag-tl-title">角色</div><div class="ag-tl-body">Coordinator · 调度 · 决策 · 升级</div></div>
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Kit</span></div><div class="ag-tl-title">模型 · 工具</div><div class="ag-tl-body">claude-opus-4 · 3 tools</div></div>
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Memory</span></div><div class="ag-tl-title">记忆</div><div class="ag-tl-body">run.context · 全局共享</div></div>
+                  </div>
+                  <div class="ag-persona">
+                    <div class="ag-persona-h"><span class="nm">coord.persona</span><span class="sp"></span><span class="meta">412 tokens</span><span class="stream idle">cached</span></div>
+<pre class="ag-persona-body"><span class="c"># coord.persona</span>
+你是 <span class="v">编排</span> Agent，BMAD 的 Build 阶段总控。
+你接收用户意图，输出 <span class="k">role_plan</span> + 把任务路由给 reader / critic / writer。
+<span class="c">- constraints</span>
+<span class="b">-</span> 不直接读论文 / 不直接生成 review
+<span class="b">-</span> 任一 agent 双拒后升级到 <span class="k">approve_gate</span>
+<span class="b">-</span> 单步重试 ≤ <span class="s">3</span>，全局重试 ≤ <span class="s">5</span></pre>
+                  </div>
+                  <div class="ag-tools">
+                    <div class="ag-tools-h"><span class="lbl">Tools</span><span class="ct">3 selected · 1 candidates</span><span class="sp"></span><span class="hint">orchestrator built-ins</span></div>
+                    <div class="ag-tool-grid">
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">route_task</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">dispatch_agent</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">policy_gate_check</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">spawn_subteam</span><span class="tag">+</span></div>
+                    </div>
+                  </div>
+                  <div class="ag-io">
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>INPUT · expects</div><div class="ag-io-body"><code>user_intent</code> · <code>team_blueprint</code></div></div>
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>OUTPUT · produces</div><div class="ag-io-body"><code>{ plan, retry_gates, role_assignments[] }</code></div></div>
+                  </div>
+                </div>
+
+                <!-- ═════ CRITIC (configured · waiting on reader) ═════ -->
+                <div class="ag-panel" data-role="critic">
+                  <div class="ag-tl">
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Profile</span></div><div class="ag-tl-title">角色</div><div class="ag-tl-body">Critic · 审稿 · 拒稿 · 升级</div></div>
+                    <div class="ag-tl-cell done"><div class="ag-tl-step"><span class="ag-tl-num">✓</span><span>Kit</span></div><div class="ag-tl-title">模型 · 工具</div><div class="ag-tl-body">claude-opus-4 · 2 tools</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">3</span><span>Memory</span></div><div class="ag-tl-title">记忆</div><div class="ag-tl-body">retry.log（待激活）</div></div>
+                  </div>
+                  <div class="ag-persona">
+                    <div class="ag-persona-h"><span class="nm">critic.persona</span><span class="sp"></span><span class="meta">524 tokens</span><span class="stream idle">waiting</span></div>
+<pre class="ag-persona-body"><span class="c"># critic.persona</span>
+你是 <span class="v">论文评审</span> Agent，给 reader 输出当 retry-gate。
+你接收 reader 的 <span class="k">extract</span>，输出 approval 或 retry 理由。
+<span class="c">- constraints</span>
+<span class="b">-</span> 不修改 reader 的产物，只产出 <span class="k">approve</span> / <span class="k">reject</span>
+<span class="b">-</span> reject 必须给 ≥ <span class="s">1</span> 条结构化理由
+<span class="b">-</span> 同稿件 reject ≥ <span class="s">2</span> 次 → <span class="k">approve_gate</span></pre>
+                  </div>
+                  <div class="ag-tools">
+                    <div class="ag-tools-h"><span class="lbl">Tools</span><span class="ct">2 selected · 2 candidates</span><span class="sp"></span><span class="hint">read-only checks</span></div>
+                    <div class="ag-tool-grid">
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">section_diff</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool sel"><span class="dot"></span><span class="nm">citation_check</span><span class="tag">SEL</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">methodology_lint</span><span class="tag">+</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">factuality_score</span><span class="tag">+</span></div>
+                    </div>
+                  </div>
+                  <div class="ag-io">
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>INPUT · expects</div><div class="ag-io-body"><code>reader.output</code> · <code>retry_count</code></div></div>
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>OUTPUT · produces</div><div class="ag-io-body"><code>{ approved: bool, reasons[], next_retry?: hint }</code></div></div>
+                  </div>
+                </div>
+
+                <!-- ═════ WRITER (pending — config not started) ═════ -->
+                <div class="ag-panel" data-role="writer">
+                  <div class="ag-tl">
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">1</span><span>Profile</span></div><div class="ag-tl-title">角色</div><div class="ag-tl-body">— 待配置</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">2</span><span>Kit</span></div><div class="ag-tl-title">模型 · 工具</div><div class="ag-tl-body">markdown · bibtex · polish</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">3</span><span>Memory</span></div><div class="ag-tl-title">记忆</div><div class="ag-tl-body">draft.cache（待激活）</div></div>
+                  </div>
+                  <div class="ag-persona">
+                    <div class="ag-persona-h"><span class="nm">writer.persona</span><span class="sp"></span><span class="meta">— tokens</span><span class="stream idle">pending</span></div>
+<pre class="ag-persona-body"><span class="c"># writer.persona</span>
+<span class="c">// 待 Reader → Critic 通过后开始配置。</span>
+<span class="c">// 草稿模板（来自 BMAD writer.template）：</span>
+你是 <span class="v">review 撰写</span> Agent。
+你接收 critic 通过的 <span class="k">reader.output</span>，输出 <span class="k">review.md</span>。
+<span class="c">- constraints</span>
+<span class="b">-</span> 输出格式 = <span class="s">markdown</span> + bibtex 引用块
+<span class="b">-</span> 字数 ≤ <span class="s">1500</span>，每条 finding 必须带页码
+<span class="b">-</span> 不可凭空补 finding，缺失 → 抛回 reader</pre>
+                  </div>
+                  <div class="ag-tools">
+                    <div class="ag-tools-h"><span class="lbl">Tools</span><span class="ct">0 selected · 3 candidates</span><span class="sp"></span><span class="hint">draft skeleton</span></div>
+                    <div class="ag-tool-grid">
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">markdown_format</span><span class="tag">+</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">citation_bibtex</span><span class="tag">+</span></div>
+                      <div class="ag-tool cand"><span class="dot"></span><span class="nm">tone_polish</span><span class="tag">+</span></div>
+                    </div>
+                  </div>
+                  <div class="ag-io">
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>INPUT · expects</div><div class="ag-io-body"><code>critic.approved_output</code></div></div>
+                    <div class="ag-io-col"><div class="ag-io-h"><span class="arrow">▸</span>OUTPUT · produces</div><div class="ag-io-body"><code>review.md</code> · <code>{ bibtex, finding_count }</code></div></div>
+                  </div>
+                </div>
+
+                <!-- ═════ PLACEHOLDER (shown for summ/trans/fact — unconfigured agents) ═════ -->
+                <div class="ag-panel" data-role="__placeholder">
+                  <div class="ag-tl">
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">1</span><span>Profile</span></div><div class="ag-tl-title">角色</div><div class="ag-tl-body">— 待配置</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">2</span><span>Kit</span></div><div class="ag-tl-title">模型 · 工具</div><div class="ag-tl-body">— 待配置</div></div>
+                    <div class="ag-tl-cell pending"><div class="ag-tl-step"><span class="ag-tl-num">3</span><span>Memory</span></div><div class="ag-tl-title">记忆</div><div class="ag-tl-body">— 待配置</div></div>
+                  </div>
+                  <div class="ag-empty">
+                    <div class="ag-empty-h">尚未配置</div>
+                    <div class="ag-empty-b">该 Agent 还未启用 —— 完成 5 步流水线（Identity → Persona → Model → Tools → Memory）即可让它加入团队，并出现在 workflow DAG 与权责矩阵中。</div>
+                    <button type="button" class="ag-empty-cta">配置 Agent →</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Preview (live YAML artifact) -->
+            <div class="vpane" data-pane="preview">
+              <div class="preview-wrap">
+                <div class="preview-bar">
+                  <span class="nm">paper-review-team.yml</span>
+                  <span class="badge">流式中</span>
+                  <span class="sp"></span>
+                  <span class="meta">+18 / 0 · 632 tokens</span>
+                </div>
+<pre class="preview-yaml"><span class="c"># auto-generated by ShadowFlow · run_2026_05_08_14_22</span>
+<span class="k">team</span>: paper.review.v1
+<span class="k">mode</span>: serial
+<span class="k">policy</span>: <span class="s">strict</span>  <span class="c">· retry 3</span>
+<span class="k">coordinator</span>:
+  <span class="k">id</span>: paper.coord.v1
+  <span class="k">model</span>: claude-opus-4
+<span class="k">agents</span>:
+  - <span class="k">id</span>: paper.reader.v1
+    <span class="k">model</span>: claude-sonnet-4
+    <span class="k">persona</span>: <span class="s">academic-reader</span>
+    <span class="k">tools</span>:
+      <span class="ad">+ pdf_extract</span>
+      <span class="ad">+ arxiv_search</span>
+      <span class="ad">+ semanticscholar_lookup</span><span class="cur"></span></pre>
+                <div class="preview-foot">
+                  <span class="ic">●</span>
+                  <span><strong>跟随中</strong> · Preview 跟着 "生成 YAML Blueprint" 步骤实时刷新。完成后可继续追加 <code style="font-family:var(--font-mono);font-size:11px">writer / critic</code> 段。</span>
+                  <button class="open-editor">Editor 打开 →</button>
+                </div>
+              </div>
+            </div>
+            <!-- Bottom-right dock: status + 完成 → 去聊天 CTAs (mirrors RunSessionPage.tsx 845-848 + composer.complete) -->
+            <div class="dk">
+              <button class="dk-btn primary" title="继续对话 · ⌘↵">
+                去聊天
+                <span class="ic"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="8" x2="13" y2="8"/><polyline points="9 4 13 8 9 12"/></svg></span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── Settings modal (shared, theme adapts) ─────────────────── -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="if(event.target===this)closeSettings()">
+  <div class="modal dark-skin" id="modal-inner" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div class="modal-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+      <div><div class="modal-title">Session Settings</div><div class="modal-sub">run_2026_05_08_14_22 · paper-review-team.yml</div></div>
+      <button class="modal-x" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="modal-tab on" data-tab="model" onclick="switchModalTab('model')">Model</button>
+      <button class="modal-tab" data-tab="policy" onclick="switchModalTab('policy')">Policy</button>
+      <button class="modal-tab" data-tab="display" onclick="switchModalTab('display')">Display</button>
+      <button class="modal-tab" data-tab="run" onclick="switchModalTab('run')">Run</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- MODEL -->
+      <div class="modal-pane on" data-modal-pane="model">
+        <div class="set-sec">Model Configuration</div>
+        <div class="set-group">
+          <div class="set-row"><div class="set-lbl"><span class="k">Model</span><span class="d">Active model for all agents</span></div><div class="set-ctrl"><select class="set-select"><option>claude-sonnet-4</option><option>claude-opus-4</option><option>claude-haiku-4</option><option>claude-sonnet-4-5</option></select></div></div>
+          <div class="set-row"><div class="set-lbl"><span class="k">Temperature</span><span class="d">Deterministic → Creative</span></div><div class="set-ctrl"><div class="set-slider-wrap"><input type="range" class="set-slider" min="0" max="2" step="0.1" value="0.7" oninput="this.nextElementSibling.textContent=this.value"><span class="set-slider-val">0.7</span></div></div></div>
+          <div class="set-row"><div class="set-lbl"><span class="k">Max Tokens</span><span class="d">Max output per response</span></div><div class="set-ctrl"><select class="set-select"><option>1024</option><option>2048</option><option selected>4096</option><option>8192</option><option>16384</option></select></div></div>
+        </div>
+        <div class="set-sec">Features</div>
+        <div class="set-group">
+          <div class="set-row"><div class="set-lbl"><span class="k">Streaming</span><span class="d">Stream tokens as generated</span></div><div class="set-ctrl"><label class="sf-toggle"><input type="checkbox" checked><span class="sf-toggle-track"><span class="sf-toggle-thumb"></span></span></label></div></div>
+          <div class="set-row"><div class="set-lbl"><span class="k">Extended Thinking</span><span class="d">Enable chain-of-thought mode</span></div><div class="set-ctrl"><label class="sf-toggle"><input type="checkbox"><span class="sf-toggle-track"><span class="sf-toggle-thumb"></span></span></label></div></div>
+        </div>
+      </div>
+
+      <!-- POLICY -->
+      <div class="modal-pane" data-modal-pane="policy">
+        <div class="set-sec">Approval Gate</div>
+        <div class="set-group">
+          <div class="set-row"><div class="set-lbl"><span class="k">Approval Strictness</span><span class="d">How often gates require human approval</span></div><div class="set-ctrl"><div class="sf-seg"><button>Strict</button><button class="on">Balanced</button><button>Relaxed</button></div></div></div>
+          <div class="set-row"><div class="set-lbl"><span class="k">Max Retries</span><span class="d">Per agent, per task (1–10)</span></div><div class="set-ctrl"><input type="number" class="set-num" min="1" max="10" value="3"></div></div>
+          <div class="set-row"><div class="set-lbl"><span class="k">Gate Timeout</span><span class="d">Seconds before auto-approve (0 = off)</span></div><div class="set-ctrl"><input type="number" class="set-num" min="0" max="300" value="0"></div></div>
+        </div>
+        <div class="set-sec">Behavior</div>
+        <div class="set-group">
+          <div class="set-row"><div class="set-lbl"><span class="k">Double Reject Halt</span><span class="d">Stop run on 2 consecutive rejections</span></div><div class="set-ctrl"><label class="sf-toggle"><input type="checkbox" checked><span class="sf-toggle-track"><span class="sf-toggle-thumb"></span></span></label></div></div>
+          <div class="set-row"><div class="set-lbl"><span class="k">Approval Log</span><span class="d">Record all gate decisions to audit log</span></div><div class="set-ctrl"><label class="sf-toggle"><input type="checkbox" checked><span class="sf-toggle-track"><span class="sf-toggle-thumb"></span></span></label></div></div>
+        </div>
+      </div>
+
+      <!-- DISPLAY -->
+      <div class="modal-pane" data-modal-pane="display">
+        <div class="set-sec">Interface</div>
+        <div class="set-group">
+          <div class="set-row"><div class="set-lbl"><span class="k">Language</span><span class="d">UI language</span></div><div class="set-ctrl"><div class="sf-seg"><button class="on">EN</button><button>中文</button></div></div></div>
+          <div class="set-row"><div class="set-lbl"><span class="k">Default View</span><span class="d">Panel shown on session open</span></div><div class="set-ctrl"><div class="sf-seg"><button>Overview</button><button class="on">Team</button><button>Agent</button></div></div></div>
+        </div>
+        <div class="set-sec">Preferences</div>
+        <div class="set-group">
+          <div class="set-row"><div class="set-lbl"><span class="k">Dense Mode</span><span class="d">Compact rows and reduced padding</span></div><div class="set-ctrl"><label class="sf-toggle"><input type="checkbox"><span class="sf-toggle-track"><span class="sf-toggle-thumb"></span></span></label></div></div>
+          <div class="set-row"><div class="set-lbl"><span class="k">Timestamps</span><span class="d">Show step timing in stream</span></div><div class="set-ctrl"><label class="sf-toggle"><input type="checkbox" checked><span class="sf-toggle-track"><span class="sf-toggle-thumb"></span></span></label></div></div>
+        </div>
+      </div>
+
+      <!-- RUN -->
+      <div class="modal-pane" data-modal-pane="run">
+        <div class="set-sec">Execution</div>
+        <div class="set-group">
+          <div class="set-row"><div class="set-lbl"><span class="k">Execution Mode</span><span class="d">Agent scheduling strategy</span></div><div class="set-ctrl"><div class="sf-seg"><button class="on">Sequential</button><button>Parallel</button></div></div></div>
+          <div class="set-row"><div class="set-lbl"><span class="k">Max Concurrent Agents</span><span class="d">Active agents in parallel mode (1–16)</span></div><div class="set-ctrl"><input type="number" class="set-num" min="1" max="16" value="4"></div></div>
+          <div class="set-row"><div class="set-lbl"><span class="k">Checkpoint Interval</span><span class="d">When to save state snapshots</span></div><div class="set-ctrl"><div class="sf-seg"><button>Off</button><button class="on">Every step</button><button>On gate</button></div></div></div>
+        </div>
+        <div class="set-sec">Safety</div>
+        <div class="set-group">
+          <div class="set-row"><div class="set-lbl"><span class="k">Cost Cap (USD)</span><span class="d">Auto-pause run if exceeded (0 = off)</span></div><div class="set-ctrl"><input type="number" class="set-num" min="0" max="1000" value="5"></div></div>
+          <div class="set-row"><div class="set-lbl"><span class="k">On-chain Checkpoint</span><span class="d">Write each checkpoint to blockchain</span></div><div class="set-ctrl"><label class="sf-toggle"><input type="checkbox"><span class="sf-toggle-track"><span class="sf-toggle-thumb"></span></span></label></div></div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-foot">
+      <button class="modal-reset">Reset to defaults</button>
+      <button class="modal-btn modal-btn-ghost" onclick="closeSettings()">Cancel</button>
+      <button class="modal-btn modal-btn-primary">Apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Tabs + 实时跟随 ─────────────────────────────────────────────
+   - Click any tab manually → that frame's follow chip goes "off"
+   - Click the off-state chip → resume follow + jump to the followed tab
+   - The followed tab is whichever tab the agent's current step maps to
+     (here: "配置 Agent 角色" → Agent tab, marked via data-followed="1")
+   ─────────────────────────────────────────────────────────────── */
+
+function switchTab(btn, id) {
+  var paneR = btn.closest('.pane-r');
+  paneR.querySelectorAll('.view-tab').forEach(function(b) { b.classList.toggle('on', b.dataset.tab === id); });
+  paneR.querySelectorAll('.vpane').forEach(function(p) { p.classList.toggle('on', p.dataset.pane === id); });
+  // If the user picked something that isn't the currently-followed tab → pause follow
+  var chip = paneR.parentElement.querySelector('.follow-chip');
+  if (chip && btn.dataset.followed !== '1') chip.classList.add('off');
+  else if (chip) chip.classList.remove('off');
+}
+
+function toggleFollow(chip) {
+  var paneR = chip.closest('.toolbar').parentElement;
+  var wasOff = chip.classList.contains('off');
+  if (wasOff) {
+    // Resume → jump to the followed tab
+    chip.classList.remove('off');
+    var followedTab = paneR.querySelector('.view-tab[data-followed="1"]');
+    if (followedTab) switchTab(followedTab, followedTab.dataset.tab);
+    chip.classList.remove('off'); // switchTab might toggle — make sure we end up on
+  } else {
+    // Pause
+    chip.classList.add('off');
+  }
+}
+
+/* ── Agent roster switcher (C/R/K/W) ────────────────────────────
+   Maps each agent to its identity-bar state. The 4 .ag-panel blocks
+   are already in the DOM; this just toggles `.on` + updates the bar. */
+var AGENT_META = {
+  coord:  { mark:'C', name:'Coordinator', role:'orchestrator',      sub:'paper.coord.v1 · <span class="stp">5 / 5 配置完成</span> · orchestrator',     pill:'READY',   state:'ok'      },
+  reader: { mark:'R', name:'Reader',      role:'academic-reader',   sub:'paper.reader.v1 · <span class="stp">substep 3 / 5</span> · academic-reader',  pill:'RUNNING', state:'running' },
+  summ:   { mark:'S', name:'Summarizer',  role:'tl;dr / abstract',  sub:'paper.summarizer.v1 · <span class="stp">0 / 5 待配置</span>',                  pill:'WAITING', state:'pending' },
+  critic: { mark:'K', name:'Critic',      role:'retry-gate',        sub:'paper.critic.v1 · <span class="stp">4 / 5 待 reader 完成</span> · retry-gate', pill:'WAITING', state:'pending' },
+  writer: { mark:'W', name:'Writer',      role:'review 撰写',        sub:'paper.writer.v1 · <span class="stp">0 / 5 待 critic 通过</span>',              pill:'WAITING', state:'pending' },
+  trans:  { mark:'T', name:'Translator',  role:'zh ⇄ en',           sub:'paper.translator.v1 · <span class="stp">未启用</span>',                       pill:'IDLE',    state:'pending' },
+  fact:   { mark:'F', name:'Fact-checker',role:'claim verification',sub:'paper.factcheck.v1 · <span class="stp">未启用</span>',                        pill:'IDLE',    state:'pending' }
+};
+var AGENT_ORDER = ['coord','reader','summ','critic','writer','trans','fact'];
+
+function switchAgent(btn, role) {
+  // btn may be an .ag-sw-av rail button OR a .ag-sw-pop-row in the popover
+  var wrap = btn.closest('.ag-wrap');
+  if (!wrap) return;
+  var meta = AGENT_META[role];
+  if (!meta) return;
+  // Identity bar
+  var id = wrap.querySelector('.ag-id');
+  id.setAttribute('data-state', meta.state);
+  id.querySelector('.ag-id-mark').textContent = meta.mark;
+  id.querySelector('.ag-id-nm').textContent   = meta.name;
+  id.querySelector('.ag-id-sub').innerHTML    = meta.sub;
+  id.querySelector('.ag-id-pill').textContent = meta.pill;
+  // Rail buttons — also auto-scroll the chosen one into view
+  wrap.querySelectorAll('.ag-sw-av').forEach(function(b) {
+    var on = b.dataset.role === role;
+    b.classList.toggle('on', on);
+    if (on && b.scrollIntoView) {
+      try { b.scrollIntoView({ block:'nearest', inline:'center', behavior:'smooth' }); } catch (e) {}
+    }
+  });
+  // Panels — fall back to placeholder if no concrete panel exists for this role
+  var hasConcrete = !!wrap.querySelector('.ag-panel[data-role="'+role+'"]');
+  wrap.querySelectorAll('.ag-panel').forEach(function(p) {
+    var match = hasConcrete ? (p.dataset.role === role) : (p.dataset.role === '__placeholder');
+    p.classList.toggle('on', match);
+  });
+  // Popover sync
+  var pop = wrap.querySelector('.ag-sw-pop');
+  if (pop) {
+    pop.querySelectorAll('.ag-sw-pop-row').forEach(function(r) {
+      r.classList.toggle('on', r.dataset.role === role);
+    });
+  }
+  closeAgentPop(wrap);
+}
+
+/* Popover: open / close / build / filter / keyboard */
+function buildAgentPop(wrap) {
+  var grid = wrap.querySelector('.ag-sw-pop-grid');
+  if (!grid || grid.dataset.built === '1') return;
+  var current = (wrap.querySelector('.ag-sw-av.on') || {}).dataset || {};
+  var html = AGENT_ORDER.map(function(role) {
+    var m = AGENT_META[role];
+    return '<button type="button" class="ag-sw-pop-row'+(role===current.role?' on':'')+'" data-role="'+role+'" onclick="switchAgent(this,\''+role+'\')">'
+         + '<div class="ag-sw-pop-mk">'+m.mark+'</div>'
+         + '<div class="ag-sw-pop-tx"><div class="nm">'+m.name+'</div><div class="rl">'+m.role+'</div></div>'
+         + '<span class="ag-sw-pop-st" data-st="'+m.state+'">'+m.pill+'</span>'
+         + '</button>';
+  }).join('');
+  grid.innerHTML = html;
+  grid.dataset.built = '1';
+}
+
+function toggleAgentPop(btn, ev) {
+  if (ev) ev.stopPropagation();
+  var wrap = btn.closest('.ag-wrap');
+  var pop = wrap.querySelector('.ag-sw-pop');
+  buildAgentPop(wrap);
+  var open = pop.classList.toggle('open');
+  if (open) {
+    var inp = pop.querySelector('.ag-sw-pop-srch');
+    if (inp) { inp.value = ''; filterAgentPop(inp); setTimeout(function() { inp.focus(); }, 30); }
+  }
+}
+function closeAgentPop(wrap) {
+  var pop = wrap.querySelector('.ag-sw-pop');
+  if (pop) pop.classList.remove('open');
+}
+function filterAgentPop(input) {
+  var q = input.value.trim().toLowerCase();
+  var rows = input.closest('.ag-sw-pop').querySelectorAll('.ag-sw-pop-row');
+  rows.forEach(function(r) {
+    if (!q) { r.style.display = ''; r.classList.remove('hov'); return; }
+    var text = r.textContent.toLowerCase();
+    r.style.display = text.indexOf(q) > -1 ? '' : 'none';
+  });
+  // pre-highlight first match for ↵
+  var first = Array.prototype.find.call(rows, function(r) { return r.style.display !== 'none'; });
+  rows.forEach(function(r) { r.classList.remove('hov'); });
+  if (first) first.classList.add('hov');
+}
+function navAgentPop(ev, input) {
+  var pop = input.closest('.ag-sw-pop');
+  var rows = Array.prototype.filter.call(pop.querySelectorAll('.ag-sw-pop-row'),
+    function(r) { return r.style.display !== 'none'; });
+  if (!rows.length) return;
+  var idx = rows.findIndex(function(r) { return r.classList.contains('hov'); });
+  if (ev.key === 'ArrowDown') { ev.preventDefault(); idx = (idx + 1) % rows.length; }
+  else if (ev.key === 'ArrowUp') { ev.preventDefault(); idx = (idx - 1 + rows.length) % rows.length; }
+  else if (ev.key === 'Enter')  { ev.preventDefault(); var pick = rows[idx>=0?idx:0]; if (pick) pick.click(); return; }
+  else if (ev.key === 'Escape') { ev.preventDefault(); closeAgentPop(input.closest('.ag-wrap')); return; }
+  else return;
+  rows.forEach(function(r) { r.classList.remove('hov'); });
+  rows[idx].classList.add('hov');
+}
+
+/* Close popovers on outside click + ⌘K / Ctrl+K shortcut */
+document.addEventListener('click', function(e) {
+  if (e.target.closest('.ag-sw')) return;
+  document.querySelectorAll('.ag-sw-pop.open').forEach(function(p) { p.classList.remove('open'); });
+});
+document.addEventListener('keydown', function(e) {
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+    // Open any Agent-tab popovers that are currently visible (multi-frame design doc)
+    var btns = document.querySelectorAll('.vpane.on[data-pane="agent"] .ag-sw-more');
+    if (!btns.length) return;
+    e.preventDefault();
+    toggleAgentPop(btns[0]);
+  }
+});
+
+/* Settings modal */
+var backdrop = document.getElementById('modal-backdrop');
+var modalEl  = document.getElementById('modal-inner');
+
+function openSettings(skin) {
+  modalEl.className = 'modal ' + (skin === 'light' ? 'light-skin' : 'dark-skin');
+  backdrop.classList.add('open');
+  switchModalTab('model');
+}
+function closeSettings() { backdrop.classList.remove('open'); }
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeSettings(); });
+
+function switchModalTab(id) {
+  modalEl.querySelectorAll('.modal-tab').forEach(function(b) { b.classList.toggle('on', b.dataset.tab === id); });
+  modalEl.querySelectorAll('.modal-pane').forEach(function(p) { p.classList.toggle('on', p.dataset.modalPane === id); });
+}
+
+/* Segment controls */
+document.querySelectorAll('.sf-seg').forEach(function(seg) {
+  seg.querySelectorAll('button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      seg.querySelectorAll('button').forEach(function(b) { b.classList.remove('on'); });
+      btn.classList.add('on');
+    });
+  });
+});
+
+/* Toggle fix — CSS :has alternative for thumb movement */
+document.querySelectorAll('.sf-toggle input').forEach(function(cb) {
+  function update() {
+    var thumb = cb.parentElement.querySelector('.sf-toggle-thumb');
+    if (thumb) thumb.style.transform = cb.checked ? 'translateX(16px)' : '';
+  }
+  cb.addEventListener('change', update);
+  update();
+});
+
+/* ════════════════════════════════════════════════════════════════
+   Click 5-cell rail → scroll + flash matching detail block
+   + inject Model / Memory blocks (parallel to Persona / Tools)
+   + add ✎ edit affordance to each detail header
+   + wire substep & artifact-link cross-pane jumps
+   ════════════════════════════════════════════════════════════════ */
+
+// Skill-sourced model + memory data (pulled verbatim from each *.skill.yaml — see RunSessionPage skill registry)
+var SKILL_MODEL = {
+  coord:  { id:'claude-opus-4',   temp:'0.1', maxTok:'8192', ctx:'200k', src:'coord.skill.yaml#model',  pending:false },
+  reader: { id:'claude-sonnet-4', temp:'0.2', maxTok:'8192', ctx:'200k', src:'reader.skill.yaml#model', pending:false },
+  critic: { id:'claude-opus-4',   temp:'0.0', maxTok:'4096', ctx:'200k', src:'critic.skill.yaml#model', pending:false },
+  writer: { id:'—',               temp:'—',   maxTok:'—',    ctx:'—',    src:'writer.skill.yaml#model', pending:true  }
+};
+var SKILL_MEMORY = {
+  coord:  { src:'coord.skill.yaml#memory',  rows:[
+    { ns:'run.context',  scope:'session', perm:'rw · shared' },
+    { ns:'team.policy',  scope:'global',  perm:'ro'          }
+  ]},
+  reader: { src:'reader.skill.yaml#memory', rows:[
+    { ns:'papers.vec',   scope:'session', perm:'rw'          },
+    { ns:'scratch.run',  scope:'session', perm:'rw · ephemeral' }
+  ]},
+  critic: { src:'critic.skill.yaml#memory', rows:[
+    { ns:'retry.log',    scope:'session', perm:'ro · pending', pending:true }
+  ]},
+  writer: { src:'writer.skill.yaml#memory', rows:[
+    { ns:'draft.cache',  scope:'session', perm:'— pending',    pending:true }
+  ]}
+};
+
+// step → detail-block CSS selector. 3-tab model:
+//   profile = Identity(I/O contract) + Persona(system prompt) merged
+//   kit     = Model(params) + Tools(grid) merged
+//   memory  = Memory namespace list
+var STEP_MAP = {
+  profile: { sel:'.ag-persona', cellPos:1 },
+  kit:     { sel:'.ag-tools',   cellPos:2 },
+  memory:  { sel:'.ag-memory',  cellPos:3 }
+};
+
+function buildModelBlock(role) {
+  var m = SKILL_MODEL[role]; if (!m) return '';
+  return '<div class="ag-model" data-detail="model" data-step="kit">'
+       + '<div class="ag-mh"><span>Model · 参数</span><span class="nm">· ' + role + '.model</span>'
+       + '<span class="sp"></span><span class="ag-src">from <code>' + m.src + '</code></span>'
+       + '<button type="button" class="ag-edit" onclick="editStep(this,\'model\',event)" title="编辑 Model 参数"><span class="pen">✎</span>编辑</button></div>'
+       + '<div class="ag-mbody' + (m.pending ? ' pending' : '') + '">'
+       +   '<div class="ag-mb-cell"><span class="ag-mb-lb">model</span><span class="ag-mb-vl"><span class="accent">' + m.id + '</span></span></div>'
+       +   '<div class="ag-mb-cell"><span class="ag-mb-lb">temperature</span><span class="ag-mb-vl">' + m.temp + '</span></div>'
+       +   '<div class="ag-mb-cell"><span class="ag-mb-lb">max_tokens</span><span class="ag-mb-vl">' + m.maxTok + '</span></div>'
+       +   '<div class="ag-mb-cell"><span class="ag-mb-lb">context</span><span class="ag-mb-vl">' + m.ctx + '</span></div>'
+       + '</div></div>';
+}
+function buildMemoryBlock(role) {
+  var m = SKILL_MEMORY[role]; if (!m) return '';
+  var rows = m.rows.map(function(r) {
+    return '<div class="ag-memrow' + (r.pending ? ' pending' : '') + '">'
+         + '<span class="ns">' + r.ns + '</span>'
+         + '<span class="scope">' + r.scope + '</span>'
+         + '<span class="perm">' + r.perm + '</span></div>';
+  }).join('');
+  return '<div class="ag-memory" data-detail="memory" data-step="memory">'
+       + '<div class="ag-mh"><span>Memory · 命名空间</span><span class="nm">· ' + role + '.memory</span>'
+       + '<span class="sp"></span><span class="ag-src">from <code>' + m.src + '</code></span>'
+       + '<button type="button" class="ag-edit" onclick="editStep(this,\'memory\',event)" title="编辑 Memory 配置"><span class="pen">✎</span>编辑</button></div>'
+       + '<div class="ag-memrows">' + rows + '</div></div>';
+}
+
+function initAgentPanel(panel) {
+  if (panel.dataset.inited === '1') return;
+  var role = panel.dataset.role;
+  if (role && role !== '__placeholder') {
+    var persona = panel.querySelector('.ag-persona');
+    var tools   = panel.querySelector('.ag-tools');
+    var io      = panel.querySelector('.ag-io');
+    // Inject Model block AFTER Persona (matches 5-cell order)
+    if (persona && !panel.querySelector('.ag-model')) {
+      persona.insertAdjacentHTML('afterend', buildModelBlock(role));
+    }
+    // Inject Memory block AFTER Tools (matches 5-cell order)
+    if (tools && !panel.querySelector('.ag-memory')) {
+      tools.insertAdjacentHTML('afterend', buildMemoryBlock(role));
+    }
+    // v3 stacked: move I/O contract to sit right after Persona so Profile group
+    // (persona + io) reads together at the top, then Kit (model + tools), then Memory.
+    if (io && persona && io.previousElementSibling !== persona) {
+      persona.insertAdjacentElement('afterend', io);
+    }
+    // Annotate existing blocks with data-detail + add ✎ edit chip
+    if (persona) {
+      persona.setAttribute('data-detail', 'persona');
+      persona.setAttribute('data-step', 'profile');
+      var ph = persona.querySelector('.ag-persona-h');
+      if (ph && !ph.querySelector('.ag-edit')) {
+        ph.insertAdjacentHTML('beforeend',
+          '<button type="button" class="ag-edit" onclick="editStep(this,\'persona\',event)" title="编辑 System Prompt"><span class="pen">✎</span>编辑</button>');
+      }
+    }
+    if (tools) {
+      tools.setAttribute('data-detail', 'tools');
+      tools.setAttribute('data-step', 'kit');
+      var th = tools.querySelector('.ag-tools-h');
+      if (th && !th.querySelector('.ag-edit')) {
+        var src = '<span class="ag-src">from <code>' + role + '.skill.yaml#tools</code></span>';
+        th.insertAdjacentHTML('beforeend', src +
+          '<button type="button" class="ag-edit" onclick="editStep(this,\'tools\',event)" title="编辑工具集"><span class="pen">✎</span>编辑</button>');
+      }
+    }
+    // Persona-h needs a skill-source label too (right before .meta tokens count)
+    if (persona) {
+      var ph2 = persona.querySelector('.ag-persona-h');
+      var meta = ph2 ? ph2.querySelector('.meta') : null;
+      if (meta && !ph2.querySelector('.ag-src')) {
+        meta.insertAdjacentHTML('beforebegin',
+          '<span class="ag-src">from <code>' + role + '.skill.yaml#persona</code></span>');
+      }
+    }
+  }
+  // Tag cells with data-step + role=tab + tabindex + slim-tab decorations
+  var cells = panel.querySelectorAll('.ag-tl > .ag-tl-cell');
+  var STEPS = ['profile','kit','memory'];
+  var DONE_TIMES = ['1.5s','2.7s','0.8s'];
+  cells.forEach(function(cell, i) {
+    var step = STEPS[i];
+    if (!step) return;
+    cell.setAttribute('data-step', step);
+    cell.setAttribute('role', 'tab');
+    cell.setAttribute('tabindex', '0');
+    cell.setAttribute('aria-label', step);
+    cell.title = step;
+    // slim tab: numeric index for the mono step prefix
+    var num = cell.querySelector('.ag-tl-num');
+    if (num) num.setAttribute('data-idx', String(i + 1).padStart(2, '0'));
+    // slim tab: top-right time badge
+    var t = '—';
+    if (cell.classList.contains('done')) t = DONE_TIMES[i] || '0.5s';
+    else if (cell.classList.contains('run')) t = '0:06.4';
+    cell.setAttribute('data-time', t);
+  });
+
+  // D-mode: I/O contract piggy-backs on Profile tab (Identity merged into Profile).
+  // Skip d-mode for placeholder (unconfigured agents) — empty state takes the full panel.
+  var io = panel.querySelector('.ag-io');
+  if (io) io.setAttribute('data-step', 'profile');
+  if (role === '__placeholder') { panel.dataset.inited = '1'; return; }
+
+  // ── v3: wrap blocks into archive-card sections ────────────────
+  // Profile = persona + io · Kit = model + tools · Memory = memory
+  if (!panel.querySelector('.ag-sec')) {
+    var cells = panel.querySelectorAll('.ag-tl > .ag-tl-cell');
+    function cellState(idx) {
+      var c = cells[idx]; if (!c) return 'pending';
+      if (c.classList.contains('done')) return 'done';
+      if (c.classList.contains('run'))  return 'run';
+      return 'pending';
+    }
+    var STATUS_TXT = {
+      done:    function(t) { return 'done · ' + t; },
+      run:     function( ) { return 'running · 0:06.4'; },
+      pending: function( ) { return 'pending'; }
+    };
+    var SEC_DEFS = [
+      { step:'profile', num:'01', title:'角色',       src:role + '.skill.yaml#persona', time:'1.5s', blocks:['.ag-persona','.ag-io'] },
+      { step:'kit',     num:'02', title:'模型 · 工具', src:role + '.skill.yaml#kit',     time:'2.7s', blocks:['.ag-model','.ag-tools'] },
+      { step:'memory',  num:'03', title:'记忆',       src:role + '.skill.yaml#memory',  time:'0.8s', blocks:['.ag-memory'] }
+    ];
+    SEC_DEFS.forEach(function(def, i) {
+      var state = cellState(i);
+      var sec = document.createElement('div');
+      sec.className = 'ag-sec';
+      sec.setAttribute('data-step', def.step);
+      sec.setAttribute('data-state', state);
+      // header
+      var hd = document.createElement('div');
+      hd.className = 'ag-sec-hd';
+      hd.innerHTML =
+          '<span class="ag-sec-num">' + def.num + '</span>'
+        + '<span class="ag-sec-title">' + def.title + '</span>'
+        + '<span class="ag-sec-status">' + STATUS_TXT[state](def.time) + '</span>'
+        + '<span class="ag-sec-src">from <code>' + def.src + '</code></span>';
+      sec.appendChild(hd);
+      // adopt blocks into section
+      def.blocks.forEach(function(sel) {
+        var b = panel.querySelector(sel);
+        if (b) sec.appendChild(b);
+      });
+      panel.appendChild(sec);
+    });
+  }
+
+  // Default tab: running agents → the running step (matches "follow" semantic);
+  // configured / pending agents → Profile (overview first).
+  var runCell = panel.querySelector('.ag-tl-cell.run');
+  var initial = runCell ? runCell.getAttribute('data-step') : 'profile';
+  activateAgentTab(panel, initial);
+  panel.dataset.inited = '1';
+}
+
+// Switch which tab is active inside an agent panel — show matching detail block,
+// dim the others, mark the cell as the tab-on indicator.
+function activateAgentTab(panel, step) {
+  if (!panel) return;
+  var activeCell = null;
+  panel.querySelectorAll('.ag-tl > .ag-tl-cell').forEach(function(c) {
+    var on = c.getAttribute('data-step') === step;
+    c.classList.toggle('is-tab-on', on);
+    if (on) activeCell = c;
+  });
+  var selectors = ['.ag-persona','.ag-tools','.ag-model','.ag-memory','.ag-io','.ag-empty'];
+  var paneEl = null;
+  selectors.forEach(function(sel) {
+    panel.querySelectorAll(sel).forEach(function(el) {
+      var on = el.getAttribute('data-step') === step;
+      el.classList.toggle('is-tab-active', on);
+      if (on) paneEl = el;
+    });
+  });
+  // Drop any stale pane hint; in d-mode add a shimmer line if active step is running
+  panel.querySelectorAll('.ag-pane-hint').forEach(function(n) { n.remove(); });
+  if (paneEl && panel.classList.contains('d-mode') && activeCell && activeCell.classList.contains('run')) {
+    var role = panel.getAttribute('data-role') || '';
+    var msg = '▸ ' + (step === 'kit'     ? 'adding semanticscholar_lookup…'
+                    : step === 'memory'  ? 'attaching ' + role + ' memory namespaces…'
+                    : step === 'profile' ? 'streaming ' + role + '.persona…'
+                    :                      'configuring ' + step + '…');
+    var hint = document.createElement('div');
+    hint.className = 'ag-pane-hint';
+    hint.textContent = msg;
+    paneEl.insertBefore(hint, paneEl.firstChild);
+  }
+}
+
+function focusAgentStep(panel, step) {
+  if (!panel) return;
+  // D-mode: 5 cell is a tab strip — switch active tab instead of scrolling.
+  if (panel.classList.contains('d-mode')) {
+    activateAgentTab(panel, step);
+    // Flash the now-visible block for visual feedback
+    var visible = panel.querySelector('.is-tab-active');
+    if (visible) {
+      visible.classList.remove('ag-detail-flash');
+      void visible.offsetWidth;
+      visible.classList.add('ag-detail-flash');
+    }
+    return;
+  }
+  var meta = STEP_MAP[step]; if (!meta) return;
+  var target = (step === 'profile')
+    ? (panel.querySelector(meta.sel) || (panel.closest('.ag-wrap') || panel.parentNode).querySelector('.ag-id'))
+    : panel.querySelector(meta.sel);
+  if (!target) return;
+  try { target.scrollIntoView({ block:'nearest', behavior:'smooth' }); } catch (e) {}
+  target.classList.remove('ag-detail-flash');
+  void target.offsetWidth;
+  target.classList.add('ag-detail-flash');
+  var rail = panel.querySelector('.ag-tl');
+  if (rail) rail.querySelectorAll('.ag-tl-cell').forEach(function(c) {
+    c.classList.toggle('is-target', c.getAttribute('data-step') === step);
+  });
+}
+
+// Delegated click handler — catches cells in all (current and future) panels
+document.addEventListener('click', function(ev) {
+  var cell = ev.target.closest('.ag-tl-cell');
+  if (cell) {
+    var step = cell.getAttribute('data-step');
+    var panel = cell.closest('.ag-panel');
+    if (step && panel) focusAgentStep(panel, step);
+  }
+});
+document.addEventListener('keydown', function(ev) {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  var cell = document.activeElement && document.activeElement.closest && document.activeElement.closest('.ag-tl-cell');
+  if (!cell) return;
+  ev.preventDefault();
+  var step = cell.getAttribute('data-step');
+  var panel = cell.closest('.ag-panel');
+  if (step && panel) focusAgentStep(panel, step);
+});
+
+// ✎ Edit chip — placeholder for "user can override skill defaults" flow
+function editStep(btn, step, ev) {
+  if (ev) ev.stopPropagation();
+  var panel = btn.closest('.ag-panel');
+  var role = panel ? panel.getAttribute('data-role') : '?';
+  // For the design prototype we just flash the block + announce intent
+  var detail = btn.closest('[data-detail]') || btn.closest('.ag-id');
+  if (detail) {
+    detail.classList.remove('ag-detail-flash');
+    void detail.offsetWidth;
+    detail.classList.add('ag-detail-flash');
+  }
+  btn.setAttribute('data-armed', '1');
+  setTimeout(function(){ btn.removeAttribute('data-armed'); }, 1500);
+  console.info('[design-stub] editStep', { role: role, step: step });
+}
+
+// Initialize every concrete agent panel in both frames
+document.querySelectorAll('.ag-panel').forEach(initAgentPanel);
+
+// ── Cross-pane jump #1: substep rows → switch right pane to Agent tab + focus matching step
+var SUBSTEP_MAP = [
+  { match: /identity|persona|profile|命名|形象|性格|角色/i,  step:'profile' },
+  { match: /model|sonnet|opus|gpt|claude|tool|工具|模型/i,    step:'kit'     },
+  { match: /memory|记忆/i,                                     step:'memory'  }
+];
+document.querySelectorAll('.sub').forEach(function(sub) {
+  if (sub.classList.contains('dim')) return;
+  var nm = sub.querySelector('.nm');
+  if (!nm) return;
+  // Detect target step from substep label
+  var text = nm.textContent || '';
+  var hit = SUBSTEP_MAP.find(function(m) { return m.match.test(text); });
+  if (!hit) return;
+  // Append → arrow hint
+  if (!sub.querySelector('.arrow')) {
+    sub.insertAdjacentHTML('beforeend', '<span class="arrow">→ ' + hit.step + '</span>');
+  }
+  sub.style.cursor = 'pointer';
+  sub.title = '跳转到右侧 Agent · ' + hit.step;
+  sub.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    // Find this frame's right pane
+    var frame = sub.closest('.frame-wrap');
+    if (!frame) return;
+    var agentTab = frame.querySelector('.view-tab[data-tab="agent"]');
+    if (agentTab && !agentTab.classList.contains('on')) {
+      // Use existing switchTab to keep state coherent
+      try { switchTab(agentTab, 'agent'); } catch (e) {}
+    }
+    var activePanel = frame.querySelector('.vpane.on[data-pane="agent"] .ag-panel.on')
+                   || frame.querySelector('.vpane[data-pane="agent"] .ag-panel.on');
+    if (activePanel) focusAgentStep(activePanel, hit.step);
+  });
+});
+
+// ── Cross-pane jump #2: yaml-stream-h .file + preview-bar .nm → switch to Preview tab
+document.querySelectorAll('.yaml-stream-h .file, .preview-bar .nm').forEach(function(el) {
+  el.title = '在 Preview 中打开 paper-review-team.yml';
+  el.addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    var frame = el.closest('.frame-wrap');
+    if (!frame) return;
+    var previewTab = frame.querySelector('.view-tab[data-tab="preview"]');
+    if (previewTab) try { switchTab(previewTab, 'preview'); } catch (e) {}
+  });
+});
+
+// ── Cross-pane jump #3: when switchAgent runs, re-init the newly-shown panel (lazy)
+var _origSwitchAgent = window.switchAgent;
+if (typeof _origSwitchAgent === 'function') {
+  window.switchAgent = function(btn, role) {
+    _origSwitchAgent(btn, role);
+    var wrap = btn.closest('.ag-wrap');
+    if (wrap) {
+      var newly = wrap.querySelector('.ag-panel.on');
+      if (newly) initAgentPanel(newly);
+    }
+  };
+}
+</script>
+</body>
+</html>
