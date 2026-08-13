@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import re
 import threading
 from typing import Any, Dict, List, Optional, Tuple
@@ -3611,23 +3612,36 @@ Output a JSON with keys:
                 logger.warning("ApiExecutor not found for verifier, degrading to threshold")
                 return base_result
 
-            # TODO: Enable logprob extraction — requires extending ApiExecutor
-            # For now, use standard API call and parse score from response
+            # Enable logprob extraction for LLM-as-Verifier
             llm_result = await api_executor.execute(
                 config={
                     "kind": "api",
                     "provider": provider,
                     "model": verifier_cfg.get("model", "claude-sonnet-4-20250514"),
                     "parse": "json",
+                    "logprobs": True,  # 启用原生 logprob
+                    "top_logprobs": 5,  # 请求 top-5 token 概率
                 },
                 payload={"prompt": prompt},
             )
 
-            # Extract score from LLM response
+            # Extract score and logprob from LLM response
             if isinstance(llm_result, dict):
                 score = llm_result.get("score", base_result.get("value", 0))
                 confidence = llm_result.get("confidence", 0.5)
                 reasoning = llm_result.get("reasoning", "")
+
+                # 原生 logprob 数据（如果存在）
+                logprobs_data = llm_result.get("logprobs", {})
+                if logprobs_data:
+                    # 计算基于 logprob 的置信度（平均对数概率转换为线性概率）
+                    raw_logprobs = logprobs_data.get("logprobs", [])
+                    if raw_logprobs:
+                        avg_logprob = sum(raw_logprobs) / len(raw_logprobs)
+                        # 将对数概率转换为 0-1 置信度（sigmoid 近似）
+                        logprob_confidence = 1 / (1 + math.exp(-avg_logprob))
+                        # 与 LLM 输出的 confidence 取平均
+                        confidence = (confidence + logprob_confidence) / 2
 
                 # VOC-based convergence: if confidence high and score above threshold
                 converged = bool(score >= (target_value if isinstance(target_value, (int, float)) else 0.95) and confidence >= 0.7)
@@ -3639,6 +3653,7 @@ Output a JSON with keys:
                     "verifier_reasoning": str(reasoning),
                     "converged": converged,
                     "classification": "converged" if converged else "diverging",
+                    "logprob_data": logprobs_data if logprobs_data else None,  # 调试用
                 }
         except Exception as exc:
             logger.warning(f"LLM-as-Verifier failed ({exc}), degrading to threshold")

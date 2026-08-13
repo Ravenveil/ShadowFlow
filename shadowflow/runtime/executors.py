@@ -1047,6 +1047,13 @@ class ApiExecutor(BaseExecutor):
             body["system"] = system_prompt
         if config.get("temperature") is not None:
             body["temperature"] = config["temperature"]
+        # LLM-as-Verifier: 原生 logprob 支持（Anthropic Claude）
+        if config.get("logprobs", False):
+            body["logprobs"] = True
+            # 可选：指定 top_logprobs 数量（默认 0）
+            top_k = config.get("top_logprobs", 5)
+            if top_k > 0:
+                body["top_logprobs"] = top_k
 
         headers = {
             "x-api-key": api_key,
@@ -1103,6 +1110,13 @@ class ApiExecutor(BaseExecutor):
             "raw_output": data,
             "response_text": text,
         }
+
+        # LLM-as-Verifier: 提取 logprob 数据
+        if config.get("logprobs", False) and provider == "anthropic":
+            logprobs_data = self._extract_anthropic_logprobs(data.get("content", []))
+            if logprobs_data:
+                output["logprobs"] = logprobs_data
+
         parse_mode = str(config.get("parse", "text"))
         if parse_mode == "json":
             parsed = json.loads(text)
@@ -1117,3 +1131,36 @@ class ApiExecutor(BaseExecutor):
             raise ValueError(f"unsupported api parse mode: {parse_mode}")
         output["message"] = text
         return output
+
+    def _extract_anthropic_logprobs(self, content: list) -> Dict[str, Any]:
+        """从 Anthropic API 响应中提取 logprob 数据。
+
+        Returns:
+            dict with:
+            - tokens: List[str] — token 序列
+            - logprobs: List[float] — 对应的对数概率
+            - top_logprobs: List[Dict[str, float]] — 每个位置的 top-K token 概率
+        """
+        tokens: List[str] = []
+        logprobs: List[float] = []
+        top_logprobs: List[Dict[str, float]] = []
+
+        for block in content:
+            if block.get("type") == "text":
+                # 提取 token 级 logprob（如果存在）
+                for token_data in block.get("logprobs", []):
+                    token = token_data.get("token", "")
+                    if token:
+                        tokens.append(token)
+                        logprobs.append(token_data.get("logprob", 0.0))
+                        # 提取 top_logprobs
+                        top_logprobs.append({
+                            t.get("token", ""): t.get("logprob", 0.0)
+                            for t in token_data.get("top_logprobs", [])
+                        })
+
+        return {
+            "tokens": tokens,
+            "logprobs": logprobs,
+            "top_logprobs": top_logprobs,
+        } if tokens else {}
