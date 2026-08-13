@@ -41,6 +41,7 @@ const RunsListPage = lazy(() =>
 const RunDetailPage = lazy(() =>
   import('./pages/RunsPage').then((m) => ({ default: m.RunDetailPage }))
 );
+const LoopEnginePage = lazy(() => import('./pages/LoopEnginePage'));
 
 // Kept for future use — other routes may still need placeholder slots
 export function RoutePlaceholder({ title }: { title: string }) {
@@ -82,6 +83,7 @@ export function AppRoutes() {
             <Route path="/editor/:templateId" element={<Navigate to="/start" replace />} />
             <Route path="/runs" element={<RunsListPage />} />
             <Route path="/runs/:runId" element={<RunDetailPage />} />
+            <Route path="/loop-engine" element={<LoopEnginePage />} />
             {/* /chat without a groupId renders ChatPage's empty state, so the
                 sidebar can safely link here when no real groups exist yet.
                 Replaces hardcoded `/chat/default` which POSTed to a fake

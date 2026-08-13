@@ -13,7 +13,7 @@
  * 迁移状态：ChatRail（顶部导航组 + 收起态竖排）已接入；HfSidebar / QuickSwitcher /
  * NarrowNav 逐步迁来同一份（批2/批3）。
  */
-import { Plus, Inbox, Users, Bot, CalendarDays, Folder } from 'lucide-react';
+import { Plus, Inbox, Users, Bot, CalendarDays, Folder, RotateCw } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export interface NavEntry {
@@ -31,10 +31,11 @@ export interface NavEntry {
 export const PRIMARY_NAV: NavEntry[] = [
   // 「新建会话」明确落个人态新会话（view=personal）——否则无 view 参数时 /chat
   // 默认落团队态，点了会跳到团队（2026-06-22 用户反馈 bug）。
-  { key: 'newtask',  labelKey: 'shell.navNewTask',  Icon: Plus,         to: '/chat?view=personal&new=1' },
-  { key: 'inbox',    labelKey: 'shell.navInbox',    Icon: Inbox,        to: '/inbox' },
-  { key: 'teams',    labelKey: 'shell.navTeams',    Icon: Users,        to: '/teams' },
-  { key: 'agents',   labelKey: 'shell.navAgents',   Icon: Bot,          to: '/agents' },
-  { key: 'calendar', labelKey: 'shell.navCalendar', Icon: CalendarDays, to: '/calendar' },
-  { key: 'projects', labelKey: 'shell.navProjects', Icon: Folder,       to: '/projects' },
+  { key: 'newtask',      labelKey: 'shell.navNewTask',      Icon: Plus,         to: '/chat?view=personal&new=1' },
+  { key: 'inbox',        labelKey: 'shell.navInbox',        Icon: Inbox,        to: '/inbox' },
+  { key: 'teams',        labelKey: 'shell.navTeams',        Icon: Users,        to: '/teams' },
+  { key: 'agents',       labelKey: 'shell.navAgents',       Icon: Bot,          to: '/agents' },
+  { key: 'loop-engine',  labelKey: 'shell.navLoopEngine',   Icon: RotateCw,     to: '/loop-engine' },
+  { key: 'calendar',     labelKey: 'shell.navCalendar',     Icon: CalendarDays, to: '/calendar' },
+  { key: 'projects',     labelKey: 'shell.navProjects',     Icon: Folder,       to: '/projects' },
 ];
