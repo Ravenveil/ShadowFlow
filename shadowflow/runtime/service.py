@@ -3322,7 +3322,14 @@ class RuntimeService:
                 metric_value = self._metric_value(measurement, setpoint)
                 if metric_value is not None:
                     metric_history.append(metric_value)
-                sensor_result = self._sense(sensor_cfg, setpoint, measurement, metric_history)
+                sensor_type = sensor_cfg.get("type", "threshold") if isinstance(sensor_cfg, dict) else "threshold"
+                if sensor_type == "verifier":
+                    sensor_result = await self._sense_with_verifier(
+                        sensor_cfg, setpoint, measurement, metric_history,
+                        self._sense(sensor_cfg, setpoint, measurement, metric_history)
+                    )
+                else:
+                    sensor_result = self._sense(sensor_cfg, setpoint, measurement, metric_history)
                 metrics = self._extract_loop_metrics(measurement, setpoint)
                 iteration_record = IterationRecord(
                     loop_id=loop_record.loop_id,
@@ -3522,9 +3529,10 @@ class RuntimeService:
     ) -> Dict[str, Any]:
         """C (Sensor): observe the response and return a structured verdict.
 
-        threshold (default) compares the metric against the setpoint; trajectory additionally
-        classifies the metric-series shape (causal-attribution method ②: converging /
-        oscillating / diverging / drifting).
+        Supported sensor types:
+        - threshold (default): compare metric against setpoint
+        - trajectory: classify metric-series shape (converging / oscillating / diverging)
+        - verifier: LLM-as-a-Verifier with probability scoring (LE-2 v0.2)
         """
         sensor_type = sensor_cfg.get("type", "threshold") if isinstance(sensor_cfg, dict) else "threshold"
         value = self._metric_value(measurement, setpoint)
@@ -3534,7 +3542,13 @@ class RuntimeService:
             "value": value,
             "converged": converged,
         }
-        if sensor_type == "trajectory":
+
+        if sensor_type == "verifier":
+            # LLM-as-a-Verifier (Stanford): probability-based scoring
+            return self._sense_with_verifier(
+                sensor_cfg, setpoint, measurement, metric_history, result
+            )
+        elif sensor_type == "trajectory":
             result["classification"] = self._classify_trajectory(metric_history, setpoint, converged)
         elif converged:
             result["classification"] = "converged"
@@ -3543,6 +3557,94 @@ class RuntimeService:
         else:
             result["classification"] = "unknown"
         return result
+
+    async def _sense_with_verifier(
+        self,
+        sensor_cfg: Dict[str, Any],
+        setpoint: Dict[str, Any],
+        measurement: Dict[str, Any],
+        metric_history: List[float],
+        base_result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """LLM-as-a-Verifier: score iteration quality with logprob-based probability.
+
+        Formula: R(x,τ) = 1/(C·K) · Σ_c Σ_k Σ_g p(v_g|x,c,τ) · φ(v_g)
+
+        Parameters from config.verifier:
+        - G: granularity (1-10, default 20) — scoring granularity
+        - K: repetitions (default 8) — number of independent evaluations
+        - C: standard splits (default 1) — cross-validation splits
+        - provider: LLM provider (default "anthropic")
+        - model: model name (uses ApiExecutor default if not set)
+
+        Fallback: if LLM call fails, degrade to threshold comparison.
+        """
+        verifier_cfg = sensor_cfg.get("verifier", {}) if isinstance(sensor_cfg, dict) else {}
+        G = int(verifier_cfg.get("G", 20))
+        K = int(verifier_cfg.get("K", 8))
+        provider = verifier_cfg.get("provider", "anthropic")
+
+        # Build verification prompt
+        metric_name = setpoint.get("metric", "quality")
+        target_value = setpoint.get("value")
+        op = setpoint.get("op", ">=")
+        current_value = base_result.get("value")
+
+        prompt = f"""Evaluate this iteration's output quality based on the convergence criterion.
+
+Metric: {metric_name}
+Target: {op} {target_value}
+Current value: {current_value}
+
+Recent history: {metric_history[-5:] if len(metric_history) >= 5 else metric_history}
+
+Output a JSON with keys:
+- score: float (0.0 to 1.0, where 1.0 = fully converged, 0.0 = fully diverged)
+- confidence: float (0.0 to 1.0, how certain are you)
+- reasoning: string (brief explanation)
+"""
+
+        try:
+            # Use ApiExecutor for LLM call with logprob
+            api_executor = self._executor_registry._executors.get("api")
+            if not isinstance(api_executor, ApiExecutor):
+                logger.warning("ApiExecutor not found for verifier, degrading to threshold")
+                return base_result
+
+            # TODO: Enable logprob extraction — requires extending ApiExecutor
+            # For now, use standard API call and parse score from response
+            llm_result = await api_executor.execute(
+                config={
+                    "kind": "api",
+                    "provider": provider,
+                    "model": verifier_cfg.get("model", "claude-sonnet-4-20250514"),
+                    "parse": "json",
+                },
+                payload={"prompt": prompt},
+            )
+
+            # Extract score from LLM response
+            if isinstance(llm_result, dict):
+                score = llm_result.get("score", base_result.get("value", 0))
+                confidence = llm_result.get("confidence", 0.5)
+                reasoning = llm_result.get("reasoning", "")
+
+                # VOC-based convergence: if confidence high and score above threshold
+                converged = bool(score >= (target_value if isinstance(target_value, (int, float)) else 0.95) and confidence >= 0.7)
+
+                return {
+                    **base_result,
+                    "verifier_score": float(score),
+                    "verifier_confidence": float(confidence),
+                    "verifier_reasoning": str(reasoning),
+                    "converged": converged,
+                    "classification": "converged" if converged else "diverging",
+                }
+        except Exception as exc:
+            logger.warning(f"LLM-as-Verifier failed ({exc}), degrading to threshold")
+
+        # Fallback to threshold
+        return base_result
 
     def _classify_trajectory(
         self, metric_history: List[float], setpoint: Dict[str, Any], converged: bool

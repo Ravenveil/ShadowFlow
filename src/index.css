@@ -2371,11 +2371,32 @@ hr, [role="separator"] { border-color: var(--t-border); }
 }
 .sl-inner { padding-top: 64px; gap: 28px; }
 .sl-dotgrid { opacity: .35; }                 /* 点阵再淡一档,不抢内容 */
-/* 模板卡:更大留白 + 浮起阴影换 UI4.0 软影 */
-.sg-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-.sg-card { padding: 15px 16px; }
+/* 模板卡:clawsgo 双列大卡观感 — 更大留白 + 大图标瓷贴 + UI4.0 软影 */
+.sg-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.sg-card { padding: 16px 18px; min-height: 110px; }
 .sg-card:hover { box-shadow: var(--ui30-shadow-md); }
+.sg-card-icon { width: 34px; height: 34px; border-radius: 10px; }
+.sg-card-name { font-size: 14px; }
 .sl-run:hover { box-shadow: var(--ui30-shadow-sm); }
+
+/* 「+ 新员工」CTA:clawsgo 式近黑主按钮(day 限定;night 保持品牌蓝渐变) */
+[data-theme="day"] .pcv-new {
+  background: #171717;
+  box-shadow: 0 2px 8px -2px rgba(15, 23, 42, .25);
+}
+[data-theme="day"] .pcv-new:hover {
+  box-shadow: 0 6px 16px -6px rgba(15, 23, 42, .30);
+  filter: brightness(1.15);
+}
+
+/* hero composer(UnifiedComposer sf-uc-hero):默认中性边,聚焦才亮蓝环 —
+ * 原常驻 accent 光晕太"闹",clawsgo 是聚焦才给反馈。inline borderColor
+ * 用 !important 覆盖(样式表 !important > 元素 inline 非 important)。 */
+.sf-uc-hero { transition: border-color 150ms ease, box-shadow 150ms ease; }
+.sf-uc-hero:focus-within {
+  border-color: color-mix(in oklab, var(--t-accent) 55%, var(--t-border)) !important;
+  box-shadow: 0 0 0 4px var(--t-accent-tint), var(--ui30-shadow-md) !important;
+}
 
 /* 减动效偏好兜底（无障碍 WCAG 2.1）：全局动画/过渡收敛 —— 保持在文件最末尾 */
 @media (prefers-reduced-motion: reduce) {

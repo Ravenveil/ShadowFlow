@@ -29,15 +29,24 @@ const RAIL_COLLAPSED_KEY = 'sf.chat.railCollapsed';
 // 带文字导航组（Hermes 式）。详见 docs/design/sidebar-unification-2026-06-22.md。
 
 const railNavStyles = `
+/* UI5.0(2026-08-13)— 对齐 ui30-navrow 质感:更大圆角 + 左侧选中指示条弹性生长 */
 .sf-rail-nav-row {
+  position:relative;
   display:flex; align-items:center; gap:9px;
-  padding:6px 8px; border-radius:7px;
+  padding:7px 10px; border-radius:8px;
   color:var(--t-fg-3); text-decoration:none;
   font-size:12.5px;
   transition:background var(--dur-1,120ms) ease, color var(--dur-1,120ms) ease;
 }
+.sf-rail-nav-row::before {
+  content:""; position:absolute; left:0; top:8px; bottom:8px; width:3px;
+  border-radius:0 3px 3px 0; background:var(--t-accent);
+  transform:scaleY(0); transform-origin:center;
+  transition:transform var(--dur-2,160ms) var(--ease-spring,ease);
+}
 .sf-rail-nav-row:hover { background:var(--t-panel-2); color:var(--t-fg); }
 .sf-rail-nav-row.on { background:var(--t-accent-tint); color:var(--t-accent); font-weight:600; }
+.sf-rail-nav-row.on::before { transform:scaleY(1); }
 `;
 
 /**

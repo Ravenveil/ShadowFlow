@@ -724,6 +724,8 @@ export function UnifiedComposer({
 
   // ── Variant styling — hero keeps the exact StartPage card; chat is the
   //    same structure in a compact bottom-bar dress (rounded-10, tighter). ──
+  // UI5.0(2026-08-13):hero 卡默认中性边+软影(clawsgo 克制),常驻 accent 光晕
+  // 改为聚焦才亮 —— 见 index.css .sf-uc-hero:focus-within。
   const cardStyle: React.CSSProperties = isChat
     ? {
         borderRadius: 10,
@@ -731,16 +733,15 @@ export function UnifiedComposer({
         boxShadow: 'none',
       }
     : {
-        borderColor: 'color-mix(in oklab, var(--t-accent) 30%, var(--t-border))',
-        boxShadow:
-          '0 0 0 4px var(--t-accent-tint), 0 12px 32px -16px color-mix(in oklab, var(--t-accent) 35%, transparent)',
+        borderColor: 'var(--t-border)',
+        boxShadow: 'var(--ui30-shadow-md, 0 2px 6px rgba(15,23,42,.06), 0 8px 20px -8px rgba(15,23,42,.12))',
         padding: '14px 16px 12px',
       };
 
   return (
     <>
       {/* Composer — textarea + structured fields + chip row, all in one box */}
-      <div className="hf-card" data-testid="unified-composer" data-variant={variant} style={cardStyle}>
+      <div className={`hf-card${isChat ? '' : ' sf-uc-hero'}`} data-testid="unified-composer" data-variant={variant} style={cardStyle}>
         {(() => {
           if (pendingSkill) {
             return (
