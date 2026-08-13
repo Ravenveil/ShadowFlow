@@ -11,12 +11,14 @@ from shadowflow.api.knowledge import (
     router as knowledge_router,
     KnowledgeService,
 )
+from shadowflow.api.runs import router as runs_router
 
 __all__ = [
     "ops_router",
     "archive_router",
     "policy_obs_router",
     "knowledge_router",
+    "runs_router",
     "OpsAggregator",
     "ArchiveService",
     "PolicyObsAggregator",

@@ -1,5 +1,9 @@
 /**
- * runs.ts — GET /api/runs (list) + projection placeholders
+ * runs.ts — GET /api/runs (list) + DELETE /api/runs/:runId
+ *
+ * Projection endpoints (/runs/:runId/graph, /task-tree, etc.) are now proxied
+ * to Python FastAPI backend (shadowflow/api/runs.py) which exposes RuntimeService's
+ * export_* methods.
  *
  * Contract (2026-05-10 review B2 — 守 Story 15.1 决议)：返回 raw array `RunRecord[]`，
  * 与前端 `listRuns(): Promise<RunRecord[]>` (src/api/runs.ts:295) 直接对齐。
@@ -27,39 +31,14 @@ router.delete('/:runId', (req: Request, res: Response) => {
   else res.status(404).json({ error: `Run ${req.params.runId} not found` });
 });
 
-// GET /runs/:runId → placeholder 404 with JSON body
-router.get('/:runId', (req: Request, res: Response) => {
-  res.status(404).json({ error: `Run ${req.params.runId} not found` });
-});
-
-// GET /runs/:runId/graph
-router.get('/:runId/graph', (req: Request, res: Response) => {
-  res.status(404).json({ error: `Run ${req.params.runId} not found` });
-});
-
-// GET /runs/:runId/task-tree
-router.get('/:runId/task-tree', (req: Request, res: Response) => {
-  res.status(404).json({ error: `Run ${req.params.runId} not found` });
-});
-
-// GET /runs/:runId/artifact-lineage
-router.get('/:runId/artifact-lineage', (req: Request, res: Response) => {
-  res.status(404).json({ error: `Run ${req.params.runId} not found` });
-});
-
-// GET /runs/:runId/memory-graph
-router.get('/:runId/memory-graph', (req: Request, res: Response) => {
-  res.status(404).json({ error: `Run ${req.params.runId} not found` });
-});
-
-// GET /runs/:runId/checkpoint-lineage
-router.get('/:runId/checkpoint-lineage', (req: Request, res: Response) => {
-  res.status(404).json({ error: `Run ${req.params.runId} not found` });
-});
-
-// GET /runs/:runId/training-dataset
-router.get('/:runId/training-dataset', (req: Request, res: Response) => {
-  res.status(404).json({ error: `Run ${req.params.runId} not found` });
-});
+// Projection endpoints are now proxied to Python:
+// - GET /runs/:runId/graph → shadowflow/api/runs.py:get_run_graph
+// - GET /runs/:runId/task-tree → shadowflow/api/runs.py:get_task_tree
+// - GET /runs/:runId/artifact-lineage → shadowflow/api/runs.py:get_artifact_lineage
+// - GET /runs/:runId/memory-graph → shadowflow/api/runs.py:get_memory_graph
+// - GET /runs/:runId/checkpoint-lineage → shadowflow/api/runs.py:get_checkpoint_lineage
+// - GET /runs/:runId/training-dataset → shadowflow/api/runs.py:get_training_dataset
+//
+// The proxy-fallback middleware handles these by forwarding to the Python backend.
 
 export default router;

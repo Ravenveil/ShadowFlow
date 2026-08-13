@@ -198,6 +198,7 @@ from shadowflow.api import a2a_bridge as _a2a_bridge_api
 from shadowflow.api import schedules as _schedules_api
 from shadowflow.api import settings as _settings_api
 from shadowflow.api import wallet as _wallet_api
+from shadowflow.api import runs as _runs_api
 
 _ops_api.set_aggregator(_ops_api.OpsAggregator(
     runtime_service=runtime_service,
@@ -244,6 +245,7 @@ app.include_router(_regression_router)
 app.include_router(_schedules_api.router)
 app.include_router(_settings_api.router)
 app.include_router(_wallet_api.router)
+app.include_router(_runs_api.router)
 
 
 @app.exception_handler(ShadowflowError)
