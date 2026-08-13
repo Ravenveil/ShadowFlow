@@ -2834,3 +2834,65 @@
   color: var(--status-reject, #ef4444);
   border-color: color-mix(in oklab, var(--status-reject, #ef4444) 35%, var(--border));
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * UI 4.0(2026-08-12)— 对标 clawsgo 实测令牌的聊天面精修层
+ * 全部 append-only 覆盖:大圆角浮动 composer、实色 accent 用户气泡、
+ * 右栏 tab 下划线滑动、胶囊发送键。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Composer:clawsgo 式大圆角浮动卡片 + focus 蓝环 ─────────────────────── */
+.composer {
+  background: transparent;
+  border-top-color: var(--border-subtle);
+}
+.compShell {
+  border-radius: 16px;
+  border-color: var(--border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .10);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.compShell:focus-within {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent),
+              0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .10);
+}
+.compToolBtn { border-radius: 7px; }
+.compFoot {
+  background: transparent;
+  border-top: 0;
+  padding-top: 2px;
+}
+/* 胶囊发送键(clawsgo 圆角刻度 4xl 观感) */
+.compFoot .btnPrimary {
+  border-radius: 999px;
+  height: 28px;
+  padding: 0 14px;
+}
+
+/* ── 用户气泡:实色 accent + accent-ink 文字(day=蓝底白字/night=蓝底深字)── */
+.usermsgBubble {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+  border-radius: 14px 14px 4px 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .10);
+}
+
+/* ── 右栏 tab:下划线滑动生长(替代生硬换色)─────────────────────────────── */
+.drTab { position: relative; }
+.drTab::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 180ms ease;
+}
+.drTabOn { border-bottom-color: transparent; }
+.drTabOn::after { transform: scaleX(1); }

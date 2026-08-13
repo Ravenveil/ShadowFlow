@@ -2252,7 +2252,132 @@ body {
   box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--t-fg-4) 25%, transparent);
 }
 
-/* 减动效偏好兜底（无障碍 WCAG 2.1）：全局动画/过渡收敛 */
+/* ════════════════════════════════════════════════════════════════════════════
+ * UI 4.0（2026-08-12，owner: frontend）— 对标 clawsgo / workbuddy 的整体观感
+ *
+ * 在 UI3.0 质感层之上做「精修层」：细滚动条、导航选中指示条、卡片浮起、
+ * 分隔线收敛。全部 append-only，不改既有规则；同名令牌按层叠覆盖。
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* UI 4.0 卡片/气泡圆角再进一档（clawsgo 的大圆角软卡片观感） */
+  --r-card: 14px;
+  --r-panel: 14px;
+
+  /* UI 4.0 悬浮层阴影：更低透明、更大扩散，浅底不显脏 */
+  --ui40-shadow-float: 0 1px 2px rgba(15, 23, 42, .04), 0 12px 32px -12px rgba(15, 23, 42, .14);
+}
+
+/* ── 细滚动条（全站）—— workbuddy/clawsgo 式：窄、半透明、hover 显现 ────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--t-fg-4, #71717A) 35%, transparent) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--t-fg-4, #71717A) 28%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--t-fg-4, #71717A) 48%, transparent);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* ── 侧栏导航行：选中态左侧指示条（clawsgo/VSCode 式），弹性生长 ────────── */
+.ui30-navrow { position: relative; }
+.ui30-navrow::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 8px; bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--t-accent);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform var(--dur-2) var(--ease-spring);
+}
+.ui30-navrow.on::before { transform: scaleY(1); }
+.ui30-navrow.on { color: var(--t-accent-bright); }
+
+/* ── 卡片浮起微交互（.sf-hoverable 已有，补一个更克制的面板级变体）──────── */
+.ui40-panel {
+  border-radius: var(--r-panel);
+  transition: box-shadow var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out),
+              transform var(--dur-2) var(--ease-out);
+}
+.ui40-panel:hover {
+  border-color: var(--t-border-2);
+  box-shadow: var(--ui40-shadow-float);
+}
+
+/* ── 空态插画容器（sf-empty 增强）：更大留白 + 更柔的图标底 ─────────────── */
+.sf-empty { letter-spacing: .01em; }
+
+/* ── 分隔线全局收敛：hairline 一档更淡（配合 day 主题 --t-border）────────── */
+hr, [role="separator"] { border-color: var(--t-border); }
+
+/* ── day 主题 clawsgo 中性化校准（2026-08-12 UI4.0 实测 clawsgo.cn 令牌）─────
+ * 来源:clawsgo.cn CSS 产物 — bg #fff / muted #f5f5f5 / border #e5e5e5 /
+ * 文字 #0a0a0a·#737373 / 关键蓝 #1447e6 / 主按钮近黑 #171717。
+ * 原则:界面回归中性灰阶,蓝色只留给关键 accent,不再大面积铺蓝。 */
+[data-theme="day"] {
+  --t-bg:        #FAFAFA;            /* 中性浅灰页底(原暖白 #F7F7F5) */
+  --t-panel-2:   #FAFAFA;
+  --t-panel-3:   #F5F5F5;            /* = clawsgo --muted */
+  --t-border:    #E5E5E5;            /* = clawsgo --border(原 #ECECEA 太虚) */
+  --t-border-2:  #D4D4D4;
+  --t-accent:    #1447E6;            /* = clawsgo sidebar-primary 实测蓝 */
+  --t-accent-bright: #0F3BCC;        /* hover/强调加深一档 */
+  --t-accent-tint: rgba(20, 71, 230, .08);
+  --t-run:       #1447E6;
+
+  --skin-bg:         #FAFAFA;
+  --skin-accent:     #1447E6;
+  --skin-border:     #E5E5E5;
+  --bg-elev-2:       #FAFAFA;
+  --bg-elev-3:       #F5F5F5;
+  --bg-elev-4:       #E5E5E5;
+  --bg-accent-tint:  rgba(20, 71, 230, .06);
+  --border-strong:   #D4D4D4;
+  --border-subtle:   #F0F0F0;
+  --accent-dim:      #0F3BCC;
+  --accent-bright:   #0F3BCC;
+  --status-run-tint: #E0E7FD;
+
+  --shadow-pop:  0 0 0 1px rgba(20,71,230,.18), var(--ui30-shadow-md);
+  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(20,71,230,.28);
+}
+
+/* clawsgo 式主按钮:近黑底白字(day 主题限定;night 保持蓝)。幽灵按钮同步收敛 */
+[data-theme="day"] .sf-btn-primary { background: #171717; color: #FAFAFA; }
+[data-theme="day"] .sf-btn-primary:hover { background: #000000; }
+
+/* ── 进站首屏(UI4.0,2026-08-13):clawsgo「早上好, Jane」式克制 hero ─────────
+ * 实测 clawsgo 首页:纯色大标题(无渐变/badge)+ 大留白 + 大卡网格。 */
+.sl-title {
+  background: none;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: currentColor;
+  background-clip: initial;
+  color: var(--t-fg);
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+.sl-inner { padding-top: 64px; gap: 28px; }
+.sl-dotgrid { opacity: .35; }                 /* 点阵再淡一档,不抢内容 */
+/* 模板卡:更大留白 + 浮起阴影换 UI4.0 软影 */
+.sg-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.sg-card { padding: 15px 16px; }
+.sg-card:hover { box-shadow: var(--ui30-shadow-md); }
+.sl-run:hover { box-shadow: var(--ui30-shadow-sm); }
+
+/* 减动效偏好兜底（无障碍 WCAG 2.1）：全局动画/过渡收敛 —— 保持在文件最末尾 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .01ms !important;

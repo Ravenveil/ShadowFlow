@@ -62,16 +62,8 @@ function rowStyle(on: boolean): CSSProperties {
   };
 }
 
-const activeBar: CSSProperties = {
-  position: 'absolute',
-  left: -10,
-  top: '50%',
-  transform: 'translateY(-50%)',
-  width: 3,
-  height: 18,
-  background: 'var(--t-accent)',
-  borderRadius: 2,
-};
+// UI 4.0（2026-08-13）：选中指示条统一由 .ui30-navrow.on::before 渲染（弹性生长
+// 动效），删除原 inline activeBar，避免双指示条。
 
 // ── UserCard — live auth state ────────────────────────────────────────────────
 
@@ -290,7 +282,6 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
                 color: 'inherit',
               }}
             >
-              {on && <span style={{ ...activeBar, left: -6 }} />}
               <span style={{ color: on ? 'var(--t-accent)' : 'var(--t-fg-3)', display: 'inline-flex' }}>
                 <it.Icon size={16} strokeWidth={1.75} aria-hidden />
               </span>
@@ -319,7 +310,6 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
         }
         return (
           <Link key={it.key} to={it.to} data-testid={`sidenav-${it.key}`} className={`ui30-navrow${on ? ' on' : ''}`} style={rowStyle(on)}>
-            {on && <span style={activeBar} />}
             <span
               style={{
                 width: 18,
@@ -381,14 +371,12 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
               color: 'inherit',
             }}
           >
-            {active === 'settings' && <span style={{ ...activeBar, left: -6 }} />}
             <span style={{ color: active === 'settings' ? 'var(--t-accent)' : 'var(--t-fg-3)', display: 'inline-flex' }}>
               <HfSettingsIcon size={16} strokeWidth={2} />
             </span>
           </Link>
         ) : (
           <Link to="/settings" className={`ui30-navrow${active === 'settings' ? ' on' : ''}`} style={rowStyle(active === 'settings')}>
-            {active === 'settings' && <span style={activeBar} />}
             <span
               style={{
                 width: 18,

@@ -10,9 +10,18 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
 import { listRunSessions, type RunSessionSummary } from '../../api/runSessions';
+import { useAuth } from '../../core/auth/AuthContext';
 import { StartGallery } from './StartGallery';
+
+/** UI4.0(2026-08-13)— clawsgo 式时段问候(对齐 tmpD65C「早上好, Jane」)。 */
+function greetingByHour(h: number): string {
+  if (h < 5) return '夜深了';
+  if (h < 11) return '早上好';
+  if (h < 14) return '中午好';
+  if (h < 18) return '下午好';
+  return '晚上好';
+}
 
 const STATUS_TOKEN: Record<string, { v: string; label: string; pulse?: boolean }> = {
   running:   { v: 'var(--status-run)', label: '运行中', pulse: true },
@@ -92,15 +101,16 @@ export function StartLanding({
   /** clawsgo 式：传入则在 hero 正下方居中渲染 composer（个人态）。 */
   composer?: ReactNode;
 }) {
+  const { user } = useAuth();
+  const greeting = `${greetingByHour(new Date().getHours())}${user?.display_name ? `, ${user.display_name}` : ''}`;
   return (
     <div className="sl-wrap">
       {/* 点阵背景（radial-gradient + 顶部椭圆遮罩，对齐 v2-start-hifi） */}
       <div className="sl-dotgrid" aria-hidden />
       <div className="sl-inner">
-        {/* 渐变 hero */}
+        {/* UI4.0:clawsgo 式问候 hero(时段问候 + 用户名,纯色大标题) */}
         <div className="sl-hero">
-          <div className="sl-badge"><Sparkles size={11} aria-hidden style={{ color: 'var(--t-accent)' }} /> SHADOWFLOW · MULTI-AGENT</div>
-          <h1 className="sl-title">今天要做什么？</h1>
+          <h1 className="sl-title">{greeting}</h1>
           <p className="sl-sub">
             一句话目标 · 一份 skill · 一个模板都行 — ShadowFlow 把它孵成一支
             <span style={{ color: 'var(--t-fg-2)', fontWeight: 600 }}> 带规则、可追溯 </span>的 team。
