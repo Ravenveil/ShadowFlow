@@ -31,8 +31,8 @@ const PROVIDER_META: Record<string, ProviderMeta> = {
   openai:    { name: 'OpenAI',          monogram: 'O',  tint: '#10B981', short: 'GPT family',                defaultUrl: 'https://api.openai.com/v1',                            keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://platform.openai.com/api-keys' },
   google:    { name: 'Google Gemini',   monogram: 'G',  tint: '#4285F4', short: 'Gemini family',             defaultUrl: 'https://generativelanguage.googleapis.com/v1beta',     keyPlaceholder: 'AIza…',       noKey: false, docsUrl: 'https://aistudio.google.com/app/apikey' },
   deepseek:  { name: 'DeepSeek',        monogram: 'DS', tint: '#3D8BFD', short: 'V3 / R1',                  defaultUrl: 'https://api.deepseek.com',                             keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://platform.deepseek.com/api_keys' },
-  zhipu:     { name: 'Zhipu GLM',       monogram: 'ZP', tint: '#7C3AED', short: 'GLM-4 family',             defaultUrl: 'https://open.bigmodel.cn/api/paas/v4',                 keyPlaceholder: 'xxxx.yyyyyy', noKey: false, docsUrl: 'https://open.bigmodel.cn/usercenter/apikeys' },
-  qwen:      { name: 'Qwen · Alibaba',  monogram: 'Qw', tint: '#A855F7', short: 'Alibaba Cloud Bailian',    defaultUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',    keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://bailian.console.aliyun.com/?apiKey=1' },
+  zhipu:     { name: 'Zhipu GLM',       monogram: 'ZP', tint: '#1447E6', short: 'GLM-4 family',             defaultUrl: 'https://open.bigmodel.cn/api/paas/v4',                 keyPlaceholder: 'xxxx.yyyyyy', noKey: false, docsUrl: 'https://open.bigmodel.cn/usercenter/apikeys' },
+  qwen:      { name: 'Qwen · Alibaba',  monogram: 'Qw', tint: '#1447E6', short: 'Alibaba Cloud Bailian',    defaultUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',    keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://bailian.console.aliyun.com/?apiKey=1' },
   moonshot:  { name: 'Moonshot · Kimi', monogram: 'MK', tint: '#06B6D4', short: 'K2 / K1.5',               defaultUrl: 'https://api.moonshot.cn/v1',                           keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://platform.moonshot.cn/console/api-keys' },
   mistral:   { name: 'Mistral',         monogram: 'Mi', tint: '#FB923C', short: 'Large 2 · Codestral',      defaultUrl: 'https://api.mistral.ai/v1',                            keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://console.mistral.ai/api-keys/' },
   groq:      { name: 'Groq',            monogram: 'Gr', tint: '#F97316', short: 'LPU inference',            defaultUrl: 'https://api.groq.com/openai/v1',                       keyPlaceholder: 'gsk_…',       noKey: false, docsUrl: 'https://console.groq.com/keys' },
@@ -275,7 +275,7 @@ const CAPABILITY_META: Record<ModelCapability, { glyph: string; label: string; t
   reasoning:        { glyph: '∴', label: '推理',  tint: '#3b82f6' },
   image_generation: { glyph: '◧', label: '绘图',  tint: '#ec4899' },
   audio:            { glyph: '♪', label: '音频',  tint: '#06b6d4' },
-  rerank:           { glyph: '⇅', label: '重排',  tint: '#a855f7' },
+  rerank:           { glyph: '⇅', label: '重排',  tint: '#1447E6' },
   web_search:       { glyph: '⌕', label: '搜索',  tint: '#0ea5e9' },
 };
 

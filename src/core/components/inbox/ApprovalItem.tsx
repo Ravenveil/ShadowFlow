@@ -83,7 +83,7 @@ export function ApprovalItem({ approval, onApprove, onReject, approving, rejecti
   };
 
   return (
-    <div className="relative rounded-[6px] border border-white/8 bg-shadowflow-bg/50 px-3 py-3">
+    <div className="relative rounded-[6px] border border-[var(--t-border)] bg-shadowflow-bg/50 px-3 py-3">
       {/* Header row: avatar + name + kind badge + wait time */}
       <div className="flex items-center gap-2">
         {/* Avatar */}
@@ -92,16 +92,16 @@ export function ApprovalItem({ approval, onApprove, onReject, approving, rejecti
         </div>
 
         {/* Name */}
-        <span className="truncate text-xs font-bold text-white">{approval.submitter_name}</span>
+        <span className="truncate text-xs font-bold text-[var(--t-fg)]">{approval.submitter_name}</span>
 
         {/* Kind badge */}
-        <span className="rounded-[4px] border border-white/15 bg-white/5 px-1 py-0.5 font-mono text-[9px] text-white/50">
+        <span className="rounded-[4px] border border-[var(--t-border)] bg-[var(--t-hover)] px-1 py-0.5 font-mono text-[9px] text-[var(--t-fg-4)]">
           {kindLabel}
         </span>
 
         {/* Wait time */}
         <span
-          className={`ml-auto shrink-0 text-[10px] font-mono ${isWaiting ? 'text-[#F59E0B]' : 'text-white/40'}`}
+          className={`ml-auto shrink-0 text-[10px] font-mono ${isWaiting ? 'text-[#F59E0B]' : 'text-[var(--t-fg-4)]'}`}
         >
           {formatWait(approval.waiting_seconds)}
         </span>
@@ -109,7 +109,7 @@ export function ApprovalItem({ approval, onApprove, onReject, approving, rejecti
 
       {/* Summary */}
       {summary && (
-        <p className="mt-1.5 line-clamp-2 text-xs text-white/70">{summary}</p>
+        <p className="mt-1.5 line-clamp-2 text-xs text-[var(--t-fg-3)]">{summary}</p>
       )}
 
       {/* Action buttons */}
@@ -145,9 +145,9 @@ export function ApprovalItem({ approval, onApprove, onReject, approving, rejecti
               role="dialog"
               aria-modal="true"
               aria-label="驳回原因"
-              className="absolute left-0 top-full z-20 mt-1 w-56 rounded-[8px] border border-white/15 bg-shadowflow-surface p-3 shadow-lg"
+              className="absolute left-0 top-full z-20 mt-1 w-56 rounded-[8px] border border-[var(--t-border)] bg-shadowflow-surface p-3 shadow-lg"
             >
-              <p className="mb-2 text-[10px] font-mono uppercase tracking-wide text-white/50">
+              <p className="mb-2 text-[10px] font-mono uppercase tracking-wide text-[var(--t-fg-4)]">
                 驳回原因
               </p>
               <textarea
@@ -156,7 +156,7 @@ export function ApprovalItem({ approval, onApprove, onReject, approving, rejecti
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="说明驳回原因..."
-                className="w-full resize-none rounded-[6px] border border-white/10 bg-shadowflow-bg px-2 py-1.5 text-xs text-white placeholder-white/30 focus:border-white/25 focus:outline-none"
+                className="w-full resize-none rounded-[6px] border border-[var(--t-border)] bg-shadowflow-bg px-2 py-1.5 text-xs text-[var(--t-fg)] placeholder-[var(--t-fg-5)] focus:border-[var(--t-border-2)] focus:outline-none"
               />
               <div className="mt-2 flex gap-2">
                 <button
@@ -170,7 +170,7 @@ export function ApprovalItem({ approval, onApprove, onReject, approving, rejecti
                 <button
                   type="button"
                   onClick={() => setShowRejectDialog(false)}
-                  className="flex-1 rounded-[6px] border border-white/15 py-1 text-xs text-white/60 hover:text-white"
+                  className="flex-1 rounded-[6px] border border-[var(--t-border)] py-1 text-xs text-[var(--t-fg-3)] hover:text-[var(--t-fg)]"
                 >
                   取消
                 </button>

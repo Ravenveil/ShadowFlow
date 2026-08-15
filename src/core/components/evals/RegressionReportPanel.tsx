@@ -20,7 +20,7 @@ function DeltaBadge({ delta }: { delta: number }) {
       ? 'text-green-400'
       : delta < -5
       ? 'text-red-400'
-      : 'text-white/40';
+      : 'text-[var(--t-fg-4)]';
   return (
     <span className={`font-mono text-[11px] ${color}`}>
       {delta > 0 ? '+' : ''}
@@ -37,21 +37,21 @@ function MetricStatusLabel({ status }: { status: MetricDiff['status'] }) {
       ? 'text-yellow-400'
       : status === 'improved'
       ? 'text-green-400'
-      : 'text-white/30';
+      : 'text-[var(--t-fg-5)]';
   return <span className={`text-[10px] ${color}`}>{status}</span>;
 }
 
 export function RegressionReportPanel({ report, gateResult, onSaveBaseline, loading }: Props) {
   if (loading) {
     return (
-      <div className="text-sm text-white/40 py-4 text-center">
+      <div className="text-sm text-[var(--t-fg-4)] py-4 text-center">
         运行回归检查中…
       </div>
     );
   }
   if (!report || !gateResult) {
     return (
-      <div className="text-sm text-white/30 py-4 text-center">
+      <div className="text-sm text-[var(--t-fg-5)] py-4 text-center">
         尚无回归报告。
       </div>
     );
@@ -61,7 +61,7 @@ export function RegressionReportPanel({ report, gateResult, onSaveBaseline, load
 
   return (
     <div
-      className={`rounded border ${cfg.border} bg-white/[0.02] p-4`}
+      className={`rounded border ${cfg.border} bg-[var(--t-panel-2)] p-4`}
       data-testid="regression-report-panel"
     >
       <div className={`text-lg font-semibold ${cfg.color} mb-3`}>{cfg.label}</div>
@@ -80,7 +80,7 @@ export function RegressionReportPanel({ report, gateResult, onSaveBaseline, load
       {report.metric_diffs.length > 0 && (
         <table className="w-full text-[11px] mb-3">
           <thead>
-            <tr className="text-white/40 border-b border-white/10">
+            <tr className="text-[var(--t-fg-4)] border-b border-[var(--t-border)]">
               <th className="text-left pb-1">Metric</th>
               <th className="text-right pb-1">基线</th>
               <th className="text-right pb-1">当前</th>
@@ -90,10 +90,10 @@ export function RegressionReportPanel({ report, gateResult, onSaveBaseline, load
           </thead>
           <tbody>
             {report.metric_diffs.map((d) => (
-              <tr key={d.metric_id} className="border-b border-white/5">
-                <td className="py-1 text-white/70">{d.metric_id}</td>
-                <td className="text-right text-white/50">{d.baseline_score.toFixed(3)}</td>
-                <td className="text-right text-white/70">{d.current_score.toFixed(3)}</td>
+              <tr key={d.metric_id} className="border-b border-[var(--t-border)]">
+                <td className="py-1 text-[var(--t-fg-3)]">{d.metric_id}</td>
+                <td className="text-right text-[var(--t-fg-4)]">{d.baseline_score.toFixed(3)}</td>
+                <td className="text-right text-[var(--t-fg-3)]">{d.current_score.toFixed(3)}</td>
                 <td className="text-right">
                   <DeltaBadge delta={d.delta} />
                 </td>
@@ -109,7 +109,7 @@ export function RegressionReportPanel({ report, gateResult, onSaveBaseline, load
       {gateResult.status === 'passed' && onSaveBaseline && (
         <button
           onClick={onSaveBaseline}
-          className="rounded border border-white/20 px-3 py-1.5 text-[12px] text-white/60 hover:text-white/90"
+          className="rounded border border-[var(--t-border-2)] px-3 py-1.5 text-[12px] text-[var(--t-fg-3)] hover:text-[var(--t-fg-2)]"
           data-testid="save-baseline-btn"
         >
           保存为新基线

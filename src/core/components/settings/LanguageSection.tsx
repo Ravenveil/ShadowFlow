@@ -32,7 +32,7 @@ export function LanguageSection() {
                 className={[
                   'flex flex-1 flex-col items-center gap-2.5 rounded-[12px] border py-5 transition-all',
                   selected
-                    ? 'border-sf-accent bg-sf-accent-tint shadow-[0_0_0_1px_#A855F7]'
+                    ? 'border-sf-accent bg-sf-accent-tint shadow-[0_0_0_1px_var(--t-accent)]'
                     : 'border-sf-border bg-sf-elev2 hover:border-sf-fg5',
                 ].join(' ')}
               >

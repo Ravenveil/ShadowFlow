@@ -22,7 +22,7 @@ export function RecentMessagesPreview({ messages, onOpenChat }: RecentMessagesPr
   return (
     <div data-testid="recent-messages-preview" className="flex flex-col gap-3">
       {messages.length === 0 ? (
-        <p className="text-xs text-white/35">暂无消息</p>
+        <p className="text-xs text-[var(--t-fg-5)]">暂无消息</p>
       ) : (
         messages.map((msg, i) => (
           <div key={i} className="flex items-start gap-2">
@@ -30,10 +30,10 @@ export function RecentMessagesPreview({ messages, onOpenChat }: RecentMessagesPr
               {senderInitial(msg.sender_name)}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-bold text-white">{msg.sender_name}</p>
-              <p className="line-clamp-2 text-xs text-white/70">{truncate(msg.content)}</p>
+              <p className="text-[12px] font-bold text-[var(--t-fg)]">{msg.sender_name}</p>
+              <p className="line-clamp-2 text-xs text-[var(--t-fg-3)]">{truncate(msg.content)}</p>
             </div>
-            <span className="shrink-0 font-mono text-[10px] text-white/40">
+            <span className="shrink-0 font-mono text-[10px] text-[var(--t-fg-4)]">
               {formatTimestamp(msg.timestamp)}
             </span>
           </div>

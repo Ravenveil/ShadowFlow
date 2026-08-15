@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { CreateWorkspaceModal } from '../workspace/CreateWorkspaceModal';
+import './layout-ui5.css'; // UI5.0 — 令牌化文字/hover（替代 dark-only white/* 类）
 
 export function WorkspaceSwitcher() {
   const { workspaces, currentId, switchTo, fetchWorkspaces } = useWorkspaceStore();
@@ -40,7 +41,7 @@ export function WorkspaceSwitcher() {
       {/* Trigger button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-white/5 focus:outline-none"
+        className="sf5-row-hover flex items-center gap-2 rounded-lg px-3 py-1.5 focus:outline-none"
         data-testid="workspace-switcher-btn"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -48,13 +49,13 @@ export function WorkspaceSwitcher() {
         {/* Color dot */}
         <span
           className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
-          style={{ background: current?.color ?? '#6366f1' }}
+          style={{ background: current?.color ?? '#1447e6' /* UI5.0 — 默认色收敛为 accent 蓝 */ }}
         />
-        <span className="max-w-[140px] truncate text-[13px] font-medium text-white/85">
+        <span className="sf5-text max-w-[140px] truncate text-[13px] font-medium">
           {current?.name ?? '…'}
         </span>
         <span
-          className={`text-[9px] text-white/40 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`sf5-text-4 text-[9px] transition-transform ${open ? 'rotate-180' : ''}`}
         >
           ▾
         </span>
@@ -76,8 +77,8 @@ export function WorkspaceSwitcher() {
                   switchTo(ws.workspace_id);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-white/5 ${
-                  ws.workspace_id === currentId ? 'text-white/90' : 'text-white/50'
+                className={`sf5-row-hover flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] ${
+                  ws.workspace_id === currentId ? 'sf5-text' : 'sf5-text-3'
                 }`}
                 data-testid={`ws-option-${ws.workspace_id}`}
               >
@@ -86,11 +87,11 @@ export function WorkspaceSwitcher() {
                   style={{ background: ws.color }}
                 />
                 <span className="flex-1 truncate">{ws.name}</span>
-                <span className="text-[10px] text-white/30">
+                <span className="sf5-text-4 text-[10px]">
                   {ws.agent_count}A · {ws.team_count}T
                 </span>
                 {ws.workspace_id === currentId && (
-                  <span className="text-[10px] text-white/60">✓</span>
+                  <span className="sf5-text-2 text-[10px]">✓</span>
                 )}
               </button>
             ))}
@@ -103,7 +104,7 @@ export function WorkspaceSwitcher() {
                 setOpen(false);
                 setShowCreate(true);
               }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-white/40 hover:bg-white/5 hover:text-white/70"
+              className="sf5-row-hover sf5-text-3 flex w-full items-center gap-2 px-3 py-1.5 text-[12px]"
               data-testid="btn-new-workspace"
             >
               <span className="text-[14px] leading-none">+</span>

@@ -325,13 +325,13 @@ interface CustomPetDraft {
 
 const CUSTOM_PET_KEY = 'sf.customPet';
 const ACCENT_SWATCHES = [
-  '#c96442', '#2348b8', '#1f7a3a', '#6c3aa6',
-  '#d97a26', '#9c2a25', '#74716b', '#A855F7',
+  '#c96442', '#2348b8', '#1f7a3a', '#0e7490', /* ===== UI5.0 ===== 紫 #6c3aa6 清零 */
+  '#d97a26', '#9c2a25', '#74716b', '#1447E6',
 ];
 const DEFAULT_DRAFT: CustomPetDraft = {
   name: 'Buddy',
   glyph: '🦄',
-  accent: '#A855F7',
+  accent: '#1447E6',
   greeting: '',
 };
 
@@ -444,7 +444,7 @@ function CustomPetForm({ onApply }: { onApply: () => void }) {
             style={{ backgroundColor: draft.accent }}
             className="relative h-6 w-6 rounded-full border-2 border-sf-border hover:scale-110 transition-transform overflow-hidden"
           >
-            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white/80 drop-shadow">
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-[var(--t-fg-2)] drop-shadow">
               +
             </span>
           </button>
@@ -557,7 +557,7 @@ export const PetSettings: React.FC = () => {
               <>
                 <div
                   className="flex h-[120px] w-[120px] shrink-0 items-center justify-center rounded-xl text-[64px] leading-none"
-                  style={{ backgroundColor: (customData.accent ?? '#A855F7') + '22' }}
+                  style={{ backgroundColor: (customData.accent ?? '#1447E6') + '22' }}
                 >
                   {customData.glyph || '🦄'}
                 </div>

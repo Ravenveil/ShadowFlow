@@ -67,7 +67,8 @@ const statusDot = (status: RunSessionToolCall['status']): React.CSSProperties =>
       return {
         ...base,
         background: 'var(--t-run, #3B82F6)',
-        boxShadow: '0 0 0 3px rgba(59,130,246,.16)',
+        // UI5.0 — 光环跟随 --t-run 令牌
+        boxShadow: '0 0 0 3px color-mix(in oklab, var(--t-run, #3B82F6) 16%, transparent)',
         animation: 'sf-pulse 1.4s ease-in-out infinite',
       };
     case 'failed':

@@ -55,7 +55,7 @@ export function PersonalTeamToggle({ view, onChange, compact = false }: Personal
           position: 'relative', zIndex: 1,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           flex: 1, padding: '7px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
-          fontSize: 13, fontWeight: 700,
+          fontSize: 13, fontWeight: 600, // UI5.0 — 字重收敛(clawsgo 克制)
           background: 'transparent',
           color: active ? 'var(--t-fg)' : 'var(--t-fg-3)',
           transition: 'color var(--dur-1) var(--ease-out)',
@@ -98,7 +98,8 @@ export function PersonalTeamToggle({ view, onChange, compact = false }: Personal
         style={{
           ...indicator,
           background: 'var(--t-panel)',
-          boxShadow: 'var(--shadow-pop)',
+          // UI5.0 — 滑动 pill 用中性软影;--shadow-pop 在 day 主题带蓝环,太跳。
+          boxShadow: 'var(--ui30-shadow-sm, 0 1px 2px rgba(0,0,0,.06))',
           transition: 'transform var(--dur-2) var(--ease-spring)',
           pointerEvents: 'none',
         }}

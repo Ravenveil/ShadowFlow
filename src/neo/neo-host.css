@@ -1,0 +1,758 @@
+/* ===== Neo ===== */
+/* NeoHost — 右栏「Agent 的主机」。颜色一律 var(--t-*) / color-mix，day/night 双主题安全。 */
+
+.neo-host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  font-family: inherit;
+}
+
+/* ── 头部：标题 + tab 栏 ─────────────────────────────────────────────────── */
+
+.neo-host-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 12px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.neo-host-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t-fg-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.neo-host-tabs {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.neo-host-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.neo-host-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t-fg-4);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color var(--dur-2, 160ms) var(--ease-out, ease-out),
+    background var(--dur-2, 160ms) var(--ease-out, ease-out);
+}
+
+.neo-host-tab:hover {
+  color: var(--t-fg-2);
+  background: var(--t-hover, var(--t-panel-2));
+}
+
+.neo-host-tab--on {
+  color: var(--t-fg);
+  /* 胶囊选中（clawsgo host tab 形态），替代下划线 */
+  background: var(--t-panel-3);
+}
+
+.neo-host-tab--artifact {
+  max-width: 160px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.neo-host-tab-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.neo-host-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--t-fg-5);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.neo-host-tab-close:hover {
+  background: var(--t-hover, var(--t-panel-3));
+  color: var(--t-fg-2);
+}
+
+.neo-host-tab--plus {
+  padding: 0 7px;
+  color: var(--t-fg-5);
+  cursor: default;
+}
+
+/* tab 下划线已退役（胶囊选中接管），保留类位防 JS 测量报错 */
+.neo-host-tabs-bar {
+  display: none;
+}
+
+/* ── 内容区（淡入）───────────────────────────────────────────────────────── */
+
+.neo-host-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.neo-host-fade {
+  animation: neo-host-fade var(--dur-2, 160ms) var(--ease-out, ease-out);
+}
+
+@keyframes neo-host-fade {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── 空态 ────────────────────────────────────────────────────────────────── */
+
+.neo-host-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--t-fg-4);
+  font-size: 12px;
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.neo-host-empty--fill {
+  flex: 1;
+  min-height: 0;
+}
+
+.neo-host-empty--err {
+  color: var(--t-err);
+}
+
+.neo-host-empty-icon {
+  color: var(--t-fg-5);
+}
+
+.neo-host-empty-sub {
+  font-size: 11px;
+  color: var(--t-fg-5);
+}
+
+/* 空态能力预览（描述真实功能，非 mock）：白卡浮在灰栏上 */
+.neo-host-caps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 14px;
+  padding: 8px;
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  background: var(--t-panel);
+  box-shadow: 0 6px 20px -12px rgba(15, 23, 42, 0.1);
+  text-align: left;
+}
+
+.neo-host-cap {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  color: var(--t-fg-5);
+}
+
+.neo-host-cap svg {
+  position: relative;
+  top: 1.5px;
+  flex-shrink: 0;
+  color: var(--t-fg-4);
+}
+
+.neo-host-cap-name {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t-fg-3);
+}
+
+.neo-host-cap-desc {
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+}
+
+/* ── 工作空间 tab ────────────────────────────────────────────────────────── */
+
+.neo-host-ws {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.neo-host-ws-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--t-border);
+  flex-shrink: 0;
+}
+
+.neo-host-ws-path {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+/* ===== Neo ===== */
+/* 工作空间搜索行（Coze「搜索文件」对标） */
+.neo-host-ws-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin: 6px 10px 0;
+  padding: 0 8px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-panel);
+  flex-shrink: 0;
+}
+
+.neo-host-ws-search:focus-within {
+  border-color: color-mix(in oklab, var(--t-accent) 45%, var(--t-border));
+}
+
+.neo-host-ws-search-icon {
+  color: var(--t-fg-5);
+  flex-shrink: 0;
+}
+
+.neo-host-ws-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--t-fg);
+  font-size: 11.5px;
+  font-family: inherit;
+}
+
+.neo-host-ws-search-input::placeholder {
+  color: var(--t-fg-5);
+}
+
+.neo-host-tree-sub {
+  flex: 0 1 45%;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.neo-host-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--t-fg-4);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color var(--dur-1, 120ms) var(--ease-out, ease-out),
+    background var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+
+.neo-host-icon-btn:hover {
+  color: var(--t-fg-2);
+  background: var(--t-hover, var(--t-panel-2));
+}
+
+.neo-host-ws-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
+/* 文件树（左）：白卡浮灰底（clawsgo 主机内部卡片化） */
+.neo-host-tree {
+  flex: 0 0 42%;
+  min-width: 130px;
+  overflow-y: auto;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+  padding: 4px 0;
+}
+
+.neo-host-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--t-fg-2);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+
+.neo-host-tree-row:hover {
+  background: var(--t-hover, var(--t-panel-2));
+}
+
+.neo-host-tree-row--sel,
+.neo-host-tree-row--sel:hover {
+  background: var(--t-accent-tint);
+  color: var(--t-accent-bright);
+}
+
+.neo-host-tree-caret {
+  color: var(--t-fg-5);
+  flex-shrink: 0;
+}
+
+.neo-host-tree-dir-icon {
+  color: var(--t-accent);
+  flex-shrink: 0;
+}
+
+.neo-host-tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-tree-note {
+  font-size: 11px;
+  color: var(--t-fg-5);
+  padding: 5px 8px;
+}
+
+.neo-host-tree-note--pad {
+  padding: 12px 14px;
+}
+
+/* 预览（右）：白卡浮灰底 */
+.neo-host-preview {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+  overflow: hidden;
+}
+
+.neo-host-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--t-border);
+  flex-shrink: 0;
+}
+
+.neo-host-preview-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--t-panel-2);
+  flex-shrink: 0;
+}
+
+.neo-host-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--t-fg-4);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    color var(--dur-1, 120ms) var(--ease-out, ease-out),
+    background var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+
+.neo-host-seg-btn--on {
+  background: var(--t-bg);
+  color: var(--t-fg);
+}
+
+.neo-host-preview-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.neo-host-preview-md {
+  padding: 12px 14px;
+  font-size: 12.5px;
+  color: var(--t-fg-2);
+}
+
+.neo-host-preview-img-wrap {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 14px;
+}
+
+.neo-host-preview-img {
+  max-width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--t-border);
+}
+
+/* 代码视图：等宽 + 行号 */
+.neo-host-code {
+  padding: 8px 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--t-fg-2);
+}
+
+.neo-host-code-line {
+  display: flex;
+  align-items: baseline;
+}
+
+.neo-host-code-line:hover {
+  background: var(--t-hover, var(--t-panel-2));
+}
+
+.neo-host-code-ln {
+  flex: 0 0 40px;
+  padding-right: 10px;
+  text-align: right;
+  color: var(--t-fg-5);
+  user-select: none;
+}
+
+.neo-host-code-text {
+  flex: 1;
+  min-width: 0;
+  padding-right: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.neo-host-truncated {
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--t-warn);
+}
+
+/* ── 产物 / Loop 列表 ────────────────────────────────────────────────────── */
+
+.neo-host-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.neo-host-artifact-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  color: var(--t-fg-2);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-1, 120ms) var(--ease-out, ease-out),
+    background var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+
+.neo-host-artifact-row:hover {
+  background: var(--t-hover, var(--t-panel-2));
+  border-color: color-mix(in oklab, var(--t-accent) 35%, var(--t-border));
+}
+
+.neo-host-artifact-icon {
+  color: var(--t-accent);
+  flex-shrink: 0;
+}
+
+.neo-host-artifact-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.neo-host-artifact-type {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--t-fg-5);
+  flex-shrink: 0;
+}
+
+.neo-host-artifact-preview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Loop tab：PDCA 迭代卡 ───────────────────────────────────────────────── */
+
+.neo-host-loop-card {
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  padding: 10px 12px;
+}
+
+.neo-host-loop-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.neo-host-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.neo-host-pill--converged {
+  background: color-mix(in oklab, var(--t-ok) 14%, transparent);
+  color: var(--t-ok);
+}
+
+.neo-host-pill--running {
+  background: color-mix(in oklab, var(--t-accent) 14%, transparent);
+  color: var(--t-accent-bright);
+}
+
+.neo-host-pill--oscillating {
+  background: color-mix(in oklab, var(--t-warn) 16%, transparent);
+  color: var(--t-warn);
+}
+
+.neo-host-pill--diverged {
+  background: color-mix(in oklab, var(--t-err) 14%, transparent);
+  color: var(--t-err);
+}
+
+.neo-host-pill--halted {
+  background: var(--t-panel-2);
+  color: var(--t-fg-4);
+}
+
+.neo-host-loop-kind {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t-fg);
+}
+
+.neo-host-loop-setpoint {
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-4);
+}
+
+.neo-host-loop-count {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  flex-shrink: 0;
+}
+
+.neo-host-loop-iters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.neo-host-iter {
+  border-top: 1px solid var(--t-border);
+  padding-top: 6px;
+}
+
+.neo-host-iter-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.neo-host-iter-k {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+}
+
+.neo-host-iter-score {
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-4);
+}
+
+.neo-host-iter-sensor {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--t-panel-2);
+  color: var(--t-fg-3);
+}
+
+/* metrics 迷你条形 */
+.neo-host-iter-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.neo-host-metric {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.neo-host-metric-label {
+  flex: 0 0 72px;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-metric-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--t-panel-2);
+  overflow: hidden;
+}
+
+.neo-host-metric-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--t-accent) 70%, transparent);
+  transition: width var(--dur-2, 160ms) var(--ease-out, ease-out);
+}
+
+.neo-host-metric-val {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-4);
+}

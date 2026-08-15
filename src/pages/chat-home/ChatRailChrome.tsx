@@ -45,7 +45,8 @@ const railNavStyles = `
   transition:transform var(--dur-2,160ms) var(--ease-spring,ease);
 }
 .sf-rail-nav-row:hover { background:var(--t-panel-2); color:var(--t-fg); }
-.sf-rail-nav-row.on { background:var(--t-accent-tint); color:var(--t-accent); font-weight:600; }
+/* UI5.0 — 选中态中性化(clawsgo 侧栏=灰底黑字),蓝只留给左侧指示条 */
+.sf-rail-nav-row.on { background:var(--t-panel-3); color:var(--t-fg); font-weight:600; }
 .sf-rail-nav-row.on::before { transform:scaleY(1); }
 `;
 

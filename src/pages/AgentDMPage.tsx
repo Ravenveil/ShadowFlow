@@ -28,6 +28,8 @@ import { useInboxStore } from '../core/store/useInboxStore';
 import { buildAgentDMBuilderUrl } from '../core/utils/builderNavigation';
 import { HfTopBar, HfAvatar, HfDot } from '../components/hifi';
 import { useI18n } from '../common/i18n';
+// ===== UI5.0 =====(2026-08-14)· 视觉层抽到 AgentDMPage.module.css（气泡/composer/agent 卡）
+import dmStyles from './AgentDMPage.module.css';
 
 // ---------------------------------------------------------------------------
 // Mock data
@@ -86,33 +88,6 @@ interface BubbleProps {
 function MessageBubble({ msg, agentName, agentGlyph }: BubbleProps) {
   const { t } = useI18n();
   const isUser = msg.role === 'user';
-  const rowStyle: CSSProperties = {
-    display: 'flex',
-    flexDirection: isUser ? 'row-reverse' : 'row',
-    alignItems: 'flex-end',
-    gap: 10,
-    marginBottom: 12,
-  };
-  const bubbleStyle: CSSProperties = {
-    maxWidth: '65%',
-    padding: '10px 14px',
-    borderRadius: isUser ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
-    background: isUser ? 'var(--t-accent)' : 'var(--t-panel-2)',
-    color: isUser ? 'var(--t-accent-ink)' : 'var(--t-fg)',
-    fontSize: 13.5,
-    lineHeight: 1.5,
-    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-    border: isUser ? 'none' : '1px solid var(--t-border)',
-    minWidth: 0,
-    wordBreak: 'break-word',
-  };
-  const metaStyle: CSSProperties = {
-    fontFamily: 'var(--font-mono)',
-    fontSize: 9.5,
-    color: 'var(--t-fg-4)',
-    marginTop: 4,
-    textAlign: isUser ? 'right' : 'left',
-  };
 
   const statusGlyph = (s?: 'sent' | 'delivered' | 'read' | 'error') => {
     if (!s) return '';
@@ -123,7 +98,7 @@ function MessageBubble({ msg, agentName, agentGlyph }: BubbleProps) {
   };
 
   return (
-    <div style={rowStyle}>
+    <div className={`${dmStyles.dmRow} ${isUser ? dmStyles.dmRowUser : ''}`}>
       {/* avatar — only on agent side */}
       {!isUser && (
         <HfAvatar
@@ -132,39 +107,24 @@ function MessageBubble({ msg, agentName, agentGlyph }: BubbleProps) {
           size={28}
         />
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start', minWidth: 0, maxWidth: '70%' }}>
+      <div className={`${dmStyles.dmCol} ${isUser ? dmStyles.dmColUser : ''}`}>
         {!isUser && (
-          <span
-            className="hf-meta"
-            style={{ fontSize: 10, marginBottom: 3, color: 'var(--t-fg-3)' }}
-          >
+          <span className={`hf-meta ${dmStyles.dmSender}`}>
             {agentName}
           </span>
         )}
-        <div style={bubbleStyle}>
+        {/* ===== UI5.0 ===== · 气泡视觉（实色 user / 干净 agent 卡）见 AgentDMPage.module.css */}
+        <div className={`${dmStyles.dmBubble} ${isUser ? dmStyles.dmBubbleUser : dmStyles.dmBubbleAgent}`}>
           {msg.toolCall ? (
-            <div
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                color: 'var(--t-fg-3)',
-                background: 'var(--t-bg)',
-                border: '1px dashed var(--t-border)',
-                borderRadius: 6,
-                padding: '6px 8px',
-                marginBottom: 6,
-                whiteSpace: 'pre-wrap',
-                overflowWrap: 'anywhere',
-              }}
-            >
-              <span style={{ color: 'var(--t-accent)' }}>&gt; </span>
+            <div className={dmStyles.dmToolCall}>
+              <span className={dmStyles.dmToolCallPrompt}>&gt; </span>
               {msg.toolCall.name}
               {msg.toolCall.args ? `("${msg.toolCall.args}")` : '()'}
             </div>
           ) : null}
           {msg.content}
         </div>
-        <span style={metaStyle}>
+        <span className={`${dmStyles.dmMeta} ${isUser ? dmStyles.dmMetaUser : ''}`}>
           {msg.timestamp}
           {isUser && msg.status ? ` · ${statusGlyph(msg.status)} ${
             msg.status === 'read' ? t('agentDM.msgRead') :
@@ -184,13 +144,6 @@ interface AgentCardProps {
 
 function AgentCard({ agent, language }: AgentCardProps) {
   const { t } = useI18n();
-  const metricRow: CSSProperties = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '6px 0',
-    borderBottom: '1px dashed var(--t-border)',
-  };
   const metricLabel: CSSProperties = {
     fontFamily: 'var(--font-mono)',
     fontSize: 10,
@@ -210,18 +163,18 @@ function AgentCard({ agent, language }: AgentCardProps) {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 16,
+        gap: 14,
         padding: 18,
         height: '100%',
         overflow: 'auto',
       }}
     >
-      {/* avatar + name block */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+      {/* avatar + name block —===== UI5.0 ===== 卡片化分区 */}
+      <div className={dmStyles.dmCardSection} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '18px 14px' }}>
         <HfAvatar
           glyph={language === 'zh' ? agent.glyph : agent.glyphEn}
           color="var(--t-accent)"
-          size={80}
+          size={72}
           status="ok"
         />
         <div style={{ textAlign: 'center' }}>
@@ -235,23 +188,23 @@ function AgentCard({ agent, language }: AgentCardProps) {
       </div>
 
       {/* metrics block */}
-      <div>
+      <div className={dmStyles.dmCardSection}>
         <div className="hf-label" style={{ marginBottom: 6 }}>
           {t('agentDM.metricsLabel')}
         </div>
-        <div style={metricRow}>
+        <div className={dmStyles.dmMetricRow}>
           <span style={metricLabel}>{t('agentDM.metricsRuns')}</span>
           <span style={metricValue}>{agent.runs}</span>
         </div>
-        <div style={metricRow}>
+        <div className={dmStyles.dmMetricRow}>
           <span style={metricLabel}>{t('agentDM.metricsAvg')}</span>
           <span style={metricValue}>{agent.avgDuration}</span>
         </div>
-        <div style={metricRow}>
+        <div className={dmStyles.dmMetricRow}>
           <span style={metricLabel}>{t('agentDM.metricsSuccess')}</span>
           <span style={metricValue}>{Math.round(agent.successRate * 100)}%</span>
         </div>
-        <div style={metricRow}>
+        <div className={dmStyles.dmMetricRow}>
           <span style={metricLabel}>{t('agentDM.metricsStatus')}</span>
           <span style={{ ...metricValue, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <HfDot color="var(--t-ok)" pulse size={7} />
@@ -261,20 +214,15 @@ function AgentCard({ agent, language }: AgentCardProps) {
       </div>
 
       {/* recent runs */}
-      <div>
-        <div className="hf-label" style={{ marginBottom: 8 }}>
+      <div className={dmStyles.dmCardSection}>
+        <div className="hf-label" style={{ marginBottom: 6 }}>
           {t('agentDM.recentRuns')}
         </div>
         {MOCK_RECENT_RUNS.map((r, i) => (
           <div
             key={`${r.when}-${i}`}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '6px 0',
-              borderBottom: '1px dashed var(--t-border)',
-            }}
+            className={dmStyles.dmMetricRow}
+            style={{ gap: 8, justifyContent: 'flex-start' }}
           >
             <HfDot color={`var(--t-${r.ok})`} size={6} />
             <span
@@ -539,76 +487,42 @@ export default function AgentDMPage() {
             ) : null}
           </div>
 
-          {/* composer */}
+          {/* composer —===== UI5.0 ===== 16px 大圆角浮动卡 + focus 蓝环 + 胶囊发送键 */}
           <div
             style={{
               flexShrink: 0,
               borderTop: '1px solid var(--t-border)',
-              padding: '12px 20px',
-              background: 'var(--t-panel)',
+              padding: '12px 20px 14px',
+              background: 'var(--t-bg)',
               display: 'flex',
               alignItems: 'flex-end',
               gap: 10,
             }}
           >
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onComposerKeyDown}
-              // TODO: i18n — agentDM.composerPlaceholder has {name} interpolation not supported by t()
-              placeholder={language === 'zh'
-                ? `发消息给 ${displayAgent.name} ...`
-                : `Message ${displayAgent.nameEn} ...`}
-              rows={1}
-              aria-label={t('agentDM.composerAriaLabel')}
-              style={{
-                flex: 1,
-                minHeight: 38,
-                maxHeight: 120,
-                padding: '9px 12px',
-                resize: 'none',
-                border: '1px solid var(--t-border)',
-                borderRadius: 10,
-                background: 'var(--t-bg)',
-                color: 'var(--t-fg)',
-                fontFamily: 'inherit',
-                fontSize: 13,
-                lineHeight: 1.4,
-                outline: 'none',
-              }}
-              onFocus={(e) => {
-                (e.currentTarget as HTMLTextAreaElement).style.borderColor = 'var(--t-accent)';
-              }}
-              onBlur={(e) => {
-                (e.currentTarget as HTMLTextAreaElement).style.borderColor = 'var(--t-border)';
-              }}
-            />
-            <button
-              type="button"
-              onClick={sendMessage}
-              disabled={!draft.trim()}
-              aria-label={t('agentDM.send')}
-              style={{
-                height: 38,
-                padding: '0 14px',
-                borderRadius: 10,
-                border: '1px solid var(--t-accent)',
-                background: draft.trim() ? 'var(--t-accent)' : 'var(--t-panel-2)',
-                color: draft.trim() ? 'var(--t-accent-ink)' : 'var(--t-fg-4)',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: draft.trim() ? 'pointer' : 'not-allowed',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                transition: 'background 120ms ease, color 120ms ease',
-              }}
-            >
-              <span>{t('agentDM.send')}</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.7 }}>
-                ⌘⏎
-              </span>
-            </button>
+            <div className={dmStyles.dmComposerShell}>
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onComposerKeyDown}
+                // TODO: i18n — agentDM.composerPlaceholder has {name} interpolation not supported by t()
+                placeholder={language === 'zh'
+                  ? `发消息给 ${displayAgent.name} ...`
+                  : `Message ${displayAgent.nameEn} ...`}
+                rows={1}
+                aria-label={t('agentDM.composerAriaLabel')}
+                className={dmStyles.dmTextarea}
+              />
+              <button
+                type="button"
+                onClick={sendMessage}
+                disabled={!draft.trim()}
+                aria-label={t('agentDM.send')}
+                className={dmStyles.dmSend}
+              >
+                <span>{t('agentDM.send')}</span>
+                <span className={dmStyles.dmSendKbd}>⌘⏎</span>
+              </button>
+            </div>
           </div>
         </div>
 

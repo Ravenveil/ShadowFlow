@@ -24,6 +24,8 @@ export interface MessageActionsProps {
   align?: 'left' | 'right';
 }
 
+// ===== UI5.0 =====(2026-08-14)· 描边小钮 → 无边框 ghost（Claude/clawsgo 风）：
+// 默认 fg-4 透明底，hover 衬 panel-2 底色 + fg-1，120ms ease。
 const BTN_STYLE: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -31,12 +33,12 @@ const BTN_STYLE: React.CSSProperties = {
   padding: '3px 7px',
   borderRadius: 6,
   background: 'transparent',
-  border: '1px solid var(--t-border)',
+  border: '1px solid transparent',
   color: 'var(--t-fg-4)',
   fontSize: 11,
   fontFamily: 'inherit',
   cursor: 'pointer',
-  transition: 'color .15s, border-color .15s, opacity .15s',
+  transition: 'color .12s ease, background .12s ease, opacity .15s',
 };
 
 export function MessageActions({
@@ -75,14 +77,15 @@ export function MessageActions({
   const hoverOn = (e: React.MouseEvent<HTMLButtonElement>): void => {
     const el = e.currentTarget;
     if (el.disabled) return;
+    // ===== UI5.0 ===== · hover 衬底色而非改描边
     el.style.color = 'var(--t-fg)';
-    el.style.borderColor = 'var(--t-border-2)';
+    el.style.background = 'var(--t-panel-2)';
   };
   const hoverOff = (e: React.MouseEvent<HTMLButtonElement>): void => {
     const el = e.currentTarget;
     if (el.disabled) return;
     el.style.color = 'var(--t-fg-4)';
-    el.style.borderColor = 'var(--t-border)';
+    el.style.background = 'transparent';
   };
 
   return (

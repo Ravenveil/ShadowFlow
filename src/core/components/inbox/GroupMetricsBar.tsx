@@ -10,11 +10,11 @@ interface CapsuleProps {
   color?: string;
 }
 
-function Capsule({ label, value, color = 'text-white' }: CapsuleProps) {
+function Capsule({ label, value, color = 'text-[var(--t-fg)]' }: CapsuleProps) {
   return (
-    <div className="flex items-center gap-1.5 rounded-sf bg-white/5 px-3 py-1.5 font-mono text-xs">
+    <div className="flex items-center gap-1.5 rounded-sf bg-[var(--t-hover)] px-3 py-1.5 font-mono text-xs">
       <span className={`font-semibold ${color}`}>{value}</span>
-      <span className="text-white/50">{label}</span>
+      <span className="text-[var(--t-fg-4)]">{label}</span>
     </div>
   );
 }
@@ -28,7 +28,7 @@ export function GroupMetricsBar({ metrics }: GroupMetricsBarProps) {
       <Capsule
         label="Pending Approvals"
         value={String(pendingApprovalsCount)}
-        color={pendingApprovalsCount > 0 ? 'text-[#F59E0B]' : 'text-white/40'}
+        color={pendingApprovalsCount > 0 ? 'text-[#F59E0B]' : 'text-[var(--t-fg-4)]'}
       />
       <Capsule label="Cost Today" value={`$${costToday.toFixed(2)}`} />
       <Capsule label="Members" value={String(members)} />

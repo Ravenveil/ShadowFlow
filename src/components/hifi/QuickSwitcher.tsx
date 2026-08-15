@@ -52,7 +52,8 @@ const CONV_ITEMS: SwitcherItem[] = [
 ];
 
 const AGENT_ITEMS: SwitcherItem[] = [
-  { id: 'agent-dudu',    kind: 'agent', label: '读读',  sub: 'READER · L1',   icon: <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#A855F7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, flexShrink: 0 }}>读</span>, to: '/chat/default?conv=dudu' },
+  // UI5.0：紫色 #A855F7 收敛为品牌蓝（clawsgo 克制用色约定）
+  { id: 'agent-dudu',    kind: 'agent', label: '读读',  sub: 'READER · L1',   icon: <span style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--t-accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, flexShrink: 0 }}>读</span>, to: '/chat/default?conv=dudu' },
   { id: 'agent-api',     kind: 'agent', label: '阿批',  sub: 'CRITIC · L2',   icon: <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#F59E0B', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, flexShrink: 0 }}>批</span>, to: '/chat/default?conv=api' },
   { id: 'agent-chaxha',  kind: 'agent', label: '查查',  sub: 'CITE · L1',     icon: <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#22D3EE', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, flexShrink: 0 }}>查</span>, to: '/chat/default?conv=chaxha' },
   { id: 'agent-xiaoxie', kind: 'agent', label: '小写',  sub: 'WRITER · L3',   icon: <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#EF4444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, flexShrink: 0 }}>写</span>, to: '/chat/default?conv=xiaoxie' },
@@ -165,17 +166,17 @@ export function QuickSwitcher() {
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — UI5.0：统一 .ui50-overlay（微模糊 + 淡入） */}
       <div
         onClick={closeSwitcher}
+        className="ui50-overlay"
         style={{
           position: 'fixed', inset: 0, zIndex: 998,
-          background: 'rgba(0,0,0,0.45)',
-          backdropFilter: 'blur(2px)',
         }}
       />
 
-      {/* Panel */}
+      {/* Panel — UI5.0：外层只做定位/居中（translateX 与入场动画 transform 冲突，
+          故拆层），内层走 .ui50-pop 淡入缩放 + .ui50-modal 圆角软阴影 */}
       <div
         style={{
           position: 'fixed',
@@ -184,11 +185,14 @@ export function QuickSwitcher() {
           transform: 'translateX(-50%)',
           width: 560,
           maxWidth: 'calc(100vw - 32px)',
+          zIndex: 999,
+        }}
+      >
+      <div
+        className="ui50-pop ui50-modal"
+        style={{
           background: 'var(--t-panel)',
           border: '1px solid var(--t-border)',
-          borderRadius: 14,
-          boxShadow: '0 24px 60px -12px rgba(0,0,0,.55)',
-          zIndex: 999,
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -315,6 +319,7 @@ export function QuickSwitcher() {
             </span>
           ))}
         </div>
+      </div>
       </div>
     </>
   );

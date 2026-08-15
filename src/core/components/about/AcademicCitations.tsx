@@ -12,7 +12,7 @@ function PaperCard({ paper }: { paper: AcademicPaper }) {
           <span className="font-mono text-[10px] uppercase tracking-widest text-sf-accent block mb-1">
             {paper.id} · {paper.year}
           </span>
-          <h3 className="text-sm font-semibold text-white/90 leading-snug">{paper.title}</h3>
+          <h3 className="text-sm font-semibold text-[var(--t-fg-2)] leading-snug">{paper.title}</h3>
           <p className="text-xs text-sf-fg4 mt-0.5">{paper.authors}</p>
         </div>
         <a

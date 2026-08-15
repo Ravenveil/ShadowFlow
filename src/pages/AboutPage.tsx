@@ -30,8 +30,9 @@ function SectionEyebrow({ text }: { text: string }) {
 }
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
+  // UI5.0 — 去掉 dark-only 的 text-white/95，标题继承根容器 var(--t-fg)，day/night 都正确。
   return (
-    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white/95 mb-2">
+    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2" style={{ color: 'var(--t-fg)' }}>
       {children}
     </h2>
   );
@@ -335,12 +336,12 @@ export default function AboutPage() {
         {/* ──────────────────────────────── TOP NAV ──────────────────────────────── */}
         <header
           className="sticky top-0 z-40 border-b"
-          style={{ borderColor: 'var(--t-border)', background: 'rgba(10,10,10,0.92)', backdropFilter: 'blur(12px)' }}
+          style={{ borderColor: 'var(--t-border)', background: 'color-mix(in srgb, var(--t-bg) 88%, transparent)', backdropFilter: 'blur(12px)' }}
         >
           <div className="mx-auto max-w-4xl px-6 flex items-center justify-between h-12 gap-4">
             <button
               onClick={() => navigate('/')}
-              className="font-mono text-[11px] text-sf-fg4 hover:text-white/90 transition-colors shrink-0"
+              className="font-mono text-[11px] text-sf-fg4 transition-colors shrink-0"
               aria-label="返回首页"
             >
               ← ShadowFlow
@@ -380,7 +381,7 @@ export default function AboutPage() {
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sf-accent mb-4">
             ◆ ShadowFlow · 技术背书
           </p>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white/95 mb-3">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3" style={{ color: 'var(--t-fg)' }}>
             不是又一个 LLM Wrapper。
           </h1>
           <p className="text-sm text-sf-fg3 max-w-xl mx-auto leading-relaxed">
@@ -495,7 +496,7 @@ export default function AboutPage() {
             <p className="font-mono text-[10px] uppercase tracking-widest text-sf-fg4 mb-4">
               看完了？来亲手试试。
             </p>
-            <h2 className="text-2xl font-bold text-white/90 mb-6">
+            <h2 className="text-2xl font-bold mb-6" style={{ color: 'var(--t-fg)' }}>
               60 秒内跑一个真实 Agent 团队。
             </h2>
             {/* 2026-05-20 — /editor /templates 均已下架；两个 CTA 都跳 /start。 */}

@@ -21,16 +21,17 @@ interface AgentStatus {
 }
 
 // Theme-aware palette for hashed agent avatar colors. All tokens map to var(--t-*).
-// 紫/青重复使用 --t-accent 与 --t-gated 是有意的，避免引入新的 CSS 变量。
+// 蓝/青重复使用 --t-accent 与 --t-gated 是有意的，避免引入新的 CSS 变量。
+// UI5.0 — accent 令牌已在设计基座收敛为 clawsgo 蓝，这里注释同步更新（无行为变化）。
 const COLOR_PALETTE = [
-  'var(--t-accent)',                          // 紫 (was #A855F7)
+  'var(--t-accent)',                          // 蓝 (was #A855F7)
   'var(--t-warn)',                            // 黄 (was #F59E0B)
   'var(--t-gated, var(--t-accent))',          // 青 (was #22D3EE)
   'var(--t-err)',                             // 红 (was #EF4444)
   'var(--t-ok)',                              // 绿 (was #10B981)
-  'var(--t-accent-bright)',                   // 蓝/亮紫 (was #3B82F6)
-  'var(--t-accent)',                          // 紫 (was #8B5CF6)
-  'var(--t-accent-bright)',                   // 粉/亮 (was #EC4899)
+  'var(--t-accent-bright)',                   // 亮蓝 (was #3B82F6)
+  'var(--t-accent)',                          // 蓝 (was #8B5CF6)
+  'var(--t-accent-bright)',                   // 亮 (was #EC4899)
 ];
 
 function hashColor(s: string): string {

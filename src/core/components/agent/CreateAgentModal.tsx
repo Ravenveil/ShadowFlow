@@ -129,10 +129,10 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
       <div className="relative w-full max-w-lg rounded-sf border border-shadowflow-border bg-shadowflow-surface p-6 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-white/90">新建 Agent</h2>
+          <h2 className="text-base font-semibold text-[var(--t-fg-2)]">新建 Agent</h2>
           <button
             onClick={onClose}
-            className="rounded px-2 py-1 text-sm text-white/40 hover:text-white/70"
+            className="rounded px-2 py-1 text-sm text-[var(--t-fg-4)] hover:text-[var(--t-fg-3)]"
             aria-label="关闭"
           >
             ✕
@@ -140,15 +140,15 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
         </div>
 
         {/* Tab switcher */}
-        <div className="mt-4 flex gap-1 rounded-lg bg-white/5 p-1">
+        <div className="mt-4 flex gap-1 rounded-lg bg-[var(--t-hover)] p-1">
           {([['quick', '自建'], ['catalog', '从 Catalog 安装']] as [Tab, string][]).map(([value, label]) => (
             <button
               key={value}
               onClick={() => { setTab(value); setError(null); }}
               className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
                 tab === value
-                  ? 'bg-white/10 text-white/90'
-                  : 'text-white/40 hover:text-white/60'
+                  ? 'bg-[var(--t-active)] text-[var(--t-fg-2)]'
+                  : 'text-[var(--t-fg-4)] hover:text-[var(--t-fg-3)]'
               }`}
               data-testid={`tab-${value}`}
             >
@@ -161,7 +161,7 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
         {tab === 'quick' && (
           <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-white/60" htmlFor="agent-name">
+              <label className="text-xs font-medium text-[var(--t-fg-3)]" htmlFor="agent-name">
                 名字 <span className="text-red-400">*</span>
               </label>
               <input
@@ -173,13 +173,13 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
                 placeholder="例：论文复现助手"
                 maxLength={100}
                 required
-                className="rounded border border-shadowflow-border bg-white/5 px-3 py-2 text-sm text-white/90 placeholder-white/25 outline-none focus:border-white/30 focus:ring-0"
+                className="rounded border border-shadowflow-border bg-[var(--t-hover)] px-3 py-2 text-sm text-[var(--t-fg-2)] placeholder-[var(--t-fg-5)] outline-none focus:border-[var(--t-border-2)] focus:ring-0"
                 data-testid="agent-name-input"
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-white/60" htmlFor="agent-soul">
+              <label className="text-xs font-medium text-[var(--t-fg-3)]" htmlFor="agent-soul">
                 角色描述（Soul）<span className="text-red-400">*</span>
               </label>
               <textarea
@@ -190,16 +190,16 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
                 rows={4}
                 maxLength={2000}
                 required
-                className="resize-none rounded border border-shadowflow-border bg-white/5 px-3 py-2 text-sm text-white/90 placeholder-white/25 outline-none focus:border-white/30"
+                className="resize-none rounded border border-shadowflow-border bg-[var(--t-hover)] px-3 py-2 text-sm text-[var(--t-fg-2)] placeholder-[var(--t-fg-5)] outline-none focus:border-[var(--t-border-2)]"
                 data-testid="agent-soul-input"
               />
             </div>
 
             {/* 2026-05-31 — 工作区归属选择(加入默认 / 新建) */}
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-white/60">放到哪个工作区？</label>
+              <label className="text-xs font-medium text-[var(--t-fg-3)]">放到哪个工作区？</label>
               <div className="flex flex-col gap-1.5">
-                <label className="flex cursor-pointer items-start gap-2 rounded border border-shadowflow-border bg-white/[0.02] px-3 py-2 text-sm hover:bg-white/5">
+                <label className="flex cursor-pointer items-start gap-2 rounded border border-shadowflow-border bg-[var(--t-panel-2)] px-3 py-2 text-sm hover:bg-[var(--t-hover)]">
                   <input
                     type="radio"
                     name="ws-choice"
@@ -209,13 +209,13 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
                     data-testid="ws-choice-existing"
                   />
                   <span className="flex flex-1 flex-col gap-1.5">
-                    <span className="text-white/90">放进已有工作区</span>
+                    <span className="text-[var(--t-fg-2)]">放进已有工作区</span>
                     {wsChoice === 'existing' && (
                       <select
                         value={targetWsId}
                         onChange={(e) => setTargetWsId(e.target.value)}
                         onClick={(e) => e.stopPropagation()}
-                        className="rounded border border-shadowflow-border bg-white/5 px-2.5 py-1.5 text-sm text-white/90 outline-none focus:border-white/30"
+                        className="rounded border border-shadowflow-border bg-[var(--t-hover)] px-2.5 py-1.5 text-sm text-[var(--t-fg-2)] outline-none focus:border-[var(--t-border-2)]"
                         data-testid="ws-existing-select"
                       >
                         {workspaces.length === 0 && (
@@ -231,7 +231,7 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
                     )}
                   </span>
                 </label>
-                <label className="flex cursor-pointer items-start gap-2 rounded border border-shadowflow-border bg-white/[0.02] px-3 py-2 text-sm hover:bg-white/5">
+                <label className="flex cursor-pointer items-start gap-2 rounded border border-shadowflow-border bg-[var(--t-panel-2)] px-3 py-2 text-sm hover:bg-[var(--t-hover)]">
                   <input
                     type="radio"
                     name="ws-choice"
@@ -241,7 +241,7 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
                     data-testid="ws-choice-new"
                   />
                   <span className="flex flex-1 flex-col gap-1.5">
-                    <span className="text-white/90">新建一个工作区</span>
+                    <span className="text-[var(--t-fg-2)]">新建一个工作区</span>
                     {wsChoice === 'new' && (
                       <input
                         type="text"
@@ -249,7 +249,7 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
                         onChange={(e) => setNewWsName(e.target.value)}
                         placeholder="新工作区名称，例：开发团队"
                         maxLength={40}
-                        className="rounded border border-shadowflow-border bg-white/5 px-2.5 py-1.5 text-sm text-white/90 placeholder-white/25 outline-none focus:border-white/30"
+                        className="rounded border border-shadowflow-border bg-[var(--t-hover)] px-2.5 py-1.5 text-sm text-[var(--t-fg-2)] placeholder-[var(--t-fg-5)] outline-none focus:border-[var(--t-border-2)]"
                         data-testid="ws-new-name-input"
                         onClick={(e) => e.stopPropagation()}
                       />
@@ -264,13 +264,13 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
               <button
                 type="button"
                 onClick={() => setShowAdvanced((v) => !v)}
-                className="flex items-center gap-1 text-xs text-white/40 hover:text-white/60"
+                className="flex items-center gap-1 text-xs text-[var(--t-fg-4)] hover:text-[var(--t-fg-3)]"
               >
                 <span>{showAdvanced ? '▲' : '▼'}</span>
                 <span>高级配置</span>
               </button>
               {showAdvanced && (
-                <div className="mt-2 rounded border border-shadowflow-border bg-white/[0.02] px-4 py-3 text-xs text-white/50">
+                <div className="mt-2 rounded border border-shadowflow-border bg-[var(--t-panel-2)] px-4 py-3 text-xs text-[var(--t-fg-4)]">
                   工具权限、层级配置等高级选项请使用
                   <button
                     type="button"
@@ -293,7 +293,7 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
               <button
                 type="button"
                 onClick={handleAdvancedCreate}
-                className="text-xs text-white/40 hover:text-white/60"
+                className="text-xs text-[var(--t-fg-4)] hover:text-[var(--t-fg-3)]"
               >
                 高级创建 →
               </button>
@@ -301,14 +301,14 @@ export function CreateAgentModal({ onCreated, onClose, onCatalogInstalled }: Cre
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded border border-shadowflow-border px-4 py-2 text-sm text-white/60 hover:bg-white/5"
+                  className="rounded border border-shadowflow-border px-4 py-2 text-sm text-[var(--t-fg-3)] hover:bg-[var(--t-hover)]"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
                   disabled={!canSubmit}
-                  className="rounded bg-white/10 px-4 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded bg-[var(--t-active)] px-4 py-2 text-sm font-medium text-[var(--t-fg-2)] transition-colors hover:bg-[var(--t-active)] disabled:cursor-not-allowed disabled:opacity-40"
                   data-testid="create-agent-submit"
                 >
                   {submitting ? '创建中…' : '创建'}

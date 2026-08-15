@@ -703,7 +703,8 @@ export function PersonalChatView() {
                     className="dm-head-model"
                     title={hasByokKey ? 'API Key 已配置 · 点击切换模型' : '未配置 API Key（将使用 CLI）· 点击切换'}
                     onClick={() => setShowModelPicker((v) => !v)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', background: 'none', border: '1px solid var(--t-border)' }}
+                    // UI5.0 — 背景/边框收口到 .dm-head-model 类,hover 由 ui50-chat-home.css 给
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
                   >
                     {/* BYOK 状态点：绿=有 key，灰=无 key */}
                     <span
@@ -776,6 +777,7 @@ export function PersonalChatView() {
                   disabled={exportableMessages.length === 0 || streaming}
                   title={exportableMessages.length === 0 ? '暂无可导出的消息' : streaming ? '流式输出中，请等待完成后导出' : '导出对话'}
                   aria-label="导出对话"
+                  className="ui50-icon-btn"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -799,6 +801,7 @@ export function PersonalChatView() {
                   onClick={() => setShowSettings(true)}
                   title="设置 · 配置 API Key"
                   aria-label="打开设置"
+                  className="ui50-icon-btn"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -824,6 +827,7 @@ export function PersonalChatView() {
                   disabled={isCreating}
                   title="新对话 · 切换助手后恢复原会话（本次对话不会消失，在历史记录中可查）"
                   aria-label="新对话"
+                  className="ui50-icon-btn"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -1033,7 +1037,7 @@ export function PersonalChatView() {
                   cursor: 'pointer', color: 'var(--t-fg)',
                   fontSize: 13, fontFamily: 'inherit', textAlign: 'left',
                 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-accent)'; }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-border-2)'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-border)'; }}
               >
                 <Download size={14} style={{ flexShrink: 0, color: 'var(--t-accent)' }} />
@@ -1053,7 +1057,7 @@ export function PersonalChatView() {
                   cursor: 'pointer', color: 'var(--t-fg)',
                   fontSize: 13, fontFamily: 'inherit', textAlign: 'left',
                 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-accent)'; }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-border-2)'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--t-border)'; }}
               >
                 <Download size={14} style={{ flexShrink: 0, color: 'var(--t-fg-3)' }} />

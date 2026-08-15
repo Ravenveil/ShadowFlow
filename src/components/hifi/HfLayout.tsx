@@ -10,6 +10,8 @@
  * (design decision — workspace context isn't meaningful there).
  */
 import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
+// UI5.0（2026-08-14）：外壳/弹层统一层（.ui50-*），全局只在此引入一次。
+import './ui5shell.css';
 import { HfTopBar } from './HfTopBar';
 import { useTheme } from './useTheme';
 import { PetRail } from '../../core/components/pet/PetRail';

@@ -33,7 +33,7 @@ function AccordionItem({ item, isOpen, onToggle, index }: AccordionItemProps) {
         aria-controls={`vs-panel-${item.id}`}
         onClick={onToggle}
         onKeyDown={handleKeyDown}
-        className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors duration-150 hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sf-accent"
+        className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors duration-150 hover:bg-[var(--t-panel-2)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sf-accent"
       >
         <div className="flex items-center gap-3 min-w-0">
           <span
@@ -43,7 +43,7 @@ function AccordionItem({ item, isOpen, onToggle, index }: AccordionItemProps) {
             {String(index + 1).padStart(2, '0')}
           </span>
           <div className="min-w-0">
-            <span className="font-semibold text-white/90 text-sm">
+            <span className="font-semibold text-[var(--t-fg-2)] text-sm">
               vs {item.target}
             </span>
             <span className="ml-2 text-sf-fg4 text-sm hidden sm:inline">

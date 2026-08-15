@@ -484,9 +484,9 @@ const RaciField: React.FC<{ agent: RunSessionNode }> = ({ agent }) => {
                 style={{
                   fontSize: 10.5, padding: '2px 7px', borderRadius: 4,
                   fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-                  background: accent ? 'var(--t-accent-tint, rgba(168,85,247,.12))' : 'var(--t-bg-elev-2, #141414)',
-                  border: `1px solid ${accent ? 'var(--t-accent, #A855F7)' : 'var(--t-border, #27272A)'}`,
-                  color: accent ? 'var(--t-accent-bright, #D8B4FE)' : 'var(--t-fg-3, #A1A1AA)',
+                  background: accent ? 'var(--t-accent-tint, rgba(20,71,230,.12))' /* UI5.0 fallback 去紫化 */ : 'var(--t-bg-elev-2, #141414)',
+                  border: `1px solid ${accent ? 'var(--t-accent, #1447E6)' /* UI5.0 fallback 去紫化 */ : 'var(--t-border, #27272A)'}`,
+                  color: accent ? 'var(--t-accent-bright, #0F3BCC)' : 'var(--t-fg-3, #A1A1AA)',
                 }}
               >
                 {RESP_LABEL[k]}·{ROLE_LABEL[role]}

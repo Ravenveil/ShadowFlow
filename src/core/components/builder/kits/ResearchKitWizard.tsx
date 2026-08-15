@@ -89,7 +89,7 @@ const ROLE_PREVIEWS = [
     id: 'report_writer',
     name: 'Report Writer',
     icon: '📝',
-    color: 'purple',
+    color: 'blue',
     desc: '把摘要整合为最终结构化报告，附引用列表',
     badge: '报告',
   },
@@ -518,7 +518,7 @@ function Step3({
           data-testid="wizard-submit"
         >
           {isLoading && (
-            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--t-border-2)] border-t-white" />
           )}
           {isLoading ? '生成中…' : '生成 Blueprint'}
         </button>

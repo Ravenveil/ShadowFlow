@@ -141,6 +141,8 @@ export default function HfSelect({
         <div
           ref={dropdownRef}
           role="listbox"
+          // UI5.0：统一浮层——圆角 12 + 软阴影 + 淡入缩放（按弹出方向选入场曲线）
+          className={`ui50-menu ${pos.top != null ? 'ui50-pop' : 'ui50-pop-up'}`}
           style={{
             position: 'fixed',
             left: pos.left,
@@ -150,8 +152,6 @@ export default function HfSelect({
             ...(pos.top != null ? { top: pos.top } : { bottom: pos.bottom ?? 0 }),
             background: 'var(--t-panel)',
             border: '1px solid var(--t-border)',
-            borderRadius: 10,
-            boxShadow: '0 12px 32px -10px rgba(0,0,0,.32), 0 0 0 1px rgba(255,255,255,.03)',
             padding: '5px',
             overflowY: 'auto',
           }}

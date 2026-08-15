@@ -92,7 +92,8 @@ function translateError(err: unknown): string {
 
 const RAG_BACKEND_BADGE: Record<string, { label: string; bg: string; fg: string }> = {
   stub: { label: 'RAG: keyword stub', bg: 'rgba(120,120,120,0.12)', fg: '#8B8B96' },
-  lightrag: { label: 'RAG: LightRAG', bg: 'rgba(120,80,220,0.15)', fg: '#A97FFF' },
+  // UI5.0: LightRAG badge 由紫 (#A97FFF) 收敛为蓝
+  lightrag: { label: 'RAG: LightRAG', bg: 'rgba(37,99,235,0.14)', fg: '#2563EB' },
 };
 
 function RagBackendBadge({ backend }: { backend?: string }) {
@@ -277,7 +278,8 @@ export default function KnowledgePage() {
       style={{
         minHeight: '100vh',
         background: 'var(--t-bg)',
-        color: 'var(--fg, #E6EDF3)',
+        // UI5.0: 文字色走主题令牌（旧 var(--fg,#E6EDF3) 在 day 主题下不可读）
+        color: 'var(--t-fg)',
         padding: '32px 40px',
         fontFamily: 'var(--font-sans)',
       }}
@@ -285,15 +287,16 @@ export default function KnowledgePage() {
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.5, letterSpacing: '0.18em', textTransform: 'uppercase' }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)', letterSpacing: '0.18em', textTransform: 'uppercase', margin: 0 }}>
               Knowledge / Story 9.1
             </p>
             <RagBackendBadge backend={ragBackend} />
           </div>
-          <h1 style={{ fontSize: 28, fontWeight: 600, marginTop: 6 }}>
+          {/* UI5.0: 页面头部层级统一 — 标题 17px/700，描述 13px 次级色 */}
+          <h1 style={{ fontSize: 17, fontWeight: 700, marginTop: 6, letterSpacing: '-.01em', marginBottom: 0 }}>
             KnowledgePack 管理
           </h1>
-          <p style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>
+          <p style={{ fontSize: 13, color: 'var(--t-fg-3)', marginTop: 4 }}>
             一等对象 — Builder 用来声明 Agent 能访问的知识、检索方式、是否要带出处。
           </p>
           <div style={{ marginTop: 12 }}>
@@ -303,11 +306,11 @@ export default function KnowledgePage() {
         <button
           data-testid="create-pack-btn"
           onClick={() => setShowModal(true)}
+          // UI5.0: 主操作按钮近黑（day）/ accent（night）
+          className="sf-btn-primary"
           style={{
             height: 36,
             padding: '0 18px',
-            background: 'var(--t-accent, #6FA8FF)',
-            color: '#0B1220',
             border: 'none',
             borderRadius: 8,
             fontWeight: 600,
@@ -324,10 +327,10 @@ export default function KnowledgePage() {
           style={{
             marginBottom: 16,
             padding: '10px 14px',
-            background: 'rgba(232,90,90,0.1)',
-            border: '1px solid rgba(232,90,90,0.3)',
+            background: 'color-mix(in oklab, var(--t-err, #E85A5A) 10%, transparent)',
+            border: '1px solid color-mix(in oklab, var(--t-err, #E85A5A) 30%, transparent)',
             borderRadius: 8,
-            color: '#F58484',
+            color: 'var(--t-err, #F58484)',
             fontSize: 13,
           }}
         >
@@ -336,21 +339,21 @@ export default function KnowledgePage() {
       )}
 
       {status === 'loading' && (
-        <div style={{ opacity: 0.6, fontSize: 13 }}>加载中…</div>
+        <div style={{ color: 'var(--t-fg-4)', fontSize: 13 }}>加载中…</div>
       )}
 
       {status === 'success' && total === 0 && (
         <div
           style={{
             border: '1px dashed var(--t-border, #2D333B)',
-            borderRadius: 14,
+            borderRadius: 12, // UI5.0
             padding: '40px 24px',
             textAlign: 'center',
-            opacity: 0.7,
+            color: 'var(--t-fg-3)',
           }}
         >
-          <p style={{ fontSize: 14, marginBottom: 8 }}>还没有任何 KnowledgePack。</p>
-          <p style={{ fontSize: 12, opacity: 0.7 }}>点击右上角「新建 Pack」开始添加你的第一份知识。</p>
+          <p style={{ fontSize: 14, marginBottom: 8, color: 'var(--t-fg-2)' }}>还没有任何 KnowledgePack。</p>
+          <p style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>点击右上角「新建 Pack」开始添加你的第一份知识。</p>
         </div>
       )}
 
@@ -392,14 +395,22 @@ function PackCard({
   onDelete: () => void;
   onReindex: () => void;
 }) {
+  // UI5.0: hover 微浮起（clawsgo 卡片观感）
+  const [hover, setHover] = useState(false);
   return (
     <div
       data-testid={`pack-card-${pack.pack_id}`}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         background: 'var(--t-panel)',
         border: '1px solid var(--t-border, #2D333B)',
-        borderRadius: 14,
+        borderRadius: 12, // UI5.0: 卡片统一 12px 圆角
         padding: 16,
+        transition: 'box-shadow 150ms ease, border-color 150ms ease, transform 150ms ease',
+        borderColor: hover ? 'var(--t-border-2, var(--t-border))' : 'var(--t-border, #2D333B)',
+        boxShadow: hover ? 'var(--ui40-shadow-float, 0 8px 24px -8px rgba(0,0,0,.12))' : 'none',
+        transform: hover ? 'translateY(-1px)' : 'none',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -413,19 +424,19 @@ function PackCard({
           style={{ cursor: 'pointer', flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 15, fontWeight: 600 }}>{pack.name}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)' }}>{pack.name}</span>
             <StatusBadge status={pack.status} />
             {pack.citation_required && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, opacity: 0.7 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>
                 citation:required
               </span>
             )}
           </div>
-          <div style={{ fontSize: 12, opacity: 0.6 }}>
+          <div style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>
             {pack.sources.length} sources · created {fmtDate(pack.created_at)} · updated {fmtDate(pack.updated_at)}
           </div>
           {pack.description && (
-            <p style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>{pack.description}</p>
+            <p style={{ fontSize: 12, color: 'var(--t-fg-3)', marginTop: 4, marginBottom: 0 }}>{pack.description}</p>
           )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -438,7 +449,7 @@ function PackCard({
               fontSize: 11,
               background: 'transparent',
               border: '1px solid var(--t-border, #2D333B)',
-              color: 'var(--fg, #E6EDF3)',
+              color: 'var(--t-fg-3)',
               borderRadius: 6,
               cursor: 'pointer',
             }}
@@ -453,8 +464,8 @@ function PackCard({
               padding: '0 12px',
               fontSize: 11,
               background: 'transparent',
-              border: '1px solid rgba(232,90,90,0.4)',
-              color: '#F58484',
+              border: '1px solid color-mix(in oklab, var(--t-err, #E85A5A) 40%, transparent)',
+              color: 'var(--t-err, #F58484)',
               borderRadius: 6,
               cursor: 'pointer',
             }}
@@ -475,7 +486,7 @@ function PackCard({
             gap: 8,
           }}
         >
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
+          <div style={{ fontSize: 12, color: 'var(--t-fg-3)' }}>
             retrieval: <code>{pack.retrieval_profile.mode}</code> · top_k={pack.retrieval_profile.top_k} ·
             chunk_size={pack.retrieval_profile.chunk_size} · overlap={pack.retrieval_profile.overlap}
           </div>
@@ -490,10 +501,10 @@ function PackCard({
                   fontSize: 12,
                   background: 'var(--t-bg)',
                   padding: '8px 10px',
-                  borderRadius: 6,
+                  borderRadius: 8, // UI5.0
                 }}
               >
-                <code style={{ opacity: 0.6, minWidth: 56 }}>{s.source_type}</code>
+                <code style={{ color: 'var(--t-fg-4)', minWidth: 56 }}>{s.source_type}</code>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {s.source_ref}
                 </span>
@@ -503,19 +514,19 @@ function PackCard({
                     fontSize: 10,
                     color:
                       s.ingest_status === 'failed'
-                        ? '#F58484'
+                        ? 'var(--t-err, #F58484)'
                         : s.ingest_status === 'done'
-                          ? '#4FCC85'
+                          ? 'var(--t-ok, #4FCC85)'
                           : s.ingest_status === 'processing'
-                            ? '#6FA8FF'
-                            : 'rgba(255,255,255,0.5)',
+                            ? 'var(--t-accent)'
+                            : 'var(--t-fg-4)',
                   }}
                 >
                   {s.ingest_status}
                   {s.chunk_count > 0 ? ` · ${s.chunk_count} chunks` : ''}
                 </span>
                 {s.error_message && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', color: '#F58484', marginLeft: 8 }} title={s.error_message}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--t-err, #F58484)', marginLeft: 8 }} title={s.error_message}>
                     <KnowledgeAlert size={11} strokeWidth={2} />
                   </span>
                 )}
@@ -596,7 +607,7 @@ function CreatePackModal({
           maxWidth: 520,
         }}
       >
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>新建 KnowledgePack</h2>
+        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 16, marginTop: 0 }}>新建 KnowledgePack</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Field label="名称">
             <input
@@ -680,8 +691,8 @@ function CreatePackModal({
               marginTop: 12,
               padding: '8px 12px',
               borderRadius: 6,
-              background: 'rgba(232,90,90,0.1)',
-              color: '#F58484',
+              background: 'color-mix(in oklab, var(--t-err, #E85A5A) 10%, transparent)',
+              color: 'var(--t-err, #F58484)',
               fontSize: 12,
             }}
           >
@@ -697,8 +708,8 @@ function CreatePackModal({
               padding: '0 16px',
               background: 'transparent',
               border: '1px solid var(--t-border, #2D333B)',
-              color: 'var(--fg, #E6EDF3)',
-              borderRadius: 6,
+              color: 'var(--t-fg-3)',
+              borderRadius: 8, // UI5.0
               cursor: 'pointer',
             }}
           >
@@ -708,14 +719,15 @@ function CreatePackModal({
             data-testid="modal-submit"
             onClick={handleSubmit}
             disabled={!canSubmit || submitting}
+            // UI5.0: 主操作按钮近黑（day）/ accent（night）
+            className="sf-btn-primary"
             style={{
               height: 34,
               padding: '0 18px',
-              background: canSubmit && !submitting ? 'var(--t-accent, #6FA8FF)' : 'rgba(120,120,120,0.3)',
               border: 'none',
-              borderRadius: 6,
-              color: '#0B1220',
+              borderRadius: 8,
               fontWeight: 600,
+              opacity: canSubmit && !submitting ? 1 : 0.5,
               cursor: canSubmit && !submitting ? 'pointer' : 'not-allowed',
             }}
           >
@@ -748,9 +760,10 @@ const textInputStyle: React.CSSProperties = {
   width: '100%',
   background: 'var(--t-bg)',
   border: '1px solid var(--t-border, #2D333B)',
-  borderRadius: 6,
+  borderRadius: 8, // UI5.0
   padding: '8px 10px',
-  color: 'var(--fg, #E6EDF3)',
+  // UI5.0: 文字色走主题令牌（旧 var(--fg,#E6EDF3) 在 day 主题下不可读）
+  color: 'var(--t-fg)',
   fontSize: 13,
   fontFamily: 'inherit',
 };

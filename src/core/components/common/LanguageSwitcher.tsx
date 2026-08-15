@@ -36,7 +36,7 @@ export function LanguageSwitcher({ className }: LanguageSwitcherProps) {
         whiteSpace: 'nowrap',
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(168,85,247,.5)' /* fixme: token */;
+        (e.currentTarget as HTMLButtonElement).style.borderColor = 'color-mix(in oklab, var(--t-accent) 50%, transparent)';
         (e.currentTarget as HTMLButtonElement).style.color = 'var(--t-accent-bright)';
       }}
       onMouseLeave={(e) => {

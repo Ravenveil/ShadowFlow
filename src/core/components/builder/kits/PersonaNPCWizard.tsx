@@ -507,7 +507,7 @@ export function PersonaNPCWizard({ onComplete, onCancel }: PersonaNPCWizardProps
         >
           {isSubmitting ? (
             <>
-              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--t-border-2)] border-t-white" />
               创建中…
             </>
           ) : (

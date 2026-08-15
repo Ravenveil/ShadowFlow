@@ -522,6 +522,6 @@ export const PORT_TYPES: Record<PortType, { name: I18nText; color: string }> = {
   stream: { name: { en: 'Stream', zh: '流' }, color: '#06b6d4' },
   file: { name: { en: 'File', zh: '文件' }, color: '#f97316' },
   agent: { name: { en: 'Agent', zh: 'Agent' }, color: '#14b8a6' },
-  task: { name: { en: 'Task', zh: '任务' }, color: '#a855f7' },
+  task: { name: { en: 'Task', zh: '任务' }, color: '#1447E6' },
   message: { name: { en: 'Message', zh: '消息' }, color: '#0ea5e9' }
 };

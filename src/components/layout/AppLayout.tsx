@@ -8,6 +8,7 @@
 
 import { Link } from 'react-router-dom';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
+import './layout-ui5.css'; // UI5.0 — 令牌化文字/hover（替代 dark-only white/* 类）
 
 function IconSettings() {
   return (
@@ -42,7 +43,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="ml-auto flex items-center gap-2">
           <Link
             to="/workspace"
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium text-white/50 hover:bg-white/5 hover:text-white/85 transition-colors"
+            className="sf5-row-hover sf5-text-3 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
               <rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" />
@@ -52,7 +53,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </Link>
           <Link
             to="/settings"
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-white/50 hover:bg-white/5 hover:text-white/85 transition-colors"
+            className="sf5-row-hover sf5-text-3 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors"
             aria-label="设置"
           >
             <IconSettings />

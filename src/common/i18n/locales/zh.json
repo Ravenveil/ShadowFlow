@@ -50,6 +50,7 @@
   "shell.navLoopEngine": "循环引擎",
   "shell.navCalendar": "日历",
   "shell.navSettings": "设置",
+  "shell.loopEngine": "循环引擎",
   "shell.settings": "设置",
   "shell.settingsShortcut": "⌘,",
   "shell.networkTitle": "服务连接正常 · 最近 ping {latency}ms · 点击查看状态",
@@ -632,5 +633,12 @@
   "runSession.rosterTruncated": "按「{{reason}}」规则确定性裁剪：保留 {{kept}} 个 agent，丢弃 {{dropped}} 个（{{names}}）",
   "runSession.viewTeam": "查看 Team →",
   "runSession.gotoChat": "Chat →",
-  "runSession.gotoAgents": "Agents →"
+  "runSession.gotoAgents": "Agents →",
+  "neo.newTask": "新任务",
+  "neo.sessions": "会话",
+  "neo.collapseRail": "收起导航栏",
+  "neo.expandRail": "展开导航栏",
+  "neo.collapseHost": "收起主机面板",
+  "neo.expandHost": "展开主机面板",
+  "neo.anonymous": "访客"
 }

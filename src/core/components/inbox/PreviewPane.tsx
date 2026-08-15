@@ -43,12 +43,12 @@ export function PreviewPane() {
     >
       {!selectedGroupId ? (
         <div className="flex flex-1 flex-col items-center justify-center">
-          <div className="flex h-[200px] w-[200px] items-center justify-center rounded-sf border border-white/10 bg-shadowflow-surface text-center text-sm text-white/45">
+          <div className="flex h-[200px] w-[200px] items-center justify-center rounded-sf border border-[var(--t-border)] bg-shadowflow-surface text-center text-sm text-[var(--t-fg-4)]">
             Preview
             <br />
             Placeholder
           </div>
-          <h2 className="mt-8 text-2xl font-semibold tracking-[-0.03em] text-white">
+          <h2 className="mt-8 text-2xl font-semibold tracking-[-0.03em] text-[var(--t-fg)]">
             {t('inbox.selectConvHint')}
           </h2>
           <p className="mt-3 max-w-sm text-center text-sm text-white/55">
@@ -64,8 +64,8 @@ export function PreviewPane() {
           <ApprovalGatePanel groupId={selectedGroupId} />
 
           {/* AC3: Recent messages slot */}
-          <section className="rounded-sf border border-white/10 bg-shadowflow-surface px-6 py-6">
-            <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.16em] text-white/45">
+          <section className="rounded-sf border border-[var(--t-border)] bg-shadowflow-surface px-6 py-6">
+            <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--t-fg-4)]">
               {t('inbox.recentMessages')}
             </p>
             <RecentMessagesPreview

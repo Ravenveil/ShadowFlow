@@ -113,7 +113,7 @@ function Chip({ children, accent, run }: { children: React.ReactNode; accent?: b
       padding: '3px 8px', borderRadius: 6,
       background: accent ? V.accentTint : run ? 'var(--status-run-tint)' : V.elev2,
       color: accent ? V.accentBr : run ? V.run : V.fg3,
-      border: `1px solid ${accent ? 'rgba(168,85,247,.35)' /* fixme: token */ : run ? 'rgba(59,130,246,.35)' : V.border}`,
+      border: `1px solid ${accent ? 'color-mix(in oklab, var(--t-accent) 35%, transparent)' : run ? 'rgba(59,130,246,.35)' : V.border}`,
     }}>
       {children}
     </span>
@@ -271,7 +271,7 @@ function FinalOutputToast() {
   return (
     <div style={{
       position: 'fixed', bottom: 24, right: 24, width: 480, maxHeight: '70vh',
-      background: V.panel, border: `1px solid rgba(168,85,247,.4)` /* fixme: token */, borderRadius: 12,
+      background: V.panel, border: `1px solid color-mix(in oklab, var(--t-accent) 40%, transparent)`, borderRadius: 12,
       boxShadow: '0 20px 60px -20px rgba(0,0,0,.8)', zIndex: 80,
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
@@ -461,7 +461,7 @@ function SidebarTemplatesList() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {userTpls.map((tpl: { alias: string; title: string; stats: { agents: number; edges: number } }) => (
-            <div key={tpl.alias} style={{ padding: '7px 8px', borderRadius: 6, background: V.accentTint, border: `1px solid rgba(168,85,247,.3)` /* fixme: token */, fontFamily: V.mono, fontSize: 11 }}>
+            <div key={tpl.alias} style={{ padding: '7px 8px', borderRadius: 6, background: V.accentTint, border: `1px solid color-mix(in oklab, var(--t-accent) 30%, transparent)`, fontFamily: V.mono, fontSize: 11 }}>
               <div style={{ color: V.accentBr, fontWeight: 600 }}>{tpl.title}</div>
               <div style={{ color: V.fg5, fontSize: 9.5, marginTop: 2 }}>{tpl.stats.agents} · {tpl.stats.edges}</div>
             </div>
@@ -490,7 +490,7 @@ function SidebarRunsList() {
               <div key={i} style={{
                 padding: '6px 8px', borderRadius: 5,
                 background: isCurrent ? V.accentTint : V.elev1,
-                border: `1px solid ${isCurrent ? 'rgba(168,85,247,.35)' /* fixme: token */ : V.border}`,
+                border: `1px solid ${isCurrent ? 'color-mix(in oklab, var(--t-accent) 35%, transparent)' : V.border}`,
                 fontFamily: V.mono, fontSize: 10.5,
                 color: isCurrent ? V.accentBr : V.fg3,
               }}>
@@ -575,7 +575,7 @@ function EdgeStylePicker({ edgeType, setEdgeType }: { edgeType: SfEdgeType; setE
           height: 28, padding: '0 10px', fontFamily: V.mono, fontSize: 11, fontWeight: 600, borderRadius: 6,
           background: open ? V.accentTint : V.elev1,
           color: open ? V.accentBr : V.fg2,
-          border: `1px solid ${open ? 'rgba(168,85,247,.4)' /* fixme: token */ : V.border}`,
+          border: `1px solid ${open ? 'color-mix(in oklab, var(--t-accent) 40%, transparent)' : V.border}`,
           cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7,
         }}
       >
@@ -809,7 +809,7 @@ function Scrubber() {
           </div>
         ))}
         {/* cursor */}
-        <div style={{ position: 'absolute', top: -3, bottom: -3, left: `${isRunning ? runProgress : 82}%`, width: 2, background: V.accent, boxShadow: '0 0 0 1px var(--accent), 0 0 8px -2px rgba(168,85,247,.6) /* fixme: token */', transition: 'left 120ms linear' }} />
+        <div style={{ position: 'absolute', top: -3, bottom: -3, left: `${isRunning ? runProgress : 82}%`, width: 2, background: V.accent, boxShadow: '0 0 0 1px var(--accent), 0 0 8px -2px color-mix(in oklab, var(--t-accent) 60%, transparent)', transition: 'left 120ms linear' }} />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1059,7 +1059,7 @@ function InspectorTab({ node, updateNode }: {
   const d = node.data;
   const nameDisplay = typeof d.name === 'string' ? d.name : (d.name as Record<string, string>)?.['en'] ?? 'Node';
   const desc = typeof d.description === 'string' ? d.description : (d.description as Record<string, string>)?.['en'] ?? '';
-  const nodeColor = d.color || '#A855F7'; /* fixme: token — used in `${nodeColor}22|66` opacity-suffix concat, can't be var(--t-accent) directly */
+  const nodeColor = d.color || '#1447E6'; /* fixme: token — used in `${nodeColor}22|66` opacity-suffix concat, can't be var(--t-accent) directly */
   const status = d.status || 'idle';
   const statusChip = STATUS_CHIP[status] ?? STATUS_CHIP.idle;
 
@@ -1103,7 +1103,7 @@ function InspectorTab({ node, updateNode }: {
       <InspectorSection>
         <SectionHdr left="Model · Config" right={
           !editing
-            ? <button onClick={() => setEditing(true)} style={{ fontFamily: V.mono, fontSize: 10, color: V.accentBr, padding: '2px 8px', borderRadius: 5, border: `1px solid rgba(168,85,247,.4)` /* fixme: token */, background: V.accentTint, cursor: 'pointer' }}>Edit</button>
+            ? <button onClick={() => setEditing(true)} style={{ fontFamily: V.mono, fontSize: 10, color: V.accentBr, padding: '2px 8px', borderRadius: 5, border: `1px solid color-mix(in oklab, var(--t-accent) 40%, transparent)`, background: V.accentTint, cursor: 'pointer' }}>Edit</button>
             : <div style={{ display: 'flex', gap: 5 }}>
                 <button onClick={handleDiscard} style={{ fontFamily: V.mono, fontSize: 10, color: V.fg4, padding: '2px 8px', borderRadius: 5, border: `1px solid ${V.border}`, background: 'transparent', cursor: 'pointer' }}>Discard</button>
                 <button onClick={handleSave} style={{ fontFamily: V.mono, fontSize: 10, color: '#fff', padding: '2px 8px', borderRadius: 5, border: 'none', background: V.accent, cursor: 'pointer', fontWeight: 700 }}>Save</button>
@@ -1251,7 +1251,7 @@ function MatrixTab() {
               <span style={{ fontFamily: V.mono, fontSize: 9.5, color: diffFromDefault ? V.accentBr : V.fg5 }}>
                 {diffFromDefault ? 'custom · 6×6' : 'default · 6×6'}
               </span>
-              <button onClick={handleEdit} style={{ fontFamily: V.mono, fontSize: 10, color: V.accentBr, padding: '2px 8px', borderRadius: 5, border: `1px solid rgba(168,85,247,.4)` /* fixme: token */, background: V.accentTint, cursor: 'pointer' }}>Edit</button>
+              <button onClick={handleEdit} style={{ fontFamily: V.mono, fontSize: 10, color: V.accentBr, padding: '2px 8px', borderRadius: 5, border: `1px solid color-mix(in oklab, var(--t-accent) 40%, transparent)`, background: V.accentTint, cursor: 'pointer' }}>Edit</button>
             </div>
           : <div style={{ display: 'flex', gap: 5 }}>
               <button onClick={handleReset}   style={{ fontFamily: V.mono, fontSize: 10, color: V.fg4, padding: '2px 8px', borderRadius: 5, border: `1px solid ${V.border}`, background: 'transparent', cursor: 'pointer' }}>Reset</button>
@@ -1261,7 +1261,7 @@ function MatrixTab() {
       } />
 
       {editing && (
-        <div style={{ marginBottom: 10, padding: '6px 8px', borderRadius: 5, background: V.accentTint, border: `1px solid rgba(168,85,247,.3)` /* fixme: token */, fontFamily: V.mono, fontSize: 9.5, color: V.accentBr }}>
+        <div style={{ marginBottom: 10, padding: '6px 8px', borderRadius: 5, background: V.accentTint, border: `1px solid color-mix(in oklab, var(--t-accent) 30%, transparent)`, fontFamily: V.mono, fontSize: 9.5, color: V.accentBr }}>
           ✎ click a cell to cycle: · → ✓ → ⊞ → ✗ → ·
         </div>
       )}
@@ -1290,7 +1290,7 @@ function MatrixTab() {
                       onClick={() => cycleCell(from, to)}
                       style={{
                         padding: '4px 5px', textAlign: 'center', borderRadius: 4,
-                        border: `1px solid ${wasEdited ? 'rgba(168,85,247,.5)' /* fixme: token */ : V.border}`,
+                        border: `1px solid ${wasEdited ? 'color-mix(in oklab, var(--t-accent) 50%, transparent)' : V.border}`,
                         background: rule === 'allow' ? 'var(--status-ok-tint)' : rule === 'deny' ? 'var(--status-reject-tint)' : rule === 'gate' ? V.accentTint : rule === 'self' ? V.elev2 : V.elev1,
                         color: rule === 'allow' ? V.ok : rule === 'deny' ? V.reject : rule === 'gate' ? V.accentBr : V.fg5,
                         fontSize: 9.5,
@@ -1660,7 +1660,7 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
 
         <button onClick={() => setSaveOpen(true)}
           title={zh ? '保存为我的模板' : 'Save as my template'}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: V.mono, fontSize: 11, color: dirty ? V.accentBr : V.fg3, background: dirty ? V.accentTint : 'transparent', border: `1px solid ${dirty ? 'rgba(168,85,247,.4)' /* fixme: token */ : V.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: V.mono, fontSize: 11, color: dirty ? V.accentBr : V.fg3, background: dirty ? V.accentTint : 'transparent', border: `1px solid ${dirty ? 'color-mix(in oklab, var(--t-accent) 40%, transparent)' : V.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           {zh ? '保存' : 'Save'}
         </button>
@@ -1778,7 +1778,7 @@ function EditorTopBar({ onBack, lang, onToggleLang, templateTitle }: { onBack: (
               </div>
             )}
             {skillSavedId && !skillSaveError && (
-              <div style={{ fontFamily: V.mono, fontSize: 11, color: V.accentBr, background: V.accentTint, padding: '6px 10px', borderRadius: 5, border: '1px solid rgba(168,85,247,.35)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ fontFamily: V.mono, fontSize: 11, color: V.accentBr, background: V.accentTint, padding: '6px 10px', borderRadius: 5, border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <span>✓ {zh ? `已保存：${skillSavedId}` : `Saved: ${skillSavedId}`}</span>
                 <button
                   type="button"

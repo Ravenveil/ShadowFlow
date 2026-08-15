@@ -79,7 +79,8 @@ function ProfileCard({ profile, onDelete, onRunSmoke, runState }: ProfileCardPro
 
   return (
     <div
-      className="rounded-[12px] border border-sf-border bg-sf-surface p-4 flex flex-col gap-3"
+      // UI5.0: ui40-panel — hover 微浮起（clawsgo 卡片观感）
+      className="ui40-panel rounded-[12px] border border-sf-border bg-sf-surface p-4 flex flex-col gap-3"
       data-testid={`profile-card-${profile.profile_id}`}
     >
       {/* Header */}
@@ -99,7 +100,8 @@ function ProfileCard({ profile, onDelete, onRunSmoke, runState }: ProfileCardPro
             type="button"
             onClick={() => onRunSmoke(profile)}
             disabled={isRunning}
-            className="rounded-[8px] bg-sf-accent px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40 hover:enabled:opacity-90"
+            // UI5.0: 主操作按钮近黑（day）/ accent（night）
+            className="sf-btn-primary rounded-[8px] px-3 py-1.5 text-[12px] font-semibold disabled:opacity-40 hover:enabled:opacity-90"
             data-testid={`smoke-run-btn-${profile.profile_id}`}
           >
             {isRunning ? '运行中…' : '▶ Smoke Run'}
@@ -417,7 +419,8 @@ function CreateProfileForm({ onCreated, onCancel }: CreateFormProps) {
         <button
           type="submit"
           disabled={saving}
-          className="rounded-[8px] bg-sf-accent px-4 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40 hover:enabled:opacity-90"
+          // UI5.0: 主操作按钮近黑（day）/ accent（night）
+          className="sf-btn-primary rounded-[8px] px-4 py-1.5 text-[13px] font-semibold disabled:opacity-40 hover:enabled:opacity-90"
           data-testid="create-profile-submit"
         >
           {saving ? '保存中…' : '创建'}
@@ -574,12 +577,12 @@ export default function EvalsPage() {
 
   return (
     <div className="min-h-screen bg-sf-bg text-sf-fg1">
-      {/* Page header */}
+      {/* Page header — UI5.0: 标题 17px / 描述 13px 次级色 */}
       <div className="border-b border-sf-border px-6 py-4">
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sf-accent-bright">
           Evals · 评测中心
         </p>
-        <h1 className="mt-1 text-[22px] font-bold tracking-[-0.02em]">EvalProfile 管理</h1>
+        <h1 className="mt-1 text-[17px] font-bold tracking-[-0.01em]">EvalProfile 管理</h1>
         <p className="mt-1 text-[13px] text-sf-fg3">
           定义最低评测标准，在发布前一键执行 Smoke Eval
         </p>
@@ -595,7 +598,8 @@ export default function EvalsPage() {
             <button
               type="button"
               onClick={() => setShowCreateForm(true)}
-              className="rounded-[8px] bg-sf-accent px-4 py-2 text-[13px] font-semibold text-white hover:opacity-90"
+              // UI5.0: 主操作按钮近黑（day）/ accent（night）— sf-btn-primary 全局令牌
+              className="sf-btn-primary rounded-[8px] px-4 py-2 text-[13px] font-semibold hover:opacity-90"
               data-testid="create-profile-btn"
             >
               + 新建 EvalProfile

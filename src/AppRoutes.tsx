@@ -1,118 +1,27 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary } from './core/components/common/ErrorBoundary';
-import { HfLayout } from './components/hifi/HfLayout';
-// AppLayout is intentionally NOT imported here — application routes are
-// wrapped by HfLayout (Hi-Fi v2). The file `components/layout/AppLayout.tsx`
-// is kept on disk for fallback / unused.
 
-const LandingPage = lazy(() => import('./pages/LandingPage'));
-const InboxPage = lazy(() => import('./pages/InboxPage'));
-// 2026-05-20 — EditorPage / TemplatesPage / CatalogPage 模块不再被 lazy import
-// （路由全部 redirect 到 /start 或 /agents）。源文件保留，等后续 audit 决定彻删时机。
-// 2026-08-11 — ImportPage 同样下架（0G 组件停用），lazy import 一并注释，
-// 避免未使用变量报错；恢复时取消注释并把 /import 路由改回 <ImportPage />。
-// const ImportPage = lazy(() => import('./pages/ImportPage'));
-const AboutPage = lazy(() => import('./pages/AboutPage'));
-const ChatHomePage = lazy(() => import('./pages/ChatHomePage'));
-const AgentDMPage = lazy(() => import('./pages/AgentDMPage'));
-// BuilderPage is intentionally NOT routed — /builder is hard-redirected to
-// /start below. The page file is kept on disk for now but no longer
-// reachable through navigation.
+// ===== Neo (clawsgo-style chat-first 重构, 2026-08-15) =====
+// 旧页面体系（Landing/Start/ChatHome/Agents/Teams/Runs/...）全部下架，
+// 主体验 = NeoApp 三栏（左导航 · 中聊天+任务执行 · 右 Agent 的主机）。
+// /settings 保留（BYOK/外观等真实配置，NeoRail 齿轮进入）。
+// /loop-engine 保留（循环引擎看板，PDCA 迭代/收敛可视化，NeoRail 图标进入）。
+// 旧路由一律 redirect 到 /，源文件删除见 .workbuddy/overview-neo.md。
+const NeoApp = lazy(() => import('./neo/NeoApp'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
-const EvalsPage = lazy(() => import('./pages/EvalsPage'));
-const AgentPage = lazy(() => import('./pages/AgentPage'));
-const TeamsIndexPage = lazy(() =>
-  import('./pages/TeamPage').then((m) => ({ default: m.TeamsIndexPage }))
-);
-const TeamDetailPage = lazy(() =>
-  import('./pages/TeamPage').then((m) => ({ default: m.TeamDetailPage }))
-);
-const StartPage = lazy(() => import('./pages/StartPage'));
-const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
-const RunSessionPage = lazy(() => import('./pages/RunSessionPage'));
-const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
-const MemoryPage = lazy(() => import('./pages/MemoryPage'));
-const CalendarPage = lazy(() => import('./pages/CalendarPage'));
-const RunsListPage = lazy(() =>
-  import('./pages/RunsPage').then((m) => ({ default: m.RunsListPage }))
-);
-const RunDetailPage = lazy(() =>
-  import('./pages/RunsPage').then((m) => ({ default: m.RunDetailPage }))
-);
 const LoopEnginePage = lazy(() => import('./pages/LoopEnginePage'));
-
-// Kept for future use — other routes may still need placeholder slots
-export function RoutePlaceholder({ title }: { title: string }) {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-shadowflow-bg px-6 text-white/90">
-      <div className="w-full max-w-xl rounded-sf border border-shadowflow-border bg-shadowflow-surface p-8 text-center">
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/45">
-          Placeholder Route
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.03em]">{title}</h1>
-        <p className="mt-3 text-sm text-white/60">
-          这个入口会在后续 Story 中接入真实内容，当前先保留稳定路由槽位。
-        </p>
-      </div>
-    </div>
-  );
-}
 
 export function AppRoutes() {
   return (
     <ErrorBoundary>
-      <Suspense fallback={<div style={{ background: 'var(--t-bg, #0D1117)', height: '100vh' }} />}>
+      <Suspense fallback={<div style={{ background: 'var(--t-bg, #FFFFFF)', height: '100vh' }} />}>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
-          {/* ── Marketing / standalone pages (no workspace bar) ── */}
-          <Route path="/about" element={<AboutPage />} />
-
-          {/* ── Application pages (Hi-Fi v2 chrome: HfLayout sidebar shell) ── */}
-          <Route element={<HfLayout />}>
-            <Route path="/inbox" element={<InboxPage />} />
-            {/* 2026-05-20 — /templates /editor /catalog 全部下架。Skill Pack
-                时代统一从 /start 进入；旧 TemplatesPage / EditorPage / CatalogPage
-                组件文件保留只是不再可达，避免误删的副作用（UI 保护规则）。 */}
-            <Route path="/templates" element={<Navigate to="/start" replace />} />
-            {/* 2026-08-11 — /import 下架（0G CID 轨迹导入组件停用，组件先不用）。
-                ImportPage 源文件保留，与上方 /templates /editor 同一处理惯例。 */}
-            <Route path="/import" element={<Navigate to="/start" replace />} />
-            <Route path="/editor" element={<Navigate to="/start" replace />} />
-            <Route path="/editor/:templateId" element={<Navigate to="/start" replace />} />
-            <Route path="/runs" element={<RunsListPage />} />
-            <Route path="/runs/:runId" element={<RunDetailPage />} />
-            <Route path="/loop-engine" element={<LoopEnginePage />} />
-            {/* /chat without a groupId renders ChatPage's empty state, so the
-                sidebar can safely link here when no real groups exist yet.
-                Replaces hardcoded `/chat/default` which POSTed to a fake
-                group_id and 404'd the message persistence. */}
-            <Route path="/chat" element={<ChatHomePage />} />
-            <Route path="/chat/:groupId" element={<ChatHomePage />} />
-            <Route path="/agent-dm/:agentId" element={<AgentDMPage />} />
-            <Route path="/builder" element={<Navigate to="/start" replace />} />
-            <Route path="/builder/*" element={<Navigate to="/start" replace />} />
-            <Route path="/catalog" element={<Navigate to="/agents" replace />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/knowledge" element={<KnowledgePage />} />
-            <Route path="/evals" element={<EvalsPage />} />
-            <Route path="/agents" element={<AgentPage />} />
-            <Route path="/teams" element={<TeamsIndexPage />} />
-            <Route path="/teams/:teamId" element={<TeamDetailPage />} />
-            <Route path="/start" element={<StartPage />} />
-            <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/memory" element={<MemoryPage />} />
-            <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/run-session/:sessionId" element={<RunSessionPage />} />
-            {/* 2026-05-20 — no-arg /run-session 旧入口下架（用户截图反馈）。
-                新入口在 /start，那里是带 Skill Pack + Goal 输入的精修页。
-                历史 RunSessionPage 的「启动新 Run Session」UI 被这条 redirect 隐藏，
-                源文件仍保留只是不再可达，避免误删的副作用（UI 保护规则）。 */}
-            <Route path="/run-session" element={<Navigate to="/start" replace />} />
-          </Route>
-          {/* ── FB-HiFi Workspace (standalone chrome, no AppLayout) ── */}
-          <Route path="/workspace" element={<WorkspacePage />} />
+          <Route path="/" element={<NeoApp />} />
+          <Route path="/neo" element={<NeoApp />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/loop-engine" element={<LoopEnginePage />} />
+          <Route path="/loop-engine/:runId" element={<LoopEnginePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

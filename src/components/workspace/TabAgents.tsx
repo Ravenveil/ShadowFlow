@@ -25,7 +25,8 @@ const DOT_CLASS: Record<AgentStatus, string> = {
 };
 
 /* ── 后端 AgentRecord → UI 显示模型 mapper ──────────────────────────── */
-const COLOR_PALETTE = ['var(--t-accent)', '#F59E0B', '#22D3EE', '#EF4444', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899'];
+// UI5.0 — 紫 #8B5CF6 收敛为中性岩灰 #64748B（clawsgo DNA：accent 只留蓝，其余中性化）。
+const COLOR_PALETTE = ['var(--t-accent)', '#F59E0B', '#22D3EE', '#EF4444', '#10B981', '#3B82F6', '#64748B', '#EC4899'];
 
 function hashColor(s: string): string {
   let h = 0;

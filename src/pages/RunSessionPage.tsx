@@ -318,12 +318,13 @@ function BlueprintNode({ node, style, colorIdx = 0, selected = false, onClick }:
           ? '1px dashed var(--t-border)'
           : `1px solid ${isCoord ? 'var(--t-accent)' : avatarColor.border}`,
         borderLeft: isCoord && !selected ? '2px solid var(--t-accent)' : undefined,
+        // UI5.0 — 去紫化：glow 统一收敛到 clawsgo 蓝 rgba(20,71,230)
         boxShadow: selected
-          ? '0 0 0 3px var(--t-accent-tint), 0 0 28px -4px rgba(124,58,237,.5)'
+          ? '0 0 0 3px var(--t-accent-tint), 0 0 28px -4px rgba(20,71,230,.35)'
           : isPending
           ? 'none'
           : isCoord
-          ? '0 0 0 1px var(--t-accent-tint), 0 0 28px -6px rgba(124,58,237,.3)'
+          ? '0 0 0 1px var(--t-accent-tint), 0 0 28px -6px rgba(20,71,230,.22)'
           : 'none',
         opacity: isPending ? 0.45 : 1,
         transition: 'opacity 0.3s ease, box-shadow 0.3s ease, border 0.15s ease',
@@ -632,7 +633,7 @@ function BlueprintCanvas({ session, zoom, onZoomChange, selectedNodeId, onSelect
           pointerEvents: 'none',
         }}
       />
-      {/* Purple center glow */}
+      {/* Accent center glow (UI5.0 — 去紫化，沿用 --t-accent-tint) */}
       <div
         style={{
           position: 'absolute',
@@ -1119,7 +1120,7 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
                         <div className="ag-name">{nd.title}</div>
                         <div className="ag-id">
                           agent_id: <span style={{ color: 'var(--t-fg)' }}>{nd.id}</span>
-                          {' · '}status: <span style={{ color: isReady ? '#10B981' : '#A855F7' }}>{nd.status}</span>
+                          {' · '}status: <span style={{ color: isReady ? '#10B981' : 'var(--t-accent)' /* UI5.0 去紫化 */ }}>{nd.status}</span>
                         </div>
                       </div>
                       <span className="rs-tag" style={{ flexShrink: 0 }}>
@@ -1271,7 +1272,7 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
                     <span style={{ fontSize: 11, opacity: .38, flexShrink: 0, color: 'var(--t-fg-4)' }}>›</span>
                     <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
                     <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--t-fg-4)' }}>{row.meta}</span>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, marginLeft: 4, background: row.status === 'run' ? '#A855F7' : '#10B981', boxShadow: row.status === 'run' ? '0 0 5px rgba(168,85,247,.5)' : 'none' }} />
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, marginLeft: 4, background: row.status === 'run' ? 'var(--t-accent)' : '#10B981', boxShadow: row.status === 'run' ? '0 0 5px rgba(20,71,230,.4)' : 'none' } /* UI5.0 去紫化 */} />
                   </button>
                 ))}
               </div>
@@ -1291,7 +1292,7 @@ function RightPanel({ session, onOpenEditor, zoom, onZoomChange, selectedNodeId,
                       <span style={{ fontSize: 11, opacity: .38, flexShrink: 0, color: 'var(--t-fg-4)' }}>›</span>
                       <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.title || node.id}</span>
                       <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--t-fg-4)' }}>{node.sub || 'idle'}</span>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, marginLeft: 4, background: node.status === 'ready' ? '#10B981' : node.status === 'building' ? '#A855F7' : 'var(--t-fg-5)' }} />
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, marginLeft: 4, background: node.status === 'ready' ? '#10B981' : node.status === 'building' ? 'var(--t-accent)' : 'var(--t-fg-5)' } /* UI5.0 去紫化 */} />
                     </button>
                   ))}
                 </div>
@@ -1856,8 +1857,9 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             width: 28,
             height: 28,
             borderRadius: 8,
-            background: 'linear-gradient(135deg, rgba(168,85,247,.28), rgba(168,85,247,.08))',
-            border: '1px solid rgba(168,85,247,.35)',
+            // UI5.0 — 去紫化：rs-mark 底色/描边收敛到 accent 蓝（color-mix 双主题自适应）
+            background: 'linear-gradient(135deg, color-mix(in oklab, var(--t-accent) 22%, transparent), color-mix(in oklab, var(--t-accent) 6%, transparent))',
+            border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -2342,7 +2344,8 @@ function LeftPanel({ sessionId, goal, skillUrl, session, collapsed, onCollapse }
             key={i}
             style={{
               background: 'var(--t-accent-tint)',
-              border: '1px solid rgba(168,85,247,.2)',
+              // UI5.0 — 去紫化：rationale 卡描边改 accent 蓝（color-mix 双主题自适应）
+              border: '1px solid color-mix(in oklab, var(--t-accent) 25%, transparent)',
               borderRadius: 8,
               padding: '10px 12px',
             }}
@@ -2811,7 +2814,8 @@ const KEYFRAMES = `
   position: absolute;
   inset: -1px;
   border-radius: 9px;
-  background: conic-gradient(from 0deg, rgba(168,85,247,.7) 0%, transparent 30%);
+  /* UI5.0 — 去紫化：旋转描边收敛到 accent 蓝 */
+  background: conic-gradient(from 0deg, color-mix(in oklab, var(--t-accent) 70%, transparent) 0%, transparent 30%);
   z-index: -1;
   animation: rs-spin 2.4s linear infinite;
 }
@@ -2856,7 +2860,8 @@ const KEYFRAMES = `
   color: var(--t-fg-4);
 }
 .rs-view-tab-on .rs-view-tab-ct {
-  background: rgba(168,85,247,.18);
+  /* UI5.0 — 去紫化 */
+  background: var(--t-accent-tint);
   color: var(--t-accent-bright);
 }
 /* status tag */
@@ -2866,8 +2871,9 @@ const KEYFRAMES = `
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(168,85,247,.14);
-  border: 1px solid rgba(168,85,247,.4);
+  /* UI5.0 — 去紫化：tag 底色/描边收敛到 accent 蓝 */
+  background: var(--t-accent-tint);
+  border: 1px solid color-mix(in oklab, var(--t-accent) 40%, transparent);
   font-family: var(--font-mono, monospace);
   font-size: 10px;
   font-weight: 600;
@@ -2903,11 +2909,12 @@ const KEYFRAMES = `
 /* ── Agent profile card ─────────────────────────────── */
 .ag-card {
   padding: 18px 20px;
-  border: 1px solid rgba(168,85,247,.45);
-  border-left: 2px solid #A855F7;
+  /* UI5.0 — 去紫化：卡框/光晕收敛到 accent 蓝 */
+  border: 1px solid color-mix(in oklab, var(--t-accent) 45%, transparent);
+  border-left: 2px solid var(--t-accent);
   border-radius: 16px;
   background: var(--t-panel);
-  box-shadow: 0 0 0 1px rgba(168,85,247,.15), 0 0 28px -8px rgba(168,85,247,.25);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--t-accent) 15%, transparent), 0 0 28px -8px color-mix(in oklab, var(--t-accent) 25%, transparent);
   display: grid;
   grid-template-columns: 64px 1fr auto;
   gap: 16px;
@@ -2917,9 +2924,10 @@ const KEYFRAMES = `
 .ag-avatar {
   width: 64px; height: 64px;
   border-radius: 14px;
-  background: rgba(168,85,247,.18);
-  border: 1px solid rgba(168,85,247,.5);
-  color: #EDE9FE;
+  /* UI5.0 — 去紫化 */
+  background: var(--t-accent-tint);
+  border: 1px solid color-mix(in oklab, var(--t-accent) 50%, transparent);
+  color: var(--t-accent-bright);
   display: flex; align-items: center; justify-content: center;
   font-size: 26px; font-weight: 800; letter-spacing: -.02em;
   position: relative; flex-shrink: 0;
@@ -2928,7 +2936,8 @@ const KEYFRAMES = `
   content: ""; position: absolute; inset: -4px;
   border-radius: 18px;
   border: 1px solid transparent;
-  border-top-color: rgba(196,181,253,.55);
+  /* UI5.0 — 去紫化 */
+  border-top-color: color-mix(in oklab, var(--t-accent) 55%, transparent);
   animation: rs-spin 2s linear infinite;
 }
 .ag-name { font-size: 18px; font-weight: 700; letter-spacing: -.01em; color: var(--t-fg); }
@@ -2950,7 +2959,8 @@ const KEYFRAMES = `
   display: flex; flex-direction: column; gap: 7px;
 }
 .ag-tl-pending { border-style: dashed; opacity: .6; }
-.ag-tl-run { border-color: rgba(168,85,247,.45); background: rgba(168,85,247,.04); }
+/* UI5.0 — 去紫化：running 格收敛到 accent 蓝 */
+.ag-tl-run { border-color: color-mix(in oklab, var(--t-accent) 45%, transparent); background: color-mix(in oklab, var(--t-accent) 4%, transparent); }
 .ag-tl-done { border-color: rgba(16,185,129,.35); }
 .ag-tl-step {
   font-family: var(--font-mono, monospace);
@@ -2964,7 +2974,8 @@ const KEYFRAMES = `
   font-size: 8.5px;
 }
 .ag-tl-done .ag-tl-num { background: #10B981; border-color: #10B981; color: #0A0A0A; }
-.ag-tl-run .ag-tl-num { background: rgba(168,85,247,.18); border-color: #A855F7; color: #C4B5FD; }
+/* UI5.0 — 去紫化 */
+.ag-tl-run .ag-tl-num { background: var(--t-accent-tint); border-color: var(--t-accent); color: var(--t-accent-bright); }
 .ag-tl-title { font-size: 12px; font-weight: 600; color: var(--t-fg); letter-spacing: -.005em; }
 .ag-tl-body { font-family: var(--font-mono, monospace); font-size: 10px; line-height: 1.55; color: var(--t-fg-3); flex: 1; }
 
@@ -3215,7 +3226,8 @@ function PreparationPanel() {
             style={{
               width: '100%',
               minHeight: 96,
-              background: 'rgba(255,255,255,0.05)',
+              // UI5.0 — day 主题下 rgba(255,255,255,.05) 等于隐形，改令牌化内凹底色
+              background: 'var(--t-panel-2)',
               border: '1px solid var(--t-border)',
               borderRadius: 12,
               padding: 12,
@@ -3252,12 +3264,12 @@ function PreparationPanel() {
             disabled={!canSubmit}
             onClick={handleStart}
             data-testid="run-session-start"
+            // UI5.0 — 去紫化：主按钮复用 .sf-btn-primary（day 近黑 / night accent 蓝，与全站主按钮一致）
+            className="sf-btn-primary"
             style={{
               padding: '8px 18px',
               borderRadius: 8,
-              border: '1px solid rgba(124,58,237,0.45)',
-              background: canSubmit ? '#7c3aed' : 'rgba(124,58,237,0.25)',
-              color: '#fff',
+              border: 'none',
               fontSize: 13,
               fontWeight: 600,
               cursor: canSubmit ? 'pointer' : 'not-allowed',

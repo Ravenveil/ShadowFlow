@@ -270,7 +270,7 @@ function SfReactFlowBaseInner({
         variant={BackgroundVariant.Dots}
         gap={24}
         size={1}
-        color="var(--t-border-subtle, rgba(255,255,255,.06))"
+        color="var(--t-border-subtle, color-mix(in oklab, var(--t-fg) 6%, transparent))"
       />
       {showControls && (
         <Controls

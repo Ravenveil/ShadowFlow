@@ -43,10 +43,12 @@ function formatRelative(iso: string): string {
   }
 }
 
+// ===== UI5.0 =====(2026-08-14)· role 配色从硬编码暗色 rgba 收敛到主题 token
+//（user=accent tint / assistant=ok tint / system=中性），day/night 自适应。
 const ROLE_COLORS: Record<MessageRecord['role'], { bg: string; fg: string; label: string }> = {
-  user: { bg: 'rgba(99,102,241,0.18)', fg: '#a5b4fc', label: 'user' },
-  assistant: { bg: 'rgba(34,197,94,0.18)', fg: '#86efac', label: 'assistant' },
-  system: { bg: 'rgba(148,163,184,0.18)', fg: '#cbd5e1', label: 'system' },
+  user: { bg: 'var(--t-accent-tint)', fg: 'var(--t-accent)', label: 'user' },
+  assistant: { bg: 'color-mix(in oklab, var(--t-ok) 14%, transparent)', fg: 'var(--t-ok)', label: 'assistant' },
+  system: { bg: 'var(--t-panel-2)', fg: 'var(--t-fg-3)', label: 'system' },
 };
 
 const PANEL_STYLE: React.CSSProperties = {
@@ -185,7 +187,7 @@ export function ConversationHistoryPanel({ projectId }: ConversationHistoryPanel
         {loading ? (
           <div style={EMPTY_STYLE}>{t('common.loading')}</div>
         ) : error ? (
-          <div style={{ ...EMPTY_STYLE, color: '#fca5a5' }} role="alert">
+          <div style={{ ...EMPTY_STYLE, color: 'var(--t-err, #dc2626)' }} role="alert">
             {error}
           </div>
         ) : conversations.length === 0 ? (
@@ -206,8 +208,10 @@ export function ConversationHistoryPanel({ projectId }: ConversationHistoryPanel
                 style={{
                   marginBottom: 6,
                   border: '1px solid var(--t-border)',
-                  borderRadius: 8,
+                  // ===== UI5.0 ===== · 10px 刻度 + 展开态软影
+                  borderRadius: 10,
                   background: isOpen ? 'var(--t-panel)' : 'transparent',
+                  boxShadow: isOpen ? '0 1px 2px rgba(15,23,42,0.04)' : 'none',
                 }}
               >
                 <div
@@ -290,10 +294,12 @@ export function ConversationHistoryPanel({ projectId }: ConversationHistoryPanel
                               display: 'flex',
                               flexDirection: 'column',
                               gap: 4,
-                              padding: '6px 8px',
-                              borderRadius: 6,
-                              background: 'rgba(255,255,255,0.02)',
+                              padding: '8px 10px',
+                              // ===== UI5.0 ===== · 暗色 rgba 底 → 主题面板 + 10px 刻度 + 软影
+                              borderRadius: 10,
+                              background: 'var(--t-panel)',
                               border: '1px solid var(--t-border)',
+                              boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
                             }}
                             data-testid={`message-${m.message_id}`}
                           >
@@ -336,8 +342,9 @@ export function ConversationHistoryPanel({ projectId }: ConversationHistoryPanel
                                     gap: 3,
                                     padding: '1px 6px',
                                     borderRadius: 4,
-                                    background: 'rgba(124,58,237,0.18)',
-                                    color: '#c4b5fd',
+                                    // ===== UI5.0 ===== · 紫色 run chip 收敛到 accent 蓝
+                                    background: 'var(--t-accent-tint)',
+                                    color: 'var(--t-accent)',
                                     fontFamily: 'var(--font-mono)',
                                     fontSize: 9,
                                     textDecoration: 'none',

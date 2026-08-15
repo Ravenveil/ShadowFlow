@@ -50,7 +50,7 @@ export function MessageItem({
     minute: '2-digit',
   });
 
-  const avatarBg = isGroup ? 'bg-shadowflow-accent' : 'bg-[#A78BFA]';
+  const avatarBg = isGroup ? 'bg-shadowflow-accent' : 'bg-[var(--t-accent)]';
 
   return (
     <button
@@ -58,8 +58,8 @@ export function MessageItem({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       className={[
-        'flex w-full items-start gap-3 rounded-sf bg-shadowflow-surface px-3 py-3 text-left transition hover:bg-white/5',
-        selected ? 'border-l-[3px] border-shadowflow-accent bg-white/5' : '',
+        'flex w-full items-start gap-3 rounded-sf bg-shadowflow-surface px-3 py-3 text-left transition hover:bg-[var(--t-hover)]',
+        selected ? 'border-l-[3px] border-shadowflow-accent bg-[var(--t-hover)]' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -78,9 +78,9 @@ export function MessageItem({
           <HighlightText
             text={name}
             keyword={highlightKeyword}
-            className="truncate text-sm font-semibold text-white"
+            className="truncate text-sm font-semibold text-[var(--t-fg)]"
           />
-          <span className="ml-2 shrink-0 font-mono text-[10px] text-white/50">
+          <span className="ml-2 shrink-0 font-mono text-[10px] text-[var(--t-fg-4)]">
             {timestamp}
           </span>
         </div>
@@ -89,7 +89,7 @@ export function MessageItem({
           <HighlightText
             text={preview}
             keyword={highlightKeyword}
-            className="truncate text-xs text-white/50"
+            className="truncate text-xs text-[var(--t-fg-4)]"
           />
         </div>
       </div>

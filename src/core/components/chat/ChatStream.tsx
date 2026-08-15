@@ -15,7 +15,7 @@
  *   - toolCall  — mono dashed inset block (`> tool.name("args")`) prepended inside
  *                 an agent bubble.
  *
- * Streaming bubbles append a blinking purple ▍ caret. All colors flow through the
+ * Streaming bubbles append a blinking accent ▍ caret. All colors flow through the
  * `--t-*` token system so theme switches stay automatic.
  *
  * NOTE: This file is consumed by ChatPage and AgentDMPage in the next refactor

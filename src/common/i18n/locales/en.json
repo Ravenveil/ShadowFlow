@@ -50,6 +50,7 @@
   "shell.navLoopEngine": "Loop Engine",
   "shell.navCalendar": "Calendar",
   "shell.navSettings": "Settings",
+  "shell.loopEngine": "Loop Engine",
   "shell.settings": "Settings",
   "shell.settingsShortcut": "⌘,",
   "shell.networkTitle": "Service connected · last ping {latency}ms · click to view status",
@@ -632,5 +633,12 @@
   "runSession.rosterTruncated": "Deterministic roster rule \"{{reason}}\" applied: kept {{kept}} agent(s), dropped {{dropped}} ({{names}})",
   "runSession.viewTeam": "View Team →",
   "runSession.gotoChat": "Chat →",
-  "runSession.gotoAgents": "Agents →"
+  "runSession.gotoAgents": "Agents →",
+  "neo.newTask": "New task",
+  "neo.sessions": "Sessions",
+  "neo.collapseRail": "Collapse sidebar",
+  "neo.expandRail": "Expand sidebar",
+  "neo.collapseHost": "Collapse host panel",
+  "neo.expandHost": "Expand host panel",
+  "neo.anonymous": "Guest"
 }

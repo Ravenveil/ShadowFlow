@@ -96,16 +96,16 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-shadowflow-border px-6 py-4">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--t-fg-4)]">
               Step {step} / 2
             </p>
-            <h2 className="text-base font-semibold text-white/90">
+            <h2 className="text-base font-semibold text-[var(--t-fg-2)]">
               {step === 1 ? '新建 Team' : '选择成员'}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-white/40 hover:text-white/80"
+            className="text-[var(--t-fg-4)] hover:text-[var(--t-fg-2)]"
             aria-label="关闭"
             data-testid="modal-close-btn"
           >
@@ -118,7 +118,7 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
           {step === 1 ? (
             <div className="flex flex-col gap-4">
               <div>
-                <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.12em] text-white/50">
+                <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--t-fg-4)]">
                   Team 名字 *
                 </label>
                 <input
@@ -128,7 +128,7 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
                   placeholder="例：论文实验室"
                   maxLength={120}
                   data-testid="field-team-name"
-                  className="w-full rounded border border-shadowflow-border bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
+                  className="w-full rounded border border-shadowflow-border bg-[var(--t-hover)] px-3 py-2 text-sm text-[var(--t-fg-2)] placeholder:text-[var(--t-fg-5)] focus:border-[var(--t-border-2)] focus:outline-none"
                 />
                 {nameError && (
                   <p className="mt-1 text-[11px] text-red-400" data-testid="name-error">
@@ -137,7 +137,7 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
                 )}
               </div>
               <div>
-                <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.12em] text-white/50">
+                <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--t-fg-4)]">
                   描述（可选）
                 </label>
                 <textarea
@@ -147,19 +147,19 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
                   rows={3}
                   maxLength={500}
                   data-testid="field-team-description"
-                  className="w-full resize-none rounded border border-shadowflow-border bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
+                  className="w-full resize-none rounded border border-shadowflow-border bg-[var(--t-hover)] px-3 py-2 text-sm text-[var(--t-fg-2)] placeholder:text-[var(--t-fg-5)] focus:border-[var(--t-border-2)] focus:outline-none"
                 />
               </div>
             </div>
           ) : (
             <div>
-              <p className="mb-3 text-[12px] text-white/50">
+              <p className="mb-3 text-[12px] text-[var(--t-fg-4)]">
                 选择至少 1 个 Agent 加入 Team。已选：{selectedIds.size}
               </p>
               {agentsLoading ? (
-                <p className="py-6 text-center text-[12px] text-white/40">加载中…</p>
+                <p className="py-6 text-center text-[12px] text-[var(--t-fg-4)]">加载中…</p>
               ) : agents.length === 0 ? (
-                <p className="py-6 text-center text-[12px] text-white/40" data-testid="no-agents-hint">
+                <p className="py-6 text-center text-[12px] text-[var(--t-fg-4)]" data-testid="no-agents-hint">
                   暂无 Agent — 请先在 Agent 页创建。
                 </p>
               ) : (
@@ -175,8 +175,8 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
                         className={[
                           'flex cursor-pointer items-center gap-3 rounded border px-3 py-2.5 transition-colors',
                           selected
-                            ? 'border-white/30 bg-white/10'
-                            : 'border-shadowflow-border bg-transparent hover:bg-white/[0.03]',
+                            ? 'border-[var(--t-border-2)] bg-[var(--t-active)]'
+                            : 'border-shadowflow-border bg-transparent hover:bg-[var(--t-panel-2)]',
                         ].join(' ')}
                         data-testid={`agent-option-${agent.agent_id}`}
                       >
@@ -187,8 +187,8 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
                           className="h-3.5 w-3.5 accent-white"
                         />
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-[13px] font-medium text-white/90">{agent.name}</span>
-                          <span className="text-[11px] text-white/40">
+                          <span className="text-[13px] font-medium text-[var(--t-fg-2)]">{agent.name}</span>
+                          <span className="text-[11px] text-[var(--t-fg-4)]">
                             {agent.soul.length > 50 ? agent.soul.slice(0, 50) + '…' : agent.soul}
                           </span>
                         </div>
@@ -200,8 +200,8 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
 
               {/* Selected members sidebar hint */}
               {selectedIds.size > 0 && (
-                <div className="mt-3 rounded border border-white/10 bg-white/[0.03] px-3 py-2">
-                  <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white/40">
+                <div className="mt-3 rounded border border-[var(--t-border)] bg-[var(--t-panel-2)] px-3 py-2">
+                  <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--t-fg-4)]">
                     已选成员
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -210,7 +210,7 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
                       .map((a) => (
                         <span
                           key={a.agent_id}
-                          className="rounded bg-white/10 px-2 py-0.5 text-[11px] text-white/70"
+                          className="rounded bg-[var(--t-active)] px-2 py-0.5 text-[11px] text-[var(--t-fg-3)]"
                         >
                           {a.name}
                         </span>
@@ -233,7 +233,7 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
           {step === 2 && (
             <button
               onClick={() => setStep(1)}
-              className="rounded border border-shadowflow-border px-4 py-1.5 text-sm text-white/60 hover:text-white/90"
+              className="rounded border border-shadowflow-border px-4 py-1.5 text-sm text-[var(--t-fg-3)] hover:text-[var(--t-fg-2)]"
               data-testid="btn-back"
             >
               返回
@@ -241,7 +241,7 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
           )}
           <button
             onClick={onClose}
-            className="rounded border border-shadowflow-border px-4 py-1.5 text-sm text-white/60 hover:text-white/90"
+            className="rounded border border-shadowflow-border px-4 py-1.5 text-sm text-[var(--t-fg-3)] hover:text-[var(--t-fg-2)]"
             data-testid="btn-cancel"
           >
             取消
@@ -251,7 +251,7 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
               onClick={handleNextStep}
               disabled={!name.trim()}
               data-testid="btn-next-step"
-              className="rounded border border-white/20 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-[var(--t-border-2)] bg-[var(--t-hover)] px-4 py-1.5 text-sm font-medium text-[var(--t-fg-2)] transition-colors hover:bg-[var(--t-active)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               下一步 →
             </button>
@@ -260,7 +260,7 @@ export function CreateTeamModal({ onCreated, onClose }: CreateTeamModalProps) {
               onClick={handleSubmit}
               disabled={selectedIds.size === 0 || submitting}
               data-testid="btn-create-team"
-              className="rounded border border-white/20 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded border border-[var(--t-border-2)] bg-[var(--t-hover)] px-4 py-1.5 text-sm font-medium text-[var(--t-fg-2)] transition-colors hover:bg-[var(--t-active)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {submitting ? '创建中…' : '创建 Team'}
             </button>

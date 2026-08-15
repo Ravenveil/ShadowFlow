@@ -61,27 +61,27 @@ export function AgentCard({ agent, onDelete, onExport }: AgentCardProps) {
       tabIndex={0}
       onClick={handleCardClick}
       onKeyDown={(e) => e.key === 'Enter' && handleCardClick()}
-      className="group relative flex cursor-pointer flex-col gap-2 rounded-sf border border-shadowflow-border bg-shadowflow-surface p-4 transition-colors hover:border-white/20 hover:bg-white/[0.03]"
+      className="group relative flex cursor-pointer flex-col gap-2 rounded-sf border border-shadowflow-border bg-shadowflow-surface p-4 transition-colors hover:border-[var(--t-border-2)] hover:bg-[var(--t-panel-2)]"
       data-testid={`agent-card-${agent.agent_id}`}
     >
       {/* Source badge */}
       {isFromCatalog && (
-        <span className="absolute right-3 top-3 rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-mono text-indigo-300">
+        <span className="absolute right-3 top-3 rounded bg-[var(--t-accent-tint)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--t-accent)]">
           catalog
         </span>
       )}
 
       {/* Name row */}
       <div className="flex items-center gap-2 pr-8">
-        <span className="h-7 w-7 shrink-0 rounded-full bg-white/10 text-center text-sm leading-7">
+        <span className="h-7 w-7 shrink-0 rounded-full bg-[var(--t-active)] text-center text-sm leading-7">
           {agent.name.charAt(0).toUpperCase()}
         </span>
-        <span className="truncate text-sm font-medium text-white/90">{agent.name}</span>
+        <span className="truncate text-sm font-medium text-[var(--t-fg-2)]">{agent.name}</span>
         <StatusBadge status={agent.status} />
       </div>
 
       {/* Soul preview */}
-      <p className="text-xs leading-relaxed text-white/50">{soulPreview}</p>
+      <p className="text-xs leading-relaxed text-[var(--t-fg-4)]">{soulPreview}</p>
 
       {/* Tool chips */}
       {tools.length > 0 && (
@@ -89,7 +89,7 @@ export function AgentCard({ agent, onDelete, onExport }: AgentCardProps) {
           {tools.map((t) => (
             <span
               key={t}
-              className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white/40"
+              className="rounded bg-[var(--t-hover)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--t-fg-4)]"
             >
               {TOOL_LABELS[t] ?? t}
             </span>
@@ -102,7 +102,7 @@ export function AgentCard({ agent, onDelete, onExport }: AgentCardProps) {
         {onExport && (
           <button
             onClick={handleExport}
-            className="rounded px-1.5 py-0.5 text-[11px] text-white/30 hover:bg-white/10 hover:text-white/60"
+            className="rounded px-1.5 py-0.5 text-[11px] text-[var(--t-fg-5)] hover:bg-[var(--t-active)] hover:text-[var(--t-fg-3)]"
             aria-label="导出蓝图"
           >
             导出
@@ -111,7 +111,7 @@ export function AgentCard({ agent, onDelete, onExport }: AgentCardProps) {
         {onDelete && (
           <button
             onClick={handleDelete}
-            className="rounded px-1.5 py-0.5 text-[11px] text-white/30 hover:bg-red-500/20 hover:text-red-400"
+            className="rounded px-1.5 py-0.5 text-[11px] text-[var(--t-fg-5)] hover:bg-red-500/20 hover:text-red-400"
             aria-label="删除 Agent"
           >
             删除

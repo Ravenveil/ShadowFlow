@@ -3,7 +3,7 @@
  *
  * Three theme cards each rendering a miniature window preview in its own
  * literal colors, so users can see the exact palette before switching.
- * Selected card gets a purple accent ring + badge.
+ * Selected card gets an accent ring + badge.
  */
 import React, { useState } from 'react';
 import { useTheme, type ThemePref } from '../../../components/hifi/useTheme';
@@ -54,8 +54,8 @@ const P: { dark: Palette; light: Palette; paper: Palette } = {
     fg: '#FAFAFA',
     fg2: '#A1A1AA',
     fg4: '#52525B',
-    accent: '#A855F7',
-    accentTint: 'rgba(168,85,247,.18)',
+    accent: '#1447E6',
+    accentTint: 'rgba(20,71,230,.18)',
   },
   light: {
     bg: '#F7F7F5',       // soft warm off-white (matches [data-theme="day"] --t-bg)
@@ -65,8 +65,8 @@ const P: { dark: Palette; light: Palette; paper: Palette } = {
     fg: '#0A0A0A',
     fg2: '#52525B',
     fg4: '#A1A1AA',
-    accent: '#7C3AED',
-    accentTint: 'rgba(168,85,247,.08)',
+    accent: '#1447E6',
+    accentTint: 'rgba(20,71,230,.08)',
   },
   paper: {
     bg: '#EBE8DE',       // warm cream/sepia "paper on paper" aesthetic
@@ -76,13 +76,13 @@ const P: { dark: Palette; light: Palette; paper: Palette } = {
     fg: '#141413',
     fg2: '#4D4C48',
     fg4: '#87867F',
-    accent: '#7C3AED',
-    accentTint: 'rgba(124,58,237,.10)',
+    accent: '#1447E6',
+    accentTint: 'rgba(20,71,230,.10)',
   },
 } as const;
 
-const ACCENT = '#A855F7';
-const ACCENT_TINT = 'rgba(168,85,247,0.13)';
+const ACCENT = '#1447E6';
+const ACCENT_TINT = 'rgba(20,71,230,0.13)';
 
 // ---------------------------------------------------------------------------
 // Mini window preview — simulates a tiny ShadowFlow shell
@@ -385,7 +385,7 @@ export function AppearanceSection() {
   // receives an empty/invalid value. Reading getComputedStyle at mount-time
   // is fine for one-shot init; user edits drive subsequent state.
   const [accent, setAccent] = useState(
-    () => loadCustomTheme().accent ?? getEffectiveColor('accent', '#A855F7'),
+    () => loadCustomTheme().accent ?? getEffectiveColor('accent', '#1447E6'),
   );
   const [bg, setBg] = useState(
     () => loadCustomTheme().bg ?? getEffectiveColor('bg', '#0A0A0A'),
@@ -409,7 +409,7 @@ export function AppearanceSection() {
     resetCustomTheme();
     // Re-seed from now-effective defaults so the swatches reflect the active
     // mode's tokens (not the previously customized values).
-    setAccent(getEffectiveColor('accent', '#A855F7'));
+    setAccent(getEffectiveColor('accent', '#1447E6'));
     setBg(getEffectiveColor('bg', '#0A0A0A'));
     setFg(getEffectiveColor('fg', '#FFFFFF'));
   }

@@ -18,6 +18,11 @@ vi.mock('../api/teams', () => ({
   deleteTeam: vi.fn(),
   createTeam: vi.fn(),
   patchTeam: vi.fn(),
+  // UI5.0 补 mock：TeamDetailPage 现行实现会调 workflow/policy 两个端点，
+  // 旧 mock 缺这两个导出导致 3 个 detail 用例历史遗留失败。
+  getTeamWorkflow: vi.fn().mockResolvedValue({ nodes: [], edges: [] }),
+  getTeamPolicy: vi.fn().mockResolvedValue({}),
+  putTeamPolicy: vi.fn().mockResolvedValue({}),
   TeamApiError: class TeamApiError extends Error {
     constructor(public status: number, public detail: unknown) { super(); }
   },

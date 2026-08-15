@@ -317,7 +317,7 @@
 .toolSpin {
   align-self: center;
   flex-shrink: 0;
-  color: var(--accent, #7c5cff);
+  color: var(--accent, #1447E6); /* UI5.0 fallback 去紫化 */
   animation: tl-tool-spin 0.8s linear infinite;
 }
 .toolOk {

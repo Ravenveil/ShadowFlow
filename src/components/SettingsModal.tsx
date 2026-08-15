@@ -145,10 +145,11 @@ export function SettingsModal({ onClose, initialTab = 'apikeys' }: Props) {
 
   return (
     <div
-      className="rs-settings-backdrop"
+      className="rs-settings-backdrop sf-modal-backdrop"
       onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="rs-settings-panel" role="dialog" aria-label="Settings">
+      {/* UI5.0：面板入场补 sf-modal-card（淡入+缩放），与全局 modal 动效统一 */}
+      <div className="rs-settings-panel sf-modal-card" role="dialog" aria-label="Settings">
 
         {/* Header */}
         <div style={{
@@ -161,6 +162,7 @@ export function SettingsModal({ onClose, initialTab = 'apikeys' }: Props) {
           <button
             type="button"
             onClick={onClose}
+            className="ui50-ibtn"
             style={{
               width: 28, height: 28,
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',

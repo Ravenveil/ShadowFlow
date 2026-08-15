@@ -43,7 +43,7 @@ interface AgentMention {
 
 // Default agents for @-mention (derived from mock conv data)
 const DEFAULT_AGENTS: AgentMention[] = [
-  { glyph: '读', name: '读读',  color: '#A855F7' },
+  { glyph: '读', name: '读读',  color: '#1447E6' },
   { glyph: '批', name: '阿批',  color: '#F59E0B' },
   { glyph: '查', name: '查查',  color: '#22D3EE' },
   { glyph: '写', name: '小写',  color: '#EF4444' },

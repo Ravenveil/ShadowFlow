@@ -26,10 +26,10 @@ interface AgentTaskNodeData {
 
 function AgentTaskNode({ data }: { data: AgentTaskNodeData }) {
   return (
-    <div className="rounded border border-white/20 bg-shadowflow-surface px-3 py-2 min-w-[120px] text-[12px]">
+    <div className="rounded border border-[var(--t-border-2)] bg-shadowflow-surface px-3 py-2 min-w-[120px] text-[12px]">
       <Handle type="target" position={Position.Left} />
-      <p className="font-medium text-white/90">{data.name}</p>
-      <p className="mt-0.5 text-white/40 text-[10px] truncate max-w-[160px]">
+      <p className="font-medium text-[var(--t-fg-2)]">{data.name}</p>
+      <p className="mt-0.5 text-[var(--t-fg-4)] text-[10px] truncate max-w-[160px]">
         {data.soul.length > 35 ? data.soul.slice(0, 35) + '…' : data.soul}
       </p>
       <Handle type="source" position={Position.Right} />
@@ -67,7 +67,7 @@ function TeamWorkflowEditorInner({ team, agents }: TeamWorkflowEditorProps) {
             ...connection,
             data: { mode: 'direct' },
             label: '直接传递',
-            style: { stroke: 'rgba(255,255,255,0.4)' },
+            style: { stroke: 'color-mix(in oklab, var(--t-fg) 40%, transparent)' },
           },
           eds,
         ),
@@ -88,7 +88,7 @@ function TeamWorkflowEditorInner({ team, agents }: TeamWorkflowEditorProps) {
                 data: { mode: nextMode },
                 label: nextMode === 'direct' ? '直接传递' : '需审批',
                 style: {
-                  stroke: nextMode === 'approve' ? '#F59E0B' : 'rgba(255,255,255,0.4)',
+                  stroke: nextMode === 'approve' ? '#F59E0B' : 'color-mix(in oklab, var(--t-fg) 40%, transparent)',
                 },
               }
             : e,
@@ -153,12 +153,12 @@ function TeamWorkflowEditorInner({ team, agents }: TeamWorkflowEditorProps) {
   return (
     <div className="flex h-[480px] gap-3">
       {/* Agent 面板 */}
-      <div className="flex w-[160px] shrink-0 flex-col gap-2 overflow-y-auto rounded border border-shadowflow-border bg-white/[0.02] p-2">
-        <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/40">
+      <div className="flex w-[160px] shrink-0 flex-col gap-2 overflow-y-auto rounded border border-shadowflow-border bg-[var(--t-panel-2)] p-2">
+        <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--t-fg-4)]">
           拖入画布
         </p>
         {agents.length === 0 ? (
-          <p className="text-[11px] text-white/30">无成员</p>
+          <p className="text-[11px] text-[var(--t-fg-5)]">无成员</p>
         ) : (
           agents.map((agent) => (
             <div
@@ -171,8 +171,8 @@ function TeamWorkflowEditorInner({ team, agents }: TeamWorkflowEditorProps) {
               className="cursor-grab rounded border border-shadowflow-border bg-shadowflow-surface px-2 py-1.5 text-[11px] active:cursor-grabbing"
               data-testid={`agent-panel-${agent.agent_id}`}
             >
-              <p className="font-medium text-white/80">{agent.name}</p>
-              <p className="truncate text-[10px] text-white/40">
+              <p className="font-medium text-[var(--t-fg-2)]">{agent.name}</p>
+              <p className="truncate text-[10px] text-[var(--t-fg-4)]">
                 {agent.soul.length > 30 ? agent.soul.slice(0, 30) + '…' : agent.soul}
               </p>
             </div>
@@ -200,7 +200,7 @@ function TeamWorkflowEditorInner({ team, agents }: TeamWorkflowEditorProps) {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="absolute bottom-3 right-3 z-10 rounded border border-white/20 bg-white/5 px-3 py-1.5 text-[12px] text-white/70 hover:bg-white/10 disabled:opacity-40"
+          className="absolute bottom-3 right-3 z-10 rounded border border-[var(--t-border-2)] bg-[var(--t-hover)] px-3 py-1.5 text-[12px] text-[var(--t-fg-3)] hover:bg-[var(--t-active)] disabled:opacity-40"
           data-testid="btn-save-workflow"
         >
           {saving ? '保存中…' : saved ? '已保存 ✓' : '保存工作流'}

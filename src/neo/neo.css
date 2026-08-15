@@ -1,0 +1,400 @@
+/* ===== Neo (clawsgo-style) ===== */
+/* Neo 三栏壳 + 左栏导航全部样式。颜色只用 var(--t-*) / color-mix，
+   day/night 双主题安全；圆角走 UI5.0 的 10/14 体系，动效走 dur-* 与 ease-* 两族令牌。 */
+
+.neo-app {
+  display: flex;
+  width: 100%;
+  /* 定高全屏壳：用项目约定的 zoom-shell 公式抵消 html zoom（index.css），
+     否则 --app-zoom>1 时内容超物理视口、栏不拉伸。 */
+  height: calc(100vh / var(--app-zoom, 1));
+  min-height: 0;
+  overflow: hidden;
+  /* clawsgo 单色策略：Neo 作用域内 accent = 近黑（竞品主按钮/选中态/下划线
+     全是近黑 + 中性灰，彩色只留状态点绿/红）。发送钮、tab 指示条、卡片图标
+     tint 等全部走 var(--t-accent*)，一处覆盖整体换色。night 保持蓝（下块）。 */
+  --t-accent: #1C1C1E;
+  --t-accent-bright: #000000;
+  --t-accent-tint: #F4F4F5;
+  --t-accent-ink: #FAFAFA;
+  /* 层次对齐竞品：内容区纯白（--t-panel），左右栏浅灰（--t-bg） */
+  background: var(--t-panel);
+  color: var(--t-fg);
+}
+[data-theme="night"] .neo-app {
+  --t-accent: #3B82F6;
+  --t-accent-bright: #93C5FD;
+  --t-accent-tint: rgba(59, 130, 246, 0.14);
+  --t-accent-ink: #0A0A0A;
+}
+
+.neo-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  transition: flex-basis 240ms var(--ease-spring);
+}
+/* 运行态：聊天列收窄 ~440px，把舞台让给「Agent 的主机」（clawsgo a_008） */
+.neo-main--run {
+  flex: 0 1 440px;
+  min-width: 360px;
+}
+
+/* ── 通用图标按钮（折叠/展开/设置齿轮共用） ─────────────────────────────── */
+.neo-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t-fg-3);
+  cursor: pointer;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-icon-btn:hover {
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+}
+
+/* ── 左栏 NeoRail ───────────────────────────────────────────────────────── */
+.neo-rail {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 240px;
+  padding: 12px 10px 10px;
+  gap: 6px;
+  /* 栏体浅灰（--t-bg），内容区纯白——竞品的层次靠底色对比，不靠边框 */
+  background: var(--t-bg);
+  border-right: 1px solid var(--t-border);
+  overflow: hidden;
+  /* clawsgo 折叠手感：240ms spring 宽度过渡 */
+  transition: width 240ms var(--ease-spring), padding 240ms var(--ease-spring);
+}
+.neo-rail.collapsed {
+  width: 56px;
+  padding: 10px 6px 8px;
+  align-items: center;
+  gap: 4px;
+}
+
+.neo-rail-head {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.neo-rail-head-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.neo-rail-toggle-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+/* 「+ 新任务」灰胶囊（WorkBuddy 形态：浅灰底黑字，不用重黑块压场） */
+.neo-rail .neo-newtask {
+  width: 100%;
+  height: 34px;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid var(--t-border);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--t-panel);
+  color: var(--t-fg);
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.neo-rail .neo-newtask:hover {
+  background: var(--t-panel-3);
+  border-color: var(--t-border-2);
+}
+.neo-newtask-icon {
+  border: 1px solid var(--t-border);
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+}
+
+/* 搜索框 */
+.neo-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.neo-search-icon {
+  position: absolute;
+  left: 9px;
+  color: var(--t-fg-5);
+  pointer-events: none;
+}
+.neo-search input {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px 0 28px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  /* 灰栏上用白底输入框，层次才不糊 */
+  background: var(--t-panel);
+  color: var(--t-fg);
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
+}
+.neo-search input::placeholder {
+  color: var(--t-fg-5);
+}
+.neo-search input:focus {
+  border-color: var(--t-border-2);
+  background: var(--t-panel);
+}
+/* 去掉 webkit 原生 search 清空钮，保持 clawsgo 极简 */
+.neo-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* 列表区 */
+.neo-rail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 2px;
+}
+.neo-section-label {
+  flex-shrink: 0;
+  padding: 10px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t-fg-5);
+}
+.neo-list-note {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--t-fg-4);
+}
+
+/* 加载骨架行（对齐列表行高，避免 ready 后跳动） */
+.neo-rail-skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 4px;
+}
+.neo-rail-skeleton {
+  height: 34px;
+  border-radius: 10px;
+}
+
+/* 加载失败：文案 + 重试按钮（后端未启动的诚实空态，不 mock） */
+.neo-list-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.neo-list-error-text {
+  flex: 1;
+  min-width: 0;
+}
+.neo-list-retry {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-panel-2);
+  color: var(--t-fg-3);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-list-retry:hover {
+  background: var(--t-panel-3);
+  color: var(--t-fg);
+}
+
+/* 列表行：选中 = 灰底黑字圆角胶囊（clawsgo/WorkBuddy 无彩色指示条） */
+.neo-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--t-fg-3);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-row:hover {
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+}
+.neo-row.on {
+  background: var(--t-panel-3);
+  color: var(--t-fg);
+  font-weight: 600;
+}
+.neo-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-row-meta {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-5);
+}
+.neo-row-badge {
+  flex-shrink: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--t-accent);
+  color: var(--t-accent-ink, var(--t-panel));
+}
+
+/* Team 行图标 tile */
+.neo-team-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  background: var(--t-panel-3);
+  color: var(--t-fg-3);
+}
+.neo-row.on .neo-team-tile {
+  color: var(--t-fg);
+}
+
+/* 折叠态图标列表 */
+.neo-rail-icons {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding-top: 4px;
+}
+.neo-rail-spacer {
+  flex: 1;
+}
+.neo-avatar-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+.neo-avatar-btn.on {
+  background: var(--t-panel-3);
+  box-shadow: inset 0 0 0 1px var(--t-border-2);
+}
+
+/* 底部用户卡 */
+.neo-usercard {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 6px 2px;
+  border-top: 1px solid var(--t-border);
+}
+.neo-user-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--t-panel-3);
+  color: var(--t-fg);
+  font-size: 12px;
+  font-weight: 700;
+}
+.neo-user-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.neo-user-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-user-type {
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+}
+
+/* ── 右栏 NeoHost（折叠按钮在右缘；运行态弹性占满，clawsgo a_008） ──────── */
+.neo-host {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  min-height: 0;
+  border-left: 1px solid var(--t-border);
+  background: var(--t-bg);
+}
+.neo-host.collapsed {
+  flex: 0 0 auto;
+}
+.neo-host-panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.neo-host.collapsed .neo-host-panel {
+  flex: 0 0 0;
+  width: 0;
+}
+.neo-host-toggle {
+  margin: 10px 6px 0 4px;
+}

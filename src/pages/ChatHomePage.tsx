@@ -2,6 +2,8 @@ import { useSearchParams } from 'react-router-dom';
 import ChatPage from './ChatPage';
 import { PersonalChatView } from './chat-home/PersonalChatView';
 import { WorkbenchView } from './chat-home/WorkbenchView';
+/* UI5.0(2026-08-14)— 聊天主页设计层(append-only,层叠在 index.css 之后) */
+import './chat-home/ui50-chat-home.css';
 
 /**
  * ChatHomePage — /chat 入口。

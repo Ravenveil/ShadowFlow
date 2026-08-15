@@ -165,11 +165,13 @@ export function CritiqueResult({ result }: Props): React.ReactElement | null {
               />
             );
           })}
-          {/* Filled polygon */}
+          {/* Filled polygon — UI5.0 去紫化：填充/描边改用 accent 令牌（day 蓝 / night 蓝，双主题自适应） */}
           <polygon
             points={polyPoints}
-            fill="rgba(124,58,237,.25)"
-            stroke="rgba(124,58,237,.85)"
+            fill="var(--t-accent, #1447E6)"
+            fillOpacity={0.16}
+            stroke="var(--t-accent, #1447E6)"
+            strokeOpacity={0.85}
             strokeWidth={1.4}
             data-testid="critique-radar-polygon"
           />

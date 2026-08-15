@@ -75,13 +75,13 @@ function AgentBlueprintNode({ data, selected }: NodeProps<AgentBlueprintNodeData
         padding: '10px 12px',
         borderRadius: 12,
         background: 'var(--t-bg-elev-2, #141414)',
-        border: `1px solid ${isCoordinator ? 'var(--t-accent, #A855F7)' : v.ring}`,
+        border: `1px solid ${isCoordinator ? 'var(--t-accent, #1447E6)' : v.ring}`,
         boxShadow: selected
-          ? '0 0 0 2px var(--t-accent, #A855F7), 0 6px 18px -8px rgba(0,0,0,.4)'
+          ? '0 0 0 2px var(--t-accent, #1447E6), 0 6px 18px -8px rgba(0,0,0,.4)'
           : isBuilding
             ? '0 0 0 1.5px var(--status-run, #60a5fa), 0 0 22px -4px rgba(96,165,250,.7)'
             : isCoordinator
-              ? 'var(--glow-accent, 0 0 0 3px rgba(168,85,247,.15))'
+              ? 'var(--glow-accent, 0 0 0 3px rgba(20,71,230,.15))' /* UI5.0 fallback 去紫化 */
               : '0 2px 12px -4px rgba(0,0,0,.3)',
         color: 'var(--t-fg-1, #FAFAFA)',
         opacity: node.status === 'pending' ? 0.6 : 1,
@@ -100,10 +100,10 @@ function AgentBlueprintNode({ data, selected }: NodeProps<AgentBlueprintNodeData
             height: 32,
             borderRadius: 9,
             background: isCoordinator
-              ? 'var(--t-accent-tint, rgba(168,85,247,.12))'
+              ? 'var(--t-accent-tint, rgba(20,71,230,.12))' /* UI5.0 fallback 去紫化 */
               : 'var(--t-bg-elev-3, #1c1c1c)',
-            border: `1px solid ${isCoordinator ? 'var(--t-accent, #A855F7)' : 'var(--t-border, #27272A)'}`,
-            color: isCoordinator ? 'var(--t-accent, #A855F7)' : v.dot,
+            border: `1px solid ${isCoordinator ? 'var(--t-accent, #1447E6)' : 'var(--t-border, #27272A)'}`,
+            color: isCoordinator ? 'var(--t-accent, #1447E6)' : v.dot,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -255,7 +255,7 @@ function BlueprintCanvasInner({ nodes, edges }: BlueprintCanvasProps) {
         type: 'default',
         animated: active,
         style: {
-          stroke: active ? 'var(--t-accent, #A855F7)' : 'var(--t-fg-4, #737373)',
+          stroke: active ? 'var(--t-accent, #1447E6)' : 'var(--t-fg-4, #737373)',
           strokeWidth: active ? 1.75 : 1.25,
           strokeOpacity: active ? 0.95 : 0.45,
           strokeDasharray: active ? undefined : '4 4',

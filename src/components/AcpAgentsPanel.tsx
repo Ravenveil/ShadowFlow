@@ -173,7 +173,7 @@ export function AcpAgentsPanel() {
                         gap: 4,
                         fontFamily: 'var(--font-mono, monospace)',
                         fontSize: 11,
-                        color: it.type === 'acp' ? '#a855f7' : '#22c55e',
+                        color: it.type === 'acp' ? 'var(--t-accent, #1447E6)' /* UI5.0 去紫化 */ : 'var(--t-ok, #22c55e)',
                       }}
                     >
                       {it.type === 'acp' ? <Cloud size={12} /> : <Terminal size={12} />}

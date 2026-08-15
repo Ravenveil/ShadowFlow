@@ -783,7 +783,7 @@ export function ReviewApprovalWizard({ onComplete, onCancel }: ReviewApprovalWiz
                     width: 12,
                     height: 12,
                     borderRadius: '50%',
-                    border: '2px solid rgba(255,255,255,.3)',
+                    border: '2px solid color-mix(in oklab, var(--t-fg) 30%, transparent)',
                     borderTopColor: 'white',
                     display: 'inline-block',
                     animation: 'sf-spin 0.6s linear infinite',

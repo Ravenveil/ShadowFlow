@@ -145,8 +145,9 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         maxHeight: 320,
         background: 'var(--t-panel)',
         border: '1px solid var(--t-border)',
-        borderRadius: 10,
-        boxShadow: '0 14px 36px -10px rgba(0,0,0,.35)',
+        // ===== UI5.0 =====(2026-08-14)· 弹层 12px 刻度 + clawsgo 浮起软影
+        borderRadius: 12,
+        boxShadow: '0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -8px rgba(15,23,42,0.16)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -209,11 +210,10 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                   alignItems: 'center',
                   gap: 10,
                   padding: '7px 10px',
-                  borderRadius: 7,
+                  // ===== UI5.0 ===== · 行 8px 刻度；选中=tint 底去描边（clawsgo 克制）
+                  borderRadius: 8,
                   background: active ? 'var(--t-accent-tint)' : 'transparent',
-                  border: active
-                    ? '1px solid var(--t-accent)'
-                    : '1px solid transparent',
+                  border: '1px solid transparent',
                   cursor: 'pointer',
                   minHeight: 32,
                 }}

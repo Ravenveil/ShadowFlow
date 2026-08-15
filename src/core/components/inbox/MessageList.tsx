@@ -92,9 +92,9 @@ export function MessageList() {
         data-testid="message-list"
         className="flex w-full flex-1 flex-col overflow-y-auto bg-shadowflow-surface"
       >
-        <div className="sticky top-0 z-10 border-b border-white/5 bg-shadowflow-surface/95 px-5 pb-4 pt-5 backdrop-blur">
+        <div className="sticky top-0 z-10 border-b border-[var(--t-border)] bg-shadowflow-surface/95 px-5 pb-4 pt-5 backdrop-blur">
           <div className="flex h-14 items-center justify-between">
-            <h2 className="text-2xl font-semibold tracking-[-0.03em] text-white">{t('inbox.title')}</h2>
+            <h2 className="text-2xl font-semibold tracking-[-0.03em] text-[var(--t-fg)]">{t('inbox.title')}</h2>
             <button
               type="button"
               data-testid="new-group-btn"
@@ -114,14 +114,14 @@ export function MessageList() {
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
                 placeholder={t('inbox.searchPlaceholder')}
-                className="h-10 w-full rounded-sf border border-white/10 bg-white/5 px-3 pr-10 text-sm text-white/90 outline-none placeholder:text-white/35"
+                className="h-10 w-full rounded-sf border border-[var(--t-border)] bg-[var(--t-hover)] px-3 pr-10 text-sm text-[var(--t-fg-2)] outline-none placeholder:text-[var(--t-fg-5)]"
               />
               {searchText && (
                 <button
                   type="button"
                   aria-label={t('inbox.clearSearch')}
                   onClick={() => setSearchText('')}
-                  className="absolute inset-y-0 right-3 text-sm text-white/45 transition hover:text-white/80"
+                  className="absolute inset-y-0 right-3 text-sm text-[var(--t-fg-4)] transition hover:text-[var(--t-fg-2)]"
                 >
                   ×
                 </button>
@@ -134,7 +134,7 @@ export function MessageList() {
               const active = tab.key === activeTab;
               const count = tabCounts[tab.key];
               const countClass =
-                tab.key === 'unread' && count > 0 ? 'text-shadowflow-warn' : 'text-white/40';
+                tab.key === 'unread' && count > 0 ? 'text-shadowflow-warn' : 'text-[var(--t-fg-4)]';
               return (
                 <button
                   key={tab.key}
@@ -144,8 +144,8 @@ export function MessageList() {
                   onClick={() => setActiveTab(tab.key)}
                   className={`border-b-2 pb-2 text-sm transition ${
                     active
-                      ? 'border-shadowflow-accent text-white'
-                      : 'border-transparent text-white/45 hover:text-white/70'
+                      ? 'border-shadowflow-accent text-[var(--t-fg)]'
+                      : 'border-transparent text-[var(--t-fg-4)] hover:text-[var(--t-fg-3)]'
                   }`}
                 >
                   {tab.label}
@@ -157,7 +157,7 @@ export function MessageList() {
         </div>
 
         <div className="px-5 py-5">
-          {loading && <p className="text-center text-sm text-white/35">{t('inbox.loading')}</p>}
+          {loading && <p className="text-center text-sm text-[var(--t-fg-5)]">{t('inbox.loading')}</p>}
 
           {!loading && !hasResults && (
             <InboxEmptyState
@@ -168,7 +168,7 @@ export function MessageList() {
 
           {showTeamSection && (
             <section>
-              <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-white/50">
+              <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--t-fg-4)]">
                 {t('inbox.teamRunsSection')}
               </p>
               <div className="mt-2 flex flex-col gap-1">
@@ -187,7 +187,7 @@ export function MessageList() {
 
           {showDMSection && (
             <section className={showTeamSection ? 'mt-8' : ''}>
-              <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-white/50">
+              <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--t-fg-4)]">
                 {t('inbox.agentDMsSection')}
               </p>
               <div className="mt-2 flex flex-col gap-1">

@@ -8,6 +8,8 @@ import {
   type Schedule,
   type ScheduleRun,
 } from '../../api/schedules';
+// UI5.0 — 页面批A共享视觉层（抽屉滑入动效/近黑主按钮）
+import ui5 from '../../pages/ui5-pages.module.css';
 
 interface ScheduleDrawerProps {
   groupId: string;
@@ -62,7 +64,7 @@ export { describeSchedule };
 
 function SkeletonRow() {
   return (
-    <div style={{ height: 18, borderRadius: 4, background: 'var(--t-panel-2, #1c1c1c)', marginBottom: 6 }} />
+    <div className="sf-skeleton" style={{ height: 18, borderRadius: 6, background: 'var(--t-panel-2, #1c1c1c)', marginBottom: 6 }} />
   );
 }
 
@@ -188,10 +190,12 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
     position: 'fixed',
     top: 0,
     right: 0,
-    width: 320,
+    width: 340,
     height: 'calc(100vh / var(--app-zoom, 1))',
     background: 'var(--t-panel, #141414)',
     borderLeft: '1px solid var(--t-border, rgba(255,255,255,0.08))',
+    // UI5.0: 浮起软阴影（clawsgo 浮层刻度）
+    boxShadow: '-16px 0 40px -24px rgba(15, 23, 42, 0.25)',
     display: 'flex',
     flexDirection: 'column',
     zIndex: 500,
@@ -208,11 +212,12 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
       aria-label="Schedule Drawer"
       tabIndex={-1}
       style={drawerStyle}
+      className={ui5.drawerIn}
       onKeyDown={handleKeyDown}
     >
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid var(--t-border, rgba(255,255,255,0.08))' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: 'var(--t-fg, #fff)' }}>
+      {/* Header — UI5.0: sans 标题（clawsgo 面板式），mono 留给表单标签 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px', borderBottom: '1px solid var(--t-border, rgba(255,255,255,0.08))' }}>
+        <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--t-fg, #fff)' }}>
           Schedule
         </span>
         <button
@@ -262,9 +267,9 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
                     ...mono,
                     background: 'var(--t-panel-2, #1c1c1c)',
                     border: '1px solid var(--t-border, rgba(255,255,255,0.1))',
-                    borderRadius: 5,
+                    borderRadius: 8,
                     color: 'var(--t-fg, #fff)',
-                    padding: '5px 8px',
+                    padding: '7px 10px',
                     width: '100%',
                   }}
                 />
@@ -278,7 +283,7 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
                 <select
                   value={weekday}
                   onChange={(e) => setWeekday(e.target.value)}
-                  style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--t-fg, #fff)', padding: '5px 8px', width: '100%' }}
+                  style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 8, color: 'var(--t-fg, #fff)', padding: '7px 10px', width: '100%' }}
                 >
                   {DAYS.map((d, i) => (
                     <option key={d} value={DAY_CRON[i]}>{d}</option>
@@ -296,7 +301,7 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
                   value={custom}
                   onChange={(e) => setCustom(e.target.value)}
                   placeholder="0 8 * * 1-5"
-                  style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--t-fg, #fff)', padding: '5px 8px', width: '100%' }}
+                  style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 8, color: 'var(--t-fg, #fff)', padding: '7px 10px', width: '100%' }}
                 />
               </div>
             )}
@@ -309,7 +314,7 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
                 value={agentId}
                 onChange={(e) => setAgentId(e.target.value)}
                 placeholder="agent-id"
-                style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--t-fg, #fff)', padding: '5px 8px', width: '100%' }}
+                style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 8, color: 'var(--t-fg, #fff)', padding: '7px 10px', width: '100%' }}
               />
             </div>
 
@@ -327,7 +332,7 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
                 placeholder="每日早报摘要…"
                 rows={3}
                 maxLength={500}
-                style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 5, color: 'var(--t-fg, #fff)', padding: '5px 8px', width: '100%', resize: 'vertical' }}
+                style={{ ...mono, background: 'var(--t-panel-2, #1c1c1c)', border: '1px solid var(--t-border, rgba(255,255,255,0.1))', borderRadius: 8, color: 'var(--t-fg, #fff)', padding: '7px 10px', width: '100%', resize: 'vertical' }}
               />
             </div>
 
@@ -348,29 +353,33 @@ export function ScheduleDrawer({ groupId, onClose }: ScheduleDrawerProps) {
               </div>
             )}
 
-            {/* Save / Delete buttons */}
+            {/* Save / Delete buttons — UI5.0: 近黑主按钮(day)，saved 态闪绿 */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               <button
                 onClick={handleSave}
                 disabled={saveState === 'saving'}
-                style={{
-                  flex: 1,
-                  ...mono,
-                  background: saveState === 'saved' ? '#065F46' : 'var(--t-accent, #6366F1)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 6,
-                  padding: '7px 12px',
-                  cursor: saveState === 'saving' ? 'wait' : 'pointer',
-                  opacity: saveState === 'saving' ? 0.7 : 1,
-                }}
+                className={saveState === 'saved' ? undefined : ui5.priBtn}
+                style={
+                  saveState === 'saved'
+                    ? {
+                        flex: 1,
+                        ...mono,
+                        background: 'var(--t-ok)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 8,
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                      }
+                    : { flex: 1, padding: '8px 12px' }
+                }
               >
                 {saveState === 'saving' ? '保存中…' : saveState === 'saved' ? 'Saved ✓' : '保存'}
               </button>
               {existing && (
                 <button
                   onClick={handleDelete}
-                  style={{ ...mono, background: 'none', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--t-err)', borderRadius: 6, padding: '7px 10px', cursor: 'pointer' }}
+                  style={{ ...mono, background: 'none', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--t-err)', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}
                 >
                   删除
                 </button>

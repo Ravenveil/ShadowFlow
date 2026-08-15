@@ -278,7 +278,7 @@ export function CatalogImportSidebar({
                       aria-label={`引入 ${app.name}`}
                     >
                       {isImporting ? (
-                        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[var(--t-border-2)] border-t-white" />
                       ) : '引入'}
                     </button>
                   </div>

@@ -22,7 +22,7 @@ description: ""
 user_role: Founder
 default_ops_room_name: ""
 brief_board_alias: BriefBoard
-theme_color: "#A78BFA"
+theme_color: "#1447E6"
 agent_roster: []
 group_roster: []
 parameters:

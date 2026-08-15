@@ -15,7 +15,7 @@ const categoryConfig: Record<
   { icon: string; color: string; bgColor: string }
 > = {
   input: { icon: '📥', color: 'blue', bgColor: 'bg-blue-50 border-blue-200' },
-  planning: { icon: '📋', color: 'purple', bgColor: 'bg-purple-50 border-purple-200' },
+  planning: { icon: '📋', color: 'blue', bgColor: 'bg-blue-50 border-blue-200' },
   execution: { icon: '⚡', color: 'orange', bgColor: 'bg-orange-50 border-orange-200' },
   review: { icon: '✅', color: 'green', bgColor: 'bg-green-50 border-green-200' },
   decision: { icon: '🔀', color: 'yellow', bgColor: 'bg-yellow-50 border-yellow-200' },

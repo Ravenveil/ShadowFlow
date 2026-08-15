@@ -401,3 +401,15 @@
   padding: 1px 5px; border: 1px solid var(--t-border); border-radius: 4px;
   color: var(--t-fg-3); background: var(--t-panel);
 }
+
+/* ===== UI5.0 =====
+ * clawsgo DNA：day 主题 accent 由紫（#7C3AED 系）收敛为蓝 #1447E6。
+ * append-only 覆写块——CSS 自定义属性在使用时才解析，此处重定义即覆盖上文
+ * day 值；回退时整块删除即可。night 主题（:root / index.css）不受影响。
+ */
+.fb-theme-day {
+  --skin-accent:     #1447E6;
+  --accent-bright:   #1D4ED8;
+  --bg-accent-tint:  rgba(20, 71, 230, .08);
+  --glow-accent:     0 0 0 1px var(--t-accent), 0 0 24px -8px rgba(20, 71, 230, .28);
+}

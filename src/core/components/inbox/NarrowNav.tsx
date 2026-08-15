@@ -71,13 +71,13 @@ export function NarrowNav() {
   return (
     <nav
       data-testid="narrow-nav"
-      className="flex w-[72px] flex-none flex-col items-center gap-6 overflow-y-auto border-r border-white/5 bg-shadowflow-surface px-3 py-4"
+      className="flex w-[72px] flex-none flex-col items-center gap-6 overflow-y-auto border-r border-[var(--t-border)] bg-shadowflow-surface px-3 py-4"
     >
       <div className="flex flex-col items-center gap-2">
         <div className="flex h-12 w-12 items-center justify-center rounded-sf bg-shadowflow-accent text-lg font-semibold text-slate-950">
           S
         </div>
-        <span className="font-mono text-[10px] text-white/50">Solo ▾</span>
+        <span className="font-mono text-[10px] text-[var(--t-fg-4)]">Solo ▾</span>
       </div>
 
       <div className="flex flex-col items-center gap-3">
@@ -95,7 +95,7 @@ export function NarrowNav() {
               className={`flex h-10 w-10 items-center justify-center rounded-sf border transition ${
                 active
                   ? 'border-shadowflow-accent/30 bg-shadowflow-accent/10 text-shadowflow-accent'
-                  : 'border-transparent text-white/50 hover:border-white/10 hover:bg-white/5 hover:text-white/80'
+                  : 'border-transparent text-[var(--t-fg-4)] hover:border-[var(--t-border)] hover:bg-[var(--t-hover)] hover:text-[var(--t-fg-2)]'
               }`}
               title={item.title}
             >
@@ -108,7 +108,7 @@ export function NarrowNav() {
       <button
         type="button"
         onClick={() => navigate('/workspace')}
-        className="mt-auto flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 font-semibold text-white/80"
+        className="mt-auto flex h-8 w-8 items-center justify-center rounded-full border border-[var(--t-border)] bg-[var(--t-hover)] font-semibold text-[var(--t-fg-2)]"
         aria-label={t('inbox.currentUser')}
       >
         J

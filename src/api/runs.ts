@@ -281,6 +281,72 @@ export interface ActivationTrainingDataset {
 }
 
 // ---------------------------------------------------------------------------
+// LoopRecord — GET /runs/{id}/loops
+// ---------------------------------------------------------------------------
+
+export type LoopKind = 'until_converge' | 'until_diverge' | 'fixed_count';
+export type LoopStatus = 'running' | 'converged' | 'oscillating' | 'diverged' | 'halted';
+
+export interface LoopSetpoint {
+  metric: string;
+  op: string;
+  value: number;
+}
+
+export interface IterationEvidence {
+  body_node_ids?: string[];
+  last_output?: Record<string, unknown>;
+  controlled?: Record<string, unknown>;
+  sensor?: {
+    converged: boolean;
+    classification: string;
+    value?: number;
+    message?: string;
+  };
+  claims?: Record<string, unknown>[];
+}
+
+export interface IterationRecord {
+  loop_id: string;
+  run_id: string;
+  index: number;
+  evidence: IterationEvidence;
+  metrics: Record<string, number>;
+  verifier_score?: number;
+  trace_id: string;
+  started_at?: string;
+}
+
+export interface LoopRecord {
+  loop_id: string;
+  run_id: string;
+  parent_loop_id?: string;
+  kind: LoopKind;
+  setpoint: LoopSetpoint;
+  depth: number;
+  sensor_binding?: string;
+  actuator_binding?: string;
+  status: LoopStatus;
+  iteration_count: number;
+  iterations: IterationRecord[];
+}
+
+export interface LoopStep {
+  step_id: string;
+  node_id: string;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  loop: LoopRecord;
+}
+
+export interface RunLoopsResponse {
+  run_id: string;
+  loops: LoopStep[];
+  total_count: number;
+}
+
+// ---------------------------------------------------------------------------
 // API functions
 // ---------------------------------------------------------------------------
 
@@ -333,4 +399,20 @@ export async function getCheckpointLineage(runId: string): Promise<CheckpointLin
 export async function getActivationTrainingDataset(runId: string): Promise<ActivationTrainingDataset> {
   const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/training-dataset`);
   return _handleResponse<ActivationTrainingDataset>(res);
+}
+
+export async function getRunLoops(runId: string): Promise<RunLoopsResponse> {
+  const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/loops`);
+  const parsed = await _handleResponse<{ data: RunLoopsResponse; meta?: Record<string, unknown> }>(res);
+  // Handle both envelope and direct response formats
+  return 'data' in parsed ? parsed.data : parsed as unknown as RunLoopsResponse;
+}
+
+export async function haltLoop(runId: string, loopId: string): Promise<{ status: string; message: string }> {
+  const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/loops/${encodeURIComponent(loopId)}/halt`, {
+    method: 'POST',
+  });
+  const parsed = await _handleResponse<{ data: { status: string; message: string }; meta?: { already_halted?: boolean } }>(res);
+  // Handle both envelope and direct response formats
+  return 'data' in parsed ? parsed.data : parsed as unknown as { status: string; message: string };
 }

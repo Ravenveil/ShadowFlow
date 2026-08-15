@@ -434,7 +434,8 @@ function Sidebar({ projects, selectedId, onSelect, onNewProject }: SidebarProps)
                         padding: '7px 8px 7px 24px',
                         background: active ? 'var(--t-accent-tint)' : 'transparent',
                         border: '1px solid transparent',
-                        borderColor: active ? 'rgba(168,85,247,.2)' : 'transparent',
+                        // UI5.0: 紫色描边收敛为 accent 蓝（color-mix 随主题）
+                        borderColor: active ? 'color-mix(in oklab, var(--t-accent) 32%, transparent)' : 'transparent',
                         cursor: 'pointer',
                         borderRadius: 6,
                         marginBottom: 1,
@@ -537,7 +538,7 @@ function ArtifactCard({ artifact, index = 0 }: { artifact: ArtifactRecord; index
       style={{
         background: 'var(--t-panel)',
         border: '1px solid var(--t-border)',
-        borderRadius: 8,
+        borderRadius: 12, // UI5.0: 卡片统一 12px 圆角
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -545,7 +546,8 @@ function ArtifactCard({ artifact, index = 0 }: { artifact: ArtifactRecord; index
         cursor: 'pointer',
         transition: 'border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease',
         borderColor: hover ? 'var(--t-border-2, var(--t-border))' : 'var(--t-border)',
-        boxShadow: hover ? '0 4px 16px -4px rgba(0,0,0,.18)' : 'none',
+        // UI5.0: clawsgo 式 hover 软浮起（全局 UI4.0 浮层阴影令牌）
+        boxShadow: hover ? 'var(--ui40-shadow-float, 0 8px 24px -8px rgba(0,0,0,.12))' : 'none',
         transform: hover ? 'translateY(-1px)' : 'none',
         animation: `pj-card-in 240ms ease both`,
         animationDelay: `${index * 32}ms`,
@@ -736,9 +738,10 @@ const FIELD_LABEL: React.CSSProperties = {
 const INPUT_STYLE: React.CSSProperties = {
   width: '100%',
   padding: '8px 12px',
-  background: 'rgba(255,255,255,0.05)',
+  // UI5.0: 输入框底色用主题令牌（旧 rgba 白 5% 在 day 主题下发灰）
+  background: 'var(--t-bg)',
   border: '1px solid var(--t-border)',
-  borderRadius: 6,
+  borderRadius: 8,
   color: 'var(--t-fg)',
   fontSize: 13,
   outline: 'none',
@@ -859,9 +862,9 @@ function Panel({ meta, onRename }: PanelProps) {
                   if (e.key === 'Escape') { setDraftName(meta.name); setRenaming(false); }
                 }}
                 style={{
-                  fontSize: 20, fontWeight: 700,
+                  fontSize: 17, fontWeight: 700, // UI5.0: 页面头部标题统一 17px
                   background: 'var(--t-bg)', border: '1px solid var(--t-accent)',
-                  borderRadius: 5, color: 'var(--t-fg)', padding: '2px 6px',
+                  borderRadius: 6, color: 'var(--t-fg)', padding: '2px 6px',
                   outline: 'none', fontFamily: 'inherit', minWidth: 180,
                   letterSpacing: '-.02em',
                 }}
@@ -871,9 +874,9 @@ function Panel({ meta, onRename }: PanelProps) {
               <h1
                 onClick={() => setRenaming(true)}
                 style={{
-                  margin: 0, fontSize: 20, fontWeight: 700, cursor: 'text',
+                  margin: 0, fontSize: 17, fontWeight: 700, cursor: 'text', // UI5.0: 标题 17px
                   color: 'var(--t-fg)', padding: '2px 6px', marginLeft: -6,
-                  borderRadius: 5, lineHeight: 1.3, letterSpacing: '-.02em',
+                  borderRadius: 6, lineHeight: 1.3, letterSpacing: '-.02em',
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}
                 title={t('projects.renameHint')}
@@ -887,7 +890,8 @@ function Panel({ meta, onRename }: PanelProps) {
                 display: 'inline-flex', alignItems: 'center', gap: 5,
                 padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
                 background: 'var(--t-accent-tint)',
-                border: '1px solid rgba(168,85,247,.25)',
+                // UI5.0: 紫色描边收敛为 accent 蓝
+                border: '1px solid color-mix(in oklab, var(--t-accent) 30%, transparent)',
                 color: 'var(--t-accent)',
               }}
             >
@@ -1206,7 +1210,7 @@ function CreateModal({ onClose, onCreate }: CreateModalProps) {
             }}
           />
           {!nameValid && name.length > 0 && (
-            <div style={{ fontSize: 10, color: '#fca5a5', marginTop: 4 }}>
+            <div style={{ fontSize: 10, color: 'var(--t-err, #DC2626)', marginTop: 4 }}>
               {t('projects.nameError')}
             </div>
           )}
@@ -1244,7 +1248,7 @@ function CreateModal({ onClose, onCreate }: CreateModalProps) {
         </div>
 
         {error && (
-          <div role="alert" style={{ fontSize: 11, color: '#fca5a5' }}>
+          <div role="alert" style={{ fontSize: 11, color: 'var(--t-err, #DC2626)' }}>
             {error}
           </div>
         )}
@@ -1256,7 +1260,7 @@ function CreateModal({ onClose, onCreate }: CreateModalProps) {
             disabled={creating}
             style={{
               padding: '6px 14px',
-              borderRadius: 6,
+              borderRadius: 8, // UI5.0: 按钮圆角统一 8px
               border: '1px solid var(--t-border)',
               background: 'transparent',
               color: 'var(--t-fg-3)',
@@ -1272,12 +1276,12 @@ function CreateModal({ onClose, onCreate }: CreateModalProps) {
             onClick={handleCreate}
             disabled={!nameValid || creating}
             data-testid="project-create-submit"
+            // UI5.0: 主操作按钮近黑（day）/ accent（night）— sf-btn-primary 全局令牌
+            className="sf-btn-primary"
             style={{
               padding: '6px 14px',
-              borderRadius: 6,
-              border: '1px solid rgba(124,58,237,0.45)',
-              background: 'var(--t-accent)',
-              color: 'var(--t-accent-ink)',
+              borderRadius: 8,
+              border: 'none',
               fontSize: 12,
               fontWeight: 600,
               cursor: !nameValid || creating ? 'not-allowed' : 'pointer',
@@ -1358,7 +1362,7 @@ function DeleteModal({ target, onClose, onDeleted }: DeleteModalProps) {
           />
         </div>
         {error && (
-          <div role="alert" style={{ fontSize: 11, color: '#fca5a5' }}>
+          <div role="alert" style={{ fontSize: 11, color: 'var(--t-err, #DC2626)' }}>
             {error}
           </div>
         )}
@@ -1369,7 +1373,7 @@ function DeleteModal({ target, onClose, onDeleted }: DeleteModalProps) {
             disabled={deleting}
             style={{
               padding: '6px 14px',
-              borderRadius: 6,
+              borderRadius: 8, // UI5.0: 按钮圆角统一 8px
               border: '1px solid var(--t-border)',
               background: 'transparent',
               color: 'var(--t-fg-3)',
@@ -1387,7 +1391,7 @@ function DeleteModal({ target, onClose, onDeleted }: DeleteModalProps) {
             data-testid="project-delete-submit"
             style={{
               padding: '6px 14px',
-              borderRadius: 6,
+              borderRadius: 8, // UI5.0: 按钮圆角统一 8px
               border: '1px solid rgba(239,68,68,0.45)',
               background: '#ef4444',
               color: '#fff',
@@ -1453,7 +1457,7 @@ function ArtifactsSkeleton() {
       aria-label="加载工件"
     >
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} style={{ border: '1px solid var(--t-border)', borderRadius: 8, overflow: 'hidden' }}>
+        <div key={i} style={{ border: '1px solid var(--t-border)', borderRadius: 12, overflow: 'hidden' }}>
           <SkeletonBlock h={42} r={0} />
           <div style={{ padding: '11px 14px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <SkeletonBlock h={13} w="80%" />

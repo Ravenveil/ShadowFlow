@@ -103,9 +103,16 @@ function filterByQuery(
  * not iconographic).
  */
 function StatusRow({ status }: { status: CompileStatus | null | undefined }) {
+  // UI5.0（2026-08-14）：Tailwind 暗色文字（text-zinc-500 等）→ --t-* 令牌。
+  const rowStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    fontSize: 11.5,
+  };
   if (!status) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+      <span style={{ ...rowStyle, color: 'var(--t-fg-4)' }}>
         <CircleDashed size={12} /> 状态未知
       </span>
     );
@@ -121,7 +128,7 @@ function StatusRow({ status }: { status: CompileStatus | null | undefined }) {
         ? ` · ~$${status.estimated_cost_usd.toFixed(2)}`
         : '';
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+      <span style={{ ...rowStyle, color: 'var(--t-ok, #10b981)' }}>
         <CheckCircle2 size={12} /> 已编译 · {meta}
         {cost}
       </span>
@@ -129,20 +136,20 @@ function StatusRow({ status }: { status: CompileStatus | null | undefined }) {
   }
   if (status.status === 'compiling') {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-sky-400">
+      <span style={{ ...rowStyle, color: 'var(--t-accent)' }}>
         <Loader2 size={12} className="animate-spin" /> 编译中...
       </span>
     );
   }
   if (status.status === 'failed') {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-amber-400">
+      <span style={{ ...rowStyle, color: 'var(--t-warn, #f59e0b)' }}>
         <XCircle size={12} /> 降级运行 (fallback)
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+    <span style={{ ...rowStyle, color: 'var(--t-fg-4)' }}>
       <CircleDashed size={12} /> 未编译
     </span>
   );
@@ -238,25 +245,34 @@ export const SkillDropdown: React.FC<SkillDropdownProps> = ({
   return (
     <div
       data-testid="skill-dropdown"
-      className={`mt-2 rounded-lg border border-zinc-800 bg-zinc-900/95 shadow-lg backdrop-blur ${className}`}
+      className={`ui50-menu ui50-pop mt-2 backdrop-blur ${className}`}
+      style={{
+        border: '1px solid var(--t-border)',
+        background: 'var(--t-panel)',
+      }}
     >
-      <ul className="divide-y divide-zinc-800">
-        {visible.map((s) => {
+      <ul style={{ listStyle: 'none', margin: 0, padding: '4px' }}>
+        {visible.map((s, i) => {
           const status = statusById[s.id];
           return (
             <li
               key={s.id}
-              className="cursor-pointer px-3 py-2 transition hover:bg-zinc-800/60"
+              className="ui50-opt"
+              style={{
+                cursor: 'pointer',
+                padding: '8px 10px',
+                borderTop: i > 0 ? '1px solid var(--t-border)' : 'none',
+              }}
               onClick={() => onPick?.(s.id)}
             >
-              <div className="flex items-baseline gap-2">
-                <span aria-hidden className="text-emerald-500">
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span aria-hidden style={{ color: 'var(--t-ok, #10b981)' }}>
                   &bull;
                 </span>
-                <span className="font-medium text-zinc-100">{s.id}</span>
-                <span className="text-xs text-zinc-500">{s.name}</span>
+                <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--t-fg)' }}>{s.id}</span>
+                <span style={{ fontSize: 11.5, color: 'var(--t-fg-4)' }}>{s.name}</span>
               </div>
-              <div className="ml-4 mt-1">
+              <div style={{ marginLeft: 16, marginTop: 4 }}>
                 <StatusRow status={status} />
               </div>
             </li>

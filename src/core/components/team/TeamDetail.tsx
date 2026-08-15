@@ -83,17 +83,17 @@ export function TeamDetail({ team, onTeamUpdated }: TeamDetailProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-white/90" data-testid="detail-team-name">
+          <h2 className="text-lg font-semibold text-[var(--t-fg-2)]" data-testid="detail-team-name">
             {team.name}
           </h2>
           {team.description && (
-            <p className="mt-0.5 text-[12px] text-white/50">{team.description}</p>
+            <p className="mt-0.5 text-[12px] text-[var(--t-fg-4)]">{team.description}</p>
           )}
         </div>
         {activeTab === 'members' && (
           <button
             onClick={() => setShowAddPanel(!showAddPanel)}
-            className="rounded border border-shadowflow-border px-3 py-1.5 text-[12px] text-white/60 hover:text-white/90"
+            className="rounded border border-shadowflow-border px-3 py-1.5 text-[12px] text-[var(--t-fg-3)] hover:text-[var(--t-fg-2)]"
             data-testid="btn-add-member"
           >
             + 添加成员
@@ -109,8 +109,8 @@ export function TeamDetail({ team, onTeamUpdated }: TeamDetailProps) {
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-[12px] font-medium transition-colors ${
               activeTab === tab
-                ? 'border-b-2 border-white/70 text-white/90'
-                : 'text-white/40 hover:text-white/60'
+                ? 'border-b-2 border-[var(--t-fg-2)] text-[var(--t-fg-2)]'
+                : 'text-[var(--t-fg-4)] hover:text-[var(--t-fg-3)]'
             }`}
             data-testid={`tab-${tab}`}
           >
@@ -130,10 +130,10 @@ export function TeamDetail({ team, onTeamUpdated }: TeamDetailProps) {
         <>
           {/* Add members panel */}
           {showAddPanel && (
-            <div className="rounded border border-shadowflow-border bg-white/[0.02] p-4">
-              <p className="mb-2 text-[11px] text-white/50">选择要添加的 Agent：</p>
+            <div className="rounded border border-shadowflow-border bg-[var(--t-panel-2)] p-4">
+              <p className="mb-2 text-[11px] text-[var(--t-fg-4)]">选择要添加的 Agent：</p>
               {nonMemberAgents.length === 0 ? (
-                <p className="text-[11px] text-white/30">没有可添加的 Agent。</p>
+                <p className="text-[11px] text-[var(--t-fg-5)]">没有可添加的 Agent。</p>
               ) : (
                 <div className="flex flex-col gap-1.5" data-testid="add-member-list">
                   {nonMemberAgents.map((agent) => {
@@ -141,7 +141,7 @@ export function TeamDetail({ team, onTeamUpdated }: TeamDetailProps) {
                     return (
                       <label
                         key={agent.agent_id}
-                        className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[12px] hover:bg-white/5"
+                        className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[12px] hover:bg-[var(--t-hover)]"
                         data-testid={`add-agent-option-${agent.agent_id}`}
                       >
                         <input
@@ -157,9 +157,9 @@ export function TeamDetail({ team, onTeamUpdated }: TeamDetailProps) {
                           }}
                           className="accent-white"
                         />
-                        <span className="text-white/80">{agent.name}</span>
-                        <span className="text-white/30">—</span>
-                        <span className="truncate text-white/40">
+                        <span className="text-[var(--t-fg-2)]">{agent.name}</span>
+                        <span className="text-[var(--t-fg-5)]">—</span>
+                        <span className="truncate text-[var(--t-fg-4)]">
                           {agent.soul.length > 40 ? agent.soul.slice(0, 40) + '…' : agent.soul}
                         </span>
                       </label>
@@ -171,14 +171,14 @@ export function TeamDetail({ team, onTeamUpdated }: TeamDetailProps) {
                 <button
                   onClick={handleAddMembers}
                   disabled={selectedAddIds.size === 0 || saving}
-                  className="rounded border border-white/20 bg-white/5 px-3 py-1 text-[12px] text-white/70 hover:bg-white/10 disabled:opacity-40"
+                  className="rounded border border-[var(--t-border-2)] bg-[var(--t-hover)] px-3 py-1 text-[12px] text-[var(--t-fg-3)] hover:bg-[var(--t-active)] disabled:opacity-40"
                   data-testid="btn-confirm-add"
                 >
                   确认添加 {selectedAddIds.size > 0 ? `(${selectedAddIds.size})` : ''}
                 </button>
                 <button
                   onClick={() => { setShowAddPanel(false); setSelectedAddIds(new Set()); }}
-                  className="rounded border border-shadowflow-border px-3 py-1 text-[12px] text-white/40 hover:text-white/70"
+                  className="rounded border border-shadowflow-border px-3 py-1 text-[12px] text-[var(--t-fg-4)] hover:text-[var(--t-fg-3)]"
                 >
                   取消
                 </button>
@@ -188,11 +188,11 @@ export function TeamDetail({ team, onTeamUpdated }: TeamDetailProps) {
 
           {/* Member list */}
           <div>
-            <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.14em] text-white/40">
+            <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--t-fg-4)]">
               成员 · {team.agent_ids.length}
             </p>
             {team.agent_ids.length === 0 ? (
-              <p className="text-[12px] text-white/30" data-testid="no-members-hint">
+              <p className="text-[12px] text-[var(--t-fg-5)]" data-testid="no-members-hint">
                 还没有成员，点击"添加成员"。
               </p>
             ) : (
@@ -210,15 +210,15 @@ export function TeamDetail({ team, onTeamUpdated }: TeamDetailProps) {
                         className="flex items-center gap-2 text-left"
                         aria-label={`查看 Agent ${agent?.name ?? agentId}`}
                       >
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[11px]">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--t-active)] text-[11px]">
                           {agent ? agent.name.charAt(0).toUpperCase() : '?'}
                         </span>
                         <div>
-                          <p className="text-[13px] font-medium text-white/90">
+                          <p className="text-[13px] font-medium text-[var(--t-fg-2)]">
                             {agent?.name ?? agentId}
                           </p>
                           {agent && (
-                            <p className="text-[11px] text-white/40">
+                            <p className="text-[11px] text-[var(--t-fg-4)]">
                               {agent.soul.length > 40 ? agent.soul.slice(0, 40) + '…' : agent.soul}
                             </p>
                           )}
@@ -227,7 +227,7 @@ export function TeamDetail({ team, onTeamUpdated }: TeamDetailProps) {
                       <button
                         onClick={() => handleRemoveMember(agentId)}
                         disabled={saving}
-                        className="hidden text-[11px] text-white/30 hover:text-red-400 group-hover:block"
+                        className="hidden text-[11px] text-[var(--t-fg-5)] hover:text-red-400 group-hover:block"
                         aria-label={`移除 ${agent?.name ?? agentId}`}
                         data-testid={`btn-remove-${agentId}`}
                       >

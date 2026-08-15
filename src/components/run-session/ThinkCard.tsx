@@ -102,8 +102,8 @@ const InlineSpinner: React.FC<{ size?: number }> = ({ size = 10 }) => (
       height: size,
       borderRadius: '50%',
       border: '1.5px solid transparent',
-      borderTopColor: 'var(--t-accent, #A855F7)',
-      borderRightColor: 'var(--t-accent, #A855F7)',
+      borderTopColor: 'var(--t-accent, #1447E6)',
+      borderRightColor: 'var(--t-accent, #1447E6)',
       animation: 'sf-spin 0.9s linear infinite',
     }}
   />
@@ -308,7 +308,7 @@ export const ThinkCard: React.FC<ThinkCardProps> = ({
                       style={{
                         fontFamily: 'var(--font-mono, monospace)',
                         fontSize: 9.5,
-                        color: 'var(--t-accent, #A855F7)',
+                        color: 'var(--t-accent, #1447E6)',
                         marginBottom: 2,
                         letterSpacing: '0.04em',
                       }}

@@ -63,7 +63,7 @@ describe('ProjectsPage', () => {
     });
   });
 
-  it('selecting a project loads meta and shows conversations panel', async () => {
+  it('selecting a project loads meta and shows artifacts panel', async () => {
     setupFetch();
     render(
       <MemoryRouter>
@@ -74,7 +74,8 @@ describe('ProjectsPage', () => {
     await userEvent.click(screen.getByTestId('project-row-pid-a'));
     await waitFor(() => {
       expect(screen.getByTestId('project-meta-name')).toHaveTextContent('Alpha');
-      expect(screen.getByTestId('conversation-history-panel')).toBeInTheDocument();
+      // UI5.0: 页签已重构为 artifacts 面板（conversation-history-panel 随 v2 重设计移除）
+      expect(screen.getByTestId('projects-panel')).toBeInTheDocument();
     });
     // localStorage written
     expect(localStorage.getItem('sf.lastProject')).toBe('pid-a');

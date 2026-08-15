@@ -663,8 +663,9 @@ const aacStyles = `
 }
 @keyframes aacRingPulse {
   0% { box-shadow: 0 0 0 0 var(--t-accent); }
-  70% { box-shadow: 0 0 0 5px rgba(168,85,247,0); }
-  100% { box-shadow: 0 0 0 0 rgba(168,85,247,0); }
+  /* UI5.0 — 去紫化：扩散环尾帧透明蓝 */
+  70% { box-shadow: 0 0 0 5px rgba(20,71,230,0); }
+  100% { box-shadow: 0 0 0 0 rgba(20,71,230,0); }
 }
 
 .aac-sec[data-state="pending"] .aac-num { color: var(--t-fg-5); }

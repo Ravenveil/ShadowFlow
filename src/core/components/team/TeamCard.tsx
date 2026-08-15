@@ -8,7 +8,7 @@ interface TeamCardProps {
 }
 
 const PALETTE = [
-  { bg: 'rgba(168,85,247,.14)', border: 'rgba(168,85,247,.32)', fg: '#A855F7' },
+  { bg: 'color-mix(in oklab, var(--t-accent) 14%, transparent)', border: 'color-mix(in oklab, var(--t-accent) 32%, transparent)', fg: '#1447E6' },
   { bg: 'rgba(245,158,11,.14)', border: 'rgba(245,158,11,.32)', fg: '#F59E0B' },
   { bg: 'rgba(34,211,238,.14)', border: 'rgba(34,211,238,.32)', fg: '#22D3EE' },
   { bg: 'rgba(16,185,129,.14)', border: 'rgba(16,185,129,.32)', fg: '#10B981' },

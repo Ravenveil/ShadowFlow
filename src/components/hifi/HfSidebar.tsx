@@ -167,7 +167,8 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
         display: 'flex',
         flexDirection: 'column',
         padding: collapsed ? '12px 6px' : '12px 10px',
-        transition: 'width 200ms ease, padding 200ms ease',
+        // UI5.0：折叠/展开 240ms spring（clawsgo 120–280ms 刻度），更丝滑
+        transition: 'width 240ms var(--ease-spring, cubic-bezier(.2,.8,.2,1)), padding 240ms var(--ease-spring, cubic-bezier(.2,.8,.2,1))',
         overflow: 'hidden',
       }}
     >
@@ -188,6 +189,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
         <button
           onClick={() => setCollapsed(c => !c)}
           title={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}
+          className="ui50-ibtn"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -197,7 +199,7 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
             cursor: 'pointer',
             color: 'var(--t-fg-4)',
             padding: 4,
-            borderRadius: 5,
+            borderRadius: 6,
             flexShrink: 0,
           }}
         >
@@ -238,12 +240,14 @@ export function HfSidebar({ active = 'start' }: HfSidebarProps) {
         <div
           title={t('shell.search')}
           onClick={openQuickSwitcher}
+          className="ui50-ibtn"
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: '7px 0',
             marginBottom: 14,
+            borderRadius: 10,
             color: 'var(--t-fg-4)',
             cursor: 'pointer',
           }}

@@ -1,0 +1,16 @@
+/* ===== UI5.0 =====
+ * layout/ 组件（AppLayout / WorkspaceSwitcher）clawsgo 化样式。
+ * 替代 dark-only 的 Tailwind white/* 类：文字/hover 全部走 --t-* 令牌，
+ * day / night 主题都正确。append-only，可整块删除回退。
+ */
+
+.sf5-text   { color: var(--t-fg); }
+.sf5-text-2 { color: var(--t-fg-2); }
+.sf5-text-3 { color: var(--t-fg-3); }
+.sf5-text-4 { color: var(--t-fg-4); }
+
+/* 行 hover：微变色（clawsgo 手感，140ms ease-out） */
+.sf5-row-hover { transition: background 140ms ease-out, color 140ms ease-out; }
+.sf5-row-hover:hover { background: var(--t-panel-2); }
+.sf5-row-hover:hover.sf5-text-3,
+.sf5-row-hover:hover .sf5-text-3 { color: var(--t-fg); }

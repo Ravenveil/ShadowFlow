@@ -255,8 +255,7 @@ function UserTemplateCard({ tpl, lang, onPick, onDelete, deleteLabel }: { tpl: U
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{
         background: V.panel,
-        /* fixme: token — rgba(168,85,247,.4) is alpha 0.4, no matching tint token */
-        border: `1px solid ${hov ? 'rgba(168,85,247,.4)' : V.border}`,
+        border: `1px solid ${hov ? 'color-mix(in oklab, var(--t-accent) 40%, transparent)' : V.border}`,
         borderRadius: 14, overflow: 'hidden',
         transition: 'all 180ms',
         display: 'flex', flexDirection: 'column',
@@ -310,8 +309,7 @@ function BuilderTemplateCard({ tpl, builderBadge, openInEditorLabel, onPick }: {
       data-testid={`builder-template-card-${tpl.template_id}`}
       style={{
         background: V.panel,
-        /* fixme: token — rgba(168,85,247,.4) is alpha 0.4, no matching tint token */
-        border: `1px solid ${hov ? 'rgba(168,85,247,.4)' : V.border}`,
+        border: `1px solid ${hov ? 'color-mix(in oklab, var(--t-accent) 40%, transparent)' : V.border}`,
         borderRadius: 14, overflow: 'hidden',
         transition: 'all 180ms',
         display: 'flex', flexDirection: 'column',

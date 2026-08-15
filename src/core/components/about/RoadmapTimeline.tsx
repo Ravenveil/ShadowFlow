@@ -123,7 +123,7 @@ export default function RoadmapTimeline() {
                   <span className="font-mono text-[10px] text-sf-fg4 ml-auto">{phase.period}</span>
                 </div>
 
-                <h3 className="text-base font-semibold text-white/90 mb-3">{phase.headline}</h3>
+                <h3 className="text-base font-semibold text-[var(--t-fg-2)] mb-3">{phase.headline}</h3>
 
                 <ul className="space-y-1.5">
                   {phase.items.map((item) => (

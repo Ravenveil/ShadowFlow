@@ -31,6 +31,8 @@ import HfSelect from '../components/hifi/HfSelect';
 import { AGENT_PALETTE, paletteFor, paletteFromColor, initialOf, getAgentColor, registerAgentColor } from '../components/chat-fb/agentAvatar';
 import { useI18n } from '../common/i18n';
 import { useWorkspaceStore } from '../store/workspaceStore';
+// UI5.0 — 页面批A共享视觉层（近黑主按钮/动效，详见该文件头部注释）
+import ui5 from './ui5-pages.module.css';
 
 // ---------------------------------------------------------------------------
 // Types & helpers
@@ -278,7 +280,7 @@ export function AgentPage() {
           <button
             type="button"
             onClick={focusQuickHire}
-            className="hf-btn hf-btn-pri"
+            className={ui5.priBtn}
             style={{ fontSize: 11 }}
             data-testid="new-agent-btn"
           >
@@ -296,18 +298,18 @@ export function AgentPage() {
         }}
       >
         {/* ── Left grid: 人才库 ───────────────────────────────────────────── */}
-        <div style={{ padding: '18px 24px', overflow: 'auto' }}>
-          {/* Header row */}
+        <div style={{ padding: '24px 28px', overflow: 'auto' }}>
+          {/* Header row — UI5.0: 更大标题 + 大留白 */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
-              marginBottom: 14,
+              gap: 12,
+              marginBottom: 20,
               flexWrap: 'wrap',
             }}
           >
-            <span style={{ fontSize: 18, fontWeight: 800 }}>{t('agent.talent')}</span>
+            <span style={{ fontSize: 20, fontWeight: 750, letterSpacing: '-0.02em' }}>{t('agent.talent')}</span>
             <span className="hf-meta">
               {counts.hired} hired · {counts.community} community
             </span>
@@ -338,14 +340,14 @@ export function AgentPage() {
                 onBlur={() => { if (!search) setSearchOpen(false); }}
                 autoFocus
                 style={{
-                  fontSize: 10,
-                  padding: '3px 8px',
-                  borderRadius: 5,
-                  background: 'var(--t-panel-2)',
+                  fontSize: 11,
+                  padding: '5px 10px',
+                  borderRadius: 8,
+                  background: 'var(--t-panel)',
                   color: 'var(--t-fg)',
                   border: '1px solid var(--t-border)',
                   outline: 'none',
-                  width: 120,
+                  width: 140,
                 }}
               />
             ) : (
@@ -401,7 +403,7 @@ export function AgentPage() {
               aria-label={t('agent.loading')}
             >
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} style={{ border: '1px solid var(--t-border)', borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div key={i} style={{ border: '1px solid var(--t-border)', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div className="sf-skeleton" style={{ width: 36, height: 36, borderRadius: 8 }} aria-hidden />
                     <div className="sf-skeleton" style={{ height: 13, flex: 1, borderRadius: 6 }} aria-hidden />
@@ -479,8 +481,8 @@ export function AgentPage() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                gap: 10,
+                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                gap: 14,
               }}
               data-testid="agent-grid"
             >
@@ -500,16 +502,17 @@ export function AgentPage() {
         <aside
           style={{
             borderLeft: '1px solid var(--t-border)',
-            padding: '16px 18px',
+            padding: '20px 22px',
             overflow: 'auto',
             background: 'var(--t-panel)',
           }}
         >
           <form onSubmit={handleHire}>
-            <div className="hf-label" style={{ color: 'var(--t-accent)', marginBottom: 8 }}>
+            {/* UI5.0: 标签收敛为中性（蓝色只留关键 accent） */}
+            <div className="hf-label" style={{ marginBottom: 8 }}>
               {t('agent.quickHireLabel')}
             </div>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', marginBottom: 16 }}>
               {t('agent.quickHireSubtitle')}
             </div>
 
@@ -604,14 +607,11 @@ export function AgentPage() {
             <button
               type="submit"
               disabled={!hireName.trim() || !hireSoul.trim() || hiring}
-              className="hf-btn hf-btn-pri"
+              className={ui5.priBtn}
               style={{
                 width: '100%',
-                justifyContent: 'center',
                 fontSize: 12,
-                padding: '9px 0',
-                opacity: !hireName.trim() || !hireSoul.trim() || hiring ? 0.5 : 1,
-                cursor: !hireName.trim() || !hireSoul.trim() || hiring ? 'not-allowed' : 'pointer',
+                padding: '10px 0',
               }}
               data-testid="hire-submit"
             >
@@ -861,19 +861,19 @@ function EmptyState({ onNewAgent }: { onNewAgent: () => void }) {
         style={{
           width: 64,
           height: 64,
-          borderRadius: 32,
+          borderRadius: 18,
           border: '1px solid var(--t-border)',
-          background: 'var(--t-panel-2)',
+          background: 'var(--t-panel-3)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'var(--t-fg-3)',
+          color: 'var(--t-fg-4)',
         }}
       >
-        <Bot size={28} strokeWidth={2} aria-hidden />
+        <Bot size={26} strokeWidth={1.5} aria-hidden />
       </div>
       <div>
-        <p style={{ fontSize: 13, color: 'var(--t-fg-2)' }}>{t('agent.noAgents')}</p>
+        <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg-2)' }}>{t('agent.noAgents')}</p>
         <p
           className="hf-meta"
           style={{ marginTop: 4, fontSize: 11, color: 'var(--t-fg-4)' }}
@@ -884,7 +884,7 @@ function EmptyState({ onNewAgent }: { onNewAgent: () => void }) {
       <button
         type="button"
         onClick={onNewAgent}
-        className="hf-btn hf-btn-pri"
+        className={ui5.priBtn}
         style={{ fontSize: 11 }}
         data-testid="empty-new-agent-btn"
       >
@@ -942,16 +942,14 @@ function AgentTile({ agent, isDeleting, onDelete }: AgentTileProps) {
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      className="hf-card"
+      className="hf-card ui40-panel"
       data-testid={`agent-card-${agent.agent_id}`}
       style={{
         position: 'relative',
-        padding: 14,
+        padding: 16,
         cursor: 'default',
         opacity: isDeleting ? 0.4 : 1,
         pointerEvents: isDeleting ? 'none' : 'auto',
-        borderColor: hover ? 'color-mix(in oklab, var(--t-accent) 50%, var(--t-border))' : 'var(--t-border)',
-        transition: 'border-color 160ms',
       }}
     >
       {/* Top row */}
@@ -1045,11 +1043,20 @@ function AgentTile({ agent, isDeleting, onDelete }: AgentTileProps) {
         <span className="hf-chip" style={{ fontSize: 9.5 }}>
           {level != null ? `L${level}` : '—'}
         </span>
-        <span
-          className="hf-chip"
-          style={{ fontSize: 9.5, color: statusColor(agent.status) }}
-        >
-          ● {agent.status}
+        {/* UI5.0: 状态 chip 中性化 — 彩色只留 6px 状态点 */}
+        <span className="hf-chip" style={{ fontSize: 9.5, color: 'var(--t-fg-3)', gap: 5 }}>
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              flexShrink: 0,
+              background: statusColor(agent.status),
+              display: 'inline-block',
+            }}
+            aria-hidden
+          />
+          {agent.status}
         </span>
         <div style={{ flex: 1 }} />
         {/* Story 15.28 — "Use in Skill Studio" hover action. Always visible

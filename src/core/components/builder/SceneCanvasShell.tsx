@@ -194,9 +194,10 @@ export function SceneCanvasShell({ blueprint }: SceneCanvasShellProps) {
     <div
       className="relative flex-1 overflow-auto"
       style={{
-        backgroundImage: 'radial-gradient(circle, rgba(63,63,70,0.4) 1px, transparent 1.5px)',
+        /* ===== UI5.0 ===== 暗色硬编码 → --t-* 令牌（day/night 自适应） */
+        backgroundImage: 'radial-gradient(circle, color-mix(in oklab, var(--t-fg) 18%, transparent) 1px, transparent 1.5px)',
         backgroundSize: '20px 20px',
-        backgroundColor: '#0A0A0A',
+        backgroundColor: 'var(--t-bg)',
       }}
       data-testid="scene-canvas"
     >

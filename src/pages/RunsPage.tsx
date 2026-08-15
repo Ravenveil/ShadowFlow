@@ -12,6 +12,10 @@
  *                    - MemoryGraph (ReactFlow)
  *                    - CheckpointLineage (ReactFlow)
  *                    - TrainingDataset (表格)
+ *
+ * UI5.0（页面批A）:全页去暗色硬编码（bg-shadowflow-* / text-white/* / zinc 暗色
+ * tint），改为 var(--t-*) 主题变量 —— day=clawsgo 中性浅色、night 保持深色。
+ * 状态 pill 中性化：彩色只留 5px 状态点。仅样式层改动，数据流/testid/文案不变。
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -49,33 +53,48 @@ import type {
   ProjectionNode,
   ProjectionEdge,
 } from '../api/runs';
+// UI5.0 — 页面批A共享视觉层
+import ui5 from './ui5-pages.module.css';
 
 
 // ---------------------------------------------------------------------------
-// Status pill
+// Status pill — UI5.0: 中性 chip + 小面积状态点（蓝/绿/黄/红只用于圆点）
 // ---------------------------------------------------------------------------
 
-const STATUS_COLORS: Record<string, string> = {
-  succeeded:        'bg-emerald-900/40 text-emerald-400 border-emerald-800/50',
-  failed:           'bg-red-900/40 text-red-400 border-red-800/50',
-  running:          'bg-blue-900/40 text-blue-400 border-blue-800/50',
-  cancelled:        'bg-zinc-800/60 text-zinc-400 border-zinc-700/50',
-  checkpointed:     'bg-amber-900/40 text-amber-400 border-amber-800/50',
-  awaiting_approval:'bg-cyan-900/40 text-cyan-400 border-cyan-800/50',
-  waiting:          'bg-purple-900/40 text-purple-400 border-purple-800/50',
-  waiting_user:     'bg-purple-900/40 text-purple-400 border-purple-800/50',
-  paused:           'bg-zinc-800/60 text-zinc-400 border-zinc-700/50',
-  accepted:         'bg-zinc-800/60 text-zinc-400 border-zinc-700/50',
-  validated:        'bg-zinc-800/60 text-zinc-400 border-zinc-700/50',
-  not_started:      'bg-zinc-800/60 text-zinc-400 border-zinc-700/50',
-  pending:          'bg-zinc-800/60 text-zinc-400 border-zinc-700/50',
-  skipped:          'bg-zinc-800/40 text-zinc-500 border-zinc-700/40',
+const STATUS_DOTS: Record<string, string> = {
+  succeeded:        'var(--t-ok)',
+  completed:        'var(--t-ok)',
+  failed:           'var(--t-err)',
+  error:            'var(--t-err)',
+  running:          'var(--t-run)',
+  checkpointed:     'var(--t-warn)',
+  awaiting_approval:'var(--t-warn)',
+  waiting:          'var(--t-warn)',
+  waiting_user:     'var(--t-warn)',
+  skipped:          'var(--t-fg-5)',
+  cancelled:        'var(--t-fg-4)',
+  paused:           'var(--t-fg-4)',
+  accepted:         'var(--t-fg-4)',
+  validated:        'var(--t-fg-4)',
+  not_started:      'var(--t-fg-4)',
+  pending:          'var(--t-fg-4)',
 };
 
 function StatusPill({ status }: { status: string }) {
-  const cls = STATUS_COLORS[status] ?? 'bg-zinc-800/60 text-zinc-400 border-zinc-700/50';
+  const dot = STATUS_DOTS[status] ?? 'var(--t-fg-4)';
   return (
-    <span className={`inline-flex items-center rounded border px-1.5 py-0.5 font-mono text-[10px] ${cls}`}>
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 font-mono text-[10px]"
+      style={{
+        background: 'var(--t-panel-2)',
+        borderColor: 'var(--t-border)',
+        color: 'var(--t-fg-3)',
+      }}
+    >
+      <span
+        style={{ width: 5, height: 5, borderRadius: '50%', flexShrink: 0, background: dot, display: 'inline-block' }}
+        aria-hidden
+      />
       {status}
     </span>
   );
@@ -121,18 +140,17 @@ function fmtRelative(iso?: string): string {
   }
 }
 
-const ARTIFACT_BADGE_CLS: Record<string, string> = {
-  html:     'bg-blue-900/40 text-blue-300 border-blue-800/50',
-  yaml:     'bg-amber-900/40 text-amber-300 border-amber-800/50',
-  markdown: 'bg-emerald-900/40 text-emerald-300 border-emerald-800/50',
-};
-
+// UI5.0: 产物 badge 中性化（类型只读信息，不再铺彩色 tint）
 function ArtifactBadge({ type }: { type: string }) {
-  const cls = ARTIFACT_BADGE_CLS[type] ?? 'bg-zinc-800/60 text-zinc-300 border-zinc-700/50';
   return (
     <span
       data-testid={`run-artifact-badge-${type}`}
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase ${cls}`}
+      className="inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase"
+      style={{
+        background: 'var(--t-panel-2)',
+        borderColor: 'var(--t-border)',
+        color: 'var(--t-fg-3)',
+      }}
     >
       {type}
     </span>
@@ -145,10 +163,17 @@ function ArtifactBadge({ type }: { type: string }) {
 
 function ErrorBanner({ msg, onRetry }: { msg: string; onRetry: () => void }) {
   return (
-    <div className="rounded border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400"
-         role="alert">
+    <div
+      className="rounded-lg border px-4 py-3 text-sm"
+      role="alert"
+      style={{
+        borderColor: 'color-mix(in oklab, var(--t-err) 35%, transparent)',
+        background: 'color-mix(in oklab, var(--t-err) 8%, transparent)',
+        color: 'var(--t-err)',
+      }}
+    >
       {msg}
-      <button onClick={onRetry} className="ml-3 underline hover:text-red-300">
+      <button onClick={onRetry} className="ml-3 underline" style={{ color: 'var(--t-err)' }}>
         重试
       </button>
     </div>
@@ -161,23 +186,31 @@ function ErrorBanner({ msg, onRetry }: { msg: string; onRetry: () => void }) {
 
 function Spinner() {
   return (
-    <div className="flex flex-1 items-center justify-center py-20 text-sm text-white/40">
+    <div className="flex flex-1 items-center justify-center py-20 text-sm" style={{ color: 'var(--t-fg-4)' }}>
       加载中…
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Empty state
+// Empty state — UI5.0: 排版+图标空态，软瓷贴 + 大留白（不引图片资源）
 // ---------------------------------------------------------------------------
 
 function EmptyState({ label }: { label: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 py-20 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-shadowflow-border bg-white/5 text-white/30">
+      <div
+        className="flex h-14 w-14 items-center justify-center border"
+        style={{
+          borderRadius: 16,
+          borderColor: 'var(--t-border)',
+          background: 'var(--t-panel-3)',
+          color: 'var(--t-fg-4)',
+        }}
+      >
         <Inbox size={24} strokeWidth={1.5} aria-hidden />
       </div>
-      <p className="text-sm text-white/50">{label}</p>
+      <p className="text-sm" style={{ color: 'var(--t-fg-3)' }}>{label}</p>
     </div>
   );
 }
@@ -206,17 +239,18 @@ function toReactFlowProjection(
       data: {
         label: (
           <div className="flex flex-col gap-0.5 text-[10px]">
-            <span className="font-medium text-white/90 truncate max-w-[130px]">{n.label}</span>
-            <span className="text-white/40">{n.entity_type}</span>
+            <span className="font-medium truncate max-w-[130px]" style={{ color: 'var(--t-fg)' }}>{n.label}</span>
+            <span style={{ color: 'var(--t-fg-4)' }}>{n.entity_type}</span>
             {n.status && <StatusPill status={n.status} />}
           </div>
         ),
       },
+      // UI5.0: 节点卡片主题化（原写死 #1A1A1A/#27272A）
       style: {
-        background: '#1A1A1A',
-        border: '1px solid #27272A',
-        borderRadius: isEllipse ? '50%' : '8px',
-        color: '#FAFAFA',
+        background: 'var(--t-panel)',
+        border: '1px solid var(--t-border)',
+        borderRadius: isEllipse ? '50%' : '10px',
+        color: 'var(--t-fg)',
         fontSize: '11px',
         minWidth: isEllipse ? 120 : 150,
         minHeight: isEllipse ? 80 : undefined,
@@ -231,9 +265,10 @@ function toReactFlowProjection(
     source: e.from_id,
     target: e.to_id,
     label: e.edge_type,
-    markerEnd: { type: MarkerType.ArrowClosed, color: '#52525B' },
-    style: { stroke: '#3F3F46' },
-    labelStyle: { fontSize: 9, fill: '#71717A' },
+    // marker 的 color 走 SVG attribute 不解析 var()，用双主题都可见的中灰
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#94A3B8' },
+    style: { stroke: 'var(--t-border-2, var(--t-border))' },
+    labelStyle: { fontSize: 9, fill: 'var(--t-fg-4)' },
     type: 'default',
   }));
 
@@ -260,8 +295,11 @@ function ProjectionGraphView({
   }
 
   return (
-    <div style={{ height: 520 }} className="w-full rounded border border-shadowflow-border bg-[#0C0C10]"
-         data-testid="projection-flow-canvas">
+    <div
+      style={{ height: 520, background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 14, overflow: 'hidden' }}
+      className="w-full"
+      data-testid="projection-flow-canvas"
+    >
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
@@ -272,8 +310,8 @@ function ProjectionGraphView({
         minZoom={0.3}
         maxZoom={2}
       >
-        <Controls className="[&>button]:bg-shadowflow-surface [&>button]:border-shadowflow-border [&>button]:text-white/70" />
-        <Background variant={BackgroundVariant.Dots} color="#27272A" gap={16} size={1} />
+        <Controls className={ui5.rfControls} />
+        <Background variant={BackgroundVariant.Dots} color="var(--t-border)" gap={16} size={1} />
       </ReactFlow>
     </div>
   );
@@ -301,11 +339,19 @@ function RunGraphView({ data }: { data: RunGraph }) {
       data: {
         label: (
           <div className="flex flex-col gap-0.5 text-[10px]">
-            <span className="font-semibold text-white/90 truncate max-w-[140px]">{n.label}</span>
-            <span className="text-white/40">{n.kind} / {n.type}</span>
+            <span className="font-semibold truncate max-w-[140px]" style={{ color: 'var(--t-fg)' }}>{n.label}</span>
+            <span style={{ color: 'var(--t-fg-4)' }}>{n.kind} / {n.type}</span>
             <StatusPill status={n.status} />
             {n.entrypoint && (
-              <span className="rounded border border-purple-700/50 bg-purple-900/30 px-1 text-[9px] text-purple-300">
+              // UI5.0: 紫 badge → accent 蓝小 chip（唯一关键 accent）
+              <span
+                className="rounded border px-1 text-[9px]"
+                style={{
+                  borderColor: 'color-mix(in oklab, var(--t-accent) 35%, transparent)',
+                  background: 'var(--t-accent-tint)',
+                  color: 'var(--t-accent)',
+                }}
+              >
                 entrypoint
               </span>
             )}
@@ -313,10 +359,10 @@ function RunGraphView({ data }: { data: RunGraph }) {
         ),
       },
       style: {
-        background: '#1A1A1A',
-        border: n.entrypoint ? '1px solid var(--t-accent)' : '1px solid #27272A',
-        borderRadius: '8px',
-        color: '#FAFAFA',
+        background: 'var(--t-panel)',
+        border: n.entrypoint ? '1px solid var(--t-accent)' : '1px solid var(--t-border)',
+        borderRadius: '10px',
+        color: 'var(--t-fg)',
         fontSize: '11px',
         minWidth: 160,
         padding: '8px 10px',
@@ -330,15 +376,18 @@ function RunGraphView({ data }: { data: RunGraph }) {
     source: e.from_id,
     target: e.to_id,
     label: e.edge_type ?? e.type,
-    markerEnd: { type: MarkerType.ArrowClosed, color: '#52525B' },
-    style: { stroke: e.intervention ? '#F59E0B' : '#3F3F46' },
-    labelStyle: { fontSize: 9, fill: '#71717A' },
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#94A3B8' },
+    style: { stroke: e.intervention ? 'var(--t-warn)' : 'var(--t-border-2, var(--t-border))' },
+    labelStyle: { fontSize: 9, fill: 'var(--t-fg-4)' },
     type: 'default',
   }));
 
   return (
-    <div style={{ height: 520 }} className="w-full rounded border border-shadowflow-border bg-[#0C0C10]"
-         data-testid="run-graph-canvas">
+    <div
+      style={{ height: 520, background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 14, overflow: 'hidden' }}
+      className="w-full"
+      data-testid="run-graph-canvas"
+    >
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
@@ -349,8 +398,8 @@ function RunGraphView({ data }: { data: RunGraph }) {
         minZoom={0.3}
         maxZoom={2}
       >
-        <Controls className="[&>button]:bg-shadowflow-surface [&>button]:border-shadowflow-border [&>button]:text-white/70" />
-        <Background variant={BackgroundVariant.Dots} color="#27272A" gap={16} size={1} />
+        <Controls className={ui5.rfControls} />
+        <Background variant={BackgroundVariant.Dots} color="var(--t-border)" gap={16} size={1} />
       </ReactFlow>
     </div>
   );
@@ -382,14 +431,14 @@ function TaskTreeNode({ node, depth }: { node: TreeNode; depth: number }) {
   return (
     <div style={{ paddingLeft: depth * 20 }}>
       <div
-        className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-white/5"
+        className={`flex items-center gap-2 rounded px-2 py-1.5 ${ui5.rowHover}`}
         data-testid={`task-tree-node-${node.id}`}
       >
-        <span className="text-white/20 font-mono text-[10px]">
+        <span className="font-mono text-[10px]" style={{ color: 'var(--t-fg-5)' }}>
           {depth > 0 ? '└ ' : ''}
         </span>
-        <span className="flex-1 text-xs text-white/80 truncate">{node.label}</span>
-        <span className="text-[10px] text-white/30">{node.entity_type}</span>
+        <span className="flex-1 text-xs truncate" style={{ color: 'var(--t-fg-2)' }}>{node.label}</span>
+        <span className="text-[10px]" style={{ color: 'var(--t-fg-5)' }}>{node.entity_type}</span>
         {node.status && <StatusPill status={node.status} />}
       </div>
       {node.children.map((child) => (
@@ -405,17 +454,20 @@ function TaskTreeView({ data }: { data: TaskTreeProjection }) {
   }
   const roots = buildTree(data.nodes);
   return (
-    <div className="rounded border border-shadowflow-border bg-shadowflow-surface p-3"
-         data-testid="task-tree-view">
+    <div
+      className="rounded-[14px] border p-3"
+      style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel)' }}
+      data-testid="task-tree-view"
+    >
       <div className="mb-2 flex items-center gap-3">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-white/30">
+        <span className="font-mono text-[10px] uppercase tracking-widest" style={{ color: 'var(--t-fg-4)' }}>
           Task Tree
         </span>
-        <span className="text-[10px] text-white/30">
+        <span className="text-[10px]" style={{ color: 'var(--t-fg-4)' }}>
           {data.nodes.length} 节点 / {data.edges.length} 边
         </span>
       </div>
-      <div className="divide-y divide-shadowflow-border/50">
+      <div className={ui5.themedDivide}>
         {roots.map((root) => (
           <TaskTreeNode key={root.id} node={root} depth={0} />
         ))}
@@ -434,34 +486,37 @@ function TrainingDatasetView({ data }: { data: ActivationTrainingDataset }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded border border-shadowflow-border bg-shadowflow-surface"
-         data-testid="training-dataset-view">
-      <div className="px-4 py-2 border-b border-shadowflow-border flex gap-4 items-center">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-white/30">
+    <div
+      className="overflow-x-auto rounded-[14px] border"
+      style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel)' }}
+      data-testid="training-dataset-view"
+    >
+      <div className="px-4 py-2 flex gap-4 items-center" style={{ borderBottom: '1px solid var(--t-border)' }}>
+        <span className="font-mono text-[10px] uppercase tracking-widest" style={{ color: 'var(--t-fg-4)' }}>
           Training Dataset
         </span>
-        <span className="text-[10px] text-white/40">
+        <span className="text-[10px]" style={{ color: 'var(--t-fg-4)' }}>
           {data.samples.length} 样本
         </span>
       </div>
       <table className="w-full text-xs">
         <thead>
-          <tr className="border-b border-shadowflow-border text-white/40 text-left">
+          <tr style={{ borderBottom: '1px solid var(--t-border)', color: 'var(--t-fg-4)', textAlign: 'left' }}>
             {['sample_id', 'node_id', 'step_status', 'activation_mode', 'activation_decision', 'candidates'].map((h) => (
               <th key={h} className="px-3 py-2 font-mono font-normal whitespace-nowrap">{h}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-shadowflow-border/40">
+        <tbody className={ui5.themedDivide}>
           {data.samples.map((s) => (
-            <tr key={s.sample_id} className="hover:bg-white/5 transition-colors"
+            <tr key={s.sample_id} className={`transition-colors ${ui5.rowHover}`}
                 data-testid={`dataset-row-${s.sample_id}`}>
-              <td className="px-3 py-2 font-mono text-white/50 max-w-[120px] truncate">{s.sample_id}</td>
-              <td className="px-3 py-2 font-mono text-white/70 max-w-[120px] truncate">{s.node_id}</td>
+              <td className="px-3 py-2 font-mono max-w-[120px] truncate" style={{ color: 'var(--t-fg-4)' }}>{s.sample_id}</td>
+              <td className="px-3 py-2 font-mono max-w-[120px] truncate" style={{ color: 'var(--t-fg-2)' }}>{s.node_id}</td>
               <td className="px-3 py-2"><StatusPill status={s.step_status} /></td>
-              <td className="px-3 py-2 text-white/60">{s.activation_mode}</td>
+              <td className="px-3 py-2" style={{ color: 'var(--t-fg-3)' }}>{s.activation_mode}</td>
               <td className="px-3 py-2"><StatusPill status={s.activation_decision} /></td>
-              <td className="px-3 py-2 text-white/40">{s.candidate_count} ({s.selected_candidate_count} selected)</td>
+              <td className="px-3 py-2" style={{ color: 'var(--t-fg-4)' }}>{s.candidate_count} ({s.selected_candidate_count} selected)</td>
             </tr>
           ))}
         </tbody>
@@ -608,41 +663,43 @@ function RunDetailInner({ runId }: { runId: string }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-shadowflow-bg text-white">
+    <div className="flex min-h-screen flex-col" style={{ background: 'var(--t-bg)', color: 'var(--t-fg)' }}>
       {/* Header */}
-      <div className="border-b border-shadowflow-border px-6 py-4">
+      <div className="px-6 py-4" style={{ borderBottom: '1px solid var(--t-border)' }}>
         <div className="mx-auto flex max-w-6xl items-center gap-4">
           <button
             onClick={() => navigate('/runs')}
-            className="text-sm text-white/40 hover:text-white/70 transition-colors"
+            className="text-sm transition-colors"
+            style={{ color: 'var(--t-fg-4)' }}
             data-testid="back-to-runs"
           >
             ← Runs
           </button>
-          <div className="h-4 w-px bg-shadowflow-border" />
+          <div className="h-4 w-px" style={{ background: 'var(--t-border)' }} />
           <div className="min-w-0">
-            <h1 className="font-mono text-sm text-white/70 truncate" data-testid="run-detail-id">
+            <h1 className="font-mono text-sm truncate" style={{ color: 'var(--t-fg-2)' }} data-testid="run-detail-id">
               {runId}
             </h1>
-            <p className="mt-0.5 text-xs text-white/30">Run 详情 — 6 种投影视图</p>
+            <p className="mt-0.5 text-xs" style={{ color: 'var(--t-fg-5)' }}>Run 详情 — 6 种投影视图</p>
           </div>
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div className="border-b border-shadowflow-border px-6">
+      {/* Tab bar — UI5.0: accent 下划线只给激活 tab（原 text-accent/border-accent
+          类全站不存在，是死样式，改为真实主题变量） */}
+      <div className="px-6" style={{ borderBottom: '1px solid var(--t-border)' }}>
         <div className="mx-auto max-w-6xl flex gap-0">
           {TABS.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               data-testid={`tab-${tab.key}`}
-              className={[
-                'px-4 py-3 text-xs font-medium border-b-2 transition-colors',
+              className="px-4 py-3 text-xs font-medium border-b-2 transition-colors"
+              style={
                 activeTab === tab.key
-                  ? 'border-accent text-accent'
-                  : 'border-transparent text-white/40 hover:text-white/70',
-              ].join(' ')}
+                  ? { borderColor: 'var(--t-accent)', color: 'var(--t-fg)' }
+                  : { borderColor: 'transparent', color: 'var(--t-fg-4)' }
+              }
             >
               {tab.label}
             </button>
@@ -709,20 +766,25 @@ export function RunsListPage() {
   useEffect(() => { fetchRuns(); }, [fetchRuns]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-shadowflow-bg text-white">
+    <div className="flex min-h-screen flex-col" style={{ background: 'var(--t-bg)', color: 'var(--t-fg)' }}>
       {/* Header */}
-      <div className="border-b border-shadowflow-border px-6 py-4">
+      <div className="px-6 py-5" style={{ borderBottom: '1px solid var(--t-border)' }}>
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-white/90">Runs</h1>
-            <p className="mt-0.5 text-xs text-white/40">
+            <h1 className="text-lg font-semibold" style={{ color: 'var(--t-fg)', letterSpacing: '-0.01em' }}>Runs</h1>
+            <p className="mt-0.5 text-xs" style={{ color: 'var(--t-fg-4)' }}>
               历史执行记录，点击行查看 6 种投影详情。
             </p>
           </div>
           <button
             onClick={fetchRuns}
             disabled={loadStatus === 'loading'}
-            className="rounded border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 disabled:opacity-40"
+            className="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40"
+            style={{
+              borderColor: 'var(--t-border)',
+              background: 'var(--t-panel)',
+              color: 'var(--t-fg-2)',
+            }}
             data-testid="refresh-runs-btn"
           >
             刷新
@@ -744,50 +806,54 @@ export function RunsListPage() {
 
         {loadStatus === 'success' && runs.length > 0 && (
           <div
-            className="overflow-x-auto rounded border border-shadowflow-border bg-shadowflow-surface"
+            className="overflow-x-auto rounded-[14px] border"
+            style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel)' }}
             data-testid="runs-table"
           >
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-shadowflow-border text-white/40 text-left">
+                <tr style={{ borderBottom: '1px solid var(--t-border)', color: 'var(--t-fg-4)', textAlign: 'left' }}>
                   {['目标', 'Skill', '产物', '状态', '时间', ''].map((h, i) => (
                     <th key={i} className="px-4 py-3 font-mono font-normal whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-shadowflow-border/40">
+              <tbody className={ui5.themedDivide}>
                 {runs.map((run) => {
                   const goalShort = run.goal.length > 60 ? run.goal.slice(0, 60) + '…' : run.goal;
                   return (
                     <tr
                       key={run.run_id}
-                      className="hover:bg-white/5 cursor-pointer transition-colors"
+                      className={`cursor-pointer transition-colors ${ui5.rowHover}`}
                       onClick={() => navigate(`/runs/${encodeURIComponent(run.run_id)}`)}
                       data-testid={`run-row-${run.run_id}`}
                     >
                       <td
-                        className="px-4 py-3 text-white/80 max-w-[300px] truncate"
+                        className="px-4 py-3 max-w-[300px] truncate"
+                        style={{ color: 'var(--t-fg-2)' }}
                         data-testid={`run-goal-${run.run_id}`}
                         title={run.goal}
                       >
                         {goalShort}
                       </td>
                       <td
-                        className="px-4 py-3 text-white/60 max-w-[160px] truncate"
+                        className="px-4 py-3 max-w-[160px] truncate"
+                        style={{ color: 'var(--t-fg-3)' }}
                         data-testid={`run-skill-${run.run_id}`}
                       >
                         {run.skill_display_name}
                       </td>
                       <td className="px-4 py-3">
                         {run.artifact_type ? <ArtifactBadge type={run.artifact_type} /> : (
-                          <span className="text-white/30">—</span>
+                          <span style={{ color: 'var(--t-fg-5)' }}>—</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <StatusPill status={run.status} />
                       </td>
                       <td
-                        className="px-4 py-3 text-white/50 whitespace-nowrap"
+                        className="px-4 py-3 whitespace-nowrap"
+                        style={{ color: 'var(--t-fg-4)' }}
                         data-testid={`run-time-${run.run_id}`}
                       >
                         {fmtRelative(run.completed_at)}
@@ -802,7 +868,8 @@ export function RunsListPage() {
                               href={run.artifact_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-accent text-[11px] hover:underline"
+                              className="text-[11px] hover:underline"
+                              style={{ color: 'var(--t-accent)' }}
                               data-testid={`run-preview-${run.run_id}`}
                             >
                               预览
@@ -810,14 +877,15 @@ export function RunsListPage() {
                             <a
                               href={run.artifact_url}
                               download={run.artifact_filename ?? undefined}
-                              className="text-white/50 text-[11px] hover:text-white/80 hover:underline"
+                              className="text-[11px] hover:underline"
+                              style={{ color: 'var(--t-fg-4)' }}
                               data-testid={`run-download-${run.run_id}`}
                             >
                               下载
                             </a>
                           </span>
                         ) : (
-                          <span className="text-white/30 text-[11px]">无产物</span>
+                          <span className="text-[11px]" style={{ color: 'var(--t-fg-5)' }}>无产物</span>
                         )}
                       </td>
                     </tr>

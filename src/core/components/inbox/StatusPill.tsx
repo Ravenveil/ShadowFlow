@@ -13,8 +13,8 @@ const STATUS_CONFIG: Record<
   idle: { label: 'Idle', bg: 'bg-[#6B7280]/15', text: 'text-[#6B7280]' },
   pending_approval: {
     label: 'Pending Approval',
-    bg: 'bg-[#A78BFA]/15',
-    text: 'text-[#A78BFA]',
+    bg: 'bg-[var(--t-accent-tint)]',
+    text: 'text-[var(--t-accent)]',
   },
 };
 

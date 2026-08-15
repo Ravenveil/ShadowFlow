@@ -27,7 +27,7 @@ const PROVIDER_COLORS: Record<LLMProvider, string> = {
   openai:   '#10B981',
   claude:   '#F59E0B',
   deepseek: '#22D3EE',
-  ollama:   '#A855F7',
+  ollama:   '#1447E6',
 };
 
 export function TabChat() {

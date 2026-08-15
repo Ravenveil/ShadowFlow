@@ -274,7 +274,8 @@ function RegisterForm({ onSuccess, onCancel }: RegisterFormProps) {
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-[8px] bg-sf-accent px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-50"
+          // UI5.0: 主操作按钮近黑（day）/ accent（night）
+          className="sf-btn-primary rounded-[8px] px-4 py-2 text-[12px] font-semibold disabled:opacity-50"
         >
           {submitting ? '连接验证中…' : '注册并连接'}
         </button>
@@ -315,7 +316,8 @@ function ProviderCard({
 
   return (
     <div
-      className="rounded-[10px] border border-sf-border bg-sf-panel p-4"
+      // UI5.0: 卡片统一 12px 圆角 + ui40-panel hover 微浮起
+      className="ui40-panel rounded-[12px] border border-sf-border bg-sf-panel p-4"
       data-testid={`provider-card-${provider.provider_id}`}
     >
       <div className="flex items-start gap-3">
@@ -420,11 +422,11 @@ export function ToolProvidersTab() {
 
   return (
     <div className="flex flex-col gap-6" data-testid="tool-providers-tab">
-      {/* Header */}
+      {/* Header — UI5.0: 标题层级统一 17px/700 */}
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-[18px] font-bold text-sf-fg1">MCP Tool Providers</h2>
-          <p className="mt-1 text-[12px] text-sf-fg4">
+          <h2 className="text-[17px] font-bold text-sf-fg1">MCP Tool Providers</h2>
+          <p className="mt-1 text-[13px] text-sf-fg4">
             注册一次，全平台 Agent 共用。凭证加密存储，永不明文传输。
           </p>
         </div>
@@ -432,7 +434,8 @@ export function ToolProvidersTab() {
           <button
             type="button"
             onClick={() => setShowForm(true)}
-            className="rounded-[8px] bg-sf-accent px-3 py-2 text-[12px] font-semibold text-white"
+            // UI5.0: 主操作按钮近黑（day）/ accent（night）
+            className="sf-btn-primary rounded-[8px] px-3 py-2 text-[12px] font-semibold"
             data-testid="register-provider-btn"
           >
             ＋ 注册 Provider

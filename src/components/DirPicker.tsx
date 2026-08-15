@@ -99,12 +99,13 @@ export default function DirPicker({ value, onPick, onClose, anchorRef, title }: 
   const panel = (
     <div
       ref={panelRef}
+      // UI5.0：统一浮层——圆角 12 + 软阴影 + 淡入缩放（按弹出方向选入场曲线）
+      className={`ui50-menu ${pos.top != null ? 'ui50-pop' : 'ui50-pop-up'}`}
       style={{
         position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom,
         width: 360, maxHeight: 380, zIndex: 300,
         display: 'flex', flexDirection: 'column',
-        background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 10,
-        boxShadow: '0 12px 32px -8px rgba(0,0,0,.32), 0 0 0 1px rgba(255,255,255,.04)',
+        background: 'var(--t-panel)', border: '1px solid var(--t-border)',
         overflow: 'hidden',
       }}
     >

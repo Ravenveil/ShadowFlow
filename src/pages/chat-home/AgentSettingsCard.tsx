@@ -77,7 +77,8 @@ export function AgentSettingsCard({
         <HfAvatar glyph={Array.from(agent.name)[0] ?? '?'} color={agent.avatar_color ?? 'var(--t-accent)'} size={72} />
         <div style={{ fontSize: 15.5, fontWeight: 700, color: 'var(--t-fg)' }}>{agent.name}</div>
         {model && (
-          <span style={{ fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', padding: '2px 9px', borderRadius: 999, background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', border: '1px solid var(--t-accent)' }}>
+          // UI5.0 — 徽标描边从实色 accent 收敛为 35% 混合,不再一圈亮蓝
+          <span style={{ fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', padding: '2px 9px', borderRadius: 999, background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)' }}>
             {model}
           </span>
         )}
@@ -138,6 +139,8 @@ export function AgentSettingsCard({
                   type="button"
                   onClick={() => { void handleSave(); }}
                   disabled={saving}
+                  // UI5.0 — day 主题近黑主按钮(见 ui50-chat-home.css .ui50-primary-btn)
+                  className="ui50-primary-btn"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, border: 'none', background: 'var(--t-accent)', cursor: saving ? 'not-allowed' : 'pointer', color: '#fff', fontSize: 12, fontFamily: 'inherit', fontWeight: 600, opacity: saving ? 0.6 : 1 }}
                 >
                   <Check size={12} /> {saving ? '保存中…' : '保存'}

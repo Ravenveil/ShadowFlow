@@ -23,13 +23,13 @@ export function CreateAgentButton({ label, builderUrl }: CreateAgentButtonProps)
           type="button"
           disabled
           aria-label={label}
-          className="cursor-not-allowed rounded-sf border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-xs text-white/30 transition-colors"
+          className="cursor-not-allowed rounded-sf border border-[var(--t-border)] bg-[var(--t-hover)] px-3 py-1.5 font-mono text-xs text-[var(--t-fg-5)] transition-colors"
         >
           {label}
         </button>
         <span
           role="tooltip"
-          className="pointer-events-none absolute right-0 top-full z-50 mt-1.5 w-48 rounded-sf bg-shadowflow-surface px-3 py-2 text-xs text-white/60 opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity group-hover:opacity-100"
+          className="pointer-events-none absolute right-0 top-full z-50 mt-1.5 w-48 rounded-sf bg-shadowflow-surface px-3 py-2 text-xs text-[var(--t-fg-3)] opacity-0 shadow-lg ring-1 ring-[var(--t-border)] transition-opacity group-hover:opacity-100"
         >
           Builder 即将可用
         </span>

@@ -54,7 +54,7 @@ const MemoryCard: React.FC<{ chunk: MemoryChunk }> = ({ chunk }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   
   const typeColors = {
-    context: 'bg-purple-100 text-purple-800 border-purple-200',
+    context: 'bg-blue-100 text-blue-800 border-blue-200',
     execution: 'bg-green-100 text-green-800 border-green-200',
     working: 'bg-blue-100 text-blue-800 border-blue-200',
     knowledge: 'bg-amber-100 text-amber-800 border-amber-200',

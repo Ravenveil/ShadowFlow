@@ -216,7 +216,7 @@ export function ArtifactPreview({
                 fontWeight: 600,
                 background: tab === t ? 'var(--t-accent-tint)' : 'transparent',
                 color: tab === t ? 'var(--t-accent-bright)' : 'var(--t-fg-3)',
-                border: tab === t ? '1px solid rgba(168,85,247,.3)' : '1px solid transparent',
+                border: tab === t ? '1px solid color-mix(in oklab, var(--t-accent) 30%, transparent)' /* UI5.0 去紫化 */ : '1px solid transparent',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 transition: 'background 120ms ease, color 120ms ease',

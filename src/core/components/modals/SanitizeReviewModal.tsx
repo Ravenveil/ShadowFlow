@@ -81,7 +81,7 @@ export function SanitizeReviewModal({
             </thead>
             <tbody>
               {removedFields.map((f, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,.06))' }}>
+                <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle, color-mix(in oklab, var(--t-fg) 6%, transparent))' }}>
                   <td style={{ padding: '6px 8px', color: 'var(--t-fg-2)', wordBreak: 'break-all' }}>{f.path}</td>
                   <td style={{ padding: '6px 8px', color: 'var(--status-reject, #ef4444)' }}>
                     {(PATTERN_LABELS[f.pattern] || { en: f.pattern, zh: f.pattern })[zh ? 'zh' : 'en']}

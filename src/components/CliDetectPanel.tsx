@@ -135,6 +135,7 @@ export function CliDetectPanel() {
             data-testid="cli-rescan-btn"
             onClick={() => void load(true)}
             disabled={state.loading}
+            className="ui50-ibtn"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -312,6 +313,7 @@ export function CliDetectPanel() {
                         type="button"
                         data-testid={`cli-install-${it.id}`}
                         onClick={() => void copyInstall(it)}
+                        className="ui50-ibtn"
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',

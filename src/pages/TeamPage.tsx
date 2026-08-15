@@ -57,12 +57,15 @@ import { usePolicyStore, type PolicyMatrix as StorePolicyMatrix } from '../core/
 import { useI18n } from '../common/i18n';
 import { useWorkspaceStore, selectCurrentWorkspace } from '../store/workspaceStore';
 import PythonBackendBanner from '../components/PythonBackendBanner';
+// UI5.0 — 页面批A共享视觉层
+import ui5 from './ui5-pages.module.css';
 
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
 type FilterTab = 'official' | 'workspace';
 
 // Agent avatar palette — deterministic from name charCode
-const AGENT_COLORS = ['#A855F7','#F59E0B','#22D3EE','#EF4444','#10B981','#3B82F6','#EC4899'];
+// UI5.0: 紫色 #A855F7 收敛为 clawsgo 蓝 #1447E6，整体压饱和度
+const AGENT_COLORS = ['#1447E6','#D97706','#0E7490','#DC2626','#059669','#2563EB','#52525B'];
 function agentColor(name: string): string {
   return AGENT_COLORS[(name.charCodeAt(0)||0) % AGENT_COLORS.length];
 }
@@ -114,6 +117,7 @@ function TeamRow({ team, active, onSelect, onDelete }: TeamRowProps) {
         borderColor: active ? 'var(--t-accent)' : 'var(--t-border)',
         background: active ? 'var(--t-accent-tint)' : 'var(--t-panel)',
         color: 'var(--t-fg)',
+        transition: 'border-color 140ms ease-out, background 140ms ease-out',
       }}
     >
       <div style={{ fontSize: 12.5, fontWeight: 700, paddingRight: 22 }}>{team.name}</div>
@@ -212,16 +216,17 @@ function TeamListColumn({ teams, activeId, onCreate, onSelect, onDelete, wsName 
       </div>
       {teams.length === 0 ? (
         <div style={{
-          margin: '4px 0', padding: '8px 10px', borderRadius: 8,
-          background: 'var(--t-accent-tint)',
-          border: '1px solid color-mix(in oklab, var(--t-accent) 25%, transparent)',
+          margin: '4px 0', padding: '8px 10px', borderRadius: 10,
+          background: 'var(--t-panel-2)',
+          border: '1px solid var(--t-border)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* UI5.0: 瓷贴改近黑（clawsgo 式），不再铺 accent */}
             <span style={{
-              width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+              width: 28, height: 28, borderRadius: 8, flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontWeight: 900, fontSize: wsName.length > 2 ? 9 : 11,
-              background: 'var(--t-accent)', color: 'var(--t-bg)',
+              background: 'var(--t-fg)', color: 'var(--t-bg)',
               letterSpacing: '-0.03em',
             }}>
               {wsName.slice(0, 2)}
@@ -393,7 +398,7 @@ function TeamListPage() {
             <button
               type="button"
               onClick={() => setShowModal(true)}
-              className="hf-btn hf-btn-pri"
+              className={ui5.priBtn}
               style={{ fontSize: 12 }}
               data-testid="new-team-btn"
             >
@@ -439,12 +444,13 @@ function TeamListPage() {
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                   gap: 14, padding: '72px 0', textAlign: 'center',
                 }}>
+                  {/* UI5.0: 空态瓷贴中性化 */}
                   <div style={{
-                    width: 56, height: 56, borderRadius: 14,
-                    background: 'color-mix(in oklab, var(--t-accent) 15%, var(--t-panel))',
-                    border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)',
+                    width: 56, height: 56, borderRadius: 16,
+                    background: 'var(--t-panel-3)',
+                    border: '1px solid var(--t-border)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: 900, fontSize: 18, color: 'var(--t-accent)',
+                    fontWeight: 900, fontSize: 18, color: 'var(--t-fg-3)',
                     letterSpacing: '-0.03em',
                   }}>
                     {wsName.slice(0, 2)}
@@ -461,7 +467,7 @@ function TeamListPage() {
                     type="button"
                     onClick={() => setShowModal(true)}
                     data-testid="empty-new-team-btn"
-                    className="hf-btn hf-btn-pri"
+                    className={ui5.priBtn}
                     style={{ fontSize: 12 }}
                   >
                     {t('team.newTeam')}
@@ -627,7 +633,8 @@ function DesignTeamHeader({
         title={`以 ${team.name} 发起新对话`}
         aria-label={`以 ${team.name} 发起新对话`}
         onClick={onStartRun}
-        style={{ fontSize: 12, flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'var(--t-accent)', color: 'var(--t-accent-ink)', fontWeight: 700 }}
+        className={ui5.priBtn}
+        style={{ fontSize: 12, flexShrink: 0, padding: '7px 16px' }}
       >
         启动新 run
       </button>
@@ -643,8 +650,8 @@ function DesignMemberRow({ agent, onRemove }: { agent: AgentRecord; onRemove?: (
   const st = agentStatusInfo(agent.status);
   return (
     <div
-      className="group"
-      style={{ display: 'grid', gridTemplateColumns: '40px 1fr 68px 1fr 96px', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--t-border)' }}
+      className={`group ${ui5.rowHover}`}
+      style={{ display: 'grid', gridTemplateColumns: '40px 1fr 68px 1fr 96px', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--t-border)', borderRadius: 6 }}
     >
       {/* Avatar */}
       <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, color, background: `color-mix(in oklab, ${color} 18%, var(--t-panel-2))`, border: `1px solid color-mix(in oklab, ${color} 45%, transparent)` }}>
@@ -655,8 +662,8 @@ function DesignMemberRow({ agent, onRemove }: { agent: AgentRecord; onRemove?: (
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{agent.name}</div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{agent.soul.slice(0, 28).toUpperCase()}</div>
       </div>
-      {/* Level pill */}
-      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '2px 8px', borderRadius: 6, background: `color-mix(in oklab, ${color} 18%, transparent)`, border: `1px solid color-mix(in oklab, ${color} 35%, transparent)`, color, fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600 }}>
+      {/* Level pill — UI5.0: 中性 chip，不再跟随头像色 */}
+      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '2px 8px', borderRadius: 6, background: 'var(--t-panel-2)', border: '1px solid var(--t-border)', color: 'var(--t-fg-3)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600 }}>
         {level}
       </div>
       {/* Source tag */}
@@ -731,18 +738,18 @@ function AddMemberModal({
   return (
     <div
       data-testid="add-member-modal"
+      className={ui5.overlayIn}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 60,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        background: 'rgba(15, 23, 42, 0.32)', backdropFilter: 'blur(4px)',
       }}
     >
-      <div style={{
+      <div className={ui5.modalIn} style={{
         width: '100%', maxWidth: 480,
-        background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12,
+        background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 16,
         color: 'var(--t-fg)',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--t-border)', padding: '14px 18px' }}>
           <div>
@@ -809,11 +816,8 @@ function AddMemberModal({
             data-testid="btn-add-members-submit"
             disabled={selected.size === 0 || submitting}
             onClick={submit}
-            style={{
-              fontSize: 12, padding: '6px 14px', borderRadius: 8, border: 'none', fontWeight: 700, cursor: selected.size === 0 ? 'not-allowed' : 'pointer',
-              background: 'var(--t-accent)', color: 'var(--t-accent-ink)',
-              opacity: selected.size === 0 || submitting ? 0.5 : 1,
-            }}
+            className={ui5.priBtn}
+            style={{ fontSize: 12 }}
           >
             {submitting ? '添加中…' : `加入 (${selected.size})`}
           </button>
@@ -842,7 +846,7 @@ function DesignMemberPanel({ team, onTeamUpdated }: { team: TeamRecord; onTeamUp
   }
 
   return (
-    <div style={{ background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--t-border)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         <span style={{ fontSize: 13, fontWeight: 700 }}>成员</span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>{team.agent_ids.length} agents</span>
@@ -882,7 +886,8 @@ function DesignMemberPanel({ team, onTeamUpdated }: { team: TeamRecord; onTeamUp
   );
 }
 
-const DAG_COLORS = ['#A855F7', '#F59E0B', '#22D3EE', '#EF4444', '#10B981', '#3B82F6', '#EC4899'];
+// UI5.0: 与 AGENT_COLORS 同步去紫
+const DAG_COLORS = ['#1447E6', '#D97706', '#0E7490', '#DC2626', '#059669', '#2563EB', '#52525B'];
 
 /** Right panel of the 2-col grid: SVG dot-grid DAG with real nodes/edges. */
 function WorkflowDagPanel({
@@ -913,7 +918,7 @@ function WorkflowDagPanel({
   const vbH = Math.max(308, maxY - minY);
 
   return (
-    <div style={{ padding: '14px 16px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ padding: '14px 16px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 14, display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <span style={{ fontSize: 13, fontWeight: 700 }}>工作流 DAG</span>
         <div style={{ flex: 1 }} />
@@ -1014,19 +1019,19 @@ function WorkflowEditorModal({
   return (
     <div
       data-testid="workflow-editor-modal"
+      className={ui5.overlayIn}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 60,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        background: 'rgba(15, 23, 42, 0.32)', backdropFilter: 'blur(4px)',
         padding: 24,
       }}
     >
-      <div style={{
+      <div className={ui5.modalIn} style={{
         width: '100%', maxWidth: 1100, height: '85vh',
-        background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12,
+        background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 16,
         color: 'var(--t-fg)', display: 'flex', flexDirection: 'column',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--t-border)', padding: '14px 18px', flexShrink: 0 }}>
           <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>编辑工作流 DAG · {team.name}</h2>
@@ -1106,19 +1111,19 @@ function WorkflowYamlModal({
   return (
     <div
       data-testid="workflow-yaml-modal"
+      className={ui5.overlayIn}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 60,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        background: 'rgba(15, 23, 42, 0.32)', backdropFilter: 'blur(4px)',
         padding: 24,
       }}
     >
-      <div style={{
+      <div className={ui5.modalIn} style={{
         width: '100%', maxWidth: 640, maxHeight: '80vh',
-        background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12,
+        background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 16,
         color: 'var(--t-fg)', display: 'flex', flexDirection: 'column',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--t-border)', padding: '14px 18px', flexShrink: 0 }}>
           <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>工作流 YAML · {team.name} <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)', marginLeft: 6 }}>(只读)</span></h2>
@@ -1199,7 +1204,7 @@ function TeamsIndexPage() {
         <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: 0, fontFamily: 'var(--font-mono)' }}>新建一个团队开始协作</p>
         <button
           type="button"
-          className="hf-btn hf-btn-pri"
+          className={ui5.priBtn}
           style={{ fontSize: 12 }}
           onClick={() => setShowModal(true)}
           data-testid="empty-new-team-btn"

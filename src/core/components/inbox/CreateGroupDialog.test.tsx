@@ -105,14 +105,15 @@ describe('CreateGroupDialog', () => {
     expect(screen.getByTestId('group-template-grp-solo')).toBeInTheDocument();
   });
 
-  it('Step 1: selecting a template highlights it with purple border', async () => {
+  it('Step 1: selecting a template highlights it with accent border', async () => {
     renderDialog();
     await waitFor(() =>
       expect(screen.getByTestId('group-template-grp-research')).toBeInTheDocument()
     );
     const btn = screen.getByTestId('group-template-grp-research');
     fireEvent.click(btn);
-    expect(btn.className).toMatch(/border-\[#A78BFA\]/);
+    // ===== UI5.0 ===== 紫 border-[#A78BFA] → accent 令牌
+    expect(btn.className).toMatch(/border-\[var\(--t-accent\)\]/);
   });
 
   it('Step 1: clicking next without selection shows error', async () => {

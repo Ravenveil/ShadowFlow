@@ -46,7 +46,7 @@ function PaletteRow({ item }: { item: PaletteItem }) {
         background: 'var(--t-panel-2)', border: '1px solid var(--t-border)',
         margin: '0 8px 4px',
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(168,85,247,.4)' /* fixme: token */; }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in oklab, var(--t-accent) 40%, transparent)'; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--t-border)'; }}
     >
       <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600, color: 'var(--t-fg)' }}>{item.label}</span>

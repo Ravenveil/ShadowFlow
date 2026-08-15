@@ -17,9 +17,9 @@ interface PreviewJsonProps {
 function renderValue(value: unknown, depth: number): React.ReactNode {
   if (value === null) return <span style={{ color: 'var(--t-fg-5)' }}>null</span>;
   if (typeof value === 'boolean')
-    return <span style={{ color: 'var(--t-accent-bright, #D8B4FE)' }}>{String(value)}</span>;
+    return <span style={{ color: 'var(--t-accent-bright, #0F3BCC)' }}>{String(value)}</span>;
   if (typeof value === 'number')
-    return <span style={{ color: 'var(--t-accent-bright, #D8B4FE)' }}>{value}</span>;
+    return <span style={{ color: 'var(--t-accent-bright, #0F3BCC)' }}>{value}</span>;
   if (typeof value === 'string')
     return <span style={{ color: 'var(--t-ok, #10B981)' }}>"{value}"</span>;
   if (Array.isArray(value)) {
@@ -53,7 +53,7 @@ function renderValue(value: unknown, depth: number): React.ReactNode {
         <div style={{ marginLeft: 12 }}>
           {entries.map(([k, v]) => (
             <div key={k} style={{ display: 'flex', gap: 6 }}>
-              <span style={{ color: 'var(--t-accent, #A855F7)' }}>"{k}":</span>
+              <span style={{ color: 'var(--t-accent, #1447E6)' /* UI5.0 fallback 去紫化 */ }}>"{k}":</span>
               <span style={{ flex: 1, minWidth: 0 }}>{renderValue(v, depth + 1)}</span>
             </div>
           ))}

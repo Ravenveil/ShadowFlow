@@ -10,11 +10,11 @@ export function InboxEmptyState({ keyword, onCreateGroup }: InboxEmptyStateProps
   const trimmedKeyword = keyword?.trim() ?? '';
 
   return (
-    <div className="flex flex-col items-center rounded-sf border border-dashed border-white/10 px-6 py-10 text-center">
+    <div className="flex flex-col items-center rounded-sf border border-dashed border-[var(--t-border)] px-6 py-10 text-center">
       <svg
         aria-hidden
         viewBox="0 0 24 24"
-        className="h-10 w-10 text-white/30"
+        className="h-10 w-10 text-[var(--t-fg-5)]"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.8"
@@ -24,8 +24,8 @@ export function InboxEmptyState({ keyword, onCreateGroup }: InboxEmptyStateProps
         <circle cx="11" cy="11" r="7" />
         <path d="m20 20-3.5-3.5" />
       </svg>
-      <h3 className="mt-4 text-sm font-medium text-white/70">{t('inbox.empty.noMatch')}</h3>
-      <p className="mt-2 text-sm text-white/50">
+      <h3 className="mt-4 text-sm font-medium text-[var(--t-fg-3)]">{t('inbox.empty.noMatch')}</h3>
+      <p className="mt-2 text-sm text-[var(--t-fg-4)]">
         {trimmedKeyword
           ? t('inbox.empty.notFound', { keyword: trimmedKeyword })
           : t('inbox.empty.noConversations')}
@@ -33,7 +33,7 @@ export function InboxEmptyState({ keyword, onCreateGroup }: InboxEmptyStateProps
       <button
         type="button"
         onClick={onCreateGroup}
-        className="mt-4 text-sm font-medium text-[#A78BFA] transition hover:text-[#C4B5FD]"
+        className="mt-4 text-sm font-medium text-[var(--t-accent)] transition hover:text-[var(--t-accent-bright)]"
       >
         {t('inbox.empty.newGroup')}
       </button>

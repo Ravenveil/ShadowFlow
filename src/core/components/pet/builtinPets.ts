@@ -9,7 +9,7 @@ export interface BuiltinPet {
 }
 
 export const BUILTIN_PETS: BuiltinPet[] = [
-  { id: 'builtin:angel',   displayName: 'Angel',   description: 'A tiny chibi angel in white clothes with small wings.',  glyph: '👼', accent: '#A855F7' },
+  { id: 'builtin:angel',   displayName: 'Angel',   description: 'A tiny chibi angel in white clothes with small wings.',  glyph: '👼', accent: '#1447E6' },
   { id: 'builtin:fox',     displayName: 'Fox',     description: '狡黠的小狐狸，总有妙计。',                                glyph: '🦊', accent: '#F97316' },
   { id: 'builtin:robot',   displayName: 'Robot',   description: '勤劳的小机器人，效率第一。',                              glyph: '🤖', accent: '#3B82F6' },
   { id: 'builtin:nyako',   displayName: 'Nyako',   description: '沉稳的小猫，默默陪伴。',                                  glyph: '🐱', accent: '#10B981' },

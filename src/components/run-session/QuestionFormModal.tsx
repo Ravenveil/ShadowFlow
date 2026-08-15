@@ -362,7 +362,7 @@ const submitBtnStyle: React.CSSProperties = {
   alignItems: 'center',
   gap: 6,
   padding: '6px 14px',
-  background: 'var(--t-accent, #A855F7)',
+  background: 'var(--t-accent, #1447E6)', /* UI5.0 fallback 去紫化 */
   border: 'none',
   borderRadius: 6,
   fontSize: 12,

@@ -236,14 +236,15 @@ function SkillRow({ skill, modeLabel, onToggle, onDelete }: SkillRowProps) {
 
   return (
     <div
-      className="hf-card"
+      // UI5.0: ui40-panel — hover 微浮起（clawsgo 卡片观感）
+      className="hf-card ui40-panel"
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 14,
         padding: '12px 14px',
         opacity: enabled ? 1 : 0.55,
-        transition: 'opacity 120ms ease-out',
+        transition: 'opacity 120ms ease-out, box-shadow 150ms ease, border-color 150ms ease',
       }}
       data-testid={`skill-row-${skill.skill_id}`}
     >
@@ -511,12 +512,13 @@ export function SkillsCatalogTab() {
           <div className="hf-label" style={{ color: 'var(--t-accent)' }}>
             {t('skillsCatalog.label')}
           </div>
+          {/* UI5.0: 设置分组标题层级统一 17px/700，描述 13px 次级色 */}
           <div
             style={{
-              fontSize: 24,
-              fontWeight: 800,
+              fontSize: 17,
+              fontWeight: 700,
               marginTop: 4,
-              letterSpacing: '-.02em',
+              letterSpacing: '-.01em',
               color: 'var(--t-fg)',
             }}
           >
@@ -532,6 +534,8 @@ export function SkillsCatalogTab() {
             setShowImport((v) => !v);
             setImportError(null);
           }}
+          // UI5.0: 主操作按钮近黑（day）/ accent（night）— sf-btn-primary 全局令牌
+          className="sf-btn-primary"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -539,8 +543,6 @@ export function SkillsCatalogTab() {
             padding: '8px 12px',
             borderRadius: 8,
             border: 'none',
-            background: 'var(--t-accent)',
-            color: 'var(--t-accent-ink, #fff)',
             cursor: 'pointer',
             fontFamily: 'inherit',
             fontSize: 12.5,
@@ -624,12 +626,12 @@ export function SkillsCatalogTab() {
               type="button"
               onClick={handleImport}
               disabled={importing}
+              // UI5.0: 主操作按钮近黑（day）/ accent（night）
+              className="sf-btn-primary"
               style={{
                 padding: '7px 14px',
                 borderRadius: 8,
                 border: 'none',
-                background: 'var(--t-accent)',
-                color: 'var(--t-accent-ink, #fff)',
                 cursor: importing ? 'default' : 'pointer',
                 fontFamily: 'inherit',
                 fontSize: 12.5,

@@ -68,25 +68,39 @@ export function SkillUrlChip({ url, onInstalled, onDismiss }: SkillUrlChipProps)
           ? '文本'
           : '识别中…';
 
+  // UI5.0（2026-08-14）：blue/zinc 硬编码 → --t-* 令牌；accent 只给识别提示
+  // 与主操作，中性色承载其余（clawsgo 克制用色）。
   return (
     <div
-      className="flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/5 px-3 py-2 text-sm"
+      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm"
+      style={{
+        border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)',
+        background: 'var(--t-accent-tint)',
+      }}
       data-testid="skill-url-chip"
     >
-      <Link2 className="h-4 w-4 shrink-0 text-blue-400" />
+      <Link2 className="h-4 w-4 shrink-0" style={{ color: 'var(--t-accent)' }} />
       <div className="flex-1 min-w-0">
-        <div className="text-xs text-blue-300 leading-tight">检测到 skill 资源 · {kindLabel}</div>
-        <div className="truncate font-mono text-xs text-zinc-200">
+        <div className="text-xs leading-tight" style={{ color: 'var(--t-accent-bright, var(--t-accent))' }}>
+          检测到 skill 资源 · {kindLabel}
+        </div>
+        <div className="truncate font-mono text-xs" style={{ color: 'var(--t-fg)' }}>
           {preview?.inferred_name ?? url}
         </div>
-        {previewError && <div className="text-xs text-red-400 mt-0.5">{previewError}</div>}
-        {installError && <div className="text-xs text-red-400 mt-0.5">{installError}</div>}
+        {previewError && <div className="text-xs mt-0.5" style={{ color: 'var(--t-err, #ef4444)' }}>{previewError}</div>}
+        {installError && <div className="text-xs mt-0.5" style={{ color: 'var(--t-err, #ef4444)' }}>{installError}</div>}
       </div>
       <button
         type="button"
         onClick={handleInstall}
         disabled={installing || !preview}
-        className="flex items-center gap-1 rounded border border-blue-400/40 bg-blue-500/15 px-2.5 py-1 text-xs font-medium text-blue-200 hover:bg-blue-500/25 disabled:opacity-40"
+        className="flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium disabled:opacity-40"
+        style={{
+          border: '1px solid var(--t-accent)',
+          background: 'var(--t-accent)',
+          color: 'var(--t-accent-ink, #fff)',
+          cursor: installing || !preview ? 'not-allowed' : 'pointer',
+        }}
       >
         {installing ? (
           <>
@@ -103,7 +117,13 @@ export function SkillUrlChip({ url, onInstalled, onDismiss }: SkillUrlChipProps)
       <button
         type="button"
         onClick={onDismiss}
-        className="flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+        className="ui50-ibtn flex items-center gap-1 rounded px-2.5 py-1 text-xs"
+        style={{
+          border: '1px solid var(--t-border)',
+          background: 'transparent',
+          color: 'var(--t-fg-3)',
+          cursor: 'pointer',
+        }}
       >
         <X className="h-3 w-3" />
         当普通链接

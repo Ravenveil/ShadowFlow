@@ -228,12 +228,13 @@ function ComingSoonSection({ label }: { label: string }) {
         <div className="hf-label" style={{ color: 'var(--t-accent)' }}>
           {label.toUpperCase()}
         </div>
+        {/* UI5.0: 设置分组标题层级统一 17px/700，描述 13px 次级色 */}
         <div
           style={{
-            fontSize: 24,
-            fontWeight: 800,
+            fontSize: 17,
+            fontWeight: 700,
             marginTop: 4,
-            letterSpacing: '-.02em',
+            letterSpacing: '-.01em',
             color: 'var(--t-fg)',
           }}
         >
@@ -272,7 +273,8 @@ function LegacySectionWrap({ children }: { children: ReactNode }) {
 }
 
 // ---------------------------------------------------------------------------
-// Nav button �?hover state + active 3px purple bar (handoff hf-pages.jsx L350)
+// Nav button — hover state + active 3px accent bar (handoff hf-pages.jsx L350)
+// UI5.0: bar 颜色来自 --t-accent（day = clawsgo 蓝 #1447E6），紫色已收敛
 // ---------------------------------------------------------------------------
 
 interface NavButtonProps {
@@ -322,7 +324,7 @@ function NavButton({ item, active, onSelect }: NavButtonProps) {
         transition: 'background 120ms ease-out, color 120ms ease-out',
       }}
     >
-      {/* 3px purple active bar �?handoff L350 (left:-8, w:3, h:16) */}
+      {/* 3px accent active bar — handoff L350 (left:-8, w:3, h:16)；UI5.0: accent 蓝 */}
       {active && (
         <span
           style={{

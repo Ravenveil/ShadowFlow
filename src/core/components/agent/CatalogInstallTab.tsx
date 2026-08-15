@@ -57,7 +57,7 @@ function StatusButton({
     <button
       onClick={onInstall}
       disabled={installing || status === 'installed'}
-      className="rounded border border-white/20 bg-white/5 px-2.5 py-1 text-[11px] text-white/70 transition-colors hover:bg-white/10 disabled:opacity-40"
+      className="rounded border border-[var(--t-border-2)] bg-[var(--t-hover)] px-2.5 py-1 text-[11px] text-[var(--t-fg-3)] transition-colors hover:bg-[var(--t-active)] disabled:opacity-40"
       data-testid={`btn-install-${status}`}
     >
       {label}
@@ -125,12 +125,12 @@ export function CatalogInstallTab({ onInstalled }: CatalogInstallTabProps) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="搜索 Pack…"
-          className="flex-1 rounded border border-shadowflow-border bg-white/5 px-3 py-1.5 text-[12px] text-white/80 placeholder-white/30 outline-none focus:border-white/30"
+          className="flex-1 rounded border border-shadowflow-border bg-[var(--t-hover)] px-3 py-1.5 text-[12px] text-[var(--t-fg-2)] placeholder-[var(--t-fg-5)] outline-none focus:border-[var(--t-border-2)]"
           data-testid="pack-search-input"
         />
         <button
           type="submit"
-          className="rounded border border-shadowflow-border px-3 py-1.5 text-[12px] text-white/50 hover:text-white/80"
+          className="rounded border border-shadowflow-border px-3 py-1.5 text-[12px] text-[var(--t-fg-4)] hover:text-[var(--t-fg-2)]"
         >
           搜索
         </button>
@@ -146,13 +146,13 @@ export function CatalogInstallTab({ onInstalled }: CatalogInstallTabProps) {
 
       {/* Pack list */}
       {loadStatus === 'loading' && (
-        <p className="py-6 text-center text-[12px] text-white/40" data-testid="packs-loading">
+        <p className="py-6 text-center text-[12px] text-[var(--t-fg-4)]" data-testid="packs-loading">
           加载中…
         </p>
       )}
 
       {loadStatus === 'success' && packs.length === 0 && (
-        <p className="py-6 text-center text-[12px] text-white/40" data-testid="packs-empty">
+        <p className="py-6 text-center text-[12px] text-[var(--t-fg-4)]" data-testid="packs-empty">
           没有找到匹配的 Pack。
         </p>
       )}
@@ -165,21 +165,21 @@ export function CatalogInstallTab({ onInstalled }: CatalogInstallTabProps) {
           {packs.map((pack) => (
             <div
               key={pack.id}
-              className="flex items-start justify-between gap-3 rounded border border-shadowflow-border bg-white/[0.02] px-3 py-2.5"
+              className="flex items-start justify-between gap-3 rounded border border-shadowflow-border bg-[var(--t-panel-2)] px-3 py-2.5"
               data-testid={`pack-card-${pack.id}`}
             >
               <div className="flex min-w-0 flex-col gap-0.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[13px] font-medium text-white/90">{pack.name}</span>
-                  <span className="text-[10px] text-white/30">v{pack.version}</span>
+                  <span className="text-[13px] font-medium text-[var(--t-fg-2)]">{pack.name}</span>
+                  <span className="text-[10px] text-[var(--t-fg-5)]">v{pack.version}</span>
                   <VerifiedBadge verified={pack.verified} />
                 </div>
-                <p className="truncate text-[11px] text-white/50">{pack.description}</p>
+                <p className="truncate text-[11px] text-[var(--t-fg-4)]">{pack.description}</p>
                 <div className="mt-0.5 flex flex-wrap gap-1">
                   {pack.tags.map((tag) => (
                     <span
                       key={tag}
-                      className="rounded bg-white/5 px-1 py-px font-mono text-[9px] text-white/35"
+                      className="rounded bg-[var(--t-hover)] px-1 py-px font-mono text-[9px] text-[var(--t-fg-5)]"
                     >
                       {tag}
                     </span>

@@ -915,7 +915,8 @@ export function UnifiedComposer({
         {/* ── Chip row · single layer · 5 chips + spacer + ⌘⏎ + ✦ go ──
             Micro-polish (clawsgo modular composer): the left config chips group
             into a soft pill rail so skill/model/dir/mode/knowledge read as one
-            modular control set, with consistent ghost-hover + line icons. */}
+            modular control set, with consistent ghost-hover + line icons.
+            2026-08-15: 去掉虚线分隔——clawsgo/WorkBuddy composer 是无缝一体胶囊。 */}
         <div
           style={{
             display: 'flex',
@@ -923,8 +924,7 @@ export function UnifiedComposer({
             gap: 2,
             flexWrap: 'nowrap',
             marginTop: isChat ? 6 : 12,
-            paddingTop: isChat ? 6 : 10,
-            borderTop: '1px dashed var(--t-border)',
+            paddingTop: isChat ? 2 : 4,
           }}
         >
           {/* 导入 Skill — 直接打开 SkillPickerModal（URL ingest 真实后端）*/}
@@ -1044,9 +1044,10 @@ export function UnifiedComposer({
                   minWidth: 140,
                   background: 'var(--t-panel)',
                   border: '1px solid var(--t-border)',
-                  borderRadius: 8,
+                  // ===== UI5.0 ===== · 弹层 10px 刻度 + clawsgo 浮起软影
+                  borderRadius: 10,
                   padding: 4,
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                  boxShadow: '0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -8px rgba(15,23,42,0.16)',
                   zIndex: 30,
                 }}
               >
@@ -1136,9 +1137,10 @@ export function UnifiedComposer({
                   minWidth: 220,
                   background: 'var(--t-panel)',
                   border: '1px solid var(--t-border)',
-                  borderRadius: 8,
+                  // ===== UI5.0 ===== · 弹层 10px 刻度 + clawsgo 浮起软影
+                  borderRadius: 10,
                   padding: 4,
-                  boxShadow: '0 8px 24px -8px rgba(0,0,0,.35)',
+                  boxShadow: '0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -8px rgba(15,23,42,0.16)',
                   zIndex: 20,
                 }}
               >
@@ -1275,24 +1277,28 @@ export function UnifiedComposer({
               {submitting ? <Loader2 size={15} className="sf-spin" /> : <ArrowUp size={17} strokeWidth={2.4} />}
             </button>
           ) : (
+            /* hero 变体：与 chat 同款 32px 圆角方形发送钮（↑ 箭头），
+               空文本时灰底禁用（2026-08-15 统一，替换原「✦ go」文字胶囊）。 */
             <button
               type="button"
               onClick={() => void handleSubmit()}
-              disabled={submitting}
-              className="hf-btn hf-btn-pri sf-press sf-focus-ring"
+              disabled={submitting || !composer.trim()}
+              className="sf-press sf-focus-ring"
               style={{
-                fontSize: 12,
-                fontWeight: 800,
-                padding: '7px 14px',
-                height: 28,
-                boxShadow:
-                  '0 8px 20px -6px color-mix(in oklab, var(--t-accent) 55%, transparent)',
-                opacity: submitting ? 0.7 : 1,
-                cursor: submitting ? 'wait' : 'pointer',
+                width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                border: 'none',
+                color: '#fff',
+                background: composer.trim() ? 'var(--t-accent)' : 'var(--t-border)',
+                boxShadow: composer.trim() ? '0 6px 16px -6px color-mix(in oklab, var(--t-accent) 60%, transparent)' : 'none',
+                cursor: submitting ? 'wait' : composer.trim() ? 'pointer' : 'not-allowed',
+                transition: 'background 140ms ease, box-shadow 140ms ease',
               }}
               data-testid="start-submit"
+              aria-label={t('start.submit')}
+              title={t('start.submit')}
             >
-              {submitting ? t('start.submitting') : t('start.submit')}
+              {submitting ? <Loader2 size={15} className="sf-spin" /> : <ArrowUp size={17} strokeWidth={2.4} />}
             </button>
           )}
         </div>
@@ -1351,12 +1357,13 @@ export function UnifiedComposer({
             left: '50%',
             transform: 'translateX(-50%)',
             padding: '8px 14px',
-            borderRadius: 8,
+            // ===== UI5.0 ===== · toast 10px 刻度 + 软影
+            borderRadius: 10,
             background: 'var(--t-panel)',
             border: '1px solid var(--t-border)',
             color: 'var(--t-fg-2)',
             fontSize: 12,
-            boxShadow: '0 8px 24px -8px rgba(0,0,0,.45)',
+            boxShadow: '0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -8px rgba(15,23,42,0.16)',
             zIndex: 50,
           }}
         >

@@ -20,10 +20,10 @@ function ensureSfThemes(monaco: typeof Monaco) {
       'editor.foreground': '#e2e8f0',
       'editor.lineHighlightBackground': '#161b22',
       'editorLineNumber.foreground': '#4b5563',
-      'editorCursor.foreground': '#a78bfa',
+      'editorCursor.foreground': '#1447E6',
       'editor.selectionBackground': '#312e81',
       'editorBracketMatch.background': '#1f2937',
-      'editorBracketMatch.border': '#a78bfa',
+      'editorBracketMatch.border': '#1447E6',
     },
   });
   monaco.editor.defineTheme('sf-light', {
@@ -35,10 +35,10 @@ function ensureSfThemes(monaco: typeof Monaco) {
       'editor.foreground': '#0A0A0A',
       'editor.lineHighlightBackground': '#F4F3EE',
       'editorLineNumber.foreground': '#A1A1AA',
-      'editorCursor.foreground': '#7C3AED',
-      'editor.selectionBackground': '#E9D5FF',
+      'editorCursor.foreground': '#1447E6',
+      'editor.selectionBackground': '#DBEAFE', /* ===== UI5.0 ===== 紫 #E9D5FF → 浅蓝 */
       'editorBracketMatch.background': '#EDEBE3',
-      'editorBracketMatch.border': '#7C3AED',
+      'editorBracketMatch.border': '#1447E6',
     },
   });
 }

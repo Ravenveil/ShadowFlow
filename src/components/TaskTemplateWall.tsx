@@ -175,13 +175,10 @@ function TemplateCard({
         background: 'var(--t-panel)',
         color: 'var(--t-fg)',
         fontFamily: 'inherit',
-        borderColor: hover
-          ? 'color-mix(in oklab, var(--t-accent) 42%, var(--t-border))'
-          : undefined,
+        // UI5.0(2026-08-14)— hover 克制化:中性边框 + 中性浮起影,不再用 accent 描边/蓝影。
+        borderColor: hover ? 'var(--t-border-2)' : undefined,
         transform: hover ? 'translateY(-2px)' : 'translateY(0)',
-        boxShadow: hover
-          ? '0 14px 30px -16px color-mix(in oklab, var(--t-accent) 45%, transparent)'
-          : undefined,
+        boxShadow: hover ? 'var(--ui50-shadow-float, 0 8px 24px -8px rgba(0,0,0,.12))' : undefined,
         transition:
           'transform 160ms cubic-bezier(.2,.8,.2,1), box-shadow 160ms ease, border-color 160ms ease',
       }}
@@ -198,8 +195,9 @@ function TemplateCard({
             width: 36,
             height: 36,
             borderRadius: 10,
-            background: hover ? 'var(--t-accent)' : 'var(--t-accent-tint)',
-            color: hover ? 'var(--t-accent-ink, #fff)' : 'var(--t-accent)',
+            // UI5.0 — 图标磁贴:常驻中性灰,hover 才染 accent-tint(不整块实色蓝)。
+            background: hover ? 'var(--t-accent-tint)' : 'var(--t-panel-3, var(--t-panel-2))',
+            color: hover ? 'var(--t-accent)' : 'var(--t-fg-2)',
             flexShrink: 0,
             transition: 'background 160ms ease, color 160ms ease',
           }}

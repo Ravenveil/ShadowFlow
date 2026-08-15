@@ -118,8 +118,8 @@ function BuiltinCard({
       className={[
         'relative flex flex-col items-center gap-2 p-3 rounded-lg border transition-all cursor-pointer',
         selected
-          ? 'bg-purple-900/40 border-purple-500'
-          : 'bg-gray-800 border-gray-700 hover:border-gray-500 hover:bg-gray-750',
+          ? 'bg-[var(--t-accent-tint)] border-[var(--t-accent)]'
+          : 'bg-[var(--t-panel-2)] border-[var(--t-border)] hover:border-[var(--t-border-2)] hover:bg-[var(--t-panel-3)]',
       ].join(' ')}
       title={pet.description}
     >
@@ -127,7 +127,7 @@ function BuiltinCard({
       <button
         type="button"
         onClick={onToggleFavorite}
-        className={`absolute top-1 right-1 transition-colors ${isFavorite ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}
+        className={`absolute top-1 right-1 transition-colors ${isFavorite ? 'text-yellow-400' : 'text-[var(--t-fg-4)] hover:text-yellow-400'}`}
         title={isFavorite ? '取消收藏' : '收藏'}
       >
         <IconStar filled={isFavorite} size={12} />
@@ -138,10 +138,10 @@ function BuiltinCard({
       >
         {pet.glyph}
       </div>
-      <span className={`text-xs text-center truncate w-full ${selected ? 'text-purple-300' : 'text-gray-300'}`}>
+      <span className={`text-xs text-center truncate w-full ${selected ? 'text-[var(--t-accent)]' : 'text-[var(--t-fg-3)]'}`}>
         {pet.displayName}
       </span>
-      <span className="text-[10px] text-gray-500">内置</span>
+      <span className="text-[10px] text-[var(--t-fg-4)]">内置</span>
     </div>
   );
 }
@@ -170,8 +170,8 @@ function CommunityCard({
       className={[
         'relative flex flex-col items-center gap-2 p-3 rounded-lg border transition-all cursor-pointer',
         selected
-          ? 'bg-purple-900/40 border-purple-500'
-          : 'bg-gray-800 border-gray-700 hover:border-gray-500 hover:bg-gray-750',
+          ? 'bg-[var(--t-accent-tint)] border-[var(--t-accent)]'
+          : 'bg-[var(--t-panel-2)] border-[var(--t-border)] hover:border-[var(--t-border-2)] hover:bg-[var(--t-panel-3)]',
       ].join(' ')}
       title={pet.description || pet.displayName}
     >
@@ -179,17 +179,17 @@ function CommunityCard({
       <button
         type="button"
         onClick={onToggleFavorite}
-        className={`absolute top-1 right-1 transition-colors ${isFavorite ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}
+        className={`absolute top-1 right-1 transition-colors ${isFavorite ? 'text-yellow-400' : 'text-[var(--t-fg-4)] hover:text-yellow-400'}`}
         title={isFavorite ? '取消收藏' : '收藏'}
       >
         <IconStar filled={isFavorite} size={12} />
       </button>
       <PetSpriteFace spritesheetUrl={pet.spritesheetUrl} size={56} rowId="idle" />
-      <span className={`text-xs text-center truncate w-full ${selected ? 'text-purple-300' : 'text-gray-300'}`}>
+      <span className={`text-xs text-center truncate w-full ${selected ? 'text-[var(--t-accent)]' : 'text-[var(--t-fg-3)]'}`}>
         {pet.displayName}
       </span>
       {pet.author && (
-        <span className="text-[10px] text-gray-600 truncate w-full text-center">by {pet.author}</span>
+        <span className="text-[10px] text-[var(--t-fg-4)] truncate w-full text-center">by {pet.author}</span>
       )}
     </div>
   );
@@ -336,12 +336,12 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
       className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-gray-900 rounded-xl p-6 w-[680px] max-h-[80vh] flex flex-col shadow-2xl">
+      <div className="bg-[var(--t-panel)] rounded-xl p-6 w-[680px] max-h-[80vh] flex flex-col shadow-2xl">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-4 flex-shrink-0">
-          <h2 className="text-gray-100 text-lg font-semibold">选择你的宠物</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-100 transition-colors p-1 rounded" aria-label="关闭">
+          <h2 className="text-[var(--t-fg)] text-lg font-semibold">选择你的宠物</h2>
+          <button onClick={onClose} className="text-[var(--t-fg-3)] hover:text-[var(--t-fg)] transition-colors p-1 rounded" aria-label="关闭">
             <IconX size={20} />
           </button>
         </div>
@@ -353,7 +353,7 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                tab === t ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                tab === t ? 'bg-[var(--t-accent)] text-white' : 'bg-[var(--t-panel-2)] text-[var(--t-fg-3)] hover:text-[var(--t-fg-2)]'
               }`}
             >
               {TAB_LABELS[t]}
@@ -368,14 +368,14 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
           {tab === 'favorites' && (
             <div>
               {favorites.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-500">
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-[var(--t-fg-4)]">
                   <IconStar size={32} />
                   <p className="text-sm">还没有收藏</p>
-                  <p className="text-xs text-gray-600">在「内置」或「社区」tab 点击 ★ 收藏宠物</p>
+                  <p className="text-xs text-[var(--t-fg-4)]">在「内置」或「社区」tab 点击 ★ 收藏宠物</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-gray-600 text-xs mb-3">拖拽左侧图标可调整顺序</p>
+                  <p className="text-[var(--t-fg-4)] text-xs mb-3">拖拽左侧图标可调整顺序</p>
                   {favorites.map(id => {
                     const builtin = BUILTIN_PETS.find(p => p.id === id);
                     return (
@@ -388,12 +388,12 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
                         onDragEnd={handleDragEnd}
                         className={[
                           'flex items-center gap-3 p-3 rounded-lg border cursor-grab active:cursor-grabbing transition-all',
-                          selectedPetId === id ? 'bg-purple-900/40 border-purple-500' : 'bg-gray-800 border-gray-700',
-                          dragOverId === id ? 'border-purple-400 bg-purple-900/30' : '',
+                          selectedPetId === id ? 'bg-[var(--t-accent-tint)] border-[var(--t-accent)]' : 'bg-[var(--t-panel-2)] border-[var(--t-border)]',
+                          dragOverId === id ? 'border-[var(--t-accent)] bg-[var(--t-accent-tint)]' : '',
                         ].join(' ')}
                       >
                         {/* Drag handle */}
-                        <span className="text-gray-600 hover:text-gray-400 flex-shrink-0">
+                        <span className="text-[var(--t-fg-4)] hover:text-[var(--t-fg-3)] flex-shrink-0">
                           <IconGrip size={14} />
                         </span>
 
@@ -406,13 +406,13 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
                             {builtin.glyph}
                           </div>
                         ) : (
-                          <div className="h-10 w-10 shrink-0 rounded-lg bg-gray-700 flex items-center justify-center text-gray-500 text-xs">
+                          <div className="h-10 w-10 shrink-0 rounded-lg bg-[var(--t-panel-3)] flex items-center justify-center text-[var(--t-fg-4)] text-xs">
                             ?
                           </div>
                         )}
 
                         {/* Name */}
-                        <span className="flex-1 text-sm text-gray-200">
+                        <span className="flex-1 text-sm text-[var(--t-fg-2)]">
                           {builtin?.displayName ?? id}
                         </span>
 
@@ -422,8 +422,8 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
                           onClick={() => handleSelect(id)}
                           className={`text-[11px] px-3 py-1 rounded-md font-medium transition-colors ${
                             selectedPetId === id
-                              ? 'bg-purple-600 text-white'
-                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                              ? 'bg-[var(--t-accent)] text-white'
+                              : 'bg-[var(--t-panel-3)] text-[var(--t-fg-3)] hover:bg-[var(--t-active)]'
                           }`}
                         >
                           {selectedPetId === id ? '使用中' : '选用'}
@@ -433,7 +433,7 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
                         <button
                           type="button"
                           onClick={e => toggleFavorite(e, id)}
-                          className="text-yellow-400 hover:text-gray-500 transition-colors"
+                          className="text-yellow-400 hover:text-[var(--t-fg-4)] transition-colors"
                           title="取消收藏"
                         >
                           <IconStar filled size={14} />
@@ -452,13 +452,13 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
               {/* Toolbar: 本地扫描路径 + 刷新 + 下载社区宠物 */}
               <div className="flex items-start justify-between mb-3 gap-3">
                 <div className="min-w-0">
-                  <p className="text-gray-400 text-xs">
+                  <p className="text-[var(--t-fg-3)] text-xs">
                     本地宠物目录
                     {communityRootDir && (
-                      <span className="text-gray-600 ml-1 font-mono text-[10px] break-all">({communityRootDir})</span>
+                      <span className="text-[var(--t-fg-4)] ml-1 font-mono text-[10px] break-all">({communityRootDir})</span>
                     )}
                   </p>
-                  <p className="text-gray-600 text-[10px] mt-0.5">
+                  <p className="text-[var(--t-fg-4)] text-[10px] mt-0.5">
                     Open Design 下载的宠物也会在这里显示。
                   </p>
                 </div>
@@ -467,7 +467,7 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
                     type="button"
                     onClick={fetchCommunity}
                     disabled={communityLoading}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-700 px-2.5 py-1.5 text-[11px] text-gray-400 hover:text-gray-200 hover:border-gray-500 disabled:opacity-40 transition-colors"
+                    className="flex items-center gap-1.5 rounded-lg border border-[var(--t-border)] px-2.5 py-1.5 text-[11px] text-[var(--t-fg-3)] hover:text-[var(--t-fg-2)] hover:border-[var(--t-border-2)] disabled:opacity-40 transition-colors"
                   >
                     <IconRefresh size={12} spinning={communityLoading} />
                     {communityLoading ? '扫描…' : '刷新'}
@@ -476,7 +476,7 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
                     type="button"
                     onClick={() => { void handleRemoteSync(); }}
                     disabled={syncing}
-                    className="flex items-center gap-1.5 rounded-lg border border-purple-700/60 bg-purple-900/20 px-2.5 py-1.5 text-[11px] text-purple-300 hover:bg-purple-900/40 hover:border-purple-500 disabled:opacity-40 transition-colors"
+                    className="flex items-center gap-1.5 rounded-lg border border-[var(--t-accent)] bg-[var(--t-accent-tint)] px-2.5 py-1.5 text-[11px] text-[var(--t-accent)] hover:bg-[var(--t-accent-tint)] hover:border-[var(--t-accent)] disabled:opacity-40 transition-colors"
                   >
                     <IconRefresh size={12} spinning={syncing} />
                     {syncing ? '下载中…' : '下载社区宠物'}
@@ -500,21 +500,21 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
               )}
 
               {communityLoading && (
-                <div className="text-center py-12 text-gray-400 text-sm">正在扫描本地宠物目录…</div>
+                <div className="text-center py-12 text-[var(--t-fg-3)] text-sm">正在扫描本地宠物目录…</div>
               )}
 
               {!communityLoading && communityError && (
                 <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-400">
                   <p className="font-semibold mb-1">无法读取宠物目录</p>
                   <p className="text-red-400/70">{communityError}</p>
-                  <p className="mt-2 text-gray-500">请确认 ShadowFlow 后端正在运行（端口 8000）。</p>
+                  <p className="mt-2 text-[var(--t-fg-4)]">请确认 ShadowFlow 后端正在运行（端口 8000）。</p>
                 </div>
               )}
 
               {!communityLoading && !communityError && communityPets.length === 0 && (
-                <div className="text-center py-12 text-gray-500 text-sm">
+                <div className="text-center py-12 text-[var(--t-fg-4)] text-sm">
                   <p>本地暂无宠物</p>
-                  <p className="text-xs mt-1 text-gray-600">
+                  <p className="text-xs mt-1 text-[var(--t-fg-4)]">
                     在 Open Design 中下载社区宠物后，这里就会显示。
                   </p>
                 </div>
@@ -548,26 +548,26 @@ export const PetPickerModal: React.FC<Props> = ({ onClose }) => {
                     className={[
                       'flex flex-col items-center gap-2 p-3 rounded-lg border transition-all',
                       selectedPetId === 'custom'
-                        ? 'bg-purple-900/40 border-purple-500'
-                        : 'bg-gray-800 border-gray-700 hover:border-gray-500',
+                        ? 'bg-[var(--t-accent-tint)] border-[var(--t-accent)]'
+                        : 'bg-[var(--t-panel-2)] border-[var(--t-border)] hover:border-[var(--t-border-2)]',
                     ].join(' ')}
                   >
                     <div
                       className="flex h-14 w-14 items-center justify-center rounded-xl text-[32px] leading-none"
-                      style={{ backgroundColor: (customPet.accent ?? '#A855F7') + '22' }}
+                      style={{ backgroundColor: (customPet.accent ?? '#1447E6') + '22' }}
                     >
                       {customPet.glyph || '🦄'}
                     </div>
-                    <span className={`text-xs text-center truncate w-full ${selectedPetId === 'custom' ? 'text-purple-300' : 'text-gray-300'}`}>
+                    <span className={`text-xs text-center truncate w-full ${selectedPetId === 'custom' ? 'text-[var(--t-accent)]' : 'text-[var(--t-fg-3)]'}`}>
                       {customPet.name || 'Buddy'}
                     </span>
-                    <span className="text-[10px] text-gray-500">自定义</span>
+                    <span className="text-[10px] text-[var(--t-fg-4)]">自定义</span>
                   </button>
                 </div>
               ) : (
-                <div className="text-center py-12 text-gray-500 text-sm">
+                <div className="text-center py-12 text-[var(--t-fg-4)] text-sm">
                   <p>还没有自定义宠物</p>
-                  <p className="text-xs mt-1 text-gray-600">在「自定义宠物」面板里创建一个吧。</p>
+                  <p className="text-xs mt-1 text-[var(--t-fg-4)]">在「自定义宠物」面板里创建一个吧。</p>
                 </div>
               )}
             </div>

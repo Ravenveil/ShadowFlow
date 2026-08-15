@@ -50,15 +50,16 @@ interface CreatorBinding {
 /* ── Constants ──────────────────────────────────────────────────────────── */
 
 const SLOTS = ['a', 'b', 'c', 'd', 'e'] as const;
+// UI5.0: slot a 由紫 (#A855F7) 收敛为蓝 — 紫色在全站只保留 accent 蓝
 const SLOT_COLOR: Record<string, string> = {
-  a: '#A855F7', b: '#22D3EE', c: '#F59E0B', d: '#EC4899', e: '#10B981',
+  a: '#2563EB', b: '#22D3EE', c: '#F59E0B', d: '#EC4899', e: '#10B981',
 };
 const SLOT_TINT: Record<string, string> = {
-  a: 'rgba(168,85,247,.15)', b: 'rgba(34,211,238,.13)', c: 'rgba(245,158,11,.13)',
+  a: 'rgba(37,99,235,.13)', b: 'rgba(34,211,238,.13)', c: 'rgba(245,158,11,.13)',
   d: 'rgba(236,72,153,.13)', e: 'rgba(16,185,129,.13)',
 };
 const SLOT_STROKE: Record<string, string> = {
-  a: 'rgba(168,85,247,.4)', b: 'rgba(34,211,238,.4)', c: 'rgba(245,158,11,.4)',
+  a: 'rgba(37,99,235,.4)', b: 'rgba(34,211,238,.4)', c: 'rgba(245,158,11,.4)',
   d: 'rgba(236,72,153,.4)', e: 'rgba(16,185,129,.4)',
 };
 
@@ -301,7 +302,7 @@ const STATUS_LABEL: Record<EvStatus, string> = {
 /* ── Avatar ─────────────────────────────────────────────────────────────── */
 
 function CalAvatar({ glyph, slot, size = 22 }: { glyph: string; slot: string; size?: number }) {
-  const c = SLOT_COLOR[slot] ?? '#A855F7';
+  const c = SLOT_COLOR[slot] ?? '#2563EB'; // UI5.0: fallback 同步收敛为蓝
   return (
     <div style={{
       width: size, height: size, borderRadius: size * 0.3,
@@ -781,7 +782,7 @@ function AgendaView({ year, month, eventsByDate, onEventClick, creator }: {
                           ? 'color-mix(in oklab,var(--t-accent) 6%,var(--t-panel))'
                           : 'var(--t-panel)',
                         border:`1px solid ${isRun ? 'color-mix(in oklab,var(--t-accent) 40%,transparent)' : 'var(--t-border)'}`,
-                        borderLeft:`3px solid ${c}`, borderRadius:8,
+                        borderLeft:`3px solid ${c}`, borderRadius:12, // UI5.0: 列表行统一 12px 圆角
                         opacity: d.isPast ? 0.6 : 1, cursor:'pointer',
                         transition:'background 120ms',
                       }}>
@@ -1239,7 +1240,7 @@ function CalToolbar({ view, onViewChange, year, month, onNav, onToday, onRefresh
           }}>{d < 0 ? <ChevronLeft size={15}/> : <ChevronRight size={15}/>}</button>
         ))}
       </div>
-      <h2 style={{ margin:0, fontSize:20, fontWeight:800, letterSpacing:'-.02em', color:'var(--cal-fg0)' }}>
+      <h2 style={{ margin:0, fontSize:17, fontWeight:700, letterSpacing:'-.02em', color:'var(--cal-fg0)' }}>
         {year} 年 {MONTH_ZH[month]}月
       </h2>
       <div style={{ flex:1 }}/>
@@ -1263,9 +1264,11 @@ function CalToolbar({ view, onViewChange, year, month, onNav, onToday, onRefresh
       <button type="button" onClick={onRefresh} style={{ width:28, height:28, borderRadius:7, border:'1px solid var(--t-border)', background:'transparent', color:'var(--t-fg-4)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
         <RefreshCw size={13} strokeWidth={1.7}/>
       </button>
-      <button type="button" onClick={onNewPlan} style={{
-        height:28, padding:'0 13px', borderRadius:7,
-        background:'var(--t-accent)', color:'var(--t-accent-ink)',
+      <button type="button" onClick={onNewPlan}
+        // UI5.0: 主操作按钮近黑（day）/ accent（night）
+        className="sf-btn-primary"
+        style={{
+        height:28, padding:'0 13px', borderRadius:8,
         fontSize:12.5, fontWeight:700, cursor:'pointer', border:'none',
         display:'inline-flex', alignItems:'center', gap:5,
       }}>
@@ -1376,8 +1379,11 @@ function EventDetailPanel({ event, schedule, onClose, onDelete }: {
 
       {/* footer */}
       <div style={{ padding:12, borderTop:'1px solid var(--t-border)', display:'flex', gap:7, flexShrink:0 }}>
-        <button type="button" style={{
-          flex:1, height:34, borderRadius:7, background:'var(--t-accent)', color:'var(--t-accent-ink)',
+        <button type="button"
+          // UI5.0: 主操作按钮近黑（day）/ accent（night）
+          className="sf-btn-primary"
+          style={{
+          flex:1, height:34, borderRadius:8,
           fontSize:12.5, fontWeight:700, cursor:'pointer', border:'none',
         }}>{t('calendar.triggerNow')}</button>
         <button type="button" onClick={onClose} style={{

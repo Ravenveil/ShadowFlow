@@ -8,7 +8,8 @@
  * conditionally render or hide the entire component when no DS is compatible
  * with the skill — this component does NOT render a "no options" placeholder.
  *
- * Visual style mirrors SkillPicker (Tailwind utility classes; no emoji icons).
+ * Visual style mirrors SkillPicker. UI5.0：改为 --t-* 令牌 inline 样式（原
+ * Tailwind 暗色硬编码在 day 主题不可读）。
  */
 import { useEffect, useMemo, useState } from 'react';
 import { listDesignSystems, LOCAL_DS, type DesignSystemInfo } from '../api/designSystems';
@@ -57,7 +58,11 @@ export function DesignSystemPicker({ value, onChange, skillId }: DesignSystemPic
         data-testid="design-system-picker-loading"
       >
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-9 w-28 rounded-lg bg-white/5 animate-pulse" />
+          <div
+            key={i}
+            className="h-9 w-28 rounded-lg animate-pulse"
+            style={{ background: 'var(--t-panel-2)' }}
+          />
         ))}
       </div>
     );
@@ -69,6 +74,8 @@ export function DesignSystemPicker({ value, onChange, skillId }: DesignSystemPic
     return null;
   }
 
+  // UI5.0（2026-08-14）：暗色 Tailwind（border-white/10、text-white/70）→ --t-*
+  // 令牌，day/night 自适应；选中态统一品牌蓝。
   return (
     <div
       role="radiogroup"
@@ -87,23 +94,34 @@ export function DesignSystemPicker({ value, onChange, skillId }: DesignSystemPic
             data-testid={`ds-option-${ds.ds_id}`}
             onClick={() => onChange(ds.ds_id)}
             title={ds.description}
-            className={`
-              relative inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all
-              ${
-                selected
-                  ? 'border-blue-500/60 bg-blue-500/15 text-white'
-                  : 'border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:text-white/90'
-              }
-            `}
+            style={{
+              position: 'relative',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 12px',
+              borderRadius: 10,
+              fontSize: 13,
+              cursor: 'pointer',
+              border: `1px solid ${selected ? 'var(--t-accent)' : 'var(--t-border)'}`,
+              background: selected ? 'var(--t-accent-tint)' : 'var(--t-panel)',
+              color: selected ? 'var(--t-fg)' : 'var(--t-fg-2)',
+              transition: 'border-color 140ms ease, background 140ms ease, color 140ms ease',
+            }}
           >
             <span
               aria-hidden="true"
-              className={`
-                inline-block h-3 w-3 rounded-full border
-                ${selected ? 'border-blue-300 bg-blue-400' : 'border-white/30 bg-transparent'}
-              `}
+              style={{
+                display: 'inline-block',
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                border: `1px solid ${selected ? 'var(--t-accent)' : 'var(--t-fg-4)'}`,
+                background: selected ? 'var(--t-accent)' : 'transparent',
+                boxShadow: selected ? 'inset 0 0 0 2px var(--t-panel)' : 'none',
+              }}
             />
-            <span className="font-medium">{ds.name}</span>
+            <span style={{ fontWeight: 500 }}>{ds.name}</span>
           </button>
         );
       })}

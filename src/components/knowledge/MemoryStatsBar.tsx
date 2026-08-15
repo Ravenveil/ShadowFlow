@@ -39,7 +39,7 @@ function StatPill({ label, value }: StatPillProps) {
         alignItems: 'center',
         gap: 5,
         padding: '3px 9px',
-        borderRadius: 5,
+        borderRadius: 6, // UI5.0
         background: 'var(--t-panel-2, #1c1c1c)',
         border: '1px solid var(--t-border, rgba(255,255,255,0.08))',
         fontFamily: 'var(--font-mono)',

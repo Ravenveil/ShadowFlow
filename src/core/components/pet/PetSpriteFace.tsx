@@ -76,7 +76,7 @@ export const PetSpriteFace: React.FC<Props> = ({
   if (!loaded) {
     return (
       <span
-        className={`inline-block bg-gray-700 animate-pulse rounded ${className}`}
+        className={`inline-block bg-[var(--t-panel-3)] animate-pulse rounded ${className}`}
         style={{ width: size, height: size }}
         aria-label="Loading pet sprite…"
       />

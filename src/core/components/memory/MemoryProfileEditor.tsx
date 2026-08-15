@@ -77,12 +77,12 @@ export function MemoryProfileEditor({ profile, onSaved }: MemoryProfileEditorPro
   const compressionHint = COMPRESSION_OPTIONS.find(o => o.value === compressionPolicy)?.hint ?? '';
 
   return (
-    <div className="flex flex-col gap-4 p-4 bg-[var(--t-panel)] rounded-lg border border-white/10 text-sm text-white">
-      <h3 className="font-semibold text-white/80 uppercase tracking-wide text-xs">Memory 配置</h3>
+    <div className="flex flex-col gap-4 p-4 bg-[var(--t-panel)] rounded-lg border border-[var(--t-border)] text-sm text-[var(--t-fg)]">
+      <h3 className="font-semibold text-[var(--t-fg-2)] uppercase tracking-wide text-xs">Memory 配置</h3>
 
       {/* Working memory limit */}
       <div className="flex flex-col gap-1">
-        <label className="text-white/60 text-xs">工作记忆上限 (tokens)</label>
+        <label className="text-[var(--t-fg-3)] text-xs">工作记忆上限 (tokens)</label>
         <div className="flex items-center gap-3">
           <input
             type="range"
@@ -91,31 +91,31 @@ export function MemoryProfileEditor({ profile, onSaved }: MemoryProfileEditorPro
             step={512}
             value={workingLimit}
             onChange={e => setWorkingLimit(Number(e.target.value))}
-            className="flex-1 accent-indigo-500"
+            className="flex-1 accent-[var(--t-accent)]"
           />
-          <span className="w-16 text-right text-white/80 tabular-nums">{workingLimit.toLocaleString()}</span>
+          <span className="w-16 text-right text-[var(--t-fg-2)] tabular-nums">{workingLimit.toLocaleString()}</span>
         </div>
       </div>
 
       {/* Episodic retention */}
       <div className="flex flex-col gap-1">
-        <label className="text-white/60 text-xs">情景记忆保留天数 (0 = 永久)</label>
+        <label className="text-[var(--t-fg-3)] text-xs">情景记忆保留天数 (0 = 永久)</label>
         <input
           type="number"
           min={0}
           value={retentionDays}
           onChange={e => setRetentionDays(Math.max(0, Number(e.target.value)))}
-          className="w-28 rounded bg-white/5 border border-white/10 px-2 py-1 text-white/90 focus:outline-none focus:border-indigo-500"
+          className="w-28 rounded bg-[var(--t-hover)] border border-[var(--t-border)] px-2 py-1 text-[var(--t-fg-2)] focus:outline-none focus:border-[var(--t-accent)]"
         />
       </div>
 
       {/* Writeback policy */}
       <div className="flex flex-col gap-1">
-        <label className="text-white/60 text-xs">写回策略</label>
+        <label className="text-[var(--t-fg-3)] text-xs">写回策略</label>
         <select
           value={writebackPolicy}
           onChange={e => setWritebackPolicy(e.target.value as WritebackPolicy)}
-          className="rounded bg-white/5 border border-white/10 px-2 py-1 text-white/90 focus:outline-none focus:border-indigo-500"
+          className="rounded bg-[var(--t-hover)] border border-[var(--t-border)] px-2 py-1 text-[var(--t-fg-2)] focus:outline-none focus:border-[var(--t-accent)]"
         >
           {WRITEBACK_OPTIONS.map(o => (
             <option key={o.value} value={o.value}>{o.label}</option>
@@ -125,18 +125,18 @@ export function MemoryProfileEditor({ profile, onSaved }: MemoryProfileEditorPro
 
       {/* Compression policy */}
       <div className="flex flex-col gap-1">
-        <label className="text-white/60 text-xs">压缩策略</label>
+        <label className="text-[var(--t-fg-3)] text-xs">压缩策略</label>
         <select
           value={compressionPolicy}
           onChange={e => setCompressionPolicy(e.target.value as CompressionPolicy)}
-          className="rounded bg-white/5 border border-white/10 px-2 py-1 text-white/90 focus:outline-none focus:border-indigo-500"
+          className="rounded bg-[var(--t-hover)] border border-[var(--t-border)] px-2 py-1 text-[var(--t-fg-2)] focus:outline-none focus:border-[var(--t-accent)]"
         >
           {COMPRESSION_OPTIONS.map(o => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
         {compressionHint && (
-          <p className="text-white/40 text-xs mt-0.5">{compressionHint}</p>
+          <p className="text-[var(--t-fg-4)] text-xs mt-0.5">{compressionHint}</p>
         )}
       </div>
 
@@ -145,7 +145,7 @@ export function MemoryProfileEditor({ profile, onSaved }: MemoryProfileEditorPro
         <button
           onClick={handleSave}
           disabled={saveStatus === 'saving'}
-          className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-medium transition-colors"
+          className="px-3 py-1.5 rounded bg-[var(--t-accent)] hover:opacity-90 disabled:opacity-50 text-white text-xs font-medium transition-colors"
         >
           {saveStatus === 'saving' ? '保存中...' : '保存配置'}
         </button>

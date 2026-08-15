@@ -21,7 +21,7 @@ const V = {
 };
 
 const RIBBON_COLORS: Record<string, string> = {
-  academic_paper: '#A855F7',
+  academic_paper: '#1447E6',
   solo_company: '#22D3EE',
   newsroom: '#0EA5E9',
   modern_startup: '#10B981',
@@ -54,8 +54,7 @@ export function TemplateCard({ preset, demo, lang, onQuickDemo, onCustomEdit }: 
         background: isBlank ? 'transparent' : V.panel,
         border: isBlank
           ? `1px dashed ${hov ? ribbon : V.borderSub}`
-          /* fixme: token — alpha 0.4 has no matching tint token */
-          : `1px solid ${hov ? 'rgba(168,85,247,.4)' : V.border}`,
+          : `1px solid ${hov ? 'color-mix(in oklab, var(--t-accent) 40%, transparent)' : V.border}`,
         borderRadius: 14,
         overflow: 'hidden',
         transition: 'all 180ms',
@@ -257,7 +256,7 @@ function PreviewMini({ preset }: { preset: TemplatePreset }) {
           <path
             key={i}
             d={`M ${a.sx} ${a.sy} C ${midX} ${a.sy}, ${midX} ${b.sy}, ${b.sx} ${b.sy}`}
-            stroke="rgba(168,85,247,.45)"
+            stroke="color-mix(in oklab, var(--t-accent) 45%, transparent)"
             strokeWidth={1.5}
             fill="none"
             strokeLinecap="round"

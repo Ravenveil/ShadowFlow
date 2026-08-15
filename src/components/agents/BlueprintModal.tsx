@@ -13,12 +13,17 @@
  *   blueprint.memory_profile.episodic_retention_days → retention days
  *   blueprint.role_profiles.length → role count
  *   blueprint.tool_policies.length → tool policy count
+ *
+ * UI5.0（页面批A）:去暗色硬编码（#141414 / white/*）与紫色按钮，改 var(--t-*)
+ * 主题变量 + clawsgo 式遮罩淡入/面板缩放动效。仅样式层，导入导出逻辑不变。
  */
 import { useEffect, useRef, useState } from 'react';
 import { Inbox as BlueprintInbox } from '../../common/icons/iconRegistry';
 import type { AgentRecord } from '../../api/agents';
 import { quickCreateAgent } from '../../api/agents';
 import { useWorkspaceStore } from '../../store/workspaceStore';
+// UI5.0 — 页面批A共享视觉层
+import ui5 from '../../pages/ui5-pages.module.css';
 
 interface BlueprintModalProps {
   agent: AgentRecord;
@@ -83,37 +88,49 @@ function AgentPreviewCard({ agent }: { agent: AgentRecord }) {
   const skillCount = getSkillCount(agent.blueprint as Record<string, unknown>);
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+    <div
+      className="flex flex-col gap-3 rounded-[14px] border p-4"
+      style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel-2)' }}
+    >
       {/* Avatar + name */}
       <div className="flex items-center gap-2">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-base font-semibold text-white/80">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-base font-semibold"
+          style={{ background: 'var(--t-panel-3)', color: 'var(--t-fg-2)', border: '1px solid var(--t-border)' }}
+        >
           {agent.name.charAt(0).toUpperCase()}
         </span>
         <div>
-          <p className="text-sm font-medium text-white/90">{agent.name}</p>
-          <p className="text-[10px] font-mono text-white/30">{agent.agent_id.slice(0, 12)}…</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--t-fg)' }}>{agent.name}</p>
+          <p className="text-[10px] font-mono" style={{ color: 'var(--t-fg-5)' }}>{agent.agent_id.slice(0, 12)}…</p>
         </div>
       </div>
 
       {/* Soul preview */}
-      <p className="text-xs leading-relaxed text-white/50">{soulPreview}</p>
+      <p className="text-xs leading-relaxed" style={{ color: 'var(--t-fg-3)' }}>{soulPreview}</p>
 
-      {/* Badges */}
+      {/* Badges — UI5.0: 中性 chip */}
       <div className="flex flex-wrap gap-1.5">
-        <span className="rounded bg-white/5 px-2 py-0.5 font-mono text-[10px] text-white/40">
+        <span
+          className="rounded px-2 py-0.5 font-mono text-[10px]"
+          style={{ background: 'var(--t-panel-3)', color: 'var(--t-fg-4)', border: '1px solid var(--t-border)' }}
+        >
           memory: {memoryLabel}
         </span>
         {skillCount > 0 && (
-          <span className="rounded bg-white/5 px-2 py-0.5 font-mono text-[10px] text-white/40">
+          <span
+            className="rounded px-2 py-0.5 font-mono text-[10px]"
+            style={{ background: 'var(--t-panel-3)', color: 'var(--t-fg-4)', border: '1px solid var(--t-border)' }}
+          >
             {skillCount} item{skillCount !== 1 ? 's' : ''}
           </span>
         )}
       </div>
 
       {/* Package includes */}
-      <div className="border-t border-white/5 pt-3">
-        <p className="mb-1.5 text-[10px] font-mono uppercase tracking-wide text-white/25">Package includes</p>
-        <ul className="space-y-0.5 text-[11px] text-white/40">
+      <div className="pt-3" style={{ borderTop: '1px solid var(--t-border)' }}>
+        <p className="mb-1.5 text-[10px] font-mono uppercase tracking-wide" style={{ color: 'var(--t-fg-5)' }}>Package includes</p>
+        <ul className="space-y-0.5 text-[11px]" style={{ color: 'var(--t-fg-4)' }}>
           <li>✓ name + soul</li>
           <li>✓ memory profile</li>
           {getSkillCount(agent.blueprint as Record<string, unknown>) > 0 && <li>✓ tool & role config</li>}
@@ -268,21 +285,29 @@ export function BlueprintModal({ agent, onClose, onImported, initialImport }: Bl
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      className={`fixed inset-0 z-50 flex items-center justify-center ${ui5.overlayIn}`}
+      style={{ background: 'rgba(15, 23, 42, 0.32)', backdropFilter: 'blur(4px)' }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="blueprint-modal-title"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="mx-4 flex w-full max-w-[680px] flex-col rounded-[14px] border border-white/15 bg-[#141414] shadow-2xl">
+      <div
+        className={`mx-4 flex w-full max-w-[680px] flex-col rounded-[18px] border ${ui5.modalIn}`}
+        style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel)', color: 'var(--t-fg)' }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
-          <h2 id="blueprint-modal-title" className="text-sm font-semibold text-white/90">
+        <div
+          className="flex items-center justify-between px-6 py-4"
+          style={{ borderBottom: '1px solid var(--t-border)' }}
+        >
+          <h2 id="blueprint-modal-title" className="text-sm font-semibold" style={{ color: 'var(--t-fg)' }}>
             Blueprint — {agent.name}
           </h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-white/30 hover:bg-white/10 hover:text-white/70"
+            className="rounded p-1 transition-colors hover:text-[var(--t-fg)]"
+            style={{ color: 'var(--t-fg-5)' }}
             aria-label="关闭"
           >
             ✕
@@ -292,12 +317,20 @@ export function BlueprintModal({ agent, onClose, onImported, initialImport }: Bl
         {/* Body: two-column */}
         <div className="flex flex-col gap-0 overflow-y-auto sm:flex-row">
           {/* Left: preview (40%) */}
-          <div className="w-full shrink-0 border-b border-white/10 p-5 sm:w-[40%] sm:border-b-0 sm:border-r">
+          <div
+            className="w-full shrink-0 p-5 sm:w-[40%] sm:border-b-0 sm:border-r"
+            style={{ borderBottom: '1px solid var(--t-border)', borderColor: 'var(--t-border)' }}
+          >
             {isImportOnly ? (
-              <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-6 text-center">
-                <span className="inline-flex items-center justify-center text-white/70"><BlueprintInbox size={24} strokeWidth={2} /></span>
-                <p className="text-sm font-medium text-white/70">Import Blueprint</p>
-                <p className="text-xs text-white/35 leading-relaxed">
+              <div
+                className="flex flex-col items-center justify-center gap-3 rounded-[14px] border p-6 text-center"
+                style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel-2)' }}
+              >
+                <span className="inline-flex items-center justify-center" style={{ color: 'var(--t-fg-3)' }}>
+                  <BlueprintInbox size={24} strokeWidth={1.5} />
+                </span>
+                <p className="text-sm font-medium" style={{ color: 'var(--t-fg-2)' }}>Import Blueprint</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--t-fg-4)' }}>
                   粘贴分享链接、base64 字符串，或上传 JSON 文件来导入 Agent。
                 </p>
               </div>
@@ -312,28 +345,31 @@ export function BlueprintModal({ agent, onClose, onImported, initialImport }: Bl
             {!isImportOnly && (
               <>
                 <div className="flex flex-col gap-2">
+                  {/* UI5.0: 原紫色按钮(accent→#9333EA hover)→ 近黑主按钮(day)/accent(night) */}
                   <button
                     ref={firstFocusRef}
                     onClick={handleExportJson}
-                    className="w-full rounded-lg bg-[var(--t-accent)] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#9333EA]"
+                    className={`w-full ${ui5.priBtn}`}
+                    style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600 }}
                   >
                     Export as JSON
                   </button>
                   <button
                     onClick={handleCopyLink}
-                    className="w-full rounded-lg border border-white/15 px-4 py-2.5 text-sm text-white/70 transition-colors hover:border-white/30 hover:text-white/90"
+                    className="w-full rounded-lg border px-4 py-2.5 text-sm transition-colors hover:border-[var(--t-border-2,_var(--t-border))] hover:text-[var(--t-fg)]"
+                    style={{ borderColor: 'var(--t-border)', color: 'var(--t-fg-3)', background: 'transparent' }}
                   >
                     {copyState === 'copied' ? '✓ Copied!' : 'Copy share link'}
                   </button>
                 </div>
 
-                <div className="border-t border-white/10" />
+                <div style={{ borderTop: '1px solid var(--t-border)' }} />
               </>
             )}
 
             {/* Import */}
             <div className="flex flex-col gap-3">
-              <p className="text-xs font-medium text-white/50">Import Blueprint</p>
+              <p className="text-xs font-medium" style={{ color: 'var(--t-fg-3)' }}>Import Blueprint</p>
 
               {/* URL input */}
               <input
@@ -345,13 +381,15 @@ export function BlueprintModal({ agent, onClose, onImported, initialImport }: Bl
                   setImportRaw(e.target.value);
                   parseAndPreview(e.target.value);
                 }}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/80 placeholder-white/20 outline-none focus:border-white/25"
+                className={`w-full rounded-lg border px-3 py-2 font-mono text-xs outline-none placeholder:text-[var(--t-fg-5)] ${ui5.inputLine}`}
+                style={{ borderColor: 'var(--t-border)', background: 'var(--t-bg)', color: 'var(--t-fg-2)' }}
               />
 
               {/* File upload */}
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full rounded-lg border border-dashed border-white/15 px-4 py-2.5 text-xs text-white/40 transition-colors hover:border-white/30 hover:text-white/60"
+                className="w-full rounded-lg border border-dashed px-4 py-2.5 text-xs transition-colors hover:border-[var(--t-border-2,_var(--t-border))] hover:text-[var(--t-fg-2)]"
+                style={{ borderColor: 'var(--t-border)', color: 'var(--t-fg-4)', background: 'transparent' }}
               >
                 或拖入 / 选择 JSON 文件
               </button>
@@ -364,19 +402,25 @@ export function BlueprintModal({ agent, onClose, onImported, initialImport }: Bl
               />
 
               {importError && (
-                <p className="text-[11px] text-red-400">{importError}</p>
+                <p className="text-[11px]" style={{ color: 'var(--t-err)' }}>{importError}</p>
               )}
 
               {/* Preview card */}
               {importPreview && (
-                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div
+                  className="rounded-[10px] border p-3"
+                  style={{ borderColor: 'var(--t-border)', background: 'var(--t-panel-2)' }}
+                >
                   <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs text-white/60">
+                    <span
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-xs"
+                      style={{ background: 'var(--t-panel-3)', color: 'var(--t-fg-3)', border: '1px solid var(--t-border)' }}
+                    >
                       {importPreview.name.charAt(0).toUpperCase()}
                     </span>
-                    <p className="text-sm font-medium text-white/80">{importPreview.name}</p>
+                    <p className="text-sm font-medium" style={{ color: 'var(--t-fg-2)' }}>{importPreview.name}</p>
                   </div>
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-white/40">
+                  <p className="mt-1.5 text-[11px] leading-relaxed" style={{ color: 'var(--t-fg-4)' }}>
                     {importPreview.soul.length > 80
                       ? importPreview.soul.slice(0, 80) + '…'
                       : importPreview.soul}
@@ -385,18 +429,19 @@ export function BlueprintModal({ agent, onClose, onImported, initialImport }: Bl
               )}
 
               {importErrorMsg && (
-                <p className="text-[11px] text-red-400">{importErrorMsg}</p>
+                <p className="text-[11px]" style={{ color: 'var(--t-err)' }}>{importErrorMsg}</p>
               )}
 
               {importStatus === 'done' && (
-                <p className="text-[11px] text-emerald-400">✓ Agent 已导入，已添加到列表</p>
+                <p className="text-[11px]" style={{ color: 'var(--t-ok)' }}>✓ Agent 已导入，已添加到列表</p>
               )}
 
               {importPreview && importStatus !== 'done' && (
                 <button
                   onClick={handleImport}
                   disabled={importStatus === 'loading'}
-                  className="w-full rounded-lg border border-white/15 px-4 py-2 text-sm text-white/80 transition-colors hover:border-white/30 disabled:opacity-40"
+                  className={`w-full ${ui5.priBtn}`}
+                  style={{ padding: '9px 16px', fontSize: 13, fontWeight: 600 }}
                 >
                   {importStatus === 'loading' ? '导入中…' : 'Import Agent'}
                 </button>

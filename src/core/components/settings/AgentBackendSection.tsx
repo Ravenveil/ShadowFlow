@@ -56,7 +56,7 @@ const AGENT_AVATARS: Record<string, { emoji: string; color: string }> = {
   opencode:        { emoji: '🔓', color: '#10B981' },
   // Cursor family
   cursor:          { emoji: '🖱',  color: '#8B5CF6' },
-  'cursor-agent':  { emoji: '🖱',  color: '#7C3AED' },
+  'cursor-agent':  { emoji: '🖱',  color: '#1447E6' },
   // GitHub Copilot — registry id is 'gh-copilot'
   'gh-copilot':    { emoji: '🪁', color: '#0078D4' },
   // Qwen — registry id is 'qwen-coder'
@@ -128,7 +128,7 @@ function AgentCard({
       className={[
         'flex w-full items-center gap-3 rounded-[10px] border p-3.5 text-left transition-all',
         selected
-          ? 'border-sf-accent bg-sf-accent-tint shadow-[0_0_0_1px_#A855F7]'
+          ? 'border-sf-accent bg-sf-accent-tint shadow-[0_0_0_1px_var(--t-accent)]'
           : agent.installed
             ? 'border-sf-border bg-sf-elev2 hover:border-sf-fg5 hover:bg-sf-elev3'
             : 'border-sf-border bg-sf-elev1 opacity-40 cursor-not-allowed',

@@ -41,7 +41,7 @@ const PythonBackendBanner: React.FC = () => {
         background: 'rgba(220, 38, 38, 0.08)',
         border: '1px solid rgba(220, 38, 38, 0.35)',
         borderLeft: '3px solid #ef4444',
-        borderRadius: 8,
+        borderRadius: 10, // UI5.0：圆角进一档
         fontSize: 12.5,
         color: 'var(--t-fg, #FAFAFA)',
       }}

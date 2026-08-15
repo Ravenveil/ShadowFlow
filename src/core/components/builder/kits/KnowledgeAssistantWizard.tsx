@@ -569,7 +569,7 @@ function Step3Preview({
         >
           {isSubmitting ? (
             <span className="flex items-center gap-2">
-              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[var(--t-border-2)] border-t-white" />
               生成中…
             </span>
           ) : (

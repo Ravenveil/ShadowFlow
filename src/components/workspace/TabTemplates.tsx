@@ -16,7 +16,7 @@ interface TabTemplatesProps {
 }
 
 const TPL_DATA = [
-  { g: '◆', name: 'Solo Company',   tag: '独立公司', alias: 'solo-company',   desc: 'CEO·CMO·CFO·Eng — 5 人小公司', x: 5, current: false, color: '#A855F7', cid: '0x9a…41' },
+  { g: '◆', name: 'Solo Company',   tag: '独立公司', alias: 'solo-company',   desc: 'CEO·CMO·CFO·Eng — 5 人小公司', x: 5, current: false, color: '#1447E6', cid: '0x9a…41' },
   { g: '◇', name: 'Academic Paper', tag: '论文',     alias: 'academic-paper', desc: 'Reader·Critic·Cite·Writer·Reviewer', x: 5, current: true, color: '#22D3EE', cid: '0x3f…91' },
   { g: '◈', name: 'Newsroom',       tag: '编辑部',   alias: 'newsroom',       desc: 'Pitch·Reporter·Editor·FactCheck', x: 4, current: false, color: '#F59E0B', cid: '0x77…a2' },
   { g: '⬢', name: 'Modern Startup', tag: '初创团队', alias: 'modern-startup', desc: 'PM·Eng·Designer·Growth', x: 4, current: false, color: '#10B981', cid: '0x12…fc' },

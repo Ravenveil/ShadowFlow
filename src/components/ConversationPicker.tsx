@@ -45,9 +45,10 @@ const LABEL_STYLE: React.CSSProperties = {
 const SELECT_STYLE: React.CSSProperties = {
   width: '100%',
   padding: '8px 12px',
-  background: 'rgba(255,255,255,0.05)',
+  // ===== UI5.0 =====(2026-08-14)· 暗色 rgba 底 → 主题面板，10px 刻度
+  background: 'var(--t-panel)',
   border: '1px solid var(--t-border)',
-  borderRadius: 8,
+  borderRadius: 10,
   color: 'var(--t-fg)',
   fontSize: 13,
   fontFamily: 'inherit',
@@ -162,7 +163,8 @@ export function ConversationPicker({
           style={{
             marginTop: 6,
             fontSize: 11,
-            color: '#fca5a5',
+            // ===== UI5.0 ===== · 硬编码 #fca5a5 → 主题错误色
+            color: 'var(--t-err, #dc2626)',
           }}
         >
           {error}
@@ -175,7 +177,7 @@ export function ConversationPicker({
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.55)',
+            background: 'rgba(0,0,0,0.32)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -188,7 +190,9 @@ export function ConversationPicker({
             style={{
               background: 'var(--t-panel)',
               border: '1px solid var(--t-border)',
-              borderRadius: 12,
+              // ===== UI5.0 ===== · 14px 刻度 + clawsgo 浮起软影
+              borderRadius: 14,
+              boxShadow: '0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -8px rgba(15,23,42,0.16)',
               padding: 20,
               width: 360,
               maxWidth: '90vw',
@@ -214,9 +218,10 @@ export function ConversationPicker({
               }}
               style={{
                 padding: '8px 12px',
-                background: 'rgba(255,255,255,0.05)',
+                // ===== UI5.0 ===== · 暗色 rgba 底 → 主题底色，10px 刻度
+                background: 'var(--t-bg)',
                 border: '1px solid var(--t-border)',
-                borderRadius: 6,
+                borderRadius: 10,
                 color: 'var(--t-fg)',
                 fontSize: 13,
                 fontFamily: 'inherit',
@@ -230,7 +235,7 @@ export function ConversationPicker({
                 disabled={creating}
                 style={{
                   padding: '6px 14px',
-                  borderRadius: 6,
+                  borderRadius: 8,
                   border: '1px solid var(--t-border)',
                   background: 'transparent',
                   color: 'var(--t-fg-3)',
@@ -248,10 +253,11 @@ export function ConversationPicker({
                 data-testid="conversation-picker-create"
                 style={{
                   padding: '6px 14px',
-                  borderRadius: 6,
-                  border: '1px solid rgba(124,58,237,0.45)',
-                  background: '#7c3aed',
-                  color: '#fff',
+                  borderRadius: 8,
+                  border: '1px solid transparent',
+                  // ===== UI5.0 ===== · 紫色 #7c3aed 主按钮收敛到 accent 蓝
+                  background: 'var(--t-accent)',
+                  color: 'var(--t-accent-ink)',
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: creating ? 'not-allowed' : 'pointer',

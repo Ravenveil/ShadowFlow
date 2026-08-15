@@ -34,7 +34,7 @@ function relativeTime(dateStr: string): string {
 const SCOPE_COLORS: Record<MemoryScope, { bg: string; border: string; text: string }> = {
   user:    { bg: 'rgba(37,99,235,.12)',  border: 'rgba(37,99,235,.22)',  text: '#2563EB' },
   project: { bg: 'rgba(5,150,105,.12)',  border: 'rgba(5,150,105,.22)',  text: 'var(--t-ok)' },
-  session: { bg: 'rgba(168,85,247,.12)', border: 'rgba(168,85,247,.22)', text: 'var(--t-accent)' },
+  session: { bg: 'color-mix(in oklab, var(--t-accent) 12%, transparent)', border: 'color-mix(in oklab, var(--t-accent) 22%, transparent)', text: 'var(--t-accent)' },
 };
 
 function ScopeTag({ scope, label }: { scope: MemoryScope; label: string }) {

@@ -2896,3 +2896,346 @@
 }
 .drTabOn { border-bottom-color: transparent; }
 .drTabOn::after { transform: scaleX(1); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * ===== UI5.0 ===== (2026-08-14)— 会话与 Composer 精修层
+ * 对标 clawsgo 实测 DNA：圆角刻度 10/14/18/26、软阴影(卡片 0 1px 2px /
+ * 浮起 0 8px 24px -8px)、120–280ms ease-out 动效、克制用色(accent 只给关键状态)。
+ * 全部 append-only 覆盖；视觉回退 = 删除本块。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Feed 阅读节奏：更大留白、正文更清晰 ───────────────────────────────── */
+.feed {
+  gap: 18px;
+  padding: 26px 28px 14px;
+}
+.msgText {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--skin-fg-1, var(--fg-1));
+}
+/* AI 消息 markdown 排版：行内 code / 链接 / 块级间距（代码块本体由
+   CodeBlockToolbar 渲染，此处只补行内元素与节奏） */
+.msgText code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 1.5px 5px;
+  border-radius: 5px;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+}
+.msgText a {
+  color: var(--accent-bright);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+  transition: color 120ms ease, border-bottom-color 120ms ease;
+}
+.msgText a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+/* UI5.0 · ChatFeedFB  fenced code block → CodeBlockToolbar 的外层间距 */
+.msgCodeBlock {
+  margin-top: 8px;
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+/* ── Agent 头像与名称行：圆角刻度对齐 10px ────────────────────────────── */
+.avLg {
+  border-radius: 10px;
+}
+.msgNm {
+  letter-spacing: -0.01em;
+}
+
+/* ── 用户气泡：实色 accent + 18px 刻度 + 软影；内部 mention 反白 ────────── */
+.usermsgBubble {
+  border-radius: 18px 18px 4px 18px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .10);
+}
+.usermsgBubble .mention {
+  background: rgba(255, 255, 255, .20);
+  color: inherit;
+}
+.usermsgBubble .mention:hover {
+  background: rgba(255, 255, 255, .30);
+}
+
+/* ── 工具调用卡：chip → 可展开卡片（工具名 → 查询词 → 展开细节/可点链接）── */
+.toolCard {
+  margin-top: 10px;
+  max-width: 520px;
+  border: 1px solid var(--skin-border, var(--border));
+  border-radius: 12px;
+  background: var(--skin-panel, var(--bg-elev));
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+  overflow: hidden;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.toolCard:hover {
+  border-color: var(--border-strong, var(--border));
+  box-shadow: 0 8px 24px -8px rgba(15, 23, 42, .12);
+}
+.toolCardHd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  box-sizing: border-box;
+}
+.toolCardHdStatic {
+  cursor: default;
+}
+.toolCardIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.toolCardName {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--skin-fg-1, var(--fg-1));
+  flex-shrink: 0;
+}
+.toolCardQuery {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--skin-fg-4, var(--fg-4));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.toolCardOk {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--status-ok);
+  flex-shrink: 0;
+}
+.toolCardChevron {
+  color: var(--skin-fg-4, var(--fg-4));
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: transform 180ms ease;
+}
+.toolCardOpen .toolCardChevron {
+  transform: rotate(180deg);
+}
+.toolCardBody {
+  border-top: 1px solid var(--border-subtle, var(--border));
+  padding: 9px 12px;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--skin-fg-2, var(--fg-2));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.toolCardLink {
+  color: var(--accent-bright);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+  word-break: break-all;
+}
+.toolCardLink:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── TypingDots：软胶囊容器 + 上下跳动（替代缩放脉冲）──────────────────── */
+.typingDots {
+  gap: 4px;
+  padding: 7px 11px;
+  background: var(--skin-panel, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+.typingDots span {
+  width: 6px;
+  height: 6px;
+  background: var(--fg-3);
+  animation: chatFbTypingBounce 1.2s ease-in-out infinite;
+}
+.typingAv {
+  border-radius: 7px;
+}
+@keyframes chatFbTypingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: .45; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typingDots span { animation: none !important; opacity: .7; }
+}
+
+/* ── Hover 工具条：10px 圆角 + 浮起软影 + 毛玻璃；hover 项 accent 化 ────── */
+.hoverTb {
+  border-radius: 10px;
+  padding: 3px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 8px 24px -8px rgba(15, 23, 42, .16);
+  backdrop-filter: blur(8px);
+}
+.hoverTbIt {
+  width: 27px;
+  height: 27px;
+  border-radius: 7px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.hoverTbIt:hover {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+}
+
+/* ── Feed 搜索栏：10px 圆角 + focus 蓝环 + 胶囊 chip ──────────────────── */
+.sbInput {
+  height: 34px;
+  border-radius: 10px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.sbInput:focus-within {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+}
+.sbChip {
+  border-radius: 999px;
+  padding: 3px 10px;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.sbClose {
+  border-radius: 8px;
+}
+
+/* ── Thread drawer：用户回复气泡实色化、mini composer 蓝环、胶囊发送 ────── */
+.drReplyBubble {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+  border-radius: 14px 14px 4px 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .08);
+}
+.drAv {
+  border-radius: 7px;
+}
+.drCompInput {
+  border-radius: 10px;
+  padding: 8px 11px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.drCompInput:focus {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+}
+.drCompSend {
+  border-radius: 999px;
+  padding: 5px 14px;
+}
+.drActBtn {
+  border-radius: 8px;
+}
+
+/* ── Composer 深化：18px 大圆角、工具钮 hover accent、发送键浮起 ────────── */
+.composer {
+  padding: 12px 24px 16px;
+}
+.compShell {
+  border-radius: 18px;
+}
+.compTools {
+  padding: 6px 10px;
+}
+.compToolBtn {
+  width: 28px;
+  height: 26px;
+  border-radius: 8px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.compToolBtn:hover {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+}
+.compArea {
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.compFoot .btnPrimary {
+  height: 30px;
+  padding: 0 16px;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .10);
+  transition: filter 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+.compFoot .btnPrimary:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px -8px color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.compFoot .btnPrimary:not(:disabled):active {
+  transform: translateY(0) scale(.97);
+}
+/* slash 弹窗：14px 圆角 + 浮起软影 + 弹入动效 */
+.slashPop {
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 8px 24px -8px rgba(15, 23, 42, .14);
+  animation: chatFbPopIn 160ms cubic-bezier(.16, .84, .44, 1);
+}
+.slashItem {
+  border-radius: 8px;
+}
+@keyframes chatFbPopIn {
+  from { opacity: 0; transform: translateY(4px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slashPop { animation: none !important; }
+}
+
+/* ── 次级元素圆角刻度收敛（reactions / issue / syscard / gate / mention）── */
+.react {
+  border-radius: 999px;
+}
+.reactAdd {
+  border-radius: 999px;
+}
+.threadChip {
+  border-radius: 8px;
+}
+.issue {
+  border-radius: 10px;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 150ms ease;
+}
+.issueClickable:hover {
+  box-shadow: 0 8px 24px -8px rgba(15, 23, 42, .10);
+}
+.syscardBox {
+  border-radius: 12px;
+}
+.gate {
+  border-radius: 14px;
+}
+.mention {
+  border-radius: 5px;
+}
+.dayLb {
+  letter-spacing: 0.1em;
+}

@@ -5,6 +5,12 @@ const sendMock = vi.fn();
 const cancelMock = vi.fn();
 const resolveDmMock = vi.fn().mockResolvedValue('dm-g1');
 
+// UI5.0 — jsdom 无 Element.scrollTo;UnifiedChatFeed 滚底会调它,补 noop polyfill
+// (此前被 useAuth 崩溃掩盖,未暴露)。
+if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = () => {};
+}
+
 const defaultMessages = [
   { id: 'm1', role: 'user', content: '你好' },
   { id: 'm2', role: 'agent', content: '收到' },
@@ -35,6 +41,15 @@ vi.mock('../../components/run-session/timeline/Timeline', () => ({
     <div data-testid="timeline" data-kinds={messages.map((m) => m.kind).join(',')} />
   ),
 }));
+// UI5.0 — chat-unify 后 DM 走 UnifiedChatFeed(不再是 Timeline);同样 stub 成 kind 列表,
+// timelineMessagesToStudio 直通(组件已构造好 kind 字段)。断言意图不变:
+// user→user_turn / agent→assistant_text / system→raw / 空消息过滤。
+vi.mock('../../components/workbench/UnifiedChatFeed', () => ({
+  UnifiedChatFeed: ({ messages }: { messages: Array<{ kind: string }> }) => (
+    <div data-testid="unified-feed" data-kinds={messages.map((m) => m.kind).join(',')} />
+  ),
+  timelineMessagesToStudio: (ms: unknown[]) => ms,
+}));
 // 「新员工」现在弹出原 /agents 页面（PagePeekOverlay）——stub 成可关闭的占位
 vi.mock('../chat-home/PagePeekOverlay', () => ({
   PagePeekOverlay: ({ target, onClose }: { target: string; onClose: () => void }) => (
@@ -46,14 +61,30 @@ vi.mock('../chat-home/PagePeekOverlay', () => ({
 vi.mock('../chat-home/PersonalRightPane', () => ({
   PersonalRightPane: ({ groupId }: { groupId: string }) => <div data-testid="right-pane" data-gid={groupId} />,
 }));
+// UI5.0(2026-08-14)— StartLanding(UI4.0 起)在空态树下调 useAuth;测试无 AuthProvider,
+// mock 成未登录态(user=null → 问候语不带用户名),修复 UI4.0 遗留的红测试。
+vi.mock('../../core/auth/AuthContext', () => ({
+  useAuth: () => ({ user: null }),
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 
 import { MemoryRouter } from 'react-router-dom';
 import { useChatStream } from '../../core/hooks/useChatStream';
 import { PersonalChatView } from '../chat-home/PersonalChatView';
+import { SidebarSlotProvider, SidebarSlotMount } from '../chat-home/SidebarSlotContext';
 
 const click = (el: HTMLElement) => act(() => { el.click(); });
-// M3b — ChatRailChrome(个人/团队切换+底部导航)用了 useNavigate/Link,需要 Router 上下文
-const view = () => <MemoryRouter initialEntries={['/chat?view=personal']}><PersonalChatView /></MemoryRouter>;
+// M3b — ChatRailChrome(个人/团队切换+底部导航)用了 useNavigate/Link,需要 Router 上下文。
+// UI5.0 — 助手列表经 portal 注入 SidebarSlot(2026-06-23 路B 统一侧栏);测试须挂
+// Provider + Mount,否则 slotEl=null、列表不渲染(此前被 useAuth 崩溃掩盖)。
+const view = () => (
+  <MemoryRouter initialEntries={['/chat?view=personal']}>
+    <SidebarSlotProvider>
+      <SidebarSlotMount />
+      <PersonalChatView />
+    </SidebarSlotProvider>
+  </MemoryRouter>
+);
 
 describe('PersonalChatView (融合M1)', () => {
   beforeEach(() => {
@@ -83,12 +114,12 @@ describe('PersonalChatView (融合M1)', () => {
     });
   });
 
-  it('消息流经适配层进 Timeline:user_turn + assistant_text', async () => {
+  it('消息流经适配层进 UnifiedChatFeed:user_turn + assistant_text', async () => {
     render(view());
     click(await screen.findByText('写写'));
     await waitFor(() => {
       // system → raw 卡(失败反馈必须可见);空 content 消息被过滤
-      expect(screen.getByTestId('timeline').getAttribute('data-kinds')).toBe('user_turn,assistant_text,raw');
+      expect(screen.getByTestId('unified-feed').getAttribute('data-kinds')).toBe('user_turn,assistant_text,raw');
     });
   });
 
@@ -129,7 +160,9 @@ describe('PersonalChatView (融合M1)', () => {
     }));
     render(view());
     click(await screen.findByText('写写'));
-    const stopBtn = await screen.findByTestId('dm-stop-btn');
+    // UI5.0 — 停止按钮已并入 UnifiedComposer 发送按钮位(data-testid 由 dm-stop-btn
+    // 改为 composer-stop,见 PersonalChatView F1 注释),断言意图不变:渲染+点击调 cancel。
+    const stopBtn = await screen.findByTestId('composer-stop');
     expect(stopBtn).toBeInTheDocument();
     click(stopBtn);
     expect(cancelMock).toHaveBeenCalledTimes(1);

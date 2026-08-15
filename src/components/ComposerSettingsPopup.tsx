@@ -123,6 +123,8 @@ export function ComposerSettingsPopup({ onClose, anchorRef }: Props) {
   return (
     <div
       ref={popupRef}
+      // UI5.0：浮层入场淡入缩放（从 composer 锚点向上长出）
+      className="ui50-pop-up"
       style={{
         position: 'absolute',
         bottom: 'calc(100% + 10px)',

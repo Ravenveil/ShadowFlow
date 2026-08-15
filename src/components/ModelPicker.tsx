@@ -240,11 +240,13 @@ export default function ModelPicker({
         </span>
       </button>
       {open && createPortal(
-        <div ref={dropdownRef} data-model-picker-pop style={{
+        <div ref={dropdownRef} data-model-picker-pop
+          // UI5.0：统一浮层——圆角 12 + 软阴影 + 淡入缩放（按弹出方向选入场曲线）
+          className={`ui50-menu ${pos.top != null ? 'ui50-pop' : 'ui50-pop-up'}`}
+          style={{
           position: 'fixed', left: pos.left, width: 260, maxHeight: maxH, zIndex: 1000,
           ...(pos.top != null ? { top: pos.top } : { bottom: pos.bottom ?? 0 }),
-          background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 10,
-          boxShadow: '0 8px 24px -8px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.04)',
+          background: 'var(--t-panel)', border: '1px solid var(--t-border)',
           padding: '4px 0', overflowY: 'auto',
         }}>
           {includeCli && (

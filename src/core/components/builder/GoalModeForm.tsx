@@ -258,12 +258,12 @@ export function GoalModeForm({
             'inline-flex h-11 items-center gap-2 rounded-[10px] px-5 text-[14px] font-bold transition-opacity',
             canSubmit
               ? 'bg-sf-accent text-white hover:opacity-90 cursor-pointer'
-              : 'bg-sf-accent/40 text-white/50 cursor-not-allowed',
+              : 'bg-sf-accent/40 text-[var(--t-fg-4)] cursor-not-allowed',
           ].join(' ')}
         >
           {isLoading ? (
             <>
-              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--t-border-2)] border-t-white" />
               Generating…
             </>
           ) : (

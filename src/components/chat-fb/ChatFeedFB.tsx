@@ -23,7 +23,9 @@ import { MsgReactionsFB, type MsgReactionItem, type ReactionIconKey } from './Ms
 import { SyscardFB, type SyscardKind } from './SyscardFB';
 import { InlineApprovalFB, type InlineApprovalStatus, type InlineApprovalChoice, type InlineApprovalMetric } from './InlineApprovalFB';
 import { IssueListFB } from './IssueListFB';
-import { useRef, type ReactNode } from 'react';
+import { CodeBlockToolbar } from '../CodeBlockToolbar';
+import { useRef, useState, type ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 // ─── Stream M 2026-05-29 · 后端 reactions(emoji→user[]) → MsgReactionItem[] ──────
 // auth 未落地，当前用户固定 'anonymous'（与后端 ReactionRequest 默认一致）。
@@ -84,6 +86,103 @@ function renderWithMentions(text: string): ReactNode {
   }
   if (last < text.length) out.push(text.slice(last));
   return out.length > 0 ? out : text;
+}
+
+/**
+ * UI5.0(2026-08-14)· Agent 消息富文本：fenced code block(```lang … ```)切出来
+ * 交给 CodeBlockToolbar（圆角 12px + 复制/折行/行号/折叠工具条），其余文本
+ * 仍走 renderWithMentions（保留 @mention chip 与 streaming caret 行为）。
+ * 纯渲染层切分，不动数据流。
+ */
+function renderRichContent(text: string): ReactNode {
+  if (!text) return null;
+  const re = /```(\w*)\n([\s\S]*?)```/g;
+  const parts: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let idx = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) {
+      parts.push(<span key={`rt-t-${idx}`}>{renderWithMentions(text.slice(last, m.index))}</span>);
+    }
+    parts.push(
+      <CodeBlockToolbar
+        key={`rt-c-${idx}`}
+        code={m[2].replace(/\n$/, '')}
+        lang={m[1] || undefined}
+        className={styles.msgCodeBlock}
+      />,
+    );
+    last = m.index + m[0].length;
+    idx += 1;
+  }
+  if (last < text.length) {
+    parts.push(<span key={`rt-t-${idx}`}>{renderWithMentions(text.slice(last))}</span>);
+  }
+  return parts;
+}
+
+/** UI5.0 · 工具卡展开区 URL → 可点链接（accent 色，新窗口打开）。 */
+function linkifyUrls(text: string): ReactNode {
+  const re = /(https?:\/\/[^\s)"']+)/g;
+  const out: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let idx = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(
+      <a
+        key={`lk-${idx++}`}
+        href={m[1]}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={styles.toolCardLink}
+      >
+        {m[1]}
+      </a>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out.length > 0 ? out : text;
+}
+
+/**
+ * UI5.0 · 工具调用可视化卡：头部（图标 + 工具名 + 查询词 + ✓ + 展开 chevron），
+ * 有 args 时可展开看完整细节（URL 可点）。无 args 时头部不可点（静态卡）。
+ * 展开态是纯展示 state，不触碰数据流。
+ */
+function ToolCardFB({ toolCall }: { toolCall: { name: string; args?: string } }) {
+  const [open, setOpen] = useState(false);
+  const expandable = !!toolCall.args;
+  return (
+    <div className={`${styles.toolCard} ${open ? styles.toolCardOpen : ''}`}>
+      <button
+        type="button"
+        className={`${styles.toolCardHd} ${expandable ? '' : styles.toolCardHdStatic}`}
+        onClick={expandable ? () => setOpen(p => !p) : undefined}
+        aria-expanded={expandable ? open : undefined}
+      >
+        <span className={styles.toolCardIcon} aria-hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} width={12} height={12}>
+            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+          </svg>
+        </span>
+        <span className={styles.toolCardName}>{toolCall.name}</span>
+        {toolCall.args && <span className={styles.toolCardQuery}>{toolCall.args}</span>}
+        <span className={styles.toolCardOk}>✓</span>
+        {expandable && (
+          <span className={styles.toolCardChevron} aria-hidden>
+            <ChevronDown size={13} strokeWidth={2} />
+          </span>
+        )}
+      </button>
+      {open && toolCall.args && (
+        <div className={styles.toolCardBody}>{linkifyUrls(toolCall.args)}</div>
+      )}
+    </div>
+  );
 }
 
 function fmtTime(ts: string | undefined): string {
@@ -186,23 +285,15 @@ function AgentMsg({
           )}
         </div>
         <div className={styles.msgText}>
-          {renderWithMentions(m.content)}
+          {renderRichContent(m.content)}
           {m.streaming && <span className={styles.streamCaret} aria-hidden>▍</span>}
         </div>
 
         {/* Stream H · agent msg issue 列表（critic/reviewer 产出）— 对照 chat-fb.html 1200-1204 */}
         {m.issues && m.issues.length > 0 && <IssueListFB issues={m.issues} />}
 
-        {m.toolCall && (
-          <div className={styles.toolChip}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} width={11} height={11}>
-              <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-            </svg>
-            <span className={styles.toolChipN}>{m.toolCall.name}</span>
-            {m.toolCall.args && <span className={styles.toolChipM}>{m.toolCall.args}</span>}
-            <span className={styles.toolChipOk}>✓</span>
-          </div>
-        )}
+        {/* UI5.0 · 工具调用卡（可展开，旧 toolChip 样式保留未删） */}
+        {m.toolCall && <ToolCardFB toolCall={m.toolCall} />}
 
         {/* Stream H 2026-05-28 · MsgReactionsFB 接入（reactions / thread-chip / read-by）
             TODO: 等后端 chat_messages.reactions / thread_count / read_by 字段上线后

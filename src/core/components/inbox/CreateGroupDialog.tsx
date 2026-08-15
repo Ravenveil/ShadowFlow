@@ -120,17 +120,17 @@ function WizardStepIndicator({ current, total }: { current: number; total: numbe
             <div
               className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold transition-colors ${
                 active
-                  ? 'bg-[#A78BFA] text-white'
+                  ? 'bg-[var(--t-accent)] text-[var(--t-accent-ink)]'
                   : done
-                    ? 'bg-[#A78BFA]/40 text-[#A78BFA]'
-                    : 'bg-white/10 text-white/40'
+                    ? 'bg-[var(--t-accent-tint)] text-[var(--t-accent)]'
+                    : 'bg-[var(--t-active)] text-[var(--t-fg-4)]'
               }`}
             >
               {done ? '✓' : step}
             </div>
             {step < total && (
               <div
-                className={`h-px w-6 ${done ? 'bg-[#A78BFA]/40' : 'bg-white/10'}`}
+                className={`h-px w-6 ${done ? 'bg-[var(--t-accent-tint)]' : 'bg-[var(--t-active)]'}`}
               />
             )}
           </div>
@@ -152,7 +152,7 @@ function GroupTemplateSelector({
   const { t } = useI18n();
   if (templates.length === 0) {
     return (
-      <p className="text-sm text-white/40">{t('inbox.createGroup.noTemplates')}</p>
+      <p className="text-sm text-[var(--t-fg-4)]">{t('inbox.createGroup.noTemplates')}</p>
     );
   }
   return (
@@ -167,12 +167,12 @@ function GroupTemplateSelector({
             onClick={() => onSelect(tpl)}
             className={`rounded-sf border p-4 text-left transition ${
               isSelected
-                ? 'border-[#A78BFA] bg-[#A78BFA]/10'
-                : 'border-white/10 hover:border-white/25'
+                ? 'border-[var(--t-accent)] bg-[var(--t-accent-tint)]'
+                : 'border-[var(--t-border)] hover:border-[var(--t-border-2)]'
             }`}
           >
-            <p className="font-medium text-white">{tpl.name}</p>
-            <p className="mt-1 text-xs text-white/45">
+            <p className="font-medium text-[var(--t-fg)]">{tpl.name}</p>
+            <p className="mt-1 text-xs text-[var(--t-fg-4)]">
               {tpl.agents.length > 0
                 ? `${tpl.agents.slice(0, 3).join(', ')}${tpl.agents.length > 3 ? ` +${tpl.agents.length - 3} more` : ''}`
                 : t('inbox.createGroup.noAgents')}
@@ -210,31 +210,31 @@ function AgentRosterSelector({
         return (
           <label
             key={agentId}
-            className="flex cursor-pointer items-start gap-3 rounded-sf border border-white/10 p-3 transition hover:border-white/25"
+            className="flex cursor-pointer items-start gap-3 rounded-sf border border-[var(--t-border)] p-3 transition hover:border-[var(--t-border-2)]"
           >
             <input
               type="checkbox"
               data-testid={`agent-check-${agentId}`}
               checked={checked}
               onChange={() => onToggle(agentId)}
-              className="mt-0.5 accent-[#A78BFA]"
+              className="mt-0.5 accent-[var(--t-accent)]"
             />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-white">{nameFor(agentId)}</span>
-                <span className="rounded px-1.5 py-0.5 font-mono text-[10px] bg-white/10 text-white/60">
+                <span className="text-sm font-medium text-[var(--t-fg)]">{nameFor(agentId)}</span>
+                <span className="rounded px-1.5 py-0.5 font-mono text-[10px] bg-[var(--t-active)] text-[var(--t-fg-3)]">
                   {kindBadgeFor(agentId)}
                 </span>
               </div>
               {soulFor(agentId) && (
-                <p className="mt-0.5 truncate text-xs text-white/40">{soulFor(agentId)}</p>
+                <p className="mt-0.5 truncate text-xs text-[var(--t-fg-4)]">{soulFor(agentId)}</p>
               )}
             </div>
           </label>
         );
       })}
       {agents.length === 0 && (
-        <p className="text-sm text-white/40">{t('inbox.createGroup.noAgents')}</p>
+        <p className="text-sm text-[var(--t-fg-4)]">{t('inbox.createGroup.noAgents')}</p>
       )}
     </div>
   );
@@ -256,9 +256,9 @@ function MemberEmailInput({
         onChange={(e) => onChange(e.target.value)}
         rows={4}
         placeholder={t('inbox.createGroup.memberEmailPlaceholder')}
-        className="w-full rounded-sf border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 outline-none placeholder:text-white/30 focus:border-[#A78BFA]/60"
+        className="w-full rounded-sf border border-[var(--t-border)] bg-[var(--t-hover)] px-3 py-2 text-sm text-[var(--t-fg-2)] outline-none placeholder:text-[var(--t-fg-5)] focus:border-[var(--t-accent)]"
       />
-      <p className="text-xs text-white/35">{t('inbox.createGroup.memberEmailHint')}</p>
+      <p className="text-xs text-[var(--t-fg-5)]">{t('inbox.createGroup.memberEmailHint')}</p>
     </div>
   );
 }
@@ -281,9 +281,9 @@ function GroupNameInput({
         maxLength={MAX}
         onChange={(e) => onChange(e.target.value)}
         placeholder={t('inbox.createGroup.groupNamePlaceholder')}
-        className="h-10 w-full rounded-sf border border-white/10 bg-white/5 px-3 text-sm text-white/90 outline-none placeholder:text-white/30 focus:border-[#A78BFA]/60"
+        className="h-10 w-full rounded-sf border border-[var(--t-border)] bg-[var(--t-hover)] px-3 text-sm text-[var(--t-fg-2)] outline-none placeholder:text-[var(--t-fg-5)] focus:border-[var(--t-accent)]"
       />
-      <p className={`text-right text-xs ${value.length >= MAX ? 'text-red-400' : 'text-white/35'}`}>
+      <p className={`text-right text-xs ${value.length >= MAX ? 'text-red-400' : 'text-[var(--t-fg-5)]'}`}>
         {value.length} / {MAX}
       </p>
     </div>
@@ -295,7 +295,7 @@ function PolicyMatrixPreview() {
   return (
     <div className="flex flex-col gap-3">
       <PolicyMatrixPanel readOnly />
-      <p className="text-xs text-white/40">
+      <p className="text-xs text-[var(--t-fg-4)]">
         {t('inbox.createGroup.policyHint')}
       </p>
     </div>
@@ -442,14 +442,14 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
         {/* Card */}
         <div
           data-testid="create-group-dialog"
-          className="relative flex max-h-[90vh] w-full max-w-[640px] flex-col overflow-hidden rounded-sf bg-[#161B22] shadow-2xl"
+          className="relative flex max-h-[90vh] w-full max-w-[640px] flex-col overflow-hidden rounded-sf bg-[var(--t-panel)] shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-start justify-between border-b border-white/5 px-6 py-5">
+          <div className="flex items-start justify-between border-b border-[var(--t-border)] px-6 py-5">
             <div>
-              <p className="text-xs text-white/40">{t('inbox.createGroup.stepLabel').replace('{current}', String(state.step)).replace('{total}', '5')}</p>
-              <h2 className="mt-1 text-lg font-semibold text-white">
+              <p className="text-xs text-[var(--t-fg-4)]">{t('inbox.createGroup.stepLabel').replace('{current}', String(state.step)).replace('{total}', '5')}</p>
+              <h2 className="mt-1 text-lg font-semibold text-[var(--t-fg)]">
                 {STEP_TITLES[state.step]}
               </h2>
             </div>
@@ -457,14 +457,14 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
               type="button"
               aria-label={t('inbox.createGroup.closeLabel')}
               onClick={onClose}
-              className="text-white/40 hover:text-white/70"
+              className="text-[var(--t-fg-4)] hover:text-[var(--t-fg-3)]"
             >
               ✕
             </button>
           </div>
 
           {/* Step indicator */}
-          <div className="border-b border-white/5 px-6 py-3">
+          <div className="border-b border-[var(--t-border)] px-6 py-3">
             <WizardStepIndicator current={state.step} total={5} />
           </div>
 
@@ -513,12 +513,12 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-white/5 px-6 py-4">
+          <div className="flex items-center justify-between border-t border-[var(--t-border)] px-6 py-4">
             <button
               type="button"
               onClick={handleBack}
               disabled={state.step === 1}
-              className="rounded-sf px-4 py-2 text-sm text-white/60 hover:text-white disabled:opacity-0"
+              className="rounded-sf px-4 py-2 text-sm text-[var(--t-fg-3)] hover:text-[var(--t-fg)] disabled:opacity-0"
             >
               {t('inbox.createGroup.back')}
             </button>
@@ -527,7 +527,7 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
                 type="button"
                 data-testid="wizard-next"
                 onClick={handleNext}
-                className="rounded-sf bg-[#A78BFA]/20 px-5 py-2 text-sm font-medium text-[#A78BFA] transition hover:bg-[#A78BFA]/30"
+                className="rounded-sf bg-[var(--t-accent-tint)] px-5 py-2 text-sm font-medium text-[var(--t-accent)] transition hover:opacity-85"
               >
                 {t('inbox.createGroup.nextStep')}
               </button>
@@ -537,7 +537,7 @@ export function CreateGroupDialog({ open, onClose, templateId }: CreateGroupDial
                 data-testid="wizard-create"
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="rounded-sf bg-[#A78BFA] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#A78BFA]/80 disabled:opacity-60"
+                className="rounded-sf bg-[var(--t-accent)] px-5 py-2 text-sm font-semibold text-[var(--t-accent-ink)] transition hover:opacity-90 disabled:opacity-60"
               >
                 {submitting ? t('inbox.createGroup.creating') : t('inbox.createGroup.createBtn')}
               </button>

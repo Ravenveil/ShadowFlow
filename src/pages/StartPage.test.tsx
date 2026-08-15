@@ -81,28 +81,34 @@ describe('StartPage', () => {
     expect(screen.getByText('从模板开始')).toBeInTheDocument();
   });
 
-  it('clicking "创建 Agent" card navigates to /builder?mode=single', async () => {
+  // UI5.0: 2026-05-20 起三张 PrimitiveCard 的跳转目标已重定 —— Agent/Team 卡片
+  // 分别到列表页 /agents、/teams（/builder 已 redirect 到 /start）；模板卡片
+  // 不再跳 /templates，而是滚动到页内 Skill Pack 区。以下断言同步更新。
+  it('clicking "创建 Agent" card navigates to /agents', async () => {
     const user = userEvent.setup();
     renderStartPage();
     const card = await screen.findByTestId('primitive-card-agent');
     await user.click(card);
-    expect(mockNavigate).toHaveBeenCalledWith('/builder?mode=single');
+    expect(mockNavigate).toHaveBeenCalledWith('/agents');
   });
 
-  it('clicking "创建 Agent Team" card navigates to /builder?mode=team', async () => {
+  it('clicking "创建 Agent Team" card navigates to /teams', async () => {
     const user = userEvent.setup();
     renderStartPage();
     const card = await screen.findByTestId('primitive-card-team');
     await user.click(card);
-    expect(mockNavigate).toHaveBeenCalledWith('/builder?mode=team');
+    expect(mockNavigate).toHaveBeenCalledWith('/teams');
   });
 
-  it('clicking "从模板开始" card navigates to /templates', async () => {
+  it('clicking "从模板开始" card scrolls to the skill-pack section', async () => {
+    const scrollSpy = vi.fn();
+    Element.prototype.scrollIntoView = scrollSpy;
     const user = userEvent.setup();
     renderStartPage();
     const card = await screen.findByTestId('primitive-card-templates');
     await user.click(card);
-    expect(mockNavigate).toHaveBeenCalledWith('/templates');
+    expect(scrollSpy).toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalledWith('/templates');
   });
 
   it('shows empty state when no recent apps', async () => {

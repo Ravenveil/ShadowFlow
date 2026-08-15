@@ -23,7 +23,7 @@ export function ChatBriefBoardToggle({
     `px-4 py-1.5 rounded-[10px] text-sm transition-colors ${
       activeTab === tab
         ? 'bg-shadowflow-accent text-white'
-        : 'text-white/60 hover:text-white/80'
+        : 'text-[var(--t-fg-3)] hover:text-[var(--t-fg-2)]'
     }`;
 
   const approvalsLabel = t('chat.tabApprovals');
@@ -31,7 +31,7 @@ export function ChatBriefBoardToggle({
     typeof pendingApprovalsCount === 'number' && pendingApprovalsCount > 0;
 
   return (
-    <div role="tablist" className="flex rounded-sf bg-white/5 p-0.5">
+    <div role="tablist" className="flex rounded-sf bg-[var(--t-hover)] p-0.5">
       <button
         type="button"
         role="tab"

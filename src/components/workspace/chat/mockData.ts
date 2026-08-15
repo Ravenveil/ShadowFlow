@@ -17,7 +17,7 @@ const MAIN_MSGS: MsgItem[] = [
   { type: 'system', text: '张明 启动 run #042 · 输入：arXiv:2410.11215', id: 2 },
   {
     type: 'agent', id: 3,
-    agent: { glyph: '读', name: '读读', role: 'READER · L1', model: 'haiku-4.5', color: '#A855F7' },
+    agent: { glyph: '读', name: '读读', role: 'READER · L1', model: 'haiku-4.5', color: '#1447E6' },
     time: '09:14',
     bodyText: '已抓 PDF · 38 页 / 12 节 / 47 引用。建议优先 §4 方法 与 §6 实验。',
     tool: { name: 'read_file', meta: 'arxiv-2410.11215.pdf · 38p · 142 KB' },
@@ -78,7 +78,7 @@ const DUDU_MSGS: MsgItem[] = [
   { type: 'divider', label: '今天 · 10 月 28 日', id: 301 },
   {
     type: 'agent', id: 302,
-    agent: { glyph: '读', name: '读读', role: 'READER · L1', model: 'haiku-4.5', color: '#A855F7' },
+    agent: { glyph: '读', name: '读读', role: 'READER · L1', model: 'haiku-4.5', color: '#1447E6' },
     time: '09:14',
     bodyText: '已抽 12 篇相关 PDF（按引用图谱倒排）。要我现在开始读？',
     reactions: [['👀', 1]],
@@ -149,7 +149,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
 ];
 
 export const ORGS: Org[] = [
-  { init: '论', name: '论文实验室',      tag: '专业版 · 已认证', cur: true,  members: '7 agents · 3 teams', color: '#A855F7' },
+  { init: '论', name: '论文实验室',      tag: '专业版 · 已认证', cur: true,  members: '7 agents · 3 teams', color: '#1447E6' },
   { init: '代', name: '代码 Review 团队', tag: '专业版',          cur: false, members: '4 agents · 2 teams', color: '#22D3EE' },
   { init: 'OP', name: 'OPS 值班',         tag: '未认证',          cur: false, warn: true, members: '3 agents · 1 team', color: '#F59E0B' },
   { init: 'NP', name: 'NPC Persona',      tag: '社区版 · L1',     cur: false, members: '9 agents · 2 teams', color: '#EF4444' },

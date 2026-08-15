@@ -260,13 +260,13 @@ export const AgentPickerModal: React.FC<AgentPickerModalProps> = ({
                     borderRadius: 8,
                     border: `1px solid ${
                       isSelected
-                        ? 'var(--t-accent, #A855F7)'
+                        ? 'var(--t-accent, #1447E6)'
                         : isHover
                           ? 'var(--t-border-2, #3F3F46)'
                           : 'transparent'
                     }`,
                     background: isSelected
-                      ? 'var(--t-accent-tint, rgba(168,85,247,0.14))'
+                      ? 'var(--t-accent-tint, rgba(20,71,230,0.14))' /* UI5.0 fallback 去紫化 */
                       : isHover
                         ? 'var(--t-bg-elev-3, #1A1A1A)'
                         : 'var(--t-bg-elev-2, #141414)',
@@ -288,17 +288,17 @@ export const AgentPickerModal: React.FC<AgentPickerModalProps> = ({
                       alignItems: 'center',
                       justifyContent: 'center',
                       background: isSelected
-                        ? 'var(--t-accent-tint, rgba(168,85,247,0.14))'
+                        ? 'var(--t-accent-tint, rgba(20,71,230,0.14))' /* UI5.0 fallback 去紫化 */
                         : 'var(--t-bg-elev-3, #1A1A1A)',
                       color: isSelected
-                        ? 'var(--t-accent-bright, #D8B4FE)'
+                        ? 'var(--t-accent-bright, #0F3BCC)' /* UI5.0 fallback 去紫化 */
                         : 'var(--t-fg-2, #E4E4E7)',
                       fontFamily: 'var(--font-mono, ui-monospace, monospace)',
                       fontWeight: 700,
                       fontSize: 11,
                       border: `1px solid ${
                         isSelected
-                          ? 'var(--t-accent, #A855F7)'
+                          ? 'var(--t-accent, #1447E6)'
                           : 'var(--t-border, #27272A)'
                       }`,
                     }}

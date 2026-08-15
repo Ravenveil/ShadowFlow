@@ -120,7 +120,8 @@ function RecentDrafts({ onNavigateCatalog }: RecentDraftsProps) {
       <div className="hf-label" style={{ marginBottom: 10 }}>
         {t('start.recentLabel')}
       </div>
-      <div className="hf-card" style={{ padding: 14 }}>
+      {/* UI5.0: ui40-panel — hover 微浮起 */}
+      <div className="hf-card ui40-panel" style={{ padding: 14 }}>
         {loading ? (
           <>
             <SkeletonRow />
@@ -280,7 +281,8 @@ function PrimitiveCard({ testId, glyph, title, description, onClick }: Primitive
       type="button"
       data-testid={testId}
       onClick={onClick}
-      className="hf-card"
+      // UI5.0: ui40-panel — hover 微浮起（clawsgo 卡片观感）
+      className="hf-card ui40-panel"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -400,7 +402,8 @@ function RecentRuns() {
             return (
               <div
                 key={run.run_id}
-                className="hf-card"
+                // UI5.0: ui40-panel — hover 微浮起
+                className="hf-card ui40-panel"
                 onClick={() => navigate(`/run-session/${run.session_id}?goal=${encodeURIComponent(run.goal ?? '')}`)}
                 style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer', position: 'relative', overflow: 'hidden', minWidth: 0 }}
                 title={run.goal}
@@ -521,7 +524,8 @@ function SkillPackSection({ onSelect, disabled }: SkillPackSectionProps) {
             key={slug}
             type="button"
             onClick={() => !disabled && onSelect(pack)}
-            className="hf-card"
+            // UI5.0: ui40-panel — hover 微浮起
+            className="hf-card ui40-panel"
             data-testid={`skill-pack-${slug}`}
             disabled={disabled}
             style={{
@@ -819,11 +823,9 @@ export default function StartPage() {
           }}
         >
           {/* Hero — design-pkg aligned (Geist heavy display + eyebrow pill + lead).
-              Decorative purple glow sits behind, accent-tint eyebrow, sf-display-l
-              scale heading (clamp for responsive), single-line lead. Additive only:
-              all original copy preserved, no sections removed. */}
+              UI5.0: 装饰光晕收敛（ accent token，透明度降到 12%，day 主题克制用色）。 */}
           <div className="sf-anim-slide-up" style={{ textAlign: 'center', position: 'relative', animationDelay: '20ms' }}>
-            {/* Decorative glow ornament — pointer-events none, sits behind text */}
+            {/* Decorative accent glow ornament — pointer-events none, sits behind text */}
             <div
               aria-hidden
               style={{
@@ -835,7 +837,7 @@ export default function StartPage() {
                 height: 360,
                 borderRadius: '50%',
                 background:
-                  'radial-gradient(ellipse, color-mix(in oklab, var(--t-accent) 18%, transparent) 0%, transparent 60%)',
+                  'radial-gradient(ellipse, color-mix(in oklab, var(--t-accent) 12%, transparent) 0%, transparent 60%)',
                 filter: 'blur(40px)',
                 pointerEvents: 'none',
                 zIndex: 0,

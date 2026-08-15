@@ -13,7 +13,7 @@ describe('QuadrantChart', () => {
     const texts = container.querySelectorAll('text');
     const sfLabel = Array.from(texts).find((t) => t.textContent === 'ShadowFlow');
     expect(sfLabel).toBeTruthy();
-    expect(sfLabel?.getAttribute('fill')).toBe('#D8B4FE');
+    expect(sfLabel?.getAttribute('fill')).toBe('#1447E6'); // ===== UI5.0 ===== 紫 #D8B4FE → accent 蓝
   });
 
   it('includes competitor labels', () => {

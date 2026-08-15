@@ -61,7 +61,7 @@ const FALLBACK_SKIN: SkinSlot[] = [
   { slot: 'panel',  value: '#0F0F12' },
   { slot: 'fg',     value: '#FAFAFA' },
   { slot: 'muted',  value: '#A1A1AA' },
-  { slot: 'accent', value: '#A855F7' },
+  { slot: 'accent', value: '#1447E6' }, // UI5.0: 紫色 accent 收敛为 clawsgo 蓝
   { slot: 'ink',    value: '#0A0A0A' },
   { slot: 'border', value: '#27272A' },
 ];
@@ -111,16 +111,16 @@ export function WalletSection() {
 
   return (
     <div>
-      {/* ── Header ── */}
+      {/* ── Header — UI5.0: 标题层级统一 17px/700 ── */}
       <div className="hf-label" style={{ color: 'var(--t-accent)' }}>
         0G · WALLET
       </div>
       <div
         style={{
-          fontSize: 24,
-          fontWeight: 800,
+          fontSize: 17,
+          fontWeight: 700,
           marginTop: 4,
-          letterSpacing: '-.02em',
+          letterSpacing: '-.01em',
           color: 'var(--t-fg)',
         }}
       >
@@ -199,7 +199,8 @@ export function WalletSection() {
         }}
       >
         {statCells.map(([k, v, s]) => (
-          <div key={k} className="hf-card" style={{ padding: '12px 14px' }}>
+          // UI5.0: ui40-panel — hover 微浮起
+          <div key={k} className="hf-card ui40-panel" style={{ padding: '12px 14px' }}>
             <div className="hf-label" style={{ marginBottom: 6 }}>
               {k}
             </div>

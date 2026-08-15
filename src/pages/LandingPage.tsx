@@ -2,6 +2,11 @@
 // 所有 section（Hero / VS Rivals / Features / Proof Wall / Templates / Import CID / CTA / Footer）
 // 必须保留。可以改进样式、新增内容，但禁止删除或缩减任何已有区块。
 // 参考设计：git commit b35001e (src/App.tsx)
+//
+// ===== UI5.0 =====
+// clawsgo DNA 统一：紫色（#1447E6 / rgba(20,71,230,*) / #1447E6）全部收敛为
+// accent 蓝 #1447E6（rgba(20,71,230,*)）；大标题不再用渐变文字，改为纯色
+// var(--t-accent-bright) 强调词，与 clawsgo「大标题纯色不渐变」一致。
 
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -281,7 +286,7 @@ function Ticker({ t }: { t: typeof T.EN }) {
 function Orb({ state, style, glyph, badge, badgeColor }: { state: 'ok' | 'run' | 'rej'; style: React.CSSProperties; glyph: string; badge: string; badgeColor: string }) {
   const stateStyles: Record<string, React.CSSProperties> = {
     ok:  { borderColor: 'var(--status-ok)', boxShadow: '0 0 0 3px rgba(16,185,129,.08)' },
-    run: { borderColor: 'var(--t-accent)', boxShadow: '0 0 0 4px rgba(168,85,247,.12), 0 0 28px -2px rgba(168,85,247,.6)', animation: 'sf-breathe 2.4s ease-in-out infinite' },
+    run: { borderColor: 'var(--t-accent)', boxShadow: '0 0 0 4px rgba(20,71,230,.12), 0 0 28px -2px rgba(20,71,230,.6)', animation: 'sf-breathe 2.4s ease-in-out infinite' },
     rej: { borderColor: 'var(--status-reject)', boxShadow: '0 0 0 4px rgba(239,68,68,.1)' },
   };
   return (
@@ -303,7 +308,7 @@ function OrbLabel({ label, style, color, accent, children }: { label: string; st
 
 function HcMsg({ children, accent, reject, style }: { children: React.ReactNode; accent?: boolean; reject?: boolean; style?: React.CSSProperties }) {
   return (
-    <div style={{ position: 'absolute', background: reject ? 'var(--status-reject-tint)' : accent ? 'linear-gradient(180deg, rgba(168,85,247,.08), var(--t-panel))' : 'var(--t-panel)', border: `1px solid ${reject ? 'rgba(239,68,68,.35)' : accent ? 'rgba(168,85,247,.4)' : 'var(--t-border)'}`, borderRadius: 10, padding: '6px 10px', fontSize: 10.5, color: 'var(--t-fg-2)', maxWidth: 180, lineHeight: 1.35, zIndex: 2, animation: 'sf-float 4s ease-in-out infinite', ...style }}>
+    <div style={{ position: 'absolute', background: reject ? 'var(--status-reject-tint)' : accent ? 'linear-gradient(180deg, rgba(20,71,230,.08), var(--t-panel))' : 'var(--t-panel)', border: `1px solid ${reject ? 'rgba(239,68,68,.35)' : accent ? 'rgba(20,71,230,.4)' : 'var(--t-border)'}`, borderRadius: 10, padding: '6px 10px', fontSize: 10.5, color: 'var(--t-fg-2)', maxWidth: 180, lineHeight: 1.35, zIndex: 2, animation: 'sf-float 4s ease-in-out infinite', ...style }}>
       {children}
     </div>
   );
@@ -314,9 +319,10 @@ function HcMsg({ children, accent, reject, style }: { children: React.ReactNode;
 // Nodes:  P(14,30)  L(38,26)  D(38,55)  W(60,70)  A(82,32)
 function HeroCanvas() {
   return (
-    <div style={{ position: 'relative', aspectRatio: '1.02', background: `radial-gradient(ellipse at 50% 40%, rgba(168,85,247,.06), transparent 65%), var(--skin-panel)`, border: '1px solid var(--t-border)', borderRadius: 28, overflow: 'hidden', boxShadow: '0 40px 80px -20px rgba(0,0,0,.5), 0 0 0 1px var(--t-border), 0 0 120px -10px rgba(168,85,247,.2)' }}>
+    // UI5.0 — 投影按 clawsgo 软阴影刻度收敛（原 rgba(0,0,0,.5) 在 day 主题下过重）。
+    <div style={{ position: 'relative', aspectRatio: '1.02', background: `radial-gradient(ellipse at 50% 40%, rgba(20,71,230,.06), transparent 65%), var(--skin-panel)`, border: '1px solid var(--t-border)', borderRadius: 28, overflow: 'hidden', boxShadow: '0 24px 48px -24px rgba(15,23,42,.22), 0 0 0 1px var(--t-border), 0 0 120px -10px rgba(20,71,230,.18)' }}>
       <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle, var(--t-panel) 1px, transparent 1px)', backgroundSize: '22px 22px', opacity: .35 }} />
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 30% 20%, rgba(168,85,247,.2), transparent 50%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 30% 20%, rgba(20,71,230,.2), transparent 50%)', pointerEvents: 'none' }} />
 
       {/* Chrome */}
       <div style={{ position: 'absolute', top: 14, left: 14, right: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 5 }}>
@@ -335,29 +341,29 @@ function HeroCanvas() {
       <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} viewBox="0 0 100 100" preserveAspectRatio="none">
         <defs>
           <marker id="H-ok"  viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon points="0,0 10,5 0,10" fill="#10B981" /></marker>
-          <marker id="H-run" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon points="0,0 10,5 0,10" fill="#A855F7" /></marker>
+          <marker id="H-run" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon points="0,0 10,5 0,10" fill="#1447E6" /></marker>
           <marker id="H-rej" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon points="0,0 10,5 0,10" fill="#EF4444" /></marker>
         </defs>
         {/* Planner → LitReviewer / DataScout */}
         <path d="M 19,30 C 26,28 31,27 33,26.5" stroke="#10B981" strokeWidth="0.3" vectorEffect="non-scaling-stroke" fill="none" markerEnd="url(#H-ok)" />
         <path d="M 19,32 C 26,42 31,50 33,54" stroke="#10B981" strokeWidth="0.3" vectorEffect="non-scaling-stroke" fill="none" markerEnd="url(#H-ok)" />
         {/* LitReviewer + DataScout → SectionWriter (streaming) */}
-        <path id="hf1" d="M 43,28 C 52,40 56,55 56,66" stroke="#A855F7" strokeWidth="0.45" vectorEffect="non-scaling-stroke" fill="none" strokeDasharray="3 2.5" style={{ animation: 'sf-dash-anim 1s linear infinite' }} markerEnd="url(#H-run)" />
-        <path id="hf2" d="M 43,55 C 50,60 54,64 56,67" stroke="#A855F7" strokeWidth="0.45" vectorEffect="non-scaling-stroke" fill="none" strokeDasharray="3 2.5" style={{ animation: 'sf-dash-anim 1s linear infinite' }} markerEnd="url(#H-run)" />
+        <path id="hf1" d="M 43,28 C 52,40 56,55 56,66" stroke="#1447E6" strokeWidth="0.45" vectorEffect="non-scaling-stroke" fill="none" strokeDasharray="3 2.5" style={{ animation: 'sf-dash-anim 1s linear infinite' }} markerEnd="url(#H-run)" />
+        <path id="hf2" d="M 43,55 C 50,60 54,64 56,67" stroke="#1447E6" strokeWidth="0.45" vectorEffect="non-scaling-stroke" fill="none" strokeDasharray="3 2.5" style={{ animation: 'sf-dash-anim 1s linear infinite' }} markerEnd="url(#H-run)" />
         {/* SectionWriter → Advisor (handoff thin) */}
-        <path d="M 65,67 C 73,55 78,45 80,38" stroke="#A855F7" strokeWidth="0.3" vectorEffect="non-scaling-stroke" fill="none" opacity=".5" strokeDasharray="2 2" />
+        <path d="M 65,67 C 73,55 78,45 80,38" stroke="#1447E6" strokeWidth="0.3" vectorEffect="non-scaling-stroke" fill="none" opacity=".5" strokeDasharray="2 2" />
         {/* Advisor reject → SectionWriter */}
         <path d="M 80,40 C 85,55 78,65 68,70" stroke="#EF4444" strokeWidth="0.5" vectorEffect="non-scaling-stroke" fill="none" markerEnd="url(#H-rej)" />
         {/* Retry loop around Advisor */}
         <path d="M 82,38 C 92,40 92,28 86,28" stroke="#F59E0B" strokeWidth="0.3" vectorEffect="non-scaling-stroke" strokeDasharray="1.5 1.5" fill="none" />
         {/* Token particles */}
-        <circle r="0.6" fill="#D8B4FE"><animateMotion dur="1.6s" repeatCount="indefinite"><mpath href="#hf1" /></animateMotion></circle>
-        <circle r="0.6" fill="#D8B4FE"><animateMotion dur="1.6s" begin=".5s" repeatCount="indefinite"><mpath href="#hf1" /></animateMotion></circle>
-        <circle r="0.6" fill="#D8B4FE"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#hf2" /></animateMotion></circle>
+        <circle r="0.6" fill="#1447E6"><animateMotion dur="1.6s" repeatCount="indefinite"><mpath href="#hf1" /></animateMotion></circle>
+        <circle r="0.6" fill="#1447E6"><animateMotion dur="1.6s" begin=".5s" repeatCount="indefinite"><mpath href="#hf1" /></animateMotion></circle>
+        <circle r="0.6" fill="#1447E6"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#hf2" /></animateMotion></circle>
       </svg>
 
       {/* FAN-OUT group box — wraps LitReviewer + DataScout */}
-      <div style={{ position: 'absolute', top: '14%', left: '28%', width: '20%', height: '55%', border: '1.5px dashed rgba(168,85,247,.35)', borderRadius: 18, zIndex: 1, pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', top: '14%', left: '28%', width: '20%', height: '55%', border: '1.5px dashed rgba(20,71,230,.35)', borderRadius: 18, zIndex: 1, pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', top: -10, left: 16, background: 'var(--skin-panel)', padding: '2px 10px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-accent-bright)' }}>↯ fan-out</div>
       </div>
 
@@ -396,8 +402,8 @@ function HeroCanvas() {
       </HcMsg>
 
       {/* Policy Matrix pulse bar */}
-      <div style={{ position: 'absolute', bottom: 16, left: 16, right: 16, background: 'var(--t-panel)', border: '1px solid rgba(168,85,247,.3)', borderRadius: 12, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 6 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--t-accent-tint)', border: '1px solid rgba(168,85,247,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--t-accent-bright)', flexShrink: 0 }}>⊞</div>
+      <div style={{ position: 'absolute', bottom: 16, left: 16, right: 16, background: 'var(--t-panel)', border: '1px solid rgba(20,71,230,.3)', borderRadius: 12, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 6 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--t-accent-tint)', border: '1px solid rgba(20,71,230,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--t-accent-bright)', flexShrink: 0 }}>⊞</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--status-reject)', letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 700 }}>POLICY MATRIX · BLOCKED</div>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-fg)', lineHeight: 1.3 }}>Advisor.reject(SectionWriter)</div>
@@ -443,7 +449,7 @@ function CheckpointMini() {
         { left: '60%', color: 'var(--t-accent)', label: 'retry_2', pulse: true },
       ].map(({ left, color, label, pulse }) => (
         <div key={label} style={{ position: 'absolute', left, top: '50%', transform: 'translate(-50%, -50%)' }}>
-          <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--t-bg)', border: `2px solid ${color}`, ...(pulse ? { boxShadow: `0 0 0 4px rgba(168,85,247,.18)`, animation: 'sf-pulse 1.4s ease-in-out infinite' } : {}) }} />
+          <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--t-bg)', border: `2px solid ${color}`, ...(pulse ? { boxShadow: `0 0 0 4px rgba(20,71,230,.18)`, animation: 'sf-pulse 1.4s ease-in-out infinite' } : {}) }} />
           <div style={{ position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t-fg-3)', whiteSpace: 'nowrap' }}>{label}</div>
         </div>
       ))}
@@ -456,7 +462,7 @@ function ChainMini({ steps }: { steps: readonly string[] }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {steps.map((text, n) => (
         <div key={n} style={{ display: 'flex', gap: 8, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-3)' }}>
-          <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, border: '1px solid rgba(168,85,247,.3)', flexShrink: 0 }}>{n + 1}</div>
+          <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, border: '1px solid rgba(20,71,230,.3)', flexShrink: 0 }}>{n + 1}</div>
           {text}
         </div>
       ))}
@@ -472,7 +478,7 @@ function HoverCard({ children, style, onClick }: { children: React.ReactNode; st
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       onClick={onClick}
-      style={{ ...style, transition: 'all var(--dur-2)', border: `1px solid ${hov ? 'rgba(168,85,247,.4)' : 'var(--t-border)'}`, transform: hov ? 'translateY(-3px)' : '' }}
+      style={{ ...style, transition: 'all var(--dur-2)', border: `1px solid ${hov ? 'rgba(20,71,230,.4)' : 'var(--t-border)'}`, transform: hov ? 'translateY(-3px)' : '' }}
     >
       {children}
     </div>
@@ -562,7 +568,7 @@ export default function LandingPage() {
 
         {/* ====== HERO ====== */}
         <div style={{ position: 'relative', padding: '60px 40px 40px', maxWidth: 1440, margin: '0 auto', overflow: 'hidden', minHeight: 820 }}>
-          <div style={{ position: 'absolute', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle, rgba(168,85,247,.18), transparent 65%)', pointerEvents: 'none', filter: 'blur(30px)', zIndex: 0, top: -100, right: -200 }} />
+          <div style={{ position: 'absolute', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle, rgba(20,71,230,.18), transparent 65%)', pointerEvents: 'none', filter: 'blur(30px)', zIndex: 0, top: -100, right: -200 }} />
           <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, rgba(59,130,246,.14), transparent 65%)', pointerEvents: 'none', filter: 'blur(30px)', zIndex: 0, bottom: -200, left: -150 }} />
           <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(var(--t-panel) 1px, transparent 1px), linear-gradient(90deg, var(--t-panel) 1px, transparent 1px)', backgroundSize: '60px 60px', opacity: .35, maskImage: 'radial-gradient(ellipse at 50% 40%, black 10%, transparent 70%)', pointerEvents: 'none' }} />
 
@@ -570,7 +576,7 @@ export default function LandingPage() {
 
           <div style={{ position: 'relative', zIndex: 2, display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 52, alignItems: 'center', marginTop: 36 }}>
             <div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--t-accent-bright)', padding: '7px 14px', borderRadius: 999, background: 'var(--t-accent-tint)', border: '1px solid rgba(168,85,247,.45)', marginBottom: 22 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--t-accent-bright)', padding: '7px 14px', borderRadius: 999, background: 'var(--t-accent-tint)', border: '1px solid rgba(20,71,230,.45)', marginBottom: 22 }}>
                 {t.eyebrow}
               </div>
 
@@ -581,9 +587,10 @@ export default function LandingPage() {
                   <span style={{ position: 'absolute', left: -4, right: -4, top: '50%', height: 4, background: 'var(--status-reject)', borderRadius: 2, transform: 'rotate(-2deg)', display: 'block' }} />
                 </span>
                 <br />{t.h1b}{' '}
-                <span style={{ background: 'linear-gradient(90deg, #C084FC, #A855F7 40%, #7C3AED)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', position: 'relative', display: 'inline-block' }}>
+                {/* UI5.0 — 大标题纯色不渐变（clawsgo DNA）：强调词用纯色 accent */}
+                <span style={{ color: 'var(--t-accent-bright)', position: 'relative', display: 'inline-block' }}>
                   {t.h1grad}
-                  <span style={{ position: 'absolute', left: 0, right: 0, bottom: -4, height: 3, background: 'linear-gradient(90deg, transparent, var(--t-accent) 40%, var(--t-accent-bright) 60%, transparent)', display: 'block' }} />
+                  <span style={{ position: 'absolute', left: 0, right: 0, bottom: -4, height: 3, borderRadius: 2, background: 'var(--t-accent)', display: 'block' }} />
                 </span>
                 <br />{t.h1c}
               </h1>
@@ -624,13 +631,13 @@ export default function LandingPage() {
         </div>
 
         {/* ====== VS RIVALS ====== */}
-        <section style={{ maxWidth: 1440, margin: '0 auto', padding: '80px 40px', background: 'linear-gradient(180deg, transparent, rgba(168,85,247,.04), transparent)' }}>
+        <section style={{ maxWidth: 1440, margin: '0 auto', padding: '80px 40px', background: 'linear-gradient(180deg, transparent, rgba(20,71,230,.04), transparent)' }}>
           <div style={{ marginBottom: 18, display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--t-accent-bright)' }}>
             <span style={{ display: 'inline-block', width: 22, height: 1, background: 'var(--t-accent)' }} />{t.vsEyebrow}
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 48, marginBottom: 48 }}>
             <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 'clamp(36px, 4vw, 60px)', fontWeight: 900, letterSpacing: '-.035em', margin: 0, lineHeight: 1 }}>
-              {t.vsH2a}{' '}<span style={{ background: 'linear-gradient(90deg, var(--t-accent), var(--t-accent-bright))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.vsH2b}</span>
+              {t.vsH2a}{' '}<span style={{ color: 'var(--t-accent-bright)' }}>{t.vsH2b}</span>
             </h2>
             <p style={{ fontSize: 14, color: 'var(--t-fg-3)', maxWidth: 420, lineHeight: 1.55 }}>{t.vsSubtitle}</p>
           </div>
@@ -658,12 +665,12 @@ export default function LandingPage() {
             <span style={{ display: 'inline-block', width: 22, height: 1, background: 'var(--t-accent)' }} />{t.featEyebrow}
           </div>
           <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 'clamp(36px, 4vw, 60px)', fontWeight: 900, letterSpacing: '-.035em', margin: '0 0 48px', lineHeight: 1 }}>
-            {t.featH2a}{' '}<span style={{ background: 'linear-gradient(90deg, var(--t-accent), var(--t-accent-bright))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.featH2b}</span>
+            {t.featH2a}{' '}<span style={{ color: 'var(--t-accent-bright)' }}>{t.featH2b}</span>
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             {t.featItems.map(({ icon, title, desc }, idx) => (
               <HoverCard key={title} style={{ padding: '28px 26px 24px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 18, overflow: 'hidden' }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--t-accent-tint)', border: '1px solid rgba(168,85,247,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: 'var(--t-accent-bright)', marginBottom: 18 }}>{icon}</div>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--t-accent-tint)', border: '1px solid rgba(20,71,230,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: 'var(--t-accent-bright)', marginBottom: 18 }}>{icon}</div>
                 <h3 style={{ fontFamily: 'var(--font-sans)', fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 10px' }}>{title}</h3>
                 <p style={{ fontSize: 14, color: 'var(--t-fg-3)', lineHeight: 1.55, margin: '0 0 20px' }}>{desc}</p>
                 <div style={{ height: 110, margin: '0 -26px -24px', padding: '16px 26px', borderTop: '1px dashed var(--t-border)', background: 'var(--t-bg)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -683,7 +690,7 @@ export default function LandingPage() {
               <div key={k} style={{ padding: '28px 26px', borderRight: i < 3 ? '1px solid var(--t-border)' : undefined, position: 'relative' }}>
                 <div style={{ position: 'absolute', left: 0, top: 0, width: 2, height: 24, background: 'var(--t-accent)', opacity: .5 }} />
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--t-fg-5)' }}>{k}</div>
-                <div style={{ fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)', fontSize: mono ? 22 : 44, fontWeight: 900, letterSpacing: '-.03em', margin: '6px 0 2px', lineHeight: 1, ...(grad ? { background: 'linear-gradient(90deg, var(--t-accent-bright), var(--t-accent))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' } : { color: 'var(--t-fg)' }) }}>{v}</div>
+                <div style={{ fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)', fontSize: mono ? 22 : 44, fontWeight: 900, letterSpacing: '-.03em', margin: '6px 0 2px', lineHeight: 1, ...(grad ? { color: 'var(--t-accent-bright)' } : { color: 'var(--t-fg)' }) }}>{v}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)', marginTop: 4 }}>{d}</div>
               </div>
             ))}
@@ -721,12 +728,12 @@ export default function LandingPage() {
 
         {/* ====== IMPORT CID ====== */}
         <section style={{ maxWidth: 1440, margin: '0 auto', padding: '0 40px 80px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 32, padding: 40, background: 'radial-gradient(ellipse at top left, rgba(168,85,247,.12), transparent 55%), radial-gradient(ellipse at bottom right, rgba(59,130,246,.08), transparent 55%), var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 24, position: 'relative', overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 32, padding: 40, background: 'radial-gradient(ellipse at top left, rgba(20,71,230,.12), transparent 55%), radial-gradient(ellipse at bottom right, rgba(59,130,246,.08), transparent 55%), var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 24, position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: 'linear-gradient(180deg, var(--t-accent), transparent)' }} />
             <div>
               <div style={{ fontSize: 40, fontWeight: 900, letterSpacing: '-.03em', lineHeight: 1.05 }}>
                 {t.importH2a}<br />
-                <span style={{ background: 'linear-gradient(90deg, var(--t-accent-bright), var(--t-accent))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.importH2b}</span>
+                <span style={{ color: 'var(--t-accent-bright)' }}>{t.importH2b}</span>
               </div>
               <p style={{ fontSize: 14, color: 'var(--t-fg-3)', margin: '14px 0 24px', lineHeight: 1.6, maxWidth: 520 }}>{t.importDesc}</p>
               <div style={{ display: 'flex', gap: 8, maxWidth: 620 }}>
@@ -737,7 +744,7 @@ export default function LandingPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, justifyContent: 'center' }}>
               {t.importSteps.map((step, n) => (
                 <div key={n} style={{ display: 'flex', gap: 10, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-3)', padding: '10px 12px', background: 'var(--skin-panel)', border: '1px solid var(--t-border)', borderRadius: 10 }}>
-                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, border: '1px solid rgba(168,85,247,.3)', flexShrink: 0 }}>{n + 1}</div>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--t-accent-tint)', color: 'var(--t-accent-bright)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, border: '1px solid rgba(20,71,230,.3)', flexShrink: 0 }}>{n + 1}</div>
                   {step}
                 </div>
               ))}
@@ -792,9 +799,9 @@ export default function LandingPage() {
 
         {/* ====== CTA BAND ====== */}
         <div style={{ position: 'relative', maxWidth: 1440, margin: '40px auto 0', padding: '60px 40px', textAlign: 'center', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle, rgba(168,85,247,.18), transparent 65%)', pointerEvents: 'none', filter: 'blur(30px)' }} />
+          <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle, rgba(20,71,230,.18), transparent 65%)', pointerEvents: 'none', filter: 'blur(30px)' }} />
           <h2 style={{ fontFamily: 'var(--font-sans)', fontSize: 'clamp(48px, 5vw, 76px)', fontWeight: 900, letterSpacing: '-.04em', lineHeight: 1, margin: '0 0 14px', position: 'relative', zIndex: 2 }}>
-            {t.ctaBandH2a}{' '}<span style={{ background: 'linear-gradient(90deg, var(--t-accent-bright), var(--t-accent))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t.ctaBandH2b}</span>
+            {t.ctaBandH2a}{' '}<span style={{ color: 'var(--t-accent-bright)' }}>{t.ctaBandH2b}</span>
           </h2>
           <p style={{ fontSize: 17, color: 'var(--t-fg-3)', margin: '0 auto 30px', maxWidth: 560, position: 'relative', zIndex: 2 }}>{t.ctaBandSub}</p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', position: 'relative', zIndex: 2 }}>

@@ -97,12 +97,12 @@ export default function QuadrantChart({ className, style }: { className?: string
         if (p.highlight) {
           return (
             <g key={p.name}>
-              <circle cx={sx} cy={sy} r={20} fill="#A855F718" />
+              <circle cx={sx} cy={sy} r={20} fill="#1447E618" />
               <circle cx={sx} cy={sy} r={6} fill="var(--t-accent)" />
               <text
                 x={sx}
                 y={sy - 12}
-                fill="#D8B4FE"
+                fill="#1447E6"
                 fontSize={13}
                 fontWeight={700}
                 fontFamily="var(--font-sans)"

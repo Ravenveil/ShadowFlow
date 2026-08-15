@@ -53,7 +53,7 @@ function CidCard({ cid }: { cid: EvidenceCid }) {
           <span className="font-mono text-[10px] uppercase tracking-widest text-sf-accent">
             {cid.templateAlias}
           </span>
-          <h3 className="text-base font-semibold text-white/90 mt-0.5">{cid.templateName}</h3>
+          <h3 className="text-base font-semibold text-[var(--t-fg-2)] mt-0.5">{cid.templateName}</h3>
         </div>
         <div className="shrink-0 flex flex-col items-end gap-1">
           {cid.isPlaceholder ? (

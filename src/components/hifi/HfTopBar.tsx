@@ -59,7 +59,6 @@ function NetworkLatencyChip() {
         letterSpacing: '.08em',
         textTransform: 'uppercase',
         textDecoration: 'none',
-        marginRight: 12,
         cursor: 'pointer',
         transition: 'background 120ms ease',
       }}
@@ -109,7 +108,8 @@ function ThemeToggle() {
         justifyContent: 'center',
         borderRadius: 6,
         border: '1px solid var(--t-border)',
-        background: hover ? 'var(--t-panel-2)' : 'var(--t-panel-2)',
+        // UI5.0：修死 hover——原 hover/非 hover 背景同为 panel-2， hover 无反馈
+        background: hover ? 'var(--t-hover)' : 'var(--t-panel-2)',
         color: hover ? 'var(--t-accent-bright)' : 'var(--t-fg-2)',
         cursor: 'pointer',
         transition: 'background 140ms ease, color 140ms ease, border-color 140ms ease',
@@ -150,15 +150,16 @@ function TopBarTools() {
     textDecoration: 'none',
     flexShrink: 0,
   };
+  // UI5.0：两个工具钮原本紧贴（fragment 无间距），加 6px gap + 统一 hover 浅底。
   return (
-    <>
-      <button type="button" onClick={openQuickSwitcher} title="搜索 ⌘K" aria-label="搜索" data-testid="topbar-search" style={btn}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <button type="button" onClick={openQuickSwitcher} title="搜索 ⌘K" aria-label="搜索" data-testid="topbar-search" className="ui50-ibtn" style={btn}>
         <Search size={14} strokeWidth={1.9} aria-hidden />
       </button>
-      <Link to="/settings" title={t('shell.navSettings')} aria-label={t('shell.navSettings')} data-testid="topbar-settings" style={btn}>
+      <Link to="/settings" title={t('shell.navSettings')} aria-label={t('shell.navSettings')} data-testid="topbar-settings" className="ui50-ibtn" style={btn}>
         <HfSettingsIcon size={14} />
       </Link>
-    </>
+    </div>
   );
 }
 

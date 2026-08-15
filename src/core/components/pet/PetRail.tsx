@@ -282,7 +282,7 @@ export const PetRail: React.FC = () => {
         {/* Tooltip — only shown when expanded or not docked */}
         {showTooltip && (!dockedSide || expanded) && (
           <div
-            className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 whitespace-nowrap shadow-lg pointer-events-none"
+            className="bg-[var(--t-panel-2)] border border-[var(--t-border)] rounded px-2 py-1 text-xs text-[var(--t-fg-2)] whitespace-nowrap shadow-lg pointer-events-none"
             style={{ position: 'relative', zIndex: 1 }}
           >
             {dockedSide
@@ -297,7 +297,7 @@ export const PetRail: React.FC = () => {
             type="button"
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
-            className="group relative outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded-lg transition-transform hover:scale-110 active:scale-95"
+            className="group relative outline-none focus-visible:ring-2 focus-visible:ring-[var(--t-accent)] rounded-lg transition-transform hover:scale-110 active:scale-95"
             aria-label={
               dockedSide
                 ? `宠物：${petName}，悬停展开，双击解除吸附`

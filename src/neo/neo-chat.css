@@ -1,0 +1,462 @@
+/* ===== Neo ===== */
+/* Neo 中栏（聊天 + inline 任务执行）样式 — clawsgo / WorkBuddy / Coze 形态。
+   颜色一律 var(--t-*)（day/night 双主题令牌），圆角 10/14/18/26，
+   动效 var(--dur-*) var(--ease-*)。accent 蓝克制使用（仅链接/运行态）。 */
+
+.neo-chat {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* 内容区纯白（竞品层次：栏灰底、内容白底） */
+  background: var(--t-panel);
+  color: var(--t-fg);
+}
+
+/* ---- 顶部条（clawsgo：无边框，小灰字浮在左上，右侧文字按钮） ---- */
+.neo-chat-topbar {
+  flex-shrink: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+}
+.neo-chat-topbar-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--t-fg-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.neo-chat-topbar-label strong {
+  color: var(--t-fg);
+  font-weight: 600;
+}
+
+/* 顶栏右侧文字按钮（clawsgo「新任务」幽灵形态） */
+.neo-topbar-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--t-fg-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.neo-topbar-btn:hover { background: var(--t-panel-2); }
+
+/* 主按钮（近黑，对齐 .ui50-pri 设计基座；night 主题落 accent 蓝） */
+.neo-btn-primary {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: #171717;
+  color: #fafafa;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.neo-btn-primary:hover { background: #000; transform: translateY(-1px); }
+.neo-btn-primary:active { transform: translateY(0); }
+[data-theme="night"] .neo-btn-primary { background: var(--t-accent); color: var(--t-accent-ink, #fff); }
+[data-theme="night"] .neo-btn-primary:hover { background: var(--t-accent-bright, var(--t-accent)); }
+
+/* ---- 消息流滚动区 ---- */
+.neo-chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 22px 12px;
+}
+.neo-run {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 760px;
+}
+
+/* 用户消息：灰气泡右对齐（clawsgo c1_03） */
+.neo-msg-user {
+  align-self: flex-end;
+  max-width: 78%;
+  padding: 9px 14px;
+  border-radius: 14px;
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* agent 头：✳ 名称 + 累计耗时（WorkBuddy 形态） */
+.neo-agent-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+}
+.neo-agent-star { color: var(--t-accent); flex-shrink: 0; }
+.neo-agent-name { font-size: 13px; font-weight: 600; color: var(--t-fg); }
+.neo-agent-elapsed {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  font-family: var(--font-mono, monospace);
+}
+
+/* ---- 「执行了 N 个操作」可折叠列表 ---- */
+.neo-ops { display: flex; flex-direction: column; gap: 2px; }
+.neo-ops-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  padding: 3px 6px;
+  margin-left: -6px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--t-fg-3);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.neo-ops-toggle:hover { background: var(--t-panel-2); }
+
+.neo-ops-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 2px;
+}
+.neo-op { display: flex; flex-direction: column; }
+.neo-op-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--t-fg-2);
+  font-size: 12.5px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.neo-op-row:hover:not(:disabled) { background: var(--t-panel-2); }
+.neo-op-row:disabled { cursor: default; }
+.neo-op-row-static { cursor: default; }
+.neo-op-row-static:hover { background: none; }
+
+.neo-op-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--t-fg-4);
+}
+.neo-op-icon[data-status="running"] { color: var(--t-accent); }
+.neo-op-icon[data-status="done"] { color: var(--t-ok, #10b981); }
+.neo-op-icon[data-status="failed"] { color: var(--t-err, #ef4444); }
+.neo-op-icon[data-status="think"] { color: var(--t-fg-4); }
+
+.neo-op-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.neo-op-elapsed {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  font-family: var(--font-mono, monospace);
+}
+
+.neo-chevron {
+  flex-shrink: 0;
+  color: var(--t-fg-5);
+  transition: transform var(--dur-1) var(--ease-out);
+}
+.neo-chevron[data-open] { transform: rotate(90deg); }
+.neo-ops-toggle .neo-chevron[data-open],
+.neo-pill .neo-chevron[data-open] { transform: rotate(180deg); }
+
+/* 行展开详情：深度思考 / 参数 / 结果摘要 */
+.neo-op-detail {
+  margin: 2px 0 6px 29px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--t-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: neo-fade var(--dur-2) var(--ease-out);
+}
+.neo-think-body p {
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--t-fg-4);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.neo-think-body p + p { margin-top: 6px; }
+.neo-op-kv { display: flex; flex-direction: column; gap: 3px; }
+.neo-op-k {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--t-fg-5);
+  letter-spacing: 0.02em;
+}
+.neo-op-kv p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--t-fg-3);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.neo-op-links { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.neo-op-links a {
+  font-size: 12px;
+  color: var(--t-accent);
+  text-decoration: none;
+}
+.neo-op-links a:hover { text-decoration: underline; }
+
+/* Loop 节点行：迭代进度徽标 */
+.neo-loop-badge {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--t-fg-4);
+  background: var(--t-panel-2);
+}
+.neo-loop-badge[data-status="running"] { color: var(--t-accent); background: var(--t-accent-tint); }
+.neo-loop-badge[data-status="converged"] { color: var(--t-ok, #10b981); background: color-mix(in oklab, var(--t-ok, #10b981) 12%, transparent); }
+.neo-loop-badge[data-status="oscillating"],
+.neo-loop-badge[data-status="diverged"] { color: var(--t-warn, #d97706); background: color-mix(in oklab, var(--t-warn, #d97706) 12%, transparent); }
+.neo-loop-badge[data-status="halted"] { color: var(--t-err, #ef4444); background: color-mix(in oklab, var(--t-err, #ef4444) 10%, transparent); }
+
+/* ---- agent 回复：左对齐无气泡 + hover 工具条（Coze 形态） ---- */
+.neo-agent-text {
+  position: relative;
+  max-width: 92%;
+  padding: 4px 2px;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--t-fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.neo-agent-toolbar {
+  position: absolute;
+  top: -10px;
+  right: 0;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  box-shadow: 0 4px 14px -6px rgba(15, 23, 42, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+.neo-agent-text:hover .neo-agent-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+.neo-agent-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--t-fg-4);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-agent-tool:hover { background: var(--t-panel-2); color: var(--t-fg-2); }
+
+/* ---- 错误条 ---- */
+.neo-run-error {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--t-err, #ef4444);
+  background: color-mix(in oklab, var(--t-err, #ef4444) 8%, transparent);
+}
+.neo-run-error-hint { color: var(--t-fg-4); }
+
+/* ---- 底部状态 pill（clawsgo：当前步骤 + x/y / ✓ 已完成全部任务） ---- */
+.neo-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  background: var(--t-panel);
+  color: var(--t-fg-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
+}
+.neo-pill:hover { background: var(--t-panel-2); }
+.neo-pill-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--t-accent);
+  animation: sf-pulse 1.4s ease-in-out infinite;
+}
+.neo-pill-icon { flex-shrink: 0; color: var(--t-ok, #10b981); }
+.neo-pill-done { color: var(--t-ok, #10b981); }
+.neo-pill-label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.neo-pill-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--t-fg-5);
+  font-family: var(--font-mono, monospace);
+}
+
+/* ---- composer 容器（clawsgo：悬浮卡片，不贴边不全宽） ---- */
+.neo-chat-composer {
+  flex-shrink: 0;
+  padding: 8px 16px 16px;
+  background: transparent;
+}
+.neo-composer { width: 100%; }
+.neo-composer-hero { max-width: 720px; margin: 0 auto; }
+
+/* 会话 composer 卡片：与 hero 同款大圆角浮起 */
+.neo-composer .hf-card {
+  border-radius: 18px;
+  box-shadow: 0 8px 28px -14px rgba(15, 23, 42, 0.16);
+}
+.neo-composer .hf-card:focus-within {
+  border-color: var(--t-border-2);
+}
+
+/* hero composer：竞品式大圆角 + 软浮起阴影（.hf-card 默认 12px 太硬） */
+.neo-composer-hero .hf-card {
+  border-radius: 22px;
+  border-color: var(--t-border-2);
+  box-shadow: 0 12px 40px -16px rgba(15, 23, 42, 0.14);
+}
+.neo-composer-hero .hf-card:focus-within {
+  border-color: var(--t-fg-5);
+  box-shadow: 0 16px 48px -16px rgba(15, 23, 42, 0.18);
+}
+
+/* 画廊单色化 + clawsgo tab 形态：选中 = 加粗黑字，无下划线无底边 */
+.neo-empty .sg-tabs {
+  border-bottom: none;
+}
+.neo-empty .sg-tab-ind {
+  display: none;
+}
+.neo-empty .sg-tab.on {
+  color: var(--t-fg);
+  font-weight: 700;
+  border-bottom-color: transparent;
+}
+.neo-empty .sg-card {
+  border-radius: 16px;
+}
+.neo-empty .sg-card:hover {
+  box-shadow: 0 10px 28px -12px rgba(15, 23, 42, 0.12);
+}
+.neo-empty .sg-card-cat {
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: inherit;
+}
+
+/* ---- 空态：hero 问候 + 居中大 composer + 模板画廊（clawsgo 首页态 tmp29A7） ----
+   画廊把内容撑高后整列可滚，顶部留 8vh 呼吸位保持视觉重心。 */
+.neo-empty {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8vh 20px 40px;
+  animation: neo-fade var(--dur-3) var(--ease-out);
+}
+.neo-empty-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--t-fg);
+  text-align: center;
+}
+.neo-empty-sub {
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: var(--t-fg-4);
+  text-align: center;
+}
+.neo-empty-composer {
+  width: min(720px, 100%);
+}
+
+/* ---- 动效 ---- */
+@keyframes neo-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes neo-spin {
+  to { transform: rotate(360deg); }
+}
+.neo-spin { animation: neo-spin 0.9s linear infinite; }

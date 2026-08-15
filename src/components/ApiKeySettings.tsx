@@ -163,7 +163,7 @@ function ProviderKeyRow({ provider, onAnthropicChange, compact }: ProviderKeyRow
         padding: cardPadding,
         background: 'var(--t-panel)',
         border: '1px solid var(--t-border)',
-        borderRadius: 10,
+        borderRadius: 12, // UI5.0：卡片圆角进一档（clawsgo 10/14/18 刻度）
       }}
     >
       <div
@@ -212,6 +212,7 @@ function ProviderKeyRow({ provider, onAnthropicChange, compact }: ProviderKeyRow
             type="button"
             aria-label={showFull ? 'Hide key' : 'Show key'}
             onClick={() => setShowFull(v => !v)}
+            className="ui50-ibtn"
             style={iconBtnStyle}
           >
             {showFull ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -223,6 +224,7 @@ function ProviderKeyRow({ provider, onAnthropicChange, compact }: ProviderKeyRow
             data-testid={
               provider === 'anthropic' ? 'api-key-clear' : `api-key-clear-${provider}`
             }
+            className="ui50-ibtn"
             style={{ ...iconBtnStyle, color: 'var(--t-err, #ef4444)' }}
           >
             <Trash2 size={14} />
@@ -341,7 +343,7 @@ function DefaultProviderRadio() {
         padding: 14,
         background: 'var(--t-panel)',
         border: '1px solid var(--t-border)',
-        borderRadius: 10,
+        borderRadius: 12, // UI5.0：卡片圆角进一档
       }}
     >
       <div

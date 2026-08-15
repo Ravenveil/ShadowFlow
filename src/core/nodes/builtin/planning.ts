@@ -27,7 +27,7 @@ export class AnalyzeNode extends BaseNode {
         { name: 'analysis', type: 'object', required: true, description: { en: 'Analysis result', zh: '分析结果' } }
       ],
       color: '#8B5CF6',
-      accentColor: '#A78BFA'
+      accentColor: '#1447E6'
     });
   }
 

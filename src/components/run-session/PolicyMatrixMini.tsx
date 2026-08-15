@@ -97,7 +97,7 @@ function renderCell(value: RaciCell): React.ReactNode {
           title={CELL_TIP.R}
           style={{
             ...base,
-            background: 'var(--t-accent, #A855F7)',
+            background: 'var(--t-accent, #1447E6)',
             color: 'var(--t-accent-ink, #fff)',
           }}
         >
@@ -245,7 +245,7 @@ const PolicyMatrixMini: React.FC<PolicyMatrixMiniProps> = ({ agents, isComplete 
             justifyContent: 'center',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.color = 'var(--t-accent-bright, #D8B4FE)';
+            e.currentTarget.style.color = 'var(--t-accent-bright, #0F3BCC)';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.color = 'var(--t-fg-4, #737373)';
@@ -353,9 +353,9 @@ const PolicyMatrixMini: React.FC<PolicyMatrixMiniProps> = ({ agents, isComplete 
           style={{
             padding: '1px 5px',
             borderRadius: 3,
-            background: 'var(--t-accent-tint, rgba(168,85,247,.12))',
-            border: '1px solid var(--t-accent, #A855F7)',
-            color: 'var(--t-accent-bright, #D8B4FE)',
+            background: 'var(--t-accent-tint, rgba(20,71,230,.12))', /* UI5.0 fallback 去紫化 */
+            border: '1px solid var(--t-accent, #1447E6)',
+            color: 'var(--t-accent-bright, #0F3BCC)',
           }}
         >
           retry 3
@@ -364,9 +364,9 @@ const PolicyMatrixMini: React.FC<PolicyMatrixMiniProps> = ({ agents, isComplete 
           style={{
             padding: '1px 5px',
             borderRadius: 3,
-            background: 'var(--t-accent-tint, rgba(168,85,247,.12))',
-            border: '1px solid var(--t-accent, #A855F7)',
-            color: 'var(--t-accent-bright, #D8B4FE)',
+            background: 'var(--t-accent-tint, rgba(20,71,230,.12))', /* UI5.0 fallback 去紫化 */
+            border: '1px solid var(--t-accent, #1447E6)',
+            color: 'var(--t-accent-bright, #0F3BCC)',
           }}
         >
           double-reject

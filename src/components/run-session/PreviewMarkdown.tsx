@@ -45,7 +45,7 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
             padding: '1px 5px',
             borderRadius: 3,
             background: 'var(--t-panel-3, var(--bg-elev-3))',
-            color: 'var(--t-accent-bright, #D8B4FE)',
+            color: 'var(--t-accent-bright, #0F3BCC)',
           }}
         >
           {tok.slice(1, -1)}
@@ -63,7 +63,7 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
           href={m[6]}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ color: 'var(--t-accent, #A855F7)', textDecoration: 'underline' }}
+          style={{ color: 'var(--t-accent, #1447E6)', textDecoration: 'underline' }}
         >
           {m[5]}
         </a>,
@@ -151,7 +151,7 @@ function renderMarkdown(src: string): React.ReactNode[] {
           style={{
             margin: '10px 0',
             padding: '6px 12px',
-            borderLeft: '3px solid var(--t-accent, #A855F7)',
+            borderLeft: '3px solid var(--t-accent, #1447E6)',
             color: 'var(--t-fg-3)',
             background: 'var(--t-panel-2, var(--bg-elev-2))',
           }}

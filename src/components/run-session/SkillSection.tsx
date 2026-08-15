@@ -29,10 +29,14 @@ import { Pencil, FileText, Box, Wrench, Database } from 'lucide-react';
  *
  *   cached    green  — yaml 锚段原文，LLM 未改写（cached=true）
  *   generated yellow — yaml 有 source 但 LLM 自适应改写（cached=false）
- *   loading   purple — 正在 streaming（substep status=running）
+ *   loading   blue   — 正在 streaming（substep status=running）
  *   waiting   gray   — agent 还在 building 但本 slot 没开始 streaming
  *   pending   gray   — agent 全局 pending（未启用）
  *   idle      muted  — 兜底，无信号
+ *
+ * UI5.0 — pill 配色按 clawsgo「中性 + 蓝」重校准：loading 从紫收敛到
+ * accent 蓝；彩色态用 10%  tint 底 + 30% 描边的软 pill，灰态用中性 tint，
+ * 双主题（day/night）均走 --t-* 令牌。
  */
 export type SectionStatus = 'cached' | 'generated' | 'loading' | 'waiting' | 'pending' | 'idle';
 
@@ -65,13 +69,33 @@ const STATUS_LABEL: Record<SectionStatus, string> = {
   idle: 'idle',
 };
 
+// UI5.0 — 彩色态 = 文字色 + 10% tint 底 + 30% 描边；灰态 = 中性面板底。
+// 注意：--t-status-ok/--t-status-warn 令牌不存在，统一用 --t-ok/--t-warn。
 const STATUS_COLOR: Record<SectionStatus, string> = {
-  cached: 'var(--t-status-ok, #16a34a)',       // green — yaml verbatim
-  generated: 'var(--t-status-warn, #ca8a04)',  // yellow — LLM-adapted from yaml
-  loading: 'var(--t-accent, #A855F7)',
+  cached: 'var(--t-ok, #16a34a)',              // green — yaml verbatim
+  generated: 'var(--t-warn, #ca8a04)',         // yellow — LLM-adapted from yaml
+  loading: 'var(--t-accent, #1447E6)',         // blue — streaming（UI5.0 去紫化）
   waiting: 'var(--t-fg-4, var(--fg-4))',
   pending: 'var(--t-fg-4, var(--fg-4))',
   idle: 'var(--t-fg-5, var(--fg-5))',
+};
+
+const STATUS_BG: Record<SectionStatus, string> = {
+  cached: 'color-mix(in oklab, var(--t-ok, #16a34a) 10%, transparent)',
+  generated: 'color-mix(in oklab, var(--t-warn, #ca8a04) 10%, transparent)',
+  loading: 'var(--t-accent-tint, rgba(20,71,230,.08))',
+  waiting: 'var(--t-panel-3, var(--bg-elev-3, transparent))',
+  pending: 'var(--t-panel-3, var(--bg-elev-3, transparent))',
+  idle: 'transparent',
+};
+
+const STATUS_BORDER: Record<SectionStatus, string> = {
+  cached: 'color-mix(in oklab, var(--t-ok, #16a34a) 35%, transparent)',
+  generated: 'color-mix(in oklab, var(--t-warn, #ca8a04) 35%, transparent)',
+  loading: 'color-mix(in oklab, var(--t-accent, #1447E6) 35%, transparent)',
+  waiting: 'var(--t-border, var(--border))',
+  pending: 'var(--t-border, var(--border))',
+  idle: 'var(--t-border, var(--border))',
 };
 
 function pickIcon(kind: SkillSectionProps['iconKind']) {
@@ -185,7 +209,8 @@ export const SkillSection: React.FC<SkillSectionProps> = ({
             fontFamily: 'var(--font-mono, monospace)',
             fontSize: 9.5,
             color: STATUS_COLOR[status],
-            border: `1px solid ${STATUS_COLOR[status]}`,
+            background: STATUS_BG[status],
+            border: `1px solid ${STATUS_BORDER[status]}`,
             padding: '1px 6px',
             borderRadius: 999,
             letterSpacing: '0.06em',

@@ -73,22 +73,23 @@ export function WalletLoginModal({ open, onClose }: WalletLoginModalProps) {
 
   return (
     <div
+      className="ui50-overlay"
       style={{
         position: 'fixed',
         inset: 0,
         zIndex: 1000,
-        background: 'rgba(0,0,0,0.6)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
+      {/* UI5.0：统一 modal 卡——圆角 16 + 软阴影 + 淡入缩放 */}
       <div
+        className="ui50-modal ui50-pop"
         style={{
           background: 'var(--t-panel)',
           border: '1px solid var(--t-border)',
-          borderRadius: 12,
           padding: '28px 32px',
           width: 380,
           maxWidth: '90vw',
@@ -98,6 +99,7 @@ export function WalletLoginModal({ open, onClose }: WalletLoginModalProps) {
         {/* Close */}
         <button
           onClick={onClose}
+          className="ui50-ibtn"
           style={{
             position: 'absolute',
             top: 14,
@@ -107,6 +109,7 @@ export function WalletLoginModal({ open, onClose }: WalletLoginModalProps) {
             cursor: 'pointer',
             color: 'var(--t-fg-4)',
             padding: 4,
+            borderRadius: 6,
           }}
           aria-label="Close"
         >
@@ -121,20 +124,18 @@ export function WalletLoginModal({ open, onClose }: WalletLoginModalProps) {
           钱包签名登录 · SIWE (EIP-4361)
         </p>
 
-        {/* Wallet button */}
+        {/* Wallet button — UI5.0：.ui50-pri（day 近黑 / night 品牌蓝） */}
         <button
           onClick={handleWallet}
           disabled={loading !== null}
+          className="ui50-pri"
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 10,
             width: '100%',
             padding: '12px 16px',
-            background: 'var(--t-accent, #7c3aed)',
-            border: 'none',
-            borderRadius: 8,
-            color: '#fff',
+            borderRadius: 10,
             fontSize: 14,
             fontWeight: 500,
             cursor: loading !== null ? 'not-allowed' : 'pointer',
@@ -158,7 +159,7 @@ export function WalletLoginModal({ open, onClose }: WalletLoginModalProps) {
             padding: '12px 16px',
             background: 'transparent',
             border: '1px solid var(--t-border)',
-            borderRadius: 8,
+            borderRadius: 10,
             color: 'var(--t-fg-2)',
             fontSize: 14,
             fontWeight: 500,

@@ -1,0 +1,85 @@
+/* ===== UI5.0 (2026-08-14) — 应用外壳 / 弹层统一层 =====
+ * owner: 应用外壳工位（Sidebar & TopBar & 全局 modal/picker）
+ *
+ * parameters 来自 clawsgo.cn 实测 CSS（_handoff_tmp/clawsgo.css）：
+ *   遮罩微模糊 + 弹层淡入缩放 120–280ms、圆角刻度 10/14/18、
+ *   软阴影（卡片 0 1px 2px rgba(0,0,0,.04) / 浮起 0 8px 24px -8px rgba(0,0,0,.12)）、
+ *   主按钮近黑 #171717（day 限定；night 保持品牌蓝）。
+ *
+ * append-only：本文件只新增 .ui50-* 类，不覆盖既有规则；回退 = 删整个文件。
+ * 由 HfLayout.tsx 全局引入一次。
+ * ===== UI5.0 ===== */
+
+/* ── 遮罩：微模糊 + 淡入（modal / 命令面板统一）────────────────────────── */
+@keyframes ui50-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.ui50-overlay {
+  background: rgba(10, 10, 10, .4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: ui50-fade-in 160ms var(--ease-out, ease-out) both;
+}
+
+/* ── 弹层入场：淡入 + 缩放（clawsgo popover 观感，spring 曲线）────────── */
+@keyframes ui50-pop-in {
+  from { opacity: 0; transform: translateY(6px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes ui50-pop-in-up {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.ui50-pop    { animation: ui50-pop-in    200ms var(--ease-spring, cubic-bezier(.2,.8,.2,1)) both; }
+/* 向上展开的浮层（composer 上方的 popup）——从锚点方向长出 */
+.ui50-pop-up { animation: ui50-pop-in-up 180ms var(--ease-spring, cubic-bezier(.2,.8,.2,1)) both; transform-origin: bottom left; }
+
+/* ── Modal 卡片：圆角 16–18 + 软阴影（day/night 双主题）────────────────── */
+.ui50-modal {
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 24px 64px -16px rgba(0,0,0,.30);
+}
+[data-theme="day"] .ui50-modal {
+  box-shadow: 0 1px 2px rgba(15,23,42,.05), 0 24px 64px -20px rgba(15,23,42,.22);
+}
+
+/* ── 下拉/浮层面板：圆角 12–14 + 浮起软阴影 ───────────────────────────── */
+.ui50-menu {
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 16px 40px -12px rgba(0,0,0,.28);
+}
+[data-theme="day"] .ui50-menu {
+  box-shadow: var(--ui40-shadow-float, 0 1px 2px rgba(15,23,42,.04), 0 12px 32px -12px rgba(15,23,42,.14));
+}
+
+/* ── 菜单选项行：圆角 8 + hover 浅底（100ms）──────────────────────────── */
+.ui50-opt { border-radius: 8px; transition: background 100ms var(--ease-out, ease-out); }
+.ui50-opt:hover { background: var(--t-hover); }
+
+/* ── 图标按钮：hover 浅底统一（TopBar 工具、modal 关闭钮）──────────────── */
+.ui50-ibtn {
+  transition: background 120ms var(--ease-out, ease-out),
+              color 120ms var(--ease-out, ease-out),
+              border-color 120ms var(--ease-out, ease-out);
+}
+/* hover 用 !important 盖过触发按钮上的 inline background（沿用 .ui30-searchpill 惯例） */
+.ui50-ibtn:hover { background: var(--t-hover) !important; color: var(--t-fg) !important; }
+
+/* ── 主按钮：day 近黑 #171717 白字 / night 品牌蓝；hover 微浮起 ────────── */
+.ui50-pri {
+  border: none;
+  cursor: pointer;
+  transition: background 140ms var(--ease-out, ease-out),
+              transform 120ms var(--ease-out, ease-out),
+              box-shadow 140ms var(--ease-out, ease-out);
+}
+[data-theme="day"] .ui50-pri { background: #171717; color: #FAFAFA; }
+[data-theme="day"] .ui50-pri:hover:not(:disabled) { background: #000000; }
+[data-theme="night"] .ui50-pri { background: var(--t-accent); color: var(--t-accent-ink, #fff); }
+[data-theme="night"] .ui50-pri:hover:not(:disabled) { background: var(--t-accent-bright, var(--t-accent)); }
+.ui50-pri:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px -4px rgba(15,23,42,.28); }
+.ui50-pri:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
+.ui50-pri:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ── day 主题 hf 主按钮同步近黑（clawsgo 主按钮约定；night 保持品牌蓝）──── */
+[data-theme="day"] .hf-btn-pri { background: #171717; color: #FAFAFA; border-color: #171717; }
+[data-theme="day"] .hf-btn-pri:hover:not(:disabled) { background: #000000; border-color: #000000; }

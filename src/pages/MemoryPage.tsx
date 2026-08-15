@@ -34,10 +34,11 @@ function relativeTime(dateStr: string): string {
 
 // ── Scope badge ───────────────────────────────────────────────────────────────
 
+// UI5.0: session 作用域由紫 (#A855F7) 收敛为中性灰 — 紫色全站只保留 accent 蓝
 const SCOPE_COLORS: Record<MemoryScope, { bg: string; border: string; text: string }> = {
   user:    { bg: 'rgba(37,99,235,.12)',  border: 'rgba(37,99,235,.22)',  text: '#2563EB' },
   project: { bg: 'rgba(5,150,105,.12)',  border: 'rgba(5,150,105,.22)',  text: '#059669' },
-  session: { bg: 'rgba(168,85,247,.12)', border: 'rgba(168,85,247,.22)', text: '#A855F7' },
+  session: { bg: 'rgba(113,113,122,.12)', border: 'rgba(113,113,122,.25)', text: '#71717A' },
 };
 
 function ScopeTag({ scope, label }: { scope: MemoryScope; label: string }) {
@@ -84,12 +85,15 @@ function EntryCard({ entry, scopeLabel, onEdit, onDelete, error }: EntryCardProp
       onMouseLeave={() => setHovered(false)}
       style={{
         padding: '12px 14px',
-        borderRadius: 8,
-        border: `1px solid ${error ? '#ef4444' : 'var(--t-border)'}`,
+        borderRadius: 12, // UI5.0: 卡片统一 12px 圆角
+        border: `1px solid ${error ? 'var(--t-err, #ef4444)' : 'var(--t-border)'}`,
         background: 'var(--t-panel)',
         marginBottom: 8,
         position: 'relative',
-        transition: 'border-color .15s',
+        // UI5.0: hover 微浮起（clawsgo 软阴影）
+        transition: 'border-color .15s, box-shadow .15s, transform .15s',
+        boxShadow: hovered ? 'var(--ui40-shadow-float, 0 8px 24px -8px rgba(0,0,0,.12))' : 'none',
+        transform: hovered ? 'translateY(-1px)' : 'none',
       }}
     >
       {/* Header row */}
@@ -324,7 +328,7 @@ function EntryModal({
           {/* Buttons */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
             <button type="button" onClick={onClose} style={cancelBtnStyle}>{labelCancel}</button>
-            <button type="submit" disabled={saving} style={saveBtnStyle}>
+            <button type="submit" disabled={saving} className="sf-btn-primary" style={saveBtnStyle}>
               {saving ? '…' : labelSave}
             </button>
           </div>
@@ -348,7 +352,7 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '7px 10px',
   marginBottom: 12,
-  borderRadius: 7,
+  borderRadius: 8, // UI5.0: 输入框圆角统一 8px
   border: '1px solid var(--t-border)',
   background: 'var(--t-bg)',
   color: 'var(--t-fg)',
@@ -359,7 +363,7 @@ const inputStyle: React.CSSProperties = {
 
 const cancelBtnStyle: React.CSSProperties = {
   padding: '6px 14px',
-  borderRadius: 7,
+  borderRadius: 8, // UI5.0
   border: '1px solid var(--t-border)',
   background: 'transparent',
   color: 'var(--t-fg-3)',
@@ -369,10 +373,9 @@ const cancelBtnStyle: React.CSSProperties = {
 
 const saveBtnStyle: React.CSSProperties = {
   padding: '6px 18px',
-  borderRadius: 7,
+  borderRadius: 8, // UI5.0
   border: 'none',
-  background: 'var(--t-accent)',
-  color: 'var(--t-accent-ink, #fff)',
+  // UI5.0: 主操作按钮底色由 sf-btn-primary class 提供（day 近黑 / night accent）
   fontSize: 12.5,
   fontWeight: 600,
   cursor: 'pointer',
@@ -551,7 +554,7 @@ export default function MemoryPage() {
             </button>
           </div>
         </div>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--t-fg-4)' }}>{t('memory.subtitle')}</p>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--t-fg-3)' }}>{t('memory.subtitle')}</p>
       </div>
 
       {/* Toolbar: tabs + new button */}
@@ -608,12 +611,12 @@ export default function MemoryPage() {
         <button
           type="button"
           onClick={() => { setEditTarget(undefined); setShowModal(true); }}
+          // UI5.0: 主操作按钮近黑（day）/ accent（night）
+          className="sf-btn-primary"
           style={{
             padding: '5px 12px',
-            borderRadius: 7,
-            border: '1px solid var(--t-accent)',
-            background: 'var(--t-accent-tint)',
-            color: 'var(--t-accent-bright, var(--t-accent))',
+            borderRadius: 8,
+            border: 'none',
             fontSize: 12,
             fontWeight: 600,
             cursor: 'pointer',

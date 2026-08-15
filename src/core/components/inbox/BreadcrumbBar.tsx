@@ -10,7 +10,7 @@ export function BreadcrumbBar({ label }: BreadcrumbBarProps) {
 
   return (
     <nav
-      className="flex items-center gap-2 border-b border-white/5 bg-shadowflow-surface px-6 py-3 text-sm"
+      className="flex items-center gap-2 border-b border-[var(--t-border)] bg-shadowflow-surface px-6 py-3 text-sm"
       aria-label="breadcrumb"
     >
       <button
@@ -20,8 +20,8 @@ export function BreadcrumbBar({ label }: BreadcrumbBarProps) {
       >
         Inbox
       </button>
-      <span className="text-white/30">/</span>
-      <span className="truncate text-white/80">{label}</span>
+      <span className="text-[var(--t-fg-5)]">/</span>
+      <span className="truncate text-[var(--t-fg-2)]">{label}</span>
     </nav>
   );
 }

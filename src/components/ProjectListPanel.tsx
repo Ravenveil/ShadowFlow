@@ -102,7 +102,7 @@ function rowStyle(active: boolean): React.CSSProperties {
     alignItems: 'center',
     gap: 8,
     padding: '8px 10px',
-    borderRadius: 6,
+    borderRadius: 8,
     cursor: 'pointer',
     background: active ? 'var(--t-accent-tint)' : 'transparent',
     border: '1px solid transparent',
@@ -110,23 +110,24 @@ function rowStyle(active: boolean): React.CSSProperties {
     color: active ? 'var(--t-fg)' : 'var(--t-fg-2)',
     fontWeight: active ? 600 : 500,
     marginBottom: 2,
+    transition: 'background 100ms ease',
   };
 }
 
+// UI5.0：遮罩背景/模糊统一走 .ui50-overlay 类，此处只留定位。
 const MODAL_BACKDROP: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.55)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 100,
 };
 
+// UI5.0：圆角/软阴影统一走 .ui50-modal 类。
 const MODAL_CARD: React.CSSProperties = {
   background: 'var(--t-panel)',
   border: '1px solid var(--t-border)',
-  borderRadius: 12,
   padding: 20,
   width: 380,
   maxWidth: '92vw',
@@ -145,9 +146,10 @@ const FIELD_LABEL: React.CSSProperties = {
 const INPUT_STYLE: React.CSSProperties = {
   width: '100%',
   padding: '8px 12px',
-  background: 'rgba(255,255,255,0.05)',
+  // UI5.0：rgba(255,255,255,.05) 在 day 主题近乎隐形，改令牌底
+  background: 'var(--t-bg)',
   border: '1px solid var(--t-border)',
-  borderRadius: 6,
+  borderRadius: 8,
   color: 'var(--t-fg)',
   fontSize: 13,
   outline: 'none',
@@ -293,7 +295,7 @@ export function ProjectListPanel({
         {loading ? (
           <div style={EMPTY_STYLE}>{t('common.loading')}</div>
         ) : error ? (
-          <div style={{ ...EMPTY_STYLE, color: '#fca5a5' }} role="alert">
+          <div style={{ ...EMPTY_STYLE, color: 'var(--t-err, #ef4444)' }} role="alert">
             {error}
           </div>
         ) : projects.length === 0 ? (
@@ -324,6 +326,9 @@ export function ProjectListPanel({
                     onSelect(p.project_id);
                   }
                 }}
+                // UI5.0：行 hover 浅底（active 行保持 accent-tint 不覆盖）
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--t-hover)'; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
               >
                 <Folder
                   size={14}
@@ -372,10 +377,11 @@ export function ProjectListPanel({
       </div>
 
       {showCreate && (
-        <div style={MODAL_BACKDROP} onClick={() => !creating && setShowCreate(false)}>
+        <div style={MODAL_BACKDROP} className="ui50-overlay" onClick={() => !creating && setShowCreate(false)}>
           <div
             onClick={(e) => e.stopPropagation()}
             style={MODAL_CARD}
+            className="ui50-modal ui50-pop"
             data-testid="project-create-modal"
           >
             <h3 style={{ margin: 0, fontSize: 14, color: 'var(--t-fg)' }}>
@@ -399,7 +405,7 @@ export function ProjectListPanel({
                 }}
               />
               {!nameValid && createName.length > 0 && (
-                <div style={{ fontSize: 10, color: '#fca5a5', marginTop: 4 }}>
+                <div style={{ fontSize: 10, color: 'var(--t-err, #ef4444)', marginTop: 4 }}>
                   {t('projects.nameError')}
                 </div>
               )}
@@ -437,7 +443,7 @@ export function ProjectListPanel({
             </div>
 
             {createError && (
-              <div role="alert" style={{ fontSize: 11, color: '#fca5a5' }}>
+              <div role="alert" style={{ fontSize: 11, color: 'var(--t-err, #ef4444)' }}>
                 {createError}
               </div>
             )}
@@ -464,12 +470,10 @@ export function ProjectListPanel({
                 onClick={handleCreate}
                 disabled={!nameValid || creating}
                 data-testid="project-create-submit"
+                className="ui50-pri"
                 style={{
                   padding: '6px 14px',
-                  borderRadius: 6,
-                  border: '1px solid rgba(124,58,237,0.45)',
-                  background: '#7c3aed',
-                  color: '#fff',
+                  borderRadius: 8,
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: !nameValid || creating ? 'not-allowed' : 'pointer',
@@ -484,10 +488,11 @@ export function ProjectListPanel({
       )}
 
       {deleteTarget && (
-        <div style={MODAL_BACKDROP} onClick={() => !deleting && setDeleteTarget(null)}>
+        <div style={MODAL_BACKDROP} className="ui50-overlay" onClick={() => !deleting && setDeleteTarget(null)}>
           <div
             onClick={(e) => e.stopPropagation()}
             style={MODAL_CARD}
+            className="ui50-modal ui50-pop"
             data-testid="project-delete-modal"
           >
             <h3 style={{ margin: 0, fontSize: 14, color: 'var(--t-fg)' }}>

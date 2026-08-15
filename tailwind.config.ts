@@ -12,7 +12,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // UI5.0: Inter Variable 优先（与 index.css --font-sans 同步），Geist 回退，CJK Noto Sans SC
+        sans: ['Inter Variable', 'Inter', 'Geist', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['Geist Mono', 'ui-monospace', 'SF Mono', 'Menlo', 'monospace'],
       },
       colors: {
@@ -24,10 +25,11 @@ const config: Config = {
           elev3:    '#1A1A1A',
           elev4:    '#1F1F23',
           border:   '#27272A',
-          accent:   '#A855F7',
-          'accent-tint':   '#140A1F',
-          'accent-bright': '#D8B4FE',
-          'accent-dim':    '#6B21A8',
+          // UI5.0: 紫色 accent 全族收敛为 clawsgo 关键蓝 #1447E6 同色系
+          accent:   '#1447E6',
+          'accent-tint':   '#0A1128',
+          'accent-bright': '#93C5FD',
+          'accent-dim':    '#0F3BCC',
           fg0:  '#FFFFFF',
           fg1:  '#FAFAFA',
           fg2:  '#E4E4E7',
@@ -49,7 +51,8 @@ const config: Config = {
           bg: '#0D1117',
           surface: '#161B22',
           border: '#21262D',
-          accent: '#A78BFA',
+          // UI5.0: #A78BFA 紫 → clawsgo 关键蓝
+          accent: '#1447E6',
           success: '#22C55E',
           warn: '#F59E0B',
           muted: '#6B7280',
@@ -62,10 +65,11 @@ const config: Config = {
         'pill': '999px',
       },
       boxShadow: {
-        'glow-accent': '0 0 0 1px #A855F7, 0 0 16px -2px rgba(168,85,247,.5)',
+        // UI5.0: glow/pop 阴影同步改蓝（原 rgba(168,85,247) 紫）
+        'glow-accent': '0 0 0 1px #1447E6, 0 0 16px -2px rgba(20,71,230,.5)',
         'glow-ok':     '0 0 0 1px #10B981, 0 0 16px -4px rgba(16,185,129,.4)',
         'glow-reject': '0 0 0 1px #EF4444, 0 0 20px -4px rgba(239,68,68,.5)',
-        'pop':         '0 0 0 1px rgba(168,85,247,.35), 0 8px 24px -8px rgba(168,85,247,.4)',
+        'pop':         '0 0 0 1px rgba(20,71,230,.35), 0 8px 24px -8px rgba(20,71,230,.4)',
         'hud':         '0 10px 30px -10px rgba(0,0,0,.6)',
       },
     },

@@ -74,9 +74,10 @@ export function CrystallizedBadge({
         gap: 6,
         padding: '5px 11px',
         borderRadius: 10,
-        background: '#0A1F17',
+        // ===== UI5.0 =====(2026-08-14)· 硬编码深底 #0A1F17 → ok 色 tint（day/night 自适应）
+        background: 'color-mix(in oklab, var(--t-ok) 10%, var(--t-panel))',
         color: 'var(--t-ok)',
-        border: '1px solid rgba(16,185,129,0.2)',
+        border: '1px solid color-mix(in oklab, var(--t-ok) 28%, transparent)',
         fontFamily: 'var(--font-mono)',
         fontSize: 11,
         fontWeight: 600,
