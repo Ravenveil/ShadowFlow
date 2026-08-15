@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import re
 import threading
 from typing import Any, Dict, List, Optional, Tuple
@@ -58,7 +59,7 @@ from shadowflow.runtime.contracts import (
     WorkflowValidationResult,
     utc_now,
 )
-from shadowflow.runtime.executors import ExecutorRegistry
+from shadowflow.runtime.executors import ApiExecutor, ExecutorRegistry
 from shadowflow.runtime.gap_detector import detect_gap
 from shadowflow.runtime.host_adapter import BaseWritebackAdapter
 
@@ -3575,15 +3576,21 @@ class RuntimeService:
         - G: granularity (1-10, default 20) — scoring granularity
         - K: repetitions (default 8) — number of independent evaluations
         - C: standard splits (default 1) — cross-validation splits
-        - provider: LLM provider (default "anthropic")
-        - model: model name (uses ApiExecutor default if not set)
+        - provider: LLM provider (default env SF_VERIFIER_PROVIDER or "anthropic"; openai/anthropic)
+        - model: model name (uses ApiExecutor provider default if not set)
+        - api_key_env: BYOK key env var (default env SF_VERIFIER_API_KEY, else provider default)
+        - base_url: BYOK endpoint override
+        - system_prompt / prompt_template: 可配置 judge prompt（模板变量
+          {metric}/{target}/{op}/{current_value}/{history}）
 
         Fallback: if LLM call fails, degrade to threshold comparison.
         """
         verifier_cfg = sensor_cfg.get("verifier", {}) if isinstance(sensor_cfg, dict) else {}
         G = int(verifier_cfg.get("G", 20))
         K = int(verifier_cfg.get("K", 8))
-        provider = verifier_cfg.get("provider", "anthropic")
+        provider = str(
+            verifier_cfg.get("provider") or os.getenv("SF_VERIFIER_PROVIDER") or "anthropic"
+        ).lower()
 
         # Build verification prompt
         metric_name = setpoint.get("metric", "quality")
@@ -3591,7 +3598,21 @@ class RuntimeService:
         op = setpoint.get("op", ">=")
         current_value = base_result.get("value")
 
-        prompt = f"""Evaluate this iteration's output quality based on the convergence criterion.
+        template = verifier_cfg.get("prompt_template")
+        if isinstance(template, str) and template.strip():
+            try:
+                prompt = template.format(
+                    metric=metric_name,
+                    target=target_value,
+                    op=op,
+                    current_value=current_value,
+                    history=metric_history[-5:] if len(metric_history) >= 5 else metric_history,
+                )
+            except (KeyError, IndexError, ValueError) as exc:
+                logger.warning(f"verifier prompt_template invalid ({exc}), using default")
+                template = None
+        if not isinstance(template, str) or not template.strip():
+            prompt = f"""Evaluate this iteration's output quality based on the convergence criterion.
 
 Metric: {metric_name}
 Target: {op} {target_value}
@@ -3605,6 +3626,28 @@ Output a JSON with keys:
 - reasoning: string (brief explanation)
 """
 
+        # BYOK：model / key env / endpoint 均可由 verifier 配置或环境变量覆盖。
+        # api_key_env 是"环境变量名"（ApiExecutor 用 os.getenv 解析）；
+        # 自定义网关通常自带鉴权，可配 base_url + api_key_env=DUMMY_KEY 之类占位。
+        llm_config: Dict[str, Any] = {
+            "kind": "api",
+            "provider": provider,
+            "parse": "json",
+        }
+        if verifier_cfg.get("model"):
+            llm_config["model"] = verifier_cfg["model"]
+        api_key_env = verifier_cfg.get("api_key_env") or os.getenv("SF_VERIFIER_API_KEY_ENV")
+        if api_key_env:
+            llm_config["api_key_env"] = str(api_key_env)
+        if verifier_cfg.get("base_url"):
+            llm_config["base_url"] = verifier_cfg["base_url"]
+        if verifier_cfg.get("system_prompt"):
+            llm_config["system_prompt"] = verifier_cfg["system_prompt"]
+        # logprob 仅 anthropic 路径原生支持
+        if provider == "anthropic":
+            llm_config["logprobs"] = True  # 启用原生 logprob
+            llm_config["top_logprobs"] = int(verifier_cfg.get("top_logprobs", 5))
+
         try:
             # Use ApiExecutor for LLM call with logprob
             api_executor = self._executor_registry._executors.get("api")
@@ -3614,14 +3657,7 @@ Output a JSON with keys:
 
             # Enable logprob extraction for LLM-as-Verifier
             llm_result = await api_executor.execute(
-                config={
-                    "kind": "api",
-                    "provider": provider,
-                    "model": verifier_cfg.get("model", "claude-sonnet-4-20250514"),
-                    "parse": "json",
-                    "logprobs": True,  # 启用原生 logprob
-                    "top_logprobs": 5,  # 请求 top-5 token 概率
-                },
+                config=llm_config,
                 payload={"prompt": prompt},
             )
 

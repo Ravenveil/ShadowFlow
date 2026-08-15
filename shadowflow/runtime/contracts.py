@@ -153,8 +153,8 @@ class WorkflowDefinition(BaseModel):
                 if not isinstance(executor_config, dict):
                     raise ValueError(f"node {node.id} executor must be an object")
                 executor_kind = executor_config.get("kind")
-                if executor_kind not in {"cli", "api", "agentteams"}:
-                    raise ValueError(f"node {node.id} executor.kind must be one of ['api', 'cli', 'agentteams']")
+                if executor_kind not in {"api", "cli", "agentteams", "rag"}:
+                    raise ValueError(f"node {node.id} executor.kind must be one of ['api', 'cli', 'agentteams', 'rag']")
 
             delegated_config = node.config.get("delegated")
             if delegated_config is not None:

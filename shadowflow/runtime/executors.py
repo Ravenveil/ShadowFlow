@@ -683,7 +683,7 @@ class ExecutorRegistry:
         self._executors: Dict[str, BaseExecutor] = {}
         # (kind, provider) → AgentExecutor for the new plugin contract
         self._agent_executors: Dict[Tuple[str, str], AgentExecutor] = {}
-        for executor in executors or [CliExecutor(), ApiExecutor(), AgentTeamsExecutor()]:
+        for executor in executors or [CliExecutor(), ApiExecutor(), AgentTeamsExecutor(), RagExecutor()]:
             self.register(executor)
         # Auto-register preset-driven CliAgentExecutors
         for agent_executor in _build_preset_cli_executors():
@@ -1164,3 +1164,62 @@ class ApiExecutor(BaseExecutor):
             "logprobs": logprobs,
             "top_logprobs": top_logprobs,
         } if tokens else {}
+
+
+class RagExecutor(BaseExecutor):
+    """Knowledge-grounded retrieval executor (kind="rag").
+
+    Bridges the LightRAG KnowledgePack index into the workflow/loop execution
+    flow: place a ``rag`` node before an LLM node and wire its
+    ``raw_output.answer`` into the next node's prompt (state writeback works
+    like any other node).
+
+    Config:
+        pack_id:   KnowledgePack id to query (or taken from payload.pack_id)
+        query:     retrieval question (or payload.prompt / payload.query)
+        mode:      naive | local | global | hybrid (default LIGHTRAG_QUERY_MODE)
+        required:  when true, a disabled/unavailable RAG backend fails the node;
+                   default false → degrade to empty context with a note.
+
+    Degradation contract: LIGHTRAG_ENABLED≠true or lightrag-hku missing →
+    returns ``{"rag_backend": "stub", "answer": "", "note": ...}`` so graphs
+    stay runnable in dev/test environments.
+    """
+
+    kind = "rag"
+
+    async def execute(self, config: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+        required = bool(config.get("required", False))
+        pack_id = str(config.get("pack_id") or (payload or {}).get("pack_id") or "").strip()
+        query = (
+            config.get("query")
+            or (payload or {}).get("query")
+            or (payload or {}).get("prompt")
+            or ""
+        )
+        if not pack_id or not str(query).strip():
+            raise ValueError("rag node requires pack_id and a non-empty query/prompt")
+
+        from shadowflow.runtime import lightrag_adapter
+
+        output: Dict[str, Any] = {
+            "executor": {"kind": "rag", "pack_id": pack_id, "backend": lightrag_adapter.backend_label()},
+        }
+
+        if not lightrag_adapter.is_enabled():
+            note = "LightRAG disabled (LIGHTRAG_ENABLED != true); returning empty context"
+            if required:
+                raise RuntimeError(note)
+            logger.warning("RagExecutor: %s", note)
+            output.update({"answer": "", "contexts": [], "note": note})
+            return output
+
+        try:
+            answer = lightrag_adapter.query(pack_id, str(query), mode=config.get("mode"))
+            output.update({"answer": answer, "contexts": [answer]})
+        except (ImportError, lightrag_adapter.LightRagConfigError, lightrag_adapter.LightRagQueryError) as exc:
+            if required:
+                raise
+            logger.warning("RagExecutor query failed for pack %s (%s); degrading", pack_id, exc)
+            output.update({"answer": "", "contexts": [], "note": f"rag query failed: {exc}"})
+        return output
