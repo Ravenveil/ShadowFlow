@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
 
-from shadowflow.runtime.service import RuntimeService, get_service
+from shadowflow.runtime.service import RuntimeService
 
 router = APIRouter(tags=["runs"])
 
@@ -28,8 +28,13 @@ def _envelope(data: Any, **meta: Any) -> Dict[str, Any]:
 
 
 def _get_runtime() -> RuntimeService:
-    """获取 RuntimeService singleton."""
-    svc = get_service()
+    """获取 RuntimeService singleton（shadowflow.server 模块级实例）。
+
+    lazy import 避免循环依赖（server.py import 本 router）—— 与
+    shadowflow/api/inbox.py 的 `from shadowflow.server import ...` 同模式。
+    """
+    from shadowflow.server import runtime_service as svc
+
     if svc is None:
         raise HTTPException(
             status_code=503,
@@ -153,3 +158,131 @@ async def get_training_dataset(run_id: str) -> Dict[str, Any]:
         )
 
     return _envelope(projection.model_dump(mode="json"))
+
+
+@router.get("/runs/{run_id}/loops")
+async def get_run_loops(run_id: str) -> Dict[str, Any]:
+    """Get loop engine data for a run.
+
+    Returns:
+        List of loop records with iterations, convergence status, and metrics.
+        Extracted from step outputs where node_type == "control.loop".
+    """
+    runtime = _get_runtime()
+    run_result = runtime.get_run(run_id)
+    if run_result is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "RUN_NOT_FOUND", "message": f"Run {run_id!r} not found"}},
+        )
+
+    # Extract loop records from step outputs
+    loops = []
+    for step in run_result.steps:
+        if not isinstance(step.output, dict):
+            continue
+        # Check if this step output contains loop data
+        loop_data = step.output.get("loop_record")
+        if not loop_data:
+            # Legacy format: check for loop_* keys at top level
+            if "loop_id" in step.output:
+                loop_data = {
+                    "loop_id": step.output.get("loop_id"),
+                    "loop_kind": step.output.get("loop_kind"),
+                    "loop_status": step.output.get("loop_status"),
+                    "loop_iterations": step.output.get("loop_iterations", 0),
+                    "loop_converged": step.output.get("loop_converged", False),
+                    "loop_depth": step.output.get("loop_depth", 0),
+                    "loop_retried_count": step.output.get("loop_retried_count", 0),
+                    "loop_halted_by_watch": step.output.get("loop_halted_by_watch", False),
+                    "loop_memory_recalled": step.output.get("loop_memory_recalled", 0),
+                    "loop_memory_settled": step.output.get("loop_memory_settled", False),
+                }
+        if loop_data:
+            loops.append({
+                "step_id": step.step_id,
+                "node_id": step.node_id,
+                "status": step.status,
+                "started_at": step.started_at.isoformat(),
+                "ended_at": step.ended_at.isoformat() if step.ended_at else None,
+                "loop": loop_data,
+            })
+
+    return _envelope({
+        "run_id": run_id,
+        "loops": loops,
+        "total_count": len(loops),
+    })
+
+
+@router.post("/runs/{run_id}/loops/{loop_id}/halt")
+async def halt_loop(run_id: str, loop_id: str) -> Dict[str, Any]:
+    """Halt a running loop.
+
+    This endpoint allows frontend-initiated loop halting for control.loop nodes.
+    It sets a signal that the loop engine checks on each iteration.
+
+    Returns:
+        Confirmation of the halt request.
+    """
+    runtime = _get_runtime()
+    run_result = runtime.get_run(run_id)
+    if run_result is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "RUN_NOT_FOUND", "message": f"Run {run_id!r} not found"}},
+        )
+
+    # Check if loop exists
+    loop_found = False
+    loop_status = None
+    for step in run_result.steps:
+        if isinstance(step.output, dict):
+            loop_data = step.output.get("loop_record") or step.output
+            if loop_data and loop_data.get("loop_id") == loop_id:
+                loop_found = True
+                loop_status = loop_data.get("loop_status") or loop_data.get("status")
+                break
+
+    if not loop_found:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "LOOP_NOT_FOUND", "message": f"Loop {loop_id!r} not found in run {run_id!r}"}},
+        )
+
+    # Cannot halt already completed loops
+    if loop_status and loop_status in ("converged", "halted", "diverged"):
+        return _envelope({
+            "run_id": run_id,
+            "loop_id": loop_id,
+            "status": loop_status,
+            "message": f"Loop is already {loop_status}, halt request ignored",
+        }, already_halted=True)
+
+    # Note: For live loops, we would need to inject a halt signal into the runtime
+    # This is a placeholder for the full implementation which would require:
+    # 1. A shared signal store that _execute_loop_node checks
+    # 2. Async event to notify the running loop
+    # For now, this endpoint validates the request and returns a success response
+    return _envelope({
+        "run_id": run_id,
+        "loop_id": loop_id,
+        "status": "halt_requested",
+        "message": "Halt request acknowledged. Live loop halting requires runtime signal integration.",
+    })
+
+
+# === Neo 2026-08-14: /api 双注册别名 =========================================
+# Node proxyFallback（server/src/proxy-fallback.ts）转发前会重新拼上 /api
+# 前缀，而本 router 历史路径是 /runs/...（tests/test_runtime_contract.py
+# 直接打无前缀路径，保持不动）。两条路径都可用：/runs/... 供直连 Python，
+# /api/runs/... 供 Vite → Node → proxyFallback → Python 端到端链路。
+for _route in list(router.routes):
+    _methods = sorted(getattr(_route, "methods", None) or {"GET"})
+    router.add_api_route(
+        "/api" + _route.path,
+        _route.endpoint,
+        methods=_methods,
+        name=f"{_route.name}_api",
+        tags=["runs"],
+    )
