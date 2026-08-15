@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Library,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -21,7 +22,9 @@ import {
   RotateCcw,
   Search,
   Settings,
+  UserPlus,
   Users,
+  UsersRound,
 } from 'lucide-react';
 import { listAgents, type AgentRecord } from '../api/agents';
 import { listTeams, type TeamRecord } from '../api/teams';
@@ -29,6 +32,7 @@ import { useAuth } from '../core/auth/AuthContext';
 import { useI18n } from '../common/i18n';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useInboxStore } from '../core/store/useInboxStore';
+import { useCommandK } from '../core/hooks/useCommandK';
 import {
   PersonalTeamToggle,
   type ChatHomeView,
@@ -54,7 +58,7 @@ function shortAddress(addr: string): string {
 }
 
 export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { user } = useAuth();
   const workspaceId = useWorkspaceStore((s) => s.currentId);
 
@@ -84,6 +88,9 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
   // 会话条目（个人态）— 最近单聊，数据源同 PersonalChatView；Python 宕机时
   // store 降级为空数组，渲染干净空态即可。
   const agentDMs = useInboxStore((s) => s.agentDMs) ?? [];
+  // 群列表（Polynoia 对标 2026-08-15）— 点击进群聊现场页（/group/:id），
+  // 看单聊编排派发后 agents 干活的可视现场。
+  const groups = useInboxStore((s) => s.groups) ?? [];
 
   const toggleCollapsed = () =>
     setCollapsed((c) => {
@@ -168,9 +175,22 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
         .slice(0, 8),
     [agentDMs, q],
   );
+  const recentGroups = useMemo(
+    () =>
+      [...groups]
+        .sort((a, b) => Date.parse(b.lastActivityAt ?? '') - Date.parse(a.lastActivityAt ?? ''))
+        .filter((g) => (q ? g.name.toLowerCase().includes(q) : true))
+        .slice(0, 6),
+    [groups, q],
+  );
 
   const isOn = (kind: NeoTarget['kind'], id: string) =>
     target?.kind === kind && target.id === id;
+
+  // 「新任务」行 kbd 提示（Kimi tmp5D2B）对应的真实绑定：复用全局 useCommandK，
+  // Ctrl/⌘+K = 回到新任务 composer（NeoApp.handleNewTask）。Neo 路由不挂
+  // HfLayout，QuickSwitcher 的 ⌘K 不在此作用域，无冲突。
+  useCommandK({ onOpen: onNewTask });
 
   const listState = view === 'personal' ? agentsState : teamsState;
 
@@ -292,6 +312,10 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
         >
           <Plus size={15} strokeWidth={2} aria-hidden />
           <span>{t('neo.newTask')}</span>
+          {/* 2026-08-15 Kimi tmp5D2B：行右侧 kbd 小胶囊，真实绑定见上方 useCommandK */}
+          <kbd className="neo-kbd" aria-hidden>
+            Ctrl K
+          </kbd>
         </button>
         <div className="neo-search">
           <Search size={13} strokeWidth={1.9} aria-hidden className="neo-search-icon" />
@@ -303,6 +327,19 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
             aria-label={t('common.search')}
           />
         </div>
+        {/* 2026-08-15 阶段1：知识库导航行（ClawsGo home.html .nav-row 复刻）。
+            承接真实页面：KnowledgePage（Story 9.1，GET /knowledge/packs）挂 /knowledge
+            路由。视觉仍是旧体系样式，Neo 化留给后续；locale key 暂未入库，先用 defaultValue。 */}
+        <Link
+          to="/knowledge"
+          className="neo-nav-row"
+          data-testid="neo-nav-knowledge"
+        >
+          <Library size={15} strokeWidth={1.75} aria-hidden />
+          <span className="neo-nav-row-name">
+            {t('neo.knowledgeBase', { defaultValue: language === 'zh' ? '知识库' : 'Knowledge' })}
+          </span>
+        </Link>
       </div>
 
       <div className="neo-rail-body">
@@ -391,6 +428,45 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
             ))}
           </>
         )}
+
+        {/* 群聊现场入口（Polynoia 对标 2026-08-15）— /group/:id 群时间线页。 */}
+        {recentGroups.length > 0 && (
+          <>
+            <div className="neo-section-label">
+              {t('neo.groups', { defaultValue: language === 'zh' ? '群聊现场' : 'Group Rooms' })}
+            </div>
+            {recentGroups.map((g) => (
+              <Link key={g.id} to={`/group/${g.id}`} className="neo-row neo-row-link" data-testid="neo-group-row">
+                <span className="neo-team-tile">
+                  <UsersRound size={13} strokeWidth={1.9} aria-hidden />
+                </span>
+                <span className="neo-row-name">{g.name}</span>
+                {g.unreadCount > 0 && <span className="neo-row-badge">{g.unreadCount}</span>}
+              </Link>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* 邀请/说明卡（ClawsGo home.html .invite 复刻：白卡 + hairline + 图标盒
+          + 两行灰字）。无真实邀请后端 → 纯信息卡、不放假按钮，缺口见 GAP.md。 */}
+      <div className="neo-invite" data-testid="neo-invite-card">
+        <span className="neo-invite-icon" aria-hidden>
+          <UserPlus size={16} strokeWidth={1.75} />
+        </span>
+        <span className="neo-invite-text">
+          <span className="neo-invite-t1">
+            {t('neo.inviteTitle', { defaultValue: language === 'zh' ? 'ShadowFlow 本地版' : 'ShadowFlow Local' })}
+          </span>
+          <span className="neo-invite-t2">
+            {t('neo.inviteDesc', {
+              defaultValue:
+                language === 'zh'
+                  ? '数据保存在本机 · 邀请协作者即将上线'
+                  : 'Data stays on this device · collaborator invites coming soon',
+            })}
+          </span>
+        </span>
       </div>
 
       <div className="neo-usercard">

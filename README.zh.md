@@ -182,10 +182,10 @@ docker compose logs shadowflow-web   # 查前端构建错误
 ### 一键启动（推荐）
 
 ```bash
-npm run dev:all
+npm run dev
 ```
 
-并行运行 Python uvicorn + Node Skill Studio + Vite，日志按颜色区分（PY/NODE/WEB），Ctrl+C 一次停止全部。
+单命令启动（对标 `dsh web`）：拉起 Python uvicorn（:8000）+ Node Skill Studio（:8002）+ Vite（:3007），三个服务全部就绪后自动打开浏览器 http://localhost:3007。启动前做端口占用预检；Ctrl+C 或任一进程挂掉都会把整棵进程树收干净（含 `uvicorn --reload` 的 worker，不留孤儿）。`npm run dev:all` 为别名；Python 解释器自动探测（`SF_PYTHON` > 仓库 `.venv` > 系统 `python`）。
 
 分别启动：
 

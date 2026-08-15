@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { subscribeRunSession, abortRunSession } from '../../api/runSessions';
+import { subscribeRunSession, abortRunSession, editRunSessionMessage } from '../../api/runSessions';
 import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent, AgentPersonaEvent, StepArtifact, StepArtifactEvent, ToolCallEvent } from '../../api/runSessions';
 import type { TimelineMessage, MessagePatch } from '../../components/run-session/timeline/types';
 import { applyPatch } from '../../components/run-session/timeline/types';
@@ -306,6 +306,9 @@ type Action =
   // mutates by id via the pure applyPatch helper.
   | { type: 'MESSAGE'; payload: TimelineMessage }
   | { type: 'MESSAGE_PATCH'; payload: MessagePatch }
+  // Polynoia-parity chat-side edit — rewrite one assistant_text body locally
+  // after the persisted conversation row was PATCHed successfully.
+  | { type: 'MESSAGE_EDIT'; id: string; body: string }
   // Post-assembly UX hint from the `assembly-meta` SSE frame.
   | { type: 'ASSEMBLY_META'; payload: { ask_workspace?: boolean; recipe?: string } }
   // 2026-05-16 — user pressed Stop. Mark stream terminated locally and
@@ -794,6 +797,17 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
         ),
       };
     }
+    case 'MESSAGE_EDIT': {
+      const idx = state.messages.findIndex((m) => m.id === action.id);
+      if (idx === -1) return state;
+      const target = state.messages[idx];
+      if (target.kind !== 'assistant_text') return state;
+      const edited: TimelineMessage = { ...target, body: action.body, streaming: false };
+      return {
+        ...state,
+        messages: state.messages.map((m, i) => (i === idx ? edited : m)),
+      };
+    }
     case 'ABORT': {
       // Avoid appending the marker twice if the user clicks Stop twice in
       // quick succession before isStreaming flips.
@@ -848,6 +862,12 @@ export interface UseRunSessionReturn extends RunSessionState {
    * memoize since text/thinking arrays grow over time.
    */
   getNodeChunks: (nodeId: string) => NodeChunkBuffer;
+  /**
+   * Polynoia-parity chat-side edit — PATCH the persisted conversation row
+   * that back-links to a timeline assistant_text message, then rewrite the
+   * local message. Returns whether the server accepted the edit.
+   */
+  editMessage: (id: string, body: string) => Promise<boolean>;
 }
 
 export function useRunSession(sessionId: string): UseRunSessionReturn {
@@ -975,6 +995,20 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     }
   }, [sessionId]);
 
+  // Polynoia-parity chat-side edit — PATCH the persisted conversation row
+  // (via the run-session route's timeline back-trace), then rewrite the
+  // local timeline message so the chat updates immediately. Returns whether
+  // the server accepted the edit; on failure the local copy is untouched.
+  const editMessage = useCallback(
+    async (id: string, body: string): Promise<boolean> => {
+      if (!sessionId) return false;
+      const ok = await editRunSessionMessage(sessionId, id, body);
+      if (ok) dispatch({ type: 'MESSAGE_EDIT', id, body });
+      return ok;
+    },
+    [sessionId],
+  );
+
   const isStreaming = connected && !state.isComplete && state.error == null;
 
   // S12 — expose a callback so RunSessionPage can dismiss the
@@ -993,7 +1027,7 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     [state.perNodeChunks],
   );
 
-  return { ...state, isStreaming, abort, dispatchClearQuestionForm, getNodeChunks };
+  return { ...state, isStreaming, abort, dispatchClearQuestionForm, getNodeChunks, editMessage };
 }
 
 /**

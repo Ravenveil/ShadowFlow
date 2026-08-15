@@ -41,6 +41,8 @@ export interface SkillInfo {
   fidelity?: string;
   has_team?: boolean;
   example_prompt?: string;
+  /** 2026-08-15 — 模板卡封面图 URL（左文右图布局右侧缩略图槽，缺省时前端回落占位图）。 */
+  cover_url?: string;
 }
 
 /**

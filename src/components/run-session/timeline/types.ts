@@ -34,7 +34,22 @@ export type MessageKind =
    * children; subsequent messages live under it visually. Currently
    * only emitted by FE-side extractors; server can emit later.
    */
-  | 'section_header';
+  | 'section_header'
+  /**
+   * Polynoia-parity rich inline content (2026-08-15) — work artifacts
+   * rendered directly in the chat stream: the orchestrator's task plan,
+   * git commit records, real file diffs, data tables, images, live web
+   * previews, artifact references and verifier verdicts. Mirror of the
+   * server contracts; additive — unknown kinds were already appended by id.
+   */
+  | 'plan_card'
+  | 'commit_record'
+  | 'file_diff'
+  | 'table_panel'
+  | 'image_panel'
+  | 'web_preview'
+  | 'artifact_card'
+  | 'verdict_card';
 
 export interface TimelineMessageBase {
   /** ULID-ish stable id. React key + patch target. */
@@ -59,6 +74,28 @@ export interface DiffLine {
   code: string;
   /** P2-4 — when true, render a blinking caret at end of line (v8 .cur). */
   cursor?: boolean;
+}
+
+/** One task row inside a plan_card — the orchestrator's decomposition. */
+export interface PlanTaskRow {
+  /** Stable id (e.g. `node:<node_id>`). Patch target for plan_update_task. */
+  id: string;
+  title: string;
+  /** Display name of the assigned agent (worker). */
+  assignee?: string;
+  /** Agent id true-source for deterministic attribution (U0 convention). */
+  agent_id?: string;
+  status: 'pending' | 'running' | 'done' | 'failed' | 'blocked';
+  /** 1-based parallel batch/layer — same batch = dispatched concurrently. */
+  batch?: number;
+  elapsed_ms?: number;
+  note?: string;
+}
+
+export interface CommitFileEntry {
+  path: string;
+  /** Git letter: A added / M modified / D deleted / R renamed. */
+  status: string;
 }
 
 export type TimelineMessage =
@@ -164,6 +201,82 @@ export type TimelineMessage =
       meta?: string;
       /** Default true; FE persists toggle state per id. */
       default_open?: boolean;
+    })
+  // ── Polynoia-parity rich inline content payloads ──────────────────────────
+  | (TimelineMessageBase & {
+      kind: 'plan_card';
+      title: string;
+      /** The user goal this plan decomposes. */
+      goal?: string;
+      tasks: PlanTaskRow[];
+    })
+  | (TimelineMessageBase & {
+      kind: 'commit_record';
+      repo: string;
+      sha: string;
+      short_sha: string;
+      message: string;
+      author: string;
+      /** ISO date of the commit. */
+      date?: string;
+      files_changed: number;
+      insertions: number;
+      deletions: number;
+      files?: CommitFileEntry[];
+      /** Optional external link (e.g. web UI commit page). */
+      url?: string;
+    })
+  | (TimelineMessageBase & {
+      kind: 'file_diff';
+      path: string;
+      /** Highlight language hint (e.g. 'ts', 'py'); optional. */
+      language?: string;
+      added: number;
+      removed: number;
+      lines: DiffLine[];
+    })
+  | (TimelineMessageBase & {
+      kind: 'table_panel';
+      caption?: string;
+      columns: string[];
+      rows: (string | number)[][];
+    })
+  | (TimelineMessageBase & {
+      kind: 'image_panel';
+      src: string;
+      alt?: string;
+      title?: string;
+    })
+  | (TimelineMessageBase & {
+      kind: 'web_preview';
+      title: string;
+      /** URL to load in the sandboxed iframe (same-origin artifact paths ok). */
+      url?: string;
+      /** Inline HTML source alternative when no URL exists. */
+      src?: string;
+    })
+  | (TimelineMessageBase & {
+      kind: 'artifact_card';
+      title?: string;
+      /** 'yaml' | 'html' | 'markdown' today; open string for future kinds. */
+      artifact_type: string;
+      filename: string;
+      /** Servable URL (e.g. /projects/<session>/artifact.html). */
+      url?: string;
+      note?: string;
+    })
+  | (TimelineMessageBase & {
+      kind: 'verdict_card';
+      title: string;
+      /** Verifier/critique pass flag; omitted when no threshold semantics. */
+      passed?: boolean;
+      /** Aggregate score (verifier 0-1 probability or critique 0-10 avg). */
+      score?: number;
+      /** Score ceiling for display normalization (e.g. 10). */
+      max_score?: number;
+      summary?: string;
+      metrics?: { label: string; value: string | number; detail?: string }[];
+      notes?: string[];
     });
 
 export type MessagePatch =
@@ -194,7 +307,9 @@ export type MessagePatch =
         tokens: number;
         cost_cny: number;
       }>;
-    };
+    }
+  // Polynoia-parity — live task status transitions inside an open plan_card.
+  | { id: string; op: 'plan_update_task'; task_id: string; patch: Partial<PlanTaskRow> };
 
 /**
  * Pure reducer helper — apply a `MessagePatch` onto the matching
@@ -276,6 +391,15 @@ export function applyPatch(
     case 'msg_foot_update': {
       if (msg.kind !== 'msg_foot') return msg;
       return { ...msg, ...patch.patch };
+    }
+    case 'plan_update_task': {
+      if (msg.kind !== 'plan_card') return msg;
+      return {
+        ...msg,
+        tasks: msg.tasks.map((t) =>
+          t.id === patch.task_id ? { ...t, ...patch.patch } : t,
+        ),
+      };
     }
     default:
       return msg;

@@ -112,6 +112,19 @@ class WorkflowPolicyMatrixSpec(BaseModel):
         return self
 
 
+# Open executor-kind registry (P2 seam): the workflow schema validates kinds
+# against this set instead of a hardcoded whitelist. ExecutorRegistry.register
+# extends it automatically; custom executors may also register a kind directly.
+EXECUTOR_KINDS: set = {"api", "cli", "agentteams", "rag"}
+
+
+def register_executor_kind(kind: str) -> None:
+    """Register a new executor kind so workflow validation accepts it."""
+    if not isinstance(kind, str) or not kind:
+        raise ValueError("executor kind must be a non-empty string")
+    EXECUTOR_KINDS.add(kind)
+
+
 class WorkflowDefinition(BaseModel):
     workflow_id: str
     version: str
@@ -153,8 +166,11 @@ class WorkflowDefinition(BaseModel):
                 if not isinstance(executor_config, dict):
                     raise ValueError(f"node {node.id} executor must be an object")
                 executor_kind = executor_config.get("kind")
-                if executor_kind not in {"api", "cli", "agentteams", "rag"}:
-                    raise ValueError(f"node {node.id} executor.kind must be one of ['api', 'cli', 'agentteams', 'rag']")
+                if executor_kind not in EXECUTOR_KINDS:
+                    raise ValueError(
+                        f"node {node.id} executor.kind must be one of {sorted(EXECUTOR_KINDS)} "
+                        "(extend via register_executor_kind)"
+                    )
 
             delegated_config = node.config.get("delegated")
             if delegated_config is not None:
@@ -228,20 +244,40 @@ class WorkflowDefinition(BaseModel):
             if node.type != "control.loop":
                 continue
 
+            # Loop body v2 (loop-engine-design §8): the body is a subgraph of
+            # this DAG — config.subgraph declares the body node set and the
+            # workflow's own edges between those nodes drive execution order
+            # (conditions and back edges included). config.preset expands a
+            # named template from the open preset registry (PDCA is a bundled
+            # example, not an engine concept); config.entry overrides the DAG
+            # body's walk start.
+            preset = node.config.get("preset")
             subgraph = node.config.get("subgraph")
+            if preset is not None:
+                if not isinstance(preset, str) or not preset:
+                    raise ValueError(f"loop node {node.id} config.preset must be a non-empty string")
             if not isinstance(subgraph, list) or not subgraph:
-                raise ValueError(
-                    f"loop node {node.id} must define a non-empty config.subgraph list"
-                )
-            if len(subgraph) != len(set(subgraph)):
-                raise ValueError(f"loop node {node.id} subgraph entries must be unique")
-            for body_id in subgraph:
-                if not isinstance(body_id, str) or body_id not in node_ids:
+                if preset is None:
                     raise ValueError(
-                        f"loop node {node.id} subgraph references unknown node: {body_id}"
+                        f"loop node {node.id} must define a non-empty config.subgraph list "
+                        "(or a config.preset body template)"
                     )
-                if body_id == node.id:
-                    raise ValueError(f"loop node {node.id} subgraph cannot reference itself")
+            else:
+                if len(subgraph) != len(set(subgraph)):
+                    raise ValueError(f"loop node {node.id} subgraph entries must be unique")
+                for body_id in subgraph:
+                    if not isinstance(body_id, str) or body_id not in node_ids:
+                        raise ValueError(
+                            f"loop node {node.id} subgraph references unknown node: {body_id}"
+                        )
+                    if body_id == node.id:
+                        raise ValueError(f"loop node {node.id} subgraph cannot reference itself")
+                entry = node.config.get("entry")
+                if entry is not None:
+                    if not isinstance(entry, str) or entry not in subgraph:
+                        raise ValueError(
+                            f"loop node {node.id} config.entry must reference a subgraph node"
+                        )
             if node.config.get("kind") not in {"while", "foreach", "until_converge", "fixed_count"}:
                 raise ValueError(
                     f"loop node {node.id} config.kind must be one of "

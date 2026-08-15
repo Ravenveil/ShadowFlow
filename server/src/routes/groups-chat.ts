@@ -37,6 +37,20 @@ import { isProviderId } from '../transport/api-clients';
 import type { ConversationMessage } from '../lib/conversation-types';
 import { loadTeamForRun } from '../lib/team-source';
 import { runTeamDagFanout, type RunTeamDagDeps } from '../lib/chat-dag/run-team-dag';
+import { computeDagLayers } from '../lib/chat-dag/dag-layers';
+// Polynoia 对标（2026-08-15）— INTENT_PARSE 编排拆解 + worktree 隔离闭环 + git 证据。
+import { decomposeWithLlm, type ParsedTask } from '../lib/orchestrator-parse';
+import {
+  commitWorktree,
+  integrateAll,
+  isGitWorkable,
+  prepareWorktree,
+  type IntegrationResult,
+  type PreparedWorktree,
+  type WorktreeCommit,
+} from '../lib/worktree-manager';
+import { inspectGitRun, type GitFileDiff } from '../lib/git-introspect';
+import type { PlanTaskRow } from '../lib/contracts';
 // B2 · 统一消息读路径 — chat MessageItem 适配 + run 事件重放（纯函数）。
 import {
   chatMessagesToTimeline,
@@ -318,6 +332,143 @@ function resolveExecutorKey(
   return undefined; // cli:/acp:/mcp: don't need a key
 }
 
+// ── Polynoia 对标 · 富卡片发射助手（经 gateway run 落群时间线） ───────────────
+
+type GwLike = ReturnType<typeof startGatewayRun>;
+
+/** commit_record 卡 — agent 提交 / 编排者合并提交共用。 */
+function emitCommitCard(gw: GwLike, c: {
+  repo: string; sha: string; short_sha: string; message: string; author: string;
+  date?: string; files_changed: number; insertions: number; deletions: number;
+  files?: WorktreeCommit['files'];
+}): void {
+  if (!gw || !c.sha) return;
+  gw.emitMessage({
+    id: gw.nextId(),
+    kind: 'commit_record',
+    turn_id: gw.turnId,
+    ts: Date.now(),
+    repo: c.repo,
+    sha: c.sha,
+    short_sha: c.short_sha,
+    message: c.message,
+    author: c.author,
+    files_changed: c.files_changed,
+    insertions: c.insertions,
+    deletions: c.deletions,
+    ...(c.date ? { date: c.date } : {}),
+    ...(c.files && c.files.length > 0 ? { files: c.files } : {}),
+  });
+}
+
+/** file_diff 卡（每个变更文件一张，git-introspect 已限量截断）。 */
+function emitFileDiffCards(gw: GwLike, diffs: GitFileDiff[]): void {
+  if (!gw) return;
+  for (const fd of diffs) {
+    gw.emitMessage({
+      id: gw.nextId(),
+      kind: 'file_diff',
+      turn_id: gw.turnId,
+      ts: Date.now(),
+      path: fd.path,
+      added: fd.added,
+      removed: fd.removed,
+      lines: fd.lines,
+      ...(fd.language ? { language: fd.language } : {}),
+    });
+  }
+}
+
+/** agent 干完即提交 + 证据卡（commit_record + file_diff）。失败静默 — 不影响聊天主链路。 */
+async function commitAndEvidence(
+  gw: GwLike,
+  wt: PreparedWorktree,
+  agentName: string,
+  taskTitle: string,
+): Promise<void> {
+  try {
+    const commit = await commitWorktree(
+      wt.dir,
+      `[sf] ${agentName}: ${taskTitle.slice(0, 60)}`,
+      agentName,
+    );
+    if (!commit?.sha) return;
+    emitCommitCard(gw, {
+      repo: agentName,
+      sha: commit.sha,
+      short_sha: commit.short_sha,
+      message: commit.message,
+      author: commit.author,
+      date: commit.date,
+      files_changed: commit.files_changed,
+      insertions: commit.insertions,
+      deletions: commit.deletions,
+      files: commit.files,
+    });
+    const ev = await inspectGitRun(wt.dir, wt.baseSha, undefined);
+    if (ev) emitFileDiffCards(gw, ev.fileDiffs);
+  } catch (e) {
+    console.warn('[groups-chat] worktree commit/evidence failed (non-fatal):', e);
+  }
+}
+
+/** MERGE 收尾 — 各 agent 分支并入集成分支，出合并卡/冲突表 + 冲突系统消息。 */
+async function integrateAndReport(
+  gw: GwLike,
+  groupId: string,
+  repoRoot: string,
+  runKey: string,
+  orderedAgents: string[],
+  wtByAgent: Map<string, PreparedWorktree>,
+): Promise<void> {
+  if (wtByAgent.size === 0) return;
+  try {
+    const branches = orderedAgents
+      .map((id) => wtByAgent.get(id)?.branch)
+      .filter((b): b is string => !!b);
+    const results = await integrateAll(repoRoot, runKey, branches);
+    if (!results || results.length === 0) return;
+    const rows: (string | number)[][] = [];
+    for (const r of results) {
+      // 分支名 agent/<agentId>/<runKey> → 反查 agent。
+      const agentId = r.branch.split('/')[1] ?? r.branch;
+      if (r.ok) {
+        emitCommitCard(gw, {
+          repo: 'integration',
+          sha: r.mergeSha ?? 'unknown',
+          short_sha: r.shortSha ?? '',
+          message: `merge ${agentId} → ${runKey.split('-')[0]}`,
+          author: 'orchestrator',
+          files_changed: 0,
+          insertions: r.insertions,
+          deletions: r.deletions,
+        });
+        rows.push([agentId, '已合并', r.insertions, r.deletions]);
+      } else {
+        rows.push([agentId, '冲突 needs-manual', r.conflicts.length, r.conflicts.slice(0, 3).join('、')]);
+        await pyPostMessage(groupId, {
+          content: `[worktree] ${agentId} 的分支合并冲突（needs-manual）：${r.conflicts.join('、') || '未知文件'}`,
+          sender_name: 'system',
+          sender_kind: 'system',
+        }).catch(() => {});
+      }
+    }
+    if (gw && rows.length > 1) {
+      gw.emitMessage({
+        id: gw.nextId(),
+        kind: 'table_panel',
+        turn_id: gw.turnId,
+        ts: Date.now(),
+        caption: '回合合并结果',
+        columns: ['Agent', '结果', '新增', '删除 / 冲突文件'],
+        rows,
+      });
+    }
+  } catch (e) {
+    console.warn('[groups-chat] worktree integration failed (non-fatal):', e);
+  }
+}
+
 /**
  * Background fan-out: generate + persist one reply per group agent.
  * Never throws to the caller (errors become sender_kind='system' notices).
@@ -370,18 +521,104 @@ async function runFanout(
         const userPrompt =
           latestUser0?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('') ?? '';
 
+        // ── Polynoia INTENT_PARSE（2026-08-15）─────────────────────────────
+        // 编排者前置拆解：BYOK 有 key 时用 LLM 把用户消息拆成 per-agent 子任务
+        // prompt（生成合适 prompt 分阶段派发）；任何失败 → null → 降级为原文
+        // 分发（现状行为，零回归）。
+        const rosterEntries = await Promise.all(
+          team.members.map(async (id) => {
+            const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(id)}`).catch(() => null);
+            return a ? { id, name: a.name || id, soul: a.soul ?? '' } : null;
+          }),
+        );
+        const roster = rosterEntries.filter((r): r is { id: string; name: string; soul: string } => r !== null);
+        const rosterName = (id: string): string => roster.find((r) => r.id === id)?.name ?? id;
+
+        const parseProvider = executor.startsWith('byok:')
+          ? executor.slice(5)
+          : executor === 'anthropic-direct'
+            ? 'anthropic'
+            : null;
+        let parsedTasks: ParsedTask[] | null = null;
+        if (parseProvider && apiKey && isProviderId(parseProvider) && userPrompt.trim()) {
+          parsedTasks = await decomposeWithLlm({
+            userText: userPrompt,
+            agents: roster,
+            provider: parseProvider,
+            apiKey,
+            model,
+          });
+        }
+        const taskByAgent = new Map<string, ParsedTask>();
+        if (parsedTasks) for (const t of parsedTasks) taskByAgent.set(t.agentId, t);
+
+        // ── DISPATCH 可视化：plan_card（层号 = 并行批次）───────────────────
+        const { layers } = computeDagLayers(team.members, team.edges);
+        let planCardId: string | null = null;
+        if (gw && team.members.length >= 2) {
+          const planTasks: PlanTaskRow[] = [];
+          layers.forEach((layer, li) => {
+            for (const id of layer) {
+              planTasks.push({
+                id: `node:${id}`,
+                title: taskByAgent.get(id)?.title ?? rosterName(id),
+                assignee: rosterName(id),
+                status: 'pending',
+                batch: li + 1,
+              });
+            }
+          });
+          if (planTasks.length >= 2) {
+            planCardId = gw.nextId();
+            gw.emitMessage({
+              id: planCardId,
+              kind: 'plan_card',
+              turn_id: gw.turnId,
+              ts: Date.now(),
+              title: '编排计划',
+              ...(userPrompt ? { goal: userPrompt } : {}),
+              tasks: planTasks,
+            });
+          }
+        }
+        const planTaskUpdate = (agentId: string, patch: Partial<PlanTaskRow>): void => {
+          if (gw && planCardId) {
+            gw.emitPatch({ id: planCardId, op: 'plan_update_task', task_id: `node:${agentId}`, patch });
+          }
+        };
+
+        // ── Polynoia worktree 隔离 ─────────────────────────────────────────
+        // 仅当群 workspace 是 git 仓库时启用（每 agent 一分支一 worktree，回合
+        // 起始重置）；scratch 共享目录 / 非 git → 行为与现状一致。
+        const runKey = `${groupId}-${Date.now()}`;
+        const wtByAgent = new Map<string, PreparedWorktree>();
+        if (await isGitWorkable(workspace)) {
+          for (const id of team.members) {
+            const wt = await prepareWorktree(workspace, runKey, id).catch(() => null);
+            if (wt) wtByAgent.set(id, wt);
+          }
+        }
+
         const deps: RunTeamDagDeps = {
           getAgent: async (agentId) => {
             const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
             return a ? { name: a.name || agentId, soul: a.soul ?? '' } : null;
           },
-          callAgent: async ({ name, soul, upstream, signal }) => {
-            // 用 name/soul/upstream/signal:agent 回复由 runTeamDagFanout 经独立 postMessage
+          callAgent: async ({ agentId, name, soul, upstream, signal }) => {
+            // 用 agentId/name/soul/upstream/signal:agent 回复由 runTeamDagFanout 经独立 postMessage
             // 落库（聊天消息路径零变化）;name 仅用于 B3 过程卡 label。
             // signal 来自 runNodeWithPolicy 的 per-attempt 控制器(超时/外部取消即 fire)→ 取消在飞 turn。
             const upstreamText = upstream.length
               ? `\n\n=== 上游 agent 产出 ===\n${upstream.map((u) => `[${u.from}]\n${u.text}`).join('\n\n')}`
               : '';
+            // INTENT_PARSE 产物优先 — 编排者拆出的 per-agent 子任务 prompt；
+            // 无拆解（无 key/失败/未分配）→ 用户原文（现状）。
+            const task = taskByAgent.get(agentId);
+            const basePrompt = task ? task.prompt : userPrompt;
+            // worktree 隔离 — 本轮该 agent 的专属工作目录。
+            const wt = wtByAgent.get(agentId);
+            // plan_card 任务行 → running。
+            planTaskUpdate(agentId, { status: 'running' });
             // B3 — DAG 节点粒度过程卡（重试时每个 attempt 一张新卡，可见即真实）。
             const thinkingId = gw?.nextId();
             const startedAt = Date.now();
@@ -398,10 +635,10 @@ async function runFanout(
             let buf = '';
             let errMsg = '';
             try {
-              const callable = resolveCallable(executor, { apiKey, model, workspace });
+              const callable = resolveCallable(executor, { apiKey, model, workspace: wt?.dir ?? workspace });
               for await (const chunk of callable.turn({
                 system: soul,
-                prompt: userPrompt + upstreamText,
+                prompt: basePrompt + upstreamText,
                 history: history0.slice(0, -1),
                 signal,
                 model,
@@ -446,6 +683,15 @@ async function runFanout(
                 elapsed_ms: elapsed,
               });
             }
+            // plan_card 任务行落终态。
+            planTaskUpdate(agentId, errMsg
+              ? { status: 'failed' }
+              : { status: 'done', elapsed_ms: Date.now() - startedAt });
+            // Polynoia MERGE 前半 — 干完即提交 worktree 产物 + 证据卡
+            // （commit_record / file_diff）；无 worktree 或干净树 → 静默跳过。
+            if (!errMsg && wt) {
+              await commitAndEvidence(gw, wt, name, task?.title ?? userPrompt);
+            }
             return { text: buf, error: errMsg || undefined };
           },
           postMessage: async (m) => {
@@ -470,9 +716,34 @@ async function runFanout(
           // 仅当注册表里仍是本 controller 时才删(避免误删后来者)。
           if (dagController && activeDagRuns.get(groupId) === dagController) activeDagRuns.delete(groupId);
         }
+        // ── Polynoia AGGREGATE/MERGE 收尾 ─────────────────────────────────
+        // 各 agent 分支按 DAG 层序并入集成分支 sf/run/<runKey>（专用 integration
+        // worktree，不碰用户检出分支）；合并卡 / 冲突表 + 冲突系统消息。
+        // 用户插话取消的回合不合并（半成品分支留给 needs-manual）。
+        if (!dagController?.signal.aborted) {
+          await integrateAndReport(
+            gw,
+            groupId,
+            workspace,
+            runKey,
+            layers.flat(),
+            wtByAgent,
+          );
+        }
         // 用户插话取消上一轮 → 'canceled'；否则本轮过程完整 → 'succeeded'。
         gw?.finish(dagController?.signal.aborted ? 'canceled' : 'succeeded');
         return;
+      }
+    }
+
+    // ── 串行降级路径的 worktree 隔离（无 team_id 时）──────────────────────
+    // 每 agent 一个 worktree（git 仓库 workspace 时）；无 plan_card（单人无拆解）。
+    const serialRunKey = `${groupId}-serial-${Date.now()}`;
+    const serialWt = new Map<string, PreparedWorktree>();
+    if (await isGitWorkable(workspace)) {
+      for (const id of agentIds) {
+        const wt = await prepareWorktree(workspace, serialRunKey, id).catch(() => null);
+        if (wt) serialWt.set(id, wt);
       }
     }
 
@@ -513,8 +784,10 @@ async function runFanout(
       const ctrl = new AbortController();
       let buf = '';
       let errMsg = '';
+      // worktree 隔离 — 该 agent 专属目录（git 仓库 workspace 时）。
+      const wt = serialWt.get(agentId);
       try {
-        const callable = resolveCallable(executor, { apiKey, model, workspace });
+        const callable = resolveCallable(executor, { apiKey, model, workspace: wt?.dir ?? workspace });
         for await (const chunk of callable.turn({
           system: soul,
           prompt,
@@ -588,7 +861,13 @@ async function runFanout(
         sender_name: agentName,
         sender_kind: 'agent',
       }).catch(() => {});
+      // 串行路径同样「干完即提交」— worktree 产物 + 证据卡。
+      if (wt) {
+        await commitAndEvidence(gw, wt, agentName, prompt);
+      }
     }
+    // 串行路径收尾：各 agent 分支按执行序并入集成分支。
+    await integrateAndReport(gw, groupId, workspace, serialRunKey, agentIds, serialWt);
     gw?.finish('succeeded');
   } catch (e) {
     // 未捕获异常：过程流以 raw 卡可见地收口，run 标 failed；异常继续上抛

@@ -19,8 +19,21 @@ from shadowflow.server import app
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
+    import json
+
+    import shadowflow.api.agents as agents_mod
     import shadowflow.api.teams as teams_mod
+
     monkeypatch.setattr(teams_mod, "_TEAMS_DIR", tmp_path / "teams")
+    # D2 write-time validation rejects teams referencing non-existent agents —
+    # seed the ids these tests use into an isolated agent store.
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(agents_mod, "_AGENTS_DIR", agents_dir)
+    for aid in ("agent-a", "agent-b"):
+        (agents_dir / f"{aid}.json").write_text(
+            json.dumps({"agent_id": aid, "name": aid}), encoding="utf-8"
+        )
     return TestClient(app)
 
 

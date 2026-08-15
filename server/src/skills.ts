@@ -84,6 +84,12 @@ export interface SkillDefinition {
   scenario?: string;
   fidelity?: string;
   example_prompt?: string;
+  /**
+   * Optional cover image URL for gallery/template cards. Loaded from SKILL.md
+   * frontmatter `cover_url` (alias `cover`). Undefined when absent → omitted
+   * from the GET /api/skills JSON.
+   */
+  cover_url?: string;
   system_prompt: string;
   /** Story 15.19 v2: optional executor selector. */
   executor?: SkillExecutor;

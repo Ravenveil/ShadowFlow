@@ -448,6 +448,9 @@ class AcpAgentExecutor(AgentExecutor):
                 run_id=task.run_id,
                 node_id=task.node_id,
                 agent_id=task.agent_id,
+                provenance=(task.payload or {}).get("provenance")
+                if isinstance(task.payload, dict)
+                else None,
             )
             prompt = compile_execution_prompt(task.payload)
             await client.prompt(prompt, context=task.metadata)
@@ -696,6 +699,11 @@ class ExecutorRegistry:
             self.register_agent(agent_executor)
 
     def register(self, executor: BaseExecutor) -> None:
+        # P2 seam: registering an executor also opens its kind at the workflow
+        # schema level, so custom executors need no contracts.py edit.
+        from shadowflow.runtime.contracts import register_executor_kind
+
+        register_executor_kind(executor.kind)
         self._executors[executor.kind] = executor
 
     def register_agent(self, executor: AgentExecutor) -> None:

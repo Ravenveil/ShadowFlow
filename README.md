@@ -122,6 +122,8 @@ Backend (FastAPI + Node.js)
 
 ## How to Plug Your Agent
 
+Full contract: [docs/AGENT_PLUGIN_CONTRACT.md](docs/AGENT_PLUGIN_CONTRACT.md)
+
 ShadowFlow supports four integration channels: `api` (HTTP inference), `cli` (subprocess), `mcp` (single MCP tool call), `acp` (ACP session + approval flow).
 
 Two steps to integrate:
@@ -180,10 +182,10 @@ Known risk: the 0G TS SDK may have WebSocket/WASM compatibility issues on Window
 ### Quick start
 
 ```bash
-npm run dev:all
+npm run dev
 ```
 
-Runs Python uvicorn + Node Skill Studio + Vite in parallel with colored logs (PY/NODE/WEB). Ctrl+C stops all three.
+Single-command dev, `dsh web` style: starts Python uvicorn (:8000) + Node gateway (:8002) + Vite (:3007), waits until all three are HTTP-ready, then opens the browser at http://localhost:3007. Port conflicts are detected before launch; Ctrl+C (or any child process dying) stops the whole tree — descendants included, no orphaned `uvicorn --reload` workers. `npm run dev:all` is an alias; `dev:python` / `dev:server` / `dev:web` still work for starting parts individually. The launcher auto-detects the Python interpreter (`SF_PYTHON` > repo `.venv` > `python`).
 
 ### Tests
 
@@ -349,7 +351,7 @@ Windows 用户确保 Docker Desktop 开启 **"Use the WSL 2 based engine"**。
 ## 开发者指南
 
 ```bash
-npm run dev:all   # 一键启动全部服务
+npm run dev        # 一键启动全部服务（就绪后自动开浏览器）
 ```
 
 ```bash

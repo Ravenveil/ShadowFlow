@@ -18,8 +18,21 @@ from shadowflow.server import app
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
+    import json
+
+    import shadowflow.api.agents as agents_mod
     import shadowflow.api.teams as teams_mod
+
     monkeypatch.setattr(teams_mod, "_TEAMS_DIR", tmp_path / "teams")
+    # D2 write-time validation rejects teams referencing non-existent agents —
+    # seed the ids these tests use into an isolated agent store.
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(agents_mod, "_AGENTS_DIR", agents_dir)
+    for aid in ("agent-a", "agent-b"):
+        (agents_dir / f"{aid}.json").write_text(
+            json.dumps({"agent_id": aid, "name": aid}), encoding="utf-8"
+        )
     return TestClient(app)
 
 
@@ -65,6 +78,12 @@ class TestTeamWorkflow:
                 }
             ],
         }
+        workflow["nodes"].append({
+            "id": "node-2",
+            "type": "agentTask",
+            "position": {"x": 300, "y": 200},
+            "data": {"agentId": "agent-b", "name": "Bob", "soul": "Creative"},
+        })
         r = client.put(f"/api/teams/{team_id}/workflow", json=workflow)
         assert r.status_code == 200
         assert r.json()["data"]["nodes"][0]["id"] == "node-1"
@@ -91,8 +110,8 @@ class TestTeamWorkflow:
         assert data["edges"] == []
 
     def test_put_workflow_overwrites(self, client, team_id):
-        wf1 = {"nodes": [{"id": "n1", "type": "agentTask", "position": {"x": 0, "y": 0}, "data": {"agentId": "a", "name": "A", "soul": "x"}}], "edges": []}
-        wf2 = {"nodes": [{"id": "n2", "type": "agentTask", "position": {"x": 10, "y": 10}, "data": {"agentId": "b", "name": "B", "soul": "y"}}], "edges": []}
+        wf1 = {"nodes": [{"id": "n1", "type": "agentTask", "position": {"x": 0, "y": 0}, "data": {"agentId": "agent-a", "name": "A", "soul": "x"}}], "edges": []}
+        wf2 = {"nodes": [{"id": "n2", "type": "agentTask", "position": {"x": 10, "y": 10}, "data": {"agentId": "agent-b", "name": "B", "soul": "y"}}], "edges": []}
         client.put(f"/api/teams/{team_id}/workflow", json=wf1)
         client.put(f"/api/teams/{team_id}/workflow", json=wf2)
 

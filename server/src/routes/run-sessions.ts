@@ -53,6 +53,7 @@ import {
   getConversationByGroup,
   getRecentMessages,
   setConversationGroup,
+  updateMessageByTimelineId,
 } from '../storage/conversations';
 import {
   listRunIndexByConversation,
@@ -90,6 +91,10 @@ import type { OutputKind, StepArtifact } from '../lib/contracts';
 // frames that the front-end can subscribe to incrementally. Legacy events are
 // preserved unchanged so existing consumers keep working.
 import { createTimelineProjector } from '../lib/timeline-projector';
+// Polynoia-parity — git evidence (commit records / real file diffs) captured
+// around the run inside a git-backed workspace. All helpers degrade to null.
+import { inspectGitRun, resolveGitHead } from '../lib/git-introspect';
+import type { PlanTaskRow } from '../lib/contracts';
 // S6.3 — skill-team synthesizer. When the active skill ships a structured
 // team.skill.yaml we bypass the LLM entirely and stream the design straight
 // from disk. Deterministic, free, and perfectly matches the v3 stacked
@@ -1438,6 +1443,19 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     return;
   }
 
+  // Polynoia-parity git evidence anchor — HEAD at run start. Captured before
+  // the pipeline executes so the finally block can diff exactly what the
+  // agents committed during THIS run (startHead..HEAD). Non-repo / unborn
+  // HEAD / no cwd → null → no commit/diff cards (never fabricated).
+  let gitStartHead: string | null = null;
+  if (session.cwd) {
+    try {
+      gitStartHead = await resolveGitHead(session.cwd);
+    } catch (e) {
+      console.warn(`[run-sessions] git head probe failed for session ${id}:`, e);
+    }
+  }
+
   // S1.2 — TS-side classify frame. Synchronous keyword classifier; runs in ~µs
   // so we can emit it right after the connection handshake, parallel to the
   // LLM warming up. LLM will later emit its own <sf:classify .../> via the
@@ -1611,6 +1629,60 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     framework: compose.framework,
   });
 
+  // ── S6.10-A — TimelineMessage projector ──────────────────────────────────
+  // Derives a Trae/Codex-style ordered timeline (user_turn → assistant_meta →
+  // step_panel/thinking/diff_plan/msg_foot + Polynoia-parity rich cards) from
+  // the legacy fine-grained event stream, emitting `message` + `message-patch`
+  // SSE frames in addition to the legacy events. P3: seeded with the session id
+  // so message ids are deterministic across SSE reconnects (this handler re-runs
+  // the whole pipeline per connection) — the front-end overwrites by id instead
+  // of appending duplicate user_turns on every reconnect.
+  //
+  // Hoisted to HANDLER scope (not inside the stream try) so the finally block
+  // can emit post-completion rich cards (critique verdict, git commit records,
+  // file diffs) through the same projector + bus — they then replay on
+  // reconnect exactly like the in-flight messages.
+  const projector = createTimelineProjector({ idSeed: id });
+  const flushProjector = (emit: {
+    messages: import('../lib/contracts').TimelineMessage[];
+    patches: import('../lib/contracts').MessagePatch[];
+  }) => {
+    for (const m of emit.messages) sendEvent('message', m);
+    for (const p of emit.patches) sendEvent('message-patch', p);
+  };
+  // Open the turn before the assembler kicks off — the user's goal anchors the
+  // timeline as its first row even when the LLM call fails immediately.
+  flushProjector(projector.onUserMessage(session.goal));
+
+  // ── Polynoia-parity — orchestrator plan card ─────────────────────────────
+  // `node` events during team assembly describe the roster the orchestrator
+  // derived from the goal. On the first execution substep we materialize a
+  // live plan_card (task per node); subsequent agent-substep running/done
+  // frames patch task rows in place. Single-agent runs (roster < 2) skip the
+  // card — the step_panel already narrates them.
+  const teamNodes: { id: string; title: string }[] = [];
+  let planCardEmitted = false;
+  const planTaskId = (nodeId: string): string => `node:${nodeId}`;
+  const emitPlanIfReady = (runningNodeId: string): void => {
+    if (planCardEmitted || teamNodes.length < 2) return;
+    planCardEmitted = true;
+    flushProjector(
+      projector.onPlanCard({
+        goal: session.goal,
+        tasks: teamNodes.map((n) => ({
+          id: planTaskId(n.id),
+          title: n.title,
+          assignee: n.title,
+          status: n.id === runningNodeId ? 'running' : 'pending',
+        })),
+      }),
+    );
+  };
+  const planTaskUpdate = (nodeId: string, patch: Partial<PlanTaskRow>): void => {
+    if (!planCardEmitted) return;
+    flushProjector(projector.onPlanTaskUpdate(planTaskId(nodeId), patch));
+  };
+
   try {
     // S0 (2026-05-20) — synthesizeTeamRun 不再默认触发。skill 即使带 team.skill.yaml
     // 也走 runSkillAssembler 真 LLM 路径。原写死回放路径降级为 opt-in fallback:
@@ -1719,27 +1791,9 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       );
     }
 
-    // ── S6.10-A — TimelineMessage projector ──────────────────────────────
-    // Derive Trae/Codex-style ordered timeline (user_turn → assistant_meta →
-    // step_panel/thinking/diff_panel/msg_foot) from the legacy fine-grained
-    // event stream. Emits `message` + `message-patch` SSE frames in addition
-    // to the legacy events. Legacy stream is untouched — front-end can
-    // subscribe to either or both during migration. See lib/timeline-projector.ts.
-    // P3 fix (audit 2026-05-27 §2.6): seed the projector with the session id so
-    // message ids are deterministic across SSE reconnects (this handler re-runs
-    // the whole pipeline per connection). Stable ids → the front-end overwrites
-    // by id instead of appending a duplicate user_turn on every reconnect.
-    const projector = createTimelineProjector({ idSeed: id });
-    const flushProjector = (emit: {
-      messages: import('../lib/contracts').TimelineMessage[];
-      patches: import('../lib/contracts').MessagePatch[];
-    }) => {
-      for (const m of emit.messages) sendEvent('message', m);
-      for (const p of emit.patches) sendEvent('message-patch', p);
-    };
-    // Open the turn — anchor it to the human-typed goal so user_turn appears
-    // as the first timeline row.
-    flushProjector(projector.onUserMessage(session.goal));
+    // ── S6.10-A — timeline projector lives at handler scope (hoisted above
+    // the try so the finally block can emit post-completion cards). The turn
+    // was already opened with onUserMessage(session.goal) before the try.
 
     for await (const { event, data } of generator) {
       if (abortController.signal.aborted) break;
@@ -1775,15 +1829,54 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
             elapsed_ms?: number | null;
           };
           if (d.node_id && d.substep) {
-            if (d.status === 'running') flushProjector(projector.onAgentSubstepStart(d.node_id, d.substep));
-            else if (d.status === 'done') flushProjector(projector.onAgentSubstepDone(d.node_id, d.substep, d.elapsed_ms ?? 0));
+            if (d.status === 'running') {
+              flushProjector(projector.onAgentSubstepStart(d.node_id, d.substep));
+              // Polynoia-parity — first execution substep materializes the
+              // orchestrator's plan card; later ones flip the task row live.
+              emitPlanIfReady(d.node_id);
+              planTaskUpdate(d.node_id, { status: 'running' });
+            } else if (d.status === 'done') {
+              flushProjector(projector.onAgentSubstepDone(d.node_id, d.substep, d.elapsed_ms ?? 0));
+              planTaskUpdate(d.node_id, {
+                status: 'done',
+                ...(typeof d.elapsed_ms === 'number' ? { elapsed_ms: d.elapsed_ms } : {}),
+              });
+            }
           }
         } else if (event === 'thinking-chunk' && data && typeof data === 'object') {
           const d = data as { text?: string };
           if (typeof d.text === 'string') flushProjector(projector.onThinkingChunk(d.text));
         } else if (event === 'blueprint' && data && typeof data === 'object') {
-          const d = data as { filename?: string; yaml?: string };
+          const d = data as {
+            filename?: string;
+            yaml?: string;
+            artifact_type?: unknown;
+            artifact_url?: unknown;
+          };
           flushProjector(projector.onBlueprint({ filename: d.filename, yaml: d.yaml }));
+          // Polynoia-parity — every persisted artifact gets a reference card
+          // inline in the chat; HTML artifacts additionally get a live
+          // sandboxed web preview. Only real blueprint payloads (filename
+          // present) — never placeholder cards.
+          const bpType = typeof d.artifact_type === 'string' ? d.artifact_type : '';
+          const bpUrl = typeof d.artifact_url === 'string' ? d.artifact_url : '';
+          if (typeof d.filename === 'string' && d.filename) {
+            flushProjector(
+              projector.onArtifactCard({
+                artifact_type: bpType || 'yaml',
+                filename: d.filename,
+                ...(bpUrl ? { url: bpUrl } : {}),
+              }),
+            );
+            if (bpType === 'html') {
+              flushProjector(
+                projector.onWebPreview({
+                  title: d.filename,
+                  ...(bpUrl ? { url: bpUrl } : {}),
+                }),
+              );
+            }
+          }
         } else if (event === 'yaml-line' && data && typeof data === 'object') {
           const d = data as { line?: string };
           if (typeof d.line === 'string') flushProjector(projector.onYamlLine(d.line));
@@ -1891,6 +1984,22 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       } else if (event === 'node' && currentStepIndex !== null) {
         const open = openSteps.get(currentStepIndex);
         if (open) open.nodes.push(data);
+        // Polynoia-parity — harvest the roster for the plan card. Node frames
+        // are the assembler's agent definitions; title/name/node_id are all
+        // optional in practice, so extraction is fully defensive.
+        if (data && typeof data === 'object') {
+          const n = data as { node_id?: unknown; id?: unknown; title?: unknown; name?: unknown };
+          const nodeId = typeof n.node_id === 'string' ? n.node_id : typeof n.id === 'string' ? n.id : null;
+          if (nodeId) {
+            const title =
+              (typeof n.title === 'string' && n.title) ||
+              (typeof n.name === 'string' && n.name) ||
+              nodeId;
+            if (!teamNodes.some((t) => t.id === nodeId)) {
+              teamNodes.push({ id: nodeId, title });
+            }
+          }
+        }
       } else if (event === 'edge' && currentStepIndex !== null) {
         const open = openSteps.get(currentStepIndex);
         if (open) open.edges.push(data);
@@ -2061,6 +2170,37 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           error_code: critOut.error_code ?? null,
           error_message: critOut.error_message ?? null,
         });
+        // Polynoia-parity — surface the critique as an inline verdict card on
+        // the timeline (metrics table + summary). Only when the critic actually
+        // scored (scores === null = NO_API_KEY / API_ERROR → no card, the
+        // legacy critique-result event already told the FE why).
+        if (critOut.scores) {
+          const dimEntries = Object.entries(critOut.scores).filter(
+            (entry): entry is [string, { score: number; rationale: string; improvement?: string }] =>
+              entry[1] != null,
+          );
+          const avg =
+            dimEntries.length > 0
+              ? Math.round((dimEntries.reduce((s, [, v]) => s + v.score, 0) / dimEntries.length) * 10) / 10
+              : 0;
+          flushProjector(
+            projector.onVerdictCard({
+              title: '评审结论 · Verifier',
+              score: avg,
+              max_score: 10,
+              summary: critOut.overall_summary,
+              metrics: dimEntries.map(([dim, v]) => ({
+                label: dim.split('_').join(' '),
+                value: `${v.score}/10`,
+                detail: v.rationale,
+              })),
+              notes: [
+                `lint: ${critOut.lint_summary.errors} errors · ${critOut.lint_summary.warnings} warnings · ${critOut.lint_summary.infos} infos`,
+                `耗时 ${(critOut.duration_ms / 1000).toFixed(1)}s`,
+              ],
+            }),
+          );
+        }
       } catch (critErr) {
         // Defensive — runCritique should never throw, but if it does we still
         // emit a degraded result so the front-end stops spinning.
@@ -2075,6 +2215,42 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           error_code: 'CRITIQUE_FAILED',
           error_message: critErr instanceof Error ? critErr.message : String(critErr),
         });
+      }
+    }
+
+    // ── Polynoia-parity — git evidence (commit records + real file diffs) ──
+    // For workspace runs inside a git repo, surface what the agents actually
+    // committed/changed during THIS run (startHead..HEAD), inline in the chat:
+    // commit_record per new commit → table_panel of changed-file stats (when
+    // >1 file) → file_diff per changed file (bounded). Emitted BEFORE
+    // runBus.finish so the frames land in the replay buffer. All probes
+    // degrade to null on non-repos → nothing emitted, never fabricated.
+    if (!abortController.signal.aborted && (sawComplete || sawError) && session.cwd) {
+      try {
+        const evidence = await inspectGitRun(
+          session.cwd,
+          gitStartHead,
+          new Date(session.created_at).toISOString(),
+        );
+        if (evidence) {
+          for (const c of evidence.commits) {
+            flushProjector(projector.onCommitRecord(c));
+          }
+          if (evidence.numstat.length > 1) {
+            flushProjector(
+              projector.onTablePanel({
+                caption: '本次运行文件变更',
+                columns: ['文件', '新增', '删除'],
+                rows: evidence.numstat.map((n) => [n.path, n.insertions, n.deletions]),
+              }),
+            );
+          }
+          for (const fd of evidence.fileDiffs) {
+            flushProjector(projector.onFileDiff(fd));
+          }
+        }
+      } catch (gitErr) {
+        console.error(`[run-sessions] git introspection failed for session ${id}:`, gitErr);
       }
     }
 
@@ -2360,6 +2536,52 @@ router.post('/:id/abort', (req: Request, res: Response) => {
   // Drop the session record so a stale client cannot reconnect.
   sessionStore.delete(id);
   res.status(204).end();
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Polynoia-parity — chat-side message editing ("直接在聊天里看还能编辑").
+//
+// The stream persists each assistant turn into the session's conversation with
+// the timeline projector's assistant_text message id as back-trace (O3). The
+// edit UI knows that timeline id, so the client PATCHes
+// { timeline_message_id, content } here; we resolve the conversation via the
+// session record and rewrite the persisted row (stamping edited_at).
+//
+// Scope note: this edits the PERSISTED conversation row (history / prompt
+// context for subsequent turns). The live SSE replay regenerates timeline
+// messages from the event buffer, so an edited body shows until the session
+// is reloaded — same behaviour as IM apps editing their local copy.
+// ────────────────────────────────────────────────────────────────────────────
+router.patch('/:id/messages', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const session = sessionStore.get(id);
+  if (!session) {
+    res.status(404).json({ error: 'session_not_found' });
+    return;
+  }
+  if (!session.conversation_id) {
+    res.status(409).json({ error: 'session_has_no_conversation' });
+    return;
+  }
+  const body = req.body as { timeline_message_id?: unknown; content?: unknown };
+  const timelineId = typeof body.timeline_message_id === 'string' ? body.timeline_message_id : '';
+  const content = typeof body.content === 'string' ? body.content : '';
+  if (!timelineId || !content.trim()) {
+    res.status(400).json({ error: 'timeline_message_id_and_content_required' });
+    return;
+  }
+  const updated = updateMessageByTimelineId(session.conversation_id, timelineId, content);
+  if (!updated) {
+    res.status(404).json({ error: 'message_not_found' });
+    return;
+  }
+  res.json({
+    message_id: updated.message_id,
+    conversation_id: updated.conversation_id,
+    timeline_message_id: updated.timeline_message_id,
+    content: updated.content,
+    edited_at: updated.edited_at,
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

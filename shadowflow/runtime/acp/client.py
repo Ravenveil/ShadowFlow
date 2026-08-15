@@ -95,8 +95,16 @@ class AcpClient:
             )
         return result
 
-    async def start_session(self, run_id: str, node_id: str, agent_id: str) -> str:
-        msg = NewSessionRequest(run_id=run_id, node_id=node_id, agent_id=agent_id)
+    async def start_session(
+        self,
+        run_id: str,
+        node_id: str,
+        agent_id: str,
+        provenance: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        msg = NewSessionRequest(
+            run_id=run_id, node_id=node_id, agent_id=agent_id, provenance=provenance
+        )
         response = await self._transport.request(msg.model_dump(exclude_none=True))
         result = response.get("result", {})
         self._session_id = str(result.get("sessionId", f"sess-{uuid4().hex[:12]}"))

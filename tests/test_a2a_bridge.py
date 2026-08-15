@@ -49,14 +49,22 @@ from shadowflow.api.a2a_bridge import (  # noqa: E402
 
 
 @pytest.fixture()
-def client():
-    """Create an isolated TestClient with A2A bridge mounted."""
+def client(monkeypatch):
+    """Create an isolated TestClient with A2A bridge mounted.
+
+    The module-level A2A_BRIDGE_ENABLED constant freezes at first import —
+    if another test (e.g. tests/api/test_chat_completions.py) imported
+    shadowflow.server earlier in the session, the env var set at the top of
+    this file arrives too late. Force the flag on the module object so the
+    handlers are enabled regardless of import order.
+    """
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from shadowflow.api.a2a_bridge import router, A2A_BRIDGE_ENABLED
+    import shadowflow.api.a2a_bridge as bridge_mod
 
+    monkeypatch.setattr(bridge_mod, "A2A_BRIDGE_ENABLED", True)
     app = FastAPI()
-    app.include_router(router)
+    app.include_router(bridge_mod.router)
     return TestClient(app)
 
 

@@ -166,7 +166,36 @@ app = FastAPI(title="ShadowFlow API", version="0.3.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 run_event_bus = RunEventBus()
-runtime_service = RuntimeService(event_bus=run_event_bus)
+
+# P1 durable runtime state: one SQLite file backs the append-only run event
+# log, run/request snapshots and checkpoints, so a restarted process keeps
+# serving runs projections instead of 404ing. Disable with
+# SF_RUNTIME_STATE_DB="" (falls back to in-memory).
+_runtime_db_env = os.getenv("SF_RUNTIME_STATE_DB", "")
+if _runtime_db_env == "":
+    _runtime_db_path = Path(__file__).resolve().parents[1] / ".shadowflow" / "runtime.sqlite"
+    _runtime_db_enabled = True
+else:
+    _runtime_db_enabled = bool(_runtime_db_env)
+    _runtime_db_path = Path(_runtime_db_env)
+
+if _runtime_db_enabled:
+    from shadowflow.runtime.checkpoint_store import SqliteCheckpointStore
+    from shadowflow.runtime.run_event_log import (
+        SqliteRequestContextStore,
+        SqliteRunEventLog,
+        SqliteRunStore,
+    )
+
+    runtime_service = RuntimeService(
+        event_bus=run_event_bus,
+        run_store=SqliteRunStore(_runtime_db_path),
+        request_context_store=SqliteRequestContextStore(_runtime_db_path),
+        run_event_log=SqliteRunEventLog(_runtime_db_path),
+        checkpoint_store=SqliteCheckpointStore(str(_runtime_db_path)),
+    )
+else:
+    runtime_service = RuntimeService(event_bus=run_event_bus)
 
 # --------------------------------------------------------------------
 # Epic 4 observability routers (Stories 4.7 / 4.8 / 4.9)
@@ -521,6 +550,133 @@ async def export_agentteams_package(workflow: WorkflowDefinition):
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.post("/workflow/export/sfagent")
+async def export_sfagent_bundle(request: Request):
+    """GOAI M9: export a .sfagent agent bundle (identity + skills + evidence).
+
+    Body: {"agent": {...}, "run_id": optional}. When run_id is given the
+    bundle embeds that run's trajectory evidence (steps/loops/checkpoints).
+    """
+    import zipfile
+    from io import BytesIO
+
+    from fastapi.responses import Response
+
+    from shadowflow.runtime.agent_bundle import export_sfagent_zip
+
+    class _SFAgentRequest(BaseModel):
+        agent: Dict[str, Any]
+        run_id: Optional[str] = None
+
+    try:
+        body = _SFAgentRequest.model_validate(await request.json())
+    except Exception as exc:
+        raise _client_error(400, exc, "BAD_REQUEST")
+
+    run_results = []
+    if body.run_id:
+        found = runtime_service.get_run(body.run_id)
+        if found is None:
+            raise _client_error(
+                404, ValueError(f"run {body.run_id!r} not found"), "RUN_NOT_FOUND"
+            )
+        run_results = [found]
+    try:
+        zip_bytes = export_sfagent_zip(body.agent, run_results=run_results)
+    except Exception as exc:
+        raise _internal_error(exc)
+    if not zipfile.is_zipfile(BytesIO(zip_bytes)):  # pragma: no cover — sanity
+        raise _internal_error(RuntimeError("sfagent zip malformed"))
+    filename = f"{str(body.agent.get('id') or body.agent.get('name') or 'agent')}.sfagent.zip"
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/workflow/sfagent/import")
+async def import_sfagent(request: Request):
+    """GOAI M9: import a .sfagent bundle into the agent store.
+
+    Body: {"zip_b64": "<base64 of the .sfagent.zip>"} — writes
+    .shadowflow/agents/<agent_id>.json and returns the stored record.
+    """
+    import base64
+
+    from shadowflow.runtime.agent_bundle import import_sfagent_zip
+
+    class _ImportRequest(BaseModel):
+        zip_b64: str
+
+    try:
+        body = _ImportRequest.model_validate(await request.json())
+        zip_bytes = base64.b64decode(body.zip_b64, validate=True)
+    except Exception as exc:
+        raise _client_error(400, exc, "BAD_REQUEST")
+
+    import shadowflow.api.agents as _agents_mod
+
+    try:
+        record = import_sfagent_zip(zip_bytes, _agents_mod._AGENTS_DIR)
+    except ValueError as exc:
+        raise _client_error(400, exc, "BAD_BUNDLE")
+    except Exception as exc:
+        raise _internal_error(exc)
+    return {"data": record, "meta": {}}
+
+
+@app.post("/workflow/sfagent/upload")
+async def upload_sfagent(request: Request):
+    """GOAI M9: export a bundle and (when the 0G bridge is configured) upload it.
+
+    Body: {"agent": {...}, "run_id": optional}. Returns the sha256 content id
+    plus the 0G location when SHADOWFLOW_BRIDGE_URL is reachable.
+    """
+    import os
+
+    from shadowflow.runtime.agent_bundle import export_sfagent_zip, upload_sfagent_to_zerog
+
+    class _UploadRequest(BaseModel):
+        agent: Dict[str, Any]
+        run_id: Optional[str] = None
+
+    try:
+        body = _UploadRequest.model_validate(await request.json())
+    except Exception as exc:
+        raise _client_error(400, exc, "BAD_REQUEST")
+
+    run_results = []
+    if body.run_id:
+        found = runtime_service.get_run(body.run_id)
+        if found is None:
+            raise _client_error(404, ValueError(f"run {body.run_id!r} not found"), "RUN_NOT_FOUND")
+        run_results = [found]
+
+    import zipfile as _zipfile
+    from io import BytesIO as _BytesIO
+
+    zip_bytes = export_sfagent_zip(body.agent, run_results=run_results)
+    import json as _json
+
+    manifest = _json.loads(
+        _zipfile.ZipFile(_BytesIO(zip_bytes)).read("sfagent.json")
+    )
+    result: Dict[str, Any] = {
+        "content_id": manifest["content_id"],
+        "uploaded": False,
+        "cid": manifest["content_id"],
+        "location": None,
+    }
+    if os.getenv("SHADOWFLOW_BRIDGE_URL"):
+        try:
+            uploaded = upload_sfagent_to_zerog(zip_bytes, manifest["content_id"])
+            result.update({"uploaded": True, "cid": uploaded["cid"], "location": uploaded["location"]})
+        except Exception as exc:  # noqa: BLE001 — degrade to local id, never fail export
+            result["upload_error"] = str(exc)
+    return {"data": result, "meta": {}}
 
 
 @app.get("/runs", response_model=List[RunSummary])

@@ -87,6 +87,29 @@
   overflow-y: auto;
   padding: 18px 22px 12px;
 }
+/* 细滚动条（规格 P2-20）：6px、半透明、hover 显形；聊天列与空态画廊统一 */
+.neo-chat-scroll,
+.neo-empty {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.neo-chat-scroll:hover,
+.neo-empty:hover {
+  scrollbar-color: color-mix(in oklab, var(--t-fg) 22%, transparent) transparent;
+}
+.neo-chat-scroll::-webkit-scrollbar,
+.neo-empty::-webkit-scrollbar { width: 6px; }
+.neo-chat-scroll::-webkit-scrollbar-thumb,
+.neo-empty::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: transparent;
+}
+.neo-chat-scroll:hover::-webkit-scrollbar-thumb,
+.neo-empty:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--t-fg) 22%, transparent);
+}
+.neo-chat-scroll::-webkit-scrollbar-track,
+.neo-empty::-webkit-scrollbar-track { background: transparent; }
 .neo-run {
   display: flex;
   flex-direction: column;
@@ -115,13 +138,15 @@
   gap: 7px;
   margin-top: 4px;
 }
-.neo-agent-star { color: var(--t-accent); flex-shrink: 0; }
+/* ClawsGo 帧实测：agent 星标是珊瑚橙 #F4845F（全界面除状态点外唯一的品牌彩色标记） */
+.neo-agent-star { color: #f4845f; flex-shrink: 0; }
 .neo-agent-name { font-size: 13px; font-weight: 600; color: var(--t-fg); }
 .neo-agent-elapsed {
   margin-left: auto;
   font-size: 10.5px;
   color: var(--t-fg-5);
   font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- 「执行了 N 个操作」可折叠列表 ---- */
@@ -191,11 +216,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* running 行标题灰化（clawsgo「正在搜索…」形态）：降为 fg-4，
+   单行 ellipsis 由 .neo-op-title 基样式保证。 */
+.neo-op-row[data-status="running"] .neo-op-title { color: var(--t-fg-4); }
 .neo-op-elapsed {
   flex-shrink: 0;
   font-size: 10.5px;
   color: var(--t-fg-5);
   font-family: var(--font-mono, monospace);
+  /* 耗时数字等宽，避免跳动（规格 P2-17） */
+  font-variant-numeric: tabular-nums;
 }
 
 .neo-chevron {
@@ -243,12 +273,23 @@
   word-break: break-word;
 }
 .neo-op-links { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+/* 链接 = day 唯一允许的彩色文字（规格 P0-4 + done 帧实测）：ClawsGo 青 #0F766E，
+   night 落 #93C5FD；下划线只在 hover 出现。 */
 .neo-op-links a {
   font-size: 12px;
-  color: var(--t-accent);
+  color: #0f766e;
   text-decoration: none;
 }
 .neo-op-links a:hover { text-decoration: underline; }
+/* 聊天列内的裸 markdown 链接（无 class 的 <a>，未来/其他渲染器输出）同色；
+   :not([class]) 保证不覆盖 Timeline CSS module 已带样式的链接卡。 */
+.neo-chat-scroll a:not([class]) {
+  color: #0f766e;
+  text-decoration: none;
+}
+.neo-chat-scroll a:not([class]):hover { text-decoration: underline; }
+[data-theme="night"] .neo-op-links a,
+[data-theme="night"] .neo-chat-scroll a:not([class]) { color: #93c5fd; }
 
 /* Loop 节点行：迭代进度徽标 */
 .neo-loop-badge {
@@ -376,24 +417,31 @@
 .neo-composer { width: 100%; }
 .neo-composer-hero { max-width: 720px; margin: 0 auto; }
 
-/* 会话 composer 卡片：与 hero 同款大圆角浮起 */
+/* 会话 composer 卡片：与 hero 同款大圆角浮起（规格软阴影 0 4px 24px rgba(0,0,0,.06)） */
 .neo-composer .hf-card {
   border-radius: 18px;
-  box-shadow: 0 8px 28px -14px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
 }
 .neo-composer .hf-card:focus-within {
   border-color: var(--t-border-2);
 }
 
-/* hero composer：竞品式大圆角 + 软浮起阴影（.hf-card 默认 12px 太硬） */
+/* hero composer：与会话态同语言（radius 20 / 同款软阴影，聚焦时略加深） */
 .neo-composer-hero .hf-card {
-  border-radius: 22px;
+  border-radius: 20px;
   border-color: var(--t-border-2);
-  box-shadow: 0 12px 40px -16px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
 }
 .neo-composer-hero .hf-card:focus-within {
   border-color: var(--t-fg-5);
-  box-shadow: 0 16px 48px -16px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.09);
+}
+
+/* 发送钮正圆化：UnifiedComposer 用 inline style（borderRadius: 9），
+   本工位不改该文件，用 !important 压过内联；尺寸 32px 已在 28~32 区间。
+   底色 var(--t-accent) 在 neo day 作用域即近黑，night 落 accent 蓝，均不破。 */
+.neo-composer button[data-testid="start-submit"] {
+  border-radius: 50% !important;
 }
 
 /* 画廊单色化 + clawsgo tab 形态：选中 = 加粗黑字，无下划线无底边 */
@@ -407,21 +455,90 @@
   color: var(--t-fg);
   font-weight: 700;
   border-bottom-color: transparent;
+  /* ClawsGo tmp29A7：选中 tab = 浅灰胶囊底 + 黑字，不只是加粗 */
+  background: var(--t-panel-3);
+  border-radius: 999px;
+}
+.neo-empty .sg-tab {
+  border-radius: 999px;
+  margin-bottom: 0;
+  border-bottom: none;
+  transition: color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
+}
+.neo-empty .sg-tab:hover {
+  background: var(--t-panel-2);
+}
+/* StartGallery 模板卡（ClawsGo tmp29A7 左文右图）：无边框透明底卡，hover 浅灰底，
+   左侧 名称 13/600 + 描述 12px 灰 2 行截断 + 徽章行，右侧 108px 缩略图槽（无图纯文字）。 */
+.neo-empty .sg-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 28px;
+  width: min(720px, 100%);
 }
 .neo-empty .sg-card {
-  border-radius: 16px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: var(--r-card);
+  transform: none;
 }
 .neo-empty .sg-card:hover {
-  box-shadow: 0 10px 28px -12px rgba(15, 23, 42, 0.12);
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+  background: var(--t-panel-2);
+}
+.neo-empty .sg-card:active { transform: none; }
+.neo-empty .sg-card-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.neo-empty .sg-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.neo-empty .sg-card-desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--t-fg-3);
+}
+.neo-empty .sg-card-thumb {
+  width: 108px;
+  height: auto;
+  display: block;
+  border-radius: 10px;
 }
 .neo-empty .sg-card-cat {
   text-transform: none;
   letter-spacing: 0;
   font-family: inherit;
 }
+@media (max-width: 560px) {
+  .neo-empty .sg-grid { grid-template-columns: 1fr; }
+}
 
 /* ---- 空态：hero 问候 + 居中大 composer + 模板画廊（clawsgo 首页态 tmp29A7） ----
    画廊把内容撑高后整列可滚，顶部留 8vh 呼吸位保持视觉重心。 */
+.neo-version-pill {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--t-fg-4);
+  padding: 3px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
+  background: var(--t-panel);
+}
 .neo-empty {
   flex: 1;
   min-height: 0;
@@ -460,3 +577,43 @@
   to { transform: rotate(360deg); }
 }
 .neo-spin { animation: neo-spin 0.9s linear infinite; }
+
+/* ── 群聊现场页（Polynoia 对标 2026-08-15）────────────────────────── */
+.neo-group-chat {
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+}
+.neo-group-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 18px;
+}
+.neo-group-scroll::-webkit-scrollbar { width: 3px; }
+.neo-group-scroll::-webkit-scrollbar-thumb { background: var(--t-panel-3); border-radius: 2px; }
+.neo-group-note {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--t-fg-4);
+}
+.neo-group-error { color: var(--t-err, #d33); }
+.neo-group-members { color: var(--t-fg-4); font-weight: 400; }
+.neo-group-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+  background: var(--t-panel-2);
+  border-radius: 99px;
+  padding: 4px 10px;
+}
+
+/* rail 群行（Link 形态复用 .neo-row 视觉） */
+a.neo-row-link {
+  text-decoration: none;
+}

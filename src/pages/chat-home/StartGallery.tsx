@@ -7,14 +7,15 @@
  * `@<skill_id> ` 预填进 UnifiedComposer（其 parseSkillToken 自动选中该
  * skill），用户接着打字即带 skill 发起 run。
  *
- * 不臆造 clawsgo 卡片上的「交付X · 约N分钟」——那是我们数据里没有的字段，
- * 编造即 mock。只渲染 skill 的真实字段。
+ * 不臆造 clawsgo 卡片上的「交付X · 约N分钟」——SkillInfo（src/api/skills.ts）
+ * 没有交付物/耗时字段，编造即 mock。故无 meta 行，只渲染 skill 的真实字段。
+ *
+ * 2026-08-15 模板卡改 ClawsGo tmp29A7「左文右图」：左侧名称 13/600 + 描述
+ * 12px 灰 2 行截断 + 底部徽章行，右侧 108px 缩略图槽（cover_url → 占位映射
+ * → 无图则不渲染图槽）。无边框卡 + hover 浅灰底（样式在 neo-chat.css，
+ * 作用域 .neo-empty）。
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  Sparkles, Workflow, FileCode, FileText, Boxes, Bot, Wrench,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { listSkills, type SkillInfo } from '../../api/skills';
 
 /** 过滤掉测试/演示 skill（id 或 name 含测试关键词）。 */
@@ -32,7 +33,7 @@ function isTestSkill(s: SkillInfo): boolean {
   return false;
 }
 
-// domain → 友好中文 + 配图标（缺失 domain 回落 kind / 其他）。
+// domain → 友好中文（缺失 domain 回落原值 / 其他）。
 const DOMAIN_LABEL: Record<string, string> = {
   general: '通用',
   design: '设计',
@@ -43,24 +44,27 @@ const DOMAIN_LABEL: Record<string, string> = {
   data: '数据',
   business: '商业',
 };
-const KIND_ICON: Record<string, LucideIcon> = {
-  workflow: Workflow,
-  generator: FileCode,
-  capability: Wrench,
+
+/**
+ * PLACEHOLDER 占位封面：skill_id → public/neo/skill-covers/ 下占位图文件名。
+ * 仅在后端尚未下发 cover_url 时兜底；后端补图后优先用 s.cover_url。
+ */
+const COVER_PLACEHOLDER: Record<string, string> = {
+  'web-prototype': 'thumb-company.png',
+  report: 'thumb-trials.png',
+  'agent-team-blueprint': 'thumb-interview.png',
+  'paper-review': 'thumb-contract.png',
 };
-const DOMAIN_ICON: Record<string, LucideIcon> = {
-  general: Boxes,
-  design: FileCode,
-  engineering: Wrench,
-  product: Bot,
-  research: FileText,
-};
+
+/** 缩略图来源优先级：cover_url（后端）→ 占位映射 → null（不渲染图槽，纯文字卡）。 */
+function coverOf(s: SkillInfo): string | null {
+  if (s.cover_url) return s.cover_url;
+  const file = COVER_PLACEHOLDER[s.skill_id ?? ''];
+  return file ? `/neo/skill-covers/${file}` : null;
+}
 
 function catOf(s: SkillInfo): string {
   return (s.domain && DOMAIN_LABEL[s.domain]) || s.domain || '其他';
-}
-function iconOf(s: SkillInfo): LucideIcon {
-  return (s.domain && DOMAIN_ICON[s.domain]) || (s.kind && KIND_ICON[s.kind]) || Sparkles;
 }
 
 export function StartGallery({ onPick }: { onPick: (token: string) => void }) {
@@ -158,26 +162,27 @@ export function StartGallery({ onPick }: { onPick: (token: string) => void }) {
       </div>
       <div key={cat} className="sg-grid sg-grid-fade">
         {shown.map((s) => {
-          const Icon = iconOf(s);
+          const cover = coverOf(s);
           return (
             <button
               key={s.skill_id}
               type="button"
-              className="sg-card"
+              className={`sg-card sg-card--lr${cover ? ' has-thumb' : ''}`}
               data-testid={`sg-card-${s.skill_id}`}
               onClick={() => onPick(`@${s.skill_id} `)}
               title={s.description}
             >
-              <div className="sg-card-head">
-                <span className="sg-card-icon"><Icon size={15} strokeWidth={1.9} aria-hidden /></span>
-                <span className="sg-card-name">{s.name}</span>
-                {s.has_team && <span className="sg-card-team">团队</span>}
+              {/* ClawsGo tmp29A7 左文右图：左 = 名称/描述/徽章，右 = 108px 缩略图槽（无图则不渲染） */}
+              <div className="sg-card-body">
+                <div className="sg-card-name">{s.name}</div>
+                <div className="sg-card-desc">{s.description}</div>
+                <div className="sg-card-foot">
+                  <span className="sg-card-cat">{catOf(s)}</span>
+                  {s.has_team && <span className="sg-card-team">团队</span>}
+                  {s.source === 'user' && <span className="sg-card-user">自建</span>}
+                </div>
               </div>
-              <div className="sg-card-desc">{s.description}</div>
-              <div className="sg-card-foot">
-                <span className="sg-card-cat">{catOf(s)}</span>
-                {s.source === 'user' && <span className="sg-card-user">自建</span>}
-              </div>
+              {cover && <img className="sg-card-thumb" src={cover} alt="" aria-hidden />}
             </button>
           );
         })}

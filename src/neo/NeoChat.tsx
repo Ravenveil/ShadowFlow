@@ -14,10 +14,11 @@
  * runId 由 NeoApp 持有（受控）：本组件经 onRunChange 上报启动/清除。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { SquarePen } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { SquarePen, UsersRound } from 'lucide-react';
 import type { NeoChatProps } from './types';
 import { useRunSession } from '../core/hooks/useRunSession';
-import { createRunSession } from '../api/runSessions';
+import { createRunSession, listRunSessions } from '../api/runSessions';
 import { createGroup } from '../api/groupApi';
 import { getApiBase, authHeaders } from '../api/_base';
 import { useWorkspaceStore } from '../store/workspaceStore';
@@ -27,6 +28,7 @@ import { useI18n } from '../common/i18n';
 import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
 import { NeoRunInline } from './NeoRunInline';
 import { StartGallery } from '../pages/chat-home/StartGallery';
+import pkg from '../../package.json';
 import './neo-chat.css';
 
 /** clawsgo 式时段问候（对齐 StartLanding）。i18n key + 中文 defaultValue。 */
@@ -46,6 +48,34 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
   // SSE 唯一数据源。runId 为 null 时传 ''——hook 内部对空 id 直接跳过订阅，
   // 保持 hooks 调用顺序稳定。
   const session = useRunSession(runId ?? '');
+
+  // ── 群聊现场跳转（Polynoia 对标 2026-08-15）─────────────────────────────
+  // 首条消息 best-effort 建的群经 B1 互链挂在 run 的 conversation 上；经
+  // listRunSessions 反查当前 session 的 group_id，顶栏出「群聊现场」入口。
+  const [linkedGroupId, setLinkedGroupId] = useState<string | null>(null);
+  const createdGroupRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!runId) {
+      setLinkedGroupId(null);
+      createdGroupRef.current = null;
+      return;
+    }
+    // 本组件刚建的群立即点亮（不等反查）。
+    if (createdGroupRef.current) setLinkedGroupId(createdGroupRef.current);
+    let alive = true;
+    listRunSessions()
+      .then((rows) => {
+        if (!alive) return;
+        const hit = rows.find((r) => r.session_id === runId);
+        if (hit?.group_id) setLinkedGroupId(hit.group_id);
+      })
+      .catch(() => {
+        /* Python 未起等 — 静默，无跳转入口即可 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [runId]);
 
   // 消息流自动滚动到底（新消息 / 新工具调用 / 新思考 / 新文本时）。
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -94,6 +124,8 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
             workspaceId: workspaceId ?? undefined,
           });
           groupId = g.groupId;
+          createdGroupRef.current = g.groupId;
+          setLinkedGroupId(g.groupId);
           // 左栏会话列表实时刷新（Python 未起时静默降级）
           void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
         } catch {
@@ -147,6 +179,17 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
           {t('neo.chat.currentTarget', { defaultValue: '当前选中：' })}
           <strong>{target?.name ?? t('neo.chat.noTarget', { defaultValue: '未选择' })}</strong>
         </span>
+        {/* 群聊现场跳转（B1 互链反查到 group 时出现）— 看 agents 干活的可视现场 */}
+        {runId && linkedGroupId && (
+          <Link
+            to={`/group/${linkedGroupId}`}
+            className="neo-topbar-btn"
+            data-testid="neo-chat-group-link"
+          >
+            <UsersRound size={14} strokeWidth={1.9} aria-hidden />
+            {t('neo.chat.viewGroup', { defaultValue: '群聊现场' })}
+          </Link>
+        )}
         <button type="button" className="neo-topbar-btn" onClick={handleNewTask}>
           <SquarePen size={14} strokeWidth={1.9} aria-hidden />
           {t('neo.chat.newTask', { defaultValue: '新任务' })}
@@ -180,6 +223,8 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
         /* 空态（target 为 null 或尚无 run）：hero 问候 + 居中大 composer
            + 模板画廊（clawsgo 首页态：分类 tab + 真实 skills 卡片） */
         <div className="neo-empty">
+          {/* 版本 pill（ClawsGO a_001「v1.0 正式上线」形态）：hairline + 灰字小胶囊 */}
+          <span className="neo-version-pill">ShadowFlow v{pkg.version}</span>
           <h1 className="neo-empty-title">{greetingText}</h1>
           <p className="neo-empty-sub">
             {t('neo.chat.heroSub', { defaultValue: '描述一个目标，Agent 直接开干' })}

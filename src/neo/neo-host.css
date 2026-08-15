@@ -1,6 +1,17 @@
 /* ===== Neo ===== */
 /* NeoHost — 右栏「Agent 的主机」。颜色一律 var(--t-*) / color-mix，day/night 双主题安全。 */
 
+/* 2026-08-15 链接色令牌（规格 P0-4/P0-5 + done.html 复刻实测）：day/paper 用 ClawsGo 青 #0F766E，
+   night 用 #93C5FD。供 PreviewMarkdown 内联样式 var(--t-link, …) 读取；day 唯一允许的彩色文字。 */
+:root,
+[data-theme="night"] {
+  --t-link: #93C5FD;
+}
+[data-theme="day"],
+[data-theme="paper"] {
+  --t-link: #0F766E;
+}
+
 .neo-host {
   display: flex;
   flex-direction: column;
@@ -180,46 +191,42 @@
   color: var(--t-fg-5);
 }
 
-/* 空态能力预览（描述真实功能，非 mock）：白卡浮在灰栏上 */
+/* 空态能力预览（描述真实功能，非 mock）。
+ * 2026-08-15 对标 ClawsGo a_011：图标+名称横排居中，图标 20px 灰、名称 12px，间距 ≥32px。 */
 .neo-host-caps {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 14px;
-  padding: 8px;
-  border: 1px solid var(--t-border);
-  border-radius: 14px;
-  background: var(--t-panel);
-  box-shadow: 0 6px 20px -12px rgba(15, 23, 42, 0.1);
-  text-align: left;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 36px;
+  margin-top: 20px;
+  text-align: center;
 }
 
 .neo-host-cap {
   display: flex;
-  align-items: baseline;
-  gap: 7px;
-  padding: 5px 8px;
-  border-radius: 8px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   color: var(--t-fg-5);
 }
 
 .neo-host-cap svg {
-  position: relative;
-  top: 1.5px;
   flex-shrink: 0;
   color: var(--t-fg-4);
+  /* ClawsGo a_011 空态：44×44 hairline 图标盒（20px 图标 + 11px 内边距 + 1px 边） */
+  padding: 11px;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+  box-sizing: content-box;
 }
 
 .neo-host-cap-name {
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--t-fg-3);
-}
-
-.neo-host-cap-desc {
-  font-size: 10.5px;
-  color: var(--t-fg-5);
+  white-space: nowrap;
 }
 
 /* ── 工作空间 tab ────────────────────────────────────────────────────────── */
@@ -255,7 +262,8 @@
 }
 
 /* ===== Neo ===== */
-/* 工作空间搜索行（Coze「搜索文件」对标） */
+/* 工作空间搜索行（Coze「搜索文件」对标）
+ * 2026-08-15 灰底填充 + radius 10，去掉白卡描边（规格 P1-7）。 */
 .neo-host-ws-search {
   display: flex;
   align-items: center;
@@ -263,14 +271,14 @@
   height: 32px;
   margin: 6px 10px 0;
   padding: 0 8px;
-  border: 1px solid var(--t-border);
-  border-radius: 8px;
-  background: var(--t-panel);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--t-panel-2);
   flex-shrink: 0;
 }
 
 .neo-host-ws-search:focus-within {
-  border-color: color-mix(in oklab, var(--t-accent) 45%, var(--t-border));
+  border-color: var(--t-border-2);
 }
 
 .neo-host-ws-search-icon {
@@ -494,13 +502,17 @@
   border: 1px solid var(--t-border);
 }
 
-/* 代码视图：等宽 + 行号 */
+/* 代码视图：等宽 + 行号
+ * 2026-08-15 固定深色编辑器（ClawsGo b_006 实测 #2C2D38 / 文字 #E4E4E7 / 行号 #71717A），
+ * day/night 均为深色，不随主题变浅（规格 P0-1）。 */
 .neo-host-code {
   padding: 8px 0;
+  min-height: 100%;
+  background: #2C2D38;
   font-family: var(--font-mono, monospace);
   font-size: 11px;
   line-height: 1.6;
-  color: var(--t-fg-2);
+  color: #E4E4E7;
 }
 
 .neo-host-code-line {
@@ -509,14 +521,14 @@
 }
 
 .neo-host-code-line:hover {
-  background: var(--t-hover, var(--t-panel-2));
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .neo-host-code-ln {
   flex: 0 0 40px;
   padding-right: 10px;
   text-align: right;
-  color: var(--t-fg-5);
+  color: #71717A;
   user-select: none;
 }
 

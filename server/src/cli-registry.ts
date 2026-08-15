@@ -144,6 +144,26 @@ export const KNOWN_CLIS: CliDescriptor[] = [
     auth_hint: 'See openclaw docs',
   },
   {
+    // Polynoia 三大 CLI 之一（claude/codex/opencode）。`opencode run` 无位置参
+    // 时从 stdin 读消息（spawner 正是把 prompt 写到 stdin），stdout 逐行输出
+    // 回复文本 → plain-line 解析即可，无需专用 parser。extra_args 见
+    // KNOWN_CLIS 消费方（transport/spawners/cli.ts 静态拼接）。
+    id: 'opencode',
+    binary: 'opencode',
+    version_arg: '--version',
+    install_cmd: 'npm i -g opencode-ai',
+    // `run` 子命令进非交互模式；消息经 stdin 传入（spawner 行为）。
+    extra_args: ['run'],
+    stream_format: 'plain-line',
+    fallback_bins: ['opencode-ai'],
+    capability_flags: {
+      '--model': 'model',
+      '--format': 'format',
+    },
+    fallback_models: ['opencode/default'],
+    auth_hint: 'Run `opencode` once to complete auth (opencode.ai/docs)',
+  },
+  {
     id: 'cursor-agent',
     binary: 'cursor-agent',
     version_arg: '--version',

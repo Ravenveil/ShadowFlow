@@ -775,33 +775,24 @@ export function NeoHost({ runId }: NeoHostProps) {
           <span className="neo-host-empty-sub">
             {t('neo.host.noRunHint', { defaultValue: '发起任务后，这里展示 Agent 的工作空间、产物与 Loop 迭代' })}
           </span>
-          {/* 能力预览：描述三个 tab 的真实功能（非 mock 数据） */}
+          {/* 能力预览：描述三个 tab 的真实功能（非 mock 数据），a_011 横排图标+名称 */}
           <div className="neo-host-caps">
             <div className="neo-host-cap">
-              <Folder size={13} strokeWidth={1.75} aria-hidden />
+              <Folder size={20} strokeWidth={1.5} aria-hidden />
               <span className="neo-host-cap-name">
                 {t('neo.host.capWs', { defaultValue: '工作空间' })}
               </span>
-              <span className="neo-host-cap-desc">
-                {t('neo.host.capWsDesc', { defaultValue: '浏览 Agent 的文件树并预览内容' })}
-              </span>
             </div>
             <div className="neo-host-cap">
-              <FileText size={13} strokeWidth={1.75} aria-hidden />
+              <FileText size={20} strokeWidth={1.5} aria-hidden />
               <span className="neo-host-cap-name">
                 {t('neo.host.capArtifact', { defaultValue: '产物' })}
               </span>
-              <span className="neo-host-cap-desc">
-                {t('neo.host.capArtifactDesc', { defaultValue: '运行产出的文档 / 代码 / 图片' })}
-              </span>
             </div>
             <div className="neo-host-cap">
-              <Repeat size={13} strokeWidth={1.75} aria-hidden />
+              <Repeat size={20} strokeWidth={1.5} aria-hidden />
               <span className="neo-host-cap-name">
                 {t('neo.host.capLoop', { defaultValue: 'Loop 迭代' })}
-              </span>
-              <span className="neo-host-cap-desc">
-                {t('neo.host.capLoopDesc', { defaultValue: 'PDCA 轮次、评分与收敛状态' })}
               </span>
             </div>
           </div>

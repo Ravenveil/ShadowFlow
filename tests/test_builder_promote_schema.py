@@ -128,11 +128,12 @@ class TestPromoteFromAgentRequestSchema:
         assert resp.status_code == 422
 
     def test_endpoint_rejects_empty_string_via_format_gate(self, client: TestClient):
-        # Endpoint-level regex `^[A-Za-z0-9_-]{1,64}$` rejects empty strings.
+        # Empty strings are rejected by Pydantic min_length=1 (FastAPI native
+        # detail list); the endpoint format gate handles non-empty invalid ids.
         resp = client.post("/builder/teams/from-agent", json={"anchor_agent_id": ""})
         assert resp.status_code == 422
         body = resp.json()
-        assert body["detail"]["error"]["code"] == "INVALID_ANCHOR_AGENT_ID"
+        assert body["detail"][0]["type"] == "string_too_short"
 
     def test_endpoint_rejects_anchor_id_with_path_traversal(self, client: TestClient):
         resp = client.post(

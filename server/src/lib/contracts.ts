@@ -110,7 +110,23 @@ export type MessageKind =
   | 'step_panel'
   | 'diff_panel'
   | 'msg_foot'
-  | 'status_line';
+  | 'status_line'
+  // ── 2026-08-15 Polynoia-parity rich inline content ─────────────────────────
+  //
+  // The kinds above cover process narration (thinking/tool/step/foot). Real
+  // IM-style collaboration needs *work artifacts* rendered inline in the chat:
+  // the orchestrator's task plan, git commits, real file diffs, data tables,
+  // images, live web previews, artifact references and verifier verdicts.
+  // Each new kind is additive — old clients ignore unknown kinds, and the
+  // front-end reducer already appends unknown-kind messages by id.
+  | 'plan_card'
+  | 'commit_record'
+  | 'file_diff'
+  | 'table_panel'
+  | 'image_panel'
+  | 'web_preview'
+  | 'artifact_card'
+  | 'verdict_card';
 
 export interface TimelineMessageBase {
   /** ULID-ish stable id. Front-end uses this as React key + patch target. */
@@ -143,6 +159,32 @@ export interface DiffLine {
   no: number;
   mark: '+' | '-' | ' ';
   code: string;
+}
+
+/**
+ * One task row inside a `plan_card` — the orchestrator's decomposition of the
+ * user goal into parallel-dispatchable units (Polynoia's "编排者拆任务派活").
+ * Status transitions arrive as `plan_update_task` patches keyed by task_id.
+ */
+export interface PlanTaskRow {
+  /** Stable id (e.g. `node:<node_id>`). Patch target for status updates. */
+  id: string;
+  title: string;
+  /** Display name of the assigned agent (worker). */
+  assignee?: string;
+  /** Agent id true-source for deterministic attribution (U0 convention). */
+  agent_id?: string;
+  status: 'pending' | 'running' | 'done' | 'failed' | 'blocked';
+  /** 1-based parallel batch/layer — same batch = dispatched concurrently. */
+  batch?: number;
+  elapsed_ms?: number;
+  note?: string;
+}
+
+export interface CommitFileEntry {
+  path: string;
+  /** Git letter: A added / M modified / D deleted / R renamed. */
+  status: string;
 }
 
 export type TimelineMessage =
@@ -241,6 +283,82 @@ export type TimelineMessage =
        * is the final duration, not a live baseline to drift from.
        */
       terminal?: boolean;
+    })
+  // ── Polynoia-parity rich inline content payloads ──────────────────────────
+  | (TimelineMessageBase & {
+      kind: 'plan_card';
+      title: string;
+      /** The user goal this plan decomposes. */
+      goal?: string;
+      tasks: PlanTaskRow[];
+    })
+  | (TimelineMessageBase & {
+      kind: 'commit_record';
+      repo: string;
+      sha: string;
+      short_sha: string;
+      message: string;
+      author: string;
+      /** ISO date of the commit. */
+      date?: string;
+      files_changed: number;
+      insertions: number;
+      deletions: number;
+      files?: CommitFileEntry[];
+      /** Optional external link (e.g. web UI commit page). */
+      url?: string;
+    })
+  | (TimelineMessageBase & {
+      kind: 'file_diff';
+      path: string;
+      /** Highlight language hint (e.g. 'ts', 'py'); optional. */
+      language?: string;
+      added: number;
+      removed: number;
+      lines: DiffLine[];
+    })
+  | (TimelineMessageBase & {
+      kind: 'table_panel';
+      caption?: string;
+      columns: string[];
+      rows: (string | number)[][];
+    })
+  | (TimelineMessageBase & {
+      kind: 'image_panel';
+      src: string;
+      alt?: string;
+      title?: string;
+    })
+  | (TimelineMessageBase & {
+      kind: 'web_preview';
+      title: string;
+      /** URL to load in the sandboxed iframe (same-origin artifact paths ok). */
+      url?: string;
+      /** Inline HTML source alternative when no URL exists. */
+      src?: string;
+    })
+  | (TimelineMessageBase & {
+      kind: 'artifact_card';
+      title?: string;
+      /** 'yaml' | 'html' | 'markdown' today; open string for future kinds. */
+      artifact_type: string;
+      filename: string;
+      /** Servable URL (e.g. /projects/<session>/artifact.html). */
+      url?: string;
+      note?: string;
+    })
+  | (TimelineMessageBase & {
+      kind: 'verdict_card';
+      title: string;
+      /** Verifier/critique pass flag; omitted when no threshold semantics. */
+      passed?: boolean;
+      /** Aggregate score (verifier 0-1 probability or critique 0-10 avg). */
+      score?: number;
+      /** Score ceiling for display normalization (e.g. 10). */
+      max_score?: number;
+      summary?: string;
+      metrics?: { label: string; value: string | number; detail?: string }[];
+      notes?: string[];
     });
 
 /**
@@ -279,7 +397,9 @@ export type MessagePatch =
         tokens: number;
         cost_cny: number;
       }>;
-    };
+    }
+  // Polynoia-parity — live task status transitions inside an open plan_card.
+  | { id: string; op: 'plan_update_task'; task_id: string; patch: Partial<PlanTaskRow> };
 
 /**
  * What `TimelineProjector` returns from every callback. Either or both arrays

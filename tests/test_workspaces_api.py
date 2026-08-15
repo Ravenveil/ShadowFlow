@@ -28,16 +28,13 @@ def client(tmp_path, monkeypatch):
 
 
 class TestDefaultWorkspace:
-    def test_empty_list_auto_creates_default(self, client):
-        """AC1: GET when no workspaces exist returns one default workspace."""
+    def test_empty_list_returns_verbatim_empty(self, client):
+        """AC1 (post-3bc1755): no auto-created default — empty stays empty."""
         r = client.get("/api/workspaces")
         assert r.status_code == 200
         body = r.json()
-        assert body["meta"]["total"] == 1
-        ws = body["data"][0]
-        assert ws["name"] == "我的工作区"
-        assert ws["color"] == "#6366f1"
-        assert "workspace_id" in ws
+        assert body["meta"]["total"] == 0
+        assert body["data"] == []
 
     def test_default_only_created_once(self, client):
         """Auto-create is idempotent — calling twice returns same workspace."""
@@ -145,6 +142,8 @@ class TestDeleteWorkspace:
 class TestCountFields:
     def test_agent_count_and_team_count_present(self, client):
         """AC6: list response includes agent_count and team_count fields (can be 0)."""
+        create_r = client.post("/api/workspaces", json={"name": "Count Fields"})
+        assert create_r.status_code == 201
         r = client.get("/api/workspaces")
         assert r.status_code == 200
         ws = r.json()["data"][0]

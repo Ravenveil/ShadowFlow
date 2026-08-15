@@ -107,6 +107,36 @@ describe('replayTimeline — message + patch replay', () => {
     const same = applyPatch(msg, { id: 'u1', op: 'text_append', chunk: 'x' });
     expect(same).toBe(msg); // returns the original instance untouched
   });
+
+  it('Polynoia-parity：plan_update_task 重放后任务状态不丢（此前被静默丢弃）', () => {
+    const events: ReplayableEvent[] = [
+      {
+        event: 'message',
+        data: {
+          ...base,
+          id: 'plan1',
+          kind: 'plan_card',
+          title: '编排计划',
+          tasks: [
+            { id: 'node:writer', title: '写文案', assignee: 'Writer', status: 'pending' },
+            { id: 'node:reviewer', title: '审校', assignee: 'Reviewer', status: 'pending' },
+          ],
+        },
+      },
+      { event: 'message-patch', data: { id: 'plan1', op: 'plan_update_task', task_id: 'node:writer', patch: { status: 'running' } } },
+      { event: 'message-patch', data: { id: 'plan1', op: 'plan_update_task', task_id: 'node:writer', patch: { status: 'done', elapsed_ms: 900 } } },
+      { event: 'message-patch', data: { id: 'plan1', op: 'plan_update_task', task_id: 'node:reviewer', patch: { status: 'failed' } } },
+    ];
+    const out = replayTimeline(events);
+    expect(out).toHaveLength(1);
+    const plan = out[0];
+    if (plan.kind !== 'plan_card') throw new Error('kind drifted');
+    expect(plan.tasks[0]).toMatchObject({ status: 'done', elapsed_ms: 900 });
+    expect(plan.tasks[1]).toMatchObject({ status: 'failed' });
+    // kind 不匹配 → 原实例原样返回（防御式 no-op）
+    const stale = applyPatch(out[0], { id: 'plan1', op: 'text_append', chunk: 'x' });
+    expect(stale).toBe(out[0]);
+  });
 });
 
 describe('chatMessagesToTimeline — group MessageItem adaptation', () => {

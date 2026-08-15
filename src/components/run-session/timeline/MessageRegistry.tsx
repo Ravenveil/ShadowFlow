@@ -24,18 +24,33 @@ import { StepPanel } from './messages/StepPanel';
 import { DiffPanel } from './messages/DiffPanel';
 import { MsgFoot } from './messages/MsgFoot';
 import { SectionHeader } from './messages/SectionHeader';
+// Polynoia-parity rich inline content (2026-08-15).
+import { PlanCard } from './messages/PlanCard';
+import { CommitRecord } from './messages/CommitRecord';
+import { FileDiffPanel } from './messages/FileDiffPanel';
+import { TablePanel } from './messages/TablePanel';
+import { ImagePanel } from './messages/ImagePanel';
+import { WebPreview } from './messages/WebPreview';
+import { ArtifactCard } from './messages/ArtifactCard';
+import { VerdictCard } from './messages/VerdictCard';
 
 interface Props {
   msg: TimelineMessage;
   /** Round 2 — wired to UserTurnMessage's hover retry button. */
   onUserRetry?: (text: string) => void;
   resending?: boolean;
+  /** Polynoia-parity — chat-side inline edit for assistant_text rows. */
+  onEditMessage?: (
+    msg: Extract<TimelineMessage, { kind: 'assistant_text' }>,
+    nextBody: string,
+  ) => void;
 }
 
 export const MessageRegistry = memo(function MessageRegistry({
   msg,
   onUserRetry,
   resending,
+  onEditMessage,
 }: Props) {
   switch (msg.kind) {
     case 'user_turn':
@@ -51,7 +66,7 @@ export const MessageRegistry = memo(function MessageRegistry({
     case 'assistant_meta':
       return <AssistantMeta msg={msg} />;
     case 'assistant_text':
-      return <AssistantText msg={msg} />;
+      return <AssistantText msg={msg} onEdit={onEditMessage} />;
     case 'raw':
       return <RawMessage msg={msg} />;
     case 'rationale':
@@ -81,6 +96,23 @@ export const MessageRegistry = memo(function MessageRegistry({
           defaultOpen={msg.default_open ?? true}
         />
       );
+    // ── Polynoia-parity rich inline content ─────────────────────────────
+    case 'plan_card':
+      return <PlanCard msg={msg} />;
+    case 'commit_record':
+      return <CommitRecord msg={msg} />;
+    case 'file_diff':
+      return <FileDiffPanel msg={msg} />;
+    case 'table_panel':
+      return <TablePanel msg={msg} />;
+    case 'image_panel':
+      return <ImagePanel msg={msg} />;
+    case 'web_preview':
+      return <WebPreview msg={msg} />;
+    case 'artifact_card':
+      return <ArtifactCard msg={msg} />;
+    case 'verdict_card':
+      return <VerdictCard msg={msg} />;
     default: {
       // Exhaustiveness — compile error if a new kind is added without a case.
       const _exhaustive: never = msg;

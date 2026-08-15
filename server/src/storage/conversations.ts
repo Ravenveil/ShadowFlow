@@ -246,3 +246,68 @@ export function getRecentMessages(
     .all(conversation_id, limit) as MessageRow[];
   return rows.map(toMessageRecord);
 }
+
+// ── Message editing (Polynoia-parity "view AND edit in chat") ───────────────
+
+export interface EditableMessageRecord extends MessageRecord {
+  edited_at: string | null;
+}
+
+interface EditableMessageRow extends MessageRow {
+  edited_at: string | null;
+}
+
+function toEditableRecord(row: EditableMessageRow): EditableMessageRecord {
+  return { ...toMessageRecord(row), edited_at: row.edited_at ?? null };
+}
+
+/**
+ * Rewrite one message's content (chat-side inline edit). Sets `edited_at`
+ * (runtime-added column; legacy rows have null) and bumps the conversation's
+ * updated_at. Returns the updated record, or null when the row doesn't exist.
+ */
+export function updateMessageContent(
+  conversation_id: string,
+  message_id: string,
+  content: string,
+): EditableMessageRecord | null {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const tx = db.transaction(() => {
+    const info = db
+      .prepare(
+        `UPDATE messages SET content = ?, edited_at = ? WHERE conversation_id = ? AND message_id = ?`,
+      )
+      .run(content, now, conversation_id, message_id);
+    if (info.changes === 0) return null;
+    db.prepare(`UPDATE conversations SET updated_at = ? WHERE conversation_id = ?`).run(
+      now,
+      conversation_id,
+    );
+    const row = db
+      .prepare(`SELECT * FROM messages WHERE conversation_id = ? AND message_id = ?`)
+      .get(conversation_id, message_id) as EditableMessageRow | undefined;
+    return row ? toEditableRecord(row) : null;
+  });
+  return tx() ?? null;
+}
+
+/**
+ * Edit by timeline-message back-trace: the run-session stream persists each
+ * assistant turn with the timeline projector's assistant_text message id
+ * (O3 bridge). The chat-side edit UI knows that id, so resolve it here.
+ */
+export function updateMessageByTimelineId(
+  conversation_id: string,
+  timeline_message_id: string,
+  content: string,
+): EditableMessageRecord | null {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT message_id FROM messages WHERE conversation_id = ? AND timeline_message_id = ? LIMIT 1`,
+    )
+    .get(conversation_id, timeline_message_id) as { message_id: string } | undefined;
+  if (!row) return null;
+  return updateMessageContent(conversation_id, row.message_id, content);
+}

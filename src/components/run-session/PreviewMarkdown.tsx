@@ -8,10 +8,11 @@
  *   - Ordered lists: `1. item`
  *   - Inline: `**bold**`, `*italic*`, `` `code` ``, `[text](url)`
  *   - Blockquote: `> ...` (single-line)
+ *   - Pipe tables: `| h | h |` + `|---|---|` delimiter + rows (hairline row lines)
  *   - Paragraphs separated by blank lines
  *
- * Out of scope (intentional, to keep <100 lines and zero deps):
- *   tables, footnotes, HTML-in-MD, image rendering, nested lists,
+ * Out of scope (intentional, to keep zero deps):
+ *   footnotes, HTML-in-MD, image rendering, nested lists,
  *   setext headings, task lists.
  *
  * Safe by construction: never sets dangerouslySetInnerHTML; every node is
@@ -63,7 +64,7 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
           href={m[6]}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ color: 'var(--t-accent, #1447E6)', textDecoration: 'underline' }}
+          style={{ color: 'var(--t-link, #2563EB)', textDecoration: 'underline' }}
         >
           {m[5]}
         </a>,
@@ -130,7 +131,7 @@ function renderMarkdown(src: string): React.ReactNode[] {
           key={`h-${key++}`}
           style={{
             fontSize: sizes[level - 1],
-            fontWeight: level <= 2 ? 700 : 600,
+            fontWeight: level <= 2 ? 600 : 500,
             color: 'var(--t-fg, var(--t-fg-1))',
             margin: margins[level - 1],
             lineHeight: 1.3,
@@ -150,16 +151,86 @@ function renderMarkdown(src: string): React.ReactNode[] {
           key={`bq-${key++}`}
           style={{
             margin: '10px 0',
-            padding: '6px 12px',
-            borderLeft: '3px solid var(--t-accent, #1447E6)',
-            color: 'var(--t-fg-3)',
-            background: 'var(--t-panel-2, var(--bg-elev-2))',
+            padding: '2px 12px',
+            // 2026-08-15 规格 P0-5：3px 中性灰左竖条 + 灰字（b_008），不再用 accent 色/灰底
+            borderLeft: '3px solid var(--t-border-2, var(--t-border, #DCDCD9))',
+            color: 'var(--t-fg-4, var(--t-fg-3))',
           }}
         >
           {renderInline(raw.replace(/^>\s?/, ''), `bq-${key}`)}
         </blockquote>,
       );
       i += 1;
+      continue;
+    }
+
+    // Pipe table: header row + `---` delimiter + body rows.
+    if (
+      raw.trim().startsWith('|') &&
+      i + 1 < lines.length &&
+      /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(lines[i + 1]) &&
+      lines[i + 1].includes('-')
+    ) {
+      const splitRow = (l: string) =>
+        l
+          .trim()
+          .replace(/^\||\|$/g, '')
+          .split('|')
+          .map((c) => c.trim());
+      const header = splitRow(raw);
+      i += 2; // skip header + delimiter
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        rows.push(splitRow(lines[i]));
+        i += 1;
+      }
+      const cellStyle: React.CSSProperties = {
+        padding: '5px 10px',
+        textAlign: 'left',
+        // hairline 行线（规格 P0-5，对标 b_008）
+        borderBottom: '1px solid var(--t-border, #ECECEA)',
+      };
+      out.push(
+        <table
+          key={`tbl-${key++}`}
+          style={{
+            margin: '10px 0',
+            width: '100%',
+            borderCollapse: 'collapse',
+            fontSize: 'inherit',
+            color: 'var(--t-fg-2)',
+          }}
+        >
+          <thead>
+            <tr>
+              {header.map((c, j) => (
+                <th
+                  key={j}
+                  style={{
+                    ...cellStyle,
+                    fontWeight: 600,
+                    color: 'var(--t-fg, var(--t-fg-1))',
+                    borderBottom: '1px solid var(--t-border-2, var(--t-border, #DCDCD9))',
+                  }}
+                >
+                  {renderInline(c, `tbl-${key}-h${j}`)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, ri) => (
+              <tr key={ri}>
+                {r.map((c, ci) => (
+                  <td key={ci} style={cellStyle}>
+                    {renderInline(c, `tbl-${key}-${ri}-${ci}`)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>,
+      );
       continue;
     }
 
@@ -220,7 +291,13 @@ function renderMarkdown(src: string): React.ReactNode[] {
       !/^#{1,6}\s+/.test(lines[i]) &&
       !/^>\s?/.test(lines[i]) &&
       !/^\s*[-*]\s+/.test(lines[i]) &&
-      !/^\s*\d+\.\s+/.test(lines[i])
+      !/^\s*\d+\.\s+/.test(lines[i]) &&
+      // 表格起始行（header + delimiter 两行模式）也要截断段落
+      !(
+        lines[i].trim().startsWith('|') &&
+        i + 1 < lines.length &&
+        /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(lines[i + 1])
+      )
     ) {
       paraLines.push(lines[i]);
       i += 1;

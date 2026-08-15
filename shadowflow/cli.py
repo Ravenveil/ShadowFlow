@@ -279,6 +279,64 @@ def export_agentteams_command(workflow_path: str, out: str | None) -> int:
     return 0
 
 
+def export_sfagent_command(agent_path: str, out: str | None) -> int:
+    """Export a .sfagent agent bundle (GOAI M9).
+
+    AGENT_PATH is a JSON/YAML agent spec (id/name/role/capabilities/skills…).
+    Writes sfagent.json / identity.yaml / skills.yaml / trajectory.json /
+    README.md into --out DIR (default: ./<agent_id>.sfagent.zip in CWD).
+    """
+    import json as _json
+
+    import yaml
+
+    from shadowflow.runtime.agent_bundle import build_sfagent_files, export_sfagent_zip
+
+    raw = Path(agent_path).read_text(encoding="utf-8")
+    agent = yaml.safe_load(raw) if agent_path.endswith((".yaml", ".yml")) else _json.loads(raw)
+    if not isinstance(agent, dict):
+        print(f"error: agent spec must be a mapping: {agent_path}", file=sys.stderr)
+        return 2
+    if out and out.endswith("/"):
+        target_dir = Path(out.rstrip("/"))
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for name, content in build_sfagent_files(agent).items():
+            (target_dir / name).write_text(content, encoding="utf-8", newline="\n")
+        target = target_dir
+    else:
+        zip_bytes = export_sfagent_zip(agent)
+        target = Path(out or f"{agent.get('id') or agent.get('name') or 'agent'}.sfagent.zip")
+        target.write_bytes(zip_bytes)
+    print(f".sfagent bundle written to: {Path(target).resolve()}")
+    return 0
+
+
+def validate_plugin_command(plugin_path: str) -> int:
+    """Validate a .sfplugin package zip and print the report."""
+    import json as _json
+
+    from shadowflow.runtime.plugin_package import validate_plugin_package
+
+    report = validate_plugin_package(Path(plugin_path).read_bytes())
+    print(_json.dumps(report, ensure_ascii=False, indent=2))
+    return 0 if report["valid"] else 2
+
+
+def import_sfagent_command(zip_path: str) -> int:
+    """Import a .sfagent bundle into the agent store (.shadowflow/agents)."""
+    from shadowflow.runtime.agent_bundle import import_sfagent_zip
+
+    zip_bytes = Path(zip_path).read_bytes()
+    agents_dir = Path.cwd() / ".shadowflow" / "agents"
+    try:
+        record = import_sfagent_zip(zip_bytes, agents_dir)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(f"imported agent {record['agent_id']!r} → {record['path']}")
+    return 0
+
+
 async def compile_template_command(
     template_ref: str,
     registry_root: str | None,
@@ -1049,6 +1107,30 @@ def main():
         help='Output: a directory (trailing / or existing dir) or .zip path; default .zip in CWD',
     )
 
+    sfagent_parser = subparsers.add_parser(
+        'export-sfagent',
+        help='Export a .sfagent agent bundle (identity + skills + evidence, GOAI M9)',
+    )
+    sfagent_parser.add_argument(
+        'agent_file', help='Agent spec JSON/YAML (id/name/role/capabilities/skills…)'
+    )
+    sfagent_parser.add_argument(
+        '--out', default=None,
+        help='Output: a directory (trailing /) or .zip path; default <agent_id>.sfagent.zip',
+    )
+
+    sfagent_import_parser = subparsers.add_parser(
+        'import-sfagent',
+        help='Import a .sfagent bundle into the agent store (.shadowflow/agents)',
+    )
+    sfagent_import_parser.add_argument('zip_file', help='Path to a .sfagent.zip bundle')
+
+    plugin_parser = subparsers.add_parser(
+        'validate-plugin',
+        help='Validate a .sfplugin plugin package (manifest + declared specs)',
+    )
+    plugin_parser.add_argument('plugin_file', help='Path to a .sfplugin.zip package')
+
     compile_parser = subparsers.add_parser('compile', help='Compile a high-level template spec into a workflow')
     compile_parser.add_argument('-t', '--template', required=True, help='Template file path or template ID')
     compile_parser.add_argument('--registry-root', default=None, help='Registry root containing tools/skills/roles/agents/templates')
@@ -1282,6 +1364,12 @@ def main():
         if not workflow_arg:
             parser.error('export-agentteams requires a workflow file (positional or -w)')
         sys.exit(export_agentteams_command(workflow_arg, args.out))
+    elif args.command == 'export-sfagent':
+        sys.exit(export_sfagent_command(args.agent_file, args.out))
+    elif args.command == 'import-sfagent':
+        sys.exit(import_sfagent_command(args.zip_file))
+    elif args.command == 'validate-plugin':
+        sys.exit(validate_plugin_command(args.plugin_file))
     elif args.command == 'registry':
         if args.registry_command == 'counts':
             sys.exit(asyncio.run(registry_counts_command(args.registry_root)))

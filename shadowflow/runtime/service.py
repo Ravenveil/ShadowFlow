@@ -89,6 +89,7 @@ class RuntimeService:
         chat_session_store: Optional[Any] = None,
         event_bus: Optional[Any] = None,
         river_memory: Optional[RiverMemory] = None,
+        run_event_log: Optional[Any] = None,
     ) -> None:
         self._runs: Dict[str, RunResult] = {}
         self._requests_by_run_id: Dict[str, RuntimeRequest] = {}
@@ -105,6 +106,10 @@ class RuntimeService:
         self._rejection_events: Dict[str, List[Dict[str, Any]]] = {}
         # P5: per-run asyncio.Lock — 保护 reject / resume / _execute 并发写
         self._run_locks: Dict[str, asyncio.Lock] = {}
+        # P1 durable run event log (append-only; SQLite in server wiring)
+        self._run_event_log = run_event_log
+        # E2 live loop halt signals: run_id → set of loop_ids pending halt
+        self._loop_halt_signals: Dict[str, set] = {}
         self._writeback_adapter = writeback_adapter
         self._checkpoint_store = checkpoint_store or getattr(writeback_adapter, "checkpoint_store", None)
         self._run_store = run_store or getattr(writeback_adapter, "run_store", None)
@@ -126,6 +131,71 @@ class RuntimeService:
         if run_id not in self._run_locks:
             self._run_locks[run_id] = asyncio.Lock()
         return self._run_locks[run_id]
+
+    # ------------------------------------------------------------------
+    # P1 durable run events + E2 live loop halt signals
+    # ------------------------------------------------------------------
+
+    def _emit_run_event(
+        self,
+        run_id: str,
+        event_type: str,
+        *,
+        node_id: Optional[str] = None,
+        iteration_index: Optional[int] = None,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Append a durable fact to the run event log.
+
+        Never raises — the log is evidence, not a dependency: a broken sink
+        must not fail the run itself.
+        """
+        if self._run_event_log is None:
+            return
+        try:
+            self._run_event_log.append(
+                run_id,
+                event_type,
+                node_id=node_id,
+                iteration_index=iteration_index,
+                payload=payload,
+            )
+        except Exception:  # noqa: BLE001 — evidence sink must not break runs
+            logger.warning("run event log append failed for %s/%s", run_id, event_type, exc_info=True)
+
+    def get_run_event_log(self, run_id: str) -> List[Dict[str, Any]]:
+        """Durable event stream for a run (empty list when log absent)."""
+        if self._run_event_log is None:
+            return []
+        try:
+            return [record.model_dump(mode="json") for record in self._run_event_log.iter_events(run_id)]
+        except Exception:  # noqa: BLE001
+            logger.warning("run event log read failed for %s", run_id, exc_info=True)
+            return []
+
+    def request_loop_halt(self, run_id: str, loop_id: str) -> None:
+        """E2: ask a running loop to halt at its next iteration boundary."""
+        self._loop_halt_signals.setdefault(run_id, set()).add(loop_id)
+        self._emit_run_event(
+            run_id, "loop.halt_requested", payload={"loop_id": loop_id}
+        )
+
+    def _consume_loop_halt(self, run_id: str, loop_id: str) -> bool:
+        """True once if a halt was requested for this loop (then cleared).
+
+        "*" in the pending set halts the next loop boundary of the run
+        (discarded once consumed so later loops still run unless re-requested).
+        """
+        pending = self._loop_halt_signals.get(run_id)
+        if not pending:
+            return False
+        if "*" in pending:
+            pending.discard("*")
+            return True
+        if loop_id in pending:
+            pending.discard(loop_id)
+            return True
+        return False
 
     def _record_citation_traces(
         self,
@@ -201,18 +271,27 @@ class RuntimeService:
 
     async def run(self, request: RuntimeRequest) -> RunResult:
         self.validate_workflow(request.workflow)
-        result = await self._execute(
-            request=request,
-            start_node_id=request.workflow.entrypoint,
-            resumed_from=None,
-            restored_state=None,
-            initial_output=request.input.copy(),
-        )
+        try:
+            result = await self._execute(
+                request=request,
+                start_node_id=request.workflow.entrypoint,
+                resumed_from=None,
+                restored_state=None,
+                initial_output=request.input.copy(),
+            )
+        except Exception:
+            self._emit_run_event("unknown", "run.failed", payload={"workflow_id": request.workflow.workflow_id})
+            raise
         self._requests_by_run_id[result.run.run_id] = request
         if self._request_context_store is not None:
             self._request_context_store.put(result.run.run_id, request)
         if self._run_store is not None:
             self._run_store.put(result)
+        self._emit_run_event(
+            result.run.run_id,
+            "run.completed" if result.run.status == "succeeded" else "run.failed",
+            payload={"status": result.run.status, "workflow_id": result.run.workflow_id},
+        )
         return result
 
     async def reject(
@@ -452,6 +531,11 @@ class RuntimeService:
                 await asyncio.get_event_loop().run_in_executor(
                     None, self._checkpoint_store.put, new_cp
                 )
+            self._emit_run_event(
+                new_cp.run_id, "checkpoint.saved",
+                node_id=new_cp.state.current_node_id,
+                payload={"checkpoint_id": new_cp.checkpoint_id, "step_id": new_cp.step_id},
+            )
 
         # 构建基础事件序列（P1: 顺序正确后全部发布到 SSE）
         base_events: List[Dict[str, Any]] = [
@@ -868,6 +952,16 @@ class RuntimeService:
         initial_output: Dict[str, Any],
     ) -> RunResult:
         run_id = f"run-{uuid4().hex[:12]}"
+        self._emit_run_event(
+            run_id,
+            "run.started",
+            payload={
+                "workflow_id": request.workflow.workflow_id,
+                "entrypoint": start_node_id,
+                "request_id": request.request_id,
+                "parent_run_id": request.metadata.get("parent_run_id"),
+            },
+        )
         metadata = {
             "execution_mode": request.execution_mode,
             "memory_scope": request.memory_scope,
@@ -963,6 +1057,11 @@ class RuntimeService:
                 metadata={"source": "runtime_service"},
             )
         ]
+        # Executor-level context deeper layers read back out of state: the
+        # owning run and the workflow-level permission default (adoption #3).
+        state.setdefault("run_id", run_id)
+        state.setdefault("permissions_default", request.workflow.defaults.get("permissions"))
+
         trace: List[Dict[str, Any]] = []
         errors: List[Dict[str, Any]] = []
 
@@ -1080,9 +1179,16 @@ class RuntimeService:
                 )
             )
             # Story 4.1 AC2: publish NODE_STARTED before execution
-            if activation.decision == "activated" and self._event_bus is not None:
-                from shadowflow.runtime.events import NODE_STARTED as _NS
-                self._event_bus.publish_node_event(run_id, _NS, current_node_id, {"node_type": node.type, "step_id": step_id})
+            if activation.decision == "activated":
+                self._emit_run_event(
+                    run_id,
+                    "node.started",
+                    node_id=current_node_id,
+                    payload={"node_type": node.type, "step_id": step_id},
+                )
+                if self._event_bus is not None:
+                    from shadowflow.runtime.events import NODE_STARTED as _NS
+                    self._event_bus.publish_node_event(run_id, _NS, current_node_id, {"node_type": node.type, "step_id": step_id})
 
             effective_input = dict(current_output)
             gap_enabled = isinstance(node.config.get("gap_detection"), dict) or node.type == "section.generate"
@@ -1174,6 +1280,11 @@ class RuntimeService:
                     self._checkpoints[_timeout_cp.checkpoint_id] = _timeout_cp
                     if self._checkpoint_store is not None:
                         self._checkpoint_store.put(_timeout_cp)
+                    self._emit_run_event(
+                        _timeout_cp.run_id, "checkpoint.saved",
+                        node_id=_timeout_cp.state.current_node_id,
+                        payload={"checkpoint_id": _timeout_cp.checkpoint_id, "step_id": _timeout_cp.step_id},
+                    )
                     if self._event_bus is not None:
                         self._event_bus.publish(run_id, {
                             "type": _CKS,
@@ -1184,6 +1295,23 @@ class RuntimeService:
                     break
             elif node.type == "control.loop":
                 step_output = await self._execute_loop_node(
+                    request=request,
+                    run_id=run_id,
+                    task=task,
+                    step_id=step_id,
+                    node=node,
+                    step_input=effective_input,
+                    state=state,
+                    nodes_by_id=nodes_by_id,
+                )
+            elif node.type == "control.parallel" and node.config.get("execution") == "gather":
+                # GOAI M2: true concurrency — all branches run under one
+                # asyncio.gather inside the parallel step, then the walk
+                # continues at the barrier. OPT-IN via config.execution=
+                # "gather": the default interleaved one-branch-per-step
+                # scheduling stays checkpoint/resume-friendly (a snapshot
+                # between branches can resume the remaining ones).
+                step_output = await self._execute_parallel_gather(
                     request=request,
                     run_id=run_id,
                     task=task,
@@ -1253,6 +1381,12 @@ class RuntimeService:
                 },
             )
             steps.append(step)
+            self._emit_run_event(
+                run_id,
+                "node.completed",
+                node_id=current_node_id,
+                payload={"step_id": step_id, "status": step.status},
+            )
             # Story 9.2 AC4: citation enrichment hook — non-invasive, metadata-only.
             # Reads optional `citation_traces` from step_output (executors that
             # surface KnowledgePack hits attach this list) and records a
@@ -1474,6 +1608,11 @@ class RuntimeService:
             self._checkpoints[checkpoint.checkpoint_id] = checkpoint
             if self._checkpoint_store is not None:
                 self._checkpoint_store.put(checkpoint)
+                self._emit_run_event(
+                    checkpoint.run_id, "checkpoint.saved",
+                    node_id=checkpoint.state.current_node_id,
+                    payload={"checkpoint_id": checkpoint.checkpoint_id, "step_id": checkpoint.step_id},
+                )
 
         else:
             errors.append({"message": "workflow exceeded max_steps guard", "code": "max_steps_exceeded"})
@@ -3028,6 +3167,26 @@ class RuntimeService:
             self._apply_gap_resolution_output(output, step_input)
             return output
 
+        if node.type == "control.sensor":
+            from shadowflow.runtime.loop_engine import execute_sensor_node
+
+            output = await execute_sensor_node(self, node, step_input)
+            self._apply_node_config_output(
+                node=node, output=output, step_input=step_input, context=context, prompt=prompt
+            )
+            self._apply_gap_resolution_output(output, step_input)
+            return output
+
+        if node.type == "control.controller":
+            from shadowflow.runtime.loop_engine import execute_controller_node
+
+            output = execute_controller_node(self, node, step_input)
+            self._apply_node_config_output(
+                node=node, output=output, step_input=step_input, context=context, prompt=prompt
+            )
+            self._apply_gap_resolution_output(output, step_input)
+            return output
+
         if node.type == "control.parallel":
             branches = [branch for branch in node.config.get("branches", []) if isinstance(branch, str)]
             barrier = node.config.get("barrier")
@@ -3176,275 +3335,104 @@ class RuntimeService:
         IterationRecords (not StepRecords), so iterations do not exhaust `max_steps`.
         LoopFrame push/pop tracks the fractal call-stack in `state["loop_frames"]`.
         """
-        from shadowflow.runtime.events import NODE_RETRIED
+        from shadowflow.runtime.loop_engine import execute_loop_node as _execute_loop_v2
 
-        config = node.config
-        loop_kind = config.get("kind", "until_converge")
-        iteration_budget = int(config.get("iteration_budget", 1))
-        subgraph_ids = [nid for nid in config.get("subgraph", []) if isinstance(nid, str)]
-        setpoint = config.get("setpoint") if isinstance(config.get("setpoint"), dict) else {}
-        role = config.get("role", node.type)
-        prompt = config.get("prompt", "")
-        max_depth = int(config.get("max_depth", 4))
-        depth_factor = float(config.get("depth_factor", 0.6))
-        watch = config.get("watch") if isinstance(config.get("watch"), list) else []
-
-        active_frames: List[LoopFrame] = state.setdefault("loop_frames", [])
-        current_depth = (active_frames[-1].depth + 1) if active_frames else 0
-        parent_loop_id = active_frames[-1].loop_id if active_frames else None
-
-        # Fractal depth bound (design §1.4 / §5.5): beyond max_depth a loop degrades to a
-        # single iteration; otherwise the budget shrinks by depth_factor per nesting level
-        # (Murray's-law analogue: deeper levels carry less computation).
-        if current_depth >= max_depth:
-            effective_budget = 1
-        else:
-            effective_budget = max(1, int(iteration_budget * (depth_factor ** current_depth)))
-
-        loop_record = LoopRecord(
+        return await _execute_loop_v2(
+            svc=self,
+            request=request,
             run_id=run_id,
-            parent_loop_id=parent_loop_id,
-            kind=loop_kind,
-            setpoint=setpoint,
-            depth=current_depth,
-            sensor_binding=config.get("sensor_binding"),
-            actuator_binding=config.get("actuator_binding"),
+            task=task,
+            step_id=step_id,
+            node=node,
+            step_input=step_input,
+            state=state,
+            nodes_by_id=nodes_by_id,
+            edges_by_from=self._get_workflow_index(request.workflow)["edges_by_from"],
         )
-        frame = LoopFrame(
-            loop_id=loop_record.loop_id,
-            index=0,
-            setpoint=setpoint,
-            depth=current_depth,
-        )
-        active_frames.append(frame)
 
-        # LE-1 mid-loop resume: if this loop was interrupted, continue from the saved iteration.
-        progress_map = state.setdefault("loop_progress", {})
-        saved = progress_map.get(node.id)
-        start_iteration = 0
-        _resume_controlled: Optional[Dict[str, Any]] = None
-        if isinstance(saved, dict):
-            start_iteration = max(0, min(int(saved.get("next_iteration", 0)), effective_budget))
-            for ir in saved.get("iterations", []):
-                rec = IterationRecord.model_validate(ir) if isinstance(ir, dict) else ir
-                loop_record.iterations.append(rec)
-            loop_record.iteration_count = len(loop_record.iterations)
-            if isinstance(saved.get("controlled"), dict):
-                _resume_controlled = saved["controlled"]
+    async def _execute_parallel_gather(
+        self,
+        *,
+        request: RuntimeRequest,
+        run_id: str,
+        task: TaskRecord,
+        step_id: str,
+        node: NodeDefinition,
+        step_input: Dict[str, Any],
+        state: Dict[str, Any],
+        nodes_by_id: Dict[str, NodeDefinition],
+    ) -> Dict[str, Any]:
+        """True-concurrency control.parallel: asyncio.gather over all branches.
 
-        signals_map = state.setdefault("loop_signals", {})
-        loop_local_visited: List[str] = []
-        last_output: Dict[str, Any] = dict(step_input)
-        converged = False
-        halted_by_watch = False
-        retried_count = 0
+        Each branch runs the same dispatch the main walk uses (loop /
+        delegated / plain node); a failing branch never cancels its siblings —
+        its slot holds an {"error": ...} marker and the barrier still joins.
+        The gather completes the parallel schedule inside this single step,
+        so the main walk resumes directly at the barrier node.
+        """
+        branches = [b for b in node.config.get("branches", []) if isinstance(b, str)]
+        barrier = node.config.get("barrier")
+        role = node.config.get("role", node.type)
 
-        # LE-2 cybernetic core: Sensor (C) observes the response; Controller (A) closes the
-        # feedback loop by actuating variables that feed the next iteration's body.
-        sensor_cfg = config.get("sensor") if isinstance(config.get("sensor"), dict) else {}
-        controller_cfg = config.get("controller") if isinstance(config.get("controller"), dict) else {}
-        freeze_fields = config.get("freeze") if isinstance(config.get("freeze"), list) else []
-        attribution_cfg = config.get("attribution") if isinstance(config.get("attribution"), dict) else {}
-        coe_enabled = bool(attribution_cfg.get("coe"))
-        controlled: Dict[str, Any] = {}
-        if isinstance(controller_cfg.get("init"), dict):
-            controlled.update(controller_cfg["init"])
-        if _resume_controlled:
-            controlled.update(_resume_controlled)
-        metric_history: List[float] = []
-
-        # River Memory (design §5.7): recall settled patterns on entry (cross-iteration
-        # memory), settle a reusable pattern on convergence.
-        memory_cfg = config.get("memory") if isinstance(config.get("memory"), dict) else {}
-        river_enabled = bool(memory_cfg.get("river"))
-        recalled: List[Dict[str, Any]] = []
-        if river_enabled:
-            recalled = [
-                c.model_dump(mode="json")
-                for c in self._river.dredge(
-                    tags=memory_cfg.get("tags"), limit=int(memory_cfg.get("recall", 3))
-                )
-            ]
-
-        # SEED-lite (design §7.4): a memory_nudge controller warm-starts from a prior settled
-        # pattern — the A node learning from sedimented experience so later runs converge faster.
-        if controller_cfg.get("type") == "memory_nudge" and recalled:
-            field = controller_cfg.get("field") or setpoint.get("metric")
+        async def _run_branch(branch_id: str) -> Dict[str, Any]:
+            branch_node = nodes_by_id.get(branch_id)
+            if branch_node is None:
+                return {"node_id": branch_id, "error": "unknown_branch"}
+            state["visited_nodes"].append(branch_id)
+            branch_input = dict(step_input)
             try:
-                factor = float(controller_cfg.get("warm_start_factor", 0.8))
-            except (TypeError, ValueError):
-                factor = 0.8
-            for chunk in recalled:
-                prior = (chunk.get("content") or {}).get("controlled") or {}
-                if field in prior:
-                    try:
-                        controlled[field] = round(float(prior[field]) * factor)
-                    except (TypeError, ValueError):
-                        pass
-                    break
-
-        try:
-            for iteration_index in range(start_iteration, effective_budget):
-                # LE-2 supervision (loops watching loops): halt if a watched loop already
-                # emitted a matching signal earlier in the run.
-                if self._loop_watch_triggered(watch, signals_map):
-                    halted_by_watch = True
-                    break
-
-                frame.index = iteration_index
-                iteration_outputs: Dict[str, Any] = {}
-                for body_node_id in subgraph_ids:
-                    body_node = nodes_by_id[body_node_id]
-                    body_input = {**last_output, **iteration_outputs, **controlled}
-                    if recalled:
-                        body_input["_river_recall"] = recalled
-                    if body_node.type == "control.loop":
-                        # Fractal nesting: a loop in the body recurses with growing depth.
-                        body_output = await self._execute_loop_node(
-                            request=request,
-                            run_id=run_id,
-                            task=task,
-                            step_id=step_id,
-                            node=body_node,
-                            step_input=body_input,
-                            state=state,
-                            nodes_by_id=nodes_by_id,
-                        )
-                    else:
-                        body_output = await self._execute_node(
-                            body_node, body_input, state, request.context
-                        )
-                    iteration_outputs[body_node_id] = body_output
-                    last_output = body_output
-                    loop_local_visited.append(body_node_id)
-
-                # C (Sensor): observe the system response — body output merged with the
-                # controller's actuated variables, so a passthrough body still exposes them.
-                measurement = {**last_output, **controlled}
-                metric_value = self._metric_value(measurement, setpoint)
-                if metric_value is not None:
-                    metric_history.append(metric_value)
-                sensor_type = sensor_cfg.get("type", "threshold") if isinstance(sensor_cfg, dict) else "threshold"
-                if sensor_type == "verifier":
-                    sensor_result = await self._sense_with_verifier(
-                        sensor_cfg, setpoint, measurement, metric_history,
-                        self._sense(sensor_cfg, setpoint, measurement, metric_history)
+                if branch_node.type == "control.loop":
+                    return await self._execute_loop_node(
+                        request=request, run_id=run_id, task=task, step_id=step_id,
+                        node=branch_node, step_input=branch_input, state=state,
+                        nodes_by_id=nodes_by_id,
                     )
-                else:
-                    sensor_result = self._sense(sensor_cfg, setpoint, measurement, metric_history)
-                metrics = self._extract_loop_metrics(measurement, setpoint)
-                iteration_record = IterationRecord(
-                    loop_id=loop_record.loop_id,
-                    run_id=run_id,
-                    index=iteration_index,
-                    evidence={
-                        "body_node_ids": list(subgraph_ids),
-                        "last_output": self._json_safe(last_output),
-                        "controlled": self._json_safe(controlled),
-                        "sensor": sensor_result,
-                        **({
-                            "claims": self._build_coe_claims(measurement, sensor_result, subgraph_ids)
-                        } if coe_enabled else {}),
-                    },
-                    metrics=metrics,
-                    verifier_score=sensor_result.get("value"),
-                    trace_id=run_id,
-                )
-                loop_record.iterations.append(iteration_record)
-                loop_record.iteration_count += 1
+                if branch_node.type == "approval_gate":
+                    # Approval pauses the walk; a paused gather would deadlock.
+                    return {
+                        "node_id": branch_id, "skipped": True,
+                        "message": f"[parallel] branch {branch_id} is an approval_gate; skipped in gather mode",
+                    }
+                if self._is_delegated_node(branch_node):
+                    return await self._execute_delegated_node(
+                        request=request, run_id=run_id, task=task, step_id=step_id,
+                        node=branch_node, step_input=branch_input, state=state,
+                    )
+                return await self._execute_node(branch_node, branch_input, state, request.context)
+            except Exception as exc:  # noqa: BLE001 — one branch must not sink the others
+                return {"node_id": branch_id, "error": str(exc)}
 
-                # Persist progress so an interrupted run can resume from this iteration.
-                progress_map[node.id] = {
-                    "next_iteration": iteration_index + 1,
-                    "iterations": [ir.model_dump(mode="json") for ir in loop_record.iterations],
-                    "controlled": self._json_safe(controlled),
-                }
-
-                if loop_kind == "until_converge" and sensor_result.get("converged"):
-                    converged = True
-                    break
-
-                # A (Controller): close the feedback loop — adjust the actuated variables
-                # for the next iteration based on the sensor's verdict (the C→A link).
-                controlled = self._control(
-                    controller_cfg, controlled, sensor_result, setpoint, freeze_fields
-                )
-
-                is_last = iteration_index >= effective_budget - 1
-                if not is_last:
-                    retried_count += 1
-                    if self._event_bus is not None:
-                        self._event_bus.publish_node_event(
-                            run_id,
-                            NODE_RETRIED,
-                            node.id,
-                            {
-                                "loop_id": loop_record.loop_id,
-                                "iteration": iteration_index,
-                                "step_id": step_id,
-                            },
-                        )
-        finally:
-            if active_frames and active_frames[-1].loop_id == loop_record.loop_id:
-                active_frames.pop()
-
-        if loop_kind != "until_converge" and not halted_by_watch:
-            converged = True
-
-        loop_record.status = "halted" if halted_by_watch else ("converged" if converged else "halted")
-
-        # River Memory: sediment a reusable pattern when the loop converges (SEED-style
-        # skill recall becomes dredge() on later runs).
-        settled = False
-        if river_enabled and converged and not halted_by_watch:
-            self._river.settle(
-                {
-                    "loop_id": loop_record.loop_id,
-                    "setpoint": setpoint,
-                    "controlled": self._json_safe(controlled),
-                    "iterations": loop_record.iteration_count,
-                },
-                run_id=run_id,
-                loop_id=loop_record.loop_id,
-                tags=list(memory_cfg.get("tags") or []) + [loop_kind],
-            )
-            settled = True
-
-        # Publish this loop's terminal signal for any supervisor watching it.
-        signals_map[node.id] = loop_record.status
-        # Loop completed: clear resumable progress so a fresh re-run starts from iteration 0.
-        progress_map.pop(node.id, None)
-
-        output: Dict[str, Any] = {
-            "message": config.get(
+        outputs = await asyncio.gather(*[_run_branch(b) for b in branches])
+        branch_outputs: Dict[str, Any] = dict(zip(branches, outputs))
+        state.setdefault("parallel", {})[node.id] = {
+            "branches": branches,
+            "branch_set": set(branches),
+            "remaining_branches": [],
+            "branch_outputs": branch_outputs,
+            "barrier": barrier,
+            "gathered": True,
+        }
+        state["active_parallel"] = node.id
+        failed = [
+            b for b, o in branch_outputs.items()
+            if isinstance(o, dict) and o.get("error")
+        ]
+        return {
+            "message": node.config.get(
                 "message_template",
-                f"[{role}] loop {loop_record.loop_id} ran {loop_record.iteration_count} "
-                f"iteration(s); status={loop_record.status}",
+                f"[{role}] gathered {len(branches)} parallel branches concurrently.",
             ),
             "node_id": node.id,
             "node_type": node.type,
             "handled_by": role,
-            "state": {
-                "last_loop_id": loop_record.loop_id,
-                "loop_status": loop_record.status,
-                "loop_iterations": loop_record.iteration_count,
-            },
-            "loop_id": loop_record.loop_id,
-            "loop_kind": loop_kind,
-            "loop_depth": current_depth,
-            "loop_iterations": loop_record.iteration_count,
-            "loop_status": loop_record.status,
-            "loop_converged": converged,
-            "loop_retried_count": retried_count,
-            "loop_halted_by_watch": halted_by_watch,
-            "loop_memory_recalled": len(recalled),
-            "loop_memory_settled": settled,
-            "loop_local_visited": loop_local_visited,
-            "loop_record": loop_record.model_dump(mode="json"),
+            "state": {},
+            "branch_count": len(branches),
+            "branches": branches,
+            "barrier": barrier,
+            "execution": "gather",
+            "failed_branches": failed,
+            "branch_outputs": {k: self._json_safe(v) for k, v in branch_outputs.items()},
         }
-        if prompt:
-            output["prompt"] = prompt
-        return output
 
     def _loop_watch_triggered(
         self, watch: List[Dict[str, Any]], signals_map: Dict[str, Any]
@@ -3866,13 +3854,66 @@ Output a JSON with keys:
                 "type": node.type,
                 "role": base_output["handled_by"],
             },
+            # Adoption #2: provenance reaches ACP sessions as _meta.shadowflow
+            # (run + enclosing loop lineage), Hermes-provenance style.
+            "provenance": {
+                "run_id": state.get("run_id"),
+                "node_id": node.id,
+                "loop": step_input.get("_loop_provenance"),
+            },
         }
+
+        # Adoption #3: permission tri-state gates the dispatch itself.
+        from shadowflow.runtime.permissions import (
+            PermissionBlocked,
+            enforce_permission,
+            resolve_effective_policy,
+        )
+
+        permission_policy = resolve_effective_policy(node.config, state)
+        permission_result: Optional[Dict[str, Any]] = None
+        if permission_policy is not None:
+            permission_result = await enforce_permission(
+                self,
+                run_id=str(state.get("run_id") or ""),
+                node_id=node.id,
+                action="dispatch",
+                policy=permission_policy,
+                summary=str(step_input.get("goal") or step_input.get("message") or "")[:200],
+            )
+
         result = self._json_safe(await self._executor_registry.execute(executor_config, payload))
         output = dict(base_output)
         if isinstance(result, dict):
             output.update(result)
         else:
             output["result"] = result
+        if permission_result is not None:
+            output["permission"] = permission_result
+
+        # N1 validation hooks (waterfall semantics): node.config.validation_hooks
+        # specs run against the produced output; on_fail=blocker raises
+        # HookRejected (node/run fails), warn marks the output and continues.
+        inline_hooks = node.config.get("validation_hooks")
+        if isinstance(inline_hooks, list) and inline_hooks:
+            from shadowflow.runtime.hook_pipeline import ValidationHookRunner, parse_inline_hooks
+
+            specs = parse_inline_hooks(inline_hooks)
+            if specs:
+                outcomes = await ValidationHookRunner().run_all(
+                    specs,
+                    {
+                        "node_id": node.id,
+                        "phase": "post_execute",
+                        "results": self._json_safe(
+                            {k: v for k, v in output.items() if k != "state"}
+                        ),
+                    },
+                )
+                output["validation_hooks"] = [
+                    {"hook_id": spec.id, "passed": o.passed, "detail": o.detail, "attempts": o.attempts}
+                    for spec, o in zip(specs, outcomes)
+                ]
         return output
 
     def _apply_node_config_output(
@@ -4565,6 +4606,11 @@ Output a JSON with keys:
         state: Dict[str, Any],
     ) -> None:
         if node.type == "control.parallel":
+            existing = state.get("parallel", {}).get(node.id)
+            if isinstance(existing, dict) and existing.get("gathered"):
+                # gather mode already executed every branch inside the step
+                # and seeded branch_outputs — do not reset the schedule.
+                return
             branches = list(step_output.get("branches", []))
             state["parallel"][node.id] = {
                 "branches": branches,

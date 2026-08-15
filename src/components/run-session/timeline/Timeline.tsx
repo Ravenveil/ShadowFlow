@@ -85,8 +85,13 @@ export interface TimelineProps {
    * 气泡、assistant 左对齐、去掉 item 分隔线（像聊天而非流程日志）。默认
    * undefined = run-session 终端风（❯ 前缀），零回归。纯 CSS 作用域
    * (.chatVariant)，不改任何消息渲染器逻辑。
+   *
+   * 2026-08-15 — 'neo'：chat 观感 + 嵌入模式。Neo 中栏（NeoRunInline）自己
+   * 持有滚动容器，Timeline 关闭自身滚动（overflow visible、flex none），
+   * 由外层 neo-chat-scroll 统一滚动。富卡片（plan/diff/commit/preview）
+   * 的入场动画与工具分组照常生效。
    */
-  variant?: 'chat';
+  variant?: 'chat' | 'neo';
   /**
    * When true, render the bottom always-on `status_line` slot. Default is
    * now `false` per v8 design (2026-05-28): the design package uses msg-foot
@@ -115,6 +120,16 @@ export interface TimelineProps {
    */
   onUserRetry?: (text: string) => void;
   resending?: boolean;
+  /**
+   * Polynoia-parity — chat-side inline edit. When provided, assistant_text
+   * rows get a hover pencil; saving calls back with the edited body. The
+   * owner is responsible for persisting (useRunSession.editMessage PATCHes
+   * the conversation row via the run-session route).
+   */
+  onEditMessage?: (
+    msg: Extract<TimelineMessage, { kind: 'assistant_text' }>,
+    nextBody: string,
+  ) => void;
 }
 
 const STICK_THRESHOLD_PX = 100;
@@ -172,6 +187,7 @@ export const Timeline = memo(function Timeline({
   costCny,
   onUserRetry,
   resending = false,
+  onEditMessage,
 }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Tracks whether the user is "stuck" to the bottom (default true). Flips
@@ -242,7 +258,8 @@ export const Timeline = memo(function Timeline({
 
   const containerClass = [
     styles.container,
-    variant === 'chat' ? styles.chatVariant : '',
+    variant === 'chat' || variant === 'neo' ? styles.chatVariant : '',
+    variant === 'neo' ? styles.neoEmbed : '',
     className ?? '',
   ].filter(Boolean).join(' ');
 
@@ -281,6 +298,7 @@ export const Timeline = memo(function Timeline({
                 msg={row.msg}
                 onUserRetry={onUserRetry}
                 resending={resending}
+                onEditMessage={onEditMessage}
               />
             </div>
           ) : (
@@ -296,6 +314,7 @@ export const Timeline = memo(function Timeline({
                     msg={m}
                     onUserRetry={onUserRetry}
                     resending={resending}
+                    onEditMessage={onEditMessage}
                   />
                 ))}
               </ToolGroup>

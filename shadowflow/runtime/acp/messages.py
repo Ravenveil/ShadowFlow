@@ -113,20 +113,33 @@ class NewSessionRequest(AcpRequest):
         agent_id: str,
         cwd: Optional[str] = None,
         mcp_servers: Optional[List[Dict[str, Any]]] = None,
+        provenance: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
         import os
 
+        # _meta.shadowflow carries the full dispatch lineage (adoption #2,
+        # Hermes-provenance convention): run/node/agent plus the enclosing
+        # loop (loop_id / iteration / depth / parent) when dispatched from
+        # inside a control.loop body. Derived per call, never persisted —
+        # standard ACP clients can safely ignore it.
+        meta: Dict[str, Any] = {
+            "runId": run_id,
+            "nodeId": node_id,
+            "agentId": agent_id,
+        }
+        if isinstance(provenance, dict):
+            loop_info = provenance.get("loop")
+            if isinstance(loop_info, dict):
+                meta["loopId"] = loop_info.get("loop_id")
+                meta["iteration"] = loop_info.get("iteration")
+                meta["loopDepth"] = loop_info.get("depth")
+                meta["parentLoopId"] = loop_info.get("parent_loop_id")
+
         params: Dict[str, Any] = {
             "cwd": cwd or os.getcwd(),
             "mcpServers": mcp_servers or [],
-            "_meta": {
-                "shadowflow": {
-                    "runId": run_id,
-                    "nodeId": node_id,
-                    "agentId": agent_id,
-                },
-            },
+            "_meta": {"shadowflow": meta},
         }
         super().__init__(params=params, **kwargs)
 

@@ -23,6 +23,16 @@ codex:
   workspace_template: null
   env: {}
 
+opencode:
+  # Polynoia 三大 CLI 之一（2026-08-15 对标补齐）。`opencode run` 非交互执行，
+  # 消息作为位置参数传入（{stdin} 插值）；stdout 纯文本回复 → stdout-text。
+  command: ["opencode"]
+  args_template: ["run", "{stdin}"]
+  stdin_format: "none"
+  parse_format: "stdout-text"
+  workspace_template: null
+  env: {}
+
 openclaw:
   command: ["openclaw"]
   args_template: ["agent", "--agent", "{id}", "-m", "{stdin}", "--deliver"]

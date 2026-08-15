@@ -9,6 +9,9 @@
  * SKILL.md frontmatter. Hardcoded skills omit those fields, which
  * serialise as `undefined` (i.e. absent in JSON) — backward-compatible
  * for existing UI consumers.
+ *
+ * 2026-08-15 — `cover_url` (SKILL.md frontmatter `cover_url`, alias `cover`)
+ * is passed through the same way: absent on the skill → key omitted in JSON.
  */
 
 import fs from 'fs';
@@ -45,6 +48,7 @@ router.get('/', (_req: Request, res: Response) => {
     scenario: skill.scenario,
     fidelity: skill.fidelity,
     example_prompt: skill.example_prompt,
+    cover_url: skill.cover_url,
     has_team: !!skill.team,
     // Skills management (OpenDesign parity): provenance + enabled state.
     // 2026-06-03 — source is now position-based (stamped by skill-loader from

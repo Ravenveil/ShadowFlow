@@ -266,6 +266,15 @@ function scanOneDir(
     const kind: SkillKind = rawKind && VALID_KINDS.has(rawKind) ? rawKind : inferKind(mode);
     const domain = normalizeDomain(fm.domain);
 
+    // 2026-08-15 — optional cover image for gallery/template cards. Accepts
+    // `cover_url` (preferred) and the `cover` alias; empty/absent → undefined
+    // so the key is omitted from the API JSON (no fabricated default).
+    const rawCover = fm.cover_url ?? fm.cover;
+    const cover_url =
+      typeof rawCover === 'string' && rawCover.trim().length > 0
+        ? rawCover.trim()
+        : undefined;
+
     const skill: SkillDefinition = {
       name: String(fm.name).trim(),
       description: String(fm.description).trim(),
@@ -278,6 +287,7 @@ function scanOneDir(
       scenario: typeof fm.scenario === 'string' ? fm.scenario : '',
       fidelity: typeof fm.fidelity === 'string' ? fm.fidelity : 'high',
       example_prompt: typeof fm.example_prompt === 'string' ? fm.example_prompt : '',
+      cover_url,
       system_prompt: parsed.content ?? '',
       executor,
       allowed_tools,

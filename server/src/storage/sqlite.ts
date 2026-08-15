@@ -77,6 +77,8 @@ export function getDb(): Database.Database {
   // best-effort additive (nullable, no default constraint that could fail) so
   // an existing db is upgraded in place without a destructive rebuild.
   addColumnIfMissing(db, 'messages', 'timeline_message_id', 'TEXT');
+  // Polynoia-parity chat-side message editing — stamp when a row was edited.
+  addColumnIfMissing(db, 'messages', 'edited_at', 'TEXT');
   // B1 统一会话内核（2026-06-11）— 与 Python 群聊体系的显式互链：
   // conversation.group_id ↔ group.conversation_id（groups.py 同日加）。
   addColumnIfMissing(db, 'conversations', 'group_id', 'TEXT');

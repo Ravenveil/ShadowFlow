@@ -17,6 +17,12 @@
   --t-accent-bright: #000000;
   --t-accent-tint: #F4F4F5;
   --t-accent-ink: #FAFAFA;
+  /* 用户消息气泡：灰底黑字（clawsgo/Coze/WorkBuddy 实测 #F2~F3 灰气泡），
+     覆盖 timeline chatVariant 默认的 accent 品牌气泡 */
+  --t-user-bubble: var(--t-panel-3);
+  --t-user-bubble-ink: var(--t-fg);
+  /* 完成绿：done 帧实测 #30C093（done pill / op 完成图标统一走 --t-ok） */
+  --t-ok: #30C093;
   /* 层次对齐竞品：内容区纯白（--t-panel），左右栏浅灰（--t-bg） */
   background: var(--t-panel);
   color: var(--t-fg);
@@ -104,23 +110,45 @@
   display: flex;
 }
 
-/* 「+ 新任务」灰胶囊（WorkBuddy 形态：浅灰底黑字，不用重黑块压场） */
+/* 「+ 新任务」导航行（ClawsGo tmp29A7：无边框透明行，常驻浅灰胶囊底，图标+文字左对齐） */
 .neo-rail .neo-newtask {
+  position: relative;
   width: 100%;
   height: 34px;
-  justify-content: center;
+  justify-content: flex-start;
+  padding: 0 10px;
+  gap: 8px;
   border-radius: 10px;
-  border: 1px solid var(--t-border);
+  border: none;
   cursor: pointer;
   font-size: 13px;
-  font-weight: 600;
-  background: var(--t-panel);
+  font-weight: 500;
+  background: var(--t-panel-3);
   color: var(--t-fg);
-  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+  transition: background var(--dur-1) var(--ease-out);
 }
 .neo-rail .neo-newtask:hover {
-  background: var(--t-panel-3);
-  border-color: var(--t-border-2);
+  background: color-mix(in srgb, var(--t-fg) 8%, transparent);
+}
+/* 新任务行右侧 kbd 提示（Kimi tmp5D2B：灰底 4px 圆角小胶囊）。
+   绝对定位靠右，不挤占居中文字；真实 Ctrl/⌘+K 绑定在 NeoRail 的 useCommandK。 */
+.neo-newtask .neo-kbd {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--t-panel);
+  color: var(--t-fg-5);
+  font-size: 10px;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.neo-rail .neo-newtask:hover .neo-kbd {
+  /* hover 行底加深，kbd 保持白底层次 */
+  background: var(--t-panel);
 }
 .neo-newtask-icon {
   border: 1px solid var(--t-border);
@@ -165,6 +193,40 @@
   display: none;
 }
 
+/* 「知识库」一级导航行（ClawsGo home.html .nav-row：图标 15px 次级灰 +
+   文字 12.5px/500 近黑，hover 浅灰底圆角 10px）。暂无知识库路由 → aria-disabled
+   空操作，只保视觉一致（缺口见 GAP.md）。 */
+.neo-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--t-fg);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: default;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-nav-row svg {
+  flex-shrink: 0;
+  color: var(--t-fg-3);
+}
+.neo-nav-row:hover {
+  background: var(--t-panel-2);
+}
+.neo-nav-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 列表区 */
 .neo-rail-body {
   flex: 1;
@@ -175,13 +237,37 @@
   gap: 1px;
   padding-top: 2px;
 }
+/* rail 滚动条细化（P2-20）：6px、半透明、默认隐形、hover 显形——竞品均无粗滚动条。
+   覆盖 index.css 全局 8px 条；color-mix 走 --t-fg，day/night 自动适配。 */
+.neo-rail-body,
+.neo-rail-icons {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.neo-rail-body:hover,
+.neo-rail-icons:hover {
+  scrollbar-color: color-mix(in srgb, var(--t-fg) 22%, transparent) transparent;
+}
+.neo-rail-body::-webkit-scrollbar,
+.neo-rail-icons::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.neo-rail-body::-webkit-scrollbar-thumb,
+.neo-rail-icons::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+.neo-rail-body:hover::-webkit-scrollbar-thumb,
+.neo-rail-icons:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--t-fg) 22%, transparent);
+}
 .neo-section-label {
   flex-shrink: 0;
   padding: 10px 10px 4px;
   font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--t-fg-5);
 }
 .neo-list-note {
@@ -271,6 +357,8 @@
   flex-shrink: 0;
   font-size: 10.5px;
   font-family: var(--font-mono, monospace);
+  /* 耗时/计数数字等宽，列表跳动对齐竞品（P2-17） */
+  font-variant-numeric: tabular-nums;
   color: var(--t-fg-5);
 }
 .neo-row-badge {
@@ -327,6 +415,53 @@
 .neo-avatar-btn.on {
   background: var(--t-panel-3);
   box-shadow: inset 0 0 0 1px var(--t-border-2);
+}
+
+/* 底部邀请/说明卡（ClawsGo home.html .invite：白卡 + 1px hairline +
+   图标盒 34px + 两行文字）。纯信息卡、无按钮——无邀请后端，见 GAP.md。 */
+.neo-invite {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+}
+.neo-invite-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  color: var(--t-fg-3);
+}
+.neo-invite-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.neo-invite-t1 {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-invite-t2 {
+  font-size: 11px;
+  color: var(--t-fg-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 底部用户卡 */

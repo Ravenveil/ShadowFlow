@@ -543,6 +543,71 @@ body
   }
 })();
 
+// ─── Test 14: cover_url frontmatter passthrough ─────────────────────────────
+
+(function testCoverUrl() {
+  console.log('\n[14] cover_url / cover frontmatter → SkillDefinition.cover_url');
+  const root = makeTmpSkillsRoot();
+  try {
+    writeSkill(
+      root,
+      'with-cover',
+      `---
+name: With Cover
+description: has cover_url
+cover_url: https://cdn.example.com/covers/with-cover.png
+---
+body
+`,
+    );
+    writeSkill(
+      root,
+      'alias-cover',
+      `---
+name: Alias Cover
+description: uses the cover alias key
+cover: /covers/alias.png
+---
+body
+`,
+    );
+    writeSkill(
+      root,
+      'no-cover',
+      `---
+name: No Cover
+description: neither key present
+---
+body
+`,
+    );
+
+    const result = loadFsSkills([], root);
+    check(
+      'cover_url parsed from cover_url key',
+      result.loaded['with-cover']?.cover_url ===
+        'https://cdn.example.com/covers/with-cover.png',
+    );
+    check(
+      'cover alias accepted',
+      result.loaded['alias-cover']?.cover_url === '/covers/alias.png',
+    );
+    check(
+      'missing cover → cover_url undefined (omitted from JSON)',
+      result.loaded['no-cover']?.cover_url === undefined,
+    );
+    check(
+      'no fabricated default: key absent in JSON',
+      !Object.prototype.hasOwnProperty.call(
+        JSON.parse(JSON.stringify(result.loaded['no-cover'])),
+        'cover_url',
+      ),
+    );
+  } finally {
+    rmrf(root);
+  }
+})();
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 console.log('\n────────────────────────────────────────');

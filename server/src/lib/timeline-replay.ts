@@ -105,6 +105,16 @@ export function applyPatch(msg: TimelineMessage, patch: MessagePatch): TimelineM
       if (msg.kind !== 'msg_foot') return msg;
       return { ...msg, ...patch.patch };
     }
+    // Polynoia-parity（2026-08-15）— plan_card 任务行的实时状态。此前缺失该
+    // 分支：群时间线 REST 读路径重放时 plan_update_task 被静默丢弃，刷新后
+    // 计划卡的任务状态退回初始值。与前端 reducer 保持同等语义。
+    case 'plan_update_task': {
+      if (msg.kind !== 'plan_card') return msg;
+      return {
+        ...msg,
+        tasks: msg.tasks.map((t) => (t.id === patch.task_id ? { ...t, ...patch.patch } : t)),
+      };
+    }
     default:
       return msg;
   }

@@ -418,6 +418,30 @@ export async function abortRunSession(sessionId: string): Promise<boolean> {
   }
 }
 
+/**
+ * Polynoia-parity chat-side message editing — PATCH the persisted
+ * conversation row that back-links to a timeline assistant_text message.
+ * The timeline id (msg_<session>_NNNN) is the O3 back-trace the stream
+ * wrote; the server resolves it to the conversation row and rewrites the
+ * content (stamping edited_at).
+ */
+export async function editRunSessionMessage(
+  sessionId: string,
+  timelineMessageId: string,
+  content: string,
+): Promise<boolean> {
+  try {
+    const resp = await fetch(`${getApiBase()}/api/run-sessions/${sessionId}/messages`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ timeline_message_id: timelineMessageId, content }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function subscribeRunSession(
   sessionId: string,
   handlers: {

@@ -15,7 +15,9 @@ export default defineConfig({
   },
   server: {
     port: 3007,
-    open: true,
+    // 统一启动器(scripts/dev.mjs)会等后端就绪后再统一开浏览器;
+    // 单独跑 vite 时(SF_DEV_OPEN 未设)仍保持自动打开。
+    open: process.env.SF_DEV_OPEN !== '0',
     watch: {
       // 忽略 .claude 下的 agent worktree / skill 资源 —— 这些目录文件海量，且个别
       // 路径会让 chokidar 在 Windows 上抛 watch UNKNOWN(-4094) 直接崩溃 dev server。

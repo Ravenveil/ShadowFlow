@@ -38,6 +38,7 @@
  */
 
 import type {
+  CommitFileEntry,
   DiffLine,
   MessagePatch,
   ProjectorEmit,
@@ -144,6 +145,76 @@ export interface TimelineProjector {
   /** Final event → close thinking, finalize msg_foot. */
   onComplete(): ProjectorEmit;
 
+  // ── Polynoia-parity rich content emitters (2026-08-15) ────────────────────
+  //
+  // Structured work artifacts the orchestrator/verifier/git layer pushes into
+  // the chat timeline. All are thin: close the open answer/thinking runs so
+  // the card starts a fresh block, then emit one message. The plan card is
+  // the only stateful one — its id is remembered so onPlanTaskUpdate can
+  // target it with `plan_update_task` patches as workers start/finish.
+
+  /** Orchestrator task decomposition → plan_card (live-updated afterwards). */
+  onPlanCard(data: {
+    title?: string;
+    goal?: string;
+    tasks: import('./contracts').PlanTaskRow[];
+  }): ProjectorEmit;
+  /** Task status transition inside the current turn's plan_card. */
+  onPlanTaskUpdate(
+    taskId: string,
+    patch: Partial<import('./contracts').PlanTaskRow>,
+  ): ProjectorEmit;
+  /** Data table (verifier metrics, file stats, comparisons…). */
+  onTablePanel(data: {
+    caption?: string;
+    columns: string[];
+    rows: (string | number)[][];
+  }): ProjectorEmit;
+  /** Inline image. */
+  onImagePanel(data: { src: string; alt?: string; title?: string }): ProjectorEmit;
+  /** Sandboxed live web/artifact preview card. */
+  onWebPreview(data: { title: string; url?: string; src?: string }): ProjectorEmit;
+  /** Persisted artifact reference card. */
+  onArtifactCard(data: {
+    title?: string;
+    artifact_type: string;
+    filename: string;
+    url?: string;
+    note?: string;
+  }): ProjectorEmit;
+  /** Git commit record. */
+  onCommitRecord(data: {
+    repo: string;
+    sha: string;
+    short_sha: string;
+    message: string;
+    author: string;
+    date?: string;
+    files_changed: number;
+    insertions: number;
+    deletions: number;
+    files?: CommitFileEntry[];
+    url?: string;
+  }): ProjectorEmit;
+  /** Real file diff (unified-diff lines), distinct from the YAML diff_panel. */
+  onFileDiff(data: {
+    path: string;
+    language?: string;
+    added: number;
+    removed: number;
+    lines: DiffLine[];
+  }): ProjectorEmit;
+  /** Verifier / critique verdict card. */
+  onVerdictCard(data: {
+    title: string;
+    passed?: boolean;
+    score?: number;
+    max_score?: number;
+    summary?: string;
+    metrics?: { label: string; value: string | number; detail?: string }[];
+    notes?: string[];
+  }): ProjectorEmit;
+
   /**
    * O3 — back-trace bridge. Returns the id of the most recent `assistant_text`
    * message created during the current turn (the row that holds the streamed
@@ -227,6 +298,10 @@ export function createTimelineProjector(
   let openDiffPanelId: string | null = null;
   let diffLineNo = 0;
   let diffAdded = 0;
+
+  // Polynoia-parity — id of the current turn's plan_card (null until the
+  // orchestrator decomposition lands). onPlanTaskUpdate targets it.
+  let planCardId: string | null = null;
 
   // gap #2 — 当前未落定的 tool_call（等 onToolResult 来 finalize）+ 其开始时间。
   // 顺序配对启发：CLI tool_use 后紧跟 tool_result，按"最近未落定"配。
@@ -382,6 +457,7 @@ export function createTimelineProjector(
       currentRunningStepIndex = null;
       openAssistantTextId = null;
       lastAssistantTextId = null; // O3 — reset back-trace anchor per turn
+      planCardId = null;
       out.messages.push({
         id: newId('msg'),
         kind: 'user_turn',
@@ -744,6 +820,160 @@ export function createTimelineProjector(
         bumpMsgFoot(out, { status: 'done' });
       }
       bumpStatusLine(out, 'Done', 0, true);
+      return out;
+    },
+
+    // ── Polynoia-parity rich content emitters ──────────────────────────────
+
+    onPlanCard(data): ProjectorEmit {
+      const out = emit();
+      closeOpenThinking(out);
+      closeOpenText(out);
+      ensureMsgFoot(out);
+      planCardId = newId('msg');
+      out.messages.push({
+        id: planCardId,
+        kind: 'plan_card',
+        turn_id: turnId,
+        ts: nowMs(),
+        title: data.title ?? '执行计划',
+        ...(data.goal ? { goal: data.goal } : {}),
+        tasks: data.tasks,
+      });
+      bumpStatusLine(out, 'Dispatching plan', 0);
+      return out;
+    },
+
+    onPlanTaskUpdate(taskId, patch): ProjectorEmit {
+      const out = emit();
+      if (!planCardId) return out;
+      out.patches.push({
+        id: planCardId,
+        op: 'plan_update_task',
+        task_id: taskId,
+        patch,
+      });
+      return out;
+    },
+
+    onTablePanel(data): ProjectorEmit {
+      const out = emit();
+      closeOpenText(out);
+      out.messages.push({
+        id: newId('msg'),
+        kind: 'table_panel',
+        turn_id: turnId,
+        ts: nowMs(),
+        columns: data.columns,
+        rows: data.rows,
+        ...(data.caption ? { caption: data.caption } : {}),
+      });
+      return out;
+    },
+
+    onImagePanel(data): ProjectorEmit {
+      const out = emit();
+      closeOpenText(out);
+      out.messages.push({
+        id: newId('msg'),
+        kind: 'image_panel',
+        turn_id: turnId,
+        ts: nowMs(),
+        src: data.src,
+        ...(data.alt ? { alt: data.alt } : {}),
+        ...(data.title ? { title: data.title } : {}),
+      });
+      return out;
+    },
+
+    onWebPreview(data): ProjectorEmit {
+      const out = emit();
+      closeOpenText(out);
+      out.messages.push({
+        id: newId('msg'),
+        kind: 'web_preview',
+        turn_id: turnId,
+        ts: nowMs(),
+        title: data.title,
+        ...(data.url ? { url: data.url } : {}),
+        ...(data.src ? { src: data.src } : {}),
+      });
+      return out;
+    },
+
+    onArtifactCard(data): ProjectorEmit {
+      const out = emit();
+      closeOpenText(out);
+      out.messages.push({
+        id: newId('msg'),
+        kind: 'artifact_card',
+        turn_id: turnId,
+        ts: nowMs(),
+        artifact_type: data.artifact_type,
+        filename: data.filename,
+        ...(data.title ? { title: data.title } : {}),
+        ...(data.url ? { url: data.url } : {}),
+        ...(data.note ? { note: data.note } : {}),
+      });
+      return out;
+    },
+
+    onCommitRecord(data): ProjectorEmit {
+      const out = emit();
+      closeOpenText(out);
+      out.messages.push({
+        id: newId('msg'),
+        kind: 'commit_record',
+        turn_id: turnId,
+        ts: nowMs(),
+        repo: data.repo,
+        sha: data.sha,
+        short_sha: data.short_sha,
+        message: data.message,
+        author: data.author,
+        files_changed: data.files_changed,
+        insertions: data.insertions,
+        deletions: data.deletions,
+        ...(data.date ? { date: data.date } : {}),
+        ...(data.files ? { files: data.files } : {}),
+        ...(data.url ? { url: data.url } : {}),
+      });
+      return out;
+    },
+
+    onFileDiff(data): ProjectorEmit {
+      const out = emit();
+      closeOpenText(out);
+      out.messages.push({
+        id: newId('msg'),
+        kind: 'file_diff',
+        turn_id: turnId,
+        ts: nowMs(),
+        path: data.path,
+        added: data.added,
+        removed: data.removed,
+        lines: data.lines,
+        ...(data.language ? { language: data.language } : {}),
+      });
+      return out;
+    },
+
+    onVerdictCard(data): ProjectorEmit {
+      const out = emit();
+      closeOpenText(out);
+      out.messages.push({
+        id: newId('msg'),
+        kind: 'verdict_card',
+        turn_id: turnId,
+        ts: nowMs(),
+        title: data.title,
+        ...(data.passed === undefined ? {} : { passed: data.passed }),
+        ...(data.score === undefined ? {} : { score: data.score }),
+        ...(data.max_score === undefined ? {} : { max_score: data.max_score }),
+        ...(data.summary ? { summary: data.summary } : {}),
+        ...(data.metrics ? { metrics: data.metrics } : {}),
+        ...(data.notes ? { notes: data.notes } : {}),
+      });
       return out;
     },
 

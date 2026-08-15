@@ -19,7 +19,8 @@
  * `msg.streaming` is true. Chip rows never get the caret (they're
  * structurally complete units).
  */
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
+import { Check, Pencil, X } from 'lucide-react';
 import type { TimelineMessage } from '../types';
 import styles from '../timeline.module.css';
 import { extractRows } from './rows/extractRows';
@@ -31,6 +32,13 @@ import { SectionHeader } from './SectionHeader';
 
 interface Props {
   msg: Extract<TimelineMessage, { kind: 'assistant_text' }>;
+  /**
+   * Polynoia-parity chat-side editing ("直接在聊天里看还能编辑"). When
+   * provided (and the message is not streaming), a hover pencil shows;
+   * saving calls back with the edited body. The owner (NeoRunInline →
+   * useRunSession.editMessage) PATCHes the persisted conversation row.
+   */
+  onEdit?: (msg: Extract<TimelineMessage, { kind: 'assistant_text' }>, nextBody: string) => void;
 }
 
 /**
@@ -68,7 +76,9 @@ function stripToolXml(raw: string): string {
   return out;
 }
 
-export const AssistantText = memo(function AssistantText({ msg }: Props) {
+export const AssistantText = memo(function AssistantText({ msg, onEdit }: Props) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
   const rows = useMemo(() => {
     const cleaned = stripToolXml(msg.body);
     return extractRows(cleaned);
@@ -87,6 +97,8 @@ export const AssistantText = memo(function AssistantText({ msg }: Props) {
       break;
     }
   }
+
+  const canEdit = Boolean(onEdit) && !msg.streaming;
 
   return (
     <div className={styles.textStack}>
@@ -108,39 +120,89 @@ export const AssistantText = memo(function AssistantText({ msg }: Props) {
           {msg.sender_name}
         </div>
       )}
-      {rows.map((row, i) => {
-        const key = `r-${i}-${row.kind}`;
-        switch (row.kind) {
-          case 'bash-chip':
-            return (
-              <BashChip
-                key={key}
-                label={row.label}
-                cmd={row.cmd}
-                body={row.body}
-              />
-            );
-          case 'bash-inline':
-            return <BashInline key={key} cmd={row.cmd} />;
-          case 'code-chip':
-            return <CodeBlockRow key={key} lang={row.lang} body={row.body} />;
-          case 'section-header':
-            return <SectionHeader key={key} label={row.title} />;
-          case 'text':
-            return (
-              <TextRow
-                key={key}
-                body={row.body}
-                streaming={Boolean(msg.streaming) && i === lastTextIdx}
-              />
-            );
-          default: {
-            const _exhaustive: never = row;
-            void _exhaustive;
-            return null;
-          }
-        }
-      })}
+      {editing ? (
+        <div className={styles.editBox}>
+          <textarea
+            className={styles.editArea}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={Math.min(14, Math.max(3, draft.split('\n').length + 1))}
+            autoFocus
+          />
+          <div className={styles.editActions}>
+            <button
+              type="button"
+              className={styles.editBtnPrimary}
+              disabled={!draft.trim() || draft === msg.body}
+              onClick={() => {
+                onEdit?.(msg, draft);
+                setEditing(false);
+              }}
+            >
+              <Check size={12} /> 保存
+            </button>
+            <button
+              type="button"
+              className={styles.editBtn}
+              onClick={() => setEditing(false)}
+            >
+              <X size={12} /> 取消
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {rows.map((row, i) => {
+            const key = `r-${i}-${row.kind}`;
+            switch (row.kind) {
+              case 'bash-chip':
+                return (
+                  <BashChip
+                    key={key}
+                    label={row.label}
+                    cmd={row.cmd}
+                    body={row.body}
+                  />
+                );
+              case 'bash-inline':
+                return <BashInline key={key} cmd={row.cmd} />;
+              case 'code-chip':
+                return <CodeBlockRow key={key} lang={row.lang} body={row.body} />;
+              case 'section-header':
+                return <SectionHeader key={key} label={row.title} />;
+              case 'text':
+                return (
+                  <TextRow
+                    key={key}
+                    body={row.body}
+                    streaming={Boolean(msg.streaming) && i === lastTextIdx}
+                  />
+                );
+              default: {
+                const _exhaustive: never = row;
+                void _exhaustive;
+                return null;
+              }
+            }
+          })}
+          {canEdit && (
+            <div className={styles.editTrigger}>
+              <button
+                type="button"
+                className={styles.editBtnIcon}
+                title="编辑消息"
+                aria-label="编辑消息"
+                onClick={() => {
+                  setDraft(msg.body);
+                  setEditing(true);
+                }}
+              >
+                <Pencil size={12} />
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 });

@@ -72,10 +72,16 @@ def translate_dag_to_team(
     def _body_worker_ids(node: Any) -> List[str]:
         """Worker ids inside a control node's body.
 
-        control.loop puts body ids in config.subgraph; control.parallel puts
-        them in config.branches as a list of branch lists — flatten both.
+        control.loop puts body ids in config.subgraph; a config.preset loop
+        expands to {node_id}-{phase} ids; control.parallel puts them in
+        config.branches as a list of branch lists — flatten all.
         """
         cfg = node.config or {}
+        preset = cfg.get("preset")
+        if isinstance(preset, str) and preset:
+            from shadowflow.runtime.loop_engine import preset_phase_node_ids
+
+            return preset_phase_node_ids(node.id, preset)
         raw: List[Any] = list(cfg.get("subgraph") or [])
         for branch in cfg.get("branches") or []:
             if isinstance(branch, list):

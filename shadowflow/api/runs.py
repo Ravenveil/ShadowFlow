@@ -52,22 +52,18 @@ def _get_runtime() -> RuntimeService:
 async def get_run_graph(run_id: str) -> Dict[str, Any]:
     """Get workflow execution graph for a run.
 
-    Returns:
-        RunGraph projection with nodes (workflow nodes) and edges (control flow).
+    Returns the flat RunGraph projection (top-level run_id/workflow_id/
+    entrypoint + per-node run status) — matches the src/api/runs.ts contract;
+    no envelope wrapper.
     """
     runtime = _get_runtime()
-
-    # 获取 workflow definition（从 RuntimeRequest 中获取）
-    request = runtime.get_request_context(run_id)
-    if request is None:
+    projection = runtime.export_run_graph(run_id)
+    if projection is None:
         raise HTTPException(
             status_code=404,
             detail={"error": {"code": "RUN_NOT_FOUND", "message": f"Run {run_id!r} not found"}},
         )
-
-    # 使用 RuntimeService 的 export_workflow_graph
-    graph = runtime.export_workflow_graph(workflow=request.workflow)
-    return _envelope(graph.model_dump(mode="json") if hasattr(graph, "model_dump") else graph)
+    return projection.model_dump(mode="json")
 
 
 @router.get("/runs/{run_id}/task-tree")
@@ -85,7 +81,7 @@ async def get_task_tree(run_id: str) -> Dict[str, Any]:
             detail={"error": {"code": "RUN_NOT_FOUND", "message": f"Run {run_id!r} not found"}},
         )
 
-    return _envelope(projection.model_dump(mode="json"))
+    return projection.model_dump(mode="json")
 
 
 @router.get("/runs/{run_id}/artifact-lineage")
@@ -103,7 +99,7 @@ async def get_artifact_lineage(run_id: str) -> Dict[str, Any]:
             detail={"error": {"code": "RUN_NOT_FOUND", "message": f"Run {run_id!r} not found"}},
         )
 
-    return _envelope(projection.model_dump(mode="json"))
+    return projection.model_dump(mode="json")
 
 
 @router.get("/runs/{run_id}/memory-graph")
@@ -121,7 +117,7 @@ async def get_memory_graph(run_id: str) -> Dict[str, Any]:
             detail={"error": {"code": "RUN_NOT_FOUND", "message": f"Run {run_id!r} not found"}},
         )
 
-    return _envelope(projection.model_dump(mode="json"))
+    return projection.model_dump(mode="json")
 
 
 @router.get("/runs/{run_id}/checkpoint-lineage")
@@ -139,7 +135,7 @@ async def get_checkpoint_lineage(run_id: str) -> Dict[str, Any]:
             detail={"error": {"code": "RUN_NOT_FOUND", "message": f"Run {run_id!r} not found"}},
         )
 
-    return _envelope(projection.model_dump(mode="json"))
+    return projection.model_dump(mode="json")
 
 
 @router.get("/runs/{run_id}/training-dataset")
@@ -157,7 +153,7 @@ async def get_training_dataset(run_id: str) -> Dict[str, Any]:
             detail={"error": {"code": "RUN_NOT_FOUND", "message": f"Run {run_id!r} not found"}},
         )
 
-    return _envelope(projection.model_dump(mode="json"))
+    return projection.model_dump(mode="json")
 
 
 @router.get("/runs/{run_id}/loops")
@@ -259,17 +255,43 @@ async def halt_loop(run_id: str, loop_id: str) -> Dict[str, Any]:
             "message": f"Loop is already {loop_status}, halt request ignored",
         }, already_halted=True)
 
-    # Note: For live loops, we would need to inject a halt signal into the runtime
-    # This is a placeholder for the full implementation which would require:
-    # 1. A shared signal store that _execute_loop_node checks
-    # 2. Async event to notify the running loop
-    # For now, this endpoint validates the request and returns a success response
+    # Live halt: the loop engine consumes this signal at its next iteration
+    # boundary (RuntimeService.request_loop_halt → _consume_loop_halt).
+    runtime.request_loop_halt(run_id, loop_id)
     return _envelope({
         "run_id": run_id,
         "loop_id": loop_id,
         "status": "halt_requested",
-        "message": "Halt request acknowledged. Live loop halting requires runtime signal integration.",
+        "message": "Halt signal set; the loop halts at its next iteration boundary.",
     })
+
+
+@router.get("/runs/{run_id}/event-log")
+async def get_run_event_log(run_id: str) -> Dict[str, Any]:
+    """Durable append-only event log for a run (P1 evidence stream).
+
+    Every durable fact (run/node lifecycle, checkpoints, loop iterations)
+    lives here and survives process restarts — the replay source for all
+    projections and the run-evidence export for competition audits.
+    """
+    runtime = _get_runtime()
+
+    events = runtime.get_run_event_log(run_id)
+    run_result = runtime.get_run(run_id)
+    if not events and run_result is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "RUN_NOT_FOUND", "message": f"Run {run_id!r} not found"}},
+        )
+
+    from shadowflow.runtime.run_event_log import RunEventRecord, replay_run_summary
+
+    records = [RunEventRecord.model_validate(evt) for evt in events]
+    return _envelope({
+        "run_id": run_id,
+        "events": events,
+        "summary": replay_run_summary(records),
+    }, total=len(events))
 
 
 # === Neo 2026-08-14: /api 双注册别名 =========================================
