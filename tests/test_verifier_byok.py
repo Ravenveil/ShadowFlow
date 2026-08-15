@@ -44,7 +44,14 @@ def _service_with_fake():
     return service, fake
 
 
-def test_byok_provider_and_key_env_from_config():
+def _clean_env(monkeypatch):
+    """Hermetic env: BYOK overrides from the operator's shell must not leak in."""
+    monkeypatch.delenv("SF_VERIFIER_PROVIDER", raising=False)
+    monkeypatch.delenv("SF_VERIFIER_API_KEY_ENV", raising=False)
+
+
+def test_byok_provider_and_key_env_from_config(monkeypatch):
+    _clean_env(monkeypatch)
     service, fake = _service_with_fake()
     result, cfg = _sense(
         service,
@@ -70,6 +77,7 @@ def test_byok_provider_and_key_env_from_config():
 
 
 def test_byok_provider_from_env(monkeypatch):
+    _clean_env(monkeypatch)
     monkeypatch.setenv("SF_VERIFIER_PROVIDER", "openai")
     monkeypatch.delenv("SF_VERIFIER_API_KEY_ENV", raising=False)
     service, fake = _service_with_fake()
@@ -80,7 +88,8 @@ def test_byok_provider_from_env(monkeypatch):
     assert "api_key_env" not in cfg
 
 
-def test_anthropic_defaults_enable_logprobs():
+def test_anthropic_defaults_enable_logprobs(monkeypatch):
+    _clean_env(monkeypatch)
     service, fake = _service_with_fake()
     _, cfg = _sense(
         service,
@@ -92,7 +101,8 @@ def test_anthropic_defaults_enable_logprobs():
     assert cfg["top_logprobs"] == 3
 
 
-def test_prompt_template_override():
+def test_prompt_template_override(monkeypatch):
+    _clean_env(monkeypatch)
     service, fake = _service_with_fake()
     _, cfg = _sense(
         service,
@@ -108,6 +118,7 @@ def test_prompt_template_override():
 
 
 def test_invalid_prompt_template_falls_back_to_default(monkeypatch):
+    _clean_env(monkeypatch)
     service, fake = _service_with_fake()
     _, cfg = _sense(
         service,

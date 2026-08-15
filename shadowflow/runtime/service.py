@@ -3534,7 +3534,9 @@ class RuntimeService:
         Supported sensor types:
         - threshold (default): compare metric against setpoint
         - trajectory: classify metric-series shape (converging / oscillating / diverging)
-        - verifier: LLM-as-a-Verifier with probability scoring (LE-2 v0.2)
+        - verifier: LLM-as-a-Verifier (async) — callers must await _sense_with_verifier
+          directly; this sync method returns the threshold baseline the verifier
+          decorates (never a coroutine).
         """
         sensor_type = sensor_cfg.get("type", "threshold") if isinstance(sensor_cfg, dict) else "threshold"
         value = self._metric_value(measurement, setpoint)
@@ -3545,12 +3547,7 @@ class RuntimeService:
             "converged": converged,
         }
 
-        if sensor_type == "verifier":
-            # LLM-as-a-Verifier (Stanford): probability-based scoring
-            return self._sense_with_verifier(
-                sensor_cfg, setpoint, measurement, metric_history, result
-            )
-        elif sensor_type == "trajectory":
+        if sensor_type == "trajectory":
             result["classification"] = self._classify_trajectory(metric_history, setpoint, converged)
         elif converged:
             result["classification"] = "converged"

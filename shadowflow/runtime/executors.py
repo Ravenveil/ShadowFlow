@@ -995,7 +995,58 @@ class ApiExecutor(BaseExecutor):
             return await self._execute_openai(config=config, payload=payload)
         if provider == "anthropic":
             return await self._execute_anthropic(config=config, payload=payload)
+        if provider == "zhipu":
+            return await self._execute_zhipu(config=config, payload=payload)
         raise ValueError(f"unsupported api provider: {provider}")
+
+    async def _execute_zhipu(self, config: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Zhipu GLM (open.bigmodel.cn) — OpenAI-compatible chat-completions style.
+
+        Any other OpenAI-compatible gateway works too: override base_url/api_key_env/model.
+        Key resolution: config.api_key_env first (BYOK), default env ZHIPU_API_KEY.
+        """
+        api_key = self._get_api_key(config=config, default_env="ZHIPU_API_KEY")
+        model = str(config.get("model", os.environ.get("ZHIPU_MODEL", "glm-4.5")))
+        compiled_prompt = self._build_api_prompt(config=config, payload=payload, enforce_json=config.get("parse") == "json")
+        body: Dict[str, Any] = {
+            "model": model,
+            "messages": [{"role": "user", "content": compiled_prompt}],
+        }
+        system_prompt = config.get("system_prompt")
+        if isinstance(system_prompt, str) and system_prompt:
+            body["messages"].insert(0, {"role": "system", "content": system_prompt})
+        if config.get("temperature") is not None:
+            body["temperature"] = config["temperature"]
+        if config.get("max_tokens") is not None:
+            body["max_tokens"] = config["max_tokens"]
+        if config.get("parse") == "json":
+            # 智谱兼容 response_format json_object（部分模型支持；不支持时靠 prompt 约束）
+            body["response_format"] = {"type": "json_object"}
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        timeout = float(config.get("timeout_seconds", 120))
+        url = str(config.get(
+            "base_url",
+            os.environ.get("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/chat/completions"),
+        ))
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(url, headers=headers, json=body)
+            response.raise_for_status()
+            data = response.json()
+        text = ""
+        choices = data.get("choices") or []
+        if choices:
+            text = str(choices[0].get("message", {}).get("content", "") or "")
+        return self._normalize_api_output(
+            provider="zhipu",
+            config=config,
+            data=data,
+            text=text,
+            model=model,
+        )
 
     async def _execute_openai(self, config: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
         api_key = self._get_api_key(config=config, default_env="OPENAI_API_KEY")

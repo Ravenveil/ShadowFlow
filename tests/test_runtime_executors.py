@@ -406,3 +406,106 @@ def test_workflow_validation_rejects_invalid_executor_kind():
             }
         )
 
+
+
+def test_api_executor_calls_zhipu_chat_completions(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "id": "chatcmpl-zhipu-1",
+                "choices": [
+                    {"message": {"content": "{\"score\": 0.92, \"confidence\": 0.88, \"reasoning\": \"ok\"}"}}
+                ],
+                "model": "glm-4.5",
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            captured["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url, headers=None, json=None):
+            captured.update({"url": url, "headers": headers, "json": json})
+            return FakeResponse()
+
+    monkeypatch.setenv("ZHIPU_API_KEY", "test-zhipu-key")
+    monkeypatch.delenv("ZHIPU_BASE_URL", raising=False)
+    monkeypatch.delenv("ZHIPU_MODEL", raising=False)
+    monkeypatch.setattr("shadowflow.runtime.executors.httpx.AsyncClient", FakeAsyncClient)
+
+    result = asyncio.run(
+        ApiExecutor().execute(
+            {
+                "kind": "api",
+                "provider": "zhipu",
+                "parse": "json",
+                "temperature": 0,
+            },
+            {"prompt": "Evaluate quality"},
+        )
+    )
+
+    assert captured["url"] == "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer test-zhipu-key"
+    body = captured["json"]
+    assert body["model"] == "glm-4.5"
+    assert body["messages"][0] == {"role": "user", "content": "Evaluate quality\n\nReturn valid JSON only."}
+    assert body["response_format"] == {"type": "json_object"}
+    # chat-completions 解析：message.content → JSON 合并进输出
+    assert result["score"] == 0.92
+    assert result["executor"] == {"kind": "api", "provider": "zhipu", "model": "glm-4.5"}
+
+
+def test_api_executor_zhipu_byok_overrides(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "plain answer"}}], "model": "glm-4-flash"}
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url, headers=None, json=None):
+            captured.update({"url": url, "headers": headers, "json": json})
+            return FakeResponse()
+
+    monkeypatch.setenv("MY_ZHIPU_GATEWAY_KEY", "gateway-key")
+    monkeypatch.setattr("shadowflow.runtime.executors.httpx.AsyncClient", FakeAsyncClient)
+
+    result = asyncio.run(
+        ApiExecutor().execute(
+            {
+                "kind": "api",
+                "provider": "zhipu",
+                "model": "glm-4-flash",
+                "api_key_env": "MY_ZHIPU_GATEWAY_KEY",
+                "base_url": "https://gateway.example/v4/chat/completions",
+                "parse": "text",
+            },
+            {"prompt": "hi"},
+        )
+    )
+    assert captured["url"] == "https://gateway.example/v4/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer gateway-key"
+    assert result["message"] == "plain answer"
