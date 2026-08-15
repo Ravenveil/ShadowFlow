@@ -35,7 +35,7 @@
 | **输入** | - 轨迹（metric_history 最近 N 轮）<br>- setpoint（metric + op + value）<br>- 当前 measurement |
 | **输出** | - verifier_score（0-1 连续分数）<br>- converged（布尔判定）<br>- reasoning（判定理由） |
 | **调用条件** | - `sensor.type == "verifier"`<br>- 每轮 loop 迭代后 |
-| **依赖** | - LLM provider（claude/openai）<br>- API key（BYOK） |
+| **依赖** | - LLM provider（anthropic/openai，`SF_VERIFIER_PROVIDER` 可覆盖）<br>- API key（BYOK：`config.verifier.api_key_env` 或 `SF_VERIFIER_API_KEY_ENV`，2026-08-15 起支持） |
 | **失败处理** | 降级到 `sensor.type == "threshold"` 阈值比较 |
 | **安全边界** | - 单次调用 max_tokens=1024<br>- 超时 120s<br>- 不暴露内部状态给 LLM |
 | **复用价值** | 高 - 可用于任何需要概率收敛判定的场景 |
@@ -221,15 +221,54 @@
 
 ---
 
+### 11. KnowledgeRetrieve（RAG 检索）
+
+| 字段 | 值 |
+|---|---|
+| **名称** | `knowledge.retrieve` |
+| **类型** | 内置 |
+| **场景** | knowledge-grounded 生成（agent/loop 执行流内检索 KnowledgePack）|
+| **输入** | - pack_id（KnowledgePack 标识）<br>- query（检索问题，或 payload.prompt）<br>- mode（naive/local/global/hybrid）|
+| **输出** | - answer（检索答案）<br>- contexts（上下文列表，可 writeback 给下游 LLM 节点）|
+| **调用条件** | - 节点 `executor.kind == "rag"` |
+| **依赖** | - LightRAG（LIGHTRAG_ENABLED=true 时）<br>- KnowledgePack 索引 |
+| **失败处理** | - LIGHTRAG 未启用 → 降级空上下文（required=true 才硬失败）|
+| **安全边界** | - 仅检索当前 workspace 的 KnowledgePack<br>- 查询失败不阻塞主流程（默认）|
+| **复用价值** | 高 - 任何 agent 流的 RAG 接入点 |
+
+**实现位置**：`shadowflow/runtime/executors.py:RagExecutor`（2026-08-15 新增）
+
+---
+
+### 12. AgentTeamsPackageExport（代码包导出）
+
+| 字段 | 值 |
+|---|---|
+| **名称** | `agentteams.export` |
+| **类型** | 内置 |
+| **场景** | 复赛必交「可执行代码包」离线导出（无需集群）|
+| **输入** | - workflow（WorkflowDefinition DAG）<br>- out（目录或 .zip 路径）|
+| **输出** | - team-cr.yaml（与 live 派发一致的 Team CR）<br>- workflow.json / manifest.json / run.sh / README.md |
+| **调用条件** | - CLI `shadowflow export-agentteams <wf.json>`<br>- HTTP `POST /workflow/export/agentteams` |
+| **依赖** | - 无外部依赖（确定性翻译）|
+| **失败处理** | - DAG 校验失败 → ValueError（400）|
+| **安全边界** | - 导出内容不含凭证<br>- CR schema 集中在 render_team_cr 一处易跟进官方 CRD |
+| **复用价值** | 高 - 离线交付 = live spec，一份材料两用 |
+
+**实现位置**：`shadowflow/runtime/agentteams_package.py`（2026-08-15 新增）
+
+---
+
 ## Skill 统计
 
 | 类别 | 数量 |
 |---|---|
 | 循环引擎核心 | 4 |
-| 协作执行 | 2 |
+| 协作执行 | 3 |
 | 记忆与重放 | 3 |
 | 工具调用 | 1 |
-| **总计** | **10** |
+| 知识检索 | 1 |
+| **总计** | **12** |
 
 ---
 

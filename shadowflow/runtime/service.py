@@ -3574,7 +3574,8 @@ class RuntimeService:
 
         Parameters from config.verifier:
         - G: granularity (1-10, default 20) — scoring granularity
-        - K: repetitions (default 8) — number of independent evaluations
+        - K: independent sampling repetitions (default 1, cost-controlled; the
+          paper formula uses K=8 — raise via config when budget allows)
         - C: standard splits (default 1) — cross-validation splits
         - provider: LLM provider (default env SF_VERIFIER_PROVIDER or "anthropic"; openai/anthropic)
         - model: model name (uses ApiExecutor provider default if not set)
@@ -3587,7 +3588,8 @@ class RuntimeService:
         """
         verifier_cfg = sensor_cfg.get("verifier", {}) if isinstance(sensor_cfg, dict) else {}
         G = int(verifier_cfg.get("G", 20))
-        K = int(verifier_cfg.get("K", 8))
+        # K 默认 1（每轮迭代只调一次 LLM，控成本）；公式 K=8 通过 config.verifier.K 开启
+        K = max(1, int(verifier_cfg.get("K", 1)))
         provider = str(
             verifier_cfg.get("provider") or os.getenv("SF_VERIFIER_PROVIDER") or "anthropic"
         ).lower()
@@ -3655,42 +3657,59 @@ Output a JSON with keys:
                 logger.warning("ApiExecutor not found for verifier, degrading to threshold")
                 return base_result
 
-            # Enable logprob extraction for LLM-as-Verifier
-            llm_result = await api_executor.execute(
-                config=llm_config,
-                payload={"prompt": prompt},
-            )
+            # K 次独立采样求期望（公式 R = 1/K · Σ score_k）。K 默认 1（成本控制），
+            # config.verifier.K 可调大降低单次评分方差；任一次失败 → 整体降级 threshold。
+            sample_results = await asyncio.gather(*[
+                api_executor.execute(config=llm_config, payload={"prompt": prompt})
+                for _ in range(K)
+            ])
 
-            # Extract score and logprob from LLM response
-            if isinstance(llm_result, dict):
+            scores: List[float] = []
+            confidences: List[float] = []
+            reasonings: List[str] = []
+            logprobs_all: List[Dict[str, Any]] = []
+            for llm_result in sample_results:
+                if not isinstance(llm_result, dict):
+                    continue
                 score = llm_result.get("score", base_result.get("value", 0))
                 confidence = llm_result.get("confidence", 0.5)
-                reasoning = llm_result.get("reasoning", "")
+                reasonings.append(str(llm_result.get("reasoning", "")))
 
-                # 原生 logprob 数据（如果存在）
+                # 原生 logprob 数据（如果存在）：平均对数概率 → sigmoid 置信度
                 logprobs_data = llm_result.get("logprobs", {})
                 if logprobs_data:
-                    # 计算基于 logprob 的置信度（平均对数概率转换为线性概率）
+                    logprobs_all.append(logprobs_data)
                     raw_logprobs = logprobs_data.get("logprobs", [])
                     if raw_logprobs:
                         avg_logprob = sum(raw_logprobs) / len(raw_logprobs)
-                        # 将对数概率转换为 0-1 置信度（sigmoid 近似）
                         logprob_confidence = 1 / (1 + math.exp(-avg_logprob))
-                        # 与 LLM 输出的 confidence 取平均
                         confidence = (confidence + logprob_confidence) / 2
 
-                # VOC-based convergence: if confidence high and score above threshold
-                converged = bool(score >= (target_value if isinstance(target_value, (int, float)) else 0.95) and confidence >= 0.7)
+                scores.append(float(score))
+                confidences.append(float(confidence))
 
-                return {
-                    **base_result,
-                    "verifier_score": float(score),
-                    "verifier_confidence": float(confidence),
-                    "verifier_reasoning": str(reasoning),
-                    "converged": converged,
-                    "classification": "converged" if converged else "diverging",
-                    "logprob_data": logprobs_data if logprobs_data else None,  # 调试用
-                }
+            if not scores:
+                raise ValueError("verifier returned no score samples")
+
+            score = sum(scores) / len(scores)
+            confidence = sum(confidences) / len(confidences)
+            reasoning = reasonings[0] if reasonings else ""
+            variance = sum((s - score) ** 2 for s in scores) / len(scores)
+
+            # VOC-based convergence: if confidence high and score above threshold
+            converged = bool(score >= (target_value if isinstance(target_value, (int, float)) else 0.95) and confidence >= 0.7)
+
+            return {
+                **base_result,
+                "verifier_score": float(score),
+                "verifier_confidence": float(confidence),
+                "verifier_reasoning": reasoning,
+                "verifier_samples": len(scores),
+                "verifier_score_std": float(math.sqrt(variance)),
+                "converged": converged,
+                "classification": "converged" if converged else "diverging",
+                "logprob_data": logprobs_all[0] if logprobs_all else None,  # 调试用（首份）
+            }
         except Exception as exc:
             logger.warning(f"LLM-as-Verifier failed ({exc}), degrading to threshold")
 

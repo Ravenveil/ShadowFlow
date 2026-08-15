@@ -116,3 +116,52 @@ def test_invalid_prompt_template_falls_back_to_default(monkeypatch):
     )
     # 未知占位符 → 回退默认模板（仍包含 JSON 输出说明）
     assert "Output a JSON" in cfg["_prompt"]
+
+
+class _SamplingApiExecutor(ApiExecutor):
+    """K 次采样聚合测试：按调用序号返回递变分数，并记录调用次数。"""
+
+    def __init__(self):
+        self.calls = 0
+
+    async def execute(self, config, payload):  # type: ignore[override]
+        self.calls += 1
+        return {"score": 0.5 + 0.1 * self.calls, "confidence": 0.8, "reasoning": "k"}
+
+
+def test_k_sampling_aggregates_mean_and_std():
+    service = RuntimeService()
+    fake = _SamplingApiExecutor()
+    service._executor_registry._executors["api"] = fake
+    base = {"sensor_type": "verifier", "value": 0.4, "converged": False}
+    result = asyncio.run(
+        service._sense_with_verifier(
+            {"type": "verifier", "verifier": {"K": 3}},
+            {"metric": "quality", "op": ">=", "value": 0.9},
+            {},
+            [0.1, 0.4],
+            base,
+        )
+    )
+    assert fake.calls == 3
+    # scores = [0.6, 0.7, 0.8] → mean 0.7
+    assert result["verifier_samples"] == 3
+    assert abs(result["verifier_score"] - 0.7) < 1e-9
+    assert abs(result["verifier_score_std"] - __import__("statistics").pstdev([0.6, 0.7, 0.8])) < 1e-9
+
+
+def test_k_defaults_to_single_call():
+    service = RuntimeService()
+    fake = _SamplingApiExecutor()
+    service._executor_registry._executors["api"] = fake
+    base = {"sensor_type": "verifier", "value": 0.4, "converged": False}
+    asyncio.run(
+        service._sense_with_verifier(
+            {"type": "verifier"},
+            {"metric": "quality", "op": ">=", "value": 0.9},
+            {},
+            [0.1],
+            base,
+        )
+    )
+    assert fake.calls == 1

@@ -175,3 +175,17 @@ examples:
     tags:
       - "migrated"
       - "integration"
+  - id: "knowledge-grounded-loop"
+    workflow: "knowledge-grounded-loop.yaml"
+    input:
+      goal: "Produce a knowledge-grounded deliverable via retrieval + PDCA loop"
+    metadata:
+      source_system: "official-example-matrix"
+      example_class: "native"
+    # control.loop 的 body 步骤不产生顶层 steps（记录于 loop_local_visited），故 min_steps=1
+    min_steps: 1
+    expected_terminal_node: "loop"
+    tags:
+      - "native"
+      - "rag"
+      - "loop"

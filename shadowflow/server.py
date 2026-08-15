@@ -498,6 +498,31 @@ async def export_workflow_graph(workflow: WorkflowDefinition):
         raise _internal_error(exc)
 
 
+@app.post("/workflow/export/agentteams")
+async def export_agentteams_package(workflow: WorkflowDefinition):
+    """Return the AgentTeams executable code package (复赛交付件) as a zip download.
+
+    Contents mirror the CLI export: team-cr.yaml / workflow.json / manifest.json /
+    run.sh / README.md — deterministic, no cluster required.
+    """
+    from fastapi.responses import Response
+
+    from shadowflow.runtime.agentteams_package import export_team_package_zip
+
+    try:
+        zip_bytes = export_team_package_zip(workflow)
+    except ValueError as exc:
+        raise _client_error(400, exc, "BAD_REQUEST")
+    except Exception as exc:
+        raise _internal_error(exc)
+    filename = f"agentteams-export-{workflow.workflow_id}.zip"
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.get("/runs", response_model=List[RunSummary])
 async def list_runs():
     return runtime_service.list_runs()

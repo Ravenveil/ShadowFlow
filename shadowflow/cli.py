@@ -255,6 +255,30 @@ async def export_workflow_graph(workflow_path: str) -> int:
     return 0
 
 
+def export_agentteams_command(workflow_path: str, out: str | None) -> int:
+    """Export the AgentTeams executable code package for a workflow (复赛交付件).
+
+    Writes team-cr.yaml / workflow.json / manifest.json / run.sh / README.md
+    into --out DIR (default: ./agentteams-export/<workflow_id>.zip in CWD).
+    """
+    from shadowflow.runtime.agentteams_package import (
+        export_team_package,
+        export_team_package_zip,
+    )
+
+    workflow = _load_workflow_definition(workflow_path)
+    if out and out.endswith("/"):
+        target = export_team_package(workflow, out.rstrip("/"))
+    elif out:
+        target = export_team_package(workflow, out)
+    else:
+        zip_bytes = export_team_package_zip(workflow)
+        target = Path(f"agentteams-export-{workflow.workflow_id}.zip")
+        target.write_bytes(zip_bytes)
+    print(f"AgentTeams code package written to: {Path(target).resolve()}")
+    return 0
+
+
 async def compile_template_command(
     template_ref: str,
     registry_root: str | None,
@@ -1010,6 +1034,21 @@ def main():
     graph_parser = subparsers.add_parser('graph', help='Export a workflow graph as JSON')
     graph_parser.add_argument('-w', '--workflow', required=True, help='Workflow JSON/YAML file')
 
+    agentteams_parser = subparsers.add_parser(
+        'export-agentteams',
+        help='Export the AgentTeams executable code package (team CR + run.sh + README)',
+    )
+    agentteams_parser.add_argument(
+        'workflow_file', nargs='?', default=None, help='Workflow JSON/YAML file (positional)'
+    )
+    agentteams_parser.add_argument(
+        '-w', '--workflow', default=None, help='Workflow JSON/YAML file (flag)'
+    )
+    agentteams_parser.add_argument(
+        '--out', default=None,
+        help='Output: a directory (trailing / or existing dir) or .zip path; default .zip in CWD',
+    )
+
     compile_parser = subparsers.add_parser('compile', help='Compile a high-level template spec into a workflow')
     compile_parser.add_argument('-t', '--template', required=True, help='Template file path or template ID')
     compile_parser.add_argument('--registry-root', default=None, help='Registry root containing tools/skills/roles/agents/templates')
@@ -1238,6 +1277,11 @@ def main():
         )
     elif args.command == 'graph':
         sys.exit(asyncio.run(export_workflow_graph(args.workflow)))
+    elif args.command == 'export-agentteams':
+        workflow_arg = args.workflow_file or args.workflow
+        if not workflow_arg:
+            parser.error('export-agentteams requires a workflow file (positional or -w)')
+        sys.exit(export_agentteams_command(workflow_arg, args.out))
     elif args.command == 'registry':
         if args.registry_command == 'counts':
             sys.exit(asyncio.run(registry_counts_command(args.registry_root)))
