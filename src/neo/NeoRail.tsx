@@ -42,11 +42,44 @@ import {
   type ChatHomeView,
 } from '../pages/chat-home/PersonalTeamToggle';
 import type { NeoRailProps, NeoTarget } from './types';
+import { NeoCreateAgentModal } from './NeoCreateAgentModal';
 
 const RAIL_COLLAPSED_KEY = 'sf.neo.railCollapsed';
 const VIEW_KEY = 'sf.neo.view';
 
 type LoadState = 'loading' | 'ready' | 'error';
+
+/**
+ * A4 rail 行相对时间（ClawsGo a_019「1m」形态）：
+ * 刚刚 / N 分钟前 / N 小时前 / 昨天 / M-D。
+ * lastActivityAt 缺失或不可解析 → null（该行不渲染时间，不造数据）。
+ */
+function relativeTime(
+  iso: string | undefined,
+  now: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string | null {
+  if (!iso) return null;
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) return null;
+  const diff = now - ts;
+  if (diff < 60_000) return t('neo.time.justNow', { defaultValue: '刚刚' });
+  const m = Math.floor(diff / 60_000);
+  if (m < 60) return t('neo.time.minutesAgo', { defaultValue: `${m} 分钟前`, count: m });
+  const h = Math.floor(m / 60);
+  if (h < 24) return t('neo.time.hoursAgo', { defaultValue: `${h} 小时前`, count: h });
+  const d = new Date(ts);
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (
+    d.getFullYear() === yesterday.getFullYear() &&
+    d.getMonth() === yesterday.getMonth() &&
+    d.getDate() === yesterday.getDate()
+  ) {
+    return t('neo.time.yesterday', { defaultValue: '昨天' });
+  }
+  return `${d.getMonth() + 1}-${d.getDate()}`;
+}
 
 /** rail 折叠态头像状态点（data-status → --t-run/warn/err，样式在 neo.css .neo-avatar-dot）。 */
 type NeoAvatarStatus = 'run' | 'warn' | 'err';
@@ -123,6 +156,17 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
   const [query, setQuery] = useState('');
   // 加载失败后的手动重试触发器（+1 重新跑列表 effect）
   const [reloadTick, setReloadTick] = useState(0);
+  // A14/B27 新建 Agent 模态开关
+  const [createAgentOpen, setCreateAgentOpen] = useState(false);
+  // A4 相对时间戳每分钟自愈（页面隐藏时暂停计时，对齐轮播/探活策略）
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      setNowTick(Date.now());
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [agentsState, setAgentsState] = useState<LoadState>('loading');
@@ -388,6 +432,21 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
           {view === 'personal' ? t('shell.navAgents') : t('shell.navTeams')}
           <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
         </div>
+        {/* A14/B27 新建 Agent 入口（ClawsGo a_001/a_019「创建 Agent」行形态：
+            + 图标纯文字行，点击开 NeoCreateAgentModal，真实 POST /api/agents） */}
+        {view === 'personal' && (
+          <button
+            type="button"
+            className="neo-row"
+            onClick={() => setCreateAgentOpen(true)}
+            data-testid="neo-new-agent"
+          >
+            <Plus size={15} strokeWidth={1.75} aria-hidden />
+            <span className="neo-row-name">
+              {t('neo.newAgent', { defaultValue: language === 'zh' ? '新建 Agent' : 'New Agent' })}
+            </span>
+          </button>
+        )}
         {listState === 'loading' && (
           <div className="neo-rail-skeletons" aria-busy="true" aria-label={t('common.loading')}>
             {[0, 1, 2].map((i) => (
@@ -448,21 +507,25 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
               {t('neo.sessions')}
               <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
             </div>
-            {recentDMs.map((d) => (
-              <button
-                key={d.agentId}
-                type="button"
-                className={`neo-row${isOn('agent', d.agentId) ? ' on' : ''}`}
-                onClick={() => onSelect({ kind: 'agent', id: d.agentId, name: d.agentName })}
-                aria-pressed={isOn('agent', d.agentId)}
-              >
-                <MessageSquare size={15} strokeWidth={1.75} aria-hidden />
-                <span className="neo-row-name">{d.agentName}</span>
-                {d.unreadCount > 0 && (
-                  <span className="neo-row-badge">{d.unreadCount}</span>
-                )}
-              </button>
-            ))}
+            {recentDMs.map((d) => {
+              const rel = relativeTime(d.lastActivityAt, nowTick, t);
+              return (
+                <button
+                  key={d.agentId}
+                  type="button"
+                  className={`neo-row${isOn('agent', d.agentId) ? ' on' : ''}`}
+                  onClick={() => onSelect({ kind: 'agent', id: d.agentId, name: d.agentName })}
+                  aria-pressed={isOn('agent', d.agentId)}
+                >
+                  <MessageSquare size={15} strokeWidth={1.75} aria-hidden />
+                  <span className="neo-row-name">{d.agentName}</span>
+                  {rel && <span className="neo-row-time">{rel}</span>}
+                  {d.unreadCount > 0 && (
+                    <span className="neo-row-badge">{d.unreadCount}</span>
+                  )}
+                </button>
+              );
+            })}
           </>
         )}
 
@@ -473,13 +536,17 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
               {t('neo.groups', { defaultValue: language === 'zh' ? '群聊现场' : 'Group Rooms' })}
               <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
             </div>
-            {recentGroups.map((g) => (
-              <Link key={g.id} to={`/group/${g.id}`} className="neo-row neo-row-link" data-testid="neo-group-row">
-                <UsersRound size={15} strokeWidth={1.75} aria-hidden />
-                <span className="neo-row-name">{g.name}</span>
-                {g.unreadCount > 0 && <span className="neo-row-badge">{g.unreadCount}</span>}
-              </Link>
-            ))}
+            {recentGroups.map((g) => {
+              const rel = relativeTime(g.lastActivityAt, nowTick, t);
+              return (
+                <Link key={g.id} to={`/group/${g.id}`} className="neo-row neo-row-link" data-testid="neo-group-row">
+                  <UsersRound size={15} strokeWidth={1.75} aria-hidden />
+                  <span className="neo-row-name">{g.name}</span>
+                  {rel && <span className="neo-row-time">{rel}</span>}
+                  {g.unreadCount > 0 && <span className="neo-row-badge">{g.unreadCount}</span>}
+                </Link>
+              );
+            })}
           </>
         )}
       </div>
@@ -530,6 +597,19 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
           <Settings size={15} strokeWidth={1.75} aria-hidden />
         </Link>
       </div>
+
+      {/* A14/B27 新建 Agent 模态：成功 → 刷新列表 + 选中新 agent；失败在模态内红条 */}
+      {createAgentOpen && (
+        <NeoCreateAgentModal
+          workspaceId={workspaceId ?? null}
+          onClose={() => setCreateAgentOpen(false)}
+          onCreated={(a) => {
+            setCreateAgentOpen(false);
+            setReloadTick((n) => n + 1);
+            onSelect({ kind: 'agent', id: a.agent_id, name: a.name });
+          }}
+        />
+      )}
     </nav>
   );
 }

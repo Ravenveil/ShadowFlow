@@ -14,11 +14,12 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { AlertTriangle, Loader2, PanelRightClose, PanelRightOpen, RotateCcw } from 'lucide-react';
 import { NeoRail } from './NeoRail';
 import { NeoChat } from './NeoChat';
 import { NeoHost } from './NeoHost';
 import { useI18n } from '../common/i18n';
+import { usePythonBackendStatus } from '../core/hooks/usePythonBackendStatus';
 import type { NeoTarget } from './types';
 import './neo.css';
 
@@ -91,11 +92,45 @@ export function NeoApp() {
   // 「+ 新任务」：清掉当前 run 关联，中栏回到新任务 composer 态（target 保留）。
   const handleNewTask = useCallback(() => setRunId(null), []);
 
+  // B36 Python 后端宕机横幅：只复用 usePythonBackendStatus 状态源（单例 20s
+  // 轮询 + 可见性恢复重探），UI 为 Neo 化顶部细条，不 import 旧渲染组件。
+  // available === null（未探测完）不渲染，避免首屏闪烁。
+  const pyStatus = usePythonBackendStatus();
+  const pyDown = pyStatus.available === false;
+  const [pyRechecking, setPyRechecking] = useState(false);
+
   // 有 run 且主机未折叠 → 聊天列收窄，主机占满（clawsgo 运行态三栏）
   const runLayout = runId !== null && !hostCollapsed;
 
   return (
-    <div className="neo-app">
+    <div className={`neo-app${pyDown ? ' neo-app--pydown' : ''}`}>
+      {pyDown && (
+        <div className="neo-py-banner" role="alert" data-testid="neo-py-banner">
+          <AlertTriangle size={13} strokeWidth={1.9} aria-hidden />
+          <span className="neo-py-banner-text">
+            {t('neo.pyDown', {
+              defaultValue: 'Python 后端未连接，部分能力不可用',
+            })}
+          </span>
+          <button
+            type="button"
+            className="neo-py-banner-retry"
+            disabled={pyRechecking}
+            onClick={() => {
+              setPyRechecking(true);
+              void pyStatus.recheck().finally(() => setPyRechecking(false));
+            }}
+            data-testid="neo-py-banner-retry"
+          >
+            {pyRechecking ? (
+              <Loader2 size={11} strokeWidth={2} className="neo-spin" aria-hidden />
+            ) : (
+              <RotateCcw size={11} strokeWidth={2} aria-hidden />
+            )}
+            {t('common.retry', { defaultValue: '重试' })}
+          </button>
+        </div>
+      )}
       <NeoRail target={target} onSelect={setTarget} onNewTask={handleNewTask} />
 
       <main className={`neo-main${runLayout ? ' neo-main--run' : ''}`}>

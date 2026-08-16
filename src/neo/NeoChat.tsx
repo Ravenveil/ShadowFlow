@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { OctagonX, RotateCcw, SquarePen, UsersRound } from 'lucide-react';
+import { ArrowDown, OctagonX, RotateCcw, SquarePen, UsersRound } from 'lucide-react';
 import type { NeoChatProps } from './types';
 import { useRunSession, type ErrorCode } from '../core/hooks/useRunSession';
 import { createRunSession, listRunSessions } from '../api/runSessions';
@@ -56,8 +56,46 @@ function errorTitleByCode(code: ErrorCode): { key: string; fallback: string } {
   }
 }
 
+/* ── A9 hero 动词轮播（ClawsGO a_001/a_003/a_004：深度调研→论文复现→数据分析）──
+   4s 间隔交叉淡入淡出（CSS 堆叠 span opacity 过渡），纯前端；页面隐藏
+   （document.hidden）时跳过推进，恢复可见后按原节奏继续。 */
+const HERO_VERBS = [
+  { key: 'neo.chat.heroVerb.research', zh: '深度调研', en: 'deep research' },
+  { key: 'neo.chat.heroVerb.paper', zh: '论文复现', en: 'paper reproduction' },
+  { key: 'neo.chat.heroVerb.data', zh: '数据分析', en: 'data analysis' },
+  { key: 'neo.chat.heroVerb.market', zh: '市场调研', en: 'market research' },
+] as const;
+
+const HERO_VERB_INTERVAL_MS = 4000;
+
+function HeroVerbCarousel() {
+  const { t, language } = useI18n();
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // 页面隐藏时暂停轮播计时（对齐 usePythonBackendStatus 的可见性策略）
+      if (typeof document !== 'undefined' && document.hidden) return;
+      setIdx((i) => (i + 1) % HERO_VERBS.length);
+    }, HERO_VERB_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <span className="neo-verb-carousel" data-testid="neo-hero-verbs">
+      {HERO_VERBS.map((v, i) => (
+        <span
+          key={v.key}
+          className={`neo-verb${i === idx ? ' on' : ''}`}
+          aria-hidden={i !== idx}
+        >
+          {t(v.key, { defaultValue: language === 'zh' ? v.zh : v.en })}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const workspaceId = useWorkspaceStore((s) => s.currentId);
   const { user } = useAuth();
 
@@ -94,10 +132,35 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
   }, [runId]);
 
   // 消息流自动滚动到底（新消息 / 新工具调用 / 新思考 / 新文本时）。
+  // A28：仅当用户停留在底部时才跟随滚底；用户上翻阅读时不打断，
+  // 上滚超过 ~400px 由底部中央浮钮（.neo-jump-bottom）承接回底。
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const atBottomRef = useRef(true);
+  const [showJump, setShowJump] = useState(false);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    atBottomRef.current = dist < 80;
+    setShowJump(dist > 400);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, []);
+
+  // 切换 run → 重置贴底标记（新会话总是从底部开始跟随），浮钮收起。
+  useEffect(() => {
+    atBottomRef.current = true;
+    setShowJump(false);
+  }, [runId]);
+
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [
     runId,
     session.messages,
@@ -250,8 +313,11 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
 
       {runId ? (
         <>
-          {/* 消息流 + inline 任务执行（key=runId：多轮接力换 session 即重挂） */}
-          <div className="neo-chat-scroll" ref={scrollRef}>
+          {/* 消息流 + inline 任务执行（key=runId：多轮接力换 session 即重挂）。
+              scrollwrap 是相对定位容器：回到底部浮钮绝对定位于其内底部中央，
+              不随消息流滚动。 */}
+          <div className="neo-chat-scrollwrap">
+            <div className="neo-chat-scroll" ref={scrollRef} onScroll={handleScroll}>
             <NeoRunInline
               key={runId}
               runId={runId}
@@ -312,6 +378,22 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
                 </span>
               </div>
             )}
+            </div>
+
+            {/* A28 回到底部浮钮（ClawsGO a_015）：上滚 >400px 浮现，点击平滑回底，
+                接近底部（<80px）由 handleScroll 自动收起。 */}
+            {showJump && (
+              <button
+                type="button"
+                className="neo-jump-bottom"
+                onClick={scrollToBottom}
+                aria-label={t('neo.chat.backToBottom', { defaultValue: '回到底部' })}
+                title={t('neo.chat.backToBottom', { defaultValue: '回到底部' })}
+                data-testid="neo-jump-bottom"
+              >
+                <ArrowDown size={14} strokeWidth={2} aria-hidden />
+              </button>
+            )}
           </div>
           <div className="neo-chat-composer">
             <NeoComposer
@@ -335,8 +417,13 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
               {/* 版本 pill（ClawsGO a_001「v1.0 正式上线」形态）：hairline + 灰字小胶囊 */}
               <span className="neo-version-pill">ShadowFlow v{pkg.version}</span>
               <h1 className="neo-empty-title">{greetingText}</h1>
-              <p className="neo-empty-sub">
-                {t('neo.chat.heroSub', { defaultValue: '描述一个目标，Agent 直接开干' })}
+              {/* A9 hero 动词轮播（ClawsGO「让 ClawsGO 帮你 深度调研→论文复现→
+                  数据分析」形态）：固定前缀 + 4s 交叉淡入淡出短句，页面隐藏暂停。 */}
+              <p className="neo-empty-sub" aria-live="polite">
+                {t('neo.chat.heroHelpPrefix', {
+                  defaultValue: language === 'zh' ? '让 Agent 帮你 ' : 'Let Agent help you with ',
+                })}
+                <HeroVerbCarousel />
               </p>
               <StartGallery onPick={setPrefill} />
             </div>

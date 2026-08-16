@@ -81,6 +81,42 @@
 [data-theme="night"] .neo-btn-primary:hover { background: var(--t-accent-bright, var(--t-accent)); }
 
 /* ---- 消息流滚动区 ---- */
+/* A28：scrollwrap 是浮钮的相对定位容器（浮钮不随消息流滚动） */
+.neo-chat-scrollwrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* A28 回到底部浮钮（ClawsGO a_015）：白底 hairline 28px 圆钮，底部中央浮现 */
+.neo-jump-bottom {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 5;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--t-border);
+  border-radius: 50%;
+  background: var(--t-panel);
+  color: var(--t-fg-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  animation: neo-fade var(--dur-2) var(--ease-out);
+  transition:
+    background var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+.neo-jump-bottom:hover {
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+}
 .neo-chat-scroll {
   flex: 1;
   min-height: 0;
@@ -559,7 +595,8 @@
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
-/* StartGallery 模板卡（ClawsGo tmp29A7 左文右图）：无边框透明底卡，hover 浅灰底，
+/* StartGallery 模板卡（ClawsGo tmp29A7 左文右图）：非 hover 无边框平铺卡，
+   hover 白卡浮起 + 细边 + 软阴影（A12，对齐 a_004 帧），
    左侧 名称 13/600 + 描述 12px 灰 2 行截断（无徽章行），右侧 108px 缩略图槽（无图纯文字）。
    间距照复刻 .cards：gap 34px 44px，max-width 560px；卡 padding 6px 8px、左右 gap 16px。 */
 .neo-empty .sg-grid {
@@ -574,19 +611,28 @@
   align-items: center;
   gap: 16px;
   padding: 6px 8px;
-  border: none;
+  /* A12（ClawsGO a_004）：非 hover 无边框平铺；预留 1px 透明边避免 hover 位移 */
+  border: 1px solid transparent;
   background: transparent;
   box-shadow: none;
   border-radius: var(--r-card);
   transform: none;
+  transition:
+    background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-out);
 }
+/* hover：白卡浮起 + 细边 + 软阴影（a_004「深度调研」卡实测形态） */
 .neo-empty .sg-card:hover {
-  border-color: transparent;
-  box-shadow: none;
-  transform: none;
-  background: var(--t-panel-2);
+  border-color: var(--t-border);
+  background: var(--t-panel);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
 }
-.neo-empty .sg-card:active { transform: none; }
+.neo-empty .sg-card:active { transform: translateY(0); }
 .neo-empty .sg-card-body {
   min-width: 0;
   display: flex;
@@ -662,6 +708,29 @@
   font-size: 13px;
   color: var(--t-fg-4);
   text-align: center;
+}
+
+/* A9 hero 动词轮播（ClawsGO a_001/a_003/a_004）：堆叠 span 交叉淡入淡出，
+   非激活项绝对定位不占布局，激活项相对定位撑高；切换节奏由 JS 4s 计时控制。 */
+.neo-verb-carousel {
+  position: relative;
+  display: inline-block;
+  vertical-align: bottom;
+}
+.neo-verb {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 600ms var(--ease-out);
+}
+.neo-verb.on {
+  position: relative;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .neo-verb { transition: none; }
 }
 .neo-empty .sg-wrap {
   margin: 0;
