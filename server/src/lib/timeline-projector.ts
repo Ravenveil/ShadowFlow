@@ -269,6 +269,13 @@ export function createTimelineProjector(
 
   let msgFootId: string | null = null;
   let toolsRun = 0;
+  /**
+   * answer 模式（无 assemble/step 事件）下 complete 可能先于 usage 到达：
+   * onComplete 时 msgFoot 尚未创建，done 落定被跳过，随后 onUsage 的
+   * ensureMsgFoot 会把 foot 建成 'running' 并永远卡住。记录 completed，
+   * 让迟到创建的 foot 直接以 'done' 出生。
+   */
+  let completed = false;
 
   let openThinkingId: string | null = null;
   let thinkingBuf = '';
@@ -328,7 +335,7 @@ export function createTimelineProjector(
       kind: 'msg_foot',
       turn_id: turnId,
       ts: nowMs(),
-      status: 'running',
+      status: completed ? 'done' : 'running',
       elapsed_ms: 0,
       tools: 0,
     });
@@ -450,6 +457,7 @@ export function createTimelineProjector(
       totalSteps = 0;
       msgFootId = null;
       toolsRun = 0;
+      completed = false;
       openDiffPanelId = null;
       diffLineNo = 0;
       diffAdded = 0;
@@ -809,6 +817,7 @@ export function createTimelineProjector(
 
     onComplete(): ProjectorEmit {
       const out = emit();
+      completed = true;
       closeOpenThinking(out);
       closeOpenText(out);
       // gap #2 — 收尾落定任何仍在 running 的 tool_call。

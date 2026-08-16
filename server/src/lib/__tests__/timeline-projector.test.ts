@@ -582,6 +582,32 @@ console.log('\n[20] O3 lastAssistantTextId');
   assert('getter reset on new turn', p.lastAssistantTextId() === null);
 }
 
+// ── Test: complete-before-usage ordering (answer mode) ─────────────────────
+console.log('\n[16] complete before usage → late msg_foot born done');
+{
+  const p = createTimelineProjector();
+  p.onUserMessage('用一句话介绍 ShadowFlow');
+  // answer 模式的真实管线：classify 不进 projector（daemon 门控），
+  // 无 assemble/step 事件，complete 先于 usage 到达
+  p.onComplete();
+  const ru = p.onUsage({ input_tokens: 642, output_tokens: 194 });
+  const foot = ru.messages.find((m) => m.kind === 'msg_foot') as
+    | Extract<TimelineMessage, { kind: 'msg_foot' }>
+    | undefined;
+  assert('usage after complete still creates msg_foot', !!foot);
+  check('late-created foot is done, not running', 'done', foot!.status);
+  const footPatch = ru.patches.find((x) => x.op === 'msg_foot_update') as
+    | Extract<MessagePatch, { op: 'msg_foot_update' }>
+    | undefined;
+  check('tokens still accumulated on the done foot', 836, footPatch?.patch.tokens);
+
+  // 新 turn 复位：下一个问题的 foot 应恢复 running 出生
+  p.onUserMessage('next');
+  const rc = p.onClassify({ output_type: 'workflow', mode: 'team', confidence: 0.9, complexity: 3, source: 'ts' });
+  const foot2 = rc.messages.find((m) => m.kind === 'msg_foot') as Extract<TimelineMessage, { kind: 'msg_foot' }>;
+  check('new turn foot born running again', 'running', foot2.status);
+}
+
 // ── Summary ─────────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -187,6 +187,13 @@ export interface RunSessionState {
   yamlLines: string[];
   activeSubsteps: Array<{ parent_step: string; name: string; elapsed_ms?: number }>;
   error: SessionError | null;
+  /**
+   * 2026-08-15 Neo 中断态 — 用户点了「停止」（abort）后置 true。区别于正常
+   * 完成（isComplete）：NeoChat 据此在 timeline 末尾渲染「已中断」标记，
+   * composer 因 isStreaming=false 自动恢复可输入。仅本地用户中止会置位；
+   * 服务端重启打断的 run 由 replay 的「已中断」终态帧经 Timeline 自渲。
+   */
+  aborted: boolean;
   retrying: boolean;
   retryAttempt: number;
   retryDelayMs: number;
@@ -311,6 +318,9 @@ type Action =
   | { type: 'MESSAGE_EDIT'; id: string; body: string }
   // Post-assembly UX hint from the `assembly-meta` SSE frame.
   | { type: 'ASSEMBLY_META'; payload: { ask_workspace?: boolean; recipe?: string } }
+  // 2026-08-15 Neo 错误卡 — 用户点了「重试」并成功重发消息（POST /messages
+  // 走真实端点，多轮接力换 session）后清掉旧错误条，避免陈旧横幅残留。
+  | { type: 'ERROR_CLEAR' }
   // 2026-05-16 — user pressed Stop. Mark stream terminated locally and
   // append "（用户已停止）" to the chat reply so the UI shows a clear marker
   // even if the LLM was mid-sentence.
@@ -624,7 +634,17 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
         activePanel: action.payload.artifact_url ? 'preview' : state.activePanel,
       };
     case 'COMPLETE':
-      return { ...state, isComplete: true, redirectUrl: action.payload.redirect ?? null, thinkingMessage: null };
+      return {
+        ...state,
+        isComplete: true,
+        redirectUrl: action.payload.redirect ?? null,
+        thinkingMessage: null,
+        // 防御：answer 模式旧事件流里 msg_foot 可能停在 running（服务端
+        // 曾在 complete 之后才创建 foot），complete 帧到达时强制落定。
+        messages: state.messages.map((m) =>
+          m.kind === 'msg_foot' && m.status === 'running' ? { ...m, status: 'done' as const } : m,
+        ),
+      };
     case 'RATIONALE':
       return { ...state, rationaleCards: [...state.rationaleCards, action.payload] };
     case 'YAML_LINE':
@@ -702,6 +722,8 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       };
       return { ...state, error: next, retrying: false, thinkingMessage: null };
     }
+    case 'ERROR_CLEAR':
+      return { ...state, error: null };
     case 'RETRYING':
       return { ...state, retrying: true, retryAttempt: action.attempt, retryDelayMs: action.delayMs, error: null };
     case 'CRITIQUE_PROGRESS':
@@ -735,7 +757,13 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       // during reconnect: if the same id already exists we overwrite it in
       // place rather than appending a dupe). Server emits monotonically; this
       // is just a defensive guard.
-      const incoming = action.payload;
+      let incoming = action.payload;
+      // 防御：answer 模式的旧事件流里 complete 帧先于 msg_foot 创建到达
+      //（foot 迟到出生、状态停在 running）。会话已完成时，迟到的 foot
+      // 直接落定 done，与 timeline-projector 的 completed 标记对齐。
+      if (state.isComplete && incoming.kind === 'msg_foot' && incoming.status === 'running') {
+        incoming = { ...incoming, status: 'done' };
+      }
       const existingIdx = state.messages.findIndex((m) => m.id === incoming.id);
       if (existingIdx >= 0) {
         return {
@@ -818,6 +846,7 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       return {
         ...state,
         isComplete: true,
+        aborted: true,
         thinkingMessage: null,
         retrying: false,
         chatReply: state.chatReply + suffix,
@@ -851,6 +880,11 @@ export interface UseRunSessionReturn extends RunSessionState {
    */
   abort: () => void;
   /**
+   * 2026-08-15 Neo 错误卡 — 手动清掉 state.error（不改变流状态）。用于
+   * 「重试」成功重发消息后移除陈旧错误条；纯本地 UI 操作，不发请求。
+   */
+  clearError: () => void;
+  /**
    * Phase 2 (A4/CL8) — return the per-node chunk buffer for `nodeId`.
    *
    * AgentDetail / parallel panels subscribe via this helper. Always returns
@@ -879,7 +913,7 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     tokenCount: 0, isComplete: false, redirectUrl: null, thinkingMessage: null,
     thinkingStream: [],
     rationaleCards: [], yamlLines: [], activeSubsteps: [],
-    error: null, retrying: false, retryAttempt: 0, retryDelayMs: 0,
+    error: null, aborted: false, retrying: false, retryAttempt: 0, retryDelayMs: 0,
     critiqueResult: null, critiqueProgress: null,
     chatReply: '',
     stepArtifacts: {},
@@ -1017,6 +1051,11 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     dispatch({ type: 'QUESTION_FORM_CLEAR' });
   }, []);
 
+  // 2026-08-15 Neo 错误卡 — 重试成功后清掉陈旧错误条。
+  const clearError = useCallback(() => {
+    dispatch({ type: 'ERROR_CLEAR' });
+  }, []);
+
   // Phase 2 (A4/CL8) — stable empty-buffer fallback so callers don't get
   // a fresh object identity every render for nodes the backend hasn't
   // emitted into yet. Defined inside the hook so it closes over the
@@ -1027,7 +1066,7 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     [state.perNodeChunks],
   );
 
-  return { ...state, isStreaming, abort, dispatchClearQuestionForm, getNodeChunks, editMessage };
+  return { ...state, isStreaming, abort, clearError, dispatchClearQuestionForm, getNodeChunks, editMessage };
 }
 
 /**
