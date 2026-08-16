@@ -15,3 +15,10 @@ Neo chat-first 前端各 UI 区块与后端端点/数据形状的对应关系及
 | NeoHost「编队」tab（roster/DAG/policy/per-node 输出） | GET /api/teams/{id}、/workflow、/policy + GET /api/agents + perNodeChunks（SSE） | Team / TeamWorkflow / TeamPolicyMatrix | 已接通（团队态选中时露出；单 Agent 空态说明） |
 | NeoHost Loop tab（PDCA 迭代卡） | GET /api/runs/{id}/loops（含 verifier_score 透出） | LoopRecord / IterationRecord | 已接通（轮询 5s；SSE 帧缺口见 GAP.md） |
 | NeoHost 工作空间 tab | GET /api/fs/list、/raw | 文件树 / 文件内容 | 已接通（既有，未动） |
+| 群聊现场页 /group/:groupId（NeoGroupChat 重做） | GET /api/run-sessions、GET /:id/messages + SSE（复用会话端点） | TimelineMessage[]（plan_card/commit/表格富卡） | 已接通（按新壳形态重做，commit 2be1162；日分隔线/成员头像条纯前端推导） |
+| Loop 引擎页 /loop-engine | GET /api/runs/{id}/loops | LoopRecord / IterationRecord | 已接通（Neo 化重写 commit 53b5b1c，信息量零缩水；/runs 死链改 /?run=<id>） |
+| 新建 Agent 模态（NeoCreateAgentModal） | POST /api/agents（payload {name, soul=name, workspace_id}，soul 为契约必填） | Agent | 已接通（commit ba76489） |
+| Python 宕机横幅（NeoApp 顶部） | GET /api/teams 存活探针（usePythonBackendStatus 复用，纯逻辑 hook） | boolean | 已接通（纯 Neo 重写，未 import 旧组件，commit ba76489） |
+| 消息流 running 行细节（live 秒表/整行灰化/复制钮/tooltip） | —（纯前端渲染层，数据源 useRunSession 不变） | TimelineMessage | 已接通（commit aa35cb1） |
+| Host 产物 tab（保活/复制/spinner 骨架） | GET /api/fs/raw（既有） | — | 已接通（commit 78fe380） |
+| 首页 hero 动词轮播 / 模板卡 hover / rail 相对时间 / 回到底部浮钮 | —（纯前端；相对时间数据源 lastActivityAt 既有字段） | — | 已接通（commit ba76489） |
