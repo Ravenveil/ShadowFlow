@@ -8,12 +8,12 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { ChevronDown, Users } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 // CreateWorkspaceModal 入口已迁到 /teams 新建团队流程（用户视角 ws=team 是同一回事）
 // 文件保留供 future 使用，但本组件不再 mount
 import { listTeams, type TeamRecord } from '../../api/teams';
-import { PagePeekOverlay } from '../../pages/chat-home/PagePeekOverlay';
 import { useI18n } from '../../common/i18n';
 
 interface WorkspaceSelectorProps {
@@ -22,6 +22,7 @@ interface WorkspaceSelectorProps {
 
 export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const currentId  = useWorkspaceStore((s) => s.currentId);
   const currentTeam = useWorkspaceStore((s) => s.currentTeam);
@@ -35,17 +36,6 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
   // don't pay the Python round-trip for users who never open the switcher.
   const [teams, setTeams] = useState<TeamRecord[]>([]);
   const [teamsLoaded, setTeamsLoaded] = useState(false);
-  // M3 三栏融合 — 「新建团队」弹出原 /teams 页面（PagePeekOverlay 内嵌
-  // MemoryRouter，TeamPage 设计原样复用），不跳页打断对话。关闭时重拉
-  // teams 列表，让弹层里创建的团队立刻出现在下拉里。
-  const [showTeamsPeek, setShowTeamsPeek] = useState(false);
-
-  const handleTeamsPeekClose = () => {
-    setShowTeamsPeek(false);
-    listTeams(currentId ?? undefined)
-      .then((data) => { setTeams(data); setTeamsLoaded(true); })
-      .catch(() => { /* 下次打开下拉再拉 */ });
-  };
 
   useEffect(() => {
     if (!open) return;
@@ -240,9 +230,10 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
         <button
           type="button"
           // workspace 和 team 合并语义后，"新建" 意为创建一个新团队。
-          // M3 三栏融合：弹出原 /teams 页面（完整设计），不再跳页。
+          // /teams 路由已下架，团队组装走 chat-first 主体验的「组装团队」skill，
+          // 这里直接跳回首页聊天。
           data-testid="workspace-dropdown-create-team"
-          onClick={() => { setOpen(false); setShowTeamsPeek(true); }}
+          onClick={() => { setOpen(false); navigate('/'); }}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
@@ -283,7 +274,6 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
           }}>{init}</span>
         </div>
         {open && createPortal(dropdownContent, document.body)}
-        {showTeamsPeek && <PagePeekOverlay target="teams" onClose={handleTeamsPeekClose} />}
       </div>
     );
   }
@@ -326,7 +316,6 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
       </div>
 
       {open && dropdownContent}
-      {showTeamsPeek && <PagePeekOverlay target="teams" onClose={handleTeamsPeekClose} />}
     </div>
   );
 }

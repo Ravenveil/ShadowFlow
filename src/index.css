@@ -1595,42 +1595,6 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .pcv-send:active:not(:disabled) { transform: translateY(1px); }
 .pcv-send:disabled { background: var(--t-panel-2); color: var(--t-fg-4); border-color: var(--t-border); cursor: not-allowed; }
 
-/* ── PagePeekOverlay — 原页面(/teams /agents)弹进聊天的站内大弹层 ─────────────
-   对标 clawsgo：遮罩模糊渐入 + 面板上浮，关闭即卸载。 */
-@keyframes sf-peek-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes sf-peek-rise { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
-.sf-peek-backdrop {
-  position: fixed; inset: 0; z-index: 240;
-  background: color-mix(in oklab, var(--t-bg) 55%, transparent);
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center;
-  animation: sf-peek-fade 160ms ease both;
-}
-.sf-peek-panel {
-  width: min(1180px, calc(100vw - 64px)); height: calc(100vh - 88px);
-  display: flex; flex-direction: column; overflow: hidden;
-  background: var(--t-bg); color: var(--t-fg);
-  border: 1px solid var(--t-border); border-radius: 16px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, .35);
-  animation: sf-peek-rise 200ms cubic-bezier(.2, .8, .2, 1) both;
-}
-.sf-peek-head {
-  flex-shrink: 0; display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px; border-bottom: 1px solid var(--t-border);
-  background: var(--t-panel);
-}
-.sf-peek-title { font-size: 13px; font-weight: 700; }
-.sf-peek-hint { flex: 1; font-size: 10.5px; color: var(--t-fg-5); font-family: var(--font-mono, monospace); }
-.sf-peek-close {
-  display: inline-flex; align-items: center; justify-content: center;
-  padding: 6px; border-radius: 7px; border: none; background: none;
-  cursor: pointer; color: var(--t-fg-4);
-  transition: background 120ms ease, color 120ms ease;
-}
-.sf-peek-close:hover { background: var(--t-panel-2); color: var(--t-fg); }
-.sf-peek-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
-.sf-peek-frame { flex: 1; min-height: 0; width: 100%; border: none; background: var(--t-bg); }
-
 /* ============================================================================
  * F6 批2 — RunWorkPane（右栏「工作区」tab）换装：内联样式 → sf-wp-* 类。
  * 此前全内联 = 无态死区（无 hover/active/focus）；现按 polish-plan §4：
