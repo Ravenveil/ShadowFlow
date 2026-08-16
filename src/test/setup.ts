@@ -1,7 +1,8 @@
 import { expect, vi, beforeAll } from 'vitest'
 import matchers from '@testing-library/jest-dom/matchers'
 
-expect.extend(matchers)
+// jest-dom 与当前 vitest 版本的 MatchersObject 类型不完全兼容，运行时可正常工作
+expect.extend(matchers as unknown as Parameters<typeof expect.extend>[0])
 
 // i18next initializes with 'en' (localStorage is empty in jsdom).
 // Tests assert Chinese text, so switch to zh before any test runs.
@@ -39,10 +40,14 @@ vi.mock('reactflow', () => ({
   ConnectionLineType: { Bezier: 'bezier' },
 }))
 
-// Mock global IntersectionObserver
+// Mock global IntersectionObserver（测试桩，只实现 jsdom 侧需要的成员）
 global.IntersectionObserver = class IntersectionObserver {
+  readonly root = null
+  readonly rootMargin = ''
+  readonly thresholds = []
   constructor() {}
   disconnect() {}
   observe() {}
   unobserve() {}
-}
+  takeRecords() { return [] }
+} as unknown as typeof IntersectionObserver

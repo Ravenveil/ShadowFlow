@@ -8,7 +8,7 @@
  *
  * Falls back gracefully to localStorage 'sf.mediaKeys' if API is unavailable.
  */
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Icon } from '../../../common/icons/iconRegistry';
 
 // ---------------------------------------------------------------------------

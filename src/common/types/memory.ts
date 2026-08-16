@@ -86,7 +86,7 @@ export interface IMemorySnapshot {
   };
 
   /** 节点执行结果 */
-  nodeResults: Map<string, INodeResult>;
+  nodeResults: Map<string, unknown>; // INodeResult 随旧工作流引擎代码一并移除，当前无消费方
 
   /** 全局变量 */
   variables: Record<string, any>;

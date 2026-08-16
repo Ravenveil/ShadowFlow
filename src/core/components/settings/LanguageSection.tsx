@@ -1,4 +1,3 @@
-import React from 'react';
 import { useI18n } from '../../../common/i18n/index';
 
 const LANGUAGES: Array<{ id: 'en' | 'zh'; flag: string; name: string; native: string }> = [

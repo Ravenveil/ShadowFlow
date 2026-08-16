@@ -10,7 +10,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { usePetStore } from './usePetStore';
-import { BUILTIN_PETS, type BuiltinPet } from './builtinPets';
+import { BUILTIN_PETS } from './builtinPets';
 
 const IconX: React.FC<{ size?: number }> = ({ size = 20 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -93,58 +93,6 @@ function loadCustomPet(): CustomPetData | null {
   }
 }
 
-// ── Builtin pet card (emoji-based, no spritesheet) ────────────────────────
-
-function BuiltinCard({
-  pet,
-  selected,
-  onSelect,
-  isFavorite,
-  onToggleFavorite,
-}: {
-  pet: BuiltinPet;
-  selected: boolean;
-  onSelect: () => void;
-  isFavorite: boolean;
-  onToggleFavorite: (e: React.MouseEvent) => void;
-}) {
-  const bg = pet.accent + '22'; // ~13% opacity
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(); }}
-      className={[
-        'relative flex flex-col items-center gap-2 p-3 rounded-lg border transition-all cursor-pointer',
-        selected
-          ? 'bg-[var(--t-accent-tint)] border-[var(--t-accent)]'
-          : 'bg-[var(--t-panel-2)] border-[var(--t-border)] hover:border-[var(--t-border-2)] hover:bg-[var(--t-panel-3)]',
-      ].join(' ')}
-      title={pet.description}
-    >
-      {/* Star button */}
-      <button
-        type="button"
-        onClick={onToggleFavorite}
-        className={`absolute top-1 right-1 transition-colors ${isFavorite ? 'text-yellow-400' : 'text-[var(--t-fg-4)] hover:text-yellow-400'}`}
-        title={isFavorite ? '取消收藏' : '收藏'}
-      >
-        <IconStar filled={isFavorite} size={12} />
-      </button>
-      <div
-        className="flex h-14 w-14 items-center justify-center rounded-xl text-[32px] leading-none"
-        style={{ backgroundColor: bg }}
-      >
-        {pet.glyph}
-      </div>
-      <span className={`text-xs text-center truncate w-full ${selected ? 'text-[var(--t-accent)]' : 'text-[var(--t-fg-3)]'}`}>
-        {pet.displayName}
-      </span>
-      <span className="text-[10px] text-[var(--t-fg-4)]">内置</span>
-    </div>
-  );
-}
 
 // ── Community pet card (spritesheet-based, from ~/.codex/pets) ─────────────
 

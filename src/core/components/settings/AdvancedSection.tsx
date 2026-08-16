@@ -10,7 +10,7 @@
  *     agentCliEnv:  Record<agentId, Record<envKey, string>>
  *   }
  */
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -124,7 +124,7 @@ function IconChevron({ expanded }: { expanded: boolean }) {
 
 // ── Per-agent accordion panel ────────────────────────────────────────────────
 
-function AgentPanel({ agentId, agentName }: { agentId: string; agentName: string }) {
+function AgentPanel({ agentId }: { agentId: string; agentName: string }) {
   const [model, setModel] = useState<string>(() => {
     const cfg = loadConfig();
     return cfg.agentModels[agentId]?.model ?? 'default';

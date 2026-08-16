@@ -69,6 +69,15 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   openai: 'OpenAI',
   deepseek: 'DeepSeek',
   zhipu: 'Zhipu (智谱)',
+  google: 'Google',
+  qwen: 'Qwen (通义)',
+  moonshot: 'Moonshot (Kimi)',
+  mistral: 'Mistral',
+  groq: 'Groq',
+  openrouter: 'OpenRouter',
+  ollama: 'Ollama',
+  lmstudio: 'LM Studio',
+  azure: 'Azure OpenAI',
 };
 
 // ---------------------------------------------------------------------------

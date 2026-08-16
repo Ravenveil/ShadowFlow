@@ -78,10 +78,12 @@ describe('getGenerationSettings', () => {
     });
   });
 
-  it('does not include model (reserved for future opt-in)', () => {
+  it('includes model picked via sf.model (opt-in landed 2026-05-11)', () => {
+    // 历史断言曾是「不含 model（reserved for future opt-in）」；_base.ts 的
+    // 2026-05-11 bug fix 起正式读取 sf.model / sf.byokModel，此处同步为当前正确行为。
     localStorage.setItem('sf.model', 'claude-opus-4');
     const got = getGenerationSettings();
-    expect(got.model).toBeUndefined();
+    expect(got.model).toBe('claude-opus-4');
   });
 
   it('respects the boundary values (1024 and 32768)', () => {

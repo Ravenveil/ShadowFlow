@@ -11,7 +11,7 @@
  * Sound notifications use the Web Audio API (oscillator synthesis).
  * Sound selections are persisted alongside the enabled flag.
  */
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useI18n } from '../../../common/i18n';
 
 // ---- Sound types & options --------------------------------------------------

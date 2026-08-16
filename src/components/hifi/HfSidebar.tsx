@@ -46,7 +46,7 @@ interface HfSidebarProps {
   active?: HfSidebarActive;
 }
 
-function rowStyle(on: boolean): CSSProperties {
+function rowStyle(_on: boolean): CSSProperties {
   // UI 3.0（2026-08-11）：背景迁出 inline，由 .ui30-navrow 类提供 hover/active 态
   return {
     display: 'flex',
