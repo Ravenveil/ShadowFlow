@@ -363,6 +363,91 @@
 }
 .neo-run-error-hint { color: var(--t-fg-4); }
 
+/* ---- 错误卡（SSE error 帧 6 桶 / watchdog 超时）：分类标题 + 重试/中止 ----
+   与 .neo-run-error 文本条同色系，承接操作（重试=重发最后一条用户消息）。 */
+.neo-error-card {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklab, var(--t-err, #ef4444) 24%, transparent);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--t-err, #ef4444) 5%, var(--t-panel));
+}
+.neo-error-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.neo-error-card-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t-err, #ef4444);
+}
+.neo-error-card-occ {
+  font-size: 11px;
+  color: var(--t-fg-4);
+}
+.neo-error-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.neo-error-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
+  background: var(--t-panel);
+  color: var(--t-fg-2);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.neo-error-btn:hover:not(:disabled) { background: var(--t-panel-2); border-color: var(--t-border-2); }
+.neo-error-btn:disabled { opacity: 0.5; cursor: default; }
+.neo-error-btn-primary {
+  background: var(--t-accent);
+  border-color: var(--t-accent);
+  color: var(--t-accent-fg, #fff);
+}
+.neo-error-btn-primary:hover:not(:disabled) { background: var(--t-accent); border-color: var(--t-accent); }
+.neo-error-card-retry-failed {
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--t-fg-4);
+}
+
+/* ---- 中断态标记（用户点「停止」后 timeline 末尾的分隔 pill） ---- */
+.neo-run-aborted {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--t-fg-4);
+}
+.neo-run-aborted::before,
+.neo-run-aborted::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--t-border);
+}
+.neo-run-aborted-label {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--t-fg-4);
+  background: var(--t-panel);
+}
+
 /* ---- 底部状态 pill（clawsgo：当前步骤 + x/y / ✓ 已完成全部任务） ---- */
 .neo-pill {
   display: flex;
@@ -437,51 +522,58 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.09);
 }
 
-/* 发送钮正圆化：UnifiedComposer 用 inline style（borderRadius: 9），
-   本工位不改该文件，用 !important 压过内联；尺寸 32px 已在 28~32 区间。
+/* 发送钮正圆化：NeoComposer（阶段 2.5 重写）发送钮 .neo-cp-submit 是 32px
+   圆角方钮，复刻 home.html 的正圆 go 钮 —— 按 data-testid 压成 50%。
    底色 var(--t-accent) 在 neo day 作用域即近黑，night 落 accent 蓝，均不破。 */
 .neo-composer button[data-testid="start-submit"] {
   border-radius: 50% !important;
 }
 
-/* 画廊单色化 + clawsgo tab 形态：选中 = 加粗黑字，无下划线无底边 */
+/* 画廊分类 tabs = 复刻分段胶囊轨（home.html .tabs）：灰底全圆轨道 padding 3px，
+   选中 = 白/深色胶囊 + 软阴影 + 黑粗字，其余灰字；无下划线、无滑动指示条。 */
 .neo-empty .sg-tabs {
   border-bottom: none;
-}
-.neo-empty .sg-tab-ind {
-  display: none;
-}
-.neo-empty .sg-tab.on {
-  color: var(--t-fg);
-  font-weight: 700;
-  border-bottom-color: transparent;
-  /* ClawsGo tmp29A7：选中 tab = 浅灰胶囊底 + 黑字，不只是加粗 */
-  background: var(--t-panel-3);
+  gap: 2px;
+  padding: 3px;
   border-radius: 999px;
+  background: var(--t-panel-3);
+  /* 轨道宽度随内容收紧（复刻 .tabs 是 hug 内容的胶囊行，非全宽条） */
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto 40px;
 }
 .neo-empty .sg-tab {
+  padding: 5px 14px;
   border-radius: 999px;
   margin-bottom: 0;
   border-bottom: none;
+  /* 复刻 .tab 实测 13px（全局 .sg-tab 是 12px fs-sub，Neo 首页态对齐复刻） */
+  font-size: 13px;
+  color: var(--t-fg-4);
   transition: color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
 }
-.neo-empty .sg-tab:hover {
-  background: var(--t-panel-2);
+.neo-empty .sg-tab:hover { color: var(--t-fg-2); }
+.neo-empty .sg-tab.on {
+  background: var(--t-panel);
+  color: var(--t-fg);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 /* StartGallery 模板卡（ClawsGo tmp29A7 左文右图）：无边框透明底卡，hover 浅灰底，
-   左侧 名称 13/600 + 描述 12px 灰 2 行截断 + 徽章行，右侧 108px 缩略图槽（无图纯文字）。 */
+   左侧 名称 13/600 + 描述 12px 灰 2 行截断（无徽章行），右侧 108px 缩略图槽（无图纯文字）。
+   间距照复刻 .cards：gap 34px 44px，max-width 560px；卡 padding 6px 8px、左右 gap 16px。 */
 .neo-empty .sg-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 28px;
-  width: min(720px, 100%);
+  gap: 34px 44px;
+  width: min(560px, 100%);
 }
 .neo-empty .sg-card {
   position: relative;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 14px;
-  padding: 10px 12px;
+  gap: 16px;
+  padding: 6px 8px;
   border: none;
   background: transparent;
   box-shadow: none;
@@ -499,7 +591,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 7px;
 }
 .neo-empty .sg-card-name {
   font-size: 13px;
@@ -519,17 +611,13 @@
   display: block;
   border-radius: 10px;
 }
-.neo-empty .sg-card-cat {
-  text-transform: none;
-  letter-spacing: 0;
-  font-family: inherit;
-}
 @media (max-width: 560px) {
   .neo-empty .sg-grid { grid-template-columns: 1fr; }
 }
 
-/* ---- 空态：hero 问候 + 居中大 composer + 模板画廊（clawsgo 首页态 tmp29A7） ----
-   画廊把内容撑高后整列可滚，顶部留 8vh 呼吸位保持视觉重心。 */
+/* ---- 空态：hero 问候 → 分类 tabs + 模板卡网格 → composer 沉底（clawsgo 首页态
+   tmp29A7 / home.html）。hero 块上下 auto margin 在剩余空间居中；内容超高时
+   auto margin 归零，整列可滚，composer 始终沉在列尾。 ---- */
 .neo-version-pill {
   font-size: 11px;
   font-weight: 500;
@@ -538,6 +626,7 @@
   border: 1px solid var(--t-border);
   border-radius: 999px;
   background: var(--t-panel);
+  margin-bottom: 14px;
 }
 .neo-empty {
   flex: 1;
@@ -546,26 +635,44 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 8vh 20px 40px;
+  padding: 0 20px 20px;
   animation: neo-fade var(--dur-3) var(--ease-out);
 }
+.neo-empty-hero {
+  flex: none;
+  width: 100%;
+  margin: auto 0;
+  padding: 32px 0 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 .neo-empty-title {
-  margin: 0;
+  margin: 0 0 8px;
   font-size: 30px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  /* 复刻 home.html .hello 实测 30/500/+.2px（非 600/-0.01em） */
+  font-weight: 500;
+  letter-spacing: 0.2px;
   color: var(--t-fg);
   text-align: center;
 }
 .neo-empty-sub {
-  margin: 0 0 18px;
-  font-size: 14px;
+  margin: 0 0 30px;
+  /* 设计规格 §2「副标题 13px 灰」（复刻页无副标题，本行为规格增量） */
+  font-size: 13px;
   color: var(--t-fg-4);
   text-align: center;
 }
+.neo-empty .sg-wrap {
+  margin: 0;
+  max-width: 720px;
+}
 .neo-empty-composer {
+  /* composer 钉在列底：滚动区（.neo-empty）之外的兄弟节点，居中 + 两侧留白 */
+  flex: none;
   width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 0 20px 20px;
 }
 
 /* ---- 动效 ---- */

@@ -4,7 +4,8 @@
  * 布局：
  *   顶部条  「当前选中：{target.name}」 + 右侧「新任务」按钮
  *   消息流  run 活跃 → NeoRunInline（用户灰气泡 / 操作列表 / agent 回复 /
- *           状态 pill）；无 run → hero 问候 + 居中大 composer（clawsgo 首页态）
+ *           状态 pill）；无 run → hero 问候 → 分类 tabs + 模板卡网格 →
+ *           composer 沉底（clawsgo 首页态 tmp29A7）
  *   底部    NeoComposer（run 活跃时沉底）
  *
  * 数据通路完全复用 chat-home 现有实现（不另造数据流）：
@@ -12,12 +13,15 @@
  *   多轮接力 → POST /api/run-sessions/:id/messages（daemon 返回新 session_id
  *   就地切换），SSE 由 useRunSession 消费（唯一 SSE 数据源）。
  * runId 由 NeoApp 持有（受控）：本组件经 onRunChange 上报启动/清除。
+ * 错误/中断态：SSE error 帧（6 桶）与 watchdog 超时 → 会话内错误卡
+ * （重试=重发最后一条用户消息走 /messages，中止=abort）；用户停止后
+ * timeline 末尾渲染「已中断」标记（session.aborted，useRunSession 维护）。
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { SquarePen, UsersRound } from 'lucide-react';
+import { OctagonX, RotateCcw, SquarePen, UsersRound } from 'lucide-react';
 import type { NeoChatProps } from './types';
-import { useRunSession } from '../core/hooks/useRunSession';
+import { useRunSession, type ErrorCode } from '../core/hooks/useRunSession';
 import { createRunSession, listRunSessions } from '../api/runSessions';
 import { createGroup } from '../api/groupApi';
 import { getApiBase, authHeaders } from '../api/_base';
@@ -38,6 +42,18 @@ function greetingKeyByHour(h: number): { key: string; fallback: string } {
   if (h < 14) return { key: 'neo.greeting.noon', fallback: '中午好' };
   if (h < 18) return { key: 'neo.greeting.afternoon', fallback: '下午好' };
   return { key: 'neo.greeting.evening', fallback: '晚上好' };
+}
+
+/** SSE error 帧 6 桶分类（server classify-error）→ 错误卡标题。i18n key + 中文兜底。 */
+function errorTitleByCode(code: ErrorCode): { key: string; fallback: string } {
+  switch (code) {
+    case 'auth': return { key: 'neo.error.auth', fallback: 'API Key 未配置或已失效' };
+    case 'rate_limit': return { key: 'neo.error.rateLimit', fallback: '请求频率超限，请稍后重试' };
+    case 'context_too_long': return { key: 'neo.error.contextTooLong', fallback: '上下文过长，请缩减输入' };
+    case 'network': return { key: 'neo.error.network', fallback: '连接中断或会话超时' };
+    case 'server': return { key: 'neo.error.server', fallback: '服务端错误' };
+    default: return { key: 'neo.error.unknown', fallback: '执行出错' };
+  }
 }
 
 export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
@@ -89,6 +105,8 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
     session.thinkingStream,
     session.chatReply,
     session.steps,
+    session.error,
+    session.aborted,
   ]);
 
   // 「新任务」—— 清除当前 run，回到 hero 空态（NeoApp 把 runId 置 null）。
@@ -158,6 +176,8 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
           onRunChange(data.session_id);
           window.dispatchEvent(new CustomEvent('sf:run-created'));
         }
+        // 多轮接力成功 → 清掉上一轮的陈旧错误条（若曾出错）。
+        session.clearError();
       }
     } catch (err) {
       throw new Error(
@@ -170,6 +190,38 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
 
   const greeting = greetingKeyByHour(new Date().getHours());
   const greetingText = `${t(greeting.key, { defaultValue: greeting.fallback })}${user?.display_name ? `, ${user.display_name}` : ''}`;
+
+  // ── 错误卡（SSE 命名 error 帧 6 桶 / watchdog 15min 超时承接 UI）──────────
+  // NeoRunInline 内的 .neo-run-error 条只展示文本；本卡补分类标题 + 操作：
+  //   重试 = 重发最后一条用户消息，走真实 POST /:id/messages（不假按钮）；
+  //   中止 = session.abort()（POST /:id/abort，best-effort）。
+  const lastUserText = useMemo(() => {
+    for (let i = session.messages.length - 1; i >= 0; i--) {
+      const m = session.messages[i];
+      if (m && m.kind === 'user_turn') return m.text;
+    }
+    return null;
+  }, [session.messages]);
+  const [retryBusy, setRetryBusy] = useState(false);
+  const [retryFailed, setRetryFailed] = useState<string | null>(null);
+
+  async function handleRetry() {
+    if (!lastUserText || retryBusy) return;
+    setRetryBusy(true);
+    setRetryFailed(null);
+    try {
+      await handleSubmit({ text: lastUserText, knowledge: [], attachments: [] });
+      // 重发成功（可能就地换了新 session_id，NeoApp 会同步 URL/存储）。
+      session.clearError();
+    } catch (err) {
+      // 重发失败（如会话已过期 404）——保留原错误条，卡内补失败原因。
+      setRetryFailed(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRetryBusy(false);
+    }
+  }
+
+  const errorTitle = session.error ? errorTitleByCode(session.error.code) : null;
 
   return (
     <div className="neo-chat">
@@ -206,6 +258,60 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
               session={session}
               targetName={target?.name ?? null}
             />
+
+            {/* 错误卡：分类标题 + 重试/中止（消息正文由 NeoRunInline 错误条展示） */}
+            {session.error && errorTitle && (
+              <div className="neo-error-card" data-testid="neo-error-card">
+                <div className="neo-error-card-head">
+                  <span className="neo-error-card-title">
+                    {t(errorTitle.key, { defaultValue: errorTitle.fallback })}
+                  </span>
+                  {session.error.occurrences > 1 && (
+                    <span className="neo-error-card-occ">
+                      {t('neo.error.occurrences', {
+                        defaultValue: `已连续失败 ${session.error.occurrences} 次`,
+                        count: session.error.occurrences,
+                      })}
+                    </span>
+                  )}
+                </div>
+                <div className="neo-error-card-actions">
+                  <button
+                    type="button"
+                    className="neo-error-btn neo-error-btn-primary"
+                    onClick={() => void handleRetry()}
+                    disabled={retryBusy || !lastUserText}
+                    data-testid="neo-error-retry"
+                  >
+                    <RotateCcw size={13} strokeWidth={1.9} aria-hidden />
+                    {retryBusy
+                      ? t('neo.error.retrying', { defaultValue: '重试中…' })
+                      : t('neo.error.retry', { defaultValue: '重试' })}
+                  </button>
+                  <button
+                    type="button"
+                    className="neo-error-btn"
+                    onClick={session.abort}
+                    disabled={session.aborted}
+                    data-testid="neo-error-abort"
+                  >
+                    <OctagonX size={13} strokeWidth={1.9} aria-hidden />
+                    {t('neo.error.abort', { defaultValue: '中止' })}
+                  </button>
+                </div>
+                {retryFailed && <div className="neo-error-card-retry-failed">{retryFailed}</div>}
+              </div>
+            )}
+
+            {/* 中断态标记：用户点「停止」后 timeline 末尾的分隔标记；
+                composer 因 isStreaming=false 已自动恢复可输入。 */}
+            {session.aborted && (
+              <div className="neo-run-aborted" data-testid="neo-run-aborted">
+                <span className="neo-run-aborted-label">
+                  {t('neo.run.aborted', { defaultValue: '已中断' })}
+                </span>
+              </div>
+            )}
           </div>
           <div className="neo-chat-composer">
             <NeoComposer
@@ -220,15 +326,21 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
           </div>
         </>
       ) : (
-        /* 空态（target 为 null 或尚无 run）：hero 问候 + 居中大 composer
-           + 模板画廊（clawsgo 首页态：分类 tab + 真实 skills 卡片） */
-        <div className="neo-empty">
-          {/* 版本 pill（ClawsGO a_001「v1.0 正式上线」形态）：hairline + 灰字小胶囊 */}
-          <span className="neo-version-pill">ShadowFlow v{pkg.version}</span>
-          <h1 className="neo-empty-title">{greetingText}</h1>
-          <p className="neo-empty-sub">
-            {t('neo.chat.heroSub', { defaultValue: '描述一个目标，Agent 直接开干' })}
-          </p>
+        /* 空态（clawsgo 首页态 tmp29A7）：hero 问候 → 分类 tabs + 模板卡网格，
+           composer 钉在列底（滚动区之外），卡片再多也不被顶出视口。
+           hero 块用上下 auto margin 在剩余空间居中，内容超高时滚动区自滚。 */
+        <>
+          <div className="neo-empty">
+            <div className="neo-empty-hero">
+              {/* 版本 pill（ClawsGO a_001「v1.0 正式上线」形态）：hairline + 灰字小胶囊 */}
+              <span className="neo-version-pill">ShadowFlow v{pkg.version}</span>
+              <h1 className="neo-empty-title">{greetingText}</h1>
+              <p className="neo-empty-sub">
+                {t('neo.chat.heroSub', { defaultValue: '描述一个目标，Agent 直接开干' })}
+              </p>
+              <StartGallery onPick={setPrefill} />
+            </div>
+          </div>
           <div className="neo-empty-composer">
             <NeoComposer
               variant="hero"
@@ -239,8 +351,7 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
               })}
             />
           </div>
-          <StartGallery onPick={setPrefill} />
-        </div>
+        </>
       )}
     </div>
   );

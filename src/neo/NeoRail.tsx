@@ -9,12 +9,16 @@
  *   - Agents/Teams 区：个人态 listAgents、团队态 listTeams（真实 API，不 mock）
  *   - 会话条目：个人态最近单聊（useInboxStore agentDMs，同 PersonalChatView 数据源）
  *   - 底部用户卡（useAuth）+ 设置齿轮（/settings）
- * 选中高亮 = 灰底黑字 + 左侧蓝色弹性指示条（对齐 sf-rail-nav-row 语言）。
+ * 列表行 = 纯文字 + 细线图标（15px --t-fg-3），选中 = 灰底 600 加粗（对齐
+ * ClawsGo home.html .nav-row / .group-label 复刻；无彩色 tile、无指示条）。
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Bot,
+  ChevronDown,
   Library,
+  MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -37,8 +41,6 @@ import {
   PersonalTeamToggle,
   type ChatHomeView,
 } from '../pages/chat-home/PersonalTeamToggle';
-import { AgentAvatar } from '../components/chat-fb/agentAvatar';
-import type { AgentAvatarProps } from '../components/chat-fb/agentAvatar';
 import type { NeoRailProps, NeoTarget } from './types';
 
 const RAIL_COLLAPSED_KEY = 'sf.neo.railCollapsed';
@@ -46,11 +48,53 @@ const VIEW_KEY = 'sf.neo.view';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
-function agentStatusToDot(status: AgentRecord['status']): AgentAvatarProps['status'] {
+/** rail 折叠态头像状态点（data-status → --t-run/warn/err，样式在 neo.css .neo-avatar-dot）。 */
+type NeoAvatarStatus = 'run' | 'warn' | 'err';
+
+function agentStatusToDot(status: AgentRecord['status']): NeoAvatarStatus | undefined {
   if (status === 'running') return 'run';
   if (status === 'error') return 'err';
   if (status === 'paused') return 'warn';
   return undefined;
+}
+
+/* ── Neo 本地极简头像（阶段 2.5：替代旧体系 AgentAvatar 渲染组件）────────────
+   圆形色块 + 首字母，纯 CSS（neo.css .neo-avatar）。色 = 后端 avatar_color（hex
+   时直接用）否则按种子 hash 落 7 色环，同一 agent 稳定同色。 */
+
+/** 浅墨兰迪 7 色环（与旧体系 agentAvatar AGENT_PALETTE accent 同色值，换壳不换色）。 */
+const NEO_AVATAR_COLORS = ['#F59E0B', '#A855F7', '#EF4444', '#0891B2', '#22D3EE', '#10B981', '#71717A'];
+
+function neoAvatarColor(seed: string, color: string | null): string {
+  if (color && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(color.trim())) return color.trim();
+  let h = 0;
+  const key = seed || '?';
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return NEO_AVATAR_COLORS[Math.abs(h) % NEO_AVATAR_COLORS.length];
+}
+
+function neoAvatarInitial(name: string): string {
+  const first = Array.from((name ?? '').trim())[0] ?? '?';
+  return /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
+}
+
+function NeoAgentAvatar({
+  seed,
+  name,
+  color,
+  status,
+}: {
+  seed: string;
+  name: string;
+  color: string | null;
+  status?: NeoAvatarStatus;
+}) {
+  return (
+    <span className="neo-avatar" style={{ background: neoAvatarColor(seed, color) }} aria-hidden>
+      {neoAvatarInitial(name)}
+      {status && <span className="neo-avatar-dot" data-status={status} />}
+    </span>
+  );
 }
 
 function shortAddress(addr: string): string {
@@ -235,11 +279,10 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
                   aria-label={a.name}
                   aria-pressed={isOn('agent', a.agent_id)}
                 >
-                  <AgentAvatar
+                  <NeoAgentAvatar
                     seed={a.agent_id}
                     name={a.name}
                     color={a.avatar_color ?? null}
-                    size={24}
                     status={agentStatusToDot(a.status)}
                   />
                 </button>
@@ -255,9 +298,7 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
                   aria-label={tm.name}
                   aria-pressed={isOn('team', tm.team_id)}
                 >
-                  <span className="neo-team-tile">
-                    <Users size={13} strokeWidth={1.9} aria-hidden />
-                  </span>
+                  <Users size={16} strokeWidth={1.75} aria-hidden />
                 </button>
               ))}
         </div>
@@ -345,6 +386,7 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
       <div className="neo-rail-body">
         <div className="neo-section-label">
           {view === 'personal' ? t('shell.navAgents') : t('shell.navTeams')}
+          <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
         </div>
         {listState === 'loading' && (
           <div className="neo-rail-skeletons" aria-busy="true" aria-label={t('common.loading')}>
@@ -382,13 +424,7 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
                 onClick={() => onSelect({ kind: 'agent', id: a.agent_id, name: a.name })}
                 aria-pressed={isOn('agent', a.agent_id)}
               >
-                <AgentAvatar
-                  seed={a.agent_id}
-                  name={a.name}
-                  color={a.avatar_color ?? null}
-                  size={22}
-                  status={agentStatusToDot(a.status)}
-                />
+                <Bot size={15} strokeWidth={1.75} aria-hidden />
                 <span className="neo-row-name">{a.name}</span>
               </button>
             ))
@@ -400,9 +436,7 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
                 onClick={() => onSelect({ kind: 'team', id: tm.team_id, name: tm.name })}
                 aria-pressed={isOn('team', tm.team_id)}
               >
-                <span className="neo-team-tile">
-                  <Users size={13} strokeWidth={1.9} aria-hidden />
-                </span>
+                <Users size={15} strokeWidth={1.75} aria-hidden />
                 <span className="neo-row-name">{tm.name}</span>
                 <span className="neo-row-meta">{tm.agent_ids.length}</span>
               </button>
@@ -410,7 +444,10 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
 
         {view === 'personal' && recentDMs.length > 0 && (
           <>
-            <div className="neo-section-label">{t('neo.sessions')}</div>
+            <div className="neo-section-label">
+              {t('neo.sessions')}
+              <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
+            </div>
             {recentDMs.map((d) => (
               <button
                 key={d.agentId}
@@ -419,7 +456,7 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
                 onClick={() => onSelect({ kind: 'agent', id: d.agentId, name: d.agentName })}
                 aria-pressed={isOn('agent', d.agentId)}
               >
-                <AgentAvatar seed={d.agentId} name={d.agentName} size={22} />
+                <MessageSquare size={15} strokeWidth={1.75} aria-hidden />
                 <span className="neo-row-name">{d.agentName}</span>
                 {d.unreadCount > 0 && (
                   <span className="neo-row-badge">{d.unreadCount}</span>
@@ -434,12 +471,11 @@ export function NeoRail({ target, onSelect, onNewTask }: NeoRailProps) {
           <>
             <div className="neo-section-label">
               {t('neo.groups', { defaultValue: language === 'zh' ? '群聊现场' : 'Group Rooms' })}
+              <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
             </div>
             {recentGroups.map((g) => (
               <Link key={g.id} to={`/group/${g.id}`} className="neo-row neo-row-link" data-testid="neo-group-row">
-                <span className="neo-team-tile">
-                  <UsersRound size={13} strokeWidth={1.9} aria-hidden />
-                </span>
+                <UsersRound size={15} strokeWidth={1.75} aria-hidden />
                 <span className="neo-row-name">{g.name}</span>
                 {g.unreadCount > 0 && <span className="neo-row-badge">{g.unreadCount}</span>}
               </Link>

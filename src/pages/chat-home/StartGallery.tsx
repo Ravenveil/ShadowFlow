@@ -11,11 +11,12 @@
  * 没有交付物/耗时字段，编造即 mock。故无 meta 行，只渲染 skill 的真实字段。
  *
  * 2026-08-15 模板卡改 ClawsGo tmp29A7「左文右图」：左侧名称 13/600 + 描述
- * 12px 灰 2 行截断 + 底部徽章行，右侧 108px 缩略图槽（cover_url → 占位映射
- * → 无图则不渲染图槽）。无边框卡 + hover 浅灰底（样式在 neo-chat.css，
- * 作用域 .neo-empty）。
+ * 12px 灰 2 行截断，右侧 108px 缩略图槽（cover_url → 占位映射 → 无图则不
+ * 渲染图槽）。无边框卡 + hover 浅灰底（样式在 neo-chat.css，作用域
+ * .neo-empty）。复刻卡只有名称+描述+右图，无徽章行；
+ * 分类 tab 为分段胶囊轨（灰底轨道 + 选中白/深色胶囊），无滑动指示条。
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { listSkills, type SkillInfo } from '../../api/skills';
 
 /** 过滤掉测试/演示 skill（id 或 name 含测试关键词）。 */
@@ -70,25 +71,6 @@ function catOf(s: SkillInfo): string {
 export function StartGallery({ onPick }: { onPick: (token: string) => void }) {
   const [skills, setSkills] = useState<SkillInfo[] | null>(null);
   const [cat, setCat] = useState<string>('全部');
-  // 滑动下划线指示条（参照 RightPaneTabs.tsx .rs-tab-ind 实现）
-  const tabsRef = useRef<HTMLDivElement | null>(null);
-  const activeBtnRef = useRef<HTMLButtonElement | null>(null);
-  const [ind, setInd] = useState<{ x: number; w: number } | null>(null);
-  const measure = () => {
-    const btn = activeBtnRef.current;
-    if (!btn || !btn.offsetWidth) { setInd(null); return; }
-    const next = { x: btn.offsetLeft, w: btn.offsetWidth };
-    setInd((prev) => (prev && prev.x === next.x && prev.w === next.w ? prev : next));
-  };
-  const measureRef = useRef(measure);
-  measureRef.current = measure;
-  useLayoutEffect(() => { measureRef.current(); });
-  useEffect(() => {
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => measureRef.current());
-    if (tabsRef.current) ro.observe(tabsRef.current);
-    return () => ro.disconnect();
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -130,10 +112,9 @@ export function StartGallery({ onPick }: { onPick: (token: string) => void }) {
   return (
     <div className="sg-wrap">
       <div
-        className={`sg-tabs${ind ? ' has-ind' : ''}`}
+        className="sg-tabs"
         role="tablist"
         aria-label="模板分类"
-        ref={tabsRef}
       >
         {cats.map((c) => {
           const isActive = cat === c;
@@ -145,20 +126,11 @@ export function StartGallery({ onPick }: { onPick: (token: string) => void }) {
               aria-selected={isActive}
               className={`sg-tab${isActive ? ' on' : ''}`}
               onClick={() => setCat(c)}
-              ref={isActive ? (el) => { activeBtnRef.current = el; } : undefined}
             >
               {c}
             </button>
           );
         })}
-        {/* 滑动指示条 — 测量成功才渲染；失败时 .sg-tab.on 的 border 兜底 */}
-        {ind && (
-          <span
-            aria-hidden
-            className="sg-tab-ind"
-            style={{ transform: `translateX(${ind.x}px)`, width: ind.w }}
-          />
-        )}
       </div>
       <div key={cat} className="sg-grid sg-grid-fade">
         {shown.map((s) => {
@@ -172,15 +144,10 @@ export function StartGallery({ onPick }: { onPick: (token: string) => void }) {
               onClick={() => onPick(`@${s.skill_id} `)}
               title={s.description}
             >
-              {/* ClawsGo tmp29A7 左文右图：左 = 名称/描述/徽章，右 = 108px 缩略图槽（无图则不渲染） */}
+              {/* ClawsGo tmp29A7 左文右图：左 = 名称/描述，右 = 108px 缩略图槽（无图则不渲染）；无徽章行 */}
               <div className="sg-card-body">
                 <div className="sg-card-name">{s.name}</div>
                 <div className="sg-card-desc">{s.description}</div>
-                <div className="sg-card-foot">
-                  <span className="sg-card-cat">{catOf(s)}</span>
-                  {s.has_team && <span className="sg-card-team">团队</span>}
-                  {s.source === 'user' && <span className="sg-card-user">自建</span>}
-                </div>
               </div>
               {cover && <img className="sg-card-thumb" src={cover} alt="" aria-hidden />}
             </button>

@@ -262,13 +262,19 @@
 .neo-rail-icons:hover::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--t-fg) 22%, transparent);
 }
+/* 分组标签（ClawsGo home.html .group-label：11px 小灰字 + 12px 静态折叠箭头） */
 .neo-section-label {
   flex-shrink: 0;
-  padding: 10px 10px 4px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px 4px;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--t-fg-5);
+}
+.neo-section-label svg {
+  flex-shrink: 0;
 }
 .neo-list-note {
   padding: 8px 10px;
@@ -320,30 +326,34 @@
   color: var(--t-fg);
 }
 
-/* 列表行：选中 = 灰底黑字圆角胶囊（clawsgo/WorkBuddy 无彩色指示条） */
+/* 列表行（ClawsGo home.html .nav-row：纯文字行 + 15px 细线图标 --t-fg-3，
+   文字 12.5px/500，hover 浅灰底、圆角 10px；选中 = 灰底 600，无彩色 tile/指示条） */
 .neo-row {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 6px 8px;
   border: none;
   border-radius: 10px;
   background: transparent;
-  color: var(--t-fg-3);
+  color: var(--t-fg);
   font-size: 12.5px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
+.neo-row > svg {
+  flex-shrink: 0;
+  color: var(--t-fg-3);
+}
 .neo-row:hover {
   background: var(--t-panel-2);
-  color: var(--t-fg);
 }
 .neo-row.on {
   background: var(--t-panel-3);
-  color: var(--t-fg);
   font-weight: 600;
 }
 .neo-row-name {
@@ -376,22 +386,6 @@
   color: var(--t-accent-ink, var(--t-panel));
 }
 
-/* Team 行图标 tile */
-.neo-team-tile {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  flex-shrink: 0;
-  background: var(--t-panel-3);
-  color: var(--t-fg-3);
-}
-.neo-row.on .neo-team-tile {
-  color: var(--t-fg);
-}
-
 /* 折叠态图标列表 */
 .neo-rail-icons {
   flex: 1;
@@ -416,6 +410,40 @@
   background: var(--t-panel-3);
   box-shadow: inset 0 0 0 1px var(--t-border-2);
 }
+
+/* Neo 本地极简头像（rail 折叠态 agent 图标）：圆形色块 + 首字母，
+   替代旧体系 AgentAvatar 生成式 SVG；色值由 NeoRail 内联 background 给。 */
+.neo-avatar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+/* 状态点：run/warn/err 走 --t-* 令牌，描边用栏底色（折叠 rail = --t-bg） */
+.neo-avatar-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--t-bg);
+}
+.neo-avatar-dot[data-status='run'] {
+  background: var(--t-run);
+  animation: sf-pulse 1.4s ease-in-out infinite;
+}
+.neo-avatar-dot[data-status='warn'] { background: var(--t-warn); }
+.neo-avatar-dot[data-status='err'] { background: var(--t-err); }
 
 /* 底部邀请/说明卡（ClawsGo home.html .invite：白卡 + 1px hairline +
    图标盒 34px + 两行文字）。纯信息卡、无按钮——无邀请后端，见 GAP.md。 */
@@ -464,27 +492,28 @@
   white-space: nowrap;
 }
 
-/* 底部用户卡 */
+/* 底部用户卡（ClawsGo home.html .user：gap 9、padding 8/6/2、margin-top 2、
+   头像 30px 圆形、名字 12.5/600、副行 11px 灰字；无分隔线） */
 .neo-usercard {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 8px 6px 2px;
-  border-top: 1px solid var(--t-border);
+  margin-top: 2px;
 }
 .neo-user-initial {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   flex-shrink: 0;
   background: var(--t-panel-3);
   color: var(--t-fg);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
 }
 .neo-user-meta {
   flex: 1;
@@ -502,7 +531,7 @@
   white-space: nowrap;
 }
 .neo-user-type {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--t-fg-5);
 }
 
