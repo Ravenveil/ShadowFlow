@@ -5,9 +5,9 @@
  *   - 数据：useGroupTimeline（B2 统一读路径 GET /api/groups/:id/timeline
  *     + 群 SSE + 活跃 run 的 /stream 订阅）——聊天消息与 run 过程卡已在
  *     服务端归并为统一 TimelineMessage 流
- *   - 渲染：完整 Timeline 渲染器（variant="neo"）——thinking/工具组卡/
- *     plan_card 编排卡/commit_record 提交卡/file_diff/table_panel/
- *     web_preview/verdict_card 全部内联呈现
+ *   - 渲染：NeoTimeline（./NeoTimeline，阶段 2.5 Neo 原生渲染层）——
+ *     thinking/工具行/plan_card 编排卡/commit_record 提交卡/file_diff/
+ *     table_panel/web_preview/verdict_card 全部内联呈现
  *   - 发言：NeoComposer → postGroupMessage（sender_kind=user）→ 网关
  *     runFanout 触发新一轮 INTENT_PARSE → 分层派发（在群里说话即派活）
  *
@@ -19,7 +19,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, UsersRound } from 'lucide-react';
 import { useGroupTimeline } from '../core/hooks/useGroupTimeline';
 import { getGroup, postGroupMessage } from '../api/groupApi';
-import { Timeline } from '../components/run-session/timeline/Timeline';
+import { NeoTimeline } from './NeoTimeline';
 import { useI18n } from '../common/i18n';
 import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
 import './neo-chat.css';
@@ -124,7 +124,7 @@ export function NeoGroupChat() {
             })}
           </div>
         ) : (
-          <Timeline messages={timeline.messages} variant="neo" />
+          <NeoTimeline messages={timeline.messages} />
         )}
       </div>
 

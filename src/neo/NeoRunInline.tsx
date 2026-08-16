@@ -1,9 +1,10 @@
 /**
  * NeoRunInline — clawsgo 式 inline 任务执行视图（Neo 中栏核心）。
  *
- * 2026-08-15 重构（Polynoia 对标）：消息流主体从手写归并列表切换为完整
- * Timeline 渲染器（variant="neo" = chat 观感 + 滚动交给外层 neo-chat-scroll）。
- * 由此 Neo 聊天直接获得全部内联渲染类型——用户气泡 / thinking / 工具组卡 /
+ * 2026-08-15 重构（Polynoia 对标）+ 阶段 2.5 视觉返工：消息流主体由
+ * NeoTimeline 渲染（./NeoTimeline，Neo 原生渲染层，视觉对齐
+ * .tmp/clawsgo-clone/running.html，滚动交给外层 neo-chat-scroll）。
+ * 由此 Neo 聊天直接获得全部内联渲染类型——用户气泡 / thinking / 工具行 /
  * 步骤面板 / YAML diff / plan_card（编排计划）/ commit_record（提交记录）/
  * file_diff（文件 diff）/ table_panel（表格）/ image_panel / web_preview
  * （网页预览）/ artifact_card / verdict_card（评审结论）/ msg_foot——以及
@@ -15,13 +16,14 @@
  *   3. 错误条 + 底部状态 pill（进度 x/y，点击无操作——Timeline 自带交互）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Repeat, Sparkles } from 'lucide-react';
+import { ChevronDown, CircleCheck, Repeat, Sparkles } from 'lucide-react';
 import type { UseRunSessionReturn } from '../core/hooks/useRunSession';
 import type { TimelineMessage } from '../components/run-session/timeline/types';
-import { Timeline } from '../components/run-session/timeline/Timeline';
+import { NeoTimeline } from './NeoTimeline';
 import { getRunLoops, type LoopStatus, type LoopStep } from '../api/runs';
 import { useI18n } from '../common/i18n';
 import './neo-chat.css';
+import './neo-run.css';
 
 export interface NeoRunInlineProps {
   /** 当前 run 的 session id（同时作为 /api/runs/{id}/loops 的 run id）。 */
@@ -179,13 +181,12 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
         </div>
       )}
 
-      {/* 消息流主体：完整 Timeline 渲染器（SSE 唯一数据源）。
-          variant="neo" = chat 观感（用户右气泡）+ 滚动交给外层容器；
-          全部富内联卡片（plan/commit/diff/table/preview/verdict）在此渲染；
+      {/* 消息流主体：NeoTimeline（SSE 唯一数据源，纯 Neo 渲染层）。
+          滚动交给外层 neo-chat-scroll；全部富内联卡片
+          （plan/commit/diff/table/preview/verdict）在此渲染；
           assistant_text 行内编辑经 handleEditMessage 落库。 */}
-      <Timeline
+      <NeoTimeline
         messages={session.messages}
-        variant="neo"
         onEditMessage={handleEditMessage}
       />
 
@@ -197,7 +198,9 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
         </div>
       )}
 
-      {/* 底部状态 pill：运行中 = 当前步骤 + x/y；完成 = ✓ 已完成全部任务。
+      {/* 底部状态 pill：运行中 = spinner + 当前步骤 + x/y（running.html .pill）；
+          完成 = 绿 circle-check + 已完成全部任务（done.html .done-row 的
+          绿色完成条语义，pill 容器形态保持 running.html）。
           点击折叠/展开 Loop 徽标行（clawsgo 底部 pill 行为）。 */}
       {showPill && (
         <button
@@ -207,9 +210,9 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
           aria-expanded={loopsOpen}
         >
           {session.isComplete ? (
-            <Check size={13} className="neo-pill-icon" aria-hidden />
+            <CircleCheck size={14} className="neo-pill-icon" aria-hidden />
           ) : (
-            <span className="neo-pill-dot" aria-hidden />
+            <span className="neo-pill-spinner" aria-hidden />
           )}
           <span className="neo-pill-label">
             {session.isComplete
