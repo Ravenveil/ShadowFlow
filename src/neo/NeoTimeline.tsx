@@ -36,6 +36,7 @@ import {
   CircleCheck,
   CircleX,
   Cloud,
+  Copy,
   FileCode2,
   FileText,
   FileWarning,
@@ -181,8 +182,11 @@ function readThinkOpen(id: string, fallback: boolean): boolean {
 
 const NeoThinking = memo(function NeoThinking({
   msg,
+  nowMs,
 }: {
   msg: Extract<TimelineMessage, { kind: 'thinking' }>;
+  /** running 行 live 秒表时钟（NeoTimeline 1s tick，仅存在 running 行时启动）。 */
+  nowMs?: number;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(() => readThinkOpen(msg.id, false));
@@ -199,6 +203,11 @@ const NeoThinking = memo(function NeoThinking({
   const durText =
     typeof msg.duration_ms === 'number' && msg.duration_ms > 0
       ? fmtThinkDuration(msg.duration_ms)
+      : null;
+  // streaming 行右侧耗时每秒递增（a_019→a_020 帧：6s→10s）；落定后回到静态 duration_ms。
+  const liveText =
+    isStreaming && typeof nowMs === 'number'
+      ? fmtThinkDuration(Math.max(0, nowMs - msg.ts))
       : null;
 
   // 终态且无体（gateway 过程卡「xxx 正在思考」）→ 安静单行，不可折叠
@@ -243,7 +252,9 @@ const NeoThinking = memo(function NeoThinking({
         {hasBody && (
           <ChevronRight size={13} className="neo-tl-op-chev" data-open={open || undefined} aria-hidden />
         )}
-        {durText && <span className="neo-tl-op-time">{durText}</span>}
+        {(isStreaming ? liveText : durText) && (
+          <span className="neo-tl-op-time">{isStreaming ? liveText : durText}</span>
+        )}
       </button>
       {hasBody && (
         <Collapse open={open}>
@@ -458,6 +469,14 @@ const NeoAssistantText = memo(function NeoAssistantText({
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    },
+    [],
+  );
   const rows = useMemo(() => extractRows(stripToolXml(msg.body)), [msg.body]);
 
   if (rows.length === 0) return null;
@@ -471,6 +490,15 @@ const NeoAssistantText = memo(function NeoAssistantText({
   }
   // 编辑铅笔同光标一套门控：streaming 标记残留但 turn 已落定（!live）时可编辑。
   const canEdit = Boolean(onEdit) && !(msg.streaming && live);
+  // 复制：同一落定门控（仅 status 落定后可点），只读场景（无 onEdit）也可复制。
+  const canCopy = !(msg.streaming && live);
+  const handleCopy = () => {
+    void navigator.clipboard?.writeText(msg.body).then(() => {
+      setCopied(true);
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   return (
     <div className="neo-tl-assistant">
@@ -540,19 +568,36 @@ const NeoAssistantText = memo(function NeoAssistantText({
               }
             }
           })}
-          {canEdit && (
-            <button
-              type="button"
-              className="neo-tl-edit-trigger"
-              title={t('neo.tl.edit', { defaultValue: '编辑消息' })}
-              aria-label={t('neo.tl.edit', { defaultValue: '编辑消息' })}
-              onClick={() => {
-                setDraft(msg.body);
-                setEditing(true);
-              }}
-            >
-              <Pencil size={12} aria-hidden />
-            </button>
+          {canCopy && (
+            <div className="neo-tl-actions">
+              <button
+                type="button"
+                className="neo-tl-edit-trigger neo-tl-tip"
+                data-tip={
+                  copied
+                    ? t('neo.tl.copied', { defaultValue: '已复制' })
+                    : t('neo.tl.copy', { defaultValue: '复制' })
+                }
+                aria-label={t('neo.tl.copy', { defaultValue: '复制' })}
+                onClick={handleCopy}
+              >
+                {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
+              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="neo-tl-edit-trigger neo-tl-tip"
+                  data-tip={t('neo.tl.edit', { defaultValue: '编辑消息' })}
+                  aria-label={t('neo.tl.edit', { defaultValue: '编辑消息' })}
+                  onClick={() => {
+                    setDraft(msg.body);
+                    setEditing(true);
+                  }}
+                >
+                  <Pencil size={12} aria-hidden />
+                </button>
+              )}
+            </div>
           )}
         </>
       )}
@@ -616,13 +661,21 @@ const NeoRationale = memo(function NeoRationale({
 /* ═══ tool_call — clawsgo op 行：类别图标 + 名称/参数 + 耗时 + 状态 ═══════════ */
 const NeoToolCall = memo(function NeoToolCall({
   msg,
+  nowMs,
 }: {
   msg: Extract<TimelineMessage, { kind: 'tool_call' }>;
+  /** running 行 live 秒表时钟（NeoTimeline 1s tick，仅存在 running 行时启动）。 */
+  nowMs?: number;
 }) {
   const Icon = toolIconFor(msg.name);
   const label = humanizeToolName(msg.name);
   const dur = fmtDuration(msg.duration_ms);
   const status = msg.status ?? 'ok';
+  // running 行右侧耗时每秒递增（nowMs - msg.ts）；ok/error 落定后保持静态 duration_ms。
+  const liveDur =
+    status === 'running' && typeof nowMs === 'number'
+      ? fmtDuration(Math.max(0, nowMs - msg.ts))
+      : dur;
   return (
     <div className="neo-tl-op neo-tl-op-static" data-status={status === 'running' ? 'running' : undefined}>
       <span className="neo-tl-op-icon" data-status={status === 'ok' ? 'done' : status === 'error' ? 'failed' : 'running'}>
@@ -638,10 +691,10 @@ const NeoToolCall = memo(function NeoToolCall({
           <ArrowUpRight size={11} aria-hidden />
         </a>
       )}
-      {(dur || msg.result_summary) && (
+      {(liveDur || msg.result_summary) && (
         <span className="neo-tl-op-time">
-          {dur}
-          {dur && msg.result_summary ? ' · ' : ''}
+          {liveDur}
+          {liveDur && msg.result_summary ? ' · ' : ''}
           {msg.result_summary ?? ''}
         </span>
       )}
@@ -1188,17 +1241,20 @@ function NeoMessage({
   msg,
   onEditMessage,
   live,
+  nowMs,
 }: {
   msg: TimelineMessage;
   onEditMessage?: NeoTimelineProps['onEditMessage'];
   /** 见 NeoAssistantText.live：流式光标门控。 */
   live: boolean;
+  /** running 行 live 秒表时钟（仅 thinking/tool_call 消费）。 */
+  nowMs?: number;
 }) {
   switch (msg.kind) {
     case 'user_turn':
       return <NeoUserTurn msg={msg} />;
     case 'thinking':
-      return <NeoThinking msg={msg} />;
+      return <NeoThinking msg={msg} nowMs={nowMs} />;
     case 'assistant_meta':
       return <NeoAssistantMeta msg={msg} />;
     case 'assistant_text':
@@ -1208,7 +1264,7 @@ function NeoMessage({
     case 'rationale':
       return <NeoRationale msg={msg} />;
     case 'tool_call':
-      return <NeoToolCall msg={msg} />;
+      return <NeoToolCall msg={msg} nowMs={nowMs} />;
     case 'tool_echo':
       return <NeoToolEcho msg={msg} />;
     case 'step_panel':
@@ -1255,6 +1311,26 @@ export const NeoTimeline = memo(function NeoTimeline({ messages, onEditMessage }
 
   const streamMessages = hoistMsgFootToEnd(messages.filter((m) => m.kind !== 'status_line'));
 
+  // running 行 live 秒表（a_019→a_020 帧：6s→10s 递增）：存在 thinking(streaming)/
+  // tool_call(running)/msg_foot(running) 行时才开 1s tick，全部落定后自动停止。
+  const hasRunning = useMemo(
+    () =>
+      messages.some(
+        (m) =>
+          (m.kind === 'thinking' && m.status === 'streaming') ||
+          (m.kind === 'tool_call' && m.status === 'running') ||
+          (m.kind === 'msg_foot' && m.status === 'running'),
+      ),
+    [messages],
+  );
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!hasRunning) return;
+    setNowMs(Date.now());
+    const iv = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, [hasRunning]);
+
   // 流式光标门控（2026-08-15 实测修复「完成态光标残留」）：
   //   完成信号 = 该 turn 收到 status='done' 的 msg_foot（projector 在 onComplete
   //   落定）；assistant_text 的 streaming 标记在 replay/异常断流下可能残留为
@@ -1284,6 +1360,7 @@ export const NeoTimeline = memo(function NeoTimeline({ messages, onEditMessage }
             msg={m}
             onEditMessage={onEditMessage}
             live={!doneTurns.has(m.turn_id) && lastContentIdByTurn.get(m.turn_id) === m.id}
+            nowMs={hasRunning ? nowMs : undefined}
           />
         </div>
       ))}

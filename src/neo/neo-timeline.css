@@ -77,6 +77,13 @@ button.neo-tl-op:hover { background: var(--t-panel-2); }
 /* running 行标题/图标灰化（clawsgo「正在搜索…」形态） */
 .neo-tl-op[data-status="running"] .neo-tl-op-title { color: var(--t-fg-4); }
 .neo-tl-op[data-status="running"] .neo-tl-op-icon { color: var(--t-fg-4); }
+/* running 行整行灰化补齐（running.html .op.running{background:transparent}）：
+   图标 spinner 顶点恢复灰、hover 不再出底色。 */
+.neo-tl-op[data-status="running"] .neo-tl-spinner {
+  border-color: color-mix(in srgb, var(--t-fg-4) 25%, transparent);
+  border-top-color: var(--t-fg-4);
+}
+button.neo-tl-op[data-status="running"]:hover { background: none; }
 
 .neo-tl-op-args {
   margin-left: 6px;
@@ -364,11 +371,23 @@ button.neo-tl-op:hover { background: var(--t-panel-2); }
   font-variant-numeric: tabular-nums;
 }
 
-/* 行内编辑（hover 铅笔 + textarea） */
-.neo-tl-edit-trigger {
+/* 行内编辑（hover 铅笔 + textarea）。hover 操作组（复制 + 编辑）绝对定位于右上，
+   容器统一控透明度；按钮本体只保留盒样式。 */
+.neo-tl-actions {
   position: absolute;
   top: -6px;
   right: 0;
+  display: inline-flex;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+.neo-tl-assistant:hover .neo-tl-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.neo-tl-edit-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -379,15 +398,31 @@ button.neo-tl-op:hover { background: var(--t-panel-2); }
   background: var(--t-panel);
   color: var(--t-fg-4);
   cursor: pointer;
+}
+.neo-tl-edit-trigger:hover { color: var(--t-fg-2); background: var(--t-panel-2); }
+
+/* 黑色 tooltip（clawsgo b_005/b_006 帧）：data-tip 属性 + ::after 纯 CSS，
+   黑底 #171717 白字 11px、radius 6、padding 4/8 小胶囊，无 JS 定位。 */
+.neo-tl-tip { position: relative; }
+.neo-tl-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #171717;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--dur-1) var(--ease-out);
+  z-index: 20;
 }
-.neo-tl-assistant:hover .neo-tl-edit-trigger {
-  opacity: 1;
-  pointer-events: auto;
-}
-.neo-tl-edit-trigger:hover { color: var(--t-fg-2); background: var(--t-panel-2); }
+.neo-tl-tip:hover::after { opacity: 1; }
 .neo-tl-edit-area {
   width: 100%;
   padding: 8px 10px;
