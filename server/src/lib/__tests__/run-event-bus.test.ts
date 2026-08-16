@@ -177,6 +177,40 @@ function makeSink(): RunEventSink & { got: RunEventRecord[]; ended: boolean } {
   check('oldest dropped — ids 3,4,5', [3, 4, 5], sink.got.map((e) => e.id));
 }
 
+// ── 7b: eviction prefers expendable status_line frames (2026-08-15) ─────────
+// Regression: a long chat-path run emits one full status_line `message` per
+// text chunk (singleton bottom-bar semantics — only the latest matters). With
+// a blind oldest-first ring buffer those floods evicted the early content
+// messages (user_turn / thinking / assistant_text), so a page refresh replayed
+// a timeline reduced to a single msg_foot. The bus must drop expendable
+// status_line frames first, keeping the newest one for the terminal bar.
+{
+  console.log('\n[7b] ring buffer evicts status_line floods before content');
+  const bus = createRunBus({ maxEvents: 5 });
+  bus.ensure('r7b');
+  const sl = (verb: string) => ({
+    id: `sl-${verb}`, kind: 'status_line', turn_id: 't1', ts: 0,
+    verb, elapsed_s: 0, tools_running: 0, terminal: false,
+  });
+  bus.emit('r7b', 'message', { id: 'u1', kind: 'user_turn', turn_id: 't1', ts: 0, body: 'hi' });
+  for (let i = 0; i < 6; i++) bus.emit('r7b', 'message', sl(`v${i}`));
+  bus.emit('r7b', 'message', { id: 'a1', kind: 'assistant_text', turn_id: 't1', ts: 1, body: 'answer', streaming: false });
+  bus.emit('r7b', 'message', { id: 'f1', kind: 'msg_foot', turn_id: 't1', ts: 2, status: 'done', elapsed_ms: 5 });
+  const sink = makeSink();
+  bus.attach('r7b', 0, sink);
+  const kinds = sink.got.map((e) => (e.data as { kind: string }).kind);
+  ok('user_turn survived eviction', kinds.includes('user_turn'));
+  ok('assistant_text survived eviction', kinds.includes('assistant_text'));
+  ok('msg_foot survived eviction', kinds.includes('msg_foot'));
+  check('only newest status_lines kept', ['v4', 'v5'], sink.got
+    .filter((e) => (e.data as { kind: string }).kind === 'status_line')
+    .map((e) => (e.data as { verb: string }).verb));
+  check('buffer at cap', 5, sink.got.length);
+  check('ids still ascending after selective eviction',
+    true,
+    sink.got.every((e, i, arr) => i === 0 || arr[i - 1]!.id < e.id));
+}
+
 // ── 8: finish ends clients ───────────────────────────────────────────────────
 {
   console.log('\n[8] finish ends attached clients');

@@ -363,7 +363,29 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     const rec: RunEventRecord = { id: run.nextEventId++, event, data, ts: now() };
     run.events.push(rec);
     if (run.events.length > maxEvents) {
-      run.events.splice(0, run.events.length - maxEvents);
+      // 2026-08-15 刷新恢复回归修复 — 环形缓冲爆满时优先驱逐可再生的
+      // status_line 刷屏帧，而不是无脑丢最旧事件。status_line 是 singleton
+      // 语义（前端只渲染最新一条，见 timeline-projector bumpStatusLine），
+      // 每个 text chunk 都会重发一条全量 message，长 run（1m25s/688 chunk）
+      // 能占掉 1/3 缓冲，把最早的 user_turn / thinking / assistant_text
+      // 内容帧挤出，导致刷新重放后时间线只剩 msg_foot 一条。
+      // 驱逐时保留最新一条 status_line（终态底部栏重放要用它）。
+      let excess = run.events.length - maxEvents;
+      const isExpendable = (r: RunEventRecord): boolean =>
+        r.event === 'message' &&
+        (r.data as { kind?: string } | null | undefined)?.kind === 'status_line';
+      const expendableIdx: number[] = [];
+      for (let i = 0; i < run.events.length; i++) {
+        if (isExpendable(run.events[i]!)) expendableIdx.push(i);
+      }
+      expendableIdx.pop(); // 最新一条不驱逐
+      const drop = new Set(expendableIdx.slice(0, excess));
+      if (drop.size > 0) {
+        run.events = run.events.filter((_, i) => !drop.has(i));
+        excess -= drop.size;
+      }
+      // 没有（或不够）可驱逐的刷屏帧 → 退回原策略：丢最旧。
+      if (excess > 0) run.events.splice(0, excess);
     }
     run.updatedAt = rec.ts;
     for (const sink of run.clients) {
