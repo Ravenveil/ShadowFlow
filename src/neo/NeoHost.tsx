@@ -6,15 +6,26 @@
  * 内容淡入。
  *
  * - 工作空间：左文件树（listDirs 懒加载展开、类型图标、选中高亮）+ 右预览
- *   （markdown → PreviewMarkdown；代码 → 等宽+行号；图片 → rawUrl <img>；
+ *   （markdown → NeoMarkdown；代码 → 等宽+行号；图片 → rawUrl <img>；
  *   工具条：预览/代码切换、下载、关闭）。
  * - 产物：runId 非空时经 listRuns() 取该 run 的 RunRecord（artifact_url /
  *   artifact_type / artifact_filename 为后端真实落库字段），点击开产物 tab，
- *   预览复用 ArtifactPreview（只 import 不改）。
+ *   预览走 Neo 自有 projections/NeoArtifactPreview（阶段 2.5：done.html
+ *   filecard + 大纲 + markdown 双栏视觉；下载/导出端点不变）。
  * - Loop：getRunLoops(runId)（src/api/runs.ts 已存在，返回 RunLoopsResponse，
  *   LoopStep[] 按 loop_id 去重）→ PDCA 迭代卡（kind/setpoint/状态 pill +
  *   迭代列表：轮次 · verifier_score · metrics 迷你条形 · sensor.classification），
  *   分形深度用缩进。
+ * - 过程（阶段 2.3）：src/neo/projections/ProcessView — getRunGraph +
+ *   getTaskTree，节点轨 + 边 chips + 缩进任务树；SSE 流式期间 5s 轮询。
+ *   run 开始执行时自动露出一次（同一 run 不重复抢 tab）。
+ * - 产物（阶段 2.3 升级）：src/neo/projections/ArtifactsView —
+ *   artifact-lineage + checkpoint-lineage 产物/检查点列表；无 lineage 数据时
+ *   回落到 RunRecord.artifact_* 单条旧行为；点击开 NeoArtifactPreview tab。
+ * - 编队（阶段 2.4 切面，target.kind==='team' 时出现）：
+ *   src/neo/projections/TeamPanel — roster + workflow DAG 摘要 + policy 要点 +
+ *   per-node 输出归属（useRunSession.perNodeChunks；本组件对同一 session 另挂
+ *   一条只读 SSE 视图，server runBus 支持多 sink attach + 全量 replay）。
  *
  * 不 mock、不加 placeholder；runId 为空 = 整体空态；数据缺失 = 干净空态。
  * 颜色一律 var(--t-*) / color-mix，day/night 双主题安全；样式全在 neo-host.css。
@@ -32,11 +43,13 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  GitBranch,
   Package,
   Plus,
   RefreshCw,
   Repeat,
   Search,
+  UsersRound,
   X,
 } from 'lucide-react';
 import { useI18n } from '../common/i18n';
@@ -50,12 +63,17 @@ import {
 import {
   getRunLoops,
   listRuns,
+  type ArtifactType,
   type LoopRecord,
   type LoopStatus,
   type RunRecord,
 } from '../api/runs';
-import { ArtifactPreview } from '../components/ArtifactPreview';
-import PreviewMarkdown from '../components/run-session/PreviewMarkdown';
+import { useRunSession } from '../core/hooks/useRunSession';
+import { NeoMarkdown } from './projections/NeoMarkdown';
+import { NeoArtifactPreview } from './projections/NeoArtifactPreview';
+import { ProcessView } from './projections/ProcessView';
+import { ArtifactsView, type LineageArtifact } from './projections/ArtifactsView';
+import { TeamPanel } from './projections/TeamPanel';
 import type { NeoHostProps } from './types';
 import './neo-host.css';
 
@@ -131,15 +149,28 @@ function metricMaxes(loop: LoopRecord): Record<string, number> {
 // 主组件
 // ---------------------------------------------------------------------------
 
-type FixedTab = 'workspace' | 'artifacts' | 'loop';
+type FixedTab = 'workspace' | 'artifacts' | 'process' | 'loop' | 'team';
 
 interface ArtifactTab {
-  /** = runId（一个 run 至多一条 artifact 记录，与 RunRecord 1:1）。 */
+  /** tab 唯一 id：RunRecord 单产物 = runId；lineage 产物 = artifact_id。 */
   id: string;
-  record: RunRecord;
+  url: string;
+  /** 预览渲染分支类型（html / yaml / markdown）。 */
+  type: ArtifactType;
+  filename: string;
+  sessionId?: string;
+  isComplete: boolean;
 }
 
-export function NeoHost({ runId }: NeoHostProps) {
+/** lineage 产物文件名 → 预览类型（按扩展名真实推导，不捏造）。 */
+function previewTypeOf(filename: string): ArtifactType {
+  const ext = extOf(filename);
+  if (ext === 'html' || ext === 'htm') return 'html';
+  if (ext === 'yaml' || ext === 'yml') return 'yaml';
+  return 'markdown';
+}
+
+export function NeoHost({ target, runId }: NeoHostProps) {
   const { t } = useI18n();
 
   // ── tab 状态 ──────────────────────────────────────────────────────────────
@@ -147,6 +178,13 @@ export function NeoHost({ runId }: NeoHostProps) {
   const [artifactTabs, setArtifactTabs] = useState<ArtifactTab[]>([]);
   /** 已自动开过产物 tab 的 runId（同一 run 不重复自动激活）。 */
   const autoOpenedRef = useRef<Set<string>>(new Set());
+  /** 已自动露出「过程」tab 的 runId（run 开始执行时抢一次 tab，之后不打扰）。 */
+  const autoProcessRef = useRef<Set<string>>(new Set());
+
+  // SSE 只读视图：per-node 输出归属（TeamPanel）+ isStreaming（投影轮询开关 +
+  // 过程 tab 自动露出）。server runBus 支持同一 session 多 sink attach + replay，
+  // 与 NeoChat 的订阅互不干扰。
+  const session = useRunSession(runId ?? '');
 
   // ── 工作空间：文件树 ──────────────────────────────────────────────────────
   const [rootPath, setRootPath] = useState<string | null>(null);
@@ -167,6 +205,8 @@ export function NeoHost({ runId }: NeoHostProps) {
   // ── 产物 ──────────────────────────────────────────────────────────────────
   const [runRecord, setRunRecord] = useState<RunRecord | null>(null);
   const [artifactContent, setArtifactContent] = useState('');
+  /** 产物预览「刷新」按钮：递增触发内容重新拉取。 */
+  const [artifactTick, setArtifactTick] = useState(0);
 
   // ── Loop ──────────────────────────────────────────────────────────────────
   const [loops, setLoops] = useState<LoopRecord[] | null>(null);
@@ -300,17 +340,55 @@ export function NeoHost({ runId }: NeoHostProps) {
     if (!runId || !runRecord?.artifact_url) return;
     if (autoOpenedRef.current.has(runId)) return;
     autoOpenedRef.current.add(runId);
-    setArtifactTabs((tabs) =>
-      tabs.some((tab) => tab.id === runId) ? tabs : [...tabs, { id: runId, record: runRecord }],
-    );
-    setActiveTab(`artifact:${runId}`);
+    openRecordArtifactTab(runRecord);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId, runRecord]);
 
-  const openArtifactTab = (rec: RunRecord) => {
+  // run 开始执行 → 自动露出「过程」tab 一次（执行中面板；同一 run 只抢一次）。
+  useEffect(() => {
+    if (!runId || !session.isStreaming) return;
+    if (autoProcessRef.current.has(runId)) return;
+    autoProcessRef.current.add(runId);
+    setActiveTab('process');
+  }, [runId, session.isStreaming]);
+
+  // target 从 team 切走 → 「编队」tab 消失，激活 tab 回落到过程视图。
+  useEffect(() => {
+    if (activeTab === 'team' && target?.kind !== 'team') setActiveTab('process');
+  }, [activeTab, target?.kind]);
+
+  const openRecordArtifactTab = (rec: RunRecord) => {
+    const url = rec.artifact_url;
+    if (!url) return;
+    const tab: ArtifactTab = {
+      id: rec.run_id,
+      url,
+      type: rec.artifact_type ?? 'markdown',
+      filename: artifactFilename(rec),
+      sessionId: rec.session_id,
+      isComplete: rec.status === 'completed',
+    };
     setArtifactTabs((tabs) =>
-      tabs.some((tab) => tab.id === rec.run_id) ? tabs : [...tabs, { id: rec.run_id, record: rec }],
+      tabs.some((tb) => tb.id === tab.id) ? tabs : [...tabs, tab],
     );
-    setActiveTab(`artifact:${rec.run_id}`);
+    setActiveTab(`artifact:${tab.id}`);
+  };
+
+  // lineage 产物点击 → 开产物 tab（走 NeoArtifactPreview；url 已由 ArtifactsView 解析）。
+  const openLineageArtifactTab = (item: LineageArtifact) => {
+    if (!item.url) return;
+    const tab: ArtifactTab = {
+      id: item.id,
+      url: item.url,
+      type: previewTypeOf(item.name),
+      filename: item.name,
+      sessionId: runRecord?.session_id,
+      isComplete: runRecord?.status === 'completed',
+    };
+    setArtifactTabs((tabs) =>
+      tabs.some((tb) => tb.id === tab.id) ? tabs : [...tabs, tab],
+    );
+    setActiveTab(`artifact:${tab.id}`);
   };
 
   const closeArtifactTab = (id: string) => {
@@ -318,9 +396,9 @@ export function NeoHost({ runId }: NeoHostProps) {
     if (activeTab === `artifact:${id}`) setActiveTab('artifacts');
   };
 
-  // 产物 tab 内容（yaml/markdown 渲染 + html 源码 tab 需要文本）。
+  // 产物 tab 内容（yaml/markdown 渲染 + html 源码 tab 需要文本；artifactTick = 手动刷新）。
   useEffect(() => {
-    const url = activeArtifactTab?.record.artifact_url;
+    const url = activeArtifactTab?.url;
     if (!url) {
       setArtifactContent('');
       return;
@@ -332,7 +410,7 @@ export function NeoHost({ runId }: NeoHostProps) {
       .catch(() => { if (!cancelled) setArtifactContent(''); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeArtifactTab?.id, activeArtifactTab?.record.artifact_url]);
+  }, [activeArtifactTab?.id, activeArtifactTab?.url, artifactTick]);
 
   // ── Loop：getRunLoops → 按 loop_id 去重（响应按 step 分组，loop 对象重复）──
   useEffect(() => {
@@ -366,9 +444,10 @@ export function NeoHost({ runId }: NeoHostProps) {
   // =========================================================================
 
   const fixedTabs: Array<{ id: FixedTab; label: string; icon: ReactNode }> = [
-    { id: 'workspace', label: t('neo.host.workspace', { defaultValue: '工作空间' }), icon: <FolderOpen size={13} strokeWidth={1.8} /> },
-    { id: 'artifacts', label: t('neo.host.artifacts', { defaultValue: '产物' }), icon: <Package size={13} strokeWidth={1.8} /> },
-    { id: 'loop', label: t('neo.host.loop', { defaultValue: 'Loop' }), icon: <Repeat size={13} strokeWidth={1.8} /> },
+    { id: 'workspace', label: t('neo.host.workspace', { defaultValue: '工作空间' }), icon: <FolderOpen size={20} strokeWidth={1.75} /> },
+    { id: 'artifacts', label: t('neo.host.artifacts', { defaultValue: '产物' }), icon: <Package size={20} strokeWidth={1.75} /> },
+    { id: 'process', label: t('neo.host.process', { defaultValue: '过程' }), icon: <GitBranch size={20} strokeWidth={1.75} /> },
+    { id: 'loop', label: t('neo.host.loop', { defaultValue: 'Loop' }), icon: <Repeat size={20} strokeWidth={1.75} /> },
   ];
 
   // ── 文件树（递归，懒加载）──
@@ -592,7 +671,7 @@ export function NeoHost({ runId }: NeoHostProps) {
                 ) : fileState ? (
                   viewMode === 'preview' && kindOf(selected.name) === 'markdown' ? (
                     <div className="neo-host-preview-md">
-                      <PreviewMarkdown source={fileState.text} />
+                      <NeoMarkdown source={fileState.text} />
                       {fileState.truncated && (
                         <div className="neo-host-truncated">
                           {t('neo.host.truncated', { defaultValue: '（内容过长，已截断）' })}
@@ -627,28 +706,16 @@ export function NeoHost({ runId }: NeoHostProps) {
     </div>
   );
 
-  // ── 产物 tab 内容 ──
-  const artifactsContent = (
-    <div className="neo-host-list">
-      {runRecord?.artifact_url ? (
-        <button
-          type="button"
-          className="neo-host-artifact-row"
-          onClick={() => openArtifactTab(runRecord)}
-        >
-          <Package size={14} strokeWidth={1.8} className="neo-host-artifact-icon" />
-          <span className="neo-host-artifact-name">{artifactFilename(runRecord)}</span>
-          <span className="neo-host-artifact-type">
-            {(runRecord.artifact_type ?? '').toUpperCase()}
-          </span>
-        </button>
-      ) : (
-        <div className="neo-host-empty neo-host-empty--fill">
-          {t('neo.host.noArtifacts', { defaultValue: '该运行尚未产出工件' })}
-        </div>
-      )}
-    </div>
-  );
+  // ── 产物 tab 内容（lineage 驱动，无数据时回落单 artifact 旧行为）──
+  const artifactsContent = runId ? (
+    <ArtifactsView
+      runId={runId}
+      active={session.isStreaming}
+      runRecord={runRecord}
+      onOpen={openLineageArtifactTab}
+      onOpenRecord={openRecordArtifactTab}
+    />
+  ) : null;
 
   // ── Loop tab 内容 ──
   const loopContent = (
@@ -735,27 +802,45 @@ export function NeoHost({ runId }: NeoHostProps) {
     </div>
   );
 
-  // ── 产物预览 tab 内容（复用 ArtifactPreview，只 import 不改）──
+  // ── 产物预览 tab 内容（Neo 自有 NeoArtifactPreview：done.html filecard 视觉）──
   const artifactTabContent = (tab: ArtifactTab) => {
-    const rec = tab.record;
     return (
       <div className="neo-host-artifact-preview">
-        <ArtifactPreview
-          url={rec.artifact_url ?? ''}
-          type={rec.artifact_type ?? 'markdown'}
+        <NeoArtifactPreview
+          url={tab.url}
+          type={tab.type}
           content={artifactContent}
-          sessionId={rec.session_id}
-          filename={artifactFilename(rec)}
-          isComplete={rec.status === 'completed'}
+          sessionId={tab.sessionId}
+          filename={tab.filename}
+          isComplete={tab.isComplete}
+          onRefresh={() => setArtifactTick((n) => n + 1)}
+          onClose={() => closeArtifactTab(tab.id)}
         />
       </div>
     );
   };
 
+  // ── 过程 / 编队 tab 内容 ──
+  const processContent = runId ? (
+    <ProcessView runId={runId} active={session.isStreaming} />
+  ) : null;
+
+  const teamContent =
+    target?.kind === 'team' ? (
+      <TeamPanel
+        teamId={target.id}
+        teamName={target.name}
+        perNodeChunks={session.perNodeChunks}
+        streaming={session.isStreaming}
+      />
+    ) : null;
+
   const contentFor = (tabId: string): ReactNode => {
     if (tabId === 'workspace') return workspaceContent;
     if (tabId === 'artifacts') return artifactsContent;
+    if (tabId === 'process') return processContent;
     if (tabId === 'loop') return loopContent;
+    if (tabId === 'team') return teamContent;
     const tab = artifactTabs.find((tb) => `artifact:${tb.id}` === tabId);
     return tab ? artifactTabContent(tab) : null;
   };
@@ -773,7 +858,7 @@ export function NeoHost({ runId }: NeoHostProps) {
           <Package size={20} strokeWidth={1.5} className="neo-host-empty-icon" />
           <span>{t('neo.host.noRun', { defaultValue: '暂无运行中的任务' })}</span>
           <span className="neo-host-empty-sub">
-            {t('neo.host.noRunHint', { defaultValue: '发起任务后，这里展示 Agent 的工作空间、产物与 Loop 迭代' })}
+            {t('neo.host.noRunHint', { defaultValue: '发起任务后，这里展示 Agent 的工作空间、产物、过程投影与 Loop 迭代' })}
           </span>
           {/* 能力预览：描述三个 tab 的真实功能（非 mock 数据），a_011 横排图标+名称 */}
           <div className="neo-host-caps">
@@ -803,7 +888,8 @@ export function NeoHost({ runId }: NeoHostProps) {
 
   return (
     <div className="neo-host">
-      {/* tab 栏：Agent 的主机 + 工作空间 / 产物 / Loop + 产物 tab + 「+」 */}
+      {/* tab 栏：Agent 的主机 + 工作空间 / 产物 / Loop + 产物 tab + 「+」
+          （2026-08-15 任务 V：ClawsGo 大图标盒形态 — 44px hairline 盒 + 下方小标签） */}
       <div className="neo-host-header">
         <span className="neo-host-title">
           {t('neo.host.title', { defaultValue: 'Agent 的主机' })}
@@ -817,10 +903,24 @@ export function NeoHost({ runId }: NeoHostProps) {
               className={`neo-host-tab${activeTab === tab.id ? ' neo-host-tab--on' : ''}`}
               onClick={() => setActiveTab(tab.id)}
             >
-              {tab.icon}
-              {tab.label}
+              <span className="neo-host-tab-box">{tab.icon}</span>
+              <span className="neo-host-tab-label">{tab.label}</span>
             </button>
           ))}
+          {/* 编队 tab：仅在 NeoRail 团队态选中 team 时出现（roster/工作流/策略/分节点输出） */}
+          {target?.kind === 'team' && (
+            <button
+              type="button"
+              data-tab="team"
+              className={`neo-host-tab${activeTab === 'team' ? ' neo-host-tab--on' : ''}`}
+              onClick={() => setActiveTab('team')}
+            >
+              <span className="neo-host-tab-box">
+                <UsersRound size={20} strokeWidth={1.75} />
+              </span>
+              <span className="neo-host-tab-label">{t('neo.host.team', { defaultValue: '编队' })}</span>
+            </button>
+          )}
           {artifactTabs.map((tab) => (
             <span
               key={tab.id}
@@ -828,19 +928,21 @@ export function NeoHost({ runId }: NeoHostProps) {
               className={`neo-host-tab neo-host-tab--artifact${activeTab === `artifact:${tab.id}` ? ' neo-host-tab--on' : ''}`}
               onClick={() => setActiveTab(`artifact:${tab.id}`)}
             >
-              <Package size={13} strokeWidth={1.8} />
-              <span className="neo-host-tab-ellipsis">{artifactFilename(tab.record)}</span>
-              <button
-                type="button"
-                className="neo-host-tab-close"
-                title={t('neo.host.close', { defaultValue: '关闭' })}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeArtifactTab(tab.id);
-                }}
-              >
-                <X size={11} strokeWidth={2} />
-              </button>
+              <span className="neo-host-tab-box">
+                <Package size={20} strokeWidth={1.75} />
+                <button
+                  type="button"
+                  className="neo-host-tab-close"
+                  title={t('neo.host.close', { defaultValue: '关闭' })}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeArtifactTab(tab.id);
+                  }}
+                >
+                  <X size={10} strokeWidth={2} />
+                </button>
+              </span>
+              <span className="neo-host-tab-label neo-host-tab-ellipsis">{tab.filename}</span>
             </span>
           ))}
           {/* 「+」先不实现功能（产物出现时自动开 tab），保留视觉位 */}
@@ -850,7 +952,9 @@ export function NeoHost({ runId }: NeoHostProps) {
             title={t('neo.host.plusSoon', { defaultValue: '新标签页（即将支持）' })}
             aria-disabled="true"
           >
-            <Plus size={13} strokeWidth={2} />
+            <span className="neo-host-tab-box">
+              <Plus size={18} strokeWidth={1.8} />
+            </span>
           </button>
           <span
             className="neo-host-tabs-bar"
