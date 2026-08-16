@@ -7,6 +7,10 @@
  *   - River Memory 集成视图
  *   - Policy Matrix 触发事件
  *
+ * W1-D（2026-08-16）：整页 Neo 化（loop-engine-neo.css，neo-le-* 作用域），
+ * 死链修复：卡片点击不再跳已下架的 /runs/:id，改跳 /?run=<runId>
+ * （chat-first 主体验恢复该 run 执行现场）。
+ *
  * 对应设计文档: docs/architecture/loop-engine-design.md
  */
 
@@ -14,6 +18,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Pause, RotateCw, AlertTriangle, CheckCircle2, XCircle, TrendingUp, TrendingDown, Minus, StopCircle } from 'lucide-react';
 import { listRuns, getRunLoops, haltLoop, type LoopKind, type LoopStatus } from '../api/runs';
+import { useI18n } from '../common/i18n';
+import './loop-engine-neo.css';
 
 interface DisplayLoop {
   step_id: string;
@@ -42,14 +48,6 @@ interface DisplayLoop {
   depth: number;
 }
 
-const STATUS_COLORS: Record<LoopStatus, string> = {
-  running: 'text-blue-400',
-  converged: 'text-emerald-400',
-  oscillating: 'text-amber-400',
-  diverged: 'text-red-400',
-  halted: 'text-zinc-400',
-};
-
 const STATUS_ICONS: Record<LoopStatus, typeof Pause> = {
   running: RotateCw,
   converged: CheckCircle2,
@@ -69,6 +67,7 @@ function getTrendIcon(history: number[]): React.ElementType {
 
 export function LoopEnginePage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const { runId } = useParams<{ runId?: string }>();
   const [loops, setLoops] = useState<DisplayLoop[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,19 +207,21 @@ export function LoopEnginePage() {
   function getStatusBadge(status: LoopStatus) {
     const Icon = STATUS_ICONS[status];
     return (
-      <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full border bg-white/5 ${STATUS_COLORS[status]}`}>
-        <Icon className="w-3.5 h-3.5" />
-        <span className="text-xs font-medium capitalize">{status}</span>
-      </div>
+      <span className={`neo-le-pill neo-le-pill--${status}`}>
+        <Icon size={12} />
+        <span>{status}</span>
+      </span>
     );
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="flex items-center gap-3 text-white/40">
-          <RotateCw className="w-5 h-5 animate-spin" />
-          <span className="text-sm">加载循环引擎状态...</span>
+      <div className="neo-le">
+        <div className="neo-le-center">
+          <div className="neo-le-loading">
+            <RotateCw size={16} className="neo-le-spin" />
+            <span>{t('neo.loopEngine.loading', { defaultValue: '加载循环引擎状态…' })}</span>
+          </div>
         </div>
       </div>
     );
@@ -228,16 +229,18 @@ export function LoopEnginePage() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center text-white/40">
-          <AlertTriangle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p className="text-sm">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-3 text-xs text-accent hover:text-accent/80"
-          >
-            重试
-          </button>
+      <div className="neo-le">
+        <div className="neo-le-center">
+          <div className="neo-le-error">
+            <AlertTriangle size={40} className="neo-le-error-icon" />
+            <p className="neo-le-error-msg">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="neo-le-error-retry"
+            >
+              {t('neo.loopEngine.retry', { defaultValue: '重试' })}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -260,136 +263,151 @@ export function LoopEnginePage() {
       .filter((v): v is number => v !== null);
   }
 
+  const runningCount = loops.filter(l => l.status === 'running').length;
+
   return (
-    <div className="space-y-6">
+    <div className="neo-le">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <header className="neo-le-header">
         <div>
-          <h1 className="text-2xl font-semibold text-white">循环引擎</h1>
-          <p className="text-sm text-white/50 mt-1">
-            PDCA 反馈控制环 · 收敛检测 · River Memory
+          <p className="neo-le-eyebrow">Loop Engine / PDCA</p>
+          <h1 className="neo-le-title">
+            {t('neo.loopEngine.title', { defaultValue: '循环引擎' })}
+          </h1>
+          <p className="neo-le-sub">
+            {t('neo.loopEngine.subtitle', { defaultValue: 'PDCA 反馈控制环 · 收敛检测 · River Memory' })}
           </p>
           {runId && (
-            <div className="text-xs text-white/30 mt-1">
-              Run: <span className="font-mono">{runId}</span>
-            </div>
+            <p className="neo-le-runref">Run: {runId}</p>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-xs text-white/40">
-            {loops.filter(l => l.status === 'running').length} 运行中 · {loops.length} 总计
-          </div>
-        </div>
-      </div>
+        <span className="neo-le-count">
+          {t('neo.loopEngine.count', {
+            defaultValue: `${runningCount} 运行中 · ${loops.length} 总计`,
+          })}
+        </span>
+      </header>
 
       {/* Loops List */}
       {loops.length === 0 ? (
-        <div className="text-center py-12 text-white/40">
-          <Pause className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p className="text-sm">当前没有循环记录</p>
-          <p className="text-xs mt-2">运行包含 control.loop 节点的 workflow 后将在此显示</p>
+        <div className="neo-le-empty">
+          <Pause size={40} className="neo-le-empty-icon" />
+          <p className="neo-le-empty-t1">
+            {t('neo.loopEngine.emptyTitle', { defaultValue: '当前没有循环记录' })}
+          </p>
+          <p className="neo-le-empty-t2">
+            {t('neo.loopEngine.emptyHint', { defaultValue: '运行包含 control.loop 节点的 workflow 后将在此显示' })}
+          </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="neo-le-list">
           {loops.map((loop) => {
             const latestIteration = getLatestIteration(loop);
             const metricHistory = getMetricHistory(loop);
             const TrendIcon = metricHistory.length > 1 ? getTrendIcon(metricHistory) : Minus;
-            const trendColor = metricHistory.length > 1
+            const trendClass = metricHistory.length > 1
               ? (metricHistory[metricHistory.length - 1] > metricHistory[metricHistory.length - 2]
-                  ? 'text-emerald-400'
+                  ? 'neo-le-trend--up'
                   : metricHistory[metricHistory.length - 1] < metricHistory[metricHistory.length - 2]
-                  ? 'text-red-400'
-                  : 'text-zinc-400')
-              : 'text-zinc-400';
+                  ? 'neo-le-trend--down'
+                  : 'neo-le-trend--flat')
+              : 'neo-le-trend--flat';
 
             return (
               <div
                 key={loop.loop_id}
-                className="bg-white/5 border border-white/10 rounded-lg p-5 hover:bg-white/[0.07] transition-colors cursor-pointer"
-                onClick={() => navigate(`/runs/${loop.run_id}`)}
+                className="neo-le-card"
+                onClick={() => navigate(`/?run=${loop.run_id}`)}
               >
                 {/* Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-sm font-mono text-white/80">{loop.loop_id}</h3>
+                <div className="neo-le-card-head">
+                  <div className="neo-le-card-main">
+                    <div className="neo-le-card-title-row">
+                      <span className="neo-le-card-id">{loop.loop_id}</span>
                       {getStatusBadge(loop.status)}
                       {loop.depth > 0 && (
-                        <span className="text-xs text-white/30 bg-white/5 px-1.5 py-0.5 rounded">
-                          深度 {loop.depth}
+                        <span className="neo-le-depth">
+                          {t('neo.loopEngine.depth', { defaultValue: `深度 ${loop.depth}` })}
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-white/40">
-                      Run: <span className="font-mono">{loop.run_id}</span>
-                      {loop.node_id && (
-                        <>
-                          {' '}· Node: <span className="font-mono">{loop.node_id}</span>
-                        </>
-                      )}
+                    <div className="neo-le-card-meta">
+                      Run: {loop.run_id}
+                      {loop.node_id && ` · Node: ${loop.node_id}`}
                     </div>
                   </div>
-                  <div className="text-right flex items-center gap-3">
-                    <div className="text-right">
-                      <div className="text-2xl font-semibold text-white">
-                        {loop.iteration_count}
+                  <div className="neo-le-card-side">
+                    <div className="neo-le-iters">
+                      <div className="neo-le-iters-num">{loop.iteration_count}</div>
+                      <div className="neo-le-iters-label">
+                        {t('neo.loopEngine.iterations', { defaultValue: '迭代' })}
                       </div>
-                      <div className="text-xs text-white/40">迭代</div>
                     </div>
                     {loop.status === 'running' && (
                       <button
                         onClick={(e) => handleHaltLoop(loop, e)}
                         disabled={haltingLoopId === loop.loop_id}
-                        className="p-2 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 disabled:opacity-50 transition-colors"
-                        title="终止循环"
+                        className={`neo-le-halt ${haltingLoopId === loop.loop_id ? 'neo-le-halt--busy' : ''}`}
+                        title={t('neo.loopEngine.halt', { defaultValue: '终止循环' })}
                       >
-                        <StopCircle className={`w-5 h-5 ${haltingLoopId === loop.loop_id ? 'animate-pulse' : ''}`} />
+                        <StopCircle size={18} />
                       </button>
                     )}
                   </div>
                 </div>
 
                 {/* Setpoint */}
-                <div className="bg-black/30 rounded px-3 py-2 mb-3">
-                  <div className="text-xs text-white/50 mb-1">收敛目标</div>
-                  <div className="font-mono text-sm text-white">
+                <div className="neo-le-setpoint">
+                  <div className="neo-le-setpoint-label">
+                    {t('neo.loopEngine.setpoint', { defaultValue: '收敛目标' })}
+                  </div>
+                  <div className="neo-le-setpoint-expr">
                     {loop.setpoint.metric} {loop.setpoint.op} {loop.setpoint.value}
                   </div>
                 </div>
 
                 {/* Current Iteration */}
                 {latestIteration && (
-                  <div className="grid grid-cols-4 gap-4 text-xs mb-3">
+                  <div className="neo-le-grid">
                     <div>
-                      <div className="text-white/40 mb-1">当前值</div>
-                      <div className="flex items-center gap-1">
+                      <div className="neo-le-cell-label">
+                        {t('neo.loopEngine.currentValue', { defaultValue: '当前值' })}
+                      </div>
+                      <div className="neo-le-cell-value neo-le-cell-value--mono">
                         {metricHistory.length > 1 && (
-                          <TrendIcon className={`w-3 h-3 ${trendColor}`} />
+                          <TrendIcon size={12} className={trendClass} />
                         )}
-                        <div className="font-mono text-white">
+                        <span>
                           {latestIteration.sensor_result.value !== undefined
                             ? latestIteration.sensor_result.value.toFixed(3)
                             : latestIteration.metrics[loop.setpoint.metric]?.toFixed(3) ?? '-'
                           }
-                        </div>
+                        </span>
                       </div>
                     </div>
                     <div>
-                      <div className="text-white/40 mb-1">分类</div>
-                      <div className="capitalize text-white">
+                      <div className="neo-le-cell-label">
+                        {t('neo.loopEngine.classification', { defaultValue: '分类' })}
+                      </div>
+                      <div className="neo-le-cell-value" style={{ textTransform: 'capitalize' }}>
                         {latestIteration.sensor_result.classification || 'unknown'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-white/40 mb-1">收敛状态</div>
-                      <div className={latestIteration.sensor_result.converged ? 'text-emerald-400' : 'text-amber-400'}>
-                        {latestIteration.sensor_result.converged ? '已收敛' : '迭代中'}
+                      <div className="neo-le-cell-label">
+                        {t('neo.loopEngine.convergence', { defaultValue: '收敛状态' })}
+                      </div>
+                      <div className={`neo-le-cell-value ${latestIteration.sensor_result.converged ? 'neo-le-conv--yes' : 'neo-le-conv--no'}`}>
+                        {latestIteration.sensor_result.converged
+                          ? t('neo.loopEngine.converged', { defaultValue: '已收敛' })
+                          : t('neo.loopEngine.iterating', { defaultValue: '迭代中' })}
                       </div>
                     </div>
                     <div>
-                      <div className="text-white/40 mb-1">最新迭代</div>
-                      <div className="text-white">
+                      <div className="neo-le-cell-label">
+                        {t('neo.loopEngine.latestIteration', { defaultValue: '最新迭代' })}
+                      </div>
+                      <div className="neo-le-cell-value neo-le-cell-value--mono">
                         #{latestIteration.index}
                       </div>
                     </div>
@@ -398,17 +416,17 @@ export function LoopEnginePage() {
 
                 {/* Timeline indicator */}
                 {loop.iterations.length > 1 && (
-                  <div className="flex items-center gap-1 mt-2">
+                  <div className="neo-le-timeline">
                     {loop.iterations.slice(-10).map((iter) => {
                       const isConverged = iter.sensor_result.converged;
                       return (
                         <div
                           key={iter.index}
-                          className={`h-1.5 rounded-full ${
-                            isConverged ? 'bg-emerald-400' : 'bg-amber-400/50'
-                          }`}
+                          className={`neo-le-tick ${isConverged ? 'neo-le-tick--converged' : 'neo-le-tick--pending'}`}
                           style={{ width: `${100 / Math.min(loop.iterations.length, 10)}%` }}
-                          title={`迭代 ${iter.index}: ${isConverged ? 'converged' : 'pending'}`}
+                          title={t('neo.loopEngine.tickTitle', {
+                            defaultValue: `迭代 ${iter.index}: ${isConverged ? 'converged' : 'pending'}`,
+                          })}
                         />
                       );
                     })}
@@ -420,22 +438,12 @@ export function LoopEnginePage() {
         </div>
       )}
 
-      {/* Quick Actions */}
-      <div className="flex items-center justify-between pt-4 border-t border-white/10">
-        <div className="text-xs text-white/40">
-          {runId
-            ? '显示当前 Run 的所有循环记录'
-            : '点击循环卡片查看完整 Run 详情和 Projection 视图'
-          }
-        </div>
-        {!runId && (
-          <button
-            onClick={() => navigate('/runs')}
-            className="text-xs text-accent hover:text-accent/80 transition-colors"
-          >
-            查看所有 Runs →
-          </button>
-        )}
+      {/* Footer */}
+      <div className="neo-le-footer">
+        {runId
+          ? t('neo.loopEngine.footerRun', { defaultValue: '显示当前 Run 的所有循环记录' })
+          : t('neo.loopEngine.footerAll', { defaultValue: '点击循环卡片回到对话，恢复该 Run 的执行现场' })
+        }
       </div>
     </div>
   );
