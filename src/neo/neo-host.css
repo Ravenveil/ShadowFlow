@@ -179,6 +179,20 @@
   overflow: hidden;
 }
 
+/* W1-B：tab 保活 —— 所有 tab pane 常驻挂载，非激活用 hidden 隐藏（display:none），
+   保留滚动位置 / 选中文件 / 预览模式等内部状态（done.html a_010）。 */
+.neo-host-pane {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.neo-host-pane[hidden] {
+  display: none;
+}
+
 .neo-host-fade {
   animation: neo-host-fade var(--dur-2, 160ms) var(--ease-out, ease-out);
 }
@@ -1288,7 +1302,7 @@
   overflow-y: auto;
 }
 
-/* html iframe 预览（skeleton + 失败态，逻辑同旧 ArtifactPreview） */
+/* html iframe 预览（居中 spinner 骨架 + 失败态，b_005/b_007） */
 .neo-ap-frame-wrap {
   position: relative;
   flex: 1;
@@ -1306,14 +1320,68 @@
 .neo-ap-skel {
   position: absolute;
   inset: 0;
-  background: var(--t-panel-2);
-  animation: neo-ap-pulse 1.4s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--t-panel);
 }
 
-@keyframes neo-ap-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
+/* W1-B：居中细圆环加载骨架（1.75px 圆环旋转，b_005/b_007 参照） */
+.neo-spin {
+  width: 18px;
+  height: 18px;
+  border: 1.75px solid var(--t-border);
+  border-top-color: var(--t-fg-3);
+  border-radius: 50%;
+  animation: neo-spin-rot 0.7s linear infinite;
 }
+
+@keyframes neo-spin-rot {
+  to { transform: rotate(360deg); }
+}
+
+.neo-ap-loading,
+.neo-host-preview-loading {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* W1-B：黑色 tooltip（data-tip 纯 CSS ::after；#171717/11px/radius 6/padding 4/8，
+   b_005「预览」b_006「代码」帧参照；class 前缀 neo-tt，仅本文件定义） */
+.neo-tt {
+  position: relative;
+}
+
+.neo-tt::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #171717;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
+  z-index: 40;
+}
+
+.neo-tt:hover::after,
+.neo-tt:focus-visible::after {
+  opacity: 1;
+}
+/* 注：b_005/b_006 帧里 tooltip 在 seg 上方；本壳 filecard 贴近 .neo-host-content
+   （overflow:hidden）顶边，上方冒泡会被裁切，故统一取下方。 */
 
 .neo-ap-frame-err {
   position: absolute;

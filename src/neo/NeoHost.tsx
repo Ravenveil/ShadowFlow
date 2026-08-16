@@ -204,8 +204,10 @@ export function NeoHost({ target, runId }: NeoHostProps) {
 
   // ── 产物 ──────────────────────────────────────────────────────────────────
   const [runRecord, setRunRecord] = useState<RunRecord | null>(null);
-  const [artifactContent, setArtifactContent] = useState('');
-  /** 产物预览「刷新」按钮：递增触发内容重新拉取。 */
+  /** W1-B：产物文本按 tab id 缓存 —— tab 保活后切走再切回不丢内容、不串内容。 */
+  const [artifactContents, setArtifactContents] = useState<Record<string, string>>({});
+  const [artifactLoading, setArtifactLoading] = useState(false);
+  /** 产物预览「刷新」按钮：清掉当前 tab 缓存并重新拉取。 */
   const [artifactTick, setArtifactTick] = useState(0);
 
   // ── Loop ──────────────────────────────────────────────────────────────────
@@ -396,18 +398,35 @@ export function NeoHost({ target, runId }: NeoHostProps) {
     if (activeTab === `artifact:${id}`) setActiveTab('artifacts');
   };
 
-  // 产物 tab 内容（yaml/markdown 渲染 + html 源码 tab 需要文本；artifactTick = 手动刷新）。
+  // 产物 tab 内容（yaml/markdown 渲染 + html 源码 tab 需要文本；按 tab id 缓存，
+  // 已缓存的 tab 不重复拉取；artifactTick = 手动刷新，先清缓存再拉）。
   useEffect(() => {
-    const url = activeArtifactTab?.url;
-    if (!url) {
-      setArtifactContent('');
+    const tab = activeArtifactTab;
+    if (!tab) {
+      setArtifactLoading(false);
+      return;
+    }
+    if (artifactContents[tab.id] !== undefined) {
+      setArtifactLoading(false);
       return;
     }
     let cancelled = false;
-    fetch(url)
+    setArtifactLoading(true);
+    fetch(tab.url)
       .then((r) => (r.ok ? r.text() : ''))
-      .then((txt) => { if (!cancelled) setArtifactContent(txt); })
-      .catch(() => { if (!cancelled) setArtifactContent(''); });
+      .then((txt) => {
+        if (!cancelled) {
+          setArtifactContents((m) => ({ ...m, [tab.id]: txt }));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setArtifactContents((m) => ({ ...m, [tab.id]: '' }));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setArtifactLoading(false);
+      });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeArtifactTab?.id, activeArtifactTab?.url, artifactTick]);
@@ -616,7 +635,8 @@ export function NeoHost({ target, runId }: NeoHostProps) {
                   <div className="neo-host-seg">
                     <button
                       type="button"
-                      className={`neo-host-seg-btn${viewMode === 'preview' ? ' neo-host-seg-btn--on' : ''}`}
+                      className={`neo-host-seg-btn neo-tt${viewMode === 'preview' ? ' neo-host-seg-btn--on' : ''}`}
+                      data-tip={t('neo.host.preview', { defaultValue: '预览' })}
                       onClick={() => setViewMode('preview')}
                     >
                       <Eye size={11} strokeWidth={2} />
@@ -624,7 +644,8 @@ export function NeoHost({ target, runId }: NeoHostProps) {
                     </button>
                     <button
                       type="button"
-                      className={`neo-host-seg-btn${viewMode === 'code' ? ' neo-host-seg-btn--on' : ''}`}
+                      className={`neo-host-seg-btn neo-tt${viewMode === 'code' ? ' neo-host-seg-btn--on' : ''}`}
+                      data-tip={t('neo.host.code', { defaultValue: '代码' })}
                       onClick={() => setViewMode('code')}
                     >
                       <Code size={11} strokeWidth={2} />
@@ -661,8 +682,9 @@ export function NeoHost({ target, runId }: NeoHostProps) {
                     />
                   </div>
                 ) : fileLoading ? (
-                  <div className="neo-host-tree-note neo-host-tree-note--pad">
-                    {t('neo.host.loading', { defaultValue: '读取中…' })}
+                  // b_007：header 先渲染，内容区居中细圆环 spinner
+                  <div className="neo-host-preview-loading">
+                    <span className="neo-spin" />
                   </div>
                 ) : fileError ? (
                   <div className="neo-host-tree-note neo-host-tree-note--pad">
@@ -707,10 +729,11 @@ export function NeoHost({ target, runId }: NeoHostProps) {
   );
 
   // ── 产物 tab 内容（lineage 驱动，无数据时回落单 artifact 旧行为）──
+  // W1-B 保活：hidden 期间暂停轮询（active 叠加 tab 可见性），切回时 effect 重跑拉新数据。
   const artifactsContent = runId ? (
     <ArtifactsView
       runId={runId}
-      active={session.isStreaming}
+      active={session.isStreaming && activeTab === 'artifacts'}
       runRecord={runRecord}
       onOpen={openLineageArtifactTab}
       onOpenRecord={openRecordArtifactTab}
@@ -804,16 +827,25 @@ export function NeoHost({ target, runId }: NeoHostProps) {
 
   // ── 产物预览 tab 内容（Neo 自有 NeoArtifactPreview：done.html filecard 视觉）──
   const artifactTabContent = (tab: ArtifactTab) => {
+    const cached = artifactContents[tab.id];
     return (
       <div className="neo-host-artifact-preview">
         <NeoArtifactPreview
           url={tab.url}
           type={tab.type}
-          content={artifactContent}
+          content={cached ?? ''}
           sessionId={tab.sessionId}
           filename={tab.filename}
           isComplete={tab.isComplete}
-          onRefresh={() => setArtifactTick((n) => n + 1)}
+          loading={cached === undefined && artifactLoading}
+          onRefresh={() => {
+            setArtifactContents((m) => {
+              const next = { ...m };
+              delete next[tab.id];
+              return next;
+            });
+            setArtifactTick((n) => n + 1);
+          }}
           onClose={() => closeArtifactTab(tab.id)}
         />
       </div>
@@ -822,7 +854,7 @@ export function NeoHost({ target, runId }: NeoHostProps) {
 
   // ── 过程 / 编队 tab 内容 ──
   const processContent = runId ? (
-    <ProcessView runId={runId} active={session.isStreaming} />
+    <ProcessView runId={runId} active={session.isStreaming && activeTab === 'process'} />
   ) : null;
 
   const teamContent =
@@ -834,16 +866,6 @@ export function NeoHost({ target, runId }: NeoHostProps) {
         streaming={session.isStreaming}
       />
     ) : null;
-
-  const contentFor = (tabId: string): ReactNode => {
-    if (tabId === 'workspace') return workspaceContent;
-    if (tabId === 'artifacts') return artifactsContent;
-    if (tabId === 'process') return processContent;
-    if (tabId === 'loop') return loopContent;
-    if (tabId === 'team') return teamContent;
-    const tab = artifactTabs.find((tb) => `artifact:${tb.id}` === tabId);
-    return tab ? artifactTabContent(tab) : null;
-  };
 
   // ── runId 为空 → 整体空态 ──
   if (!runId) {
@@ -967,9 +989,35 @@ export function NeoHost({ target, runId }: NeoHostProps) {
         </div>
       </div>
 
-      {/* tab 内容（淡入） */}
-      <div className="neo-host-content neo-host-fade" key={activeTab}>
-        {contentFor(activeTab)}
+      {/* tab 内容：全部 pane 常驻挂载，hidden 保活（display:none），切 tab 不丢
+          滚动位置 / 选中文件 / 预览模式（done.html a_010）；fade 在 pane 首次挂载时播放 */}
+      <div className="neo-host-content">
+        <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'workspace'}>
+          {workspaceContent}
+        </div>
+        <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'artifacts'}>
+          {artifactsContent}
+        </div>
+        <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'process'}>
+          {processContent}
+        </div>
+        <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'loop'}>
+          {loopContent}
+        </div>
+        {teamContent && (
+          <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'team'}>
+            {teamContent}
+          </div>
+        )}
+        {artifactTabs.map((tab) => (
+          <div
+            key={tab.id}
+            className="neo-host-pane neo-host-fade"
+            hidden={activeTab !== `artifact:${tab.id}`}
+          >
+            {artifactTabContent(tab)}
+          </div>
+        ))}
       </div>
     </div>
   );
