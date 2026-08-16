@@ -9,9 +9,13 @@
  *   - 创建按钮 → Modal（name / description / sources / citation_required / freshness_policy）
  *   - 展开单个 Pack 看 sources 状态列表
  *   - 状态轮询：indexing 期间 3s 一次 GET /knowledge/packs/:id，ready/failed 后停
+ *
+ * 阶段 2.5 视觉返工（任务 C，2026-08-15）：
+ *   视觉 Neo 化（样式见 ./knowledge-neo.css，token 走 var(--t-*)），逻辑一行未动。
+ *   旧体系组件 MemoryStatsBar / iconRegistry 不再 import——统计条按原数据源
+ *   （GET /memory/stats）在本文件内联 Neo 化重写，告警三角改内联 SVG。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle as KnowledgeAlert } from '../common/icons/iconRegistry';
 import {
   createPack,
   deletePack,
@@ -20,6 +24,8 @@ import {
   listPacks,
   reindexPack,
 } from '../api/knowledge';
+import { getMemoryStats } from '../api/memory';
+import type { MemoryStats } from '../api/memory';
 import type {
   CreatePackPayload,
   FreshnessPolicy,
@@ -28,7 +34,8 @@ import type {
   PackStatus,
   SourceType,
 } from '../common/types/knowledge';
-import { MemoryStatsBar } from '../components/knowledge/MemoryStatsBar';
+import { useI18n } from '../common/i18n';
+import './knowledge-neo.css';
 
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -38,32 +45,32 @@ const POLL_INTERVAL_MS = 3000;
 // click Reindex explicitly.
 const POLL_MAX_TICKS = 60;
 
-const STATUS_BADGE: Record<PackStatus, { label: string; bg: string; fg: string }> = {
-  pending: { label: 'pending', bg: 'rgba(120,120,120,0.15)', fg: '#A4A4AA' },
-  indexing: { label: 'indexing', bg: 'rgba(56,128,255,0.15)', fg: '#6FA8FF' },
-  ready: { label: 'ready', bg: 'rgba(58,190,120,0.15)', fg: '#4FCC85' },
-  failed: { label: 'failed', bg: 'rgba(232,90,90,0.15)', fg: '#F58484' },
-};
-
 function StatusBadge({ status }: { status: PackStatus }) {
-  const cfg = STATUS_BADGE[status];
   return (
-    <span
-      data-testid={`pack-status-${status}`}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        height: 22,
-        padding: '0 10px',
-        borderRadius: 11,
-        fontSize: 11,
-        fontFamily: 'var(--font-mono)',
-        background: cfg.bg,
-        color: cfg.fg,
-      }}
-    >
-      {cfg.label}
+    <span data-testid={`pack-status-${status}`} className={`neo-kp-pill neo-kp-pill--${status}`}>
+      {status}
     </span>
+  );
+}
+
+/** lucide alert-triangle 内联版（替代旧 iconRegistry 的 KnowledgeAlert）。 */
+function AlertTriangleIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
   );
 }
 
@@ -90,41 +97,92 @@ function translateError(err: unknown): string {
   return '网络错误，请稍后重试。';
 }
 
-const RAG_BACKEND_BADGE: Record<string, { label: string; bg: string; fg: string }> = {
-  stub: { label: 'RAG: keyword stub', bg: 'rgba(120,120,120,0.12)', fg: '#8B8B96' },
-  // UI5.0: LightRAG badge 由紫 (#A97FFF) 收敛为蓝
-  lightrag: { label: 'RAG: LightRAG', bg: 'rgba(37,99,235,0.14)', fg: '#2563EB' },
-};
-
 function RagBackendBadge({ backend }: { backend?: string }) {
-  const cfg = RAG_BACKEND_BADGE[backend ?? 'stub'] ?? RAG_BACKEND_BADGE.stub;
+  const isLightrag = backend === 'lightrag';
   return (
     <span
       data-testid="rag-backend-badge"
       title={
-        backend === 'lightrag'
+        isLightrag
           ? 'LightRAG (graph + vector index) is active. Set LIGHTRAG_ENABLED=true in .env to enable.'
           : 'Keyword stub index active. Set LIGHTRAG_ENABLED=true in .env to enable LightRAG.'
       }
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        height: 20,
-        padding: '0 8px',
-        borderRadius: 10,
-        fontSize: 10,
-        fontFamily: 'var(--font-mono)',
-        background: cfg.bg,
-        color: cfg.fg,
-        letterSpacing: '0.04em',
-      }}
+      className={`neo-kp-pill neo-kp-pill--rag${isLightrag ? ' neo-kp-pill--rag-lightrag' : ''}`}
     >
-      {cfg.label}
+      {isLightrag ? 'RAG: LightRAG' : 'RAG: keyword stub'}
+    </span>
+  );
+}
+
+/**
+ * Memory 统计条（Story 14.1 AC4）— 旧 components/knowledge/MemoryStatsBar 的
+ * Neo 化内联重写。数据源不变：GET /memory/stats，placeholder 模式只展示配置
+ * 参数（working limit / episodic retention days / semantic skills count），
+ * live counts 待 Story 9.4 writeback。
+ */
+function NeoMemoryStatsBar() {
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [stats, setStats] = useState<MemoryStats | null>(null);
+
+  const load = useCallback(async () => {
+    setStatus('loading');
+    try {
+      const res = await getMemoryStats();
+      setStats(res.data);
+      setStatus('success');
+    } catch {
+      setStatus('error');
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div data-testid="memory-stats-bar" className="neo-kp-stats-bar">
+      {status === 'loading' && (
+        <>
+          <div className="neo-kp-skeleton" aria-hidden="true" />
+          <div className="neo-kp-skeleton" aria-hidden="true" />
+          <div className="neo-kp-skeleton" aria-hidden="true" />
+        </>
+      )}
+
+      {status === 'error' && (
+        <span className="neo-kp-stats-error">
+          Stats unavailable{' '}
+          <button
+            onClick={load}
+            className="neo-kp-stats-retry"
+            aria-label="重试加载 Memory Stats"
+          >
+            retry
+          </button>
+        </span>
+      )}
+
+      {status === 'success' && stats && (
+        <>
+          <StatPill label="Working" value={`${stats.working_memory_limit} tokens`} />
+          <StatPill label="Episodic" value={`${stats.episodic_retention_days} days`} />
+          <StatPill label="Semantic Skills" value={String(stats.semantic_skills_count)} />
+          <span className="neo-kp-stats-note">Live memory counts coming soon</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function StatPill({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="neo-kp-stat-pill">
+      <span className="neo-kp-stat-label">{label}:</span>
+      {' '}{value}
     </span>
   );
 }
 
 export default function KnowledgePage() {
+  const { t } = useI18n();
   const [packs, setPacks] = useState<KnowledgePack[]>([]);
   const [status, setStatus] = useState<LoadStatus>('idle');
   const [ragBackend, setRagBackend] = useState<string | undefined>(undefined);
@@ -273,92 +331,57 @@ export default function KnowledgePage() {
   const total = packs.length;
 
   return (
-    <div
-      data-testid="knowledge-page"
-      style={{
-        minHeight: '100vh',
-        background: 'var(--t-bg)',
-        // UI5.0: 文字色走主题令牌（旧 var(--fg,#E6EDF3) 在 day 主题下不可读）
-        color: 'var(--t-fg)',
-        padding: '32px 40px',
-        fontFamily: 'var(--font-sans)',
-      }}
-    >
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+    <div data-testid="knowledge-page" className="neo-kp">
+      <header className="neo-kp-header">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--t-fg-4)', letterSpacing: '0.18em', textTransform: 'uppercase', margin: 0 }}>
-              Knowledge / Story 9.1
-            </p>
+          <div className="neo-kp-eyebrow-row">
+            <p className="neo-kp-eyebrow">Knowledge / Story 9.1</p>
             <RagBackendBadge backend={ragBackend} />
           </div>
-          {/* UI5.0: 页面头部层级统一 — 标题 17px/700，描述 13px 次级色 */}
-          <h1 style={{ fontSize: 17, fontWeight: 700, marginTop: 6, letterSpacing: '-.01em', marginBottom: 0 }}>
-            KnowledgePack 管理
+          <h1 className="neo-kp-title">
+            {t('neo.knowledge.title', { defaultValue: 'KnowledgePack 管理' })}
           </h1>
-          <p style={{ fontSize: 13, color: 'var(--t-fg-3)', marginTop: 4 }}>
-            一等对象 — Builder 用来声明 Agent 能访问的知识、检索方式、是否要带出处。
+          <p className="neo-kp-sub">
+            {t('neo.knowledge.subtitle', {
+              defaultValue: '一等对象 — Builder 用来声明 Agent 能访问的知识、检索方式、是否要带出处。',
+            })}
           </p>
-          <div style={{ marginTop: 12 }}>
-            <MemoryStatsBar />
+          <div className="neo-kp-stats">
+            <NeoMemoryStatsBar />
           </div>
         </div>
         <button
           data-testid="create-pack-btn"
           onClick={() => setShowModal(true)}
-          // UI5.0: 主操作按钮近黑（day）/ accent（night）
-          className="sf-btn-primary"
-          style={{
-            height: 36,
-            padding: '0 18px',
-            border: 'none',
-            borderRadius: 8,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
+          className="neo-kp-btn neo-kp-btn-primary"
         >
-          + 新建 Pack
+          {t('neo.knowledge.create', { defaultValue: '+ 新建 Pack' })}
         </button>
       </header>
 
       {errorMsg && (
-        <div
-          role="alert"
-          style={{
-            marginBottom: 16,
-            padding: '10px 14px',
-            background: 'color-mix(in oklab, var(--t-err, #E85A5A) 10%, transparent)',
-            border: '1px solid color-mix(in oklab, var(--t-err, #E85A5A) 30%, transparent)',
-            borderRadius: 8,
-            color: 'var(--t-err, #F58484)',
-            fontSize: 13,
-          }}
-        >
+        <div role="alert" className="neo-kp-alert">
           {errorMsg}
         </div>
       )}
 
       {status === 'loading' && (
-        <div style={{ color: 'var(--t-fg-4)', fontSize: 13 }}>加载中…</div>
+        <div className="neo-kp-loading">{t('neo.knowledge.loading', { defaultValue: '加载中…' })}</div>
       )}
 
       {status === 'success' && total === 0 && (
-        <div
-          style={{
-            border: '1px dashed var(--t-border, #2D333B)',
-            borderRadius: 12, // UI5.0
-            padding: '40px 24px',
-            textAlign: 'center',
-            color: 'var(--t-fg-3)',
-          }}
-        >
-          <p style={{ fontSize: 14, marginBottom: 8, color: 'var(--t-fg-2)' }}>还没有任何 KnowledgePack。</p>
-          <p style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>点击右上角「新建 Pack」开始添加你的第一份知识。</p>
+        <div className="neo-kp-empty">
+          <p className="neo-kp-empty-t1">
+            {t('neo.knowledge.emptyTitle', { defaultValue: '还没有任何 KnowledgePack。' })}
+          </p>
+          <p className="neo-kp-empty-t2">
+            {t('neo.knowledge.emptyHint', { defaultValue: '点击右上角「新建 Pack」开始添加你的第一份知识。' })}
+          </p>
         </div>
       )}
 
       {status === 'success' && total > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="neo-kp-list">
           {packs.map((pack) => (
             <PackCard
               key={pack.pack_id}
@@ -395,25 +418,9 @@ function PackCard({
   onDelete: () => void;
   onReindex: () => void;
 }) {
-  // UI5.0: hover 微浮起（clawsgo 卡片观感）
-  const [hover, setHover] = useState(false);
   return (
-    <div
-      data-testid={`pack-card-${pack.pack_id}`}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        background: 'var(--t-panel)',
-        border: '1px solid var(--t-border, #2D333B)',
-        borderRadius: 12, // UI5.0: 卡片统一 12px 圆角
-        padding: 16,
-        transition: 'box-shadow 150ms ease, border-color 150ms ease, transform 150ms ease',
-        borderColor: hover ? 'var(--t-border-2, var(--t-border))' : 'var(--t-border, #2D333B)',
-        boxShadow: hover ? 'var(--ui40-shadow-float, 0 8px 24px -8px rgba(0,0,0,.12))' : 'none',
-        transform: hover ? 'translateY(-1px)' : 'none',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+    <div data-testid={`pack-card-${pack.pack_id}`} className="neo-kp-card">
+      <div className="neo-kp-card-head">
         <div
           onClick={onToggle}
           role="button"
@@ -421,54 +428,34 @@ function PackCard({
           onKeyDown={(e) => {
             if (e.key === 'Enter') onToggle();
           }}
-          style={{ cursor: 'pointer', flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}
+          className="neo-kp-card-main"
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)' }}>{pack.name}</span>
+          <div className="neo-kp-card-title-row">
+            <span className="neo-kp-card-name">{pack.name}</span>
             <StatusBadge status={pack.status} />
             {pack.citation_required && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t-fg-4)' }}>
-                citation:required
-              </span>
+              <span className="neo-kp-citation">citation:required</span>
             )}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>
+          <div className="neo-kp-card-meta">
             {pack.sources.length} sources · created {fmtDate(pack.created_at)} · updated {fmtDate(pack.updated_at)}
           </div>
           {pack.description && (
-            <p style={{ fontSize: 12, color: 'var(--t-fg-3)', marginTop: 4, marginBottom: 0 }}>{pack.description}</p>
+            <p className="neo-kp-card-desc">{pack.description}</p>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="neo-kp-card-actions">
           <button
             data-testid={`reindex-${pack.pack_id}`}
             onClick={onReindex}
-            style={{
-              height: 28,
-              padding: '0 12px',
-              fontSize: 11,
-              background: 'transparent',
-              border: '1px solid var(--t-border, #2D333B)',
-              color: 'var(--t-fg-3)',
-              borderRadius: 6,
-              cursor: 'pointer',
-            }}
+            className="neo-kp-btn neo-kp-btn-ghost"
           >
             Reindex
           </button>
           <button
             data-testid={`delete-${pack.pack_id}`}
             onClick={onDelete}
-            style={{
-              height: 28,
-              padding: '0 12px',
-              fontSize: 11,
-              background: 'transparent',
-              border: '1px solid color-mix(in oklab, var(--t-err, #E85A5A) 40%, transparent)',
-              color: 'var(--t-err, #F58484)',
-              borderRadius: 6,
-              cursor: 'pointer',
-            }}
+            className="neo-kp-btn neo-kp-btn-danger"
           >
             Delete
           </button>
@@ -476,58 +463,33 @@ function PackCard({
       </div>
 
       {expanded && (
-        <div
-          style={{
-            marginTop: 14,
-            paddingTop: 14,
-            borderTop: '1px solid var(--t-border, #2D333B)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
-          <div style={{ fontSize: 12, color: 'var(--t-fg-3)' }}>
+        <div className="neo-kp-card-detail">
+          <div className="neo-kp-retrieval">
             retrieval: <code>{pack.retrieval_profile.mode}</code> · top_k={pack.retrieval_profile.top_k} ·
             chunk_size={pack.retrieval_profile.chunk_size} · overlap={pack.retrieval_profile.overlap}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className="neo-kp-sources">
             {pack.sources.map((s) => (
-              <div
-                key={s.source_id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  fontSize: 12,
-                  background: 'var(--t-bg)',
-                  padding: '8px 10px',
-                  borderRadius: 8, // UI5.0
-                }}
-              >
-                <code style={{ color: 'var(--t-fg-4)', minWidth: 56 }}>{s.source_type}</code>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {s.source_ref}
-                </span>
+              <div key={s.source_id} className="neo-kp-source">
+                <code className="neo-kp-source-type">{s.source_type}</code>
+                <span className="neo-kp-source-ref">{s.source_ref}</span>
                 <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    color:
-                      s.ingest_status === 'failed'
-                        ? 'var(--t-err, #F58484)'
-                        : s.ingest_status === 'done'
-                          ? 'var(--t-ok, #4FCC85)'
-                          : s.ingest_status === 'processing'
-                            ? 'var(--t-accent)'
-                            : 'var(--t-fg-4)',
-                  }}
+                  className={`neo-kp-source-status${
+                    s.ingest_status === 'failed'
+                      ? ' neo-kp-source-status--failed'
+                      : s.ingest_status === 'done'
+                        ? ' neo-kp-source-status--done'
+                        : s.ingest_status === 'processing'
+                          ? ' neo-kp-source-status--processing'
+                          : ''
+                  }`}
                 >
                   {s.ingest_status}
                   {s.chunk_count > 0 ? ` · ${s.chunk_count} chunks` : ''}
                 </span>
                 {s.error_message && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--t-err, #F58484)', marginLeft: 8 }} title={s.error_message}>
-                    <KnowledgeAlert size={11} strokeWidth={2} />
+                  <span className="neo-kp-source-err" title={s.error_message}>
+                    <AlertTriangleIcon size={11} />
                   </span>
                 )}
               </div>
@@ -546,6 +508,7 @@ function CreatePackModal({
   onCancel: () => void;
   onSubmit: (p: CreatePackPayload) => void | Promise<void>;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [sourceType, setSourceType] = useState<SourceType>('text');
@@ -583,56 +546,36 @@ function CreatePackModal({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal
-      data-testid="create-pack-modal"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
-    >
-      <div
-        style={{
-          background: 'var(--t-panel)',
-          border: '1px solid var(--t-border, #2D333B)',
-          borderRadius: 12,
-          padding: 24,
-          width: '100%',
-          maxWidth: 520,
-        }}
-      >
-        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 16, marginTop: 0 }}>新建 KnowledgePack</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Field label="名称">
+    <div role="dialog" aria-modal data-testid="create-pack-modal" className="neo-kp-modal-mask">
+      <div className="neo-kp-modal">
+        <h2 className="neo-kp-modal-title">
+          {t('neo.knowledge.modalTitle', { defaultValue: '新建 KnowledgePack' })}
+        </h2>
+        <div className="neo-kp-form">
+          <Field label={t('neo.knowledge.fieldName', { defaultValue: '名称' })}>
             <input
               data-testid="modal-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="如：项目说明文档"
-              style={textInputStyle}
+              placeholder={t('neo.knowledge.fieldNamePh', { defaultValue: '如：项目说明文档' })}
+              className="neo-kp-input"
             />
           </Field>
-          <Field label="描述">
+          <Field label={t('neo.knowledge.fieldDesc', { defaultValue: '描述' })}>
             <textarea
               data-testid="modal-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              style={{ ...textInputStyle, resize: 'vertical' }}
+              className="neo-kp-input"
             />
           </Field>
-          <Field label="Source 类型">
+          <Field label={t('neo.knowledge.fieldSourceType', { defaultValue: 'Source 类型' })}>
             <select
               data-testid="modal-source-type"
               value={sourceType}
               onChange={(e) => setSourceType(e.target.value as SourceType)}
-              style={textInputStyle}
+              className="neo-kp-input"
             >
               <option value="text">text（直接输入文本）</option>
               <option value="file">file（本地文件路径）</option>
@@ -640,7 +583,13 @@ function CreatePackModal({
               <option value="dataset">dataset（外部数据集 ref）</option>
             </select>
           </Field>
-          <Field label={sourceType === 'text' ? 'Source 内容' : 'Source 引用'}>
+          <Field
+            label={
+              sourceType === 'text'
+                ? t('neo.knowledge.fieldSourceContent', { defaultValue: 'Source 内容' })
+                : t('neo.knowledge.fieldSourceRef', { defaultValue: 'Source 引用' })
+            }
+          >
             <textarea
               data-testid="modal-source-ref"
               value={sourceRef}
@@ -653,27 +602,27 @@ function CreatePackModal({
                     ? 'https://example.com/docs/intro'
                     : sourceType === 'dataset'
                       ? 'dataset:my-dataset@v1'
-                      : '直接粘贴文本'
+                      : t('neo.knowledge.fieldSourceRefPh', { defaultValue: '直接粘贴文本' })
               }
-              style={{ ...textInputStyle, resize: 'vertical' }}
+              className="neo-kp-input"
             />
           </Field>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          <div className="neo-kp-form-row">
+            <label className="neo-kp-check">
               <input
                 data-testid="modal-citation-required"
                 type="checkbox"
                 checked={citationRequired}
                 onChange={(e) => setCitationRequired(e.target.checked)}
               />
-              需要引用出处
+              {t('neo.knowledge.fieldCitation', { defaultValue: '需要引用出处' })}
             </label>
-            <Field label="刷新策略" inline>
+            <Field label={t('neo.knowledge.fieldFreshness', { defaultValue: '刷新策略' })} inline>
               <select
                 data-testid="modal-freshness"
                 value={freshnessPolicy}
                 onChange={(e) => setFreshnessPolicy(e.target.value as FreshnessPolicy)}
-                style={{ ...textInputStyle, height: 32 }}
+                className="neo-kp-input neo-kp-input--sm"
               >
                 <option value="on_demand">on_demand</option>
                 <option value="always">always</option>
@@ -685,53 +634,24 @@ function CreatePackModal({
         </div>
 
         {localError && (
-          <div
-            role="alert"
-            style={{
-              marginTop: 12,
-              padding: '8px 12px',
-              borderRadius: 6,
-              background: 'color-mix(in oklab, var(--t-err, #E85A5A) 10%, transparent)',
-              color: 'var(--t-err, #F58484)',
-              fontSize: 12,
-            }}
-          >
+          <div role="alert" className="neo-kp-modal-error">
             {localError}
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
-          <button
-            onClick={onCancel}
-            style={{
-              height: 34,
-              padding: '0 16px',
-              background: 'transparent',
-              border: '1px solid var(--t-border, #2D333B)',
-              color: 'var(--t-fg-3)',
-              borderRadius: 8, // UI5.0
-              cursor: 'pointer',
-            }}
-          >
-            取消
+        <div className="neo-kp-modal-actions">
+          <button onClick={onCancel} className="neo-kp-btn neo-kp-btn-ghost neo-kp-btn-md">
+            {t('neo.knowledge.cancel', { defaultValue: '取消' })}
           </button>
           <button
             data-testid="modal-submit"
             onClick={handleSubmit}
             disabled={!canSubmit || submitting}
-            // UI5.0: 主操作按钮近黑（day）/ accent（night）
-            className="sf-btn-primary"
-            style={{
-              height: 34,
-              padding: '0 18px',
-              border: 'none',
-              borderRadius: 8,
-              fontWeight: 600,
-              opacity: canSubmit && !submitting ? 1 : 0.5,
-              cursor: canSubmit && !submitting ? 'pointer' : 'not-allowed',
-            }}
+            className="neo-kp-btn neo-kp-btn-primary neo-kp-btn-md"
           >
-            {submitting ? '创建中…' : '创建'}
+            {submitting
+              ? t('neo.knowledge.creating', { defaultValue: '创建中…' })
+              : t('neo.knowledge.submit', { defaultValue: '创建' })}
           </button>
         </div>
       </div>
@@ -749,21 +669,9 @@ function Field({
   inline?: boolean;
 }) {
   return (
-    <label style={{ display: 'flex', flexDirection: inline ? 'row' : 'column', gap: inline ? 8 : 4, alignItems: inline ? 'center' : 'stretch' }}>
-      <span style={{ fontSize: 12, opacity: 0.7 }}>{label}</span>
+    <label className={`neo-kp-field${inline ? ' neo-kp-field--inline' : ''}`}>
+      <span className="neo-kp-field-label">{label}</span>
       {children}
     </label>
   );
 }
-
-const textInputStyle: React.CSSProperties = {
-  width: '100%',
-  background: 'var(--t-bg)',
-  border: '1px solid var(--t-border, #2D333B)',
-  borderRadius: 8, // UI5.0
-  padding: '8px 10px',
-  // UI5.0: 文字色走主题令牌（旧 var(--fg,#E6EDF3) 在 day 主题下不可读）
-  color: 'var(--t-fg)',
-  fontSize: 13,
-  fontFamily: 'inherit',
-};

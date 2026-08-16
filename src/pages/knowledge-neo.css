@@ -1,0 +1,478 @@
+/* ===== KnowledgePage Neo 化（阶段 2.5 任务 C，2026-08-15）=====
+   /knowledge 独立路由页（不经 .neo-app 壳，故自行做作用域 token 覆盖）。
+   颜色一律 var(--t-*) / color-mix，day/night 双主题安全；
+   圆角走 Neo 10/14 体系，pill 999px。单色策略对齐 .neo-app：作用域内 accent =
+   近黑（day），night 保持蓝；状态语义色（pending/indexing/ready/failed）独立
+   令牌保留。类名 neo-kp-* 前缀，避免与壳内 neo-* 冲突。 */
+
+.neo-kp {
+  min-height: 100vh;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  padding: 32px 40px;
+  font-family: var(--font-sans, inherit);
+  /* clawsgo 单色策略（同 .neo-app）：主按钮/强调 = 近黑，彩色只留状态语义 */
+  --t-accent: #1C1C1E;
+  --t-accent-bright: #000000;
+  --t-accent-tint: #F4F4F5;
+  --t-accent-ink: #FAFAFA;
+  /* indexing 蓝：独立于 accent（accent 已被单色策略覆盖为近黑） */
+  --neo-kp-info: #2563EB;
+}
+[data-theme="night"] .neo-kp {
+  --t-accent: #3B82F6;
+  --t-accent-bright: #93C5FD;
+  --t-accent-tint: rgba(59, 130, 246, 0.14);
+  --t-accent-ink: #0A0A0A;
+  --neo-kp-info: #6FA8FF;
+}
+
+/* ── 页头 ───────────────────────────────────────────────────────────────── */
+.neo-kp-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.neo-kp-eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.neo-kp-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-4);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.neo-kp-title {
+  margin: 6px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.neo-kp-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--t-fg-3);
+}
+.neo-kp-stats {
+  margin-top: 12px;
+}
+
+/* ── Pill（状态徽章 / RAG 后端徽章）：999px Neo pill，语义色保留 ────────── */
+.neo-kp-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.neo-kp-pill--pending {
+  background: color-mix(in srgb, var(--t-fg-4) 16%, transparent);
+  color: var(--t-fg-3);
+}
+.neo-kp-pill--indexing {
+  background: color-mix(in srgb, var(--neo-kp-info) 14%, transparent);
+  color: var(--neo-kp-info);
+}
+.neo-kp-pill--ready {
+  background: color-mix(in srgb, var(--t-ok) 14%, transparent);
+  color: var(--t-ok);
+}
+.neo-kp-pill--failed {
+  background: color-mix(in srgb, var(--t-err) 14%, transparent);
+  color: var(--t-err);
+}
+.neo-kp-pill--rag {
+  height: 20px;
+  padding: 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--t-fg-4) 12%, transparent);
+  color: var(--t-fg-4);
+}
+.neo-kp-pill--rag-lightrag {
+  background: color-mix(in srgb, var(--neo-kp-info) 14%, transparent);
+  color: var(--neo-kp-info);
+}
+
+/* ── 按钮 ───────────────────────────────────────────────────────────────── */
+.neo-kp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+.neo-kp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* 主操作：近黑（day）/ 蓝（night），同 .neo-app 单色策略 */
+.neo-kp-btn-primary {
+  height: 36px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 10px;
+  background: var(--t-accent);
+  color: var(--t-accent-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.neo-kp-btn-primary:hover:not(:disabled) {
+  background: var(--t-accent-bright);
+}
+.neo-kp-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--t-border);
+  color: var(--t-fg-3);
+}
+.neo-kp-btn-ghost:hover:not(:disabled) {
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+}
+.neo-kp-btn-danger {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--t-err) 40%, transparent);
+  color: var(--t-err);
+}
+.neo-kp-btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--t-err) 10%, transparent);
+}
+/* Modal 底栏中号尺寸（取消/创建共用；放在 primary 之后以便覆盖其 36px 高） */
+.neo-kp-btn-md {
+  height: 34px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+/* ── 提示条 / 空态 / 加载 ───────────────────────────────────────────────── */
+.neo-kp-alert {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--t-err) 30%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--t-err) 10%, transparent);
+  color: var(--t-err);
+  font-size: 13px;
+}
+.neo-kp-loading {
+  color: var(--t-fg-4);
+  font-size: 13px;
+}
+.neo-kp-empty {
+  padding: 40px 24px;
+  border: 1px dashed var(--t-border);
+  border-radius: 14px;
+  text-align: center;
+  color: var(--t-fg-3);
+}
+.neo-kp-empty-t1 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--t-fg-2);
+}
+.neo-kp-empty-t2 {
+  margin: 0;
+  font-size: 12px;
+  color: var(--t-fg-4);
+}
+
+/* ── Pack 卡片 ──────────────────────────────────────────────────────────── */
+.neo-kp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.neo-kp-card {
+  padding: 16px;
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  background: var(--t-panel);
+  transition:
+    box-shadow var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-out);
+}
+/* hover 微浮起（clawsgo 卡片观感） */
+.neo-kp-card:hover {
+  border-color: var(--t-border-2);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+.neo-kp-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.neo-kp-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+}
+.neo-kp-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.neo-kp-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--t-fg);
+}
+.neo-kp-citation {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--t-fg-4);
+}
+.neo-kp-card-meta {
+  font-size: 12px;
+  color: var(--t-fg-4);
+}
+.neo-kp-card-desc {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--t-fg-3);
+}
+.neo-kp-card-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+}
+
+/* 展开区：retrieval 参数 + sources 列表 */
+.neo-kp-card-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--t-border);
+}
+.neo-kp-retrieval {
+  font-size: 12px;
+  color: var(--t-fg-3);
+}
+.neo-kp-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.neo-kp-source {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--t-bg);
+  font-size: 12px;
+}
+.neo-kp-source-type {
+  min-width: 56px;
+  color: var(--t-fg-4);
+}
+.neo-kp-source-ref {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-kp-source-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--t-fg-4);
+}
+.neo-kp-source-status--failed {
+  color: var(--t-err);
+}
+.neo-kp-source-status--done {
+  color: var(--t-ok);
+}
+.neo-kp-source-status--processing {
+  color: var(--neo-kp-info);
+}
+.neo-kp-source-err {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  color: var(--t-err);
+}
+
+/* ── Memory 统计条（原 MemoryStatsBar 内联 Neo 化，数据源不变） ─────────── */
+.neo-kp-stats-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.neo-kp-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
+  background: var(--t-panel);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-3);
+  white-space: nowrap;
+}
+.neo-kp-stat-label {
+  color: var(--t-fg-4);
+}
+.neo-kp-stats-note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: italic;
+  color: var(--t-fg-5);
+}
+.neo-kp-stats-error {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-5);
+}
+.neo-kp-stats-retry {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--t-fg-3);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.neo-kp-skeleton {
+  width: 110px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--t-panel-3);
+  animation: neo-kp-pulse 1.5s ease-in-out infinite;
+}
+@keyframes neo-kp-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ── 创建 Modal ─────────────────────────────────────────────────────────── */
+.neo-kp-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+.neo-kp-modal {
+  width: 100%;
+  max-width: 520px;
+  padding: 24px;
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  background: var(--t-panel);
+}
+.neo-kp-modal-title {
+  margin: 0 0 16px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.neo-kp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.neo-kp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.neo-kp-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.neo-kp-field-label {
+  font-size: 12px;
+  color: var(--t-fg-3);
+}
+.neo-kp-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--dur-1) var(--ease-out);
+}
+.neo-kp-input:focus {
+  border-color: var(--t-border-2);
+}
+.neo-kp-input::placeholder {
+  color: var(--t-fg-5);
+}
+textarea.neo-kp-input {
+  resize: vertical;
+}
+select.neo-kp-input {
+  height: 34px;
+}
+.neo-kp-input--sm {
+  height: 32px;
+}
+.neo-kp-form-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.neo-kp-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.neo-kp-check input {
+  accent-color: var(--t-accent);
+}
+.neo-kp-modal-error {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--t-err) 10%, transparent);
+  color: var(--t-err);
+  font-size: 12px;
+}
+.neo-kp-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
