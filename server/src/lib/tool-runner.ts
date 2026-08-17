@@ -33,6 +33,30 @@
 
 import type { ToolRegistry, ToolSpec } from './tool-spec';
 import type { PermissionPolicyV2, PermissionOutcomeV2 } from './permission-policy-v2';
+import type { PermissionDecision } from './tool-approval';
+
+/**
+ * 阶段 1 — human-in-the-loop approval callback. Given the pending tool_use,
+ * resolves 'approve' (execute) or 'deny' (is_error tool_result). Implementations
+ * park on the shared `toolApprovals` registry (lib/tool-approval.ts), which
+ * emits `permission_check` frames and waits for the REST decision / timeout /
+ * abort. Kept as a plain callable so unit tests can resolve synchronously
+ * without the registry.
+ */
+export type ToolApprovalPrompter = (
+  toolUse: { name: string; input: unknown },
+  signal: AbortSignal,
+) => Promise<PermissionDecision>;
+
+/** ToolRunner construction options. */
+export interface ToolRunnerOptions {
+  /**
+   * Approval round trip for `mode === 'prompt'`. When absent, prompt keeps
+   * the v1 soft-deny semantics (deny + `permission_check` SSE) — legacy call
+   * sites and unit tests rely on that fail-closed default.
+   */
+  prompter?: ToolApprovalPrompter;
+}
 
 /** A side-effect SSE the tool wants emitted by the surrounding runtime. */
 export interface ToolSseEvent {
@@ -97,10 +121,15 @@ export function _resetToolExecutorsForTests(): void {
  * permission policy. dispatch() is the only public method.
  */
 export class ToolRunner {
+  private readonly prompter?: ToolApprovalPrompter;
+
   constructor(
     private readonly registry: ToolRegistry,
     private readonly policy: PermissionPolicyV2,
-  ) {}
+    opts: ToolRunnerOptions = {},
+  ) {
+    this.prompter = opts.prompter;
+  }
 
   /** Tool specs to advertise to the LLM on each turn. */
   toolSpecs(): ToolSpec[] {
@@ -137,18 +166,30 @@ export class ToolRunner {
       };
     }
 
-    // Permission gate. Synchronous: matches v1 semantics, no async prompter
-    // round-trip in the MVP. Lane 2's `'prompt'` mode produces a non-allow
-    // outcome that the runtime layer surfaces as `permission_check` SSE.
-    const permission = this.policy.authorize(name);
+    // Permission gate. v1 semantics were synchronous (prompt = soft deny,
+    // no round trip). 阶段 1: when a prompter is wired and the mode is
+    // 'prompt', we now await a real human decision — 'approve' upgrades the
+    // outcome to allow (execution proceeds below), anything else keeps the
+    // fail-closed deny. Without a prompter the v1 behaviour is preserved.
+    let permission = this.policy.authorize(name);
+    if (!permission.allow && permission.mode === 'prompt' && this.prompter) {
+      const decision = await this.prompter({ name, input }, signal);
+      if (decision === 'approve') {
+        permission = {
+          allow: true,
+          mode: 'prompt',
+          reason: `tool '${name}' approved by user`,
+        };
+      }
+    }
     if (!permission.allow) {
       // Build a structured error payload that includes the mode so the
       // runtime can decide whether to also emit a `permission_check` SSE
       // (mode === 'prompt') vs a plain deny tool_result (mode === 'deny').
-      // Compare structurally (string-typed) so this compiles even before
-      // Lane 2 widens `PermissionMode` to include the `'prompt'` literal.
-      // Once the union widens, TS narrowing here remains correct.
-      const isPromptMode = (permission.mode as string) === 'prompt';
+      // For prompt mode this chunk-level frame carries the FINAL outcome; the
+      // authoritative request/decision frames are emitted by the approval
+      // registry straight into the run event log (replayable there).
+      const isPromptMode = permission.mode === 'prompt';
       const sseEvents: ToolSseEvent[] = isPromptMode
         ? [
             {
@@ -156,9 +197,8 @@ export class ToolRunner {
               data: {
                 tool_name: name,
                 reason: permission.reason,
-                // v1 behaviour: prompt acts as deny; this flag lets a
-                // future UI distinguish "denied immediately" vs
-                // "deferred for approval".
+                // With a prompter this is the settled outcome (user denied /
+                // timed out / aborted); without one it is the v1 soft-deny.
                 decision: 'deny',
               },
             },

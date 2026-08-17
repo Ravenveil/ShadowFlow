@@ -23,6 +23,10 @@ import {
   type RunStatus,
 } from '../lib/run-event-bus';
 import { createRunEventStore } from '../lib/run-event-store';
+// 阶段 1（ROADMAP-agentinfra / GAP G1）— Node 工具管线的人在环审批回路：
+// tool-approval 注册表经下方 emitter 把 permission_check 帧写进本文件的
+// 私有 runBus（落事件日志、可重放），决策经 POST /:id/permissions/:requestId 回填。
+import { toolApprovals, type PermissionDecision } from '../lib/tool-approval';
 // Round 4 PR-E — canonical `@skill` token parser shared byte-equal with the
 // frontend (`src/lib/skillToken.ts`). Replaces an inline regex that drifted
 // in shape from the SkillDropdown UI; both call sites now agree on which
@@ -617,6 +621,14 @@ const stepStoreSingleton = createStepStore();
 // + a synthetic "interrupted by restart" terminal frame, so a reconnect replays
 // the timeline read-only instead of re-running the pipeline.
 const runBus = createRunBus({ persist: createRunEventStore() });
+
+// 阶段 1 — tool-approval 帧直写 runBus：待审请求与最终决策都以命名事件
+// `permission_check` 落进该 run 的单调编号事件日志（重连经 attach 重放，
+// 重启经 run-event-store hydrate）——「决策为命名事件，可回放」的落点。
+// 注册表本体在 lib（assembler / executor 构造 prompter 时引用同一单例）。
+toolApprovals.setEmitter((sessionId, event, frame) => {
+  runBus.emit(sessionId, event, frame);
+});
 
 /**
  * T3 A8 — graceful shutdown entry point for the daemon. Cancels every active
@@ -2536,6 +2548,56 @@ router.post('/:id/abort', (req: Request, res: Response) => {
   // Drop the session record so a stale client cannot reconnect.
   sessionStore.delete(id);
   res.status(204).end();
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// 阶段 1（ROADMAP-agentinfra / GAP G1）— Node 工具审批决策端点。
+//
+// prompt 模式的工具调用经 lib/tool-approval 注册表挂起并向本 run 事件日志
+// 发 `permission_check`（decision:'pending'）帧；前端（或任何客户端）拿到
+// request_id 后经下方端点回填决策，注册表 settle 掉挂起的 dispatch：
+//   approve → 执行器续跑；deny → is_error tool_result（fail-closed，与
+// 超时/中止同路）。决策帧同样落事件日志，重放可见。
+// 语义对齐 Python 侧 runtime/approval/service.py（pending/approve/reject）。
+// ────────────────────────────────────────────────────────────────────────────
+router.get('/:id/permissions', (req: Request, res: Response) => {
+  const { id } = req.params;
+  res.json({ session_id: id, pending: toolApprovals.listPending(id) });
+});
+
+router.post('/:id/permissions/:requestId', (req: Request, res: Response) => {
+  const { id, requestId } = req.params;
+  const body = req.body as { decision?: unknown; reason?: unknown };
+  const decision = body.decision;
+  if (decision !== 'approve' && decision !== 'deny') {
+    res.status(400).json({
+      error: {
+        code: 'INVALID_DECISION',
+        message: `decision must be 'approve' or 'deny' (got ${JSON.stringify(decision)})`,
+      },
+    });
+    return;
+  }
+  const reason = typeof body.reason === 'string' && body.reason.trim()
+    ? body.reason.trim()
+    : undefined;
+  // expectedSession=id：跨会话误用他 session 的 request_id 直接拒绝。
+  const ok = toolApprovals.decide(
+    requestId,
+    decision as PermissionDecision,
+    reason,
+    id,
+  );
+  if (!ok) {
+    res.status(404).json({
+      error: {
+        code: 'REQUEST_NOT_FOUND_OR_SETTLED',
+        message: `No pending permission request ${requestId} on session ${id}`,
+      },
+    });
+    return;
+  }
+  res.json({ session_id: id, request_id: requestId, decision });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -56,6 +56,8 @@ import { ConversationRuntime } from '../lib/conversation-runtime';
 import { ToolRunner } from '../lib/tool-runner';
 import { PermissionPolicyV2 } from '../lib/permission-policy-v2';
 import { ToolRegistry } from '../lib/tool-spec';
+import { toolApprovals } from '../lib/tool-approval';
+import { promptDefaultsForTools } from '../lib/tools/builtin';
 
 // ─── Workspace I/O ───────────────────────────────────────────────────────────
 
@@ -184,7 +186,7 @@ export async function executeNode(
     const userTurn = ctx.goal ?? node.id;
     const stream =
       pickedTools.length > 0 && callable instanceof ApiClientCallable
-        ? buildRuntimeStream(callable, node, system, pickedTools, signal, userTurn)
+        ? buildRuntimeStream(callable, node, system, pickedTools, signal, userTurn, ctx.session_id)
         : callable.turn({
             system,
             prompt: userTurn, // Branch 0: user goal; else node.id (BMAD). The
@@ -264,7 +266,12 @@ export async function executeNode(
  * The runtime here is single-use (one runTurn() call per node, matching the
  * Phase 2 artifact-handoff contract — no rolling cross-node history). The
  * tool whitelist comes from `node.tools.picked` verbatim; permission policy
- * is deny-by-default + whitelist allowed.
+ * is deny-by-default + whitelist allowed. 阶段 1: write-tier builtin defaults
+ * ('prompt') become approval gates, and when `sessionId` is threaded from the
+ * assembler the prompter parks on the shared `toolApprovals` registry so the
+ * decision round trip frames the session's run log. Without a sessionId
+ * (tests / library callers) the prompter is skipped and 'prompt' tools keep
+ * the v1 fail-closed soft-deny.
  */
 function buildRuntimeStream(
   callable: ApiClientCallable,
@@ -273,6 +280,7 @@ function buildRuntimeStream(
   pickedTools: string[],
   signal: AbortSignal,
   userTurn: string,
+  sessionId?: string,
 ): AsyncGenerator<TurnChunk> {
   const apiClient = callable.getApiClient();
   const registry = new ToolRegistry(
@@ -283,8 +291,21 @@ function buildRuntimeStream(
       source: 'base' as const,
     })),
   );
-  const policy = PermissionPolicyV2.fromAllowedTools(pickedTools);
-  const runner = new ToolRunner(registry, policy);
+  const policy = new PermissionPolicyV2({
+    allowedTools: pickedTools,
+    defaults: promptDefaultsForTools(pickedTools),
+  });
+  const runner = new ToolRunner(registry, policy, {
+    prompter: sessionId
+      ? (toolUse, promptSignal) =>
+          toolApprovals.request(
+            sessionId,
+            toolUse,
+            `tool '${toolUse.name}' requires human approval`,
+            promptSignal,
+          )
+      : undefined,
+  });
   const runtime = new ConversationRuntime({
     apiClient,
     toolRunner: runner,

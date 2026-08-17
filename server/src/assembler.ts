@@ -51,6 +51,8 @@ import { ConversationRuntime } from './lib/conversation-runtime';
 import { ToolRunner, registerToolExecutor } from './lib/tool-runner';
 import { PermissionPolicyV2 } from './lib/permission-policy-v2';
 import { ToolRegistry, type ToolSpec } from './lib/tool-spec';
+import { toolApprovals } from './lib/tool-approval';
+import { promptDefaultsForTools } from './lib/tools/builtin';
 // 2026-06-01 — 组装期 read_skill 工具:@skill 触发但目标蓝图未随上下文给出时,
 // 让组装 agent 按 ref(skill id / 本地路径 / https URL)拉真实蓝图,解析不到则如实
 // 报"未找到",而非凭空编造。自包含执行器,直接注册(不依赖未接的 builtin ALS)。
@@ -745,7 +747,7 @@ export async function* runSkillAssembler(
     console.log(
       `[skill-assembler] running compiled team ${teamV1.team_id}: ${teamV1.members_ids.length} members, ${teamV1.edges_v1.length} edges, derivedFrom=${compiled.teamConfig.derivedFrom}`,
     );
-    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal);
+    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, undefined, session_id);
     yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
     return;
   }
@@ -757,7 +759,7 @@ export async function* runSkillAssembler(
     console.log(
       `[skill-assembler] running legacy team ${teamV1.team_id}: ${teamV1.members_ids.length} members (no compile cache)`,
     );
-    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal);
+    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, undefined, session_id);
     yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
     return;
   }
@@ -786,7 +788,8 @@ export async function* runSkillAssembler(
       yield { event: 'assembly-meta', data: { ask_workspace: true, recipe: matchedRecipe.id } };
     }
     // 传 goal → executor 把 user-turn prompt 设为 goal(而非 node.id)。
-    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, goal);
+    // session_id 串到 NodeContext,团队节点内 prompt 工具的审批帧才能落对 run 日志。
+    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, goal, session_id);
     yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
     return;
   }
@@ -888,8 +891,23 @@ export async function* runSkillAssembler(
           },
     );
     const registry = new ToolRegistry(specs);
-    const policy = PermissionPolicyV2.fromAllowedTools(effectiveToolNames);
-    const runner = new ToolRunner(registry, policy);
+    // 阶段 1 — write-tier builtin defaults (write_file/edit_file) turn into
+    // real approval gates: 'prompt' now parks on the shared toolApprovals
+    // registry (SSE `permission_check` → POST decision → resume/deny) instead
+    // of the v1 soft-deny. Listed tools without a 'prompt' default stay allow.
+    const policy = new PermissionPolicyV2({
+      allowedTools: effectiveToolNames,
+      defaults: promptDefaultsForTools(effectiveToolNames),
+    });
+    const runner = new ToolRunner(registry, policy, {
+      prompter: (toolUse, signal) =>
+        toolApprovals.request(
+          session_id,
+          toolUse,
+          `tool '${toolUse.name}' requires human approval`,
+          signal,
+        ),
+    });
     const runtime = new ConversationRuntime({
       apiClient,
       toolRunner: runner,

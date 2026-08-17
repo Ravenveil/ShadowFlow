@@ -3,6 +3,29 @@
 All notable changes to ShadowFlow are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] — 2026-08-17（dsh 借鉴 阶段 1 · Node 工具审批交互回路）
+
+### Added — prompt 模式从软拒绝接成真人在环审批（ROADMAP-agentinfra 阶段 1 / GAP-dsh-alignment G1）
+- **`server/src/lib/tool-approval.ts`**：pending 审批注册表。`request()` 立即发
+  `permission_check`（decision:'pending'）帧并挂起；用户决策（approve/deny）、
+  超时（默认 120s，`SF_TOOL_APPROVAL_TIMEOUT_MS` 可覆写）、中止三者任一到达即
+  settle 并发决策帧——超时/中止 fail-closed=deny，对齐 Python
+  `permissions.py`/`approval/service.py` 语义（同名同义，未发明第二套）。
+- **`tool-runner.ts`**：`ToolRunner` 新增可选 `prompter`。`mode==='prompt'` 且有
+  prompter 时走真实审批回路（approve → 执行续跑；否则 is_error tool_result）；
+  无 prompter 保持 v1 软拒绝（既有调用点/单测零变化）。
+- **接线（双路径）**：非团队组装分支（`assembler.ts`）与团队每节点
+  （`workflow/executor.ts`，session_id 经 `runDag`→`NodeContext` 穿参）都按
+  `builtinDefaultModes` 把 write-tier 工具（write_file/edit_file）升为 'prompt'
+  门（`promptDefaultsForTools` 只 lift prompt，不给已列工具新增 deny）。
+- **决策端点**：`GET /api/run-sessions/:id/permissions`（pending 列表）+
+  `POST /api/run-sessions/:id/permissions/:requestId`（decision: approve|deny，
+  跨会话 request_id 拒绝）。发射器在 `routes/run-sessions.ts` 接入私有 runBus，
+  请求与决策两帧均落单调编号事件日志——重连/重启重放可见。
+- **测试**：`lib/__tests__/tool-approval.test.ts`（23 用例）+
+  `lib/__tests__/tool-runner-approval.test.ts`（14 用例：approve 续跑/deny 拒绝/
+  v1 兼容/白名单可见性[只读 agent 看不到写工具]/RunBus 重放集成）。
+
 ## [Unreleased] — 2026-08-15（下午第二轮 · Polynoia 对标：单聊编排 → 分阶段派发 → 群聊现场）
 
 ### Added — Polynoia 式多 Agent 协作闭环（后端执行能力 + 群聊现场页）

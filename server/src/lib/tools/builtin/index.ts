@@ -76,10 +76,11 @@ export const builtinExecutors: Record<string, BuiltinToolExecutor> = {
 };
 
 /**
- * Canonical defaults. `'prompt'` means tool-runner should hold the call,
- * emit an `event: "tool_permission_prompt"` SSE frame, and only run on
- * explicit user approval. v1 implementation (Lane 1) may downgrade
- * `'prompt'` → deny + notify SSE if interactive approval isn't wired yet.
+ * Canonical defaults. `'prompt'` means tool-runner holds the call, emits a
+ * `permission_check` frame (pending → decision via the tool-approval registry,
+ * 阶段 1), and only runs on explicit user approval; timeout/abort settle as
+ * deny (fail-closed). When no prompter is wired (legacy call sites / unit
+ * tests), tool-runner downgrades `'prompt'` → deny + notify SSE (v1 behaviour).
  */
 export const builtinDefaultModes: Record<string, PermissionMode> = {
   read_file: 'allow',
@@ -92,6 +93,24 @@ export const builtinDefaultModes: Record<string, PermissionMode> = {
   edit_file: 'prompt',
   shell_exec: 'deny',
 };
+
+/**
+ * 阶段 1 — lift ONLY the `'prompt'` entries of `builtinDefaultModes` for tools
+ * present in a skill's whitelist. Deliberately ignores the `'deny'` default
+ * (shell_exec): a tool the skill author explicitly listed keeps today's
+ * listed→allow semantics — this helper adds approval gates, never new denials.
+ * The deny-by-default floor for UNLISTED tools already comes from
+ * `PermissionPolicyV2` itself.
+ */
+export function promptDefaultsForTools(
+  names: readonly string[],
+): Record<string, PermissionMode> {
+  const out: Record<string, PermissionMode> = {};
+  for (const n of names) {
+    if (builtinDefaultModes[n] === 'prompt') out[n] = 'prompt';
+  }
+  return out;
+}
 
 /** Fresh ToolRegistry seeded with the canonical builtin order. */
 export function createBuiltinRegistry(): ToolRegistry {

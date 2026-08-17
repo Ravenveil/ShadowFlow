@@ -1,19 +1,11 @@
 # ShadowFlow — Codex Instructions
 
-## 0G Agent Skills
+## 0G direction cancelled (2026-08)
 
-This project targets the 0G decentralized AI operating system (Storage / Compute /
-Chain / Cross-layer). The 0G Foundation's official agent skills are installed under
-`.0g-skills/` and provide 15 skills with ALWAYS/NEVER rules for correct SDK usage.
-
-@.0g-skills/AGENTS.md
-
-When working on 0G integration code, follow the critical rules in `.0g-skills/AGENTS.md`
-(ethers v6, `evmVersion: "cancun"`, `processResponse()` after every compute inference,
-ZgFile close-in-finally, etc.) and load the relevant `SKILL.md` from
-`.0g-skills/skills/{category}/{skill}/SKILL.md`.
-
-Orchestration rules and activation triggers live in `.0g-skills/AGENTS.md`.
+0G integration is **no longer a project direction**. Do not follow any 0G skill
+rules, do not add new 0G code, and treat existing 0G components (ZeroGCheckpointStore,
+bridge/, @0glabs deps, .0g-skills/) as pending removal — see task card T2.5 in
+`docs/pm/ROADMAP-agentinfra.md` for the tracked teardown plan.
 
 ## Skill routing
 

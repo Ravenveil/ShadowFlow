@@ -191,4 +191,11 @@ export interface NodeContext {
    * falls back to `node.id`, preserving the exact pre-goal behaviour.
    */
   goal?: string;
+  /**
+   * 阶段 1 — run-session id, threaded from the assembler so per-node tool
+   * approval (`permission_check`) frames land in the right run event log.
+   * ABSENT for tests / library callers: the executor then skips the prompter
+   * and 'prompt' tools keep the v1 fail-closed soft-deny.
+   */
+  session_id?: string;
 }
