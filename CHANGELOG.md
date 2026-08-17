@@ -3,6 +3,23 @@
 All notable changes to ShadowFlow are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] — 2026-08-17（dsh 借鉴 阶段 2 · 双端统一事件命名表）
+
+### Added — 事件命名对齐与 model-visible 对账（ROADMAP-agentinfra 阶段 2 / GAP G4+G5）
+- **`docs/EVENT_NAMING.md`**：双端统一事件命名表。主表 27 个 Node wire 事件
+  × 发射处 × 事实/观察归属 × Python 对应物（无对应即显式"无对应"）；反向表
+  Python 14 个 durable 类型 → Node；`message` 帧 19 个 kind 子表；Node 侧
+  「model-visible means logged」对账表（system prompt 与工具白名单两项登记为
+  整改候选 R1/R2，信号未到不实现）。
+- **`server/src/lib/__tests__/event-naming.test.ts`**：四向一致性 guard——代码
+  发射点 ↔ 命名表主表（双向，防漏登也防陈旧）↔ Python `DURABLE_EVENT_TYPES`
+  ↔ timeline kind。任一漂移即红。
+- 登记即对齐：Node 端 runBus 无 durable 子集（整 run 快照落盘），故归属判定
+  采用"事实帧/观察帧"语义二分（与既有 status_line 优先驱逐策略互证）；
+  `permission_check` ↔ `permission.checked/blocked` 的语义映射入表。
+- 回归：前端 vitest 147/147 零改动通过（证明确未动帧结构与事件名）；
+  server tsc 零错误。EXTENSION_POINTS 事件三分法节加指针。
+
 ## [Unreleased] — 2026-08-17（dsh 借鉴 阶段 1 · Node 工具审批交互回路）
 
 ### Added — prompt 模式从软拒绝接成真人在环审批（ROADMAP-agentinfra 阶段 1 / GAP-dsh-alignment G1）

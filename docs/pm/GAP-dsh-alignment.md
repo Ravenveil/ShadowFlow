@@ -72,8 +72,8 @@ post-execute 治理"三段缺，"审批"段有挂点但只有半条命。
 | G1 | `prompt` 审批无交互回路（软拒绝） | Node | 非赛事（人在环演示走 Python approval_gate） | **已到**（write_file/edit_file 声明 prompt 需求，permission-policy.ts:6-9；回路模板 question-form 已存在）→ **已解决（2026-08-17，阶段 1 落地，见 ROADMAP/CHANGELOG）** |
 | G2 | 工具 input schema 校验缺（宽松 schema） | Node | 非赛事 | 未到（无幻觉参数故障记录） |
 | G3 | post-execute 结果治理（截断/spill）缺 | 双侧 | 非赛事 | 未到（无超长结果故障/成本记录） |
-| G4 | 统一事件命名表（双端三分法对齐）缺 | 双侧 | 非赛事（Demo 重连恢复已工作） | **已到**（双端 14 durable vs 23 wire 两套语言是现存摩擦；纯文档活） |
-| G5 | "model-visible means logged" Node 侧系统审计 | Node | 非赛事 | 部分完成（本审计确认机制在；余量并入 G4 命名表的 durable/live 归属判定） |
+| G4 | 统一事件命名表（双端三分法对齐）缺 | 双侧 | 非赛事（Demo 重连恢复已工作） | **已到**（双端 14 durable vs 23 wire 两套语言是现存摩擦；纯文档活）→ **已解决（2026-08-17，阶段 2 落地：docs/EVENT_NAMING.md + 四向一致性测试；实数 27 事件）** |
+| G5 | "model-visible means logged" Node 侧系统审计 | Node | 非赛事 | 部分完成 → **已完成对账（2026-08-17，EVENT_NAMING §4）：内容帧双路可恢复；system prompt 与工具白名单登记为整改候选 R1/R2（信号未到不实现）** |
 | G6 | `.sfplugin` apply | Python | 非赛事 | 未到（ROADMAP 3.4 门控） |
 | G7 | guards 跨工具策略（路径/参数级） | 双侧 | 非赛事 | 未到 |
 | G8 | CLI/ACP/MCP 外部 loop 的审批介入 | Node | 非赛事 | 未到（Python AcpApprovalBridge 可作参照，需要时再议） |

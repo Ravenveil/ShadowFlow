@@ -40,6 +40,11 @@
 
 ## 事件三分法（P3）
 
+> **双端统一事件命名表**：Node run-session 链 27 个 wire 事件 × Python 对应物
+> （含事实/观察归属判定、durable/live 映射、`message` kind 子表、model-visible
+> 对账）见 `docs/EVENT_NAMING.md`；一致性由
+> `server/src/lib/__tests__/event-naming.test.ts` 四向对账 guard（阶段 2，2026-08-17）。
+
 - **Durable 事件**（`run_event_log.py:DURABLE_EVENT_TYPES`）：必须挺过重启的事实——run/node 生命周期、checkpoint、循环迭代。全部落 SQLite，`/runs/{id}/event-log` 可读，投影可重放。
 - **Live 事件**（`RunEventBus` → SSE）：进行中观察（NODE_STARTED/NODE_RETRIED…），内存即可。
 - **瀑布钩子**（`hook_pipeline.py`）：校验/拦截语义——监听者必须放行（pass）、改写（transform）或拒绝（`HookRejected`）。

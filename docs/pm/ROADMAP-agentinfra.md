@@ -29,10 +29,11 @@ loop 已是纯驱动且有统一管线骨架（ConversationRuntime + ToolRunner�
 不是我们的运行时——它管"编队怎么描述、怎么交给评委验证"，不管"我们的 Agent
 Loop 长得好不好"。文章里的事是让自研底座工程化，两者并行不冲突。
 
-**4. dsh 哪些代码能拿过来前后端用？** 直接可搬的≈0——它的核心（agent loop、event
-log、tool pipeline）全部绑定 Cordis 的 Context/Service/Effect 模型，搬代码等于先
-引入 Cordis（架构级决策，见阶段 5 压着）。能"抄作业"的独立小件：compaction 首尾
-剪枝策略、超长结果 spill 外置、KV-cache 稳定前缀的组装纪律（§06 性能点）。
+**4. dsh 哪些代码能拿过来前后端用？** 模块级≈0——它的核心（agent loop、event
+log、tool pipeline）全部绑定 Cordis 的 Context/Service/Effect 模型，搬模块等于先
+引入 Cordis（架构级决策，见阶段 5 压着）。但 2026-08-17 仓库实查修正了"≈0"的
+判断：**纯函数层可以真·直接搬**——我们的 Node 网关同为 TypeScript，剪枝/spill
+的算法内核是零框架依赖的纯 TS（明细见文末附录「dsh 可搬运清单」）。
 
 **5. 技术栈一样吗？** 前端几乎同款（React 18 + Vite + TS）；后端异构（dsh 纯
 Node/TS + Cordis 单体；我们 Python FastAPI 引擎 + Node/TS 网关双进程）。所以
@@ -112,13 +113,20 @@ policy 构建）+ 审批端点（routes）。审计修正：管线实际位于 `
 
 ---
 
-## 阶段 2 — 统一事件命名表（阶段 0 审计后收缩；启动信号：**已到**——Python 14 durable 类型 vs Node 23 wire 事件两套语言是现存摩擦，GAP §4 G4）
+## 阶段 2 — 统一事件命名表 ✅ 已完成（2026-08-17；启动信号：**已到**——Python 14 durable 类型 vs Node 23 wire 事件两套语言是现存摩擦，GAP §4 G4）
+
+> 完成（2026-08-17）：`docs/EVENT_NAMING.md`（主表 27 事件双向对齐 Python 对应物 +
+> 反向表 + 19 kind 子表 + model-visible 对账，R1/R2 整改候选登记不实现）+
+> `lib/__tests__/event-naming.test.ts` 四向一致性 guard（4/4）。验收：前端 vitest
+> 147/147 零改动通过（帧结构确未动），server tsc 零错误。审计盘点实数：Node 27
+> 个 wire 事件（原 GAP 记 23 系早期扫描漏了 bus 直发式 3 个 + 阶段 1 新增
+> permission_check）。见 CHANGELOG 2026-08-17 第二条。
 
 > 阶段 0 审计删减：原目标②"可重建审计"——重启恢复机制与测试已在
 > （`run-event-bus.ts:274-306` hydration、`run-event-bus.test.ts` O4/重放用例），
 > 审计结论已并入 GAP 文档，不再立项；原目标③三件"抄作业"（首尾剪枝 + spill
 > 外置 + 稳定前缀）——信号未到（GAP G3：无超长结果/成本故障记录），删除，待
-> 痛点出现再议。
+> 痛点出现再议；**重开时优先搬运而非自写，见文末附录「dsh 可搬运清单」**。
 
 【对应文章】§07 Event Log——"任何能进入模型请求的内容都必须能从会话日志重建"；
 §11 第四类成本"状态纪律不能偷偷把重要上下文留在内存变量里"。
@@ -202,9 +210,42 @@ SessionRecord 恢复，不可恢复的列整改项（GAP G5 余量）。
 
 ---
 
+## 附：dsh 可搬运清单（2026-08-17 仓库实查，deepseek-harness@master，MIT）
+
+> 结论：**可搬的不是"后端模块"，是各模块的"纯函数层"。** 供阶段 2 删减项重开
+> 或相关信号到达时直接取用；搬运时文件头注明 upstream 包路径 + commit hash，
+> 连不变式测试一起搬（不变式比实现更有价值）。
+
+### A. 真·可直接搬（TS→TS 同语言，零框架依赖）
+
+- **`packages/compaction/compaction-tool-result-pruner`**：确定性头/中/尾剪枝。
+  `src/config.ts` 全纯函数可直接复制——`PRUNE_MARKER` 格式、默认预算
+  （threshold 8192 / head 4096 / tail 1024 字符，coding-agent 场景调好的值）、
+  `codePointLength`（Unicode 码点计数）、预算不变式（head+marker+tail ≤
+  threshold）；`src/index.ts` 的剪枝 walk 需剥 Cordis Service 壳（`extends
+  Service` + `inject:['tokenMeter']`），预计两三百行。唯一外部依赖 `deepFreeze`
+  可自替。
+- **`packages/spill/spill-policy`**：超长结果外置策略，与上同构，搬前按同样
+  标准过一遍纯度。
+
+### B. 不能搬、值得对读（参照实现）
+
+- `packages/guard`：guards 语义——对照 ToolRunner 管线查漏；
+- `packages/mcp` / `packages/acp`：与自研 `shadowflow/runtime/mcp/`、`acp/`
+  对读协议边界处理；
+- 事件 schema：阶段 2 命名表已完成对齐，dsh 事件分类是持续参照。
+
+### C. 不可搬（平台绑定/不适用）
+
+- 所有 `extends Service` / `static inject` 壳 = Cordis 插件运行时（= 阶段 5）；
+- `sandbox` / `native/landlock-run`：Linux 内核特性，Windows 开发环境不适用；
+- `e2b`：商业云沙箱集成层；
+- `python/sdk`：仅是驱动打包 Node 二进制走 JSON-RPC 的客户端壳，无后端逻辑。
+
+---
+
 ## 排序建议
 
-阶段 0 ✅（2026-08-17）→ 阶段 1 ✅（2026-08-17，审批回路）→ 阶段 2（命名表，纯文档；
-信号已独立到位，可开始）；阶段 3 各项按信号穿插；
+阶段 0/1/2 ✅（2026-08-17）→ 阶段 3 各项按信号穿插；
 阶段 4 按赛事日历与主线并行，勿互相阻塞；阶段 5 压着。若复赛交期临近，4 插队优先
 ——那是硬门槛，其余是"新增能力时还需不需要打开心脏"（文章结语）的长期账。
