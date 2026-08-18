@@ -1,8 +1,23 @@
 # Agent Identity 清单（赛题附录 A）
 
 > 依据：`docs/architecture/loop-engine-design.md` 附录 B
-> 创建：2026-08-13
+> 创建：2026-08-13；手册原文溯源补充：2026-08-17（阶段 4③）
 > 范围：ShadowFlow 循环引擎 PDCA 四职能 Agent
+
+## 手册原文（附录 A 提取，`多智能体框架研究/参赛手册.pdf` §16）
+
+| 字段 | 填写说明（手册原文） |
+|---|---|
+| Name | Agent 的唯一标识。 |
+| Role | Agent 的职责定位。 |
+| Capabilities | Agent 能做什么、不能做什么。 |
+| Inputs | 需要接收的输入信息。 |
+| Outputs | 输出格式与质量要求。 |
+| Dependencies | 依赖的其他 Agent、Skill 或工具。 |
+| Decision Boundary | 自主决策边界与需要人工确认的边界。 |
+| Trace | 执行过程如何被记录、回放和审计。 |
+
+下文清单逐字段对齐此模板；五要素/闭环的框架能力映射见 `docs/pm/agentteams-mapping.md`。
 
 ---
 
