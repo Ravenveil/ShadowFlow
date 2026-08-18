@@ -1,17 +1,13 @@
-"""M9 completion tests: .sfagent import/upload roundtrip + 0G bridge upload.
+"""M9 tests: .sfagent export/import roundtrip + import HTTP endpoint.
 
-The 0G bridge is faked with a local HTTP server speaking the same
-PUT /kv/:key contract as ZeroGCheckpointStore.
+(0G bridge upload tests removed with the 0G teardown — ROADMAP 3.5, 2026-08-17;
+offline export/import are the supported .sfagent paths.)
 """
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import json
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -19,7 +15,6 @@ from shadowflow.runtime.agent_bundle import (
     export_sfagent_zip,
     import_sfagent_zip,
     read_sfagent_zip,
-    upload_sfagent_to_zerog,
 )
 
 _AGENT = {
@@ -57,48 +52,7 @@ def test_read_bundle_rejects_non_bundle_zip(tmp_path):
         read_sfagent_zip(buf.getvalue())
 
 
-def test_upload_to_zerog_bridge_roundtrip():
-    received: dict = {}
-
-    class _Handler(BaseHTTPRequestHandler):
-        def do_PUT(self):  # noqa: N802 — http.server API
-            length = int(self.headers.get("Content-Length", 0))
-            received["body"] = json.loads(self.rfile.read(length))
-            received["key"] = self.path
-            self.send_response(201)
-            self.end_headers()
-
-        def log_message(self, *args):  # silence
-            pass
-
-    server = HTTPServer(("127.0.0.1", 0), _Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        zip_bytes = export_sfagent_zip(_AGENT)
-        content_id = read_sfagent_zip(zip_bytes)["manifest"]["content_id"]
-        result = upload_sfagent_to_zerog(
-            zip_bytes, content_id, bridge_url=f"http://127.0.0.1:{server.server_port}"
-        )
-        assert result["cid"] == content_id
-        assert result["location"].startswith("0g://sfagent/")
-        assert received["key"].startswith("/kv/sfagent/")
-        assert received["body"]["encoding"] == "base64"
-        assert base64.b64decode(received["body"]["value"]) == zip_bytes
-    finally:
-        server.shutdown()
-
-
-def test_upload_requires_bridge_config(monkeypatch):
-    import pytest
-
-    monkeypatch.delenv("SHADOWFLOW_BRIDGE_URL", raising=False)
-    with pytest.raises(ValueError, match="SHADOWFLOW_BRIDGE_URL"):
-        upload_sfagent_to_zerog(b"x", "sha256:abc")
-
-
-def test_http_import_and_upload_endpoints(tmp_path, monkeypatch):
-    monkeypatch.delenv("SHADOWFLOW_BRIDGE_URL", raising=False)
+def test_http_import_endpoint(tmp_path, monkeypatch):
     import shadowflow.api.agents as agents_mod
 
     agents_dir = tmp_path / "agents"
@@ -114,9 +68,3 @@ def test_http_import_and_upload_endpoints(tmp_path, monkeypatch):
     data = imported.json()["data"]
     assert data["agent_id"] == "checker-beta"
     assert (agents_dir / "checker-beta.json").exists()
-
-    upload = client.post("/workflow/sfagent/upload", json={"agent": _AGENT})
-    assert upload.status_code == 200, upload.text
-    payload = upload.json()["data"]
-    assert payload["content_id"].startswith("sha256:")
-    assert payload["uploaded"] is False  # no bridge configured → local cid only

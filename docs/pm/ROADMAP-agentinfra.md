@@ -172,12 +172,24 @@ SessionRecord 恢复，不可恢复的列整改项（GAP G5 余量）。
 ### 3.4 `.sfplugin` apply（信号：出现"无仓库访问分发扩展"的真实需求）
 锚点 `plugin_package.py`（v1 validate-only，头注释写明 apply 为后续）；实现 apply-plugin：幂等、可回滚、决策落日志。验收：二次 apply 零变更、rollback 复原、provides 与内容不符拒绝。
 
-### 3.5 0G 组件下线（信号：已触发——方向取消，2026-08-16 决定）
+### 3.5 0G 组件下线 ✅ 已完成（2026-08-17；信号：已触发——方向取消，2026-08-16 决定）
 删除 `ZeroGCheckpointStore`、`bridge/`、`@0glabs/*` 及仅服务 0G 的 ethers/hardhat 依赖、`vite.config.ts` ZgFile stub 与 `src/_stubs/`、`.0g-skills/`、契约 zerog 通道、`upload_sfagent_to_zerog` + upload 端点；checkpoint 留 InMemory/SQLite 两实现，`.sfagent` 离线导出不动。验收：全库 grep `0g|zerog` 零残留（node_modules/CHANGELOG 除外）、前端 build+测试过、pytest 过、CHANGELOG 记 breaking。
+
+> 完成（2026-08-17）：实际拆除面比卡片更广——还包括 `llm/zerog.py`
+> （`ProviderType.ZERO_G` 整个 provider）、`integrations/zerog_storage.py` 路由、
+> MCP `bridge_url` 参数、CLI `--bridge-url`、0G deploy/broker/evidence 脚本五件、
+> CI zerog extras、README 双语 0G 段落。`ethers` 保留（`routes/auth.ts` 钱包签名
+> 校验真实使用，非 0G 专属）。AGENTS.md 指令已更新为"已拆除勿再引入"。
 
 ---
 
-## 阶段 4（B 线）— 赛事合规：AgentTeams 闭环（不属 dsh 借鉴，按赛事日历倒排，与阶段 1–3 并行、互不阻塞）
+## 阶段 4（B 线）— 赛事合规：AgentTeams 闭环 🟡 ③ 已完成 / ①② 环境阻塞（不属 dsh 借鉴，按赛事日历倒排，与阶段 1–3 并行、互不阻塞）
+
+> 进展（2026-08-17）：**③ 完成**——附录 A 已有 `docs/pm/附录A-AgentIdentity.md`
+> （8 字段与手册逐项对齐，本轮补手册原文溯源，未建重复文件）；五要素/八步闭环
+> 映射表落 `docs/pm/agentteams-mapping.md`（含交付件对账）。**①② 阻塞**——本机
+> 无 docker/kind，部署脚本与 live 联调验收需环境窗口（对应 GOAI M1③ 既有决策），
+> 无 env 时 dry-run 回归不破（pytest 2255 过含 agentteams 套件）。
 
 【背景锚点】`agentteams_bridge.py` 头注释（gated behind `AGENTTEAMS_CONTROLLER_URL`
 + `MATRIX_HOMESERVER`）；`executors.py:129-190`；`agentteams_package.py`；赛事硬

@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "shadowflow"
 version = "0.3.0"
-description = "Multi-agent workflow orchestration with pluggable checkpoint stores (Memory / File / 0G)"
+description = "Multi-agent workflow orchestration with pluggable checkpoint stores (Memory / File / SQLite)"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
     {name = "Ravenveil"}
 ]
-keywords = ["multi-agent", "orchestration", "ai", "workflow", "0g", "checkpoint"]
+keywords = ["multi-agent", "orchestration", "ai", "workflow", "checkpoint"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -29,14 +29,10 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.0.0",
     "pyyaml>=6.0.0",
-    "httpx>=0.26.0",     # ZeroGCheckpointStore HTTP 客户端 & CLI 执行器
+    "httpx>=0.26.0",     # CLI / HTTP 执行器客户端
 ]
 
 [project.optional-dependencies]
-# pip install shadowflow[zerog]  — 使用 0G KV 链上存储
-zerog = [
-    "httpx>=0.26.0",
-]
 # pip install shadowflow[server]  — REST API server (shadowflow server)
 server = [
     "fastapi>=0.109.0",

@@ -69,7 +69,6 @@ def _build_runtime_service(
     writeback_mode: str = "reference",
     writeback_root: str | None = None,
     store: str = "file",
-    bridge_url: str | None = None,
 ) -> RuntimeService:
     if writeback_mode == "markdown":
         root = Path(writeback_root or DEFAULT_RUNTIME_ROOT)
@@ -88,10 +87,6 @@ def _build_runtime_service(
     # Select checkpoint store backend
     if store == "memory":
         checkpoint_store = InMemoryCheckpointStore()
-    elif store == "zerog":
-        from shadowflow.runtime.checkpoint_store import ZeroGCheckpointStore  # imported lazily
-        url = bridge_url or os.environ.get("SHADOWFLOW_BRIDGE_URL") or os.environ.get("AGENTGRAPH_BRIDGE_URL", "http://localhost:3001")
-        checkpoint_store = ZeroGCheckpointStore(bridge_url=url)
     else:  # "file" (default)
         root = Path(writeback_root or DEFAULT_RUNTIME_ROOT)
         checkpoint_store = FileCheckpointStore(root / "checkpoint-store")
@@ -228,13 +223,11 @@ async def run_workflow(
     writeback_mode: str,
     writeback_root: str | None,
     store: str = "file",
-    bridge_url: str | None = None,
 ):
     runtime_service = _build_runtime_service(
         writeback_mode=writeback_mode,
         writeback_root=writeback_root,
         store=store,
-        bridge_url=bridge_url,
     )
     workflow = _load_workflow_definition(workflow_path)
     request = RuntimeRequest(
@@ -1079,14 +1072,9 @@ def main():
     )
     run_parser.add_argument(
         '--store',
-        choices=['file', 'memory', 'zerog'],
+        choices=['file', 'memory'],
         default='file',
         help='Checkpoint store backend (default: file)',
-    )
-    run_parser.add_argument(
-        '--bridge-url',
-        default=None,
-        help='0G Node.js bridge URL (for --store zerog, overrides SHADOWFLOW_BRIDGE_URL)',
     )
 
     graph_parser = subparsers.add_parser('graph', help='Export a workflow graph as JSON')
@@ -1353,7 +1341,6 @@ def main():
                     args.writeback,
                     args.writeback_root,
                     store=args.store,
-                    bridge_url=args.bridge_url,
                 )
             )
         )

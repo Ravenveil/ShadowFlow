@@ -59,7 +59,6 @@ from shadowflow.runtime.checkpoint_store import (
     BaseCheckpointStore,
     InMemoryCheckpointStore,
     StoredCheckpointRecord,
-    ZeroGCheckpointStore,
 )
 from shadowflow.runtime.host_adapter import (
     BaseWritebackAdapter,
@@ -152,7 +151,6 @@ __all__ = [
     "StoredCheckpointRecord",
     "TaskTreeProjection",
     "TaskRecord",
-    "ZeroGCheckpointStore",
     "WritebackReceipt",
     "WritebackRef",
     "WorkflowGraph",

@@ -10,7 +10,7 @@ from shadowflow.runtime.checkpoint_store import BaseCheckpointStore, InMemoryChe
 from shadowflow.runtime.contracts import ArtifactRef, CheckpointRef, ExecutionFeedbackRecord, RunResult, utc_now
 
 
-WritebackTarget = Literal["host", "docs", "memory", "graph", "zerog"]
+WritebackTarget = Literal["host", "docs", "memory", "graph"]
 
 
 class WritebackReceipt(BaseModel):

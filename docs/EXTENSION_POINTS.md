@@ -20,9 +20,9 @@
 | 挂起运行中的循环 | `POST /runs/{id}/loops/{loop_id}/halt`（迭代边界消费信号，支持 `*` 通配） | `service.py:request_loop_halt` + `api/runs.py` | ✅ |
 | 持久化运行状态/事件 | `SF_RUNTIME_STATE_DB` SQLite（事件日志 + run/request 快照 + checkpoint） | `shadowflow/runtime/run_event_log.py` + `server.py` | ✅ |
 | 读取运行的 durable 事件流 | `GET /runs/{run_id}/event-log`（append-only，重启可读） | `shadowflow/api/runs.py` | ✅ |
-| 替换 checkpoint 后端 | 实现 `BaseCheckpointStore` 四方法（InMemory/SQLite/0G 已有） | `shadowflow/runtime/checkpoint_store.py` | ✅ |
+| 替换 checkpoint 后端 | 实现 `BaseCheckpointStore` 四方法（InMemory/SQLite 已有；0G 实现已随方向下线移除，见 ROADMAP 3.5） | `shadowflow/runtime/checkpoint_store.py` | ✅ |
 | 导出 AgentTeams 代码包 | CLI `export-agentteams` / `POST /workflow/export/agentteams`（含 preset 循环展开） | `shadowflow/runtime/agentteams_package.py` | ✅ |
-| 导出/上传 agent | `.sfagent` bundle：CLI `export-sfagent` / `POST /workflow/export/sfagent`（identity+skills+轨迹证据+content id） | `shadowflow/runtime/agent_bundle.py` | ✅（上传/0G CID ⏳） |
+| 导出/上传 agent | `.sfagent` bundle：CLI `export-sfagent` / `POST /workflow/export/sfagent`（identity+skills+轨迹证据+content id） | `shadowflow/runtime/agent_bundle.py` | ✅（离线导出/导入；0G 上传已随 3.5 下线移除） |
 | 接入宿主写回 | `BaseWritebackAdapter`（host/docs/memory/graph/zerog 五通道） | `docs/WRITEBACK_ADAPTER_CONTRACT.md` | 🟡 |
 | 接入子 agent 运行时 | `AgentExecutor` ABC（kind=cli/acp/mcp + provider 复合键注册） | `docs/AGENT_PLUGIN_CONTRACT.md` | ✅ |
 | 团队级验证钩子（Node 侧） | `team.validation_hooks`（schema 与 Python 共享） | `server/src/workflow/` + `validation_hooks/schema.py` | 🟡 |
@@ -33,10 +33,8 @@
 | 循环任务账本 | 每轮迭代自动 `task.ledger` durable 事件（goal/done/current/actuated），replay 可重建 | `loop_engine.py` + `run_event_log.py` | ✅ |
 | ACP 会话谱系 | `_meta.shadowflow`（run/node/agent + loopId/iteration/depth/parentLoopId，按需派生不持久化） | `acp/messages.py:NewSessionRequest` | ✅ |
 | 导入 agent 包 | CLI `import-sfagent` / `POST /workflow/sfagent/import`（写入 agent store） | `agent_bundle.py` | ✅ |
-| 上传 agent 包（0G CID） | `POST /workflow/sfagent/upload`（配 `SHADOWFLOW_BRIDGE_URL` 时经 0G KV bridge 上传） | `agent_bundle.py:upload_sfagent_to_zerog` | ✅ |
 | 分发插件包 | `.sfplugin` zip（manifest + provider_presets/ + loop_presets.yaml），CLI `validate-plugin` 校验；apply 待格式稳定后实现 | `plugin_package.py` | 🟡 |
 | 治理矩阵 | `WorkflowPolicyMatrixSpec`（编译警告 + 运行期驳回→回滚） | `shadowflow/runtime/policy_matrix.py` | ✅ |
-| 0G 链上存证 | 0G Storage Merkle 归档 + KV bridge checkpoint | `ZeroGCheckpointStore` + bridge | 🟡 |
 
 ## 事件三分法（P3）
 

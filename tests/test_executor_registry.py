@@ -118,4 +118,4 @@ class TestLegacyExecuteUnchanged:
     async def test_execute_unknown_kind_raises_value_error(self):
         reg = ExecutorRegistry()
         with pytest.raises(ValueError, match="unsupported executor kind"):
-            await reg.execute({"kind": "zerog"}, {})
+            await reg.execute({"kind": "no-such-kind"}, {})

@@ -3,6 +3,27 @@
 All notable changes to ShadowFlow are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] — 2026-08-17（阶段 3.5 · 0G 组件下线）
+
+### Removed — 0G 方向取消，全链路拆除（ROADMAP-agentinfra 3.5；breaking）
+- **Python**：`ZeroGCheckpointStore`（checkpoint 留 InMemory/SQLite）、
+  `llm/zerog.py`（`ProviderType.ZERO_G` 枚举与注册）、`integrations/zerog_storage.py`
+  路由、`upload_sfagent_to_zerog` + `POST /workflow/sfagent/upload` 端点（.sfagent
+  离线导出/导入不动）、CLI `--store zerog` / `--bridge-url`、MCP `store` enum 的
+  zerog 项与 `bridge_url` 参数、契约 `WritebackTarget` 的 `"zerog"` 通道、
+  `pyproject` zerog extras 与 "0g" keyword。
+- **Node/前端**：`bridge/`（KV bridge 整目录）、`@0glabs/*` 两包、`hardhat` +
+  `@nomicfoundation/hardhat-ethers`（**`ethers` 保留**——`routes/auth.ts` 钱包
+  签名校验仍依赖）、`vite.config.ts` 的 ZgFile node:fs stub 别名、`.0g-skills/`、
+  0G deploy/broker/evidence 脚本五件、CI 的 zerog extras 安装、根 `hardhat.config.cjs`
+  与 `package-lock.json` 中的 @0glabs/hardhat 锁定项（收尾补清，2026-08-18）。
+- **测试**：删除 `test_zerog_{provider,store}.py`、`integrations/test_zerog_storage.py`
+  及三处 zerog 用例；`test_sfagent_import_upload.py` 收缩为离线导入测试。
+- **Breaking**：`--store zerog` / `bridge_url` 参数、`ProviderType.ZERO_G`、
+  `WritebackTarget "zerog"`、`/workflow/sfagent/upload`、`zerog` pip extras 不复
+  存在。README 双语已去 0G 段落；EXTENSION_POINTS 对应行更新。
+- **护栏**：`SHADOWFLOW_BRIDGE_URL`/`ZEROG_*` 环境变量从此为无效空置（不再读取）。
+
 ## [Unreleased] — 2026-08-17（dsh 借鉴 阶段 2 · 双端统一事件命名表）
 
 ### Added — 事件命名对齐与 model-visible 对账（ROADMAP-agentinfra 阶段 2 / GAP G4+G5）

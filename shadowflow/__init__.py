@@ -30,7 +30,6 @@ from shadowflow.highlevel import (
 )
 from shadowflow.runtime import (
     InMemoryCheckpointStore,
-    ZeroGCheckpointStore,
     ReferenceWritebackAdapter,
     ResumeRequest,
     RunResult,
@@ -47,7 +46,6 @@ __all__ = [
     "RunResult",
     "ReferenceWritebackAdapter",
     "InMemoryCheckpointStore",
-    "ZeroGCheckpointStore",
     "ToolSpec",
     "SkillSpec",
     "RoleSpec",

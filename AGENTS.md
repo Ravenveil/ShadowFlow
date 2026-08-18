@@ -2,10 +2,11 @@
 
 ## 0G direction cancelled (2026-08)
 
-0G integration is **no longer a project direction**. Do not follow any 0G skill
-rules, do not add new 0G code, and treat existing 0G components (ZeroGCheckpointStore,
-bridge/, @0glabs deps, .0g-skills/) as pending removal — see task card T2.5 in
-`docs/pm/ROADMAP-agentinfra.md` for the tracked teardown plan.
+0G integration is **no longer a project direction**. The teardown completed
+2026-08-17 (ROADMAP 3.5): ZeroGCheckpointStore, bridge/, @0glabs/hardhat deps,
+.0g-skills/, zerog writeback channel and the sfagent upload endpoint are all
+removed. Do not reintroduce any 0G component; historical mentions remain only
+in docs/pm records and CHANGELOG.
 
 ## Skill routing
 

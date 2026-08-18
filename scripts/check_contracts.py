@@ -87,7 +87,6 @@ def scan_frontend_secrets() -> int:
     allowlist = {
         Path("src/core/security/leakGuard.ts"),
         Path("src/core/security/__tests__/leakGuard.test.ts"),
-        Path("src/core/hooks/__tests__/useZerogSecretsStore.test.ts"),
     }
 
     src_dir = PROJECT_ROOT / "src"

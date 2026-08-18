@@ -363,7 +363,7 @@ class RunRecord(BaseModel):
 
 class WritebackRef(BaseModel):
     channel: Literal["artifact", "checkpoint"]
-    target: Literal["host", "docs", "memory", "graph", "zerog"] = "host"
+    target: Literal["host", "docs", "memory", "graph"] = "host"
     mode: Literal["reference", "inline"] = "reference"
     host_action: Literal["persist_artifact_ref", "persist_checkpoint_ref"]
     content_field: Optional[str] = None

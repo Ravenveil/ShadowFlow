@@ -2,9 +2,6 @@
 import argparse
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -23,8 +20,7 @@ def _parse_run_args(argv: list[str]):
     run_parser.add_argument("-u", "--user-id", default="default")
     run_parser.add_argument("--writeback", choices=["reference", "markdown"], default="reference")
     run_parser.add_argument("--writeback-root", default=None)
-    run_parser.add_argument("--store", choices=["file", "memory", "zerog"], default="file")
-    run_parser.add_argument("--bridge-url", default=None)
+    run_parser.add_argument("--store", choices=["file", "memory"], default="file")
 
     return parser.parse_args(["run"] + argv)
 
@@ -54,11 +50,6 @@ class TestRunArgParsing:
         args = _parse_run_args(["workflow.yaml", "-i", "x", "--store", "memory"])
         assert args.store == "memory"
 
-    def test_store_zerog_with_bridge_url(self):
-        args = _parse_run_args(["workflow.yaml", "-i", "x", "--store", "zerog", "--bridge-url", "http://localhost:3001"])
-        assert args.store == "zerog"
-        assert args.bridge_url == "http://localhost:3001"
-
 
 # ---------------------------------------------------------------------------
 # _build_runtime_service checkpoint store selection
@@ -78,14 +69,6 @@ class TestBuildRuntimeService:
 
         svc = _build_runtime_service(store="memory")
         assert isinstance(svc._checkpoint_store, InMemoryCheckpointStore)
-
-    def test_store_zerog_requires_bridge_import(self):
-        """ZeroGCheckpointStore import fails gracefully if module missing."""
-        from shadowflow.cli import _build_runtime_service
-
-        with patch.dict("sys.modules", {"shadowflow.runtime.checkpoint_store": None}):
-            with pytest.raises(Exception):
-                _build_runtime_service(store="zerog")
 
 
 # ---------------------------------------------------------------------------

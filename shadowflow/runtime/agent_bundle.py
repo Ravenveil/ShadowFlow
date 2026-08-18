@@ -156,7 +156,6 @@ def build_sfagent_files(
             "artifact_count": evidence["artifact_count"],
             "loop_count": len(evidence["loops"]),
         },
-        "zerog": {"storage_cid": None, "note": "minted on upload (M9 live path)"},
     }
     files["sfagent.json"] = _canonical_json(manifest)
     return files
@@ -204,41 +203,6 @@ def read_sfagent_zip(zip_bytes: bytes) -> Dict[str, Any]:
     }
 
 
-def upload_sfagent_to_zerog(
-    zip_bytes: bytes,
-    content_id: str,
-    *,
-    bridge_url: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Upload a bundle through the local 0G KV bridge (M9 live path).
-
-    The bridge contract mirrors ZeroGCheckpointStore: PUT /kv/:key with
-    {"value": ...}. Returns {"cid", "location"}; the sha256 content id is the
-    local CID until the bridge mints a storage-layer one.
-    """
-    import os
-    import urllib.request
-
-    bridge = (bridge_url or os.getenv("SHADOWFLOW_BRIDGE_URL") or "").rstrip("/")
-    if not bridge:
-        raise ValueError("0G bridge not configured (set SHADOWFLOW_BRIDGE_URL)")
-    key = f"sfagent/{content_id.split(':', 1)[-1]}"
-    import base64
-
-    req = urllib.request.Request(
-        f"{bridge}/kv/{key}",
-        data=json.dumps(
-            {"value": base64.b64encode(zip_bytes).decode("ascii"), "encoding": "base64"}
-        ).encode("utf-8"),
-        method="PUT",
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        if resp.status not in (200, 201):
-            raise RuntimeError(f"0G bridge upload failed: {resp.status}")
-    return {"cid": content_id, "location": f"0g://{key}", "bridge": bridge}
-
-
 def import_sfagent_zip(zip_bytes: bytes, agents_dir) -> Dict[str, Any]:
     """Import a bundle into the agent store (`.shadowflow/agents`).
 
@@ -280,5 +244,4 @@ __all__ = [
     "export_sfagent_zip",
     "import_sfagent_zip",
     "read_sfagent_zip",
-    "upload_sfagent_to_zerog",
 ]

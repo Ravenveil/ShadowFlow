@@ -8,8 +8,7 @@ Tool: run_workflow
   Input:
     workflow_path (str)  — path to .yaml workflow file
     input_text    (str)  — workflow input (text or JSON)
-    store         (str)  — "file" | "memory" | "zerog"  (default "file")
-    bridge_url    (str?) — 0G bridge URL (only for store=zerog)
+    store         (str)  — "file" | "memory"  (default "file")
 
   Output: streaming text — one line per node completion, then final JSON.
 
@@ -64,13 +63,9 @@ TOOLS = [
                 },
                 "store": {
                     "type": "string",
-                    "enum": ["file", "memory", "zerog"],
+                    "enum": ["file", "memory"],
                     "default": "file",
                     "description": "Checkpoint store backend",
-                },
-                "bridge_url": {
-                    "type": "string",
-                    "description": "0G bridge URL (only needed for store=zerog)",
                 },
             },
             "required": ["workflow_path", "input_text"],
@@ -90,7 +85,6 @@ async def _execute_run_workflow(args: Dict) -> str:
     workflow_path: str = args["workflow_path"]
     input_text: str = args["input_text"]
     store: str = args.get("store", "file")
-    bridge_url: str | None = args.get("bridge_url")
 
     buf = io.StringIO()
     with redirect_stdout(buf):
@@ -101,7 +95,6 @@ async def _execute_run_workflow(args: Dict) -> str:
             "reference",
             None,
             store=store,
-            bridge_url=bridge_url,
         )
     return buf.getvalue().strip()
 

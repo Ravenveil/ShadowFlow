@@ -8,25 +8,14 @@
 
 [![CI](https://github.com/Ravenveil/ShadowFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Ravenveil/ShadowFlow/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
-[![0G 生态](https://img.shields.io/badge/0G-Storage%20%2B%20Compute%20%2B%20Chain-6C47FF.svg)](https://0g.ai)
 
 ---
 
 ## 问题痛点
 
-今天的 AI Agent 开发充斥着重复的编排样板代码——没有统一的合规策略执行、无法驳回并回滚失控的 Agent 输出、更没有可审计的链上轨迹。**ShadowFlow** 是一个 contract-first 多智能体工作流平台：AI Agent 团队在人工可审查的 Policy Matrix 下协作，具备驳回闭环、checkpoint 回滚、0G 可验证存档，以及对任何 Agent 运行时（Claude Code、Codex、MCP、ACP）的插件化接入合约。
+今天的 AI Agent 开发充斥着重复的编排样板代码——没有统一的合规策略执行、无法驳回并回滚失控的 Agent 输出、更没有可审计的链上轨迹。**ShadowFlow** 是一个 contract-first 多智能体工作流平台：AI Agent 团队在人工可审查的 Policy Matrix 下协作，具备驳回闭环、checkpoint 回滚、可验证存档，以及对任何 Agent 运行时（Claude Code、Codex、MCP、ACP）的插件化接入合约。
 
 ---
-
-## 0G 技术栈
-
-| 0G 组件 | ShadowFlow 中的用途 |
-|---|---|
-| **0G Compute** | Provider #5 接入去中心化 LLM 推理网络（DeepSeek V3.1 / Qwen / Gemma）；每次推理后自动调用 `processResponse()` 完成费用结算。 |
-| **0G Storage** | 工作流运行轨迹（trajectory）存档至 0G Storage，获得 Merkle 验证的不可篡改审计日志。支持浏览器 BYOK 直传模式（0G JS SDK）和后端代理模式（`ZEROG_FRONTEND_DIRECT=false`）。 |
-| **0G Chain** | 钱包身份层（Phase 2）——钱包地址捕获链上归属意向；完整 SIWE 认证将在 Phase 2 上线。 |
-
-> **合约地址**：ShadowFlow 不部署自定义智能合约，直接使用 0G 原生账本与钱包基础设施。
 
 ---
 
@@ -92,8 +81,6 @@ policy.violation — ComplianceOfficer 拒绝本次草稿：含敏感词汇，�
 node.succeeded — content_draft (retry #1) ✓
 ```
 
-> **0G 归档**：运行结束后点击运行详情面板里的归档按钮，可将完整轨迹上传至 0G Storage，获得 Merkle 验证 CID。
-
 ---
 
 ## 架构概览
@@ -106,12 +93,8 @@ node.succeeded — content_draft (retry #1) ✓
   ├── Runtime Engine  →  TaskRecord / RunRecord / StepRecord / Artifact / Checkpoint
   ├── Agent Executors →  CLI (Claude Code / Codex / ShadowSoul) | API | MCP | ACP
   ├── Policy Matrix   →  编译期验证 + 运行期驳回 → handoff + rollback
-  └── Provider Layer  →  Claude / OpenAI / Gemini / Ollama / 0G Compute（fallback chain）
+  └── Provider Layer  →  Claude / OpenAI / Gemini / Ollama（fallback chain）
         ↕ BYOK
-0G 网络
-  ├── 0G Storage  →  trajectory 存档（Merkle 验证）
-  ├── 0G Compute  →  LLM 推理（Provider #5：DeepSeek / Qwen / Gemma）
-  └── 0G Chain    →  钱包身份层（Phase 2）
 ```
 
 **两个后端，一个 API 入口：**
@@ -129,13 +112,13 @@ ShadowFlow 支持四种接入通道：`api`（HTTP 推理）、`cli`（子进程
 1. 在 `shadowflow/runtime/provider_presets.yaml` 添加 preset
 2. 在工作流 YAML 中声明 `provider: <your-agent>`
 
-**已内置预设：** Hermes（ACP）、OpenClaw（CLI）、ShadowSoul（ACP+CLI 双路径）、Claude / OpenAI / Gemini / Ollama（api）、0G Compute（api via broker）
+**已内置预设：** Hermes（ACP）、OpenClaw（CLI）、ShadowSoul（ACP+CLI 双路径）、Claude / OpenAI / Gemini / Ollama（api）
 
 ---
 
 ## 牵引力
 
-- 自 2026 年 3 月持续开发，13 个 Epic 已交付：运行时引擎、Agent 执行器、Policy Matrix、0G 集成、多 Agent 团队协作
+- 自 2026 年 3 月持续开发，13 个 Epic 已交付：运行时引擎、Agent 执行器、Policy Matrix、多 Agent 团队协作
 - 核心运行时契约（7+1 对象）经 80+ 后端测试验证
 - Docker 一键启动已在 macOS 和 Windows（WSL 2）验证通过
 
@@ -168,14 +151,6 @@ docker compose logs shadowflow-web   # 查前端构建错误
 ### Windows 路径问题
 
 确保 Docker Desktop → Settings → General → **"Use the WSL 2 based engine"** 已勾选。
-
-### 0G TS SDK 在 Windows 不稳定
-
-已知风险：0G TS SDK 在 Windows 原生环境可能有 WebSocket/WASM 兼容问题。
-
-**临时方案：** 在 macOS / Linux 机器上运行，或设置 `ZEROG_FRONTEND_DIRECT=false` 使用后端代理模式。
-
----
 
 ## 开发者指南
 
@@ -216,7 +191,6 @@ python scripts/check_contracts.py
 
 - **Tauri Sidecar**：打包为桌面应用（macOS / Windows），离线可用
 - **River Memory 系统**：主流 / 支流 / 水闸记忆协议，跨 run 持久化语义记忆
-- **0G Storage 后端代理**：受限环境下的服务器端 trajectory 上传
 
 ### Phase 3 — 价值网络
 

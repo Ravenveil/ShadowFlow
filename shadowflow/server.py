@@ -215,7 +215,6 @@ from shadowflow.api import citations as _citations_api
 from shadowflow.api import memory as _memory_api
 from shadowflow.api import state as _state_api
 from shadowflow.api import evals as _evals_api
-from shadowflow.integrations import zerog_storage as _zerog_storage_api
 from shadowflow.api import agents as _agents_api
 from shadowflow.api import teams as _teams_api
 from shadowflow.api import registry as _registry_api
@@ -247,7 +246,6 @@ app.include_router(_policy_obs_api.router)
 app.include_router(_inbox_api.router)
 app.include_router(_groups_api.router)
 app.include_router(_approvals_api.router)
-app.include_router(_zerog_storage_api.router)
 app.include_router(_builder_api.router)
 app.include_router(_catalog_api.router)
 app.include_router(_tools_api.router)
@@ -626,57 +624,6 @@ async def import_sfagent(request: Request):
     except Exception as exc:
         raise _internal_error(exc)
     return {"data": record, "meta": {}}
-
-
-@app.post("/workflow/sfagent/upload")
-async def upload_sfagent(request: Request):
-    """GOAI M9: export a bundle and (when the 0G bridge is configured) upload it.
-
-    Body: {"agent": {...}, "run_id": optional}. Returns the sha256 content id
-    plus the 0G location when SHADOWFLOW_BRIDGE_URL is reachable.
-    """
-    import os
-
-    from shadowflow.runtime.agent_bundle import export_sfagent_zip, upload_sfagent_to_zerog
-
-    class _UploadRequest(BaseModel):
-        agent: Dict[str, Any]
-        run_id: Optional[str] = None
-
-    try:
-        body = _UploadRequest.model_validate(await request.json())
-    except Exception as exc:
-        raise _client_error(400, exc, "BAD_REQUEST")
-
-    run_results = []
-    if body.run_id:
-        found = runtime_service.get_run(body.run_id)
-        if found is None:
-            raise _client_error(404, ValueError(f"run {body.run_id!r} not found"), "RUN_NOT_FOUND")
-        run_results = [found]
-
-    import zipfile as _zipfile
-    from io import BytesIO as _BytesIO
-
-    zip_bytes = export_sfagent_zip(body.agent, run_results=run_results)
-    import json as _json
-
-    manifest = _json.loads(
-        _zipfile.ZipFile(_BytesIO(zip_bytes)).read("sfagent.json")
-    )
-    result: Dict[str, Any] = {
-        "content_id": manifest["content_id"],
-        "uploaded": False,
-        "cid": manifest["content_id"],
-        "location": None,
-    }
-    if os.getenv("SHADOWFLOW_BRIDGE_URL"):
-        try:
-            uploaded = upload_sfagent_to_zerog(zip_bytes, manifest["content_id"])
-            result.update({"uploaded": True, "cid": uploaded["cid"], "location": uploaded["location"]})
-        except Exception as exc:  # noqa: BLE001 — degrade to local id, never fail export
-            result["upload_error"] = str(exc)
-    return {"data": result, "meta": {}}
 
 
 @app.get("/runs", response_model=List[RunSummary])
