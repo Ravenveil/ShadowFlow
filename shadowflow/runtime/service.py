@@ -10,6 +10,7 @@ import threading
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
+from shadowflow.runtime.artifact_pins import pinned_ids
 from shadowflow.runtime.checkpoint_store import BaseCheckpointStore
 from shadowflow.runtime.river_memory import RiverMemory
 from shadowflow.runtime.contracts import (
@@ -67,6 +68,46 @@ from shadowflow.runtime.host_adapter import BaseWritebackAdapter
 logger = logging.getLogger(__name__)
 
 _REJECTION_EVENTS_PER_RUN_MAX = 100
+
+
+def artifact_uri_scheme(uri: Optional[str]) -> Optional[str]:
+    """Return the URI scheme of an artifact URI (e.g. ``memory`` / ``https``).
+
+    Artifact URI scheme contract (previously undocumented — GAP L6 artifact
+    preview): the runtime writes ``memory://{run_id}/{node_id}/{index}/{offset}``
+    by default; writeback adapters may emit ``{target}://artifacts/{id}``
+    (host/docs/memory/graph) or caller-supplied ``file://`` / ``http(s)://``.
+    """
+    if isinstance(uri, str) and "://" in uri:
+        return uri.split("://", 1)[0]
+    return None
+
+
+def artifact_preview_url(uri: Optional[str]) -> Optional[str]:
+    """Map an artifact URI to a directly fetchable preview URL.
+
+    Only ``http(s)://`` URIs are directly fetchable by the frontend. For
+    everything else (``memory://`` etc.) this returns None — the frontend
+    falls back to lineage metadata (inline content lives in
+    ``metadata.content`` when writeback.mode == "inline").
+    """
+    if isinstance(uri, str) and uri.startswith(("http://", "https://")):
+        return uri
+    return None
+
+
+def _plain_text_summary(content: Any, limit: int = 120) -> Optional[str]:
+    """filecard 副标题：内容首 ~120 字符纯文本摘要（不调 LLM，GAP :15）。
+
+    只做折叠空白 + 截断；非字符串内容（dict/list payload）返回 None，
+    前端回落到现状副标题。
+    """
+    if not isinstance(content, str):
+        return None
+    text = " ".join(content.split())
+    if not text:
+        return None
+    return text[:limit]
 
 
 class RuntimeService:
@@ -147,21 +188,40 @@ class RuntimeService:
     ) -> None:
         """Append a durable fact to the run event log.
 
+        Loop-domain facts (loop.* / task.ledger) additionally fan out to the
+        in-memory SSE event bus so GET /runs/{id}/loops/stream can push
+        incremental frames instead of the frontend polling. The durable log
+        stays the source of truth for replay; the bus copy is live-only.
         Never raises — the log is evidence, not a dependency: a broken sink
         must not fail the run itself.
         """
-        if self._run_event_log is None:
-            return
-        try:
-            self._run_event_log.append(
-                run_id,
-                event_type,
-                node_id=node_id,
-                iteration_index=iteration_index,
-                payload=payload,
-            )
-        except Exception:  # noqa: BLE001 — evidence sink must not break runs
-            logger.warning("run event log append failed for %s/%s", run_id, event_type, exc_info=True)
+        if self._run_event_log is not None:
+            try:
+                self._run_event_log.append(
+                    run_id,
+                    event_type,
+                    node_id=node_id,
+                    iteration_index=iteration_index,
+                    payload=payload,
+                )
+            except Exception:  # noqa: BLE001 — evidence sink must not break runs
+                logger.warning("run event log append failed for %s/%s", run_id, event_type, exc_info=True)
+        if self._event_bus is not None and event_type.startswith(("loop.", "task.ledger")):
+            try:
+                self._event_bus.publish(run_id, {
+                    "type": event_type,
+                    "run_id": run_id,
+                    "node_id": node_id,
+                    "iteration_index": iteration_index,
+                    **(payload or {}),
+                })
+            except Exception:  # noqa: BLE001 — live fan-out must not break runs
+                logger.warning("event bus fan-out failed for %s/%s", run_id, event_type, exc_info=True)
+
+    @property
+    def event_bus(self) -> Optional[Any]:
+        """SSE event bus accessor for streaming endpoints (None when unwired)."""
+        return self._event_bus
 
     def get_run_event_log(self, run_id: str) -> List[Dict[str, Any]]:
         """Durable event stream for a run (empty list when log absent)."""
@@ -1848,12 +1908,39 @@ class RuntimeService:
                 continue
             feedback_by_step_id.setdefault(record.step_id, []).append(record)
         workflow_graph = self.export_workflow_graph(request.workflow)
+
+        # 2026-08-19 导航架构统一批：迭代环是 DAG 的一部分——control.loop 节点
+        # 的 loop 记录（step.output.loop_record，legacy 为 loop_* 顶层键）挂进
+        # 节点 metadata.loop，前端「过程」tab 在图节点上直接渲染迭代徽标
+        # （状态 + 轮数 + 收敛）。提取逻辑与 api/runs.py get_run_loops 同构。
+        def _loop_record_of(step) -> Optional[dict]:
+            if not isinstance(step.output, dict):
+                return None
+            rec = step.output.get("loop_record")
+            if rec:
+                return rec
+            if "loop_id" in step.output:
+                return {
+                    "loop_id": step.output.get("loop_id"),
+                    "loop_kind": step.output.get("loop_kind"),
+                    "loop_status": step.output.get("loop_status"),
+                    "loop_iterations": step.output.get("loop_iterations", 0),
+                    "loop_converged": step.output.get("loop_converged", False),
+                    "loop_depth": step.output.get("loop_depth", 0),
+                    "loop_halted_by_watch": step.output.get("loop_halted_by_watch", False),
+                }
+            return None
+
         nodes: List[RunGraphNode] = []
+        loop_count = 0
         for node in workflow_graph.nodes:
             step = steps_by_node_id.get(node.id)
             candidates = candidates_by_step_id.get(step.step_id, []) if step is not None else []
             activation = activations_by_step_id.get(step.step_id) if step is not None else None
             feedback_records = feedback_by_step_id.get(step.step_id, []) if step is not None else []
+            loop_record = _loop_record_of(step) if step is not None else None
+            if loop_record:
+                loop_count += 1
             nodes.append(
                 RunGraphNode(
                     id=node.id,
@@ -1877,6 +1964,7 @@ class RuntimeService:
                         "candidate_ids": [candidate.candidate_id for candidate in candidates],
                         "feedback_count": len(feedback_records),
                         "feedback_ids": [item.feedback_id for item in feedback_records],
+                        "loop": loop_record,
                     },
                 )
             )
@@ -1896,6 +1984,7 @@ class RuntimeService:
                 "feedback_count": len(result.feedback),
                 "memory_event_count": len(result.memory_events),
                 "handoff_count": len(result.handoffs),
+                "loop_count": loop_count,
             },
             nodes=nodes,
             edges=workflow_graph.edges,
@@ -2104,6 +2193,8 @@ class RuntimeService:
         included_task_ids: set[str] = set()
         included_step_ids: set[str] = set()
         node_ids = {target_result.run.run_id}
+        # filecard 置顶标记（GAP :14）——独立小仓 .shadowflow/artifacts/，注入节点 metadata
+        pinned = pinned_ids()
 
         for artifact in artifacts:
             step = steps_by_id.get(artifact.producer_step_id)
@@ -2185,6 +2276,9 @@ class RuntimeService:
                     metadata={
                         "kind": artifact.kind,
                         "uri": artifact.uri,
+                        "uri_scheme": artifact_uri_scheme(artifact.uri),
+                        "preview_url": artifact_preview_url(artifact.uri),
+                        "pinned": artifact.artifact_id in pinned,
                         "writeback": artifact.writeback.model_dump(mode="json"),
                         **artifact.metadata,
                     },
@@ -3993,6 +4087,7 @@ Output a JSON with keys:
                     ),
                     metadata={
                         "content": payload.get("content"),
+                        "summary": _plain_text_summary(payload.get("content")),
                         "workflow_id": workflow_id,
                         "producer_node_id": node_id,
                     },

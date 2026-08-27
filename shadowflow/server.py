@@ -227,6 +227,7 @@ from shadowflow.api import schedules as _schedules_api
 from shadowflow.api import settings as _settings_api
 from shadowflow.api import wallet as _wallet_api
 from shadowflow.api import runs as _runs_api
+from shadowflow.api import artifacts as _artifacts_api
 
 _ops_api.set_aggregator(_ops_api.OpsAggregator(
     runtime_service=runtime_service,
@@ -248,6 +249,9 @@ app.include_router(_groups_api.router)
 app.include_router(_approvals_api.router)
 app.include_router(_builder_api.router)
 app.include_router(_catalog_api.router)
+# T04 模板 fork 黄金路径：前端经 Node 网关只能到 /api/*（proxyFallback 只代理
+# /api 前缀），同一 router 再挂一份 /api/catalog 别名；原 /catalog 路径保持不变。
+app.include_router(_catalog_api.router, prefix="/api")
 app.include_router(_tools_api.router)
 app.include_router(_knowledge_api.router)
 app.include_router(_citations_api.router)
@@ -273,6 +277,7 @@ app.include_router(_schedules_api.router)
 app.include_router(_settings_api.router)
 app.include_router(_wallet_api.router)
 app.include_router(_runs_api.router)
+app.include_router(_artifacts_api.router)
 
 
 @app.exception_handler(ShadowflowError)
@@ -345,6 +350,23 @@ async def _check_agent_binaries() -> None:
     results = await asyncio.to_thread(check_all_agents)
     app.state.agent_health = results
     log_agent_health_warnings(results)
+
+
+@app.on_event("startup")
+async def _seed_builtin_catalog_templates() -> None:
+    """Seed built-in Catalog team templates (T04 氢能获客 6 角色 DAG 团队).
+
+    幂等：模板以固定 app_id 注册，已存在则跳过。失败只告警，不阻塞启动。
+    """
+    try:
+        from shadowflow.runtime.catalog_service import get_service as _get_catalog
+        from shadowflow.runtime.catalog_templates import ensure_builtin_templates
+
+        seeded = ensure_builtin_templates(_get_catalog())
+        if seeded:
+            logger.info("Catalog: seeded builtin template(s): %s", ", ".join(seeded))
+    except Exception as exc:  # noqa: BLE001 — 种子失败不应拖垮 server 启动
+        logger.warning("Catalog: builtin template seeding failed: %s", exc)
 
 
 @app.on_event("startup")

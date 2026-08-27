@@ -9,9 +9,22 @@
  *
  * 实现:写 documentElement 的 `--app-zoom`(CSS 变量)+ html{zoom:var(--app-zoom)}。
  * 存储:localStorage `sf-font-scale` = zoom 系数(默认 1.0)。滑块范围 0.85–1.4。
+ * 2026-08:值同时 best-effort 同步到后端 /api/settings/preferences(跨设备)。
  */
 
+import { putPreferences } from '../../api/preferences';
+
 const STORAGE_KEY = 'sf-font-scale';
+
+// Session guard: once the user adjusts zoom in this tab, a late-arriving
+// bootstrap snapshot must not revert it (stale-GET race). User paths always
+// call saveZoom with syncRemote enabled; only bootstrap回灌 passes false.
+let userAdjustedZoom = false;
+
+/** True once the user has touched the zoom slider this session. */
+export function zoomUserAdjusted(): boolean {
+  return userAdjustedZoom;
+}
 
 /** 默认缩放(1.0 = 原始大小,不放大)。无存储时用它。 */
 export const DEFAULT_ZOOM = 1.0;
@@ -32,9 +45,15 @@ export function loadZoom(): number | null {
   return null;
 }
 
-/** 存 zoom(夹取范围)。传 null/默认值则清存储,回默认 1.0。 */
-export function saveZoom(z: number | null): void {
+/**
+ * 存 zoom(夹取范围)。传 null/默认值则清存储,回默认 1.0。
+ * `syncRemote`(默认 true)同时把值 best-effort 写到后端 preferences
+ * (见 src/api/preferences.ts);bootstrap 从服务端回灌本地时传 false,
+ * 避免刚 GET 到的值又原样 PUT 回去。
+ */
+export function saveZoom(z: number | null, opts?: { syncRemote?: boolean }): void {
   if (typeof window === 'undefined') return;
+  const syncRemote = opts?.syncRemote !== false;
   try {
     if (z === null) {
       window.localStorage.removeItem(STORAGE_KEY);
@@ -44,6 +63,15 @@ export function saveZoom(z: number | null): void {
     }
   } catch {
     /* ignore */
+  }
+  if (syncRemote) {
+    userAdjustedZoom = true;
+    void putPreferences({ zoom: z === null ? DEFAULT_ZOOM : Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z)) });
+  }
+  // 通知同页其它实例(如设置页滑块)跟上 bootstrap/跨页同步来的新值。
+  if (typeof window !== 'undefined') {
+    const effective = z === null ? DEFAULT_ZOOM : Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+    try { window.dispatchEvent(new CustomEvent('sf-zoom-change', { detail: effective })); } catch { /* ignore */ }
   }
 }
 

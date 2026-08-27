@@ -17,7 +17,7 @@
 ### → 独立 Sprint
 
 - **React Flow v11→v12 迁移** — 较大重构，不捆绑功能需求
-- **LightRAG query route** (/knowledge/packs/{id}/search) — Story 9.4 前置
+- ~~**LightRAG query route** (/knowledge/packs/{id}/search)~~ — ✅ 已完成 2026-08-22（实装为 `POST /api/knowledge/packs/{id}/query`，见 GAP.md RAG 行）
 - **A2A SSE streaming** — Phase 2
 
 ### → 环境待修

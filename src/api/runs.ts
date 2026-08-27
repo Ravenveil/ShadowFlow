@@ -1,8 +1,8 @@
 /**
- * Runs API client — 6 projection endpoints + list/get
+ * Runs API client — 6 projection endpoints + list/get + loops SSE/verdicts
  *
  * Covers:
- *   GET /runs                           → RunSummary[]
+ *   GET /runs?limit=                    → RunRecord[]
  *   GET /runs/{runId}                   → RunResult
  *   GET /runs/{runId}/graph             → RunGraph
  *   GET /runs/{runId}/task-tree         → TaskTreeProjection
@@ -10,6 +10,10 @@
  *   GET /runs/{runId}/memory-graph      → MemoryRelationProjection
  *   GET /runs/{runId}/checkpoint-lineage → CheckpointLineageProjection
  *   GET /runs/{runId}/training-dataset  → ActivationTrainingDataset
+ *   GET /runs/{runId}/loops             → RunLoopsResponse
+ *   GET /runs/{runId}/loops/stream      → SSE（loops 快照/单环 upsert 帧）
+ *   GET /runs/{runId}/loops/{loopId}/verdicts → LoopVerdict | LoopVerdict[]
+ *   GET /runs/{runId}/suggestions       → 完成态「后续建议」（Node 网关 LLM 生成）
  */
 
 import { getApiBase } from './_base';
@@ -359,8 +363,12 @@ export interface RunLoopsResponse {
  * 仍兼容 envelope 形态（双形态 fallback）以容忍临时部署不同步：若 server
  * 端尚未升级回 raw，前端仍能正常 unwrap，避免 hackathon demo 中断。
  */
-export async function listRuns(): Promise<RunRecord[]> {
-  const res = await fetch(`${getApiBase()}/api/runs`);
+export async function listRuns(limit?: number): Promise<RunRecord[]> {
+  const qs =
+    typeof limit === 'number' && Number.isFinite(limit) && limit > 0
+      ? `?limit=${Math.floor(limit)}`
+      : '';
+  const res = await fetch(`${getApiBase()}/api/runs${qs}`);
   const parsed = await _handleResponse<RunRecord[] | RunsListResponse>(res);
   if (Array.isArray(parsed)) return parsed;
   return parsed.runs ?? [];
@@ -386,6 +394,29 @@ export async function getArtifactLineage(runId: string): Promise<ArtifactLineage
   return _handleResponse<ArtifactLineageProjection>(res);
 }
 
+// ---------------------------------------------------------------------------
+// Artifact pin — POST /artifacts/{id}/pin（toggle，GAP：产物 filecard 置顶）
+// ---------------------------------------------------------------------------
+
+export interface ArtifactPinState {
+  artifact_id: string;
+  pinned: boolean;
+  pinned_at: string | null;
+}
+
+/**
+ * toggleArtifactPin — 产物 filecard 置顶开关（持久化在后端独立小仓
+ * .shadowflow/artifacts/）。重复调用即撤销（toggle 语义）。
+ */
+export async function toggleArtifactPin(artifactId: string): Promise<ArtifactPinState> {
+  const res = await fetch(
+    `${getApiBase()}/api/artifacts/${encodeURIComponent(artifactId)}/pin`,
+    { method: 'POST' },
+  );
+  const parsed = await _handleResponse<{ data: ArtifactPinState } | ArtifactPinState>(res);
+  return 'data' in parsed ? (parsed as { data: ArtifactPinState }).data : (parsed as ArtifactPinState);
+}
+
 export async function getMemoryGraph(runId: string): Promise<MemoryRelationProjection> {
   const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/memory-graph`);
   return _handleResponse<MemoryRelationProjection>(res);
@@ -408,6 +439,26 @@ export async function getRunLoops(runId: string): Promise<RunLoopsResponse> {
   return 'data' in parsed ? parsed.data : parsed as unknown as RunLoopsResponse;
 }
 
+// ---------------------------------------------------------------------------
+// 完成态「后续建议」— GET /runs/{id}/suggestions（Node 网关 run-suggestions.ts）
+// ---------------------------------------------------------------------------
+
+export interface RunSuggestionsResponse {
+  suggestions: string[];
+}
+
+/**
+ * 取 run 完成后的下一步建议（LLM 实时生成）。LLM 不可用 / run 未知时后端
+ * 返回 502/404 —— 抛 RunsApiError，由调用方降级为「不渲染建议区」，
+ * 前端绝不展示假建议。
+ */
+export async function getRunSuggestions(runId: string): Promise<string[]> {
+  const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/suggestions`);
+  const parsed = await _handleResponse<RunSuggestionsResponse>(res);
+  if (!Array.isArray(parsed.suggestions)) return [];
+  return parsed.suggestions.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+}
+
 export async function haltLoop(runId: string, loopId: string): Promise<{ status: string; message: string }> {
   const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/loops/${encodeURIComponent(loopId)}/halt`, {
     method: 'POST',
@@ -415,4 +466,165 @@ export async function haltLoop(runId: string, loopId: string): Promise<{ status:
   const parsed = await _handleResponse<{ data: { status: string; message: string }; meta?: { already_halted?: boolean } }>(res);
   // Handle both envelope and direct response formats
   return 'data' in parsed ? parsed.data : parsed as unknown as { status: string; message: string };
+}
+
+// ---------------------------------------------------------------------------
+// LoopVerdict — GET /runs/{id}/loops/{loop_id}/verdicts
+// ---------------------------------------------------------------------------
+
+/** 单个 claim 的字段未在端点契约里固定——保留开放形状，渲染层防御式取值。 */
+export type LoopVerdictClaim = Record<string, unknown>;
+
+export interface LoopVerdict {
+  iteration: number;
+  score?: number;
+  rationale?: string;
+  claims: LoopVerdictClaim[];
+}
+
+/** 解一层 `{data: …}` envelope（loops 系端点的惯用包装）。 */
+function _unwrapData(raw: unknown): unknown {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'data' in raw) {
+    return (raw as { data: unknown }).data;
+  }
+  return raw;
+}
+
+function _normalizeVerdict(raw: unknown): LoopVerdict | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const claims = Array.isArray(o.claims)
+    ? (o.claims.filter((c) => c && typeof c === 'object') as LoopVerdictClaim[])
+    : [];
+  return {
+    iteration: typeof o.iteration === 'number' ? o.iteration : 0,
+    score: typeof o.score === 'number' ? o.score : undefined,
+    rationale: typeof o.rationale === 'string' && o.rationale ? o.rationale : undefined,
+    claims,
+  };
+}
+
+/**
+ * getLoopVerdicts — verifier 面板数据源（GAP：verdicts 端点）。
+ *
+ * 契约签名 `{ iteration, score, rationale, claims[] }`；实现侧可能按轮返回
+ * 单个对象或整轮列表，这里三种形态都容忍：单对象 / 数组 / `{verdicts: []}`，
+ * 外加一层可选 `{data: …}` envelope。未知形状 → 空数组（前端不编造）。
+ */
+export async function getLoopVerdicts(runId: string, loopId: string): Promise<LoopVerdict[]> {
+  const res = await fetch(
+    `${getApiBase()}/api/runs/${encodeURIComponent(runId)}/loops/${encodeURIComponent(loopId)}/verdicts`,
+  );
+  let parsed: unknown = await _handleResponse<unknown>(res);
+  parsed = _unwrapData(parsed);
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && 'verdicts' in parsed) {
+    parsed = (parsed as { verdicts: unknown }).verdicts;
+  }
+  const arr = Array.isArray(parsed) ? parsed : [parsed];
+  return arr
+    .map(_normalizeVerdict)
+    .filter((v): v is LoopVerdict => v !== null)
+    .sort((a, b) => a.iteration - b.iteration);
+}
+
+// ---------------------------------------------------------------------------
+// Loops SSE — GET /runs/{id}/loops/stream
+// ---------------------------------------------------------------------------
+
+export interface RunLoopsStreamHandle {
+  /** 永久关闭流（不再重连）。 */
+  close: () => void;
+}
+
+/**
+ * streamRunLoops — 优先于 5s REST 轮询的 loops 增量通道（GAP：Loop 实时性）。
+ *
+ * 帧形状容忍（后端迭代期间契约可能微调）：
+ *   - `{ loops: LoopStep[] }` 全量快照（按 loop_id 重建）
+ *   - 单条 LoopStep（`{ step_id, loop, … }`）或裸 LoopRecord → 按 loop_id upsert
+ *   外层再容忍一层 `{data: …}` envelope。事件名监听 message/loop/loops/
+ *   snapshot/update 五种。
+ *
+ * 首个数据帧到达之前出错（端点不存在/未就绪）→ 关流并回调 onUnavailable，
+ * 调用方回落轮询；拿到过数据之后的瞬断交给浏览器 EventSource 自动重连。
+ */
+export function streamRunLoops(
+  runId: string,
+  onSnapshot: (loops: LoopStep[]) => void,
+  onUnavailable?: () => void,
+): RunLoopsStreamHandle {
+  const url = `${getApiBase()}/api/runs/${encodeURIComponent(runId)}/loops/stream`;
+  const byId = new Map<string, LoopStep>();
+  let gotData = false;
+  let closed = false;
+
+  const es = new EventSource(url);
+
+  const emit = () => onSnapshot([...byId.values()]);
+
+  const ingest = (raw: unknown) => {
+    const v = _unwrapData(raw);
+    if (v && typeof v === 'object' && !Array.isArray(v) && Array.isArray((v as { loops?: unknown }).loops)) {
+      // 全量快照
+      byId.clear();
+      for (const step of (v as { loops: LoopStep[] }).loops) {
+        if (step?.loop?.loop_id) byId.set(step.loop.loop_id, step);
+      }
+      gotData = true;
+      emit();
+      return;
+    }
+    // 单条 LoopStep
+    const asStep = v as LoopStep | null;
+    if (asStep && typeof asStep === 'object' && asStep.loop?.loop_id) {
+      byId.set(asStep.loop.loop_id, asStep);
+      gotData = true;
+      emit();
+      return;
+    }
+    // 裸 LoopRecord（无 step 包装）
+    const asLoop = v as LoopRecord | null;
+    if (asLoop && typeof asLoop === 'object' && typeof asLoop.loop_id === 'string' && typeof asLoop.kind === 'string') {
+      const prev = byId.get(asLoop.loop_id);
+      byId.set(asLoop.loop_id, {
+        step_id: prev?.step_id ?? '',
+        node_id: prev?.node_id ?? '',
+        status: prev?.status ?? asLoop.status,
+        started_at: prev?.started_at ?? '',
+        ended_at: prev?.ended_at ?? null,
+        loop: asLoop,
+      });
+      gotData = true;
+      emit();
+    }
+    // 形状不识别的帧：静默丢弃（不编造）
+  };
+
+  const onMessage = (ev: Event) => {
+    const data = (ev as MessageEvent).data;
+    if (typeof data !== 'string') return;
+    try {
+      ingest(JSON.parse(data));
+    } catch {
+      // 非 JSON 帧（心跳/注释行已被浏览器滤掉）→ 忽略
+    }
+  };
+
+  es.addEventListener('message', onMessage);
+  for (const name of ['loop', 'loops', 'snapshot', 'update']) {
+    es.addEventListener(name, onMessage);
+  }
+  es.addEventListener('error', () => {
+    if (gotData || closed) return; // 有数据后的瞬断 → 交给 EventSource 自动重连
+    closed = true;
+    es.close();
+    onUnavailable?.();
+  });
+
+  return {
+    close: () => {
+      closed = true;
+      es.close();
+    },
+  };
 }

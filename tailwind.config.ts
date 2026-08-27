@@ -12,9 +12,9 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        // UI5.0: Inter Variable 优先（与 index.css --font-sans 同步），Geist 回退，CJK Noto Sans SC
-        sans: ['Inter Variable', 'Inter', 'Geist', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        mono: ['Geist Mono', 'ui-monospace', 'SF Mono', 'Menlo', 'monospace'],
+        // 2026-08-18 clawsgo 收敛: 与 index.css --font-sans 同步切系统字体栈
+        sans: ['system-ui', '-apple-system', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SF Mono', 'Menlo', 'monospace'],
       },
       colors: {
         sf: {

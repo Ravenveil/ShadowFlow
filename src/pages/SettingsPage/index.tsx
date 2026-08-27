@@ -55,6 +55,7 @@ import { WalletSection } from './WalletSection';
 import { GenerationSettings } from '../../components/GenerationSettings';
 import { AcpAgentsPanel } from '../../components/AcpAgentsPanel';
 import { MemorySection } from '../../core/components/settings/MemorySection';
+import { SchedulesSection } from './SchedulesSection';
 
 // ---------------------------------------------------------------------------
 // Section ids �?12 existing + 4 placeholders + 1 wallet (= 17)
@@ -84,6 +85,7 @@ type SectionId =
   // 记忆
   | 'memory-river'
   // 数据
+  | 'schedules'
   | 'notifications'
   | 'advanced'
   | 'media-providers'
@@ -143,6 +145,7 @@ const STATIC_NAV_GROUPS: NavGroup[] = [
   {
     group: 'Data',
     items: [
+      { id: 'schedules',       label: 'Schedules' },
       { id: 'notifications',   label: 'Notifications' },
       { id: 'advanced',        label: 'Privacy & Data · Advanced' },
       { id: 'media-providers', label: 'Media Providers' },
@@ -155,7 +158,7 @@ const STATIC_NAV_GROUPS: NavGroup[] = [
 const ALL_IDS = STATIC_NAV_GROUPS.flatMap((g) => g.items.map((it) => it.id));
 const ID_SET = new Set<string>(ALL_IDS);
 
-function buildNavGroups(t: (key: string) => string): NavGroup[] {
+function buildNavGroups(t: (key: string, options?: Record<string, unknown>) => string): NavGroup[] {
   return [
     {
       group: t('settings.groupAccount'),
@@ -196,6 +199,7 @@ function buildNavGroups(t: (key: string) => string): NavGroup[] {
     {
       group: t('settings.groupData'),
       items: [
+        { id: 'schedules',       label: t('settings.navSchedules', { defaultValue: 'Schedules' }) },
         { id: 'notifications',   label: t('settings.navNotifications') },
         { id: 'advanced',        label: t('settings.navPrivacy') },
         { id: 'media-providers', label: t('settings.navMedia') },
@@ -505,6 +509,7 @@ export default function SettingsPage() {
           {activeSection === 'memory-river' && <LegacySectionWrap><MemorySection /></LegacySectionWrap>}
 
           {/* 数据 */}
+          {activeSection === 'schedules'        && <LegacySectionWrap><SchedulesSection /></LegacySectionWrap>}
           {activeSection === 'notifications'    && <LegacySectionWrap><NotificationsSection /></LegacySectionWrap>}
           {activeSection === 'advanced'         && <LegacySectionWrap><AdvancedSection /></LegacySectionWrap>}
           {activeSection === 'media-providers'  && <LegacySectionWrap><MediaProvidersSection /></LegacySectionWrap>}

@@ -14,6 +14,7 @@ Errors raise HTTP exceptions with {error: {code, message}} body.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -144,6 +145,7 @@ def _escape_fmt_str(s: str) -> str:
 # ---------------------------------------------------------------------------
 
 from shadowflow.api import team_validation as _tv  # noqa: E402
+from shadowflow.runtime import team_workflow_versions as _wf_versions  # noqa: E402
 
 
 def _reject_dag(errors: List[str]) -> None:
@@ -349,7 +351,109 @@ async def put_team_workflow(team_id: str, body: TeamWorkflow) -> Dict[str, Any]:
     record["workflow"] = workflow
     record["updated_at"] = datetime.now(timezone.utc).isoformat()
     _save_team(record)
+    # 版本仓快照（team_workflow_versions 独立小仓）：每次成功保存自动记一版，
+    # 供 GET …/workflow/versions 列表与 restore/branch 回放。
+    _wf_versions.record_version(team_id, workflow)
     return _envelope(record["workflow"])
+
+
+# ---------------------------------------------------------------------------
+# Workflow version endpoints — 版本管理（借鉴 StaffDeck SOP 版本）
+# ---------------------------------------------------------------------------
+
+
+class RestoreWorkflowRequest(BaseModel):
+    version: int = Field(..., ge=1)
+
+
+class BranchWorkflowRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+
+
+@router.get("/{team_id}/workflow/versions")
+async def list_team_workflow_versions(team_id: str) -> Dict[str, Any]:
+    """List workflow version snapshots (metadata only, oldest first)."""
+    _validate_team_id(team_id)
+    record = _load_team(team_id)
+    if record is None:
+        raise _not_found(team_id)
+    versions = [
+        {
+            "version": v["version"],
+            "saved_at": v["saved_at"],
+            "summary": v.get("summary"),
+        }
+        for v in _wf_versions.list_versions(team_id)
+    ]
+    return _envelope(versions, total=len(versions))
+
+
+@router.post("/{team_id}/workflow/restore")
+async def restore_team_workflow(team_id: str, body: RestoreWorkflowRequest) -> Dict[str, Any]:
+    """Restore the team's workflow to a saved version.
+
+    The restored snapshot goes through the same D1/D2 write-time validation as
+    a fresh PUT (an agent referenced by the old graph may have been deleted
+    since), then counts as a new version ("restored from vN") so history is
+    append-only.
+    """
+    _validate_team_id(team_id)
+    record = _load_team(team_id)
+    if record is None:
+        raise _not_found(team_id)
+    entry = _wf_versions.get_version(team_id, body.version)
+    if entry is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": {
+                    "code": "VERSION_NOT_FOUND",
+                    "message": f"Workflow version v{body.version} not found for team {team_id!r}",
+                }
+            },
+        )
+    workflow = entry["workflow"]
+    _reject_dag(_tv.validate_workflow(workflow))
+    _reject_missing_agents(_tv.workflow_agent_ids(workflow))
+    record["workflow"] = workflow
+    record["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _save_team(record)
+    _wf_versions.record_version(team_id, workflow, summary=f"restored from v{body.version}")
+    return _envelope(record["workflow"])
+
+
+@router.post("/{team_id}/workflow/branch", status_code=201)
+async def branch_team_workflow(team_id: str, body: BranchWorkflowRequest) -> Dict[str, Any]:
+    """Copy the team (with its current workflow) into a new team variant.
+
+    Default name is ``<原名> · 分支``；body.name 可覆盖。分支带走
+    workflow/policy_matrix/validation_hooks，并在自己的版本仓里记下初始
+    版本（summary 注明来源），后续各自演化互不影响。
+    """
+    _validate_team_id(team_id)
+    record = _load_team(team_id)
+    if record is None:
+        raise _not_found(team_id)
+    now = datetime.now(timezone.utc).isoformat()
+    branch: Dict[str, Any] = {
+        "team_id": f"team-{uuid4().hex[:12]}",
+        "name": body.name or f"{record.get('name', team_id)} · 分支",
+        "description": record.get("description", ""),
+        "workspace_id": normalize_workspace_id(record.get("workspace_id")),
+        "agent_ids": list(record.get("agent_ids", [])),
+        "created_at": now,
+        "updated_at": now,
+    }
+    for key in ("workflow", "policy_matrix", "validation_hooks"):
+        if key in record:
+            branch[key] = copy.deepcopy(record[key])
+    _save_team(branch)
+    workflow = branch.get("workflow")
+    if isinstance(workflow, dict):
+        latest = _wf_versions.latest_version(team_id)
+        origin = f"{team_id} v{latest['version']}" if latest else team_id
+        _wf_versions.record_version(branch["team_id"], workflow, summary=f"branched from {origin}")
+    return _envelope(branch, created=True, branched_from=team_id)
 
 
 # ---------------------------------------------------------------------------

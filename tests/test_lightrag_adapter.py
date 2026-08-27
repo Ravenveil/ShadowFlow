@@ -254,7 +254,7 @@ class TestConfigError:
 
 class TestApiMetaRagBackend:
     def test_list_packs_includes_rag_backend(self, tmp_path: Path) -> None:
-        """GET /knowledge/packs envelope meta must include rag_backend field."""
+        """GET /api/knowledge/packs envelope meta must include rag_backend field."""
         import shadowflow.api.knowledge as knowledge_api
         from shadowflow.api.knowledge import KnowledgeService
         from fastapi.testclient import TestClient
@@ -264,7 +264,7 @@ class TestApiMetaRagBackend:
         svc = KnowledgeService(storage_dir=tmp_path / "knowledge")
         knowledge_api.set_service(svc)
         try:
-            resp = client.get("/knowledge/packs")
+            resp = client.get("/api/knowledge/packs")
             assert resp.status_code == 200
             body = resp.json()
             assert "rag_backend" in body["meta"], "meta must include rag_backend"
@@ -273,7 +273,7 @@ class TestApiMetaRagBackend:
             knowledge_api.set_service(KnowledgeService())
 
     def test_create_pack_includes_rag_backend(self, tmp_path: Path) -> None:
-        """POST /knowledge/packs envelope meta must include rag_backend field."""
+        """POST /api/knowledge/packs envelope meta must include rag_backend field."""
         import shadowflow.api.knowledge as knowledge_api
         from shadowflow.api.knowledge import KnowledgeService
         from fastapi.testclient import TestClient
@@ -284,7 +284,7 @@ class TestApiMetaRagBackend:
         knowledge_api.set_service(svc)
         try:
             resp = client.post(
-                "/knowledge/packs",
+                "/api/knowledge/packs",
                 json={
                     "name": "meta-test",
                     "sources": [{"source_type": "text", "source_ref": "hello"}],
@@ -296,6 +296,159 @@ class TestApiMetaRagBackend:
             assert body["meta"]["rag_backend"] == "stub"  # LIGHTRAG_ENABLED not set
         finally:
             knowledge_api.set_service(KnowledgeService())
+
+
+# ---------------------------------------------------------------------------
+# 8. query_hits() — multi-chunk retrieval (2026-08-22)
+# ---------------------------------------------------------------------------
+
+
+class TestQueryHitsParsing:
+    """Pure parsing helpers: no lightrag import, no network."""
+
+    def test_hits_from_structured_maps_chunks(self) -> None:
+        from shadowflow.runtime import lightrag_adapter
+
+        result = {
+            "status": "success",
+            "data": {
+                "chunks": [
+                    {"content": "chunk one", "file_path": "docs/a.md", "reference_id": "1"},
+                    {"content": "chunk two", "reference_id": "2"},
+                    {"content": "  ", "file_path": "skip-me.md"},
+                    "not-a-dict",
+                ],
+                "references": [{"reference_id": "2", "file_path": "docs/b.md"}],
+            },
+        }
+        hits = lightrag_adapter._hits_from_structured(result, top_k=5)
+        assert [h["text"] for h in hits] == ["chunk one", "chunk two"]
+        assert hits[0]["source"] == "docs/a.md"
+        assert hits[1]["source"] == "docs/b.md"  # resolved via reference_id
+        # rank-derived scores: 1.0 → 0.5 (no score in LightRAG chunk payload)
+        assert hits[0]["score"] == 1.0
+        assert hits[1]["score"] == 0.5
+
+    def test_hits_from_structured_keeps_explicit_score(self) -> None:
+        from shadowflow.runtime import lightrag_adapter
+
+        result = {"data": {"chunks": [{"content": "c", "rerank_score": 0.42}]}}
+        hits = lightrag_adapter._hits_from_structured(result, top_k=5)
+        assert hits[0]["score"] == 0.42
+
+    def test_hits_from_structured_bad_shape_returns_empty(self) -> None:
+        from shadowflow.runtime import lightrag_adapter
+
+        assert lightrag_adapter._hits_from_structured("not a dict", 5) == []
+        assert lightrag_adapter._hits_from_structured({"data": {}}, 5) == []
+
+    def test_hits_from_context_parses_json_lines(self) -> None:
+        from shadowflow.runtime import lightrag_adapter
+
+        context = (
+            "-----Document Chunks-----\n"
+            '{"content": "alpha chunk", "file_path": "a.md"}\n'
+            '{"content": "beta chunk"}\n'
+            '{"content": "alpha chunk", "file_path": "dup.md"}\n'  # duplicate → dedup
+            "this is not json\n"
+        )
+        hits = lightrag_adapter._hits_from_context(context, top_k=5)
+        assert [h["text"] for h in hits] == ["alpha chunk", "beta chunk"]
+        assert hits[0]["source"] == "a.md"
+        assert hits[1]["source"] == ""
+        assert hits[1]["score"] == 0.5  # rank-derived
+
+    def test_hits_from_context_non_string_returns_empty(self) -> None:
+        from shadowflow.runtime import lightrag_adapter
+
+        assert lightrag_adapter._hits_from_context(None, 5) == []
+
+
+@pytest.mark.skipif(
+    not _lightrag_installed(),
+    reason="lightrag-hku not installed; skipping live LightRAG integration tests",
+)
+class TestQueryHitsIntegration:
+    """query_hits() against a mocked LightRAG instance (no real API calls)."""
+
+    def _set_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LIGHTRAG_ENABLED", "true")
+        monkeypatch.setenv("LIGHTRAG_WORKING_DIR", str(tmp_path / "lightrag"))
+        monkeypatch.setenv("LIGHTRAG_LLM_API_KEY", "sk-test")
+        monkeypatch.setenv("LIGHTRAG_EMBED_API_KEY", "sk-test")
+
+    def test_query_hits_via_aquery_data(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._set_env(tmp_path, monkeypatch)
+        from shadowflow.runtime import lightrag_adapter
+
+        mock_rag = MagicMock()
+        mock_rag.initialize_storages = MagicMock(return_value=_async_noop())
+        mock_rag.finalize_storages = MagicMock(return_value=_async_noop())
+        mock_rag.aquery_data = MagicMock(
+            return_value=_async_return(
+                {
+                    "status": "success",
+                    "data": {
+                        "chunks": [
+                            {"content": "氢能片段一", "file_path": "h2/a.md"},
+                            {"content": "氢能片段二", "file_path": "h2/b.md"},
+                        ],
+                        "references": [],
+                    },
+                }
+            )
+        )
+
+        with patch.object(lightrag_adapter, "_build_rag", return_value=mock_rag):
+            hits = lightrag_adapter.query_hits("a" * 32, "氢能？", top_k=5)
+
+        assert [h["text"] for h in hits] == ["氢能片段一", "氢能片段二"]
+        assert hits[0] == {"text": "氢能片段一", "source": "h2/a.md", "score": 1.0}
+        mock_rag.aquery_data.assert_called_once()
+
+    def test_query_hits_legacy_context_fallback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Old lightrag without aquery_data → parse only_need_context string."""
+        self._set_env(tmp_path, monkeypatch)
+        from shadowflow.runtime import lightrag_adapter
+
+        mock_rag = MagicMock(
+            spec=["initialize_storages", "finalize_storages", "aquery"]
+        )
+        mock_rag.initialize_storages = MagicMock(return_value=_async_noop())
+        mock_rag.finalize_storages = MagicMock(return_value=_async_noop())
+        mock_rag.aquery = MagicMock(
+            return_value=_async_return(
+                '{"content": "legacy chunk", "file_path": "old.md"}\n'
+            )
+        )
+
+        with patch.object(lightrag_adapter, "_build_rag", return_value=mock_rag):
+            hits = lightrag_adapter.query_hits("a" * 32, "q", top_k=5)
+
+        assert hits == [{"text": "legacy chunk", "source": "old.md", "score": 1.0}]
+
+    def test_query_hits_raises_when_context_unparseable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Legacy path with no parseable chunks → LightRagQueryError so the
+        API endpoint falls back to the synthesized answer."""
+        self._set_env(tmp_path, monkeypatch)
+        from shadowflow.runtime import lightrag_adapter
+
+        mock_rag = MagicMock(
+            spec=["initialize_storages", "finalize_storages", "aquery"]
+        )
+        mock_rag.initialize_storages = MagicMock(return_value=_async_noop())
+        mock_rag.finalize_storages = MagicMock(return_value=_async_noop())
+        mock_rag.aquery = MagicMock(return_value=_async_return("no chunks here"))
+
+        with patch.object(lightrag_adapter, "_build_rag", return_value=mock_rag):
+            with pytest.raises(lightrag_adapter.LightRagQueryError):
+                lightrag_adapter.query_hits("a" * 32, "q", top_k=5)
 
 
 # ---------------------------------------------------------------------------

@@ -40,13 +40,19 @@ async function _handleResponse<T>(res: Response): Promise<MemoryApiResponse<T>> 
     try { detail = await res.json(); } catch { detail = res.statusText; }
     throw new MemoryApiError(res.status, detail, _extractCode(detail));
   }
-  return res.json() as Promise<MemoryApiResponse<T>>;
+  try {
+    return (await res.json()) as MemoryApiResponse<T>;
+  } catch {
+    // 200 + 非 JSON（典型：Vite/网关 SPA fallback 回了 index.html）。
+    // 与 api/knowledge.ts 的 KNOWLEDGE_API_BAD_RESPONSE 同一套防御。
+    throw new MemoryApiError(res.status, 'non-JSON response', 'MEMORY_API_BAD_RESPONSE');
+  }
 }
 
 export async function createMemoryProfile(
   payload: CreateMemoryProfilePayload,
 ): Promise<MemoryApiResponse<MemoryProfile>> {
-  const res = await fetch(`${API_BASE_URL}/memory/profiles`, {
+  const res = await fetch(`${API_BASE_URL}/api/memory/profiles`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -54,10 +60,15 @@ export async function createMemoryProfile(
   return _handleResponse<MemoryProfile>(res);
 }
 
+export async function listMemoryProfiles(): Promise<MemoryApiResponse<MemoryProfile[]>> {
+  const res = await fetch(`${API_BASE_URL}/api/memory/profiles`);
+  return _handleResponse<MemoryProfile[]>(res);
+}
+
 export async function getMemoryProfile(
   profileId: string,
 ): Promise<MemoryApiResponse<MemoryProfile>> {
-  const res = await fetch(`${API_BASE_URL}/memory/profiles/${profileId}`);
+  const res = await fetch(`${API_BASE_URL}/api/memory/profiles/${profileId}`);
   return _handleResponse<MemoryProfile>(res);
 }
 
@@ -65,7 +76,7 @@ export async function updateMemoryProfile(
   profileId: string,
   payload: UpdateMemoryProfilePayload,
 ): Promise<MemoryApiResponse<MemoryProfile>> {
-  const res = await fetch(`${API_BASE_URL}/memory/profiles/${profileId}`, {
+  const res = await fetch(`${API_BASE_URL}/api/memory/profiles/${profileId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -74,7 +85,7 @@ export async function updateMemoryProfile(
 }
 
 export async function deleteMemoryProfile(profileId: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/memory/profiles/${profileId}`, {
+  const res = await fetch(`${API_BASE_URL}/api/memory/profiles/${profileId}`, {
     method: 'DELETE',
   });
   if (!res.ok && res.status !== 204) {
@@ -94,14 +105,14 @@ export interface MemoryStats {
 export async function getMemoryStats(agentId?: string): Promise<MemoryApiResponse<MemoryStats>> {
   // 2026-05-11 fix — `new URL('/memory/stats')` (no host) throws.
   const qs = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : '';
-  const res = await fetch(`${API_BASE_URL}/memory/stats${qs}`);
+  const res = await fetch(`${API_BASE_URL}/api/memory/stats${qs}`);
   return _handleResponse<MemoryStats>(res);
 }
 
 export async function triggerManualWriteback(
   runId: string,
 ): Promise<MemoryApiResponse<{ run_id: string; status: string }>> {
-  const res = await fetch(`${API_BASE_URL}/memory/writeback/${runId}`, {
+  const res = await fetch(`${API_BASE_URL}/api/memory/writeback/${runId}`, {
     method: 'POST',
   });
   return _handleResponse(res);

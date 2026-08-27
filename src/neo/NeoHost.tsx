@@ -1,9 +1,11 @@
 /**
  * NeoHost — Neo 右栏「Agent 的主机」（对标 clawsgo c1_05/c1_07/c2_02/c2_03）。
  *
- * 顶部 tab：工作空间 / 产物 / Loop + 「+」（+ 暂不实现功能；产物出现时自动开
- * 产物 tab 并激活，对齐 clawsgo「产出即开新 tab」形态）。tab 下划线滑动 +
- * 内容淡入。
+ * 顶部 tab：固定集 工作空间 / 产物 / 过程（+ 条件性的灵魂/编队/成员）保持原样；
+ * 动态产物 tab（2026-08-23，对标 clawsgo c1_05/c1_07/c2_02/c2_03）：点「产物」
+ * 行 / 「历史」行进入的 run 产物、或产物出现时自动开——在 tab 条追加一个以
+ * 产物文件名命名的临时 tab（图标盒右上角 × 关闭，关闭激活 tab 回落「产物」）；
+ * 同一产物重复点击聚焦已有 tab 不重复开；tab 条溢出横滚（safe center）。
  *
  * - 工作空间：左文件树（listDirs 懒加载展开、类型图标、选中高亮）+ 右预览
  *   （markdown → NeoMarkdown；代码 → 等宽+行号；图片 → rawUrl <img>；
@@ -12,13 +14,16 @@
  *   artifact_type / artifact_filename 为后端真实落库字段），点击开产物 tab，
  *   预览走 Neo 自有 projections/NeoArtifactPreview（阶段 2.5：done.html
  *   filecard + 大纲 + markdown 双栏视觉；下载/导出端点不变）。
- * - Loop：getRunLoops(runId)（src/api/runs.ts 已存在，返回 RunLoopsResponse，
- *   LoopStep[] 按 loop_id 去重）→ PDCA 迭代卡（kind/setpoint/状态 pill +
- *   迭代列表：轮次 · verifier_score · metrics 迷你条形 · sensor.classification），
- *   分形深度用缩进。
+ * - Loop：SSE `loop` 帧（useRunSession）优先 → loops/stream SSE → 一次性
+ *   getRunLoops 回落（src/api/runs.ts，返回 RunLoopsResponse，LoopStep[]
+ *   按 loop_id 去重）→ PDCA 迭代卡（kind/setpoint/状态 pill +
+ *   迭代列表：轮次 · verifier_score · metrics 迷你条形 · sensor.classification +
+ *   每环 verifier 面板 LoopVerdicts：每轮 rationale + claims），分形深度用缩进。
  * - 过程（阶段 2.3）：src/neo/projections/ProcessView — getRunGraph +
  *   getTaskTree，节点轨 + 边 chips + 缩进任务树；SSE 流式期间 5s 轮询。
- *   run 开始执行时自动露出一次（同一 run 不重复抢 tab）。
+ *   run 开始执行时自动露出一次（同一 run 不重复抢 tab）。下方并挂迭代环区
+ *   （PDCA 卡 + 每环 LoopVerdicts 验证意见）与证据投影区（B40：
+ *   src/neo/projections/EvidencePanel — memory-graph / training-dataset）。
  * - 产物（阶段 2.3 升级）：src/neo/projections/ArtifactsView —
  *   artifact-lineage + checkpoint-lineage 产物/检查点列表；无 lineage 数据时
  *   回落到 RunRecord.artifact_* 单条旧行为；点击开 NeoArtifactPreview tab。
@@ -26,20 +31,27 @@
  *   src/neo/projections/TeamPanel — roster + workflow DAG 摘要 + policy 要点 +
  *   per-node 输出归属（useRunSession.perNodeChunks；本组件对同一 session 另挂
  *   一条只读 SSE 视图，server runBus 支持多 sink attach + 全量 replay）。
+ * - 灵魂（2026-08-22，soulAgent 非空时出现：agent-target 或 agent 的 DM 会话）：
+ *   内嵌 NeoAgentSoul — persona/系统提示词编辑（GET + PATCH /api/agents）。
+ * - 成员（2026-08-22 W2 钉钉式融合，conversation 非 DM 时出现）：标题变
+ *   「团队的主机」，内嵌 projections/GroupMembersPanel — 成员列表（头像 +
+ *   状态点 + 角色 badge）+ 团队 DAG 摘要 + 审批门（approve 边；无则空态）。
  *
  * 不 mock、不加 placeholder；runId 为空 = 整体空态；数据缺失 = 干净空态。
  * 颜色一律 var(--t-*) / color-mix，day/night 双主题安全；样式全在 neo-host.css。
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import {
   ChevronDown,
   ChevronRight,
   Code,
+  Database,
   Download,
   Eye,
   FileCode,
   FileImage,
+  FilePlus2,
   FileText,
   Folder,
   FolderOpen,
@@ -49,6 +61,8 @@ import {
   RefreshCw,
   Repeat,
   Search,
+  Sparkles,
+  Upload,
   UsersRound,
   X,
 } from 'lucide-react';
@@ -58,11 +72,14 @@ import {
   pickNativeFolder,
   rawUrl,
   readFile,
+  uploadFile,
+  writeFile,
   type FsDirEntry,
 } from '../api/fsFiles';
 import {
   getRunLoops,
   listRuns,
+  streamRunLoops,
   type ArtifactType,
   type LoopRecord,
   type LoopStatus,
@@ -73,7 +90,11 @@ import { NeoMarkdown } from './projections/NeoMarkdown';
 import { NeoArtifactPreview } from './projections/NeoArtifactPreview';
 import { ProcessView } from './projections/ProcessView';
 import { ArtifactsView, type LineageArtifact } from './projections/ArtifactsView';
+import { LoopVerdicts } from './projections/LoopVerdicts';
+import { EvidencePanel } from './projections/EvidencePanel';
 import { TeamPanel } from './projections/TeamPanel';
+import { GroupMembersPanel } from './projections/GroupMembersPanel';
+import { NeoAgentSoul } from './NeoAgentSoul';
 import type { NeoHostProps } from './types';
 import './neo-host.css';
 
@@ -149,7 +170,7 @@ function metricMaxes(loop: LoopRecord): Record<string, number> {
 // 主组件
 // ---------------------------------------------------------------------------
 
-type FixedTab = 'workspace' | 'artifacts' | 'process' | 'loop' | 'team';
+type FixedTab = 'workspace' | 'artifacts' | 'process' | 'team' | 'members';
 
 interface ArtifactTab {
   /** tab 唯一 id：RunRecord 单产物 = runId；lineage 产物 = artifact_id。 */
@@ -170,8 +191,13 @@ function previewTypeOf(filename: string): ArtifactType {
   return 'markdown';
 }
 
-export function NeoHost({ target, runId }: NeoHostProps) {
+export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps) {
   const { t } = useI18n();
+
+  // W2 钉钉式融合（2026-08-22）：中栏开着非 DM 会话（团队群）→ 本面板变
+  // 「团队的主机」并露出「成员」tab（成员列表 + 团队 DAG 摘要 + 审批门，
+  // projections/GroupMembersPanel）；DM/无会话保持「Agent 的主机」。
+  const isTeamConv = conversation != null && conversation.kind !== 'dm';
 
   // ── tab 状态 ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<string>('workspace');
@@ -288,6 +314,34 @@ export function NeoHost({ target, runId }: NeoHostProps) {
     setRootPath(p);
   };
 
+  // ── 工作空间：新建 / 上传文件（2026-08-22，T04 企业资料喂入）───────────────
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  // 新建：相对文件名交给后端相对 root 解析（前端不拼路径分隔符）；成功后刷新树。
+  const createFile = async () => {
+    if (!rootPath) return;
+    const name = window.prompt(t('neo.host.newFilePrompt', { defaultValue: '新建文件名（可带子目录，如 docs/notes.md）' }));
+    if (!name?.trim()) return;
+    try {
+      await writeFile(name.trim(), '', rootPath);
+      refreshTree();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const onUploadPicked = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // 允许连续选同一文件
+    if (!file || !rootPath) return;
+    try {
+      await uploadFile(rootPath, rootPath, file);
+      refreshTree();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   // ── 文件选中 → 预览（race-safe）──────────────────────────────────────────
   const openFile = (entry: FsDirEntry) => {
     setSelected(entry);
@@ -358,6 +412,16 @@ export function NeoHost({ target, runId }: NeoHostProps) {
   useEffect(() => {
     if (activeTab === 'team' && target?.kind !== 'team') setActiveTab('process');
   }, [activeTab, target?.kind]);
+
+  // 会话切走/切到 DM → 「成员」tab 消失，激活 tab 回落到工作空间。
+  useEffect(() => {
+    if (activeTab === 'members' && !isTeamConv) setActiveTab('workspace');
+  }, [activeTab, isTeamConv]);
+
+  // agent 上下文消失（切到群聊/团队/首页）→ 「灵魂」tab 消失，回落到工作空间。
+  useEffect(() => {
+    if (activeTab === 'soul' && !soulAgent) setActiveTab('workspace');
+  }, [activeTab, soulAgent]);
 
   const openRecordArtifactTab = (rec: RunRecord) => {
     const url = rec.artifact_url;
@@ -431,32 +495,70 @@ export function NeoHost({ target, runId }: NeoHostProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeArtifactTab?.id, activeArtifactTab?.url, artifactTick]);
 
-  // ── Loop：getRunLoops → 按 loop_id 去重（响应按 step 分组，loop 对象重复）──
+  // ── Loop：优先 SSE `loop` 帧（网关 loop-watcher 推流，全量快照直接替换）；
+  // 无帧时挂 loops/stream 专属 SSE（流式期间），最后回落一次性 getRunLoops
+  // 拉取（历史 run / watcher 静默场景）──
+  // 三条通路都按 loop_id 去重（响应按 step 分组，loop 对象会重复）──
   useEffect(() => {
     if (!runId) {
       setLoops(null);
       setLoopsError(null);
       return;
     }
+    if (session.loops && session.loops.length > 0) {
+      const byId = new Map<string, LoopRecord>();
+      for (const raw of session.loops) {
+        const loop = raw as unknown as LoopRecord;
+        if (loop?.loop_id) byId.set(loop.loop_id, loop);
+      }
+      setLoops(
+        [...byId.values()].sort(
+          (a, b) => a.depth - b.depth || a.loop_id.localeCompare(b.loop_id),
+        ),
+      );
+      setLoopsError(null);
+      return;
+    }
     let cancelled = false;
     setLoops(null);
     setLoopsError(null);
+    const applySteps = (steps: { loop: LoopRecord }[]) => {
+      const byId = new Map<string, LoopRecord>();
+      for (const step of steps) byId.set(step.loop.loop_id, step.loop);
+      setLoops(
+        [...byId.values()].sort(
+          (a, b) => a.depth - b.depth || a.loop_id.localeCompare(b.loop_id),
+        ),
+      );
+    };
     getRunLoops(runId)
       .then((r) => {
         if (cancelled) return;
-        const byId = new Map<string, LoopRecord>();
-        for (const step of r.loops) byId.set(step.loop.loop_id, step.loop);
-        setLoops(
-          [...byId.values()].sort(
-            (a, b) => a.depth - b.depth || a.loop_id.localeCompare(b.loop_id),
-          ),
-        );
+        applySteps(r.loops);
       })
       .catch((e: unknown) => {
         if (!cancelled) setLoopsError(e instanceof Error ? e.message : String(e));
       });
-    return () => { cancelled = true; };
-  }, [runId]);
+    // loops 专属 SSE（流式期间实时刷新；端点不可用时上面的一次性拉取即回落，
+    // 不另加轮询——过程 tab 的 ProcessView 已有自己的 5s 轮询节奏）。
+    const stream = session.isStreaming
+      ? streamRunLoops(
+          runId,
+          (steps) => {
+            if (cancelled) return;
+            applySteps(steps);
+            setLoopsError(null);
+          },
+          () => {
+            /* 端点未就绪 → 保持一次性 REST 结果，不升级为轮询 */
+          },
+        )
+      : null;
+    return () => {
+      cancelled = true;
+      stream?.close();
+    };
+  }, [runId, session.loops, session.isStreaming]);
 
   // =========================================================================
   // 渲染
@@ -466,7 +568,6 @@ export function NeoHost({ target, runId }: NeoHostProps) {
     { id: 'workspace', label: t('neo.host.workspace', { defaultValue: '工作空间' }), icon: <FolderOpen size={20} strokeWidth={1.75} /> },
     { id: 'artifacts', label: t('neo.host.artifacts', { defaultValue: '产物' }), icon: <Package size={20} strokeWidth={1.75} /> },
     { id: 'process', label: t('neo.host.process', { defaultValue: '过程' }), icon: <GitBranch size={20} strokeWidth={1.75} /> },
-    { id: 'loop', label: t('neo.host.loop', { defaultValue: 'Loop' }), icon: <Repeat size={20} strokeWidth={1.75} /> },
   ];
 
   // ── 文件树（递归，懒加载）──
@@ -539,6 +640,29 @@ export function NeoHost({ target, runId }: NeoHostProps) {
         >
           <RefreshCw size={12} strokeWidth={1.8} />
         </button>
+        <button
+          type="button"
+          className="neo-host-icon-btn"
+          title={t('neo.host.newFile', { defaultValue: '新建文件' })}
+          onClick={createFile}
+        >
+          <FilePlus2 size={12} strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
+          className="neo-host-icon-btn"
+          title={t('neo.host.uploadFile', { defaultValue: '上传文件' })}
+          onClick={() => uploadInputRef.current?.click()}
+        >
+          <Upload size={12} strokeWidth={1.8} />
+        </button>
+        <input
+          ref={uploadInputRef}
+          type="file"
+          hidden
+          data-testid="neo-host-upload-input"
+          onChange={onUploadPicked}
+        />
         <button
           type="button"
           className="neo-host-icon-btn"
@@ -728,6 +852,18 @@ export function NeoHost({ target, runId }: NeoHostProps) {
     </div>
   );
 
+  // ── runId 为空时的 run 依赖 tab 空态（2026-08-19：会话/目标态右栏也常驻，
+  //    工作空间 tab 不依赖 run 照常可用；产物/过程/Loop 给干净空态）──
+  const runlessNote = (
+    <div className="neo-host-empty neo-host-empty--fill">
+      <Package size={20} strokeWidth={1.5} className="neo-host-empty-icon" />
+      <span>{t('neo.host.noRun', { defaultValue: '暂无运行中的任务' })}</span>
+      <span className="neo-host-empty-sub">
+        {t('neo.host.noRunHint', { defaultValue: '发起任务后，这里展示 Agent 的工作空间、产物、过程投影与 Loop 迭代' })}
+      </span>
+    </div>
+  );
+
   // ── 产物 tab 内容（lineage 驱动，无数据时回落单 artifact 旧行为）──
   // W1-B 保活：hidden 期间暂停轮询（active 叠加 tab 可见性），切回时 effect 重跑拉新数据。
   const artifactsContent = runId ? (
@@ -738,7 +874,9 @@ export function NeoHost({ target, runId }: NeoHostProps) {
       onOpen={openLineageArtifactTab}
       onOpenRecord={openRecordArtifactTab}
     />
-  ) : null;
+  ) : (
+    runlessNote
+  );
 
   // ── Loop tab 内容 ──
   const loopContent = (
@@ -747,6 +885,8 @@ export function NeoHost({ target, runId }: NeoHostProps) {
         <div className="neo-host-empty neo-host-empty--fill neo-host-empty--err">
           {t('neo.host.loopsError', { defaultValue: 'Loop 数据加载失败' })}：{loopsError}
         </div>
+      ) : !runId ? (
+        runlessNote
       ) : loops === null ? (
         <div className="neo-host-tree-note neo-host-tree-note--pad">
           {t('neo.host.loading', { defaultValue: '读取中…' })}
@@ -818,6 +958,8 @@ export function NeoHost({ target, runId }: NeoHostProps) {
                   );
                 })}
               </div>
+              {/* verifier 面板：每轮 rationale + claims（端点未就绪 → 干净空态） */}
+              <LoopVerdicts runId={runId} loopId={loop.loop_id} active={session.isStreaming} />
             </div>
           );
         })
@@ -852,10 +994,30 @@ export function NeoHost({ target, runId }: NeoHostProps) {
     );
   };
 
-  // ── 过程 / 编队 tab 内容 ──
+  // ── 过程 / 编队 tab 内容（2026-08-19 导航架构统一：原 Loop tab 并入——
+  //    迭代环是 DAG 执行图的一部分，PDCA 卡直接挂在过程视图下方）──
   const processContent = runId ? (
-    <ProcessView runId={runId} active={session.isStreaming && activeTab === 'process'} />
-  ) : null;
+    <div className="neo-host-process">
+      <ProcessView runId={runId} active={session.isStreaming && activeTab === 'process'} />
+      <div className="neo-host-loop-fold">
+        <div className="neo-host-loop-fold-head">
+          <Repeat size={13} strokeWidth={1.9} aria-hidden />
+          {t('neo.host.loopFold', { defaultValue: '迭代环' })}
+        </div>
+        {loopContent}
+      </div>
+      {/* B40：memory-graph / training-dataset 投影露出（L6 证据层） */}
+      <div className="neo-host-loop-fold">
+        <div className="neo-host-loop-fold-head">
+          <Database size={13} strokeWidth={1.9} aria-hidden />
+          {t('neo.host.evidenceFold', { defaultValue: '证据投影' })}
+        </div>
+        <EvidencePanel runId={runId} active={session.isStreaming && activeTab === 'process'} />
+      </div>
+    </div>
+  ) : (
+    runlessNote
+  );
 
   const teamContent =
     target?.kind === 'team' ? (
@@ -867,54 +1029,23 @@ export function NeoHost({ target, runId }: NeoHostProps) {
       />
     ) : null;
 
-  // ── runId 为空 → 整体空态 ──
-  if (!runId) {
-    return (
-      <div className="neo-host">
-        <div className="neo-host-header">
-          <span className="neo-host-title">
-            {t('neo.host.title', { defaultValue: 'Agent 的主机' })}
-          </span>
-        </div>
-        <div className="neo-host-empty neo-host-empty--fill">
-          <Package size={20} strokeWidth={1.5} className="neo-host-empty-icon" />
-          <span>{t('neo.host.noRun', { defaultValue: '暂无运行中的任务' })}</span>
-          <span className="neo-host-empty-sub">
-            {t('neo.host.noRunHint', { defaultValue: '发起任务后，这里展示 Agent 的工作空间、产物、过程投影与 Loop 迭代' })}
-          </span>
-          {/* 能力预览：描述三个 tab 的真实功能（非 mock 数据），a_011 横排图标+名称 */}
-          <div className="neo-host-caps">
-            <div className="neo-host-cap">
-              <Folder size={20} strokeWidth={1.5} aria-hidden />
-              <span className="neo-host-cap-name">
-                {t('neo.host.capWs', { defaultValue: '工作空间' })}
-              </span>
-            </div>
-            <div className="neo-host-cap">
-              <FileText size={20} strokeWidth={1.5} aria-hidden />
-              <span className="neo-host-cap-name">
-                {t('neo.host.capArtifact', { defaultValue: '产物' })}
-              </span>
-            </div>
-            <div className="neo-host-cap">
-              <Repeat size={20} strokeWidth={1.5} aria-hidden />
-              <span className="neo-host-cap-name">
-                {t('neo.host.capLoop', { defaultValue: 'Loop 迭代' })}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // 「成员」tab（W2）：非 DM 会话时挂 GroupMembersPanel（成员 + DAG 摘要 + 审批门）。
+  const membersContent =
+    isTeamConv && conversation ? <GroupMembersPanel groupId={conversation.groupId} /> : null;
+
+  // ── runId 为空不再整栏空态（2026-08-19）：会话/目标态右栏常驻，直接进
+  //    tab 壳 —— 工作空间文件树可用，产物/过程/Loop 走 runlessNote 空态。 ──
 
   return (
     <div className="neo-host">
-      {/* tab 栏：Agent 的主机 + 工作空间 / 产物 / Loop + 产物 tab + 「+」
+      {/* tab 栏：Agent 的主机 + 固定 tab（工作空间/产物/过程 + 条件性灵魂/编队/成员）
+          + 动态产物 tab（可关闭）+ 「+」
           （2026-08-15 任务 V：ClawsGo 大图标盒形态 — 44px hairline 盒 + 下方小标签） */}
       <div className="neo-host-header">
-        <span className="neo-host-title">
-          {t('neo.host.title', { defaultValue: 'Agent 的主机' })}
+        <span className="neo-host-title" data-testid="neo-host-title">
+          {isTeamConv
+            ? t('neo.host.teamTitle', { defaultValue: '团队的主机' })
+            : t('neo.host.title', { defaultValue: 'Agent 的主机' })}
         </span>
         <div className="neo-host-tabs" ref={tabbarRef}>
           {fixedTabs.map((tab) => (
@@ -929,6 +1060,22 @@ export function NeoHost({ target, runId }: NeoHostProps) {
               <span className="neo-host-tab-label">{tab.label}</span>
             </button>
           ))}
+          {/* 灵魂 tab：agent 上下文（agent-target / agent 的 DM 会话）时出现，
+              内嵌 NeoAgentSoul（persona/系统提示词编辑，PATCH /api/agents） */}
+          {soulAgent && (
+            <button
+              type="button"
+              data-tab="soul"
+              className={`neo-host-tab${activeTab === 'soul' ? ' neo-host-tab--on' : ''}`}
+              onClick={() => setActiveTab('soul')}
+              data-testid="neo-host-soul-tab"
+            >
+              <span className="neo-host-tab-box">
+                <Sparkles size={20} strokeWidth={1.75} />
+              </span>
+              <span className="neo-host-tab-label">{t('neo.host.soul', { defaultValue: '灵魂' })}</span>
+            </button>
+          )}
           {/* 编队 tab：仅在 NeoRail 团队态选中 team 时出现（roster/工作流/策略/分节点输出） */}
           {target?.kind === 'team' && (
             <button
@@ -941,6 +1088,24 @@ export function NeoHost({ target, runId }: NeoHostProps) {
                 <UsersRound size={20} strokeWidth={1.75} />
               </span>
               <span className="neo-host-tab-label">{t('neo.host.team', { defaultValue: '编队' })}</span>
+            </button>
+          )}
+          {/* 成员 tab（W2 钉钉式融合）：中栏开着非 DM 会话时出现——成员列表 +
+              团队 DAG 摘要 + 审批门（GroupMembersPanel） */}
+          {isTeamConv && (
+            <button
+              type="button"
+              data-tab="members"
+              className={`neo-host-tab${activeTab === 'members' ? ' neo-host-tab--on' : ''}`}
+              onClick={() => setActiveTab('members')}
+              data-testid="neo-host-members-tab"
+            >
+              <span className="neo-host-tab-box">
+                <UsersRound size={20} strokeWidth={1.75} />
+              </span>
+              <span className="neo-host-tab-label">
+                {t('neo.host.members', { defaultValue: '成员' })}
+              </span>
             </button>
           )}
           {artifactTabs.map((tab) => (
@@ -1001,12 +1166,22 @@ export function NeoHost({ target, runId }: NeoHostProps) {
         <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'process'}>
           {processContent}
         </div>
-        <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'loop'}>
-          {loopContent}
-        </div>
+        {soulAgent && (
+          <div
+            className="neo-host-pane neo-host-fade neo-host-soul-pane"
+            hidden={activeTab !== 'soul'}
+          >
+            <NeoAgentSoul agentId={soulAgent.id} />
+          </div>
+        )}
         {teamContent && (
           <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'team'}>
             {teamContent}
+          </div>
+        )}
+        {membersContent && (
+          <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'members'}>
+            {membersContent}
           </div>
         )}
         {artifactTabs.map((tab) => (

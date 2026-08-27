@@ -94,3 +94,36 @@ export interface KnowledgeDeleteResponse {
   data: { deleted: boolean; pack_id: string };
   meta: KnowledgeMeta;
 }
+
+/** 单条检索命中（POST /packs/{id}/query 的 data.hits 元素）。 */
+export interface KnowledgeHit {
+  text: string;
+  source: string;
+  score: number;
+  /** 层级来源路径（"doc > chapter"），层级检索（hier）命中时由后端给出。 */
+  path?: string;
+  /** 命中所属树节点 id（对应 GET /packs/{id}/index 的 node_id）。 */
+  node_id?: string;
+}
+
+/** 检索调试 trace 中被定位到的树节点（doc/chapter/page）。 */
+export interface KnowledgeTraceNode {
+  node_id: string;
+  kind: string;
+  title: string;
+  path: string;
+  score: number;
+}
+
+/** 检索调试信息：strategy='hier' 层级定位命中；'flat' 回落平铺检索（reason 说明原因）。 */
+export interface KnowledgeQueryTrace {
+  strategy: string;
+  located?: KnowledgeTraceNode[];
+  candidate_chunks?: number;
+  reason?: string;
+}
+
+export interface KnowledgeQueryResponse {
+  data: { hits: KnowledgeHit[]; trace?: KnowledgeQueryTrace };
+  meta: KnowledgeMeta & { pack_id: string; query: string };
+}

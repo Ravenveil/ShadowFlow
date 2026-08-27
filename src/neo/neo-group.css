@@ -15,6 +15,10 @@
   background: var(--t-panel);
   color: var(--t-fg);
 }
+/* 内嵌形态（NeoApp 中栏，2026-08-19）：高度 100% 填充中栏，不占整页 */
+.neo-gc--inline {
+  height: 100%;
+}
 
 /* ---- 顶栏：48px + hairline 下边框，标题 12.5px/600 ---- */
 .neo-gc-topbar {
@@ -270,4 +274,214 @@
 .neo-gc-composer .neo-composer {
   max-width: 760px;
   margin: 0 auto;
+}
+
+/* ===== W2 钉钉式气泡流（2026-08-22）：聊天气泡壳 =====
+   只服务 NeoGroupChat.tsx；全部 var(--t-*) / color-mix，day/night 双主题。
+   （成员/DAG/审批门已融合进 NeoHost「成员」tab，样式在 neo-host.css .neo-gm-*） */
+
+/* agent 消息：头像 + 名字/角色/时间头 + 气泡体 */
+.neo-gc-msg {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+}
+.neo-gc-msg-avatar {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+.neo-gc-msg-main {
+  flex: 1;
+  min-width: 0;
+}
+.neo-gc-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.neo-gc-msg-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-fg);
+}
+.neo-gc-msg-role {
+  padding: 1px 6px;
+  border: 1px solid var(--t-border);
+  border-radius: 5px;
+  background: var(--t-panel-2);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--t-fg-4);
+  text-transform: uppercase;
+}
+.neo-gc-msg-time {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  font-variant-numeric: tabular-nums;
+}
+.neo-gc-msg-bubble {
+  border: 1px solid var(--t-border);
+  border-radius: 4px 12px 12px 12px;
+  background: var(--t-panel-2);
+  padding: 8px 12px;
+}
+/* 气泡壳已带名字头，隐藏 NeoTimeline 自带的 sender 行，避免重复 */
+.neo-gc-msg-bubble .neo-tl-sender {
+  display: none;
+}
+
+/* 用户消息：右对齐（neo-tl-user 自带右浮气泡），时间行靠右弱化 */
+.neo-gc-user-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: 10px 0;
+}
+.neo-gc-user-time {
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 系统/事件消息：居中弱化条 */
+.neo-gc-sys {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+  font-size: 11px;
+  color: var(--t-fg-5);
+  text-align: center;
+}
+
+/* run 过程卡段：嵌在 turn 下，左侧留出与气泡头像对齐的边距 */
+.neo-gc-proc {
+  margin: 6px 0 6px 40px;
+}
+
+/* ── 派发卡 / 交付卡（2026-08-23 意图分发可视化 + 交付收口） ────────────── */
+
+/* 派发卡：意图 → 派给谁（理由）+ 可选子任务明细；与过程卡同左边距对齐 */
+.neo-gc-dispatch {
+  margin: 6px 0 6px 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--t-border);
+  border-left: 2px solid var(--t-accent);
+  border-radius: 4px 10px 10px 10px;
+  background: var(--t-panel-2);
+  font-size: 12px;
+}
+.neo-gc-dispatch-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t-fg-5);
+  margin-bottom: 4px;
+}
+.neo-gc-dispatch-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}
+.neo-gc-dispatch-intent {
+  font-weight: 500;
+}
+.neo-gc-dispatch-arrow {
+  color: var(--t-fg-5);
+}
+.neo-gc-dispatch-target {
+  font-weight: 600;
+}
+.neo-gc-dispatch-reason {
+  color: var(--t-fg-5);
+}
+.neo-gc-dispatch-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.neo-gc-dispatch-item {
+  display: flex;
+  gap: 8px;
+  font-size: 11.5px;
+}
+.neo-gc-dispatch-item-name {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.neo-gc-dispatch-item-title {
+  color: var(--t-fg-5);
+}
+
+/* 交付卡：run 完成态消息流尾部汇总 */
+.neo-gc-delivery {
+  margin: 12px 0 4px 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel-2);
+  font-size: 12px;
+}
+.neo-gc-delivery-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.neo-gc-delivery-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--t-fg-5);
+}
+.neo-gc-delivery-summary {
+  color: var(--t-fg-5);
+  margin-bottom: 6px;
+}
+.neo-gc-delivery-list {
+  margin: 0;
+  padding: 0 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.neo-gc-delivery-item a {
+  color: var(--t-accent);
+  text-decoration: none;
+}
+.neo-gc-delivery-item a:hover {
+  text-decoration: underline;
+}
+.neo-gc-delivery-more {
+  color: var(--t-fg-5);
+  list-style: none;
+}
+.neo-gc-delivery-view {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--t-accent);
+  text-decoration: none;
+}
+.neo-gc-delivery-view:hover {
+  text-decoration: underline;
 }

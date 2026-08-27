@@ -15,6 +15,8 @@ export interface TeamRunShape {
   members: string[];
   edges: TeamEdgeV1[];
   policy_matrix: Record<string, Record<string, string>>;
+  /** 团队展示名（Python JSON name 字段透传；缺失时调用方回退 team_id）。 */
+  name?: string;
 }
 
 interface PyWorkflowNode { id?: string; data?: { agentId?: string } }
@@ -51,7 +53,8 @@ export function mapPythonTeamToRunShape(json: PyTeamJson): TeamRunShape {
     if (typeof e.data?.max_retries === 'number') edge.max_retries = e.data.max_retries;
     edges.push(edge);
   }
-  return { members, edges, policy_matrix: json.policy_matrix ? { ...json.policy_matrix } : {} };
+  return { members, edges, policy_matrix: json.policy_matrix ? { ...json.policy_matrix } : {},
+    ...(typeof json.name === 'string' && json.name.trim() ? { name: json.name.trim() } : {}) };
 }
 
 // VALID_ID_RE / ROOT_TEAMS_DIR / LOCAL_TEAMS_DIR 统一从 team-yaml.ts 导入,避免双 loader 校验分叉。

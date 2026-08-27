@@ -2,6 +2,7 @@
 
 Routes:
   POST   /memory/profiles                    — create MemoryProfile
+  GET    /memory/profiles                    — list all MemoryProfiles
   GET    /memory/profiles/{profile_id}       — get MemoryProfile
   PATCH  /memory/profiles/{profile_id}       — update fields
   DELETE /memory/profiles/{profile_id}       — delete profile
@@ -30,7 +31,9 @@ from shadowflow.memory.memory_profile import (
     WritebackPolicy,
 )
 
-router = APIRouter(tags=["memory"])
+# 2026-08-19 前缀对齐：裸 /memory/* → /api/memory/*（网关只路由 /api/*，
+# 与 shadowflow/api/knowledge.py 同批迁移；前端 src/api/memory.ts 已同步）。
+router = APIRouter(prefix="/api/memory", tags=["memory"])
 
 # In-memory store (replaced by DB in future story)
 _profiles: Dict[str, MemoryProfile] = {}
@@ -86,20 +89,33 @@ class PatchProfileRequest(BaseModel):
 # Endpoints
 # ------------------------------------------------------------------
 
-@router.post("/memory/profiles", status_code=201)
+@router.post("/profiles", status_code=201)
 async def create_profile(body: CreateProfileRequest) -> Dict[str, Any]:
     profile = MemoryProfile(**body.model_dump())
     _profiles[profile.profile_id] = profile
     return {"data": profile.model_dump(mode="json"), "meta": {"created_at": _utc_now().isoformat()}}
 
 
-@router.get("/memory/profiles/{profile_id}")
+@router.get("/profiles")
+async def list_profiles() -> Dict[str, Any]:
+    """List all MemoryProfiles (newest-updated first).
+
+    2026-08-23: 补齐列表端点，前端 MemoryProfilePanel 不再依赖 localStorage 逐个回填。
+    """
+    profiles = sorted(_profiles.values(), key=lambda p: p.updated_at, reverse=True)
+    return {
+        "data": [p.model_dump(mode="json") for p in profiles],
+        "meta": {"count": len(profiles)},
+    }
+
+
+@router.get("/profiles/{profile_id}")
 async def get_profile(profile_id: str) -> Dict[str, Any]:
     profile = _get_or_404(profile_id)
     return {"data": profile.model_dump(mode="json"), "meta": {}}
 
 
-@router.patch("/memory/profiles/{profile_id}")
+@router.patch("/profiles/{profile_id}")
 async def update_profile(profile_id: str, body: PatchProfileRequest) -> Dict[str, Any]:
     profile = _get_or_404(profile_id)
     patch = body.model_dump(exclude_none=True)
@@ -108,13 +124,13 @@ async def update_profile(profile_id: str, body: PatchProfileRequest) -> Dict[str
     return {"data": updated.model_dump(mode="json"), "meta": {}}
 
 
-@router.delete("/memory/profiles/{profile_id}", status_code=204)
+@router.delete("/profiles/{profile_id}", status_code=204)
 async def delete_profile(profile_id: str) -> None:
     _get_or_404(profile_id)
     del _profiles[profile_id]
 
 
-@router.post("/memory/writeback/{run_id}", status_code=202)
+@router.post("/writeback/{run_id}", status_code=202)
 async def manual_writeback(run_id: str) -> Dict[str, Any]:
     """Manually trigger memory writeback for a run (used when writeback_policy=manual).
 
@@ -135,7 +151,7 @@ async def manual_writeback(run_id: str) -> Dict[str, Any]:
     }
 
 
-@router.get("/memory/stats")
+@router.get("/stats")
 async def get_memory_stats(agent_id: Optional[str] = None) -> Dict[str, Any]:
     """Return memory configuration parameters for MemoryStatsBar (Story 14.1 placeholder mode).
 
@@ -163,7 +179,7 @@ async def get_memory_stats(agent_id: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
-@router.get("/memory/state/{agent_id}")
+@router.get("/state/{agent_id}")
 async def get_memory_state(agent_id: str) -> Dict[str, Any]:
     """Return three-layer memory summary for an agent (Story 9.4 stub)."""
     return {

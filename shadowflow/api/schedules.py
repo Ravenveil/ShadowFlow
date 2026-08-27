@@ -3,6 +3,7 @@
 Endpoints (prefix /schedules):
   POST   /schedules                — create schedule (validates cron + 500-char desc)
   GET    /schedules?group_id=X     — list schedules (optionally filtered by group_id)
+  PATCH  /schedules/{id}           — enable/disable (pause/resume APScheduler job)
   DELETE /schedules/{id}           — delete schedule + cancel APScheduler job
   GET    /schedules/{id}/runs      — last 20 run records for a schedule
 
@@ -113,6 +114,10 @@ def _schedule_job(schedule_id: str) -> None:
     if record is None:
         logger.warning("schedule_job: schedule %s not found, skipping", schedule_id)
         return
+    # Safety net for stale in-memory jobs: a disabled schedule must not fire
+    # even if the pause did not reach APScheduler (e.g. re-added after restart).
+    if record.get("enabled", True) is False:
+        return
 
     run = {
         "run_id": uuid4().hex,
@@ -156,9 +161,35 @@ class CreateScheduleRequest(BaseModel):
         return self
 
 
+class PatchScheduleRequest(BaseModel):
+    """Enable/disable toggle. `enabled` is the only mutable field for now."""
+    enabled: bool
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+def _rebuild_trigger(record: Dict[str, Any]):
+    """Rebuild an APScheduler trigger from a stored record. None when the
+    schedule cannot fire anymore (corrupt cron, one-shot already past)."""
+    if not _APSCHEDULER_AVAILABLE:
+        return None
+    cron = record.get("cron_expression")
+    if cron:
+        try:
+            return CronTrigger.from_crontab(cron)
+        except (ValueError, TypeError):
+            return None
+    start_at_raw = record.get("start_at")
+    if start_at_raw:
+        start_at = datetime.fromisoformat(start_at_raw)
+        if start_at.tzinfo is None:
+            start_at = start_at.replace(tzinfo=timezone.utc)
+        if start_at > _utc_now():
+            return DateTrigger(run_date=start_at)
+    return None
+
 
 @router.post("", status_code=201)
 async def create_schedule(body: CreateScheduleRequest) -> Dict[str, Any]:
@@ -213,6 +244,7 @@ async def create_schedule(body: CreateScheduleRequest) -> Dict[str, Any]:
         "created_at": now.isoformat(),
         "next_run_time": next_run_iso,
         "completed": False,
+        "enabled": True,
         "runs": [],
     }
     _save_schedule(record)
@@ -238,6 +270,54 @@ async def list_schedules(group_id: Optional[str] = None) -> Dict[str, Any]:
     if group_id:
         records = [r for r in records if r.get("group_id") == group_id]
     return {"data": records, "meta": {"count": len(records)}}
+
+
+@router.patch("/{schedule_id}")
+async def patch_schedule(schedule_id: str, body: PatchScheduleRequest) -> Dict[str, Any]:
+    if not _SCHEDULE_ID_RE.match(schedule_id):
+        raise HTTPException(status_code=400, detail={"error": {"code": "INVALID_ID", "message": "Invalid schedule_id"}})
+
+    record = _load_schedule(schedule_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Schedule not found"}})
+
+    record["enabled"] = body.enabled
+
+    # Recompute next_run_time so list views reflect the toggle immediately.
+    # A completed one-shot stays completed — re-enabling does not resurrect it.
+    if body.enabled and not record.get("completed"):
+        trigger = _rebuild_trigger(record)
+        next_fire = trigger.get_next_fire_time(None, _utc_now()) if trigger else None
+        record["next_run_time"] = next_fire.isoformat() if next_fire else None
+    else:
+        record["next_run_time"] = None
+    _save_schedule(record)
+
+    # Mirror the toggle into APScheduler (best-effort; storage is the truth).
+    from shadowflow.services.scheduler import get_scheduler
+    scheduler = get_scheduler()
+    if scheduler.running:
+        try:
+            if not body.enabled:
+                scheduler.pause_job(schedule_id)
+            elif scheduler.get_job(schedule_id) is not None:
+                scheduler.resume_job(schedule_id)
+            elif not record.get("completed"):
+                # Job missing from the in-memory scheduler (e.g. after a
+                # backend restart) — re-register so enabling actually fires.
+                trigger = _rebuild_trigger(record)
+                if trigger is not None:
+                    scheduler.add_job(
+                        _schedule_job,
+                        trigger=trigger,
+                        id=schedule_id,
+                        args=[schedule_id],
+                        replace_existing=True,
+                    )
+        except Exception:
+            pass
+
+    return {"data": record, "meta": {}}
 
 
 @router.delete("/{schedule_id}", status_code=204)

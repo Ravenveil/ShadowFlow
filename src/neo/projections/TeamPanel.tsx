@@ -15,18 +15,25 @@
  * 单 Agent run 走全局流，此处显示干净空态说明，不伪造归属。
  */
 import { useEffect, useState } from 'react';
-import { GitBranch, ShieldCheck, UsersRound } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { GitBranch, MessageSquareText, PenLine, Pencil, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
 import {
+  deleteTeam,
   getTeam,
   getTeamPolicy,
   getTeamWorkflow,
+  patchTeam,
   type TeamPolicyMatrix,
   type TeamRecord,
   type TeamWorkflow,
 } from '../../api/teams';
 import { listAgents, type AgentRecord } from '../../api/agents';
+import { resolveTeamGroup } from '../../api/groupApi';
 import type { NodeChunkBuffer } from '../../core/hooks/useRunSession';
 import { useI18n } from '../../common/i18n';
+import { useWorkspaceStore } from '../../store/workspaceStore';
+import { useInboxStore } from '../../core/store/useInboxStore';
+import { TeamDagEditor } from './TeamDagEditor';
 
 export interface TeamPanelProps {
   teamId: string;
@@ -58,11 +65,24 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  // 「编辑 DAG」开关：true 时整面板切到 TeamDagEditor（GAP B28）。
+  const [editingDag, setEditingDag] = useState(false);
+  // GAP D（2026-08-22）「发起群聊」CTA：find-or-create 绑 team_id 的群后跳
+  // 群聊现场页（/group/:gid，NeoGroupChat 路由页），失败给明确提示不静默。
+  const navigate = useNavigate();
+  const workspaceId = useWorkspaceStore((s) => s.currentId);
+  const [launchBusy, setLaunchBusy] = useState(false);
+  const [launchError, setLaunchError] = useState<string | null>(null);
+  // 管理面闭环（2026-08-23）：头部团队重命名/删除。删除走 window.confirm 二次
+  // 确认；失败进 manageError 红条（不吞错）；删除成功 → 回 Neo home 安全页。
+  const [manageBusy, setManageBusy] = useState(false);
+  const [manageError, setManageError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
     setFailed(false);
+    setEditingDag(false);
     // 四个数据源独立结算：任何一个失败不拖垮其余 section。
     Promise.all([
       getTeam(teamId).then(
@@ -116,6 +136,71 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
     ([, buf]) => buf.text.trim() || buf.thinking.length > 0 || buf.steps.length > 0,
   );
 
+  // 发起群聊：已有群直接跳，没有则以该 team（绑 team_id + roster）建群再跳；
+  // 建群失败 / 后端不可用（resolveTeamGroup 回 null）→ 面板内错误行提示。
+  const handleLaunchChat = async () => {
+    if (launchBusy) return;
+    setLaunchBusy(true);
+    setLaunchError(null);
+    const gid = await resolveTeamGroup(
+      { team_id: teamId, name: teamName, agent_ids: team?.agent_ids ?? [] },
+      workspaceId ?? undefined,
+    );
+    if (gid) {
+      // 刷新 inbox，左栏「群聊现场」列表即时出新群（Python 未起时静默）
+      void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
+      navigate(`/group/${encodeURIComponent(gid)}`);
+    } else {
+      setLaunchError(
+        t('neo.host.teamChatError', { defaultValue: '建群失败：后端不可用或群创建被拒绝' }),
+      );
+      setLaunchBusy(false);
+    }
+  };
+
+  // 团队重命名：prompt 输入新名 → patchTeam 真实更新；成功同步本地 team record
+  // （roster 头部显示名即时反映，不依赖外层 reload）。
+  const handleRenameTeam = async () => {
+    if (manageBusy) return;
+    const current = team?.name ?? teamName;
+    const name = window
+      .prompt(t('neo.host.teamRenamePrompt', { defaultValue: '团队新名称' }), current)
+      ?.trim();
+    if (!name || name === current) return;
+    setManageBusy(true);
+    setManageError(null);
+    try {
+      const updated = await patchTeam(teamId, { name });
+      setTeam(updated);
+    } catch {
+      setManageError(t('neo.host.teamManageError', { defaultValue: '操作失败，请重试' }));
+    } finally {
+      setManageBusy(false);
+    }
+  };
+
+  // 团队删除：二次确认 → deleteTeam；成功回 Neo home，失败红条并恢复可操作。
+  const handleDeleteTeam = async () => {
+    if (manageBusy) return;
+    if (
+      !window.confirm(
+        t('neo.host.teamDeleteConfirm', {
+          defaultValue: `确定删除团队「${team?.name ?? teamName}」？此操作不可撤销`,
+        }),
+      )
+    )
+      return;
+    setManageBusy(true);
+    setManageError(null);
+    try {
+      await deleteTeam(teamId);
+      navigate('/');
+    } catch {
+      setManageError(t('neo.host.teamManageError', { defaultValue: '操作失败，请重试' }));
+      setManageBusy(false);
+    }
+  };
+
   if (!loaded) {
     return (
       <div className="neo-host-list">
@@ -140,17 +225,87 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
   const wfNodes = workflow?.nodes ?? [];
   const wfEdges = workflow?.edges ?? [];
 
+  // 编辑态：整面板换成 DAG 编辑器（只读摘要/策略/输出保存后回来）。
+  if (editingDag) {
+    const rosterAgents = roster
+      .map((id) => agentById.get(id))
+      .filter((a): a is AgentRecord => Boolean(a));
+    return (
+      <div className="neo-host-list neo-host-list--editing">
+        <TeamDagEditor
+          teamId={teamId}
+          workflow={workflow ?? { nodes: [], edges: [] }}
+          agents={rosterAgents}
+          onSaved={(wf) => {
+            setWorkflow(wf);
+            setEditingDag(false);
+          }}
+          onCancel={() => setEditingDag(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="neo-host-list">
-      {/* 成员 roster */}
+      {/* 成员 roster（头部带「发起群聊」CTA — GAP D，与「编辑 DAG」并存；
+          2026-08-23 管理面闭环：头部追加团队重命名/删除钮） */}
       <div className="neo-host-sec">
         <div className="neo-host-sec-head">
           <UsersRound size={12} strokeWidth={1.8} />
           <span className="neo-host-sec-title">
             {t('neo.host.teamRoster', { defaultValue: '成员' })}
           </span>
-          <span className="neo-host-sec-meta">{teamName}</span>
+          <span className="neo-host-sec-meta">{team?.name ?? teamName}</span>
+          <button
+            type="button"
+            className="neo-host-wf-edit-btn"
+            onClick={() => void handleRenameTeam()}
+            disabled={manageBusy}
+            title={t('neo.manage.rename', { defaultValue: '重命名' })}
+            data-testid="team-rename-btn"
+          >
+            <Pencil size={11} strokeWidth={1.8} />
+            {t('neo.manage.rename', { defaultValue: '重命名' })}
+          </button>
+          <button
+            type="button"
+            className="neo-host-wf-edit-btn"
+            onClick={() => void handleDeleteTeam()}
+            disabled={manageBusy}
+            title={t('common.delete', { defaultValue: '删除' })}
+            data-testid="team-delete-btn"
+          >
+            <Trash2 size={11} strokeWidth={1.8} />
+            {t('common.delete', { defaultValue: '删除' })}
+          </button>
+          <button
+            type="button"
+            className="neo-host-wf-edit-btn"
+            onClick={() => void handleLaunchChat()}
+            disabled={launchBusy}
+            data-testid="team-chat-launch"
+          >
+            <MessageSquareText size={11} strokeWidth={1.8} />
+            {launchBusy
+              ? t('neo.host.teamChatLaunching', { defaultValue: '建群中…' })
+              : t('neo.host.teamChatLaunch', { defaultValue: '发起群聊' })}
+          </button>
         </div>
+        {manageError && (
+          <div
+            className="neo-host-tree-note neo-host-tree-note--pad neo-host-empty--err"
+            role="alert"
+            data-testid="team-manage-error"
+          >
+            {manageError}
+          </div>
+        )}
+        {launchError && (
+          <div className="neo-host-tree-note neo-host-tree-note--pad neo-host-empty--err" role="alert">
+            {launchError}
+          </div>
+        )}
         {roster.length === 0 ? (
           <div className="neo-host-tree-note neo-host-tree-note--pad">
             {t('neo.host.teamRosterEmpty', { defaultValue: '该团队暂无成员' })}
@@ -189,6 +344,15 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
               edges: wfEdges.length,
             })}
           </span>
+          <button
+            type="button"
+            className="neo-host-wf-edit-btn"
+            onClick={() => setEditingDag(true)}
+            data-testid="team-dag-edit-entry"
+          >
+            <PenLine size={11} strokeWidth={1.8} />
+            {t('neo.host.teamDagEdit', { defaultValue: '编辑 DAG' })}
+          </button>
         </div>
         {wfNodes.length === 0 ? (
           <div className="neo-host-tree-note neo-host-tree-note--pad">

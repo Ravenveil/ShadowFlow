@@ -18,6 +18,9 @@
  *      http-proxy-middleware default 502 page)
  *   4. SSE responses get cache-control: no-cache + x-accel-buffering: no
  *      injected by the proxyRes hook
+ *   5. POST with EMPTY JSON object `{}` is proxied (regression: express.json()
+ *      consumed the body, proxy used to hang waiting for Content-Length bytes)
+ *   6. POST with non-empty JSON body is proxied with body intact
  *
  * Cardinality of passes is asserted at the bottom — process exits 1 on any
  * fail so this can be wired into a `npm test` script later.
@@ -51,10 +54,16 @@ function rawRequest(
   port: number,
   path: string,
   method = 'GET',
+  body?: string,
 ): Promise<FetchResult> {
   return new Promise((resolve, reject) => {
+    const headers: Record<string, string> = {};
+    if (body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      headers['Content-Length'] = String(Buffer.byteLength(body));
+    }
     const req = http.request(
-      { host: '127.0.0.1', port, path, method },
+      { host: '127.0.0.1', port, path, method, headers },
       (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (c) => chunks.push(c));
@@ -68,6 +77,7 @@ function rawRequest(
       },
     );
     req.on('error', reject);
+    if (body !== undefined) req.write(body);
     req.end();
   });
 }
@@ -89,14 +99,21 @@ async function main(): Promise<void> {
       res.end();
       return;
     }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        source: 'mock-python',
-        method: req.method,
-        path: req.url,
-      }),
-    );
+    // Read the full request body before responding — a proxy that fails to
+    // forward body bytes will hang here (which is exactly what case 5 guards).
+    const chunks: Buffer[] = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          source: 'mock-python',
+          method: req.method,
+          path: req.url,
+          receivedBody: Buffer.concat(chunks).toString('utf8'),
+        }),
+      );
+    });
   });
   const pythonPort = (pythonMock.address() as AddressInfo).port;
   console.log(`mock-python listening on :${pythonPort}`);
@@ -109,6 +126,10 @@ async function main(): Promise<void> {
 
   // ── 3. Build an Express app that mirrors index.ts mounting order ───────────
   const app = express();
+
+  // index.ts mounts express.json() globally BEFORE all routers — replicate it,
+  // because the body-consumption interplay with the proxy is what case 5/6 test.
+  app.use(express.json({ limit: '1mb' }));
 
   // Fake "Node-owned" router (stands in for the real 12 routers)
   const nodeOwned = express.Router();
@@ -184,6 +205,46 @@ async function main(): Promise<void> {
       'x-accel-buffering: no',
       r.headers['x-accel-buffering'] === 'no',
       r.headers['x-accel-buffering'],
+    );
+  }
+
+  // ── 6b. Case 5/6: POST with JSON body proxied (empty + non-empty) ──────────
+  console.log('\n── case 5: POST {} (empty JSON body) is proxied ──');
+  {
+    const r = await rawRequest(proxyPort, '/api/catalog/apps/x/fork', 'POST', '{}');
+    check('status 200', r.status === 200, r.status);
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(r.body);
+    } catch {}
+    check(
+      'body.source === "mock-python"',
+      parsed && parsed.source === 'mock-python',
+      r.body,
+    );
+    check(
+      'python received the {} body',
+      parsed && parsed.receivedBody === '{}',
+      parsed?.receivedBody,
+    );
+  }
+  console.log('\n── case 6: POST non-empty JSON body is proxied intact ──');
+  {
+    const r = await rawRequest(
+      proxyPort,
+      '/api/groups/g1/messages',
+      'POST',
+      '{"content":"hi"}',
+    );
+    check('status 200', r.status === 200, r.status);
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(r.body);
+    } catch {}
+    check(
+      'python received the body verbatim',
+      parsed && parsed.receivedBody === '{"content":"hi"}',
+      parsed?.receivedBody,
     );
   }
 

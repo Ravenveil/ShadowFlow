@@ -10,11 +10,11 @@
  * 不臆造 clawsgo 卡片上的「交付X · 约N分钟」——SkillInfo（src/api/skills.ts）
  * 没有交付物/耗时字段，编造即 mock。故无 meta 行，只渲染 skill 的真实字段。
  *
- * 2026-08-15 模板卡改 ClawsGo tmp29A7「左文右图」：左侧名称 13/600 + 描述
- * 12px 灰 2 行截断，右侧 108px 缩略图槽（cover_url → 占位映射 → 无图则不
- * 渲染图槽）。无边框卡 + hover 浅灰底（样式在 neo-chat.css，作用域
- * .neo-empty）。复刻卡只有名称+描述+右图，无徽章行；
- * 分类 tab 为分段胶囊轨（灰底轨道 + 选中白/深色胶囊），无滑动指示条。
+ * 2026-08-19 二次改版（用户拍板）：列表嫌丑，简化成「药丸 chip 流」——
+ * 只保留名称，去掉描述与箭头，chip 横向流动自动换行（flex-wrap），形态与
+ * 上方分类 tab 胶囊统一。不再渲染任何封面/缩略图（cover_url 字段保留在
+ * 数据里，前端不展示）。分类 tab 仍为分段胶囊轨。样式在 neo-chat.css，
+ * 作用域 .neo-empty。
  */
 import { useEffect, useMemo, useState } from 'react';
 import { listSkills, type SkillInfo } from '../../api/skills';
@@ -34,7 +34,8 @@ function isTestSkill(s: SkillInfo): boolean {
   return false;
 }
 
-// domain → 友好中文（缺失 domain 回落原值 / 其他）。
+// domain → 友好中文（缺失 domain 回落原值 / 其他）。分类名是 ShadowFlow
+// 自己的 taxonomy，不跟随 clawsgo（用户拍板 2026-08-19）。
 const DOMAIN_LABEL: Record<string, string> = {
   general: '通用',
   design: '设计',
@@ -46,31 +47,13 @@ const DOMAIN_LABEL: Record<string, string> = {
   business: '商业',
 };
 
-/**
- * PLACEHOLDER 占位封面：skill_id → public/neo/skill-covers/ 下占位图文件名。
- * 仅在后端尚未下发 cover_url 时兜底；后端补图后优先用 s.cover_url。
- */
-const COVER_PLACEHOLDER: Record<string, string> = {
-  'web-prototype': 'thumb-company.png',
-  report: 'thumb-trials.png',
-  'agent-team-blueprint': 'thumb-interview.png',
-  'paper-review': 'thumb-contract.png',
-};
-
-/** 缩略图来源优先级：cover_url（后端）→ 占位映射 → null（不渲染图槽，纯文字卡）。 */
-function coverOf(s: SkillInfo): string | null {
-  if (s.cover_url) return s.cover_url;
-  const file = COVER_PLACEHOLDER[s.skill_id ?? ''];
-  return file ? `/neo/skill-covers/${file}` : null;
-}
-
 function catOf(s: SkillInfo): string {
   return (s.domain && DOMAIN_LABEL[s.domain]) || s.domain || '其他';
 }
 
 export function StartGallery({ onPick }: { onPick: (token: string) => void }) {
   const [skills, setSkills] = useState<SkillInfo[] | null>(null);
-  const [cat, setCat] = useState<string>('全部');
+  const [cat, setCat] = useState('全部');
 
   useEffect(() => {
     let alive = true;
@@ -98,11 +81,11 @@ export function StartGallery({ onPick }: { onPick: (token: string) => void }) {
   }, [skills, cat]);
 
   if (skills === null) {
-    // 真加载骨架（批1 .sf-skeleton）
+    // 真加载骨架（批1 .sf-skeleton），chip 尺寸
     return (
-      <div className="sg-grid" aria-busy="true">
+      <div className="sg-list" aria-busy="true">
         {[0, 1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="sf-skeleton" style={{ height: 96, borderRadius: 'var(--r-card)' }} />
+          <div key={i} className="sf-skeleton" style={{ width: 88 + (i % 3) * 22, height: 28, borderRadius: 999 }} />
         ))}
       </div>
     );
@@ -132,27 +115,20 @@ export function StartGallery({ onPick }: { onPick: (token: string) => void }) {
           );
         })}
       </div>
-      <div key={cat} className="sg-grid sg-grid-fade">
-        {shown.map((s) => {
-          const cover = coverOf(s);
-          return (
-            <button
-              key={s.skill_id}
-              type="button"
-              className={`sg-card sg-card--lr${cover ? ' has-thumb' : ''}`}
-              data-testid={`sg-card-${s.skill_id}`}
-              onClick={() => onPick(`@${s.skill_id} `)}
-              title={s.description}
-            >
-              {/* ClawsGo tmp29A7 左文右图：左 = 名称/描述，右 = 108px 缩略图槽（无图则不渲染）；无徽章行 */}
-              <div className="sg-card-body">
-                <div className="sg-card-name">{s.name}</div>
-                <div className="sg-card-desc">{s.description}</div>
-              </div>
-              {cover && <img className="sg-card-thumb" src={cover} alt="" aria-hidden />}
-            </button>
-          );
-        })}
+      <div key={cat} className="sg-list sg-grid-fade">
+        {shown.map((s) => (
+          <button
+            key={s.skill_id}
+            type="button"
+            className="sg-chip"
+            data-testid={`sg-card-${s.skill_id}`}
+            onClick={() => onPick(`@${s.skill_id} `)}
+            title={s.description}
+          >
+            {/* chip 流：只保留名称，描述进 title 悬停提示 */}
+            {s.name}
+          </button>
+        ))}
       </div>
     </div>
   );

@@ -1,11 +1,17 @@
 /**
- * AppearanceSection — Settings: Theme selector (redesigned)
+ * AppearanceSection — Settings: Appearance (ZCode-style)
  *
- * Three theme cards each rendering a miniature window preview in its own
- * literal colors, so users can see the exact palette before switching.
- * Selected card gets an accent ring + badge.
+ * Layout mirrors the ZCode (智谱) settings "外观" page: stacked module cards,
+ * each with a module title + description, and setting rows where the label +
+ * description sit on the left and the control (dropdown / slider / swatch)
+ * sits on the right. Changing a value applies instantly (live preview) and
+ * persists to localStorage + backend /api/settings/preferences (best-effort).
+ *
+ * Modules:
+ *   界面设置 Interface  — theme dropdown (dark/light/paper/system) + zoom slider
+ *   颜色定制 Custom     — accent / background / foreground color overrides
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTheme, type ThemePref } from '../../../components/hifi/useTheme';
 import { useI18n } from '../../../common/i18n';
 import {
@@ -24,327 +30,79 @@ import {
   ZOOM_MAX,
 } from '../../../components/hifi/fontScale';
 
-export const APPEARANCE_I18N_KEYS = {
-  header: 'appearance.header',
-  subtitle: 'appearance.subtitle',
-  modeLabel: 'appearance.modeLabel',
-  themeDark: 'appearance.theme.dark',
-  themeLight: 'appearance.theme.light',
-  themeSystem: 'appearance.theme.system',
-  themePaper: 'appearance.theme.paper',
-  selected: 'appearance.selected',
-  note: 'appearance.note',
-} as const;
-
-interface Palette {
-  bg: string; panel: string; sidebar: string; border: string;
-  fg: string; fg2: string; fg4: string; accent: string; accentTint: string;
-}
-
-// Exact palette per theme — NOT var(--t-*) tokens on purpose. 2026-05-28: added
-// `paper` palette and re-synced `light` palette to the new soft-white tokens in
-// src/index.css ([data-theme="day"] = #F7F7F5 bg + white #FFFFFF panels, NOT
-// the old cream/beige values which now live under the `paper` theme).
-const P: { dark: Palette; light: Palette; paper: Palette } = {
-  dark: {
-    bg: '#111113',
-    panel: '#18181B',
-    sidebar: '#141416',
-    border: '#2A2A2E',
-    fg: '#FAFAFA',
-    fg2: '#A1A1AA',
-    fg4: '#52525B',
-    accent: '#1447E6',
-    accentTint: 'rgba(20,71,230,.18)',
-  },
-  light: {
-    bg: '#F7F7F5',       // soft warm off-white (matches [data-theme="day"] --t-bg)
-    panel: '#FFFFFF',
-    sidebar: '#FAFAF8',
-    border: '#ECECEA',
-    fg: '#0A0A0A',
-    fg2: '#52525B',
-    fg4: '#A1A1AA',
-    accent: '#1447E6',
-    accentTint: 'rgba(20,71,230,.08)',
-  },
-  paper: {
-    bg: '#EBE8DE',       // warm cream/sepia "paper on paper" aesthetic
-    panel: '#FAF9F5',
-    sidebar: '#F0EEE6',
-    border: '#D1CFC5',
-    fg: '#141413',
-    fg2: '#4D4C48',
-    fg4: '#87867F',
-    accent: '#1447E6',
-    accentTint: 'rgba(20,71,230,.10)',
-  },
-} as const;
-
 const ACCENT = '#1447E6';
-const ACCENT_TINT = 'rgba(20,71,230,0.13)';
 
 // ---------------------------------------------------------------------------
-// Mini window preview — simulates a tiny ShadowFlow shell
+// Layout primitives — module card + setting row (ZCode appearance page style)
 // ---------------------------------------------------------------------------
-function MiniPreview({ c, split }: { c: Palette; split?: boolean }) {
-  // For the "system" card we show a 50/50 dark-left / light-right split
-  const leftC  = split ? P.dark  : c;
-  const rightC = split ? P.light : c;
-
+function ModuleCard({
+  title,
+  desc,
+  children,
+}: {
+  title: string;
+  desc?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div
+    <section
       style={{
-        width: '100%',
-        aspectRatio: '16 / 9',
-        borderRadius: 8,
-        overflow: 'hidden',
-        border: `1px solid ${c.border}`,
-        display: 'flex',
-        flexDirection: 'column',
-        background: c.bg,
+        border: '1px solid var(--t-border)',
+        borderRadius: 12,
+        background: 'var(--t-panel)',
+        padding: '4px 0',
       }}
     >
-      {/* Top bar */}
-      <div
-        style={{
-          height: 18,
-          background: c.panel,
-          borderBottom: `1px solid ${c.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 8px',
-          gap: 4,
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#FF5F57', opacity: 0.8 }} />
-        <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#FEBC2E', opacity: 0.8 }} />
-        <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#28C840', opacity: 0.8 }} />
-        <div style={{ flex: 1, margin: '0 6px', height: 6, borderRadius: 3, background: c.border }} />
-      </div>
-
-      {/* Body — sidebar + content, optionally split */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left half */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* Sidebar */}
-          <div
-            style={{
-              width: 24,
-              background: leftC.sidebar,
-              borderRight: `1px solid ${leftC.border}`,
-              padding: '6px 4px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 4,
-              flexShrink: 0,
-            }}
-          >
-            {[1, 0.5, 0.5, 0.5].map((op, i) => (
-              <div key={i} style={{ height: 4, borderRadius: 2, background: leftC.fg4, opacity: op }} />
-            ))}
-          </div>
-          {/* Content */}
-          <div
-            style={{
-              flex: 1,
-              background: leftC.bg,
-              padding: '7px 8px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 4,
-            }}
-          >
-            <div style={{ height: 5, width: '70%', borderRadius: 2.5, background: leftC.fg2, opacity: 0.5 }} />
-            <div style={{ height: 4, width: '90%', borderRadius: 2, background: leftC.fg4, opacity: 0.4 }} />
-            <div style={{ height: 4, width: '80%', borderRadius: 2, background: leftC.fg4, opacity: 0.3 }} />
-            <div style={{ height: 4, width: '60%', borderRadius: 2, background: leftC.fg4, opacity: 0.25 }} />
-            <div
-              style={{
-                marginTop: 4,
-                height: 14,
-                width: '55%',
-                borderRadius: 4,
-                background: leftC.accent,
-                opacity: 0.9,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Right half (only for split/system) */}
-        {split && (
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden', borderLeft: `1px solid ${rightC.border}` }}>
-            <div
-              style={{
-                width: 24,
-                background: rightC.sidebar,
-                borderRight: `1px solid ${rightC.border}`,
-                padding: '6px 4px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 4,
-                flexShrink: 0,
-              }}
-            >
-              {[1, 0.5, 0.5, 0.5].map((op, i) => (
-                <div key={i} style={{ height: 4, borderRadius: 2, background: rightC.fg4, opacity: op }} />
-              ))}
-            </div>
-            <div
-              style={{
-                flex: 1,
-                background: rightC.bg,
-                padding: '7px 8px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 4,
-              }}
-            >
-              <div style={{ height: 5, width: '70%', borderRadius: 2.5, background: rightC.fg2, opacity: 0.5 }} />
-              <div style={{ height: 4, width: '90%', borderRadius: 2, background: rightC.fg4, opacity: 0.4 }} />
-              <div style={{ height: 4, width: '80%', borderRadius: 2, background: rightC.fg4, opacity: 0.3 }} />
-              <div style={{ height: 4, width: '60%', borderRadius: 2, background: rightC.fg4, opacity: 0.25 }} />
-              <div
-                style={{
-                  marginTop: 4,
-                  height: 14,
-                  width: '55%',
-                  borderRadius: 4,
-                  background: rightC.accent,
-                  opacity: 0.9,
-                }}
-              />
-            </div>
-          </div>
+      <div style={{ padding: '14px 18px 6px' }}>
+        <h3 style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--t-fg)', margin: 0 }}>
+          {title}
+        </h3>
+        {desc && (
+          <p style={{ margin: '3px 0 0', fontSize: 11.5, color: 'var(--t-fg-4)', lineHeight: 1.5 }}>
+            {desc}
+          </p>
         )}
       </div>
-    </div>
+      <div style={{ padding: '6px 0 10px' }}>{children}</div>
+    </section>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Single theme card
-// ---------------------------------------------------------------------------
-interface ThemeCardProps {
-  id: ThemePref;
+function SettingRow({
+  label,
+  desc,
+  htmlFor,
+  children,
+}: {
   label: string;
-  sublabel: string;
-  selected: boolean;
-  onClick: () => void;
-}
-
-function ThemeCard({ id, label, sublabel, selected, onClick }: ThemeCardProps) {
-  const [hover, setHover] = React.useState(false);
-
-  const isLight  = id === 'light';
-  const isPaper  = id === 'paper';
-  const isSystem = id === 'system';
-
-  // Card shell uses current token system (adapts to active theme)
-  const cardBg = selected
-    ? 'var(--t-panel-2)'
-    : hover
-    ? 'var(--t-panel-2)'
-    : 'var(--t-panel)';
-
-  const previewC: Palette = isPaper ? P.paper : isLight ? P.light : P.dark;
-
+  desc?: string;
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+    <div
       style={{
-        position: 'relative',
         display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        padding: 12,
-        borderRadius: 14,
-        border: selected
-          ? `1.5px solid ${ACCENT}`
-          : `1px solid var(--t-border)`,
-        background: cardBg,
-        boxShadow: selected
-          ? `0 0 0 3px ${ACCENT_TINT}`
-          : hover
-          ? '0 2px 8px rgba(0,0,0,.12)'
-          : 'none',
-        cursor: 'pointer',
-        textAlign: 'left',
-        transition: 'box-shadow 140ms ease, border-color 140ms ease, background 120ms ease',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 24,
+        padding: '12px 18px',
+        borderTop: '1px solid var(--t-border)',
+        marginTop: 6,
       }}
     >
-      {/* Selected badge */}
-      {selected && (
-        <span
-          style={{
-            position: 'absolute',
-            top: 10,
-            right: 10,
-            width: 18,
-            height: 18,
-            borderRadius: '50%',
-            background: ACCENT,
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1,
-          }}
-          aria-hidden
-        >
-          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </span>
-      )}
-
-      {/* Mini preview window */}
-      <MiniPreview c={previewC} split={isSystem} />
-
-      {/* Label row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 2 }}>
-        <div>
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: selected ? ACCENT : 'var(--t-fg)',
-              lineHeight: 1.2,
-            }}
-          >
-            {label}
-          </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: 'var(--t-fg-4)',
-              fontFamily: 'var(--font-mono, monospace)',
-              marginTop: 2,
-            }}
-          >
-            {sublabel}
-          </div>
-        </div>
-
-        {/* Radio indicator */}
-        <div
-          style={{
-            width: 16,
-            height: 16,
-            borderRadius: '50%',
-            border: selected ? `5px solid ${ACCENT}` : '1.5px solid var(--t-border-2, var(--t-border))',
-            background: selected ? '#fff' : 'transparent',
-            flexShrink: 0,
-            transition: 'border 140ms ease',
-          }}
-        />
+      <div style={{ minWidth: 0 }}>
+        <label htmlFor={htmlFor} style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-fg)', display: 'block' }}>
+          {label}
+        </label>
+        {desc && (
+          <p style={{ margin: '2px 0 0', fontSize: 11.5, color: 'var(--t-fg-4)', lineHeight: 1.5 }}>
+            {desc}
+          </p>
+        )}
       </div>
-    </button>
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>{children}</div>
+    </div>
   );
 }
 
@@ -353,37 +111,12 @@ function ThemeCard({ id, label, sublabel, selected, onClick }: ThemeCardProps) {
 // ---------------------------------------------------------------------------
 export function AppearanceSection() {
   const { theme, setTheme } = useTheme();
-  const { language } = useI18n();
-  const isZh = language === 'zh';
-
-  const tx = {
-    header:      isZh ? '外观' : 'Appearance',
-    subtitle:    isZh ? '选择界面颜色主题。' : 'Choose your interface color theme.',
-    modeLabel:   isZh ? '颜色模式' : 'Color Mode',
-    themeDark:   isZh ? '深色'   : 'Dark',
-    themeLight:  isZh ? '浅色'   : 'Light',
-    themeSystem: isZh ? '跟随系统' : 'System',
-    themePaper:  isZh ? '纸张'   : 'Paper',
-    customLabel: isZh ? '颜色定制' : 'Custom Colors',
-    customHint:  isZh
-      ? '调整以下颜色会立即生效并保存。覆盖当前主题对应的 CSS 变量；点重置回到当前模式默认。'
-      : 'Edits apply instantly and persist. Overrides the current theme tokens; reset to fall back to mode defaults.',
-    slotAccent:  isZh ? '强调色' : 'Accent',
-    slotBg:      isZh ? '背景色' : 'Background',
-    slotFg:      isZh ? '前景色' : 'Foreground',
-    resetBtn:    isZh ? '重置默认' : 'Reset to defaults',
-    fontLabel:   isZh ? '界面缩放(字号)' : 'Interface Scale',
-    fontHint:    isZh
-      ? '拖动整体放大/缩小界面(85%–140%),立即生效并保存。等比缩放所有文字和间距。'
-      : 'Drag to scale the whole UI (85%–140%). Applies instantly. Zooms all text & spacing proportionally.',
-    fontReset:   isZh ? '恢复默认' : 'Reset',
-  };
+  const { t } = useI18n();
 
   // ── 颜色定制 state ───────────────────────────────────────────────────────
   // Seed from localStorage (custom override) → fall back to active computed
   // CSS token → fall back to a sane hex literal so <input type="color"> never
-  // receives an empty/invalid value. Reading getComputedStyle at mount-time
-  // is fine for one-shot init; user edits drive subsequent state.
+  // receives an empty/invalid value.
   const [accent, setAccent] = useState(
     () => loadCustomTheme().accent ?? getEffectiveColor('accent', '#1447E6'),
   );
@@ -394,18 +127,14 @@ export function AppearanceSection() {
     () => loadCustomTheme().fg ?? getEffectiveColor('fg', '#FFFFFF'),
   );
 
-  const slotState: Record<CustomSlot, [string, (v: string) => void, string]> = {
-    accent: [accent, setAccent, tx.slotAccent],
-    bg:     [bg,     setBg,     tx.slotBg],
-    fg:     [fg,     setFg,     tx.slotFg],
-  };
-
   function handleColorChange(slot: CustomSlot, value: string) {
-    slotState[slot][1](value);
+    if (slot === 'accent') setAccent(value);
+    else if (slot === 'bg') setBg(value);
+    else setFg(value);
     setCustomColor(slot, value);
   }
 
-  function handleReset() {
+  function handleColorReset() {
     resetCustomTheme();
     // Re-seed from now-effective defaults so the swatches reflect the active
     // mode's tokens (not the previously customized values).
@@ -414,14 +143,34 @@ export function AppearanceSection() {
     setFg(getEffectiveColor('fg', '#FFFFFF'));
   }
 
-  // ── 界面缩放自由调整(2026-06-01 v2,zoom 方案)─────────────────────────────
-  // 滑块 0.85–1.4 自由调,实时写 <html> --app-zoom → 整体等比放大所有 px 文字+间距。
-  // 全 app 字号 100% 用 px,改字号基准无效,zoom 才是唯一可行的「整体调大」。
+  // ── 界面缩放(2026-06-01 v2,zoom 方案;2026-08 ZCode 式行布局)─────────────
   const [zoom, setZoomState] = useState(() => currentZoom());
+
+  // Follow zoom changes made elsewhere in this tab (bootstrap server sync)
+  // or in other tabs (localStorage storage event) so the slider stays true.
+  useEffect(() => {
+    const onZoomEvent = (e: Event) => {
+      const v = (e as CustomEvent<number>).detail;
+      if (typeof v === 'number') setZoomState(v);
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== 'sf-font-scale') return;
+      if (e.newValue === null) { setZoomState(DEFAULT_ZOOM); return; }
+      const n = parseFloat(e.newValue);
+      if (!isNaN(n) && n >= ZOOM_MIN && n <= ZOOM_MAX) setZoomState(n);
+    };
+    window.addEventListener('sf-zoom-change', onZoomEvent as EventListener);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('sf-zoom-change', onZoomEvent as EventListener);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
   function handleZoomChange(z: number) {
     setZoomState(z);
-    applyZoom(z);                                 // 实时生效
-    saveZoom(z === DEFAULT_ZOOM ? null : z);       // 等于默认则清存储
+    applyZoom(z);                                  // 实时生效
+    saveZoom(z === DEFAULT_ZOOM ? null : z);       // 等于默认则清存储；同步后端
   }
   function handleZoomReset() {
     setZoomState(DEFAULT_ZOOM);
@@ -429,215 +178,169 @@ export function AppearanceSection() {
     saveZoom(null);
   }
 
-  const options: Array<{ id: ThemePref; label: string; sublabel: string }> = [
-    { id: 'dark',   label: tx.themeDark,   sublabel: 'dark'   },
-    { id: 'light',  label: tx.themeLight,  sublabel: 'light'  },
-    { id: 'paper',  label: tx.themePaper,  sublabel: 'paper'  },
-    { id: 'system', label: tx.themeSystem, sublabel: 'auto'   },
+  const themeOptions: Array<{ id: ThemePref; label: string }> = [
+    { id: 'dark',   label: t('appearance.theme.dark') },
+    { id: 'light',  label: t('appearance.theme.light') },
+    { id: 'paper',  label: t('appearance.theme.paper') },
+    { id: 'system', label: t('appearance.theme.system') },
   ];
 
+  const colorSlots: Array<{ slot: CustomSlot; value: string; label: string }> = [
+    { slot: 'accent', value: accent, label: t('appearance.slotAccent') },
+    { slot: 'bg',     value: bg,     label: t('appearance.slotBg') },
+    { slot: 'fg',     value: fg,     label: t('appearance.slotFg') },
+  ];
+
+  const selectStyle: React.CSSProperties = {
+    fontSize: 12.5,
+    padding: '7px 10px',
+    minWidth: 150,
+    border: '1px solid var(--t-border)',
+    borderRadius: 8,
+    background: 'var(--t-panel-2, var(--t-panel))',
+    color: 'var(--t-fg)',
+    cursor: 'pointer',
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* Header */}
       <div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--t-fg)', margin: 0 }}>
-          {tx.header}
+          {t('appearance.header')}
         </h2>
         <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--t-fg-4)' }}>
-          {tx.subtitle}
+          {t('appearance.subtitle')}
         </p>
       </div>
 
-      {/* Selector */}
-      <div>
-        <p
-          style={{
-            margin: '0 0 10px',
-            fontFamily: 'var(--font-mono, monospace)',
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: 'var(--t-fg-4)',
-          }}
+      {/* ── 模块:界面设置(主题 + 缩放)────────────────────────────────── */}
+      <ModuleCard title={t('appearance.interfaceModule')} desc={t('appearance.interfaceModuleDesc')}>
+        <SettingRow
+          label={t('appearance.themeLabel')}
+          desc={t('appearance.themeDesc')}
+          htmlFor="appearance-theme-select"
         >
-          {tx.modeLabel}
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-          {options.map(({ id, label, sublabel }) => (
-            <ThemeCard
-              key={id}
-              id={id}
-              label={label}
-              sublabel={sublabel}
-              selected={theme === id}
-              onClick={() => void setTheme(id)}
+          <select
+            id="appearance-theme-select"
+            value={theme}
+            onChange={(e) => void setTheme(e.target.value as ThemePref)}
+            data-testid="theme-select"
+            style={selectStyle}
+          >
+            {themeOptions.map(({ id, label }) => (
+              <option key={id} value={id}>{label}</option>
+            ))}
+          </select>
+        </SettingRow>
+
+        <div data-testid="appearance-font-size">
+          <SettingRow
+            label={t('appearance.zoomLabel')}
+            desc={t('appearance.zoomDesc')}
+            htmlFor="appearance-zoom-slider"
+          >
+            <span style={{ fontSize: 12, color: 'var(--t-fg-4)' }}>A</span>
+            <input
+              id="appearance-zoom-slider"
+              type="range"
+              min={ZOOM_MIN}
+              max={ZOOM_MAX}
+              step={0.05}
+              value={zoom}
+              onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
+              aria-label={t('appearance.zoomLabel')}
+              data-testid="font-size-slider"
+              style={{ width: 160, accentColor: ACCENT, cursor: 'pointer' }}
             />
-          ))}
+            <span style={{ fontSize: 16, color: 'var(--t-fg-4)' }}>A</span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono, monospace)',
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--t-fg)',
+                minWidth: 44,
+                textAlign: 'right',
+              }}
+            >
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={handleZoomReset}
+              data-testid="font-size-reset"
+              style={{
+                fontSize: 12,
+                padding: '5px 10px',
+                border: '1px solid var(--t-border)',
+                borderRadius: 6,
+                background: 'var(--t-panel-2, var(--t-panel))',
+                color: 'var(--t-fg)',
+                cursor: 'pointer',
+              }}
+            >
+              {t('appearance.zoomReset')}
+            </button>
+          </SettingRow>
         </div>
-      </div>
+      </ModuleCard>
 
-      {/* 字号 — 自由滑块 12–18px,实时生效。 */}
-      <div data-testid="appearance-font-size">
-        <p
-          style={{
-            margin: '0 0 6px',
-            fontFamily: 'var(--font-mono, monospace)',
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: 'var(--t-fg-4)',
-          }}
-        >
-          {tx.fontLabel}
-        </p>
-        <p style={{ margin: '0 0 12px', fontSize: 11.5, color: 'var(--t-fg-4)', lineHeight: 1.55 }}>
-          {tx.fontHint}
-        </p>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-            padding: '12px 14px',
-            border: '1px solid var(--t-border)',
-            borderRadius: 8,
-            background: 'var(--t-panel)',
-          }}
-        >
-          <span style={{ fontSize: 12, color: 'var(--t-fg-4)', flexShrink: 0 }}>A</span>
-          <input
-            type="range"
-            min={ZOOM_MIN}
-            max={ZOOM_MAX}
-            step={0.05}
-            value={zoom}
-            onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-            aria-label={tx.fontLabel}
-            data-testid="font-size-slider"
-            style={{ flex: 1, accentColor: ACCENT, cursor: 'pointer' }}
-          />
-          <span style={{ fontSize: 18, color: 'var(--t-fg-4)', flexShrink: 0 }}>A</span>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono, monospace)',
-              fontSize: 12,
-              fontWeight: 600,
-              color: 'var(--t-fg)',
-              minWidth: 44,
-              textAlign: 'right',
-              flexShrink: 0,
-            }}
-          >
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            type="button"
-            onClick={handleZoomReset}
-            data-testid="font-size-reset"
-            style={{
-              fontSize: 12,
-              padding: '5px 10px',
-              border: '1px solid var(--t-border)',
-              borderRadius: 6,
-              background: 'var(--t-panel-2, var(--t-panel))',
-              color: 'var(--t-fg)',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            {tx.fontReset}
-          </button>
-        </div>
-      </div>
-
-      {/* 颜色定制 — 3 个 CSS var slot 的色板(强调色/背景/前景)+ 重置。 */}
+      {/* ── 模块:颜色定制(3 个 CSS var slot + 重置)────────────────────── */}
       <div data-testid="appearance-custom-colors">
-        <p
-          style={{
-            margin: '0 0 6px',
-            fontFamily: 'var(--font-mono, monospace)',
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: 'var(--t-fg-4)',
-          }}
-        >
-          {tx.customLabel}
-        </p>
-        <p style={{ margin: '0 0 12px', fontSize: 11.5, color: 'var(--t-fg-4)', lineHeight: 1.55 }}>
-          {tx.customHint}
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {(['accent', 'bg', 'fg'] as const).map((slot) => {
-            const [value, , label] = slotState[slot];
-            return (
-              <div
-                key={slot}
-                data-testid={`color-row-${slot}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  border: '1px solid var(--t-border)',
-                  borderRadius: 8,
-                  background: 'var(--t-panel)',
-                }}
-              >
-                <span style={{ fontSize: 13, color: 'var(--t-fg)' }}>{label}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono, monospace)',
-                      fontSize: 11,
-                      color: 'var(--t-fg-3)',
-                      letterSpacing: '0.02em',
-                    }}
-                  >
-                    {value.toUpperCase()}
-                  </span>
-                  <input
-                    type="color"
-                    value={value}
-                    onChange={(e) => handleColorChange(slot, e.target.value)}
-                    aria-label={label}
-                    data-testid={`color-input-${slot}`}
-                    style={{
-                      width: 44,
-                      height: 28,
-                      padding: 0,
-                      border: '1px solid var(--t-border)',
-                      borderRadius: 6,
-                      background: 'transparent',
-                      cursor: 'pointer',
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-          <button
-            type="button"
-            onClick={handleReset}
-            data-testid="custom-colors-reset"
-            style={{
-              alignSelf: 'flex-start',
-              marginTop: 4,
-              fontSize: 12,
-              padding: '6px 12px',
-              border: '1px solid var(--t-border)',
-              borderRadius: 6,
-              background: 'var(--t-panel)',
-              color: 'var(--t-fg)',
-              cursor: 'pointer',
-            }}
-          >
-            {tx.resetBtn}
-          </button>
-        </div>
+        <ModuleCard title={t('appearance.customModule')} desc={t('appearance.customModuleDesc')}>
+          {colorSlots.map(({ slot, value, label }) => (
+            <div key={slot} data-testid={`color-row-${slot}`}>
+              <SettingRow label={label} htmlFor={`color-input-${slot}`}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono, monospace)',
+                    fontSize: 11,
+                    color: 'var(--t-fg-3)',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  {value.toUpperCase()}
+                </span>
+                <input
+                  id={`color-input-${slot}`}
+                  type="color"
+                  value={value}
+                  onChange={(e) => handleColorChange(slot, e.target.value)}
+                  aria-label={label}
+                  data-testid={`color-input-${slot}`}
+                  style={{
+                    width: 44,
+                    height: 28,
+                    padding: 0,
+                    border: '1px solid var(--t-border)',
+                    borderRadius: 6,
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                />
+              </SettingRow>
+            </div>
+          ))}
+          <div style={{ padding: '8px 18px 4px' }}>
+            <button
+              type="button"
+              onClick={handleColorReset}
+              data-testid="custom-colors-reset"
+              style={{
+                fontSize: 12,
+                padding: '6px 12px',
+                border: '1px solid var(--t-border)',
+                borderRadius: 6,
+                background: 'var(--t-panel-2, var(--t-panel))',
+                color: 'var(--t-fg)',
+                cursor: 'pointer',
+              }}
+            >
+              {t('appearance.resetBtn')}
+            </button>
+          </div>
+        </ModuleCard>
       </div>
     </div>
   );

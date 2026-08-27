@@ -5,6 +5,7 @@
  */
 
 import { getApiBase } from './_base';
+import { buildByokHeaders } from './chat';
 import { markPythonDown, markPythonUp } from '../core/hooks/usePythonBackendStatus';
 const API_BASE_URL = getApiBase();
 
@@ -197,6 +198,42 @@ export async function putTeamWorkflow(teamId: string, workflow: TeamWorkflow): P
 }
 
 // ---------------------------------------------------------------------------
+// DAG layout endpoint（Node 网关 server/src/routes/teams.ts，yaml team 专属）
+// ---------------------------------------------------------------------------
+//
+// 注意：PUT /api/teams/{id}/dag 只写 yaml team 的 dag_layout 坐标块。
+// Python 后端 JSON team（team-*.json）没有对应 yaml 文件时会 404
+// TEAM_NOT_FOUND —— 调用方应把它当作「无 yaml 布局层」容忍（节点坐标本来
+// 也随 PUT workflow 的 node.position 持久化，dag_layout 只是 yaml 运行态
+// 的镜像）。
+
+export interface TeamDagLayoutNode {
+  id: string;
+  x: number;
+  y: number;
+}
+
+export interface TeamDagLayout {
+  mode: 'auto' | 'manual';
+  nodes: TeamDagLayoutNode[];
+  viewport: { zoom: number; pan_x: number; pan_y: number };
+}
+
+export async function putTeamDagLayout(teamId: string, layout: TeamDagLayout): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/teams/${teamId}/dag`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dag_layout: layout }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    let detail: unknown = body;
+    try { detail = JSON.parse(body); } catch { /* raw */ }
+    throw new TeamApiError(res.status, detail, _extractErrorCode(detail));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Policy endpoints — Story 12-3
 // ---------------------------------------------------------------------------
 
@@ -222,6 +259,82 @@ export async function putTeamPolicy(teamId: string, matrix: Record<string, Recor
     try { detail = JSON.parse(body); } catch { /* raw */ }
     throw new TeamApiError(res.status, detail, _extractErrorCode(detail));
   }
+}
+
+// ---------------------------------------------------------------------------
+// Workflow version endpoints — 版本管理（Python 后端 team_workflow_versions 仓）
+// ---------------------------------------------------------------------------
+
+export interface TeamWorkflowVersionMeta {
+  version: number;
+  saved_at: string;
+  summary: string | null;
+}
+
+export async function listTeamWorkflowVersions(teamId: string): Promise<TeamWorkflowVersionMeta[]> {
+  const res = await fetch(`${API_BASE_URL}/api/teams/${teamId}/workflow/versions`);
+  const env = await _handleResponse<Envelope<TeamWorkflowVersionMeta[]>>(res);
+  return env.data ?? [];
+}
+
+/** 回滚到指定版本；返回回滚后的 workflow（回滚本身在服务端再记一个新版本）。 */
+export async function restoreTeamWorkflowVersion(teamId: string, version: number): Promise<TeamWorkflow> {
+  const res = await fetch(`${API_BASE_URL}/api/teams/${teamId}/workflow/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version }),
+  });
+  const env = await _handleResponse<Envelope<TeamWorkflow>>(res);
+  return env.data;
+}
+
+/** 把当前 team（含 workflow）复制为新变体；不传 name 时服务端自动加「· 分支」后缀。 */
+export async function branchTeamWorkflow(teamId: string, name?: string): Promise<TeamRecord> {
+  const res = await fetch(`${API_BASE_URL}/api/teams/${teamId}/workflow/branch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(name ? { name } : {}),
+  });
+  const env = await _handleResponse<Envelope<TeamRecord>>(res);
+  return env.data;
+}
+
+// ---------------------------------------------------------------------------
+// DAG draft endpoint（Node 网关 server/src/routes/teams.ts POST /dag-draft）
+// ---------------------------------------------------------------------------
+//
+// 自然语言 → DAG 草稿：一句话描述协作流程，LLM 生成 { nodes, edges } 草稿，
+// **只返回不落库** —— 由编辑器画进画布、标脏，用户确认后才走既有保存通路。
+// BYOK key 经 buildByokHeaders 转发（与 chat/群聊同一套 X-LLM-* 约定）。
+
+export type TeamDagDraftEdgeMode = 'direct' | 'approve' | 'conditional';
+
+export interface TeamDagDraftNode {
+  id: string;
+  agentId?: string;
+  name?: string;
+  role?: string;
+}
+
+export interface TeamDagDraftEdge {
+  source: string;
+  target: string;
+  mode: TeamDagDraftEdgeMode;
+}
+
+export interface TeamDagDraft {
+  nodes: TeamDagDraftNode[];
+  edges: TeamDagDraftEdge[];
+}
+
+export async function generateTeamDagDraft(prompt: string, agentIds?: string[]): Promise<TeamDagDraft> {
+  const res = await fetch(`${API_BASE_URL}/api/teams/dag-draft`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...buildByokHeaders() },
+    body: JSON.stringify({ prompt, ...(agentIds && agentIds.length > 0 ? { agentIds } : {}) }),
+  });
+  const env = await _handleResponse<Envelope<{ draft: TeamDagDraft }>>(res);
+  return env.data.draft;
 }
 
 // ---------------------------------------------------------------------------

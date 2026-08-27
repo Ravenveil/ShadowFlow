@@ -253,6 +253,167 @@ def query(pack_id: str, question: str, *, mode: Optional[str] = None) -> str:
         ) from exc
 
 
+def _finalize_hits(hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Normalize hit scores in-place.
+
+    LightRAG's merged chunk list is relevance-ordered but (in most versions)
+    carries no similarity score, so when a chunk lacks a numeric score we
+    derive one from its retrieval rank: first hit = 1.0, last = 1/n.  The
+    value is a rank indicator, not a raw cosine similarity.
+    """
+    n = len(hits)
+    for i, hit in enumerate(hits):
+        score = hit.get("score")
+        if isinstance(score, bool) or not isinstance(score, (int, float)):
+            hit["score"] = round((n - i) / n, 3) if n else 0.0
+        else:
+            hit["score"] = round(float(score), 3)
+    return hits
+
+
+def _hits_from_structured(result: Any, top_k: int) -> List[Dict[str, Any]]:
+    """Map a LightRAG ``aquery_data()`` result to ``[{text, source, score}]``."""
+    if not isinstance(result, dict):
+        return []
+    data = result.get("data") or {}
+    chunks = data.get("chunks") or []
+    refs: Dict[str, str] = {}
+    for ref in data.get("references") or []:
+        if isinstance(ref, dict):
+            rid = str(ref.get("reference_id") or "")
+            if rid:
+                refs[rid] = str(ref.get("file_path") or "")
+    hits: List[Dict[str, Any]] = []
+    for chunk in chunks:
+        if not isinstance(chunk, dict):
+            continue
+        text = str(chunk.get("content") or "").strip()
+        if not text:
+            continue
+        source = str(
+            chunk.get("file_path")
+            or refs.get(str(chunk.get("reference_id") or ""), "")
+            or ""
+        ).strip()
+        hits.append(
+            {
+                "text": text,
+                "source": source,
+                "score": chunk.get("score") or chunk.get("rerank_score"),
+            }
+        )
+        if len(hits) >= top_k:
+            break
+    return _finalize_hits(hits)
+
+
+def _hits_from_context(context: Any, top_k: int) -> List[Dict[str, Any]]:
+    """Best-effort parse of an ``aquery(only_need_context=True)`` string.
+
+    LightRAG renders text chunks as one JSON object per line inside the
+    "Document Chunks" section; keep every line that decodes to a dict with a
+    non-empty ``content`` field.  Returns [] when nothing parses — the caller
+    then falls back to the synthesized answer.
+    """
+    if not isinstance(context, str):
+        return []
+    import json
+
+    hits: List[Dict[str, Any]] = []
+    seen = set()
+    for line in context.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            obj = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(obj, dict):
+            continue
+        text = str(obj.get("content") or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        hits.append(
+            {
+                "text": text,
+                "source": str(obj.get("file_path") or "").strip(),
+                "score": obj.get("score") or obj.get("rerank_score"),
+            }
+        )
+        if len(hits) >= top_k:
+            break
+    return _finalize_hits(hits)
+
+
+def query_hits(pack_id: str, question: str, *, mode: Optional[str] = None, top_k: int = 5) -> List[Dict[str, Any]]:
+    """Query the LightRAG index and return raw retrieval chunks as hits.
+
+    Unlike :func:`query` (which returns one LLM-synthesized answer), this
+    returns the actual retrieved fragments as a list of
+    ``{"text", "source", "score"}`` dicts ordered by relevance — suitable for
+    multi-citation UIs.  ``query()`` is left untouched.
+
+    Strategy:
+      1. ``rag.aquery_data()`` (lightrag ≥ 1.4) — structured chunks with
+         ``content`` / ``file_path`` / ``reference_id``, no LLM call.
+      2. Older versions: ``aquery(only_need_context=True)`` and parse the
+         JSON chunk lines out of the context string.
+
+    An empty list means "no matches" (callers should NOT fall back).  When
+    structured retrieval is unavailable or yields nothing parseable, raises
+    :class:`LightRagQueryError` so callers can fall back to :func:`query`.
+
+    Raises:
+        ImportError:         lightrag-hku not installed.
+        LightRagConfigError: missing env vars.
+        LightRagQueryError:  structured retrieval unsupported/failed.
+    """
+    effective_mode = mode or os.environ.get("LIGHTRAG_QUERY_MODE", "hybrid")
+
+    async def _run() -> List[Dict[str, Any]]:
+        rag = _build_rag(pack_id)  # raises ImportError / LightRagConfigError first
+        await rag.initialize_storages()
+        try:
+            from lightrag import QueryParam  # type: ignore[import]
+
+            if hasattr(rag, "aquery_data"):
+                param = QueryParam(mode=effective_mode, top_k=top_k, chunk_top_k=top_k)
+                result = await rag.aquery_data(question, param=param)
+                return _hits_from_structured(result, top_k)
+            # Legacy lightrag: only_need_context returns the raw context string.
+            param = QueryParam(mode="naive", top_k=top_k, only_need_context=True)
+            context = await rag.aquery(question, param=param)
+            hits = _hits_from_context(context, top_k)
+            if not hits:
+                raise LightRagQueryError(
+                    f"LightRAG query_hits: no parseable chunks for pack {pack_id}"
+                )
+            return hits
+        finally:
+            await rag.finalize_storages()
+
+    try:
+        return asyncio.run(_run())
+    except RuntimeError as exc:
+        if "cannot run nested event loop" in str(exc).lower() or \
+                "no running event loop" in str(exc).lower():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, _run())
+                return future.result()
+        raise LightRagQueryError(
+            f"LightRAG query_hits failed for pack {pack_id}: {exc}"
+        ) from exc
+    except (LightRagConfigError, LightRagQueryError, ImportError):
+        raise
+    except Exception as exc:
+        raise LightRagQueryError(
+            f"LightRAG query_hits failed for pack {pack_id}: {type(exc).__name__}: {exc}"
+        ) from exc
+
+
 def delete_pack_index(pack_id: str) -> None:
     """Remove the LightRAG working directory for `pack_id`.
 
@@ -283,6 +444,7 @@ __all__ = [
     "is_enabled",
     "ingest_text",
     "query",
+    "query_hits",
     "delete_pack_index",
     "backend_label",
     "LightRagConfigError",

@@ -185,6 +185,8 @@ class CatalogAppSummary(BaseModel):
     template_id: str = ""
     workflow_id: str = ""
     blueprint_id: str = ""
+    # T04 模板 fork 入口：列表卡片按 mode=="team" 过滤团队模板（取自快照）
+    mode: str = "single"
     # Story 13.5: scope_hint 字段（可选，team_member_candidate 时写入）
     scope_hint: Optional[str] = None
     # Story 13.6 D2-b: 暴露第一个 RoleProfile 的 collaboration_contract，
@@ -218,6 +220,9 @@ class RegisterPublishedAppRequest(BaseModel):
     workflow_id: str = ""
     author: str = "anonymous"
     kit_type: str = "custom"
+    # 内置模板种子用固定 app_id 保证幂等（catalog_templates.ensure_builtin_templates）；
+    # 空串 = 正常发布路径，自动生成。
+    app_id: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -346,8 +351,13 @@ class CatalogService:
         roles = snapshot_full.get("role_profiles") or []
         role_names = [r.get("name", "") for r in roles if isinstance(r, dict)]
 
+        summary = self._summary_of(rec)
+        # detail 的 mode 由快照显式给出（Literal["single","team"]），丢弃 summary 里的
+        # 透传字符串，避免与显式关键字冲突
+        summary.pop("mode", None)
+
         return CatalogAppDetail(
-            **self._summary_of(rec),
+            **summary,
             mode=snapshot_full.get("mode", "single"),
             role_names=role_names,
             role_count=len(role_names),
@@ -382,7 +392,7 @@ class CatalogService:
         # 后续 blueprint 编辑不会回写已发布的 catalog app。新发布会产生新 app_id。
         scope_hint = _infer_scope_hint(bp)
 
-        app_id = f"app-{uuid4().hex[:12]}"
+        app_id = req.app_id.strip() or f"app-{uuid4().hex[:12]}"
         record: Dict[str, Any] = {
             "app_id": app_id,
             "name": bp.name,
@@ -482,6 +492,8 @@ class CatalogService:
         # Story 13.6 D2-b: surface first role's collaboration_contract from snapshot.
         snap = rec.get("blueprint_snapshot")
         if isinstance(snap, dict):
+            # 团队模板标记：快照 mode（single/team）透传到 summary，供前端模板入口过滤
+            summary["mode"] = snap.get("mode", "single")
             roles = snap.get("role_profiles") or []
             if roles and isinstance(roles[0], dict):
                 cc = roles[0].get("collaboration_contract")

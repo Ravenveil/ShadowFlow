@@ -12,7 +12,8 @@
  *
  * 本组件保留的 Neo 特有件：
  *   1. agent 头（✳ 名称 + 累计耗时，首条消息 ts 起算）
- *   2. Loop 徽标行（GET /api/runs/{id}/loops，REST 轮询补充 SSE；运行中 5s/次）
+ *   2. Loop 徽标行（loops 数据源优先级：SSE loop 帧 → loops/stream SSE →
+ *      5s REST 轮询回落；2026-08-22 L6 证据层打包）
  *   3. 错误条 + 底部状态 pill（进度 x/y，点击无操作——Timeline 自带交互）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -20,7 +21,9 @@ import { ChevronDown, CircleCheck, Repeat, Sparkles } from 'lucide-react';
 import type { UseRunSessionReturn } from '../core/hooks/useRunSession';
 import type { TimelineMessage } from '../components/run-session/timeline/types';
 import { NeoTimeline } from './NeoTimeline';
-import { getRunLoops, type LoopStatus, type LoopStep } from '../api/runs';
+import { NeoMsgFeedback } from './NeoMsgFeedback';
+import { getRunLoops, streamRunLoops, type LoopRecord, type LoopStatus } from '../api/runs';
+import { retryStep } from '../api/runSessions';
 import { useI18n } from '../common/i18n';
 import './neo-chat.css';
 import './neo-run.css';
@@ -44,24 +47,49 @@ function fmtMs(ms: number): string {
 export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) {
   const { t } = useI18n();
 
-  // ---- loop 数据（REST 轮询补充 SSE；失败 → 空列表，不 mock）----
-  const [loops, setLoops] = useState<LoopStep[]>([]);
+  // ---- loop 数据（数据源优先级：SSE loop 帧 → loops/stream SSE → 5s REST
+  //      轮询回落；全部失败 → 空列表，不 mock）----
+  const [loops, setLoops] = useState<LoopRecord[]>([]);
   useEffect(() => {
+    // 1) 网关 loop-watcher 的 SSE `loop` 帧（useRunSession 已订阅，全量快照）
+    if (session.loops && session.loops.length > 0) {
+      const byId = new Map<string, LoopRecord>();
+      for (const raw of session.loops) {
+        const loop = raw as unknown as LoopRecord;
+        if (loop?.loop_id) byId.set(loop.loop_id, loop);
+      }
+      setLoops([...byId.values()]);
+      return;
+    }
     let alive = true;
+    let pollIv: ReturnType<typeof setInterval> | null = null;
     async function load() {
       try {
         const r = await getRunLoops(runId);
-        if (alive) setLoops(r.loops ?? []);
+        if (alive) setLoops((r.loops ?? []).map((s) => s.loop));
       } catch {
         // 后端无 loop 数据 / 端点未就绪 → 空列表（干净排版，不编造）
         if (alive) setLoops([]);
       }
     }
     void load();
-    if (!session.isStreaming) return;
-    const iv = setInterval(() => { void load(); }, 5000);
-    return () => { alive = false; clearInterval(iv); };
-  }, [runId, session.isStreaming, session.isComplete]);
+    if (!session.isStreaming) return () => { alive = false; };
+    // 2) loops 专属 SSE；3) 端点不可用时回落 5s 轮询
+    const stream = streamRunLoops(
+      runId,
+      (steps) => {
+        if (alive) setLoops(steps.map((s) => s.loop));
+      },
+      () => {
+        if (alive && !pollIv) pollIv = setInterval(() => { void load(); }, 5000);
+      },
+    );
+    return () => {
+      alive = false;
+      stream.close();
+      if (pollIv) clearInterval(pollIv);
+    };
+  }, [runId, session.loops, session.isStreaming, session.isComplete]);
 
   // ---- 操作列表折叠开关（底部 pill 控制 loops 区展开）----
   const [loopsOpen, setLoopsOpen] = useState(true);
@@ -93,6 +121,29 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
       void session.editMessage(msg.id, nextBody);
     },
     [session.editMessage],
+  );
+
+  // ---- L1（2026-08-22）— 单聊消息底部 👍/👎 反馈行（仅 agent 回复）----
+  // 独立小组件 NeoMsgFeedback，经 NeoTimeline 可选挂载点插入，不动消息主组件。
+  const renderMsgActions = useCallback(
+    (msg: TimelineMessage) =>
+      msg.kind === 'assistant_text' ? <NeoMsgFeedback messageId={msg.id} /> : null,
+    [],
+  );
+
+  // ---- 单步重跑（2026-08-23 救场）：step_panel 已完成步骤行尾「重跑」按钮
+  //      → 网关 POST /api/run-sessions/:id/steps/:n/retry（full_rerun 语义）。
+  //      false = 端点缺失，按钮行内红字提示（NeoStepRetry 处理）。
+  //      202 接受后主动 restartStream()：重跑多发生在 run 终态（SSE 已随
+  //      complete 关闭，retry-pending 帧无人接收），必须重挂才能让「过程」
+  //      tab / 时间线自动续跑；流仍开着时则由 retry-pending 帧路径负责。----
+  const handleRetryStep = useCallback(
+    (stepIndex: number) =>
+      retryStep(runId, stepIndex).then((ok) => {
+        if (ok) session.restartStream();
+        return ok;
+      }),
+    [runId, session.restartStream],
   );
 
   // ---- 状态 pill 文案 ----
@@ -133,7 +184,7 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
         </div>
       )}
 
-      {/* Loop 徽标行（REST 轮询数据，Timeline 不覆盖的补充维度） */}
+      {/* Loop 徽标行（SSE 优先 + REST 回落，Timeline 不覆盖的补充维度） */}
       {loops.length > 0 && (
         <div className="neo-ops">
           <button
@@ -147,8 +198,7 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
           </button>
           {loopsOpen && (
             <div className="neo-ops-list">
-              {loops.map((loopStep) => {
-                const { loop } = loopStep;
+              {loops.map((loop) => {
                 const total =
                   loop.kind === 'fixed_count' && loop.setpoint?.value
                     ? `/${loop.setpoint.value}`
@@ -188,6 +238,8 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
       <NeoTimeline
         messages={session.messages}
         onEditMessage={handleEditMessage}
+        renderMsgActions={renderMsgActions}
+        onRetryStep={handleRetryStep}
       />
 
       {/* 错误条（替代状态 pill，含重试次数后缀由 reducer 维护 occurrences） */}

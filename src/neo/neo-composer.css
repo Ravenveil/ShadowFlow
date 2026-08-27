@@ -10,7 +10,7 @@
   padding: 8px 12px 6px;
 }
 .neo-composer-hero .neo-cp-card {
-  padding: 14px 16px 12px;
+  padding: 16px 16px 12px;
 }
 
 .neo-cp-input-wrap {
@@ -33,8 +33,9 @@
   color: var(--t-fg-5);
 }
 .neo-composer-hero .neo-cp-textarea {
-  min-height: 88px;
-  font-size: 15px;
+  /* 复刻 .composer-text：14px 单行起（内容多时自然增高） */
+  min-height: 24px;
+  font-size: 14px;
 }
 
 /* ---- chip 行 ---- */
@@ -47,26 +48,28 @@
   padding-top: 2px;
 }
 .neo-composer-hero .neo-cp-bar {
-  margin-top: 12px;
-  padding-top: 4px;
+  margin-top: 14px;
+  padding-top: 0;
 }
 .neo-cp-bar-spacer {
   flex: 1;
   min-width: 6px;
 }
 
-/* 幽灵 chip（默认 → hover → configured → on；类顺序保证 on 优先） */
+/* 幽灵 chip（默认 → hover → configured → on；类顺序保证 on 优先）。
+   2026-08-18 对齐复刻 .composer-bar：纯文字化（12.5/500 次灰、透明底、
+   hover 4% 浅灰），不再是 11px 小 chip 观感 */
 .neo-cp-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 8px;
-  border-radius: 6px;
+  gap: 6px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 8px;
   background: transparent;
   border: none;
   color: var(--t-fg-3);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
@@ -75,7 +78,7 @@
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .neo-cp-chip:hover {
-  background: var(--t-panel-2);
+  background: color-mix(in srgb, var(--t-fg) 4%, transparent);
   color: var(--t-fg-2);
 }
 .neo-cp-chip.configured {
@@ -395,11 +398,11 @@
   flex-shrink: 0;
 }
 
-/* ---- 发送 / 停止钮 ---- */
+/* ---- 发送 / 停止钮（复刻 .send：30px 正圆，无投影；空态黑圆降透明度） ---- */
 .neo-cp-submit {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -407,22 +410,21 @@
   border: none;
   color: #fff;
   background: var(--t-accent);
-  box-shadow: 0 6px 16px -6px color-mix(in oklab, var(--t-accent) 60%, transparent);
   cursor: pointer;
-  transition: background var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+  transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
 .neo-cp-submit.is-empty {
-  background: var(--t-border);
-  box-shadow: none;
+  background: var(--t-accent);
+  opacity: 0.45;
   cursor: not-allowed;
 }
 .neo-cp-submit:disabled:not(.is-empty) {
   cursor: wait;
 }
 .neo-cp-stop {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -604,32 +606,35 @@
 .neo-cp-badge[data-tone='run'] { color: var(--t-run, #3b82f6); }
 .neo-cp-badge[data-tone='warn'] { color: var(--t-warn, #d97706); }
 
-/* ---- 模型/执行器选择 ---- */
+/* ---- 模型/执行器选择（复刻 .composer-bar .model：纯文字 12.5/500 次灰，无边框） ---- */
 .neo-cp-model-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 8px;
-  border-radius: 7px;
-  max-width: 160px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 8px;
+  max-width: 180px;
   background: transparent;
-  border: 1px solid var(--t-border);
+  border: none;
   color: var(--t-fg-3);
   cursor: pointer;
   font-family: inherit;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
+.neo-cp-model-btn:hover {
+  background: color-mix(in srgb, var(--t-fg) 4%, transparent);
+  color: var(--t-fg-2);
+}
 .neo-cp-model-btn.on {
-  background: var(--t-accent-tint);
-  border-color: var(--t-accent);
-  color: var(--t-accent-bright, var(--t-accent));
+  background: color-mix(in srgb, var(--t-fg) 4%, transparent);
+  color: var(--t-fg);
 }
 .neo-cp-model-btn-icon {
   flex-shrink: 0;
 }
 .neo-cp-model-btn-label {
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;

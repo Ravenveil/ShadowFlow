@@ -2,7 +2,9 @@
  * NeoChat — Neo 中栏：聊天 + inline 任务执行（clawsgo 中栏形态）。
  *
  * 布局：
- *   顶部条  「当前选中：{target.name}」 + 右侧「新任务」按钮
+ *   顶部条  「当前选中：{target.name}」 + 群聊现场入口
+ *           （「新任务」按钮已删 2026-08-19 用户要求——左栏导航与 Ctrl+K
+ *            已有同款入口；纯首页空态整条隐藏，hero 即全部内容）
  *   消息流  run 活跃 → NeoRunInline（用户灰气泡 / 操作列表 / agent 回复 /
  *           状态 pill）；无 run → hero 问候 → 分类 tabs + 模板卡网格 →
  *           composer 沉底（clawsgo 首页态 tmp29A7）
@@ -18,8 +20,7 @@
  * timeline 末尾渲染「已中断」标记（session.aborted，useRunSession 维护）。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowDown, OctagonX, RotateCcw, SquarePen, UsersRound } from 'lucide-react';
+import { ArrowDown, OctagonX, RotateCcw, UsersRound } from 'lucide-react';
 import type { NeoChatProps } from './types';
 import { useRunSession, type ErrorCode } from '../core/hooks/useRunSession';
 import { createRunSession, listRunSessions } from '../api/runSessions';
@@ -31,6 +32,9 @@ import { useAuth } from '../core/auth/AuthContext';
 import { useI18n } from '../common/i18n';
 import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
 import { NeoRunInline } from './NeoRunInline';
+import { NeoRunSuggestions } from './NeoRunSuggestions';
+import { NeoTeamSavedCard } from './NeoTeamSavedCard';
+import { KnowledgeCitations } from '../components/knowledge/KnowledgeCitations';
 import { StartGallery } from '../pages/chat-home/StartGallery';
 import pkg from '../../package.json';
 import './neo-chat.css';
@@ -94,7 +98,7 @@ function HeroVerbCarousel() {
   );
 }
 
-export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
+export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps) {
   const { t, language } = useI18n();
   const workspaceId = useWorkspaceStore((s) => s.currentId);
   const { user } = useAuth();
@@ -152,10 +156,17 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, []);
 
+  // ── 知识库引用（L5/L1）─────────────────────────────────────────────────
+  // 发送带知识库的消息后，对选中的 pack 走 /knowledge/packs/{id}/query，
+  // 引用卡渲染在消息流底部（NeoRunInline 之下）。未选中 pack 时不展示。
+  const [citations, setCitations] = useState<{ packIds: string[]; query: string } | null>(null);
+
   // 切换 run → 重置贴底标记（新会话总是从底部开始跟随），浮钮收起。
   useEffect(() => {
     atBottomRef.current = true;
     setShowJump(false);
+    setCitations(null);
+    setChatPrefill(undefined);
   }, [runId]);
 
   useEffect(() => {
@@ -170,17 +181,17 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
     session.steps,
     session.error,
     session.aborted,
+    session.teamSaved,
   ]);
-
-  // 「新任务」—— 清除当前 run，回到 hero 空态（NeoApp 把 runId 置 null）。
-  const handleNewTask = useCallback(() => {
-    onRunChange(null);
-  }, [onRunChange]);
 
   // 模板画廊点选 → 预填 `@<skill_id> ` 进 hero composer（StartGallery 同一
   // 通路，UnifiedComposer parseSkillToken 自动选中该 skill）。state 而非
   // ref：initialText 受控下发，同一卡片重复点选也能再次触发聚焦。
   const [prefill, setPrefill] = useState<string | undefined>(undefined);
+
+  // 完成态「后续建议」点选 → 预填进 chat composer（NeoComposer initialText
+  // 受控下发，仅填入不发送，用户确认后再提交）。
+  const [chatPrefill, setChatPrefill] = useState<string | undefined>(undefined);
 
   /**
    * 提交链路（与 NewTaskComposer.handleSubmit 同一通路）：
@@ -242,6 +253,10 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
         // 多轮接力成功 → 清掉上一轮的陈旧错误条（若曾出错）。
         session.clearError();
       }
+      // 选中知识库 → 发送成功后对 pack 走 RAG query，引用卡挂消息流底部。
+      if (p.knowledge.length > 0) {
+        setCitations({ packIds: p.knowledge, query: text });
+      }
     } catch (err) {
       throw new Error(
         t('neo.chat.sendFailed', {
@@ -288,28 +303,28 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
 
   return (
     <div className="neo-chat">
-      {/* 顶部条：当前选中 + 新任务 */}
-      <header className="neo-chat-topbar">
-        <span className="neo-chat-topbar-label">
-          {t('neo.chat.currentTarget', { defaultValue: '当前选中：' })}
-          <strong>{target?.name ?? t('neo.chat.noTarget', { defaultValue: '未选择' })}</strong>
-        </span>
-        {/* 群聊现场跳转（B1 互链反查到 group 时出现）— 看 agents 干活的可视现场 */}
-        {runId && linkedGroupId && (
-          <Link
-            to={`/group/${linkedGroupId}`}
-            className="neo-topbar-btn"
-            data-testid="neo-chat-group-link"
-          >
-            <UsersRound size={14} strokeWidth={1.9} aria-hidden />
-            {t('neo.chat.viewGroup', { defaultValue: '群聊现场' })}
-          </Link>
-        )}
-        <button type="button" className="neo-topbar-btn" onClick={handleNewTask}>
-          <SquarePen size={14} strokeWidth={1.9} aria-hidden />
-          {t('neo.chat.newTask', { defaultValue: '新任务' })}
-        </button>
-      </header>
+      {/* 顶部条：页面标题 + 群聊现场入口（←/→/折叠 导航簇已移至左栏顶部；
+          「新任务」按钮已删，新任务走左栏导航 / Ctrl+K）。纯首页空态
+          （无 run 无 target）不渲染，hero 问候即整屏内容。 */}
+      {(runId || target) && (
+        <header className="neo-chat-topbar">
+          <span className="neo-chat-topbar-title">
+            {target?.name ?? t('neo.chat.newTask', { defaultValue: '新任务' })}
+          </span>
+          {/* 群聊现场（B1 互链反查到 group 时出现）— 中栏内打开（ZCode 式停留同页） */}
+          {runId && linkedGroupId && (
+            <button
+              type="button"
+              className="neo-topbar-btn"
+              onClick={() => onNavigate({ view: 'conversation', groupId: linkedGroupId })}
+              data-testid="neo-chat-group-link"
+            >
+              <UsersRound size={14} strokeWidth={1.9} aria-hidden />
+              {t('neo.chat.viewGroup', { defaultValue: '群聊现场' })}
+            </button>
+          )}
+        </header>
+      )}
 
       {runId ? (
         <>
@@ -324,6 +339,21 @@ export function NeoChat({ target, runId, onRunChange }: NeoChatProps) {
               session={session}
               targetName={target?.name ?? null}
             />
+
+            {/* 团队已保存引导卡（SSE team-saved 帧）：组装落库成功后给下一步
+                引导；CTA 只做跳转（已互链群）/内联提示，不直接建群。 */}
+            {session.teamSaved && (
+              <NeoTeamSavedCard
+                team={session.teamSaved}
+                groupId={linkedGroupId}
+                onOpenGroup={(gid) => onNavigate({ view: 'conversation', groupId: gid })}
+              />
+            )}
+
+            {/* 知识库引用卡：本轮消息选了 pack 时展示检索命中来源列表 */}
+            {citations && (
+              <KnowledgeCitations packIds={citations.packIds} query={citations.query} />
+            )}
 
             {/* 错误卡：分类标题 + 重试/中止（消息正文由 NeoRunInline 错误条展示） */}
             {session.error && errorTitle && (

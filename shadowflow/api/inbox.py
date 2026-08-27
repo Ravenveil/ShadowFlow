@@ -63,6 +63,9 @@ class AgentDMItem(BaseModel):
     unreadCount: int = 0
     lastMessage: str = ""
     lastActivityAt: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # 2026-08-19 — DM 底层是单成员 group 记录（kinds=["dm"]）；带上 group_id
+    # 让前端「最近会话」行一步跳转 /group/:id 会话页，不再只改选中态。
+    group_id: Optional[str] = None
 
 
 class InboxData(BaseModel):
@@ -233,6 +236,7 @@ async def get_workspace_inbox(
 
         # 预建 agent_id → 最新 DM group name 映射（按 created_at 取最新，name 为已改名）。
         dm_name_by_agent: Dict[str, str] = {}
+        dm_group_id_by_agent: Dict[str, str] = {}
         dm_last_activity: Dict[str, str] = {}
         dm_last_message: Dict[str, str] = {}
         try:
@@ -244,6 +248,7 @@ async def get_workspace_inbox(
                     rec_ts = dm_rec.get("updated_at") or dm_rec.get("created_at") or ""
                     if aid not in dm_name_by_agent or rec_ts > (dm_rec.get("created_at") or ""):
                         dm_name_by_agent[aid] = dm_rec.get("name") or ""
+                        dm_group_id_by_agent[aid] = dm_rec.get("group_id") or ""
                         # 最后活跃时间：最后一条消息时间 or created_at
                         msgs = dm_rec.get("messages") or []
                         last_dm_msg = msgs[-1] if msgs else None
@@ -281,6 +286,7 @@ async def get_workspace_inbox(
                     unreadCount=0,
                     lastMessage=dm_last_message.get(agent_id) or (arec.get("soul") or "")[:140],
                     lastActivityAt=dm_last_activity.get(agent_id) or arec.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                    group_id=(dm_group_id_by_agent.get(agent_id) or None),
                 )
             )
     except Exception:

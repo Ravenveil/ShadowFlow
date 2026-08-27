@@ -14,6 +14,7 @@
  */
 import { useEffect, useState } from 'react';
 import { GitBranch, ListTree } from 'lucide-react';
+import { ProcessDagCanvas } from './ProcessDagCanvas';
 import {
   getRunGraph,
   getTaskTree,
@@ -118,15 +119,8 @@ export function ProcessView({ runId, active }: ProcessViewProps) {
     };
   }, [runId, active]);
 
-  // ── graph 节点排序：entrypoint 优先，其次 step index，保持原始相对顺序 ──
-  const graphNodes = graph
-    ? [...graph.nodes].sort(
-        (a, b) =>
-          Number(b.entrypoint) - Number(a.entrypoint) ||
-          (a.index ?? Number.MAX_SAFE_INTEGER) - (b.index ?? Number.MAX_SAFE_INTEGER),
-      )
-    : [];
-  const graphLabelById = new Map(graphNodes.map((n) => [n.id, n.label || n.id]));
+  // ── graph 节点计数（画布由 ProcessDagCanvas 渲染，这里只留 meta 统计）──
+  const graphNodeCount = graph?.nodes.length ?? 0;
 
   const treeRoots = tree ? (buildChildren(tree.nodes).get('') ?? []) : [];
   const treeChildren = tree ? buildChildren(tree.nodes) : new Map<string, ProjectionNode[]>();
@@ -154,7 +148,7 @@ export function ProcessView({ runId, active }: ProcessViewProps) {
     );
   };
 
-  const hasGraph = graphNodes.length > 0;
+  const hasGraph = graphNodeCount > 0;
   const hasTree = treeRoots.length > 0;
 
   return (
@@ -184,42 +178,16 @@ export function ProcessView({ runId, active }: ProcessViewProps) {
                 <span className="neo-host-sec-meta">
                   {t('neo.host.procGraphMeta', {
                     defaultValue: '{{nodes}} 节点 · {{edges}} 边',
-                    nodes: graphNodes.length,
+                    nodes: graphNodeCount,
                     edges: graph?.edges.length ?? 0,
                   })}
                 </span>
               </div>
-              <div className="neo-host-pgraph">
-                {graphNodes.map((n) => (
-                  <div key={n.id} className="neo-host-pgraph-node">
-                    <span
-                      className={`neo-host-pgraph-dot neo-host-pgraph-dot--${n.status}`}
-                      aria-hidden
-                    />
-                    <span className="neo-host-pgraph-label" title={n.id}>
-                      {n.label || n.id}
-                    </span>
-                    <span className="neo-host-pgraph-kind">{n.kind || n.type}</span>
-                    <span className={`neo-host-pill ${statusClass(n.status)}`}>{n.status}</span>
-                  </div>
-                ))}
+              {/* DAG 执行画布（2026-08-19 复活 react-flow，血统见 ProcessDagCanvas
+                  头注）：节点状态染色 + 迭代环徽标 + 环回虚线边；可拖可缩。 */}
+              <div className="neo-host-pdag-wrap">
+                {graph && <ProcessDagCanvas graph={graph} streaming={active} />}
               </div>
-              {graph && graph.edges.length > 0 && (
-                <div className="neo-host-pgraph-edges">
-                  {graph.edges.map((e, i) => (
-                    <span
-                      key={`${e.from_id}->${e.to_id}-${i}`}
-                      className="neo-host-edge-chip"
-                      title={e.condition ?? e.edge_type ?? e.type}
-                    >
-                      {graphLabelById.get(e.from_id) ?? e.from_id}
-                      <span className="neo-host-edge-arrow">→</span>
-                      {graphLabelById.get(e.to_id) ?? e.to_id}
-                      {e.condition ? <span className="neo-host-edge-cond">{e.condition}</span> : null}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 

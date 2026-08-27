@@ -23,6 +23,7 @@ import {
   type RunStatus,
 } from '../lib/run-event-bus';
 import { createRunEventStore } from '../lib/run-event-store';
+import { startLoopWatcher } from '../lib/loop-watcher';
 // 阶段 1（ROADMAP-agentinfra / GAP G1）— Node 工具管线的人在环审批回路：
 // tool-approval 注册表经下方 emitter 把 permission_check 帧写进本文件的
 // 私有 runBus（落事件日志、可重放），决策经 POST /:id/permissions/:requestId 回填。
@@ -64,7 +65,7 @@ import {
   setRunIndexStatus,
   upsertRunIndex,
 } from '../storage/run-index';
-import { getOrCreateProject } from '../storage/projects';
+import { getOrCreateProject, getProject } from '../storage/projects';
 // 2026-05-19 — Cherry Studio parity: replace in-memory Map with a JSON-file
 // backed store so backend restarts no longer wipe live sessions. Survives
 // hot reload + crash; sensitive fields persisted under .shadowflow/ (gitignored,
@@ -878,6 +879,9 @@ router.post('/', (req: Request, res: Response) => {
     conversation_id,
     // B1 统一会话内核 — 可选聊天群挂靠：按群复用/创建互链 conversation。
     group_id,
+    // GAP A3 回写（2026-08-23）— 自动创建 conversation 时的目标项目；
+    // 缺省落 'default' 项目（现状不变）。
+    project_id,
     // Story 15.14 follow-up — body-level auto_critique override (UI toggle).
     auto_critique,
   } = req.body as {
@@ -898,6 +902,7 @@ router.post('/', (req: Request, res: Response) => {
     cwd?: unknown;
     conversation_id?: unknown;
     group_id?: unknown;
+    project_id?: unknown;
     auto_critique?: unknown;
   };
 
@@ -1054,6 +1059,35 @@ router.post('/', (req: Request, res: Response) => {
   //   (b) string + missing → 400 CONVERSATION_NOT_FOUND
   //   (c) wrong type → 400 INVALID_CONVERSATION_ID
   //   (d) undefined → auto-create anonymous conversation under 'default' project
+  // GAP A3 回写（2026-08-23）— 自动创建（group_id 分支 / 匿名分支）可用 body
+  // .project_id 指定目标项目；给了但不存在的项目 → 400 PROJECT_NOT_FOUND。
+  let autoCreateProjectId: string | undefined;
+  if (project_id !== undefined) {
+    if (typeof project_id === 'string' && project_id.trim().length > 0) {
+      if (!getProject(project_id.trim())) {
+        res.status(400).json({
+          error: {
+            code: 'PROJECT_NOT_FOUND',
+            message: `project ${project_id} not found`,
+          },
+        });
+        return;
+      }
+      autoCreateProjectId = project_id.trim();
+    } else {
+      res.status(400).json({
+        error: {
+          code: 'INVALID_PROJECT_ID',
+          message: 'project_id must be a non-empty string when provided',
+        },
+      });
+      return;
+    }
+  }
+  const autoCreateProject = () =>
+    autoCreateProjectId
+      ? getProject(autoCreateProjectId)!
+      : getOrCreateProject('default', 'Default Project');
   let validated_conversation_id: string;
   if (typeof conversation_id === 'string') {
     if (!getConversation(conversation_id)) {
@@ -1087,12 +1121,12 @@ router.post('/', (req: Request, res: Response) => {
     if (existing) {
       validated_conversation_id = existing.conversation_id;
     } else {
-      const project = getOrCreateProject('default', 'Default Project');
+      const project = autoCreateProject();
       const conv = createConversation(project.project_id, undefined, group_id);
       validated_conversation_id = conv.conversation_id;
     }
   } else {
-    const project = getOrCreateProject('default', 'Default Project');
+    const project = autoCreateProject();
     const conv = createConversation(project.project_id);
     validated_conversation_id = conv.conversation_id;
   }
@@ -1455,6 +1489,13 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     return;
   }
 
+  // 2026-08-19 迭代环 watcher：run 活跃期间把 Python loops 投影差分上流为
+  // 命名 wire 事件 `loop`（EVENT_NAMING §1；前端 useRunSession → 右栏「过程」
+  // tab 实时渲染）。Python 不可达/无 run 记录时 watcher 静默，不影响执行。
+  const stopLoopWatcher = startLoopWatcher(id, (payload) => {
+    runBus.emit(id, 'loop', payload);
+  });
+
   // Polynoia-parity git evidence anchor — HEAD at run start. Captured before
   // the pipeline executes so the finally block can diff exactly what the
   // agents committed during THIS run (startHead..HEAD). Non-repo / unborn
@@ -1792,6 +1833,8 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           // 2026-06-23 — 普通对话直通：assembler 据此跳过组装路由，verbatim 用上面
           // 的 conversational system_prompt 单轮 turn()，不注入「组装指挥官」directive。
           conversational: wantPlainConversation,
+          // 2026-08-22 — 组装落库的工作区归属（team-persistence 写 Python team/agent 用）。
+          workspace_id: session.workspace_id,
         });
     if (teamSpec && wantSyntheticFallback) {
       console.log(
@@ -2272,6 +2315,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     // we finish will replay the buffer then end immediately (attach() handles
     // the terminal case). Status: failed iff we saw an error and no complete.
     runBus.finish(id, sawError && !sawComplete ? 'failed' : 'succeeded');
+    stopLoopWatcher(); // 迭代环 watcher 随 run 终态停止
     // 阶段0 — 终态写进持久索引
     try { setRunIndexStatus(id, sawError && !sawComplete ? 'failed' : 'succeeded'); } catch { /* 非致命 */ }
     console.log(`[run-sessions] run ${id} finished (complete=${sawComplete} error=${sawError})`);

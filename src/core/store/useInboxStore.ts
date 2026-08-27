@@ -45,6 +45,12 @@ interface InboxState {
    * 配合 deleteGroup() DELETE；后端失败时调用方应重拉 fetchWorkspaceInbox 恢复。
    */
   removeAgentDM: (agentId: string) => void;
+  /**
+   * 2026-08-23 · 管理面闭环 — 群聊删除乐观移除（与 removeAgentDM 同款）。
+   * 配合 deleteGroup() DELETE；fetchWorkspaceInbox 在已填充时会 skip 重拉，
+   * 所以删除/改名后必须本地同步，后端失败时调用方负责提示重试。
+   */
+  removeGroup: (groupId: string) => void;
   updateGroupMetrics: (groupId: string, partial: Partial<GroupMetrics>) => void;
   updateActiveRuns: (groupId: string, delta: number) => void;
   markRead: (groupId: string) => void;
@@ -146,6 +152,12 @@ export const useInboxStore = create<InboxState>((set, get) => ({
   removeAgentDM: (agentId: string) => {
     set((state) => ({
       agentDMs: state.agentDMs.filter((d) => d.agentId !== agentId),
+    }));
+  },
+
+  removeGroup: (groupId: string) => {
+    set((state) => ({
+      groups: state.groups.filter((g) => g.id !== groupId),
     }));
   },
 

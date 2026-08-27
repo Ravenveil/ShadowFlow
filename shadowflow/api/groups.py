@@ -30,7 +30,7 @@ import re
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, Request
@@ -690,6 +690,128 @@ async def pin_message(
     target["pinned"] = new_val
     _save_group(rec)
     return _envelope({"message_id": message_id, "pinned": new_val})
+
+
+# ---------------------------------------------------------------------------
+# L1 缺口补齐（2026-08-22）— message 👍/👎 feedback
+#
+# POST /api/messages/{message_id}/feedback { rating: 1 | -1, user_id? }
+# GET  /api/messages/{message_id}/feedback?user_id=
+#
+# 为什么不在群记录里就地存：单聊（run-session）消息的 id 由 Node 网关管线
+# 生成，不在任何群 JSON 里；群消息 message_id 又是全局唯一（uuid4 hex）。
+# 所以反馈落一个按 message_id 索引的独立 JSON 仓，两种消息统一可用。
+# ---------------------------------------------------------------------------
+
+_FEEDBACK_DIR = Path(__file__).resolve().parents[2] / ".shadowflow" / "feedback"
+_FEEDBACK_FILE_NAME = "message_feedback.json"
+_MESSAGE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")
+
+
+def _feedback_path() -> Path:
+    _FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+    return _FEEDBACK_DIR / _FEEDBACK_FILE_NAME
+
+
+def _load_feedback_store() -> Dict[str, Dict[str, int]]:
+    """Load the whole {message_id: {user_id: rating}} map ({} on first use)."""
+    p = _feedback_path()
+    if not p.exists():
+        return {}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_feedback_store(store: Dict[str, Dict[str, int]]) -> None:
+    """Atomic write — mirrors _save_group (tmp file + os.replace + fsync)."""
+    target = _feedback_path()
+    content = json.dumps(store, ensure_ascii=False).encode("utf-8")
+    fd, tmp_name = tempfile.mkstemp(dir=str(target.parent), prefix=".tmp-")
+    try:
+        os.write(fd, content)
+        os.fsync(fd)
+        os.close(fd)
+        os.replace(tmp_name, str(target))
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            Path(tmp_name).unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _validate_message_id(message_id: str) -> None:
+    if not _MESSAGE_ID_RE.match(message_id):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "INVALID_MESSAGE_ID", "message": "Invalid message_id format"}},
+        )
+
+
+class FeedbackRequest(BaseModel):
+    # 1 = 👍 / -1 = 👎；同一 user 重复同一 rating = toggle 撤销
+    rating: Literal[1, -1]
+    # auth 未落地前 user_id 走前端传入，默认 anonymous（与 reactions 一致）
+    user_id: str = "anonymous"
+
+
+def _feedback_view(
+    store: Dict[str, Dict[str, int]], message_id: str, user_id: str
+) -> Dict[str, Any]:
+    """Project one message's ratings into the API shape (counts + my_rating)."""
+    ratings = store.get(message_id) or {}
+    up = sum(1 for r in ratings.values() if r == 1)
+    down = sum(1 for r in ratings.values() if r == -1)
+    my = ratings.get(user_id)
+    return {
+        "message_id": message_id,
+        "up": up,
+        "down": down,
+        "my_rating": my if my in (1, -1) else None,
+    }
+
+
+@router.post("/api/messages/{message_id}/feedback")
+@limiter.limit("120/minute")
+async def post_message_feedback(
+    request: Request, message_id: str, body: FeedbackRequest
+) -> Dict[str, Any]:
+    """Record 👍/👎 feedback on any message (group chat or run-session).
+
+    Toggle semantics: submitting the same rating again withdraws it;
+    submitting the opposite rating switches it. One rating per user per
+    message.
+    """
+    _validate_message_id(message_id)
+    store = _load_feedback_store()
+    ratings: Dict[str, int] = dict(store.get(message_id) or {})
+    if ratings.get(body.user_id) == body.rating:
+        ratings.pop(body.user_id, None)  # toggle off
+    else:
+        ratings[body.user_id] = body.rating
+    if ratings:
+        store[message_id] = ratings
+    else:
+        store.pop(message_id, None)  # prune empty bucket
+    _save_feedback_store(store)
+    return _envelope(_feedback_view(store, message_id, body.user_id))
+
+
+@router.get("/api/messages/{message_id}/feedback")
+async def get_message_feedback(
+    message_id: str, user_id: str = Query(default="anonymous")
+) -> Dict[str, Any]:
+    """Read back counts + the caller's own rating (widget hydration)."""
+    _validate_message_id(message_id)
+    store = _load_feedback_store()
+    return _envelope(_feedback_view(store, message_id, user_id))
 
 
 # ---------------------------------------------------------------------------

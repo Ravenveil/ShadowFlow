@@ -47,9 +47,20 @@ export const proxyFallback = createProxyMiddleware({
   on: {
     proxyReq: (proxyReq, req) => {
       // express.json() consumes the body stream before we reach this middleware.
-      // Re-inject the parsed body so Python receives it.
+      // Re-inject the parsed body so Python receives it — including EMPTY objects:
+      // an incoming `{}` still carries Content-Length: 2, and http-proxy would
+      // otherwise wait forever for a body that was already consumed (observed:
+      // POST /api/catalog/apps/{id}/fork with `{}` hung until client timeout).
+      // Only re-inject for JSON requests — other content types (e.g. multipart)
+      // are not parsed by express.json() and must stream through untouched.
       const body = (req as any).body;
-      if (body && Object.keys(body).length > 0) {
+      const hadIncomingBody =
+        req.headers['content-length'] !== undefined ||
+        req.headers['transfer-encoding'] !== undefined;
+      const isJson = String(req.headers['content-type'] ?? '').includes(
+        'application/json',
+      );
+      if (body && typeof body === 'object' && hadIncomingBody && isJson) {
         const raw = JSON.stringify(body);
         proxyReq.setHeader('Content-Type', 'application/json');
         proxyReq.setHeader('Content-Length', Buffer.byteLength(raw));

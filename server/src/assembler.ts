@@ -63,6 +63,12 @@ import { ApiClientCallable } from './transport/ApiClientCallable';
 // floor at the assembly exit.
 import { selectRecipe } from './assembly/select';
 import { deriveRules, enforceRules } from './assembly/rules/enforce';
+// 2026-08-22 — L2 闭环:组装完成落库(team+agents → Python store)。此前组装只 emit
+// 蓝图事件 + 写 artifact,SKILL.md 声称的「节点 5 后 daemon 落库」缺失;见模块头注释。
+import {
+  persistAssembledTeam,
+  tapAssemblyTeamPersistence,
+} from './team-persistence';
 // 待决1 — Path A 轻量闸门:只尊重"用户显式要 1 个 agent"的意图(其余 verbatim 不砍)。
 import { detectExplicitSingleAgent } from './lib/intent-router';
 import { shouldOrchestrate } from './lib/assembly-routing';
@@ -423,6 +429,12 @@ export interface SkillAssemblerOptions {
    * 「团队组装指挥官」directive 的覆盖路被绕开——普通对话不再扮演组装器。
    */
   conversational?: boolean;
+  /**
+   * 2026-08-22 — 组装落库用工作区 id（routes/run-sessions.ts 从 session 透传）。
+   * 仅组装路径（Branch 0 recipe / Branch 1 离线 emit / Branch 2 orchestrate）
+   * 在 complete 时把它写进 Python team/agent 记录；缺省则由 Python 侧默认值兜底。
+   */
+  workspace_id?: string;
 }
 
 // 2026-06-01 — 组装意图指令。读 `.shadowflow/skills/agent-team-assembly` 的
@@ -478,6 +490,8 @@ async function* emitCompiledTeamBlueprint(
   synthAgents: SkillAgentDef[],
   session_id: string,
   singleAgent = false,
+  /** 2026-08-22 — 落库上下文（goal 派生团队名 / workspace_id 归属）；缺省则跳过落库。 */
+  persistCtx?: { goal: string; workspace_id?: string },
 ): AsyncGenerator<ParserSseEvent> {
   const byId = new Map(synthAgents.map((a) => [a.id, a]));
   // 待决1 — 轻量闸门:用户显式"要 1 个 agent"时,只取 1 个(优先 coordinator,否则第一个),
@@ -541,6 +555,32 @@ async function* emitCompiledTeamBlueprint(
     }
   }
   yield step('Policy 协作规则', 'done');
+
+  // 2026-08-22 — L2 闭环:落库在 complete 之前(上面注释承诺的「蓝图 + 落库」此前
+  // 只有蓝图)。model/tools 的 'compiled-default' / 空数组是 synth 哨兵,不落库。
+  // 失败只 warn(persistAssembledTeam 内部兜底),不影响 complete 帧。
+  if (persistCtx) {
+    const persisted = await persistAssembledTeam({
+      session_id,
+      goal: persistCtx.goal,
+      workspace_id: persistCtx.workspace_id,
+      name: teamConfig.name,
+      roster: memberIds.map((id) => {
+        const a = byId.get(id);
+        const modelId = a?.model?.id;
+        const picked = a?.tools?.picked ?? [];
+        return {
+          node_id: id,
+          title: a?.title ?? id,
+          // 落库 soul 用完整 persona(QuickCreateRequest.soul 契约),不是 80 字摘要。
+          persona: a?.persona ?? teamConfig.members_personas[id],
+          model: modelId && modelId !== 'compiled-default' ? modelId : undefined,
+          tools: picked.length > 0 ? picked : undefined,
+        };
+      }),
+    });
+    if (persisted) yield { event: 'team-saved', data: { ...persisted } };
+  }
 
   yield {
     event: 'complete',
@@ -740,7 +780,10 @@ export async function* runSkillAssembler(
       console.log(
         `[skill-assembler] @skill OFFLINE deterministic emit (no LLM) team ${teamV1.team_id}: ${teamV1.members_ids.length} members, single=${singleAgent}`,
       );
-      yield* emitCompiledTeamBlueprint(compiled.teamConfig, synthAgents, session_id, singleAgent);
+      yield* emitCompiledTeamBlueprint(compiled.teamConfig, synthAgents, session_id, singleAgent, {
+        goal,
+        workspace_id: opts.workspace_id,
+      });
       return;
     }
     // 非 @skill 的编译 team → 执行(runDag),保持原行为。
@@ -787,6 +830,20 @@ export async function* runSkillAssembler(
     if (matchedRecipe.askWorkspaceOnCreate) {
       yield { event: 'assembly-meta', data: { ask_workspace: true, recipe: matchedRecipe.id } };
     }
+    // 2026-08-22 — L2 闭环:recipe 组装落库。原「front-end auto-save」已随 /teams
+    // 路由下架消失(见上方 assembly-meta 注释的历史描述),补到 server 侧:runDag
+    // 执行前把 team+agents 落进 Python store,run 失败也不丢组装产物。
+    const persisted = await persistAssembledTeam({
+      session_id,
+      goal,
+      workspace_id: opts.workspace_id,
+      roster: teamDef.agents.map((a) => ({
+        node_id: (a as any).id as string,
+        title: (a as any).title as string,
+        persona: (a as any).persona as string,
+      })),
+    });
+    if (persisted) yield { event: 'team-saved', data: { ...persisted } };
     // 传 goal → executor 把 user-turn prompt 设为 goal(而非 node.id)。
     // session_id 串到 NodeContext,团队节点内 prompt 工具的审批帧才能落对 run 日志。
     const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, goal, session_id);
@@ -919,7 +976,13 @@ export async function* runSkillAssembler(
       history: [],
       signal: effectiveSignal,
     });
-    yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
+    // 2026-08-22 — L2 闭环:orchestrate(组装 skill 5 步流)时给事件流套落库 tap:
+    // 边过边收 <sf:node> roster,complete 时把 team+agents 写进 Python store。
+    // 非 orchestrate(普通 skill 对话)原样透传,不落库。
+    const sse = pipeChunksToSse(chunkStream, session_id, artifactCallback);
+    yield* orchestrate
+      ? tapAssemblyTeamPersistence(sse, { session_id, goal, workspace_id: opts.workspace_id })
+      : sse;
     return;
   }
 
@@ -936,7 +999,11 @@ export async function* runSkillAssembler(
     maxTokens: opts.max_tokens,
     temperature: opts.temperature,
   });
-  yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
+  // 2026-08-22 — 同上的落库 tap(orchestrate 时才启用)。
+  const sse = pipeChunksToSse(chunkStream, session_id, artifactCallback);
+  yield* orchestrate
+    ? tapAssemblyTeamPersistence(sse, { session_id, goal, workspace_id: opts.workspace_id })
+    : sse;
 }
 
 /**

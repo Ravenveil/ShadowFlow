@@ -1,0 +1,258 @@
+/* ===== KnowledgeGraphPage Neo 化（2026-08-19，从 Shadow 搬迁）=====
+   图谱可视化页：react-force-graph 2D 力导图 + graphAnalysis 分析层。
+   布局：页头（pack 选择/刷新/返回）+ 工具条（搜索/类型过滤/统计）
+   + 左图右详情（右侧点击节点的邻域摘要面板）。 */
+
+.neo-kg {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  font-family: var(--font-sans, inherit);
+  --t-accent: #1C1C1E;
+  --t-accent-bright: #000000;
+  --t-accent-tint: #F4F4F5;
+  --t-accent-ink: #FAFAFA;
+}
+[data-theme="night"] .neo-kg {
+  --t-accent: #3B82F6;
+  --t-accent-bright: #93C5FD;
+  --t-accent-tint: rgba(59, 130, 246, 0.14);
+  --t-accent-ink: #0A0A0A;
+}
+
+.neo-kg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 28px 12px;
+  flex-wrap: wrap;
+}
+.neo-kg-header-left { min-width: 0; }
+.neo-kg-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-4);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.neo-kg-title {
+  margin: 4px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.neo-kg-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.neo-kg-select {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--t-line);
+  background: var(--t-bg);
+  color: var(--t-fg);
+  font-size: 12.5px;
+  max-width: 260px;
+}
+
+.neo-kg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 28px 12px;
+  flex-wrap: wrap;
+}
+.neo-kg-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--t-line);
+  background: var(--t-bg);
+  min-width: 220px;
+}
+.neo-kg-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--t-fg);
+  font-size: 12.5px;
+  width: 100%;
+}
+.neo-kg-chip {
+  height: 24px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--t-line);
+  background: transparent;
+  color: var(--t-fg-3);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.neo-kg-chip.on {
+  background: var(--t-accent);
+  border-color: var(--t-accent);
+  color: var(--t-accent-ink);
+}
+.neo-kg-stats {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-4);
+  white-space: nowrap;
+}
+
+.neo-kg-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.neo-kg-canvas-wrap {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+.neo-kg-detail {
+  width: 320px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--t-line);
+  padding: 18px 20px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+.neo-kg-detail h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.neo-kg-detail .raw-type {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-4);
+  margin-bottom: 10px;
+}
+.neo-kg-detail .desc {
+  color: var(--t-fg-2);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0 0 12px;
+}
+.neo-kg-detail .section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--t-fg-4);
+  margin: 12px 0 6px;
+}
+.neo-kg-detail .rel-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin: 3px 0;
+  font-size: 12px;
+  color: var(--t-fg-2);
+  overflow-wrap: anywhere;
+}
+.neo-kg-detail .rel-row .rel {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--t-accent);
+  flex-shrink: 0;
+}
+
+.neo-kg-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--t-fg-3);
+  font-size: 13px;
+  text-align: center;
+  padding: 0 40px;
+}
+.neo-kg-empty code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--t-accent-tint);
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.neo-kg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--t-line);
+  background: transparent;
+  color: var(--t-fg);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.neo-kg-btn:hover { border-color: var(--t-fg-3); }
+.neo-kg-btn-primary {
+  background: var(--t-accent);
+  border-color: var(--t-accent);
+  color: var(--t-accent-ink);
+}
+.neo-kg-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--t-line);
+  background: var(--t-bg);
+  color: var(--t-fg-3);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+/* 缩放控件(− / 适应 / +,2026-08-20 搬自 Shadow KnowledgeGraphPanel) */
+.neo-kg-zoomctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  padding: 2px;
+}
+.neo-kg-zoomctl button {
+  min-width: 24px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--t-fg-3);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-kg-zoomctl button:hover {
+  background: var(--t-accent-tint);
+  color: var(--t-fg);
+}

@@ -9,6 +9,7 @@ import path from 'path';
 import fs from 'fs';
 import runSessionsRouter, { shutdownActiveRuns } from './routes/run-sessions';
 import runsRouter from './routes/runs';
+import runSuggestionsRouter from './routes/run-suggestions';
 import agentsRouter from './routes/agents';
 import teamsRouter from './routes/teams';
 import skillsRouter from './routes/skills';
@@ -23,6 +24,8 @@ import { groupsChatRouter } from './routes/groups-chat';
 import { groupsNodeRouter, handleDmResolve } from './routes/groups-node';
 // 2026-05-30 — 后端目录浏览器(给 CLI cwd 选工作目录;浏览器拿不到真实磁盘路径)
 import { fsBrowseRouter } from './routes/fs-browse';
+// 2026-08-19 — 本地仓库知识库(注册表 + 扫描 + 安全读取,Obsidian vault 模式)
+import { knowledgeVaultsRouter } from './routes/knowledge-vaults';
 // Story 15.14 — POST /api/artifacts/lint
 import artifactsRouter from './routes/artifacts';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
@@ -84,6 +87,9 @@ initSqlite();
 
 app.use('/api/run-sessions', runSessionsRouter);
 app.use('/api/runs', runsRouter);
+// 2026-08-23 — 完成态「后续建议」：GET /api/runs/:runId/suggestions。
+// 独立 router 同挂 /api/runs（路径不与 runs.ts 冲突），必须在 proxyFallback 之前。
+app.use('/api/runs', runSuggestionsRouter);
 app.use('/api/agents', agentsRouter);
 // S0.7 — Team DAG endpoints (yaml-backed). Mounted before proxyFallback so
 // /:id/dag and /:id/dag/validate hit Node; non-matching /api/teams paths
@@ -127,6 +133,9 @@ if (process.env.SF_GROUPS_BACKEND === 'node') {
 // 后端目录浏览器(GET /api/fs/list|home|validate)。Node 读本机磁盘列目录,前端逐层
 // 点选 → 回传真实绝对路径当 CLI cwd。挂在 proxyFallback 之前,否则会被转去 Python。
 app.use('/api/fs', fsBrowseRouter);
+// 2026-08-19 — 本地仓库知识库(Obsidian vault 模式,注册表移植自 Shadow):
+// 注册/浏览/阅读本地文件夹,只读用户文件。同样必须挂在 proxyFallback 之前。
+app.use('/api/knowledge-vaults', knowledgeVaultsRouter);
 // Part D — LLM protocol entrypoints. MUST be mounted BEFORE proxyFallback
 // otherwise /api/llm/* would be forwarded to Python instead of handled here.
 app.use('/api/llm', llmRouter);

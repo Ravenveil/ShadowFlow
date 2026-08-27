@@ -8,12 +8,13 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
 import { ChevronDown, Users } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 // CreateWorkspaceModal 入口已迁到 /teams 新建团队流程（用户视角 ws=team 是同一回事）
 // 文件保留供 future 使用，但本组件不再 mount
 import { listTeams, type TeamRecord } from '../../api/teams';
+import { CreateTeamModal } from './CreateTeamModal';
+import { ForkTeamTemplateModal } from './ForkTeamTemplateModal';
 import { useI18n } from '../../common/i18n';
 
 interface WorkspaceSelectorProps {
@@ -22,7 +23,6 @@ interface WorkspaceSelectorProps {
 
 export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
   const { t } = useI18n();
-  const navigate = useNavigate();
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const currentId  = useWorkspaceStore((s) => s.currentId);
   const currentTeam = useWorkspaceStore((s) => s.currentTeam);
@@ -36,6 +36,12 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
   // don't pay the Python round-trip for users who never open the switcher.
   const [teams, setTeams] = useState<TeamRecord[]>([]);
   const [teamsLoaded, setTeamsLoaded] = useState(false);
+  // 2026-08-22 — L2 缺口 A:「新建团队」从跳回聊天页改为打开真实创建表单
+  // （CreateTeamModal → createTeam() → POST /api/teams）。
+  const [createOpen, setCreateOpen] = useState(false);
+  // 2026-08-22 — T04 黄金路径：「从模板新建」打开 ForkTeamTemplateModal，
+  // fork 内置团队模板（氢能获客 6 角色 DAG）→ Python 落库 agents+team。
+  const [forkOpen, setForkOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -230,10 +236,10 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
         <button
           type="button"
           // workspace 和 team 合并语义后，"新建" 意为创建一个新团队。
-          // /teams 路由已下架，团队组装走 chat-first 主体验的「组装团队」skill，
-          // 这里直接跳回首页聊天。
+          // 2026-08-22 — /teams 路由已下架，但 createTeam() 客户端仍在；这里改为
+          // 打开 CreateTeamModal 表单真实创建（chat-first 组装路仍在，表单是显式入口）。
           data-testid="workspace-dropdown-create-team"
-          onClick={() => { setOpen(false); navigate('/'); }}
+          onClick={() => { setOpen(false); setCreateOpen(true); }}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
@@ -249,9 +255,62 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
           }}>+</span>
           {t('workspace.createTeam') || '新建团队'}
         </button>
+        <button
+          type="button"
+          // T04 黄金路径：一键 fork 内置团队模板（落库 agents+team，可直接群聊运行）
+          data-testid="workspace-dropdown-fork-template"
+          onClick={() => { setOpen(false); setForkOpen(true); }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
+            border: '1px solid transparent', background: 'transparent',
+            width: '100%', textAlign: 'left', color: 'var(--t-fg-4)', fontSize: 12,
+          }}
+        >
+          <span style={{
+            width: 20, height: 20, borderRadius: 5,
+            border: '1.5px dashed var(--t-border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, flexShrink: 0, color: 'var(--t-fg-5)',
+          }}>⚡</span>
+          {t('workspace.forkTemplate', { defaultValue: '从模板新建' })}
+        </button>
       </div>
     </div>
   );
+
+  // fork 成功：与 createTeamModal 同一收口 —— 追加进列表 + 选为 currentTeam。
+  const forkTemplateModal = forkOpen
+    ? createPortal(
+        <ForkTeamTemplateModal
+          workspaceId={currentId}
+          onClose={() => setForkOpen(false)}
+          onCreated={(team) => {
+            setTeams((prev) => [...prev, team]);
+            setCurrentTeam({ team_id: team.team_id, name: team.name, agent_ids: team.agent_ids ?? [] });
+            setForkOpen(false);
+          }}
+        />,
+        document.body,
+      )
+    : null;
+
+  // 创建成功：追加进下拉列表 + 选为 currentTeam（chat 据此过滤会话/显示成员）。
+  // 团队 workspace_id 就是当前 currentId（或根态缺省），无需 switchTo。
+  const createTeamModal = createOpen
+    ? createPortal(
+        <CreateTeamModal
+          workspaceId={currentId}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(team) => {
+            setTeams((prev) => [...prev, team]);
+            setCurrentTeam({ team_id: team.team_id, name: team.name, agent_ids: team.agent_ids ?? [] });
+            setCreateOpen(false);
+          }}
+        />,
+        document.body,
+      )
+    : null;
 
   // ── Collapsed: icon-only, dropdown opens via portal to the right ─────────────
   if (collapsed) {
@@ -274,6 +333,8 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
           }}>{init}</span>
         </div>
         {open && createPortal(dropdownContent, document.body)}
+        {createTeamModal}
+        {forkTemplateModal}
       </div>
     );
   }
@@ -316,6 +377,8 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
       </div>
 
       {open && dropdownContent}
+      {createTeamModal}
+      {forkTemplateModal}
     </div>
   );
 }

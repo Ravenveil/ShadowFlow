@@ -25,15 +25,22 @@ export interface DirPickerProps {
   anchorRef: React.RefObject<HTMLElement | null>;
   /** 浮层标题。 */
   title?: string;
+  /** 底部提示文案(场景化:CLI 工作目录 / 知识库仓库 …)。 */
+  pickHint?: string;
 }
 
-export default function DirPicker({ value, onPick, onClose, anchorRef, title }: DirPickerProps) {
+export default function DirPicker({ value, onPick, onClose, anchorRef, title, pickHint }: DirPickerProps) {
   const [cur, setCur] = useState<string | undefined>(value);
   const [parent, setParent] = useState<string | null>(null);
   const [entries, setEntries] = useState<FsEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number }>({ left: 0 });
+  // 面板高度(2026-08-20 三改):不再设上限 —— 拉满到视口边缘(「到底」),
+  // 高度在定位 effect 里按锚点上下可用空间计算,列表内滚动。
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; h: number }>({
+    left: 0,
+    h: 420,
+  });
   // 2026-05-30 — 可编辑路径栏(对齐 OpenDesign:粘贴绝对路径直接转到)。draft 是输入框
   // 当前文本,导航成功后同步成真实路径;手输/粘贴后回车或点「转到」→ load。
   const [draft, setDraft] = useState<string>(value ?? '');
@@ -67,21 +74,24 @@ export default function DirPicker({ value, onPick, onClose, anchorRef, title }: 
     else fsHome().then((h) => load(h?.home));
   }, []);
 
-  // 定位浮层(锚点上方优先,空间不够翻下)。
+  // 定位浮层 + 高度:哪边空间大往哪边展开,高度取「可用空间拉满」
+  // (FULL = 视口高 - 上下边距),面板边缘贴近视口边 —— 不留大段空白。
   useEffect(() => {
     const el = anchorRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     const GAP = 6;
-    const PANEL_H = 380;
     const PANEL_W = 360;
     const left = Math.max(8, Math.min(r.left, window.innerWidth - PANEL_W - 8));
-    const spaceAbove = r.top;
-    if (spaceAbove > PANEL_H + GAP) {
-      setPos({ left, bottom: window.innerHeight - r.top + GAP });
+    const FULL = Math.max(320, window.innerHeight - 120); // 拉满目标(只留 120px 边距)
+    const spaceAbove = r.top - GAP - 8;
+    const spaceBelow = window.innerHeight - r.bottom - GAP - 8;
+    if (spaceAbove >= spaceBelow) {
+      setPos({ left, bottom: window.innerHeight - r.top + GAP, h: Math.min(FULL, Math.max(320, spaceAbove)) });
     } else {
-      setPos({ left, top: r.bottom + GAP });
+      setPos({ left, top: r.bottom + GAP, h: Math.min(FULL, Math.max(320, spaceBelow)) });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anchorRef]);
 
   // 点外关闭。
@@ -103,7 +113,10 @@ export default function DirPicker({ value, onPick, onClose, anchorRef, title }: 
       className={`ui50-menu ${pos.top != null ? 'ui50-pop' : 'ui50-pop-up'}`}
       style={{
         position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom,
-        width: 360, maxHeight: 380, zIndex: 300,
+        width: 360, height: pos.h,
+        // 1100 = 盖过 neo-kp-modal-mask(z1000):DirPicker 也被锚进 Modal 内使用
+        // (知识库 CreateVaultModal 选父目录),浮层必须浮在 Modal 之上。
+        zIndex: 1100,
         display: 'flex', flexDirection: 'column',
         background: 'var(--t-panel)', border: '1px solid var(--t-border)',
         overflow: 'hidden',
@@ -242,7 +255,7 @@ export default function DirPicker({ value, onPick, onClose, anchorRef, title }: 
         borderTop: '1px solid var(--t-border)', flexShrink: 0,
       }}>
         <span style={{ flex: 1, fontSize: 10.5, color: 'var(--t-fg-4)' }}>
-          {cur ? '选「此目录」= 该文件夹当 CLI 工作目录' : '进入一个盘符后可选目录'}
+          {cur ? (pickHint ?? '选「此目录」= 该文件夹当 CLI 工作目录') : '进入一个盘符后可选目录'}
         </span>
         <button
           type="button"

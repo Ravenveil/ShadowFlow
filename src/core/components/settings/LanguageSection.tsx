@@ -1,26 +1,32 @@
-import { useI18n } from '../../../common/i18n/index';
+/**
+ * LanguageSection — Settings: Language (ZCode-style module layout)
+ *
+ * Flag cards pick the UI language; choice applies instantly via i18next and
+ * syncs to backend /api/settings/preferences (best-effort, cross-device).
+ */
+import { useI18n } from '../../../common/i18n';
 
-const LANGUAGES: Array<{ id: 'en' | 'zh'; flag: string; name: string; native: string }> = [
-  { id: 'en', flag: '🇺🇸', name: 'English', native: 'English' },
-  { id: 'zh', flag: '🇨🇳', name: '中文', native: '中文' },
+const LANGUAGES: Array<{ id: 'en' | 'zh'; flag: string; name: string }> = [
+  { id: 'en', flag: '🇺🇸', name: 'English' },
+  { id: 'zh', flag: '🇨🇳', name: '中文' },
 ];
 
 export function LanguageSection() {
-  const { language, setLanguage } = useI18n();
-  const T = (zh: string, en: string) => (language === 'zh' ? zh : en);
+  const { language, setLanguage, t } = useI18n();
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-[18px]">
       <div>
-        <h2 className="text-[18px] font-bold text-sf-fg1">{T('语言 / Language', 'Language / 语言')}</h2>
-        <p className="mt-1 text-[12px] text-sf-fg4">{T('选择界面显示语言', 'Choose the display language')}</p>
+        <h2 className="text-[18px] font-bold text-sf-fg1">{t('languagePage.header')}</h2>
+        <p className="mt-1 text-[12px] text-sf-fg4">{t('languagePage.subtitle')}</p>
       </div>
 
-      <div>
-        <p className="mb-3 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-sf-fg4">
-          {T('显示语言', 'Display language')}
-        </p>
-        <div className="flex gap-3">
+      <section className="rounded-[12px] border border-sf-border bg-sf-elev1">
+        <div className="px-[18px] pt-3.5 pb-1.5">
+          <h3 className="text-[13.5px] font-bold text-sf-fg1">{t('languagePage.label')}</h3>
+          <p className="mt-0.5 text-[11.5px] leading-normal text-sf-fg4">{t('languagePage.desc')}</p>
+        </div>
+        <div className="flex gap-3 px-[18px] pt-1 pb-4">
           {LANGUAGES.map(({ id, flag, name }) => {
             const selected = language === id;
             return (
@@ -28,6 +34,7 @@ export function LanguageSection() {
                 key={id}
                 type="button"
                 onClick={() => setLanguage(id)}
+                data-testid={`language-card-${id}`}
                 className={[
                   'flex flex-1 flex-col items-center gap-2.5 rounded-[12px] border py-5 transition-all',
                   selected
@@ -46,14 +53,14 @@ export function LanguageSection() {
                 </span>
                 {selected && (
                   <span className="font-mono text-[9px] text-sf-accent-bright">
-                    {id === 'zh' ? '✓ 已选' : '✓ Active'}
+                    {t('languagePage.active')}
                   </span>
                 )}
               </button>
             );
           })}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

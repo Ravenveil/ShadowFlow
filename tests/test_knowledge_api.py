@@ -1,14 +1,14 @@
 """Knowledge API endpoint tests — Story 9.1 AC6 + post-review hardening.
 
 Covers:
-  - POST /knowledge/packs returns pack with status=pending and `{data, meta}` envelope
-  - GET /knowledge/packs lists packs, exposes meta.skipped (M3)
-  - GET /knowledge/packs/{pack_id} returns 404 for unknown UUID-hex IDs
-  - GET /knowledge/packs/{malformed} returns 400 KNOWLEDGE_PACK_INVALID_ID (C4/H2)
-  - PATCH /knowledge/packs/{pack_id} updates name / description
+  - POST /api/knowledge/packs returns pack with status=pending and `{data, meta}` envelope
+  - GET /api/knowledge/packs lists packs, exposes meta.skipped (M3)
+  - GET /api/knowledge/packs/{pack_id} returns 404 for unknown UUID-hex IDs
+  - GET /api/knowledge/packs/{malformed} returns 400 KNOWLEDGE_PACK_INVALID_ID (C4/H2)
+  - PATCH /api/knowledge/packs/{pack_id} updates name / description
   - PATCH retrieval_profile.chunk_size auto-resets sources to pending (H5)
-  - DELETE /knowledge/packs/{pack_id} removes the record (and nested dirs, H7)
-  - POST /knowledge/packs/{pack_id}/reindex resets sources to pending
+  - DELETE /api/knowledge/packs/{pack_id} removes the record (and nested dirs, H7)
+  - POST /api/knowledge/packs/{pack_id}/reindex resets sources to pending
   - Server-side corrupted records map to 500 KNOWLEDGE_PACK_INVALID (H3)
 """
 from __future__ import annotations
@@ -58,7 +58,7 @@ def _new_uuid_hex() -> str:
 
 
 def test_create_pack_returns_envelope_with_pending_status():
-    resp = client.post("/knowledge/packs", json=_create_payload())
+    resp = client.post("/api/knowledge/packs", json=_create_payload())
     assert resp.status_code == 200
     body = resp.json()
     assert "data" in body and "meta" in body
@@ -77,7 +77,7 @@ def test_create_pack_returns_envelope_with_pending_status():
 def test_create_pack_rejects_empty_sources():
     bad = _create_payload()
     bad["sources"] = []
-    resp = client.post("/knowledge/packs", json=bad)
+    resp = client.post("/api/knowledge/packs", json=bad)
     assert resp.status_code == 422  # pydantic schema rejection (min_length=1)
 
 
@@ -87,7 +87,7 @@ def test_create_pack_rejects_empty_sources():
 
 
 def test_list_packs_empty():
-    resp = client.get("/knowledge/packs")
+    resp = client.get("/api/knowledge/packs")
     assert resp.status_code == 200
     body = resp.json()
     assert body["data"]["packs"] == []
@@ -99,9 +99,9 @@ def test_list_packs_empty():
 
 
 def test_list_packs_returns_created_pack():
-    client.post("/knowledge/packs", json=_create_payload("alpha"))
-    client.post("/knowledge/packs", json=_create_payload("beta"))
-    resp = client.get("/knowledge/packs?limit=10&offset=0")
+    client.post("/api/knowledge/packs", json=_create_payload("alpha"))
+    client.post("/api/knowledge/packs", json=_create_payload("beta"))
+    resp = client.get("/api/knowledge/packs?limit=10&offset=0")
     assert resp.status_code == 200
     body = resp.json()
     assert body["meta"]["total"] == 2
@@ -113,12 +113,12 @@ def test_list_packs_returns_created_pack():
 def test_list_packs_surfaces_skipped_corrupted_records(_isolated_knowledge: KnowledgeService):
     """M3: corrupted pack.json files show up as `meta.skipped` and don't crash."""
     # Drop a valid pack and a corrupted one.
-    client.post("/knowledge/packs", json=_create_payload("good"))
+    client.post("/api/knowledge/packs", json=_create_payload("good"))
     bad_dir = _isolated_knowledge._storage_dir / _new_uuid_hex()
     bad_dir.mkdir(parents=True)
     (bad_dir / "pack.json").write_text("{ this is not json", encoding="utf-8")
 
-    resp = client.get("/knowledge/packs")
+    resp = client.get("/api/knowledge/packs")
     body = resp.json()
     assert resp.status_code == 200
     assert body["meta"]["total"] == 1  # only the good one
@@ -129,7 +129,7 @@ def test_list_packs_surfaces_skipped_corrupted_records(_isolated_knowledge: Know
 def test_get_pack_not_found_returns_standard_error_envelope():
     """Valid UUID-hex shape but no record → 404 KNOWLEDGE_PACK_NOT_FOUND."""
     missing = _new_uuid_hex()
-    resp = client.get(f"/knowledge/packs/{missing}")
+    resp = client.get(f"/api/knowledge/packs/{missing}")
     assert resp.status_code == 404
     body = resp.json()
     assert "error" in body
@@ -156,15 +156,15 @@ def test_get_pack_invalid_id_returns_400():
         "A" * 31,           # 31 chars, not 32
         "0123456789abcdef" * 2 + "x",  # 33 chars
     ]:
-        resp = client.get(f"/knowledge/packs/{bad_id}")
+        resp = client.get(f"/api/knowledge/packs/{bad_id}")
         assert resp.status_code == 400, f"expected 400 for {bad_id!r} got {resp.status_code}"
         assert resp.json()["error"]["code"] == "KNOWLEDGE_PACK_INVALID_ID"
 
 
 def test_get_pack_round_trip():
-    created = client.post("/knowledge/packs", json=_create_payload()).json()["data"]
+    created = client.post("/api/knowledge/packs", json=_create_payload()).json()["data"]
     pack_id = created["pack_id"]
-    resp = client.get(f"/knowledge/packs/{pack_id}")
+    resp = client.get(f"/api/knowledge/packs/{pack_id}")
     assert resp.status_code == 200
     pack = resp.json()["data"]
     assert pack["pack_id"] == pack_id
@@ -178,7 +178,7 @@ def test_get_pack_corrupted_record_returns_500(_isolated_knowledge: KnowledgeSer
     pack_dir.mkdir(parents=True)
     (pack_dir / "pack.json").write_text("{ broken json", encoding="utf-8")
 
-    resp = client.get(f"/knowledge/packs/{pack_id}")
+    resp = client.get(f"/api/knowledge/packs/{pack_id}")
     assert resp.status_code == 500
     assert resp.json()["error"]["code"] == "KNOWLEDGE_PACK_INVALID"
 
@@ -189,10 +189,10 @@ def test_get_pack_corrupted_record_returns_500(_isolated_knowledge: KnowledgeSer
 
 
 def test_patch_pack_updates_name_and_description():
-    created = client.post("/knowledge/packs", json=_create_payload()).json()["data"]
+    created = client.post("/api/knowledge/packs", json=_create_payload()).json()["data"]
     pack_id = created["pack_id"]
     resp = client.patch(
-        f"/knowledge/packs/{pack_id}",
+        f"/api/knowledge/packs/{pack_id}",
         json={"name": "renamed", "description": "new desc"},
     )
     assert resp.status_code == 200
@@ -202,7 +202,7 @@ def test_patch_pack_updates_name_and_description():
 
 
 def test_patch_pack_404_on_missing():
-    resp = client.patch(f"/knowledge/packs/{_new_uuid_hex()}", json={"name": "x"})
+    resp = client.patch(f"/api/knowledge/packs/{_new_uuid_hex()}", json={"name": "x"})
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "KNOWLEDGE_PACK_NOT_FOUND"
 
@@ -212,7 +212,7 @@ def test_patch_retrieval_profile_chunk_size_triggers_reindex(
 ):
     """H5: changing chunk_size invalidates the persisted index → status flips to pending
     and sources are reset so the BG ingest can re-chunk against the new profile."""
-    created = client.post("/knowledge/packs", json=_create_payload()).json()["data"]
+    created = client.post("/api/knowledge/packs", json=_create_payload()).json()["data"]
     pack_id = created["pack_id"]
     # Wait for BG to settle (text source is fast; status will be ready or pending depending
     # on TestClient timing). Force a fresh state by manually saving as ready.
@@ -230,7 +230,7 @@ def test_patch_retrieval_profile_chunk_size_triggers_reindex(
     )
 
     resp = client.patch(
-        f"/knowledge/packs/{pack_id}",
+        f"/api/knowledge/packs/{pack_id}",
         json={"retrieval_profile": {"mode": "semantic", "top_k": 5, "min_confidence": 0.5,
                                      "chunk_size": 256, "overlap": 32}},
     )
@@ -243,7 +243,7 @@ def test_patch_retrieval_profile_chunk_size_triggers_reindex(
 
 def test_patch_name_only_does_not_trigger_reindex(_isolated_knowledge: KnowledgeService):
     """H5: name/description changes are no-op for the index — no reindex queued."""
-    created = client.post("/knowledge/packs", json=_create_payload()).json()["data"]
+    created = client.post("/api/knowledge/packs", json=_create_payload()).json()["data"]
     pack_id = created["pack_id"]
     pack = _isolated_knowledge.load(pack_id)
     from shadowflow.memory.knowledge_pack import update_pack
@@ -258,7 +258,7 @@ def test_patch_name_only_does_not_trigger_reindex(_isolated_knowledge: Knowledge
         )
     )
 
-    resp = client.patch(f"/knowledge/packs/{pack_id}", json={"name": "renamed"})
+    resp = client.patch(f"/api/knowledge/packs/{pack_id}", json={"name": "renamed"})
     updated = resp.json()["data"]
     assert updated["status"] == "ready"  # unchanged
     assert updated["sources"][0]["ingest_status"] == "done"
@@ -270,27 +270,27 @@ def test_patch_name_only_does_not_trigger_reindex(_isolated_knowledge: Knowledge
 
 
 def test_delete_pack_removes_record():
-    created = client.post("/knowledge/packs", json=_create_payload()).json()["data"]
+    created = client.post("/api/knowledge/packs", json=_create_payload()).json()["data"]
     pack_id = created["pack_id"]
-    resp = client.delete(f"/knowledge/packs/{pack_id}")
+    resp = client.delete(f"/api/knowledge/packs/{pack_id}")
     assert resp.status_code == 200
     assert resp.json()["data"]["deleted"] is True
 
     # Subsequent GET on the (now-deleted) UUID-hex returns 404, NOT 400.
-    follow = client.get(f"/knowledge/packs/{pack_id}")
+    follow = client.get(f"/api/knowledge/packs/{pack_id}")
     assert follow.status_code == 404
 
 
 def test_delete_pack_with_nested_subdirs(_isolated_knowledge: KnowledgeService):
     """H7: shutil.rmtree handles nested cache subdirs cleanly."""
-    created = client.post("/knowledge/packs", json=_create_payload()).json()["data"]
+    created = client.post("/api/knowledge/packs", json=_create_payload()).json()["data"]
     pack_id = created["pack_id"]
     pack_dir = _isolated_knowledge.pack_dir(pack_id)
     nested = pack_dir / "cache" / "subdir"
     nested.mkdir(parents=True)
     (nested / "leftover.bin").write_text("payload", encoding="utf-8")
 
-    resp = client.delete(f"/knowledge/packs/{pack_id}")
+    resp = client.delete(f"/api/knowledge/packs/{pack_id}")
     assert resp.status_code == 200
     assert not pack_dir.exists()
 
@@ -301,9 +301,9 @@ def test_delete_pack_with_nested_subdirs(_isolated_knowledge: KnowledgeService):
 
 
 def test_reindex_resets_sources_to_pending():
-    created = client.post("/knowledge/packs", json=_create_payload()).json()["data"]
+    created = client.post("/api/knowledge/packs", json=_create_payload()).json()["data"]
     pack_id = created["pack_id"]
-    resp = client.post(f"/knowledge/packs/{pack_id}/reindex")
+    resp = client.post(f"/api/knowledge/packs/{pack_id}/reindex")
     assert resp.status_code == 200
     pack = resp.json()["data"]
     assert pack["status"] == "pending"
@@ -311,7 +311,7 @@ def test_reindex_resets_sources_to_pending():
 
 
 def test_reindex_invalid_id_returns_400():
-    resp = client.post("/knowledge/packs/not-a-uuid/reindex")
+    resp = client.post("/api/knowledge/packs/not-a-uuid/reindex")
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "KNOWLEDGE_PACK_INVALID_ID"
 
@@ -325,7 +325,7 @@ def test_load_pack_with_unknown_persisted_field_succeeds(
     _isolated_knowledge: KnowledgeService,
 ):
     """H4: pack.json written by a future version (with extra fields) still loads."""
-    created = client.post("/knowledge/packs", json=_create_payload()).json()["data"]
+    created = client.post("/api/knowledge/packs", json=_create_payload()).json()["data"]
     pack_id = created["pack_id"]
     record = _isolated_knowledge.pack_dir(pack_id) / "pack.json"
     payload = json.loads(record.read_text(encoding="utf-8"))
@@ -333,6 +333,6 @@ def test_load_pack_with_unknown_persisted_field_succeeds(
     payload["retrieval_profile"]["future_top_p"] = 0.9
     record.write_text(json.dumps(payload), encoding="utf-8")
 
-    resp = client.get(f"/knowledge/packs/{pack_id}")
+    resp = client.get(f"/api/knowledge/packs/{pack_id}")
     assert resp.status_code == 200, resp.text
     assert resp.json()["data"]["pack_id"] == pack_id

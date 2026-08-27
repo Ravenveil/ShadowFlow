@@ -2,18 +2,20 @@
  * useTheme — reads/writes appearance preference and installs `data-theme`
  * on the document element so the Hi-Fi v2 token system flips Day ↔ Night.
  *
- * Mapping from API value → `data-theme`:
+ * Mapping from preference value → `data-theme`:
  *   "dark"   → "night"
  *   "light"  → "day"
  *   "system" → matches `prefers-color-scheme: dark` → "night" else "day"
  *
- * Uses GET / PUT `/api/settings/appearance` (see shadowflow/api/settings.py).
- * Falls back silently when the backend is offline so the UI still renders.
+ * Server sync (2026-08): GET/PUT `/api/settings/preferences` via
+ * src/api/preferences.ts (theme + language + zoom in one blob). Falls back
+ * silently when the backend is offline so the UI still renders; localStorage
+ * stays the offline source of truth.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getApiBase } from '../../api/_base';
+import { fetchPreferencesOnce, putPreferences } from '../../api/preferences';
 import { applyCustomTheme, loadCustomTheme } from './customTheme';
-import { initFontScale } from './fontScale';
+import { initFontScale, applyZoom, saveZoom, loadZoom, zoomUserAdjusted, DEFAULT_ZOOM, ZOOM_MIN, ZOOM_MAX } from './fontScale';
 
 // 2026-05-28 — added 'paper' as a third skin pack (warm cream/sepia aesthetic),
 // alongside dark/light/system. Aligns with the design package's 7-slot Skin
@@ -65,6 +67,10 @@ function applyTheme(pref: ThemePref): void {
  */
 const SAME_TAB_EVENT = 'sf-theme-change';
 
+// Session guard: once the user picks a theme in this tab, a late-arriving
+// bootstrap GET (stale snapshot) must not revert their choice.
+let userPickedTheme = false;
+
 export function useTheme(): {
   theme: ThemePref;
   setTheme: (t: ThemePref) => Promise<void>;
@@ -89,22 +95,30 @@ export function useTheme(): {
   // Background sync from backend on FIRST mount of the app session. If backend
   // disagrees with localStorage, prefer backend (cross-device source of truth)
   // — but only when fetch succeeds. Fetch failure must NEVER clobber.
+  // Theme AND zoom ride the same snapshot (one GET per page load, shared via
+  // fetchPreferencesOnce); language is applied by I18nProvider the same way.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const res = await fetch(`${getApiBase()}/api/settings/appearance`);
-        if (!res.ok) return;
-        const data = (await res.json()) as { theme?: unknown };
-        if (!isPref(data.theme)) return;
-        if (cancelled) return;
-        if (data.theme !== themeRef.current) {
-          setThemeState(data.theme);
-          applyTheme(data.theme);
-          writeStoredPref(data.theme);
-        }
-      } catch {
-        // Silent — keep localStorage value as source of truth.
+      const prefs = await fetchPreferencesOnce();
+      if (!prefs || cancelled) return;
+      if (
+        !userPickedTheme &&
+        isPref(prefs.theme) &&
+        prefs.theme !== themeRef.current
+      ) {
+        setThemeState(prefs.theme);
+        applyTheme(prefs.theme);
+        writeStoredPref(prefs.theme);
+      }
+      if (
+        !zoomUserAdjusted() &&
+        typeof prefs.zoom === 'number' &&
+        prefs.zoom >= ZOOM_MIN && prefs.zoom <= ZOOM_MAX &&
+        prefs.zoom !== (loadZoom() ?? DEFAULT_ZOOM)
+      ) {
+        applyZoom(prefs.zoom);
+        saveZoom(prefs.zoom, { syncRemote: false });  // echo guard: no PUT back
       }
     })();
     return () => { cancelled = true; };
@@ -154,6 +168,7 @@ export function useTheme(): {
   }, []);
 
   const setTheme = useCallback(async (next: ThemePref) => {
+    userPickedTheme = true;
     // 1. Local state + DOM attr + localStorage — synchronous, no flicker.
     setThemeState(next);
     applyTheme(next);
@@ -163,15 +178,7 @@ export function useTheme(): {
       window.dispatchEvent(new CustomEvent<ThemePref>(SAME_TAB_EVENT, { detail: next }));
     }
     // 3. Persist to backend (best-effort, cross-device).
-    try {
-      await fetch(`${getApiBase()}/api/settings/appearance`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme: next }),
-      });
-    } catch {
-      // localStorage already has it; cross-device sync is the only loss.
-    }
+    void putPreferences({ theme: next });
   }, []);
 
   return { theme, setTheme };

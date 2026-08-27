@@ -46,6 +46,7 @@ import {
   Loader2,
   Package,
   Pencil,
+  RotateCcw,
   ShieldCheck,
   X,
 } from 'lucide-react';
@@ -70,6 +71,21 @@ export interface NeoTimelineProps {
     msg: Extract<TimelineMessage, { kind: 'assistant_text' }>,
     nextBody: string,
   ) => void;
+  /**
+   * 消息行动作挂载点（可选，2026-08-22 L1）：对 user_turn / assistant_text
+   * 消息在其下方渲染一行调用方提供的动作（群聊 reactions/pin 见
+   * NeoGroupMsgActions，单聊 👍👎 反馈见 NeoMsgFeedback）。缺省不渲染，
+   * 纯增量——只读回放与既有调用方行为不变。
+   */
+  renderMsgActions?: (msg: TimelineMessage) => ReactNode;
+  /**
+   * 步骤重跑回调（可选，2026-08-23 救场）：step_panel 里已完成步骤行尾
+   * 渲染「重跑」按钮，点击调 retryStep(sessionId, index)（POST
+   * /api/run-sessions/:id/steps/:n/retry）。仅单聊执行视图（NeoRunInline）
+   * 传入；群聊/只读回放缺省不渲染。返回值 false（端点 404/405 缺失）→
+   * 行内红字失败提示。
+   */
+  onRetryStep?: (stepIndex: number) => Promise<boolean> | void;
 }
 
 /* ── 纯逻辑：msg_foot 归位（逐 turn 搬到末尾，保持其余相对顺序） ──────────── */
@@ -776,16 +792,76 @@ function NeoStepIcon({ status, index }: { status: StepRow['status']; index: numb
   return <span className="neo-tl-step-icon" aria-hidden>{index + 1}</span>;
 }
 
+/* 单步重跑按钮（2026-08-23 救场）：点击 → onRetryStep(index)（网关 POST
+   steps/:n/retry，full_rerun 语义）；进行中 spinner + 禁用，失败（含端点
+   404/405 缺失的 false 返回）行内红字提示。 */
+const NeoStepRetry = memo(function NeoStepRetry({
+  index,
+  onRetryStep,
+}: {
+  index: number;
+  onRetryStep: NonNullable<NeoTimelineProps['onRetryStep']>;
+}) {
+  const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const handleClick = () => {
+    if (busy) return;
+    setBusy(true);
+    setFailed(false);
+    Promise.resolve(onRetryStep(index)).then(
+      (ok) => {
+        setBusy(false);
+        if (ok === false) setFailed(true);
+      },
+      () => {
+        setBusy(false);
+        setFailed(true);
+      },
+    );
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className="neo-tl-step-retry"
+        disabled={busy}
+        onClick={handleClick}
+        title={t('neo.tl.retryStepTip', { defaultValue: '从本步骤起重跑' })}
+      >
+        {busy ? (
+          <Loader2 size={11} strokeWidth={2.2} className="neo-tl-spin" aria-hidden />
+        ) : (
+          <RotateCcw size={11} strokeWidth={2} aria-hidden />
+        )}
+        {busy
+          ? t('neo.tl.retrying', { defaultValue: '重跑中…' })
+          : t('neo.tl.retryStep', { defaultValue: '重跑' })}
+      </button>
+      {failed && (
+        <span className="neo-tl-step-retry-fail" role="alert">
+          {t('neo.tl.retryStepFailed', { defaultValue: '重跑失败' })}
+        </span>
+      )}
+    </>
+  );
+});
+
 const NeoStepPanel = memo(function NeoStepPanel({
   msg,
+  onRetryStep,
 }: {
   msg: Extract<TimelineMessage, { kind: 'step_panel' }>;
+  onRetryStep?: NeoTimelineProps['onRetryStep'];
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(true);
   const visibleSteps = msg.steps.filter((s) => s.status !== 'pending');
   const totalElapsed = msg.steps.reduce((acc, s) => acc + (s.elapsed_ms ?? 0), 0);
   const doneCount = msg.steps.filter((s) => s.status === 'done').length;
+  // 有步骤仍在跑时收起全部重跑按钮——网关 retry 会清 n..N 并重置整个 run，
+  // 流式中触发会把在跑的步骤一并抹掉。
+  const anyRunning = msg.steps.some((s) => s.status === 'running');
 
   return (
     <div className="neo-tl-panel">
@@ -810,6 +886,9 @@ const NeoStepPanel = memo(function NeoStepPanel({
                   <NeoStepIcon status={s.status} index={realIdx} />
                   <span className="neo-tl-step-name">{s.name}</span>
                   <span className="neo-tl-step-time">{isRun ? '…' : fmtElapsed(s.elapsed_ms)}</span>
+                  {onRetryStep && !anyRunning && s.status === 'done' && (
+                    <NeoStepRetry index={realIdx} onRetryStep={onRetryStep} />
+                  )}
                 </div>
                 {visibleSubs.length > 0 && (
                   <div className="neo-tl-substeps">
@@ -1240,11 +1319,13 @@ const NeoVerdictCard = memo(function NeoVerdictCard({
 function NeoMessage({
   msg,
   onEditMessage,
+  onRetryStep,
   live,
   nowMs,
 }: {
   msg: TimelineMessage;
   onEditMessage?: NeoTimelineProps['onEditMessage'];
+  onRetryStep?: NeoTimelineProps['onRetryStep'];
   /** 见 NeoAssistantText.live：流式光标门控。 */
   live: boolean;
   /** running 行 live 秒表时钟（仅 thinking/tool_call 消费）。 */
@@ -1268,7 +1349,7 @@ function NeoMessage({
     case 'tool_echo':
       return <NeoToolEcho msg={msg} />;
     case 'step_panel':
-      return <NeoStepPanel msg={msg} />;
+      return <NeoStepPanel msg={msg} onRetryStep={onRetryStep} />;
     case 'diff_panel':
       return <NeoDiffPanel msg={msg} />;
     case 'msg_foot':
@@ -1294,6 +1375,10 @@ function NeoMessage({
       return <NeoArtifactCard msg={msg} />;
     case 'verdict_card':
       return <NeoVerdictCard msg={msg} />;
+    case 'intent':
+      // 派发决策卡由 NeoGroupChat 的 NeoDispatchCard 渲染（群聊现场专属）；
+      // 其他 Timeline 消费面（RunInline 等）不重复出卡。
+      return null;
     default: {
       const _exhaustive: never = msg;
       void _exhaustive;
@@ -1302,7 +1387,7 @@ function NeoMessage({
   }
 }
 
-export const NeoTimeline = memo(function NeoTimeline({ messages, onEditMessage }: NeoTimelineProps) {
+export const NeoTimeline = memo(function NeoTimeline({ messages, onEditMessage, renderMsgActions, onRetryStep }: NeoTimelineProps) {
   // 首屏已有 id = 历史（刷新/只读回放）不播入场动画；仅新到消息淡入。
   const initialIdsRef = useRef<Set<string> | null>(null);
   if (initialIdsRef.current === null) {
@@ -1359,9 +1444,14 @@ export const NeoTimeline = memo(function NeoTimeline({ messages, onEditMessage }
           <NeoMessage
             msg={m}
             onEditMessage={onEditMessage}
+            onRetryStep={onRetryStep}
             live={!doneTurns.has(m.turn_id) && lastContentIdByTurn.get(m.turn_id) === m.id}
             nowMs={hasRunning ? nowMs : undefined}
           />
+          {/* L1 消息行动作挂载点（群聊 reactions/pin、单聊 👍👎）：仅聊天消息。 */}
+          {renderMsgActions && (m.kind === 'user_turn' || m.kind === 'assistant_text')
+            ? renderMsgActions(m)
+            : null}
         </div>
       ))}
     </div>

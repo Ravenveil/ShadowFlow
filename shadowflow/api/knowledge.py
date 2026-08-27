@@ -7,6 +7,7 @@ Routes:
   PATCH  /knowledge/packs/{pack_id}      — update name / description / retrieval_profile
   DELETE /knowledge/packs/{pack_id}      — delete pack
   POST   /knowledge/packs/{pack_id}/reindex — force re-ingest
+  POST   /knowledge/packs/{pack_id}/query   — RAG query over the pack's index
 
 All success responses use the shared `{data, meta}` envelope.
 All errors raise ShadowflowError → handled by the global handler in
@@ -32,8 +33,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -282,6 +285,13 @@ class UpdatePackRequest(BaseModel):
     freshness_policy: Optional[FreshnessPolicy] = None
 
 
+class QueryPackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    query: str = Field(min_length=1, max_length=4000)
+    top_k: int = Field(default=5, ge=1, le=50)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -417,6 +427,16 @@ def _ingest_and_save(pack_id: str, svc: KnowledgeService) -> None:
                 pack_id,
                 exc.message,
             )
+            return
+
+        # 层级索引（借鉴 StaffDeck）：ingest 完成后顺手把文档树持久化；
+        # 失败仅记日志 —— 查询/浏览时会现场重建，不影响 ingest 结果。
+        try:
+            from shadowflow.runtime import hier_index  # noqa: PLC0415
+
+            hier_index.build_index(finished, root=svc.pack_dir(pack_id).parent)
+        except Exception as exc:  # noqa: BLE001 — non-critical, rebuilt lazily
+            logger.warning("hier_index build skipped for pack %s: %s", pack_id, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -424,7 +444,10 @@ def _ingest_and_save(pack_id: str, svc: KnowledgeService) -> None:
 # ---------------------------------------------------------------------------
 
 
-router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+# 2026-08-19 前缀对齐：/knowledge → /api/knowledge。整条网关链路
+# （Vite 代理 → Node:8002 → proxyFallback）只路由 /api/*；旧裸路径是
+# VITE_API_BASE 直连 Python 时代的遗留，前端已同步迁移（src/api/knowledge.ts）。
+router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
 
 @router.post("/packs")
@@ -552,6 +575,219 @@ async def reindex_pack(
         svc.save(pack)
     background_tasks.add_task(_ingest_and_save, pack.pack_id, svc)
     return _envelope(pack.model_dump(mode="json"))
+
+
+@router.post("/packs/{pack_id}/query")
+async def query_pack(pack_id: str, payload: QueryPackRequest) -> Dict[str, Any]:
+    """RAG query over a pack's index.
+
+    层级检索优先（借鉴 StaffDeck）：hier_index 先在文档树上定位候选
+    文档/章节节点，再在其子树内取 chunk 合成 hits —— 命中时直接返回，每条带
+    `path`（doc > chapter 层级来源），响应带 `trace`（定位路径，供检索调试）。
+
+    层级索引无命中 / 构建失败 → 回落现有平铺检索：LightRAG enabled → prefer
+    lightrag_adapter.query_hits() and pass through the real retrieved fragments
+    as multiple `{text, source, score}` hits.  When the adapter can't do
+    structured retrieval (raises), fall back to the original behaviour: wrap the
+    synthesized answer as a single hit.  Disabled / not configured / query
+    failure → empty `hits` (never 500): callers degrade to "no citations"
+    instead of breaking the chat flow.
+    """
+    svc = get_service()
+    pack = svc.load(pack_id)  # same 400/404 guards as the other handlers
+
+    hits: List[Dict[str, Any]] = []
+    trace: Dict[str, Any] = {"strategy": "flat", "reason": "hier-unavailable"}
+
+    # 层级检索（locate → retrieve）。老 pack 无索引时 hier_index 现场构建；
+    # 任何失败都不阻断下面的平铺检索。
+    try:
+        from shadowflow.runtime import hier_index  # noqa: PLC0415
+
+        hier_hits, hier_trace = hier_index.query(
+            pack, payload.query, top_k=payload.top_k, root=svc.pack_dir(pack_id).parent
+        )
+        if hier_hits:
+            return _envelope(
+                data={"hits": hier_hits[: payload.top_k], "trace": hier_trace},
+                meta={"pack_id": pack_id, "query": payload.query},
+            )
+        trace = {
+            "strategy": "flat",
+            "reason": "hier-no-match",
+            "located": hier_trace.get("located", []),
+        }
+    except Exception as exc:  # noqa: BLE001 — hierarchical index must not break queries
+        logger.warning(
+            "hier_index query unavailable for pack %s, falling back to flat retrieval: %s",
+            pack_id,
+            exc,
+        )
+
+    try:
+        from shadowflow.runtime import lightrag_adapter  # noqa: PLC0415
+
+        if lightrag_adapter.is_enabled():
+            raw_hits = lightrag_adapter.query_hits(
+                pack_id, payload.query, top_k=payload.top_k
+            )
+            for raw in raw_hits:
+                if not isinstance(raw, dict):
+                    continue
+                text = str(raw.get("text") or "").strip()
+                if not text:
+                    continue
+                score = raw.get("score")
+                hits.append(
+                    {
+                        "text": text,
+                        "source": str(raw.get("source") or "").strip() or pack.name,
+                        "score": float(score) if isinstance(score, (int, float)) else 1.0,
+                    }
+                )
+    except Exception as exc:  # noqa: BLE001 — query failure must not 500
+        logger.warning(
+            "knowledge query_hits unavailable for pack %s, falling back to synthesized answer: %s",
+            pack_id,
+            exc,
+        )
+        # 回落：adapter 不支持多片段检索 / 检索失败 → 保持原有行为，把
+        # LightRAG 合成答案包成单条 hit（score=1.0, source=pack 名）。
+        try:
+            answer = lightrag_adapter.query(pack_id, payload.query)  # type: ignore[possibly-undefined]
+            if isinstance(answer, str) and answer.strip():
+                hits = [{"text": answer.strip(), "source": pack.name, "score": 1.0}]
+        except Exception as exc2:  # noqa: BLE001 — never 500
+            logger.warning("knowledge query failed for pack %s: %s", pack_id, exc2)
+
+    return _envelope(
+        data={"hits": hits[: payload.top_k], "trace": trace},
+        meta={"pack_id": pack_id, "query": payload.query},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Hierarchical index browsing (借鉴 StaffDeck 的文档→章节→页面可导航索引)
+#
+# 树由 shadowflow/runtime/hier_index.py 构建并持久化在 pack 目录下
+# (hier_index.json)；老 pack 首次访问时现场构建。chunk 正文不透出，只给
+# 节点结构 + 统计，供前端做树浏览。
+# ---------------------------------------------------------------------------
+
+
+@router.get("/packs/{pack_id}/index")
+async def get_pack_index(pack_id: str) -> Dict[str, Any]:
+    svc = get_service()
+    pack = svc.load(pack_id)  # 404/400 guards, same as other handlers
+    try:
+        from shadowflow.runtime import hier_index  # noqa: PLC0415
+
+        tree = hier_index.tree_view(pack, root=svc.pack_dir(pack_id).parent)
+    except Exception as exc:  # noqa: BLE001 — 构建失败给空树，不 500
+        logger.warning("hier_index tree_view failed for pack %s: %s", pack_id, exc)
+        tree = {
+            "pack_id": pack_id,
+            "built_at": "",
+            "documents": [],
+            "stats": {"documents": 0, "nodes": 0, "chunks": 0},
+        }
+    return _envelope(data=tree, meta={"pack_id": pack_id})
+
+
+# ---------------------------------------------------------------------------
+# Knowledge graph export (2026-08-19, 从 Shadow 搬迁知识图谱可视化的数据源)
+#
+# LightRAG 的实体-关系图以 GraphML 落在 working_dir/graph_*.graphml。这里用
+# 标准库 xml.etree 解析（stub 模式无 networkx 依赖也能跑），转成前端
+# GraphData 形状（见 src/common/utils/graphAnalysis.ts）。
+# ---------------------------------------------------------------------------
+
+
+def _parse_graphml(graphml_path: Path) -> Dict[str, Any]:
+    """Parse a LightRAG GraphML file into {nodes, links} JSON."""
+    root = ET.parse(graphml_path).getroot()
+    ns = {"g": root.tag.split("}")[0] + "}"} if root.tag.startswith("{") else {}
+
+    def _q(tag: str) -> str:
+        return ns["g"] + tag if ns else tag
+
+    key_names: Dict[str, str] = {}
+    for key in root.findall(f"{_q('key')}"):
+        key_names[key.get("id", "")] = key.get("attr.name", key.get("id", ""))
+
+    def _attrs(element: ET.Element) -> Dict[str, str]:
+        out: Dict[str, str] = {}
+        for data in element.findall(f"{_q('data')}"):
+            name = key_names.get(data.get("key", ""), data.get("key", ""))
+            if name:
+                out[name] = (data.text or "").strip()
+        return out
+
+    degree: Dict[str, int] = {}
+    raw_links: List[Dict[str, str]] = []
+    for edge in root.iter(_q("edge")):
+        src, tgt = edge.get("source", ""), edge.get("target", "")
+        if not src or not tgt:
+            continue
+        attrs = _attrs(edge)
+        raw_links.append({
+            "source": src,
+            "target": tgt,
+            "relation": attrs.get("relation") or attrs.get("weight") or "related",
+        })
+        degree[src] = degree.get(src, 0) + 1
+        degree[tgt] = degree.get(tgt, 0) + 1
+
+    nodes: List[Dict[str, Any]] = []
+    for node in root.iter(_q("node")):
+        nid = node.get("id", "")
+        if not nid:
+            continue
+        attrs = _attrs(node)
+        name = attrs.get("entity_id") or attrs.get("label") or nid
+        nodes.append({
+            "id": nid,
+            "name": name,
+            # LightRAG entity_type 是自由字符串（person/org/event/...），
+            # 归一到 Shadow 图谱的 'tag'（概念节点），原值放 raw_type。
+            "type": "tag",
+            "raw_type": attrs.get("entity_type", ""),
+            "text": attrs.get("description", ""),
+            "val": min(degree.get(nid, 0) + 1, 10),
+        })
+
+    return {"nodes": nodes, "links": raw_links}
+
+
+def _load_pack_graph(pack_id: str) -> Tuple[Dict[str, Any], str]:
+    """Return ({nodes, links}, rag_backend_label). Empty graph when disabled."""
+    from shadowflow.runtime import lightrag_adapter  # noqa: PLC0415
+
+    backend = lightrag_adapter.backend_label()
+    if not lightrag_adapter.is_enabled():
+        return {"nodes": [], "links": []}, backend
+
+    base = Path(os.environ.get("LIGHTRAG_WORKING_DIR", ".shadowflow/lightrag"))
+    graphmls = sorted((base / pack_id).glob("graph_*.graphml")) if (base / pack_id).exists() else []
+    if not graphmls:
+        return {"nodes": [], "links": []}, backend
+    return _parse_graphml(graphmls[0]), backend
+
+
+@router.get("/packs/{pack_id}/graph")
+async def get_pack_graph(pack_id: str) -> Dict[str, Any]:
+    svc = get_service()
+    svc.load(pack_id)  # 404 when pack missing (same guard as other handlers)
+    graph, backend = _load_pack_graph(pack_id)
+    return {
+        "data": graph,
+        "meta": {
+            "pack_id": pack_id,
+            "rag_backend": backend,
+            "node_count": len(graph["nodes"]),
+            "link_count": len(graph["links"]),
+        },
+    }
 
 
 __all__ = [

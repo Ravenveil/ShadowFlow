@@ -3,6 +3,166 @@
 All notable changes to ShadowFlow are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] — 2026-08-23（第四轮 · 管理面闭环 + L6 审批 + StaffDeck 三借鉴）
+
+### Changed — Neo 侧栏与团队主机视觉收尾
+- NeoRail 员工行去掉灵魂/暂停行内按钮（图标挡住名字），只留 hover 删除；
+  灵魂编辑走 DM → 右侧主机「灵魂」tab，暂停/恢复在灵魂页头部状态钮。
+- GroupMembersPanel 成员区改钉钉式横向头像网格（状态点保留，角色并入
+  title）；「工作流」section 接入只读 DAG 画布（新 `TeamDagCanvas`，
+  SfReactFlowBase + 最长路径分层，approve/conditional 边虚线分色），
+  边明细收进折叠区。测试 4 新 + 2 改写。
+
+### Added — 后端已就绪但前端无入口的功能批量接线
+- **管理面闭环**：NeoRail 员工行暂停/恢复/删除、DM/群行重命名/删除、
+  项目行重命名/删除（补 `patchProject/deleteProject` 客户端）；TeamPanel
+  团队重命名/删除；NeoAgentSoul 暂停/恢复。删除二次确认 + 失败红条 +
+  删后安全跳转；`useInboxStore` 补 `removeGroup`。测试 23 新 + 158 回归。
+- **L6 审批工作流接线**：`src/api/approvals.ts`（pending/approve/reject/
+  SSE events）；GroupMembersPanel 审批门升级为真实审批队列（SSE 推送 +
+  轮询回落）；新增「简报」折叠区（briefboard 按天聚合）。测试 8。
+- **救场**：LoopVerdicts「急停本循环」（两步确认 → POST loops/{id}/halt）；
+  NeoTimeline 步骤「重跑」（`onRetryStep` prop → POST steps/:n/retry，
+  full_rerun 语义）；删除遗留死函数 `fetchStepArtifact`。测试 9 新。
+- **定时任务（Schedules）**：设置页新 section（列表/新建团队或 Agent 目标/
+  常用频率或 cron/启停/删除/runs 展开）；后端补 `PATCH /api/schedules/{id}`
+  （enabled 字段 + 停用清 next_run_time + job 丢失重建护栏）。
+  测试 6 pytest + 14 vitest。
+- **记忆画像**：MemoryPage 挂 MemoryProfilePanel（画像 CRUD + 统计卡 +
+  手动写回 run_id）。测试 8。遗留：后端无 profiles 列表端点，前端暂用
+  localStorage 记 id 回填。
+
+### Added — StaffDeck/WorkBuddy 借鉴三项
+- **层级知识检索**：`runtime/hier_index.py` 文档→章节→页面树索引
+  （md 大纲建树，非结构化退化分页，持久化 .shadowflow/knowledge/）；
+  query 先定位 top-3 节点再子树取 chunk，响应带 `trace` + hit 层级 `path`；
+  `GET /api/knowledge/packs/{id}/index` 树浏览；引用卡面包屑 + 检索调试
+  折叠区；中文查询 CJK bigram 修复。测试 13 pytest + 32 回归 + 10 vitest。
+- **DAG 版本管理 + 分支**：PUT workflow 自动快照（team_workflow_versions
+  小仓，append-only）；`GET .../workflow/versions`、`POST .../restore`
+  （回滚前重跑 D1/D2）、`POST .../branch`（复制为新 team 变体）；
+  TeamDagEditor「版本」面板。测试 9 pytest + 58 回归 + 4 vitest。
+- **意图分发可视化 + 交付收口**：groups-chat 补 `intent` 事件帧
+  （intent/target/reason/assignments，NeverRaising）；群聊派发卡
+  （NeoDispatchCard：意图 → 派发给谁 + 理由 + 子任务明细）与交付卡
+  （NeoDeliveryCard：产物清单 + 一句话总结 + 查看产物）。
+  测试 6 server + 15 回归 + 10 web。
+
+### Notes
+- Python 后端以无 --reload 运行（StatReload 在本机不稳）；本轮 Python 改动
+  （schedules PATCH / workflow versions / hier index / artifacts pin）已随
+  第四次重启全部生效并实测 200。
+- server tsc 仅剩 1 处预存错误（knowledge-vaults.test.ts，8-20 在途文件）。
+
+## [Unreleased] — 2026-08-23（第三轮 · 群聊页团队主机融合 + 收尾缺口）
+
+### Added — 群聊页重做（钉钉式，融合进现有主机面板）
+- **DM/群聊文案分岔**：NeoGroupChat 读 `group.kind` 走 `neo.dm.*` 文案
+  （空态「还没有对话」/composer「发消息，TA 就开始干活」/计数「N 位员工」），
+  单聊不再显示群聊口径；zh/en locale 新增 neo.dm.* 与成员 tab 相关 key。
+- **消息流钉钉气泡化**：agent 消息 = 色块头像 + 名字 + 角色 badge + 相对时间，
+  用户消息右对齐，系统/事件消息居中弱化条；run 过程卡保留内嵌。
+- **NeoHost 上下文感知**：非 DM 会话 → 标题「团队的主机」+ 新增「成员」tab
+  （`GroupMembersPanel`：成员列表含角色 badge 与 running/idle/paused 状态点 +
+  团队 DAG 摘要 chips + approve 边审批门区块，全部真实数据推导、空态不 mock）；
+  DM/无会话保持「Agent 的主机」+ 灵魂 tab。`NeoHostProps.conversation` 新契约
+  由 NeoApp 单点下发。测试 13 新 + neo 域 68/68。
+- **A3 项目分组（GAP :22）**：`GET /api/projects?withSessions=1`（Node 侧，
+  复用 conversations.project_id/group_id 互链零新表）；NeoRail「项目」分组 +
+  内联新建项目行 + 会话按项目分桶，失败降级平铺。测试 3 server + 6 web。
+  遗留：会话创建路径未回写 project_id（多数会话暂落默认组）。
+- **RAG 多片段检索**：`lightrag_adapter.query_hits()`（优先 `aquery_data`
+  结构化 chunks，老版本回落 `aquery(only_need_context=True)` 解析）；
+  query 端点透出多条真实 `{text, source, score}`，adapter 不支持时回落
+  单条合成答案；score 为名次归一（非余弦相似度，docstring 注明）。
+  测试 34 pytest + 66 回归 + 6 vitest。
+- **filecard 置顶 + 副标题（GAP :14/:15）**：`POST /api/artifacts/{id}/pin`
+  （toggle，独立仓 .shadowflow/artifacts/artifact_pins.json，原子写）；
+  artifact 写入落 `metadata.summary`（120 字符纯文本摘要）；ArtifactsView
+  置顶排前 + summary 副标题优先。测试 9 pytest + 3 vitest。
+
+### Notes
+- 运行中 Python 服务需重载一次才能挂上 `/api/artifacts` 新路由（server.py
+  include_router）；tsx watch 在本机不热重载，Node 侧改动需重启 dev:server。
+- 清理过时 mock 数据：4 个 6 月 quick_hire 烟测 agent、3 个烟测 team、
+  40 个垃圾 group（空 hi/孤儿 DM/6 月空测试群）已经 API 删除。
+
+## [Unreleased] — 2026-08-22（第二轮 · 创建-运行黄金路径体验，对标 WorkBuddy/StaffDeck）
+
+### Added — 无代码创建 agent/团队并运行的体验闭环
+- **创建后引导**：run SSE 的 `team-saved` 帧前端消费——聊天流渲染
+  `NeoTeamSavedCard`（团队名/成员数/「去群聊运行」CTA，复用死字符串
+  `runSession.teamSaved`）；`CreateTeamModal` 创建成功进入成功态引导；
+  创建 agent 成功 toast「去对话试试」。测试 21 vitest。
+- **Agent 一句话生成人设**：`NeoCreateAgentModal` 加描述输入 +「生成人设」
+  （`POST /api/llm/chat/completions`，GLM，前端 prompt 模板生成角色定位/
+  能力/边界三段 persona），失败降级手输、不阻塞纯名称创建。测试 10 vitest。
+- **T04 模板团队一键 fork**：catalog 内置 `app-t04-hydrogen-team`（6 角色
+  真实中文 persona + DAG：4 direct + reviewer→verifier `approve` 审批门 +
+  reviewer→strategist `conditional` 驳回回炉）；fork 落库 6 agents + team
+  （写前过 D1/D2 校验，agent 记录 `source="catalog_fork"`、executor
+  zhipu/glm-4.6）；catalog router 增 `/api` 别名挂载 + 启动幂等种子；
+  前端 WorkspaceStrip「从模板新建」+ `ForkTeamTemplateModal`。
+  测试 110 pytest + 6 vitest；已实测经网关 fork 成功。
+- **群聊显式入口**：`NeoCreateGroupModal`（名称 + 选 team/agents 建群跳
+  现场页）；TeamPanel 头部「发起群聊」CTA（`resolveTeamGroup` find-or-create
+  幂等，跳 `/group/:gid`）。测试 21 vitest。
+- **DAG 边 mode 编辑**：TeamDagEditor 边属性面板切 direct/approve（approve
+  = L6 人工审批门，虚线 + 警示色），脏检查取消拦截 + 保存中禁用 + 节点名
+  回退；核对结论：后端对 approve 边无额外 D1/D2 约束（归 sequential 参与
+  环检测），已记入 docstring。测试 12 vitest。
+
+### Fixed
+- **proxy-fallback 空 JSON body 挂起**：express.json() 消费 body 后，旧
+  proxyReq 钩子只在非空对象时重注入——`{}` body 使代理永远等 2 字节，
+  前端 `forkCatalogApp`（无 workspaceId 时发 `{}`）经网关必超时。现按
+  content-length/transfer-encoding + application/json 判定重注入；
+  测试补 express.json 挂载 + POST `{}`/非空 body 两例，18/18 通过。
+
+## [Unreleased] — 2026-08-22（六层能力缺口批量补齐 · 8 路并行）
+
+### Added — GAP.md 对标缺口批量补齐（详见 GAP.md 各行「已解决 2026-08-22」标注）
+- **知识库 RAG 查询（L1/L5）**：`POST /api/knowledge/packs/{id}/query`（LightRAG
+  query 透出，未配置/无命中/异常均返回空 hits）；前端 `KnowledgeCitations`
+  引用卡挂单聊消息底部。测试 8 pytest + 7 vitest。
+- **证据层后端（L6）**：`GET /api/runs/{id}/loops/{loop_id}/verdicts`（透出
+  IterationRecord 的 score/rationale/claims）、`GET /api/runs/{id}/loops/stream`
+  （SSE snapshot + 增量帧 + Last-Event-ID 续传，loop 事件扇出 RunEventBus）、
+  `GET /api/runs?limit=`（RunSummary 列表）、artifact-lineage 节点落
+  `preview_url` + `uri_scheme`（scheme 契约文档化）。测试 16 pytest + 111 回归。
+- **证据层前端（L6）**：NeoRunInline/NeoHost 的 loop 数据源改 SSE 优先 +
+  5s 轮询回落；`LoopVerdicts` verifier 面板；`NeoRunHistory` 历史 runs 列表
+  （NeoRail「历史」行）；`EvidencePanel`（memory-graph / training-dataset
+  投影露出，B40）；ArtifactsView 按 preview_url 优先直链预览。测试 27 vitest。
+- **Node 侧 run 投影（L6，GAP :13）**：`GET /api/runs/:runId/graph` 与
+  `/task-tree` 由 Node 网关对 daemon run 直接返回与 Python 同形投影
+  （runBus 事件日志折叠，含重启后磁盘 hydrate），未命中落回 Python。
+  测试 15 vitest。
+- **Team DAG 编辑 UI（L2/L3，B28）**：`TeamDagEditor`（React Flow v11）——
+  节点/连线增删 + 拖拽布局，保存 = 客户端 preflight（`validateTeamWorkflowGraph`
+  镜像后端 D1 规则）+ PUT workflow + PUT dag 布局；TeamPanel「编辑 DAG」入口。
+  注：`/dag/validate` 仅适用 Node yaml team，未接入。测试 16 vitest。
+- **团队创建与组装落库（L2）**：WorkspaceStrip「新建团队」改开
+  `CreateTeamModal` 真实调 createTeam()；确诊并修复 chat-first 组装不落库——
+  新增 `server/src/team-persistence.ts`，组装 complete 前经 Node→Python HTTP
+  落库 agents+team（满足 D2 写时校验），成功时 SSE 插 `team-saved` 帧。
+  测试 12 vitest + assembler 回归 24/24。
+- **群消息 pin/reactions + 消息反馈（L1）**：确诊 pin/reactions 端点早已存在
+  （GAP :26 过时），补 UI 接线 `NeoGroupMsgActions`；新增
+  `POST/GET /api/messages/{id}/feedback`（独立仓 .shadowflow/feedback/，toggle
+  语义）+ 单聊 `NeoMsgFeedback` 反馈行。测试 10 pytest + 32 回归。
+- **工作空间文件写入/上传（L1/L5，A33）**：`POST /api/fs/write` 与
+  `POST /api/fs/upload`（Node fs-browse.ts，手写极简 multipart 解析零新依赖，
+  穿越 400 / 越权 403 / 超限 413 全防护）；前端工作空间 tab 加新建/上传按钮。
+  测试 17 vitest + 12 回归。
+
+### Notes
+- 运行中的三服务未重启：Node 网关新路由（fs write/upload、run 投影）与
+  Python 新端点待服务重载/重启后生效（各路径均已集成测试覆盖）。
+- 已知遗留：`server/src/__tests__/knowledge-vaults.test.ts` 为 8-20 遗留
+  在途文件（非本批次产出），server tsc 有 1 处其域报错；
+  `KnowledgePage.test.tsx` 的 vault-graph-btn 失败同属该 WIP。
+
 ## [Unreleased] — 2026-08-17（阶段 3.5 · 0G 组件下线）
 
 ### Removed — 0G 方向取消，全链路拆除（ROADMAP-agentinfra 3.5；breaking）

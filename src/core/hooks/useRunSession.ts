@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { subscribeRunSession, abortRunSession, editRunSessionMessage } from '../../api/runSessions';
-import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent, AgentPersonaEvent, StepArtifact, StepArtifactEvent, ToolCallEvent } from '../../api/runSessions';
+import type { ClassifyEvent, AssembleEvent, NodeEvent, EdgeEvent, BlueprintEvent, CompleteEvent, RationaleEvent, YamlLineEvent, SubstepEvent, CritiqueResultEvent, CritiqueProgressEvent, TextEvent, AgentPersonaEvent, StepArtifact, StepArtifactEvent, ToolCallEvent, TeamSavedEvent } from '../../api/runSessions';
 import type { TimelineMessage, MessagePatch } from '../../components/run-session/timeline/types';
 import { applyPatch } from '../../components/run-session/timeline/types';
 import { classifyClientError, isErrorCode } from '../errors/classifyError';
@@ -260,6 +260,20 @@ export interface RunSessionState {
    * effect on any structural rendering.
    */
   askWorkspace: boolean;
+  /**
+   * 2026-08-19 导航架构统一 — 迭代环差分快照（SSE `loop` 帧，网关
+   * loop-watcher 对 Python loops 投影的推流化）。每帧为全量快照（非增量），
+   * 直接整体替换。右栏「过程」tab 的迭代环区实时消费；null = 尚未收到帧
+   * （消费方回落到自己的 getRunLoops 拉取）。
+   */
+  loops: Record<string, unknown>[] | null;
+  /**
+   * 2026-08-22 — 组装落库闭环（SSE `team-saved` 帧，complete 之前到达）。
+   * 非空表示本次组装的 team+agents 已写入 Python 存储；NeoChat 据此在聊天流
+   * 末尾渲染「团队已保存」引导卡（团队名/成员数/去群聊运行 CTA）。
+   * null = 未收到（非组装流或落库失败——team-persistence 失败只 warn 不污染流）。
+   */
+  teamSaved: TeamSavedEvent | null;
 }
 
 // 2026-05-11 UX fix — steps are now driven entirely by `<sf:step>` events
@@ -270,6 +284,34 @@ export interface RunSessionState {
 // returned anything. Now the panel shows "等待开始…" until the first
 // running step arrives, then appends each step as it appears.
 const INITIAL_STEPS: RunSessionStep[] = [];
+
+/**
+ * 2026-08-23 — 初始 run 态工厂。useReducer 初值与 RETRY_PENDING（步骤重跑
+ * full_rerun 清场）共用，保证两处字段不漂移。
+ */
+function createInitialState(): RunSessionState {
+  return {
+    outputType: null, mode: null, confidence: 0,
+    steps: INITIAL_STEPS, nodes: [], edges: [],
+    blueprintFile: null, blueprintYaml: null,
+    artifactUrl: null, artifactType: 'yaml', activePanel: 'canvas',
+    tokenCount: 0, isComplete: false, redirectUrl: null, thinkingMessage: null,
+    thinkingStream: [],
+    rationaleCards: [], yamlLines: [], activeSubsteps: [],
+    error: null, aborted: false, retrying: false, retryAttempt: 0, retryDelayMs: 0,
+    critiqueResult: null, critiqueProgress: null,
+    chatReply: '',
+    stepArtifacts: {},
+    toolCalls: [],
+    activeAgentSubstep: null,
+    pendingQuestionForm: null,
+    messages: [],
+    perNodeChunks: {},
+    askWorkspace: false,
+    loops: null,
+    teamSaved: null,
+  };
+}
 
 // Phase 2 (A4/CL8) — payload types extended with optional node_id so the
 // reducer can pivot between per-node buffers and the global stream. These
@@ -318,9 +360,17 @@ type Action =
   | { type: 'MESSAGE_EDIT'; id: string; body: string }
   // Post-assembly UX hint from the `assembly-meta` SSE frame.
   | { type: 'ASSEMBLY_META'; payload: { ask_workspace?: boolean; recipe?: string } }
+  // 2026-08-19 — 迭代环差分快照（wire `loop` 帧，网关 loop-watcher；全量替换）。
+  | { type: 'LOOP'; payload: { loops: Record<string, unknown>[] } }
+  // 2026-08-22 — 组装落库闭环（wire `team-saved` 帧，complete 之前）。
+  // payload=null 用于切换 session 时清空（见下方 reset effect）。
+  | { type: 'TEAM_SAVED'; payload: TeamSavedEvent | null }
   // 2026-08-15 Neo 错误卡 — 用户点了「重试」并成功重发消息（POST /messages
   // 走真实端点，多轮接力换 session）后清掉旧错误条，避免陈旧横幅残留。
   | { type: 'ERROR_CLEAR' }
+  // 2026-08-23 — 步骤重跑预告（SSE `retry-pending` 帧 / restartStream 主动
+  // 重挂）。full_rerun 语义：run 态整体归零，等 fresh run 从头重放。
+  | { type: 'RETRY_PENDING' }
   // 2026-05-16 — user pressed Stop. Mark stream terminated locally and
   // append "（用户已停止）" to the chat reply so the UI shows a clear marker
   // even if the LLM was mid-sentence.
@@ -724,6 +774,13 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
     }
     case 'ERROR_CLEAR':
       return { ...state, error: null };
+    case 'RETRY_PENDING':
+      // 2026-08-23 — 步骤重跑（POST steps/:n/retry，full_rerun）：后端已丢弃
+      // 旧 run 的全部事件日志 + step 落盘（runBus.reset + stepStore.clear），
+      // fresh run 会从头重发每一帧（projector idSeed=session id，message id
+      // 确定性复用，MESSAGE 按 id 覆盖）。本地把 run 态归零等重放，避免旧
+      // run 的 steps/messages/toolCalls/artifacts 与新流混排出双份。
+      return createInitialState();
     case 'RETRYING':
       return { ...state, retrying: true, retryAttempt: action.attempt, retryDelayMs: action.delayMs, error: null };
     case 'CRITIQUE_PROGRESS':
@@ -811,6 +868,13 @@ function reducer(state: RunSessionState, action: Action): RunSessionState {
       // Single-agent recipe asked us to offer a workspace choice. Latch true;
       // never auto-resets (the prompt is dismissed by the page, not the stream).
       return { ...state, askWorkspace: state.askWorkspace || action.payload.ask_workspace === true };
+    case 'LOOP':
+      // 2026-08-19 — 迭代环差分快照：全量替换（网关 loop-watcher 只在变化时发）。
+      return { ...state, loops: action.payload.loops ?? [] };
+    case 'TEAM_SAVED':
+      // 2026-08-22 — 组装落库闭环：一帧即终态；null = 会话切换清空。
+      if (action.payload === null && state.teamSaved === null) return state;
+      return { ...state, teamSaved: action.payload };
     case 'MESSAGE_PATCH': {
       // S6.10-B — mutate the matching message by id via applyPatch. If no
       // match (out-of-order delivery, possible during reconnect), we drop
@@ -902,28 +966,18 @@ export interface UseRunSessionReturn extends RunSessionState {
    * local message. Returns whether the server accepted the edit.
    */
   editMessage: (id: string, body: string) => Promise<boolean>;
+  /**
+   * 2026-08-23 — 步骤重跑（full_rerun）主动重挂。reducer 归零 run 态并强制
+   * 重新订阅 SSE（新 EventSource、空 cursor）。用于 retryStep 成功返回后：
+   * 重跑多发生在 run 终态（SSE 已随 complete 关闭，`retry-pending` 帧无人
+   * 接收），必须主动重连——下一次 GET /stream 对 fresh run claimStart，
+   * 后端从头重跑，「过程」tab / 时间线自动续上。
+   */
+  restartStream: () => void;
 }
 
 export function useRunSession(sessionId: string): UseRunSessionReturn {
-  const [state, dispatch] = useReducer(reducer, {
-    outputType: null, mode: null, confidence: 0,
-    steps: INITIAL_STEPS, nodes: [], edges: [],
-    blueprintFile: null, blueprintYaml: null,
-    artifactUrl: null, artifactType: 'yaml', activePanel: 'canvas',
-    tokenCount: 0, isComplete: false, redirectUrl: null, thinkingMessage: null,
-    thinkingStream: [],
-    rationaleCards: [], yamlLines: [], activeSubsteps: [],
-    error: null, aborted: false, retrying: false, retryAttempt: 0, retryDelayMs: 0,
-    critiqueResult: null, critiqueProgress: null,
-    chatReply: '',
-    stepArtifacts: {},
-    toolCalls: [],
-    activeAgentSubstep: null,
-    pendingQuestionForm: null,
-    messages: [],
-    perNodeChunks: {},
-    askWorkspace: false,
-  });
+  const [state, dispatch] = useReducer(reducer, null, createInitialState);
 
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Cleanup fn returned by subscribeRunSession — calling it tears down the
@@ -934,6 +988,11 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
   // on cleanup, abort, complete, error, or server error. Combined with
   // !isComplete to form the public `isStreaming` flag.
   const [connected, setConnected] = useState(false);
+  // 2026-08-23 — 步骤重跑重挂计数器。restartStream() 自增它强制订阅 effect
+  // 重跑：旧 EventSource 由 cleanup 收编，新订阅 cursor 为空（full_rerun
+  // 从头重放）。流仍开着时收到的 retry-pending 帧不走这里——
+  // subscribeRunSession 内部已自清 cursor 重挂，这里只 dispatch 归零。
+  const [streamNonce, setStreamNonce] = useState(0);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -970,6 +1029,14 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
       onMessagePatch:  (d) => dispatch({ type: 'MESSAGE_PATCH', payload: d }),
       // Post-assembly UX hint — single-agent recipe offers workspace choice.
       onAssemblyMeta:  (d) => dispatch({ type: 'ASSEMBLY_META', payload: d }),
+      // 2026-08-19 — 迭代环差分快照（loop-watcher 推流；全量替换）
+      onLoop:         (d) => dispatch({ type: 'LOOP', payload: d }),
+      // 2026-08-22 — 组装落库闭环：team-saved 帧 → 「团队已保存」引导卡。
+      onTeamSaved:    (d) => dispatch({ type: 'TEAM_SAVED', payload: d }),
+      // 2026-08-23 — 步骤重跑预告帧：subscribeRunSession 已自清 cursor 重挂，
+      // 这里把 run 态归零，等 fresh run 从头重放（full_rerun）。setConnected(true)
+      // 与新连接对齐——否则若此前到达过 complete，isStreaming 会一直停在 false。
+      onRetryPending: () => { dispatch({ type: 'RETRY_PENDING' }); setConnected(true); },
       onRetrying:      (attempt, delayMs) => dispatch({ type: 'RETRYING', attempt, delayMs }),
       // EventSource gave up retrying — pure network bucket so the UI can
       // surface a "重发" CTA instead of "配置 API Key". setConnected(false)
@@ -986,6 +1053,13 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
       cleanupRef.current = null;
       setConnected(false);
     };
+  }, [sessionId, streamNonce]);
+
+  // 2026-08-22 — teamSaved 属于单次会话流：切换 session 即清空，避免上一次
+  // 组装的「团队已保存」引导卡残留进无关的新 run（多轮接力换 session_id 时
+  // 同理；新会话若是组装流会重新收到 team-saved 帧）。
+  useEffect(() => {
+    dispatch({ type: 'TEAM_SAVED', payload: null });
   }, [sessionId]);
 
   // 15 分钟 watchdog — session 超时自动标 error
@@ -1056,6 +1130,14 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     dispatch({ type: 'ERROR_CLEAR' });
   }, []);
 
+  // 2026-08-23 — 步骤重跑（full_rerun）主动重挂：归零 run 态 + 自增 nonce
+  // 强制订阅 effect 重跑（cleanup 收编旧 EventSource，新订阅空 cursor 全量
+  // 接收 fresh run 的重放帧）。retryStep 成功返回后由调用方触发。
+  const restartStream = useCallback(() => {
+    dispatch({ type: 'RETRY_PENDING' });
+    setStreamNonce((n) => n + 1);
+  }, []);
+
   // Phase 2 (A4/CL8) — stable empty-buffer fallback so callers don't get
   // a fresh object identity every render for nodes the backend hasn't
   // emitted into yet. Defined inside the hook so it closes over the
@@ -1066,7 +1148,7 @@ export function useRunSession(sessionId: string): UseRunSessionReturn {
     [state.perNodeChunks],
   );
 
-  return { ...state, isStreaming, abort, clearError, dispatchClearQuestionForm, getNodeChunks, editMessage };
+  return { ...state, isStreaming, abort, clearError, dispatchClearQuestionForm, getNodeChunks, editMessage, restartStream };
 }
 
 /**

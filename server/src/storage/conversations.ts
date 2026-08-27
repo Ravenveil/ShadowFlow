@@ -133,6 +133,22 @@ export function setConversationGroup(
   return info.changes > 0;
 }
 
+/**
+ * GAP A3 回写（2026-08-23）— 改会话归属项目（「移入项目」/ 移回默认项目）。
+ * project_id 由路由层先校验存在性（conversations.project_id 是 FK），这里纯落库。
+ */
+export function setConversationProject(
+  conversation_id: string,
+  project_id: string,
+): boolean {
+  const info = getDb()
+    .prepare(
+      `UPDATE conversations SET project_id = ?, updated_at = ? WHERE conversation_id = ?`,
+    )
+    .run(project_id, new Date().toISOString(), conversation_id);
+  return info.changes > 0;
+}
+
 export function createConversation(
   project_id: string,
   title?: string,

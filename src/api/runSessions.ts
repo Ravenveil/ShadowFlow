@@ -156,6 +156,20 @@ export interface CompleteEvent {
   redirect?: string;
 }
 
+/**
+ * 2026-08-22 — 组装落库闭环（server/src/team-persistence.ts）。团队组装的
+ * SSE 流在 complete 之前插入一帧 `team-saved`：team+agents 已写入 Python
+ * 存储，前端收到 complete 时团队已可查询。前端据此在聊天流渲染「团队已
+ * 保存」引导卡（去群聊运行）。形状镜像 server PersistedTeam（手抄维护，
+ * 无 monorepo 共享类型）。
+ */
+export interface TeamSavedEvent {
+  team_id: string;
+  name: string;
+  agent_ids: string[];
+  workspace_id: string;
+}
+
 export interface RationaleEvent {
   title: string;
   body: string;
@@ -260,13 +274,12 @@ export interface CritiqueProgressEvent {
 }
 
 // ── Step artifact (S0/S2/S4 — intent-workflow design v1) ──────────────────────
-// Each pipeline step can persist its tangible output as a "StepArtifact". The
-// drawer (StepArtifactDrawer) renders the payload differently per `output_kind`
-// so users can drill into intermediate state without leaving the run view.
+// Each pipeline step can persist its tangible output as a "StepArtifact".
 // SSE event `step-artifact` arrives once the backend finishes writing the
-// payload to disk; REST endpoints GET /steps/:n + POST /steps/:n/retry round
-// out the contract. The backend may not have these landed yet; the front-end
-// degrades gracefully on 404 (drawer shows "尚未落盘").
+// payload to disk; POST /steps/:n/retry (retryStep below) rounds out the
+// contract. 2026-08-23: 旧 StepArtifactDrawer 已删，单步产物的 REST 读取
+// （GET /steps/:n 客户端 fetchStepArtifact）随之移除——前端产物展示已统一走
+// artifact-lineage 投影（ArtifactsView），不再保留死路客户端。
 
 export type OutputKind = 'nodes' | 'edges' | 'yaml' | 'classify' | 'none';
 
@@ -280,6 +293,22 @@ export interface StepArtifact {
   finished_at: string | null;
   status: 'running' | 'done' | 'failed';
   error?: string;
+}
+
+/**
+ * 2026-08-23 — 步骤重跑预告帧。POST steps/:n/retry（full_rerun 语义）被接受后，
+ * 后端先 runBus.emit('retry-pending') 通知当前仍挂在流上的视图，随后同 tick
+ * runBus.reset()：旧 run 的事件日志整体作废、连接被 res.end()，下一次
+ * GET /stream 对一个 fresh run claimStart → 从头重跑（事件 id 从 1 重排）。
+ * 注意只有重跑时流仍开着的视图收得到本帧；run 已到终态（complete/error）后
+ * 发起重跑时连接早已关闭，前端需在 retry 成功后主动重新订阅
+ * （见 useRunSession.restartStream）。
+ */
+export interface RetryPendingEvent {
+  session_id: string;
+  from_step: number;
+  cleared_steps: number[];
+  strategy: 'full_rerun';
 }
 
 /** SSE `step-artifact` event payload — partial fields, merged into client state. */
@@ -353,35 +382,6 @@ export async function createRunSession(
 }
 
 /**
- * 2026-05-16 — Tell the daemon to abort an in-flight run session. Best-effort:
- * a 404 (session already torn down) or network failure is non-fatal — the
- * front-end has already closed its EventSource locally. Returns true when the
- * server confirmed the abort, false otherwise.
- */
-/**
- * GET /api/run-sessions/:id/steps/:n
- * Returns the persisted artifact for a single step. Throws on non-2xx so the
- * caller (StepArtifactDrawer) can differentiate 404 ("尚未落盘") from real
- * network errors. The thrown Error carries `(err as any).status` so the
- * drawer can branch without parsing the message.
- */
-export async function fetchStepArtifact(
-  sessionId: string,
-  stepIndex: number,
-): Promise<StepArtifact> {
-  const resp = await fetch(
-    `${getApiBase()}/api/run-sessions/${sessionId}/steps/${stepIndex}`,
-    { headers: { ...authHeaders() } },
-  );
-  if (!resp.ok) {
-    const err = new Error(`fetchStepArtifact failed: ${resp.status}`) as Error & { status: number };
-    err.status = resp.status;
-    throw err;
-  }
-  return resp.json();
-}
-
-/**
  * POST /api/run-sessions/:id/steps/:n/retry
  * Asks the backend to re-execute a single step. Returns true when the request
  * was accepted; false (and no throw) when the endpoint is missing (404 / 405)
@@ -406,6 +406,12 @@ export async function retryStep(
   }
 }
 
+/**
+ * 2026-05-16 — Tell the daemon to abort an in-flight run session. Best-effort:
+ * a 404 (session already torn down) or network failure is non-fatal — the
+ * front-end has already closed its EventSource locally. Returns true when the
+ * server confirmed the abort, false otherwise.
+ */
 export async function abortRunSession(sessionId: string): Promise<boolean> {
   try {
     const resp = await fetch(`${getApiBase()}/api/run-sessions/${sessionId}/abort`, {
@@ -509,6 +515,24 @@ export function subscribeRunSession(
      * Non-structural — clients that ignore it lose nothing.
      */
     onAssemblyMeta?: (data: { ask_workspace?: boolean; recipe?: string }) => void;
+    /**
+     * 2026-08-19 — 迭代环差分快照（wire 事件 `loop`，网关 loop-watcher 发）。
+     * loops = Python loops 投影的 loop 记录数组（loop_id/kind/status/setpoint/
+     * iterations/iteration_count 等，原样透传）。控制循环 control.loop 节点在
+     * DAG 执行中产生的迭代数据，右栏「过程」tab 实时渲染。
+     */
+    onLoop?: (data: { loops: Record<string, unknown>[] }) => void;
+    /**
+     * 2026-08-22 — 组装落库闭环：complete 之前的 `team-saved` 帧（team+agents
+     * 已写入 Python 存储）。仅组装流会发；非组装流不触发。
+     */
+    onTeamSaved?: (data: TeamSavedEvent) => void;
+    /**
+     * 2026-08-23 — 步骤重跑预告帧（RetryPendingEvent）。subscribeRunSession
+     * 收到后已自行清零续传 cursor 并重挂到新 run；本回调供状态层把 run 态
+     * 归零（full_rerun 会从头重发全部帧）。
+     */
+    onRetryPending?: (data: RetryPendingEvent) => void;
     onRetrying?: (attempt: number, delayMs: number) => void;
     onError?: (err: Event) => void;
     onServerError?: (message: string, code?: string) => void;
@@ -611,6 +635,25 @@ export function subscribeRunSession(
     // Post-assembly UX hint — single-agent recipe asks whether to move the
     // auto-saved team to a new workspace.
     es.addEventListener('assembly-meta', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onAssemblyMeta?.(d); });
+    // 2026-08-19 导航架构统一 — 迭代环差分快照（网关 loop-watcher 对 Python
+    // loops 投影的推流化；迭代环并入右栏「过程」tab 的实时通道）。
+    es.addEventListener('loop', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onLoop?.(d); });
+    // 2026-08-22 — 组装落库闭环：complete 前的 team-saved 帧 → 前端引导卡。
+    es.addEventListener('team-saved', (e) => { const d = parse(e as MessageEvent); if (d) handlers.onTeamSaved?.(d); });
+    // 2026-08-23 — 步骤重跑预告帧（full_rerun）。后端 emit 本帧后同 tick
+    // runBus.reset()：旧 run 日志作废、本连接随后被 res.end()。新 run 的事件
+    // id 从 1 重排，若带旧 cursor 重连，attach() 会吞掉新 run id≤cursor 的
+    // 全部帧——所以先清零 cursor + 重试计数，主动收编本连接并立即重挂
+    // （帧到达客户端时 reset 已完成，新连接的 GET /stream 对 fresh run
+    // claimStart → 从头重跑）。主动 close 后旧连接的 onerror 不会再触发。
+    es.addEventListener('retry-pending', (e) => {
+      const d = parse(e as MessageEvent);
+      lastEventId = '';
+      retryCount = 0;
+      es?.close();
+      connect();
+      if (d) handlers.onRetryPending?.(d);
+    });
     es.addEventListener('error',     (e) => {
       const d = parse(e as MessageEvent);
       if (d?.message) {

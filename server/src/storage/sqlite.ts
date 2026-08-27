@@ -136,6 +136,19 @@ export function getDb(): Database.Database {
   );
   CREATE INDEX IF NOT EXISTS idx_group_messages_group ON group_messages(group_id, timestamp);`);
 
+  // 本地仓库注册表（2026-08-19，移植自 Shadow vault_registry）— 把任意本地文件夹
+  // 注册为知识库仓库（Obsidian vault 模式）。path UNIQUE：同路径重复注册幂等
+  // upsert；status 是注册级标记（active/archived），磁盘存活探测不落库。
+  // 铁律（Shadow REG-1）：remove 只删注册行，永不触碰磁盘用户文件。
+  db.exec(`CREATE TABLE IF NOT EXISTS knowledge_vaults (
+    vault_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    path TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    last_opened_at TEXT,
+    status TEXT NOT NULL DEFAULT 'active'
+  );`);
+
   _db = db;
   _initialized = true;
   console.log(`[sqlite] db ${dbExisted ? 'loaded' : 'initialized'} at ${file}`);

@@ -55,6 +55,8 @@ export interface AgentDMItem {
   unreadCount: number;
   lastMessage: string;
   lastActivityAt: string;
+  /** 2026-08-19 — DM 底层单成员 group 的 id；有值即可一步跳 /group/:id 会话页。 */
+  group_id?: string | null;
 }
 
 export interface InboxData {

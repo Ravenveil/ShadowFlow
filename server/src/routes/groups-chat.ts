@@ -50,7 +50,7 @@ import {
   type WorktreeCommit,
 } from '../lib/worktree-manager';
 import { inspectGitRun, type GitFileDiff } from '../lib/git-introspect';
-import type { PlanTaskRow } from '../lib/contracts';
+import type { PlanTaskRow, IntentAssignment } from '../lib/contracts';
 // B2 · 统一消息读路径 — chat MessageItem 适配 + run 事件重放（纯函数）。
 import {
   chatMessagesToTimeline,
@@ -336,6 +336,60 @@ function resolveExecutorKey(
 
 type GwLike = ReturnType<typeof startGatewayRun>;
 
+/** intent 帧 payload（WorkBuddy 式派发决策可见化，2026-08-23）。 */
+export interface IntentCardInput {
+  /** 用户原始意图（原文，本函数负责截断）。 */
+  intent: string;
+  target_kind: 'team' | 'agent';
+  target_name: string;
+  reason: string;
+  assignments?: IntentAssignment[];
+}
+
+/** intent 帧的意图原文截断长度（卡片只展示概览，全文在时间线里）。 */
+const INTENT_TEXT_MAX = 120;
+
+/**
+ * 组装 intent 帧 payload（纯函数，可单测）：截断意图原文；拆解明细为空数组
+ * 时归一为 undefined（卡片「无明细」与「无拆解」同一视觉，不伪造空列表）。
+ */
+export function buildIntentCard(input: IntentCardInput): {
+  intent: string;
+  target_kind: 'team' | 'agent';
+  target_name: string;
+  reason: string;
+  assignments?: IntentAssignment[];
+} {
+  return {
+    intent: input.intent.replace(/\s+/g, ' ').trim().slice(0, INTENT_TEXT_MAX),
+    target_kind: input.target_kind,
+    target_name: input.target_name,
+    reason: input.reason,
+    ...(input.assignments && input.assignments.length > 0
+      ? { assignments: input.assignments }
+      : {}),
+  };
+}
+
+/**
+ * intent 帧发射（NeverRaising）：gw 为 null / emit 抛错都静默——派发决策
+ * 可视化是 additive 增强，绝不影响聊天主链路（与 startGatewayRun 失败语义一致）。
+ */
+export function emitIntentCard(gw: GwLike, input: IntentCardInput): void {
+  if (!gw) return;
+  try {
+    gw.emitMessage({
+      id: gw.nextId(),
+      kind: 'intent',
+      turn_id: gw.turnId,
+      ts: Date.now(),
+      ...buildIntentCard(input),
+    });
+  } catch {
+    /* NeverRaising */
+  }
+}
+
 /** commit_record 卡 — agent 提交 / 编排者合并提交共用。 */
 function emitCommitCard(gw: GwLike, c: {
   repo: string; sha: string; short_sha: string; message: string; author: string;
@@ -552,6 +606,24 @@ async function runFanout(
         const taskByAgent = new Map<string, ParsedTask>();
         if (parsedTasks) for (const t of parsedTasks) taskByAgent.set(t.agentId, t);
 
+        // ── DISPATCH 决策可见化：intent 帧（NeverRaising）───────────────────
+        // 用户说一句话后能立刻看到「派给了谁、为什么」：拆解成功 → 团队 +
+        // per-agent 明细；拆解不可用（无 key/失败）→ 团队 + 降级原因。卡片本体
+        // 由前端 NeoGroupChat 的 NeoDispatchCard 渲染。
+        emitIntentCard(gw, {
+          intent: userPrompt,
+          target_kind: 'team',
+          target_name: team.name ?? group.team_id!,
+          reason: parsedTasks
+            ? `编排者拆解为 ${parsedTasks.length} 个子任务，按 DAG 分层派发`
+            : '拆解不可用（无 BYOK key 或解析失败），用户原文分发给全体成员',
+          assignments: parsedTasks?.map((t) => ({
+            agent_id: t.agentId,
+            name: rosterName(t.agentId),
+            title: t.title,
+          })),
+        });
+
         // ── DISPATCH 可视化：plan_card（层号 = 并行批次）───────────────────
         const { layers } = computeDagLayers(team.members, team.edges);
         let planCardId: string | null = null;
@@ -766,6 +838,15 @@ async function runFanout(
       }
       const agentName = agent.name || agentId;
       const soul = agent.soul ?? '';
+
+      // intent 帧（NeverRaising）— 串行降级路径的派发决策：未绑团队 → 按成员
+      // 逐个派发（单员工群/DM 即「派发给员工Y」场景）。
+      emitIntentCard(gw, {
+        intent: prompt,
+        target_kind: 'agent',
+        target_name: agentName,
+        reason: '群未绑定团队，按成员依次处理用户原文',
+      });
 
       // B3 — 串行路径过程卡：thinking 占位 → 流式 append → finalize + msg_foot。
       const thinkingId = gw?.nextId();

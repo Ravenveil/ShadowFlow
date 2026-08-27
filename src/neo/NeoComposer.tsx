@@ -45,7 +45,7 @@ import {
   Paperclip,
   Link2,
   Hash,
-  Download,
+  Plus,
   ArrowRight,
   ArrowUp,
   CheckCircle2,
@@ -1482,9 +1482,9 @@ export function NeoComposer({
 
         {/* ── chip 行：导入 Skill ｜ 模型 ｜ 目录 ｜ 模式 ｜ 知识 ｜ 发送 ── */}
         <div className="neo-cp-bar">
+          {/* 复刻 .composer-bar .plus：纯加号图标行（16px，无文字标签） */}
           <NeoChipBtn
-            glyph={<Download size={14} strokeWidth={2} />}
-            label={t('start.importSkill')}
+            glyph={<Plus size={16} strokeWidth={1.75} />}
             onClick={() => setSkillPickerOpen(true)}
             testId="start-chip-import-skill"
             title={t('start.importSkill')}
@@ -1677,7 +1677,7 @@ export function NeoComposer({
               aria-label={t('start.submit')}
               title={t('start.submit')}
             >
-              {submitting ? <Loader2 size={15} className="neo-cp-spin" aria-hidden /> : <ArrowUp size={17} strokeWidth={2.4} aria-hidden />}
+              {submitting ? <Loader2 size={15} className="neo-cp-spin" aria-hidden /> : <ArrowUp size={14} strokeWidth={2} aria-hidden />}
             </button>
           )}
         </div>

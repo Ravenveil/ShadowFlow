@@ -620,6 +620,35 @@ button.neo-tl-op[data-status="running"]:hover { background: none; }
   color: var(--t-fg-4);
   font-variant-numeric: tabular-nums;
 }
+/* 单步重跑（2026-08-23 救场）：done 步骤行尾 ghost 小按钮 + 失败红字 */
+.neo-tl-step-retry {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--t-border);
+  background: transparent;
+  color: var(--t-fg-3);
+  font-family: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.neo-tl-step-retry:hover:not(:disabled) {
+  color: var(--t-fg-2);
+  border-color: var(--t-border-2);
+}
+.neo-tl-step-retry:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.neo-tl-step-retry-fail {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  color: var(--t-err, #ef4444);
+}
 .neo-tl-substeps {
   display: flex;
   flex-direction: column;

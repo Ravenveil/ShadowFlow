@@ -73,11 +73,6 @@
   color: var(--t-fg);
 }
 
-.neo-op-elapsed {
-  font-size: 11px;
-  color: var(--t-fg-4);
-}
-
 /* ── 底部状态 pill ──────────────────────────────────────────────────────────
    running.html .pill：999 圆角 + hairline + 浮起软阴影、padding 9px 16px、
    标题 12.5px/500 fg-1、计数 11.5px fg-3；完成态绿 pill 保持（--t-ok）。 */

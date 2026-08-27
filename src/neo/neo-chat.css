@@ -13,28 +13,30 @@
   background: var(--t-panel);
   color: var(--t-fg);
 }
+/* day 主区底色钉复刻 --bg-panel #FDFDFD（复刻 .main；卡片/composer 仍纯白浮起） */
+[data-theme="day"] .neo-chat {
+  background: #FDFDFD;
+}
 
-/* ---- 顶部条（clawsgo：无边框，小灰字浮在左上，右侧文字按钮） ---- */
+/* ---- 顶部条：页面标题 + 右侧动作（←/→/折叠 导航簇已移至左栏顶部） ---- */
 .neo-chat-topbar {
   flex-shrink: 0;
   height: 48px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 18px;
+  padding: 0 16px;
 }
-.neo-chat-topbar-label {
+/* 页面标题（复刻 .topbar .title：12.5/600 近黑；选中目标时=目标名） */
+.neo-chat-topbar-title {
   flex: 1;
   min-width: 0;
   font-size: 12.5px;
-  color: var(--t-fg-4);
+  font-weight: 600;
+  color: var(--t-fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.neo-chat-topbar-label strong {
-  color: var(--t-fg);
-  font-weight: 600;
 }
 
 /* 顶栏右侧文字按钮（clawsgo「新任务」幽灵形态） */
@@ -153,20 +155,6 @@
   max-width: 760px;
 }
 
-/* 用户消息：灰气泡右对齐（clawsgo c1_03） */
-.neo-msg-user {
-  align-self: flex-end;
-  max-width: 78%;
-  padding: 9px 14px;
-  border-radius: 14px;
-  background: var(--t-panel-2);
-  color: var(--t-fg);
-  font-size: 13px;
-  line-height: 1.65;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 /* agent 头：✳ 名称 + 累计耗时（WorkBuddy 形态） */
 .neo-agent-head {
   display: flex;
@@ -255,15 +243,6 @@
 /* running 行标题灰化（clawsgo「正在搜索…」形态）：降为 fg-4，
    单行 ellipsis 由 .neo-op-title 基样式保证。 */
 .neo-op-row[data-status="running"] .neo-op-title { color: var(--t-fg-4); }
-.neo-op-elapsed {
-  flex-shrink: 0;
-  font-size: 10.5px;
-  color: var(--t-fg-5);
-  font-family: var(--font-mono, monospace);
-  /* 耗时数字等宽，避免跳动（规格 P2-17） */
-  font-variant-numeric: tabular-nums;
-}
-
 .neo-chevron {
   flex-shrink: 0;
   color: var(--t-fg-5);
@@ -273,50 +252,6 @@
 .neo-ops-toggle .neo-chevron[data-open],
 .neo-pill .neo-chevron[data-open] { transform: rotate(180deg); }
 
-/* 行展开详情：深度思考 / 参数 / 结果摘要 */
-.neo-op-detail {
-  margin: 2px 0 6px 29px;
-  padding: 8px 12px;
-  border-left: 2px solid var(--t-border);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  animation: neo-fade var(--dur-2) var(--ease-out);
-}
-.neo-think-body p {
-  margin: 0;
-  font-size: 12px;
-  font-style: italic;
-  color: var(--t-fg-4);
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.neo-think-body p + p { margin-top: 6px; }
-.neo-op-kv { display: flex; flex-direction: column; gap: 3px; }
-.neo-op-k {
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--t-fg-5);
-  letter-spacing: 0.02em;
-}
-.neo-op-kv p {
-  margin: 0;
-  font-size: 12px;
-  color: var(--t-fg-3);
-  line-height: 1.65;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.neo-op-links { display: flex; flex-wrap: wrap; gap: 4px 12px; }
-/* 链接 = day 唯一允许的彩色文字（规格 P0-4 + done 帧实测）：ClawsGo 青 #0F766E，
-   night 落 #93C5FD；下划线只在 hover 出现。 */
-.neo-op-links a {
-  font-size: 12px;
-  color: #0f766e;
-  text-decoration: none;
-}
-.neo-op-links a:hover { text-decoration: underline; }
 /* 聊天列内的裸 markdown 链接（无 class 的 <a>，未来/其他渲染器输出）同色；
    :not([class]) 保证不覆盖 Timeline CSS module 已带样式的链接卡。 */
 .neo-chat-scroll a:not([class]) {
@@ -324,7 +259,6 @@
   text-decoration: none;
 }
 .neo-chat-scroll a:not([class]):hover { text-decoration: underline; }
-[data-theme="night"] .neo-op-links a,
 [data-theme="night"] .neo-chat-scroll a:not([class]) { color: #93c5fd; }
 
 /* Loop 节点行：迭代进度徽标 */
@@ -342,51 +276,6 @@
 .neo-loop-badge[data-status="oscillating"],
 .neo-loop-badge[data-status="diverged"] { color: var(--t-warn, #d97706); background: color-mix(in oklab, var(--t-warn, #d97706) 12%, transparent); }
 .neo-loop-badge[data-status="halted"] { color: var(--t-err, #ef4444); background: color-mix(in oklab, var(--t-err, #ef4444) 10%, transparent); }
-
-/* ---- agent 回复：左对齐无气泡 + hover 工具条（Coze 形态） ---- */
-.neo-agent-text {
-  position: relative;
-  max-width: 92%;
-  padding: 4px 2px;
-  font-size: 13.5px;
-  line-height: 1.75;
-  color: var(--t-fg);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.neo-agent-toolbar {
-  position: absolute;
-  top: -10px;
-  right: 0;
-  display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--t-border);
-  border-radius: 10px;
-  background: var(--t-panel);
-  box-shadow: 0 4px 14px -6px rgba(15, 23, 42, 0.25);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--dur-1) var(--ease-out);
-}
-.neo-agent-text:hover .neo-agent-toolbar {
-  opacity: 1;
-  pointer-events: auto;
-}
-.neo-agent-tool {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 8px;
-  background: none;
-  color: var(--t-fg-4);
-  cursor: pointer;
-  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
-}
-.neo-agent-tool:hover { background: var(--t-panel-2); color: var(--t-fg-2); }
 
 /* ---- 错误条 ---- */
 .neo-run-error {
@@ -503,14 +392,6 @@
   transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
 }
 .neo-pill:hover { background: var(--t-panel-2); }
-.neo-pill-dot {
-  flex-shrink: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--t-accent);
-  animation: sf-pulse 1.4s ease-in-out infinite;
-}
 .neo-pill-icon { flex-shrink: 0; color: var(--t-ok, #10b981); }
 .neo-pill-done { color: var(--t-ok, #10b981); }
 .neo-pill-label {
@@ -536,7 +417,8 @@
   background: transparent;
 }
 .neo-composer { width: 100%; }
-.neo-composer-hero { max-width: 720px; margin: 0 auto; }
+/* hero composer 与模板卡网格同宽 560px（复刻 .composer width:560） */
+.neo-composer-hero { max-width: 560px; margin: 0 auto; }
 
 /* 会话 composer 卡片：与 hero 同款大圆角浮起（规格软阴影 0 4px 24px rgba(0,0,0,.06)） */
 .neo-composer .hf-card {
@@ -595,71 +477,44 @@
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
-/* StartGallery 模板卡（ClawsGo tmp29A7 左文右图）：非 hover 无边框平铺卡，
-   hover 白卡浮起 + 细边 + 软阴影（A12，对齐 a_004 帧），
-   左侧 名称 13/600 + 描述 12px 灰 2 行截断（无徽章行），右侧 108px 缩略图槽（无图纯文字）。
-   间距照复刻 .cards：gap 34px 44px，max-width 560px；卡 padding 6px 8px、左右 gap 16px。 */
-.neo-empty .sg-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 34px 44px;
-  width: min(560px, 100%);
+/* StartGallery 药丸 chip 流（2026-08-19 二次改版）：只保留名称，去掉描述/
+   箭头/分隔线，chip 横向流动自动换行（flex-wrap 居中），与分类 tab 胶囊
+   形态呼应。chip = 白底 hairline 药丸，hover 边框/文字加深 + 轻浮起。
+   宽度对齐 hero composer min(720px,100%)。无任何图片。 */
+.neo-empty .sg-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: min(720px, 100%);
 }
-.neo-empty .sg-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 16px;
-  padding: 6px 8px;
-  /* A12（ClawsGO a_004）：非 hover 无边框平铺；预留 1px 透明边避免 hover 位移 */
-  border: 1px solid transparent;
-  background: transparent;
-  box-shadow: none;
-  border-radius: var(--r-card);
-  transform: none;
-  transition:
-    background var(--dur-1) var(--ease-out),
-    border-color var(--dur-1) var(--ease-out),
-    box-shadow var(--dur-2) var(--ease-out),
-    transform var(--dur-2) var(--ease-out);
-}
-/* hover：白卡浮起 + 细边 + 软阴影（a_004「深度调研」卡实测形态） */
-.neo-empty .sg-card:hover {
-  border-color: var(--t-border);
+.neo-empty .sg-chip {
+  flex-shrink: 0;
+  padding: 5px 13px;
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
   background: var(--t-panel);
-  box-shadow:
-    0 6px 20px rgba(0, 0, 0, 0.06),
-    0 1px 3px rgba(0, 0, 0, 0.04);
+  color: var(--t-fg-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  /* 预留位移：hover 轻浮起（对齐 neo-topbar-btn 的克制形态，不用 accent） */
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out),
+    transform var(--dur-1) var(--ease-out);
+}
+.neo-empty .sg-chip:hover {
+  border-color: var(--t-fg-4);
+  color: var(--t-fg);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   transform: translateY(-1px);
 }
-.neo-empty .sg-card:active { transform: translateY(0); }
-.neo-empty .sg-card-body {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.neo-empty .sg-card-name {
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.neo-empty .sg-card-desc {
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--t-fg-3);
-}
-.neo-empty .sg-card-thumb {
-  width: 108px;
-  height: auto;
-  display: block;
-  border-radius: 10px;
-}
-@media (max-width: 560px) {
-  .neo-empty .sg-grid { grid-template-columns: 1fr; }
-}
+.neo-empty .sg-chip:active { transform: translateY(0); box-shadow: none; }
+.neo-empty .sg-chip:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
 
 /* ---- 空态：hero 问候 → 分类 tabs + 模板卡网格 → composer 沉底（clawsgo 首页态
    tmp29A7 / home.html）。hero 块上下 auto margin 在剩余空间居中；内容超高时
@@ -768,14 +623,6 @@
 }
 .neo-group-scroll::-webkit-scrollbar { width: 3px; }
 .neo-group-scroll::-webkit-scrollbar-thumb { background: var(--t-panel-3); border-radius: 2px; }
-.neo-group-note {
-  padding: 32px 0;
-  text-align: center;
-  font-size: 12.5px;
-  color: var(--t-fg-4);
-}
-.neo-group-error { color: var(--t-err, #d33); }
-.neo-group-members { color: var(--t-fg-4); font-weight: 400; }
 .neo-group-live {
   display: inline-flex;
   align-items: center;

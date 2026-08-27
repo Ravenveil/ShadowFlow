@@ -15,9 +15,9 @@
   /* clawsgo 单色策略：Neo 作用域内 accent = 近黑（竞品主按钮/选中态/下划线
      全是近黑 + 中性灰，彩色只留状态点绿/红）。发送钮、tab 指示条、卡片图标
      tint 等全部走 var(--t-accent*)，一处覆盖整体换色。night 保持蓝（下块）。 */
-  --t-accent: #1C1C1E;
+  --t-accent: #171717;
   --t-accent-bright: #000000;
-  --t-accent-tint: #F4F4F5;
+  --t-accent-tint: rgba(23, 23, 23, 0.08);
   --t-accent-ink: #FAFAFA;
   /* 用户消息气泡：灰底黑字（clawsgo/Coze/WorkBuddy 实测 #F2~F3 灰气泡），
      覆盖 timeline chatVariant 默认的 accent 品牌气泡 */
@@ -131,6 +131,12 @@
   background: var(--t-panel-2);
   color: var(--t-fg);
 }
+/* 历史导航 ←/→ 的尽头态（ZCode 式灰显，不可点） */
+.neo-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
 
 /* ── 左栏 NeoRail ───────────────────────────────────────────────────────── */
 .neo-rail {
@@ -138,9 +144,10 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  width: 240px;
-  padding: 12px 10px 10px;
-  gap: 6px;
+  /* 2026-08-18 clawsgo 收敛：180px 窄栏 + 10/8 紧凑内距（复刻 home.html .sidebar） */
+  width: 180px;
+  padding: 10px 8px 8px;
+  gap: 2px;
   /* 栏体浅灰（--t-bg），内容区纯白——竞品的层次靠底色对比，不靠边框 */
   background: var(--t-bg);
   border-right: 1px solid var(--t-border);
@@ -155,70 +162,38 @@
   gap: 4px;
 }
 
-.neo-rail-head {
+/* 栏顶导航簇（ZCode 式 ←/→/折叠；2026-08-19 从顶栏移入，工作区头移除） */
+.neo-rail-nav {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 2px 8px;
+}
+.neo-rail.collapsed .neo-rail-nav {
+  flex-direction: column;
+  padding: 2px 0 6px;
+}
+
+/* 一级导航 ×5（复刻 .nav：gap 2px 容器 + .nav-row 行） */
+.neo-nav {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-.neo-rail-head-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.neo-rail-toggle-wrap {
-  flex: 1;
-  min-width: 0;
-  display: flex;
+  gap: 2px;
 }
 
-/* 「+ 新任务」导航行（ClawsGo tmp29A7：无边框透明行，常驻浅灰胶囊底，图标+文字左对齐） */
-.neo-rail .neo-newtask {
-  position: relative;
-  width: 100%;
-  height: 34px;
-  justify-content: flex-start;
-  padding: 0 10px;
-  gap: 8px;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  background: var(--t-panel-3);
-  color: var(--t-fg);
-  transition: background var(--dur-1) var(--ease-out);
-}
-.neo-rail .neo-newtask:hover {
-  background: color-mix(in srgb, var(--t-fg) 8%, transparent);
-}
-/* 新任务行右侧 kbd 提示（Kimi tmp5D2B：灰底 4px 圆角小胶囊）。
-   绝对定位靠右，不挤占居中文字；真实 Ctrl/⌘+K 绑定在 NeoRail 的 useCommandK。 */
-.neo-newtask .neo-kbd {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--t-panel);
-  color: var(--t-fg-5);
-  font-size: 10px;
-  font-weight: 500;
-  font-family: inherit;
-  line-height: 1.4;
-}
-.neo-rail .neo-newtask:hover .neo-kbd {
-  /* hover 行底加深，kbd 保持白底层次 */
-  background: var(--t-panel);
-}
+/* 折叠态「+ 新任务」图标钮（白底细边小方块） */
 .neo-newtask-icon {
   border: 1px solid var(--t-border);
   background: var(--t-panel-2);
   color: var(--t-fg);
 }
 
-/* 搜索框 */
+/* 搜索框（「搜索」导航行按需展开；复刻页无常驻输入框） */
+.neo-rail .neo-search {
+  padding: 2px 6px 6px;
+}
 .neo-search {
   position: relative;
   display: flex;
@@ -263,7 +238,7 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 10px;
+  padding: 6px 8px;
   border: none;
   border-radius: 10px;
   background: transparent;
@@ -271,7 +246,7 @@
   font-size: 12.5px;
   font-weight: 500;
   text-align: left;
-  cursor: default;
+  cursor: pointer;
   transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .neo-nav-row svg {
@@ -279,7 +254,13 @@
   color: var(--t-fg-3);
 }
 .neo-nav-row:hover {
-  background: var(--t-panel-2);
+  /* 复刻 .nav-row:hover = rgba(0,0,0,.04)：4% 前景混色，day/night 自适应 */
+  background: color-mix(in srgb, var(--t-fg) 4%, transparent);
+}
+.neo-nav-row.on {
+  /* 复刻 .nav-row.on = #E9E9E7 + 600 */
+  background: var(--t-row-sel, var(--t-panel-3));
+  font-weight: 600;
 }
 .neo-nav-row-name {
   flex: 1;
@@ -412,10 +393,10 @@
   color: var(--t-fg-3);
 }
 .neo-row:hover {
-  background: var(--t-panel-2);
+  background: color-mix(in srgb, var(--t-fg) 4%, transparent);
 }
 .neo-row.on {
-  background: var(--t-panel-3);
+  background: var(--t-row-sel, var(--t-panel-3));
   font-weight: 600;
 }
 .neo-row-name {
@@ -514,55 +495,7 @@
 .neo-avatar-dot[data-status='warn'] { background: var(--t-warn); }
 .neo-avatar-dot[data-status='err'] { background: var(--t-err); }
 
-/* 底部邀请/说明卡（ClawsGo home.html .invite：白卡 + 1px hairline +
-   图标盒 34px + 两行文字）。纯信息卡、无按钮——无邀请后端，见 GAP.md。 */
-.neo-invite {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid var(--t-border);
-  border-radius: 12px;
-  background: var(--t-panel);
-}
-.neo-invite-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  border: 1px solid var(--t-border);
-  border-radius: 10px;
-  background: var(--t-panel);
-  color: var(--t-fg-3);
-}
-.neo-invite-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.neo-invite-t1 {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--t-fg);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.neo-invite-t2 {
-  font-size: 11px;
-  color: var(--t-fg-4);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 底部用户卡（ClawsGo home.html .user：gap 9、padding 8/6/2、margin-top 2、
-   头像 30px 圆形、名字 12.5/600、副行 11px 灰字；无分隔线） */
+/* 底部账户行（ZCode 式单组件：头像 + 名 + 齿轮菜单） */
 .neo-usercard {
   flex-shrink: 0;
   display: flex;
@@ -571,18 +504,29 @@
   padding: 8px 6px 2px;
   margin-top: 2px;
 }
-.neo-user-initial {
-  display: inline-flex;
+/* ShadowFlow 徽章头像：白底圆 + 近黑 S 字母（2026-08-19 用户拍板；
+   hairline 描边保证在灰栏/深栏上都有轮廓） */
+.neo-user-face {
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 30px;
   height: 30px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--t-panel-3);
-  color: var(--t-fg);
-  font-size: 13px;
-  font-weight: 600;
+  background: #ffffff;
+  border: 1px solid var(--t-border);
+  color: #0a0a0a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+}
+/* 折叠 rail 底部的小号徽章（20px，嵌 28px 图标钮） */
+.neo-user-face--sm {
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
 }
 .neo-user-meta {
   flex: 1;
@@ -599,9 +543,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 用户行第二行（复刻 .user-mail：11px 浅灰，超长省略） */
+.neo-user-mail,
 .neo-user-type {
   font-size: 11px;
   color: var(--t-fg-5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── 右栏 NeoHost（折叠按钮在右缘；运行态弹性占满，clawsgo a_008） ──────── */
@@ -682,6 +631,61 @@
 .neo-modal-input:disabled {
   opacity: 0.6;
 }
+/* 一句话描述 → 生成人设（六层能力第二轮 B）：输入 + 生成钮同行 */
+.neo-modal-gen-row {
+  display: flex;
+  gap: 8px;
+}
+.neo-modal-gen-row .neo-modal-input {
+  flex: 1;
+  min-width: 0;
+}
+.neo-modal-gen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel-2);
+  color: var(--t-fg-2);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.neo-modal-gen-btn:hover:not(:disabled) {
+  background: var(--t-hover);
+}
+.neo-modal-gen-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+/* persona 编辑区：生成回填 / 失败手输共用 */
+.neo-modal-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  color: var(--t-fg);
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  transition: border-color var(--dur-1) var(--ease-out);
+}
+.neo-modal-textarea:focus {
+  border-color: var(--t-fg-5);
+}
+.neo-modal-textarea:disabled {
+  opacity: 0.6;
+}
+
 /* 失败红条：真实后端错误，不吞不假成功 */
 .neo-modal-error {
   margin-top: 10px;
@@ -729,4 +733,265 @@
 .neo-modal-cancel:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* ── Agent「灵魂」页（NeoAgentSoul，2026-08-22；CherryStudio 助手提示词形态） ── */
+/* 中栏内嵌阅读/编辑态：单列 720px 居中，名称 + 大 soul 编辑区 + 保存。 */
+.neo-soul {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 720px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 28px 24px 20px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  color: var(--t-fg);
+}
+.neo-soul-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.neo-soul-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.neo-soul-sub {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--t-fg-3);
+}
+.neo-soul-field {
+  display: flex;
+  flex-direction: column;
+}
+.neo-soul-field--grow {
+  flex: 1;
+  /* 不设 min-height:0 —— 矮容器（右栏窄 pane）里 textarea 的 min-height 会溢出
+     盖住下方的字数/保存行；让 .neo-soul 整体滚动即可。 */
+}
+.neo-soul-textarea {
+  flex: 1;
+  min-height: 300px;
+  padding: 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  color: var(--t-fg);
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--dur-1) var(--ease-out);
+}
+.neo-soul-textarea:focus {
+  border-color: var(--t-fg-5);
+}
+.neo-soul-textarea:disabled {
+  opacity: 0.6;
+}
+.neo-soul-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.neo-soul-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--t-fg-3);
+}
+.neo-soul-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--t-run);
+}
+.neo-soul-skeleton {
+  height: 40px;
+  border-radius: 10px;
+}
+.neo-soul-skeleton--tall {
+  flex: 1;
+  min-height: 300px;
+}
+/* rail 员工行：行本体撑满 + 悬停显现的 soul 编辑钮 */
+.neo-agent-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.neo-agent-row .neo-row {
+  flex: 1;
+  min-width: 0;
+}
+.neo-row-soul {
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+.neo-agent-row:hover .neo-row-soul,
+.neo-row-soul:focus-visible {
+  opacity: 1;
+}
+
+/* ── 历史 runs 列表（GAP B39，NeoRunHistory；中栏整宽阅读态）────────────── */
+.neo-history {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.neo-history-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 2px 8px;
+  color: var(--t-fg-2);
+}
+.neo-history-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-fg);
+}
+.neo-history-head .neo-host-icon-btn {
+  margin-left: auto;
+}
+.neo-history-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  color: var(--t-fg-2);
+  text-decoration: none;
+  font-size: 12px;
+  transition:
+    border-color var(--dur-1, 120ms) var(--ease-out, ease-out),
+    background var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+.neo-history-row:hover {
+  background: var(--t-hover, var(--t-panel-2));
+}
+.neo-history-ic {
+  flex-shrink: 0;
+}
+.neo-history-ic--ok {
+  color: var(--t-ok);
+}
+.neo-history-ic--err {
+  color: var(--t-err);
+}
+.neo-history-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.neo-history-goal {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t-fg);
+}
+.neo-history-sub {
+  font-size: 10.5px;
+  color: var(--t-fg-4);
+}
+.neo-history-artifact {
+  flex-shrink: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--t-fg-5);
+}
+
+/* ── 新建群聊模态（NeoCreateGroupModal，2026-08-22 GAP D） ───────────────── */
+.neo-modal-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--t-fg-3);
+}
+.neo-newgroup-mode-label {
+  margin-top: 12px;
+}
+.neo-newgroup-modes {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.neo-newgroup-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t-fg-2);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.neo-newgroup-mode.on {
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+  font-weight: 600;
+}
+.neo-newgroup-mode:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.neo-newgroup-select {
+  appearance: auto;
+  cursor: pointer;
+}
+.neo-newgroup-pick-list {
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  padding: 4px;
+}
+.neo-newgroup-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--t-fg);
+  cursor: pointer;
+}
+.neo-newgroup-pick-row:hover {
+  background: var(--t-panel-2);
+}
+.neo-newgroup-pick-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

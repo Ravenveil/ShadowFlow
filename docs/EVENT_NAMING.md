@@ -57,6 +57,7 @@ Node 差异（如实记录，不改代码）：runBus **没有 durable 子集概
 | `aborted` | run-sessions.ts（bus emit） | 用户中止 | **事实** | `run.cancelled`（durable） |
 | `retry-pending` | run-sessions.ts（bus emit） | 步骤重试挂起 | 观察 | 无对应 |
 | `resume-pending` | run-sessions.ts（bus emit） | 会话恢复挂起 | 观察 | `run.resumed`（live）部分对应 |
+| `loop` | run-sessions.ts（loop-watcher emit） | 迭代环差分快照（control.loop 节点的 loop 记录数组；{status, iteration_count, converged} 变化才发。2026-08-19 导航架构统一批：迭代环并入右栏「过程」tab，本帧为其实时通道） | 观察 | 无统一对应（Python `GET /runs/:id/loops` 投影轮询的推流化） |
 | `policy` | run-sessions.ts:2888 | 策略提示 | 观察 | `policy.violation`/`policy.updated`（live） |
 | `question-form` | assembler.ts:1151 / parser.ts:398 | AskUserQuestion 交互表单 | **事实**（等待用户输入） | 无对应（Python 审批走 REST+SSE，见 `permission_check`） |
 | `permission_check` | tool-approval.ts / tool-runner.ts（经 bus） | 工具审批请求与决策（decision: pending/approve/deny；decided_by: user/timeout/abort） | **事实**（决策现场） | `permission.checked`/`permission.blocked`（durable）。语义映射：decision=approve → `permission.checked`；deny/timeout/abort → `permission.blocked` |

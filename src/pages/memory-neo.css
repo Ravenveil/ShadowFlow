@@ -1,0 +1,313 @@
+/* ===== MemoryPage Neo 化（2026-08-19，河流记忆前端补齐）=====
+   与 knowledge-neo.css 同一套作用域 token 策略：颜色一律 var(--t-*) /
+   color-mix，day/night 双主题安全；类名 neo-mm-* 前缀避免冲突。
+   数据源：GET/POST/PATCH/DELETE /api/memory-entries（Node，Story 16.1）。 */
+
+.neo-mm {
+  min-height: 100vh;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  padding: 32px 40px;
+  font-family: var(--font-sans, inherit);
+  /* clawsgo 单色策略（同 .neo-kp）：accent = 近黑（day），night 蓝 */
+  --t-accent: #1C1C1E;
+  --t-accent-bright: #000000;
+  --t-accent-tint: #F4F4F5;
+  --t-accent-ink: #FAFAFA;
+}
+[data-theme="night"] .neo-mm {
+  --t-accent: #3B82F6;
+  --t-accent-bright: #93C5FD;
+  --t-accent-tint: rgba(59, 130, 246, 0.14);
+  --t-accent-ink: #0A0A0A;
+}
+
+/* ── 页头（结构对齐 .neo-kp-header）──────────────────────────────────── */
+.neo-mm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.neo-mm-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-4);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.neo-mm-title {
+  margin: 6px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.neo-mm-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--t-fg-3);
+}
+
+/* ── scope 过滤 tabs ─────────────────────────────────────────────────── */
+.neo-mm-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.neo-mm-tab {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--t-line);
+  background: transparent;
+  color: var(--t-fg-3);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.neo-mm-tab:hover { color: var(--t-fg); }
+.neo-mm-tab.on {
+  background: var(--t-accent);
+  border-color: var(--t-accent);
+  color: var(--t-accent-ink);
+}
+
+/* ── 记忆条目卡片 ────────────────────────────────────────────────────── */
+.neo-mm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 860px;
+}
+.neo-mm-card {
+  border: 1px solid var(--t-line);
+  border-radius: 14px;
+  background: var(--t-card, var(--t-bg));
+  padding: 14px 16px;
+}
+.neo-mm-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.neo-mm-card-title {
+  font-size: 14px;
+  font-weight: 650;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.neo-mm-scope-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--t-fg-4) 14%, transparent);
+  color: var(--t-fg-3);
+}
+.neo-mm-scope-pill--user { background: color-mix(in srgb, #2563eb 14%, transparent); color: #2563eb; }
+.neo-mm-scope-pill--project { background: color-mix(in srgb, #16a34a 14%, transparent); color: #16a34a; }
+.neo-mm-scope-pill--session { background: color-mix(in srgb, #d97706 14%, transparent); color: #d97706; }
+.neo-mm-card-meta {
+  margin: 6px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-4);
+}
+.neo-mm-card-content {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--t-fg-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.neo-mm-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* ── 按钮 / 输入（对齐 neo-kp 同族）─────────────────────────────────── */
+.neo-mm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--t-line);
+  background: transparent;
+  color: var(--t-fg);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.neo-mm-btn:hover { border-color: var(--t-fg-3); }
+.neo-mm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.neo-mm-btn-primary {
+  background: var(--t-accent);
+  border-color: var(--t-accent);
+  color: var(--t-accent-ink);
+}
+.neo-mm-btn-primary:hover { background: var(--t-accent-bright); border-color: var(--t-accent-bright); }
+.neo-mm-btn-danger { color: #dc2626; border-color: color-mix(in srgb, #dc2626 35%, transparent); }
+.neo-mm-btn-danger:hover { border-color: #dc2626; }
+.neo-mm-btn-ghost { border-color: transparent; color: var(--t-fg-3); }
+.neo-mm-btn-ghost:hover { color: var(--t-fg); border-color: var(--t-line); }
+.neo-mm-btn-sm { height: 26px; padding: 0 10px; font-size: 11.5px; border-radius: 8px; }
+
+.neo-mm-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--t-line);
+  border-radius: 10px;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.neo-mm-input:focus {
+  outline: none;
+  border-color: var(--t-accent);
+}
+
+/* ── 编辑/新建 Modal（对齐 neo-kp-modal）─────────────────────────────── */
+.neo-mm-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, #000 45%, transparent);
+}
+.neo-mm-modal {
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid var(--t-line);
+  background: var(--t-bg);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.neo-mm-modal-title { margin: 0; font-size: 15px; font-weight: 700; }
+.neo-mm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.neo-mm-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+}
+.neo-mm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.neo-mm-modal-error {
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #dc2626 40%, transparent);
+  background: color-mix(in srgb, #dc2626 8%, transparent);
+  color: #dc2626;
+  padding: 8px 12px;
+  font-size: 12.5px;
+}
+
+/* ── 状态条 ───────────────────────────────────────────────────────────── */
+.neo-mm-alert {
+  max-width: 860px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #dc2626 40%, transparent);
+  background: color-mix(in srgb, #dc2626 8%, transparent);
+  color: #dc2626;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.neo-mm-loading,
+.neo-mm-empty {
+  color: var(--t-fg-3);
+  font-size: 13px;
+  padding: 32px 0;
+  text-align: center;
+}
+
+/* 内嵌变体（NeoApp 中栏，2026-08-19 导航架构统一）：100% 高度填充、紧凑
+   内距、白底可滚、藏全页 hero 副题 */
+.neo-mm--inline {
+  min-height: 100%;
+  height: 100%;
+  padding: 20px 24px 28px;
+  background: var(--t-panel);
+  overflow-y: auto;
+}
+.neo-mm--inline .neo-mm-sub {
+  display: none;
+}
+.neo-mm--inline .neo-mm-header {
+  margin-bottom: 12px;
+}
+
+/* ── 记忆画像面板（MemoryProfilePanel，2026-08-23 补齐 Story 9.3 前端）───── */
+.neo-mm-section {
+  max-width: 860px;
+  margin-bottom: 24px;
+}
+.neo-mm-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.neo-mm-section-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.neo-mm-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.neo-mm-stat {
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid var(--t-border);
+  background: var(--t-panel);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.neo-mm-stat-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+}
+.neo-mm-stat-label {
+  font-size: 12px;
+  color: var(--t-fg-3);
+}
+.neo-mm-writeback {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  max-width: 420px;
+}
+.neo-mm-writeback .neo-mm-input {
+  flex: 1;
+}

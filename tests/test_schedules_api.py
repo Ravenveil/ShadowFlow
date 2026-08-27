@@ -230,3 +230,67 @@ def test_get_runs_empty_for_new_schedule():
 def test_get_runs_not_found_returns_404():
     res = client.get("/api/schedules/no-such-id/runs")
     assert res.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# PATCH /schedules/{id} — enable/disable toggle
+# ---------------------------------------------------------------------------
+
+def test_create_schedule_defaults_enabled():
+    res = _create()
+    assert res.status_code == 201
+    data = res.json()["data"]
+    assert data["enabled"] is True
+    assert data["next_run_time"] is not None
+
+
+def test_patch_disable_clears_next_run_time():
+    created = _create().json()["data"]
+    sid = created["schedule_id"]
+    res = client.patch(f"/api/schedules/{sid}", json={"enabled": False})
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["enabled"] is False
+    assert data["next_run_time"] is None
+    # Persisted — a fresh list shows the same state.
+    listed = client.get("/api/schedules").json()["data"]
+    stored = next(r for r in listed if r["schedule_id"] == sid)
+    assert stored["enabled"] is False
+    assert stored["next_run_time"] is None
+
+
+def test_patch_enable_recomputes_next_run_time():
+    created = _create().json()["data"]
+    sid = created["schedule_id"]
+    client.patch(f"/api/schedules/{sid}", json={"enabled": False})
+    res = client.patch(f"/api/schedules/{sid}", json={"enabled": True})
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["enabled"] is True
+    assert data["next_run_time"] is not None
+
+
+def test_patch_completed_oneshot_not_resurrected():
+    created = _create_oneshot(group_id="grp-once-toggle").json()["data"]
+    sid = created["schedule_id"]
+    # Simulate a fired one-shot by marking the record completed on disk.
+    record = schedules_api._load_schedule(sid)
+    record["completed"] = True
+    record["next_run_time"] = None
+    schedules_api._save_schedule(record)
+    res = client.patch(f"/api/schedules/{sid}", json={"enabled": True})
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["enabled"] is True
+    assert data["completed"] is True
+    assert data["next_run_time"] is None
+
+
+def test_patch_not_found_returns_404():
+    res = client.patch("/api/schedules/no-such-id", json={"enabled": False})
+    assert res.status_code == 404
+
+
+def test_patch_invalid_id_returns_400():
+    res = client.patch("/api/schedules/bad id!", json={"enabled": False})
+    assert res.status_code == 400

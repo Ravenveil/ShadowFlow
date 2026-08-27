@@ -11,6 +11,12 @@
  *   PUT    /api/settings/:key         → { key, value }   body: { value }
  *   DELETE /api/settings/:key         → 204 (idempotent)
  *
+ * Added (UI preferences — ZCode-style appearance sync, 2026-08):
+ *   GET    /api/settings/preferences  → { preferences: { theme?, language?, zoom? } }
+ *   PUT    /api/settings/preferences  → partial merge { theme?, language?, zoom? }
+ *   GET    /api/settings/appearance   → { theme }      (legacy Python-era alias)
+ *   PUT    /api/settings/appearance   → { theme }      (legacy alias, theme-only)
+ *
  * BYOK provider config (Cherry Studio-style, mirrors Shadow's aiConfigStore):
  *   GET    /api/settings/byok                        → { providers: { [id]: ProviderData (masked) }, defaultModel, temperature, routingPriority }
  *   GET    /api/settings/byok/models                 → { models: ModelDef[] }  // static catalog
@@ -921,6 +927,131 @@ router.delete('/byok/:providerId', (req: Request, res: Response) => {
     res.status(204).send();
   } catch {
     res.status(500).json({ error: 'Failed to delete provider' });
+  }
+});
+
+// ── UI preferences (theme + language + zoom, ZCode-style appearance sync) ────
+//
+// One validated JSON blob persisted through the existing KV store under key
+// `preferences`. Partial-merge semantics borrowed from Open WebUI's user
+// settings update + hermes-agent's settings server: clients PUT only the
+// fields they changed, server validates each field strictly and merges over
+// the stored blob. Range/enum values mirror the frontend contracts
+// (useTheme.ts ThemePref, i18n Language, fontScale.ts ZOOM_MIN/MAX).
+
+const PREFERENCES_KEY = 'preferences';
+const VALID_THEMES: ReadonlySet<string> = new Set(['dark', 'light', 'system', 'paper']);
+const VALID_LANGUAGES: ReadonlySet<string> = new Set(['en', 'zh']);
+const ZOOM_MIN = 0.85;
+const ZOOM_MAX = 1.4;
+
+interface UiPreferences {
+  theme?: string;
+  language?: string;
+  zoom?: number;
+}
+
+/** Read the stored blob, dropping anything invalid (defensive re-validate). */
+function loadPreferences(): UiPreferences {
+  const raw = getSetting(PREFERENCES_KEY);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const obj = raw as Record<string, unknown>;
+  const out: UiPreferences = {};
+  if (typeof obj.theme === 'string' && VALID_THEMES.has(obj.theme)) out.theme = obj.theme;
+  if (typeof obj.language === 'string' && VALID_LANGUAGES.has(obj.language)) out.language = obj.language;
+  if (typeof obj.zoom === 'number' && obj.zoom >= ZOOM_MIN && obj.zoom <= ZOOM_MAX) {
+    out.zoom = obj.zoom;
+  }
+  return out;
+}
+
+/**
+ * Validate a partial update body. Returns the clean patch, or the first
+ * validation error with its field name for the 400 response.
+ */
+function normalizePreferencesPatch(body: unknown): { patch: UiPreferences } | { field: string; message: string } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { field: 'body', message: 'body must be a JSON object' };
+  }
+  const obj = body as Record<string, unknown>;
+  const patch: UiPreferences = {};
+  if ('theme' in obj) {
+    if (typeof obj.theme !== 'string' || !VALID_THEMES.has(obj.theme)) {
+      return { field: 'theme', message: 'theme must be one of dark | light | system | paper' };
+    }
+    patch.theme = obj.theme;
+  }
+  if ('language' in obj) {
+    if (obj.language !== 'en' && obj.language !== 'zh') {
+      return { field: 'language', message: 'language must be en | zh' };
+    }
+    patch.language = obj.language;
+  }
+  if ('zoom' in obj) {
+    const z = obj.zoom;
+    if (typeof z !== 'number' || !Number.isFinite(z) || z < ZOOM_MIN || z > ZOOM_MAX) {
+      return { field: 'zoom', message: `zoom must be a number between ${ZOOM_MIN} and ${ZOOM_MAX}` };
+    }
+    patch.zoom = Math.round(z * 100) / 100;
+  }
+  if (Object.keys(patch).length === 0) {
+    return { field: 'body', message: 'body must include at least one of theme, language, zoom' };
+  }
+  return { patch };
+}
+
+// GET /api/settings/preferences → { preferences: { theme?, language?, zoom? } }
+// Only explicitly-saved fields are returned — an unset field reads as absent,
+// letting the client keep its local default instead of guessing one.
+// no-store: this snapshot must never be heuristically cached — a stale cached
+// copy can arrive after a user action and revert it client-side.
+router.get('/preferences', (_req: Request, res: Response) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ preferences: loadPreferences() });
+});
+
+// PUT /api/settings/preferences { theme?, language?, zoom? } → merged blob
+router.put('/preferences', (req: Request, res: Response) => {
+  const norm = normalizePreferencesPatch(req.body);
+  if ('message' in norm) {
+    return res.status(400).json({
+      error: { code: 'INVALID_PREFERENCE', field: norm.field, message: norm.message },
+    });
+  }
+  const merged: UiPreferences = { ...loadPreferences(), ...norm.patch };
+  try {
+    setSetting(PREFERENCES_KEY, merged);
+    res.json({ preferences: merged });
+  } catch (e: unknown) {
+    const code = e instanceof Error ? e.message : 'UNKNOWN';
+    return res.status(500).json({ error: { code: 'INTERNAL', message: code } });
+  }
+});
+
+// Legacy Python-era contract (shadowflow/api/settings.py used to serve this):
+// theme-only view. Kept so old clients / docs don't 404; new code should use
+// /preferences. GET defaults to 'dark' to match the old API's response shape.
+router.get('/appearance', (_req: Request, res: Response) => {
+  res.set('Cache-Control', 'no-store');
+  const prefs = loadPreferences();
+  res.json({ theme: prefs.theme ?? 'dark' });
+});
+
+router.put('/appearance', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { theme?: unknown };
+  const theme = body.theme;
+  if (typeof theme !== 'string' || !VALID_THEMES.has(theme)) {
+    return res.status(400).json({
+      error: { code: 'INVALID_PREFERENCE', field: 'theme', message: 'theme must be one of dark | light | system | paper' },
+    });
+  }
+  const merged: UiPreferences = { ...loadPreferences(), theme };
+  try {
+    setSetting(PREFERENCES_KEY, merged);
+    res.json({ theme });
+  } catch (e: unknown) {
+    const code = e instanceof Error ? e.message : 'UNKNOWN';
+    return res.status(500).json({ error: { code: 'INTERNAL', message: code } });
   }
 });
 

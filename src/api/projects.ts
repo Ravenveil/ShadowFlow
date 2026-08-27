@@ -1,0 +1,85 @@
+/**
+ * projects.ts — GAP A3（2026-08-22）— Node 侧 /api/projects 客户端。
+ *
+ * Neo 左栏项目分组用：`listProjectsWithSessions()` 拉项目 + 关联会话
+ * （GET /api/projects?withSessions=1，session.group_id 互链 inbox 的
+ * DM/群聊 group_id），`createProject()` 支撑「新建项目」行。
+ * 响应 shape 与 server storage record 一致（无 envelope，snake_case 直透）。
+ */
+import { getApiBase, authHeaders } from './_base';
+
+export interface ProjectSession {
+  conversation_id: string;
+  project_id: string;
+  title: string | null;
+  /** B1 统一会话内核 — 互链 Python 群/DM 的 group_id；null = 匿名 run 会话。 */
+  group_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectRecord {
+  project_id: string;
+  name: string;
+  workspace_path: string;
+  skill_id: string | null;
+  design_system_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** withSessions=1 变体：verbatim record + id 别名 + sessions[]。 */
+export interface ProjectWithSessions extends ProjectRecord {
+  id: string;
+  sessions: ProjectSession[];
+}
+
+const base = () => getApiBase();
+
+export async function listProjectsWithSessions(): Promise<ProjectWithSessions[]> {
+  const res = await fetch(`${base()}/api/projects?withSessions=1`, {
+    headers: { ...authHeaders() },
+  });
+  if (!res.ok) throw new Error(`listProjectsWithSessions: ${res.status}`);
+  return res.json();
+}
+
+export async function createProject(name: string): Promise<ProjectRecord> {
+  const res = await fetch(`${base()}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`createProject: ${res.status}`);
+  return res.json();
+}
+
+export interface ProjectPatchRequest {
+  name?: string;
+  workspace_path?: string;
+  skill_id?: string | null;
+  design_system_id?: string | null;
+}
+
+/** 管理面闭环（2026-08-23）：项目重命名等局部更新，PATCH /api/projects/:id。 */
+export async function patchProject(
+  projectId: string,
+  patch: ProjectPatchRequest,
+): Promise<ProjectRecord> {
+  const res = await fetch(`${base()}/api/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`patchProject: ${res.status}`);
+  return res.json();
+}
+
+/** 管理面闭环（2026-08-23）：删除项目，DELETE /api/projects/:id（204）。 */
+export async function deleteProject(projectId: string): Promise<void> {
+  const res = await fetch(`${base()}/api/projects/${encodeURIComponent(projectId)}`, {
+    method: 'DELETE',
+    headers: { ...authHeaders() },
+  });
+  if (!res.ok) throw new Error(`deleteProject: ${res.status}`);
+}

@@ -2,6 +2,9 @@
  * projects.ts — Story 15.16 — REST API for the Project resource.
  *
  *   GET    /api/projects                    → list (newest first)
+ *   GET    /api/projects?withSessions=1     → list + 每项附 sessions[]（项目分组会话，
+ *                                             GAP A3 2026-08-22；session = conversations 行，
+ *                                             group_id 互链 Python 群/DM，前端按它归组）
  *   POST   /api/projects                    → create  → 201
  *   GET    /api/projects/:id                → fetch   / 404
  *   PATCH  /api/projects/:id                → partial / 404
@@ -20,12 +23,27 @@ import {
   listProjects,
   updateProject,
 } from '../storage/projects';
+import { listConversations } from '../storage/conversations';
 import { getDb } from '../storage/sqlite';
 
 const router = Router();
 
-router.get('/', (_req: Request, res: Response) => {
-  res.json(listProjects());
+router.get('/', (req: Request, res: Response) => {
+  const projects = listProjects();
+  // GAP A3（2026-08-22）：?withSessions=1 → 每个项目附 sessions[]（该项目下的
+  // 会话行，按 updated_at 新→旧）。数据模型复用 conversations.project_id（15.16
+  // 已有外键），不新增表；shape 在 verbatim record 上额外加 id 别名 + sessions。
+  if (req.query.withSessions === '1' || req.query.withSessions === 'true') {
+    res.json(
+      projects.map((p) => ({
+        ...p,
+        id: p.project_id,
+        sessions: listConversations(p.project_id),
+      })),
+    );
+    return;
+  }
+  res.json(projects);
 });
 
 router.post('/', (req: Request, res: Response) => {

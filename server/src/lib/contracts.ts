@@ -126,7 +126,10 @@ export type MessageKind =
   | 'image_panel'
   | 'web_preview'
   | 'artifact_card'
-  | 'verdict_card';
+  | 'verdict_card'
+  // 2026-08-23 — WorkBuddy 式意图分发可视化：网关在 INTENT_PARSE 后补发一帧
+  // 派发决策（选了哪个 team/agent、为什么）。additive；旧客户端按 id append 即可。
+  | 'intent';
 
 export interface TimelineMessageBase {
   /** ULID-ish stable id. Front-end uses this as React key + patch target. */
@@ -185,6 +188,15 @@ export interface CommitFileEntry {
   path: string;
   /** Git letter: A added / M modified / D deleted / R renamed. */
   status: string;
+}
+
+/** intent 卡里的一条派发明细（编排者拆出的 per-agent 子任务）。 */
+export interface IntentAssignment {
+  agent_id: string;
+  /** 展示名（ roster 解析结果，可能等于 id）。 */
+  name: string;
+  /** 子任务标题（INTENT_PARSE 产物）。 */
+  title: string;
 }
 
 export type TimelineMessage =
@@ -359,6 +371,18 @@ export type TimelineMessage =
       summary?: string;
       metrics?: { label: string; value: string | number; detail?: string }[];
       notes?: string[];
+    })
+  | (TimelineMessageBase & {
+      kind: 'intent';
+      /** 用户原始意图（原文截断，≤120 字）。 */
+      intent: string;
+      /** 派发对象类型：team = 团队 DAG 派发；agent = 串行逐个派发。 */
+      target_kind: 'team' | 'agent';
+      target_name: string;
+      /** 派发理由（LLM 拆解说明 / 降级原因），NeverRaising 侧已保证非空。 */
+      reason: string;
+      /** 可选：per-agent 子任务明细（仅 LLM 拆解成功时有）。 */
+      assignments?: IntentAssignment[];
     });
 
 /**

@@ -49,7 +49,13 @@ export type MessageKind =
   | 'image_panel'
   | 'web_preview'
   | 'artifact_card'
-  | 'verdict_card';
+  | 'verdict_card'
+  /**
+   * 2026-08-23 — WorkBuddy 式意图分发可视化：网关 INTENT_PARSE 后补发的
+   * 派发决策帧（派给谁、为什么）。群聊现场由 NeoGroupChat 的
+   * NeoDispatchCard 渲染；通用 Timeline 不渲染（见 NeoTimeline case）。
+   */
+  | 'intent';
 
 export interface TimelineMessageBase {
   /** ULID-ish stable id. React key + patch target. */
@@ -96,6 +102,13 @@ export interface CommitFileEntry {
   path: string;
   /** Git letter: A added / M modified / D deleted / R renamed. */
   status: string;
+}
+
+/** intent 卡里的一条派发明细（镜像 server contracts.IntentAssignment）。 */
+export interface IntentAssignment {
+  agent_id: string;
+  name: string;
+  title: string;
 }
 
 export type TimelineMessage =
@@ -277,6 +290,18 @@ export type TimelineMessage =
       summary?: string;
       metrics?: { label: string; value: string | number; detail?: string }[];
       notes?: string[];
+    })
+  | (TimelineMessageBase & {
+      kind: 'intent';
+      /** 用户原始意图（原文截断）。 */
+      intent: string;
+      /** team = 团队 DAG 派发；agent = 串行逐个派发。 */
+      target_kind: 'team' | 'agent';
+      target_name: string;
+      /** 派发理由（LLM 拆解说明 / 降级原因）。 */
+      reason: string;
+      /** 可选：per-agent 子任务明细（仅 LLM 拆解成功时有）。 */
+      assignments?: IntentAssignment[];
     });
 
 export type MessagePatch =

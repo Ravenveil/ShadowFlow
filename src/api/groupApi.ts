@@ -230,6 +230,41 @@ export async function resolveDmConversation(
 }
 
 /**
+ * 2026-08-19 · 团队 ↔ 群聊 find-or-create（与 resolveDmConversation 同款模式）。
+ *
+ * 后端没有「按 team 查 group」的端点（GET /api/groups 只支持 workspace/kind
+ * 过滤），唯一通路是客户端 join：listGroups 结果里每条 GroupRecord 都带
+ * team_id，过滤命中即返回；未命中则建一条挂在团队下的群（POST /api/groups
+ * 两端都持久化 team_id）。群聊网关按 group.team_id 触发团队 DAG 调度
+ * （server/src/routes/groups-chat.ts），团队的干活现场就是它的群。
+ *
+ * 失败（后端不可用等）返回 null，调用方回落 team 编排目标态。
+ */
+export async function resolveTeamGroup(
+  team: { team_id: string; name: string; agent_ids?: string[] },
+  workspaceId?: string | null,
+): Promise<string | null> {
+  try {
+    const groups = await listGroups(workspaceId, 'group');
+    const hit = groups.find((g) => g.team_id === team.team_id);
+    if (hit) return hit.group_id;
+    const created = await createGroup({
+      templateId: 'new-task',
+      groupTemplateId: '',
+      name: team.name,
+      agentIds: team.agent_ids ?? [],
+      memberEmails: [],
+      policyMatrix: {},
+      workspaceId: workspaceId ?? undefined,
+      teamId: team.team_id,
+    });
+    return created.groupId;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 2026-06-26 · 强制创建一条全新的 DM conversation，不做 find-or-create。
  * 用于「新对话」按钮：保留历史的同时开一条干净会话。
  * 直接 POST /api/groups with kind='dm'，绕过 /api/chat/dm/:id/resolve 的查重逻辑。

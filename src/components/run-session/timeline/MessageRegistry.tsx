@@ -113,6 +113,10 @@ export const MessageRegistry = memo(function MessageRegistry({
       return <ArtifactCard msg={msg} />;
     case 'verdict_card':
       return <VerdictCard msg={msg} />;
+    case 'intent':
+      // 派发决策卡由 NeoGroupChat 的 NeoDispatchCard 渲染（群聊现场专属）；
+      // 经典 Timeline 消费面不重复出卡。
+      return null;
     default: {
       // Exhaustiveness — compile error if a new kind is added without a case.
       const _exhaustive: never = msg;
