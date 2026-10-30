@@ -90,3 +90,7 @@ _bmad-output/
 # Local-only review notes & handoff scratch (not source-tracked)
 .shadowflow-review.md
 _handoff_tmp/
+
+# 2026-10-30 安全清理：server 侧运行时数据（settings.json 含 API key、sqlite、
+# sessions/projects）一律不入库（曾因跟踪泄露 key，历史已在远程，key 已作废待换）。
+server/.shadowflow/
