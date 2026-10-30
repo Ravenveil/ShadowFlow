@@ -1,0 +1,91 @@
+pageType: final
+background:
+  type: solid
+  color: "$paper"
+notes: 收尾：分层阅读清单（三颗星到一颗星）和三个留给团队的讨论问题。参考文献均给出 arXiv 编号，对应 research/papers/ 下已下载的 PDF。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 44, 300, 18]
+    content:
+      style: "$label"
+      text: 延伸阅读与讨论
+  - elementId: title
+    elementType: text
+    bounds: [48, 68, 800, 38]
+    content:
+      style: "$pagetitle"
+      text: 下一步读什么，讨论什么
+  - elementId: list-head
+    elementType: text
+    bounds: [48, 124, 480, 22]
+    content:
+      fontSize: 14
+      bold: true
+      color: "$ink"
+      text: 分层阅读清单
+  - elementId: list
+    elementType: text
+    bounds: [48, 152, 480, 300]
+    content:
+      style: "$body"
+      fontSize: 12
+      lineHeight: 1.62
+      text: |
+        <p><span style="color:$primary;"><strong>★★★</strong></span> Cheng, Nie, Swaminathan. Trace is the Next AutoDiff. NeurIPS 2024. arXiv:2406.16218</p>
+        <p><span style="color:$primary;"><strong>★★★</strong></span> Dwarakanath, Balch, Vyetrenko. ABIDES-Economist. arXiv:2402.09563</p>
+        <p><span style="color:$primary;"><strong>★★★</strong></span> Hao et al. Game-Theoretic Lens on LLM-based MAS. arXiv:2601.15047</p>
+        <p><span style="color:$primary;"><strong>★★</strong></span> Alicea et al. A "Good" Regulator May Provide a World Model. arXiv:2506.23032</p>
+        <p><span style="color:$primary;"><strong>★★</strong></span> Laurière et al. Learning in Mean Field Games: A Survey. arXiv:2205.12944</p>
+        <p><span style="color:$primary;"><strong>★★</strong></span> Byrd, Hybinette, Balch. ABIDES. arXiv:1904.12066</p>
+        <p><span style="color:$gray;"><strong>★</strong></span> Conant & Ashby. Every Good Regulator..., 1970</p>
+        <p><span style="color:$gray;"><strong>★</strong></span> Gao et al. LLM-empowered ABM Survey. Nature HSS, 2024</p>
+        <p><span style="color:$gray;"><strong>★</strong></span> Wang et al. Agent Cybernetics, 2026</p>
+  - elementId: list-note
+    elementType: text
+    bounds: [48, 456, 480, 16]
+    content:
+      style: "$small"
+      text: 前六篇 PDF 已下载至 research/papers/
+  - elementId: div
+    elementType: shape
+    bounds: [568, 124, 1, 340]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: disc-head
+    elementType: text
+    bounds: [600, 124, 312, 22]
+    content:
+      fontSize: 14
+      bold: true
+      color: "$primary"
+      text: 留给团队的三个问题
+  - elementId: disc
+    elementType: text
+    bounds: [600, 152, 312, 300]
+    content:
+      style: "$body"
+      fontSize: 12.5
+      lineHeight: 1.6
+      text: |
+        <p><strong>Q1.</strong> 我们的"反馈"由谁定义？合规驳回、市场冲击、还是人工标注——反馈设计的归谁管？</p>
+        <p style="margin-top:12px"><strong>Q2.</strong> 万级种群用规则 agent 撑起后，"关键角色"（LLM/RL）的比例定在多少，涌现仍然保真？</p>
+        <p style="margin-top:12px"><strong>Q3.</strong> 均衡收敛的判定标准（ε 多大算收敛）能否直接进入项目的可信性评估体系？</p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: Trace is the Next AutoDiff · 文献精读 · 谢谢
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "14"

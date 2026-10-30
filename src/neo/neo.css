@@ -995,3 +995,30 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── ClawHub（2026-10-30）：左侧会话行 Claw 标识 ──────────────────────────
+   绑定 claw 的 agent 会话行：爪印图标替代默认气泡图标 + claw id 小标签。 */
+.neo-row-claw-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: #f59e0b;
+}
+
+.neo-row-claw-badge svg {
+  display: block;
+}
+
+.neo-row-claw-tag {
+  flex-shrink: 0;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}

@@ -1,0 +1,62 @@
+version: v2
+title: Trace 文献精读 — 当执行轨迹成为梯度
+size: [960, 540]
+theme:
+  colors:
+    primary: "#8C1514"
+    ink: "#27231F"
+    paper: "#F7F3E8"
+    gray: "#9B9489"
+    soft: "#EFE7D6"
+    line: "#D8CDB8"
+  textStyles:
+    pagetitle:
+      fontSize: 26
+      color: "$ink"
+      bold: true
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+    body:
+      fontSize: 14
+      color: "$ink"
+      lineHeight: 1.45
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+    small:
+      fontSize: 10
+      color: "$gray"
+      lineHeight: 1.3
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+    label:
+      fontSize: 11
+      color: "$primary"
+      bold: true
+      letterSpacing: 3
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+  tableStyles:
+    default:
+      cellStyle:
+        fontSize: 12
+        color: "$ink"
+        fontFamily: {latin: "Georgia", ea: "MiSans"}
+        border: [null, null, {style: solid, width: 1, color: "$line"}, null]
+        align: [left, middle]
+      firstRowStyle:
+        bold: true
+        color: "$primary"
+        border: [ {style: solid, width: 2, color: "$primary"}, null, {style: solid, width: 1, color: "$primary"}, null ]
+      lastRowStyle:
+        border: [null, null, {style: solid, width: 2, color: "$primary"}, null]
+pages:
+  - pages/01_cover.page
+  - pages/02_map.page
+  - pages/03_background.page
+  - pages/04_insight.page
+  - pages/05_opto.page
+  - pages/06_system.page
+  - pages/07_optoprime.page
+  - pages/08_experiments.page
+  - pages/09_robot.page
+  - pages/10_limits.page
+  - pages/11_cybernetics.page
+  - pages/12_gametheory.page
+  - pages/13_proposal.page
+  - pages/14_reading.page

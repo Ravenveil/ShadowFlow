@@ -662,6 +662,9 @@ export async function* runSkillAssembler(
   try {
     callable = resolveCallable(executor, {
       apiKey,
+      // 2026-10-30 设置联动：provider 一并传给 dispatcher，cli:* 子进程按
+      // provider 名注入对应 env key（如 ARC 读 OPENAI_API_KEY）。
+      provider: opts.provider,
       model: opts.model,
       maxTokens: opts.max_tokens,
       temperature: opts.temperature,

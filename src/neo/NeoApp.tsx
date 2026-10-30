@@ -25,6 +25,8 @@ import { NeoAgentSoul } from './NeoAgentSoul';
 import { NeoRunHistory } from './NeoRunHistory';
 import KnowledgePage, { parseSourceId } from '../pages/KnowledgePage';
 import MemoryPage from '../pages/MemoryPage';
+// ClawHub（2026-10-30 内嵌化）：中栏变体，左栏常驻（原独立路由保留兼容）。
+import ClawHubPage from '../pages/clawhub/ClawHubPage';
 import { useI18n } from '../common/i18n';
 import { usePythonBackendStatus } from '../core/hooks/usePythonBackendStatus';
 import { useInboxStore } from '../core/store/useInboxStore';
@@ -221,7 +223,8 @@ export function NeoApp() {
   // 知识库/记忆/灵魂/历史页是内容阅读态：不套 440px 窄聊天列布局（neo-main--run），
   // 中栏按默认 flex 自然展开。
   const pageView =
-    nav.view === 'knowledge' || nav.view === 'memory' || nav.view === 'agent-soul' || nav.view === 'runs';
+    nav.view === 'knowledge' || nav.view === 'memory' || nav.view === 'agent-soul' ||
+    nav.view === 'runs' || nav.view === 'clawhub';
   // 主机未折叠 → 聊天列收窄，主机占满（clawsgo 运行态三栏）
   const runLayout = hostActive && !hostCollapsed && !pageView;
 
@@ -265,7 +268,7 @@ export function NeoApp() {
 
       <main className={`neo-main${runLayout ? ' neo-main--run' : ''}`}>
         {nav.view === 'conversation' ? (
-          <NeoGroupChat groupId={nav.groupId} embedded />
+          <NeoGroupChat groupId={nav.groupId} embedded onNavigate={navigate} />
         ) : nav.view === 'knowledge' ? (
           <KnowledgePage
             embedded
@@ -273,6 +276,8 @@ export function NeoApp() {
           />
         ) : nav.view === 'memory' ? (
           <MemoryPage embedded />
+        ) : nav.view === 'clawhub' ? (
+          <ClawHubPage embedded />
         ) : nav.view === 'agent-soul' ? (
           <NeoAgentSoul agentId={nav.agentId} />
         ) : nav.view === 'runs' ? (

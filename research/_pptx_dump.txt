@@ -1,0 +1,368 @@
+<!-- Slide number: 1 -->
+
+PAPER READING · 文献精读
+Trace is the Next AutoDiff
+当执行轨迹成为梯度：面向一般计算工作流的生成式优化
+Trace
+
+Ching-An Cheng（Microsoft Research）· Allen Nie（Stanford）· Adith Swaminathan（Netflix）
+ Generative Optimization with Rich Feedback, Execution Traces, and LLMs
+核心命题：梯度只能优化可微分系统；而执行轨迹可以为不可微分的工作流（LLM 调用、编排代码、模拟器）承担同样的"信用分配"角色。
+NeurIPS 2024
+arXiv: 2406.16218
+Microsoft Research × Stanford × Netflix
+金融世界模型项目 · 文献调研 · 2026-09-02
+
+### Notes:
+开场：今天精读的论文是 NeurIPS 2024 的 Trace。一句话——它把"反向传播"推广到了不可微分的一切计算工作流，用的载体不是梯度，而是执行轨迹。
+
+<!-- Slide number: 2 -->
+READING MAP · 阅读地图
+本次精读的四个问题
+
+问题与洞察
+为什么 AutoDiff 到不了的地方，需要一种新优化范式？轨迹凭什么等价于梯度？
+OPTO 与系统设计
+Trace Oracle 的形式化定义；Trace 库与 OptoPrime 优化器如何工作。
+01
+02
+实验与局限
+五个实验域的证据强度；作者自述的三条边界。
+两个解读视角
+控制论：OPTO 即反馈控制环；博弈论：轨迹驱动的经验均衡分析。
+03
+04
+
+为什么读这篇 · 与项目的关系
+我们的金融世界模型项目卡在三个地方：奖励函数依赖（RL 路线结果高度依赖奖励设定）、规模（万级智能体涌现）、可信性评估（模拟结果无统一评判依据）。
+Trace 提供了一条绕开奖励函数设计的优化路线——直接用执行轨迹 + 丰富反馈更新智能体的策略与提示词；而它的轨迹抽象，恰好能与博弈论的均衡分析、控制论的反馈闭环缝合成一个完整研究框架。
+
+Trace is the Next AutoDiff · 文献精读
+02
+
+### Notes:
+阅读地图：四段式。先讲问题，再讲 OPTO 与系统，然后实验与局限，最后落到我们自己的两个解读视角——控制论与博弈论。
+
+<!-- Slide number: 3 -->
+01 · 问题
+梯度优化万物，止于"不可微"
+AutoDiff 的世界（PyTorch）
+真实的 AI 工作流
+
+· 计算图可微分：每个算子有解析梯度
+· 反馈是标量损失：一个数代表好坏
+· 参数同质：全是浮点张量
+· 结构静态：图在编译期固定
+反向传播把误差沿图回传，每个参数得到精确改进方向——这套机制支撑了十亿参数级网络的端到端优化。
+· 不可微：LLM 调用、工具调用、模拟器、检索
+· 反馈丰富：控制台输出、用户回复、编译报错
+· 参数异质：提示词、代码、超参混在一起
+· 结构动态：编排逻辑随输入改变图的形状
+部署后行为出错只能靠工程师手动改；贝叶斯优化 / 进化算法 / RL 只吃标量反馈，在大参数空间效率极低。
+
+研究问题：能否找到一种载体，替代梯度，把"输出的丰富反馈"端到端地归因到"异质参数"上？作者的回答：执行轨迹（execution trace）。
+
+Trace is the Next AutoDiff · §1 Introduction
+03
+
+### Notes:
+讲清问题的两面：左边是 AutoDiff 的天堂（可微、标量损失），右边是真实工作流的地狱（不可微、丰富反馈、异质参数、结构动态变化）。底部一句话收束。
+
+<!-- Slide number: 4 -->
+01 · 核心洞察
+执行轨迹 ≈ 不可微系统的"梯度"
+工作流视作计算图：节点是输入 / 参数 / 计算结果，边是"谁由谁计算而来"。反向传播传播梯度；Trace 传播执行轨迹。
+① 轨迹记录了"中间结果如何被使用"
+这是把输出端反馈归因到上游参数所需的全部信息。
+② 严格包含反向传播
+论文证明：可微分情形下，传播轨迹的 backward 就是梯度反传——AutoDiff 是 Trace 的特例。
+③ 对不可微工作流仍然成立
+LLM、代码、模拟器无所谓"梯度"，但都有执行轨迹——人类工程师本来就用轨迹 debug 分布式系统。
+④ 最小子图控制成本
+只把与参数有因果关系的子图交给优化器，等价于只回传相关梯度。
+
+前向：执行工作流，记录轨迹
+
+输入 map
+
+参数 θ
+
+中间结果
+
+输出 + 反馈 f
+
+回传：最小子图 g + 反馈 f（而非梯度 ∇）
+
+Trace is the Next AutoDiff · §1.1 / §3.3
+04
+
+### Notes:
+全文最重要的一页。中间用 DAG 示意：前向是执行，回传的不是梯度而是轨迹子图。右侧三点解释为什么轨迹能承担梯度的角色。
+
+<!-- Slide number: 5 -->
+02 · 形式化
+OPTO：带轨迹预言机的迭代优化
+OPTO 问题实例 = 三元组 (Θ, ω, T)
+· Θ：参数空间（提示词 / 代码 / 超参）
+· ω：问题上下文（任务说明、环境描述）
+· T：Trace Oracle，输入 θ，返回轨迹反馈
+一轮 OPTO 迭代
+
+① 优化器选择参数 θ（如改写后的提示词）
+
+② Trace Oracle 执行工作流，返回 τ = (f, g)
+
+f = 对输出的反馈（自然语言 / 标量 / 控制台输出）
+g = 以 θ 为输入的执行计算图（含全部中间值）
+对照：传统优化只给 f（标量），OPTO 同时给"问题是怎么算出来的"。
+
+③ 优化器依据 f 与 g 更新 θ → 进入下一轮
+与相邻概念的关系：OPTO 像 RL，但反馈不是标量奖励而是"丰富反馈 + 轨迹"；像贝叶斯优化，但不把系统当黑箱；像 AutoDiff，但不要求可微。它是一个新的数学 setup，而不是某个具体算法。
+
+Trace is the Next AutoDiff · §2 Optimization with Trace Oracle
+05
+
+### Notes:
+OPTO 形式化：三元组（参数空间、上下文、Trace Oracle）。讲清每轮迭代的循环：选参数→拿轨迹反馈→更新。强调这与强化学习的差异：反馈不是标量奖励，而是丰富反馈+完整轨迹。
+
+<!-- Slide number: 6 -->
+02 · 系统
+Trace 库：像写 PyTorch 一样声明可优化工作流
+
+与 PyTorch 的一一对应
+# Battleship 智能体策略
+class Policy(trace.Module):
+  def forward(self, map):
+    plan = self.reason(map)
+    return self.act(map, plan)
+
+  @trace.bundle(trainable=True)
+  def reason(self, map): ...
+
+policy = Policy()
+optimizer = trace.Optimizer(
+    policy.parameters())
+# 与环境交互 → 收集轨迹 → 更新
+| PyTorch | Trace |
+| --- | --- |
+| Tensor | Node（任意对象：字符串 / 代码 / 数值） |
+| nn.Module 层 | @bundle 装饰的算子 |
+| requires\_grad=True | trainable=True |
+| SGD / Adam | LLM 优化器（OptoPrime） |
+图 1 · 基于论文 Fig. 2 简化：trainable 标记即"可训练参数"
+关键差别只在最后一行：优化器从"数值算法"换成了"读轨迹的 LLM"——更新的可以是 prompt 的措辞，也可以是整段 Python 代码。
+
+Trace is the Next AutoDiff · §3 Design of Trace
+06
+
+### Notes:
+系统设计：PyTorch 风格的 API。左边放简化的 Battleship 策略代码，右边放 PyTorch 类比表——听众只要会 PyTorch 就会 Trace。
+
+<!-- Slide number: 7 -->
+02 · 优化器
+OptoPrime：让 LLM 像程序员一样"读轨迹改代码"
+一份真实的伪代码报告（论文 Fig. 4）
+执行工作流
+记录每个算子的输入输出，得到完整执行轨迹。
+
+①
+
+#Code
+a = bar(x); y = add(b, a)
+z = mul(a, y)
+#Inputs: b=1.0
+#Others: a=2.0  y=3.0
+#Output: z=6.0
+#Variable: x=-1.0
+#Feedback: Output should be larger.
+提取最小子图
+只保留与可训练参数有因果关系的节点，压缩 token。
+②
+转写为伪代码报告
+子图 → "代码 + 算子说明 + 各变量取值 + 反馈"的文本报告。
+③
+LLM 推理并更新参数
+像 debug 一样推断"改哪个参数、往哪个方向改"，输出新 θ。
+④
+LLM 读到"z 要更大、a=x 的负缩放、x 是变量"，即可推出应把 x 调得更负——无需任何梯度。
+
+Trace is the Next AutoDiff · §4 Design of the First OPTO Optimizer
+07
+
+### Notes:
+OptoPrime 的四步：执行工作流、取最小子图、转伪代码报告、LLM 给出更新。右边展示一个真实的伪代码报告样子（论文 Fig. 4 的例子）。强调为什么用伪代码：利用 LLM 的 debug 能力。
+
+<!-- Slide number: 8 -->
+03 · 证据
+实验：一个通用优化器横跨五个领域
+| 实验域 | 任务设置 | 被优化的参数 | 主要结论 |
+| --- | --- | --- | --- |
+| 一阶数值优化 | 验证 OptoPrime 复现梯度下降行为 | 数值变量 | 与精确一阶方法接近 |
+| 系统编排调优 | DSPy 流水线超参与编排 | 超参 + 编排代码 | 与专用优化器竞争力相当 |
+| 提示词×代码联合优化 | Battleship 游戏智能体 | prompt + Python 代码 | 从"只会猜 [0,0]"学会枚举全盘 |
+| 长时域机器人控制 | Meta-World Sawyer 机械臂三任务 | 控制器代码 | 用自然语言反馈实现"跨时间反传" |
+| 对比 TextGrad | 同为 LLM 优化框架的消融 | —— | Trace 的图追踪更完整 |
+表 1 · 依据论文 §5 整理；除最后一行外均报告 10 个随机种子的均值与标准误
+读法：证据的意义不在"打败专用优化器"，而在同一个 OPTO 接口覆盖了五个看似无关的问题类——这正是 AutoDiff 当年做的事。
+
+Trace is the Next AutoDiff · §5 Experiments
+08
+
+### Notes:
+实验总览：五个域，一张三线表。强调两点——覆盖面（数值优化到机器人控制）和"通用优化器与各领域专用优化器打平"这个主张的证据强度。
+
+<!-- Slide number: 9 -->
+03 · 深读一个实验
+机器人控制：用自然语言反馈"跨时间反向传播"
+设置（LLF-Bench Meta-World）
+· 模拟 Sawyer 机械臂：Reach / Pick-place / Push
+· 每次迭代跑一次 10 步的 episode
+· 环境返回观测 + 自然语言引导反馈
+· 被优化对象：控制器 Python 代码
+这恰是一个标准反馈控制环
+
+环境（被控对象）
+
+动作（4 维向量）
+观测 + 自然语言反馈 f
+为什么这个实验关键
+轨迹跨 10 个时间步，反馈发生在末端——等价于深度学习里"随时间反向传播"（BPTT）的难题。
+Trace 的做法不变：把整条时间轨迹作为子图交给 LLM，让它把"最后没抓到"归因到"第三步的抓取逻辑写错了"。
+
+控制器代码（θ）
+
+OptoPrime 读 10 步轨迹 → 改写控制器代码（参数更新）
+
+Trace is the Next AutoDiff · §5.4 Long-Horizon Robot Manipulator Control
+09
+
+### Notes:
+机器人实验是最能体现"跨时间反向传播"的案例：10 步 rollout 的环境反馈被归因回控制器代码。这也是通往控制论视角的过渡页——这就是一个反馈控制环。
+
+<!-- Slide number: 10 -->
+03 · 边界
+局限：作者自己划出的三条边界
+
+已被证明的
+尚未解决的
+· 轨迹传播严格包含反向传播（可微情形）
+· 单一 OPTO 接口覆盖五个问题类
+· 丰富反馈（自然语言）可作为有效优化信号
+· 中等规模图上 OptoPrime 稳定工作
+① 反馈设计成为新的"损失函数设计"
+反馈怎么设计、最优性如何定义，是开放研究问题。
+② 表达边界
+原地修改状态的有状态函数无法直接表示为 DAG；分布式 / 并行工作流与当前实现不兼容（理论上无环即可异步）。
+③ OptoPrime 只是初步方案
+非可证最优；token 开销大于 OPRO；问题规模受限于 LLM 的 debug 能力与上下文长度。
+对我们的含义：第②条意味着 Trace 目前管不了"万级 agent 并行仿真"本身——它优化的是单个工作流的参数；并行仿真需要另一层（DES 内核），两者是互补关系。
+
+Trace is the Next AutoDiff · §6 Limitations
+10
+
+### Notes:
+局限性页：一条粗线把"已证明"和"尚未解决"切开。三条局限都来自论文第 6 节原文：反馈设计、DAG 表达边界（含不支持分布式并行）、OptoPrime 只是初步。
+
+<!-- Slide number: 11 -->
+04 · 视角一：控制论
+OPTO 就是一个反馈控制环
+| PDCA | 控制论角色 | OPTO 对应物 |
+| --- | --- | --- |
+| Plan | Setpoint 设定值 | 目标 / 上下文 ω |
+| Do | Actuator 执行器 | 工作流以 θ 执行 |
+| Check | Sensor 传感 | 反馈 f + 轨迹 g |
+| Act | Controller 控制律 | OptoPrime 更新 θ |
+好调节器定理 → 世界模型
+"Every good regulator of a system must be a model of that system."
+—— Conant & Ashby, 1970
+· Alicea et al. (2025) 把这一定理对接到现代 AI：能调控系统的智能体，其内部必然含有该系统（近似）的世界模型。
+· 对金融世界模型的推论：央行 agent 的调控能力上界 = 它内部模型的质量——世界模型不是奢侈品，是调控的前提。
+· 智能体的信念更新（belief update）= 内部模型的在线修正；反馈设计决定模型修正的方向。
+表 2 · OPTO 迭代的控制论拆解（对照 ShadowFlow 循环引擎 §1.2）
+ShadowFlow 侧的资产：循环引擎（loop_engine.py）已实现 PDCA↔控制环映射、Sensor/Controller 一等节点、loops-watching-loops 监督（VSM System-2）、分形嵌套上界。缺的正是 Trace 补的东西：把 Sensor 读到的轨迹反馈转成 Controller 的参数更新。
+
+参考：arXiv:2506.23032（Good Regulator × World Model）· Conant & Ashby (1970)
+11
+
+### Notes:
+视角一：控制论。OPTO 迭代本质就是反馈控制环；好调节器定理把"调控能力"与"内部世界模型"画等号——这正是金融世界模型项目的理论根基。ShadowFlow 的 PDCA 循环引擎已经是控制论结构。
+
+<!-- Slide number: 12 -->
+04 · 视角二：博弈论
+均衡 = "没有有利可图的偏离"
+把多智能体系统写成随机博弈
+
+EGTA：经验博弈论分析
+· 状态随联合动作演化 → Markov Game / 随机博弈
+· 每个 agent 的最优性 = 给定他人策略时的最优反应（best response）
+· 经验均衡检验：固定他人策略，看单 agent 偏离是否还能获益（ε-Nash）
+仿真估计收益矩阵 → 在策略子空间求解纳什均衡 → 用新发现的策略扩充博弈，迭代收敛。
+ABIDES 主论文的 spoofing 研究即此方法（Wellman 学派）。
+ABIDES-Economist 的实测规模
+· 10,503 个规则 agent / 单步约 5,000 万条消息 / 约 20 分钟跑完
+· RL 学习只敢做 112 个 agent；4 个类型级共享策略网络
+· 共享策略 = 对称马尔可夫完美均衡假设，同时充当均衡选择机制
+· 训练 4.3 万 episode / 31 小时（PPO + RLlib 并行采样）
+万级规模：平均场博弈
+· N 人博弈不可分析 → 近似为"一人对群体分布"
+· 观测从"逐 agent"变"分布统计量"，通信 O(N²)→O(N)
+· 既是性能工具，也是理论接口（MFG 均衡可证）
+要点："均衡"不是算出来的解析解，而是用轨迹反复检验"偏离是否有利可图"得到的经验结论——这就是下一页的结合点。
+
+参考：arXiv:2601.15047 · arXiv:2205.12944 · arXiv:2402.09563（§4.3.3）
+12
+
+### Notes:
+视角二：博弈论。多智能体系统建模为随机博弈；均衡的操作化定义是"无利可图的偏离"；EGTA 给出从仿真到均衡分析的方法论；万级规模必须借助平均场。底部放 ABIDES-Economist 的实测数字。
+
+<!-- Slide number: 13 -->
+04 · 研究切口
+提案：Trace 驱动的经验博弈均衡分析
+
+① DES 仿真
+万级 agent 市场仿真，产出完整执行轨迹
+② 轨迹优化
+OPTO：轨迹+反馈做生成式 best-response
+③ 均衡探测
+检验偏离是否仍有利可图（ε-Nash）
+④ 调控检验
+好调节器定理检验央行内部模型
+
+发现更优策略 → 扩充博弈 → 回到①重新仿真（EGTA 式迭代）
+与主流 MARL 路线的差异
+· 不依赖奖励函数设计：反馈可以是市场评论、风控警告、合规驳回等自然语言信号（回应启动会"结果高度依赖奖励函数"的痛点）
+· 可解释：每次参数更新附带 LLM 的归因推理，而非黑箱梯度步
+· 与规模解耦：优化只发生在"关键角色"的轨迹上，背景种群保持廉价规则 agent
+ShadowFlow 的现成资产：RunTrajectory / TrajectoryBundle 契约已有 Trace 所需的轨迹数据结构；rejection loop 与策略矩阵天然是"丰富反馈源"；循环引擎提供 PDCA 骨架。补 DES 内核 + OPTO 优化层即闭环。
+
+研究提案 · 详见研究报告 §4.4
+13
+
+### Notes:
+研究切口页：把三篇文献缝成一个闭环提案。四步循环：DES 仿真产轨迹 → OPTO 生成式优化做 best-response → 均衡探测 → 好调节器检验。右侧强调与 RL 路线的差异和 ShadowFlow 的现成资产。
+
+<!-- Slide number: 14 -->
+延伸阅读与讨论
+下一步读什么，讨论什么
+分层阅读清单
+
+留给团队的三个问题
+★★★ Cheng, Nie, Swaminathan. Trace is the Next AutoDiff. NeurIPS 2024. arXiv:2406.16218
+★★★ Dwarakanath, Balch, Vyetrenko. ABIDES-Economist. arXiv:2402.09563
+★★★ Hao et al. Game-Theoretic Lens on LLM-based MAS. arXiv:2601.15047
+★★ Alicea et al. A "Good" Regulator May Provide a World Model. arXiv:2506.23032
+★★ Laurière et al. Learning in Mean Field Games: A Survey. arXiv:2205.12944
+★★ Byrd, Hybinette, Balch. ABIDES. arXiv:1904.12066
+★ Conant & Ashby. Every Good Regulator..., 1970
+★ Gao et al. LLM-empowered ABM Survey. Nature HSS, 2024
+★ Wang et al. Agent Cybernetics, 2026
+Q1. 我们的"反馈"由谁定义？合规驳回、市场冲击、还是人工标注——反馈设计的归谁管？
+Q2. 万级种群用规则 agent 撑起后，"关键角色"（LLM/RL）的比例定在多少，涌现仍然保真？
+Q3. 均衡收敛的判定标准（ε 多大算收敛）能否直接进入项目的可信性评估体系？
+前六篇 PDF 已下载至 research/papers/
+
+Trace is the Next AutoDiff · 文献精读 · 谢谢
+14
+
+### Notes:
+收尾：分层阅读清单（三颗星到一颗星）和三个留给团队的讨论问题。参考文献均给出 arXiv 编号，对应 research/papers/ 下已下载的 PDF。

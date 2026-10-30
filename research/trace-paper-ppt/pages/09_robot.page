@@ -1,0 +1,149 @@
+pageType: content
+background:
+  type: solid
+  color: "$paper"
+notes: 机器人实验是最能体现"跨时间反向传播"的案例：10 步 rollout 的环境反馈被归因回控制器代码。这也是通往控制论视角的过渡页——这就是一个反馈控制环。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 40, 300, 18]
+    content:
+      style: "$label"
+      text: 03 · 深读一个实验
+  - elementId: title
+    elementType: text
+    bounds: [48, 64, 860, 38]
+    content:
+      style: "$pagetitle"
+      text: 机器人控制：用自然语言反馈"跨时间反向传播"
+  - elementId: setup
+    elementType: text
+    bounds: [48, 118, 400, 130]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.55
+      text: |
+        <p><strong>设置</strong>（LLF-Bench Meta-World）</p>
+        <p style="margin-top:6px">· 模拟 Sawyer 机械臂：Reach / Pick-place / Push</p>
+        <p>· 每次迭代跑一次 10 步的 episode</p>
+        <p>· 环境返回观测 + <strong>自然语言引导反馈</strong></p>
+        <p>· 被优化对象：控制器 Python 代码</p>
+  - elementId: why
+    elementType: text
+    bounds: [48, 268, 400, 180]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.55
+      text: |
+        <p><strong>为什么这个实验关键</strong></p>
+        <p style="margin-top:6px">轨迹跨 10 个时间步，反馈发生在末端——等价于深度学习里"随时间反向传播"（BPTT）的难题。</p>
+        <p style="margin-top:8px">Trace 的做法不变：把整条时间轨迹作为子图交给 LLM，让它把"最后没抓到"归因到"第三步的抓取逻辑写错了"。</p>
+  - elementId: div
+    elementType: shape
+    bounds: [484, 120, 1, 330]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: loop-head
+    elementType: text
+    bounds: [520, 118, 392, 22]
+    content:
+      fontSize: 13
+      bold: true
+      color: "$ink"
+      text: 这恰是一个标准反馈控制环
+  - elementId: env
+    elementType: shape
+    bounds: [640, 152, 152, 52]
+    shapeName: rect
+    fill: {type: solid, color: "$soft"}
+    border: {style: solid, width: 1, color: "$gray"}
+  - elementId: env-t
+    elementType: text
+    bounds: [640, 152, 152, 52]
+    content:
+      fontSize: 12
+      color: "$ink"
+      align: [center, middle]
+      text: 环境（被控对象）
+  - elementId: pol
+    elementType: shape
+    bounds: [640, 288, 152, 52]
+    shapeName: rect
+    fill: {type: solid, color: "$primary"}
+  - elementId: pol-t
+    elementType: text
+    bounds: [640, 288, 152, 52]
+    content:
+      fontSize: 12
+      color: "#F7F3E8"
+      align: [center, middle]
+      text: 控制器代码（θ）
+  - elementId: fb1
+    elementType: line
+    bounds: [712, 204, 8, 84]
+    viewBox: [8, 84]
+    points: "4,0 4,84"
+    curve: sharp
+    arrow: [null, "arrow"]
+    border: {style: solid, width: 2, color: "$ink"}
+  - elementId: fb1-t
+    elementType: text
+    bounds: [728, 232, 170, 32]
+    content:
+      fontSize: 10.5
+      color: "$gray"
+      lineHeight: 1.35
+      text: 观测 + 自然语言反馈 f
+  - elementId: fb2
+    elementType: line
+    bounds: [616, 204, 8, 84]
+    viewBox: [8, 84]
+    points: "4,84 4,0"
+    curve: sharp
+    arrow: [null, "arrow"]
+    border: {style: solid, width: 2, color: "$ink"}
+  - elementId: fb2-t
+    elementType: text
+    bounds: [508, 232, 100, 32]
+    content:
+      fontSize: 10.5
+      color: "$gray"
+      lineHeight: 1.35
+      text: 动作（4 维向量）
+  - elementId: upd
+    elementType: line
+    bounds: [520, 366, 392, 40]
+    viewBox: [392, 40]
+    points: "392,0 196,40 0,0"
+    curve: smooth
+    arrow: [null, "arrow"]
+    border: {style: dash, width: 2, color: "$primary"}
+  - elementId: upd-t
+    elementType: text
+    bounds: [520, 410, 392, 40]
+    content:
+      fontSize: 11
+      color: "$primary"
+      align: [center, top]
+      lineHeight: 1.4
+      text: OptoPrime 读 10 步轨迹 → 改写控制器代码（参数更新）
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: Trace is the Next AutoDiff · §5.4 Long-Horizon Robot Manipulator Control
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "09"

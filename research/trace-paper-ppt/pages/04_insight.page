@@ -1,0 +1,173 @@
+pageType: content
+background:
+  type: solid
+  color: "$paper"
+notes: 全文最重要的一页。中间用 DAG 示意：前向是执行，回传的不是梯度而是轨迹子图。右侧三点解释为什么轨迹能承担梯度的角色。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 40, 300, 18]
+    content:
+      style: "$label"
+      text: 01 · 核心洞察
+  - elementId: title
+    elementType: text
+    bounds: [48, 64, 860, 38]
+    content:
+      style: "$pagetitle"
+      text: 执行轨迹 ≈ 不可微系统的"梯度"
+  - elementId: claim
+    elementType: text
+    bounds: [48, 112, 420, 56]
+    content:
+      fontSize: 14
+      color: "$gray"
+      lineHeight: 1.5
+      text: |
+        <p>工作流视作计算图：节点是输入 / 参数 / 计算结果，边是"谁由谁计算而来"。反向传播传播梯度；Trace 传播<strong>执行轨迹</strong>。</p>
+  - elementId: n1
+    elementType: shape
+    bounds: [60, 240, 76, 44]
+    shapeName: roundRect
+    adjustments: [24000]
+    fill: {type: solid, color: "$soft"}
+    border: {style: solid, width: 1, color: "$gray"}
+  - elementId: n1t
+    elementType: text
+    bounds: [60, 240, 76, 44]
+    content:
+      fontSize: 12
+      color: "$ink"
+      align: [center, middle]
+      text: 输入 map
+  - elementId: n2
+    elementType: shape
+    bounds: [196, 240, 76, 44]
+    shapeName: roundRect
+    adjustments: [24000]
+    fill: {type: solid, color: "$primary"}
+  - elementId: n2t
+    elementType: text
+    bounds: [196, 240, 76, 44]
+    content:
+      fontSize: 12
+      color: "#F7F3E8"
+      align: [center, middle]
+      text: 参数 θ
+  - elementId: n3
+    elementType: shape
+    bounds: [332, 240, 76, 44]
+    shapeName: roundRect
+    adjustments: [24000]
+    fill: {type: solid, color: "$soft"}
+    border: {style: solid, width: 1, color: "$gray"}
+  - elementId: n3t
+    elementType: text
+    bounds: [332, 240, 76, 44]
+    content:
+      fontSize: 12
+      color: "$ink"
+      align: [center, middle]
+      text: 中间结果
+  - elementId: n4
+    elementType: shape
+    bounds: [468, 240, 76, 44]
+    shapeName: roundRect
+    adjustments: [24000]
+    fill: {type: solid, color: "$soft"}
+    border: {style: solid, width: 1, color: "$gray"}
+  - elementId: n4t
+    elementType: text
+    bounds: [468, 240, 76, 44]
+    content:
+      fontSize: 12
+      color: "$ink"
+      align: [center, middle]
+      text: 输出 + 反馈 f
+  - elementId: e1
+    elementType: line
+    bounds: [136, 258, 60, 8]
+    viewBox: [60, 8]
+    points: "0,4 60,4"
+    curve: sharp
+    arrow: [null, "arrow"]
+    border: {style: solid, width: 2, color: "$ink"}
+  - elementId: e2
+    elementType: line
+    bounds: [272, 258, 60, 8]
+    viewBox: [60, 8]
+    points: "0,4 60,4"
+    curve: sharp
+    arrow: [null, "arrow"]
+    border: {style: solid, width: 2, color: "$ink"}
+  - elementId: e3
+    elementType: line
+    bounds: [408, 258, 60, 8]
+    viewBox: [60, 8]
+    points: "0,4 60,4"
+    curve: sharp
+    arrow: [null, "arrow"]
+    border: {style: solid, width: 2, color: "$ink"}
+  - elementId: fwd-label
+    elementType: text
+    bounds: [136, 218, 300, 18]
+    content:
+      fontSize: 10
+      color: "$gray"
+      align: [center, top]
+      text: 前向：执行工作流，记录轨迹
+  - elementId: bwd
+    elementType: line
+    bounds: [200, 310, 340, 40]
+    viewBox: [340, 40]
+    points: "340,0 170,40 0,0"
+    curve: smooth
+    arrow: [null, "arrow"]
+    border: {style: dash, width: 2, color: "$primary"}
+  - elementId: bwd-label
+    elementType: text
+    bounds: [200, 352, 340, 18]
+    content:
+      fontSize: 10
+      color: "$primary"
+      align: [center, top]
+      text: 回传：最小子图 g + 反馈 f（而非梯度 ∇）
+  - elementId: right-rule
+    elementType: shape
+    bounds: [560, 120, 1, 300]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: points
+    elementType: text
+    bounds: [592, 118, 330, 320]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.55
+      text: |
+        <p><strong>① 轨迹记录了"中间结果如何被使用"</strong></p>
+        <p><span style="color:$gray; font-size:12px;">这是把输出端反馈归因到上游参数所需的全部信息。</span></p>
+        <p style="margin-top:12px"><strong>② 严格包含反向传播</strong></p>
+        <p><span style="color:$gray; font-size:12px;">论文证明：可微分情形下，传播轨迹的 backward 就是梯度反传——AutoDiff 是 Trace 的特例。</span></p>
+        <p style="margin-top:12px"><strong>③ 对不可微工作流仍然成立</strong></p>
+        <p><span style="color:$gray; font-size:12px;">LLM、代码、模拟器无所谓"梯度"，但都有执行轨迹——人类工程师本来就用轨迹 debug 分布式系统。</span></p>
+        <p style="margin-top:12px"><strong>④ 最小子图控制成本</strong></p>
+        <p><span style="color:$gray; font-size:12px;">只把与参数有因果关系的子图交给优化器，等价于只回传相关梯度。</span></p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: Trace is the Next AutoDiff · §1.1 / §3.3
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "04"

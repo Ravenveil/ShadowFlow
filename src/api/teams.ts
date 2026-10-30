@@ -233,6 +233,26 @@ export async function putTeamDagLayout(teamId: string, layout: TeamDagLayout): P
   }
 }
 
+/**
+ * POST /api/teams/{id}/dag/validate — 干跑校验服务端 yaml DAG（不落库）。
+ * 注意校验的是 Node yaml team（members/edges_v1）模型，与编辑器的 Python
+ * workflow 模型不是同一份数据；Python JSON team 无 yaml 层时 404
+ * TEAM_NOT_FOUND，调用方按「无 yaml 层」容忍（同 putTeamDagLayout）。
+ */
+export interface TeamDagValidation {
+  team_id: string;
+  ok: boolean;
+  errors: string[];
+}
+
+export async function validateTeamDag(teamId: string): Promise<TeamDagValidation> {
+  const res = await fetch(`${API_BASE_URL}/api/teams/${teamId}/dag/validate`, {
+    method: 'POST',
+  });
+  const env = await _handleResponse<Envelope<TeamDagValidation>>(res);
+  return env.data;
+}
+
 // ---------------------------------------------------------------------------
 // Policy endpoints — Story 12-3
 // ---------------------------------------------------------------------------

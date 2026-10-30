@@ -17,11 +17,16 @@
  * 成功 → onCreated（父级刷新列表并选中新 agent）；失败 → 模态内红条展示
  * 真实错误，不吞不假成功。
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 import { AgentApiError, quickCreateAgent } from '../api/agents';
 import { generateAgentPersona, LlmApiError } from '../api/llm';
+import { listDetectedClis, type DetectedCli } from '../api/cli';
+import { AvatarStylePicker, type AvatarConfigValue } from '../components/agent/AvatarStylePicker';
+import { DEFAULT_AVATAR_STYLE, hashSeed } from '../config/clawhub';
 import { useI18n } from '../common/i18n';
+// ClawHub（2026-06）：Claw 下拉 + 头像选择器样式（增量引入）
+import '../pages/clawhub/clawhub.css';
 
 export interface NeoCreateAgentModalProps {
   workspaceId: string | null;
@@ -55,6 +60,30 @@ export function NeoCreateAgentModal({ workspaceId, onClose, onCreated }: NeoCrea
   const [genError, setGenError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ── ClawHub（2026-06，FR-05/06）：驱动后端 Claw 下拉 + DiceBear 头像 ──────
+  const [claws, setClaws] = useState<DetectedCli[]>([]);
+  const [clawId, setClawId] = useState(''); // '' = 不绑定
+  const [avatarCfg, setAvatarCfg] = useState<AvatarConfigValue>({
+    style: DEFAULT_AVATAR_STYLE,
+    seed: '',
+  });
+  // 已安装 Claw 列表（失败 → 空表，下拉仅剩「不绑定」）
+  useEffect(() => {
+    let alive = true;
+    listDetectedClis()
+      .then((snap) => {
+        if (alive) setClaws(snap.items.filter((i) => i.is_claw && i.installed));
+      })
+      .catch(() => {
+        if (alive) setClaws([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  // 名字变化且种子为空时预览跟随（hashSeed(name)）
+  const previewName = useMemo(() => name.trim() || t('neo.newAgent.namePlaceholder', { defaultValue: '我的 Agent' }), [name, t]);
 
   const locked = busy || generating;
 
@@ -104,6 +133,10 @@ export function NeoCreateAgentModal({ workspaceId, onClose, onCreated }: NeoCrea
         name: n,
         soul: persona.trim() || n,
         workspace_id: workspaceId ?? undefined,
+        // ClawHub（2026-06）：Claw 绑定 + DiceBear 头像（'' = 不绑定/用默认）
+        claw_id: clawId || undefined,
+        avatar_style: avatarCfg.style || undefined,
+        avatar_seed: avatarCfg.seed.trim() || undefined,
       });
       onCreated({ agent_id: agent.agent_id, name: agent.name || n });
     } catch (err) {
@@ -220,6 +253,57 @@ export function NeoCreateAgentModal({ workspaceId, onClose, onCreated }: NeoCrea
             />
           </>
         )}
+
+        {/* ── ClawHub（2026-06，FR-05）：驱动后端（Claw）下拉 — 增量区块 ────── */}
+        <label className="neo-modal-label" htmlFor="neo-new-agent-claw" style={{ marginTop: 12 }}>
+          {t('clawhub.agent.clawLabel', { defaultValue: language === 'zh' ? '驱动后端（Claw）' : 'Backend (Claw)' })}
+        </label>
+        <select
+          id="neo-new-agent-claw"
+          className="neo-modal-input"
+          value={clawId}
+          disabled={locked}
+          onChange={(e) => setClawId(e.target.value)}
+          data-testid="neo-create-agent-claw"
+        >
+          <option value="">
+            {t('clawhub.agent.noClaw', { defaultValue: language === 'zh' ? '不绑定（默认 AI 引擎）' : 'None (default engine)' })}
+          </option>
+          {claws.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.id}
+              {c.version ? ` · ${c.version.slice(0, 20)}` : ''}
+            </option>
+          ))}
+        </select>
+        <span className="claw-copyonly-hint">
+          {t('clawhub.agent.clawHint', {
+            defaultValue: language === 'zh'
+              ? '绑定后对话完全由该 Claw 驱动（Agent 仅作入口）；未安装的 Claw 可先去 ClawHub 安装'
+              : 'Once bound, chats are fully driven by this Claw',
+          })}
+        </span>
+
+        {/* ── ClawHub（2026-06，FR-06）：DiceBear 头像配置 — 增量区块 ───────── */}
+        <label className="neo-modal-label" style={{ marginTop: 12 }}>
+          {t('clawhub.agent.avatarLabel', { defaultValue: language === 'zh' ? '头像（DiceBear）' : 'Avatar (DiceBear)' })}
+        </label>
+        <AvatarStylePicker
+          value={avatarCfg}
+          onChange={setAvatarCfg}
+          agentName={previewName}
+          variant="compact"
+        />
+        {/* 隐式引用 AgentAvatar：AvatarStylePicker 内部已用；此处确保 hashSeed
+            默认值语义可见（种子空 → 按名字 hash，见 config/clawhub.ts） */}
+        <span className="claw-copyonly-hint" data-testid="neo-avatar-seed-hint">
+          {avatarCfg.seed.trim()
+            ? `${t('clawhub.avatar.seedLabel', { defaultValue: '种子' })}: ${avatarCfg.seed}`
+            : t('clawhub.avatar.seedAuto', { defaultValue: '种子留空 = 按名字自动生成' })}
+          {' · '}
+          {hashSeed(previewName)}
+        </span>
+
         {error && (
           <div className="neo-modal-error" role="alert" data-testid="neo-create-agent-error">
             {error}

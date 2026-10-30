@@ -1049,4 +1049,8 @@ select.neo-kp-input {
 .neo-kv-graphpane .neo-kg {
   height: 100%;
   min-height: 0;
+  /* 2026-09-03：flex 行容器里 .neo-kg 默认按内容定宽，画布只渲染一半；
+     显式撑满右栏（flex item 主轴尺寸）。 */
+  flex: 1;
+  min-width: 0;
 }

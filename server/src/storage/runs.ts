@@ -89,8 +89,18 @@ export function listRuns(): RunRecord[] {
  * Uses INSERT OR REPLACE so re-saving the same run_id (rare but possible if
  * a callback fires twice) doesn't blow up. The trim step deletes everything
  * older than the MAX_RUNS-th newest row.
+ *
+ * `linkage` (optional) persists the project_id / conversation_id the run was
+ * created under — this is what makes GET /api/projects/:id/artifacts (which
+ * filters runs WHERE project_id = ?) return rows. NULL when unknown. Kept
+ * out of RunRecord so the 15.8-era public record shape stays byte-compatible.
  */
-export function saveRun(record: RunRecord): void {
+export interface RunLinkage {
+  project_id?: string | null;
+  conversation_id?: string | null;
+}
+
+export function saveRun(record: RunRecord, linkage?: RunLinkage): void {
   const db = getDb();
   const tx = db.transaction(() => {
     db.prepare(
@@ -98,10 +108,12 @@ export function saveRun(record: RunRecord): void {
        (run_id, session_id, project_id, conversation_id, goal,
         skill_name, skill_display_name, artifact_type, artifact_filename,
         artifact_url, project_dir, status, created_at, completed_at)
-       VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       record.run_id,
       record.session_id,
+      linkage?.project_id ?? null,
+      linkage?.conversation_id ?? null,
       record.goal,
       record.skill_name,
       record.skill_display_name,

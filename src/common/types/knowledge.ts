@@ -123,7 +123,25 @@ export interface KnowledgeQueryTrace {
   reason?: string;
 }
 
+/** PackGraph 图遍历扩展（query 提及的实体 + 1 跳邻居）。 */
+export interface KnowledgeGraphContext {
+  matched: Array<{ id: string; name: string; kind: string }>;
+  related: Array<{
+    id: string;
+    name: string;
+    relation: string;
+    weight: number;
+    via: string;
+    via_name: string;
+  }>;
+}
+
 export interface KnowledgeQueryResponse {
-  data: { hits: KnowledgeHit[]; trace?: KnowledgeQueryTrace };
+  data: {
+    hits: KnowledgeHit[];
+    trace?: KnowledgeQueryTrace;
+    /** PackGraph 图遍历扩展；图不存在或无命中时为 null。 */
+    graph_context?: KnowledgeGraphContext | null;
+  };
   meta: KnowledgeMeta & { pack_id: string; query: string };
 }

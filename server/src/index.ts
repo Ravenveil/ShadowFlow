@@ -17,6 +17,8 @@ import designSystemsRouter from './routes/design-systems';
 import exportRouter from './routes/export';
 import settingsRouter from './routes/settings';
 import cliRouter from './routes/cli';
+// ClawHub（2026-06）— 安装会话 REST + SSE
+import clawhubRouter from './routes/clawhub';
 import acpRouter from './routes/acp';
 import { groupsChatRouter } from './routes/groups-chat';
 // 后端合一·阶段1b（2026-06-12）— Node 自服务 /api/groups（仅 SF_GROUPS_BACKEND==='node'
@@ -102,6 +104,8 @@ app.use('/api/export', exportRouter);
 app.use('/api/settings', settingsRouter);
 // Story 15.19 v2 — Local CLI auto-discovery + spawn bridge.
 app.use('/api/cli', cliRouter);
+// ClawHub（2026-06）— Claw 安装会话（POST 建会话 + GET SSE 日志流 + cancel）。
+app.use('/api/clawhub', clawhubRouter);
 // Story 15.23 — ACP / MCP remote agent discovery.
 app.use('/api/acp', acpRouter);
 // Story 15.14 — POST /api/artifacts/lint

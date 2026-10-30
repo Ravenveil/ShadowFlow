@@ -17,13 +17,13 @@
  *   3. 错误条 + 底部状态 pill（进度 x/y，点击无操作——Timeline 自带交互）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, CircleCheck, Repeat, Sparkles } from 'lucide-react';
+import { ChevronDown, CircleCheck, Loader2, Play, Repeat, Sparkles } from 'lucide-react';
 import type { UseRunSessionReturn } from '../core/hooks/useRunSession';
 import type { TimelineMessage } from '../components/run-session/timeline/types';
 import { NeoTimeline } from './NeoTimeline';
 import { NeoMsgFeedback } from './NeoMsgFeedback';
 import { getRunLoops, streamRunLoops, type LoopRecord, type LoopStatus } from '../api/runs';
-import { retryStep } from '../api/runSessions';
+import { retryStep, resumeRunSession } from '../api/runSessions';
 import { useI18n } from '../common/i18n';
 import './neo-chat.css';
 import './neo-run.css';
@@ -146,6 +146,30 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
     [runId, session.restartStream],
   );
 
+  // ---- 整 run 续跑（S4.2 resume 前端入口）：aborted（用户停止）/ failed
+  //      （SSE error 帧）终态时露出「继续」按钮。语义同单步重跑（full_rerun）：
+  //      202 接受后主动 restartStream()——resume 多发生在 run 终态（SSE 已随
+  //      complete/abort 关闭，resume-pending 帧无人接收），必须重挂才能让
+  //      时间线自动续跑。false/410（全部已完成）→ 行内红字提示。----
+  const [resumeBusy, setResumeBusy] = useState(false);
+  const [resumeFailed, setResumeFailed] = useState(false);
+  const handleResume = useCallback(() => {
+    if (resumeBusy) return;
+    setResumeBusy(true);
+    setResumeFailed(false);
+    resumeRunSession(runId).then(
+      (ok) => {
+        setResumeBusy(false);
+        if (ok) session.restartStream();
+        else setResumeFailed(true);
+      },
+      () => {
+        setResumeBusy(false);
+        setResumeFailed(true);
+      },
+    );
+  }, [runId, resumeBusy, session.restartStream]);
+
   // ---- 状态 pill 文案 ----
   const doneSteps = session.steps.filter((s) => s.status === 'done').length;
   const doneTools = session.toolCalls.filter((c) => c.status !== 'running').length;
@@ -172,6 +196,9 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
   };
 
   const showPill = !session.error && hasActivity && (session.isStreaming || session.isComplete);
+  // 整 run 续跑按钮可见性：仅 aborted（用户停止）/ failed（SSE error 帧）
+  // 终态；成功完成（isComplete && !aborted && !error）与运行中不显示。
+  const canResume = !session.isStreaming && hasActivity && (session.aborted || session.error != null);
 
   return (
     <div className="neo-run">
@@ -247,6 +274,36 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
         <div className="neo-run-error" role="alert">
           {session.error.message}
           {session.error.hint ? <span className="neo-run-error-hint"> · {session.error.hint}</span> : null}
+        </div>
+      )}
+
+      {/* 整 run 续跑入口：aborted/failed 终态出现；复用单步重跑的 ghost
+          小按钮样式（neo-tl-step-retry）。点击 → POST /:id/resume，
+          202 后 restartStream() 重挂 SSE 自动续跑。 */}
+      {canResume && (
+        <div className="neo-run-resume">
+          <button
+            type="button"
+            className="neo-tl-step-retry"
+            disabled={resumeBusy}
+            onClick={handleResume}
+            title={t('neo.run.resumeTip', { defaultValue: '从中断处继续运行' })}
+            data-testid="neo-run-resume"
+          >
+            {resumeBusy ? (
+              <Loader2 size={11} strokeWidth={2.2} className="neo-tl-spin" aria-hidden />
+            ) : (
+              <Play size={11} strokeWidth={2} aria-hidden />
+            )}
+            {resumeBusy
+              ? t('neo.run.resuming', { defaultValue: '续跑中…' })
+              : t('neo.run.resume', { defaultValue: '继续' })}
+          </button>
+          {resumeFailed && (
+            <span className="neo-tl-step-retry-fail" role="alert">
+              {t('neo.run.resumeFailed', { defaultValue: '续跑失败' })}
+            </span>
+          )}
         </div>
       )}
 

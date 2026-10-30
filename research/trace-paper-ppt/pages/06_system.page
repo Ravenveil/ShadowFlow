@@ -1,0 +1,103 @@
+pageType: content
+background:
+  type: solid
+  color: "$paper"
+notes: 系统设计：PyTorch 风格的 API。左边放简化的 Battleship 策略代码，右边放 PyTorch 类比表——听众只要会 PyTorch 就会 Trace。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 40, 300, 18]
+    content:
+      style: "$label"
+      text: 02 · 系统
+  - elementId: title
+    elementType: text
+    bounds: [48, 64, 800, 38]
+    content:
+      style: "$pagetitle"
+      text: Trace 库：像写 PyTorch 一样声明可优化工作流
+  - elementId: code-bg
+    elementType: shape
+    bounds: [48, 120, 440, 268]
+    shapeName: rect
+    fill: {type: solid, color: "#27231F"}
+  - elementId: code
+    elementType: text
+    bounds: [68, 136, 404, 240]
+    content:
+      fontFamily: {latin: "Consolas", ea: "MiSans"}
+      fontSize: 11.5
+      color: "#F1E9DA"
+      lineHeight: 1.5
+      text: |
+        <p><span style="color:#9B9489;"># Battleship 智能体策略</span></p>
+        <p><span style="color:#C9828B;">class</span> Policy(trace.Module):</p>
+        <p>  <span style="color:#C9828B;">def</span> forward(self, map):</p>
+        <p>    plan = self.reason(map)</p>
+        <p>    <span style="color:#C9828B;">return</span> self.act(map, plan)</p>
+        <p></p>
+        <p>  <span style="color:#B66A3C;">@trace.bundle(trainable=True)</span></p>
+        <p>  <span style="color:#C9828B;">def</span> reason(self, map): ...</p>
+        <p></p>
+        <p>policy = Policy()</p>
+        <p>optimizer = trace.Optimizer(</p>
+        <p>    policy.parameters())</p>
+        <p><span style="color:#9B9489;"># 与环境交互 → 收集轨迹 → 更新</span></p>
+  - elementId: code-caption
+    elementType: text
+    bounds: [48, 396, 440, 16]
+    content:
+      style: "$small"
+      text: 图 1 · 基于论文 Fig. 2 简化：trainable 标记即"可训练参数"
+  - elementId: tbl-head
+    elementType: text
+    bounds: [528, 120, 384, 22]
+    content:
+      fontSize: 14
+      bold: true
+      color: "$ink"
+      text: 与 PyTorch 的一一对应
+  - elementId: tbl
+    elementType: table
+    bounds: [528, 150, 384, 236]
+    columnWidths: [0.44, 0.56]
+    rowHeights: [0.18, 0.205, 0.205, 0.205, 0.205]
+    style: "$default"
+    rows:
+      - - text: PyTorch
+        - text: Trace
+      - - text: Tensor
+        - text: Node（任意对象：字符串 / 代码 / 数值）
+      - - text: nn.Module 层
+        - text: "@bundle 装饰的算子"
+      - - text: requires_grad=True
+        - text: trainable=True
+      - - text: SGD / Adam
+        - text: LLM 优化器（OptoPrime）
+  - elementId: note
+    elementType: text
+    bounds: [528, 402, 384, 80]
+    content:
+      style: "$body"
+      fontSize: 12
+      lineHeight: 1.5
+      text: |
+        <p>关键差别只在最后一行：<strong>优化器从"数值算法"换成了"读轨迹的 LLM"</strong>——更新的可以是 prompt 的措辞，也可以是整段 Python 代码。</p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: Trace is the Next AutoDiff · §3 Design of Trace
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "06"

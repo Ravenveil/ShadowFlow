@@ -1,0 +1,125 @@
+pageType: content
+background:
+  type: solid
+  color: "$paper"
+notes: 视角二：博弈论。多智能体系统建模为随机博弈；均衡的操作化定义是"无利可图的偏离"；EGTA 给出从仿真到均衡分析的方法论；万级规模必须借助平均场。底部放 ABIDES-Economist 的实测数字。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 40, 300, 18]
+    content:
+      style: "$label"
+      text: 04 · 视角二：博弈论
+  - elementId: title
+    elementType: text
+    bounds: [48, 64, 860, 38]
+    content:
+      style: "$pagetitle"
+      text: 均衡 = "没有有利可图的偏离"
+  - elementId: m1head
+    elementType: text
+    bounds: [48, 120, 420, 22]
+    content:
+      fontSize: 14
+      bold: true
+      color: "$ink"
+      text: 把多智能体系统写成随机博弈
+  - elementId: m1
+    elementType: text
+    bounds: [48, 148, 420, 150]
+    content:
+      style: "$body"
+      fontSize: 12.5
+      lineHeight: 1.55
+      text: |
+        <p>· 状态随<strong>联合动作</strong>演化 → Markov Game / 随机博弈</p>
+        <p>· 每个 agent 的最优性 = 给定他人策略时的<strong>最优反应</strong>（best response）</p>
+        <p>· 经验均衡检验：固定他人策略，看单 agent 偏离是否还能获益（ε-Nash）</p>
+  - elementId: m2head
+    elementType: text
+    bounds: [48, 306, 420, 22]
+    content:
+      fontSize: 14
+      bold: true
+      color: "$ink"
+      text: 万级规模：平均场博弈
+  - elementId: m2
+    elementType: text
+    bounds: [48, 334, 420, 130]
+    content:
+      style: "$body"
+      fontSize: 12.5
+      lineHeight: 1.55
+      text: |
+        <p>· N 人博弈不可分析 → 近似为"一人对群体分布"</p>
+        <p>· 观测从"逐 agent"变"分布统计量"，通信 O(N²)→O(N)</p>
+        <p>· 既是性能工具，也是理论接口（MFG 均衡可证）</p>
+  - elementId: div
+    elementType: shape
+    bounds: [500, 120, 1, 344]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: egt-head
+    elementType: text
+    bounds: [536, 120, 376, 22]
+    content:
+      fontSize: 14
+      bold: true
+      color: "$ink"
+      text: EGTA：经验博弈论分析
+  - elementId: egt
+    elementType: text
+    bounds: [536, 148, 376, 108]
+    content:
+      style: "$body"
+      fontSize: 12.5
+      lineHeight: 1.55
+      text: |
+        <p>仿真估计收益矩阵 → 在策略子空间求解纳什均衡 → 用新发现的策略扩充博弈，迭代收敛。</p>
+        <p style="margin-top:6px"><span style="color:$gray;">ABIDES 主论文的 spoofing 研究即此方法（Wellman 学派）。</span></p>
+  - elementId: num-head
+    elementType: text
+    bounds: [536, 268, 376, 22]
+    content:
+      fontSize: 14
+      bold: true
+      color: "$primary"
+      text: ABIDES-Economist 的实测规模
+  - elementId: nums
+    elementType: text
+    bounds: [536, 296, 376, 168]
+    content:
+      style: "$body"
+      fontSize: 12.5
+      lineHeight: 1.6
+      text: |
+        <p>· <strong>10,503</strong> 个规则 agent / 单步约 <strong>5,000 万条</strong>消息 / 约 <strong>20 分钟</strong>跑完</p>
+        <p>· RL 学习只敢做 <strong>112</strong> 个 agent；4 个<strong>类型级共享策略网络</strong></p>
+        <p>· 共享策略 = 对称马尔可夫完美均衡假设，<strong>同时充当均衡选择机制</strong></p>
+        <p>· 训练 4.3 万 episode / 31 小时（PPO + RLlib 并行采样）</p>
+  - elementId: verdict
+    elementType: text
+    bounds: [48, 478, 864, 30]
+    content:
+      fontSize: 13
+      color: "$ink"
+      text: |
+        <p><strong>要点：</strong>"均衡"不是算出来的解析解，而是<span style="color:$primary;"><strong>用轨迹反复检验"偏离是否有利可图"得到的经验结论</strong></span>——这就是下一页的结合点。</p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 640, 14]
+    content:
+      style: "$small"
+      text: 参考：arXiv:2601.15047 · arXiv:2205.12944 · arXiv:2402.09563（§4.3.3）
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "12"

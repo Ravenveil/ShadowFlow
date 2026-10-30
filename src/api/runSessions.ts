@@ -77,6 +77,12 @@ export interface RunSessionCreateRequest {
    * 该群的所有 run 归属同一条会话（群 timeline 经 B2 端点可见）。
    */
   group_id?: string;
+  /**
+   * GAP A3 项目分组 — 显式挂靠项目：服务端在该项目下 find-or-create
+   * conversation；未知 project_id → 400。省略时服务端回落 'default' 项目。
+   * 前端从 localStorage('sf.project_id') 读取（NeoComposer 项目 chip 写入）。
+   */
+  project_id?: string | null;
 }
 
 export interface RunSessionCreateResponse {
@@ -400,6 +406,27 @@ export async function retryStep(
       },
     );
     if (resp.status === 404 || resp.status === 405) return false;
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * POST /api/run-sessions/:id/resume
+ * S4.2 — resume an aborted/failed run (server emits `resume-pending`, resets
+ * the bus, next GET /stream re-runs; full_rerun semantics like retryStep).
+ * Returns true when the request was accepted (202); false (and no throw) when
+ * the endpoint is missing (404 / 405) or the run has already completed (410)
+ * so the resume button can degrade to an inline error rather than a crash.
+ */
+export async function resumeRunSession(sessionId: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`${getApiBase()}/api/run-sessions/${sessionId}/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    });
+    if (resp.status === 404 || resp.status === 405 || resp.status === 410) return false;
     return resp.ok;
   } catch {
     return false;

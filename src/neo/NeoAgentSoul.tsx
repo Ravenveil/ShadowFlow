@@ -14,7 +14,7 @@
  * POST /api/agents/:id/pause|resume（pauseAgent/resumeAgent），成功以端点
  * 返回的完整 record 刷新本地状态。
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, Loader2, Pause, Play, RotateCcw } from 'lucide-react';
 import {
   AgentApiError,
@@ -24,7 +24,12 @@ import {
   resumeAgent,
   type AgentRecord,
 } from '../api/agents';
+import { listDetectedClis, type DetectedCli } from '../api/cli';
+import { AgentAvatar } from '../components/agent/AgentAvatar';
+import { AvatarStylePicker, type AvatarConfigValue } from '../components/agent/AvatarStylePicker';
 import { useI18n } from '../common/i18n';
+// ClawHub（2026-06）：Claw 绑定编辑 + 头像重配样式（增量引入）
+import '../pages/clawhub/clawhub.css';
 
 export interface NeoAgentSoulProps {
   agentId: string;
@@ -62,6 +67,38 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
   // 真实端点），成功用返回的完整 record 刷新本地状态，失败红条不吞错。
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+
+  // ── ClawHub（2026-06，FR-05/06）：Claw 绑定 + 头像 查看/重配 ──────────────
+  const [claws, setClaws] = useState<DetectedCli[]>([]);
+  const [clawId, setClawId] = useState('');
+  const [avatarCfg, setAvatarCfg] = useState<AvatarConfigValue>({ style: '', seed: '' });
+  const [clawDirty, setClawDirty] = useState(false);
+  const [avatarDirty, setAvatarDirty] = useState(false);
+  const [bindingBusy, setBindingBusy] = useState(false);
+  const [bindingError, setBindingError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    listDetectedClis()
+      .then((snap) => {
+        if (alive) setClaws(snap.items.filter((i) => i.is_claw && i.installed));
+      })
+      .catch(() => {
+        if (alive) setClaws([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // record 加载/刷新 → 同步本地编辑态（binding 与 soul 分离保存，互不干扰）
+  useEffect(() => {
+    if (!agent) return;
+    setClawId(agent.claw_id ?? '');
+    setAvatarCfg({ style: agent.avatar_style ?? '', seed: agent.avatar_seed ?? '' });
+    setClawDirty(false);
+    setAvatarDirty(false);
+  }, [agent]);
 
   useEffect(() => {
     let alive = true;
@@ -129,6 +166,48 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
       setStatusBusy(false);
     }
   }
+
+  // ── ClawHub（2026-06）：保存 Claw 绑定（"" = 解绑）。独立于 soul 保存钮。──
+  async function handleSaveClawBinding() {
+    if (!agent || bindingBusy) return;
+    setBindingBusy(true);
+    setBindingError(null);
+    try {
+      const updated = await patchAgent(agent.agent_id, { claw_id: clawId });
+      setAgent(updated);
+    } catch (err) {
+      setBindingError(errorMessageOf(err));
+    } finally {
+      setBindingBusy(false);
+    }
+  }
+
+  // ── ClawHub（2026-06）：保存头像配置（"" = 清空回默认/名字 hash）。────────
+  async function handleSaveAvatar() {
+    if (!agent || bindingBusy) return;
+    setBindingBusy(true);
+    setBindingError(null);
+    try {
+      const updated = await patchAgent(agent.agent_id, {
+        avatar_style: avatarCfg.style,
+        avatar_seed: avatarCfg.seed,
+      });
+      setAgent(updated);
+    } catch (err) {
+      setBindingError(errorMessageOf(err));
+    } finally {
+      setBindingBusy(false);
+    }
+  }
+
+  // 当前绑定 Claw 是否仍已安装（卸载提示；弱校验仅 UI 提示不阻断）。
+  const boundClawUninstalled = useMemo(
+    () =>
+      !!agent?.claw_id &&
+      claws.length > 0 &&
+      !claws.some((c) => c.id === agent.claw_id),
+    [agent, claws],
+  );
 
   if (loadState === 'loading') {
     return (
@@ -208,6 +287,68 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
         </div>
       )}
 
+      {/* ── ClawHub（2026-06）：头像预览 + Claw 绑定编辑（增量区块）────────── */}
+      <div className="claw-avatar-preview" data-testid="neo-soul-claw-block">
+        <AgentAvatar
+          name={agent.name}
+          style={avatarCfg.style || agent.avatar_style}
+          seed={avatarCfg.seed || agent.avatar_seed}
+          size={56}
+        />
+        <div className="claw-avatar-preview-meta" style={{ flex: 1 }}>
+          <label className="neo-modal-label" htmlFor="neo-soul-claw">
+            {t('clawhub.agent.clawLabel', { defaultValue: language === 'zh' ? '驱动后端（Claw）' : 'Backend (Claw)' })}
+          </label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select
+              id="neo-soul-claw"
+              className="neo-modal-input"
+              style={{ flex: '1 1 180px', minHeight: 30 }}
+              value={clawId}
+              disabled={bindingBusy}
+              onChange={(e) => {
+                setClawId(e.target.value);
+                setClawDirty(true);
+              }}
+              data-testid="neo-soul-claw-select"
+            >
+              <option value="">
+                {t('clawhub.agent.noClaw', { defaultValue: language === 'zh' ? '不绑定（默认 AI 引擎）' : 'None (default engine)' })}
+              </option>
+              {agent.claw_id && !claws.some((c) => c.id === agent.claw_id) && (
+                <option value={agent.claw_id}>{agent.claw_id}（未安装）</option>
+              )}
+              {claws.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.id}
+                  {c.version ? ` · ${c.version.slice(0, 20)}` : ''}
+                </option>
+              ))}
+            </select>
+            {clawDirty && (
+              <button
+                type="button"
+                className="neo-btn-primary"
+                style={{ height: 30, padding: '0 12px', fontSize: 12 }}
+                onClick={() => void handleSaveClawBinding()}
+                disabled={bindingBusy}
+                data-testid="neo-soul-claw-save"
+              >
+                {bindingBusy ? <Loader2 size={12} className="neo-spin" aria-hidden /> : null}
+                {t('common.save', { defaultValue: language === 'zh' ? '保存' : 'Save' })}
+              </button>
+            )}
+          </div>
+          {boundClawUninstalled && (
+            <span className="claw-copyonly-hint" style={{ color: '#B45309' }}>
+              {t('clawhub.agent.boundClawMissing', {
+                defaultValue: `绑定的 ${agent.claw_id} 当前未安装，对话将无法由它驱动（可在 ClawHub 重装）`,
+              })}
+            </span>
+          )}
+        </div>
+      </div>
+
       <div className="neo-soul-field">
         <label className="neo-modal-label" htmlFor="neo-soul-name">
           {t('neo.newAgent.nameLabel', { defaultValue: language === 'zh' ? '名称' : 'Name' })}
@@ -251,6 +392,42 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
           {saveError}
         </div>
       )}
+
+      {/* ── ClawHub（2026-06）：头像重配（风格 + 种子 + 实时预览；独立保存）── */}
+      <div className="neo-soul-field">
+        <label className="neo-modal-label">
+          {t('clawhub.agent.avatarLabel', { defaultValue: language === 'zh' ? '头像（DiceBear）' : 'Avatar (DiceBear)' })}
+        </label>
+        <AvatarStylePicker
+          value={avatarCfg}
+          onChange={(next) => {
+            setAvatarCfg(next);
+            setAvatarDirty(true);
+          }}
+          agentName={agent.name}
+          variant="compact"
+        />
+        {bindingError && (
+          <div className="neo-modal-error" role="alert" data-testid="neo-soul-binding-error">
+            {bindingError}
+          </div>
+        )}
+        {avatarDirty && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+            <button
+              type="button"
+              className="neo-btn-primary"
+              style={{ height: 30, padding: '0 14px', fontSize: 12 }}
+              onClick={() => void handleSaveAvatar()}
+              disabled={bindingBusy}
+              data-testid="neo-soul-avatar-save"
+            >
+              {bindingBusy && <Loader2 size={12} className="neo-spin" aria-hidden />}
+              {t('clawhub.agent.saveAvatar', { defaultValue: language === 'zh' ? '保存头像' : 'Save Avatar' })}
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="neo-soul-foot">
         <span className="neo-soul-count">

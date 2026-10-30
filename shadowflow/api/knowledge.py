@@ -577,6 +577,23 @@ async def reindex_pack(
     return _envelope(pack.model_dump(mode="json"))
 
 
+def _graph_context(
+    pack_id: str, question: str, *, root: Optional[Path] = None
+) -> Optional[Dict[str, Any]]:
+    """PackGraph 图遍历扩展：query 提及的实体 + 1 跳邻居。
+
+    与 hier_index / LightRAG 同一容错语义：任何失败只告警并返回 None，
+    绝不阻断检索主路径。
+    """
+    try:
+        from shadowflow.memory import pack_graph  # noqa: PLC0415
+
+        return pack_graph.query_context(pack_id, question, root=root)
+    except Exception as exc:  # noqa: BLE001 — graph expansion must not break queries
+        logger.warning("pack_graph query_context failed for pack %s: %s", pack_id, exc)
+        return None
+
+
 @router.post("/packs/{pack_id}/query")
 async def query_pack(pack_id: str, payload: QueryPackRequest) -> Dict[str, Any]:
     """RAG query over a pack's index.
@@ -592,6 +609,9 @@ async def query_pack(pack_id: str, payload: QueryPackRequest) -> Dict[str, Any]:
     synthesized answer as a single hit.  Disabled / not configured / query
     failure → empty `hits` (never 500): callers degrade to "no citations"
     instead of breaking the chat flow.
+
+    两条路径的响应都带 `graph_context`（PackGraph 图遍历扩展：query 提及的
+    实体 + 1 跳邻居，无 LLM、确定性）；图不存在或无命中时为 null。
     """
     svc = get_service()
     pack = svc.load(pack_id)  # same 400/404 guards as the other handlers
@@ -609,7 +629,13 @@ async def query_pack(pack_id: str, payload: QueryPackRequest) -> Dict[str, Any]:
         )
         if hier_hits:
             return _envelope(
-                data={"hits": hier_hits[: payload.top_k], "trace": hier_trace},
+                data={
+                    "hits": hier_hits[: payload.top_k],
+                    "trace": hier_trace,
+                    "graph_context": _graph_context(
+                        pack_id, payload.query, root=svc.pack_dir(pack_id).parent
+                    ),
+                },
                 meta={"pack_id": pack_id, "query": payload.query},
             )
         trace = {
@@ -661,7 +687,13 @@ async def query_pack(pack_id: str, payload: QueryPackRequest) -> Dict[str, Any]:
             logger.warning("knowledge query failed for pack %s: %s", pack_id, exc2)
 
     return _envelope(
-        data={"hits": hits[: payload.top_k], "trace": trace},
+        data={
+            "hits": hits[: payload.top_k],
+            "trace": trace,
+            "graph_context": _graph_context(
+                pack_id, payload.query, root=svc.pack_dir(pack_id).parent
+            ),
+        },
         meta={"pack_id": pack_id, "query": payload.query},
     )
 
@@ -759,31 +791,66 @@ def _parse_graphml(graphml_path: Path) -> Dict[str, Any]:
     return {"nodes": nodes, "links": raw_links}
 
 
-def _load_pack_graph(pack_id: str) -> Tuple[Dict[str, Any], str]:
-    """Return ({nodes, links}, rag_backend_label). Empty graph when disabled."""
+def _load_pack_graph(
+    pack_id: str, *, root: Optional[Path] = None
+) -> Tuple[Dict[str, Any], str, str, int, Optional[Dict[str, Any]]]:
+    """Return ({nodes, links}, rag_backend, graph_backend, conflict_count, health).
+
+    graph_backend: ``lightrag``（LLM 抽取的 GraphML）→ ``pack_graph``（确定性
+    图层，LightRAG 缺席/未产出时的 fallback）→ ``none``（两边都没有）。
+    health 为图健康指标（孤岛/hub/密度/连通分量），两种后端都计算；空图为 None。
+    """
+    from shadowflow.memory import pack_graph  # noqa: PLC0415
     from shadowflow.runtime import lightrag_adapter  # noqa: PLC0415
 
     backend = lightrag_adapter.backend_label()
-    if not lightrag_adapter.is_enabled():
-        return {"nodes": [], "links": []}, backend
+    if lightrag_adapter.is_enabled():
+        base = Path(os.environ.get("LIGHTRAG_WORKING_DIR", ".shadowflow/lightrag"))
+        graphmls = sorted((base / pack_id).glob("graph_*.graphml")) if (base / pack_id).exists() else []
+        if graphmls:
+            data = _parse_graphml(graphmls[0])
+            return (
+                data,
+                backend,
+                "lightrag",
+                0,
+                pack_graph.graph_health(data["nodes"], data["links"]),
+            )
 
-    base = Path(os.environ.get("LIGHTRAG_WORKING_DIR", ".shadowflow/lightrag"))
-    graphmls = sorted((base / pack_id).glob("graph_*.graphml")) if (base / pack_id).exists() else []
-    if not graphmls:
-        return {"nodes": [], "links": []}, backend
-    return _parse_graphml(graphmls[0]), backend
+    # Deterministic fallback: PackGraph built at ingest (no LLM required).
+    try:
+        payload = pack_graph.load_graph(pack_id, root=root)
+    except Exception as exc:  # noqa: BLE001 — graph fallback must not 500
+        logger.warning("pack_graph load failed for pack %s: %s", pack_id, exc)
+        payload = None
+    if payload and payload.get("nodes"):
+        data = pack_graph.to_graph_data(payload)
+        graph = {"nodes": data["nodes"], "links": data["links"]}
+        return (
+            graph,
+            backend,
+            "pack_graph",
+            len(data.get("conflicts") or []),
+            pack_graph.graph_health(graph["nodes"], graph["links"]),
+        )
+    return {"nodes": [], "links": []}, backend, "none", 0, None
 
 
 @router.get("/packs/{pack_id}/graph")
 async def get_pack_graph(pack_id: str) -> Dict[str, Any]:
     svc = get_service()
     svc.load(pack_id)  # 404 when pack missing (same guard as other handlers)
-    graph, backend = _load_pack_graph(pack_id)
+    graph, backend, graph_backend, conflict_count, health = _load_pack_graph(
+        pack_id, root=svc.pack_dir(pack_id).parent
+    )
     return {
         "data": graph,
         "meta": {
             "pack_id": pack_id,
             "rag_backend": backend,
+            "graph_backend": graph_backend,
+            "conflict_count": conflict_count,
+            "health": health,
             "node_count": len(graph["nodes"]),
             "link_count": len(graph["links"]),
         },

@@ -1,0 +1,126 @@
+pageType: table_of_contents
+background:
+  type: solid
+  color: "$paper"
+notes: 阅读地图：四段式。先讲问题，再讲 OPTO 与系统，然后实验与局限，最后落到我们自己的两个解读视角——控制论与博弈论。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 44, 300, 18]
+    content:
+      style: "$label"
+      text: READING MAP · 阅读地图
+  - elementId: title
+    elementType: text
+    bounds: [48, 68, 600, 40]
+    content:
+      style: "$pagetitle"
+      text: 本次精读的四个问题
+  - elementId: rule
+    elementType: shape
+    bounds: [48, 118, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: q1no
+    elementType: text
+    bounds: [48, 150, 80, 60]
+    content:
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+      color: "$primary"
+      text: |
+        <p><span style="font-size:34px;">01</span></p>
+  - elementId: q1
+    elementType: text
+    bounds: [140, 148, 340, 76]
+    content:
+      style: "$body"
+      text: |
+        <p><strong>问题与洞察</strong></p>
+        <p><span style="color:$gray; font-size:12px;">为什么 AutoDiff 到不了的地方，需要一种新优化范式？轨迹凭什么等价于梯度？</span></p>
+  - elementId: q2no
+    elementType: text
+    bounds: [510, 150, 80, 60]
+    content:
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+      color: "$primary"
+      text: |
+        <p><span style="font-size:34px;">02</span></p>
+  - elementId: q2
+    elementType: text
+    bounds: [602, 148, 320, 76]
+    content:
+      style: "$body"
+      text: |
+        <p><strong>OPTO 与系统设计</strong></p>
+        <p><span style="color:$gray; font-size:12px;">Trace Oracle 的形式化定义；Trace 库与 OptoPrime 优化器如何工作。</span></p>
+  - elementId: q3no
+    elementType: text
+    bounds: [48, 256, 80, 60]
+    content:
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+      color: "$primary"
+      text: |
+        <p><span style="font-size:34px;">03</span></p>
+  - elementId: q3
+    elementType: text
+    bounds: [140, 254, 340, 76]
+    content:
+      style: "$body"
+      text: |
+        <p><strong>实验与局限</strong></p>
+        <p><span style="color:$gray; font-size:12px;">五个实验域的证据强度；作者自述的三条边界。</span></p>
+  - elementId: q4no
+    elementType: text
+    bounds: [510, 256, 80, 60]
+    content:
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+      color: "$primary"
+      text: |
+        <p><span style="font-size:34px;">04</span></p>
+  - elementId: q4
+    elementType: text
+    bounds: [602, 254, 320, 76]
+    content:
+      style: "$body"
+      text: |
+        <p><strong>两个解读视角</strong></p>
+        <p><span style="color:$gray; font-size:12px;">控制论：OPTO 即反馈控制环；博弈论：轨迹驱动的经验均衡分析。</span></p>
+  - elementId: midrule
+    elementType: shape
+    bounds: [48, 356, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: ctx-label
+    elementType: text
+    bounds: [48, 380, 300, 18]
+    content:
+      style: "$label"
+      text: 为什么读这篇 · 与项目的关系
+  - elementId: ctx
+    elementType: text
+    bounds: [48, 406, 864, 100]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.6
+      text: |
+        <p>我们的金融世界模型项目卡在三个地方：<strong>奖励函数依赖</strong>（RL 路线结果高度依赖奖励设定）、<strong>规模</strong>（万级智能体涌现）、<strong>可信性评估</strong>（模拟结果无统一评判依据）。</p>
+        <p>Trace 提供了一条绕开奖励函数设计的优化路线——直接用<strong>执行轨迹 + 丰富反馈</strong>更新智能体的策略与提示词；而它的轨迹抽象，恰好能与博弈论的均衡分析、控制论的反馈闭环缝合成一个完整研究框架。</p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: Trace is the Next AutoDiff · 文献精读
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "02"

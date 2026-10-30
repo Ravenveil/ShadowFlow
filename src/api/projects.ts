@@ -44,11 +44,19 @@ export async function listProjectsWithSessions(): Promise<ProjectWithSessions[]>
   return res.json();
 }
 
-export async function createProject(name: string): Promise<ProjectRecord> {
+/**
+ * 新建项目。`workspace_path`（可选）= 本地文件夹绝对路径，由 NeoRail
+ * 「新建项目」行的文件夹按钮经 fsPickNative 选取；JSON.stringify 自动丢弃
+ * undefined，后端缺省时回落空串。
+ */
+export async function createProject(
+  name: string,
+  workspace_path?: string,
+): Promise<ProjectRecord> {
   const res = await fetch(`${base()}/api/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, workspace_path }),
   });
   if (!res.ok) throw new Error(`createProject: ${res.status}`);
   return res.json();
@@ -82,4 +90,30 @@ export async function deleteProject(projectId: string): Promise<void> {
     headers: { ...authHeaders() },
   });
   if (!res.ok) throw new Error(`deleteProject: ${res.status}`);
+}
+
+/**
+ * 项目产物（server/src/routes/projects.ts GET /:id/artifacts）— 该 run 产出了
+ * artifact_filename 的行才返回。download_url/preview_url 为相对路径
+ * （/projects/...），消费侧拼 getApiBase()。
+ */
+export interface ProjectArtifact {
+  artifact_id: string;
+  title: string;
+  file_type: string;
+  generated_at: string;
+  download_url: string | null;
+  preview_url: string | null;
+  size_bytes: number | null;
+  run_id: string;
+}
+
+/** 项目产物列表（NeoRail 项目 label 产物面板，2026-09-03 修复链路后启用）。 */
+export async function getProjectArtifacts(projectId: string): Promise<ProjectArtifact[]> {
+  const res = await fetch(
+    `${base()}/api/projects/${encodeURIComponent(projectId)}/artifacts`,
+    { headers: { ...authHeaders() } },
+  );
+  if (!res.ok) throw new Error(`getProjectArtifacts: ${res.status}`);
+  return res.json();
 }

@@ -1,0 +1,143 @@
+pageType: content
+background:
+  type: solid
+  color: "$paper"
+notes: OPTO 形式化：三元组（参数空间、上下文、Trace Oracle）。讲清每轮迭代的循环：选参数→拿轨迹反馈→更新。强调这与强化学习的差异：反馈不是标量奖励，而是丰富反馈+完整轨迹。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 40, 300, 18]
+    content:
+      style: "$label"
+      text: 02 · 形式化
+  - elementId: title
+    elementType: text
+    bounds: [48, 64, 800, 38]
+    content:
+      style: "$pagetitle"
+      text: OPTO：带轨迹预言机的迭代优化
+  - elementId: def
+    elementType: text
+    bounds: [48, 116, 420, 120]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.55
+      text: |
+        <p>OPTO 问题实例 = 三元组 <strong>(Θ, ω, T)</strong></p>
+        <p style="margin-top:8px">· <strong>Θ</strong>：参数空间（提示词 / 代码 / 超参）</p>
+        <p>· <strong>ω</strong>：问题上下文（任务说明、环境描述）</p>
+        <p>· <strong>T</strong>：Trace Oracle，输入 θ，返回轨迹反馈</p>
+  - elementId: formula
+    elementType: text
+    bounds: [48, 246, 420, 60]
+    content:
+      fontSize: 16
+      color: "$primary"
+      align: [left, middle]
+      text: |
+        <p>\(\tau = (f,\ g)\ \sim\ \mathcal{T}(\theta;\ \omega)\)</p>
+  - elementId: formula-note
+    elementType: text
+    bounds: [48, 306, 420, 90]
+    content:
+      style: "$body"
+      fontSize: 12
+      lineHeight: 1.5
+      text: |
+        <p>f = 对输出的<strong>反馈</strong>（自然语言 / 标量 / 控制台输出）</p>
+        <p>g = 以 θ 为输入的<strong>执行计算图</strong>（含全部中间值）</p>
+        <p style="margin-top:6px"><span style="color:$gray;">对照：传统优化只给 f（标量），OPTO 同时给"问题是怎么算出来的"。</span></p>
+  - elementId: loop-title
+    elementType: text
+    bounds: [520, 116, 400, 22]
+    content:
+      fontSize: 13
+      bold: true
+      color: "$ink"
+      text: 一轮 OPTO 迭代
+  - elementId: s1
+    elementType: shape
+    bounds: [520, 150, 392, 58]
+    shapeName: rect
+    fill: {type: solid, color: "$soft"}
+  - elementId: s1t
+    elementType: text
+    bounds: [536, 158, 360, 44]
+    content:
+      fontSize: 12
+      color: "$ink"
+      lineHeight: 1.4
+      text: |
+        <p><strong>① 优化器</strong>选择参数 θ（如改写后的提示词）</p>
+  - elementId: a1
+    elementType: line
+    bounds: [716, 208, 2, 22]
+    viewBox: [2, 22]
+    points: "1,0 1,22"
+    curve: sharp
+    arrow: [null, "arrow"]
+    border: {style: solid, width: 2, color: "$gray"}
+  - elementId: s2
+    elementType: shape
+    bounds: [520, 230, 392, 58]
+    shapeName: rect
+    fill: {type: solid, color: "$soft"}
+  - elementId: s2t
+    elementType: text
+    bounds: [536, 238, 360, 44]
+    content:
+      fontSize: 12
+      color: "$ink"
+      lineHeight: 1.4
+      text: |
+        <p><strong>② Trace Oracle</strong> 执行工作流，返回 τ = (f, g)</p>
+  - elementId: a2
+    elementType: line
+    bounds: [716, 288, 2, 22]
+    viewBox: [2, 22]
+    points: "1,0 1,22"
+    curve: sharp
+    arrow: [null, "arrow"]
+    border: {style: solid, width: 2, color: "$gray"}
+  - elementId: s3
+    elementType: shape
+    bounds: [520, 310, 392, 58]
+    shapeName: rect
+    fill: {type: solid, color: "$primary"}
+  - elementId: s3t
+    elementType: text
+    bounds: [536, 318, 360, 44]
+    content:
+      fontSize: 12
+      color: "#F7F3E8"
+      lineHeight: 1.4
+      text: |
+        <p><strong>③ 优化器</strong>依据 f 与 g 更新 θ → 进入下一轮</p>
+  - elementId: compare
+    elementType: text
+    bounds: [48, 412, 864, 70]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.55
+      text: |
+        <p><strong>与相邻概念的关系：</strong>OPTO 像 RL，但反馈不是标量奖励而是"丰富反馈 + 轨迹"；像贝叶斯优化，但不把系统当黑箱；像 AutoDiff，但不要求可微。<span style="color:$primary;">它是一个新的数学 setup，而不是某个具体算法。</span></p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: Trace is the Next AutoDiff · §2 Optimization with Trace Oracle
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "05"

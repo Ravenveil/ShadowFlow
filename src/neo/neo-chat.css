@@ -288,6 +288,15 @@
 }
 .neo-run-error-hint { color: var(--t-fg-4); }
 
+/* ---- 整 run 续跑入口（S4.2 resume）：aborted/failed 终态的错误条下方，
+   复用 .neo-tl-step-retry ghost 小按钮（neo-timeline.css）。---- */
+.neo-run-resume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 /* ---- 错误卡（SSE error 帧 6 桶 / watchdog 超时）：分类标题 + 重试/中止 ----
    与 .neo-run-error 文本条同色系，承接操作（重试=重发最后一条用户消息）。 */
 .neo-error-card {

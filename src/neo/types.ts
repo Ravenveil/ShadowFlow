@@ -24,6 +24,8 @@ export type NeoNav =
   | { view: 'knowledge'; sourceId?: string }
   /** 记忆内嵌页（左栏列表 = 记忆条目）。 */
   | { view: 'memory' }
+  /** ClawHub 内嵌页（2026-10-30，左栏常驻；中栏 = Claw 目录/安装/卸载）。 */
+  | { view: 'clawhub' }
   /** 历史 runs 列表（GAP B39；左栏列表保持不动，行链接 /?run=<id>）。 */
   | { view: 'runs' }
   /** 浏览员工（左栏列表 = 员工）；中栏落到新任务 composer。 */

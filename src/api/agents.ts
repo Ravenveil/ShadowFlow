@@ -66,6 +66,12 @@ export interface QuickCreateRequest {
   tools?: string[];
   /** RACI 分工:职责桶(plan|draft|review|approve|gate|tool) → R/A/C/I。组建保存带,手动招人不带。 */
   raci?: Record<string, string>;
+  /** ClawHub（2026-06）：驱动后端 Claw id（如 'openclaw'）；Claw 完全接管语义。 */
+  claw_id?: string | null;
+  /** DiceBear 风格 id（见 config/clawhub.ts DICEBEAR_STYLES）。 */
+  avatar_style?: string | null;
+  /** DiceBear 种子（缺省按名字 hash）。 */
+  avatar_seed?: string | null;
 }
 
 export interface AgentRecord {
@@ -79,6 +85,13 @@ export interface AgentRecord {
   created_at: string;
   /** 后端持久化的头像色（#rrggbb）；未设置为 null/缺省。 */
   avatar_color?: string | null;
+  /** ClawHub（2026-06）：绑定的驱动后端 Claw id；未绑定为 null/缺省。 */
+  claw_id?: string | null;
+  /** DiceBear 风格 id；未配置为 null/缺省（渲染层回落 bottts-neutral）。 */
+  avatar_style?: string | null;
+  /** DiceBear 种子；未配置为 null/缺省（渲染层按名字 hash）。 */
+  avatar_seed?: string | null;
+  updated_at?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +165,12 @@ export interface AgentPatchRequest {
   tools?: string[];
   /** #rrggbb 设置；"" 清除（回到按名字 hash）。 */
   avatar_color?: string | null;
+  /** ClawHub（2026-06）：Claw id 设置；"" 清除（解除接管）。 */
+  claw_id?: string | null;
+  /** DiceBear 风格设置；"" 清除（回默认风格）。 */
+  avatar_style?: string | null;
+  /** DiceBear 种子设置；"" 清除（回名字 hash）。 */
+  avatar_seed?: string | null;
 }
 
 export async function patchAgent(agentId: string, patch: AgentPatchRequest): Promise<AgentRecord> {

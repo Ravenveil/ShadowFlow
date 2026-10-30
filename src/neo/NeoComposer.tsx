@@ -61,6 +61,7 @@ import {
   MonitorUp,
   Cpu,
   ExternalLink,
+  PawPrint,
 } from 'lucide-react';
 import { getApiBase } from '../api/_base';
 import { listPacks } from '../api/knowledge';
@@ -77,6 +78,7 @@ import {
 } from '../api/skillIngest';
 import { listSkills, type SkillInfo } from '../api/skills';
 import { fsHome, fsList, fsPickNative, type FsEntry } from '../api/fsBrowse';
+import { listProjectsWithSessions, type ProjectWithSessions } from '../api/projects';
 import { parseSkillToken } from '../lib/skillToken';
 import {
   fetchPickerCliItems,
@@ -95,6 +97,9 @@ import type {
   AttachedFile,
 } from '../components/composer/UnifiedComposer';
 import type { CompileStatus } from '../components/SkillDropdown';
+import type { NeoNav } from './types';
+// ClawHub（2026-06）：.claw-target-chip / .claw-badge-mini 样式（增量引入）
+import '../pages/clawhub/clawhub.css';
 import './neo-composer.css';
 
 export type { UnifiedComposerSubmitPayload };
@@ -111,6 +116,16 @@ export interface NeoComposerProps {
   onStop?: () => void;
   /** 预填文本（如模板画廊点选后注入 `@<skill_id> `）。值变化时覆盖当前草稿。 */
   initialText?: string;
+  /** NeoApp 内部导航（中栏视图切换，如 {view:'runs'}）——/inspect 等内建
+   *  slash 命令走它；runs 是 NeoApp 内部视图而非 react-router 路由。
+   *  由 NeoApp → NeoChat/NeoGroupChat → 本组件逐级透传；缺省（独立路由页）
+   *  时回落 react-router navigate。 */
+  onNavigate?: (nav: NeoNav) => void;
+  /** ClawHub（2026-06，FR-03）：当前 Claw 聊天 target（非空时 chip 行显示
+   *  Claw 徽章，提示用户对话将由该 Claw 驱动）。 */
+  clawTarget?: { cliId: string; name: string } | null;
+  /** ClawHub（2026-06）：清除 Claw target。 */
+  onClearClawTarget?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -1009,6 +1024,9 @@ export function NeoComposer({
   initialText,
   streaming = false,
   onStop,
+  onNavigate,
+  clawTarget,
+  onClearClawTarget,
 }: NeoComposerProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -1030,6 +1048,17 @@ export function NeoComposer({
   const [pickCwd, setPickCwd] = useState<string>(() => localStorage.getItem('sf.cwd') ?? '');
   const [showDirPicker, setShowDirPicker] = useState(false);
   const dirAnchorRef = useRef<HTMLButtonElement>(null);
+  // GAP A3 项目 chip：选 → 存 sf.project_id（+ sf.project_name 供免请求渲染）→
+  // NeoChat 建 run session 时读 sf.project_id 拼进请求。弹层打开时懒拉项目列表。
+  const [pickProjectId, setPickProjectId] = useState<string>(
+    () => localStorage.getItem('sf.project_id') ?? '',
+  );
+  const [pickProjectName, setPickProjectName] = useState<string>(
+    () => localStorage.getItem('sf.project_name') ?? '',
+  );
+  const [projectOpen, setProjectOpen] = useState(false);
+  const [projects, setProjects] = useState<ProjectWithSessions[] | null>(null);
+  const projectRef = useRef<HTMLDivElement | null>(null);
   // Skill-URL 识别：dismissedUrls 记用户说「不」的 URL，免得每次击键重弹。
   const [dismissedUrls, setDismissedUrls] = useState<Set<string>>(() => new Set());
   const [pendingSkill, setPendingSkill] = useState<SkillIngestSummary | null>(null);
@@ -1055,16 +1084,17 @@ export function NeoComposer({
   const [toast, setToast] = useState<string | null>(null);
   const knowledgeRef = useRef<HTMLDivElement | null>(null);
 
-  // 点外关闭（mode / knowledge 弹层）。
+  // 点外关闭（mode / knowledge / project 弹层）。
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       const tgt = e.target as Node;
       if (knowledgeOpen && knowledgeRef.current && !knowledgeRef.current.contains(tgt)) setKnowledgeOpen(false);
       if (modeOpen && modeRef.current && !modeRef.current.contains(tgt)) setModeOpen(false);
+      if (projectOpen && projectRef.current && !projectRef.current.contains(tgt)) setProjectOpen(false);
     }
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [knowledgeOpen, modeOpen]);
+  }, [knowledgeOpen, modeOpen, projectOpen]);
 
   // toast 自动消失。
   useEffect(() => {
@@ -1251,7 +1281,11 @@ export function NeoComposer({
         setToast(t('neo.composer.helpHint', { defaultValue: '快捷键: @ 提及 Skill · / 命令' }));
         break;
       case 'inspect':
-        navigate('/runs');
+        // runs 历史列表是 NeoApp 内部视图（view:'runs'），不是 react-router
+        // 路由（navigate('/runs') 会被 catch-all 重定向回 '/'）——走 NeoApp
+        // 透传的 onNavigate；独立路由页无 NeoApp 壳时回落原行为。
+        if (onNavigate) onNavigate({ view: 'runs' });
+        else navigate('/runs');
         break;
       case 'reload':
         // POST /api/skills/reload 让服务端重扫 FS。
@@ -1371,6 +1405,33 @@ export function NeoComposer({
     }
   }
 
+  // 项目弹层：打开时懒拉项目列表（失败回落空列表，chip 仍可用「无项目」清除）。
+  function openProjectPicker() {
+    setProjectOpen((v) => !v);
+    if (projects === null) {
+      listProjectsWithSessions()
+        .then((items) => setProjects(items))
+        .catch(() => setProjects([]));
+    }
+  }
+
+  // 选中/清除项目：写 localStorage（sf.project_id + sf.project_name 展示缓存），
+  // NeoChat 建 run session 时在请求时读取。
+  function selectProject(p: ProjectWithSessions | null) {
+    if (p) {
+      localStorage.setItem('sf.project_id', p.project_id);
+      localStorage.setItem('sf.project_name', p.name);
+      setPickProjectId(p.project_id);
+      setPickProjectName(p.name);
+    } else {
+      localStorage.removeItem('sf.project_id');
+      localStorage.removeItem('sf.project_name');
+      setPickProjectId('');
+      setPickProjectName('');
+    }
+    setProjectOpen(false);
+  }
+
   const hasText = composer.trim().length > 0;
 
   return (
@@ -1480,7 +1541,7 @@ export function NeoComposer({
           </div>
         )}
 
-        {/* ── chip 行：导入 Skill ｜ 模型 ｜ 目录 ｜ 模式 ｜ 知识 ｜ 发送 ── */}
+        {/* ── chip 行：导入 Skill ｜ Claw target ｜ 模型 ｜ 目录 ｜ 模式 ｜ 知识 ｜ 发送 ── */}
         <div className="neo-cp-bar">
           {/* 复刻 .composer-bar .plus：纯加号图标行（16px，无文字标签） */}
           <NeoChipBtn
@@ -1489,6 +1550,28 @@ export function NeoComposer({
             testId="start-chip-import-skill"
             title={t('start.importSkill')}
           />
+
+          {/* ClawHub（2026-06，FR-03）：Claw 聊天 target 徽章（增量；点击 × 清除） */}
+          {clawTarget && (
+            <span className="neo-cp-chip claw-target-chip" data-testid="claw-target-chip">
+              <span aria-hidden className="neo-cp-chip-icon">
+                <PawPrint size={13} strokeWidth={2} />
+              </span>
+              <span>{clawTarget.name || clawTarget.cliId}</span>
+              <span className="claw-badge-mini">Claw</span>
+              {onClearClawTarget && (
+                <button
+                  type="button"
+                  className="neo-cp-attach-x"
+                  onClick={onClearClawTarget}
+                  aria-label={t('clawhub.composer.clearTarget', { defaultValue: '取消 Claw 对话' })}
+                  data-testid="claw-target-clear"
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          )}
 
           <NeoModelPicker
             value={{ executor: pickExecutor, model: pickModel }}
@@ -1531,6 +1614,71 @@ export function NeoComposer({
                 }}
                 onClose={() => setShowDirPicker(false)}
               />
+            )}
+          </div>
+
+          {/* PROJECT chip — 选中项目后新 run 挂到该项目（sf.project_id） */}
+          <div ref={projectRef} className="neo-cp-pop-anchor">
+            <NeoChipBtn
+              glyph={<Folder size={14} strokeWidth={2} />}
+              label={
+                pickProjectId && pickProjectName
+                  ? pickProjectName
+                  : t('neo.composer.projectNone', { defaultValue: '无项目' })
+              }
+              hasArrow
+              active={projectOpen}
+              configured={!!pickProjectId}
+              onClick={openProjectPicker}
+              testId="start-project-chip"
+              title={t('neo.composer.projectSelect', { defaultValue: '选择项目' })}
+            />
+            {projectOpen && (
+              <div className="neo-cp-pop neo-cp-pop--wide">
+                <div className="neo-cp-pop-head">
+                  {t('neo.composer.projectSelect', { defaultValue: '选择项目' })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => selectProject(null)}
+                  data-testid="start-project-none"
+                  className={`neo-cp-pop-row${!pickProjectId ? ' on' : ''}`}
+                >
+                  <span aria-hidden className="neo-cp-pop-row-icon">
+                    <X size={14} strokeWidth={2} />
+                  </span>
+                  <span className="neo-cp-pop-row-label">
+                    {t('neo.composer.projectNoneDesc', { defaultValue: '不在项目中工作' })}
+                  </span>
+                  {!pickProjectId && <span aria-hidden>✓</span>}
+                </button>
+                {projects === null && (
+                  <div className="neo-cp-pop-note">{t('common.loading')}</div>
+                )}
+                {projects && projects.length === 0 && (
+                  <div className="neo-cp-pop-note">
+                    {t('neo.composer.projectEmpty', { defaultValue: '还没有项目，可在左栏「新建项目」创建。' })}
+                  </div>
+                )}
+                {projects?.map((p) => {
+                  const on = pickProjectId === p.project_id;
+                  return (
+                    <button
+                      key={p.project_id}
+                      type="button"
+                      onClick={() => selectProject(p)}
+                      data-testid={`start-project-${p.project_id}`}
+                      className={`neo-cp-pop-row${on ? ' on' : ''}`}
+                    >
+                      <span aria-hidden className="neo-cp-pop-row-icon">
+                        <Folder size={14} strokeWidth={2} />
+                      </span>
+                      <span className="neo-cp-pop-row-label">{p.name}</span>
+                      {on && <span aria-hidden>✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
 
@@ -1642,7 +1790,7 @@ export function NeoComposer({
                     <p className="neo-cp-pop-empty-text">{t('start.knowledgeEmpty')}</p>
                     <button
                       type="button"
-                      onClick={() => { setKnowledgeOpen(false); navigate('/settings?section=knowledge'); }}
+                      onClick={() => { setKnowledgeOpen(false); navigate('/knowledge'); }}
                       className="neo-cp-pop-empty-link"
                     >
                       <ArrowRight size={11} strokeWidth={2} aria-hidden />

@@ -96,6 +96,10 @@ import { TeamPanel } from './projections/TeamPanel';
 import { GroupMembersPanel } from './projections/GroupMembersPanel';
 import { NeoAgentSoul } from './NeoAgentSoul';
 import type { NeoHostProps } from './types';
+// ClawHub（2026-06，T08）：soulAgent 头像（AgentRecord → DiceBear）
+import { AgentAvatar } from '../components/agent/AgentAvatar';
+import { getAgent, type AgentRecord } from '../api/agents';
+import '../pages/clawhub/clawhub.css';
 import './neo-host.css';
 
 // ---------------------------------------------------------------------------
@@ -193,6 +197,27 @@ function previewTypeOf(filename: string): ArtifactType {
 
 export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps) {
   const { t } = useI18n();
+
+  // ── ClawHub（2026-06，T08）：soulAgent 的完整记录（DiceBear 头像字段）────
+  // agent-target / DM 会话上下文时拉取；失败 → null（标题不渲染头像，零回归）。
+  const [soulAgentRecord, setSoulAgentRecord] = useState<AgentRecord | null>(null);
+  useEffect(() => {
+    if (!soulAgent) {
+      setSoulAgentRecord(null);
+      return;
+    }
+    let alive = true;
+    getAgent(soulAgent.id)
+      .then((a) => {
+        if (alive) setSoulAgentRecord(a);
+      })
+      .catch(() => {
+        if (alive) setSoulAgentRecord(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [soulAgent?.id]);
 
   // W2 钉钉式融合（2026-08-22）：中栏开着非 DM 会话（团队群）→ 本面板变
   // 「团队的主机」并露出「成员」tab（成员列表 + 团队 DAG 摘要 + 审批门，
@@ -1043,6 +1068,17 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
           （2026-08-15 任务 V：ClawsGo 大图标盒形态 — 44px hairline 盒 + 下方小标签） */}
       <div className="neo-host-header">
         <span className="neo-host-title" data-testid="neo-host-title">
+          {/* ClawHub（2026-10-30）：agent 上下文统一 DiceBear 头像（未配置按
+              名字 hash 稳定生成）+ 名 */}
+          {soulAgentRecord && (
+            <AgentAvatar
+              name={soulAgentRecord.name}
+              style={soulAgentRecord.avatar_style}
+              seed={soulAgentRecord.avatar_seed ?? soulAgentRecord.name}
+              size={22}
+              className="neo-host-title-avatar"
+            />
+          )}
           {isTeamConv
             ? t('neo.host.teamTitle', { defaultValue: '团队的主机' })
             : t('neo.host.title', { defaultValue: 'Agent 的主机' })}

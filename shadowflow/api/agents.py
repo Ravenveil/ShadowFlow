@@ -221,6 +221,14 @@ class QuickCreateRequest(BaseModel):
     tools: Optional[List[str]] = Field(None, max_length=64)
     # RACI 分工(职责桶 → R/A/C/I)。组建保存由前端 deriveRaci 派生传入;手动招人不传 → {}。
     raci: Optional[Dict[str, str]] = None
+    # ── ClawHub（2026-06）Agent 绑定 Claw + DiceBear 头像（全 Optional）──────
+    # claw_id：驱动后端（Claw 完全接管语义）。仅格式校验；存在性由前端对照
+    # GET /api/cli/detect 列表把关（Python 不持有注册表）。
+    claw_id: Optional[str] = Field(None, max_length=64, pattern=r"^[a-z0-9][a-z0-9-]*$|^$")
+    # DiceBear 风格 id（见前端 src/config/clawhub.ts 的 DICEBEAR_STYLES）。
+    avatar_style: Optional[str] = Field(None, max_length=40, pattern=r"^[a-z0-9-]+$|^$")
+    # DiceBear 种子（缺省时前端按名字 hash）。
+    avatar_seed: Optional[str] = Field(None, max_length=64)
 
 
 class QuickCreateResponse(BaseModel):
@@ -237,6 +245,10 @@ class AgentPatchRequest(BaseModel):
     tools: Optional[List[str]] = None
     # 传 "" 清除颜色（回到按名字 hash）；传 #rrggbb 设置。
     avatar_color: Optional[str] = Field(None, max_length=9)
+    # ── ClawHub（2026-06）：传 "" 清空绑定/头像；传合法值设置 ──────────────────
+    claw_id: Optional[str] = Field(None, max_length=64, pattern=r"^[a-z0-9][a-z0-9-]*$|^$")
+    avatar_style: Optional[str] = Field(None, max_length=40, pattern=r"^[a-z0-9-]+$|^$")
+    avatar_seed: Optional[str] = Field(None, max_length=64)
 
 
 class AgentChatRequest(BaseModel):
@@ -386,12 +398,19 @@ async def quick_create_agent(body: QuickCreateRequest) -> Dict[str, Any]:
         "created_at": now,
         # 头像色：手选才写；不传存 None（前端按名字 hash 兜底）。
         "avatar_color": body.avatar_color or None,
+        # ── ClawHub（2026-06）：Claw 绑定 + DiceBear 头像；"" → None（清空语义）。
+        "claw_id": (body.claw_id or "").strip() or None,
+        "avatar_style": (body.avatar_style or "").strip() or None,
+        "avatar_seed": (body.avatar_seed or "").strip() or None,
     }
     _save_agent(record)
     return _envelope({
         "agent_id": agent_id,
         "name": body.name,
         "avatar_color": record["avatar_color"],
+        "claw_id": record["claw_id"],
+        "avatar_style": record["avatar_style"],
+        "avatar_seed": record["avatar_seed"],
         "blueprint": blueprint.model_dump(),
         "created_at": now,
         "source": "quick_hire",
@@ -491,6 +510,13 @@ async def patch_agent(agent_id: str, body: AgentPatchRequest) -> Dict[str, Any]:
         _validate_avatar_color(body.avatar_color)
         # "" → 清除（回到按名字 hash）；#rrggbb → 设置。
         record["avatar_color"] = body.avatar_color or None
+    # ── ClawHub（2026-06）："" = 显式清空；合法值 = 设置。与 avatar_color 同语义。
+    if body.claw_id is not None:
+        record["claw_id"] = body.claw_id.strip() or None
+    if body.avatar_style is not None:
+        record["avatar_style"] = body.avatar_style.strip() or None
+    if body.avatar_seed is not None:
+        record["avatar_seed"] = body.avatar_seed.strip() or None
     if body.skills is not None:
         if bp.get("role_profiles") and len(bp["role_profiles"]) > 0:
             bp["role_profiles"][0]["skills"] = body.skills

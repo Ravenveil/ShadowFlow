@@ -42,8 +42,12 @@ import { NeoDeliveryCard, collectDeliverables, summarizeText } from './NeoDelive
 import type { TimelineMessage } from '../components/run-session/timeline/types';
 import { useI18n } from '../common/i18n';
 import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
+// ClawHub（2026-06，T08）：agent 气泡头像接入 DiceBear（配了头像的 Agent 生效）
+import { AgentAvatar } from '../components/agent/AgentAvatar';
+import type { NeoNav } from './types';
 import './neo-chat.css'; // composer 容器/发送钮基样式（.neo-chat-composer / .neo-composer）
 import './neo-group.css';
+import '../pages/clawhub/clawhub.css';
 
 /* ── 纯逻辑：turn 分组 + 分日 ─────────────────────────────────────────────── */
 
@@ -216,9 +220,13 @@ const MEMBER_STACK_MAX = 5;
 export function NeoGroupChat({
   groupId: groupIdProp,
   embedded = false,
+  onNavigate,
 }: {
   groupId?: string;
   embedded?: boolean;
+  /** NeoApp 内部导航（内嵌态由 NeoApp 透传）——转发给 NeoComposer 的
+   *  /inspect 等内建 slash 命令；独立路由页缺省。 */
+  onNavigate?: (nav: NeoNav) => void;
 } = {}) {
   const params = useParams<{ groupId: string }>();
   const groupId = groupIdProp ?? params.groupId;
@@ -596,15 +604,39 @@ export function NeoGroupChat({
                           const role = roleBadge(s.msg);
                           return (
                             <div className="neo-gc-msg" key={s.key} data-testid="neo-gc-msg">
-                              <span
-                                className="neo-gc-msg-avatar"
-                                style={{
-                                  background: agentRec?.avatar_color ?? gcAvatarColor(aid ?? sender),
-                                }}
-                                aria-hidden
-                              >
-                                {gcAvatarInitial(sender)}
-                              </span>
+                              {/* ClawHub（2026-10-30）：群聊消息头像统一 DiceBear
+                                  （未配置按名字 hash 稳定生成）；字符色块保留为
+                                  SVG 异常兜底（fallback）。 */}
+                              {agentRec ? (
+                                <AgentAvatar
+                                  name={sender}
+                                  style={agentRec.avatar_style}
+                                  seed={agentRec.avatar_seed ?? sender}
+                                  size={28}
+                                  className="neo-gc-msg-avatar"
+                                  fallback={
+                                    <span
+                                      className="neo-gc-msg-avatar"
+                                      style={{
+                                        background: agentRec?.avatar_color ?? gcAvatarColor(aid ?? sender),
+                                      }}
+                                      aria-hidden
+                                    >
+                                      {gcAvatarInitial(sender)}
+                                    </span>
+                                  }
+                                />
+                              ) : (
+                                <span
+                                  className="neo-gc-msg-avatar"
+                                  style={{
+                                    background: gcAvatarColor(aid ?? sender),
+                                  }}
+                                  aria-hidden
+                                >
+                                  {gcAvatarInitial(sender)}
+                                </span>
+                              )}
                               <div className="neo-gc-msg-main">
                                 <div className="neo-gc-msg-head">
                                   <span className="neo-gc-msg-name">{sender}</span>
@@ -641,6 +673,7 @@ export function NeoGroupChat({
           variant="chat"
           onSubmit={handleSubmit}
           streaming={busy}
+          onNavigate={onNavigate}
           placeholder={
             isDm
               ? t('neo.dm.placeholder', { defaultValue: '发消息，TA 就开始干活' })

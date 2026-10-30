@@ -49,8 +49,13 @@ export type ExecutorString =
  * pick a credential / pin a model before the callable instance exists).
  */
 export interface ResolveOptions {
-  /** BYOK key for `byok:*` / `anthropic-direct`. Ignored for CLI/ACP/MCP. */
+  /** BYOK key for `byok:*` / `anthropic-direct`. */
   apiKey?: string;
+  /**
+   * BYOK provider id（2026-10-30 联动修复）：cli:* 子进程注入哪个 provider 的
+   * key 由它决定（如 ARC 的 preflight 读 OPENAI_API_KEY）。与 apiKey 配对使用。
+   */
+  provider?: string;
   /** Pinned model id (e.g., `claude-opus-4-7`, `glm-4.6`). */
   model?: string;
   /** Default ceilings the callable should encode into its requests. */
@@ -76,6 +81,56 @@ export interface ResolveOptions {
  *   4. `mcp:<spec>` → McpCallable
  *   5. `byok:<provider>` → ApiClientCallable(provider)
  */
+/**
+ * BYOK provider → Claw 子进程注入的环境变量名（2026-10-30 设置联动）。
+ * 值 = 用户在设置页配的 key。CLI 自带认证（claude login / hermes portal）
+ * 的会忽略这些变量，不受影响；读 env 的 Claw（ARC 读 OPENAI_API_KEY 等）
+ * 从此能用平台设置的 key，不再 Connection error。
+ */
+const CLI_ENV_BY_PROVIDER: Record<string, string> = {
+  anthropic: 'ANTHROPIC_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
+  zhipu: 'ZHIPU_API_KEY',
+  google: 'GEMINI_API_KEY',
+  qwen: 'DASHSCOPE_API_KEY',
+  moonshot: 'MOONSHOT_API_KEY',
+  mistral: 'MISTRAL_API_KEY',
+  groq: 'GROQ_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+};
+
+function cliKeyEnv(provider: string, apiKey: string): Record<string, string> {
+  const name = CLI_ENV_BY_PROVIDER[provider];
+  return name ? { [name]: apiKey } : {};
+}
+
+/**
+ * 设置页全量联动（2026-10-30）：读取 settings/byok 里所有 enabled 且配了
+ * key 的 provider，按标准 env 名全部注入 Claw 子进程。Claw 只消费自己认识
+ * 的变量（ARC 读 OPENAI_API_KEY，hermes 读自己的配置），互不干扰。读取失败
+ * 静默返回 {}（联动是增强，不是依赖）。
+ */
+function cliByokEnvFromSettings(): Record<string, string> {
+  try {
+    // 惰性 require 防循环依赖（storage → 无 transport 引用，安全，但保守起见）。
+    const { getSetting } = require('../storage/settings') as {
+      getSetting: (k: string) => unknown;
+    };
+    const byok = getSetting('byok') as
+      | { providers?: Record<string, { apiKey?: string; enabled?: boolean }> }
+      | undefined;
+    const env: Record<string, string> = {};
+    for (const [id, p] of Object.entries(byok?.providers ?? {})) {
+      if (!p?.enabled || !p.apiKey) continue;
+      Object.assign(env, cliKeyEnv(id, p.apiKey));
+    }
+    return env;
+  } catch {
+    return {};
+  }
+}
+
 export function resolveCallable(
   executor: ExecutorString | string,
   opts: ResolveOptions = {},
@@ -112,6 +167,14 @@ export function resolveCallable(
       cwd: opts.workspace,
       model: opts.model,
       maxTokens: opts.maxTokens,
+      // 2026-10-30 设置联动（两层）：
+      //  1) 本 session 显式 provider+key（请求头 BYOK）→ 注入该 provider 的 env
+      //  2) 设置页全部 enabled 的 BYOK key → 按标准 env 名全量注入
+      // Claw 只消费自己认识的变量；自带认证的 CLI（claude login 等）不受影响。
+      env: {
+        ...cliByokEnvFromSettings(),
+        ...(opts.apiKey && opts.provider ? cliKeyEnv(opts.provider, opts.apiKey) : {}),
+      },
     });
   }
 

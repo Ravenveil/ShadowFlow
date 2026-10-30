@@ -1,0 +1,77 @@
+pageType: cover
+background:
+  type: solid
+  color: "$paper"
+notes: 开场：今天精读的论文是 NeurIPS 2024 的 Trace。一句话——它把"反向传播"推广到了不可微分的一切计算工作流，用的载体不是梯度，而是执行轨迹。
+elements:
+  - elementId: band
+    elementType: shape
+    bounds: [0, 0, 268, 540]
+    shapeName: rect
+    fill: {type: solid, color: "$primary"}
+  - elementId: band-label
+    elementType: text
+    bounds: [40, 56, 200, 20]
+    content:
+      style: "$label"
+      color: "#F7F3E8"
+      text: PAPER READING · 文献精读
+  - elementId: band-venue
+    elementType: text
+    bounds: [40, 400, 200, 90]
+    content:
+      fontSize: 11
+      color: "#F7F3E8CC"
+      lineHeight: 1.6
+      text: |
+        <p>NeurIPS 2024</p>
+        <p>arXiv: 2406.16218</p>
+        <p>Microsoft Research × Stanford × Netflix</p>
+  - elementId: band-no
+    elementType: text
+    bounds: [40, 120, 200, 90]
+    content:
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+      color: "#F7F3E8"
+      text: |
+        <p><span style="font-size:52px;">Trace</span></p>
+  - elementId: title
+    elementType: text
+    bounds: [320, 108, 600, 150]
+    content:
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+      color: "$ink"
+      lineHeight: 1.25
+      text: |
+        <p><span style="font-size:40px;"><strong>Trace is the Next AutoDiff</strong></span></p>
+        <p style="margin-top:10px"><span style="font-size:22px;">当执行轨迹成为梯度：面向一般计算工作流的生成式优化</span></p>
+  - elementId: rule
+    elementType: shape
+    bounds: [320, 282, 120, 3]
+    shapeName: rect
+    fill: {type: solid, color: "$primary"}
+  - elementId: meta
+    elementType: text
+    bounds: [320, 306, 600, 60]
+    content:
+      fontSize: 13
+      color: "$ink"
+      lineHeight: 1.6
+      text: |
+        <p>Ching-An Cheng（Microsoft Research）· Allen Nie（Stanford）· Adith Swaminathan（Netflix）</p>
+        <p><span style="color:$gray; font-size:11px;"> Generative Optimization with Rich Feedback, Execution Traces, and LLMs</span></p>
+  - elementId: takeaway
+    elementType: text
+    bounds: [320, 396, 600, 80]
+    content:
+      fontSize: 15
+      color: "$ink"
+      lineHeight: 1.6
+      text: |
+        <p><strong>核心命题：</strong>梯度只能优化可微分系统；而执行轨迹可以为<span style="color:$primary;"><strong>不可微分的工作流</strong></span>（LLM 调用、编排代码、模拟器）承担同样的"信用分配"角色。</p>
+  - elementId: foot
+    elementType: text
+    bounds: [320, 500, 600, 16]
+    content:
+      style: "$small"
+      text: 金融世界模型项目 · 文献调研 · 2026-09-02

@@ -1,0 +1,82 @@
+pageType: content
+background:
+  type: solid
+  color: "$paper"
+notes: 实验总览：五个域，一张三线表。强调两点——覆盖面（数值优化到机器人控制）和"通用优化器与各领域专用优化器打平"这个主张的证据强度。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 40, 300, 18]
+    content:
+      style: "$label"
+      text: 03 · 证据
+  - elementId: title
+    elementType: text
+    bounds: [48, 64, 800, 38]
+    content:
+      style: "$pagetitle"
+      text: 实验：一个通用优化器横跨五个领域
+  - elementId: tbl
+    elementType: table
+    bounds: [48, 124, 864, 300]
+    columnWidths: [0.2, 0.34, 0.24, 0.22]
+    rowHeights: [0.14, 0.172, 0.172, 0.172, 0.172, 0.172]
+    style: "$default"
+    rows:
+      - - text: 实验域
+        - text: 任务设置
+        - text: 被优化的参数
+        - text: 主要结论
+      - - text: 一阶数值优化
+        - text: 验证 OptoPrime 复现梯度下降行为
+        - text: 数值变量
+        - text: 与精确一阶方法接近
+      - - text: 系统编排调优
+        - text: DSPy 流水线超参与编排
+        - text: 超参 + 编排代码
+        - text: 与专用优化器竞争力相当
+      - - text: 提示词×代码联合优化
+        - text: Battleship 游戏智能体
+        - text: prompt + Python 代码
+        - text: 从"只会猜 [0,0]"学会枚举全盘
+      - - text: 长时域机器人控制
+        - text: Meta-World Sawyer 机械臂三任务
+        - text: 控制器代码
+        - text: 用自然语言反馈实现"跨时间反传"
+      - - text: 对比 TextGrad
+        - text: 同为 LLM 优化框架的消融
+        - text: ——
+        - text: Trace 的图追踪更完整
+  - elementId: tbl-caption
+    elementType: text
+    bounds: [48, 432, 864, 16]
+    content:
+      style: "$small"
+      text: 表 1 · 依据论文 §5 整理；除最后一行外均报告 10 个随机种子的均值与标准误
+  - elementId: read
+    elementType: text
+    bounds: [48, 456, 864, 44]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.5
+      text: |
+        <p><strong>读法：</strong>证据的意义不在"打败专用优化器"，而在<span style="color:$primary;"><strong>同一个 OPTO 接口覆盖了五个看似无关的问题类</strong></span>——这正是 AutoDiff 当年做的事。</p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: Trace is the Next AutoDiff · §5 Experiments
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "08"

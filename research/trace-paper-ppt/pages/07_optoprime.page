@@ -1,0 +1,152 @@
+pageType: content
+background:
+  type: solid
+  color: "$paper"
+notes: OptoPrime 的四步：执行工作流、取最小子图、转伪代码报告、LLM 给出更新。右边展示一个真实的伪代码报告样子（论文 Fig. 4 的例子）。强调为什么用伪代码：利用 LLM 的 debug 能力。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 40, 300, 18]
+    content:
+      style: "$label"
+      text: 02 · 优化器
+  - elementId: title
+    elementType: text
+    bounds: [48, 64, 800, 38]
+    content:
+      style: "$pagetitle"
+      text: OptoPrime：让 LLM 像程序员一样"读轨迹改代码"
+  - elementId: step1no
+    elementType: text
+    bounds: [48, 122, 30, 30]
+    content:
+      fontSize: 20
+      color: "$primary"
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+      text: ①
+  - elementId: step1
+    elementType: text
+    bounds: [84, 120, 360, 66]
+    content:
+      style: "$body"
+      fontSize: 12.5
+      lineHeight: 1.45
+      text: |
+        <p><strong>执行工作流</strong></p>
+        <p><span style="color:$gray;">记录每个算子的输入输出，得到完整执行轨迹。</span></p>
+  - elementId: step2no
+    elementType: text
+    bounds: [48, 200, 30, 30]
+    content:
+      fontSize: 20
+      color: "$primary"
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+      text: ②
+  - elementId: step2
+    elementType: text
+    bounds: [84, 198, 360, 66]
+    content:
+      style: "$body"
+      fontSize: 12.5
+      lineHeight: 1.45
+      text: |
+        <p><strong>提取最小子图</strong></p>
+        <p><span style="color:$gray;">只保留与可训练参数有因果关系的节点，压缩 token。</span></p>
+  - elementId: step3no
+    elementType: text
+    bounds: [48, 278, 30, 30]
+    content:
+      fontSize: 20
+      color: "$primary"
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+      text: ③
+  - elementId: step3
+    elementType: text
+    bounds: [84, 276, 360, 66]
+    content:
+      style: "$body"
+      fontSize: 12.5
+      lineHeight: 1.45
+      text: |
+        <p><strong>转写为伪代码报告</strong></p>
+        <p><span style="color:$gray;">子图 → "代码 + 算子说明 + 各变量取值 + 反馈"的文本报告。</span></p>
+  - elementId: step4no
+    elementType: text
+    bounds: [48, 356, 30, 30]
+    content:
+      fontSize: 20
+      color: "$primary"
+      fontFamily: {latin: "Georgia", ea: "MiSans"}
+      text: ④
+  - elementId: step4
+    elementType: text
+    bounds: [84, 354, 360, 66]
+    content:
+      style: "$body"
+      fontSize: 12.5
+      lineHeight: 1.45
+      text: |
+        <p><strong>LLM 推理并更新参数</strong></p>
+        <p><span style="color:$gray;">像 debug 一样推断"改哪个参数、往哪个方向改"，输出新 θ。</span></p>
+  - elementId: div
+    elementType: shape
+    bounds: [476, 120, 1, 330]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: rep-head
+    elementType: text
+    bounds: [512, 118, 400, 22]
+    content:
+      fontSize: 13
+      bold: true
+      color: "$ink"
+      text: 一份真实的伪代码报告（论文 Fig. 4）
+  - elementId: rep-bg
+    elementType: shape
+    bounds: [512, 148, 400, 230]
+    shapeName: rect
+    fill: {type: solid, color: "#27231F"}
+  - elementId: rep
+    elementType: text
+    bounds: [530, 162, 366, 206]
+    content:
+      fontFamily: {latin: "Consolas", ea: "MiSans"}
+      fontSize: 11
+      color: "#F1E9DA"
+      lineHeight: 1.55
+      text: |
+        <p><span style="color:#B66A3C;">#Code</span></p>
+        <p>a = bar(x); y = add(b, a)</p>
+        <p>z = mul(a, y)</p>
+        <p><span style="color:#B66A3C;">#Inputs:</span> b=1.0</p>
+        <p><span style="color:#B66A3C;">#Others:</span> a=2.0  y=3.0</p>
+        <p><span style="color:#B66A3C;">#Output:</span> z=6.0</p>
+        <p><span style="color:#B66A3C;">#Variable:</span> x=-1.0</p>
+        <p><span style="color:#C9828B;">#Feedback: Output should be larger.</span></p>
+  - elementId: rep-caption
+    elementType: text
+    bounds: [512, 386, 400, 60]
+    content:
+      style: "$body"
+      fontSize: 12
+      lineHeight: 1.5
+      text: |
+        <p>LLM 读到"z 要更大、a=x 的负缩放、x 是变量"，即可推出<strong>应把 x 调得更负</strong>——无需任何梯度。</p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: Trace is the Next AutoDiff · §4 Design of the First OPTO Optimizer
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "07"

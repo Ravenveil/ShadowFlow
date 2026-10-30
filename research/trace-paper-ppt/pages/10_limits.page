@@ -1,0 +1,92 @@
+pageType: content
+background:
+  type: solid
+  color: "$paper"
+notes: 局限性页：一条粗线把"已证明"和"尚未解决"切开。三条局限都来自论文第 6 节原文：反馈设计、DAG 表达边界（含不支持分布式并行）、OptoPrime 只是初步。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 40, 300, 18]
+    content:
+      style: "$label"
+      text: 03 · 边界
+  - elementId: title
+    elementType: text
+    bounds: [48, 64, 800, 38]
+    content:
+      style: "$pagetitle"
+      text: 局限：作者自己划出的三条边界
+  - elementId: proven-head
+    elementType: text
+    bounds: [48, 126, 400, 24]
+    content:
+      fontSize: 15
+      bold: true
+      color: "$ink"
+      text: 已被证明的
+  - elementId: proven
+    elementType: text
+    bounds: [48, 158, 400, 250]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.6
+      text: |
+        <p>· 轨迹传播<strong>严格包含</strong>反向传播（可微情形）</p>
+        <p>· 单一 OPTO 接口覆盖五个问题类</p>
+        <p>· 丰富反馈（自然语言）可作为有效优化信号</p>
+        <p>· 中等规模图上 OptoPrime 稳定工作</p>
+  - elementId: cutline
+    elementType: shape
+    bounds: [476, 120, 6, 340]
+    shapeName: rect
+    fill: {type: solid, color: "$primary"}
+  - elementId: open-head
+    elementType: text
+    bounds: [512, 126, 400, 24]
+    content:
+      fontSize: 15
+      bold: true
+      color: "$primary"
+      text: 尚未解决的
+  - elementId: open
+    elementType: text
+    bounds: [512, 158, 400, 300]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.55
+      text: |
+        <p><strong>① 反馈设计成为新的"损失函数设计"</strong></p>
+        <p><span style="color:$gray; font-size:12px;">反馈怎么设计、最优性如何定义，是开放研究问题。</span></p>
+        <p style="margin-top:10px"><strong>② 表达边界</strong></p>
+        <p><span style="color:$gray; font-size:12px;">原地修改状态的有状态函数无法直接表示为 DAG；<strong>分布式 / 并行工作流与当前实现不兼容</strong>（理论上无环即可异步）。</span></p>
+        <p style="margin-top:10px"><strong>③ OptoPrime 只是初步方案</strong></p>
+        <p><span style="color:$gray; font-size:12px;">非可证最优；token 开销大于 OPRO；问题规模受限于 LLM 的 debug 能力与上下文长度。</span></p>
+  - elementId: verdict
+    elementType: text
+    bounds: [48, 452, 864, 44]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.5
+      text: |
+        <p><strong>对我们的含义：</strong>第②条意味着 Trace 目前管不了"万级 agent 并行仿真"本身——它优化的是<strong>单个工作流的参数</strong>；并行仿真需要另一层（DES 内核），两者是互补关系。</p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: Trace is the Next AutoDiff · §6 Limitations
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "10"

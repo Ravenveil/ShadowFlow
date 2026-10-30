@@ -24,6 +24,7 @@ import { ArrowDown, OctagonX, RotateCcw, UsersRound } from 'lucide-react';
 import type { NeoChatProps } from './types';
 import { useRunSession, type ErrorCode } from '../core/hooks/useRunSession';
 import { createRunSession, listRunSessions } from '../api/runSessions';
+import { getAgent } from '../api/agents';
 import { createGroup } from '../api/groupApi';
 import { getApiBase, authHeaders } from '../api/_base';
 import { useWorkspaceStore } from '../store/workspaceStore';
@@ -102,6 +103,53 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
   const { t, language } = useI18n();
   const workspaceId = useWorkspaceStore((s) => s.currentId);
   const { user } = useAuth();
+
+  // ── ClawHub（2026-06，FR-03/04）：当前 Claw 聊天 target ──────────────────
+  // 选中已安装 Claw（StartGallery 分区 / ClawHub 「对话」桥）后：提交时注入
+  // executor:'cli:<id>'（Claw 完全接管对话；多轮接力 POST /:id/messages 继承
+  // source session.executor，见架构文档 D6）。
+  const [clawTarget, setClawTarget] = useState<{ cliId: string; name: string } | null>(null);
+  // ClawHub 页「对话」按钮经 localStorage 桥（sf.claw-target）跳转过来 —— 装载时消费。
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('sf.claw-target');
+      if (!raw) return;
+      localStorage.removeItem('sf.claw-target');
+      const parsed = JSON.parse(raw) as { cliId: string; name?: string; at?: number };
+      // 桥接 5 分钟内有效（防陈旧值复活）
+      if (parsed?.cliId && (!parsed.at || Date.now() - parsed.at < 5 * 60_000)) {
+        setClawTarget({ cliId: parsed.cliId, name: parsed.name ?? parsed.cliId });
+      }
+    } catch {
+      /* ignore malformed bridge value */
+    }
+  }, []);
+  // 切走 run → 清 Claw target（run 已在跑，target 态失效）
+  useEffect(() => {
+    if (runId) setClawTarget(null);
+  }, [runId]);
+
+  // ── ClawHub（2026-06，D6）：绑定了 claw_id 的 Agent → Claw 完全接管 ──────
+  // target 为 agent 时读它的 AgentRecord.claw_id（getAgent）；未绑定 → null。
+  const [agentClawId, setAgentClawId] = useState<string | null>(null);
+  useEffect(() => {
+    if (target?.kind !== 'agent') {
+      setAgentClawId(null);
+      return;
+    }
+    let alive = true;
+    getAgent(target.id)
+      .then((a) => {
+        if (!alive) return;
+        setAgentClawId(typeof a.claw_id === 'string' && a.claw_id ? a.claw_id : null);
+      })
+      .catch(() => {
+        if (alive) setAgentClawId(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [target?.kind, target?.id]);
 
   // SSE 唯一数据源。runId 为 null 时传 ''——hook 内部对空 id 直接跳过订阅，
   // 保持 hooks 调用顺序稳定。
@@ -209,7 +257,11 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
           const g = await createGroup({
             templateId: 'new-task',
             groupTemplateId: '',
-            name: text.slice(0, 20),
+            // ClawHub（2026-10-30）：Claw 直聊会话命名带爪印前缀，左栏一眼
+            // 识别是哪个 Claw（替代"消息前 20 字符"的默认命名）。
+            name: clawTarget
+              ? `🐾 ${clawTarget.name || clawTarget.cliId}`
+              : text.slice(0, 20),
             agentIds: [],
             memberEmails: [],
             policyMatrix: {},
@@ -223,26 +275,50 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
         } catch {
           // Python 后端未启等 — 静默降级为匿名 run 会话，聊天体验优先
         }
+        // GAP A3 项目分组：NeoComposer 项目 chip 写 localStorage('sf.project_id')，
+        // 这里在请求时读取（同 sf.cwd/sf.model 的 localStorage-at-request-time
+        // 惯例）；空/缺失 → undefined（JSON 丢弃该键，服务端回落 default 项目）。
+        const projectId = localStorage.getItem('sf.project_id')?.trim() || undefined;
+        // CLI 工作目录 chip 写 localStorage('sf.cwd')，同一 localStorage-at-
+        // request-time 惯例；空/缺失 → undefined（服务端回落默认工作目录）。
+        const cwd = localStorage.getItem('sf.cwd')?.trim() || undefined;
+        // ── ClawHub（2026-06，D6）：executor 注入点（唯一）──────────────────
+        // 优先级：Claw target（直接选 Claw 对话）> 绑定 claw_id 的 Agent
+        // （Claw 完全接管）。两者皆无 → 不传（createRunSession 照旧从
+        // sf.defaultExecutor 合并，原行为零变化）。
+        // run-sessions 原生支持 executor:'cli:<id>'（Story 15.19 v2 链路）。
+        const executorOverride: string | undefined = clawTarget
+          ? `cli:${clawTarget.cliId}`
+          : target?.kind === 'agent' && agentClawId
+            ? `cli:${agentClawId}`
+            : undefined;
         const resp = await createRunSession({
           goal: text,
           skill_name: p.skillName,
-          // 个人/未选目标默认单 agent（Auto → 'single'，后端锁 roster=1）；
-          // 团队目标保持 Auto → undefined（走团队编排）。显式选择的 mode 优先。
+          // Claw 接管态：单 agent 直连（不走团队编排）；否则保持原 mode 逻辑。
           mode:
-            p.mode && p.mode !== 'auto'
-              ? p.mode
-              : target?.kind === 'team'
-                ? undefined
-                : 'single',
+            executorOverride
+              ? 'single'
+              : p.mode && p.mode !== 'auto'
+                ? p.mode
+                : target?.kind === 'team'
+                  ? undefined
+                  : 'single',
+          executor: executorOverride,
           group_id: groupId,
+          project_id: projectId,
+          cwd,
         });
         window.dispatchEvent(new CustomEvent('sf:run-created'));
         onRunChange(resp.session_id);
       } else {
+        // 多轮接力：cwd 作为 override 一并带上（服务端仅接受绝对路径，
+        // 空/缺失 → 继承 source session 的值）。
+        const cwd = localStorage.getItem('sf.cwd')?.trim() || undefined;
         const resp = await fetch(`${getApiBase()}/api/run-sessions/${runId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({ content: text }),
+          body: JSON.stringify({ content: text, cwd }),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = (await resp.json()) as { session_id?: string };
@@ -306,10 +382,12 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
       {/* 顶部条：页面标题 + 群聊现场入口（←/→/折叠 导航簇已移至左栏顶部；
           「新任务」按钮已删，新任务走左栏导航 / Ctrl+K）。纯首页空态
           （无 run 无 target）不渲染，hero 问候即整屏内容。 */}
-      {(runId || target) && (
+      {(runId || target || clawTarget) && (
         <header className="neo-chat-topbar">
           <span className="neo-chat-topbar-title">
-            {target?.name ?? t('neo.chat.newTask', { defaultValue: '新任务' })}
+            {clawTarget
+              ? `🐾 ${clawTarget.name || clawTarget.cliId}`
+              : target?.name ?? t('neo.chat.newTask', { defaultValue: '新任务' })}
           </span>
           {/* 群聊现场（B1 互链反查到 group 时出现）— 中栏内打开（ZCode 式停留同页） */}
           {runId && linkedGroupId && (
@@ -431,6 +509,7 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
               onSubmit={handleSubmit}
               streaming={session.isStreaming}
               onStop={session.abort}
+              onNavigate={onNavigate}
               placeholder={t('neo.chat.followupPlaceholder', {
                 defaultValue: '补充指令，AI 会接着干 · 试试 @ 提及 Skill',
               })}
@@ -455,7 +534,10 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
                 })}
                 <HeroVerbCarousel />
               </p>
-              <StartGallery onPick={setPrefill} />
+              <StartGallery
+                onPick={setPrefill}
+                onPickClaw={(cliId) => setClawTarget({ cliId, name: cliId })}
+              />
             </div>
           </div>
           <div className="neo-empty-composer">
@@ -463,9 +545,18 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
               variant="hero"
               onSubmit={handleSubmit}
               initialText={prefill}
-              placeholder={t('neo.chat.heroPlaceholder', {
-                defaultValue: '描述一个目标，直接开干 · 试试 @ 提及 Skill 或 / 命令',
-              })}
+              onNavigate={onNavigate}
+              clawTarget={clawTarget}
+              onClearClawTarget={() => setClawTarget(null)}
+              placeholder={
+                clawTarget
+                  ? t('neo.chat.clawPlaceholder', {
+                      defaultValue: `与 ${clawTarget.cliId} 对话中 · 输入内容直接发送`,
+                    })
+                  : t('neo.chat.heroPlaceholder', {
+                      defaultValue: '描述一个目标，直接开干 · 试试 @ 提及 Skill 或 / 命令',
+                    })
+              }
             />
           </div>
         </>

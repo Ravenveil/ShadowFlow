@@ -16,6 +16,11 @@
  *     每次 PUT workflow 成功时自动快照；「版本」面板（TeamWorkflowVersionsPanel）
  *     提供版本列表 / 回滚（二次确认，走后端 restore 端点）/「存为分支」
  *     （POST …/workflow/branch 复制为新 team 变体，默认名「· 分支」后缀）
+ *   - AI 生成草稿：工具条「AI 生成」开 bottom-left 面板，输入自然语言描述
+ *     → POST /api/teams/dag-draft（BYOK LLM）生成 {nodes,edges} 草稿 →
+ *     dagDraftToWorkflow 铺进画布并标脏；只进画布不落库，确认后走既有保存通路
+ *   - 服务端校验：工具条「服务端校验」干跑 POST /api/teams/{id}/dag/validate，
+ *     结果（ok/errors）回显到错误区/提示行；不过不挡保存（保存链路自有 D1/D2）
  *
  * 保存链路（校验不过不允许保存）：
  *   1. 客户端 preflight —— validateTeamWorkflowGraph（镜像后端
@@ -27,7 +32,8 @@
  *      坐标已随 workflow node.position 持久化）
  *
  * 注意：POST /dag/validate 校验的是 Node yaml team（members/edges_v1）模型，
- * 与本编辑器操作的 Python workflow 模型不是同一份数据，故不在保存链路里调它。
+ * 与本编辑器操作的 Python workflow 模型不是同一份数据，故不在保存链路里调它；
+ * 工具条「服务端校验」为按需手动触发，结果仅作提示，Python JSON team 404 容忍。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -50,6 +56,7 @@ import {
   restoreTeamWorkflowVersion,
   branchTeamWorkflow,
   generateTeamDagDraft,
+  validateTeamDag,
   TeamApiError,
   type TeamDagDraft,
   type TeamWorkflow,
@@ -124,6 +131,20 @@ function extractSaveErrors(err: unknown): string[] {
     return [`保存失败（HTTP ${err.status}）`];
   }
   return [err instanceof Error ? err.message : '保存失败'];
+}
+
+/** 把 TeamApiError detail 拆成逐条错误文案（AI 草稿 / 服务端校验共用，fallback 为兜底动词短语）。 */
+function extractApiErrorLines(err: unknown, fallback: string): string[] {
+  if (err instanceof TeamApiError) {
+    const detail = err.detail as { error?: { errors?: unknown; message?: unknown } } | null;
+    const inner = detail && typeof detail === 'object' ? detail.error : undefined;
+    if (inner && Array.isArray(inner.errors) && inner.errors.length > 0) {
+      return inner.errors.map(String);
+    }
+    if (inner && typeof inner.message === 'string') return [inner.message];
+    return [`${fallback}（HTTP ${err.status}）`];
+  }
+  return [err instanceof Error ? err.message : fallback];
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +344,14 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
   const [saving, setSaving] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
   const [versionsToken, setVersionsToken] = useState(0);
+  // AI 生成草稿面板（bottom-left）：prompt 输入 + 生成中/错误态（错误面板内联，不关面板）
+  const [showAiDraft, setShowAiDraft] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErrors, setAiErrors] = useState<string[]>([]);
+  // 服务端干跑校验（POST /dag/validate，yaml 模型）：ok/不适用走提示行，errors 走错误区
+  const [validating, setValidating] = useState(false);
+  const [validateInfo, setValidateInfo] = useState('');
 
   // 添加候选：roster 里还没上画布的 agent（data.agentId 为空占位的旧节点不挡）。
   const placedAgentIds = useMemo(
@@ -512,6 +541,112 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
     onSaved(wf);
   }, [serialize, teamId, onSaved, t]);
 
+  /** 把一份 workflow 图整体铺进画布（AI 草稿用；映射与 seedNodes/seedEdges 同构）。 */
+  const loadWorkflowToCanvas = useCallback(
+    (wf: TeamWorkflow) => {
+      setRfNodes(
+        wf.nodes.map((n, i) => ({
+          id: n.id,
+          type: 'teamAgent',
+          position: n.position ?? { x: 0, y: i * 106 },
+          data: {
+            agentId: n.data?.agentId ?? '',
+            name: resolveNodeName(n.data?.agentId ?? '', n.data?.name, n.id),
+            soul: n.data?.soul ?? '',
+            nodeType: n.type || 'agentTask',
+          },
+        })),
+      );
+      setRfEdges(
+        wf.edges.map((e) => {
+          const mode = normalizeEdgeMode(e.data?.mode);
+          return {
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            type: 'smoothstep',
+            data: { mode },
+            ...edgeVisual(mode),
+            ...(e.label ? { label: e.label } : {}),
+          };
+        }),
+      );
+    },
+    [setRfNodes, setRfEdges, resolveNodeName],
+  );
+
+  /** AI 生成草稿：NL → POST /dag-draft → dagDraftToWorkflow → 铺画布标脏（不落库）。 */
+  const handleAiGenerate = useCallback(async () => {
+    const prompt = aiPrompt.trim();
+    if (!prompt || aiBusy) return;
+    setAiBusy(true);
+    setAiErrors([]);
+    try {
+      const draft: TeamDagDraft = await generateTeamDagDraft(
+        prompt,
+        agents.map((a) => a.agent_id),
+      );
+      loadWorkflowToCanvas(dagDraftToWorkflow(draft, agents));
+      setShowAiDraft(false);
+      setAiPrompt('');
+      setErrors([]);
+      setValidateInfo('');
+    } catch (err) {
+      // 502 LLM_NO_KEY/LLM_FAILED、422 DAG_DRAFT_INVALID —— 面板内联回显，不关面板
+      setAiErrors(
+        extractApiErrorLines(err, t('neo.host.teamDagAiFailed', { defaultValue: '生成失败' })),
+      );
+    } finally {
+      setAiBusy(false);
+    }
+  }, [aiPrompt, aiBusy, agents, loadWorkflowToCanvas, t]);
+
+  /**
+   * 服务端干跑校验：先跑与保存同一套客户端 preflight（本地有错直接列出、不发
+   * 请求），再 POST /dag/validate 校验服务端 yaml DAG。注意它校验的是 yaml
+   * members/edges_v1 模型，不是画布上的 workflow —— 结果仅作提示，不挡保存；
+   * Python JSON team 无 yaml 层时 404 TEAM_NOT_FOUND 容忍（同布局写回）。
+   */
+  const onValidate = useCallback(async () => {
+    const wf = serialize();
+    const localErrs = validateTeamWorkflowGraph(wf);
+    setErrors(localErrs);
+    setValidateInfo('');
+    if (localErrs.length > 0) return;
+    setValidating(true);
+    try {
+      const result = await validateTeamDag(teamId);
+      if (result.ok) {
+        setValidateInfo(
+          t('neo.host.teamDagValidateOk', { defaultValue: '服务端 DAG 校验通过' }),
+        );
+      } else {
+        setErrors(
+          result.errors.length > 0
+            ? result.errors
+            : [t('neo.host.teamDagValidateFailed', { defaultValue: '服务端 DAG 校验未通过' })],
+        );
+      }
+    } catch (err) {
+      if (err instanceof TeamApiError && err.status === 404) {
+        setValidateInfo(
+          t('neo.host.teamDagValidateNoYaml', {
+            defaultValue: '该团队无 yaml DAG 层（Python JSON team），服务端干跑校验不适用；本地校验已通过',
+          }),
+        );
+      } else {
+        setErrors(
+          extractApiErrorLines(
+            err,
+            t('neo.host.teamDagValidateFailed', { defaultValue: '服务端 DAG 校验未通过' }),
+          ),
+        );
+      }
+    } finally {
+      setValidating(false);
+    }
+  }, [serialize, teamId, t]);
+
   return (
     <div className="neo-team-dag-editor">
       {errors.length > 0 && (
@@ -524,6 +659,11 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
         </div>
       )}
       {layoutWarning && <div className="neo-team-dag-warn">{layoutWarning}</div>}
+      {validateInfo && (
+        <div className="neo-team-dag-warn" data-testid="team-dag-validate-info">
+          {validateInfo}
+        </div>
+      )}
       <div className="neo-team-dag-editor-canvas">
         <SfReactFlowBase
           nodes={rfNodes}
@@ -570,6 +710,18 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
             >
               {t('neo.host.teamDagDelete', { defaultValue: '删除选中' })}
             </button>
+            <button
+              type="button"
+              className={`neo-team-dag-btn${showAiDraft ? ' is-active' : ''}`}
+              disabled={saving || validating}
+              onClick={() => {
+                setShowAiDraft((v) => !v);
+                setAiErrors([]);
+              }}
+              data-testid="team-dag-ai-btn"
+            >
+              {t('neo.host.teamDagAiGenerate', { defaultValue: 'AI 生成' })}
+            </button>
             <span className="neo-team-dag-hint">
               {t('neo.host.teamDagHint', { defaultValue: '拖点连线 · 点边改模式 · Delete 删除' })}
             </span>
@@ -579,6 +731,17 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
                 {t('neo.host.teamDagDirty', { defaultValue: '● 未保存' })}
               </span>
             )}
+            <button
+              type="button"
+              className="neo-team-dag-btn"
+              disabled={saving || validating}
+              onClick={onValidate}
+              data-testid="team-dag-validate-btn"
+            >
+              {validating
+                ? t('neo.host.teamDagValidating', { defaultValue: '校验中…' })
+                : t('neo.host.teamDagValidate', { defaultValue: '服务端校验' })}
+            </button>
             <button
               type="button"
               className="neo-team-dag-btn neo-team-dag-btn--primary"
@@ -616,6 +779,67 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
                 refreshToken={versionsToken}
                 onRestored={onSaved}
               />
+            </Panel>
+          )}
+          {showAiDraft && (
+            <Panel position="bottom-left" className="neo-team-dag-ai-panel" data-testid="team-dag-ai-panel">
+              <div className="neo-team-dag-ai">
+                <div className="neo-team-dag-versions-head">
+                  <span className="neo-team-dag-versions-title">
+                    {t('neo.host.teamDagAiTitle', { defaultValue: 'AI 生成草稿' })}
+                  </span>
+                </div>
+                <textarea
+                  className="neo-team-dag-ai-input"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder={t('neo.host.teamDagAiPlaceholder', {
+                    defaultValue: '一句话描述协作流程，如：研究员查资料 → 写手成稿 → 审校批准后发布',
+                  })}
+                  rows={3}
+                  disabled={aiBusy}
+                  data-testid="team-dag-ai-input"
+                />
+                {aiErrors.length > 0 && (
+                  <div className="neo-team-dag-ai-errors" role="alert">
+                    {aiErrors.map((e, i) => (
+                      <div key={i} className="neo-team-dag-error-row">
+                        {e}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="neo-team-dag-ai-actions">
+                  <button
+                    type="button"
+                    className="neo-team-dag-btn neo-team-dag-btn--primary"
+                    disabled={!aiPrompt.trim() || aiBusy}
+                    onClick={handleAiGenerate}
+                    data-testid="team-dag-ai-submit"
+                  >
+                    {aiBusy
+                      ? t('neo.host.teamDagAiBusy', { defaultValue: '生成中…' })
+                      : t('neo.host.teamDagAiSubmit', { defaultValue: '生成草稿' })}
+                  </button>
+                  <button
+                    type="button"
+                    className="neo-team-dag-btn"
+                    disabled={aiBusy}
+                    onClick={() => {
+                      setShowAiDraft(false);
+                      setAiErrors([]);
+                    }}
+                    data-testid="team-dag-ai-cancel"
+                  >
+                    {t('neo.host.teamDagCancel', { defaultValue: '取消' })}
+                  </button>
+                </div>
+                <div className="neo-team-dag-edge-hint">
+                  {t('neo.host.teamDagAiHint', {
+                    defaultValue: '草稿只进画布不落库，确认后点「校验并保存」',
+                  })}
+                </div>
+              </div>
             </Panel>
           )}
           {activeEdge && (

@@ -19,6 +19,8 @@ const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
 // 图谱 = KnowledgePack 的 LightRAG 实体关系可视化（从 Shadow 搬迁，去 Tauri 化）。
 const MemoryPage = lazy(() => import('./pages/MemoryPage'));
 const KnowledgeGraphPage = lazy(() => import('./pages/KnowledgeGraphPage'));
+// ClawHub（2026-06）— Claw 集合平台目录页（浏览/安装/详情）。
+const ClawHubPage = lazy(() => import('./pages/clawhub/ClawHubPage'));
 
 /** /loop-engine/:runId → /?run=<runId>（循环引擎并入过程 tab 后的旧链回收）。 */
 function LoopEngineRedirect() {
@@ -45,6 +47,8 @@ export function AppRoutes() {
           <Route path="/knowledge/graph" element={<KnowledgeGraphPage />} />
           {/* 河流记忆（River Memory，Story 16.1 前端补齐） */}
           <Route path="/memory" element={<MemoryPage />} />
+          {/* ClawHub（2026-06）— Claw 集合平台（浏览/安装/详情抽屉） */}
+          <Route path="/clawhub" element={<ClawHubPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

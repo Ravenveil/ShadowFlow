@@ -1891,6 +1891,37 @@
   background: color-mix(in oklab, var(--t-run) 10%, transparent);
 }
 
+/* AI 生成草稿面板（bottom-left Panel）：样式对齐版本面板 */
+.neo-team-dag-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev-2, #141414);
+  font-size: 11px;
+  color: var(--t-fg-2);
+  width: 260px;
+}
+.neo-team-dag-ai-input {
+  font: inherit;
+  color: var(--t-fg);
+  background: var(--t-panel-2);
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  padding: 5px 7px;
+  resize: vertical;
+  min-height: 48px;
+}
+.neo-team-dag-ai-errors {
+  color: var(--t-err);
+}
+.neo-team-dag-ai-actions {
+  display: flex;
+  gap: 6px;
+}
+
 /* approve 边：虚线（颜色由 edge.style.stroke 给到警示色，箭头随动） */
 .neo-team-dag .react-flow__edge.neo-team-dag-edge--approve .react-flow__edge-path {
   stroke-dasharray: 7 4;

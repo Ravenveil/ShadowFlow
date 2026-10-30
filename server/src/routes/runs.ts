@@ -25,8 +25,20 @@ import {
 const router = Router();
 
 // GET /runs → RunRecord[] (raw array, NOT envelope — see contract note above)
-router.get('/', (_req: Request, res: Response) => {
-  res.json(listRuns());
+// ?limit= (frontend src/api/runs.ts sends it): parse int, clamp 1..200;
+// absent/invalid → full list (previous behavior, table is already MAX_RUNS-capped).
+router.get('/', (req: Request, res: Response) => {
+  const runs = listRuns();
+  const raw = req.query.limit;
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    const n = parseInt(raw, 10);
+    if (!Number.isNaN(n)) {
+      const limit = Math.min(Math.max(n, 1), 200);
+      res.json(runs.slice(0, limit));
+      return;
+    }
+  }
+  res.json(runs);
 });
 
 // ── L6（GAP.md:13）— Node daemon run 的投影端点 ─────────────────────────────

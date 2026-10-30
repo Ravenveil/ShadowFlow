@@ -613,6 +613,12 @@ def run_ingest(
       ``.shadowflow/lightrag/{pack_id}/``).  Failures in LightRAG are logged as
       warnings but do NOT flip the source to ``failed`` — the keyword index is
       always the authoritative fallback so existing behaviour is preserved.
+
+    PackGraph integration (always on):
+      After all sources are staged, a deterministic knowledge graph
+      (``shadowflow.memory.pack_graph``) is rebuilt from every parseable source
+      and persisted to ``graph.json`` next to ``index.json``.  No LLM is
+      involved; failures are logged as warnings and never affect ingest status.
     """
     # Lazy import to keep the dependency optional; guarded by is_enabled() check
     # below, but we import the module unconditionally so misconfiguration
@@ -655,7 +661,25 @@ def run_ingest(
         new_sources.append(finished)
 
     final_status: PackStatus = "failed" if any_failed else "ready"
-    return update_pack(pack, sources=[s.model_dump() for s in new_sources], status=final_status)
+    final_pack = update_pack(pack, sources=[s.model_dump() for s in new_sources], status=final_status)
+
+    # PackGraph (deterministic knowledge layer): rebuild from every parseable
+    # source. Same non-fatal contract as the LightRAG hook above — graph build
+    # failures log a warning and never flip ingest status. 内容指纹未变
+    # （Shadow graph_build_state 式设计）时跳过重建。
+    if any(s.ingest_status == "done" for s in final_pack.sources):
+        try:
+            from shadowflow.memory import pack_graph  # noqa: PLC0415 — avoids import cycle
+
+            if not pack_graph.is_graph_fresh(final_pack):
+                pack_graph.build_graph(final_pack)
+        except Exception as exc:  # noqa: BLE001 — non-fatal by design
+            logger.warning(
+                "PackGraph build failed for pack %s: %s — keyword index is still intact",
+                pack.pack_id,
+                exc,
+            )
+    return final_pack
 
 
 async def run_ingest_async(

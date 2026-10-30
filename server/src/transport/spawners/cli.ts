@@ -73,12 +73,22 @@ export async function* runCliSpawn(
 
   console.log(
     `[cli:${cliId}] spawn binary="${desc.binary}" args=${JSON.stringify(desc.extra_args ?? [])}` +
-      ` cwd="${input.cwd}" prompt_len=${fullPrompt.length}`,
+      ` cwd="${input.cwd}" prompt_len=${fullPrompt.length}` +
+      (desc.prompt_mode ? ` prompt_mode=${desc.prompt_mode}` : ' prompt_mode=stdin'),
   );
+
+  // ClawHub（2026-10-30）：prompt_mode='argv-<flag>' → prompt 以 `<flag>
+  // <prompt>` 追加到命令行（hermes 等 TUI 型 CLI 读 stdin 会进交互界面）。
+  const argvPrompt =
+    desc.prompt_mode?.startsWith('argv-') === true ? desc.prompt_mode.slice(5) : null;
 
   let child: ReturnType<typeof spawn>;
   try {
-    child = spawn(desc.binary, desc.extra_args ?? [], {
+    const spawnArgs = [...(desc.extra_args ?? [])];
+    if (argvPrompt && argvPrompt.length > 0) {
+      spawnArgs.push(argvPrompt, fullPrompt);
+    }
+    child = spawn(desc.binary, spawnArgs, {
       cwd: input.cwd,
       env: { ...process.env, ...(input.env ?? {}) },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -97,8 +107,9 @@ export async function* runCliSpawn(
     return;
   }
 
-  // Send prompt via stdin (avoid argv length limits).
-  if (child.stdin) {
+  // Send prompt via stdin (avoid argv length limits) — argv 模式下跳过
+  // （prompt 已在命令行上；写 stdin 反而可能干扰子进程）。
+  if (child.stdin && !argvPrompt) {
     child.stdin.on('error', () => {
       // Some CLIs close stdin early; ignore EPIPE.
     });

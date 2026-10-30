@@ -1,0 +1,102 @@
+pageType: content
+background:
+  type: solid
+  color: "$paper"
+notes: 讲清问题的两面：左边是 AutoDiff 的天堂（可微、标量损失），右边是真实工作流的地狱（不可微、丰富反馈、异质参数、结构动态变化）。底部一句话收束。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 40, 300, 18]
+    content:
+      style: "$label"
+      text: 01 · 问题
+  - elementId: title
+    elementType: text
+    bounds: [48, 64, 800, 38]
+    content:
+      style: "$pagetitle"
+      text: 梯度优化万物，止于"不可微"
+  - elementId: left-head
+    elementType: text
+    bounds: [48, 128, 400, 24]
+    content:
+      fontSize: 16
+      bold: true
+      color: "$ink"
+      text: AutoDiff 的世界（PyTorch）
+  - elementId: left-rule
+    elementType: shape
+    bounds: [48, 156, 60, 3]
+    shapeName: rect
+    fill: {type: solid, color: "$ink"}
+  - elementId: left-body
+    elementType: text
+    bounds: [48, 172, 400, 210]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.55
+      text: |
+        <p>· 计算图<strong>可微分</strong>：每个算子有解析梯度</p>
+        <p>· 反馈是<strong>标量损失</strong>：一个数代表好坏</p>
+        <p>· 参数<strong>同质</strong>：全是浮点张量</p>
+        <p>· 结构<strong>静态</strong>：图在编译期固定</p>
+        <p style="margin-top:10px">反向传播把误差沿图回传，每个参数得到精确改进方向——这套机制支撑了十亿参数级网络的端到端优化。</p>
+  - elementId: right-head
+    elementType: text
+    bounds: [512, 128, 400, 24]
+    content:
+      fontSize: 16
+      bold: true
+      color: "$primary"
+      text: 真实的 AI 工作流
+  - elementId: right-rule
+    elementType: shape
+    bounds: [512, 156, 60, 3]
+    shapeName: rect
+    fill: {type: solid, color: "$primary"}
+  - elementId: right-body
+    elementType: text
+    bounds: [512, 172, 400, 210]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.55
+      text: |
+        <p>· <strong>不可微</strong>：LLM 调用、工具调用、模拟器、检索</p>
+        <p>· 反馈<strong>丰富</strong>：控制台输出、用户回复、编译报错</p>
+        <p>· 参数<strong>异质</strong>：提示词、代码、超参混在一起</p>
+        <p>· 结构<strong>动态</strong>：编排逻辑随输入改变图的形状</p>
+        <p style="margin-top:10px">部署后行为出错只能靠工程师手动改；贝叶斯优化 / 进化算法 / RL 只吃标量反馈，在大参数空间效率极低。</p>
+  - elementId: midrule
+    elementType: shape
+    bounds: [48, 404, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: verdict
+    elementType: text
+    bounds: [48, 424, 864, 60]
+    content:
+      fontSize: 17
+      color: "$ink"
+      lineHeight: 1.5
+      text: |
+        <p><strong>研究问题：</strong>能否找到一种载体，替代梯度，把"输出的丰富反馈"端到端地归因到"异质参数"上？<span style="color:$primary;"><strong>作者的回答：执行轨迹（execution trace）。</strong></span></p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: Trace is the Next AutoDiff · §1 Introduction
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "03"

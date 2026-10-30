@@ -184,12 +184,29 @@ export async function getPackIndex(packId: string): Promise<KnowledgeIndexRespon
 // ---------------------------------------------------------------------------
 // Knowledge graph export（2026-08-19，配合 /knowledge/graph 图谱可视化页）
 // 后端把 LightRAG 的 graph_*.graphml 解析成 GraphData 形状（graphAnalysis.ts）。
-// stub 模式（LIGHTRAG_ENABLED 未开）返回空图 + meta.rag_backend='stub'。
+// 2026-09-03 起 LightRAG 缺席时回退 PackGraph 确定性图层（graph_backend 标识），
+// meta 附带冲突计数与图健康指标。
 // ---------------------------------------------------------------------------
+
+/** 图健康指标（后端 pack_graph.graph_health：孤岛/hub/密度/连通分量）。 */
+export interface KnowledgeGraphHealth {
+  nodes: number;
+  edges: number;
+  density: number;
+  components: number;
+  isolated_count: number;
+  isolated: string[];
+  hubs: Array<{ id: string; name: string; degree: number }>;
+}
 
 export interface KnowledgeGraphMeta {
   pack_id: string;
   rag_backend: string;
+  /** 图数据来源：lightrag（LLM 抽取）| pack_graph（确定性图层）| none。 */
+  graph_backend?: string;
+  /** PackGraph 受控词表冲突数（wiki-link 别名指向多个目标）。 */
+  conflict_count?: number;
+  health?: KnowledgeGraphHealth | null;
   node_count: number;
   link_count: number;
 }

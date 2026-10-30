@@ -26,6 +26,8 @@
  * 二次确认（window.confirm），失败红条（neo-manage-error），删当前打开的
  * 会话/员工后跳回 home 安全页。移入项目（GAP A3 回写）按互链 group_id
  * PATCH /api/conversations/by-group/:gid，浮层内「默认项目」= project_id 置空。
+ * 项目 label hover 另有产物钮（2026-09-03）：GET /api/projects/:id/artifacts
+ * 居中模态列表，预览/下载直链（相对路径，与 NeoHost 产物 tab 同款）。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -38,11 +40,14 @@ import {
   ChevronDown,
   Folder,
   FolderInput,
+  FolderOpen,
   History,
   Library,
   MessageSquare,
+  Package,
   PanelLeft,
   PanelLeftOpen,
+  PawPrint,
   Pencil,
   Plus,
   RotateCcw,
@@ -65,17 +70,23 @@ import {
 import {
   createProject,
   deleteProject,
+  getProjectArtifacts,
   listProjectsWithSessions,
   patchProject,
+  type ProjectArtifact,
   type ProjectWithSessions,
 } from '../api/projects';
 import { moveGroupConversationToProject } from '../api/conversations';
+import { fsPickNative } from '../api/fsBrowse';
 import type { AgentDMItem, GroupItem } from '../common/types/inbox';
 import { listPacks } from '../api/knowledge';
 import type { KnowledgePack } from '../common/types/knowledge';
 import { listVaults } from '../api/knowledgeVaults';
 import type { KnowledgeVault } from '../common/types/knowledgeVault';
 import { listMemoryEntries, type MemoryEntry } from '../api/memoryEntries';
+import { AgentAvatar } from '../components/agent/AgentAvatar';
+// ClawHub（2026-06，T08）：AgentAvatar 样式（增量引入）
+import '../pages/clawhub/clawhub.css';
 import { useAuth } from '../core/auth/AuthContext';
 import { useI18n } from '../common/i18n';
 import { useWorkspaceStore } from '../store/workspaceStore';
@@ -212,6 +223,8 @@ export function NeoRail({
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [projectError, setProjectError] = useState<string | null>(null);
+  // 新建项目可选绑定的本地文件夹（fsPickNative 原生对话框拿到的绝对路径）。
+  const [projectWorkspace, setProjectWorkspace] = useState<string | null>(null);
   // A4 相对时间戳每分钟自愈（页面隐藏时暂停计时，对齐轮播/探活策略）
   const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {
@@ -494,12 +507,16 @@ export function NeoRail({
   // GAP A3 新建项目（内联输入行 Enter 提交）：成功 → 收起输入 + 重新拉项目分组；
   // 失败留输入行并显示错误条（不吞错）。
   const submitNewProject = useCallback(() => {
-    const name = projectName.trim();
+    // 选了文件夹但名称为空 → 用目录 basename 作项目名。
+    const name =
+      projectName.trim() ||
+      (projectWorkspace?.split(/[\\/]/).filter(Boolean).pop() ?? '');
     if (!name) return;
-    createProject(name)
+    createProject(name, projectWorkspace ?? undefined)
       .then(() => {
         setCreateProjectOpen(false);
         setProjectName('');
+        setProjectWorkspace(null);
         setProjectError(null);
         setReloadTick((n) => n + 1);
       })
@@ -510,7 +527,15 @@ export function NeoRail({
           }),
         ),
       );
-  }, [projectName, t, language]);
+  }, [projectName, projectWorkspace, t, language]);
+
+  // 「新建项目」行的文件夹按钮：原生对话框选本地文件夹作为 workspace_path；
+  // 取消/不支持（null）→ 静默保持现状，仍可不绑目录创建。
+  const pickProjectFolder = useCallback(() => {
+    void fsPickNative().then((p) => {
+      if (p) setProjectWorkspace(p);
+    });
+  }, []);
 
   // ── 管理面闭环（2026-08-23）：行级 hover 操作（暂停/恢复/重命名/删除）─────
   // 全部真实调 API；删除一律 window.confirm 二次确认；失败进 manageError 红条
@@ -519,6 +544,25 @@ export function NeoRail({
   const [manageError, setManageError] = useState<string | null>(null);
   // GAP A3 回写（2026-08-23）「移入项目」：当前打开项目浮层的行（group_id）。
   const [moveMenuFor, setMoveMenuFor] = useState<string | null>(null);
+  // 项目产物面板（2026-09-03）：当前打开产物模态的项目；artifacts=null=加载中。
+  const [artifactsProject, setArtifactsProject] = useState<ProjectWithSessions | null>(null);
+  const [artifacts, setArtifacts] = useState<ProjectArtifact[] | null>(null);
+  const [artifactsError, setArtifactsError] = useState<string | null>(null);
+
+  const openProjectArtifacts = useCallback((p: ProjectWithSessions) => {
+    setArtifactsProject(p);
+    setArtifacts(null);
+    setArtifactsError(null);
+    getProjectArtifacts(p.project_id)
+      .then(setArtifacts)
+      .catch(() =>
+        setArtifactsError(
+          t('neo.manage.opFailed', {
+            defaultValue: language === 'zh' ? '操作失败，请重试' : 'Operation failed, please retry',
+          }),
+        ),
+      );
+  }, [t, language]);
 
   const failManage = useCallback(() => {
     setManageError(
@@ -668,7 +712,7 @@ export function NeoRail({
     [failManage, t, language],
   );
 
-  // 项目分组 label + hover 管理操作（重命名/删除）；复用 .neo-agent-row/.neo-row-soul
+  // 项目分组 label + hover 管理操作（产物/重命名/删除）；复用 .neo-agent-row/.neo-row-soul
   // 的悬停显现样式（与员工行 soul 钮同款），label 本体撑满剩余宽度。
   const renderProjectLabel = (p: ProjectWithSessions) => (
     <div className="neo-agent-row">
@@ -680,6 +724,18 @@ export function NeoRail({
         <Folder size={12} strokeWidth={1.75} aria-hidden />
         {p.name}
       </div>
+      <button
+        type="button"
+        className="neo-icon-btn neo-row-soul"
+        onClick={() => openProjectArtifacts(p)}
+        aria-label={t('neo.manage.viewProjectArtifacts', {
+          defaultValue: language === 'zh' ? `查看项目 ${p.name} 的产物` : `View artifacts of project ${p.name}`,
+        })}
+        title={t('projects.tabArtifacts', { defaultValue: language === 'zh' ? '产物' : 'Artifacts' })}
+        data-testid="neo-project-artifacts"
+      >
+        <Package size={12} strokeWidth={1.75} aria-hidden />
+      </button>
       <button
         type="button"
         className="neo-icon-btn neo-row-soul"
@@ -801,6 +857,9 @@ export function NeoRail({
   // 管理面闭环（2026-08-23）：有 group_id 的行追加 hover 重命名/删除钮。
   const renderDmRow = (d: AgentDMItem) => {
     const rel = relativeTime(d.lastActivityAt, nowTick, t);
+    // ClawHub（2026-10-30）：会话行显示驱动 Claw —— agent 绑定 claw_id 时
+    // 行内展示爪印徽章（title 提示 claw id），一眼区分普通 agent 与 Claw 驱动。
+    const dmAgentClaw = agents.find((a) => a.agent_id === d.agentId)?.claw_id ?? null;
     const openDm = () => {
       if (d.group_id) onNavigate({ view: 'conversation', groupId: d.group_id });
       else openAgentDm(d.agentId, d.agentName);
@@ -814,8 +873,23 @@ export function NeoRail({
           data-testid="neo-dm-row"
           title={d.lastMessage || d.agentName}
         >
-          <MessageSquare size={15} strokeWidth={1.75} aria-hidden />
+          {dmAgentClaw ? (
+            <span
+              className="neo-row-claw-badge"
+              data-testid="neo-dm-claw-badge"
+              title={language === 'zh' ? `Claw 驱动：${dmAgentClaw}` : `Driven by claw: ${dmAgentClaw}`}
+            >
+              <PawPrint size={15} strokeWidth={1.75} aria-hidden />
+            </span>
+          ) : (
+            <MessageSquare size={15} strokeWidth={1.75} aria-hidden />
+          )}
           <span className="neo-row-name">{d.agentName}</span>
+          {dmAgentClaw && (
+            <span className="neo-row-claw-tag" data-testid="neo-dm-claw-tag">
+              {dmAgentClaw}
+            </span>
+          )}
           {rel && <span className="neo-row-time">{rel}</span>}
           {d.unreadCount > 0 && (
             <span className="neo-row-badge">{d.unreadCount}</span>
@@ -967,11 +1041,22 @@ export function NeoRail({
               aria-label={a.name}
               aria-pressed={isAgentOn(a.agent_id)}
             >
-              <NeoAgentAvatar
-                seed={a.agent_id}
+              {/* ClawHub（2026-10-30）：员工头像统一 DiceBear —— 配了 style/seed
+                  用配置值，未配置按名字 hash 稳定生成（同一 agent 永远同头像）；
+                  字母色块仅作 SVG 异常兜底（AgentAvatar 内置）。 */}
+              <AgentAvatar
                 name={a.name}
-                color={a.avatar_color ?? null}
-                status={agentStatusToDot(a.status)}
+                style={a.avatar_style}
+                seed={a.avatar_seed ?? a.name}
+                size={24}
+                fallback={
+                  <NeoAgentAvatar
+                    seed={a.agent_id}
+                    name={a.name}
+                    color={a.avatar_color ?? null}
+                    status={agentStatusToDot(a.status)}
+                  />
+                }
               />
             </button>
           ))}
@@ -1098,6 +1183,20 @@ export function NeoRail({
             {t('neo.nav.search', { defaultValue: language === 'zh' ? '搜索' : 'Search' })}
           </span>
         </button>
+        {/* ClawHub（2026-10-30 内嵌化）— 导航切换（左栏常驻），不再跳独立路由 */}
+        <button
+          type="button"
+          className={`neo-nav-row${nav.view === 'clawhub' ? ' on' : ''}`}
+          data-testid="neo-nav-clawhub"
+          title={t('clawhub.title', { defaultValue: language === 'zh' ? 'ClawHub · Claw 集合平台' : 'ClawHub' })}
+          onClick={() => onNavigate({ view: 'clawhub' })}
+          aria-pressed={nav.view === 'clawhub'}
+        >
+          <PawPrint size={15} strokeWidth={1.75} aria-hidden />
+          <span className="neo-nav-row-name">
+            {t('clawhub.navEntry', { defaultValue: language === 'zh' ? 'ClawHub' : 'ClawHub' })}
+          </span>
+        </button>
       </nav>
 
       {searchOpen && (
@@ -1146,29 +1245,59 @@ export function NeoRail({
               </span>
             </button>
             {createProjectOpen && (
-              <div className="neo-search">
-                <input
-                  autoFocus
-                  type="text"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') submitNewProject();
-                    if (e.key === 'Escape') {
-                      setCreateProjectOpen(false);
-                      setProjectName('');
-                      setProjectError(null);
-                    }
-                  }}
-                  placeholder={t('neo.newProject.placeholder', {
-                    defaultValue: language === 'zh' ? '项目名称，回车创建' : 'Project name, Enter to create',
-                  })}
-                  aria-label={t('neo.newProject', {
-                    defaultValue: language === 'zh' ? '新建项目' : 'New Project',
-                  })}
-                  data-testid="neo-new-project-input"
-                />
-              </div>
+              <>
+                <div className="neo-search">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') submitNewProject();
+                      if (e.key === 'Escape') {
+                        setCreateProjectOpen(false);
+                        setProjectName('');
+                        setProjectWorkspace(null);
+                        setProjectError(null);
+                      }
+                    }}
+                    placeholder={t('neo.newProject.placeholder', {
+                      defaultValue: language === 'zh' ? '项目名称，回车创建' : 'Project name, Enter to create',
+                    })}
+                    aria-label={t('neo.newProject', {
+                      defaultValue: language === 'zh' ? '新建项目' : 'New Project',
+                    })}
+                    data-testid="neo-new-project-input"
+                  />
+                  <button
+                    type="button"
+                    className="neo-icon-btn"
+                    onClick={pickProjectFolder}
+                    title={t('neo.newProject.pickFolder', {
+                      defaultValue: language === 'zh'
+                        ? '选择本地文件夹作为项目目录'
+                        : 'Pick a local folder for the project',
+                    })}
+                    aria-label={t('neo.newProject.pickFolder', {
+                      defaultValue: language === 'zh'
+                        ? '选择本地文件夹作为项目目录'
+                        : 'Pick a local folder for the project',
+                    })}
+                    data-testid="neo-new-project-pick-folder"
+                  >
+                    <FolderOpen size={14} strokeWidth={1.75} aria-hidden />
+                  </button>
+                </div>
+                {projectWorkspace && (
+                  <div className="neo-list-note" title={projectWorkspace}>
+                    <span className="neo-list-error-text" data-testid="neo-new-project-workspace">
+                      {projectWorkspace.length > 34
+                        ? `…${projectWorkspace.slice(-33)}`
+                        : projectWorkspace}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
             {projectError && (
               <div className="neo-list-note neo-list-error">
@@ -1254,7 +1383,15 @@ export function NeoRail({
                   onClick={() => openAgentDm(a.agent_id, a.name)}
                   aria-pressed={isAgentOn(a.agent_id)}
                 >
-                  <Bot size={15} strokeWidth={1.75} aria-hidden />
+                  {/* ClawHub（2026-10-30）：员工行头像统一 DiceBear（未配置按
+                      名字 hash 生成稳定头像）；Bot 图标保留给无名单兜底场景。 */}
+                  <AgentAvatar
+                    name={a.name}
+                    style={a.avatar_style}
+                    seed={a.avatar_seed ?? a.name}
+                    size={18}
+                    fallback={<Bot size={15} strokeWidth={1.75} aria-hidden />}
+                  />
                   <span className="neo-row-name">{a.name}</span>
                 </button>
                 {/* 行内只留删除（悬停显现）：灵魂编辑走 DM → 右侧主机「灵魂」tab，
@@ -1543,6 +1680,113 @@ export function NeoRail({
             void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
           }}
         />
+      )}
+
+      {/* 项目产物模态（2026-09-03）：项目 label 产物钮 → GET /api/projects/:id/artifacts。
+          内联样式居中浮层（同 agentCreatedToast / 移入项目浮层先例，不引重型组件）；
+          preview_url/download_url 为相对路径（/projects/...），与 NeoHost 产物 tab 同
+          款直链用法；空态复用 projects.artifactsEmpty。 */}
+      {artifactsProject && (
+        <div
+          role="presentation"
+          data-testid="neo-artifacts-overlay"
+          onClick={() => setArtifactsProject(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 10002,
+            background: 'rgba(0,0,0,.32)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('projects.tabArtifacts', {
+              defaultValue: language === 'zh' ? '产物' : 'Artifacts',
+            })}
+            data-testid="neo-artifacts-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 420, maxWidth: '90vw', maxHeight: '70vh',
+              display: 'flex', flexDirection: 'column',
+              borderRadius: 10, padding: 12,
+              background: 'var(--t-panel)', color: 'var(--t-fg-2)',
+              border: '1px solid var(--t-border)',
+              boxShadow: '0 12px 32px rgba(0,0,0,.24)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Package size={14} strokeWidth={1.75} aria-hidden />
+              <span style={{ flex: 1, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {artifactsProject.name} · {t('projects.tabArtifacts', { defaultValue: language === 'zh' ? '产物' : 'Artifacts' })}
+              </span>
+              <button
+                type="button"
+                className="neo-icon-btn"
+                onClick={() => setArtifactsProject(null)}
+                aria-label={t('common.close', { defaultValue: language === 'zh' ? '关闭' : 'Close' })}
+                title={t('common.close', { defaultValue: language === 'zh' ? '关闭' : 'Close' })}
+                data-testid="neo-artifacts-close"
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {artifactsError && (
+                <div className="neo-list-note neo-list-error" role="alert">
+                  <span className="neo-list-error-text">{artifactsError}</span>
+                </div>
+              )}
+              {!artifactsError && artifacts === null && (
+                <div className="neo-list-note">{t('common.loading', { defaultValue: language === 'zh' ? '加载中…' : 'Loading…' })}</div>
+              )}
+              {!artifactsError && artifacts !== null && artifacts.length === 0 && (
+                <div className="neo-list-note" data-testid="neo-artifacts-empty">
+                  {t('projects.artifactsEmpty', { defaultValue: language === 'zh' ? '暂无产物' : 'No artifacts yet' })}
+                </div>
+              )}
+              {(artifacts ?? []).map((a) => (
+                <div
+                  key={a.artifact_id}
+                  data-testid="neo-artifact-row"
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', borderRadius: 6, fontSize: 12 }}
+                >
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.title}>
+                    {a.title}
+                  </span>
+                  <span className="neo-row-meta">{a.file_type}</span>
+                  <span className="neo-row-meta" style={{ flex: '0 0 auto' }}>
+                    {new Date(a.generated_at).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}
+                  </span>
+                  {a.preview_url && (
+                    <a
+                      className="neo-icon-btn"
+                      href={a.preview_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      data-testid="neo-artifact-preview"
+                      title={t('projects.artifactPreview', { defaultValue: language === 'zh' ? '预览' : 'Preview' })}
+                    >
+                      {t('projects.artifactPreview', { defaultValue: language === 'zh' ? '预览' : 'Preview' })}
+                    </a>
+                  )}
+                  {a.download_url && (
+                    <a
+                      className="neo-icon-btn"
+                      href={a.download_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      download
+                      data-testid="neo-artifact-download"
+                      title={t('projects.artifactDownload', { defaultValue: language === 'zh' ? '下载' : 'Download' })}
+                    >
+                      {t('projects.artifactDownload', { defaultValue: language === 'zh' ? '下载' : 'Download' })}
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </nav>
   );

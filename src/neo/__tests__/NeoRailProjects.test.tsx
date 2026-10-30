@@ -186,7 +186,9 @@ describe('NeoRail — 项目分组（GAP A3）', () => {
     fireEvent.change(input, { target: { value: '  新官网改版  ' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => {
-      expect(createProject).toHaveBeenCalledWith('新官网改版');
+      // 2026-06 A4：createProject 增加可选 workspace_path 形参（未选文件夹时
+      // 传 undefined）——断言跟进新签名，行为语义（名称 trim + 调用）不变。
+      expect(createProject).toHaveBeenCalledWith('新官网改版', undefined);
     });
     await waitFor(() => {
       expect(screen.queryByTestId('neo-new-project-input')).not.toBeInTheDocument();

@@ -2326,20 +2326,31 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     if (!abortController.signal.aborted && (sawComplete || sawError)) {
       try {
         const skill = SKILLS[session.skill_name];
-        saveRun({
-          run_id: persistedRunId,
-          session_id: id,
-          goal: session.goal,
-          skill_name: session.skill_name,
-          skill_display_name: skill?.name ?? session.skill_name,
-          artifact_type: artifactInfo.type,
-          artifact_filename: artifactInfo.filename,
-          artifact_url: artifactInfo.url,
-          status: sawError && !sawComplete ? 'failed' : 'completed',
-          created_at: new Date(session.created_at).toISOString(),
-          completed_at: new Date().toISOString(),
-          project_dir: `.shadowflow/projects/${id}`,
-        });
+        saveRun(
+          {
+            run_id: persistedRunId,
+            session_id: id,
+            goal: session.goal,
+            skill_name: session.skill_name,
+            skill_display_name: skill?.name ?? session.skill_name,
+            artifact_type: artifactInfo.type,
+            artifact_filename: artifactInfo.filename,
+            artifact_url: artifactInfo.url,
+            status: sawError && !sawComplete ? 'failed' : 'completed',
+            created_at: new Date(session.created_at).toISOString(),
+            completed_at: new Date().toISOString(),
+            project_dir: `.shadowflow/projects/${id}`,
+          },
+          {
+            // 项目产物面板修复（2026-09-03）— run 归属落库：conversation 在
+            // POST /api/run-sessions 时已定（显式传入或按 project_id/group_id
+            // 自动创建），project_id 由 conversation 反查；无会话则 NULL。
+            conversation_id: session.conversation_id ?? null,
+            project_id: session.conversation_id
+              ? (getConversation(session.conversation_id)?.project_id ?? null)
+              : null,
+          },
+        );
       } catch (persistErr) {
         // Don't fail the response just because we couldn't persist the
         // run record — the SSE stream is already over. Log and move on.

@@ -9,6 +9,15 @@
  * graphAnalysis.ts（797 行）从 Shadow 原样拷贝，零改动复用
  * enrichGraphData / summarizeNodeNeighborhood / getCommunityColor。
  *
+ * 2026-09-03 PackGraph 批：LightRAG 缺席时后端回退确定性图层（无 LLM 构图），
+ * 本页新增 graph_backend 标识、受控词表冲突计数、图健康指标（密度/连通分量/
+ * 孤岛/hub）与节点详情的内容级溯源（source_id + chunk_index + checksum）。
+ *
+ * 2026-09-03 Obsidian 化：canvas 自绘节点（社区色圆点 + 常显标签，低缩放
+ * text fade 只留悬停上下文）、悬停 1 跳邻域高亮/其余淡出、sequential 关系
+ * 箭头、节点详情改为右侧悬浮卡、缩放控件改右下角浮层。graphAnalysis.ts
+ * 仍与 Shadow 逐字节同步，本批不改它。
+ *
  * 路由：/knowledge/graph?pack=<pack_id>，从 KnowledgePage 每张 Pack 卡进入。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -37,6 +46,28 @@ import './graph-neo.css';
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
 
 const REL_SAMPLE = 5;
+const PROV_SAMPLE = 5;
+/** 节点标签字号（图坐标系 px）。Obsidian 式：标签随缩放缩放，
+ *  屏幕上小于 ~6px（scale < 6/LABEL_FONT ≈ 1.4）时自动隐没。 */
+const LABEL_FONT = 4.2;
+
+/** PackGraph 节点携带的内容级溯源（to_graph_data 透出；LightRAG 节点没有）。 */
+interface NodeProvenance {
+  source_id: string;
+  chunk_index: number;
+  checksum?: string;
+}
+
+type PackGraphNode = GraphNode & {
+  mentions?: number;
+  sources?: NodeProvenance[];
+};
+
+const BACKEND_LABEL: Record<string, string> = {
+  lightrag: 'LightRAG',
+  pack_graph: '确定性图层',
+  none: '无图',
+};
 
 /**
  * embedded 变体(2026-08-20 知识库统一批):作为知识页右栏「图谱」视图嵌入 ——
@@ -65,6 +96,9 @@ export default function KnowledgeGraphPage({
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  // Obsidian 式画布交互（2026-09-03）：悬停节点 → 邻域高亮、其余淡出
+  const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
+  const [themeTick, setThemeTick] = useState(0);
 
   const [params, setParams] = useSearchParams();
   const packId = propPackId ?? params.get('pack') ?? '';
@@ -74,6 +108,8 @@ export default function KnowledgeGraphPage({
     centerAt: (x?: number, y?: number, ms?: number) => void;
     zoom: (k?: number, ms?: number) => number | undefined;
     zoomToFit: (ms?: number, padding?: number) => void;
+    d3Force: (name: string) => { strength?: (s: number) => unknown } | undefined;
+    d3ReheatSimulation: () => void;
   } | undefined>(undefined);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
@@ -88,6 +124,32 @@ export default function KnowledgeGraphPage({
     setSize({ w: el.clientWidth, h: el.clientHeight });
     return () => ro.disconnect();
   }, []);
+
+  // canvas 不认 CSS 变量：data-theme 切换时 bump 一下，让下方 ink 重新解析
+  useEffect(() => {
+    const obs = new MutationObserver(() => setThemeTick((v) => v + 1));
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+    return () => obs.disconnect();
+  }, []);
+
+  // canvas 墨色（React 渲染级解析一次，非逐节点）：标签/边/描边/高亮环
+  const ink = useMemo(() => {
+    void themeTick;
+    const night = document.documentElement.dataset.theme === 'night';
+    const cs = getComputedStyle(wrapRef.current ?? document.documentElement);
+    const css = (name: string, fb: string) => cs.getPropertyValue(name).trim() || fb;
+    return {
+      label: css('--t-fg-2', night ? '#d4d4d8' : '#3f3f46'),
+      edge: night ? 'rgba(170,170,185,0.22)' : 'rgba(120,120,135,0.30)',
+      edgeHi: night ? 'rgba(167,139,250,0.80)' : 'rgba(28,28,30,0.55)',
+      edgeDim: night ? 'rgba(170,170,185,0.06)' : 'rgba(120,120,135,0.07)',
+      nodeStroke: night ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.85)',
+      ringSoft: night ? 'rgba(167,139,250,0.28)' : 'rgba(28,28,30,0.12)',
+    };
+  }, [themeTick]);
 
   // pack 列表（选 pack 用;vault 模式无选择器,跳过）
   useEffect(() => {
@@ -165,10 +227,87 @@ export default function KnowledgeGraphPage({
     };
   }, [enriched, typeFilter]);
 
+  // Obsidian 式铺开：无/少边的图用默认斥力会挤成一团，加强 charge 让节点散开。
+  // 注意：历史上配合 d3ReheatSimulation() 实测卡死过（2026-09-03），
+  // effect 在首帧仿真未冷却时生效，无需 reheat。
+  useEffect(() => {
+    if (!visible) return;
+    fgRef.current?.d3Force?.('charge')?.strength?.(-90);
+  }, [visible]);
+
   const selectedSummary = useMemo(() => {
     if (!selected || !graph) return null;
     return summarizeNodeNeighborhood(selected.id, graph.nodes, graph.links, REL_SAMPLE);
   }, [selected, graph]);
+
+  // 悬停节点的 1 跳邻域（Obsidian hover：邻居保持、其余淡出）
+  const hoverNeighbors = useMemo(() => {
+    if (!hoverNode || !visible) return new Set<string>();
+    const set = new Set<string>([hoverNode.id]);
+    for (const l of visible.links) {
+      const s = typeof l.source === 'string' ? l.source : l.source.id;
+      const t = typeof l.target === 'string' ? l.target : l.target.id;
+      if (s === hoverNode.id) set.add(t);
+      if (t === hoverNode.id) set.add(s);
+    }
+    return set;
+  }, [hoverNode, visible]);
+
+  const hoverLinks = useMemo(() => {
+    if (!hoverNode || !visible) return new Set<object>();
+    return new Set<object>(
+      visible.links.filter((l) => {
+        const s = typeof l.source === 'string' ? l.source : l.source.id;
+        const t = typeof l.target === 'string' ? l.target : l.target.id;
+        return s === hoverNode.id || t === hoverNode.id;
+      }),
+    );
+  }, [hoverNode, visible]);
+
+  // 自定义节点绘制（Obsidian 风）：社区色圆点 + 常显标签 + 悬停/选中光环。
+  // 低缩放时只画悬停上下文的标签（text fade），避免满屏叠字。
+  const drawNode = useCallback(
+    (n: object, ctx: CanvasRenderingContext2D, scale: number) => {
+      const node = n as GraphNode;
+      const x = node.x ?? 0;
+      const y = node.y ?? 0;
+      const isHover = hoverNode?.id === node.id;
+      const isSel = selected?.id === node.id;
+      const dimmed = hoverNode != null && !hoverNeighbors.has(node.id);
+
+      const r = Math.max(2.4, Math.sqrt(node.val ?? 1) * 2.8);
+      ctx.save();
+      ctx.globalAlpha = dimmed ? 0.12 : 1;
+
+      if (isHover || isSel) {
+        ctx.beginPath();
+        ctx.arc(x, y, r + 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = ink.ringSoft;
+        ctx.fill();
+      }
+
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = getCommunityColor(node.community);
+      ctx.fill();
+      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = ink.nodeStroke;
+      ctx.stroke();
+
+      if (!dimmed && (isHover || isSel || hoverNode != null || LABEL_FONT * scale >= 6)) {
+        // Obsidian：标签画在图坐标系，随缩放缩小（缩远自然隐没，不叠字）
+        const fontSize = isHover || isSel ? LABEL_FONT * 1.15 : LABEL_FONT;
+        const name = node.name.length > 26 ? `${node.name.slice(0, 26)}…` : node.name;
+        ctx.font = `${isHover || isSel ? 600 : 400} ${fontSize}px "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = ink.label;
+        ctx.fillText(name, x, y + r + 1.4);
+      }
+      ctx.restore();
+    },
+    [hoverNode, selected, hoverNeighbors, ink],
+  );
 
   const handleSearch = () => {
     const q = search.trim().toLowerCase();
@@ -255,9 +394,37 @@ export default function KnowledgeGraphPage({
             {type} · {count}
           </button>
         ))}
+        {meta?.graph_backend && meta.graph_backend !== 'none' && (
+          <span
+            className="neo-kg-tag"
+            data-testid="graph-backend-tag"
+            title={
+              meta.graph_backend === 'pack_graph'
+                ? '确定性图层：wiki-link / 标题 / 短语构图，无 LLM，节点带内容级溯源'
+                : 'LightRAG：LLM 抽取的实体-关系图谱'
+            }
+          >
+            {BACKEND_LABEL[meta.graph_backend] ?? meta.graph_backend}
+          </span>
+        )}
+        {(meta?.conflict_count ?? 0) > 0 && (
+          <span
+            className="neo-kg-tag neo-kg-tag-warn"
+            data-testid="graph-conflict-tag"
+            title="受控词表冲突：同一 wiki-link 别名指向多个不同目标（已标记，未覆盖）"
+          >
+            {t('neo.knowledgeGraph.conflicts', { defaultValue: '冲突' })} · {meta?.conflict_count}
+          </span>
+        )}
         {meta && (
           <span className="neo-kg-stats">
-            {meta.node_count} nodes · {meta.link_count} links · {meta.rag_backend}
+            {meta.node_count} nodes · {meta.link_count} links
+            {meta.health && (
+              <>
+                {' '}· ρ {meta.health.density} · ⌗ {meta.health.components}
+                {meta.health.isolated_count > 0 && ` · 孤岛 ${meta.health.isolated_count}`}
+              </>
+            )}
           </span>
         )}
         {embedded && (
@@ -270,11 +437,6 @@ export default function KnowledgeGraphPage({
             {t('neo.knowledgeGraph.refresh', { defaultValue: '刷新' })}
           </button>
         )}
-        <span className="neo-kg-zoomctl">
-          <button onClick={() => zoomBy(0.67)} aria-label="缩小" title="缩小">−</button>
-          <button onClick={() => fgRef.current?.zoomToFit(400, 30)} aria-label="适应全图" title="适应全图">⤢</button>
-          <button onClick={() => zoomBy(1.5)} aria-label="放大" title="放大">+</button>
-        </span>
       </div>
 
       <div className="neo-kg-body">
@@ -303,12 +465,11 @@ export default function KnowledgeGraphPage({
           )}
           {empty && !vaultId && stubMode && (
             <div className="neo-kg-empty">
+              <p>确定性图层已启用，但在该 Pack 中没有检测到实体。</p>
               <p>
-                当前 RAG 后端是 <code>keyword stub</code>，不生成实体-关系图谱。
-              </p>
-              <p>
-                在 .env 设置 <code>LIGHTRAG_ENABLED=true</code> 并配置 LLM/embedding
-                后重启后端，再 Reindex 该 Pack 即可生成图谱。
+                在文档里写 <code>[[双链]]</code>、Markdown 标题或英文大写术语后
+                Reindex，图谱即刻生成；配置 <code>LIGHTRAG_ENABLED=true</code>
+                可叠加 LLM 抽取的实体-关系图。
               </p>
             </div>
           )}
@@ -320,12 +481,23 @@ export default function KnowledgeGraphPage({
               graphData={visible as never}
               backgroundColor="transparent"
               nodeLabel={(n: object) => (n as GraphNode).name}
-              nodeVal={(n: object) => (n as GraphNode).val}
-              nodeColor={(n: object) => getCommunityColor((n as GraphNode).community)}
-              linkColor={() => 'rgba(128,128,128,0.35)'}
+              nodeCanvasObject={drawNode}
+              linkColor={(l: object) => {
+                if (!hoverNode) return ink.edge;
+                return hoverLinks.has(l) ? ink.edgeHi : ink.edgeDim;
+              }}
+              linkWidth={(l: object) => (hoverNode && hoverLinks.has(l) ? 1.5 : 0.7)}
+              linkDirectionalArrowLength={(l: object) =>
+                (l as { relationFamily?: string }).relationFamily === 'sequential' ? 3.5 : 0
+              }
+              linkDirectionalArrowRelPos={1}
               linkLabel={(l: object) => {
                 const link = l as { relation?: string };
                 return link.relation ?? '';
+              }}
+              onNodeHover={(n: object | null) => {
+                setHoverNode((n as GraphNode | null) ?? null);
+                if (wrapRef.current) wrapRef.current.style.cursor = n ? 'pointer' : '';
               }}
               onNodeClick={(n: object) => {
                 const node = n as GraphNode;
@@ -338,15 +510,23 @@ export default function KnowledgeGraphPage({
               cooldownTicks={120}
             />
           )}
-          {selected && (
-            <button className="neo-kg-close" onClick={() => setSelected(null)}>
-              {t('neo.knowledgeGraph.closeDetail', { defaultValue: '关闭详情' })}
-            </button>
-          )}
+          <span className="neo-kg-zoomctl">
+            <button onClick={() => zoomBy(0.67)} aria-label="缩小" title="缩小">−</button>
+            <button onClick={() => fgRef.current?.zoomToFit(400, 30)} aria-label="适应全图" title="适应全图">⤢</button>
+            <button onClick={() => zoomBy(1.5)} aria-label="放大" title="放大">+</button>
+          </span>
         </div>
 
         {selected && selectedSummary && (
           <aside className="neo-kg-detail" data-testid="graph-node-detail">
+            <button
+              className="neo-kg-close"
+              onClick={() => setSelected(null)}
+              aria-label={t('neo.knowledgeGraph.closeDetail', { defaultValue: '关闭详情' })}
+              title={t('neo.knowledgeGraph.closeDetail', { defaultValue: '关闭详情' })}
+            >
+              ✕
+            </button>
             <h3>{selected.name}</h3>
             {selected.path && onNodeOpen && (
               <button
@@ -357,8 +537,31 @@ export default function KnowledgeGraphPage({
                 打开文件
               </button>
             )}
-            <p className="raw-type">{selected.raw_type || 'entity'} · {selectedSummary.totalNeighbors} neighbors</p>
+            <p className="raw-type">
+              {selected.raw_type || 'entity'}
+              {(selected as PackGraphNode).mentions !== undefined &&
+                ` · ${(selected as PackGraphNode).mentions} mentions`}
+              {' '}· {selectedSummary.totalNeighbors} neighbors
+            </p>
             {selected.text && <p className="desc">{selected.text}</p>}
+            {(selected as PackGraphNode).sources &&
+              (selected as PackGraphNode).sources!.length > 0 && (
+              <>
+                <p className="section-label">
+                  {t('neo.knowledgeGraph.provenance', { defaultValue: 'Provenance 溯源' })}
+                </p>
+                {(selected as PackGraphNode).sources!.slice(0, PROV_SAMPLE).map((s, i) => (
+                  <div
+                    key={`prov-${s.source_id}-${s.chunk_index}-${i}`}
+                    className="rel-row"
+                    title={`source ${s.source_id}${s.checksum ? ` · sha256 ${s.checksum}` : ''}`}
+                  >
+                    <span className="rel">chunk {s.chunk_index}</span>
+                    {s.checksum && <span className="prov-hash">{s.checksum.slice(0, 8)}…</span>}
+                  </div>
+                ))}
+              </>
+            )}
             {selectedSummary.relationTypes.length > 0 && (
               <p className="raw-type">relations: {selectedSummary.relationTypes.join(', ')}</p>
             )}

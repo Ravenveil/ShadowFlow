@@ -1,0 +1,102 @@
+pageType: content
+background:
+  type: solid
+  color: "$paper"
+notes: 视角一：控制论。OPTO 迭代本质就是反馈控制环；好调节器定理把"调控能力"与"内部世界模型"画等号——这正是金融世界模型项目的理论根基。ShadowFlow 的 PDCA 循环引擎已经是控制论结构。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 40, 300, 18]
+    content:
+      style: "$label"
+      text: 04 · 视角一：控制论
+  - elementId: title
+    elementType: text
+    bounds: [48, 64, 860, 38]
+    content:
+      style: "$pagetitle"
+      text: OPTO 就是一个反馈控制环
+  - elementId: map-tbl
+    elementType: table
+    bounds: [48, 122, 430, 220]
+    columnWidths: [0.3, 0.36, 0.34]
+    rowHeights: [0.16, 0.21, 0.21, 0.21, 0.21]
+    style: "$default"
+    rows:
+      - - text: PDCA
+        - text: 控制论角色
+        - text: OPTO 对应物
+      - - text: Plan
+        - text: Setpoint 设定值
+        - text: 目标 / 上下文 ω
+      - - text: Do
+        - text: Actuator 执行器
+        - text: 工作流以 θ 执行
+      - - text: Check
+        - text: Sensor 传感
+        - text: 反馈 f + 轨迹 g
+      - - text: Act
+        - text: Controller 控制律
+        - text: OptoPrime 更新 θ
+  - elementId: map-caption
+    elementType: text
+    bounds: [48, 350, 430, 16]
+    content:
+      style: "$small"
+      text: 表 2 · OPTO 迭代的控制论拆解（对照 ShadowFlow 循环引擎 §1.2）
+  - elementId: reg-title
+    elementType: text
+    bounds: [520, 122, 392, 24]
+    content:
+      fontSize: 15
+      bold: true
+      color: "$primary"
+      text: 好调节器定理 → 世界模型
+  - elementId: reg-quote
+    elementType: text
+    bounds: [520, 152, 392, 66]
+    content:
+      fontSize: 13
+      color: "$ink"
+      lineHeight: 1.5
+      text: |
+        <p><em>"Every good regulator of a system must be a model of that system."</em></p>
+        <p style="text-align:right"><span style="font-size:11px; color:$gray;">—— Conant & Ashby, 1970</span></p>
+  - elementId: reg-body
+    elementType: text
+    bounds: [520, 228, 392, 200]
+    content:
+      style: "$body"
+      fontSize: 12.5
+      lineHeight: 1.55
+      text: |
+        <p>· Alicea et al. (2025) 把这一定理对接到现代 AI：<strong>能调控系统的智能体，其内部必然含有该系统（近似）的世界模型</strong>。</p>
+        <p style="margin-top:8px">· 对金融世界模型的推论：央行 agent 的调控能力上界 = 它内部模型的质量——<strong>世界模型不是奢侈品，是调控的前提</strong>。</p>
+        <p style="margin-top:8px">· 智能体的信念更新（belief update）= 内部模型的在线修正；反馈设计决定模型修正的方向。</p>
+  - elementId: sf-note
+    elementType: text
+    bounds: [48, 396, 864, 92]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.6
+      text: |
+        <p><strong>ShadowFlow 侧的资产：</strong>循环引擎（loop_engine.py）已实现 PDCA↔控制环映射、Sensor/Controller 一等节点、loops-watching-loops 监督（VSM System-2）、分形嵌套上界。<span style="color:$primary;"><strong>缺的正是 Trace 补的东西：把 Sensor 读到的轨迹反馈转成 Controller 的参数更新。</strong></span></p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: 参考：arXiv:2506.23032（Good Regulator × World Model）· Conant & Ashby (1970)
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "11"

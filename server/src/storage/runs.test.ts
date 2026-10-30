@@ -165,6 +165,44 @@ async function main() {
     check('saveRun recovers from corrupt file', after.length === 1);
   });
 
+  // ── Test 7: project_id / conversation_id linkage persists ───────────────
+  console.log('\n[7] linkage persistence');
+  await inIsolatedCwd(async (s) => {
+    // runs.project_id / conversation_id 是 FK（REFERENCES projects/conversations
+    // ON DELETE SET NULL），先建行再挂链；生产路径的 id 同样来自已校验/已建行。
+    const { getOrCreateProject } = await import('./projects');
+    const { createConversation } = await import('./conversations');
+    const project = getOrCreateProject('proj-abc', 'Linkage Test');
+    const conv = createConversation(project.project_id);
+    s.saveRun(makeRecord({ run_id: 'run-linked' }), {
+      project_id: project.project_id,
+      conversation_id: conv.conversation_id,
+    });
+    s.saveRun(makeRecord({ run_id: 'run-unlinked' }));
+    const { getDb } = await import('./sqlite');
+    const linked = getDb()
+      .prepare(`SELECT project_id, conversation_id FROM runs WHERE run_id = ?`)
+      .get('run-linked') as { project_id: string | null; conversation_id: string | null };
+    check(
+      'linked run persists project_id',
+      linked.project_id === project.project_id,
+      linked,
+    );
+    check(
+      'linked run persists conversation_id',
+      linked.conversation_id === conv.conversation_id,
+      linked,
+    );
+    const unlinked = getDb()
+      .prepare(`SELECT project_id, conversation_id FROM runs WHERE run_id = ?`)
+      .get('run-unlinked') as { project_id: string | null; conversation_id: string | null };
+    check(
+      'omitted linkage stores NULL',
+      unlinked.project_id === null && unlinked.conversation_id === null,
+      unlinked,
+    );
+  });
+
   // ── Summary ─────────────────────────────────────────────────────────────
   console.log('\n────────────────────────────────────────');
   console.log(`  ${passCount} passed,  ${failCount} failed`);

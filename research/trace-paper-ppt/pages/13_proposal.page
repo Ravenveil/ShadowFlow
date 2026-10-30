@@ -1,0 +1,164 @@
+pageType: content
+background:
+  type: solid
+  color: "$paper"
+notes: 研究切口页：把三篇文献缝成一个闭环提案。四步循环：DES 仿真产轨迹 → OPTO 生成式优化做 best-response → 均衡探测 → 好调节器检验。右侧强调与 RL 路线的差异和 ShadowFlow 的现成资产。
+elements:
+  - elementId: label
+    elementType: text
+    bounds: [48, 40, 400, 18]
+    content:
+      style: "$label"
+      text: 04 · 研究切口
+  - elementId: title
+    elementType: text
+    bounds: [48, 64, 880, 38]
+    content:
+      style: "$pagetitle"
+      text: 提案：Trace 驱动的经验博弈均衡分析
+  - elementId: c1
+    elementType: shape
+    bounds: [48, 128, 200, 96]
+    shapeName: rect
+    fill: {type: solid, color: "$soft"}
+  - elementId: c1t
+    elementType: text
+    bounds: [62, 138, 172, 76]
+    content:
+      fontSize: 12
+      color: "$ink"
+      lineHeight: 1.45
+      text: |
+        <p><strong>① DES 仿真</strong></p>
+        <p>万级 agent 市场仿真，产出完整执行轨迹</p>
+  - elementId: ca1
+    elementType: line
+    bounds: [248, 168, 40, 16]
+    viewBox: [40, 16]
+    points: "0,8 40,8"
+    curve: sharp
+    arrow: [null, "arrow"]
+    border: {style: solid, width: 2, color: "$gray"}
+  - elementId: c2
+    elementType: shape
+    bounds: [288, 128, 200, 96]
+    shapeName: rect
+    fill: {type: solid, color: "$soft"}
+  - elementId: c2t
+    elementType: text
+    bounds: [302, 138, 172, 76]
+    content:
+      fontSize: 12
+      color: "$ink"
+      lineHeight: 1.45
+      text: |
+        <p><strong>② 轨迹优化</strong></p>
+        <p>OPTO：轨迹+反馈做生成式 best-response</p>
+  - elementId: ca2
+    elementType: line
+    bounds: [488, 168, 40, 16]
+    viewBox: [40, 16]
+    points: "0,8 40,8"
+    curve: sharp
+    arrow: [null, "arrow"]
+    border: {style: solid, width: 2, color: "$gray"}
+  - elementId: c3
+    elementType: shape
+    bounds: [528, 128, 200, 96]
+    shapeName: rect
+    fill: {type: solid, color: "$soft"}
+  - elementId: c3t
+    elementType: text
+    bounds: [542, 138, 172, 76]
+    content:
+      fontSize: 12
+      color: "$ink"
+      lineHeight: 1.45
+      text: |
+        <p><strong>③ 均衡探测</strong></p>
+        <p>检验偏离是否仍有利可图（ε-Nash）</p>
+  - elementId: ca3
+    elementType: line
+    bounds: [728, 168, 40, 16]
+    viewBox: [40, 16]
+    points: "0,8 40,8"
+    curve: sharp
+    arrow: [null, "arrow"]
+    border: {style: solid, width: 2, color: "$gray"}
+  - elementId: c4
+    elementType: shape
+    bounds: [768, 128, 144, 96]
+    shapeName: rect
+    fill: {type: solid, color: "$primary"}
+  - elementId: c4t
+    elementType: text
+    bounds: [780, 138, 120, 76]
+    content:
+      fontSize: 12
+      color: "#F7F3E8"
+      lineHeight: 1.45
+      text: |
+        <p><strong>④ 调控检验</strong></p>
+        <p>好调节器定理检验央行内部模型</p>
+  - elementId: loop-back
+    elementType: line
+    bounds: [148, 224, 620, 40]
+    viewBox: [620, 40]
+    points: "620,0 310,40 0,0"
+    curve: smooth
+    arrow: [null, "arrow"]
+    border: {style: dash, width: 2, color: "$primary"}
+  - elementId: loop-back-t
+    elementType: text
+    bounds: [148, 266, 620, 18]
+    content:
+      fontSize: 11
+      color: "$primary"
+      align: [center, top]
+      text: 发现更优策略 → 扩充博弈 → 回到①重新仿真（EGTA 式迭代）
+  - elementId: diff-head
+    elementType: text
+    bounds: [48, 308, 864, 22]
+    content:
+      fontSize: 14
+      bold: true
+      color: "$ink"
+      text: 与主流 MARL 路线的差异
+  - elementId: diff
+    elementType: text
+    bounds: [48, 336, 864, 76]
+    content:
+      style: "$body"
+      fontSize: 12.5
+      lineHeight: 1.55
+      text: |
+        <p>· <strong>不依赖奖励函数设计</strong>：反馈可以是市场评论、风控警告、合规驳回等自然语言信号（回应启动会"结果高度依赖奖励函数"的痛点）</p>
+        <p>· <strong>可解释</strong>：每次参数更新附带 LLM 的归因推理，而非黑箱梯度步</p>
+        <p>· <strong>与规模解耦</strong>：优化只发生在"关键角色"的轨迹上，背景种群保持廉价规则 agent</p>
+  - elementId: asset
+    elementType: text
+    bounds: [48, 424, 864, 60]
+    content:
+      style: "$body"
+      fontSize: 13
+      lineHeight: 1.55
+      text: |
+        <p><strong>ShadowFlow 的现成资产：</strong>RunTrajectory / TrajectoryBundle 契约已有 Trace 所需的轨迹数据结构；rejection loop 与策略矩阵天然是"丰富反馈源"；循环引擎提供 PDCA 骨架。<span style="color:$primary;">补 DES 内核 + OPTO 优化层即闭环。</span></p>
+  - elementId: foot-rule
+    elementType: shape
+    bounds: [48, 514, 864, 1]
+    shapeName: rect
+    fill: {type: solid, color: "$line"}
+  - elementId: foot
+    elementType: text
+    bounds: [48, 520, 600, 14]
+    content:
+      style: "$small"
+      text: 研究提案 · 详见研究报告 §4.4
+  - elementId: page-no
+    elementType: text
+    bounds: [880, 520, 32, 14]
+    content:
+      style: "$small"
+      align: [right, top]
+      text: "13"
