@@ -761,26 +761,6 @@
   white-space: nowrap;
 }
 
-/* ── 设置联动提示条（2026-10-30）────────────────────────────────────────── */
-.clawhub-byok-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 10px 24px 0;
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--t-ink, #374151);
-  background: color-mix(in oklab, #10b981 10%, var(--t-panel, #ffffff));
-  border: 1px solid color-mix(in oklab, #10b981 28%, var(--t-border, #e5e7eb));
-}
-
-.clawhub-byok-banner svg {
-  flex-shrink: 0;
-  color: #059669;
-}
-
 /* 内嵌模式（2026-10-30）：NeoApp 中栏变体 —— 中栏已有壳层滚动/边距，这里
    自适应填满并收敛外边距；功能与独立路由版完全一致。 */
 .clawhub-page--embedded {

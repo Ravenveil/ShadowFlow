@@ -94,3 +94,11 @@ _handoff_tmp/
 # 2026-10-30 安全清理：server 侧运行时数据（settings.json 含 API key、sqlite、
 # sessions/projects）一律不入库（曾因跟踪泄露 key，历史已在远程，key 已作废待换）。
 server/.shadowflow/
+
+# 2026-10-31：仓库根目录的调试临时文件（_run*.txt/_sess*.txt 曾含明文 API key，
+# 永不入库）；Obsidian 主题下载缓存不入库（app.json 等配置仍跟踪）。
+/_run*.txt
+/_sess*.txt
+/_*.tmp
+.obsidian/themes/
+.obsidian/workspace.json

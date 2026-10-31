@@ -17,13 +17,7 @@
  * 作用域 .neo-empty。
  */
 import { useEffect, useMemo, useState } from 'react';
-import { PawPrint } from 'lucide-react';
 import { listSkills, type SkillInfo } from '../../api/skills';
-import { listDetectedClis, type DetectedCli } from '../../api/cli';
-import { resolveClawMeta } from '../../config/clawhub';
-import { useI18n } from '../../common/i18n';
-// ClawHub（2026-06）：.sg-claw-* 样式（增量引入，不动 neo-chat.css / index.css）
-import '../clawhub/clawhub.css';
 
 /** 过滤掉测试/演示 skill（id 或 name 含测试关键词）。 */
 function isTestSkill(s: SkillInfo): boolean {
@@ -59,17 +53,11 @@ function catOf(s: SkillInfo): string {
 
 export function StartGallery({
   onPick,
-  onPickClaw,
 }: {
   onPick: (token: string) => void;
-  /** ClawHub（2026-06）：点击已安装 Claw → 父级把它设为聊天 target。 */
-  onPickClaw?: (cliId: string) => void;
 }) {
-  const { t } = useI18n();
   const [skills, setSkills] = useState<SkillInfo[] | null>(null);
   const [cat, setCat] = useState('全部');
-  // ── ClawHub（2026-06，FR-03）：「已安装 Claw」分区（增量；后端未起时空区不渲染）
-  const [claws, setClaws] = useState<DetectedCli[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -78,12 +66,6 @@ export function StartGallery({
         if (alive) setSkills(rows.filter((s) => s.enabled !== false && !isTestSkill(s)));
       })
       .catch(() => { if (alive) setSkills([]); });
-    // Claw 分区数据（已安装 is_claw 条目）；接口失败静默降级为空
-    listDetectedClis()
-      .then((snap) => {
-        if (alive) setClaws(snap.items.filter((i) => i.is_claw && i.installed));
-      })
-      .catch(() => { if (alive) setClaws([]); });
     return () => { alive = false; };
   }, []);
 
@@ -115,43 +97,8 @@ export function StartGallery({
 
   return (
     <div className="sg-wrap">
-      {/* ── ClawHub（2026-06，FR-03）：「已安装 Claw」分区（增量；点击 = 选为聊天
-          target：父级 NeoChat 消费 onPickClaw 注入 executor:'cli:<id>'）────────── */}
-      {claws.length > 0 && (
-        <div className="sg-claw-section">
-          <span className="sg-claw-label">
-            <PawPrint size={12} strokeWidth={2} aria-hidden />
-            {t('clawhub.gallery.label', { defaultValue: '已安装 Claw（点击直接对话）' })}
-          </span>
-          <div className="sg-claw-list">
-            {claws.map((c) => {
-              const brand = resolveClawMeta(c.id);
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  className="sg-claw-chip"
-                  data-testid={`sg-claw-${c.id}`}
-                  title={c.description ?? c.id}
-                  onClick={() => onPickClaw?.(c.id)}
-                >
-                  <span
-                    className="claw-brand-badge"
-                    style={{
-                      background: `color-mix(in oklab, ${brand.tint} 18%, transparent)`,
-                      color: brand.tint,
-                    }}
-                    aria-hidden
-                  >
-                    {brand.monogram}
-                  </span>
-                  {c.id}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* ClawHub 入口已移除（2026-10-31 用户需求）：首页不再显示 Claw 分区，
+          改为 composer 加号菜单内「从 ClawHub 挑选」（NeoComposer PlusMenu）。 */}
       <div
         className="sg-tabs"
         role="tablist"

@@ -401,8 +401,6 @@
   transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
 }
 .neo-pill:hover { background: var(--t-panel-2); }
-.neo-pill-icon { flex-shrink: 0; color: var(--t-ok, #10b981); }
-.neo-pill-done { color: var(--t-ok, #10b981); }
 .neo-pill-label {
   flex: 1;
   min-width: 0;
@@ -648,4 +646,183 @@
 /* rail 群行（Link 形态复用 .neo-row 视觉） */
 a.neo-row-link {
   text-decoration: none;
+}
+
+/* ── 加号两层弹出菜单（2026-10-31，参考 WorkBuddy 交互）──────────────────
+   第一层：竖排入口行（ClawHub / Skill，带 ›）；光标移入即在右侧弹出第二层
+   列表面板（搜索 + 列表 + 底部动作）。两层同处一个 fixed 容器（flex 排布，
+   8px 间隙），容器 mouseleave 才收起第二层 —— 光标跨间隙不闪断。 */
+.neo-plus-root {
+  position: fixed;
+  z-index: 3200;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* 第一层：窄入口面板 */
+.neo-plus-menu {
+  width: 232px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--t-panel, #fff);
+  border: 1px solid var(--t-border, #e5e7eb);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* 第二层：宽列表面板（搜索 + 列表 + 底部动作） */
+.neo-plus-sub {
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  max-height: 440px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--t-panel, #fff);
+  border: 1px solid var(--t-border, #e5e7eb);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
+  animation: neo-plus-sub-in 0.14s ease;
+}
+
+@keyframes neo-plus-sub-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.neo-plus-sub-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 2px 6px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--t-ink-3, #9ca3af) 8%, transparent);
+  color: var(--t-ink-3, #6b7280);
+}
+
+.neo-plus-sub-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 13px;
+  color: var(--t-fg, #1f2937);
+}
+
+.neo-plus-sub-search-input::placeholder {
+  color: var(--t-ink-3, #9ca3af);
+}
+
+.neo-plus-sub-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.neo-plus-sub-foot {
+  flex-shrink: 0;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--t-border, #e5e7eb);
+}
+
+.neo-plus-note {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--t-ink-3, #9ca3af);
+}
+
+.neo-plus-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--t-fg, #1f2937);
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.neo-plus-item:hover,
+.neo-plus-item.on {
+  background: color-mix(in oklab, var(--t-accent, #2563eb) 8%, transparent);
+}
+
+.neo-plus-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 第二层列表项两行文本（名称 + 描述） */
+.neo-plus-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.neo-plus-item-desc {
+  font-size: 11px;
+  color: var(--t-ink-3, #9ca3af);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-plus-item-tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.neo-plus-item-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--t-ink-3, #6b7280);
+}
+
+.neo-plus-item-chev {
+  flex-shrink: 0;
+  color: var(--t-ink-3, #9ca3af);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.neo-plus-item:hover .neo-plus-item-chev,
+.neo-plus-item.on .neo-plus-item-chev {
+  opacity: 1;
+}
+
+.neo-plus-item--more .neo-plus-item-name {
+  color: var(--t-ink-3, #6b7280);
+  font-size: 12px;
+}
+
+.neo-plus-divider {
+  height: 1px;
+  margin: 6px 8px;
+  background: var(--t-border, #e5e7eb);
 }

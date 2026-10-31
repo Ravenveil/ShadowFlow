@@ -840,13 +840,17 @@ async function runFanout(
       const soul = agent.soul ?? '';
 
       // intent 帧（NeverRaising）— 串行降级路径的派发决策：未绑团队 → 按成员
-      // 逐个派发（单员工群/DM 即「派发给员工Y」场景）。
-      emitIntentCard(gw, {
-        intent: prompt,
-        target_kind: 'agent',
-        target_name: agentName,
-        reason: '群未绑定团队，按成员依次处理用户原文',
-      });
+      // 逐个派发。仅多成员群展示派发卡（对群聊有「谁在处理」信息量）；
+      // DM/单员工群 1:1 对话无派发语义，跳过（2026-10-31 用户反馈：单聊页
+      // 不应出现「群未绑定团队」群聊文案）。
+      if (group.kind !== 'dm' && agentIds.length > 1) {
+        emitIntentCard(gw, {
+          intent: prompt,
+          target_kind: 'agent',
+          target_name: agentName,
+          reason: '群未绑定团队，按成员依次处理用户原文',
+        });
+      }
 
       // B3 — 串行路径过程卡：thinking 占位 → 流式 append → finalize + msg_foot。
       const thinkingId = gw?.nextId();
@@ -937,10 +941,13 @@ async function runFanout(
         continue;
       }
       // agent 最终回复仍走 pyPostMessage（聊天消息路径零变化）。
+      // 2026-10-31 — 补 agent_id 透传（DAG 路径 U0 同款）：前端 agentById
+      // 按 agent_id 命中 DiceBear 头像，缺省 → 字母色块兜底（头像「不绑定」根因）。
       await pyPostMessage(groupId, {
         content: reply,
         sender_name: agentName,
         sender_kind: 'agent',
+        agent_id: agentId,
       }).catch(() => {});
       // 串行路径同样「干完即提交」— worktree 产物 + 证据卡。
       if (wt) {

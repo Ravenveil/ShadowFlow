@@ -139,6 +139,50 @@ router.get('/', async (req: Request, res: Response) => {
   res.json({ data: [...pythonAgents, ...yamlAgents], meta: {} });
 });
 
+// ─── GET /api/agents/:id — Python first, fall back to local yaml template ───
+// 2026-10-31 — 此前缺这个路由：单个 GET 落到 proxyFallback 直打 Python，
+// Python 只认 .shadowflow/agents/*.json（agent-*），Node 侧合并进列表的
+// .agent.yaml 模板（dev/arch/writer 等语义 id）全部 404 —— 右栏「灵魂」tab
+// 打开即 Agent API error 404。现对齐 GET '/' 的合并语义：Python 命中返回；
+// 404/网络失败 → 查 yaml 模板；都没有 → 404。
+router.get('/:id', async (req: Request, res: Response) => {
+  const id = req.params.id;
+  const workspaceId =
+    typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
+
+  // registry / routing-log 是 DAG 子路径资源，不属于单个 agent。
+  if (id === 'registry' || id === 'routing-log') {
+    res.status(404).json({ error: { code: 'AGENT_NOT_FOUND', message: `Agent '${id}' not found` } });
+    return;
+  }
+
+  // Python first（真实持久化 agent-*）
+  try {
+    const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+    const pyRes = await fetch(`${PYTHON_BASE}/api/agents/${encodeURIComponent(id)}${qs}`);
+    if (pyRes.ok) {
+      res.status(pyRes.status).json(await pyRes.json());
+      return;
+    }
+    if (pyRes.status !== 404 && pyRes.status !== 400) {
+      // 非「不存在」类错误也回落 yaml（列表语义如此，保持一致）
+      // eslint-disable-next-line no-console
+      console.warn(`[agents-route] Python GET /:id returned ${pyRes.status}; falling back to yaml`);
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[agents-route] Python GET /:id failed; falling back to yaml:', err);
+  }
+
+  // yaml 模板回落（语义 id：dev / arch / writer / pm …）
+  const tpl = yamlToRecord(workspaceId).find((a) => a.agent_id === id);
+  if (tpl) {
+    res.json({ data: tpl, meta: {} });
+    return;
+  }
+  res.status(404).json({ error: { code: 'AGENT_NOT_FOUND', message: `Agent '${id}' not found` } });
+});
+
 // ─── POST /api/agents — forward to Python ───────────────────────────────────
 router.post('/', async (req: Request, res: Response) => {
   try {

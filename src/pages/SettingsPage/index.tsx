@@ -34,7 +34,8 @@
  *   HfTopBar (50px crumbs)  +  240px settings nav  +  scrollable right pane.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Construction } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Construction } from 'lucide-react';
 import { useI18n } from '../../common/i18n';
 import { ToolProvidersTab } from './ToolProvidersTab';
 import { SkillsCatalogTab } from './SkillsCatalogTab';
@@ -374,7 +375,43 @@ function NavButton({ item, active, onSelect }: NavButtonProps) {
 
 export default function SettingsPage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const NAV_GROUPS = useMemo(() => buildNavGroups(t), [t]);
+
+  // 2026-10-31: 设置页返回按钮——用户从齿轮进入后能一键回退。
+  // react-router v6 在 history.state 里存 idx：>0 说明有站内历史可回退，
+  // 否则（新标签直开 / 刷新后首条）兜底回主页，避免退出站点。
+  const handleBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate('/', { replace: true });
+  };
+
+  const backBtn = (
+    <button
+      type="button"
+      className="ui50-ibtn"
+      data-testid="settings-back"
+      onClick={handleBack}
+      aria-label={t('settings.back', { defaultValue: '返回' })}
+      title={t('settings.back', { defaultValue: '返回' })}
+      style={{
+        width: 28,
+        height: 28,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 6,
+        border: '1px solid var(--t-border)',
+        background: 'var(--t-panel-2)',
+        color: 'var(--t-fg-2)',
+        cursor: 'pointer',
+        flexShrink: 0,
+      }}
+    >
+      <ArrowLeft size={14} strokeWidth={1.9} aria-hidden />
+    </button>
+  );
 
   const SECTION_LABEL = useMemo<Record<SectionId, string>>(
     () =>
@@ -418,7 +455,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <HfTopBar />
+      <HfTopBar left={backBtn} />
 
       <div
         style={{

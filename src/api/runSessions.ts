@@ -77,12 +77,6 @@ export interface RunSessionCreateRequest {
    * 该群的所有 run 归属同一条会话（群 timeline 经 B2 端点可见）。
    */
   group_id?: string;
-  /**
-   * GAP A3 项目分组 — 显式挂靠项目：服务端在该项目下 find-or-create
-   * conversation；未知 project_id → 400。省略时服务端回落 'default' 项目。
-   * 前端从 localStorage('sf.project_id') 读取（NeoComposer 项目 chip 写入）。
-   */
-  project_id?: string | null;
 }
 
 export interface RunSessionCreateResponse {

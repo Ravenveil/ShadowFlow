@@ -12,10 +12,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { KeyRound, PawPrint, RefreshCw, Search } from 'lucide-react';
+import { PawPrint, RefreshCw, Search } from 'lucide-react';
 import { useI18n } from '../../common/i18n';
 import { listDetectedClis, refreshCliDetection, type DetectedCli } from '../../api/cli';
-import { getApiBase } from '../../api/_base';
 import {
   ClawhubApiError,
   startInstall,
@@ -44,42 +43,6 @@ interface InstallState {
 /** Claw 对话入口桥：写 localStorage，NeoApp/StartGallery 装载时消费。 */
 const CLAW_TARGET_KEY = 'sf.claw-target';
 
-/**
- * 设置联动（2026-10-30）：拉取设置页 BYOK 配置，显示哪些 provider 的 key
- * 正注入 Claw 子进程（后端 dispatcher 按 <PROVIDER>_API_KEY 标准名注入）。
- * 与 ByokSection 同一 GET /api/settings/byok 端点；失败静默（提示条不显示）。
- */
-interface ByokProviderInfo {
-  id: string;
-  hasKey: boolean;
-  enabled: boolean;
-}
-
-function useByokLinked(): ByokProviderInfo[] {
-  const [providers, setProviders] = useState<ByokProviderInfo[]>([]);
-  useEffect(() => {
-    let alive = true;
-    fetch(`${getApiBase()}/api/settings/byok`, { signal: AbortSignal.timeout(4000) })
-      .then((r) => (r.ok ? r.json() : { providers: {} }))
-      .then((j: { providers?: Record<string, { apiKey?: string; enabled?: boolean; maskedKey?: string }> }) => {
-        if (!alive) return;
-        const list = Object.entries(j.providers ?? {}).map(([id, p]) => ({
-          id,
-          hasKey: !!(p?.apiKey || p?.maskedKey),
-          enabled: !!p?.enabled,
-        }));
-        setProviders(list);
-      })
-      .catch(() => {
-        /* 静默 — 联动提示是增强 */
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return providers;
-}
-
 export function ClawHubPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -94,9 +57,6 @@ export function ClawHubPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [detail, setDetail] = useState<DetectedCli | null>(null);
   const [install, setInstall] = useState<InstallState | null>(null);
   const streamRef = useRef<InstallStreamHandle | null>(null);
-  // 设置联动状态（提示条数据源）。
-  const byokProviders = useByokLinked();
-  const linkedProviders = byokProviders.filter((p) => p.hasKey && p.enabled);
 
   const load = useCallback((force = false) => {
     const p = force ? refreshCliDetection() : listDetectedClis();
@@ -345,19 +305,6 @@ export function ClawHubPage({ embedded = false }: { embedded?: boolean } = {}) {
             : ''}
         </span>
       </div>
-
-      {/* 设置联动提示条（2026-10-30）：显示设置页已启用的 BYOK key 正注入 Claw。 */}
-      {linkedProviders.length > 0 && (
-        <div className="clawhub-byok-banner" data-testid="clawhub-byok-banner">
-          <KeyRound size={12} strokeWidth={2} aria-hidden />
-          <span>
-            {t('clawhub.byok.linked', {
-              providers: linkedProviders.map((p) => p.id).join('、'),
-              defaultValue: `已联动设置页 API Key：${linkedProviders.map((p) => p.id).join('、')} — 对话时自动注入对应 Claw`,
-            })}
-          </span>
-        </div>
-      )}
 
       <div className="clawhub-filters">
         <div className="clawhub-search">

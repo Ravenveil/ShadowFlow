@@ -434,6 +434,12 @@ export async function getActivationTrainingDataset(runId: string): Promise<Activ
 
 export async function getRunLoops(runId: string): Promise<RunLoopsResponse> {
   const res = await fetch(`${getApiBase()}/api/runs/${encodeURIComponent(runId)}/loops`);
+  // 2026-10-31: Node run-session 的 run 不在 Python 运行时注册表里，Python 返回
+  // 404 RUN_NOT_FOUND —— 这是常态（Node 对话本就不产 Loop 数据），按空数据处理，
+  // 不再红字报「Runs API error 404」（面板自身有空态「该运行暂无可视化过程数据」）。
+  if (res.status === 404) {
+    return { run_id: runId, loops: [], total_count: 0 };
+  }
   const parsed = await _handleResponse<{ data: RunLoopsResponse; meta?: Record<string, unknown> }>(res);
   // Handle both envelope and direct response formats
   return 'data' in parsed ? parsed.data : parsed as unknown as RunLoopsResponse;

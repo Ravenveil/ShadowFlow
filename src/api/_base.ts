@@ -260,7 +260,18 @@ export function clearStoredApiKey(provider: ProviderId = 'anthropic'): void {
 export function getDefaultProvider(): ProviderId {
   try {
     const raw = localStorage.getItem(DEFAULT_PROVIDER_STORAGE);
-    return isProviderId(raw) ? raw : 'anthropic';
+    if (isProviderId(raw)) return raw;
+    // 2026-10-31: 跟随输入框模型 chip。ModelPicker 写 sf.defaultExecutor
+    // （byok:zhipu 等），但 createRunSession 只认 sf_default_provider——两个
+    // 键从未接通，用户在 chip 上选的 byok 模型对「新任务」不生效，请求永远
+    // 回落 anthropic 直连 api.anthropic.com（国内 403 "Request not allowed"，
+    // 即「设置检测通过却无法对话」的根因）。chip 是 byok: 时按其 provider 走。
+    const exec = localStorage.getItem('sf.defaultExecutor');
+    if (typeof exec === 'string' && exec.startsWith('byok:')) {
+      const p = exec.slice(5).trim();
+      if (isProviderId(p)) return p;
+    }
+    return 'anthropic';
   } catch {
     return 'anthropic';
   }

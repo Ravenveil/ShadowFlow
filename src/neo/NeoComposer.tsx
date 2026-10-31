@@ -62,8 +62,11 @@ import {
   Cpu,
   ExternalLink,
   PawPrint,
+  Search,
 } from 'lucide-react';
 import { getApiBase } from '../api/_base';
+import { listDetectedClis, type DetectedCli } from '../api/cli';
+import { resolveClawMeta } from '../config/clawhub';
 import { listPacks } from '../api/knowledge';
 import type { KnowledgePack } from '../common/types/knowledge';
 import { useI18n } from '../common/i18n';
@@ -78,7 +81,6 @@ import {
 } from '../api/skillIngest';
 import { listSkills, type SkillInfo } from '../api/skills';
 import { fsHome, fsList, fsPickNative, type FsEntry } from '../api/fsBrowse';
-import { listProjectsWithSessions, type ProjectWithSessions } from '../api/projects';
 import { parseSkillToken } from '../lib/skillToken';
 import {
   fetchPickerCliItems,
@@ -126,6 +128,8 @@ export interface NeoComposerProps {
   clawTarget?: { cliId: string; name: string } | null;
   /** ClawHub（2026-06）：清除 Claw target。 */
   onClearClawTarget?: () => void;
+  /** ClawHub（2026-10-31 加号菜单）：从菜单挑选 Claw → 父级设为聊天 target。 */
+  onPickClaw?: (cliId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -875,6 +879,273 @@ function NeoSkillUrlChip({
 // 给调用方 pin 成 pendingSkill。
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// NeoPlusMenu — 加号两层弹出菜单（2026-10-31 用户需求：参考 WorkBuddy 交互 —
+// 第一层竖排入口行，光标移入带「›」的行即在右侧弹出第二层列表面板）。
+//   Layer 1：ClawHub ›（Claw 选择）/ Skill ›（已装 Skill 选择 + URL 导入）
+//   Layer 2：搜索框 + 列表 + 底部动作（去 ClawHub 安装更多 / 打开 SkillPicker）
+// 两个面板同处一个 fixed portal 容器（flex 排布），容器 mouseleave 才收起
+// 第二层 —— 光标跨 8px 间隙移动不会闪断。空间不足时第二层翻到左侧。
+// ---------------------------------------------------------------------------
+
+function NeoPlusMenu({
+  anchorRef,
+  onClose,
+  onPickClaw,
+  onPickSkill,
+  onOpenSkillPicker,
+}: {
+  anchorRef: React.RefObject<HTMLElement | null>;
+  onClose: () => void;
+  onPickClaw: (cliId: string) => void;
+  onPickSkill: (item: InstalledSkill) => void;
+  onOpenSkillPicker: () => void;
+}) {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const [claws, setClaws] = useState<DetectedCli[] | null>(null);
+  const [skills, setSkills] = useState<InstalledSkill[] | null>(null);
+  const [clawQuery, setClawQuery] = useState('');
+  const [skillQuery, setSkillQuery] = useState('');
+  // 当前展开的第二层（hover 驱动；null = 只显示第一层）。
+  const [sub, setSub] = useState<'claw' | 'skill' | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let alive = true;
+    listDetectedClis()
+      .then((snap) => { if (alive) setClaws(snap.items.filter((i) => i.is_claw && i.installed)); })
+      .catch(() => { if (alive) setClaws([]); });
+    listInstalledSkills()
+      .then((items) => { if (alive) setSkills(items); })
+      .catch(() => { if (alive) setSkills([]); });
+    return () => { alive = false; };
+  }, []);
+
+  // 定位：锚点上方弹出，第二层默认在第一层右侧、空间不足翻左侧。
+  const [pos, setPos] = useState<{ left: number; bottom: number; dir: 'right' | 'left' } | null>(null);
+  useLayoutEffect(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const L1_W = 232;
+    const L2_W = 320;
+    const dir: 'right' | 'left' =
+      r.left + L1_W + 8 + L2_W > window.innerWidth - 8 && r.left - 8 - L2_W >= 8
+        ? 'left'
+        : 'right';
+    setPos({ left: r.left, bottom: window.innerHeight - r.top + 8, dir });
+  }, [anchorRef]);
+
+  // 外点关闭（容器含两层面板，data-plus-menu 统一标识）。
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!(e.target instanceof Node)) return;
+      if (rootRef.current?.contains(e.target)) return;
+      if (anchorRef.current?.contains(e.target)) return;
+      onClose();
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [anchorRef, onClose]);
+
+  if (!pos) return null;
+
+  const q = (s: string) => s.trim().toLowerCase();
+  const filteredClaws = (claws ?? []).filter(
+    (c) =>
+      !q(clawQuery) ||
+      c.id.toLowerCase().includes(q(clawQuery)) ||
+      (c.description ?? '').toLowerCase().includes(q(clawQuery)),
+  );
+  const filteredSkills = (skills ?? []).filter(
+    (s) => !q(skillQuery) || s.id.toLowerCase().includes(q(skillQuery)) || s.name.toLowerCase().includes(q(skillQuery)),
+  );
+
+  return createPortal(
+    <div
+      ref={rootRef}
+      className="neo-plus-root"
+      data-plus-menu
+      data-testid="neo-plus-menu"
+      style={{
+        left: pos.left,
+        bottom: pos.bottom,
+        flexDirection: pos.dir === 'left' ? 'row-reverse' : 'row',
+      }}
+      onMouseLeave={() => setSub(null)}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* ── Layer 1：竖排入口行（hover 带 › 的行弹出第二层）────────────────── */}
+      <div className="neo-plus-menu">
+        <button
+          type="button"
+          className={`neo-plus-item${sub === 'claw' ? ' on' : ''}`}
+          data-testid="neo-plus-row-claw"
+          onMouseEnter={() => setSub('claw')}
+          onClick={() => setSub('claw')}
+        >
+          <span
+            className="neo-plus-item-icon"
+            style={{ color: '#f59e0b' }}
+            aria-hidden
+          >
+            <PawPrint size={14} strokeWidth={2} />
+          </span>
+          <span className="neo-plus-item-name">
+            {t('neo.composer.plusClawLabel', { defaultValue: 'ClawHub' })}
+          </span>
+          <ChevronRight size={13} strokeWidth={2} aria-hidden className="neo-plus-item-chev" />
+        </button>
+
+        <div className="neo-plus-divider" aria-hidden />
+
+        <button
+          type="button"
+          className={`neo-plus-item${sub === 'skill' ? ' on' : ''}`}
+          data-testid="neo-plus-row-skill"
+          onMouseEnter={() => setSub('skill')}
+          onClick={() => setSub('skill')}
+        >
+          <span className="neo-plus-item-icon" aria-hidden>
+            <BookOpen size={14} strokeWidth={2} />
+          </span>
+          <span className="neo-plus-item-name">
+            {t('neo.composer.plusSkillLabel', { defaultValue: 'Skill' })}
+          </span>
+          <ChevronRight size={13} strokeWidth={2} aria-hidden className="neo-plus-item-chev" />
+        </button>
+      </div>
+
+      {/* ── Layer 2 · ClawHub：搜索 + 已装 Claw 列表 + 去 ClawHub ──────────── */}
+      {sub === 'claw' && (
+        <div className="neo-plus-sub" data-testid="neo-plus-sub-claw">
+          <div className="neo-plus-sub-search">
+            <Search size={13} strokeWidth={2} aria-hidden />
+            <input
+              value={clawQuery}
+              onChange={(e) => setClawQuery(e.target.value)}
+              placeholder={t('neo.composer.plusSearchClaw', { defaultValue: '搜索 Claw' })}
+              className="neo-plus-sub-search-input"
+            />
+          </div>
+          <div className="neo-plus-sub-list">
+            {claws === null && (
+              <div className="neo-plus-note">{t('common.loading', { defaultValue: '加载中…' })}</div>
+            )}
+            {claws !== null && filteredClaws.length === 0 && (
+              <div className="neo-plus-note">
+                {t('neo.composer.plusClawNone', { defaultValue: '还没有已安装的 Claw，去 ClawHub 装一个' })}
+              </div>
+            )}
+            {filteredClaws.map((c) => {
+              const brand = resolveClawMeta(c.id);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="neo-plus-item"
+                  data-testid={`neo-plus-claw-${c.id}`}
+                  title={c.description ?? c.id}
+                  onClick={() => { onPickClaw(c.id); onClose(); }}
+                >
+                  <span
+                    className="claw-brand-badge"
+                    style={{
+                      background: `color-mix(in oklab, ${brand.tint} 18%, transparent)`,
+                      color: brand.tint,
+                    }}
+                    aria-hidden
+                  >
+                    {brand.monogram}
+                  </span>
+                  <span className="neo-plus-item-main">
+                    <span className="neo-plus-item-name">{c.id}</span>
+                    {c.description && (
+                      <span className="neo-plus-item-desc">{c.description}</span>
+                    )}
+                  </span>
+                  <span className="neo-plus-item-tag">Claw</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="neo-plus-sub-foot">
+            <button
+              type="button"
+              className="neo-plus-item neo-plus-item--more"
+              data-testid="neo-plus-clawhub-more"
+              onClick={() => { onClose(); navigate('/clawhub'); }}
+            >
+              <span className="neo-plus-item-icon"><ExternalLink size={13} strokeWidth={2} aria-hidden /></span>
+              <span className="neo-plus-item-name">
+                {t('neo.composer.plusClawMore', { defaultValue: '去 ClawHub 浏览 / 安装更多' })}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Layer 2 · Skill：搜索 + 已装 Skill 列表 + URL 导入 ─────────────── */}
+      {sub === 'skill' && (
+        <div className="neo-plus-sub" data-testid="neo-plus-sub-skill">
+          <div className="neo-plus-sub-search">
+            <Search size={13} strokeWidth={2} aria-hidden />
+            <input
+              value={skillQuery}
+              onChange={(e) => setSkillQuery(e.target.value)}
+              placeholder={t('neo.composer.plusSearchSkill', { defaultValue: '搜索 Skill' })}
+              className="neo-plus-sub-search-input"
+            />
+          </div>
+          <div className="neo-plus-sub-list">
+            {skills === null && (
+              <div className="neo-plus-note">{t('common.loading', { defaultValue: '加载中…' })}</div>
+            )}
+            {skills !== null && filteredSkills.length === 0 && (
+              <div className="neo-plus-note">
+                {t('neo.composer.plusSkillNone', { defaultValue: '还没有已装的 Skill' })}
+              </div>
+            )}
+            {filteredSkills.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className="neo-plus-item"
+                data-testid={`neo-plus-skill-${s.id}`}
+                title={s.name}
+                onClick={() => { onPickSkill(s); onClose(); }}
+              >
+                <span className="neo-plus-item-icon" aria-hidden>
+                  <BookOpen size={13} strokeWidth={2} />
+                </span>
+                <span className="neo-plus-item-main">
+                  <span className="neo-plus-item-name">{s.name}</span>
+                  <span className="neo-plus-item-desc">{s.source}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="neo-plus-sub-foot">
+            <button
+              type="button"
+              className="neo-plus-item neo-plus-item--more"
+              data-testid="neo-plus-import-skill"
+              onClick={() => { onClose(); onOpenSkillPicker(); }}
+            >
+              <span className="neo-plus-item-icon"><Link2 size={13} strokeWidth={2} aria-hidden /></span>
+              <span className="neo-plus-item-name">
+                {t('neo.composer.plusImportSkill', { defaultValue: '导入 Skill（URL / 已装列表）' })}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>,
+    document.body,
+  );
+}
+
 function NeoSkillPickerModal({
   open,
   onClose,
@@ -1027,6 +1298,7 @@ export function NeoComposer({
   onNavigate,
   clawTarget,
   onClearClawTarget,
+  onPickClaw,
 }: NeoComposerProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -1048,21 +1320,13 @@ export function NeoComposer({
   const [pickCwd, setPickCwd] = useState<string>(() => localStorage.getItem('sf.cwd') ?? '');
   const [showDirPicker, setShowDirPicker] = useState(false);
   const dirAnchorRef = useRef<HTMLButtonElement>(null);
-  // GAP A3 项目 chip：选 → 存 sf.project_id（+ sf.project_name 供免请求渲染）→
-  // NeoChat 建 run session 时读 sf.project_id 拼进请求。弹层打开时懒拉项目列表。
-  const [pickProjectId, setPickProjectId] = useState<string>(
-    () => localStorage.getItem('sf.project_id') ?? '',
-  );
-  const [pickProjectName, setPickProjectName] = useState<string>(
-    () => localStorage.getItem('sf.project_name') ?? '',
-  );
-  const [projectOpen, setProjectOpen] = useState(false);
-  const [projects, setProjects] = useState<ProjectWithSessions[] | null>(null);
-  const projectRef = useRef<HTMLDivElement | null>(null);
   // Skill-URL 识别：dismissedUrls 记用户说「不」的 URL，免得每次击键重弹。
   const [dismissedUrls, setDismissedUrls] = useState<Set<string>>(() => new Set());
   const [pendingSkill, setPendingSkill] = useState<SkillIngestSummary | null>(null);
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
+  // 加号竖版菜单（2026-10-31）：Claw 挑选 + Skill 导入聚合入口。
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const plusAnchorRef = useRef<HTMLDivElement>(null);
   // `@` / `/` 内联命令菜单。
   const [installedSkills, setInstalledSkills] = useState<InstalledSkill[] | null>(null);
   // `/` 模式额外拉 GET /api/skills（含 `<id>:<cmd>` 子命令 + description）。
@@ -1084,17 +1348,16 @@ export function NeoComposer({
   const [toast, setToast] = useState<string | null>(null);
   const knowledgeRef = useRef<HTMLDivElement | null>(null);
 
-  // 点外关闭（mode / knowledge / project 弹层）。
+  // 点外关闭（mode / knowledge 弹层）。
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       const tgt = e.target as Node;
       if (knowledgeOpen && knowledgeRef.current && !knowledgeRef.current.contains(tgt)) setKnowledgeOpen(false);
       if (modeOpen && modeRef.current && !modeRef.current.contains(tgt)) setModeOpen(false);
-      if (projectOpen && projectRef.current && !projectRef.current.contains(tgt)) setProjectOpen(false);
     }
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [knowledgeOpen, modeOpen, projectOpen]);
+  }, [knowledgeOpen, modeOpen]);
 
   // toast 自动消失。
   useEffect(() => {
@@ -1405,33 +1668,6 @@ export function NeoComposer({
     }
   }
 
-  // 项目弹层：打开时懒拉项目列表（失败回落空列表，chip 仍可用「无项目」清除）。
-  function openProjectPicker() {
-    setProjectOpen((v) => !v);
-    if (projects === null) {
-      listProjectsWithSessions()
-        .then((items) => setProjects(items))
-        .catch(() => setProjects([]));
-    }
-  }
-
-  // 选中/清除项目：写 localStorage（sf.project_id + sf.project_name 展示缓存），
-  // NeoChat 建 run session 时在请求时读取。
-  function selectProject(p: ProjectWithSessions | null) {
-    if (p) {
-      localStorage.setItem('sf.project_id', p.project_id);
-      localStorage.setItem('sf.project_name', p.name);
-      setPickProjectId(p.project_id);
-      setPickProjectName(p.name);
-    } else {
-      localStorage.removeItem('sf.project_id');
-      localStorage.removeItem('sf.project_name');
-      setPickProjectId('');
-      setPickProjectName('');
-    }
-    setProjectOpen(false);
-  }
-
   const hasText = composer.trim().length > 0;
 
   return (
@@ -1543,13 +1779,36 @@ export function NeoComposer({
 
         {/* ── chip 行：导入 Skill ｜ Claw target ｜ 模型 ｜ 目录 ｜ 模式 ｜ 知识 ｜ 发送 ── */}
         <div className="neo-cp-bar">
-          {/* 复刻 .composer-bar .plus：纯加号图标行（16px，无文字标签） */}
-          <NeoChipBtn
-            glyph={<Plus size={16} strokeWidth={1.75} />}
-            onClick={() => setSkillPickerOpen(true)}
-            testId="start-chip-import-skill"
-            title={t('start.importSkill')}
-          />
+          {/* 加号 = 竖版弹出菜单（2026-10-31）：从 ClawHub 挑选 / 导入 Skill。
+              原行为（直接开 SkillPicker）移入菜单第二项。 */}
+          <div ref={plusAnchorRef} className="neo-cp-pop-anchor">
+            <NeoChipBtn
+              glyph={<Plus size={16} strokeWidth={1.75} />}
+              onClick={() => setPlusMenuOpen((v) => !v)}
+              testId="start-chip-import-skill"
+              title={t('start.importSkill')}
+            />
+            {plusMenuOpen && (
+              <NeoPlusMenu
+                anchorRef={plusAnchorRef}
+                onClose={() => setPlusMenuOpen(false)}
+                onPickClaw={(id) => onPickClaw?.(id)}
+                onPickSkill={(item) => {
+                  // 已装 skill 合成 summary 形状，与 SkillPicker 走同一代码路径。
+                  setPendingSkill({
+                    skill_id: item.id,
+                    name: item.name,
+                    is_new: false,
+                    source_label: item.source,
+                    counts: item.counts,
+                    truncated: false,
+                  });
+                  setToast(t('neo.composer.skillSelected', { defaultValue: `已选 Skill: ${item.name}` }));
+                }}
+                onOpenSkillPicker={() => setSkillPickerOpen(true)}
+              />
+            )}
+          </div>
 
           {/* ClawHub（2026-06，FR-03）：Claw 聊天 target 徽章（增量；点击 × 清除） */}
           {clawTarget && (
@@ -1614,71 +1873,6 @@ export function NeoComposer({
                 }}
                 onClose={() => setShowDirPicker(false)}
               />
-            )}
-          </div>
-
-          {/* PROJECT chip — 选中项目后新 run 挂到该项目（sf.project_id） */}
-          <div ref={projectRef} className="neo-cp-pop-anchor">
-            <NeoChipBtn
-              glyph={<Folder size={14} strokeWidth={2} />}
-              label={
-                pickProjectId && pickProjectName
-                  ? pickProjectName
-                  : t('neo.composer.projectNone', { defaultValue: '无项目' })
-              }
-              hasArrow
-              active={projectOpen}
-              configured={!!pickProjectId}
-              onClick={openProjectPicker}
-              testId="start-project-chip"
-              title={t('neo.composer.projectSelect', { defaultValue: '选择项目' })}
-            />
-            {projectOpen && (
-              <div className="neo-cp-pop neo-cp-pop--wide">
-                <div className="neo-cp-pop-head">
-                  {t('neo.composer.projectSelect', { defaultValue: '选择项目' })}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => selectProject(null)}
-                  data-testid="start-project-none"
-                  className={`neo-cp-pop-row${!pickProjectId ? ' on' : ''}`}
-                >
-                  <span aria-hidden className="neo-cp-pop-row-icon">
-                    <X size={14} strokeWidth={2} />
-                  </span>
-                  <span className="neo-cp-pop-row-label">
-                    {t('neo.composer.projectNoneDesc', { defaultValue: '不在项目中工作' })}
-                  </span>
-                  {!pickProjectId && <span aria-hidden>✓</span>}
-                </button>
-                {projects === null && (
-                  <div className="neo-cp-pop-note">{t('common.loading')}</div>
-                )}
-                {projects && projects.length === 0 && (
-                  <div className="neo-cp-pop-note">
-                    {t('neo.composer.projectEmpty', { defaultValue: '还没有项目，可在左栏「新建项目」创建。' })}
-                  </div>
-                )}
-                {projects?.map((p) => {
-                  const on = pickProjectId === p.project_id;
-                  return (
-                    <button
-                      key={p.project_id}
-                      type="button"
-                      onClick={() => selectProject(p)}
-                      data-testid={`start-project-${p.project_id}`}
-                      className={`neo-cp-pop-row${on ? ' on' : ''}`}
-                    >
-                      <span aria-hidden className="neo-cp-pop-row-icon">
-                        <Folder size={14} strokeWidth={2} />
-                      </span>
-                      <span className="neo-cp-pop-row-label">{p.name}</span>
-                      {on && <span aria-hidden>✓</span>}
-                    </button>
-                  );
-                })}
-              </div>
             )}
           </div>
 

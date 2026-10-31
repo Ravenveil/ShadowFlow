@@ -33,7 +33,6 @@ import { useAuth } from '../core/auth/AuthContext';
 import { useI18n } from '../common/i18n';
 import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
 import { NeoRunInline } from './NeoRunInline';
-import { NeoRunSuggestions } from './NeoRunSuggestions';
 import { NeoTeamSavedCard } from './NeoTeamSavedCard';
 import { KnowledgeCitations } from '../components/knowledge/KnowledgeCitations';
 import { StartGallery } from '../pages/chat-home/StartGallery';
@@ -214,7 +213,6 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
     atBottomRef.current = true;
     setShowJump(false);
     setCitations(null);
-    setChatPrefill(undefined);
   }, [runId]);
 
   useEffect(() => {
@@ -236,10 +234,6 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
   // 通路，UnifiedComposer parseSkillToken 自动选中该 skill）。state 而非
   // ref：initialText 受控下发，同一卡片重复点选也能再次触发聚焦。
   const [prefill, setPrefill] = useState<string | undefined>(undefined);
-
-  // 完成态「后续建议」点选 → 预填进 chat composer（NeoComposer initialText
-  // 受控下发，仅填入不发送，用户确认后再提交）。
-  const [chatPrefill, setChatPrefill] = useState<string | undefined>(undefined);
 
   /**
    * 提交链路（与 NewTaskComposer.handleSubmit 同一通路）：
@@ -275,11 +269,7 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
         } catch {
           // Python 后端未启等 — 静默降级为匿名 run 会话，聊天体验优先
         }
-        // GAP A3 项目分组：NeoComposer 项目 chip 写 localStorage('sf.project_id')，
-        // 这里在请求时读取（同 sf.cwd/sf.model 的 localStorage-at-request-time
-        // 惯例）；空/缺失 → undefined（JSON 丢弃该键，服务端回落 default 项目）。
-        const projectId = localStorage.getItem('sf.project_id')?.trim() || undefined;
-        // CLI 工作目录 chip 写 localStorage('sf.cwd')，同一 localStorage-at-
+        // CLI 工作目录 chip 写 localStorage('sf.cwd')，localStorage-at-
         // request-time 惯例；空/缺失 → undefined（服务端回落默认工作目录）。
         const cwd = localStorage.getItem('sf.cwd')?.trim() || undefined;
         // ── ClawHub（2026-06，D6）：executor 注入点（唯一）──────────────────
@@ -306,7 +296,6 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
                   : 'single',
           executor: executorOverride,
           group_id: groupId,
-          project_id: projectId,
           cwd,
         });
         window.dispatchEvent(new CustomEvent('sf:run-created'));
@@ -510,6 +499,9 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
               streaming={session.isStreaming}
               onStop={session.abort}
               onNavigate={onNavigate}
+              clawTarget={clawTarget}
+              onClearClawTarget={() => setClawTarget(null)}
+              onPickClaw={(cliId) => setClawTarget({ cliId, name: cliId })}
               placeholder={t('neo.chat.followupPlaceholder', {
                 defaultValue: '补充指令，AI 会接着干 · 试试 @ 提及 Skill',
               })}
@@ -534,10 +526,7 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
                 })}
                 <HeroVerbCarousel />
               </p>
-              <StartGallery
-                onPick={setPrefill}
-                onPickClaw={(cliId) => setClawTarget({ cliId, name: cliId })}
-              />
+              <StartGallery onPick={setPrefill} />
             </div>
           </div>
           <div className="neo-empty-composer">
@@ -548,6 +537,7 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
               onNavigate={onNavigate}
               clawTarget={clawTarget}
               onClearClawTarget={() => setClawTarget(null)}
+              onPickClaw={(cliId) => setClawTarget({ cliId, name: cliId })}
               placeholder={
                 clawTarget
                   ? t('neo.chat.clawPlaceholder', {

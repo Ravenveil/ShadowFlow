@@ -165,11 +165,16 @@ function TopBarTools() {
 
 interface HfTopBarProps {
   right?: ReactNode;
+  /**
+   * 2026-10-31: 可选左侧插槽——默认顶栏左侧为空（flex spacer 起手），
+   * SettingsPage 用它放「返回」按钮；不传时行为与之前完全一致。
+   */
+  left?: ReactNode;
   /** @deprecated 工作区选择器现在按路由自动显示（/chat 在内容区显示，其余页面在顶栏兜底）。 */
   hideWorkspace?: boolean;
 }
 
-export function HfTopBar({ right }: HfTopBarProps) {
+export function HfTopBar({ left, right }: HfTopBarProps) {
   // 工作区/团队选择器现在唯一地住在常驻左侧栏（ChatRail，HfLayout 全站渲染）。
   // 顶栏此前在非 /chat 页兜底再渲一个，导致与侧栏的同一张「未命名团队」卡重复
   // （用户 2026-06-27 报告）。彻底移除顶栏这份，侧栏成为唯一真源。
@@ -186,6 +191,7 @@ export function HfTopBar({ right }: HfTopBarProps) {
         background: 'var(--t-panel)',
       }}
     >
+      {left}
       <div style={{ flex: 1 }} />
       {right}
       <NetworkLatencyChip />

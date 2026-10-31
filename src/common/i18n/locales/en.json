@@ -294,6 +294,7 @@
   "templates.edgeCount": "{count} edges",
   "settings.title": "Settings",
   "settings.titleMeta": "Settings · ⌘ ,",
+  "settings.back": "Back",
   "settings.groupAccount": "Account",
   "settings.groupAppearance": "Appearance",
   "settings.groupIntegrations": "Integrations",
@@ -826,7 +827,6 @@
   "neo.loopEngine.subtitle": "PDCA feedback control loop · convergence detection · River Memory",
   "neo.loopEngine.title": "Loop engine",
   "neo.ops.loopCount": "{{count}} loops",
-  "neo.pill.done": "All tasks completed",
   "neo.run.aborted": "Aborted",
   "neo.run.agentFallback": "Agent",
   "neo.run.working": "Working",
@@ -914,5 +914,12 @@
   "clawhub.uninstall.confirm": "Uninstall {{name}}? It will stop working in the platform (you can reinstall anytime).",
   "clawhub.uninstall.copyOnly": "This Claw must be uninstalled manually (command copied):\n{{cmd}}",
   "clawhub.uninstall.startFailed": "Failed to start uninstall",
-  "clawhub.byok.linked": "Linked to Settings API Keys: {{providers}} — injected into Claws on chat"
+  "neo.composer.plusClawLabel": "ClawHub",
+  "neo.composer.plusClawNone": "No installed Claws yet — get one in ClawHub",
+  "neo.composer.plusClawMore": "Browse / install more in ClawHub",
+  "neo.composer.plusSearchClaw": "Search Claws",
+  "neo.composer.plusSkillLabel": "Skill",
+  "neo.composer.plusSearchSkill": "Search Skills",
+  "neo.composer.plusSkillNone": "No installed Skills yet",
+  "neo.composer.plusImportSkill": "Import Skill (URL / installed)"
 }

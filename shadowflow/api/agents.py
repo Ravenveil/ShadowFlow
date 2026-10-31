@@ -131,6 +131,11 @@ def _list_agents() -> List[Dict[str, Any]]:
     d = _agents_dir()
     records = []
     for p in sorted(d.glob("*.json")):
+        # 跳过设置文件（selection.json / *.tmp 等）——目录里只有 agent-*.json
+        # 是 agent 记录；否则 selection.json 会被当 agent 混进列表（前端渲染
+        # 成 name=None 的幽灵行，点击即 404）。
+        if not p.name.startswith("agent-"):
+            continue
         try:
             records.append(json.loads(p.read_text(encoding="utf-8")))
         except (json.JSONDecodeError, OSError) as exc:

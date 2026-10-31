@@ -17,7 +17,7 @@
  *   3. 错误条 + 底部状态 pill（进度 x/y，点击无操作——Timeline 自带交互）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, CircleCheck, Loader2, Play, Repeat, Sparkles } from 'lucide-react';
+import { ChevronDown, Loader2, Play, Repeat, Sparkles } from 'lucide-react';
 import type { UseRunSessionReturn } from '../core/hooks/useRunSession';
 import type { TimelineMessage } from '../components/run-session/timeline/types';
 import { NeoTimeline } from './NeoTimeline';
@@ -195,7 +195,9 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
     }
   };
 
-  const showPill = !session.error && hasActivity && (session.isStreaming || session.isComplete);
+  // 状态 pill：仅运行中显示（spinner + 当前步骤 + x/y）。完成态的绿色
+  // 「已完成全部任务」条已删（2026-10-31 用户反馈：多余，交付卡已表达完成）。
+  const showPill = !session.error && hasActivity && session.isStreaming;
   // 整 run 续跑按钮可见性：仅 aborted（用户停止）/ failed（SSE error 帧）
   // 终态；成功完成（isComplete && !aborted && !error）与运行中不显示。
   const canResume = !session.isStreaming && hasActivity && (session.aborted || session.error != null);
@@ -307,27 +309,17 @@ export function NeoRunInline({ runId, session, targetName }: NeoRunInlineProps) 
         </div>
       )}
 
-      {/* 底部状态 pill：运行中 = spinner + 当前步骤 + x/y（running.html .pill）；
-          完成 = 绿 circle-check + 已完成全部任务（done.html .done-row 的
-          绿色完成条语义，pill 容器形态保持 running.html）。
-          点击折叠/展开 Loop 徽标行（clawsgo 底部 pill 行为）。 */}
+      {/* 状态 pill：仅运行中（spinner + 当前步骤 + x/y progress）。
+          完成态不渲染（完成由交付卡/消息流表达）；点击折叠/展开 Loop 徽标行。 */}
       {showPill && (
         <button
           type="button"
-          className={session.isComplete ? 'neo-pill neo-pill-done' : 'neo-pill'}
+          className="neo-pill"
           onClick={() => setLoopsOpen((v) => !v)}
           aria-expanded={loopsOpen}
         >
-          {session.isComplete ? (
-            <CircleCheck size={14} className="neo-pill-icon" aria-hidden />
-          ) : (
-            <span className="neo-pill-spinner" aria-hidden />
-          )}
-          <span className="neo-pill-label">
-            {session.isComplete
-              ? t('neo.pill.done', { defaultValue: '已完成全部任务' })
-              : runningLabel}
-          </span>
+          <span className="neo-pill-spinner" aria-hidden />
+          <span className="neo-pill-label">{runningLabel}</span>
           {progress && <span className="neo-pill-count">{progress}</span>}
           <ChevronDown size={13} className="neo-chevron" data-open={loopsOpen || undefined} aria-hidden />
         </button>
