@@ -65,13 +65,16 @@ export function computeTeamDagColumns(workflow: TeamWorkflow): Map<string, numbe
     }
   }
   const guard = workflow.nodes.length * 4 + 8;
+  const maxCol = Math.max(0, workflow.nodes.length - 1);
   let steps = 0;
   while (queue.length && steps++ < guard) {
     const id = queue.shift()!;
     const c = col.get(id) ?? 0;
     for (const next of outgoing[id] ?? []) {
       const prev = col.get(next);
-      if (prev === undefined || prev < c + 1) {
+      // 列号封顶 n-1：驳回回炉边（环）会让 BFS 反复入队抬高列号，
+      // 不封顶时 6 节点图能被推到 20+ 列，fitView 缩到 0.25 画布近乎空白。
+      if ((prev === undefined || prev < c + 1) && c + 1 <= maxCol) {
         col.set(next, c + 1);
         queue.push(next);
       }

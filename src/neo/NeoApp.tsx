@@ -82,6 +82,7 @@ export function NeoApp() {
     groupId: string;
     kind: string | null;
     teamId: string | null;
+    teamName: string | null;
   } | null>(null);
   useEffect(() => {
     if (nav.view !== 'conversation') {
@@ -92,7 +93,7 @@ export function NeoApp() {
     const dm = (inboxDMs ?? []).find((d) => d.group_id === nav.groupId);
     if (dm) {
       setConvAgent({ id: dm.agentId, name: dm.agentName });
-      setConvGroup({ groupId: nav.groupId, kind: 'dm', teamId: null });
+      setConvGroup({ groupId: nav.groupId, kind: 'dm', teamId: null, teamName: null });
       return;
     }
     let alive = true;
@@ -100,7 +101,11 @@ export function NeoApp() {
       .then((g) => {
         if (!alive) return;
         const kind = (g?.kind as string | undefined) ?? null;
-        setConvGroup(g ? { groupId: nav.groupId, kind, teamId: g.team_id ?? null } : null);
+        setConvGroup(
+          g
+            ? { groupId: nav.groupId, kind, teamId: g.team_id ?? null, teamName: g.name ?? null }
+            : null,
+        );
         if (g && kind === 'dm' && g.agent_ids && g.agent_ids.length > 0) {
           setConvAgent({ id: g.agent_ids[0], name: g.name ?? '' });
         } else {

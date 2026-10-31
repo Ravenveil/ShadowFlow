@@ -43,6 +43,15 @@ vi.mock('../../api/agents', () => ({
 }));
 vi.mock('../../api/groupApi', () => ({
   resolveTeamGroup: vi.fn().mockResolvedValue('g-team-1'),
+  // 2026-10-31 TeamPanel 新增「最近运行」区块依赖 listGroups，一并 mock；
+  // 回 [] → find 不到 group → runsState='empty'，不触发后续请求。
+  listGroups: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('../../api/runSessions', () => ({
+  listRunSessions: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('../../api/runs', () => ({
+  getRunGraph: vi.fn().mockResolvedValue({ nodes: [], edges: [] }),
 }));
 vi.mock('../../store/workspaceStore', () => ({
   useWorkspaceStore: (sel: (s: { currentId: string | null }) => unknown) =>
@@ -58,8 +67,11 @@ vi.mock('../projections/TeamDagEditor', () => ({
   TeamDagEditor: () => null,
 }));
 
-import { patchTeam, deleteTeam } from '../../api/teams';
+import { getTeam, patchTeam, deleteTeam } from '../../api/teams';
 import { TeamPanel } from '../projections/TeamPanel';
+
+let confirmSpy: ReturnType<typeof vi.spyOn>;
+let promptSpy: ReturnType<typeof vi.spyOn>;
 
 function renderPanel() {
   render(
@@ -68,14 +80,37 @@ function renderPanel() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  // 注意：不能用 vi.restoreAllMocks() —— 它会把 vi.mock 模块工厂的 mockResolvedValue
+  // 实现一并还原成 undefined（getTeam.then 崩），只还原这里创建的 window spy。
+  confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('新团队名');
   navigateMock.mockReset();
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
-  vi.spyOn(window, 'prompt').mockReturnValue('新团队名');
+  vi.clearAllMocks();
+  // clearAllMocks 清掉工厂 mock 的实现，重打模块 mock 的 resolved 值
+  vi.mocked(getTeam).mockResolvedValue({
+    team_id: 't1',
+    name: '测试团队',
+    description: '',
+    workspace_id: 'ws1',
+    agent_ids: ['a1'],
+    created_at: '',
+    updated_at: '',
+  });
+  vi.mocked(patchTeam).mockResolvedValue({
+    team_id: 't1',
+    name: '新团队名',
+    description: '',
+    workspace_id: 'ws1',
+    agent_ids: ['a1'],
+    created_at: '',
+    updated_at: '',
+  });
+  vi.mocked(deleteTeam).mockResolvedValue(undefined);
 });
 
 afterEach(() => {
-  vi.restoreAllMocks();
+  confirmSpy.mockRestore();
+  promptSpy.mockRestore();
 });
 
 describe('TeamPanel — 团队重命名/删除（管理面闭环）', () => {

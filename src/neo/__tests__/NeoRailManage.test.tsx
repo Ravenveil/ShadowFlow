@@ -118,12 +118,15 @@ vi.mock('../NeoCreateGroupModal', () => ({
   NeoCreateGroupModal: () => null,
 }));
 
-import { deleteAgent } from '../../api/agents';
+import { deleteAgent, listAgents } from '../../api/agents';
 import { patchGroup, deleteGroup } from '../../api/groupApi';
 import { patchProject, deleteProject } from '../../api/projects';
 import { moveGroupConversationToProject } from '../../api/conversations';
 import { NeoRail } from '../NeoRail';
 import type { NeoNav, RailSection } from '../types';
+
+let confirmSpy: ReturnType<typeof vi.spyOn>;
+let promptSpy: ReturnType<typeof vi.spyOn>;
 
 function renderRail(section: RailSection, nav: NeoNav = { view: 'home' }, onNavigate = vi.fn()) {
   render(
@@ -142,13 +145,21 @@ function renderRail(section: RailSection, nav: NeoNav = { view: 'home' }, onNavi
 }
 
 beforeEach(() => {
+  // 注意：不能用 vi.restoreAllMocks() —— 它会把 vi.mock 模块工厂的实现一并
+  // 还原成 undefined（listAgents.then 崩，2026-10-31 测试基建修复后暴露）。
+  // 只重置调用记录并重打实现，window spy 单独还原。
   vi.clearAllMocks();
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
-  vi.spyOn(window, 'prompt').mockReturnValue('新名字');
+  vi.mocked(listAgents).mockResolvedValue([
+    { agent_id: 'a1', name: '设计助手', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
+    { agent_id: 'a2', name: '暂停员工', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'paused', source: 'quick_hire', created_at: '' },
+  ]);
+  confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('新名字');
 });
 
 afterEach(() => {
-  vi.restoreAllMocks();
+  confirmSpy.mockRestore();
+  promptSpy.mockRestore();
 });
 
 describe('NeoRail 管理面 — 员工行', () => {

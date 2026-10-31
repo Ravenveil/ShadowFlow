@@ -147,6 +147,35 @@ function SfReactFlowBaseInner({
 }: Omit<SfReactFlowBaseProps, 'withProvider'>) {
   const { fitView, setCenter, getNode } = useReactFlow();
   const lastNodeCountRef = React.useRef(0);
+  const shellRef = React.useRef<HTMLDivElement | null>(null);
+
+  // 容器从 0 尺寸（display:none 的 hidden tab 面板）变为有尺寸时重新 fitView：
+  // ReactFlow 挂载在 hidden 面板里时初始 fitView 拿到 0×0 视口，展开后节点
+  // 全部落在视口外 + onlyRenderVisibleElements → 画布空白。所有画布受益。
+  // 延时 120ms：等 ReactFlow 完成节点测量（0 尺寸期挂载的节点无 width/height，
+  // 立即 fitView 会按错误包围盒算出极小缩放）。
+  useEffect(() => {
+    const el = shellRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let last = { w: el.clientWidth, h: el.clientHeight };
+    let timer: number | undefined;
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (last.w === 0 && last.h === 0 && (w > 0 || h > 0)) {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          fitView({ padding: DEFAULT_FIT_PADDING, duration: 240 });
+        }, 120);
+      }
+      last = { w, h };
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(timer);
+    };
+  }, [fitView]);
 
   // Decorate edges with the default arrow marker unless the caller already
   // specified one. This is the visual that was missing from BlueprintCanvas
@@ -223,9 +252,10 @@ function SfReactFlowBaseInner({
   const proOptions = useMemo(() => ({ hideAttribution: true }), []);
 
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={decoratedEdges}
+    <div ref={shellRef} style={{ width: '100%', height: '100%' }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={decoratedEdges}
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       onNodesChange={onNodesChange}
@@ -303,7 +333,8 @@ function SfReactFlowBaseInner({
         />
       )}
       {children}
-    </ReactFlow>
+        </ReactFlow>
+      </div>
   );
 }
 

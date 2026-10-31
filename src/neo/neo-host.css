@@ -1103,6 +1103,52 @@
   gap: 4px;
 }
 
+/* ── TeamPanel 最近运行（2026-10-31）────────────────────────────────── */
+.neo-host-run-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.neo-host-run-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.neo-host-run-row:hover {
+  background: var(--t-panel-2);
+}
+
+.neo-host-run-row--sel,
+.neo-host-run-row--sel:hover {
+  background: var(--t-panel-2);
+  border-left-color: var(--t-accent, var(--t-fg-2));
+}
+
+.neo-host-run-goal {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-team-runcanvas {
+  margin-top: 6px;
+}
+
+
 .neo-host-wf-chip {
   display: inline-flex;
   align-items: center;

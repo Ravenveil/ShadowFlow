@@ -224,6 +224,13 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
   // projections/GroupMembersPanel）；DM/无会话保持「Agent 的主机」。
   const isTeamConv = conversation != null && conversation.kind !== 'dm';
 
+  // 编队 tab 群会话入口（2026-11-01）：无 target 且会话带 teamId → 可在群聊右栏
+  // 直接挂 TeamPanel（DAG 编辑 + 运行查看）。teamName 回落会话名。
+  const convTeamEntry =
+    !target && conversation?.teamId
+      ? { id: conversation.teamId, name: conversation.teamName ?? conversation.groupId }
+      : null;
+
   // ── tab 状态 ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<string>('workspace');
   const [artifactTabs, setArtifactTabs] = useState<ArtifactTab[]>([]);
@@ -433,10 +440,11 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
     setActiveTab('process');
   }, [runId, session.isStreaming]);
 
-  // target 从 team 切走 → 「编队」tab 消失，激活 tab 回落到过程视图。
+  // 编队 tab 失效守卫：target 切走且群会话也无 teamId（convTeamEntry 消失）→ 回落过程视图。
   useEffect(() => {
-    if (activeTab === 'team' && target?.kind !== 'team') setActiveTab('process');
-  }, [activeTab, target?.kind]);
+    if (activeTab === 'team' && target?.kind !== 'team' && !convTeamEntry)
+      setActiveTab('process');
+  }, [activeTab, target?.kind, convTeamEntry]);
 
   // 会话切走/切到 DM → 「成员」tab 消失，激活 tab 回落到工作空间。
   useEffect(() => {
@@ -1044,11 +1052,20 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
     runlessNote
   );
 
+  // 编队 tab 内容（2026-11-01 双入口）：① NeoRail 团队 target 态；
+  // ② 团队群会话（convTeamEntry）→ 从群聊右栏直接可编辑 DAG / 查看运行。
   const teamContent =
     target?.kind === 'team' ? (
       <TeamPanel
         teamId={target.id}
         teamName={target.name}
+        perNodeChunks={session.perNodeChunks}
+        streaming={session.isStreaming}
+      />
+    ) : convTeamEntry ? (
+      <TeamPanel
+        teamId={convTeamEntry.id}
+        teamName={convTeamEntry.name}
         perNodeChunks={session.perNodeChunks}
         streaming={session.isStreaming}
       />
@@ -1112,8 +1129,9 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
               <span className="neo-host-tab-label">{t('neo.host.soul', { defaultValue: '灵魂' })}</span>
             </button>
           )}
-          {/* 编队 tab：仅在 NeoRail 团队态选中 team 时出现（roster/工作流/策略/分节点输出） */}
-          {target?.kind === 'team' && (
+          {/* 编队 tab（2026-11-01 双入口）：NeoRail 团队 target 态，或团队群会话
+              （conversation.teamId 非空）——从群聊右栏直接可编辑 DAG / 查看运行 */}
+          {(target?.kind === 'team' || convTeamEntry) && (
             <button
               type="button"
               data-tab="team"
@@ -1210,8 +1228,8 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
             <NeoAgentSoul agentId={soulAgent.id} />
           </div>
         )}
-        {teamContent && (
-          <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'team'}>
+        {teamContent && activeTab === 'team' && (
+          <div className="neo-host-pane neo-host-fade">
             {teamContent}
           </div>
         )}

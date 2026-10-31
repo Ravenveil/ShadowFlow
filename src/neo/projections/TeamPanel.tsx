@@ -16,7 +16,16 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GitBranch, MessageSquareText, PenLine, Pencil, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
+import {
+  GitBranch,
+  History,
+  MessageSquareText,
+  PenLine,
+  Pencil,
+  ShieldCheck,
+  Trash2,
+  UsersRound,
+} from 'lucide-react';
 import {
   deleteTeam,
   getTeam,
@@ -28,12 +37,16 @@ import {
   type TeamWorkflow,
 } from '../../api/teams';
 import { listAgents, type AgentRecord } from '../../api/agents';
-import { resolveTeamGroup } from '../../api/groupApi';
+import { listGroups, resolveTeamGroup } from '../../api/groupApi';
+import { listRunSessions, type RunSessionSummary } from '../../api/runSessions';
+import { getRunGraph, type RunGraph } from '../../api/runs';
 import type { NodeChunkBuffer } from '../../core/hooks/useRunSession';
 import { useI18n } from '../../common/i18n';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { useInboxStore } from '../../core/store/useInboxStore';
 import { TeamDagEditor } from './TeamDagEditor';
+import { TeamDagCanvas } from './TeamDagCanvas';
+import { ProcessDagCanvas } from './ProcessDagCanvas';
 
 export interface TeamPanelProps {
   teamId: string;
@@ -57,6 +70,17 @@ const AGENT_STATUS_CLASS: Record<string, string> = {
   error: 'neo-host-pill--err',
 };
 
+// run-sessions 状态 → pill 配色（runBus 内存态全集 + 未知回落 muted）。
+const RUN_STATUS_CLASS: Record<string, string> = {
+  running: 'neo-host-pill--running',
+  succeeded: 'neo-host-pill--ok',
+  completed: 'neo-host-pill--ok',
+  failed: 'neo-host-pill--err',
+  canceled: 'neo-host-pill--oscillating',
+  cancelled: 'neo-host-pill--oscillating',
+  idle: 'neo-host-pill--muted',
+};
+
 export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPanelProps) {
   const { t } = useI18n();
   const [team, setTeam] = useState<TeamRecord | null>(null);
@@ -77,6 +101,61 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
   // 确认；失败进 manageError 红条（不吞错）；删除成功 → 回 Neo home 安全页。
   const [manageBusy, setManageBusy] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
+
+  // ── 最近运行（2026-10-31）───────────────────────────────────────────────
+  // team → group 换算（只读 find-only，走 listGroups 过滤 team_id；复用
+  // resolveTeamGroup 会触发建群副作用，只读列出场景不合适）→
+  // listRunSessions(gid) 取该团队干活现场的 run 列表 → 选中一条就地渲染
+  // ProcessDagCanvas 执行态画布（节点染色 + 迭代环徽标）。
+  const [recentRuns, setRecentRuns] = useState<RunSessionSummary[]>([]);
+  const [runsState, setRunsState] = useState<'loading' | 'ready' | 'empty' | 'failed'>('loading');
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [runGraph, setRunGraph] = useState<RunGraph | null>(null);
+  const [runGraphFailed, setRunGraphFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRecentRuns([]);
+    setRunsState('loading');
+    setSelectedRunId(null);
+    setRunGraph(null);
+    setRunGraphFailed(false);
+    (async () => {
+      try {
+        // find-only：已有群直接用；没有 → 该团队从没开过群，自然也没有 run。
+        const groups = await listGroups(workspaceId ?? null, 'group');
+        if (cancelled) return;
+        const gid = groups.find((g) => g.team_id === teamId)?.group_id ?? null;
+        if (!gid) {
+          setRunsState('empty');
+          return;
+        }
+        const sessions = await listRunSessions(gid, 'group');
+        if (cancelled) return;
+        setRecentRuns(sessions);
+        setRunsState(sessions.length > 0 ? 'ready' : 'empty');
+      } catch {
+        if (!cancelled) setRunsState('failed');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, workspaceId]);
+
+  // 选中某次运行 → 拉执行图（daemon run 本地折叠 / Python run 走 proxy）。
+  const handleSelectRun = async (runId: string) => {
+    if (runId === selectedRunId) return;
+    setSelectedRunId(runId);
+    setRunGraph(null);
+    setRunGraphFailed(false);
+    try {
+      const graph = await getRunGraph(runId);
+      setRunGraph(graph);
+    } catch {
+      setRunGraphFailed(true);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -330,7 +409,8 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
         )}
       </div>
 
-      {/* workflow DAG 摘要 */}
+      {/* workflow DAG 摘要 — 2026-10-31 起 chips → 图形画布（TeamDagCanvas），
+          编辑入口不变（TeamDagEditor），编队 tab 内即可看图 + 编辑 */}
       <div className="neo-host-sec">
         <div className="neo-host-sec-head">
           <GitBranch size={12} strokeWidth={1.8} />
@@ -359,24 +439,75 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
             {t('neo.host.teamWorkflowEmpty', { defaultValue: '该团队尚未编排工作流' })}
           </div>
         ) : (
+          <TeamDagCanvas workflow={workflow as TeamWorkflow} />
+        )}
+      </div>
+
+      {/* 最近运行 — 该团队干活现场（绑 team 的群）关联 run 列表；选中就地渲染
+          执行态 DAG（ProcessDagCanvas：节点状态染色 + 迭代环徽标）。历史 run
+          走 REST 快照（不订阅 SSE）；当前 run 实时输出仍看「分节点输出」。 */}
+      <div className="neo-host-sec">
+        <div className="neo-host-sec-head">
+          <History size={12} strokeWidth={1.8} />
+          <span className="neo-host-sec-title">
+            {t('neo.host.teamRecentRuns', { defaultValue: '最近运行' })}
+          </span>
+          {runsState === 'ready' && (
+            <span className="neo-host-sec-meta">
+              {t('neo.host.teamRecentRunsMeta', {
+                defaultValue: '{{count}} 次',
+                count: recentRuns.length,
+              })}
+            </span>
+          )}
+        </div>
+        {runsState === 'loading' ? (
+          <div className="neo-host-tree-note neo-host-tree-note--pad">
+            {t('neo.host.loading', { defaultValue: '读取中…' })}
+          </div>
+        ) : runsState === 'empty' ? (
+          <div className="neo-host-tree-note neo-host-tree-note--pad">
+            {t('neo.host.teamRecentRunsEmpty', {
+              defaultValue: '暂无运行记录（发起群聊并派发任务后出现）',
+            })}
+          </div>
+        ) : runsState === 'failed' ? (
+          <div className="neo-host-tree-note neo-host-tree-note--pad">
+            {t('neo.host.teamRecentRunsFailed', { defaultValue: '运行记录加载失败' })}
+          </div>
+        ) : (
           <>
-            <div className="neo-host-wf-nodes">
-              {wfNodes.map((n) => (
-                <span key={n.id} className="neo-host-wf-chip" title={n.data?.agentId ?? n.id}>
-                  {n.data?.name || n.id}
-                </span>
+            <div className="neo-host-run-list">
+              {recentRuns.slice(0, 8).map((run) => (
+                <button
+                  key={run.session_id}
+                  type="button"
+                  className={`neo-host-run-row${run.session_id === selectedRunId ? ' neo-host-run-row--sel' : ''}`}
+                  onClick={() => void handleSelectRun(run.session_id)}
+                  data-testid={`team-run-row-${run.session_id}`}
+                >
+                  <span className="neo-host-run-goal" title={run.goal}>
+                    {run.goal || run.session_id}
+                  </span>
+                  <span className={`neo-host-pill ${RUN_STATUS_CLASS[run.status] ?? 'neo-host-pill--muted'}`}>
+                    {run.status}
+                  </span>
+                </button>
               ))}
             </div>
-            {wfEdges.length > 0 && (
-              <div className="neo-host-pgraph-edges">
-                {wfEdges.map((e) => (
-                  <span key={e.id} className="neo-host-edge-chip">
-                    {wfNodeNameById.get(e.source) ?? e.source}
-                    <span className="neo-host-edge-arrow">→</span>
-                    {wfNodeNameById.get(e.target) ?? e.target}
-                    {e.data?.mode && <span className="neo-host-edge-cond">{e.data.mode}</span>}
-                  </span>
-                ))}
+            {selectedRunId && (
+              <div className="neo-host-pdag-wrap neo-host-team-runcanvas" data-testid="team-run-canvas">
+                {runGraphFailed ? (
+                  <div className="neo-host-tree-note neo-host-tree-note--pad">
+                    {t('neo.host.teamRunGraphFailed', { defaultValue: '执行图加载失败（该运行可能无图数据）' })}
+                  </div>
+                ) : runGraph ? (
+                  <ProcessDagCanvas graph={runGraph} streaming={false} />
+                ) : (
+                  <div className="neo-host-tree-note neo-host-tree-note--pad">
+                    {t('neo.host.teamRunGraphLoading', { defaultValue: '执行图读取中…' })}
+                  </div>
+                )}
               </div>
             )}
           </>

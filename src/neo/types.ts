@@ -79,5 +79,10 @@ export interface NeoHostProps {
    * （GroupMembersPanel：成员列表 + 团队 DAG 摘要 + 审批门）；DM/无会话 → null，
    * 保持「Agent 的主机」。
    */
-  conversation?: { groupId: string; kind: string | null; teamId?: string | null } | null;
+  conversation?: {
+    groupId: string;
+    kind: string | null;
+    teamId?: string | null;
+    teamName?: string | null;
+  } | null;
 }

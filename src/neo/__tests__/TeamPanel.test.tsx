@@ -16,8 +16,17 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
+// 2026-10-31 TeamPanel 新增「最近运行」区块依赖这三个 API，一并 mock；
+// listGroups 回 [] → find 不到 group → runsState='empty'，不触发后续请求。
 vi.mock('../../api/groupApi', () => ({
   resolveTeamGroup: vi.fn().mockResolvedValue('g-team-1'),
+  listGroups: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('../../api/runSessions', () => ({
+  listRunSessions: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('../../api/runs', () => ({
+  getRunGraph: vi.fn().mockResolvedValue({ nodes: [], edges: [] }),
 }));
 vi.mock('../../store/workspaceStore', () => ({
   useWorkspaceStore: (sel: (s: { currentId: string | null }) => unknown) =>
@@ -100,8 +109,9 @@ describe('TeamPanel — 编辑 DAG 入口', () => {
   it('只读工作流 section 出现「编辑 DAG」钮', async () => {
     renderPanel();
     expect(await screen.findByTestId('team-dag-edit-entry')).toBeInTheDocument();
-    // 只读摘要还在（成员 roster 行 + 工作流 chip 都有「甲」）
-    expect(screen.getAllByText('甲').length).toBeGreaterThanOrEqual(2);
+    // 只读摘要还在：roster 行有「甲」；2026-10-31 起工作流文字 chips 换成
+    // TeamDagCanvas 图形画布（测试环境 reactflow mock 无文字），不再断言 chip。
+    expect(screen.getAllByText('甲').length).toBeGreaterThanOrEqual(1);
   });
 
   it('点入口 → 切到编辑器；取消 → 回到只读视图', async () => {
