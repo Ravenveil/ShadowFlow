@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Spec 8.1 · AgentBlueprint contract</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+  body { padding: 48px 56px; max-width: 1440px; margin: 0 auto; }
+  .hdr { display: flex; align-items: baseline; gap: 16px; margin-bottom: 8px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent-bright); }
+  h1 { font-size: 36px; letter-spacing: -.03em; font-weight: 800; margin: 4px 0 8px; }
+  .sub { color: var(--fg-3); font-size: 15px; max-width: 760px; line-height: 1.55; margin-bottom: 36px; }
+  .sec { margin-bottom: 48px; }
+  .sec h2 { font-size: 11px; font-family: var(--font-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--fg-4); font-weight: 700; margin: 0 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  /* Contract diagram */
+  .contract { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .card { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 12px; padding: 0; overflow: hidden; }
+  .card-h { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); }
+  .card-h .t { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+  .card-h .tag { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); letter-spacing: .12em; text-transform: uppercase; }
+  .fields { padding: 4px 16px 14px; }
+  .field { display: grid; grid-template-columns: 180px 1fr auto; gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--border-subtle); font-family: var(--font-mono); font-size: 11px; align-items: baseline; }
+  .field:last-child { border-bottom: 0; }
+  .fn { color: var(--accent-bright); }
+  .ft { color: var(--fg-3); }
+  .fb { font-size: 9px; color: var(--fg-5); letter-spacing: .08em; text-transform: uppercase; }
+  .req { color: var(--status-reject); }
+  /* Hierarchy diagram */
+  .hier { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 12px; padding: 28px; position: relative; }
+  .hier-tree { display: flex; flex-direction: column; gap: 10px; font-family: var(--font-mono); font-size: 12px; }
+  .hier-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; background: var(--bg-elev-1); border: 1px solid var(--border-subtle); }
+  .hier-row.boss { border-left: 2px solid var(--accent); }
+  .hier-row.worker { border-left: 2px solid var(--status-run); margin-left: 40px; background: var(--bg-elev-2); }
+  .hier-row.team { border-left: 2px solid var(--fg-4); background: transparent; }
+  .hier-row .icon { font-size: 14px; }
+  .hier-row .name { color: var(--fg-1); font-weight: 600; }
+  .hier-row .role { color: var(--fg-4); font-size: 10px; margin-left: auto; letter-spacing: .08em; text-transform: uppercase; }
+  /* Flow pipeline */
+  .pipe { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr; align-items: center; gap: 12px; }
+  .pipe-box { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 14px; text-align: center; }
+  .pipe-box .pb-t { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--fg-1); letter-spacing: .04em; }
+  .pipe-box .pb-s { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); margin-top: 4px; letter-spacing: .1em; text-transform: uppercase; }
+  .pipe-box.src { border-left: 2px solid var(--accent); }
+  .pipe-box.out { border-left: 2px solid var(--status-ok); }
+  .pipe-arr { font-family: var(--font-mono); color: var(--fg-4); font-size: 18px; }
+  /* API endpoints */
+  .api-list { display: flex; flex-direction: column; gap: 8px; }
+  .api-row { display: grid; grid-template-columns: 60px 1fr 1fr 140px; gap: 16px; align-items: center; padding: 14px 16px; background: var(--skin-panel); border: 1px solid var(--border); border-radius: 10px; font-family: var(--font-mono); font-size: 12px; }
+  .api-verb { padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-align: center; }
+  .api-verb.post { background: var(--accent-tint); color: var(--accent-bright); border: 1px solid rgba(168,85,247,.4); }
+  .api-verb.get { background: var(--status-run-tint); color: var(--status-run); border: 1px solid rgba(59,130,246,.4); }
+  .api-path { color: var(--fg-1); font-weight: 600; }
+  .api-desc { color: var(--fg-3); font-size: 11px; }
+  .api-stat { text-align: right; font-size: 10px; color: var(--fg-4); letter-spacing: .08em; text-transform: uppercase; }
+  .envelope { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .env-card { background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .env-h { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; margin-bottom: 10px; }
+  .env-h.ok { color: var(--status-ok); }
+  .env-h.err { color: var(--status-reject); }
+  .env-code { font-family: var(--font-mono); font-size: 11px; line-height: 1.7; color: var(--fg-2); white-space: pre; }
+  .env-code .k { color: var(--accent-bright); }
+  .env-code .s { color: var(--status-ok); }
+  .env-code .p { color: var(--fg-5); }
+</style>
+</head><body>
+
+<div class="hdr">
+  <span class="eyebrow">Story 8.1 · Contract &amp; API skeleton</span>
+</div>
+<h1>AgentBlueprint is the single mid-layer contract.</h1>
+<p class="sub">Goal / Scene / Graph all operate on the same Blueprint. Runtime contracts in <span style="font-family:var(--font-mono);color:var(--accent-bright)">runtime/contracts.py</span> stay frozen — Builder lives in a sibling file and maps down through the existing <span style="font-family:var(--font-mono);color:var(--accent-bright)">TemplateCompiler</span>.</p>
+
+<!-- 1. Contract shapes -->
+<section class="sec">
+  <h2>① Builder contract — 7 first-class objects</h2>
+  <div class="contract">
+    <div class="card">
+      <div class="card-h"><span class="t">AgentBlueprint</span><span class="tag">ROOT</span></div>
+      <div class="fields">
+        <div class="field"><span class="fn">blueprint_id</span><span class="ft">UUID</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">version</span><span class="ft">int</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">name</span><span class="ft">str</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">goal</span><span class="ft">str</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">audience</span><span class="ft">str</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">mode</span><span class="ft">'single' | 'team'</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">role_profiles[]</span><span class="ft">RoleProfile</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">tool_policies[]</span><span class="ft">ToolPolicy</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">knowledge_bindings[]</span><span class="ft">KnowledgeBinding</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">memory_profile</span><span class="ft">MemoryProfile</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">eval_profile</span><span class="ft">EvalProfile</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">publish_profile</span><span class="ft">PublishProfile</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">metadata</span><span class="ft">dict</span><span class="fb">opt</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><span class="t">RoleProfile</span><span class="tag">recursive · supports boss/worker</span></div>
+      <div class="fields">
+        <div class="field"><span class="fn">role_id</span><span class="ft">str</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">title</span><span class="ft">str</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">description</span><span class="ft">str · system prompt</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">handoff_style</span><span class="ft">'sequential' | 'parallel'</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">visible_tools[]</span><span class="ft">tool_id ref</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn" style="color:var(--status-warn)">sub_agents[]</span><span class="ft">RoleProfile · recursive</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn" style="color:var(--status-warn)">can_spawn_tasks</span><span class="ft">bool · boss flag</span><span class="fb">opt</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><span class="t">ToolPolicy</span><span class="tag">bridges Story 8.4b</span></div>
+      <div class="fields">
+        <div class="field"><span class="fn">tool_id</span><span class="ft">'builtin:...' | 'mcp:...'</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">visibility</span><span class="ft">'enabled' | 'hidden'</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">approval_required</span><span class="ft">bool</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">rules[]</span><span class="ft">deny &gt; ask &gt; allow</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">credentials_ref</span><span class="ft">provider_uuid</span><span class="fb">opt</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><span class="t">KnowledgeBinding</span><span class="tag">stabilized by Story 8.4</span></div>
+      <div class="fields">
+        <div class="field"><span class="fn">binding_id</span><span class="ft">UUID</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">source_type</span><span class="ft">'doc' | 'url' | 'pack' | 'none'</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">source_ref</span><span class="ft">str</span><span class="fb">cond</span></div>
+        <div class="field"><span class="fn">retrieval_mode</span><span class="ft">'rag' | 'direct' | 'cite'</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">citation_required</span><span class="ft">bool</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">freshness_hint</span><span class="ft">ISO8601 · stale threshold</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">scope</span><span class="ft">'shared' | 'agent'</span><span class="fb">opt</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><span class="t">MemoryProfile · EvalProfile</span><span class="tag">schema-complete · behavior-light</span></div>
+      <div class="fields">
+        <div class="field"><span class="fn">mem.persistence</span><span class="ft">'none' | 'session' | 'persistent'</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">mem.writeback</span><span class="ft">bool · epic 9</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">eval.smoke_checks[]</span><span class="ft">check_id list</span><span class="fb">opt</span></div>
+        <div class="field"><span class="fn">eval.regression_baseline</span><span class="ft">CID · epic 9</span><span class="fb">opt</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><span class="t">PublishProfile</span><span class="tag">consumed by 8.6</span></div>
+      <div class="fields">
+        <div class="field"><span class="fn">target</span><span class="ft">'template' | 'agent_app' | 'workflow'</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">visibility</span><span class="ft">'private' | 'org' | 'public'</span><span class="fb req">req</span></div>
+        <div class="field"><span class="fn">storage_ref</span><span class="ft">0G CID · optional</span><span class="fb">opt</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. Hierarchy -->
+<section class="sec">
+  <h2>② Boss / worker hierarchy (sub_agents[] recursion)</h2>
+  <div class="hier">
+    <div class="hier-tree">
+      <div class="hier-row team"><span class="icon">◈</span><span class="name">Team</span><span class="role">mode: team</span></div>
+      <div class="hier-row boss" style="margin-left:20px"><span class="icon">🎯</span><span class="name">Research Manager</span><span class="role">can_spawn_tasks: true</span></div>
+      <div class="hier-row worker"><span class="icon">👷</span><span class="name">Search Worker 1</span><span class="role">worker · isolated ctx</span></div>
+      <div class="hier-row worker"><span class="icon">👷</span><span class="name">Search Worker 2</span><span class="role">worker · isolated ctx</span></div>
+      <div class="hier-row worker"><span class="icon">📝</span><span class="name">Report Writer</span><span class="role">worker</span></div>
+      <div class="hier-row boss" style="margin-left:20px"><span class="icon">🎯</span><span class="name">Review Manager</span><span class="role">can_spawn_tasks: true</span></div>
+      <div class="hier-row worker"><span class="icon">🔍</span><span class="name">Fact Checker</span><span class="role">worker</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. Pipeline -->
+<section class="sec">
+  <h2>③ Blueprint → Template → Workflow mapping</h2>
+  <div class="pipe">
+    <div class="pipe-box src"><div class="pb-t">AgentBlueprint</div><div class="pb-s">Builder mid-layer</div></div>
+    <span class="pipe-arr">→</span>
+    <div class="pipe-box"><div class="pb-t">_blueprint_to_template_spec()</div><div class="pb-s">builder_service.py</div></div>
+    <span class="pipe-arr">→</span>
+    <div class="pipe-box"><div class="pb-t">WorkflowTemplateSpec</div><div class="pb-s">highlevel.py · EXISTS</div></div>
+    <span class="pipe-arr">→</span>
+    <div class="pipe-box out"><div class="pb-t">WorkflowDefinition</div><div class="pb-s">runtime/contracts.py · FROZEN</div></div>
+  </div>
+</section>
+
+<!-- 4. Endpoints -->
+<section class="sec">
+  <h2>④ API surface — /builder/*</h2>
+  <div class="api-list">
+    <div class="api-row"><span class="api-verb post">POST</span><span class="api-path">/builder/blueprints/generate</span><span class="api-desc">Goal form → heuristic Blueprint + confidence meta</span><span class="api-stat">consumed by 8.2</span></div>
+    <div class="api-row"><span class="api-verb post">POST</span><span class="api-path">/builder/blueprints/instantiate</span><span class="api-desc">Blueprint → TemplateSpec + WorkflowDefinition</span><span class="api-stat">consumed by 8.3</span></div>
+    <div class="api-row"><span class="api-verb post">POST</span><span class="api-path">/builder/blueprints/smoke-run</span><span class="api-desc">Structured 5-check validation result</span><span class="api-stat">consumed by 8.5</span></div>
+    <div class="api-row"><span class="api-verb post">POST</span><span class="api-path">/builder/blueprints/publish</span><span class="api-desc">Publish to template / agent_app / workflow</span><span class="api-stat">consumed by 8.6</span></div>
+    <div class="api-row"><span class="api-verb get">GET</span><span class="api-path">/builder/kits</span><span class="api-desc">Static catalog · research · knowledge · review · persona</span><span class="api-stat">used by 10.x</span></div>
+  </div>
+</section>
+
+<!-- 5. Envelope -->
+<section class="sec">
+  <h2>⑤ Response envelope — no naked HTTPException</h2>
+  <div class="envelope">
+    <div class="env-card">
+      <div class="env-h ok">● Success · 200 OK</div>
+<pre class="env-code">{
+  <span class="k">"data"</span>: {
+    <span class="k">"blueprint"</span>: {...},
+    <span class="k">"warnings"</span>: []
+  },
+  <span class="k">"meta"</span>: {
+    <span class="k">"confidence"</span>: <span class="s">0.72</span>,
+    <span class="k">"missing_inputs"</span>: [],
+    <span class="k">"suggested_next_step"</span>: <span class="s">"scene"</span>,
+    <span class="k">"source"</span>: <span class="s">"heuristic"</span>
+  }
+}</pre>
+    </div>
+    <div class="env-card">
+      <div class="env-h err">● Error · via ShadowflowError handler</div>
+<pre class="env-code">{
+  <span class="k">"error"</span>: {
+    <span class="k">"code"</span>: <span class="s">"BUILDER_GOAL_TOO_VAGUE"</span>,
+    <span class="k">"message"</span>: <span class="s">"Goal needs a concrete outcome"</span>,
+    <span class="k">"details"</span>: {
+      <span class="k">"field"</span>: <span class="s">"goal"</span>,
+      <span class="k">"min_length"</span>: <span class="s">12</span>
+    },
+    <span class="k">"trace_id"</span>: <span class="s">"01HQZ..."</span>
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+</body></html>

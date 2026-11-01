@@ -1,0 +1,2490 @@
+/* ===== Neo ===== */
+/* NeoHost — 右栏「Agent 的主机」。颜色一律 var(--t-*) / color-mix，day/night 双主题安全。 */
+
+/* 2026-08-15 链接色令牌（规格 P0-4/P0-5 + done.html 复刻实测）：day/paper 用 ClawsGo 青 #0F766E，
+   night 用 #93C5FD。供 NeoMarkdown .neo-md-link 读取；day 唯一允许的彩色文字。 */
+:root,
+[data-theme="night"] {
+  --t-link: #93C5FD;
+}
+[data-theme="day"],
+[data-theme="paper"] {
+  --t-link: #0F766E;
+}
+
+.neo-host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  font-family: inherit;
+}
+
+/* ── 头部：标题 + tab 栏 ─────────────────────────────────────────────────── */
+
+.neo-host-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px 12px 12px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.neo-host-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t-fg-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.neo-host-tabs {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  /* safe center：溢出时回退起始对齐，保证横滚能摸到最左的动态 tab
+     （裸 center + overflow-x 会把左侧溢出内容裁成不可达）。 */
+  justify-content: safe center;
+  gap: 36px;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.neo-host-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* 2026-08-15 任务 V：tab 条改为 ClawsGo 大图标盒形态（running.html .caps 复刻）——
+   每个 tab = 44px hairline 图标盒 + 下方 12px 小标签，横排居中 gap 36px；
+   动态产物 tab / 编队 tab / 「+」同一语言。激活态 = 盒底加深 + 标签转 fg。 */
+.neo-host-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--t-fg-3);
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.neo-host-tab-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+  color: var(--t-fg-3);
+  transition:
+    color var(--dur-2, 160ms) var(--ease-out, ease-out),
+    background var(--dur-2, 160ms) var(--ease-out, ease-out),
+    border-color var(--dur-2, 160ms) var(--ease-out, ease-out);
+}
+
+.neo-host-tab:hover .neo-host-tab-box {
+  color: var(--t-fg-2);
+  background: var(--t-hover, var(--t-panel-2));
+}
+
+.neo-host-tab--on .neo-host-tab-box {
+  color: var(--t-fg);
+  background: var(--t-panel-3);
+  border-color: var(--t-border-2);
+}
+
+.neo-host-tab-label {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--t-fg-3);
+}
+
+.neo-host-tab--on .neo-host-tab-label {
+  color: var(--t-fg);
+  font-weight: 600;
+}
+
+.neo-host-tab--artifact {
+  cursor: pointer;
+  user-select: none;
+}
+
+.neo-host-tab-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* 产物 tab 关闭 ×：图标盒右上角小圆钮 */
+.neo-host-tab-close {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--t-border);
+  border-radius: 50%;
+  background: var(--t-bg);
+  color: var(--t-fg-5);
+  cursor: pointer;
+}
+
+.neo-host-tab-close:hover {
+  background: var(--t-hover, var(--t-panel-3));
+  color: var(--t-fg-2);
+}
+
+.neo-host-tab--plus {
+  cursor: default;
+}
+
+.neo-host-tab--plus .neo-host-tab-box {
+  color: var(--t-fg-5);
+  border-style: dashed;
+}
+
+/* tab 下划线已退役（胶囊选中接管），保留类位防 JS 测量报错 */
+.neo-host-tabs-bar {
+  display: none;
+}
+
+/* ── 内容区（淡入）───────────────────────────────────────────────────────── */
+
+.neo-host-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* W1-B：tab 保活 —— 所有 tab pane 常驻挂载，非激活用 hidden 隐藏（display:none），
+   保留滚动位置 / 选中文件 / 预览模式等内部状态（done.html a_010）。 */
+.neo-host-pane {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.neo-host-pane[hidden] {
+  display: none;
+}
+
+.neo-host-fade {
+  animation: neo-host-fade var(--dur-2, 160ms) var(--ease-out, ease-out);
+}
+
+@keyframes neo-host-fade {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── 空态 ────────────────────────────────────────────────────────────────── */
+
+.neo-host-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--t-fg-4);
+  font-size: 12px;
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.neo-host-empty--fill {
+  flex: 1;
+  min-height: 0;
+}
+
+.neo-host-empty--err {
+  color: var(--t-err);
+}
+
+.neo-host-empty-icon {
+  color: var(--t-fg-5);
+}
+
+.neo-host-empty-sub {
+  font-size: 11px;
+  color: var(--t-fg-5);
+}
+
+/* 空态能力预览（描述真实功能，非 mock）。
+ * 2026-08-15 对标 ClawsGo a_011：图标+名称横排居中，图标 20px 灰、名称 12px，间距 ≥32px。 */
+.neo-host-caps {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 36px;
+  margin-top: 20px;
+  text-align: center;
+}
+
+.neo-host-cap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--t-fg-5);
+}
+
+.neo-host-cap svg {
+  flex-shrink: 0;
+  color: var(--t-fg-4);
+  /* ClawsGo a_011 空态：44×44 hairline 图标盒（20px 图标 + 11px 内边距 + 1px 边） */
+  padding: 11px;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+  box-sizing: content-box;
+}
+
+.neo-host-cap-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--t-fg-3);
+  white-space: nowrap;
+}
+
+/* ── 工作空间 tab ────────────────────────────────────────────────────────── */
+
+.neo-host-ws {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.neo-host-ws-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--t-border);
+  flex-shrink: 0;
+}
+
+.neo-host-ws-path {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+/* ===== Neo ===== */
+/* 工作空间搜索行（Coze「搜索文件」对标）
+ * 2026-08-15 灰底填充 + radius 10，去掉白卡描边（规格 P1-7）。 */
+.neo-host-ws-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin: 6px 10px 0;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--t-panel-2);
+  flex-shrink: 0;
+}
+
+.neo-host-ws-search:focus-within {
+  border-color: var(--t-border-2);
+}
+
+.neo-host-ws-search-icon {
+  color: var(--t-fg-5);
+  flex-shrink: 0;
+}
+
+.neo-host-ws-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--t-fg);
+  font-size: 11.5px;
+  font-family: inherit;
+}
+
+.neo-host-ws-search-input::placeholder {
+  color: var(--t-fg-5);
+}
+
+.neo-host-tree-sub {
+  flex: 0 1 45%;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.neo-host-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--t-fg-4);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color var(--dur-1, 120ms) var(--ease-out, ease-out),
+    background var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+
+.neo-host-icon-btn:hover {
+  color: var(--t-fg-2);
+  background: var(--t-hover, var(--t-panel-2));
+}
+
+.neo-host-ws-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
+/* 文件树（左）：白卡浮灰底（clawsgo 主机内部卡片化） */
+.neo-host-tree {
+  flex: 0 0 42%;
+  min-width: 130px;
+  overflow-y: auto;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+  padding: 4px 0;
+}
+
+.neo-host-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--t-fg-2);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+
+.neo-host-tree-row:hover {
+  background: var(--t-hover, var(--t-panel-2));
+}
+
+.neo-host-tree-row--sel,
+.neo-host-tree-row--sel:hover {
+  background: var(--t-accent-tint);
+  color: var(--t-accent-bright);
+}
+
+.neo-host-tree-caret {
+  color: var(--t-fg-5);
+  flex-shrink: 0;
+}
+
+.neo-host-tree-dir-icon {
+  color: var(--t-accent);
+  flex-shrink: 0;
+}
+
+.neo-host-tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-tree-note {
+  font-size: 11px;
+  color: var(--t-fg-5);
+  padding: 5px 8px;
+}
+
+.neo-host-tree-note--pad {
+  padding: 12px 14px;
+}
+
+/* 预览（右）：白卡浮灰底 */
+.neo-host-preview {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+  overflow: hidden;
+}
+
+.neo-host-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--t-border);
+  flex-shrink: 0;
+}
+
+.neo-host-preview-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--t-panel-2);
+  flex-shrink: 0;
+}
+
+.neo-host-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--t-fg-4);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    color var(--dur-1, 120ms) var(--ease-out, ease-out),
+    background var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+
+.neo-host-seg-btn--on {
+  background: var(--t-bg);
+  color: var(--t-fg);
+}
+
+.neo-host-preview-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.neo-host-preview-md {
+  padding: 12px 14px;
+  font-size: 12.5px;
+  color: var(--t-fg-2);
+}
+
+.neo-host-preview-img-wrap {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 14px;
+}
+
+.neo-host-preview-img {
+  max-width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--t-border);
+}
+
+/* 代码视图：等宽 + 行号
+ * 2026-08-15 固定深色编辑器（ClawsGo b_006 实测 #2C2D38 / 文字 #E4E4E7 / 行号 #71717A），
+ * day/night 均为深色，不随主题变浅（规格 P0-1）。 */
+.neo-host-code {
+  padding: 8px 0;
+  min-height: 100%;
+  background: #2C2D38;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1.6;
+  color: #E4E4E7;
+}
+
+.neo-host-code-line {
+  display: flex;
+  align-items: baseline;
+}
+
+.neo-host-code-line:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.neo-host-code-ln {
+  flex: 0 0 40px;
+  padding-right: 10px;
+  text-align: right;
+  color: #71717A;
+  user-select: none;
+}
+
+.neo-host-code-text {
+  flex: 1;
+  min-width: 0;
+  padding-right: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.neo-host-truncated {
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--t-warn);
+}
+
+/* ── 产物 / Loop 列表 ────────────────────────────────────────────────────── */
+
+.neo-host-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.neo-host-artifact-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  color: var(--t-fg-2);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-1, 120ms) var(--ease-out, ease-out),
+    background var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+
+.neo-host-artifact-row:hover {
+  background: var(--t-hover, var(--t-panel-2));
+}
+
+/* 产物图标角块（done.html filecard 实测薰衣草 #7F88AD 文档块：22px radius 6 白图标） */
+.neo-host-artifact-chip {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #7F88AD;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.neo-host-artifact-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* 产物行内 producer = 副标题（done.html filecard sub：11px 灰 sans，非等宽） */
+.neo-host-artifact-main .neo-host-artifact-producer {
+  max-width: 100%;
+  font-family: inherit;
+  font-size: 10.5px;
+  color: var(--t-fg-4);
+}
+
+.neo-host-artifact-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t-fg);
+}
+
+.neo-host-artifact-type {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--t-fg-5);
+  flex-shrink: 0;
+}
+
+.neo-host-artifact-preview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Loop tab：PDCA 迭代卡 ───────────────────────────────────────────────── */
+
+.neo-host-loop-card {
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  padding: 10px 12px;
+}
+
+.neo-host-loop-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.neo-host-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.neo-host-pill--converged {
+  background: color-mix(in oklab, var(--t-ok) 14%, transparent);
+  color: var(--t-ok);
+}
+
+.neo-host-pill--running {
+  background: color-mix(in oklab, var(--t-accent) 14%, transparent);
+  color: var(--t-accent-bright);
+}
+
+.neo-host-pill--oscillating {
+  background: color-mix(in oklab, var(--t-warn) 16%, transparent);
+  color: var(--t-warn);
+}
+
+.neo-host-pill--diverged {
+  background: color-mix(in oklab, var(--t-err) 14%, transparent);
+  color: var(--t-err);
+}
+
+.neo-host-pill--halted {
+  background: var(--t-panel-2);
+  color: var(--t-fg-4);
+}
+
+.neo-host-loop-kind {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t-fg);
+}
+
+.neo-host-loop-setpoint {
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-4);
+}
+
+.neo-host-loop-count {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  flex-shrink: 0;
+}
+
+.neo-host-loop-iters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.neo-host-iter {
+  border-top: 1px solid var(--t-border);
+  padding-top: 6px;
+}
+
+.neo-host-iter-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.neo-host-iter-k {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+}
+
+.neo-host-iter-score {
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-4);
+}
+
+.neo-host-iter-sensor {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--t-panel-2);
+  color: var(--t-fg-3);
+}
+
+/* metrics 迷你条形 */
+.neo-host-iter-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.neo-host-metric {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.neo-host-metric-label {
+  flex: 0 0 72px;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-metric-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--t-panel-2);
+  overflow: hidden;
+}
+
+.neo-host-metric-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--t-accent) 70%, transparent);
+  transition: width var(--dur-2, 160ms) var(--ease-out, ease-out);
+}
+
+.neo-host-metric-val {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-4);
+}
+
+/* ── 通用 section 卡（过程 / 产物 lineage / 编队共用，对齐 loop-card 语言）──── */
+
+.neo-host-sec {
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  padding: 10px 12px;
+}
+
+.neo-host-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--t-fg-4);
+  margin-bottom: 8px;
+}
+
+.neo-host-sec-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t-fg);
+}
+
+.neo-host-sec-meta {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 通用状态 pill modifier（loop 状态之外：run 节点 / agent / policy 用） */
+.neo-host-pill--ok {
+  background: color-mix(in oklab, var(--t-ok) 14%, transparent);
+  color: var(--t-ok);
+}
+
+.neo-host-pill--err {
+  background: color-mix(in oklab, var(--t-err) 14%, transparent);
+  color: var(--t-err);
+}
+
+.neo-host-pill--muted {
+  background: var(--t-panel-2);
+  color: var(--t-fg-4);
+}
+
+/* ── 过程 tab：执行图（节点轨）+ 边 chips + 任务树 ────────────────────────── */
+
+.neo-host-pgraph {
+  display: flex;
+  flex-direction: column;
+}
+
+.neo-host-pgraph-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0 5px 18px;
+  /* 左轨竖线（时间轨式迷你 DAG，无新依赖） */
+  border-left: 1px solid var(--t-border);
+  margin-left: 5px;
+}
+
+.neo-host-pgraph-dot {
+  position: absolute;
+  left: -5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--t-fg-5);
+  border: 2px solid var(--t-panel);
+  box-sizing: content-box;
+  flex-shrink: 0;
+}
+
+.neo-host-pgraph-dot--running {
+  background: var(--t-accent);
+}
+
+.neo-host-pgraph-dot--succeeded {
+  background: var(--t-ok);
+}
+
+.neo-host-pgraph-dot--failed {
+  background: var(--t-err);
+}
+
+.neo-host-pgraph-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-pgraph-kind {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-5);
+  flex-shrink: 0;
+}
+
+.neo-host-pgraph-edges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  border-top: 1px solid var(--t-border);
+  padding-top: 8px;
+}
+
+.neo-host-edge-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--t-panel-2);
+  color: var(--t-fg-3);
+  font-size: 10.5px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.neo-host-edge-arrow {
+  color: var(--t-fg-5);
+}
+
+.neo-host-edge-cond {
+  font-size: 9.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-5);
+}
+
+.neo-host-ptree {
+  display: flex;
+  flex-direction: column;
+}
+
+.neo-host-ptree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.neo-host-ptree-tag {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--t-panel-2);
+  color: var(--t-fg-4);
+}
+
+.neo-host-ptree-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 产物 tab：lineage 行 + checkpoint ────────────────────────────────────── */
+
+.neo-host-artifact-row--static {
+  cursor: default;
+}
+
+.neo-host-artifact-row--static:hover {
+  background: var(--t-panel);
+  border-color: var(--t-border);
+}
+
+.neo-host-artifact-producer {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-5);
+  max-width: 30%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.neo-host-checkpoint-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--t-border);
+}
+
+.neo-host-checkpoint-row:first-of-type {
+  border-top: 0;
+}
+
+.neo-host-checkpoint-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-checkpoint-time {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-5);
+  flex-shrink: 0;
+}
+
+/* ── 编队 tab：roster / workflow chips / policy / 分节点输出 ──────────────── */
+
+.neo-host-roster-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+}
+
+.neo-host-roster-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-roster-id {
+  margin-left: auto;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-5);
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.neo-host-wf-nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ── TeamPanel 最近运行（2026-10-31）────────────────────────────────── */
+.neo-host-run-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.neo-host-run-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.neo-host-run-row:hover {
+  background: var(--t-panel-2);
+}
+
+.neo-host-run-row--sel,
+.neo-host-run-row--sel:hover {
+  background: var(--t-panel-2);
+  border-left-color: var(--t-accent, var(--t-fg-2));
+}
+
+.neo-host-run-goal {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-team-runcanvas {
+  margin-top: 6px;
+}
+
+
+.neo-host-wf-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--t-border);
+  background: var(--t-panel-2);
+  color: var(--t-fg-2);
+  font-size: 11px;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-policy-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+.neo-host-policy-pair {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-host-nodeout {
+  border-top: 1px solid var(--t-border);
+  padding: 8px 8px 4px;
+}
+
+.neo-host-nodeout:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.neo-host-nodeout-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.neo-host-nodeout-text {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--t-fg-3);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* ── 阶段 2.5：NeoArtifactPreview（done.html b_004 右栏文档预览复刻）───────── */
+
+.neo-ap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--t-panel);
+}
+
+/* filecard ~56px：文档角块 + 名称 13/600 + 副标题 11px 灰 + 右侧图标操作 */
+.neo-ap-filecard {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 10px;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.neo-ap-doc-ic {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #7F88AD; /* b_008 实测文档图标薰衣草 */
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.neo-ap-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.neo-ap-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-ap-sub {
+  font-size: 11px;
+  color: var(--t-fg-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-ap-sp {
+  flex: 1;
+}
+
+.neo-ap-act {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.neo-ap-act a.neo-host-icon-btn {
+  text-decoration: none;
+}
+
+/* 双栏：大纲 210px ｜ markdown flex-1 */
+.neo-ap-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.neo-ap-outline {
+  width: 210px;
+  flex: none;
+  padding: 6px 10px 14px 16px;
+  overflow-y: auto;
+}
+
+.neo-ap-outline-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t-fg-5);
+  padding: 4px 8px 6px;
+}
+
+.neo-ap-outline-node {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  font-size: 12px;
+  color: var(--t-fg-3);
+  padding: 4px 8px;
+  border-radius: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-1, 120ms) var(--ease-out, ease-out);
+}
+
+.neo-ap-outline-node:hover {
+  background: var(--t-hover, var(--t-panel-2));
+}
+
+.neo-ap-outline-node--root {
+  font-weight: 500;
+  color: var(--t-fg);
+}
+
+.neo-ap-outline-node--l2 {
+  padding-left: 22px;
+}
+
+.neo-ap-outline-node--l3 {
+  padding-left: 36px;
+}
+
+.neo-ap-outline-node--cur,
+.neo-ap-outline-node--cur:hover {
+  background: var(--t-panel-3);
+  color: var(--t-fg);
+  font-weight: 500;
+}
+
+.neo-ap-md {
+  position: relative; /* scroll-spy 的 offsetParent */
+  flex: 1;
+  min-width: 0;
+  padding: 4px 40px 24px 22px;
+  overflow-y: auto;
+}
+
+/* html iframe 预览（居中 spinner 骨架 + 失败态，b_005/b_007） */
+.neo-ap-frame-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.neo-ap-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+  display: block;
+}
+
+.neo-ap-skel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--t-panel);
+}
+
+/* W1-B：居中细圆环加载骨架（1.75px 圆环旋转，b_005/b_007 参照） */
+.neo-spin {
+  width: 18px;
+  height: 18px;
+  border: 1.75px solid var(--t-border);
+  border-top-color: var(--t-fg-3);
+  border-radius: 50%;
+  animation: neo-spin-rot 0.7s linear infinite;
+}
+
+@keyframes neo-spin-rot {
+  to { transform: rotate(360deg); }
+}
+
+.neo-ap-loading,
+.neo-host-preview-loading {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* W1-B：黑色 tooltip（data-tip 纯 CSS ::after；#171717/11px/radius 6/padding 4/8，
+   b_005「预览」b_006「代码」帧参照；class 前缀 neo-tt，仅本文件定义） */
+.neo-tt {
+  position: relative;
+}
+
+.neo-tt::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #171717;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
+  z-index: 40;
+}
+
+.neo-tt:hover::after,
+.neo-tt:focus-visible::after {
+  opacity: 1;
+}
+/* 注：b_005/b_006 帧里 tooltip 在 seg 上方；本壳 filecard 贴近 .neo-host-content
+   （overflow:hidden）顶边，上方冒泡会被裁切，故统一取下方。 */
+
+.neo-ap-frame-err {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--t-panel-2);
+  color: var(--t-fg-4);
+  font-size: 12px;
+}
+
+.neo-ap-frame-err a {
+  color: var(--t-link);
+}
+
+/* 源码视图（markdown 源码 / html 源码 / yaml）：固定深色编辑器，同 .neo-host-code 规范（P0-1） */
+.neo-ap-source {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  padding: 16px;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  line-height: 1.55;
+  color: #E4E4E7;
+  background: #2C2D38;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── NeoMarkdown（done.html .md 实测：h2 19/700、列表 13px lh 1.9、链接青下划线）── */
+
+.neo-md {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--t-fg);
+}
+
+.neo-md-p {
+  margin: 8px 0;
+}
+
+.neo-md-h {
+  color: var(--t-fg);
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  scroll-margin-top: 8px;
+}
+
+.neo-md-h1 { font-size: 22px; font-weight: 700; margin: 18px 0 10px; }
+.neo-md-h2 { font-size: 19px; font-weight: 700; margin: 14px 0 10px; }
+.neo-md-h3 { font-size: 17px; font-weight: 600; margin: 14px 0 8px; }
+.neo-md-h4 { font-size: 15px; font-weight: 600; margin: 12px 0 6px; }
+.neo-md-h5 { font-size: 14px; font-weight: 500; margin: 10px 0 6px; }
+.neo-md-h6 { font-size: 13px; font-weight: 500; margin: 10px 0 4px; }
+
+.neo-md-ul,
+.neo-md-ol {
+  margin: 8px 0;
+  padding-left: 22px;
+  color: var(--t-fg);
+}
+
+.neo-md-ul li,
+.neo-md-ol li {
+  margin: 4px 0;
+  line-height: 1.9;
+}
+
+.neo-md-link {
+  color: var(--t-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 行内 code：中性灰底（规格 P0-5：day 唯一彩色文字是链接） */
+.neo-md-code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--t-panel-3);
+  color: var(--t-fg-2);
+}
+
+.neo-md-pre {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--t-border);
+  background: var(--t-panel-2);
+  overflow: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--t-fg-2);
+}
+
+/* blockquote：3px 中性灰左竖条 + 灰字（规格 P0-5 / b_008） */
+.neo-md-bq {
+  margin: 10px 0;
+  padding: 2px 12px;
+  border-left: 3px solid var(--t-border-2);
+  color: var(--t-fg-4);
+}
+
+.neo-md-table {
+  margin: 10px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: inherit;
+  color: var(--t-fg-2);
+}
+
+.neo-md-table th,
+.neo-md-table td {
+  padding: 5px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.neo-md-table th {
+  font-weight: 600;
+  color: var(--t-fg);
+  border-bottom: 1px solid var(--t-border-2);
+}
+
+/* ── 迭代环折叠区（原 Loop tab 并入过程 tab，2026-08-19 导航架构统一）── */
+.neo-host-loop-fold {
+  flex-shrink: 0;
+  border-top: 1px solid var(--t-border);
+  padding-top: 2px;
+}
+.neo-host-loop-fold-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+}
+
+/* 迭代环节点徽标（graph 节点行内，2026-08-19：loop 是 DAG 的一部分） */
+.neo-host-pgraph-loop {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--t-fg-3);
+  background: color-mix(in srgb, var(--t-fg) 6%, transparent);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.neo-host-pgraph-loop--ok {
+  color: var(--t-ok);
+  background: color-mix(in srgb, var(--t-ok) 12%, transparent);
+}
+
+/* ── DAG 执行画布（ProcessDagCanvas，react-flow 复活 2026-08-19）── */
+.neo-host-pdag-wrap {
+  height: 280px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--t-panel);
+}
+.neo-pdag .react-flow__node { font-family: inherit; }
+.neo-pdag-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 178px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--t-panel);
+  border: 1px solid var(--t-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  font-size: 12px;
+  color: var(--t-fg);
+}
+.neo-pdag-node--running { border-color: var(--t-run); }
+.neo-pdag-node--succeeded { border-color: var(--t-ok); }
+.neo-pdag-node--failed { border-color: var(--t-err); }
+.neo-pdag-node--entry { box-shadow: 0 0 0 1px var(--t-border-2), 0 1px 3px rgba(0, 0, 0, 0.05); }
+.neo-pdag-node-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--t-fg-5);
+}
+.neo-pdag-node--running .neo-pdag-node-dot { background: var(--t-run); animation: sf-pulse 1.4s ease-in-out infinite; }
+.neo-pdag-node--succeeded .neo-pdag-node-dot { background: var(--t-ok); }
+.neo-pdag-node--failed .neo-pdag-node-dot { background: var(--t-err); }
+.neo-pdag-node-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.neo-pdag-node-kind {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--t-fg-4);
+  font-family: var(--font-mono, monospace);
+}
+.neo-pdag-node-loop {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--t-fg-3);
+  background: color-mix(in srgb, var(--t-fg) 6%, transparent);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+.neo-pdag-node-loop--ok {
+  color: var(--t-ok);
+  background: color-mix(in srgb, var(--t-ok) 12%, transparent);
+}
+/* 环回趋势边（指向/出自迭代环节点）：虚线 */
+.neo-pdag .neo-pdag-edge-loop path {
+  stroke-dasharray: 6 4;
+}
+.neo-pdag .react-flow__edge-text {
+  font-size: 9px;
+  fill: var(--t-fg-4);
+}
+
+/* ── 灵魂 tab（2026-08-22）：NeoAgentSoul 内嵌右栏窄 pane，收紧页边距 ── */
+.neo-host-soul-pane .neo-soul {
+  max-width: none;
+  padding: 16px 14px 12px;
+}
+
+/* ── TeamDagEditor（编队 DAG 可视化编辑器，GAP B28，2026-08-22）──── */
+
+.neo-host-list--editing {
+  height: 100%;
+  min-height: 0;
+}
+
+.neo-team-dag-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+.neo-team-dag-editor-canvas {
+  flex: 1;
+  min-height: 340px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--t-panel);
+}
+
+.neo-team-dag-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev-2, #141414);
+  font-size: 11px;
+  color: var(--t-fg-2);
+}
+
+.neo-team-dag-toolbar-spacer {
+  flex: 1;
+}
+
+.neo-team-dag-select {
+  font: inherit;
+  color: var(--t-fg);
+  background: var(--t-panel-2);
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  padding: 3px 6px;
+  max-width: 140px;
+}
+
+.neo-team-dag-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--t-fg-2);
+  background: var(--t-panel-2);
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.neo-team-dag-btn:hover:not(:disabled) {
+  color: var(--t-fg);
+  border-color: var(--t-border-2);
+}
+.neo-team-dag-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.neo-team-dag-btn--primary {
+  color: var(--t-ok);
+  border-color: color-mix(in oklab, var(--t-ok) 40%, transparent);
+}
+
+.neo-team-dag-hint {
+  color: var(--t-fg-5);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.neo-team-dag-errors {
+  border: 1px solid color-mix(in oklab, var(--t-err) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--t-err) 8%, transparent);
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--t-err);
+}
+.neo-team-dag-error-row + .neo-team-dag-error-row {
+  margin-top: 3px;
+}
+
+.neo-team-dag-warn {
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--t-fg-4);
+}
+
+.neo-team-dag .react-flow__node { font-family: inherit; }
+.neo-team-dag .react-flow__node.selected .neo-team-dag-node {
+  border-color: var(--t-run);
+}
+.neo-team-dag-node {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 160px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--t-panel);
+  border: 1px solid var(--t-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  font-size: 12px;
+  color: var(--t-fg);
+}
+.neo-team-dag-node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.neo-team-dag-node-id {
+  font-size: 10px;
+  color: var(--t-fg-4);
+  font-family: var(--font-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 边属性面板（选中边后右上角）：direct/approve 切换（2026-08-22） */
+.neo-team-dag-edge-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev-2, #141414);
+  font-size: 11px;
+  color: var(--t-fg-2);
+  min-width: 170px;
+}
+.neo-team-dag-edge-panel-title {
+  font-weight: 600;
+  color: var(--t-fg);
+  font-family: var(--font-mono, monospace);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-team-dag-edge-modes {
+  display: flex;
+  gap: 4px;
+}
+.neo-team-dag-edge-mode-btn {
+  flex: 1;
+  font: inherit;
+  font-weight: 600;
+  color: var(--t-fg-4);
+  background: var(--t-panel-2);
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.neo-team-dag-edge-mode-btn:hover {
+  color: var(--t-fg);
+  border-color: var(--t-border-2);
+}
+.neo-team-dag-edge-mode-btn.is-active {
+  color: var(--t-run);
+  border-color: color-mix(in oklab, var(--t-run) 45%, transparent);
+  background: color-mix(in oklab, var(--t-run) 10%, transparent);
+}
+.neo-team-dag-edge-mode-btn--approve.is-active {
+  color: var(--t-warn, #D97706);
+  border-color: color-mix(in oklab, var(--t-warn, #D97706) 45%, transparent);
+  background: color-mix(in oklab, var(--t-warn, #D97706) 10%, transparent);
+}
+.neo-team-dag-edge-hint {
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+}
+
+/* 版本面板：列表 / 回滚 / 存为分支（bottom-right Panel） */
+.neo-team-dag-versions-panel {
+  max-height: 260px;
+  overflow-y: auto;
+}
+.neo-team-dag-versions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev-2, #141414);
+  font-size: 11px;
+  color: var(--t-fg-2);
+  min-width: 230px;
+}
+.neo-team-dag-versions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.neo-team-dag-versions-title {
+  font-weight: 600;
+  color: var(--t-fg);
+}
+.neo-team-dag-versions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.neo-team-dag-versions-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.neo-team-dag-versions-label {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  color: var(--t-fg);
+}
+.neo-team-dag-versions-time {
+  color: var(--t-fg-4);
+  font-size: 10.5px;
+}
+.neo-team-dag-versions-summary {
+  color: var(--t-fg-5);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+.neo-team-dag-versions-row .neo-team-dag-btn {
+  margin-left: auto;
+  padding: 2px 8px;
+}
+.neo-team-dag-versions-empty {
+  color: var(--t-fg-5);
+  font-size: 10.5px;
+}
+.neo-team-dag-versions-info {
+  color: var(--t-run);
+  font-size: 10.5px;
+}
+.neo-team-dag-btn.is-active {
+  color: var(--t-run);
+  border-color: color-mix(in oklab, var(--t-run) 45%, transparent);
+  background: color-mix(in oklab, var(--t-run) 10%, transparent);
+}
+
+/* AI 生成草稿面板（bottom-left Panel）：样式对齐版本面板 */
+.neo-team-dag-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-bg-elev-2, #141414);
+  font-size: 11px;
+  color: var(--t-fg-2);
+  width: 260px;
+}
+.neo-team-dag-ai-input {
+  font: inherit;
+  color: var(--t-fg);
+  background: var(--t-panel-2);
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  padding: 5px 7px;
+  resize: vertical;
+  min-height: 48px;
+}
+.neo-team-dag-ai-errors {
+  color: var(--t-err);
+}
+.neo-team-dag-ai-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* approve 边：虚线（颜色由 edge.style.stroke 给到警示色，箭头随动） */
+.neo-team-dag .react-flow__edge.neo-team-dag-edge--approve .react-flow__edge-path {
+  stroke-dasharray: 7 4;
+}
+
+/* 脏状态指示（有未保存改动时出现在保存钮左侧） */
+.neo-team-dag-dirty {
+  font-size: 10.5px;
+  color: var(--t-warn, #D97706);
+  white-space: nowrap;
+}
+
+/* TeamPanel「工作流」section 头的编辑 DAG 入口钮 */
+.neo-host-wf-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--t-fg-4);
+  background: transparent;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.neo-host-wf-edit-btn:hover {
+  color: var(--t-fg);
+  border-color: var(--t-border-2);
+}
+
+/* ── verifier 面板（LoopVerdicts，L6 证据层打包）────────────────────────── */
+.neo-host-verdicts {
+  margin-top: 8px;
+  border-top: 1px solid var(--t-border);
+  padding-top: 6px;
+}
+.neo-host-verdicts-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--t-fg-3);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.neo-host-verdicts-toggle:hover {
+  color: var(--t-fg-2);
+}
+.neo-host-verdicts-toggle .neo-host-sec-meta {
+  margin-left: 0;
+}
+.neo-host-verdicts-toggle > svg:last-child {
+  margin-left: auto;
+}
+.neo-host-verdict {
+  padding: 6px 0 4px;
+}
+.neo-host-verdict-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.neo-host-verdict-rationale {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--t-fg-2);
+  white-space: pre-wrap;
+}
+.neo-host-verdict-claims {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.neo-host-verdict-claim {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--t-fg-3);
+}
+.neo-host-verdict-claim-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* loop 急停控制（演示救场，LoopVerdicts 内）：ghost 小按钮 + 危险确认态 */
+.neo-host-halt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.neo-host-halt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--t-border);
+  background: transparent;
+  color: var(--t-fg-3);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.neo-host-halt-btn:hover:not(:disabled) {
+  color: var(--t-fg-2);
+  border-color: var(--t-border-2);
+}
+.neo-host-halt-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.neo-host-halt-btn--danger {
+  color: var(--t-err, #ef4444);
+  border-color: color-mix(in oklab, var(--t-err, #ef4444) 45%, transparent);
+}
+.neo-host-halt-err {
+  font-size: 11px;
+  color: var(--t-err, #ef4444);
+}
+
+/* ── 证据投影（EvidencePanel，B40：memory-graph / training-dataset）──────── */
+.neo-host-evidence {
+  padding: 0 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.neo-host-evidence-seg {
+  align-self: flex-start;
+}
+.neo-host-evidence-meta {
+  font-size: 10.5px;
+  color: var(--t-fg-4);
+}
+.neo-host-evidence-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.neo-host-evidence-cand {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--t-fg-5);
+}
+
+/* ===== W2 钉钉式「成员」tab（2026-08-22）：GroupMembersPanel =====
+   NeoHost 成员 tab 区块（团队群会话时）。全部 var(--t-*) / color-mix，
+   day/night 双主题安全；section 壳复用 .neo-host-sec / .neo-host-sec-head。 */
+
+/* 成员网格（2026-08-23 改版，钉钉式）：横向 wrap 头像格子，名字小字在头像下 */
+.neo-gm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 8px 4px;
+}
+.neo-gm-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.neo-gm-avatar {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  user-select: none;
+}
+.neo-gm-cell-name {
+  max-width: 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--t-fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 状态点（idle/running/paused/error）：头像右下角，描边吃页面底色 */
+.neo-gm-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--t-panel);
+  background: var(--t-fg-5);
+}
+.neo-gm-dot--running {
+  background: var(--t-accent);
+  animation: sf-pulse 1.4s ease-in-out infinite;
+}
+.neo-gm-dot--paused {
+  background: var(--t-warn, #f59e0b);
+}
+.neo-gm-dot--error {
+  background: var(--t-err, #ef4444);
+}
+
+/* DAG 画布（TeamDagCanvas，2026-08-23）：固定高度只读画布 + 折叠边明细 */
+.neo-gm-dag-canvas {
+  height: 240px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--t-panel);
+}
+.neo-gm-dag-flow .react-flow__node { font-family: inherit; }
+.neo-gm-dag-node {
+  display: flex;
+  align-items: center;
+  width: 118px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: var(--t-panel);
+  border: 1px solid var(--t-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  font-size: 11px;
+  color: var(--t-fg);
+}
+.neo-gm-dag-node-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  text-align: center;
+}
+.neo-gm-dag-flow .react-flow__edge-text {
+  font-size: 9px;
+  fill: var(--t-fg-4);
+}
+/* approve / conditional 边：虚线（描边色由 edge.style.stroke 给，箭头随动） */
+.neo-gm-dag-flow .react-flow__edge.neo-gm-dag-edge--approve .react-flow__edge-path,
+.neo-gm-dag-flow .react-flow__edge.neo-gm-dag-edge--conditional .react-flow__edge-path {
+  stroke-dasharray: 7 4;
+}
+.neo-gm-dag-details {
+  margin-top: 8px;
+}
+.neo-gm-dag-details-head {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--t-fg-4);
+  user-select: none;
+}
+.neo-gm-edges {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.neo-gm-edge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--t-fg-3);
+}
+.neo-gm-edge-arrow {
+  color: var(--t-fg-5);
+}
+.neo-gm-edge-mode {
+  padding: 0 5px;
+  border: 1px solid var(--t-border);
+  border-radius: 4px;
+  font-size: 9.5px;
+  color: var(--t-fg-4);
+}
+
+/* 审批门行：流转对 + 需审批 badge（warn 色调） */
+.neo-gm-approval-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--t-warn, #f59e0b) 40%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--t-warn, #f59e0b) 8%, var(--t-panel));
+  margin-bottom: 6px;
+}
+.neo-gm-approval-pair {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--t-fg-2);
+  overflow: hidden;
+}
+.neo-gm-approval-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--t-warn, #f59e0b);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+/* filecard 右侧置顶图标（GAP :14；默认淡灰 hover 显形，置顶态着色填充） */
+.neo-host-artifact-pin {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: var(--t-fg-5);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+
+.neo-host-artifact-row:hover .neo-host-artifact-pin {
+  opacity: 1;
+}
+
+.neo-host-artifact-pin:hover {
+  background: var(--t-hover, var(--t-panel-2));
+}
+
+.neo-host-artifact-pin--on {
+  color: #7F88AD;
+  opacity: 1;
+}
+
+/* ── L6 审批队列（2026-08-23）：pending 条目 + 批准/驳回按钮 ── */
+.neo-gm-approval-item {
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--t-warn, #f59e0b) 40%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--t-warn, #f59e0b) 8%, var(--t-panel));
+  margin-bottom: 6px;
+}
+.neo-gm-approval-item-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.neo-gm-approval-submitter {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-gm-approval-waiting {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--t-fg-4);
+}
+.neo-gm-approval-summary {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--t-fg-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.neo-gm-approval-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.neo-gm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: var(--t-panel-2);
+  font-size: 10.5px;
+  color: var(--t-fg-2);
+  cursor: pointer;
+}
+.neo-gm-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.neo-gm-btn--approve:not(:disabled):hover {
+  border-color: var(--t-ok, #10b981);
+  color: var(--t-ok, #10b981);
+}
+.neo-gm-btn--reject:not(:disabled):hover {
+  border-color: var(--t-err, #ef4444);
+  color: var(--t-err, #ef4444);
+}
+
+/* 驳回理由行内输入（2026-08-23）：输入框 + 确认/取消，空理由可直接确认 */
+.neo-gm-approval-rejectbox {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.neo-gm-approval-rejectbox-input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--t-border);
+  border-radius: 6px;
+  background: var(--t-panel-2);
+  font-size: 10.5px;
+  color: var(--t-fg-2);
+}
+.neo-gm-approval-rejectbox-input:focus {
+  outline: none;
+  border-color: var(--t-err, #ef4444);
+}
+
+/* 已驳回留痕（2026-08-23）：resolved 带 reason 的驳回项，err 色调 */
+.neo-gm-approval-rejected {
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--t-err, #ef4444) 35%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--t-err, #ef4444) 6%, var(--t-panel));
+  margin-bottom: 6px;
+}
+.neo-gm-approval-rejected-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.neo-gm-approval-rejected-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-gm-approval-rejected-tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--t-err, #ef4444);
+}
+.neo-gm-approval-rejected-reason {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--t-fg-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── 群简报折叠区（2026-08-23）：details/summary 原生折叠 ── */
+.neo-gm-brief-head {
+  cursor: pointer;
+  list-style: none;
+}
+.neo-gm-brief-head::-webkit-details-marker {
+  display: none;
+}
+.neo-gm-brief-entry {
+  padding: 5px 8px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-panel);
+  margin-bottom: 6px;
+}
+.neo-gm-brief-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.neo-gm-brief-agent {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-gm-brief-time {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--t-fg-5);
+}
+.neo-gm-brief-text {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--t-fg-3);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

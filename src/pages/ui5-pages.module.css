@@ -1,0 +1,80 @@
+/* ===== UI5.0 ===== 页面批A（Agents · Teams · Inbox · Runs）共享视觉层
+ * clawsgo 实测 DNA：中性灰阶 + 近黑主按钮（day）+ 状态只用小面积色点 +
+ * 120–280ms ease-out 微动效。主题色一律走 var(--t-*)，day/night 双主题安全。
+ * append-only：本文件删除即可整体回退。 */
+
+/* ── 近黑主按钮（clawsgo #171717 白字；night 主题回退 accent 蓝）──────────── */
+.priBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--t-accent);
+  background: var(--t-accent);
+  color: var(--t-accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: filter 140ms ease-out, background 140ms ease-out, box-shadow 140ms ease-out;
+}
+.priBtn:hover { filter: brightness(1.12); }
+.priBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+:global([data-theme="day"]) .priBtn {
+  background: #171717;
+  border-color: #171717;
+  color: #fafafa;
+}
+:global([data-theme="day"]) .priBtn:hover {
+  background: #000;
+  filter: none;
+  box-shadow: 0 4px 12px -4px rgba(15, 23, 42, 0.28);
+}
+
+/* ── 弹窗：遮罩淡入 + 面板淡入缩放（clawsgo 式 160–220ms ease-out）───────── */
+.overlayIn { animation: ui5-overlay-in 160ms ease-out; }
+.modalIn {
+  animation: ui5-modal-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 24px 64px -16px rgba(15, 23, 42, 0.28);
+}
+@keyframes ui5-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ui5-modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── 抽屉：从右缘滑入 ────────────────────────────────────────────────────── */
+.drawerIn { animation: ui5-drawer-in 220ms cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes ui5-drawer-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── 表格/列表行 hover：中性微变色（主题变量，day/night 通用）────────────── */
+.rowHover { transition: background 120ms ease-out; }
+.rowHover:hover { background: var(--t-panel-2); }
+
+/* ── 表格行分隔线：主题 hairline ─────────────────────────────────────────── */
+.themedDivide > * + * { border-top: 1px solid var(--t-border); }
+
+/* ── ReactFlow Controls 主题化（原写死 shadowflow 暗色）──────────────────── */
+.rfControls button {
+  background: var(--t-panel) !important;
+  border-bottom: 1px solid var(--t-border) !important;
+  color: var(--t-fg-3) !important;
+  fill: var(--t-fg-3) !important;
+}
+.rfControls button:hover { background: var(--t-panel-2) !important; }
+
+/* ── 输入框 focus：accent 蓝环（克制，仅聚焦时出现）──────────────────────── */
+.inputLine { transition: border-color 140ms ease-out, box-shadow 140ms ease-out; }
+.inputLine:focus {
+  border-color: color-mix(in oklab, var(--t-accent) 55%, var(--t-border)) !important;
+  box-shadow: 0 0 0 3px var(--t-accent-tint);
+  outline: none;
+}

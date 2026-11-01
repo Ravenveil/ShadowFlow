@@ -1,0 +1,1056 @@
+/* ===== KnowledgePage Neo 化（阶段 2.5 任务 C，2026-08-15）=====
+   /knowledge 独立路由页（不经 .neo-app 壳，故自行做作用域 token 覆盖）。
+   颜色一律 var(--t-*) / color-mix，day/night 双主题安全；
+   圆角走 Neo 10/14 体系，pill 999px。单色策略对齐 .neo-app：作用域内 accent =
+   近黑（day），night 保持蓝；状态语义色（pending/indexing/ready/failed）独立
+   令牌保留。类名 neo-kp-* 前缀，避免与壳内 neo-* 冲突。 */
+
+.neo-kp {
+  /* 锁定视口高、纵向 flex:工作区 flex:1 撑满 —— 任何屏高都不留底部空白
+     (2026-08-20 三改;高度公式对齐 .neo-app 的 zoom 补偿) */
+  height: calc(100vh / var(--app-zoom, 1));
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  padding: 32px 40px;
+  font-family: var(--font-sans, inherit);
+  /* clawsgo 单色策略（同 .neo-app）：主按钮/强调 = 近黑，彩色只留状态语义 */
+  --t-accent: #1C1C1E;
+  --t-accent-bright: #000000;
+  --t-accent-tint: #F4F4F5;
+  --t-accent-ink: #FAFAFA;
+  /* indexing 蓝：独立于 accent（accent 已被单色策略覆盖为近黑） */
+  --neo-kp-info: #2563EB;
+}
+[data-theme="night"] .neo-kp {
+  --t-accent: #3B82F6;
+  --t-accent-bright: #93C5FD;
+  --t-accent-tint: rgba(59, 130, 246, 0.14);
+  --t-accent-ink: #0A0A0A;
+  --neo-kp-info: #6FA8FF;
+}
+
+/* ── 页头 ───────────────────────────────────────────────────────────────── */
+.neo-kp-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.neo-kp-eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.neo-kp-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-4);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.neo-kp-title {
+  margin: 6px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.neo-kp-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--t-fg-3);
+}
+.neo-kp-stats {
+  margin-top: 12px;
+}
+
+/* ── Pill（状态徽章 / RAG 后端徽章）：999px Neo pill，语义色保留 ────────── */
+.neo-kp-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.neo-kp-pill--pending {
+  background: color-mix(in srgb, var(--t-fg-4) 16%, transparent);
+  color: var(--t-fg-3);
+}
+.neo-kp-pill--indexing {
+  background: color-mix(in srgb, var(--neo-kp-info) 14%, transparent);
+  color: var(--neo-kp-info);
+}
+.neo-kp-pill--ready {
+  background: color-mix(in srgb, var(--t-ok) 14%, transparent);
+  color: var(--t-ok);
+}
+.neo-kp-pill--failed {
+  background: color-mix(in srgb, var(--t-err) 14%, transparent);
+  color: var(--t-err);
+}
+.neo-kp-pill--rag {
+  height: 20px;
+  padding: 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--t-fg-4) 12%, transparent);
+  color: var(--t-fg-4);
+}
+.neo-kp-pill--rag-lightrag {
+  background: color-mix(in srgb, var(--neo-kp-info) 14%, transparent);
+  color: var(--neo-kp-info);
+}
+
+/* ── 按钮 ───────────────────────────────────────────────────────────────── */
+.neo-kp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+.neo-kp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* 主操作：近黑（day）/ 蓝（night），同 .neo-app 单色策略 */
+.neo-kp-btn-primary {
+  height: 36px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 10px;
+  background: var(--t-accent);
+  color: var(--t-accent-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.neo-kp-btn-primary:hover:not(:disabled) {
+  background: var(--t-accent-bright);
+}
+.neo-kp-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--t-border);
+  color: var(--t-fg-3);
+}
+.neo-kp-btn-ghost:hover:not(:disabled) {
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+}
+.neo-kp-btn-danger {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--t-err) 40%, transparent);
+  color: var(--t-err);
+}
+.neo-kp-btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--t-err) 10%, transparent);
+}
+/* Modal 底栏中号尺寸（取消/创建共用；放在 primary 之后以便覆盖其 36px 高） */
+.neo-kp-btn-md {
+  height: 34px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+/* ── 提示条 / 空态 / 加载 ───────────────────────────────────────────────── */
+.neo-kp-alert {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--t-err) 30%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--t-err) 10%, transparent);
+  color: var(--t-err);
+  font-size: 13px;
+}
+
+
+
+
+
+/* ── Pack 卡片 ──────────────────────────────────────────────────────────── */
+
+
+/* hover 微浮起（clawsgo 卡片观感） */
+
+
+
+
+
+
+
+
+
+
+/* 展开区：retrieval 参数 + sources 列表 */
+
+
+.neo-kp-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.neo-kp-source {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--t-bg);
+  font-size: 12px;
+}
+.neo-kp-source-type {
+  min-width: 56px;
+  color: var(--t-fg-4);
+}
+.neo-kp-source-ref {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-kp-source-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--t-fg-4);
+}
+.neo-kp-source-status--failed {
+  color: var(--t-err);
+}
+.neo-kp-source-status--done {
+  color: var(--t-ok);
+}
+.neo-kp-source-status--processing {
+  color: var(--neo-kp-info);
+}
+.neo-kp-source-err {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  color: var(--t-err);
+}
+
+/* ── Memory 统计条（原 MemoryStatsBar 内联 Neo 化，数据源不变） ─────────── */
+
+
+
+
+
+
+
+
+
+/* ── 创建 Modal ─────────────────────────────────────────────────────────── */
+.neo-kp-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+.neo-kp-modal {
+  width: 100%;
+  max-width: 520px;
+  padding: 24px;
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  background: var(--t-panel);
+}
+.neo-kp-modal-title {
+  margin: 0 0 16px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.neo-kp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.neo-kp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.neo-kp-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.neo-kp-field-label {
+  font-size: 12px;
+  color: var(--t-fg-3);
+}
+.neo-kp-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--dur-1) var(--ease-out);
+}
+.neo-kp-input:focus {
+  border-color: var(--t-border-2);
+}
+.neo-kp-input::placeholder {
+  color: var(--t-fg-5);
+}
+textarea.neo-kp-input {
+  resize: vertical;
+}
+select.neo-kp-input {
+  height: 34px;
+}
+.neo-kp-input--sm {
+  height: 32px;
+}
+.neo-kp-form-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.neo-kp-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.neo-kp-check input {
+  accent-color: var(--t-accent);
+}
+.neo-kp-modal-error {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--t-err) 10%, transparent);
+  color: var(--t-err);
+  font-size: 12px;
+}
+.neo-kp-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+/* 内嵌变体（NeoApp 中栏，2026-08-19 导航架构统一）：100% 高度填充、紧凑
+   内距、白底可滚、藏全页 hero 副题 */
+.neo-kp--inline {
+  height: 100%;
+  padding: 20px 24px;
+  background: var(--t-panel);
+  overflow: hidden;
+}
+.neo-kp--inline .neo-kp-sub {
+  display: none;
+}
+.neo-kp--inline .neo-kp-header {
+  margin-bottom: 12px;
+}
+
+/* ===== 本地仓库（LocalVaults，2026-08-19，Obsidian vault 模式）=====
+   知识库页第二视图：注册/浏览/阅读本地文件夹。复用 neo-kp-* 的卡片/
+   按钮/输入/Modal 体系，这里只补布局类（tab、工具条、文件树、阅读器）。
+   类名 neo-kv-* 前缀，token 同样走 var(--t-*)。 */
+
+/* ── 视图切换 Tab ───────────────────────────────────────────────────────── */
+
+
+
+
+
+/* ── 仓库列表头 ─────────────────────────────────────────────────────────── */
+
+
+.neo-kv-path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 520px;
+  margin-top: 3px;
+}
+.neo-kp-card .neo-kv-path {
+  margin-top: 2px;
+}
+.neo-kv-pick-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.neo-kv-pick-row .neo-kp-input {
+  flex: 1;
+}
+.neo-kv-warn-text {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--t-fg-2);
+}
+
+/* ── 浏览视图：工具条 + 双栏布局 ────────────────────────────────────────── */
+.neo-kv-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  min-width: 0;
+}
+.neo-kv-toolbar-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.neo-kv-toolbar-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.neo-kv-toolbar-title .neo-kv-path {
+  margin-top: 0;
+}
+.neo-kv-toolbar-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-3);
+  white-space: nowrap;
+}
+.neo-kv-layout {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ── 左：文件树 ─────────────────────────────────────────────────────────── */
+.neo-kv-tree {
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  min-width: 220px;
+  max-width: 360px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-bg);
+  overflow: hidden;
+}
+.neo-kv-filter {
+  padding: 8px;
+  border-bottom: 1px solid var(--t-border);
+}
+.neo-kv-filter .neo-kp-input {
+  height: 30px;
+  font-size: 12px;
+}
+.neo-kv-tree-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 4px;
+}
+.neo-kv-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  height: 26px;
+  padding-right: 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--t-fg-2);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-kv-row:hover {
+  background: color-mix(in srgb, var(--t-fg-4) 10%, transparent);
+  color: var(--t-fg);
+}
+.neo-kv-row--dir {
+  color: var(--t-fg);
+  font-weight: 500;
+}
+.neo-kv-row--active {
+  background: var(--t-accent-tint);
+  color: var(--t-accent);
+}
+[data-theme="night"] .neo-kv-row--active {
+  color: var(--t-accent-bright);
+}
+.neo-kv-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-kv-chevron {
+  flex: none;
+  transition: transform var(--dur-1) var(--ease-out);
+}
+.neo-kv-chevron--open {
+  transform: rotate(90deg);
+}
+.neo-kv-hint {
+  padding: 12px 10px;
+  font-size: 12px;
+  color: var(--t-fg-4);
+  line-height: 1.6;
+}
+.neo-kv-hint--center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* ── 右：阅读器 ─────────────────────────────────────────────────────────── */
+.neo-kv-reader {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-bg);
+  overflow: hidden;
+}
+.neo-kv-reader-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.neo-kv-reader-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--t-border);
+  background: color-mix(in srgb, var(--t-fg-4) 4%, transparent);
+}
+.neo-kv-reader-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--t-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-kv-reader-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--t-fg-4);
+  white-space: nowrap;
+}
+.neo-kv-badge-trunc {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--t-warn, #D97706) 14%, transparent);
+  color: var(--t-warn, #D97706);
+  font-size: 10px;
+}
+/* 阅读正文区：Markdown 用 NeoMarkdown（neo-md-*，样式来自 neo-host.css） */
+.neo-kv-reader-inner > .neo-md,
+.neo-kv-plain {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  margin: 0;
+}
+.neo-kv-plain {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--t-fg-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.neo-kv-media {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 16px;
+}
+.neo-kv-media img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+}
+.neo-kv-media--pdf {
+  padding: 0;
+}
+.neo-kv-media--pdf iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* ===== 知识库统一布局(2026-08-19 合并重构批)=====
+   左栏 = 扁平知识源列表(栏头标题+添加菜单,栏底虚线直达);右栏 = 三态
+   内容(仓库浏览器 / 包详情 / 概览)。类名 neo-kv-workspace / rail / pd / guide。 */
+
+/* ── 工作区(左栏 + 右栏)────────────────────────────────────────────────── */
+.neo-kv-workspace {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.neo-kv-workspace--inline {
+  /* flex:1 撑满中栏;无上限 */
+}
+
+/* ── 左栏:知识源 rail ──────────────────────────────────────────────────── */
+.neo-kv-rail {
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  flex: none;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-bg);
+  overflow: hidden;
+}
+.neo-kv-workspace--inline .neo-kv-rail {
+  width: 200px;
+}
+.neo-kv-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid var(--t-border);
+}
+.neo-kv-rail-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.neo-kv-rail-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+.neo-kv-rail-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--t-fg-2);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-kv-rail-row:hover {
+  background: color-mix(in srgb, var(--t-fg-4) 10%, transparent);
+  color: var(--t-fg);
+}
+.neo-kv-rail-row--active {
+  /* Obsidian 式中性灰强调(选中项灰底、正文色、微加粗;不再用 accent 着色) */
+  background: color-mix(in srgb, var(--t-fg) 9%, transparent);
+  color: var(--t-fg);
+  font-weight: 600;
+}
+.neo-kv-rail-row-icon {
+  flex: none;
+  color: var(--t-fg-3);
+}
+.neo-kv-rail-row--active .neo-kv-rail-row-icon {
+  color: inherit;
+}
+.neo-kv-rail-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-kv-rail-row-meta {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--t-fg-4);
+}
+.neo-kv-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--t-fg-5);
+}
+.neo-kv-dot--ok {
+  background: var(--t-ok);
+}
+.neo-kv-dot--err {
+  background: var(--t-err);
+}
+.neo-kv-badge-project {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--t-accent-tint);
+  color: var(--t-accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.5;
+}
+[data-theme="night"] .neo-kv-badge-project {
+  color: var(--t-accent-bright);
+}
+
+/* ── 添加菜单(rail 头部 + VaultBrowser ··· 共用)────────────────────────── */
+.neo-kv-addwrap {
+  position: relative;
+}
+.neo-kp-btn--sm {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  gap: 3px;
+}
+.neo-kv-addmenu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+.neo-kv-addmenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  min-width: 176px;
+  padding: 4px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.18);
+}
+.neo-kv-addmenu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--t-fg-2);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-kv-addmenu-item:hover {
+  background: var(--t-accent-tint);
+  color: var(--t-fg);
+}
+.neo-kv-addmenu-item--danger:hover {
+  background: color-mix(in srgb, var(--t-err) 10%, transparent);
+  color: var(--t-err);
+}
+
+/* ── 右栏容器 + 仓库浏览器 ─────────────────────────────────────────────── */
+.neo-kv-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.neo-kv-browser {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.neo-kv-browser .neo-kp-alert {
+  margin: 8px 0 0;
+}
+.neo-kv-browser .neo-kv-toolbar {
+  margin-bottom: 8px;
+}
+
+/* ── 右栏:包详情 ──────────────────────────────────────────────────────── */
+.neo-kv-pd {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 4px 16px;
+}
+.neo-kv-pd-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.neo-kv-pd-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.neo-kv-pd-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.neo-kv-pd-desc {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--t-fg-2);
+}
+.neo-kv-pd-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--t-fg-4);
+}
+.neo-kv-pd-retrieval {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--t-fg-3);
+}
+.neo-kv-pd-section-label {
+  margin: 18px 0 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--t-fg-4);
+}
+.neo-kv-pd-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── 右栏:包详情 — 文档树(PackDocTree,层级检索 index 浏览)──────────────── */
+.neo-kv-dt-stats {
+  margin-left: 8px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.neo-kv-dt-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--t-fg-2);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.neo-kv-dt-row:hover {
+  background: var(--t-accent-tint);
+}
+.neo-kv-dt-row--active {
+  background: var(--t-accent-tint);
+}
+.neo-kv-dt-chevron {
+  flex-shrink: 0;
+  color: var(--t-fg-4);
+}
+.neo-kv-dt-chevron--leaf {
+  display: inline-block;
+  width: 12px;
+}
+.neo-kv-dt-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-kv-dt-kind {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--t-fg-4);
+}
+.neo-kv-dt-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--t-fg-4);
+  white-space: nowrap;
+}
+.neo-kv-dt-error {
+  color: var(--t-err);
+}
+.neo-kv-dt-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--t-fg-3);
+  word-break: break-all;
+}
+.neo-kv-dt-meta-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+}
+
+/* ── 右栏:概览 / 缺失面板 ─────────────────────────────────────────────── */
+.neo-kv-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 20px;
+  text-align: center;
+}
+.neo-kv-center-icon {
+  color: var(--t-fg-4);
+}
+.neo-kv-center-t1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+}
+.neo-kv-center-t2 {
+  margin: 0;
+  font-size: 12px;
+  color: var(--t-fg-4);
+}
+.neo-kv-overview-project {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-bg);
+  max-width: 100%;
+}
+.neo-kv-overview-project-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.neo-kv-overview-project .neo-kv-path {
+  margin-top: 0;
+}
+.neo-kv-guide {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.neo-kv-guide-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 220px;
+  padding: 16px;
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  background: var(--t-bg);
+  color: var(--t-fg-2);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.neo-kv-guide-card:hover {
+  border-color: var(--t-border-2);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.12);
+}
+.neo-kv-guide-card > svg {
+  color: var(--t-fg-3);
+}
+.neo-kv-guide-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-fg);
+}
+.neo-kv-guide-sub {
+  font-size: 11px;
+  color: var(--t-fg-4);
+}
+
+/* ── 图谱嵌入容器(2026-08-20 二改:入口=工具栏图标,容器带返回头)──────── */
+.neo-kv-graphpane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-bg);
+  overflow: hidden;
+}
+.neo-kv-graphpane-head {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--t-border);
+  flex-shrink: 0;
+}
+.neo-kv-graphpane-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.neo-kv-graphpane .neo-kg {
+  height: 100%;
+  min-height: 0;
+  /* 2026-09-03：flex 行容器里 .neo-kg 默认按内容定宽，画布只渲染一半；
+     显式撑满右栏（flex item 主轴尺寸）。 */
+  flex: 1;
+  min-width: 0;
+}

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Spec 8.4 · Knowledge Dock</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+  body { padding: 48px 56px; max-width: 1440px; margin: 0 auto; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent-bright); }
+  h1 { font-size: 36px; letter-spacing: -.03em; font-weight: 800; margin: 4px 0 8px; }
+  .sub { color: var(--fg-3); font-size: 15px; max-width: 760px; line-height: 1.55; margin-bottom: 36px; }
+  .sec { margin-bottom: 48px; }
+  .sec h2 { font-size: 11px; font-family: var(--font-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--fg-4); font-weight: 700; margin: 0 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
+  .dock-shell { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .dock-top { height: 46px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 14px; }
+  .dock-title { font-weight: 700; font-size: 14px; }
+  .dock-sub { color: var(--fg-4); font-size: 11px; font-family: var(--font-mono); letter-spacing: .06em; }
+
+  .dock-body { display: grid; grid-template-columns: 280px 1fr 360px; min-height: 500px; }
+  .src-list { border-right: 1px solid var(--border); padding: 12px 8px; }
+  .src-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 2px; }
+  .src-item:hover { background: var(--bg-elev-2); }
+  .src-item.selected { background: var(--accent-tint); }
+  .src-icon { width: 28px; height: 28px; border-radius: 7px; background: var(--bg-elev-2); display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .src-body { flex: 1; min-width: 0; }
+  .src-name { font-size: 12px; color: var(--fg-1); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .src-meta { font-family: var(--font-mono); font-size: 9px; color: var(--fg-5); letter-spacing: .06em; margin-top: 2px; }
+  .src-status { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .src-status.ok { background: var(--status-ok); }
+  .src-status.run { background: var(--status-run); animation: sf-pulse 1.6s ease-in-out infinite; }
+  .src-status.warn { background: var(--status-warn); }
+  @keyframes sf-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+  .src-add { margin: 8px 4px; padding: 10px; border: 1px dashed var(--border); border-radius: 8px; color: var(--fg-4); font-size: 11px; text-align: center; cursor: pointer; }
+  .src-add:hover { border-color: var(--accent); color: var(--accent-bright); }
+
+  .upload-zone { padding: 28px; display: flex; flex-direction: column; gap: 20px; }
+  .dropbox { border: 2px dashed var(--border); border-radius: 12px; padding: 40px; text-align: center; color: var(--fg-3); background: var(--bg-elev-1); }
+  .dropbox .plus { font-size: 32px; color: var(--fg-4); margin-bottom: 8px; }
+  .dropbox .dh { font-size: 14px; font-weight: 600; color: var(--fg-1); margin-bottom: 4px; }
+  .dropbox .ds { font-size: 12px; color: var(--fg-4); }
+  .tabs { display: flex; gap: 2px; background: var(--bg-elev-1); padding: 3px; border-radius: 8px; border: 1px solid var(--border); width: max-content; }
+  .tab { padding: 6px 14px; border-radius: 6px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--fg-4); }
+  .tab.active { background: var(--accent); color: var(--accent-ink); }
+
+  .chunk-list { margin-top: 4px; }
+  .chunk-list .ch { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-4); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .chunk-list .ch .n { background: var(--bg-elev-2); color: var(--fg-2); padding: 1px 6px; border-radius: 4px; }
+  .chunk { background: var(--bg-elev-1); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+  .chunk .cid { font-family: var(--font-mono); font-size: 9px; color: var(--fg-5); }
+  .chunk .ctext { font-size: 12px; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chunk .cmeta { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); }
+
+  /* Binding panel */
+  .binding { border-left: 1px solid var(--border); padding: 18px 20px; }
+  .binding h4 { font-size: 14px; font-weight: 700; margin: 0 0 4px; }
+  .binding .bs { font-family: var(--font-mono); font-size: 10px; color: var(--accent-bright); letter-spacing: .06em; margin-bottom: 18px; }
+  .binding-sec { margin-bottom: 18px; }
+  .bl { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-4); margin-bottom: 8px; }
+  .bind-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--bg-elev-1); border: 1px solid var(--border-subtle); border-radius: 7px; font-size: 12px; margin-bottom: 4px; }
+  .bind-row .bn { display: flex; align-items: center; gap: 6px; color: var(--fg-2); }
+  .bind-row .bn .s { color: var(--fg-5); font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+  .cb { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center; }
+  .cb.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-size: 10px; }
+  .tog { width: 30px; height: 16px; border-radius: 8px; background: var(--accent); position: relative; }
+  .tog::after { content: ""; position: absolute; right: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent-ink); }
+  .tog.off { background: var(--bg-elev-3); }
+  .tog.off::after { right: auto; left: 2px; background: var(--fg-4); }
+
+  /* Indexing states */
+  .states { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .state-card { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-height: 120px; }
+  .state-card .sh { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; margin-bottom: 8px; }
+  .state-card.uploading .sh { color: var(--status-run); }
+  .state-card.indexing .sh { color: var(--status-warn); }
+  .state-card.ready .sh { color: var(--status-ok); }
+  .state-card.failed .sh { color: var(--status-reject); }
+  .state-card .sd { font-size: 11px; color: var(--fg-3); line-height: 1.5; margin-bottom: 10px; }
+  .progress { height: 4px; background: var(--bg-elev-2); border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
+  .progress .pf { height: 100%; border-radius: 2px; }
+  .file-stat { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); letter-spacing: .06em; }
+</style>
+</head><body>
+
+<span class="eyebrow">Story 8.4 · Knowledge Dock</span>
+<h1>The Dock is where documents become cited facts.</h1>
+<p class="sub">Left: source list. Middle: upload + chunk preview. Right: binding rules (who reads it, must cite, freshness). Indexing runs async; agents can be published before it finishes — they just wait on the knowledge they need.</p>
+
+<section class="sec">
+  <h2>① Full Dock — document selected, indexed, bound to 2 roles</h2>
+  <div class="dock-shell">
+    <div class="dock-top">
+      <span class="dock-title">📚 Knowledge Dock</span>
+      <span class="dock-sub">scope = blueprint · 4 sources · 1,284 chunks · embedder: text-embedding-3-small</span>
+      <div style="margin-left:auto; display:flex; gap:8px">
+        <button class="sf-btn sf-btn-ghost sf-btn-sm">↻ Reindex all</button>
+      </div>
+    </div>
+    <div class="dock-body">
+      <div class="src-list">
+        <div class="src-item selected">
+          <div class="src-icon">📄</div>
+          <div class="src-body"><div class="src-name">OSS-coding-agents-2024.pdf</div><div class="src-meta">12.4 MB · 842 chunks</div></div>
+          <div class="src-status ok"></div>
+        </div>
+        <div class="src-item">
+          <div class="src-icon">🔗</div>
+          <div class="src-body"><div class="src-name">arxiv.org/abs/2405…</div><div class="src-meta">url · 38 chunks</div></div>
+          <div class="src-status ok"></div>
+        </div>
+        <div class="src-item">
+          <div class="src-icon">📦</div>
+          <div class="src-body"><div class="src-name">Team KP · Engineering</div><div class="src-meta">pack · inherits</div></div>
+          <div class="src-status ok"></div>
+        </div>
+        <div class="src-item">
+          <div class="src-icon">📄</div>
+          <div class="src-body"><div class="src-name">weekly-summaries.md</div><div class="src-meta">24 KB · indexing…</div></div>
+          <div class="src-status run"></div>
+        </div>
+        <div class="src-add">＋ Add source</div>
+      </div>
+
+      <div class="upload-zone">
+        <div class="tabs">
+          <div class="tab active">File</div>
+          <div class="tab">URL</div>
+          <div class="tab">Knowledge Pack</div>
+          <div class="tab">Live feed · beta</div>
+        </div>
+        <div class="dropbox">
+          <div class="plus">＋</div>
+          <div class="dh">Drop files or paste text</div>
+          <div class="ds">PDF · Markdown · TXT · DOCX · CSV · up to 50 MB each</div>
+        </div>
+        <div class="chunk-list">
+          <div class="ch">● Preview · first chunks of <span class="n">OSS-coding-agents-2024.pdf</span></div>
+          <div class="chunk">
+            <span class="cid">#0001</span>
+            <span class="ctext">"This survey covers 48 open-source coding agents released between Jan 2024 and…"</span>
+            <span class="cmeta">p.1 · 512 tok</span>
+          </div>
+          <div class="chunk">
+            <span class="cid">#0002</span>
+            <span class="ctext">"Section 2 — Architectures. We classify agents by loop topology, tool surface…"</span>
+            <span class="cmeta">p.2 · 498 tok</span>
+          </div>
+          <div class="chunk">
+            <span class="cid">#0003</span>
+            <span class="ctext">"Table 1 lists planning strategies: ReAct, Plan-and-Execute, Reflexion…"</span>
+            <span class="cmeta">p.3 · 511 tok</span>
+          </div>
+          <div class="chunk" style="opacity:.5">
+            <span class="cid">#0004</span>
+            <span class="ctext">…</span>
+            <span class="cmeta">+ 839 more</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="binding">
+        <h4>OSS-coding-agents-2024.pdf</h4>
+        <div class="bs">● indexed · 842 / 842 chunks</div>
+
+        <div class="binding-sec">
+          <div class="bl">Bound to roles</div>
+          <div class="bind-row"><div class="bn"><span class="cb on">✓</span>Research Manager <span class="s">· boss</span></div><div class="tog"></div></div>
+          <div class="bind-row"><div class="bn"><span class="cb on">✓</span>Search Worker 1</div><div class="tog"></div></div>
+          <div class="bind-row"><div class="bn"><span class="cb">&nbsp;</span>Search Worker 2</div><div class="tog off"></div></div>
+          <div class="bind-row"><div class="bn"><span class="cb">&nbsp;</span>Report Writer</div><div class="tog off"></div></div>
+        </div>
+
+        <div class="binding-sec">
+          <div class="bl">Policy</div>
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; font-size:12px; color:var(--fg-2)">Must cite in output<div class="tog"></div></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; font-size:12px; color:var(--fg-2)">Freshness check <span style="color:var(--fg-5); font-family:var(--font-mono); font-size:9px; margin-left:4px">(re-embed on edit)</span><div class="tog"></div></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; font-size:12px; color:var(--fg-2)">Visible in chat hover<div class="tog off"></div></div>
+        </div>
+
+        <div class="binding-sec">
+          <div class="bl">Retrieval</div>
+          <div style="font-family:var(--font-mono); font-size:11px; color:var(--fg-3); line-height:1.7">
+            top_k = 6<br>
+            score_threshold = 0.72<br>
+            rerank = cohere-r3
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <h2>② Indexing states — async, non-blocking</h2>
+  <div class="states">
+    <div class="state-card uploading">
+      <div class="sh">● uploading</div>
+      <div class="sd">Client-side chunks going up. Cancelable.</div>
+      <div class="progress"><div class="pf" style="width:62%; background:var(--status-run)"></div></div>
+      <div class="file-stat"><span>weekly-summaries.md</span><span>62%</span></div>
+    </div>
+    <div class="state-card indexing">
+      <div class="sh">● indexing</div>
+      <div class="sd">Embedder running in worker queue. Agents can be published — queries wait.</div>
+      <div class="progress"><div class="pf" style="width:38%; background:var(--status-warn)"></div></div>
+      <div class="file-stat"><span>324 / 842 chunks</span><span>~90s</span></div>
+    </div>
+    <div class="state-card ready">
+      <div class="sh">● ready</div>
+      <div class="sd">Queryable. Bindings take effect immediately at next run.</div>
+      <div class="progress"><div class="pf" style="width:100%; background:var(--status-ok)"></div></div>
+      <div class="file-stat"><span>842 chunks</span><span>✓ done</span></div>
+    </div>
+    <div class="state-card failed">
+      <div class="sh">● failed</div>
+      <div class="sd">"File type not supported: .key" — actionable, no traceback.</div>
+      <div class="progress"><div class="pf" style="width:100%; background:var(--status-reject); opacity:.4"></div></div>
+      <div class="file-stat"><span style="color:var(--status-reject)">pitchdeck.key</span><span>↻ retry</span></div>
+    </div>
+  </div>
+</section>
+
+</body></html>

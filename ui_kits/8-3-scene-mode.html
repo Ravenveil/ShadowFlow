@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Spec 8.3 · Scene Mode shell</title>
+<link rel="stylesheet" href="../_kit.css">
+<style>
+  body { padding: 48px 56px; max-width: 1440px; margin: 0 auto; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent-bright); }
+  h1 { font-size: 36px; letter-spacing: -.03em; font-weight: 800; margin: 4px 0 8px; }
+  .sub { color: var(--fg-3); font-size: 15px; max-width: 760px; line-height: 1.55; margin-bottom: 36px; }
+  .sec { margin-bottom: 48px; }
+  .sec h2 { font-size: 11px; font-family: var(--font-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--fg-4); font-weight: 700; margin: 0 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
+  /* Scene shell */
+  .scene-shell { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .scene-top { height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 16px; }
+  .mode-switch { display: inline-flex; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 2px; }
+  .mode-switch button { padding: 4px 12px; border-radius: 6px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--fg-4); }
+  .mode-switch button.active { background: var(--accent); color: var(--accent-ink); }
+  .bp-meta { display: flex; align-items: center; gap: 8px; color: var(--fg-3); font-size: 12px; }
+  .bp-meta .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--status-ok); }
+  .scene-body { display: grid; grid-template-columns: 260px 1fr 320px; height: 620px; }
+
+  /* Scene tree */
+  .tree { border-right: 1px solid var(--border); padding: 12px 6px; overflow: auto; }
+  .tree-h { font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--fg-4); padding: 4px 12px 10px; }
+  .tnode { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px; font-size: 12px; color: var(--fg-2); cursor: pointer; position: relative; }
+  .tnode:hover { background: var(--bg-elev-2); }
+  .tnode.selected { background: var(--accent-tint); color: var(--accent-bright); }
+  .tnode .caret { width: 10px; font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); }
+  .tnode .icon { width: 14px; text-align: center; }
+  .tnode .boss-badge { margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-bright); background: var(--accent-tint); padding: 1px 5px; border-radius: 4px; border: 1px solid rgba(168,85,247,.35); }
+  .indent-1 { padding-left: 24px; }
+  .indent-2 { padding-left: 44px; }
+  .tsep { height: 1px; background: var(--border-subtle); margin: 8px 12px; }
+
+  /* Canvas */
+  .canvas-wrap { position: relative; overflow: hidden; background-image: radial-gradient(circle, var(--bg-elev-4) 1px, transparent 1.5px); background-size: 20px 20px; }
+  .cnode { position: absolute; background: var(--bg-node); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; min-width: 150px; }
+  .cnode .ct { font-family: var(--font-sans); font-size: 12px; font-weight: 600; color: var(--fg-1); }
+  .cnode .cs { font-family: var(--font-mono); font-size: 9px; color: var(--fg-4); margin-top: 2px; letter-spacing: .08em; text-transform: uppercase; }
+  .cnode.boss { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(168,85,247,.18); background: linear-gradient(180deg, var(--bg-node), var(--accent-tint)); }
+  .cnode.boss .cs { color: var(--accent-bright); }
+  .cnode.worker { background: var(--bg-elev-2); }
+  .cnode.selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(168,85,247,.3); }
+  .cnode.shared { border-style: dashed; background: transparent; color: var(--fg-3); }
+  .cline { position: absolute; stroke: var(--fg-5); stroke-width: 1.5; fill: none; }
+
+  /* Inspector */
+  .inspector { border-left: 1px solid var(--border); overflow: auto; }
+  .insp-h { padding: 14px 16px 10px; border-bottom: 1px solid var(--border-subtle); }
+  .insp-h .hl { font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-bright); margin-bottom: 2px; }
+  .insp-h .ht { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+  .insp-h .htag { margin-left: 6px; font-family: var(--font-mono); font-size: 8px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-bright); background: var(--accent-tint); padding: 2px 6px; border-radius: 4px; }
+  .insp-sec { padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); }
+  .insp-sec .sl { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-4); margin-bottom: 8px; }
+  .insp-input { width: 100%; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; font-size: 12px; color: var(--fg-1); font-family: var(--font-sans); }
+  textarea.insp-input { resize: none; min-height: 62px; font-size: 11px; line-height: 1.5; }
+  .toolrow { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 12px; }
+  .toolrow .tl { display: flex; align-items: center; gap: 6px; color: var(--fg-2); }
+  .toolrow .tl .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-5); }
+  .toolrow .tl .builtin-tag { font-size: 8px; background: var(--bg-elev-2); color: var(--fg-4); padding: 1px 5px; border-radius: 3px; letter-spacing: .08em; text-transform: uppercase; }
+  .tog { width: 26px; height: 14px; border-radius: 7px; background: var(--accent); position: relative; }
+  .tog::after { content: ""; position: absolute; right: 2px; top: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent-ink); }
+  .tog.off { background: var(--bg-elev-3); }
+  .tog.off::after { right: auto; left: 2px; background: var(--fg-4); }
+  .worker-list { display: flex; flex-direction: column; gap: 6px; }
+  .worker-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--bg-elev-1); border: 1px solid var(--border-subtle); border-left: 2px solid var(--status-run); border-radius: 7px; font-size: 12px; }
+  .worker-item .wn { color: var(--fg-1); font-weight: 500; }
+  .worker-item .wr { margin-left: auto; color: var(--fg-5); font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+  .add-worker { padding: 8px 10px; background: transparent; border: 1px dashed var(--border); border-radius: 7px; color: var(--fg-4); font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+  /* Dual state */
+  .dual { display: grid; grid-template-columns: 1fr 60px 1fr; gap: 16px; align-items: center; }
+  .state-card { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .state-card .sh { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-bright); margin-bottom: 10px; }
+  .state-card.source { border-left: 2px solid var(--accent); }
+  .state-card.deriv { border-left: 2px solid var(--status-run); }
+  .state-card pre { font-family: var(--font-mono); font-size: 10.5px; line-height: 1.7; color: var(--fg-2); margin: 0; white-space: pre; }
+  .state-card pre .k { color: var(--accent-bright); }
+  .state-card pre .s { color: var(--status-ok); }
+  .state-card pre .c { color: var(--fg-5); }
+  .dual-arrow { text-align: center; font-family: var(--font-mono); color: var(--fg-4); }
+  .dual-arrow .label { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-4); margin-top: 6px; }
+</style>
+</head><body>
+
+<span class="eyebrow">Story 8.3 · Scene Mode shell</span>
+<h1>Four regions. One blueprint. Godot-style editing.</h1>
+<p class="sub">Scene Tree · Canvas · Inspector · Goal/Scene/Graph switcher. Scene is the <b>default</b> editing home for most users — workflow schema stays optional, behind Graph Mode.</p>
+
+<section class="sec">
+  <h2>① Full shell</h2>
+  <div class="scene-shell">
+    <div class="scene-top">
+      <div class="mode-switch">
+        <button>Goal</button>
+        <button class="active">Scene</button>
+        <button>Graph</button>
+      </div>
+      <div class="bp-meta"><span class="dot"></span><span>Coding Research Digest</span><span style="color:var(--fg-5)">·</span><span style="font-family:var(--font-mono); font-size:10px">mode=team · v3</span></div>
+      <div style="margin-left:auto; display:flex; gap:8px">
+        <button class="sf-btn sf-btn-ghost sf-btn-sm">↻ Smoke Run</button>
+        <button class="sf-btn sf-btn-primary sf-btn-sm">Publish →</button>
+      </div>
+    </div>
+
+    <div class="scene-body">
+      <!-- Scene tree -->
+      <div class="tree">
+        <div class="tree-h">Scene Tree</div>
+        <div class="tnode"><span class="caret">▼</span><span class="icon">◈</span><span>Team · Research Digest</span></div>
+        <div class="tnode indent-1"><span class="caret">▼</span><span class="icon">🎯</span><span>Research Manager</span><span class="boss-badge">boss</span></div>
+        <div class="tnode indent-2 selected"><span class="caret"></span><span class="icon">👷</span><span>Search Worker 1</span></div>
+        <div class="tnode indent-2"><span class="caret"></span><span class="icon">👷</span><span>Search Worker 2</span></div>
+        <div class="tnode indent-2"><span class="caret"></span><span class="icon">📝</span><span>Report Writer</span></div>
+        <div class="tnode indent-1"><span class="caret">▶</span><span class="icon">🎯</span><span>Review Manager</span><span class="boss-badge">boss</span></div>
+        <div class="tsep"></div>
+        <div class="tnode"><span class="caret">▼</span><span class="icon">🔧</span><span>Shared Tools</span></div>
+        <div class="tnode indent-1"><span class="caret"></span><span class="icon">·</span><span style="color:var(--fg-3)">web_search · builtin</span></div>
+        <div class="tnode indent-1"><span class="caret"></span><span class="icon">·</span><span style="color:var(--fg-3)">xhs_search · MCP</span></div>
+        <div class="tnode"><span class="caret">▶</span><span class="icon">📚</span><span>Shared Knowledge</span></div>
+        <div class="tnode"><span class="caret">▶</span><span class="icon">🧠</span><span>Shared Memory</span></div>
+      </div>
+
+      <!-- Canvas -->
+      <div class="canvas-wrap">
+        <svg style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none">
+          <path class="cline" d="M 220 100 C 260 100, 260 200, 300 200" />
+          <path class="cline" d="M 220 100 C 260 100, 260 300, 300 300" />
+          <path class="cline" d="M 220 100 C 260 100, 260 400, 300 400" />
+          <path class="cline" d="M 450 200 C 490 200, 490 500, 530 500" style="stroke: var(--border-strong); stroke-dasharray: 4 4" />
+          <path class="cline" d="M 450 300 C 490 300, 490 500, 530 500" style="stroke: var(--border-strong); stroke-dasharray: 4 4" />
+          <path class="cline" d="M 450 400 C 490 400, 490 500, 530 500" style="stroke: var(--border-strong); stroke-dasharray: 4 4" />
+        </svg>
+        <div class="cnode boss" style="left:60px; top:80px"><div class="ct">🎯 Research Manager</div><div class="cs">boss · can_spawn_tasks</div></div>
+        <div class="cnode worker selected" style="left:300px; top:180px"><div class="ct">👷 Search Worker 1</div><div class="cs">worker · isolated ctx</div></div>
+        <div class="cnode worker" style="left:300px; top:280px"><div class="ct">👷 Search Worker 2</div><div class="cs">worker</div></div>
+        <div class="cnode worker" style="left:300px; top:380px"><div class="ct">📝 Report Writer</div><div class="cs">worker</div></div>
+        <div class="cnode shared" style="left:530px; top:480px; min-width:170px"><div class="ct">📚 Shared Knowledge</div><div class="cs">2 bindings · citation: on</div></div>
+      </div>
+
+      <!-- Inspector -->
+      <div class="inspector">
+        <div class="insp-h">
+          <div class="hl">● selection</div>
+          <div class="ht">Search Worker 1 <span class="htag">worker</span></div>
+        </div>
+        <div class="insp-sec">
+          <div class="sl">Role title</div>
+          <input class="insp-input" value="Search Worker 1">
+        </div>
+        <div class="insp-sec">
+          <div class="sl">Description · system prompt</div>
+          <textarea class="insp-input">You search the open web for high-signal sources on the assigned topic. Return structured findings with URLs.</textarea>
+        </div>
+        <div class="insp-sec">
+          <div class="sl">Handoff style</div>
+          <div style="display:flex; gap:6px">
+            <div class="sf-chip sf-chip-accent">parallel</div>
+            <div class="sf-chip">sequential</div>
+          </div>
+        </div>
+        <div class="insp-sec">
+          <div class="sl">Visible tools · 2</div>
+          <div class="toolrow"><div class="tl">web_search <span class="builtin-tag">builtin</span></div><div class="tog"></div></div>
+          <div class="toolrow"><div class="tl">web_fetch <span class="builtin-tag">builtin</span></div><div class="tog"></div></div>
+          <div class="toolrow"><div class="tl">xhs_search <span class="builtin-tag" style="background:var(--accent-tint); color:var(--accent-bright)">MCP</span></div><div class="tog off"></div></div>
+        </div>
+        <div class="insp-sec">
+          <div class="sl">Knowledge bindings · inherits shared</div>
+          <div style="font-size:11px; color:var(--fg-4); font-family:var(--font-mono)">2 shared bindings · citation required</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <h2>② Boss-selected inspector — workers list appears</h2>
+  <div style="background:var(--skin-panel); border:1px solid var(--border); border-radius:12px; padding:22px 24px; max-width:400px">
+    <div style="font-family:var(--font-mono); font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent-bright); margin-bottom:6px">● selection · boss</div>
+    <div style="font-size:15px; font-weight:700; margin-bottom:2px">Research Manager <span style="font-family:var(--font-mono); font-size:8px; letter-spacing:.12em; text-transform:uppercase; background:var(--accent-tint); color:var(--accent-bright); padding:2px 6px; border-radius:4px; margin-left:4px">boss</span></div>
+    <div style="color:var(--fg-4); font-size:11px; font-family:var(--font-mono); margin-bottom:16px">can_spawn_tasks = true · sub_agents.length = 3</div>
+    <div style="font-family:var(--font-mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--fg-4); margin-bottom:8px">Workers · sub_agents[]</div>
+    <div class="worker-list">
+      <div class="worker-item"><span>👷</span><span class="wn">Search Worker 1</span><span class="wr">worker</span></div>
+      <div class="worker-item"><span>👷</span><span class="wn">Search Worker 2</span><span class="wr">worker</span></div>
+      <div class="worker-item"><span>📝</span><span class="wn">Report Writer</span><span class="wr">worker</span></div>
+      <button class="add-worker">＋ Add worker</button>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <h2>③ Dual state — blueprint is source, graph projection is derived</h2>
+  <div class="dual">
+    <div class="state-card source">
+      <div class="sh">● blueprint state · source of truth</div>
+<pre><span class="c">// builder store</span>
+{
+  <span class="k">mode</span>: <span class="s">"scene"</span>,
+  <span class="k">blueprint</span>: {
+    <span class="k">name</span>: <span class="s">"Research Digest"</span>,
+    <span class="k">role_profiles</span>: [
+      { <span class="k">role_id</span>: <span class="s">"boss-rm"</span>,
+        <span class="k">can_spawn_tasks</span>: true,
+        <span class="k">sub_agents</span>: [...] }
+    ]
+  },
+  <span class="k">selection</span>: <span class="s">"worker-sw1"</span>
+}</pre>
+    </div>
+    <div class="dual-arrow">
+      <div style="font-size:22px">⟶</div>
+      <div class="label">derive<br>on select</div>
+    </div>
+    <div class="state-card deriv">
+      <div class="sh">● graph projection · derived view</div>
+<pre><span class="c">// memoized selector</span>
+{
+  <span class="k">nodes</span>: [
+    { <span class="k">id</span>: <span class="s">"rm"</span>, <span class="k">type</span>: <span class="s">"boss"</span> },
+    { <span class="k">id</span>: <span class="s">"sw1"</span>, <span class="k">type</span>: <span class="s">"worker"</span> }
+  ],
+  <span class="k">edges</span>: [
+    { <span class="k">from</span>: <span class="s">"rm"</span>,
+      <span class="k">to</span>: <span class="s">"sw1"</span>,
+      <span class="k">kind</span>: <span class="s">"spawn_task"</span> }
+  ]
+}</pre>
+    </div>
+  </div>
+</section>
+
+</body></html>

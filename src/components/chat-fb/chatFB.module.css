@@ -1,0 +1,3241 @@
+/* ============================================================================
+ * chat-fb CSS Module · FB-HiFi 设计语言
+ * 对齐 _evidence/design-pkg-2026-05-28/chat-fb.html
+ * 颜色 token 全部走 var(--xxx)（已在 src/index.css 和 fb-hifi.css 定义），
+ * 此处只负责布局/尺寸/字号/状态映射，不重复定义 token。
+ * ============================================================================ */
+
+/* ============================================================================
+ * Stream A · Inbox 左栏 (InboxPanelFB)
+ * 设计稿对照行号：chat-fb.html 行 194-260（CSS）+ 行 878-1018（HTML）
+ * ============================================================================ */
+
+/* ---- 外壳 (行 194-197) ---- */
+.inbox {
+  width: 296px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-family: inherit;
+}
+
+/* ---- 搜索区 (行 198-205) ---- */
+.searchWrap {
+  padding: 12px 12px 8px;
+}
+.input {
+  height: 32px;
+  padding: 0 10px;
+  background: var(--skin-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg-1);
+  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: text;
+}
+.input svg {
+  color: var(--fg-4);
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.inputPh {
+  color: var(--fg-4);
+}
+/* 搜索框真实 <input> — 替换静态 .inputPh 占位，实现实时过滤 */
+.inputReal {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg-1);
+  font-family: inherit;
+  font-size: 11.5px;
+}
+.inputReal::placeholder {
+  color: var(--fg-4);
+}
+/* 清除搜索 × 按钮 */
+.inputClear {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--fg-4);
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+}
+.inputClear:hover {
+  color: var(--fg-2);
+}
+.kbd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+}
+
+/* ---- 过滤 chips (行 207-212) ---- */
+.chips {
+  padding: 0 12px 10px;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.chip {
+  padding: 3px 9px;
+  border-radius: 11px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--skin-panel);
+  color: var(--fg-3);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  font-family: inherit;
+}
+.chipOn {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+  border-color: color-mix(in oklab, var(--accent) 30%, transparent);
+}
+
+/* ---- 区段标签 (行 214-216) ---- */
+.labRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px 4px;
+  gap: 6px;
+}
+.lab {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.lab svg {
+  width: 11px;
+  height: 11px;
+}
+.labN {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+}
+
+/* ---- 行列表 (行 218-259) ---- */
+.list {
+  padding: 0 8px 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  /* position:relative — FLIP(useFlipReorder) offsetTop 锚点收敛到本容器(reviewer-C)。 */
+  position: relative;
+}
+.listInner {
+  padding: 0 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  position: relative;
+  transition: background var(--dur-1, 120ms) ease, transform var(--dur-1, 120ms) var(--ease-out, ease);
+}
+/* R3 clawsgo 化：选中左条改 ::before 常驻 + scaleY 弹性生长（对齐个人态 .pcv-row），
+   替代原本静态 border-left-color，选中/切换更顺滑。 */
+.row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 2.5px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform var(--dur-2, 180ms) var(--ease-spring, cubic-bezier(.2, .8, .2, 1));
+}
+.row:hover {
+  background: var(--skin-panel);
+}
+.row:active {
+  transform: scale(.985);
+}
+.rowActive {
+  background: var(--accent-tint);
+}
+.rowActive::before {
+  transform: scaleY(1);
+}
+.rowActive:hover {
+  background: var(--accent-tint);
+}
+
+/* ---- 头像 (行 225-240) ---- */
+.av {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+  position: relative;
+  border: 1px solid;
+}
+.av svg {
+  width: 16px;
+  height: 16px;
+}
+.cnt {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  min-width: 15px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--skin-panel);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--fg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stat {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-elev-2);
+}
+.statRun {
+  background: var(--status-run);
+  animation: chatFbPulse 1.4s infinite;
+}
+.statWarn {
+  background: var(--status-warn);
+}
+/* R6 — 任务完成反馈（clawsgo「已完成」绿勾）：running→结束时短暂弹出绿勾，
+   pop 过冲入场，2.4s 后随 justDone 清除消失。 */
+.statDone {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--t-ok, #10b981);
+  border: 2px solid var(--bg-elev-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  animation: chatFbPop 0.34s cubic-bezier(.34, 1.56, .64, 1);
+}
+.statDone svg {
+  width: 9px;
+  height: 9px;
+}
+@keyframes chatFbPop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.18); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .statDone { animation: none !important; }
+}
+
+/* ---- 元数据 (行 241-259) ---- */
+.meta {
+  flex: 1;
+  min-width: 0;
+}
+.top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.nm {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-1);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--dur-1, 120ms) ease;
+}
+/* R10 — hover 名字向 accent 高亮（与个人态 .pcv-row-name 对称，clawsgo 招牌）。 */
+.row:hover .nm {
+  color: var(--accent);
+}
+/* R11 — 选中行名字常亮 accent，与个人态 .pcv-row.active .pcv-row-name 对称。 */
+.rowActive .nm {
+  color: var(--accent);
+}
+.rowUnread .nm {
+  font-weight: 700;
+}
+.live {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--status-run);
+  background: color-mix(in oklab, var(--status-run) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--status-run) 28%, transparent);
+}
+.t {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  flex-shrink: 0;
+}
+.rowUnread .t {
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+.at {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--status-reject);
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--status-reject-tint);
+  border: 1px solid color-mix(in oklab, var(--status-reject) 25%, transparent);
+}
+.unr {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--status-reject);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ---- 空态 ---- */
+.empty {
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.emptyIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-5);
+}
+.emptyText {
+  margin: 0;
+  font-size: 11px;
+  color: var(--fg-5);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+/* ---- 动画 (chat-fb.html 全局 @keyframes pulse) ---- */
+@keyframes chatFbPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ============================================================================
+ * Stream B · 主对话区 (ChatMainFB) —— 由 Stream B 在此处往下加
+ * 对照 chat-fb.html
+ *   - ConvHeader   : CSS 264-300 / HTML 1019-1096
+ *   - PinnedBrief  : CSS 301-313 / HTML 1123-1138
+ *   - Composer     : CSS 498-535 / HTML 1276-1309
+ *   - 共用 btn/btn-icon/hdr-menu : CSS 121-189
+ * ============================================================================ */
+
+/* ─── 共用 btn 基类 (chat-fb.html 121-151) ──────────────────────────────────── */
+.btn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: var(--fg-2);
+  font-family: inherit;
+}
+.btnPrimary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btnPrimary:hover {
+  filter: brightness(1.08);
+}
+.btnPrimary:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.btnGhost {
+  background: transparent;
+  color: var(--fg-2);
+  border: 1px solid var(--border);
+}
+.btnGhost:hover {
+  background: var(--bg-elev-2);
+  border-color: var(--border-strong);
+}
+.btnIcon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--fg-3);
+  border: 1px solid transparent;
+  position: relative;
+  background: transparent;
+  cursor: pointer;
+}
+.btnIcon:hover {
+  background: var(--bg-elev-2);
+  color: var(--fg-1);
+}
+.btnIconActive {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+  border-color: color-mix(in oklab, var(--accent) 35%, transparent);
+}
+.badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--status-reject);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--skin-panel);
+}
+.btnIconActive .badge {
+  background: var(--accent);
+  border-color: var(--accent-tint);
+}
+.pulseDot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-run);
+  box-shadow: 0 0 0 1.5px var(--skin-panel);
+  animation: chatFbPulse 1.4s infinite;
+}
+.btnSm {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
+/* ─── B: ConvHeader (chat-fb.html 264-300 / 1019-1096) ─────────────────────── */
+.hdr {
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--skin-panel);
+  flex-shrink: 0;
+}
+.hdrAv {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.hdrAv svg {
+  width: 18px;
+  height: 18px;
+}
+.hdrTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.hdrNm {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg-1);
+}
+.hdrMeta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-5);
+}
+.hdrSubline {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pillLive {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--status-run) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--status-run) 35%, transparent);
+  color: var(--status-run);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.pillLive::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-run);
+  animation: chatFbPulse 1.4s infinite;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--border);
+  color: var(--fg-4);
+  background: var(--bg-elev-2);
+}
+.hdrDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.hdrDotOk {
+  background: var(--status-ok);
+}
+.avStack {
+  display: flex;
+}
+.avMini {
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
+  border-radius: 4px;
+  border: 1px solid;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-left: -6px;
+}
+.avMini:first-child {
+  margin-left: 0;
+}
+
+/* ─── B: hdr-menu (chat-fb.html 153-189) ──────────────────────────────────── */
+.hdrMenuWrap {
+  position: relative;
+  display: inline-flex;
+}
+.hdrMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 232px;
+  background: var(--skin-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop, 0 24px 48px -20px rgba(24, 24, 27, 0.15), 0 8px 16px -10px rgba(24, 24, 27, 0.08));
+  padding: 6px;
+  z-index: 50;
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  pointer-events: none;
+  transform-origin: top right;
+  transition: opacity 140ms cubic-bezier(0.16, 0.84, 0.44, 1),
+              transform 140ms cubic-bezier(0.16, 0.84, 0.44, 1);
+}
+.hdrMenuOpen {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.hdrMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--fg-2);
+  user-select: none;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  width: 100%;
+  text-align: left;
+}
+.hdrMenuItem:hover {
+  background: var(--bg-elev-2);
+  color: var(--fg-1);
+}
+.hdrMenuItem svg {
+  width: 14px;
+  height: 14px;
+  color: var(--fg-4);
+  flex-shrink: 0;
+  stroke-width: 1.6;
+}
+.hdrMenuItem:hover svg {
+  color: var(--fg-2);
+}
+.menuLabel {
+  flex: 1;
+}
+.menuHint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-5);
+  padding: 1px 5px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.menuSw {
+  width: 24px;
+  height: 14px;
+  border-radius: 8px;
+  background: var(--bg-elev-3);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 140ms ease;
+}
+.menuSw::after {
+  content: '';
+  position: absolute;
+  top: 1.5px;
+  left: 1.5px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: left 140ms cubic-bezier(0.16, 0.84, 0.44, 1);
+}
+.hdrMenuItemOn .menuSw {
+  background: var(--accent);
+}
+.hdrMenuItemOn .menuSw::after {
+  left: 11px;
+}
+.hdrMenuSep {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 5px 4px;
+}
+.hdrMenuItemDanger {
+  color: var(--status-reject);
+}
+.hdrMenuItemDanger svg {
+  color: var(--status-reject);
+}
+.hdrMenuItemDanger:hover {
+  background: color-mix(in oklab, var(--status-reject) 8%, transparent);
+  color: var(--status-reject);
+}
+
+/* ─── B: PinnedBrief (chat-fb.html 301-313 / 1123-1138) ───────────────────── */
+.brief {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--cream, color-mix(in oklab, var(--accent) 6%, var(--skin-panel)));
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.briefPin {
+  color: var(--accent);
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+.briefTag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--accent-bright);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.briefPinnedBy {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+  margin-left: 8px;
+}
+.briefBody {
+  font-size: 11.5px;
+  color: var(--fg-2);
+  margin-top: 3px;
+  line-height: 1.45;
+}
+.briefBody b {
+  margin-left: 6px;
+  color: var(--fg-1);
+  font-weight: 600;
+}
+.briefBody b:first-child {
+  margin-left: 0;
+}
+.briefMore {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+  cursor: pointer;
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+}
+.briefMore:hover {
+  color: var(--fg-2);
+}
+
+/* ─── B: Composer (chat-fb.html 498-535 / 1276-1309) ──────────────────────── */
+.composer {
+  padding: 11px 20px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  position: relative;
+  flex-shrink: 0;
+}
+.slashPop {
+  position: absolute;
+  bottom: 88px;
+  left: 20px;
+  width: 360px;
+  z-index: 10;
+  background: var(--skin-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop, 0 24px 48px -20px rgba(24, 24, 27, 0.15), 0 8px 16px -10px rgba(24, 24, 27, 0.08));
+  padding: 5px;
+}
+.slashHead {
+  padding: 6px 9px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.slashLab {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  letter-spacing: 0.06em;
+}
+.slashHint {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  margin-left: auto;
+}
+.slashItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.slashItem:hover {
+  background: var(--bg-elev-2);
+}
+.slashItemSel {
+  background: var(--accent-tint);
+}
+.slashCmd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg-2);
+  min-width: 68px;
+}
+.slashItemSel .slashCmd {
+  color: var(--accent-bright);
+}
+.slashDesc {
+  font-size: 11.5px;
+  color: var(--fg-3);
+  flex: 1;
+}
+.compShell {
+  background: var(--skin-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  overflow: hidden;
+}
+.compTools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 9px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.compToolBtn {
+  width: 26px;
+  height: 24px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-4);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+.compToolBtn:hover {
+  background: var(--bg-elev-2);
+  color: var(--fg-2);
+}
+.compToolBtn svg {
+  width: 14px;
+  height: 14px;
+}
+.compMd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  padding: 0 6px;
+}
+.compArea {
+  padding: 11px 13px;
+  min-height: 50px;
+  font-size: 13px;
+  color: var(--fg-2);
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.5;
+  display: block;
+}
+.compArea::placeholder {
+  color: var(--fg-5);
+}
+.compFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px 8px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-elev-2);
+}
+.compFootL {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.compKbd {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+}
+.compSaved {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+}
+.dotOk {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-ok);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Stream D · ChatFeedFB / Messages
+ * 对照 chat-fb.html 行 315-496（feed / msg / usermsg / typing / day-div）
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.feed {
+  flex: 1;
+  overflow: auto;
+  padding: 22px 24px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── 日期分割 ───────────────────────────────────────────────────────────── */
+.dayDiv {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+}
+.dayLn {
+  flex: 1;
+  height: 1px;
+  background: var(--skin-border, var(--border));
+}
+.dayLb {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--skin-fg-4, var(--fg-4));
+}
+
+/* ── 系统通知行 ─────────────────────────────────────────────────────────── */
+.sysnote {
+  text-align: center;
+}
+.sysnote span {
+  display: inline-block;
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--skin-fg-4, var(--fg-4));
+  background: color-mix(in oklab, var(--skin-fg-4, #888) 6%, transparent);
+}
+
+/* ── Agent 消息 ─────────────────────────────────────────────────────────── */
+.msg {
+  display: flex;
+  gap: 10px;
+  position: relative;
+}
+.agentAv {
+  position: relative;
+  flex-shrink: 0;
+}
+.avLg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  border-radius: 8px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.bodyWrap {
+  flex: 1;
+  min-width: 0;
+  max-width: 720px;
+  padding-left: 12px;
+  border-left: 2px solid;
+}
+.msgHd {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.msgNm {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--skin-fg-1, var(--fg-1));
+}
+.agPill {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+}
+.msgT {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--skin-fg-5, var(--fg-5));
+}
+.msgText {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--skin-fg-2, var(--fg-2));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.streamCaret {
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--accent);
+  animation: hf-pulse 1s steps(2, end) infinite;
+  font-weight: 600;
+}
+
+/* ── 工具调用 chip ──────────────────────────────────────────────────────── */
+.toolChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 9px;
+  border-radius: 5px;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+}
+.toolChipN {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--skin-fg-2, var(--fg-2));
+  font-weight: 600;
+}
+.toolChipM {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--skin-fg-4, var(--fg-4));
+}
+.toolChipOk {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--status-ok);
+  font-weight: 600;
+}
+
+/* ── User 消息（右侧）───────────────────────────────────────────────────── */
+.usermsg {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  position: relative;
+}
+.usermsgCol {
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.usermsgHd {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+.usermsgBubble {
+  padding: 9px 13px;
+  background: var(--accent-tint);
+  color: var(--skin-fg-1, var(--fg-1));
+  border-radius: 11px 11px 3px 11px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.usermsgDelivered {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--skin-fg-5, var(--fg-5));
+  margin-top: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Stream D · ThreadDrawerFB
+ * 对照 chat-fb.html 行 599-818
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.drawer {
+  width: 360px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--skin-border, var(--border));
+  background: var(--skin-panel, var(--bg-elev));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  transition: width 160ms ease;
+}
+
+/* Tabs */
+.drTabs {
+  display: flex;
+  border-bottom: 1px solid var(--skin-border, var(--border));
+  padding: 0 8px;
+  flex-shrink: 0;
+  align-items: center;
+}
+.drTab {
+  padding: 11px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--skin-fg-4, var(--fg-4));
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 120ms;
+}
+.drTab:hover {
+  color: var(--skin-fg-2, var(--fg-2));
+}
+.drTabOn {
+  color: var(--skin-fg-1, var(--fg-1));
+  font-weight: 700;
+  border-bottom-color: var(--accent);
+}
+.drTabN {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--skin-fg-4, var(--fg-4));
+  padding: 0 5px;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+  border-radius: 8px;
+  min-width: 14px;
+  text-align: center;
+}
+.drClose {
+  margin-left: auto;
+  padding: 10px 8px;
+  color: var(--skin-fg-4, var(--fg-4));
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.drClose:hover {
+  color: var(--skin-fg-1, var(--fg-1));
+}
+
+/* Pane */
+.drPane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.drEmpty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--skin-fg-5, var(--fg-5));
+  padding: 30px 16px;
+  text-align: center;
+}
+
+/* dr-ctx */
+.drCtx {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--skin-border, var(--border));
+  flex-shrink: 0;
+}
+.drCtxCount {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--skin-fg-4, var(--fg-4));
+  letter-spacing: 0.04em;
+}
+
+/* dr-replies */
+.drReplies {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.drReply {
+  display: flex;
+  gap: 8px;
+  position: relative;
+}
+.drAv {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 5px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.drReplyBody {
+  flex: 1;
+  min-width: 0;
+}
+.drReplyAgent .drReplyBody {
+  border-left: 2px solid;
+  padding-left: 7px;
+}
+.drReplyUser {
+  justify-content: flex-end;
+}
+.drReplyUser .drReplyBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.drReplyHd {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.drReplyNm {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--skin-fg-1, var(--fg-1));
+}
+.drReplyAg {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.drReplyT {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--skin-fg-5, var(--fg-5));
+}
+.drReplyTxt {
+  font-size: 11px;
+  color: var(--skin-fg-2, var(--fg-2));
+  margin-top: 3px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.drReplyBubble {
+  font-size: 11px;
+  padding: 6px 10px;
+  background: var(--accent-tint);
+  color: var(--skin-fg-1, var(--fg-1));
+  border-radius: 10px 10px 3px 10px;
+  margin-top: 3px;
+  border: 1px solid color-mix(in oklab, var(--accent) 28%, transparent);
+  max-width: 280px;
+  word-break: break-word;
+}
+
+/* Actbar */
+.drActbar {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--skin-border, var(--border));
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.drActBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--skin-fg-3, var(--fg-3));
+  background: transparent;
+  border: 1px solid var(--skin-border, var(--border));
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 120ms;
+}
+.drActBtn:not(:disabled):hover {
+  color: var(--accent-bright);
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+  background: var(--accent-tint);
+}
+.drActBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Stream F · FeedSearchbar / MessageHoverToolbar / IssueList
+ *   对照 _evidence/design-pkg-2026-05-28/chat-fb.html
+ *   - searchbar : 行 555-596
+ *   - hover-tb  : 行 411-440 + 1576-1589 模板
+ *   - issue-list: 行 367-373
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── FeedSearchbar (inline drop under header) ──────────────────────────── */
+.searchbar {
+  max-height: 0;
+  overflow: hidden;
+  background: var(--skin-panel, #fff);
+  border-bottom: 1px solid transparent;
+  flex-shrink: 0;
+  transition: max-height 180ms ease, border-bottom-color 180ms ease;
+}
+.searchbarOpen {
+  max-height: 96px;
+  border-bottom-color: var(--border, #e4e7ec);
+}
+.sbInner {
+  padding: 9px 18px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.sbRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sbInput {
+  flex: 1;
+  height: 30px;
+  padding: 0 11px;
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #e4e7ec);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sbInput:focus-within {
+  border-color: color-mix(in oklab, var(--accent, #2f80ed) 50%, var(--border, #e4e7ec));
+}
+.sbInput svg {
+  color: var(--fg-4, #98a2b3);
+  flex-shrink: 0;
+}
+.sbInput input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--fg-1, #101828);
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.sbCount {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4, #98a2b3);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sbNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+.sbKbd {
+  padding: 1px 5px;
+  background: var(--bg-elev-2, #f2f4f7);
+  border: 1px solid var(--border, #e4e7ec);
+  border-radius: 4px;
+  font-size: 9.5px;
+  color: var(--fg-3, #475467);
+  font-family: var(--font-mono);
+}
+.sbNum {
+  color: var(--fg-1, #101828);
+  font-weight: 600;
+}
+.sbClose {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-4, #98a2b3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sbClose:hover {
+  background: var(--bg-elev-2, #f2f4f7);
+  color: var(--fg-1, #101828);
+}
+.sbChips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.sbChip {
+  padding: 2px 8px;
+  border-radius: 11px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--skin-panel, #fff);
+  color: var(--fg-3, #475467);
+  border: 1px solid var(--border, #e4e7ec);
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.45;
+}
+.sbChip:hover {
+  background: var(--bg-elev-2, #f2f4f7);
+  color: var(--fg-1, #101828);
+}
+.sbChipOn {
+  background: var(--accent-tint, #e7f0fd);
+  color: var(--accent-bright, #1d4ed8);
+  border-color: color-mix(in oklab, var(--accent, #2f80ed) 30%, transparent);
+}
+.sbChipOn:hover {
+  background: var(--accent-tint, #e7f0fd);
+}
+
+/* ─── MessageHoverToolbar (Lark-style; 9 actions + sep) ─────────────────── */
+.hoverTb {
+  position: absolute;
+  top: -13px;
+  right: 10px;
+  z-index: 5;
+  display: flex;
+  background: var(--skin-panel, #fff);
+  border: 1px solid var(--border, #e4e7ec);
+  border-radius: 8px;
+  padding: 2px;
+  box-shadow: var(--shadow-pop, 0 6px 18px rgba(15, 23, 42, 0.12));
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  /* F6 批4：时长/曲线收敛到 token（原 0.12s ease），位移 3px→2px 对齐
+     polish-plan §4「hover·消息工具条」规范 */
+  transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+/* 父级 hover 时显示；F6 批4 增补 :focus-within —— 键盘 Tab 进消息内的
+   可聚焦元素（含工具条按钮本身）同样呼出工具条（polish-plan 清单 #12） */
+/* stylelint-disable-next-line selector-pseudo-class-no-unknown */
+.msgHoverHost:hover > .hoverTb,
+.msgHoverHost:focus-within > .hoverTb,
+.hoverTbShow {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.hoverTbIt {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-3, #475467);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.hoverTbIt:hover {
+  background: var(--bg-elev-2, #f2f4f7);
+  color: var(--fg-1, #101828);
+}
+.hoverTbSep {
+  width: 1px;
+  height: 14px;
+  background: var(--border, #e4e7ec);
+  margin: 6px 2px;
+  align-self: center;
+}
+
+/* msgHoverHost — 包装消息卡，给 hover-tb 提供定位锚 + hover 触发器 */
+.msgHoverHost {
+  position: relative;
+}
+
+/* user-msg 工具栏沿气泡左缘悬浮，避开右侧头像 — 对照 chat-fb.html 行 426 */
+.usermsg.msgHoverHost > .hoverTb,
+.usermsg .hoverTb {
+  right: 54px;
+}
+
+/* ─── IssueList (structured findings inside agent msg) ──────────────────── */
+.issueList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
+.issue {
+  display: flex;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--skin-panel, #fff);
+  border-radius: 6px;
+  border: 1px solid var(--border, #e4e7ec);
+}
+.issueClickable {
+  cursor: pointer;
+  outline: none;
+}
+.issueClickable:hover {
+  background: var(--bg-elev-2, #f2f4f7);
+  border-color: color-mix(in oklab, var(--accent, #2f80ed) 35%, var(--border, #e4e7ec));
+}
+.issueClickable:focus-visible {
+  border-color: var(--accent, #2f80ed);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent, #2f80ed) 25%, transparent);
+}
+.issueSec {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 36px;
+  letter-spacing: 0.04em;
+  align-self: flex-start;
+  line-height: 1.5;
+}
+.issueSev_high {
+  color: var(--status-err, #dc2626);
+}
+.issueSev_med {
+  color: var(--status-warn, #d97706);
+}
+.issueSev_low {
+  color: var(--fg-4, #98a2b3);
+}
+.issueBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.issueTitle {
+  font-size: 12px;
+  color: var(--fg-2, #344054);
+  line-height: 1.45;
+  font-weight: 500;
+}
+.issueExcerpt {
+  font-size: 11.5px;
+  color: var(--fg-3, #475467);
+  line-height: 1.5;
+  /* 2 行 clip */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.issueLoc {
+  align-self: flex-start;
+  margin-top: 2px;
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-elev-2, #f2f4f7);
+  border: 1px solid var(--border, #e4e7ec);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4, #98a2b3);
+}
+
+/* ═══ G: ThreadDrawer dr-ctx / dr-comp / dr-doc ═══
+ * Stream G 落地 chat-fb.html 设计稿 P3 漏项：
+ *   - dr-ctx 头部源消息预览（avatar + name + excerpt）  HTML 行 619-624
+ *   - dr-comp 底部 mini composer + 同步勾选            HTML 行 652-662
+ *   - dr-doc 文档列表（lucide icon + name + chip）      HTML 行 1461-1497
+ *   不复用既有 .drCtx/.drDoc/.drComp 命名以免污染 dr-replies pane
+ *   的兼容渲染；新选择器都加在文件末尾，按"只能加不能删"原则。
+ * ─────────────────────────────────────────────────── */
+
+/* dr-ctx 源消息预览 row（用户传 sourceMessage 时启用） */
+.drCtxRow {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.drCtxAv {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.drCtxBody {
+  flex: 1;
+  min-width: 0;
+}
+.drCtxHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.drCtxNm {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--skin-fg-1, var(--fg-1));
+}
+.drCtxMeta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--skin-fg-4, var(--fg-4));
+}
+.drCtxExcerpt {
+  font-size: 11px;
+  color: var(--skin-fg-3, var(--fg-3));
+  margin-top: 2px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+/* dr-comp · Thread 底部回复 mini composer */
+.drComp {
+  flex-shrink: 0;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--skin-border, var(--border));
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.drCompInput {
+  width: 100%;
+  background: var(--skin-panel, var(--bg-elev-1));
+  border: 1px solid var(--skin-border, var(--border));
+  border-radius: 7px;
+  padding: 7px 9px;
+  font-size: 11px;
+  color: var(--skin-fg-1, var(--fg-1));
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  line-height: 1.45;
+  transition: border-color 120ms;
+  box-sizing: border-box;
+}
+.drCompInput:focus {
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+}
+.drCompInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.drCompOpts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.drCompCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--skin-fg-4, var(--fg-4));
+  cursor: pointer;
+  user-select: none;
+}
+.drCompCheck input {
+  accent-color: var(--accent);
+  width: 11px;
+  height: 11px;
+  cursor: pointer;
+}
+.drCompCheck input:disabled {
+  cursor: not-allowed;
+}
+.drCompSend {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-ink, #fff);
+  background: var(--accent);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 120ms;
+}
+.drCompSend:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.drCompSend:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Stream L 2026-05-28 · dr-comp 右下 0G synced 角标（v7 line 1559） */
+.drCompSyncRight {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.drCompSyncDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-ok, #10b981);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-ok, #10b981) 22%, transparent);
+}
+.drCompSyncText {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  color: var(--fg-4);
+  letter-spacing: 0.02em;
+}
+
+/* Stream L 2026-05-28 · dr-typing 行（thread 内 "—— Agent 正在输入 ⋯ ——" v7 line 1546） */
+.drTyping {
+  text-align: center;
+  padding: 4px 0 6px;
+}
+.drTyping span {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  color: var(--fg-5, var(--fg-4));
+  letter-spacing: 0.02em;
+}
+
+/* dr-doc · 文档列表（mock 阶段） */
+.drDocList {
+  flex: 1;
+  overflow: auto;
+  padding: 2px 0 8px;
+  display: flex;
+  flex-direction: column;
+}
+.drDocItem {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--skin-border-subtle, var(--border-subtle));
+  cursor: pointer;
+  transition: background 120ms;
+}
+.drDocItem:hover {
+  background: var(--skin-panel-2, var(--bg-elev-2));
+}
+.drDocIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+  color: var(--skin-fg-3, var(--fg-3));
+  flex-shrink: 0;
+}
+.drDocBody {
+  flex: 1;
+  min-width: 0;
+}
+.drDocName {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--skin-fg-1, var(--fg-1));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.drDocChip {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+  color: var(--skin-fg-4, var(--fg-4));
+  flex-shrink: 0;
+}
+.drDocChip[data-kind='pdf'] {
+  background: color-mix(in oklab, #dc2626 14%, var(--bg-elev-2));
+  color: #b91c1c;
+  border-color: color-mix(in oklab, #dc2626 22%, transparent);
+}
+.drDocChip[data-kind='md'] {
+  background: color-mix(in oklab, #2563eb 14%, var(--bg-elev-2));
+  color: #1d4ed8;
+  border-color: color-mix(in oklab, #2563eb 22%, transparent);
+}
+.drDocChip[data-kind='img'] {
+  background: color-mix(in oklab, #059669 14%, var(--bg-elev-2));
+  color: #047857;
+  border-color: color-mix(in oklab, #059669 22%, transparent);
+}
+.drDocChip[data-kind='code'] {
+  background: color-mix(in oklab, #7c3aed 14%, var(--bg-elev-2));
+  color: #6d28d9;
+  border-color: color-mix(in oklab, #7c3aed 22%, transparent);
+}
+.drDocMeta {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--skin-fg-4, var(--fg-4));
+  margin-top: 4px;
+}
+.drDocTodo {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--skin-fg-5, var(--fg-5));
+  padding: 10px 13px;
+  opacity: 0.7;
+  letter-spacing: 0.04em;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * E: Syscard / InlineApproval / TypingDots / Reactions / Reply 引用块
+ * 对照 _evidence/design-pkg-2026-05-28/chat-fb.html
+ *   - .syscard     CSS 行 330-339   HTML 行 1220-1231
+ *   - .gate-wrap   CSS 行 461-484   HTML 行 1243-1265
+ *   - .typing      CSS 行 487-496   HTML 行 1267-1272
+ *   - .reactions   CSS 行 385-397   HTML 行 1146-1180
+ *   - .thread-chip CSS 行 399-407   HTML 行 1173-1178
+ *   - .read-by     CSS 行 409       HTML 行 1179
+ *   - usermsg .reply CSS 行 448-452 HTML 行 1236
+ * Stream E 范围 — 行内"功能层"二级元素；本段只追加，不改动既有规则。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Syscard（feed 内系统决策事件卡）─────────────────────────────────────── */
+.syscard {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0;
+}
+.syscardBox {
+  display: flex;
+  gap: 10px;
+  padding: 11px 13px;
+  border-radius: 9px;
+  max-width: 560px;
+  background: var(--status-reject-tint, color-mix(in oklab, var(--status-reject) 12%, transparent));
+  border: 1px solid color-mix(in oklab, var(--status-reject) 30%, transparent);
+}
+.syscardBox[data-kind="policy-approve"],
+.syscardBox[data-kind="gate-pass"] {
+  background: color-mix(in oklab, var(--status-ok) 12%, transparent);
+  border-color: color-mix(in oklab, var(--status-ok) 30%, transparent);
+}
+.syscardBox[data-kind="system-event"] {
+  background: var(--bg-elev-2);
+  border-color: var(--border);
+}
+.syscardDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+.syscardCol {
+  flex: 1;
+  min-width: 0;
+}
+.syscardTag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--status-reject);
+  margin-bottom: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.syscardTag[data-kind="policy-approve"],
+.syscardTag[data-kind="gate-pass"] {
+  color: var(--status-ok);
+}
+.syscardTag[data-kind="system-event"] {
+  color: var(--fg-3);
+}
+.syscardTagIcon {
+  flex-shrink: 0;
+}
+.syscardBody {
+  font-size: 11.5px;
+  color: var(--fg-2);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.syscardMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 5px;
+}
+.syscardMetaKv {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.syscardMetaK {
+  color: var(--fg-5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.syscardMetaV {
+  color: var(--fg-2);
+  font-weight: 600;
+}
+.syscardTs {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--fg-5);
+  margin-top: 4px;
+}
+
+/* ─── InlineApproval（feed 内嵌 Approval Gate 卡）─────────────────────────── */
+.gateWrap {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0;
+}
+.gateWrap[data-status="approved"] .gate {
+  border-color: color-mix(in oklab, var(--status-ok) 38%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--status-ok) 22%, transparent),
+    0 8px 22px -10px color-mix(in oklab, var(--status-ok) 35%, transparent);
+}
+.gateWrap[data-status="rejected"] .gate {
+  border-color: color-mix(in oklab, var(--status-reject) 38%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--status-reject) 22%, transparent),
+    0 8px 22px -10px color-mix(in oklab, var(--status-reject) 35%, transparent);
+}
+.gate {
+  width: 100%;
+  max-width: 640px;
+  padding: 14px 15px 13px;
+  border-radius: 11px;
+  position: relative;
+  background: var(--skin-panel);
+  border: 1px solid color-mix(in oklab, var(--accent) 38%, transparent);
+  box-shadow: var(--glow-accent, 0 0 0 1px color-mix(in oklab, var(--accent) 22%, transparent),
+    0 8px 22px -10px color-mix(in oklab, var(--accent) 35%, transparent));
+}
+.gateTag {
+  position: absolute;
+  top: -10px;
+  left: 14px;
+  padding: 2px 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.gateRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  flex-wrap: wrap;
+}
+.gateAv {
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+.gateNm {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fg-1);
+}
+.gateRole {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+}
+.gateWait {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  margin-left: auto;
+}
+.gateResultOk {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--status-ok);
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.gateResultReject {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--status-reject);
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.gateTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg-1);
+  margin-bottom: 4px;
+}
+.gateBody {
+  font-size: 13px;
+  color: var(--fg-2);
+  margin-bottom: 9px;
+  line-height: 1.5;
+}
+.gateKv {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.gateKvCell {
+  padding: 6px 9px;
+  background: var(--bg-elev-2);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.gateKvK {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--fg-4);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.gateKvV {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg-1);
+  margin-top: 2px;
+}
+.gateCtas {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.gateKbd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+}
+/* Reject 按钮变体（既有 .btn/.btnPrimary/.btnGhost/.btnSm 链合使用） */
+.btnReject {
+  background: color-mix(in oklab, var(--status-reject) 14%, transparent);
+  color: var(--status-reject);
+  border: 1px solid color-mix(in oklab, var(--status-reject) 35%, transparent);
+}
+.btnReject:hover {
+  background: color-mix(in oklab, var(--status-reject) 22%, transparent);
+}
+
+/* ─── TypingDots（agent 思考中三点）──────────────────────────────────────── */
+.typing {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-left: 2px;
+  margin: 4px 0;
+}
+.typingAv {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+.typingNm {
+  font-size: 11.5px;
+  color: var(--fg-4);
+}
+.typingDots {
+  display: inline-flex;
+  gap: 3px;
+}
+.typingDots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fg-4);
+  animation: chatFbTypingPulse 1.2s ease-in-out infinite;
+}
+.typingDots span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.typingDots span:nth-child(3) {
+  animation-delay: 0.36s;
+}
+.typingMeta {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  margin-left: 6px;
+}
+@keyframes chatFbTypingPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+
+/* ─── Reactions / Thread-chip / Read-by（agent msg 二级元素）─────────────── */
+.reactions {
+  display: flex;
+  gap: 5px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.react {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 11px;
+  background: var(--skin-panel);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--fg-3);
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1;
+  font-family: inherit;
+}
+.react:hover {
+  background: var(--bg-elev-2);
+}
+.reactN {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+}
+.reactMine {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+  border-color: color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.reactAdd {
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: var(--skin-panel);
+  border: 1px dashed var(--border-strong);
+  color: var(--fg-4);
+}
+.reactAdd:hover {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+
+.threadChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: var(--accent-tint);
+  border: 1px solid color-mix(in oklab, var(--accent) 25%, transparent);
+  color: var(--accent-bright);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
+.threadChip:hover {
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+}
+.threadChipC {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+.threadChipLast {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+}
+.threadChipArr {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.readByRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.readByStack {
+  display: inline-flex;
+}
+.readByAv {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  color: var(--fg-3);
+  margin-left: -4px;
+  flex-shrink: 0;
+}
+.readByAv:first-child {
+  margin-left: 0;
+}
+.readBy {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--fg-5);
+}
+
+/* ─── usermsg .reply 引用块 ──────────────────────────────────────────────── */
+.usermsgReply {
+  display: block;
+  width: 100%;
+  text-align: right;
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 5px;
+  margin-bottom: 5px;
+  background: var(--bg-elev-2);
+  border: none;
+  border-left: 2px solid var(--accent);
+  color: var(--fg-4);
+  max-width: 100%;
+  cursor: pointer;
+  line-height: 1.4;
+  font-family: inherit;
+}
+.usermsgReply:hover {
+  background: color-mix(in oklab, var(--accent) 12%, var(--bg-elev-2));
+}
+.usermsgReplyWho {
+  font-weight: 700;
+  color: var(--fg-3);
+}
+.usermsgReplyExcerpt {
+  margin-left: 6px;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* ── Stream H 2026-05-28 · @mention 行内高亮 chip ────────────────────────────
+   对照 chat-fb.html 行 1237 — `<span ...accent-tint...>@阿批</span>` */
+.mention {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 0 2px;
+  border-radius: 4px;
+  background: var(--accent-tint, color-mix(in oklab, var(--accent) 15%, transparent));
+  color: var(--accent-bright, var(--accent));
+  font-weight: 700;
+  font-size: inherit;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.mention:hover {
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   I: GroupSettings Modal (gset-*)
+   对照 _evidence/design-pkg-2026-05-28-v7/chat-fb.html 行 191-421 (CSS)
+                                                          行 1742-1842 (markup)
+   DingTalk 风右侧抽屉：group card / members grid / KV rows / toggles / danger
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* overlay — 抽屉容器；ChatPage 加 .gsetOverlay.open 显示 */
+.gsetOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0);
+  pointer-events: none;
+  transition: background 200ms var(--ease-out, ease-out);
+}
+.gsetOverlay.open {
+  pointer-events: auto;
+  background: rgba(0, 0, 0, 0.12);
+}
+:global([data-theme="night"]) .gsetOverlay.open,
+:global(.frame[data-theme="night"]) .gsetOverlay.open {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+/* right-side slide-in dialog */
+.gsetDialog {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow:
+    -16px 0 40px -16px rgba(0, 0, 0, 0.22),
+    -1px 0 0 0 var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateX(100%);
+  transition: transform 260ms var(--ease-out, ease-out);
+}
+.gsetOverlay.open .gsetDialog {
+  transform: translateX(0);
+}
+
+/* header */
+.gsetHd {
+  height: 52px;
+  padding: 0 10px 0 20px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  background: transparent;
+}
+.gsetTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-1);
+  flex: 1;
+  letter-spacing: 0.005em;
+}
+.gsetX {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--fg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 140ms ease, color 140ms ease;
+}
+.gsetX svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.8;
+}
+.gsetX:hover {
+  background: color-mix(in oklab, var(--fg-1) 8%, transparent);
+  color: var(--fg-1);
+}
+
+/* body (scrollable) */
+.gsetBd {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  padding: 0 16px 20px;
+}
+
+/* group identity hero */
+.gsetCard {
+  display: flex;
+  gap: 16px;
+  padding: 20px 4px 22px;
+  align-items: center;
+}
+.gsetCardAv {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  flex-shrink: 0;
+  background: var(--skin-panel);
+  border: 1px solid color-mix(in oklab, var(--accent) 38%, transparent);
+  color: var(--accent-bright, var(--accent));
+  font-family: var(--font-serif, var(--font-sans, inherit));
+  font-size: 30px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.6) inset,
+    0 6px 18px -6px color-mix(in oklab, var(--accent) 38%, transparent),
+    0 0 0 4px color-mix(in oklab, var(--accent) 8%, transparent);
+}
+:global(.frame[data-theme="night"]) .gsetCardAv,
+:global([data-theme="night"]) .gsetCardAv {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+    0 6px 22px -4px color-mix(in oklab, var(--accent) 40%, transparent),
+    0 0 0 4px color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.gsetCardMeta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.gsetCardNm {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--fg-1);
+  letter-spacing: -0.005em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gsetCardStats {
+  font-size: 11px;
+  color: var(--fg-4);
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+}
+
+/* section spacing — soft 14px gap, no hard line */
+.gsetSep {
+  height: 14px;
+}
+
+/* section grouped as elevated card (Linear style) */
+.gsetSec {
+  padding: 14px 16px 12px;
+  background: var(--skin-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+}
+:global(.frame[data-theme="night"]) .gsetSec,
+:global([data-theme="night"]) .gsetSec {
+  background: color-mix(in oklab, var(--skin-panel) 92%, #fff);
+  border-color: color-mix(in oklab, var(--border) 60%, transparent);
+}
+.gsetSecHd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px 12px;
+}
+.gsetSecTtl {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--fg-4);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.gsetSecCnt {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--fg-3);
+  padding: 1px 7px;
+  background: color-mix(in oklab, var(--fg-1) 7%, transparent);
+  border-radius: 9px;
+  line-height: 16px;
+  font-weight: 500;
+}
+.gsetSpacer {
+  flex: 1;
+}
+.gsetLink {
+  border: none;
+  background: transparent;
+  color: var(--accent-bright, var(--accent));
+  font-size: 11.5px;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-weight: 500;
+  transition: background 120ms ease;
+}
+.gsetLink:hover {
+  background: var(--accent-tint, color-mix(in oklab, var(--accent) 15%, transparent));
+}
+
+/* members grid */
+.gsetMembers {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px 2px;
+  padding: 2px 0 4px;
+}
+.gsetM {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  padding: 4px 2px;
+  border-radius: 10px;
+  transition: transform 140ms var(--ease-out, ease-out);
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  /* 2026-05-29 修「脱框」：grid item 默认 min-width = min-content，长名字
+     （dev_engineer / 全栈开发）会撑大 cell 让总宽度超出 modal 380px。
+     min-width:0 让 1fr 真正能等分；min-width:0 + 配下面 gsetMNm/Role 的
+     overflow:hidden 让超长名字省略号截断而不撑爆。 */
+  min-width: 0;
+}
+.gsetM:hover {
+  transform: translateY(-1px);
+}
+.gsetM:hover .gsetMAv {
+  box-shadow:
+    0 4px 10px -2px rgba(0, 0, 0, 0.18),
+    0 0 0 3px color-mix(in oklab, var(--fg-1) 5%, transparent);
+}
+.gsetMAv {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif, var(--font-sans, inherit));
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 160ms ease;
+}
+.gsetMAv[data-c="r"] { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+.gsetMAv[data-c="b"] { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+.gsetMAv[data-c="g"] { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+.gsetMAv[data-c="o"] { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.gsetMAv[data-c="p"] { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); }
+.onDot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--status-ok, #10b981);
+  border: 2px solid var(--skin-panel);
+}
+.gsetMAvAdd {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  border: 1.5px dashed var(--border-strong, var(--border));
+  color: var(--fg-4) !important;
+  font-family: var(--font-sans, inherit);
+  font-size: 22px;
+  font-weight: 300;
+  box-shadow: none !important;
+}
+.gsetMNm {
+  font-size: 12px;
+  color: var(--fg-1);
+  line-height: 1.2;
+  text-align: center;
+  font-weight: 500;
+  /* 配合 .gsetM min-width:0：长名字省略号截断而非撑爆 grid */
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gsetMRole {
+  font-size: 9.5px;
+  color: var(--fg-4);
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-align: center;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* editable + toggle rows */
+.gsetRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 6px;
+  margin: 0 -6px;
+  border-radius: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background 120ms ease;
+  width: calc(100% + 12px);
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.gsetRow:last-child {
+  border-bottom: none;
+}
+.gsetRow:hover {
+  background: color-mix(in oklab, var(--fg-1) 4%, transparent);
+}
+.gsetRowSw {
+  cursor: pointer;
+}
+.gsetRowSw:hover {
+  background: transparent;
+}
+.gsetRowK {
+  font-size: 12.5px;
+  color: var(--fg-1);
+  flex-shrink: 0;
+  min-width: 88px;
+  font-weight: 500;
+}
+.gsetRowV {
+  flex: 1;
+  font-size: 12px;
+  color: var(--fg-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  justify-content: flex-end;
+  text-align: right;
+}
+.gsetRowV > span:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gsetRowVMute {
+  color: var(--fg-4);
+}
+.gsetRowChev {
+  color: var(--fg-5, var(--fg-4));
+  font-size: 15px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.gsetTagOwner {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 3.5px;
+  background: var(--accent-tint, color-mix(in oklab, var(--accent) 15%, transparent));
+  color: var(--accent-bright, var(--accent));
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  border: none;
+}
+
+/* toggle switch */
+.gsetSw {
+  width: 34px;
+  height: 20px;
+  border-radius: 11px;
+  background: color-mix(in oklab, var(--fg-1) 14%, transparent);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 220ms var(--ease-out, ease-out);
+  display: inline-block;
+}
+.gsetSw::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2.5px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  transition: left 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.gsetRowSw.on .gsetSw {
+  background: var(--accent);
+}
+.gsetRowSw.on .gsetSw::after {
+  left: 16px;
+}
+
+/* danger group */
+.gsetDanger {
+  display: flex;
+  gap: 10px;
+  padding: 6px 4px 10px;
+}
+.gsetDangerBtn {
+  flex: 1;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--skin-panel);
+  color: var(--fg-2);
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.gsetDangerBtn:hover {
+  background: color-mix(in oklab, var(--fg-1) 5%, transparent);
+  color: var(--fg-1);
+}
+.gsetDangerBtnRed {
+  color: var(--status-reject, #ef4444);
+}
+.gsetDangerBtnRed:hover {
+  background: color-mix(in oklab, var(--status-reject, #ef4444) 8%, transparent);
+  color: var(--status-reject, #ef4444);
+  border-color: color-mix(in oklab, var(--status-reject, #ef4444) 35%, var(--border));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * UI 4.0(2026-08-12)— 对标 clawsgo 实测令牌的聊天面精修层
+ * 全部 append-only 覆盖:大圆角浮动 composer、实色 accent 用户气泡、
+ * 右栏 tab 下划线滑动、胶囊发送键。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Composer:clawsgo 式大圆角浮动卡片 + focus 蓝环 ─────────────────────── */
+.composer {
+  background: transparent;
+  border-top-color: var(--border-subtle);
+}
+.compShell {
+  border-radius: 16px;
+  border-color: var(--border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .10);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.compShell:focus-within {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent),
+              0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .10);
+}
+.compToolBtn { border-radius: 7px; }
+.compFoot {
+  background: transparent;
+  border-top: 0;
+  padding-top: 2px;
+}
+/* 胶囊发送键(clawsgo 圆角刻度 4xl 观感) */
+.compFoot .btnPrimary {
+  border-radius: 999px;
+  height: 28px;
+  padding: 0 14px;
+}
+
+/* ── 用户气泡:实色 accent + accent-ink 文字(day=蓝底白字/night=蓝底深字)── */
+.usermsgBubble {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+  border-radius: 14px 14px 4px 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .10);
+}
+
+/* ── 右栏 tab:下划线滑动生长(替代生硬换色)─────────────────────────────── */
+.drTab { position: relative; }
+.drTab::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 180ms ease;
+}
+.drTabOn { border-bottom-color: transparent; }
+.drTabOn::after { transform: scaleX(1); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * ===== UI5.0 ===== (2026-08-14)— 会话与 Composer 精修层
+ * 对标 clawsgo 实测 DNA：圆角刻度 10/14/18/26、软阴影(卡片 0 1px 2px /
+ * 浮起 0 8px 24px -8px)、120–280ms ease-out 动效、克制用色(accent 只给关键状态)。
+ * 全部 append-only 覆盖；视觉回退 = 删除本块。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Feed 阅读节奏：更大留白、正文更清晰 ───────────────────────────────── */
+.feed {
+  gap: 18px;
+  padding: 26px 28px 14px;
+}
+.msgText {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--skin-fg-1, var(--fg-1));
+}
+/* AI 消息 markdown 排版：行内 code / 链接 / 块级间距（代码块本体由
+   CodeBlockToolbar 渲染，此处只补行内元素与节奏） */
+.msgText code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 1.5px 5px;
+  border-radius: 5px;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+}
+.msgText a {
+  color: var(--accent-bright);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+  transition: color 120ms ease, border-bottom-color 120ms ease;
+}
+.msgText a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+/* UI5.0 · ChatFeedFB  fenced code block → CodeBlockToolbar 的外层间距 */
+.msgCodeBlock {
+  margin-top: 8px;
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+/* ── Agent 头像与名称行：圆角刻度对齐 10px ────────────────────────────── */
+.avLg {
+  border-radius: 10px;
+}
+.msgNm {
+  letter-spacing: -0.01em;
+}
+
+/* ── 用户气泡：实色 accent + 18px 刻度 + 软影；内部 mention 反白 ────────── */
+.usermsgBubble {
+  border-radius: 18px 18px 4px 18px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .10);
+}
+.usermsgBubble .mention {
+  background: rgba(255, 255, 255, .20);
+  color: inherit;
+}
+.usermsgBubble .mention:hover {
+  background: rgba(255, 255, 255, .30);
+}
+
+/* ── 工具调用卡：chip → 可展开卡片（工具名 → 查询词 → 展开细节/可点链接）── */
+.toolCard {
+  margin-top: 10px;
+  max-width: 520px;
+  border: 1px solid var(--skin-border, var(--border));
+  border-radius: 12px;
+  background: var(--skin-panel, var(--bg-elev));
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+  overflow: hidden;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.toolCard:hover {
+  border-color: var(--border-strong, var(--border));
+  box-shadow: 0 8px 24px -8px rgba(15, 23, 42, .12);
+}
+.toolCardHd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  box-sizing: border-box;
+}
+.toolCardHdStatic {
+  cursor: default;
+}
+.toolCardIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.toolCardName {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--skin-fg-1, var(--fg-1));
+  flex-shrink: 0;
+}
+.toolCardQuery {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--skin-fg-4, var(--fg-4));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.toolCardOk {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--status-ok);
+  flex-shrink: 0;
+}
+.toolCardChevron {
+  color: var(--skin-fg-4, var(--fg-4));
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: transform 180ms ease;
+}
+.toolCardOpen .toolCardChevron {
+  transform: rotate(180deg);
+}
+.toolCardBody {
+  border-top: 1px solid var(--border-subtle, var(--border));
+  padding: 9px 12px;
+  background: var(--skin-panel-2, var(--bg-elev-2));
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--skin-fg-2, var(--fg-2));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.toolCardLink {
+  color: var(--accent-bright);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+  word-break: break-all;
+}
+.toolCardLink:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── TypingDots：软胶囊容器 + 上下跳动（替代缩放脉冲）──────────────────── */
+.typingDots {
+  gap: 4px;
+  padding: 7px 11px;
+  background: var(--skin-panel, var(--bg-elev-2));
+  border: 1px solid var(--skin-border, var(--border));
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+.typingDots span {
+  width: 6px;
+  height: 6px;
+  background: var(--fg-3);
+  animation: chatFbTypingBounce 1.2s ease-in-out infinite;
+}
+.typingAv {
+  border-radius: 7px;
+}
+@keyframes chatFbTypingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: .45; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typingDots span { animation: none !important; opacity: .7; }
+}
+
+/* ── Hover 工具条：10px 圆角 + 浮起软影 + 毛玻璃；hover 项 accent 化 ────── */
+.hoverTb {
+  border-radius: 10px;
+  padding: 3px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 8px 24px -8px rgba(15, 23, 42, .16);
+  backdrop-filter: blur(8px);
+}
+.hoverTbIt {
+  width: 27px;
+  height: 27px;
+  border-radius: 7px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.hoverTbIt:hover {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+}
+
+/* ── Feed 搜索栏：10px 圆角 + focus 蓝环 + 胶囊 chip ──────────────────── */
+.sbInput {
+  height: 34px;
+  border-radius: 10px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.sbInput:focus-within {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+}
+.sbChip {
+  border-radius: 999px;
+  padding: 3px 10px;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.sbClose {
+  border-radius: 8px;
+}
+
+/* ── Thread drawer：用户回复气泡实色化、mini composer 蓝环、胶囊发送 ────── */
+.drReplyBubble {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+  border-radius: 14px 14px 4px 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .08);
+}
+.drAv {
+  border-radius: 7px;
+}
+.drCompInput {
+  border-radius: 10px;
+  padding: 8px 11px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.drCompInput:focus {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+}
+.drCompSend {
+  border-radius: 999px;
+  padding: 5px 14px;
+}
+.drActBtn {
+  border-radius: 8px;
+}
+
+/* ── Composer 深化：18px 大圆角、工具钮 hover accent、发送键浮起 ────────── */
+.composer {
+  padding: 12px 24px 16px;
+}
+.compShell {
+  border-radius: 18px;
+}
+.compTools {
+  padding: 6px 10px;
+}
+.compToolBtn {
+  width: 28px;
+  height: 26px;
+  border-radius: 8px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.compToolBtn:hover {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+}
+.compArea {
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.compFoot .btnPrimary {
+  height: 30px;
+  padding: 0 16px;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .10);
+  transition: filter 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+.compFoot .btnPrimary:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px -8px color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.compFoot .btnPrimary:not(:disabled):active {
+  transform: translateY(0) scale(.97);
+}
+/* slash 弹窗：14px 圆角 + 浮起软影 + 弹入动效 */
+.slashPop {
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 8px 24px -8px rgba(15, 23, 42, .14);
+  animation: chatFbPopIn 160ms cubic-bezier(.16, .84, .44, 1);
+}
+.slashItem {
+  border-radius: 8px;
+}
+@keyframes chatFbPopIn {
+  from { opacity: 0; transform: translateY(4px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slashPop { animation: none !important; }
+}
+
+/* ── 次级元素圆角刻度收敛（reactions / issue / syscard / gate / mention）── */
+.react {
+  border-radius: 999px;
+}
+.reactAdd {
+  border-radius: 999px;
+}
+.threadChip {
+  border-radius: 8px;
+}
+.issue {
+  border-radius: 10px;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 150ms ease;
+}
+.issueClickable:hover {
+  box-shadow: 0 8px 24px -8px rgba(15, 23, 42, .10);
+}
+.syscardBox {
+  border-radius: 12px;
+}
+.gate {
+  border-radius: 14px;
+}
+.mention {
+  border-radius: 5px;
+}
+.dayLb {
+  letter-spacing: 0.1em;
+}

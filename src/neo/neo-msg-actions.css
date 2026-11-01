@@ -1,0 +1,124 @@
+/**
+ * neo-msg-actions.css — 消息行动作小组件样式（2026-08-22 L1 缺口补齐）。
+ *
+ * 覆盖两个新建组件：
+ *   .neo-msg-feedback — 单聊消息底部 👍/👎 反馈行（NeoMsgFeedback）
+ *   .neo-gma          — 群聊消息行 reactions chips + 快捷反应 + pin
+ *                       （NeoGroupMsgActions）
+ * 全部走 --t-* token（day/night 安全），视觉对齐 neo-timeline.css 的
+ * hairline / 12px fg-3 小件体系。工具栏默认低可见，父行 hover 浮现
+ * （.neo-tl-item 是 NeoTimeline 每条消息的包裹）。
+ */
+
+/* ── 单聊反馈行 ─────────────────────────────────────────────────────────── */
+.neo-msg-feedback {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.neo-tl-item:hover .neo-msg-feedback,
+.neo-msg-feedback:focus-within,
+.neo-msg-feedback:has([data-active]) {
+  opacity: 1;
+}
+
+.neo-msg-feedback-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t-fg-3);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.neo-msg-feedback-btn:hover:not(:disabled) {
+  color: var(--t-fg-2);
+  border-color: var(--t-border-2);
+}
+.neo-msg-feedback-btn[data-active] {
+  color: var(--t-accent);
+  border-color: var(--t-accent);
+  background: var(--t-accent-tint);
+}
+.neo-msg-feedback-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.neo-msg-feedback-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 群聊消息行：reactions + pin ────────────────────────────────────────── */
+.neo-gma {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.neo-gma-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel-2);
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.neo-gma-chip[data-mine] {
+  border-color: var(--t-accent);
+  background: var(--t-accent-tint);
+}
+.neo-gma-chip-count {
+  font-size: 11px;
+  color: var(--t-fg-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 工具栏：默认隐藏，父消息行 hover / 已 pin / 聚焦时浮现 */
+.neo-gma-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.neo-tl-item:hover .neo-gma-toolbar,
+.neo-gma-toolbar:focus-within,
+.neo-gma-toolbar:has([data-active]) {
+  opacity: 1;
+}
+
+.neo-gma-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--t-fg-3);
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.neo-gma-btn:hover:not(:disabled) {
+  background: var(--t-panel-3);
+  color: var(--t-fg-2);
+}
+.neo-gma-btn[data-active] {
+  color: var(--t-accent);
+}
+.neo-gma-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

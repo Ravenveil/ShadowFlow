@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- UI5.0: Google Fonts 预连接（index.css @import 引 Inter/Bricolage/Geist/Noto Sans SC），提前握手降低首屏字体延迟 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <title>ShadowFlow — 让每个人都能设计自己的 AI 协作团队</title>
+    <!-- Pre-paint theme bootstrap: stamp data-theme on <html> before
+         the first paint so [data-theme="night"] / [data-theme="day"]
+         selectors and var(--t-bg) resolve from frame 1. The actual
+         user preference is loaded from the backend by useTheme on
+         mount and may flip this to "day"; defaulting to "night" here
+         matches the :root token block so existing dark UI is unchanged.
+         If matchMedia indicates a light OS, prefer "day" to soften the
+         FOUC for users who picked "system" or "light". -->
+    <script>
+      (function () {
+        var t = 'night';
+        try {
+          if (window.matchMedia && !window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            t = 'day';
+          }
+        } catch (_) {}
+        document.documentElement.setAttribute('data-theme', t);
+      })();
+    </script>
+    <meta name="description" content="链上可验证的 AI 多 Agent 协作平台，团队即资产" />
+    <meta property="og:title" content="让每个人都能设计自己的 AI 协作团队，团队本身是链上资产" />
+    <meta property="og:description" content="链上可验证的 AI 多 Agent 协作平台，团队即资产" />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:url" content="https://demo.shadowflow.xyz/" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ShadowFlow — AI 协作团队即链上资产" />
+    <meta name="twitter:description" content="链上可验证的 AI 多 Agent 协作平台" />
+    <meta name="twitter:image" content="/og-image.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

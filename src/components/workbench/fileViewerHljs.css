@@ -1,0 +1,68 @@
+/**
+ * fileViewerHljs.css — Studio FileViewer 的 highlight.js 主题（owner: right-files），2026-06-24。
+ *
+ * 不引 highlight.js 自带主题（会和 ShadowFlow 的 --t-* token 撞色），改用项目 token 做的
+ * 软蓝/中性配色，深浅主题都跟着 CSS 变量走。只作用在 .hljs（FileViewer 代码块）。
+ */
+.hljs {
+  color: var(--t-fg-2);
+  background: transparent;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--t-fg-5);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-name,
+.hljs-tag {
+  color: var(--t-accent);
+}
+
+.hljs-string,
+.hljs-title,
+.hljs-section,
+.hljs-attribute,
+.hljs-literal,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-type,
+.hljs-addition {
+  color: #16a34a; /* soft green — strings / additions */
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-meta,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: #d97706; /* amber — numbers / meta */
+}
+
+.hljs-deletion {
+  color: #ef4444;
+}
+
+.hljs-function .hljs-title,
+.hljs-title.function_ {
+  color: #2563eb;
+}
+
+.hljs-variable,
+.hljs-params,
+.hljs-property {
+  color: var(--t-fg);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 700;
+}

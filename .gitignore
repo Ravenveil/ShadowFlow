@@ -1,0 +1,132 @@
+.coverage
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.pyo
+
+.opencode/
+.claude/.opencode/
+.claude/settings.local.json
+
+agentgraph.egg-info/
+shadowflow.egg-info/
+*.tgz
+dist/
+build/
+
+node_modules/
+src-tauri/target/
+
+.venv/
+.smoke-venv/
+venv/
+env/
+
+*.log
+nul.okm
+simple_data_pipeline_workflow.json
+simple_test.py
+test_planner.py
+.opencode
+.gstack/
+
+# 0G agent skills (cloned reference, update via: cd .0g-skills && git pull)
+.0g-skills/
+
+# Custom templates (user-authored, not source-tracked)
+templates/custom/
+
+# Ephemeral / plugin-managed directories
+.tmp/
+.claude/worktrees/
+.claude/skills/
+.agents/
+
+# Test artifacts
+test-results/
+playwright-report/
+
+# Environment / secrets (H4 fix — never commit .env files)
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Runtime state — encrypted tool credentials, catalog snapshots, workflow runs
+# (must never be committed; per code-review-2026-04-27 H4)
+_data/
+# Ignore everything in .shadowflow/ (sessions, projects, settings.json, credentials)
+# EXCEPT source-tracked declarative data:
+#   - skills/ : skill packs (S6.4)
+#   - agents/*.agent.yaml : global agent library (S0.5) — yaml only, NOT
+#     sqlite-exported agent-*.json / selection.*.tmp / etc.
+#   - teams/*.team.yaml   : global team library with DAG layout (S0.5) — same
+.shadowflow/*
+!.shadowflow/skills
+!.shadowflow/agents
+!.shadowflow/teams
+# Inside agents/ and teams/, only yaml is tracked. Runtime state stays ignored.
+.shadowflow/agents/*
+!.shadowflow/agents/*.agent.yaml
+.shadowflow/teams/*
+!.shadowflow/teams/*.team.yaml
+
+# Documentation / design files (not source code)
+docs/
+
+# Hardhat build artifacts
+artifacts/
+cache/
+typechain-types/
+
+# Claude Code internal (entire directory — project rules live in CLAUDE.md)
+.claude/
+
+# BMAD planning artifacts
+_bmad/
+_bmad-output/
+.vercel
+
+# Local-only review notes & handoff scratch (not source-tracked)
+.shadowflow-review.md
+_handoff_tmp/
+
+# 2026-10-30 安全清理：server 侧运行时数据（settings.json 含 API key、sqlite、
+# sessions/projects）一律不入库（曾因跟踪泄露 key，历史已在远程，key 已作废待换）。
+server/.shadowflow/
+
+# 2026-10-31：仓库根目录的调试临时文件（_run*.txt/_sess*.txt 曾含明文 API key，
+# 永不入库）；Obsidian 主题下载缓存不入库（app.json 等配置仍跟踪）。
+/_run*.txt
+/_sess*.txt
+/_*.tmp
+.obsidian/themes/
+.obsidian/workspace.json
+
+# ── OSS cleanup (2026-11): personal / local-only content, never publish ──
+.workbuddy/
+.claude/
+.zcode/
+.agents/
+.slidep/
+.vibeyardignore
+.obsidian/
+_bmad/
+_bmad-output/
+_evidence/
+_handoff_tmp/
+research/
+logs/
+demo-runtime/
+ppt/
+多智能体框架研究/
+lingbot-复现报告/
+日常prompt/
+会话补上下文补全
+向量召回知识
+.tmp_*
+_run*.txt
+_sess*.txt
+_exp*.pid
+Pasted image *.png
+DTempreadme_b64.txt

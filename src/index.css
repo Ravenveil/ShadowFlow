@@ -1,0 +1,1834 @@
+/* ============================================================================
+ * ShadowFlow · Global styles
+ * Dark terminal/IDE aesthetic · blue accent · 三声部字体系统
+ *
+ * 2026-05-28 字体升级 (三声部 — 设计稿"terminal + 编辑出版"双气质):
+ *   - Display: Bricolage Grotesque — 可变字体, 编辑出版风, 独特字形(g/a/?),
+ *     用于 .sf-display-* / .sf-h* 标题层级, 给 hero 注入设计感
+ *   - Body: Geist — 中性骨架(保留), 13px 正文密度大量用
+ *   - Mono: JetBrains Mono — 程序员字体, x-高更大、字形辨识度强、连字可选
+ *     用于 ~48% mono 文本(标签/ID/code)
+ *
+ * 一次 Google Fonts 请求, display=swap 避免 FOIT。
+ * ============================================================================ */
+
+/* 2026-08-18 clawsgo 收敛批: body/display 切 system-ui 系统字体栈(与复刻页
+ * home.html 同款, 消除 Geist/Inter 与系统字体的字宽行高差异); web 字体只保留
+ * JetBrains Mono(代码/标签)。Geist/Inter/Noto/Bricolage 不再引入。 */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---- Font families --------------------------------------
+ * 三声部 + CJK fallback:
+ *   --font-sans:    body/UI         (Geist Latin + Noto Sans SC CJK)
+ *   --font-display: hero/标题        (Bricolage Latin + Noto Sans SC CJK)
+ *   --font-mono:    标签/ID/code     (JetBrains Mono Latin + Noto Sans SC CJK)
+ * 字体栈顺序: Latin 第一, CJK 第二, system 兜底。浏览器按 codepoint 命中,
+ * Bricolage/Geist/JetBrains 不含汉字 → 自动落到 Noto Sans SC 而非系统默认
+ * 的微软雅黑(小字号发糊). */
+:root {
+  /* 2026-06-01 — 全局界面缩放系数(用户在「设置 → 外观 → 字号」滑块调,fontScale.ts
+   * 写 documentElement inline 覆盖)。默认 1(原始大小)。全 app 字号 100% 用 px,
+   * 改基准无效,只有 zoom 能等比放大 px 文字。定高全屏壳须加 .zoom-shell 抵消。 */
+  --app-zoom: 1;
+
+  /* 2026-08-18 clawsgo 收敛: sans/display 复刻页同款系统栈(Win=Segoe/PingFang,
+   * mac=SF); mono 保留 JetBrains Mono。 */
+  --font-sans:    system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-display: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ---- SKIN SLOTS (7) ----------------------------------------
+     7-slot YAML Skin Pack. Everything downstream derives from these. */
+  --skin-bg:         #0A0A0A;
+  --skin-panel:      #0F0F12;
+  --skin-fg:         #FAFAFA;
+  --skin-muted:      #A1A1AA;
+  --skin-accent:     #3B82F6;
+  --skin-accent-ink: #0A0A0A;
+  --skin-border:     #27272A;
+
+  /* ---- Extended palette (derived / functional) ------------ */
+  --bg:              var(--skin-bg);
+  --bg-elev-1:       #0C0C10;
+  --bg-elev-2:       #141414;
+  --bg-elev-3:       #1A1A1A;
+  --bg-elev-4:       #1F1F23;
+  --bg-node:         #1A1A1A;
+  --bg-accent-tint:  #0B1728;
+
+  --fg-0:            #FFFFFF;
+  --fg-1:            var(--skin-fg);
+  --fg-2:            #E4E4E7;
+  --fg-3:            var(--skin-muted);
+  --fg-4:            #71717A;
+  --fg-5:            #52525B;
+  --fg-6:            #3F3F46;
+
+  --border:          var(--skin-border);
+  --border-strong:   #3F3F46;
+  --border-subtle:   #1A1A1A;
+
+  --accent:          var(--skin-accent);
+  --accent-tint:     var(--bg-accent-tint);
+  --accent-dim:      #1D4ED8;
+  --accent-bright:   #93C5FD;
+  --accent-ink:      var(--skin-accent-ink);
+
+  --status-run:      #3B82F6;
+  --status-ok:       #10B981;
+  --status-warn:     #F59E0B;
+  --status-reject:   #EF4444;
+  --status-gated:    #22D3EE;
+  --status-pending:  #71717A;
+  --status-reject-tint: #1A0F12;
+  --status-ok-tint:     #0A1F17;
+  --status-warn-tint:   #1F1810;
+  --status-run-tint:    #0A1020;
+
+  /* ---- Radius -------------------------------------------- */
+  --r-1: 1px; --r-2: 2px; --r-4: 4px; --r-8: 8px;
+  --r-10: 10px; --r-12: 12px; --r-14: 14px; --r-16: 16px;
+  /* 2026-06-11 F6 批1 — 语义化圆角别名（frontend-polish-plan §3.3）。
+   * 规则：chip/badge=6、列表行与输入=8、卡片与面板=12、modal=14、胶囊=999；
+   * 7/9/10/11/3 等中间值在后续换装批归并到最近刻度，本批只定义。 */
+  --r-chip: 6px;  --r-row: 8px;  --r-input: 8px;
+  --r-card: 12px; --r-panel: 12px; --r-modal: 14px; --r-full: 999px;
+
+  /* ---- Spacing (4px base) -------------------------------- */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px;
+  --s-12: 48px; --s-16: 64px;
+
+  /* ---- Font size (2026-06-11 F6 批1, frontend-polish-plan §3.4) ----
+   * 13 档 0.5px 步进 → 7 档语义刻度，本批只定义，换装在后续批次：
+   *   --fs-meta   9px mono  时间戳/ID/badge        (收编 8.5/9/9.5)
+   *   --fs-label 10px mono  区块标签 uppercase      (收编 9.5/10/10.5)
+   *   --fs-mono  11px mono  代码/路径/chip 文本     (收编 10.5/11/11.5)
+   *   --fs-sub   12px       次要正文/描述           (收编 11.5/12/12.5)
+   *   --fs-body  13px       正文（Linear 密度）     (收编 12.5/13)
+   *   --fs-emph  14px       行标题/会话名           (收编 14/15)
+   *   --fs-title 17px       面板标题/空态标题       (收编 16/17) */
+  --fs-meta: 9px;  --fs-label: 10px; --fs-mono: 11px;
+  --fs-sub: 12px;  --fs-body: 13px;  --fs-emph: 14px;
+  --fs-title: 17px;
+
+  /* ---- Shadows ------------------------------------------- */
+  --shadow-pop:  0 0 0 1px rgba(59,130,246,.35), 0 8px 24px -8px rgba(59,130,246,.4);
+  --shadow-card: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-hud:  0 10px 30px -10px rgba(0,0,0,.6);
+  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(59,130,246,.5);
+  --glow-ok:     0 0 0 1px var(--status-ok), 0 0 16px -4px rgba(16,185,129,.4);
+  --glow-reject: 0 0 0 1px var(--status-reject), 0 0 20px -4px rgba(239,68,68,.5);
+  /* 2026-06-11 F6 批1 — 阴影语义三档（frontend-polish-plan §3.5）。
+   *   --shadow-1 卡片浮起 / --shadow-2 dropdown·popover / --shadow-3 modal·抽屉。
+   * 1、3 档别名到已有值（day/paper 主题块重定义 --shadow-card/--shadow-hud 时
+   * 同元素级联自动跟随），2 档为新增中间档。 */
+  --shadow-1: var(--shadow-card);
+  --shadow-2: 0 8px 24px -8px rgba(0,0,0,.35);
+  --shadow-3: var(--shadow-hud);
+
+  /* ---- Motion -------------------------------------------- */
+  /* 2026-06-11 F6 批1 — 时长五档（frontend-polish-plan §3.1）：
+   *   --dur-0  80ms  按压反馈 active/press
+   *   --dur-1 120ms  hover、颜色变化
+   *   --dur-2 180ms  元素入场 fade/slide、tab 内容
+   *   --dur-3 280ms  面板/弹层/折叠
+   *   --dur-4 420ms  大面积折叠、抽屉、spring 入场
+   * 曲线收敛三条（对齐 ClawsGO 三曲线模型）：
+   *   --ease-out    默认出场/hover；--ease-in-out 对称运动；
+   *   --ease-spring 入场弹性（统一 (.2,.8,.2,1)/(.22,1,.36,1)/(.16,1,.3,1) 三个散落变体）。
+   * 规则：组件 CSS 一律 var(--dur-n) var(--ease-x)，换装在后续批次进行。 */
+  --ease-out: cubic-bezier(.16,.84,.44,1);
+  --ease-in-out: cubic-bezier(.4,0,.2,1);
+  --ease-spring: cubic-bezier(.2,.8,.2,1);
+  --dur-0: 80ms;
+  --dur-1: 120ms; --dur-2: 180ms; --dur-3: 280ms;
+  --dur-4: 420ms;
+}
+
+/* ============ Base reset ============ */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 2026-06-01 — 全局界面缩放。zoom 在 <html> 等比放大所有 px 文字+间距(全 app 0 rem,
+ * 唯一可行的「整体调大」)。默认 --app-zoom:1 不放大;用户拖滑块改它。
+ * 已知代价:定高全屏壳(height:100vh + overflow:hidden)zoom 后内容超物理视口被裁,
+ * 用 .zoom-shell 抵消(下方)。 */
+html {
+  zoom: var(--app-zoom);
+}
+
+/* 定高全屏壳专用:height 抵消 zoom,使放大后内容正好填满物理视口(不裁底部)。
+ * 所有 height:100vh + overflow:hidden 的 app 根壳/抽屉都应挂这个 class 而非裸 100vh。 */
+.zoom-shell {
+  height: calc(100vh / var(--app-zoom)) !important;
+}
+
+/* Theme-aware root surface lives on <html> only — useTheme writes
+   data-theme to documentElement, and this is the lowest-cost place
+   to flip background/foreground for the whole app (legacy pages
+   included). <body> stays transparent so it never masks <html>. */
+html {
+  background: var(--t-bg, #FAFAF7);
+  color: var(--t-fg, #0A0A0A);
+  transition: background-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+}
+body {
+  background: transparent;
+  color: inherit;
+}
+
+button { font-family: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input, textarea, select { font-family: inherit; color: inherit; }
+
+#root { width: 100%; height: 100%; }
+
+/* ── Motion polish (2026-06-22) ─────────────────────────────────────────────
+   弹层进退场 + 消息入场。退场靠 data-closing="1" 切换到 *-out 关键帧，由
+   useModalAnimation hook 在卸载前延迟一帧（见 src/common/hooks/useModalAnimation.ts）。 */
+@keyframes sf-modal-backdrop-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sf-modal-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sf-modal-card-in  { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes sf-modal-card-out { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(6px) scale(.98); } }
+.sf-modal-backdrop { animation: sf-modal-backdrop-in 160ms var(--ease-out) both; }
+.sf-modal-backdrop[data-closing="1"] { animation: sf-modal-backdrop-out 150ms var(--ease-out) both; }
+.sf-modal-card { animation: sf-modal-card-in 200ms var(--ease-out) both; }
+.sf-modal-card[data-closing="1"] { animation: sf-modal-card-out 150ms var(--ease-out) both; }
+
+/* 生成式 SVG 头像（AgentAvatar）入场 — 轻微 scale-up + 淡入，挂载即播放一次。
+   纹样是确定性的，这层只给「出现」一个柔和的弹入手感，不持续动画（省电、不分心）。 */
+@keyframes sf-avatar-in { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
+.sf-avatar { animation: sf-avatar-in var(--dur-2) var(--ease-out) both; will-change: transform; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-modal-backdrop, .sf-modal-card, .sf-avatar,
+  .sf-modal-backdrop[data-closing="1"], .sf-modal-card[data-closing="1"] { animation: none !important; }
+}
+
+/* Run-session resend button: hover-revealed on parent .group */
+.group:hover > .sf-resend-hover { opacity: 1 !important; }
+
+/* ============ Scrollbar ============ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--bg-elev-4); border-radius: 4px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* ============ Typography classes ============ */
+.sf-body       { font-family: var(--font-sans); font-size: 14px; font-weight: 500; line-height: 1.5; }
+.sf-body-sm    { font-family: var(--font-sans); font-size: 13px; font-weight: 500; line-height: 1.45; }
+.sf-body-lg    { font-family: var(--font-sans); font-size: 16px; font-weight: 500; line-height: 1.55; }
+.sf-label      { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-4); }
+.sf-meta       { font-family: var(--font-mono); font-size: 9px;  font-weight: 400; color: var(--fg-4); letter-spacing: .02em; }
+.sf-mono-sm    { font-family: var(--font-mono); font-size: 10px; font-weight: 500; }
+.sf-mono       { font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+.sf-mono-md    { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+.sf-kbd        { font-family: var(--font-mono); font-size: 10px; font-weight: 600; padding: 1px 5px; border: 1px solid var(--border); border-radius: var(--r-4); color: var(--fg-3); background: var(--bg-elev-2); }
+
+/* ============ Shared components ============ */
+
+/* Top chrome */
+.sf-logo { display: flex; align-items: center; gap: 10px; }
+.sf-logo-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; font-family: var(--font-sans); font-weight: 900; font-size: 16px; letter-spacing: -.03em; }
+.sf-logo-word { font-family: var(--font-sans); font-size: 15px; font-weight: 700; letter-spacing: -.02em; }
+.sf-bread { display: flex; align-items: center; gap: 8px; font-family: var(--font-sans); font-size: 13px; font-weight: 500; color: var(--fg-3); }
+.sf-bread .sep { color: var(--fg-5); }
+.sf-bread .cur { color: var(--fg-1); }
+
+/* Buttons */
+.sf-btn { height: 32px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out); }
+.sf-btn-primary { background: var(--accent); color: var(--accent-ink); }
+.sf-btn-primary:hover { background: var(--accent-bright); }
+.sf-btn-ghost { background: transparent; color: var(--fg-2); border: 1px solid var(--border); }
+.sf-btn-ghost:hover { background: var(--bg-elev-2); border-color: var(--border-strong); }
+.sf-btn-icon { width: 32px; height: 32px; padding: 0; justify-content: center; border-radius: 8px; color: var(--fg-3); }
+.sf-btn-icon:hover { background: var(--bg-elev-2); color: var(--fg-1); }
+.sf-btn-sm { height: 24px; padding: 0 8px; font-size: 11px; border-radius: 6px; }
+.sf-btn-ok { background: var(--status-ok); color: #06221A; }
+.sf-btn-reject { background: transparent; color: var(--status-reject); border: 1px solid rgba(239,68,68,.4); }
+.sf-btn-reject:hover { background: var(--status-reject-tint); }
+
+.sf-pill-live { padding: 2px 8px; border-radius: 999px; background: var(--status-run-tint); border: 1px solid rgba(59,130,246,.4); color: var(--status-run); font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px; }
+.sf-pill-live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--status-run); animation: sf-pulse 1.4s ease-in-out infinite; }
+
+/* Panels */
+.sf-panel { background: var(--skin-panel); border: 1px solid var(--border); border-radius: 12px; }
+.sf-panel-head { padding: 12px 14px 10px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; }
+
+/* Inputs */
+.sf-input { height: 32px; background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 8px; color: var(--fg-1); font-size: 13px; padding: 0 10px; width: 100%; transition: border-color var(--dur-1); }
+.sf-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(59,130,246,.25); }
+
+/* DAG nodes */
+.sf-node { width: 160px; min-height: 64px; background: var(--bg-node); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; position: relative; transition: border-color var(--dur-1); }
+.sf-node .t { font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--fg-1); }
+.sf-node .m { font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); margin-top: 2px; }
+.sf-node.selected { border-color: var(--accent); box-shadow: var(--glow-accent); }
+.sf-node.running   { border-color: var(--status-run); }
+.sf-node.ok        { border-color: var(--status-ok); }
+.sf-node.reject    { border-color: var(--status-reject); background: var(--status-reject-tint); }
+
+/* Canvas dot-grid */
+.sf-canvas { background: var(--bg); background-image: radial-gradient(circle, var(--bg-elev-4) 1px, transparent 1.5px); background-size: 24px 24px; background-position: -1px -1px; }
+
+/* Sidebar rows */
+.sf-side-row { padding: 8px 10px; border-radius: 8px; display: flex; align-items: center; gap: 10px; color: var(--fg-2); font-size: 13px; cursor: pointer; transition: background var(--dur-1); }
+.sf-side-row:hover { background: var(--bg-elev-2); }
+.sf-side-row.active { background: var(--accent-tint); color: var(--accent-bright); }
+
+/* Stat cards */
+.sf-stat { background: var(--bg-elev-1); border: 1px solid var(--border); border-left: 2px solid var(--accent); border-radius: 10px; padding: 14px 16px; }
+.sf-stat .k { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-4); }
+.sf-stat .v { font-family: var(--font-sans); font-size: 28px; font-weight: 800; letter-spacing: -.02em; color: var(--fg-1); margin-top: 4px; }
+
+/* Lucide icons */
+.lucide { width: 16px; height: 16px; stroke-width: 1.5; }
+
+/* ============ Animations ============ */
+@keyframes sf-pulse     { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+@keyframes sf-breathe   { 0%,100% { box-shadow: 0 0 0 4px rgba(59,130,246,.12), 0 0 28px -2px rgba(59,130,246,.55); } 50% { box-shadow: 0 0 0 8px rgba(59,130,246,.08), 0 0 44px -2px rgba(59,130,246,.75); } }
+@keyframes sf-ripple    { 0% { transform: scale(1); opacity: .5; } 100% { transform: scale(1.6); opacity: 0; } }
+@keyframes sf-float     { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes sf-marquee   { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes sf-drift-x   { 0% { transform: translateX(-100%); opacity:0 } 20% { opacity:1 } 80% { opacity:1 } 100% { transform: translateX(100%); opacity:0 } }
+@keyframes sf-dash-anim { to { stroke-dashoffset: -12; } }
+@keyframes sf-blink     { 50% { opacity: 0; } }
+/* 2026-05-18 (agent-4) — promoted from agent-1/agent-2 local <style> injections
+ * to permanent global keyframes so 4 degraded animations (ID-mark rotating ring,
+ * persona caret blink, slot running spinner, Tools ADDING spinner) get the
+ * same definition + no runtime DOM injection on mount. */
+@keyframes sf-spin      { to { transform: rotate(360deg); } }
+/* 2026-06-11 F6 批1 修真 bug：7 处内联 `animation:'spin …'`（RunWorkPane、
+   AcpAgentsPanel、CliDetectPanel、LocalCLISection、ReviewApprovalWizard、
+   ImportTemplateDialog、workspace/chat/Composer）此前依赖「别处恰好用了
+   Tailwind animate-spin 才生成 @keyframes spin」或局部 <style> 才能转。
+   这里显式全局定义兜底；与 Tailwind 生成的同名同体 keyframes 重复无害。
+   F6 批2 收尾：上述 7 处调用点已全部换装 .sf-spin 类（1s 档）或显式引用
+   sf-spin keyframes（0.6/0.7s 档），`spin` 同名兜底保留给历史/第三方。 */
+@keyframes spin         { to { transform: rotate(360deg); } }
+/* 统一 spinner 类（polish-plan §4 loading·spinner）：1s 线性旋转。
+   非 1s 档位（0.6/0.7s）在调用点显式写 `animation: sf-spin .7s linear infinite`。 */
+.sf-spin { animation: sf-spin 1s linear infinite; }
+
+/* ============================================================================
+ * F6 批2 — 骨架屏体系（polish-plan §4 loading·骨架屏，对标 clawsgo-shimmer）
+ * 底色 --t-panel-2，流光 background-position 200% → -50%（1.4s 线性循环），
+ * 圆角随宿主（默认 --r-row，宿主可用 style/类覆盖）。
+ * 用法：<div class="sf-skeleton" style="height:44px;width:72%" />
+ * reduced-motion 由文件末尾全局兜底块终止循环。
+ * ============================================================================ */
+@keyframes sf-shimmer { to { background-position: -50% 0; } }
+.sf-skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--t-panel-2) 40%,
+    color-mix(in srgb, var(--t-fg) 8%, var(--t-panel-2)) 50%,
+    var(--t-panel-2) 60%
+  );
+  background-size: 200% 100%;
+  background-position: 200% 0;
+  border-radius: var(--r-row);
+  animation: sf-shimmer 1.4s linear infinite;
+  pointer-events: none;
+}
+@keyframes sf-cur       { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
+
+/* 2026-06-02 — Trae 式「实时跟随」聚光：run-session 自动滚动到正在生成的
+ * section / agent 时，给目标元素套一圈渐隐的 accent 光环 + 轻微 tint，
+ * 像盯着光标落点。RunSessionPage 的 anchor-scroll effect 在滚动后给元素
+ * 加 .sf-spotlight，1.6s 后移除（动画结束即视觉归零）。 */
+@keyframes sf-spotlight {
+  0%   { box-shadow: 0 0 0 2px var(--accent), 0 0 22px -2px rgba(59,130,246,.65); background-color: rgba(59,130,246,.10); }
+  60%  { box-shadow: 0 0 0 2px var(--accent), 0 0 22px -2px rgba(59,130,246,.45); background-color: rgba(59,130,246,.06); }
+  100% { box-shadow: 0 0 0 0 transparent;                                         background-color: transparent; }
+}
+.sf-spotlight {
+  animation: sf-spotlight 1.6s ease-out 1;
+  border-radius: 12px;
+  scroll-margin-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-spotlight { animation: none; }
+}
+
+/* Utility */
+.truncate     { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ============================================================================
+ * Hi-Fi v2 Design System (HF) — Day + Night theme tokens
+ * Coexists with the legacy --sf-* tokens above. Components opt-in by either
+ * (a) being mounted under [data-theme="day"|"night"] (set by useTheme hook on
+ * the documentElement) and (b) using `var(--t-*)` token references.
+ * ============================================================================ */
+
+:root,
+[data-theme="night"] {
+  --t-bg:        #0A0A0A;
+  --t-panel:     #0F0F12;
+  --t-panel-2:   #141418;
+  --t-panel-3:   #1A1A1F;
+  --t-fg:        #FAFAFA;
+  --t-fg-2:      #E4E4E7;
+  --t-fg-3:      #A1A1AA;
+  --t-fg-4:      #71717A;
+  --t-fg-5:      #52525B;
+  --t-fg-6:      #3F3F46;
+  --t-border:    #27272A;
+  --t-border-2:  #3F3F46;
+  --t-accent:    #3B82F6;
+  --t-accent-bright: #93C5FD;
+  --t-accent-tint: rgba(59,130,246,.14);
+  --t-accent-ink: #0A0A0A;
+  --t-ok:        #10B981;
+  --t-warn:      #F59E0B;
+  --t-err:       #EF4444;
+  --t-run:       #3B82F6;
+  --t-gated:     #22D3EE;
+  --t-dot:       rgba(255,255,255,.06);
+
+  /* 2026-06-11 F6 批1 — 交互态颜色（frontend-polish-plan §3.2，Cherry Studio
+   * color-mix 公式）。修真 bug：--t-hover 此前被 .cmp-btn / DirPicker /
+   * ModelPicker 三处引用但从未定义，全部静默落 fallback。
+   * 公式基于本主题 --t-bg/--t-fg 推导，三主题免手调自动正确。 */
+  --t-hover:  color-mix(in srgb, var(--t-bg) 88%, var(--t-fg) 12%);  /* 行/按钮 hover 底 */
+  --t-active: color-mix(in srgb, var(--t-bg) 80%, var(--t-fg) 20%);  /* 按下/选中底 */
+
+  /* 2026-05-19 agent-3 BlueprintCanvas / PolicyMatrixMini aliases.
+     These names were used unprefixed by agent-3 components but never had
+     real token definitions, so they were silently falling back to the
+     hard-coded dark values in var() second arg — invisible in night mode,
+     reading as dark islands on cream paper in day mode. Defining them as
+     aliases here flips both panels with the theme switch. */
+  --t-bg-elev-2:     var(--t-panel-2);
+  --t-bg-elev-3:     var(--t-panel-3);
+  --t-fg-1:          var(--t-fg);
+  --t-border-subtle: var(--t-dot);
+}
+
+[data-theme="day"] {
+  /* 2026-05-28 — clean white day theme (replaces the cream/beige paper palette
+     the user rejected). Mirror of the design package's dark/blue skin: same
+     7-slot semantic structure with bg↔fg inverted, accent shifts to #1890FF
+     for legibility on white, status colors deepen one Tailwind step, borders
+     use neutral zinc hairlines. NO warm/sepia cast — neutral cool grays
+     throughout so it reads as "modern dashboard" not "vintage paper". */
+  /* 2026-05-28 调整: 用户反馈纯白 #FFFFFF 太刺眼, 参照 OpenAI Codex 风的暖白
+     纸感白 — 页面底色微暖 off-white, 卡片用纯白做一档层级浮起, hairline 极淡
+     近乎不可见(对齐"papery soft white", 不是 cream/beige 的米黄). */
+  /* 2026-08-18 clawsgo 收敛批: day 色板逐值钉死复刻页 home.html :root
+     （.tmp/neo-design-spec.md §2 实测）——rail 中性灰 #F3F3F3、hairline
+     #ECECEA、强调色近黑 #171717（黑圆发送钮/灰选中态, 替代原蓝 #1890FF）。
+     追加复刻专用 token: --t-row-sel 导航选中行、--t-seg 胶囊轨道。 */
+  --t-bg:        #F3F3F3;            /* rail 中性灰（复刻 --bg-rail） */
+  --t-panel:     #FFFFFF;            /* pure white cards (elevated against bg) */
+  --t-panel-2:   #FAFAFA;
+  --t-panel-3:   #F5F5F5;
+  --t-fg:        #0A0A0A;
+  --t-fg-2:      #27272A;
+  --t-fg-3:      #52525B;
+  --t-fg-4:      #737373;            /* 复刻 --fg-3（tab 未选中/次文字） */
+  --t-fg-5:      #A1A1AA;
+  --t-fg-6:      #D4D4D8;
+  --t-border:    #ECECEA;            /* near-invisible hairline（复刻同值） */
+  --t-border-2:  #DCDCD9;
+  --t-accent:    #171717;            /* 复刻 --accent: 近黑（黑圆发送钮/强调） */
+  --t-accent-bright: #000000;        /* 强调加深处 = 纯黑 */
+  --t-accent-tint: rgba(23,23,23,.08);
+  --t-accent-ink: #FFFFFF;
+  --t-row-sel:   #E9E9E7;            /* 复刻 --row-sel: 导航选中行灰底 */
+  --t-seg:       #F4F4F3;            /* 复刻 --seg-bg: 分段胶囊轨道 */
+  --t-ok:        #059669;
+  --t-warn:      #D97706;
+  --t-err:       #DC2626;
+  --t-run:       #2563EB;
+  --t-gated:     #0891B2;
+  --t-dot:       rgba(0,0,0,.04);
+
+  /* 交互态（F6 批1）：同 night 块的 color-mix 公式，基于 day 的 bg/fg 自动派生。 */
+  --t-hover:  color-mix(in srgb, var(--t-bg) 88%, var(--t-fg) 12%);
+  --t-active: color-mix(in srgb, var(--t-bg) 80%, var(--t-fg) 20%);
+
+  /* Legacy --skin-* / --bg-* / --fg-* / --accent-* day overrides so older
+     token names also flip on theme switch (50+ components depend on these). */
+  --skin-bg:         #F3F3F3;
+  --skin-panel:      #FFFFFF;
+  --skin-fg:         #0A0A0A;
+  --skin-muted:      #52525B;
+  --skin-accent:     #171717;
+  --skin-accent-ink: #FFFFFF;
+  --skin-border:     #ECECEA;
+
+  --bg-elev-1:       #FFFFFF;
+  --bg-elev-2:       #FAFAF8;
+  --bg-elev-3:       #F0F0EE;
+  --bg-elev-4:       #DCDCD9;
+  --bg-node:         #FFFFFF;
+  --bg-accent-tint:  rgba(23,23,23,.05);
+
+  --fg-0:            #000000;
+  --fg-2:            #27272A;
+  --fg-4:            #71717A;
+  --fg-5:            #A1A1AA;
+  --fg-6:            #D4D4D8;
+
+  --border-strong:   #DCDCD9;
+  --border-subtle:   #F4F4F1;
+
+  --accent-dim:      #3F3F3F;
+  --accent-bright:   #171717;
+
+  --status-reject-tint: #FEE2E2;
+  --status-ok-tint:     #D1FAE5;
+  --status-warn-tint:   #FEF3C7;
+  --status-run-tint:    #DBEAFE;
+
+  /* Neutral shadows（去蓝光, clawsgo 单色系） */
+  --shadow-pop:  0 0 0 1px rgba(23,23,23,.16), 0 8px 24px -8px rgba(0,0,0,.16);
+  --shadow-card: 0 1px 2px rgba(0,0,0,.06);
+  --shadow-hud:  0 24px 60px -20px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.04);
+  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(0,0,0,.22);
+
+  /* 2026-05-19 agent-3 aliases (day overrides — paper palette).
+     See matching block in :root,[data-theme="night"] for rationale. */
+  --t-bg-elev-2:     var(--t-panel-2);
+  --t-bg-elev-3:     var(--t-panel-3);
+  --t-fg-1:          var(--t-fg);
+  --t-border-subtle: var(--t-dot);
+}
+
+/* ============================================================================
+ * Paper skin pack (third theme, opt-in via sf-theme='paper').
+ *
+ * 2026-05-28 — preserved as a named skin alongside `night` (dark/blue)
+ * and `day` (clean soft-white). Warm cream/sepia "paper on paper" aesthetic
+ * with darker blue-700 accent for legibility on cream. Aligns with the
+ * design package's 7-slot Skin Pack model (README: "swap them, reskin the
+ * product"). User can pick this via Settings → Appearance.
+ * ============================================================================ */
+[data-theme="paper"] {
+  --t-bg:        #EBE8DE;
+  --t-panel:     #FAF9F5;
+  --t-panel-2:   #F0EEE6;
+  --t-panel-3:   #E8E6DC;
+  --t-fg:        #141413;
+  --t-fg-2:      #2A2A27;
+  --t-fg-3:      #4D4C48;
+  --t-fg-4:      #5E5D59;
+  --t-fg-5:      #87867F;
+  --t-fg-6:      #B0AEA5;
+  --t-border:    #E8E6DC;
+  --t-border-2:  #D1CFC5;
+  --t-accent:    #1890FF;
+  --t-accent-bright: #1D4ED8;
+  --t-accent-tint: rgba(24,144,255,.10);
+  --t-accent-ink: #FFFFFF;
+  --t-ok:        #047857;
+  --t-warn:      #B45309;
+  --t-err:       #B91C1C;
+  --t-run:       #1D4ED8;
+  --t-gated:     #0E7490;
+  --t-dot:       rgba(40,30,20,.07);
+
+  /* 交互态（F6 批1）：同 night 块的 color-mix 公式，基于 paper 的 bg/fg 自动派生。 */
+  --t-hover:  color-mix(in srgb, var(--t-bg) 88%, var(--t-fg) 12%);
+  --t-active: color-mix(in srgb, var(--t-bg) 80%, var(--t-fg) 20%);
+
+  --skin-bg:         #EBE8DE;
+  --skin-panel:      #FAF9F5;
+  --skin-fg:         #141413;
+  --skin-muted:      #4D4C48;
+  --skin-accent:     #1890FF;
+  --skin-accent-ink: #FFFFFF;
+  --skin-border:     #E8E6DC;
+
+  --bg-elev-1:       #FAF9F5;
+  --bg-elev-2:       #F0EEE6;
+  --bg-elev-3:       #E8E6DC;
+  --bg-elev-4:       #D1CFC5;
+  --bg-node:         #FAF9F5;
+  --bg-accent-tint:  rgba(24,144,255,.08);
+
+  --fg-0:            #0A0A09;
+  --fg-2:            #2A2A27;
+  --fg-4:            #5E5D59;
+  --fg-5:            #87867F;
+  --fg-6:            #B0AEA5;
+
+  --border-strong:   #D1CFC5;
+  --border-subtle:   #F0EEE6;
+
+  --accent-dim:      #1E40AF;
+  --accent-bright:   #1D4ED8;
+
+  --status-reject-tint: #FCE7E7;
+  --status-ok-tint:     #D9F1E1;
+  --status-warn-tint:   #FBEFCC;
+  --status-run-tint:    #D7E4F9;
+
+  /* Warm sepia shadows — reads as "paper on paper", not "glass". */
+  --shadow-pop:  0 0 0 1px rgba(24,144,255,.30), 0 8px 24px -8px rgba(24,144,255,.30);
+  --shadow-card: 0 1px 2px rgba(40,30,20,.08);
+  --shadow-hud:  0 24px 60px -20px rgba(40,30,20,.18), 0 0 0 1px rgba(20,20,19,.04);
+  --glow-accent: 0 0 0 1px var(--accent), 0 0 16px -2px rgba(24,144,255,.35);
+
+  --t-bg-elev-2:     var(--t-panel-2);
+  --t-bg-elev-3:     var(--t-panel-3);
+  --t-fg-1:          var(--t-fg);
+  --t-border-subtle: var(--t-dot);
+}
+
+/* ============================================================================
+ * Day-theme overrides for legacy Tailwind dark utility classes
+ *
+ * 50+ legacy components use `bg-shadowflow-bg`, `bg-zinc-900`, `text-white/90`
+ * and similar fixed-dark Tailwind classes from before the day theme existed.
+ * Migrating each one to theme-aware tokens is a long road; meanwhile these
+ * rules transparently flip them when the user is on day theme so the page
+ * actually looks light. Order matters: rules below need to come AFTER the
+ * `[data-theme="day"]` token definitions so var() lookups resolve to day
+ * values.
+ * ========================================================================= */
+
+/* Day mode: kill the warm cream paper bg entirely. Root + all settings
+   panels become the replica panel tone #FDFDFD; only the 1px dividers remain. */
+[data-theme="day"] html        { background: #FDFDFD !important; }
+[data-theme="day"] .hf-root    { background: #FDFDFD !important; }
+[data-theme="day"] .sf-settings-bg { background: #FDFDFD !important; }
+[data-theme="night"] .sf-settings-bg { background: var(--t-bg) !important; }
+
+/* Soften dividers to neutral light grey in day mode so the warm
+   --t-border (#E8E6DC) doesn't read as a "cream strip" against the
+   pure white panels. */
+[data-theme="day"] .sf-settings-bg { border-right-color: #ECECEC !important; }
+[data-theme="day"] .sf-settings-bg [style*="borderRight"],
+[data-theme="day"] .sf-settings-bg [style*="border-right"] {
+  border-right-color: #ECECEC !important;
+}
+
+/* Hide scrollbars on settings panels but keep scrolling functional.
+   This kills the visible scrollbar strip that was reading as a
+   "thick cream/grey line" next to the divider. */
+.sf-settings-bg { scrollbar-width: none; -ms-overflow-style: none; }
+.sf-settings-bg::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.sf-settings-bg *::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.sf-settings-bg * { scrollbar-width: none; }
+
+[data-theme="day"] .bg-shadowflow-bg       { background-color: var(--t-bg) !important; }
+[data-theme="day"] .bg-shadowflow-surface  { background-color: var(--t-panel) !important; }
+[data-theme="day"] .bg-shadowflow-border   { background-color: var(--t-border) !important; }
+[data-theme="day"] .border-shadowflow-bg     { border-color: var(--t-border) !important; }
+[data-theme="day"] .border-shadowflow-surface{ border-color: var(--t-border) !important; }
+[data-theme="day"] .border-shadowflow-border{ border-color: var(--t-border) !important; }
+[data-theme="day"] .text-shadowflow-muted  { color: var(--t-fg-3) !important; }
+[data-theme="day"] .text-shadowflow-accent { color: var(--t-accent) !important; }
+
+[data-theme="day"] .bg-sf-bg     { background-color: var(--t-bg) !important; }
+[data-theme="day"] .bg-sf-panel  { background-color: var(--t-panel) !important; }
+[data-theme="day"] .bg-sf-elev1, [data-theme="day"] .bg-sf-elev-1 { background-color: var(--t-panel) !important; }
+[data-theme="day"] .bg-sf-elev2, [data-theme="day"] .bg-sf-elev-2 { background-color: var(--t-panel-2) !important; }
+[data-theme="day"] .bg-sf-elev3, [data-theme="day"] .bg-sf-elev-3 { background-color: var(--t-panel-3) !important; }
+[data-theme="day"] .bg-sf-elev4, [data-theme="day"] .bg-sf-elev-4 { background-color: var(--t-panel-3) !important; }
+[data-theme="day"] .bg-sf-border { background-color: var(--t-border) !important; }
+[data-theme="day"] .border-sf-border { border-color: var(--t-border) !important; }
+[data-theme="day"] .text-sf-fg0,
+[data-theme="day"] .text-sf-fg1 { color: var(--t-fg) !important; }
+[data-theme="day"] .text-sf-fg2 { color: var(--t-fg-2) !important; }
+[data-theme="day"] .text-sf-fg3 { color: var(--t-fg-3) !important; }
+[data-theme="day"] .text-sf-fg4 { color: var(--t-fg-4) !important; }
+[data-theme="day"] .text-sf-fg5 { color: var(--t-fg-5) !important; }
+[data-theme="day"] .text-sf-fg6 { color: var(--t-fg-6) !important; }
+[data-theme="day"] .bg-sf-accent       { background-color: var(--t-accent) !important; color: var(--t-accent-ink) !important; }
+[data-theme="day"] .text-sf-accent     { color: var(--t-accent) !important; }
+[data-theme="day"] .border-sf-accent   { border-color: var(--t-accent) !important; }
+[data-theme="day"] .bg-sf-accent-tint  { background-color: var(--t-accent-tint) !important; }
+
+/* Generic Tailwind grayscale → flip to readable light-mode equivalents.
+   gray-/neutral-/purple-* 系列在 src 已零引用（2.5 收尾清理 2026-08-16），
+   仅保留仍在用的 text-zinc-200/400/500 重映射。 */
+[data-theme="day"] .bg-black            { background-color: var(--t-bg) !important; }
+
+[data-theme="day"] .text-white,
+[data-theme="day"] [class*="text-white/"] { color: var(--t-fg) !important; }
+[data-theme="day"] .text-zinc-200       { color: var(--t-fg) !important; }
+[data-theme="day"] .text-zinc-400       { color: var(--t-fg-3) !important; }
+[data-theme="day"] .text-zinc-500       { color: var(--t-fg-4) !important; }
+
+.hf-root {
+  background: var(--t-bg);
+  color: var(--t-fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.hf-mono  { font-family: var(--font-mono); }
+.hf-label { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--t-fg-4); }
+.hf-meta  { font-family: var(--font-mono); font-size: 10px; color: var(--t-fg-4); }
+.hf-card  { background: var(--t-panel); border: 1px solid var(--t-border); border-radius: 12px; }
+.hf-kbd {
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 600;
+  padding: 1px 5px; border: 1px solid var(--t-border); border-radius: 3px;
+  color: var(--t-fg-3); background: var(--t-panel);
+}
+.hf-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 8px;
+  background: var(--t-panel); border: 1px solid var(--t-border);
+  color: var(--t-fg-2); font-size: 12px; cursor: pointer;
+}
+
+@keyframes hf-pulse  { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+@keyframes hf-cursor { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes hf-dash   { to { stroke-dashoffset: -16; } }
+@keyframes pj-card-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Run Session animations ── */
+@keyframes rs-pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+@keyframes rs-dash  { to { stroke-dashoffset: -16; } }
+
+/* ============ RunSession LeftPanel kit primitives (2026-05-11) ============ */
+/* cmp-btn — composer icon button (settings / attach / model) */
+.cmp-btn {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  color: var(--t-fg-4);
+  transition: background .12s, color .12s, border-color .12s;
+}
+.cmp-btn:hover {
+  background: var(--t-hover, var(--t-panel));
+  color: var(--t-fg);
+  border-color: var(--t-border);
+}
+
+/* ─── Chat inbox row hover effects (FB-HiFi design) ─── */
+.sf-inbox-row {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 120ms;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  position: relative;
+}
+.sf-inbox-row:hover { background: var(--t-panel-2); }
+.sf-inbox-row.active {
+  background: var(--t-accent-tint);
+  border-left: 2px solid var(--t-accent);
+}
+.sf-inbox-row:not(.active) { border-left: 2px solid transparent; }
+
+.sf-dm-row {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 120ms;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+}
+.sf-dm-row:hover { background: var(--t-panel-2); }
+
+.sf-chat-rail-item {
+  width: 40px;
+  height: 42px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  position: relative;
+  transition: background 120ms;
+}
+.sf-chat-rail-item:hover { background: var(--t-panel-2); }
+.sf-chat-rail-item.active {
+  background: var(--t-accent-tint);
+  color: var(--t-accent-bright);
+}
+
+.sf-org-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.sf-org-row:hover { background: var(--t-panel-2); }
+.sf-org-row.active { background: var(--t-accent-tint); }
+
+/* ───────────────────────────────────────────────────────────────
+   clawsgo 化侧栏动效词汇（2026-06-26 R1）—— 只增不删。
+   一组可复用的侧栏列表「进出场 / 切换淡入」动画，供个人态 .pcv-row
+   与后续 R3 团队态 IbxRow 共用（共用的是这些 sf-rail-* 类，不是 .pcv-row 本身）。
+   状态点不在此处造轮子：直接用 HfAvatar 自带的 status 角标（见 HfAtoms.tsx）。
+   重点参考 clawsgo：列表项进出场、切换列表内容淡入。
+   ─────────────────────────────────────────────────────────────── */
+@keyframes sf-rail-in   { from { opacity: 0; transform: translateY(7px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes sf-rail-out  { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-10px); } }
+@keyframes sf-rail-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* 列表项入场：进入时上浮淡入。stagger 由内联 animation-delay 控制。
+   fill-mode 用 backwards（非 both）：延迟期套 from 隐藏未启动的行，但动画结束后
+   释放 transform，不把行锁在 translateY(0)，从而不压制 .pcv-row/.row 的 :active 按压
+   缩放（R4 修 reviewer-H）。to 帧的 translateY(0) 与自然态等价，无视觉跳变。 */
+.sf-rail-in  { animation: sf-rail-in var(--dur-3) var(--ease-out) backwards; }
+/* 列表项退场：左滑淡出（R4 删除时套用，配合 JS 延后卸载）。 */
+.sf-rail-out { animation: sf-rail-out var(--dur-2) var(--ease-in-out) both; pointer-events: none; }
+/* 列表内容随个人/团队切换淡入（R2 用）。 */
+.sf-rail-fade { animation: sf-rail-fade var(--dur-2) var(--ease-out) both; }
+
+/* 折叠态侧栏图标按钮（R5）—— 收进 class 才能让 :hover 生效（inline style 会压制
+   class 的 hover 颜色/底色）。base 复刻原 iconBtnStyle，叠加 hover 底色 + 按压缩放。 */
+.sf-rail-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 7px; border-radius: 7px; border: none; background: none; cursor: pointer;
+  color: var(--t-fg-4); text-decoration: none;
+  transition: background var(--dur-1) ease, color var(--dur-1) ease, transform var(--dur-1) var(--ease-out);
+}
+.sf-rail-icon:hover { background: var(--t-panel-2); color: var(--t-fg); }
+.sf-rail-icon:active { transform: scale(.9); }
+/* 折叠/展开把手：图标随 hover 微缩放，chevron 式 delight（clawsgo 折叠手感）。 */
+.sf-rail-toggle > svg { transition: transform var(--dur-2) var(--ease-spring); }
+.sf-rail-toggle:hover > svg { transform: scale(1.14); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-rail-in, .sf-rail-out, .sf-rail-fade { animation: none !important; }
+  .pcv-row { transition: background var(--dur-1) ease !important; }
+  .pcv-row:hover, .pcv-row:active, .sf-rail-icon:active { transform: none !important; }
+  .pcv-row:hover .pcv-av, .pcv-row.active .pcv-av { transform: none !important; }
+  .pcv-row::before, .sf-rail-toggle > svg, .pcv-av { transition: none !important; }
+  .pcv-dm-dots { transition: opacity var(--dur-1) ease !important; }
+  .pcv-new:hover, .pcv-new:active { transform: none !important; }
+}
+
+/* ───────────────────────────────────────────────────────────────
+   右栏 clawsgo 化动效（2026-06-27 R2+）—— 只增不删。
+   sf-pop-in：状态图标「运行→完成」绿勾的过冲弹入（clawsgo 任务完成 ✓）；
+   产物/卡片整块进场可复用。同时补右栏既有动效的 reduced-motion 守卫。
+   ─────────────────────────────────────────────────────────────── */
+@keyframes sf-pop-in {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.18); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.sf-pop-in { animation: sf-pop-in 0.34s cubic-bezier(.34, 1.56, .64, 1) both; }
+
+/* 产物/面板整块进场：淡入 + 轻微上滑（clawsgo 产物出现）。 */
+@keyframes sf-rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.sf-rise-in { animation: sf-rise-in var(--dur-3) var(--ease-out) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* 右栏 tab 框架(RightPaneTabs inline <style>) + 产物流式光标(PreviewPanel) +
+     本轮新增 —— 全局类，可从此处统一中和。 */
+  .rs-tab-ind, .rs-pane-fade, .rs-tab-ct, .rs-tab-dot,
+  .sf-cur, .sf-pop-in, .sf-rise-in { animation: none !important; }
+  .rs-tab-ind { transition: none !important; }
+}
+
+/* "Load more" button below DM list */
+.pcv-more-btn {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  width: 100%; padding: 5px 8px; background: none; border: none;
+  border-radius: 5px; cursor: pointer; font-size: 11.5px; color: var(--t-fg-4);
+  font-family: inherit; transition: background 100ms ease;
+}
+.pcv-more-btn:hover { background: var(--t-panel-2); }
+
+.pcv-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+.pcv-empty-glyph { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: var(--t-accent-tint); color: var(--t-accent-bright); margin-bottom: 18px; }
+.pcv-empty-title { font-size: 17px; font-weight: 700; color: var(--t-fg); letter-spacing: -.01em; }
+.pcv-empty-sub { font-size: 13px; color: var(--t-fg-3); margin-top: 7px; max-width: 330px; line-height: 1.55; }
+.pcv-empty-hints { display: flex; gap: 8px; margin-top: 22px; flex-wrap: wrap; justify-content: center; max-width: 380px; }
+.pcv-hint { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--t-border); background: var(--t-panel); color: var(--t-fg-3); font-size: 12px; white-space: nowrap; }
+.pcv-hint > svg { color: var(--t-fg-4); flex-shrink: 0; }
+.pcv-empty-cta {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 24px; height: 38px; padding: 0 18px;
+  border-radius: 10px; border: 1px solid transparent; background: var(--t-accent); color: var(--t-accent-ink);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 130ms ease, transform 130ms cubic-bezier(.2,.8,.2,1);
+}
+.pcv-empty-cta:hover { background: var(--t-accent-bright); }
+.pcv-empty-cta:active { transform: translateY(1px); }
+
+/* ── StartLanding — 进站首屏 start 富视觉（2026-06-15，港 v2-start-hifi）── */
+.sl-wrap { flex: 1; min-height: 0; overflow-y: auto; position: relative; }
+.sl-dotgrid {
+  position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background-image: radial-gradient(circle, var(--t-border) 1px, transparent 1px);
+  background-size: 24px 24px; opacity: .5;
+  -webkit-mask-image: radial-gradient(ellipse at center top, black 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at center top, black 0%, transparent 70%);
+}
+.sl-inner {
+  position: relative; z-index: 1;
+  max-width: 880px; margin: 0 auto;
+  padding: 44px 24px 28px;
+  display: flex; flex-direction: column; gap: 24px;
+}
+.sl-hero { text-align: center; }
+.sl-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--font-mono, monospace); font-size: var(--fs-meta);
+  font-weight: 700; letter-spacing: .14em; color: var(--t-fg-4);
+  padding: 4px 12px; border: 1px solid var(--t-border); border-radius: var(--r-full);
+  background: var(--t-panel-2); margin-bottom: 14px;
+}
+.sl-title {
+  font-size: 42px; font-weight: 800; line-height: 1.06; letter-spacing: -.03em; margin: 0;
+  background: linear-gradient(135deg, var(--t-fg) 0%, var(--t-accent-bright, var(--t-accent)) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.sl-sub { font-size: 14px; color: var(--t-fg-3); margin: 13px auto 0; max-width: 560px; line-height: 1.6; }
+/* clawsgo 式居中 composer（hero 正下方） */
+.sl-composer { width: 100%; max-width: 720px; margin: 2px auto 4px; }
+
+.sl-recent { width: 100%; }
+.sl-recent-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.sl-recent-lbl { font-family: var(--font-mono, monospace); font-size: var(--fs-meta); font-weight: 700; letter-spacing: .12em; color: var(--t-fg-4); }
+.sl-recent-list { display: flex; flex-direction: column; gap: 7px; }
+.sl-run {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 11px 14px; border-radius: var(--r-card); cursor: pointer; font-family: inherit;
+  background: var(--t-panel); border: 1px solid var(--t-border);
+  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.sl-run:hover { border-color: var(--t-border-2, var(--t-accent)); box-shadow: var(--shadow-1); transform: translateY(-1px); }
+.sl-run:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
+.sl-run-dot { width: 8px; height: 8px; border-radius: var(--r-full); flex-shrink: 0; }
+.sl-run-goal { flex: 1; min-width: 0; font-size: var(--fs-body); font-weight: 600; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sl-run-state { flex-shrink: 0; font-family: var(--font-mono, monospace); font-size: var(--fs-meta); font-weight: 700; padding: 1px 7px; border-radius: var(--r-chip); border: 1px solid; letter-spacing: .04em; }
+.sl-run-time { flex-shrink: 0; font-family: var(--font-mono, monospace); font-size: var(--fs-meta); color: var(--t-fg-5); }
+
+/* ── StartGallery — clawsgo 式开始页模板画廊（2026-06-13，真实 skills）── */
+.sg-wrap { width: 100%; max-width: 760px; margin: 18px auto 0; }
+/* 单行滑动分类 tab 行（2026-06-24 升级，对标 RightPaneTabs .rs-tabs 指示条） */
+.sg-tabs {
+  position: relative;
+  display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+  gap: 0; justify-content: center;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--t-border);
+}
+.sg-tabs::-webkit-scrollbar { display: none; }
+.sg-tab {
+  position: relative; flex-shrink: 0;
+  padding: 6px 14px; border-radius: 0; border: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: none; cursor: pointer; font-size: var(--fs-sub); color: var(--t-fg-4);
+  transition: color var(--dur-1) var(--ease-out);
+  white-space: nowrap;
+}
+.sg-tab:hover { color: var(--t-fg-2); }
+.sg-tab.on { color: var(--t-accent); font-weight: 600; border-bottom-color: var(--t-accent); }
+/* 滑动指示条接管后，关掉 per-tab border */
+.sg-tabs.has-ind .sg-tab.on { border-bottom-color: transparent; }
+.sg-tab-ind {
+  position: absolute; bottom: 0; left: 0;
+  height: 2px; border-radius: 1px;
+  background: var(--t-accent);
+  pointer-events: none;
+  transition: transform var(--dur-2) var(--ease-spring), width var(--dur-2) var(--ease-spring);
+}
+/* 切换分类时卡片网格淡入 */
+@keyframes sg-grid-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.sg-grid-fade { animation: sg-grid-fade-in var(--dur-1) var(--ease-out); }
+.sg-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  gap: 10px;
+}
+.sg-card {
+  display: flex; flex-direction: column; gap: 7px; text-align: left;
+  padding: 13px 14px; border-radius: var(--r-card); cursor: pointer;
+  border: 1px solid var(--t-border); background: var(--t-panel);
+  font-family: inherit;
+  transition: border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.sg-card:hover { border-color: var(--t-border-2, var(--t-accent)); box-shadow: var(--shadow-1); transform: translateY(-2px); }
+.sg-card:active { transform: translateY(0); }
+.sg-card:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
+.sg-card-head { display: flex; align-items: center; gap: 8px; }
+.sg-card-icon {
+  width: 26px; height: 26px; flex-shrink: 0; border-radius: var(--r-row);
+  display: grid; place-items: center; background: var(--t-accent-tint); color: var(--t-accent);
+}
+.sg-card-name { flex: 1; min-width: 0; font-size: var(--fs-body); font-weight: 600; color: var(--t-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-card-team, .sg-card-user {
+  flex-shrink: 0; font-size: var(--fs-meta); font-weight: 700; padding: 1px 6px;
+  border-radius: var(--r-chip); background: var(--t-accent-tint); color: var(--t-accent);
+}
+.sg-card-user { background: var(--t-panel-2); color: var(--t-fg-4); }
+.sg-card-desc {
+  font-size: var(--fs-sub); color: var(--t-fg-3); line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sg-card-foot { display: flex; align-items: center; gap: 6px; }
+.sg-card-cat { font-size: var(--fs-meta); color: var(--t-fg-5); font-family: var(--font-mono, monospace); letter-spacing: .06em; text-transform: uppercase; }
+
+.pcv-chat-head { height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--t-border); background: var(--t-panel); }
+.pcv-chat-name { font-size: 14px; font-weight: 700; color: var(--t-fg); }
+.pcv-chat-status { font-size: 11px; color: var(--t-fg-4); }
+
+/* ── DM 单聊 header（Cherry/Yuxi 式：头像+名字+人设+模型/状态）── */
+.dm-head { flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--t-border); background: var(--t-panel); }
+.dm-head-id { flex: 1; min-width: 0; }
+.dm-head-name { display: flex; align-items: center; gap: 8px; font-size: var(--fs-emph); font-weight: 700; color: var(--t-fg); }
+.dm-head-state { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-meta); font-weight: 600; color: var(--t-fg-4); }
+.dm-head-state .dm-head-dot { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--t-fg-5); }
+.dm-head-state[data-on] { color: var(--t-ok, #16a34a); }
+.dm-head-state[data-on] .dm-head-dot { background: var(--t-ok, #16a34a); animation: sf-pulse 1.6s ease-in-out infinite; }
+.dm-head-persona { margin-top: 2px; font-size: var(--fs-sub); color: var(--t-fg-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 540px; }
+.dm-head-actions { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+.dm-head-model { font-family: var(--font-mono, monospace); font-size: var(--fs-label); font-weight: 700; padding: 3px 9px; border-radius: var(--r-full); background: var(--t-panel-2); color: var(--t-fg-3); border: 1px solid var(--t-border); }
+
+/* ── DM 空对话引导态 ── */
+.dm-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; }
+.dm-empty-name { font-size: var(--fs-title); font-weight: 800; color: var(--t-fg); margin-top: 4px; }
+.dm-empty-persona { font-size: var(--fs-body); color: var(--t-fg-3); line-height: 1.6; max-width: 420px; }
+.dm-empty-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+.dm-empty-chip { padding: 7px 14px; border-radius: var(--r-full); border: 1px solid var(--t-border); background: var(--t-panel); color: var(--t-fg-2); font-size: var(--fs-sub); cursor: pointer; transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); }
+.dm-empty-chip:hover { border-color: var(--t-accent); background: var(--t-hover); }
+
+.pcv-composer { flex-shrink: 0; border-top: 1px solid var(--t-border); padding: 12px 18px; background: var(--t-panel); display: flex; align-items: flex-end; gap: 10px; }
+.pcv-composer textarea {
+  flex: 1; min-height: 40px; max-height: 120px; padding: 10px 12px; resize: none;
+  border: 1px solid var(--t-border); border-radius: 10px; background: var(--t-bg); color: var(--t-fg);
+  font-size: 13px; line-height: 1.5; outline: none; font-family: inherit;
+  transition: border-color 130ms ease, box-shadow 130ms ease;
+}
+.pcv-composer textarea::placeholder { color: var(--t-fg-4); }
+.pcv-composer textarea:focus { border-color: var(--t-accent); box-shadow: 0 0 0 3px var(--t-accent-tint); }
+.pcv-send {
+  height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid transparent;
+  background: var(--t-accent); color: var(--t-accent-ink); font-weight: 600; font-size: 12.5px;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: background 130ms ease, transform 130ms cubic-bezier(.2,.8,.2,1);
+}
+.pcv-send:hover:not(:disabled) { background: var(--t-accent-bright); }
+.pcv-send:active:not(:disabled) { transform: translateY(1px); }
+.pcv-send:disabled { background: var(--t-panel-2); color: var(--t-fg-4); border-color: var(--t-border); cursor: not-allowed; }
+
+/* ============================================================================
+ * F6 批2 — RunWorkPane（右栏「工作区」tab）换装：内联样式 → sf-wp-* 类。
+ * 此前全内联 = 无态死区（无 hover/active/focus）；现按 polish-plan §4：
+ *   hover·卡片 = border → --t-border-2 + --shadow-1（--dur-1 --ease-out）
+ *   hover·行   = 底色 → --t-hover，仅变一档
+ *   active     = translateY(1px)（--dur-0）
+ *   focus      = focus-visible 2px accent outline
+ * 字号/圆角/时长全部走批1 token。
+ * ============================================================================ */
+.sf-wp {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.sf-wp-label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--t-fg-4);
+  padding: 2px 2px 8px;
+}
+.sf-wp-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: var(--r-full);
+  font-size: var(--fs-label); font-weight: 700; letter-spacing: .02em;
+  flex-shrink: 0;
+}
+.sf-wp-refresh {
+  border: none; background: none; cursor: pointer;
+  color: var(--t-fg-5); padding: 4px; border-radius: var(--r-chip);
+  display: inline-flex;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.sf-wp-refresh:hover { background: var(--t-hover); color: var(--t-fg-2); }
+.sf-wp-refresh:active { background: var(--t-active); }
+.sf-wp-refresh:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
+/* 主卡（最近 run）—— hover 浮起，active 按压 */
+.sf-wp-card {
+  width: 100%; text-align: left; cursor: pointer;
+  border: 1px solid var(--t-border); border-radius: var(--r-card);
+  background: var(--t-panel-2); padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  font-family: inherit; color: inherit;
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out),
+    transform var(--dur-0) var(--ease-out);
+}
+.sf-wp-card:hover { border-color: var(--t-border-2); box-shadow: var(--shadow-1); }
+.sf-wp-card:active { transform: translateY(1px); }
+.sf-wp-card:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
+/* 历史 run 行 —— hover 底色一档 */
+.sf-wp-row {
+  width: 100%; text-align: left; cursor: pointer;
+  border: 1px solid var(--t-border); border-radius: var(--r-row);
+  background: transparent; padding: 8px 10px;
+  display: flex; align-items: center; gap: 8px;
+  font-family: inherit; color: inherit;
+  transition:
+    background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    transform var(--dur-0) var(--ease-out);
+}
+.sf-wp-row:hover { background: var(--t-hover); border-color: var(--t-border-2); }
+.sf-wp-row:active { background: var(--t-active); transform: translateY(1px); }
+.sf-wp-row:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
+/* 空态 CTA */
+.sf-wp-cta {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: var(--r-row); border: none; cursor: pointer;
+  background: var(--t-accent); color: var(--t-accent-ink);
+  font-weight: 700; font-size: var(--fs-sub); font-family: inherit;
+  transition: filter var(--dur-1) var(--ease-out), transform var(--dur-0) var(--ease-out);
+}
+.sf-wp-cta:hover { filter: brightness(1.08); }
+.sf-wp-cta:active { transform: translateY(1px); }
+.sf-wp-cta:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
+/* 空态容器（虚线引导框，沿用现有设计） */
+.sf-wp-empty {
+  border: 1px dashed var(--t-border); border-radius: var(--r-card);
+  padding: 22px 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center;
+}
+/* loading 骨架卡（首载时替代「加载中…」文字） */
+.sf-wp-skel-card {
+  border: 1px solid var(--t-border); border-radius: var(--r-card);
+  padding: 12px; display: flex; flex-direction: column; gap: 8px;
+}
+
+/* ============================================================================
+ * prefers-reduced-motion 全局兜底（2026-06-11 F6 批1，polish-plan 清单 #15）
+ *
+ * 此前只有 sf-spotlight 和 rs-anim-* 两处局部覆盖；sf-pulse / sf-breathe /
+ * sf-marquee / chatFbPulse / shimmer 等十余个常驻循环动画不受控。本块放全文件
+ * 末尾保证级联胜出，对所有样式表（含 CSS Modules）生效：
+ *   - 入场动画 1ms 跑到 to 帧（保留 both/forwards 的终态，不会卡在 from 帧）；
+ *   - iteration-count:1 终止 infinite 循环（spin/pulse/marquee/shimmer）；
+ *   - transition 1ms 即时完成，hover/主题切换等状态变化仍然正确呈现终值。
+ * 仅在用户系统开启「减少动态效果」时生效，普通用户零视觉影响。
+ * ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ████████████████████████████████████████████████████████████████████████████
+ * SF · Global motion + interaction layer  (2026-06-24 · "clawsgo" 视觉连接组织)
+ * ----------------------------------------------------------------------------
+ * ADD-ONLY. 一组可被各 stream 通过 class 名按需采用的运动/交互工具，零侵入：
+ * 不改任何组件文件，只暴露 `sf-*` 工具类 + `--sf-*` token。全部复用已有调色板
+ * (--t-fg / --t-accent / --t-panel-2 / --t-border-2 …) 与已有 --dur-* / --ease-*
+ * 曲线，与现有 sf-modal / sf-skeleton / sf-spin 等观感一致。
+ *
+ * 命名约定：入场动画 = `.sf-anim-*`；交互态 = `.sf-hoverable` / `.sf-press`；
+ * 进度条 = `.sf-bar*`；空态 = `.sf-empty*`；滚动条 = `.sf-scroll*`。
+ * reduced-motion 由上方全局 `*` 兜底块自动终止循环/即时完成（无需各自重复声明）。
+ * 注：本块置于 reduced-motion 块之后，但兜底用 `*{…!important}` 故仍胜出，安全。
+ * ████████████████████████████████████████████████████████████████████████████ */
+
+/* ── §1 Motion token 集 ─────────────────────────────────────────────────────
+ * 给「采用方」一个稳定的速记别名层：语义化时长/曲线/位移量，换皮只改这里。
+ * 别名到已有 --dur-*/--ease-*，因此与全站节奏天然同步。 */
+:root {
+  --sf-dur-fast:   var(--dur-1, 120ms);   /* hover / 颜色 */
+  --sf-dur-base:   var(--dur-2, 180ms);   /* 入场 fade/slide */
+  --sf-dur-slow:   var(--dur-3, 280ms);   /* 面板/弹层 */
+  --sf-ease:       var(--ease-out, cubic-bezier(.16,.84,.44,1));
+  --sf-ease-spring:var(--ease-spring, cubic-bezier(.2,.8,.2,1));
+  /* 入场位移/缩放幅度 —— 统一全站「轻一点点」的克制手感 */
+  --sf-rise:   8px;    /* slide-up 起始下移量 */
+  --sf-scale:  .96;    /* scale-in 起始缩放 */
+  /* 软投影（hover 浮起用，比 --shadow-2 更克制） */
+  --sf-shadow-soft: 0 2px 10px -4px rgba(0,0,0,.28), 0 1px 2px rgba(0,0,0,.18);
+  /* accent 软发光（focus / 强调 hover），随主题 --t-accent 走 */
+  --sf-ring-accent: 0 0 0 1px color-mix(in srgb, var(--t-accent) 55%, transparent),
+                    0 4px 14px -6px color-mix(in srgb, var(--t-accent) 50%, transparent);
+}
+
+/* ── §2 可复用入场关键帧 + 工具类 ──────────────────────────────────────────
+ * 全部 `both`：保留终态、不卡在 from 帧。用法 <div class="sf-anim-slide-up" />。
+ * 需错峰时调用点叠 inline `style="animation-delay:60ms"` 即可。 */
+@keyframes sf-anim-fade   { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sf-anim-rise   { from { opacity: 0; transform: translateY(var(--sf-rise)); }
+                            to   { opacity: 1; transform: translateY(0); } }
+@keyframes sf-anim-pop    { from { opacity: 0; transform: scale(var(--sf-scale)); }
+                            to   { opacity: 1; transform: scale(1); } }
+@keyframes sf-anim-pulse  { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+
+.sf-anim-fade     { animation: sf-anim-fade  var(--sf-dur-base) var(--sf-ease) both; }
+.sf-anim-slide-up { animation: sf-anim-rise  var(--sf-dur-base) var(--sf-ease) both; }
+/* scale-in 用 spring 曲线，给 modal/卡片入场一点点「弹」 */
+.sf-anim-scale-in { animation: sf-anim-pop   var(--sf-dur-base) var(--sf-ease-spring) both; }
+.sf-anim-pulse    { animation: sf-anim-pulse 1.6s var(--ease-in-out, ease-in-out) infinite; }
+
+/* shimmer 文本/占位 —— 与 sf-skeleton 同一节奏(1.4s)，但作用在文字/小条上：
+ * 给「正在生成」的标签/数字一层流光，不需要整块骨架时用。 */
+.sf-anim-shimmer {
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--t-fg) 55%, transparent) 30%,
+    var(--t-fg) 50%,
+    color-mix(in srgb, var(--t-fg) 55%, transparent) 70%
+  );
+  background-size: 200% 100%;
+  background-position: 200% 0;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  animation: sf-shimmer 1.4s linear infinite;  /* 复用已有 §批2 keyframe */
+}
+
+/* ── §3 交互态工具：hover 浮起 / press 按压 / accent 聚焦 ───────────────────
+ * 采用方只需加 class，不必各自写 transition。颜色全部 token 化、随主题切换。 */
+.sf-hoverable {
+  transition:
+    transform   var(--sf-dur-fast) var(--sf-ease),
+    box-shadow  var(--sf-dur-fast) var(--sf-ease),
+    border-color var(--sf-dur-fast) var(--sf-ease),
+    background  var(--sf-dur-fast) var(--sf-ease);
+}
+.sf-hoverable:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--sf-shadow-soft);
+  border-color: var(--t-border-2, var(--border-strong));
+}
+.sf-hoverable:active { transform: translateY(0); box-shadow: none; }
+
+/* 纯按压反馈（无浮起），用在 chip/icon-btn 上 */
+.sf-press { transition: transform var(--dur-0, 80ms) var(--sf-ease), filter var(--sf-dur-fast) var(--sf-ease); }
+.sf-press:hover  { filter: brightness(1.06); }
+.sf-press:active { transform: translateY(1px) scale(.985); }
+
+/* accent 软聚焦光环 —— 给可聚焦交互件统一 focus-visible 观感（替代裸 outline）。
+ * 不抢 outline 的可达性：保留 outline:none 仅在我们画了 ring 时。 */
+.sf-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--sf-ring-accent);
+  border-color: var(--t-accent);
+}
+
+/* ── §4 紧凑进度条（步骤耗时 / token 用量 / 上传进度）────────────────────────
+ * 结构：<div class="sf-bar"><span class="sf-bar-fill" style="width:62%"/></div>
+ * fill 宽度可被 JS 动画(width 过渡已内置)。变体：--ok / --warn / --accent。 */
+.sf-bar {
+  position: relative; width: 100%; height: 6px;
+  border-radius: var(--r-full, 999px);
+  background: color-mix(in srgb, var(--t-fg, #fff) 10%, transparent);
+  overflow: hidden;
+}
+.sf-bar-fill {
+  display: block; height: 100%; width: 0;
+  border-radius: inherit;
+  background: var(--t-accent);
+  transition: width var(--sf-dur-slow) var(--sf-ease);
+}
+.sf-bar--ok     .sf-bar-fill { background: var(--status-ok,   #10B981); }
+.sf-bar--warn   .sf-bar-fill { background: var(--status-warn, #F59E0B); }
+.sf-bar--reject .sf-bar-fill { background: var(--status-reject,#EF4444); }
+/* 不确定进度（无 width，纯流动），用在「执行中、未知百分比」步骤 */
+.sf-bar--indet .sf-bar-fill {
+  width: 35%;
+  background: linear-gradient(90deg,
+    transparent, var(--t-accent), transparent);
+  animation: sf-bar-indet 1.15s var(--ease-in-out, ease-in-out) infinite;
+}
+@keyframes sf-bar-indet {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+
+/* ── §5 空态工具（统一「无数据」呈现）──────────────────────────────────────
+ * 与现有 .sf-wp-empty 同语言（虚线引导框），但通用、不绑定 workspace 上下文。
+ * 结构：<div class="sf-empty"><icon/><div class="sf-empty-title"/><p class="sf-empty-sub"/></div> */
+.sf-empty {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; text-align: center;
+  padding: 32px 20px;
+  border: 1px dashed var(--t-border, var(--border));
+  border-radius: var(--r-card, 12px);
+  color: var(--t-fg-4, var(--fg-4));
+  animation: sf-anim-fade var(--sf-dur-base) var(--sf-ease) both;
+}
+.sf-empty-icon  { opacity: .55; display: inline-flex; }
+.sf-empty-title {
+  font-size: var(--fs-emph, 14px); font-weight: 600;
+  color: var(--t-fg-2, var(--fg-2));
+}
+.sf-empty-sub {
+  margin: 0; max-width: 34ch;
+  font-size: var(--fs-sub, 12px); line-height: 1.5;
+  color: var(--t-fg-4, var(--fg-4));
+}
+
+/* ── §6 主题化滚动条工具 ────────────────────────────────────────────────────
+ * 给内容区显式套 .sf-scroll，得到细、低对比、hover 才显眼的滚动条，
+ * 与全局默认条同色系但更克制。.sf-scroll-thin 更窄(6px)；二者都随主题走。 */
+.sf-scroll { scrollbar-width: thin; scrollbar-color: var(--t-border-2, var(--border-strong)) transparent; }
+.sf-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.sf-scroll::-webkit-scrollbar-track { background: transparent; }
+.sf-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--t-fg, #fff) 14%, transparent);
+  border-radius: var(--r-full, 999px);
+  border: 2px solid transparent; background-clip: padding-box;
+  transition: background var(--sf-dur-fast) var(--sf-ease);
+}
+.sf-scroll:hover::-webkit-scrollbar-thumb,
+.sf-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--t-fg, #fff) 26%, transparent);
+  background-clip: padding-box;
+}
+.sf-scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.sf-scroll-thin { scrollbar-width: thin; }
+
+
+/* ── §7 Tab / workspace 切换动效（clawsgo 风「丝滑切换」）─────────────────────
+ * polish stream 追加（2026-06-24, ADD-ONLY）。供 shell-left（团队/Agent 模式切换、
+ * recent sessions 展开）与 right-files（工作空间/文件/预览 tab 切换）按 class 采用，
+ * 复刻 clawsgo 右栏 Agent host 工作空间 tab 的「滑动下划线 + 内容横滑/交叉淡入」手感。
+ * 全部走已有 --sf-dur-*/--sf-ease* 节奏，reduced-motion 由顶部全局 `*` 兜底块即时完成。 */
+
+/* (a) 滑动下划线指示器 ──────────────────────────────────────────────────────
+ * 结构：
+ *   <div class="sf-tabs">
+ *     <button class="sf-tab" data-on>…</button> …
+ *     <span class="sf-tab-underline" style="--sf-tab-x:0px; --sf-tab-w:64px" />
+ *   </div>
+ * 调用方在选中变化时把激活 tab 的 offsetLeft/offsetWidth 写进 --sf-tab-x/--sf-tab-w，
+ * 下划线就会平滑滑过去（width+transform 一起过渡）。*/
+.sf-tabs { position: relative; display: inline-flex; align-items: center; }
+.sf-tab {
+  position: relative;
+  background: transparent; border: none; cursor: pointer;
+  font: inherit; color: var(--t-fg-3, var(--fg-3));
+  padding: 6px 12px; border-radius: 7px;
+  transition: color var(--sf-dur-fast) var(--sf-ease),
+              background var(--sf-dur-fast) var(--sf-ease);
+}
+.sf-tab:hover { color: var(--t-fg-2, var(--fg-2)); background: var(--t-panel-2); }
+.sf-tab[data-on="true"], .sf-tab[aria-selected="true"] { color: var(--t-accent); }
+.sf-tab-underline {
+  position: absolute; bottom: 0; left: 0; height: 2px;
+  width: var(--sf-tab-w, 0px);
+  transform: translateX(var(--sf-tab-x, 0px));
+  background: var(--t-accent);
+  border-radius: var(--r-full, 999px);
+  transition: transform var(--sf-dur-slow) var(--sf-ease-spring),
+              width var(--sf-dur-slow) var(--sf-ease-spring);
+  pointer-events: none;
+}
+/* 竖向变体（左栏导航的「滑动高亮条」）：把宽改高、X 改 Y。 */
+.sf-tab-underline--v {
+  bottom: auto; left: 0; top: 0; width: 2px; height: var(--sf-tab-h, 0px);
+  transform: translateY(var(--sf-tab-y, 0px));
+  transition: transform var(--sf-dur-slow) var(--sf-ease-spring),
+              height var(--sf-dur-slow) var(--sf-ease-spring);
+}
+
+/* (b) 内容切换 ─────────────────────────────────────────────────────────────
+ * 切 tab 时给【新】面板加 class 触发入场；用 `key` 或重挂载使动画每次重放。
+ *   交叉淡入：    <div class="sf-switch-fade"  key={tab}>…</div>
+ *   横滑（右进）：<div class="sf-switch-slide" key={tab}>…</div>
+ *   横滑（左进，回退方向）：再叠 .sf-switch-slide--back */
+@keyframes sf-switch-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes sf-switch-slide-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes sf-switch-slide-in-back {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.sf-switch-fade  { animation: sf-switch-fade var(--sf-dur-base) var(--sf-ease) both; }
+.sf-switch-slide { animation: sf-switch-slide-in var(--sf-dur-base) var(--sf-ease) both; }
+.sf-switch-slide.sf-switch-slide--back { animation-name: sf-switch-slide-in-back; }
+
+/* (c) 视图叠放容器（display:none lazy-mount 多视图共存时，让显示中的那个淡入）
+ * 结构：每个视图外层 .sf-view，隐藏的加 [hidden]，显示的不加；切换即淡入。
+ * 与 hermes Layout 的 visitedViews(display:none) 懒挂载法对齐。 */
+.sf-view { animation: sf-switch-fade var(--sf-dur-base) var(--sf-ease) both; }
+.sf-view[hidden] { display: none; }
+
+/* (d) 左栏折叠/展开宽度过渡（hermes .sidebar-collapsed 手感）
+ * 给侧栏容器加 .sf-collapsible，宽度变化即平滑；折叠态把 --sf-rail-w 设小。 */
+.sf-collapsible {
+  width: var(--sf-rail-w, 240px);
+  transition: width var(--sf-dur-slow) var(--sf-ease-spring);
+  overflow: hidden;
+}
+
+
+/* ── §7.1 round-2 切换层 · ADOPTION 备案（2026-06-24, ADD-ONLY）──────────────
+ * REVIEWER 指出 round-2 切换类此前 0 个 tsx 采用（dead CSS）。本 round 由 polish owner
+ * 在自有文件落地为可复用受控原语，下列 class 现均有真实调用点（非 dead CSS）：
+ *
+ *   sf-tabs / sf-tab / sf-tab-underline        ← <StudioTabs>      (SlashCommandMenu.tsx)
+ *   sf-tab-underline--v                        ← <StudioTabs orientation="v">
+ *   sf-switch-slide / sf-switch-slide--back    ← <StudioTabPanel>  (SlashCommandMenu.tsx)
+ *   sf-view                                    ← <StudioTabPanel>
+ *   sf-switch-fade                             ← SlashCommandMenu 列表 cross-fade
+ *
+ * shell-left（Agents/Teams 模式切换、recent 展开）与 right-files（代码/预览 tab）
+ * 直接 import { StudioTabs, StudioTabPanel } from './SlashCommandMenu' 即可 drop-in，
+ * 替换各自的 inline transition，复用同一「滑动下划线 + 内容横滑/淡入」手感。
+ * sf-collapsible 供 ThreeColumnShell 栏宽折叠采用（栏壳 owner 处采用）。 */
+
+/* (e) tab 行块级铺满修饰：工作空间顶栏（code/preview）整宽分布时用。 */
+.sf-tabs--block { display: flex; width: 100%; }
+.sf-tabs--block > .sf-tab { flex: 1; justify-content: center; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * §批3 — Workbench 视觉对齐 clawsgo / hermes（append-only，2026-06-24，owner: visual）
+ *
+ * 目标：给 in-place 三栏工作台「clawsgo 级」观感 —— 柔和蓝 #1890FF 强调、
+ * 圆角卡片、一致 hover-lift、平滑入场、干净气泡。全部新增 utility，不改既有规则。
+ * 2026-08-11：全局 --t-accent 已收敛为蓝（#1890FF/#3B82F6），本组 --sf-blue* 与全局同色系。
+ *
+ * clawsgo 的视觉灵魂是「柔和蓝」：这里引一组 workbench 作用域的 --sf-blue* 变量，
+ * 供 StudioMessageRow / ComposerTokenMeter / 模板墙等组件按需取用（流式光标、
+ * agent 气泡描边、token 计正常态等），与紫色主品牌并存而不冲突。
+ * ──────────────────────────────────────────────────────────────────────────── */
+:root,
+[data-theme="dark"],
+[data-theme="day"],
+[data-theme="light"] {
+  --sf-blue:        #1890FF;   /* clawsgo soft blue —— 主强调 */
+  --sf-blue-strong: #0E73E6;   /* hover / 强调态 */
+  --sf-blue-tint:   color-mix(in srgb, #1890FF 12%, transparent);
+  --sf-blue-tint-2: color-mix(in srgb, #1890FF 20%, transparent);
+  --sf-green:       #21A678;   /* clawsgo 辅助绿（成功 / 完成态点缀） */
+}
+
+/* ── 气泡阴影 / 描边：clawsgo「圆角卡片 + 柔影」气泡观感 ─────────────────────
+ * StudioMessageRow 的 .chat-bubble-* 自带背景/边框；这里只补「软影 + 入场」，
+ * 让 agent 气泡像浮起的卡片、user 气泡带一抹蓝色质感，对比清晰却都很干净。 */
+.chat-bubble-user,
+.chat-bubble-assistant {
+  box-shadow: 0 1px 2px -1px color-mix(in srgb, var(--t-fg, #000) 22%, transparent),
+              0 2px 8px -6px color-mix(in srgb, var(--t-fg, #000) 30%, transparent);
+  transition: box-shadow var(--sf-dur-fast, 120ms) var(--sf-ease, ease),
+              transform  var(--sf-dur-fast, 120ms) var(--sf-ease, ease);
+}
+/* user 气泡：柔和蓝薄发光内缘，回合归属一眼可辨（不改既有 bg/border） */
+.chat-bubble-user {
+  box-shadow: inset 0 0 0 1px var(--sf-blue-tint),
+              0 1px 2px -1px color-mix(in srgb, var(--sf-blue) 28%, transparent),
+              0 3px 10px -6px color-mix(in srgb, var(--sf-blue) 32%, transparent);
+}
+/* 整回合 hover 时气泡极轻微浮起（clawsgo hover-lift 一致性），不抢注意力 */
+.chat-message-user:hover   .chat-bubble-user,
+.chat-message-assistant:hover .chat-bubble-assistant {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px -1px color-mix(in srgb, var(--t-fg, #000) 26%, transparent),
+              0 6px 18px -8px color-mix(in srgb, var(--t-fg, #000) 34%, transparent);
+}
+.chat-message-user:hover .chat-bubble-user {
+  box-shadow: inset 0 0 0 1px var(--sf-blue-tint-2),
+              0 2px 4px -1px color-mix(in srgb, var(--sf-blue) 30%, transparent),
+              0 6px 18px -8px color-mix(in srgb, var(--sf-blue) 36%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble-user, .chat-bubble-assistant,
+  .chat-message-user:hover .chat-bubble-user,
+  .chat-message-assistant:hover .chat-bubble-assistant { transform: none; transition: none; }
+}
+
+/* ── 工具行 hover：hermes 实时 tool-row 的克制反馈 ─────────────────────────── */
+.sf-toolrow {
+  transition: background var(--sf-dur-fast, 120ms) var(--sf-ease, ease),
+              border-color var(--sf-dur-fast, 120ms) var(--sf-ease, ease);
+}
+.sf-toolrow:hover {
+  background: var(--t-hover, color-mix(in srgb, var(--t-fg, #fff) 6%, transparent));
+  border-color: var(--t-border-2, var(--border-strong));
+}
+
+/* ── 流式「打字」点：clawsgo 蓝、三点波浪相位。
+   「呼吸」手感 = scale 收缩/舒张 + 轻微抬升 + 透明度脉动（比纯 translateY 弹跳更自然、
+   更像在「思考喘息」）。相位由 StudioMessageRow 内联 animationDelay 错峰驱动。 ──── */
+@keyframes sf-typing-bounce {
+  0%, 70%, 100% { transform: translateY(0) scale(.72);    opacity: .35; }
+  35%           { transform: translateY(-2.5px) scale(1); opacity: 1;   }
+}
+.sf-typing-dot {
+  animation: sf-typing-bounce 1.3s var(--ease-in-out, ease-in-out) infinite both;
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-typing-dot { animation: sf-anim-fade var(--sf-dur-base) var(--sf-ease) both; }
+}
+
+/* ── sf-blink-cursor：流式输出末尾内联光标（StudioMessageRow trailingCursor）。
+   平滑淡入淡出（取代生硬 step-end 通断）+ 细微辉光 + 顶/底渐隐的发丝形态，
+   读起来像「正在落字」的活光标，而非死板的方块闪烁。 ──────────────────────── */
+@keyframes sf-cursor-soft { 0%, 42% { opacity: 1; } 58%, 100% { opacity: .18; } }
+.sf-blink-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--sf-blue, #1890FF) 78%, transparent),
+    var(--sf-blue, #1890FF),
+    color-mix(in oklab, var(--sf-blue, #1890FF) 78%, transparent)
+  );
+  border-radius: 2px;
+  box-shadow: 0 0 6px -1px color-mix(in oklab, var(--sf-blue, #1890FF) 65%, transparent);
+  animation: sf-cursor-soft 1.05s var(--ease-in-out, ease-in-out) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-blink-cursor { animation: none; }
+}
+
+/* ── sf-bubble-settle：流式完成时气泡微弹落地动画（assistant 气泡 key 切换触发） ── */
+@keyframes sf-bubble-settle {
+  0%   { transform: scaleY(0.97); }
+  60%  { transform: scaleY(1.01); }
+  100% { transform: scaleY(1); }
+}
+.sf-bubble-settle {
+  transform-origin: top left;
+  animation: sf-bubble-settle 200ms var(--ease-out, ease-out) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-bubble-settle { animation: none; }
+}
+
+/* ── token 计正常态走 clawsgo 蓝（而非紫），与 hermes ContextGauge 同色温 ───── */
+.sf-bar--blue .sf-bar-fill { background: var(--sf-blue); }
+
+/* ── clawsgo 软蓝 hover-lift（卡片/模板墙片复用，与 sf-hoverable 同骨架但蓝调）─ */
+.sf-hoverable-blue {
+  transition:
+    transform   var(--sf-dur-fast) var(--sf-ease),
+    box-shadow  var(--sf-dur-fast) var(--sf-ease),
+    border-color var(--sf-dur-fast) var(--sf-ease);
+}
+.sf-hoverable-blue:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--sf-blue) 45%, transparent);
+  box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--sf-blue) 40%, transparent);
+}
+.sf-hoverable-blue:active { transform: translateY(0); box-shadow: none; }
+
+/* ── sf-cursor-blink：streaming text cursor（流式输出末尾跳动光标，2026-06-25）── */
+.sf-cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--t-accent);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: sf-blink 1s step-start infinite;
+}
+@keyframes sf-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * UI 3.0（2026-08-11，owner: frontend）— 全站观感向 workbuddy / clawsgo 收敛
+ *
+ * 背景：accent 已全局紫→蓝；本批做「质感层」——更软的圆角与阴影、统一 hover /
+ * focus / selection 反馈、字体渲染优化。全部 append-only，不改既有规则；
+ * 同名令牌按层叠覆盖（本块在最后，天然生效）。
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* UI 3.0 圆角刻度：比 2.0 更圆润一档（chip 6→8、row/input 8→10、modal 14→16） */
+  --r-chip: 8px;
+  --r-row: 10px;
+  --r-input: 10px;
+  --r-modal: 16px;
+
+  /* UI 3.0 软阴影（workbuddy 式：低透明、多层、无脏边） */
+  --ui30-shadow-sm: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 3px rgba(15, 23, 42, .06);
+  --ui30-shadow-md: 0 2px 6px rgba(15, 23, 42, .06), 0 8px 20px -8px rgba(15, 23, 42, .12);
+  --ui30-shadow-lg: 0 4px 12px rgba(15, 23, 42, .08), 0 16px 40px -12px rgba(15, 23, 42, .16);
+}
+
+/* day 主题：dropdown / modal 阴影降浊（原 .35/.12 在浅底上太重） */
+[data-theme="day"] {
+  --shadow-2: var(--ui30-shadow-md);
+  --shadow-hud: var(--ui30-shadow-lg);
+  --shadow-pop: 0 0 0 1px rgba(23,23,23,.14), var(--ui30-shadow-md);
+}
+
+/* 文字选中 → 品牌蓝浅底（全站生效） */
+::selection {
+  background: color-mix(in srgb, var(--t-accent) 22%, transparent);
+  color: inherit;
+}
+
+/* 输入占位符统一降档 */
+::placeholder { color: var(--t-fg-4, #A1A1AA); opacity: 1; }
+
+/* 全局 focus-visible 软聚焦环（不设裸 outline 的默认观感；组件级特化规则优先） */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--t-accent) 65%, transparent);
+  outline-offset: 1px;
+  border-radius: var(--r-4);
+}
+
+/* 链接与可点元素的过渡基线 */
+a, button, [role="button"] {
+  transition: background-color var(--dur-1) var(--ease-out),
+              color var(--dur-1) var(--ease-out),
+              border-color var(--dur-1) var(--ease-out),
+              box-shadow var(--dur-1) var(--ease-out),
+              transform var(--dur-1) var(--ease-out);
+}
+
+/* 字体渲染：浅底下更干净（workbuddy/clawsgo 的共同底子） */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* 共享按钮质感升级：hover 轻浮起 + active 回压（.sf-btn 全站通用） */
+.sf-btn { transition: background var(--dur-1) var(--ease-out),
+                      border-color var(--dur-1) var(--ease-out),
+                      box-shadow var(--dur-1) var(--ease-out),
+                      transform var(--dur-0) var(--ease-out); }
+.sf-btn:hover { transform: translateY(-1px); box-shadow: var(--ui30-shadow-sm); }
+.sf-btn:active { transform: translateY(0); box-shadow: none; }
+
+/* UI 3.0 侧栏导航行：hover 浅底 + active 品牌蓝浅底（HfSidebar 采用，
+ * 背景从 inline style 迁到此类以获得 hover 态） */
+.ui30-navrow {
+  border-radius: var(--r-row);
+  transition: background-color var(--dur-1) var(--ease-out);
+}
+.ui30-navrow:hover { background: var(--t-hover); }
+.ui30-navrow.on { background: var(--t-accent-tint); }
+.ui30-navrow.on:hover { background: color-mix(in srgb, var(--t-accent-tint) 130%, transparent); }
+
+/* UI 3.0 搜索胶囊（侧栏 ⌘K 入口）：hover 提亮 + 边框加深 */
+.ui30-searchpill { transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
+.ui30-searchpill:hover {
+  border-color: var(--t-border-2) !important;
+  box-shadow: var(--ui30-shadow-sm);
+}
+
+/* UI 3.0 用户卡 hover */
+.ui30-usercard { transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
+.ui30-usercard:hover { border-color: var(--t-border-2) !important; box-shadow: var(--ui30-shadow-sm); }
+
+/* UI 3.0 kbd 键帽：更浅的底 + 更圆 */
+.hf-kbd, .sf-kbd {
+  border-radius: 5px;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--t-fg-4) 25%, transparent);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * UI 4.0（2026-08-12，owner: frontend）— 对标 clawsgo / workbuddy 的整体观感
+ *
+ * 在 UI3.0 质感层之上做「精修层」：细滚动条、导航选中指示条、卡片浮起、
+ * 分隔线收敛。全部 append-only，不改既有规则；同名令牌按层叠覆盖。
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* UI 4.0 卡片/气泡圆角再进一档（clawsgo 的大圆角软卡片观感） */
+  --r-card: 14px;
+  --r-panel: 14px;
+
+  /* UI 4.0 悬浮层阴影：更低透明、更大扩散，浅底不显脏 */
+  --ui40-shadow-float: 0 1px 2px rgba(15, 23, 42, .04), 0 12px 32px -12px rgba(15, 23, 42, .14);
+}
+
+/* ── 细滚动条（全站）—— workbuddy/clawsgo 式：窄、半透明、hover 显现 ────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--t-fg-4, #71717A) 35%, transparent) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--t-fg-4, #71717A) 28%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--t-fg-4, #71717A) 48%, transparent);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* ── 侧栏导航行：选中态左侧指示条（clawsgo/VSCode 式），弹性生长 ────────── */
+.ui30-navrow { position: relative; }
+.ui30-navrow::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 8px; bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--t-accent);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform var(--dur-2) var(--ease-spring);
+}
+.ui30-navrow.on::before { transform: scaleY(1); }
+.ui30-navrow.on { color: var(--t-accent-bright); }
+
+/* ── 卡片浮起微交互（.sf-hoverable 已有，补一个更克制的面板级变体）──────── */
+.ui40-panel {
+  border-radius: var(--r-panel);
+  transition: box-shadow var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out),
+              transform var(--dur-2) var(--ease-out);
+}
+.ui40-panel:hover {
+  border-color: var(--t-border-2);
+  box-shadow: var(--ui40-shadow-float);
+}
+
+/* ── 空态插画容器（sf-empty 增强）：更大留白 + 更柔的图标底 ─────────────── */
+.sf-empty { letter-spacing: .01em; }
+
+/* ── 分隔线全局收敛：hairline 一档更淡（配合 day 主题 --t-border）────────── */
+hr, [role="separator"] { border-color: var(--t-border); }
+
+/* ── day 主题 clawsgo 校准 ─────────────────────────────────────────────────
+ * 2026-08-12 UI4.0 曾在此用 clawsgo.cn 网页实测值整体覆盖 day 令牌（bg #FAFAFA /
+ * border #E5E5E5 / accent 蓝 #1447E6）。2026-08-18 clawsgo 收敛批改为以复刻页
+ * .tmp/clawsgo-clone/home.html 为唯一基准（bg #F3F3F3 / border #ECECEA /
+ * accent 近黑 #171717），本覆盖块已删除——day 令牌以 [data-theme="day"] 主块
+ * （文件前部）为唯一事实源，勿再在文件后部追加 day 令牌覆盖。 */
+
+/* clawsgo 式主按钮:近黑底白字(day 主题限定;night 保持蓝)。幽灵按钮同步收敛 */
+[data-theme="day"] .sf-btn-primary { background: #171717; color: #FAFAFA; }
+[data-theme="day"] .sf-btn-primary:hover { background: #000000; }
+
+/* ── 进站首屏(UI4.0,2026-08-13):clawsgo「早上好, Jane」式克制 hero ─────────
+ * 实测 clawsgo 首页:纯色大标题(无渐变/badge)+ 大留白 + 大卡网格。 */
+.sl-title {
+  background: none;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: currentColor;
+  background-clip: initial;
+  color: var(--t-fg);
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+.sl-inner { padding-top: 64px; gap: 28px; }
+.sl-dotgrid { opacity: .35; }                 /* 点阵再淡一档,不抢内容 */
+/* 模板卡:clawsgo 双列大卡观感 — 更大留白 + 大图标瓷贴 + UI4.0 软影 */
+.sg-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.sg-card { padding: 16px 18px; min-height: 110px; }
+.sg-card:hover { box-shadow: var(--ui30-shadow-md); }
+.sg-card-icon { width: 34px; height: 34px; border-radius: 10px; }
+.sg-card-name { font-size: 14px; }
+.sl-run:hover { box-shadow: var(--ui30-shadow-sm); }
+
+/* 「+ 新员工」CTA:clawsgo 式近黑主按钮(day 限定;night 保持品牌蓝渐变) */
+[data-theme="day"] .pcv-new {
+  background: #171717;
+  box-shadow: 0 2px 8px -2px rgba(15, 23, 42, .25);
+}
+[data-theme="day"] .pcv-new:hover {
+  box-shadow: 0 6px 16px -6px rgba(15, 23, 42, .30);
+  filter: brightness(1.15);
+}
+
+/* hero composer(UnifiedComposer sf-uc-hero):默认中性边,聚焦才亮蓝环 —
+ * 原常驻 accent 光晕太"闹",clawsgo 是聚焦才给反馈。inline borderColor
+ * 用 !important 覆盖(样式表 !important > 元素 inline 非 important)。 */
+.sf-uc-hero { transition: border-color 150ms ease, box-shadow 150ms ease; }
+.sf-uc-hero:focus-within {
+  border-color: color-mix(in oklab, var(--t-accent) 55%, var(--t-border)) !important;
+  box-shadow: 0 0 0 4px var(--t-accent-tint), var(--ui30-shadow-md) !important;
+}
+
+/* ===== UI5.0 ===== （2026-08-14，owner: design-foundation）— 设计基座二次校准
+ *
+ * 目标：day 主题令牌按 clawsgo.cn 实测 DNA 二次校准 ——
+ *   纯白 #FFFFFF 底 / 灰阶层次 #F5F5F5 / 边框 #E5E5E5 /
+ *   文字主 #0A0A0A、次 #737373 / 主按钮近黑 #171717 / 关键 accent 蓝 #1447E6。
+ *   文字从 zinc(微蓝调) 收敛为 neutral 纯灰阶，界面回归中性，蓝色只留给关键 accent。
+ * 字体：body 主字体切到 Inter Variable（Geist 保留为回退，CJK 仍 Noto Sans SC）。
+ * 圆角：对齐 clawsgo 刻度 10/14/18/26（modal 16→18，新增 --r-xl 26）。
+ * 全部 append-only：不删 UI3.0/UI4.0 旧层，同名令牌按层叠覆盖（本块在最后，天然生效）。
+ * night 主题不动：本块 day 令牌全部限定 [data-theme="day"]。
+ * 细滚动条 / selection 蓝底 / focus-visible 蓝环已由 UI3.0+UI4.0 层提供并经确认沿用，
+ * 本块只做增量修正与令牌收敛。
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* 2026-08-18 clawsgo 收敛批：body 切系统字体栈（复刻页同款）。此处曾是
+   * UI5.0 的 Inter Variable 栈，已随收敛批废弃。 */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  /* UI5.0 圆角刻度对齐 clawsgo 10/14/18/26（--r-modal 16→18，新增 26 档） */
+  --r-modal: 18px;
+  --r-xl: 26px;
+}
+
+/* ── day 主题 clawsgo DNA 校准 ──────────────────────────────────────────────
+ * UI4.0 / UI5.0 曾在此两度用 clawsgo.cn 网页实测值覆盖 day 令牌（最终态为
+ * 纯白页底 #FFFFFF + 蓝 accent #1447E6）。2026-08-18 clawsgo 收敛批改为以
+ * 复刻页 .tmp/clawsgo-clone/home.html 为唯一基准（bg #F3F3F3 / border
+ * #ECECEA / accent 近黑 #171717 / 中性 fg 阶），两个覆盖块均已删除——
+ * day 令牌以文件前部的 [data-theme="day"] 主块为唯一事实源。
+ * 勿再在文件后部追加 day 令牌覆盖。 */
+
+/* workbench 作用域的 --sf-blue* 一并收敛到 #1447E6 同色系（原 #1890FF 偏亮，
+ * 与 day 主题关键蓝不统一）；night 保持原柔和蓝不动。 */
+[data-theme="day"] {
+  --sf-blue:        #1447E6;
+  --sf-blue-strong: #0F3BCC;
+  --sf-blue-tint:   color-mix(in srgb, #1447E6 12%, transparent);
+  --sf-blue-tint-2: color-mix(in srgb, #1447E6 20%, transparent);
+}
+
+/* 链接色：无类名的裸 <a> 在 day 主题走关键蓝（组件级特化规则优先，不受影响） */
+[data-theme="day"] a:not([class]) { color: var(--t-accent); }
+
+/* 减动效偏好兜底（无障碍 WCAG 2.1）：全局动画/过渡收敛 —— 保持在文件最末尾 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

@@ -1,0 +1,117 @@
+/* ===== Neo ===== */
+/* NeoRunInline — 运行态中栏视图视觉对齐 .tmp/clawsgo-clone/running.html。
+   颜色一律 var(--t-*) / color-mix；本文件只承载视觉覆盖，不改数据/行为。
+   顶部 chrome DOM 在 NeoChat.tsx（别任务文件），此处经 .neo-chat:has(.neo-run)
+   作用域只覆盖运行态表现，hero/新任务态不受影响。 */
+
+/* ── 运行态顶部 chrome：极简顶行（左「当前选中：X」，右仅「新任务」）──────────
+   running.html .chat-head：48px、padding 0 14px、12.5px/500 灰字、底部 hairline。 */
+.neo-chat:has(.neo-run) .neo-chat-topbar {
+  height: 48px;
+  padding: 0 14px;
+  gap: 6px;
+  border-bottom: 1px solid var(--t-border);
+}
+
+.neo-chat:has(.neo-run) .neo-chat-topbar-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--t-fg-3);
+}
+
+.neo-chat:has(.neo-run) .neo-chat-topbar-label strong {
+  color: var(--t-fg-3);
+  font-weight: 500;
+}
+
+/* 右侧只留「新任务」（群聊现场入口运行态隐藏，仅视觉隐藏不改逻辑） */
+.neo-chat:has(.neo-run) .neo-topbar-btn[data-testid="neo-chat-group-link"] {
+  display: none;
+}
+
+.neo-chat:has(.neo-run) .neo-topbar-btn {
+  height: auto;
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--t-fg-2);
+}
+
+.neo-chat:has(.neo-run) .neo-topbar-btn:hover {
+  background: var(--t-panel-2);
+}
+
+/* ── 操作列表（「执行了 N 个操作」+ 每行右侧耗时）──────────────────────────
+   running.html 实测：toggle/行 padding 7px 8px、radius 10、12.5px/500 fg-2；
+   行 gap 9px、标题 fg-1；耗时 11px fg-4 tabular-nums。 */
+.neo-ops {
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.neo-ops-toggle {
+  gap: 7px;
+  padding: 7px 8px;
+  margin-left: -8px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--t-fg-2);
+}
+
+.neo-ops-list {
+  gap: 0;
+  padding-left: 0;
+}
+
+.neo-op-row {
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--t-fg);
+}
+
+/* ── 底部状态 pill ──────────────────────────────────────────────────────────
+   running.html .pill：999 圆角 + hairline + 浮起软阴影、padding 9px 16px、
+   标题 12.5px/500 fg-1、计数 11.5px fg-3；完成态绿 pill 保持（--t-ok）。 */
+.neo-pill {
+  gap: 9px;
+  margin-top: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-weight: 500;
+  color: var(--t-fg);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+.neo-pill:hover {
+  background: var(--t-panel);
+  border-color: var(--t-border-2);
+}
+
+.neo-pill.neo-pill-done {
+  color: var(--t-ok);
+}
+
+.neo-pill-count {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--t-fg-3);
+}
+
+/* 运行中 pill 的 spinner（running.html .spinner：14px 细环 + accent 顶点旋转），
+   替换旧脉动圆点，与复刻页一致。 */
+.neo-pill-spinner {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.75px solid color-mix(in srgb, var(--t-fg) 15%, transparent);
+  border-top-color: var(--t-accent);
+  animation: neo-pill-rot 0.9s linear infinite;
+}
+@keyframes neo-pill-rot {
+  to { transform: rotate(360deg); }
+}

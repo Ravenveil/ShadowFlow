@@ -1,0 +1,690 @@
+/**
+ * NeoGroupChat — 群聊现场页（Neo 形态，2026-08-15 Polynoia 对标；
+ * 2026-08-16 W1-C 视觉/信息呈现层重做，数据链路不动；
+ * 2026-08-22 W2 钉钉式气泡流 + DM 文案分岔）。
+ *
+ * 单聊（NeoChat）里编排者拆解派发后，agents 的干活现场就在这里：
+ *   - 数据：useGroupTimeline（B2 统一读路径 GET /api/groups/:id/timeline
+ *     + 群 SSE + 活跃 run 的 /stream 订阅）——聊天消息与 run 过程卡已在
+ *     服务端归并为统一 TimelineMessage 流
+ *   - 渲染：NeoTimeline（./NeoTimeline，阶段 2.5 Neo 原生渲染层，只读）——
+ *     本页在其外面包纯前端结构，不改 NeoTimeline 源文件：
+ *       1) 按 turn_id 分组成「消息块」（用户发言 + 该轮 agent 回复/过程卡）
+ *       2) 按消息 ts（本地日）把 turn 分日，日界处插入灰字居中分隔行
+ *       3) turn 内再按 segmentTurn 切段：聊天消息走钉钉气泡壳（头像 + 名字
+ *          + 角色 badge + 相对时间；用户消息右对齐；system 通知居中弱化条），
+ *          连续过程卡（thinking/tool/plan…）合并成一段仍由 NeoTimeline 整段渲染
+ *   - 钉钉式成员/DAG/审批门不落在中栏——融合进 NeoHost「成员」tab
+ *     （团队群会话时 NeoHost 标题变「团队的主机」，见 GroupMembersPanel）
+ *   - 发言：NeoComposer → postGroupMessage（sender_kind=user）→ 网关
+ *     runFanout 触发新一轮 INTENT_PARSE → 分层派发（在群里说话即派活）
+ *   - 派发/交付收口（2026-08-23）：网关 intent 帧 → 用户发言下方的
+ *     「派发卡」（NeoDispatchCard：意图→派给谁+理由）；run 完成态消息流
+ *     尾部出「交付卡」（NeoDeliveryCard：本轮产物清单 + 一句话总结 +
+ *     「查看产物」跳转；无产物不渲染，不编造）。
+ *
+ * DM 分岔（W2）：getGroup 读 GroupRecord.kind（NeoApp.tsx 已有判 kind 先例），
+ * 空态标题 / composer placeholder / 顶栏成员计数走 neo.dm.* 文案。
+ *
+ * 入口：NeoRail 群列表行 / NeoChat 顶栏「群聊现场」跳转（session ↔ group
+ * 经 B1 互链反查）。样式全部在 neo-group.css（--t-* token，day/night 安全）。
+ */
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, UsersRound } from 'lucide-react';
+import { useGroupTimeline } from '../core/hooks/useGroupTimeline';
+import { getGroup, postGroupMessage } from '../api/groupApi';
+import { listAgents, type AgentRecord } from '../api/agents';
+import { NeoTimeline } from './NeoTimeline';
+import { NeoGroupMsgActions } from './NeoGroupMsgActions';
+import { NeoDispatchCard, type IntentMessage } from './NeoDispatchCard';
+import { NeoDeliveryCard, collectDeliverables, summarizeText } from './NeoDeliveryCard';
+import type { TimelineMessage } from '../components/run-session/timeline/types';
+import { useI18n } from '../common/i18n';
+import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
+// ClawHub（2026-06，T08）：agent 气泡头像接入 DiceBear（配了头像的 Agent 生效）
+import { AgentAvatar } from '../components/agent/AgentAvatar';
+import type { NeoNav } from './types';
+import './neo-chat.css'; // composer 容器/发送钮基样式（.neo-chat-composer / .neo-composer）
+import './neo-group.css';
+import '../pages/clawhub/clawhub.css';
+
+/* ── 纯逻辑：turn 分组 + 分日 ─────────────────────────────────────────────── */
+
+interface TurnGroup {
+  turnId: string;
+  /** 块锚定时间 = 块内首条消息的 ts（epoch ms）。 */
+  ts: number;
+  messages: TimelineMessage[];
+}
+
+/** 按 turn_id 保序分组（消息流本身 ts 升序；同 turn 的过程卡不拆散）。 */
+function groupByTurn(messages: readonly TimelineMessage[]): TurnGroup[] {
+  const order: string[] = [];
+  const byTurn = new Map<string, TimelineMessage[]>();
+  for (const m of messages) {
+    let bucket = byTurn.get(m.turn_id);
+    if (!bucket) {
+      bucket = [];
+      byTurn.set(m.turn_id, bucket);
+      order.push(m.turn_id);
+    }
+    bucket.push(m);
+  }
+  return order.map((turnId) => {
+    const bucket = byTurn.get(turnId)!;
+    return { turnId, ts: bucket[0]?.ts ?? 0, messages: bucket };
+  });
+}
+
+interface DaySegment {
+  /** 本地日 key（YYYY-M-D），同一天的消息块归一段。 */
+  key: string;
+  ts: number;
+  turns: TurnGroup[];
+}
+
+function localDayKey(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function segmentByDay(turns: readonly TurnGroup[]): DaySegment[] {
+  const out: DaySegment[] = [];
+  for (const turn of turns) {
+    const key = localDayKey(turn.ts);
+    const last = out[out.length - 1];
+    if (last && last.key === key) last.turns.push(turn);
+    else out.push({ key, ts: turn.ts, turns: [turn] });
+  }
+  return out;
+}
+
+function startOfDay(ts: number): number {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/* ── 纯逻辑：turn 内钉钉分段（聊天气泡 vs 过程卡） ─────────────────────────── */
+
+export type StreamSeg =
+  | { type: 'process'; key: string; messages: TimelineMessage[] }
+  | { type: 'dispatch'; key: string; msg: IntentMessage }
+  | { type: 'user' | 'agent' | 'system'; key: string; msg: TimelineMessage };
+
+/**
+ * 把一个 turn 的消息切成渲染段：
+ *   - user_turn                       → 用户气泡（右对齐）
+ *   - assistant_text/raw + sender_name → agent 气泡（头像 + 名字 + 角色 badge）
+ *     （sender_name='system' 是 chat-gateway 的 system.notice 适配 → 居中弱化条）
+ *   - intent（网关 INTENT_PARSE 派发决策帧）→ 派发卡（NeoDispatchCard）
+ *   - 其余（thinking/tool_call/plan_card…run 过程卡）→ 连续合并为一段，
+ *     整段交给 NeoTimeline 渲染，仍嵌在本 turn 下
+ */
+export function segmentTurn(messages: readonly TimelineMessage[]): StreamSeg[] {
+  const segs: StreamSeg[] = [];
+  let proc: TimelineMessage[] = [];
+  const flush = () => {
+    if (proc.length > 0) {
+      segs.push({ type: 'process', key: `proc:${proc[0].id}`, messages: proc });
+      proc = [];
+    }
+  };
+  for (const m of messages) {
+    if (m.kind === 'intent') {
+      flush();
+      segs.push({ type: 'dispatch', key: m.id, msg: m });
+      continue;
+    }
+    let cls: 'user' | 'agent' | 'system' | null = null;
+    if (m.kind === 'user_turn') cls = 'user';
+    else if (m.kind === 'assistant_text' || m.kind === 'raw') {
+      const sender = (m.sender_name ?? '').trim();
+      if (sender) cls = sender.toLowerCase() === 'system' ? 'system' : 'agent';
+    }
+    if (cls) {
+      flush();
+      segs.push({ type: cls, key: m.id, msg: m });
+    } else {
+      proc.push(m);
+    }
+  }
+  flush();
+  return segs;
+}
+
+/** 系统弱化条 / 气泡兜底取文本（仅 user/assistant_text/raw 会走到）。 */
+function segText(m: TimelineMessage): string {
+  if (m.kind === 'user_turn') return m.text;
+  if (m.kind === 'assistant_text' || m.kind === 'raw') return m.body;
+  return '';
+}
+
+/* ── 纯逻辑：成员推导（sender_name/agent_id + plan_card assignee 去重） ────── */
+
+interface GroupMember {
+  key: string;
+  name: string;
+}
+
+function deriveMembers(messages: readonly TimelineMessage[]): GroupMember[] {
+  const seen = new Map<string, string>();
+  const add = (id: string | undefined, name: string | undefined) => {
+    const n = (name ?? '').trim();
+    // 系统通知行（chat-gateway 的 system.notice 适配会带 sender_name='system'）
+    // 不是群成员，不进头像条。
+    if (!n || n.toLowerCase() === 'system') return;
+    const key = id ?? `name:${n}`;
+    if (!seen.has(key)) seen.set(key, n);
+  };
+  for (const m of messages) {
+    if (m.kind === 'assistant_text' || m.kind === 'raw') add(m.agent_id, m.sender_name);
+    if (m.kind === 'plan_card') {
+      for (const task of m.tasks) add(task.agent_id, task.assignee);
+    }
+  }
+  return [...seen.entries()].map(([key, name]) => ({ key, name }));
+}
+
+/* ── 纯逻辑：头像（与 NeoRail neoAvatarColor 同算法同色环，换壳不换色） ────── */
+
+const GC_AVATAR_COLORS = ['#F59E0B', '#A855F7', '#EF4444', '#0891B2', '#22D3EE', '#10B981', '#71717A'];
+
+function gcAvatarColor(seed: string): string {
+  let h = 0;
+  const key = seed || '?';
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return GC_AVATAR_COLORS[Math.abs(h) % GC_AVATAR_COLORS.length];
+}
+
+function gcAvatarInitial(name: string): string {
+  const first = Array.from((name ?? '').trim())[0] ?? '?';
+  return /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
+}
+
+/** 头像条最多叠 5 个，其余收进 +N。 */
+const MEMBER_STACK_MAX = 5;
+
+/* ── 组件 ─────────────────────────────────────────────────────────────────── */
+
+/**
+ * 双形态（2026-08-19）：
+ *   - 路由页：/group/:groupId 独立整页（AppRoutes 懒加载，无 props）
+ *   - 内嵌：NeoApp 中栏 `<NeoGroupChat groupId embedded />` —— 点击侧栏
+ *     「会话/群聊现场」不再跳路由页，留在 Neo 壳内（ZCode 式停留同页）。
+ * 内嵌态隐藏返回钮、高度 100% 填充中栏（.neo-gc--inline）。
+ */
+export function NeoGroupChat({
+  groupId: groupIdProp,
+  embedded = false,
+  onNavigate,
+}: {
+  groupId?: string;
+  embedded?: boolean;
+  /** NeoApp 内部导航（内嵌态由 NeoApp 透传）——转发给 NeoComposer 的
+   *  /inspect 等内建 slash 命令；独立路由页缺省。 */
+  onNavigate?: (nav: NeoNav) => void;
+} = {}) {
+  const params = useParams<{ groupId: string }>();
+  const groupId = groupIdProp ?? params.groupId;
+  const { t } = useI18n();
+
+  const timeline = useGroupTimeline(groupId ?? null);
+
+  // 群记录（getGroup 失败 → 退化用 groupId，不阻塞页面）。kind='dm' → 单聊
+  // 文案分岔（NeoApp.tsx 已有判 kind 先例）。
+  const [groupName, setGroupName] = useState<string | null>(null);
+  const [groupKind, setGroupKind] = useState<string | null>(null);
+  const [memberCount, setMemberCount] = useState<number>(0);
+  useEffect(() => {
+    if (!groupId) return;
+    let alive = true;
+    getGroup(groupId)
+      .then((g) => {
+        if (!alive || !g) return;
+        setGroupName(g.name);
+        setGroupKind((g.kind as string | undefined) ?? null);
+        setMemberCount(g.agent_ids?.length ?? 0);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [groupId]);
+  const isDm = groupKind === 'dm';
+
+  // 气泡角色 badge / 头像色数据源（TeamPanel 同款 listAgents；失败 → 空表，
+  // badge 退化为不出，头像色回退名字 hash，不阻塞聊天主链路）
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
+  useEffect(() => {
+    if (!groupId) return;
+    let alive = true;
+    listAgents()
+      .then((list) => {
+        if (alive) setAgents(list);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [groupId]);
+  const agentById = useMemo(() => new Map(agents.map((a) => [a.agent_id, a])), [agents]);
+
+  // 活跃 run → composer 显示 Stop 视觉 + 顶栏 live 徽章
+  const busy = timeline.runs.some((r) => r.status === 'running');
+
+  // ── 交付卡（2026-08-23 交付收口）────────────────────────────────────────
+  // run 跑完（最新一条 gateway run 进入 succeeded 且当前无 running）→ 消息流
+  // 尾部出一张交付汇总卡：该轮真实产物（artifact_card / commit_record.files /
+  // file_diff，与 artifact-lineage 同一 worktree 证据链）+ 本轮最后一条 agent
+  // 回复首行作一句话总结 + 产物自带 url 时的「查看产物」跳转。
+  // 无产物 / 仍在跑 / 无完成 run → null（不渲染空卡，不编造）。
+  const delivery = useMemo(() => {
+    if (busy) return null;
+    const doneRun = [...timeline.runs].reverse().find((r) => r.status === 'succeeded');
+    if (!doneRun) return null;
+    const turnId = `gwturn_${doneRun.session_id}`;
+    const turnMsgs = timeline.messages.filter((m) => m.turn_id === turnId);
+    const items = collectDeliverables(turnMsgs);
+    if (items.length === 0) return null;
+    const turnStart = turnMsgs.reduce((min, m) => (m.ts < min ? m.ts : min), Infinity);
+    const lastReply = [...timeline.messages]
+      .reverse()
+      .find((m) => m.kind === 'assistant_text' && m.ts >= turnStart);
+    const summary =
+      lastReply && lastReply.kind === 'assistant_text' ? summarizeText(lastReply.body) : '';
+    return { items, summary: summary || undefined };
+  }, [busy, timeline.runs, timeline.messages]);
+
+  // ── L1（2026-08-22）— 群消息 reactions/pinned 元数据 + 消息行动作 ──────────
+  // 水合：GET /api/groups/{id} 全量记录里的 messages[].reactions/pinned →
+  // message_id 索引 map；聊天消息数变化时重取（新到的 agent 回复也要带上
+  // 既有反应）。动作回写以服务端 POST 响应为准（群消息 id 规则：
+  // TimelineMessage.id = `chat_<message_id>`，与 server 适配器一致）。
+  const [msgMeta, setMsgMeta] = useState<
+    Record<string, { reactions: Record<string, string[]>; pinned: boolean }>
+  >({});
+  const chatMsgCount = useMemo(
+    () => timeline.messages.filter((m) => m.id.startsWith('chat_')).length,
+    [timeline.messages],
+  );
+  useEffect(() => {
+    if (!groupId) return;
+    let alive = true;
+    getGroup(groupId)
+      .then((g) => {
+        if (!alive || !g) return;
+        const msgs = (g.messages ?? []) as Array<Record<string, unknown>>;
+        const meta: Record<string, { reactions: Record<string, string[]>; pinned: boolean }> = {};
+        for (const m of msgs) {
+          const mid = m.message_id;
+          if (typeof mid === 'string' && mid) {
+            meta[mid] = {
+              reactions: (m.reactions ?? {}) as Record<string, string[]>,
+              pinned: Boolean(m.pinned),
+            };
+          }
+        }
+        setMsgMeta(meta);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [groupId, chatMsgCount]);
+
+  const handleReactionsChange = useCallback((mid: string, reactions: Record<string, string[]>) => {
+    setMsgMeta((prev) => ({ ...prev, [mid]: { reactions, pinned: prev[mid]?.pinned ?? false } }));
+  }, []);
+  const handlePinnedChange = useCallback((mid: string, pinned: boolean) => {
+    setMsgMeta((prev) => ({ ...prev, [mid]: { reactions: prev[mid]?.reactions ?? {}, pinned } }));
+  }, []);
+
+  const renderMsgActions = useCallback(
+    (msg: TimelineMessage) => {
+      if (!groupId || !msg.id.startsWith('chat_')) return null;
+      const mid = msg.id.slice('chat_'.length);
+      const meta = msgMeta[mid];
+      // 乐观/SSE 占位 id（chat_sse_*）不在群记录里 — 等元数据刷新出真 id 再渲染。
+      if (!meta) return null;
+      return (
+        <NeoGroupMsgActions
+          groupId={groupId}
+          messageId={mid}
+          reactions={meta.reactions}
+          pinned={meta.pinned}
+          onReactionsChange={handleReactionsChange}
+          onPinnedChange={handlePinnedChange}
+        />
+      );
+    },
+    [groupId, msgMeta, handleReactionsChange, handlePinnedChange],
+  );
+
+  // 日分隔标签：今天 / 昨天 / YYYY-MM-DD
+  const dayLabel = useCallback(
+    (ts: number): string => {
+      const dayDiff = Math.round((startOfDay(Date.now()) - startOfDay(ts)) / 86400000);
+      if (dayDiff <= 0) return t('neo.group.today', { defaultValue: '今天' });
+      if (dayDiff === 1) return t('neo.group.yesterday', { defaultValue: '昨天' });
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    },
+    [t],
+  );
+
+  // 块/气泡相对时间：当天 = 刚刚/N 分钟前/N 小时前；跨天 = HH:mm（日期由分隔行承担）
+  const relTime = useCallback(
+    (ts: number): string => {
+      if (!ts) return '';
+      const diff = Date.now() - ts;
+      if (diff < 60_000) return t('neo.group.timeNow', { defaultValue: '刚刚' });
+      const m = Math.floor(diff / 60_000);
+      if (m < 60) {
+        return t('neo.group.timeMinutesAgo', { defaultValue: '{{count}} 分钟前', count: m });
+      }
+      const sameDay = startOfDay(Date.now()) === startOfDay(ts);
+      const h = Math.floor(m / 60);
+      if (sameDay && h < 24) {
+        return t('neo.group.timeHoursAgo', { defaultValue: '{{count}} 小时前', count: h });
+      }
+      const d = new Date(ts);
+      return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    },
+    [t],
+  );
+
+  // 消息流 → 日分段（每段内按 turn 分块 → turn 内按钉钉段渲染）
+  const daySegments = useMemo(() => segmentByDay(groupByTurn(timeline.messages)), [timeline.messages]);
+
+  // 成员头像条（纯前端推导；推导不出 → 不渲染）
+  const members = useMemo(() => deriveMembers(timeline.messages), [timeline.messages]);
+  const stackedMembers = members.slice(0, MEMBER_STACK_MAX);
+  const overflowCount = members.length - stackedMembers.length;
+
+  // 气泡角色 badge：blueprint.role 真源优先；有 agent 记录但没配角色 → 通用
+  // 「Agent」标签；连 agent 记录都查不到 → 不出 badge（不伪造头衔）。
+  const roleBadge = useCallback(
+    (msg: TimelineMessage): string | null => {
+      const aid = msg.kind === 'assistant_text' || msg.kind === 'raw' ? msg.agent_id : undefined;
+      const a = aid ? agentById.get(aid) : undefined;
+      if (!a) return null;
+      const role = a.blueprint?.role;
+      if (typeof role === 'string' && role.trim()) return role.trim();
+      return t('neo.group.roleAgent', { defaultValue: 'Agent' });
+    },
+    [agentById, t],
+  );
+
+  // 发言 = 在群里说话 → 网关触发新一轮派发（INTENT_PARSE → 分层并行）。
+  // executor/model 与其他 composer 调用方同源：UnifiedComposer 的内部
+  // picker 写 localStorage（sf.defaultExecutor / sf.model），此处原样读取。
+  const handleSubmit = useCallback(
+    async (p: UnifiedComposerSubmitPayload) => {
+      if (!groupId) return;
+      const text = p.text.trim();
+      if (!text) return;
+      let executor: string | undefined;
+      let model: string | undefined;
+      try {
+        executor = localStorage.getItem('sf.defaultExecutor') || undefined;
+        model = localStorage.getItem('sf.model') || undefined;
+      } catch {
+        /* localStorage 不可用 → 网关默认 executor */
+      }
+      timeline.appendLocalUser(text);
+      try {
+        await postGroupMessage(groupId, text, {
+          senderName: 'user',
+          senderKind: 'user',
+          executor,
+          model,
+        });
+      } catch (err) {
+        throw new Error(
+          t('neo.group.sendFailed', {
+            defaultValue: `发送失败：${err instanceof Error ? err.message : String(err)}`,
+          }),
+        );
+      }
+    },
+    [groupId, timeline, t],
+  );
+
+  if (!groupId) return null;
+
+  return (
+    <div className={`neo-gc${embedded ? ' neo-gc--inline' : ''}`}>
+      <header className="neo-gc-topbar">
+        {!embedded && (
+          <Link
+            to="/"
+            className="neo-gc-back"
+            aria-label={t('neo.group.back', { defaultValue: '返回' })}
+          >
+            <ArrowLeft size={14} strokeWidth={1.9} aria-hidden />
+          </Link>
+        )}
+        <span className="neo-gc-title">
+          <UsersRound size={13} strokeWidth={1.9} aria-hidden className="neo-gc-title-icon" />
+          <strong>{groupName ?? groupId.slice(0, 8)}</strong>
+          {memberCount > 0 && (
+            <span className="neo-gc-title-count">
+              {'· '}
+              {isDm
+                ? t('neo.dm.members', { defaultValue: '{{count}} 位员工', count: memberCount })
+                : t('neo.group.members', { defaultValue: '{{count}} 个 Agent', count: memberCount })}
+            </span>
+          )}
+        </span>
+        {members.length > 0 && (
+          <span
+            className="neo-gc-members"
+            title={members.map((m) => m.name).join('、')}
+            data-testid="neo-gc-members"
+          >
+            <span className="neo-gc-member-stack">
+              {stackedMembers.map((m) => (
+                <span
+                  key={m.key}
+                  className="neo-gc-member"
+                  style={{ background: gcAvatarColor(m.key) }}
+                  aria-hidden
+                >
+                  {gcAvatarInitial(m.name)}
+                </span>
+              ))}
+              {overflowCount > 0 && (
+                <span className="neo-gc-member neo-gc-member-more" aria-hidden>
+                  +{overflowCount}
+                </span>
+              )}
+            </span>
+            <span className="neo-gc-member-count">
+              {t('neo.group.memberCount', { defaultValue: '{{count}} 位在场', count: members.length })}
+            </span>
+          </span>
+        )}
+        {busy && (
+          <span className="neo-gc-live" data-testid="neo-group-live">
+            <span className="neo-gc-live-dot" aria-hidden />
+            {t('neo.group.live', { defaultValue: '执行中' })}
+          </span>
+        )}
+      </header>
+
+      <div className="neo-gc-scroll">
+        <div className="neo-gc-stream">
+              {timeline.loading ? (
+                <div className="neo-gc-state">
+                  <span className="neo-gc-state-spinner" aria-hidden />
+                  {t('common.loading', { defaultValue: '加载中…' })}
+                </div>
+              ) : timeline.error ? (
+                <div className="neo-gc-state neo-gc-state-error" role="alert">
+                  <span>{timeline.error}</span>
+                  <span className="neo-gc-state-hint">
+                    {t('neo.group.hint', {
+                      defaultValue: '请确认后端 server 在运行（:8002），且群存在',
+                    })}
+                  </span>
+                </div>
+              ) : daySegments.length === 0 ? (
+                <div className="neo-gc-state neo-gc-state-empty">
+                  <span className="neo-gc-state-icon" aria-hidden>
+                    <UsersRound size={18} strokeWidth={1.6} />
+                  </span>
+                  <span className="neo-gc-state-title">
+                    {isDm
+                      ? t('neo.dm.emptyTitle', { defaultValue: '还没有对话' })
+                      : t('neo.group.emptyTitle', { defaultValue: '群里还没有动静' })}
+                  </span>
+                  {!isDm && (
+                    <span className="neo-gc-state-hint">
+                      {t('neo.group.emptyHint', { defaultValue: '在下面说句话，Agents 就开始干活' })}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <>
+                {daySegments.map((seg) => (
+                  <div className="neo-gc-day" key={seg.key}>
+                    <div className="neo-gc-day-divider" role="separator">
+                      <span className="neo-gc-day-label">{dayLabel(seg.ts)}</span>
+                    </div>
+                    {seg.turns.map((turn) => (
+                      <section className="neo-gc-turn" key={turn.turnId}>
+                        {segmentTurn(turn.messages).map((s) => {
+                          if (s.type === 'process') {
+                            // run 过程卡：整段仍由 NeoTimeline 渲染，嵌在本 turn 下
+                            return (
+                              <div className="neo-gc-proc" key={s.key}>
+                                <NeoTimeline messages={s.messages} renderMsgActions={renderMsgActions} />
+                              </div>
+                            );
+                          }
+                          if (s.type === 'dispatch') {
+                            // 派发决策卡（intent 帧）：意图 → 派给谁 + 理由
+                            return <NeoDispatchCard key={s.key} msg={s.msg} />;
+                          }
+                          if (s.type === 'system') {
+                            // 系统/事件消息：居中弱化条
+                            return (
+                              <div className="neo-gc-sys" key={s.key}>
+                                {segText(s.msg)}
+                              </div>
+                            );
+                          }
+                          if (s.type === 'user') {
+                            // 用户消息：右对齐气泡（neo-tl-user 自带右浮，这里补时间行）
+                            return (
+                              <div className="neo-gc-user-row" key={s.key}>
+                                <NeoTimeline messages={[s.msg]} renderMsgActions={renderMsgActions} />
+                                {s.msg.ts > 0 && (
+                                  <span className="neo-gc-user-time" aria-hidden>
+                                    {relTime(s.msg.ts)}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          }
+                          // agent 消息：钉钉气泡壳（头像 + 名字 + 角色 badge + 相对时间）
+                          const sender =
+                            s.msg.kind === 'assistant_text' || s.msg.kind === 'raw'
+                              ? (s.msg.sender_name ?? '').trim()
+                              : '';
+                          const aid =
+                            s.msg.kind === 'assistant_text' || s.msg.kind === 'raw'
+                              ? s.msg.agent_id
+                              : undefined;
+                          const agentRec = aid ? agentById.get(aid) : undefined;
+                          const role = roleBadge(s.msg);
+                          return (
+                            <div className="neo-gc-msg" key={s.key} data-testid="neo-gc-msg">
+                              {/* ClawHub（2026-10-30）：群聊消息头像统一 DiceBear
+                                  （未配置按名字 hash 稳定生成）；字符色块保留为
+                                  SVG 异常兜底（fallback）。 */}
+                              {agentRec ? (
+                                <AgentAvatar
+                                  name={sender}
+                                  style={agentRec.avatar_style}
+                                  seed={agentRec.avatar_seed ?? sender}
+                                  size={28}
+                                  className="neo-gc-msg-avatar"
+                                  fallback={
+                                    <span
+                                      className="neo-gc-msg-avatar"
+                                      style={{
+                                        background: agentRec?.avatar_color ?? gcAvatarColor(aid ?? sender),
+                                      }}
+                                      aria-hidden
+                                    >
+                                      {gcAvatarInitial(sender)}
+                                    </span>
+                                  }
+                                />
+                              ) : (
+                                <span
+                                  className="neo-gc-msg-avatar"
+                                  style={{
+                                    background: gcAvatarColor(aid ?? sender),
+                                  }}
+                                  aria-hidden
+                                >
+                                  {gcAvatarInitial(sender)}
+                                </span>
+                              )}
+                              <div className="neo-gc-msg-main">
+                                <div className="neo-gc-msg-head">
+                                  <span className="neo-gc-msg-name">{sender}</span>
+                                  {role && <span className="neo-gc-msg-role">{role}</span>}
+                                  {s.msg.ts > 0 && (
+                                    <span className="neo-gc-msg-time">{relTime(s.msg.ts)}</span>
+                                  )}
+                                </div>
+                                <div className="neo-gc-msg-bubble">
+                                  <NeoTimeline messages={[s.msg]} renderMsgActions={renderMsgActions} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {turn.ts > 0 && (
+                          <span className="neo-gc-turn-time" aria-hidden>
+                            {relTime(turn.ts)}
+                          </span>
+                        )}
+                      </section>
+                    ))}
+                  </div>
+                ))}
+                {/* 交付卡：run 完成态在消息流尾部汇总本轮产物（无产物不渲染） */}
+                {delivery && <NeoDeliveryCard items={delivery.items} summary={delivery.summary} />}
+                </>
+              )}
+            </div>
+          </div>
+
+      <div className="neo-chat-composer neo-gc-composer">
+        <NeoComposer
+          variant="chat"
+          onSubmit={handleSubmit}
+          streaming={busy}
+          onNavigate={onNavigate}
+          placeholder={
+            isDm
+              ? t('neo.dm.placeholder', { defaultValue: '发消息，TA 就开始干活' })
+              : t('neo.group.placeholder', {
+                  defaultValue: '在群里说话，Agents 开始干活 · 拆解/派发/合并全程可见',
+                })
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+export default NeoGroupChat;

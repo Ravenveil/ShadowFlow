@@ -1,0 +1,81 @@
+/**
+ * NeoAgentSoul 暂停/恢复切换测试（2026-08-23 管理面闭环）。
+ * 覆盖：头部状态行 + 切换钮常驻；idle → 点暂停调 pauseAgent 并以返回 record
+ * 刷新状态显示；paused → 点恢复调 resumeAgent；切换失败 → 红条不吞错。
+ */
+import { render, screen, fireEvent, waitFor } from '../../test/utils';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+
+const AGENT = vi.hoisted(() => ({
+  agent_id: 'a1',
+  name: '设计助手',
+  soul: '你是设计助手',
+  workspace_id: 'ws1',
+  blueprint: {},
+  status: 'idle',
+  source: 'quick_hire',
+  created_at: '',
+}));
+
+vi.mock('../../api/agents', () => {
+  // 工厂内定义（vi.mock 提升，顶层 class 不可引用）
+  class AgentApiError extends Error {
+    constructor(
+      public status: number,
+      public detail: unknown,
+      public code: string = '',
+    ) {
+      super(`Agent API error ${status}`);
+    }
+  }
+  return {
+    AgentApiError,
+    getAgent: vi.fn(),
+    patchAgent: vi.fn(),
+    pauseAgent: vi.fn(),
+    resumeAgent: vi.fn(),
+  };
+});
+
+import { getAgent, pauseAgent, resumeAgent } from '../../api/agents';
+import { NeoAgentSoul } from '../NeoAgentSoul';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  (getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ ...AGENT });
+  (pauseAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ ...AGENT, status: 'paused' });
+  (resumeAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ ...AGENT, status: 'idle' });
+});
+
+describe('NeoAgentSoul — 暂停/恢复状态切换', () => {
+  it('加载后头部显示当前状态 + 切换钮（idle → 暂停）', async () => {
+    render(<NeoAgentSoul agentId="a1" />);
+    expect(await screen.findByTestId('neo-soul-status')).toHaveTextContent('idle');
+    fireEvent.click(screen.getByTestId('neo-soul-status-toggle'));
+    await waitFor(() => expect(pauseAgent).toHaveBeenCalledWith('a1'));
+    // 成功以端点返回的 record 刷新状态显示
+    await waitFor(() =>
+      expect(screen.getByTestId('neo-soul-status')).toHaveTextContent('paused'),
+    );
+  });
+
+  it('paused 员工 → 切换钮调 resumeAgent，状态回到 idle', async () => {
+    (getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ ...AGENT, status: 'paused' });
+    render(<NeoAgentSoul agentId="a1" />);
+    expect(await screen.findByTestId('neo-soul-status')).toHaveTextContent('paused');
+    fireEvent.click(screen.getByTestId('neo-soul-status-toggle'));
+    await waitFor(() => expect(resumeAgent).toHaveBeenCalledWith('a1'));
+    await waitFor(() =>
+      expect(screen.getByTestId('neo-soul-status')).toHaveTextContent('idle'),
+    );
+  });
+
+  it('pauseAgent 失败 → 红条出现，状态不变', async () => {
+    (pauseAgent as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('HTTP 500'));
+    render(<NeoAgentSoul agentId="a1" />);
+    await screen.findByTestId('neo-soul-status-toggle');
+    fireEvent.click(screen.getByTestId('neo-soul-status-toggle'));
+    expect(await screen.findByTestId('neo-soul-status-error')).toHaveTextContent('HTTP 500');
+    expect(screen.getByTestId('neo-soul-status')).toHaveTextContent('idle');
+  });
+});

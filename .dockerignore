@@ -1,0 +1,44 @@
+# Never ship secrets or local-only cruft into the build context.
+.env
+.env.*
+!.env.example
+
+# Python noise
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+.smoke-venv/
+*.egg-info/
+
+# Node noise
+node_modules/
+dist/
+
+# Git / editor / tooling
+.git/
+.github/
+.gitignore
+.vscode/
+.idea/
+.claude/
+.agents/
+.0g-skills/
+.opencode/
+.gstack/
+.tmp/
+.mcp.json
+
+# BMAD artefacts (huge planning trees, not runtime)
+_bmad/
+_bmad-output/
+
+# Tauri desktop shell — not part of the web/api containers
+src-tauri/
+
+# Docs / research / scratch
+docs/
+research/
+demo-runtime/
+paperscope-cli-*.tgz

@@ -1,0 +1,487 @@
+/* ===== Neo 群聊现场页（/group/:groupId，W1-C 重做 2026-08-16） =====
+   只服务 NeoGroupChat.tsx。颜色一律 var(--t-*) / color-mix（day/night 双主题
+   token），圆角走 8/10/14 体系，动效 var(--dur-*) var(--ease-*)。
+   布局：顶栏（48px + hairline 下边框）→ 消息流（按日分段 + turn 块）→ composer。 */
+
+.neo-gc {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  /* 与 .neo-app 同一 zoom-shell 公式抵消 html zoom（index.css） */
+  height: calc(100vh / var(--app-zoom, 1));
+  min-height: 0;
+  overflow: hidden;
+  /* 内容区纯白（neo 壳层次：栏灰底、内容白底） */
+  background: var(--t-panel);
+  color: var(--t-fg);
+}
+/* 内嵌形态（NeoApp 中栏，2026-08-19）：高度 100% 填充中栏，不占整页 */
+.neo-gc--inline {
+  height: 100%;
+}
+
+/* ---- 顶栏：48px + hairline 下边框，标题 12.5px/600 ---- */
+.neo-gc-topbar {
+  flex-shrink: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--t-border);
+  background: var(--t-panel);
+}
+
+.neo-gc-back {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--t-fg-3);
+  text-decoration: none;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-gc-back:hover {
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+}
+
+.neo-gc-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--t-fg-4);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.neo-gc-title-icon {
+  flex-shrink: 0;
+  color: var(--t-fg-3);
+}
+.neo-gc-title strong {
+  color: var(--t-fg);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.neo-gc-title-count {
+  flex-shrink: 0;
+  color: var(--t-fg-4);
+  font-weight: 400;
+}
+
+/* 成员头像条：22px 小圆叠排 + 数量（数据由 timeline sender/assignee 推导） */
+.neo-gc-members {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.neo-gc-member-stack {
+  display: inline-flex;
+  align-items: center;
+}
+.neo-gc-member {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  /* 叠排描边吃页面底色，day/night 都干净 */
+  border: 2px solid var(--t-panel);
+  margin-left: -6px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+.neo-gc-member:first-child {
+  margin-left: 0;
+}
+.neo-gc-member-more {
+  background: var(--t-panel-3);
+  color: var(--t-fg-3);
+  font-size: 9.5px;
+}
+.neo-gc-member-count {
+  font-size: 11px;
+  color: var(--t-fg-5);
+  white-space: nowrap;
+}
+
+/* 执行中 live 徽章：灰胶囊 + 脉动点（dot 走 --t-accent，day 近黑 / night 蓝） */
+.neo-gc-live {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--t-panel-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+}
+.neo-gc-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--t-accent);
+  animation: sf-pulse 1.4s ease-in-out infinite;
+}
+
+/* ---- 消息流滚动区（细滚动条规格同 neo-chat-scroll） ---- */
+.neo-gc-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.neo-gc-scroll:hover {
+  scrollbar-color: color-mix(in srgb, var(--t-fg) 22%, transparent) transparent;
+}
+.neo-gc-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.neo-gc-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+.neo-gc-scroll:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--t-fg) 22%, transparent);
+}
+.neo-gc-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 流列：居中限宽（对齐 neo-run 的 760 阅读宽） */
+.neo-gc-stream {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 10px 22px 16px;
+}
+
+/* ---- 日分隔行：灰字居中 + 两侧 hairline（同 .neo-run-aborted 形态） ---- */
+.neo-gc-day-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 6px;
+}
+.neo-gc-day:first-child .neo-gc-day-divider {
+  margin-top: 6px;
+}
+.neo-gc-day-divider::before,
+.neo-gc-day-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--t-border);
+}
+.neo-gc-day-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--t-fg-5);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- turn 消息块：hover 右上角浮相对时间 ---- */
+.neo-gc-turn {
+  position: relative;
+}
+.neo-gc-turn + .neo-gc-turn {
+  margin-top: 16px;
+}
+.neo-gc-turn-time {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--t-panel);
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+.neo-gc-turn:hover .neo-gc-turn-time {
+  opacity: 1;
+}
+
+/* ---- loading / 错误 / 空态（neo 空态规范：居中灰字 + 细线图标） ---- */
+.neo-gc-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 72px 20px;
+  font-size: 12.5px;
+  color: var(--t-fg-4);
+  text-align: center;
+  animation: neo-fade var(--dur-3) var(--ease-out);
+}
+.neo-gc-state-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--t-border-2);
+  border-top-color: var(--t-fg-4);
+  animation: neo-spin 0.9s linear infinite;
+}
+.neo-gc-state-error {
+  color: var(--t-err, #ef4444);
+}
+.neo-gc-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel-2);
+  color: var(--t-fg-3);
+  margin-bottom: 2px;
+}
+.neo-gc-state-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+}
+.neo-gc-state-hint {
+  font-size: 12px;
+  color: var(--t-fg-5);
+  max-width: 420px;
+  line-height: 1.7;
+}
+
+/* ---- composer：沿用 neo-chat.css 容器基样式，这里只限宽居中 ---- */
+.neo-gc-composer {
+  width: 100%;
+}
+.neo-gc-composer .neo-composer {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/* ===== W2 钉钉式气泡流（2026-08-22）：聊天气泡壳 =====
+   只服务 NeoGroupChat.tsx；全部 var(--t-*) / color-mix，day/night 双主题。
+   （成员/DAG/审批门已融合进 NeoHost「成员」tab，样式在 neo-host.css .neo-gm-*） */
+
+/* agent 消息：头像 + 名字/角色/时间头 + 气泡体 */
+.neo-gc-msg {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+}
+.neo-gc-msg-avatar {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+.neo-gc-msg-main {
+  flex: 1;
+  min-width: 0;
+}
+.neo-gc-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.neo-gc-msg-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-fg);
+}
+.neo-gc-msg-role {
+  padding: 1px 6px;
+  border: 1px solid var(--t-border);
+  border-radius: 5px;
+  background: var(--t-panel-2);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--t-fg-4);
+  text-transform: uppercase;
+}
+.neo-gc-msg-time {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  font-variant-numeric: tabular-nums;
+}
+.neo-gc-msg-bubble {
+  border: 1px solid var(--t-border);
+  border-radius: 4px 12px 12px 12px;
+  background: var(--t-panel-2);
+  padding: 8px 12px;
+}
+/* 气泡壳已带名字头，隐藏 NeoTimeline 自带的 sender 行，避免重复 */
+.neo-gc-msg-bubble .neo-tl-sender {
+  display: none;
+}
+
+/* 用户消息：右对齐（neo-tl-user 自带右浮气泡），时间行靠右弱化 */
+.neo-gc-user-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: 10px 0;
+}
+.neo-gc-user-time {
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 系统/事件消息：居中弱化条 */
+.neo-gc-sys {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+  font-size: 11px;
+  color: var(--t-fg-5);
+  text-align: center;
+}
+
+/* run 过程卡段：嵌在 turn 下，左侧留出与气泡头像对齐的边距 */
+.neo-gc-proc {
+  margin: 6px 0 6px 40px;
+}
+
+/* ── 派发卡 / 交付卡（2026-08-23 意图分发可视化 + 交付收口） ────────────── */
+
+/* 派发卡：意图 → 派给谁（理由）+ 可选子任务明细；与过程卡同左边距对齐 */
+.neo-gc-dispatch {
+  margin: 6px 0 6px 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--t-border);
+  border-left: 2px solid var(--t-accent);
+  border-radius: 4px 10px 10px 10px;
+  background: var(--t-panel-2);
+  font-size: 12px;
+}
+.neo-gc-dispatch-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t-fg-5);
+  margin-bottom: 4px;
+}
+.neo-gc-dispatch-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}
+.neo-gc-dispatch-intent {
+  font-weight: 500;
+}
+.neo-gc-dispatch-arrow {
+  color: var(--t-fg-5);
+}
+.neo-gc-dispatch-target {
+  font-weight: 600;
+}
+.neo-gc-dispatch-reason {
+  color: var(--t-fg-5);
+}
+.neo-gc-dispatch-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.neo-gc-dispatch-item {
+  display: flex;
+  gap: 8px;
+  font-size: 11.5px;
+}
+.neo-gc-dispatch-item-name {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.neo-gc-dispatch-item-title {
+  color: var(--t-fg-5);
+}
+
+/* 交付卡：run 完成态消息流尾部汇总 */
+.neo-gc-delivery {
+  margin: 12px 0 4px 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel-2);
+  font-size: 12px;
+}
+.neo-gc-delivery-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.neo-gc-delivery-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--t-fg-5);
+}
+.neo-gc-delivery-summary {
+  color: var(--t-fg-5);
+  margin-bottom: 6px;
+}
+.neo-gc-delivery-list {
+  margin: 0;
+  padding: 0 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.neo-gc-delivery-item a {
+  color: var(--t-accent);
+  text-decoration: none;
+}
+.neo-gc-delivery-item a:hover {
+  text-decoration: underline;
+}
+.neo-gc-delivery-more {
+  color: var(--t-fg-5);
+  list-style: none;
+}
+.neo-gc-delivery-view {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--t-accent);
+  text-decoration: none;
+}
+.neo-gc-delivery-view:hover {
+  text-decoration: underline;
+}

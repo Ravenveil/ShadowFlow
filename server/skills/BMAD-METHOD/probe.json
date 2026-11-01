@@ -1,0 +1,2354 @@
+{
+  "files": [
+    {
+      "rel_path": "AGENTS.md",
+      "kind": "doc",
+      "size": 477,
+      "frontmatter": null,
+      "excerpt": "# BMAD-METHOD\r\n\r\nOpen source framework for structured, agent-assisted software delivery.\r\n\r\n## Rules\r\n\r\n- Use Conventional Commits for every commit.\r\n- Before pushing, run `npm ci && npm run quality` on `HEAD` in the exact checkout you are about to push.\r\n  `quality` mirrors the checks in `.github/workflows/quality.yaml`.\r\n\r\n- Skill validation rules are in `tools/skill-validator.md`.\r\n- Determinis"
+    },
+    {
+      "rel_path": "bmad-modules.yaml",
+      "kind": "config",
+      "size": 2984,
+      "frontmatter": null,
+      "excerpt": "# Official module registry — the single source of truth for which modules\r\n# the BMad installer offers and how they are displayed.\r\n#\r\n# Order here determines display order in the installer picker (after the\r\n# built-in core and bmm entries, which are loaded from local module.yaml).\r\n#\r\n# default_channel (optional) — the install channel when the user does not\r\n# override with --channel/--pin/--nex"
+    },
+    {
+      "rel_path": "CHANGELOG.md",
+      "kind": "doc",
+      "size": 112763,
+      "frontmatter": null,
+      "excerpt": "# Changelog\r\n\r\n## v6.7.1 - 2026-05-18\r\n\r\n### 🐛 Fixes\r\n\r\n* **Installer no longer errors when a previously installed module's source can no longer be found** — In v6.7.0 the experimental BMad Automator module's installer code (the value used for its `_bmad/<code>/` folder and manifest entry) was renamed from `baut` to `automator`. Anyone who had installed it under the old `baut` code saw `quick-upd"
+    },
+    {
+      "rel_path": "CONTRIBUTING.md",
+      "kind": "doc",
+      "size": 6981,
+      "frontmatter": null,
+      "excerpt": "# Contributing to BMad\r\n\r\nThank you for considering contributing! We believe in **Human Amplification, Not Replacement** — bringing out the best thinking in both humans and AI through guided collaboration.\r\n\r\n💬 **Discord**: [Join our community](https://discord.gg/gk8jAdXWmj) for real-time discussions, questions, and collaboration.\r\n\r\n---\r\n\r\n> **Before you write code: talk to us on [Discord](https"
+    },
+    {
+      "rel_path": "CONTRIBUTORS.md",
+      "kind": "doc",
+      "size": 1363,
+      "frontmatter": null,
+      "excerpt": "# Contributors\r\n\r\nBMad Core, BMad Method and BMad and Community BMad Modules are made possible by contributions from our community. We gratefully acknowledge everyone who has helped improve this project.\r\n\r\n## How We Credit Contributors\r\n\r\n- **Git history** — Every contribution is preserved in the project's commit history\r\n- **Contributors badge** — See the dynamic contributors list on our [README"
+    },
+    {
+      "rel_path": "docs/_STYLE_GUIDE.md",
+      "kind": "doc",
+      "size": 11397,
+      "frontmatter": {
+        "title": "Documentation Style Guide",
+        "description": "Project-specific documentation conventions based on Google style and Diataxis structure"
+      },
+      "excerpt": "This project adheres to the [Google Developer Documentation Style Guide](https://developers.google.com/style) and uses [Diataxis](https://diataxis.fr/) to structure content. Only project-specific conventions follow.\r\n\r\n## Project-Specific Rules\r\n\r\n| Rule                             | Specification                            |\r\n| -------------------------------- | ----------------------------------"
+    },
+    {
+      "rel_path": "docs/404.md",
+      "kind": "doc",
+      "size": 149,
+      "frontmatter": {
+        "title": "Page Not Found",
+        "template": "splash"
+      },
+      "excerpt": "The page you're looking for doesn't exist or has been moved.\r\n\r\n[Return to Home](./index.md)"
+    },
+    {
+      "rel_path": "docs/cs/_STYLE_GUIDE.md",
+      "kind": "doc",
+      "size": 12537,
+      "frontmatter": {
+        "title": "Průvodce stylem dokumentace",
+        "description": "Projektově specifické konvence dokumentace založené na stylu Google a struktuře Diataxis"
+      },
+      "excerpt": "Tento projekt se řídí [Google Developer Documentation Style Guide](https://developers.google.com/style) a používá [Diataxis](https://diataxis.fr/) pro strukturování obsahu. Následují pouze projektově specifické konvence.\r\n\r\n## Projektově specifická pravidla\r\n\r\n| Pravidlo                               | Specifikace                              |\r\n| -------------------------------------- | ---------"
+    },
+    {
+      "rel_path": "docs/cs/404.md",
+      "kind": "doc",
+      "size": 165,
+      "frontmatter": {
+        "title": "Stránka nenalezena",
+        "template": "splash"
+      },
+      "excerpt": "Stránka, kterou hledáte, neexistuje nebo byla přesunuta.\r\n\r\n[Zpět na úvodní stránku](/cs/index.md)"
+    },
+    {
+      "rel_path": "docs/cs/explanation/advanced-elicitation.md",
+      "kind": "doc",
+      "size": 2644,
+      "frontmatter": {
+        "title": "Pokročilá elicitace",
+        "description": "Přimějte LLM přehodnotit svou práci pomocí strukturovaných metod uvažování",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "Přimějte LLM přehodnotit, co právě vygeneroval. Vyberete metodu uvažování, LLM ji aplikuje na svůj vlastní výstup, a vy rozhodnete, zda si vylepšení ponecháte.\r\n\r\n## Co je pokročilá elicitace?\r\n\r\nStrukturovaný druhý průchod. Místo žádání AI, aby „to zkusila znovu“ nebo „to zlepšila“, vyberete specifickou metodu uvažování a AI přezkoumá svůj vlastní výstup přes tento objektiv.\r\n\r\nRozdíl je podstatn"
+    },
+    {
+      "rel_path": "docs/cs/explanation/adversarial-review.md",
+      "kind": "doc",
+      "size": 3176,
+      "frontmatter": {
+        "title": "Adversariální revize",
+        "description": "Technika vynuceného uvažování, která zabraňuje líným „vypadá dobře“ revizím",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "Vynuťte hlubší analýzu tím, že budete vyžadovat nalezení problémů.\r\n\r\n## Co je adversariální revize?\r\n\r\nTechnika revize, kde recenzent *musí* najít problémy. Žádné „vypadá dobře“ není povoleno. Recenzent zaujme cynický postoj — předpokládá, že problémy existují, a hledá je.\r\n\r\nNejde o negativismus. Jde o vynucení skutečné analýzy místo povrchního pohledu, který automaticky schválí cokoli, co bylo "
+    },
+    {
+      "rel_path": "docs/cs/explanation/analysis-phase.md",
+      "kind": "doc",
+      "size": 6481,
+      "frontmatter": {
+        "title": "Fáze analýzy: od nápadu k základům",
+        "description": "Co je brainstorming, výzkum, product brief a PRFAQ — a kdy který nástroj použít",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "Fáze analýzy (fáze 1) vám pomůže jasně si promyslet váš produkt, než se pustíte do jeho tvorby. Každý nástroj v této fázi je volitelný, ale úplné vynechání analýzy znamená, že váš PRD je postaven na předpokladech namísto vhledu.\r\n\r\n## Proč analýza před plánováním?\r\n\r\nPRD odpovídá na otázku „Co bychom měli postavit a proč?“. Pokud jej nakrmíte vágním myšlením, získáte vágní PRD — a každý navazující"
+    },
+    {
+      "rel_path": "docs/cs/explanation/brainstorming.md",
+      "kind": "doc",
+      "size": 1453,
+      "frontmatter": {
+        "title": "Brainstorming",
+        "description": "Interaktivní kreativní sezení s využitím 60+ osvědčených technik ideace",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Uvolněte svou kreativitu prostřednictvím řízeného průzkumu.\r\n\r\n## Co je brainstorming?\r\n\r\nSpusťte `bmad-brainstorming` a máte kreativního facilitátora, který z vás táhne nápady — ne který je generuje za vás. AI působí jako kouč a průvodce, používá osvědčené techniky k vytvoření podmínek, ve kterých se projeví vaše nejlepší myšlení.\r\n\r\n**Ideální pro:**\r\n\r\n- Překonání kreativních bloků\r\n- Generování"
+    },
+    {
+      "rel_path": "docs/cs/explanation/established-projects-faq.md",
+      "kind": "doc",
+      "size": 2412,
+      "frontmatter": {
+        "title": "FAQ pro existující projekty",
+        "description": "Časté otázky o používání BMad Method na existujících projektech",
+        "sidebar": {
+          "order": 8
+        }
+      },
+      "excerpt": "Rychlé odpovědi na časté otázky o práci na existujících projektech s BMad Method (BMM).\r\n\r\n## Otázky\r\n\r\n- [Musím nejdřív spustit document-project?](#musím-nejdřív-spustit-document-project)\r\n- [Co když zapomenu spustit document-project?](#co-když-zapomenu-spustit-document-project)\r\n- [Mohu použít Quick Flow pro existující projekty?](#mohu-použít-quick-flow-pro-existující-projekty)\r\n- [Co když můj e"
+    },
+    {
+      "rel_path": "docs/cs/explanation/party-mode.md",
+      "kind": "doc",
+      "size": 2761,
+      "frontmatter": {
+        "title": "Party Mode",
+        "description": "Spolupráce více agentů — všichni vaši AI agenti v jedné konverzaci",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "Všichni vaši AI agenti v jedné konverzaci.\r\n\r\n## Co je Party Mode?\r\n\r\nSpusťte `bmad-party-mode` a máte celý svůj AI tým v jedné místnosti — PM, Architect, Dev, UX Designer, kohokoli potřebujete. BMad Master orchestruje, vybírá relevantní agenty pro každou zprávu. Agenti odpovídají v charakteru, souhlasí, nesouhlasí a staví na nápadech ostatních.\r\n\r\nKonverzace pokračuje tak dlouho, jak chcete. Ptej"
+    },
+    {
+      "rel_path": "docs/cs/explanation/preventing-agent-conflicts.md",
+      "kind": "doc",
+      "size": 3897,
+      "frontmatter": {
+        "title": "Předcházení konfliktům agentů",
+        "description": "Jak architektura zabraňuje konfliktům, když více agentů implementuje systém",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "Když více AI agentů implementuje různé části systému, mohou dělat protichůdná technická rozhodnutí. Dokumentace architektury tomu zabraňuje stanovením sdílených standardů.\r\n\r\n## Běžné typy konfliktů\r\n\r\n### Konflikty stylu API\r\n\r\nBez architektury:\r\n- Agent A používá REST s `/users/{id}`\r\n- Agent B používá GraphQL mutations\r\n- Výsledek: Nekonzistentní vzory API, zmatení konzumenti\r\n\r\nS architekturou"
+    },
+    {
+      "rel_path": "docs/cs/explanation/project-context.md",
+      "kind": "doc",
+      "size": 7265,
+      "frontmatter": {
+        "title": "Kontext projektu",
+        "description": "Jak project-context.md vede AI agenty s pravidly a preferencemi vašeho projektu",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "Soubor `project-context.md` je implementační průvodce vašeho projektu pro AI agenty. Podobně jako „ústava“ v jiných vývojových systémech zachycuje pravidla, vzory a preference, které zajišťují konzistentní generování kódu napříč všemi workflow.\r\n\r\n## Co dělá\r\n\r\nAI agenti neustále dělají implementační rozhodnutí — jaké vzory následovat, jak strukturovat kód, jaké konvence používat. Bez jasného vede"
+    },
+    {
+      "rel_path": "docs/cs/explanation/quick-dev.md",
+      "kind": "doc",
+      "size": 5806,
+      "frontmatter": {
+        "title": "Quick Dev",
+        "description": "Snižte tření human-in-the-loop bez ztráty kontrolních bodů chránících kvalitu výstupu",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Záměr na vstupu, změny kódu na výstupu, s co nejmenším počtem human-in-the-loop kroků — bez obětování kvality.\r\n\r\nUmožňuje modelu běžet déle mezi kontrolními body a poté přivede člověka zpět pouze tehdy, když úkol nemůže bezpečně pokračovat bez lidského úsudku nebo když je čas zkontrolovat konečný výsledek.\r\n\r\n![Diagram workflow Quick Dev](/diagrams/quick-dev-diagram.png)\r\n\r\n## Proč to existuje\r\n\r"
+    },
+    {
+      "rel_path": "docs/cs/explanation/why-solutioning-matters.md",
+      "kind": "doc",
+      "size": 3067,
+      "frontmatter": {
+        "title": "Proč je solutioning důležitý",
+        "description": "Pochopení toho, proč je fáze solutioningu klíčová pro projekty s více epicy",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Fáze 3 (Solutioning) překládá **co** budovat (z plánování) na **jak** to budovat (technický návrh). Tato fáze zabraňuje konfliktům agentů v projektech s více epicy tím, že dokumentuje architektonická rozhodnutí před zahájením implementace.\r\n\r\n## Problém bez solutioningu\r\n\r\n```text\r\nAgent 1 implementuje Epic 1 pomocí REST API\r\nAgent 2 implementuje Epic 2 pomocí GraphQL\r\nVýsledek: Nekonzistentní des"
+    },
+    {
+      "rel_path": "docs/cs/how-to/customize-bmad.md",
+      "kind": "doc",
+      "size": 6067,
+      "frontmatter": {
+        "title": "Jak přizpůsobit BMad",
+        "description": "Přizpůsobení agentů, workflow a modulů se zachováním kompatibility s aktualizacemi",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "Použijte soubory `.customize.yaml` k přizpůsobení chování agentů, person a nabídek při zachování vašich změn napříč aktualizacemi.\r\n\r\n## Kdy to použít\r\n\r\n- Chcete změnit jméno, osobnost nebo komunikační styl agenta\r\n- Potřebujete, aby si agenti pamatovali kontextově specifické informace projektu\r\n- Chcete přidat vlastní položky nabídky, které spouštějí vaše vlastní workflow nebo prompty\r\n- Chcete,"
+    },
+    {
+      "rel_path": "docs/cs/how-to/established-projects.md",
+      "kind": "doc",
+      "size": 4977,
+      "frontmatter": {
+        "title": "Existující projekty",
+        "description": "Jak používat BMad Method na existujících kódových bázích",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "Používejte BMad Method efektivně při práci na existujících projektech a starších kódových bázích.\r\n\r\nTento návod pokrývá základní workflow pro zapojení se do existujících projektů s BMad Method.\r\n\r\n:::note[Předpoklady]\r\n- BMad Method nainstalován (`npx bmad-method install`)\r\n- Existující kódová báze, na které chcete pracovat\r\n- Přístup k AI-powered IDE (Claude Code nebo Cursor)\r\n:::\r\n\r\n## Krok 1: "
+    },
+    {
+      "rel_path": "docs/cs/how-to/get-answers-about-bmad.md",
+      "kind": "doc",
+      "size": 4481,
+      "frontmatter": {
+        "title": "Jak získat odpovědi o BMad",
+        "description": "Použijte LLM k rychlému zodpovězení vašich otázek o BMad",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "## Začněte zde: BMad-Help\r\n\r\n**Nejrychlejší způsob, jak získat odpovědi o BMad, je skill `bmad-help`.** Tento inteligentní průvodce zodpoví více než 80 % všech otázek a je vám k dispozici přímo ve vašem IDE při práci.\r\n\r\nBMad-Help je víc než vyhledávací nástroj — umí:\r\n- **Prozkoumat váš projekt** a zjistit, co už bylo dokončeno\r\n- **Rozumět přirozenému jazyku** — ptejte se běžnou řečí\r\n- **Přizpů"
+    },
+    {
+      "rel_path": "docs/cs/how-to/install-bmad.md",
+      "kind": "doc",
+      "size": 3872,
+      "frontmatter": {
+        "title": "Jak nainstalovat BMad",
+        "description": "Průvodce instalací BMad ve vašem projektu krok za krokem",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "Použijte příkaz `npx bmad-method install` k nastavení BMad ve vašem projektu s výběrem modulů a AI nástrojů.\r\n\r\nPokud chcete použít neinteraktivní instalátor a zadat všechny možnosti na příkazové řádce, podívejte se na [tento návod](./non-interactive-installation.md).\r\n\r\n## Kdy to použít\r\n\r\n- Začínáte nový projekt s BMad\r\n- Přidáváte BMad do existující kódové báze\r\n- Aktualizujete stávající instal"
+    },
+    {
+      "rel_path": "docs/cs/how-to/non-interactive-installation.md",
+      "kind": "doc",
+      "size": 5559,
+      "frontmatter": {
+        "title": "Neinteraktivní instalace",
+        "description": "Instalace BMad pomocí příznaků příkazové řádky pro CI/CD pipelines a automatizované nasazení",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Použijte příznaky příkazové řádky k neinteraktivní instalaci BMad. To je užitečné pro:\r\n\r\n## Kdy to použít\r\n\r\n- Automatizovaná nasazení a CI/CD pipelines\r\n- Skriptované instalace\r\n- Hromadné instalace napříč více projekty\r\n- Rychlé instalace se známými konfiguracemi\r\n\r\n:::note[Předpoklady]\r\nVyžaduje [Node.js](https://nodejs.org) v20.12+ a `npx` (součástí npm).\r\n:::\r\n\r\n## Dostupné příznaky\r\n\r\n### M"
+    },
+    {
+      "rel_path": "docs/cs/how-to/project-context.md",
+      "kind": "doc",
+      "size": 4555,
+      "frontmatter": {
+        "title": "Správa kontextu projektu",
+        "description": "Vytvoření a údržba project-context.md pro vedení AI agentů",
+        "sidebar": {
+          "order": 8
+        }
+      },
+      "excerpt": "Použijte soubor `project-context.md` k zajištění toho, aby AI agenti dodržovali technické preference a pravidla implementace vašeho projektu ve všech workflow. Aby byl vždy dostupný, můžete také přidat řádek `Important project context and conventions are located in [cesta k project context]/project-context.md` do souboru kontextu nebo pravidel vašeho nástroje (jako je `AGENTS.md`).\r\n\r\n:::note[Před"
+    },
+    {
+      "rel_path": "docs/cs/how-to/quick-fixes.md",
+      "kind": "doc",
+      "size": 3904,
+      "frontmatter": {
+        "title": "Rychlé opravy",
+        "description": "Jak provádět rychlé opravy a ad-hoc změny",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "Použijte **Quick Dev** pro opravy chyb, refaktoringy nebo malé cílené změny, které nevyžadují plnou metodu BMad.\r\n\r\n## Kdy to použít\r\n\r\n- Opravy chyb s jasnou, známou příčinou\r\n- Malé refaktoringy (přejmenování, extrakce, restrukturalizace) omezené na několik souborů\r\n- Drobné úpravy funkcí nebo změny konfigurace\r\n- Aktualizace závislostí\r\n\r\n:::note[Předpoklady]\r\n- BMad Method nainstalován (`npx b"
+    },
+    {
+      "rel_path": "docs/cs/how-to/shard-large-documents.md",
+      "kind": "doc",
+      "size": 2351,
+      "frontmatter": {
+        "title": "Průvodce dělením dokumentů",
+        "description": "Rozdělení velkých markdown souborů na menší organizované soubory pro lepší správu kontextu",
+        "sidebar": {
+          "order": 9
+        }
+      },
+      "excerpt": "Použijte nástroj `bmad-shard-doc`, pokud potřebujete rozdělit velké markdown soubory na menší, organizované soubory pro lepší správu kontextu.\r\n\r\n:::caution[Zastaralé]\r\nToto se již nedoporučuje a brzy s aktualizovanými workflow a většinou hlavních LLM a nástrojů podporujících subprocesy to bude zbytečné.\r\n:::\r\n\r\n## Kdy to použít\r\n\r\nPoužijte pouze pokud si všimnete, že váš zvolený nástroj / model n"
+    },
+    {
+      "rel_path": "docs/cs/how-to/upgrade-to-v6.md",
+      "kind": "doc",
+      "size": 3919,
+      "frontmatter": {
+        "title": "Jak upgradovat na v6",
+        "description": "Migrace z BMad v4 na v6",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Použijte instalátor BMad pro upgrade z v4 na v6, který zahrnuje automatickou detekci starších instalací a asistenci při migraci.\r\n\r\n## Kdy to použít\r\n\r\n- Máte nainstalovaný BMad v4 (složka `.bmad-method`)\r\n- Chcete migrovat na novou architekturu v6\r\n- Máte existující plánovací artefakty k zachování\r\n\r\n:::note[Předpoklady]\r\n- Node.js 20.12+\r\n- Existující instalace BMad v4\r\n:::\r\n\r\n## Kroky\r\n\r\n### 1."
+    },
+    {
+      "rel_path": "docs/cs/index.md",
+      "kind": "readme",
+      "size": 4190,
+      "frontmatter": {
+        "title": "Vítejte v metodě BMad",
+        "description": "Framework pro vývoj řízený umělou inteligencí se specializovanými agenty, řízenými pracovními postupy a inteligentním plánováním"
+      },
+      "excerpt": "Metoda BMad (**B**uild **M**ore **A**rchitect **D**reams) je framework pro vývoj řízený umělou inteligencí v rámci ekosystému BMad Method, který vám pomáhá vytvářet software celým procesem od nápadu a plánování až po agentní implementaci. Poskytuje specializované AI agenty, řízené pracovní postupy a inteligentní plánování, které se přizpůsobí složitosti vašeho projektu, ať už opravujete chybu nebo"
+    },
+    {
+      "rel_path": "docs/cs/reference/agents.md",
+      "kind": "doc",
+      "size": 3885,
+      "frontmatter": {
+        "title": "Agenti",
+        "description": "Výchozí BMM agenti s jejich skill ID, spouštěči nabídky a primárními workflow",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "## Výchozí agenti\r\n\r\nTato stránka uvádí výchozí BMM (Agile suite) agenty, kteří se instalují s BMad Method, společně s jejich skill ID, spouštěči nabídky a primárními workflow. Každý agent se vyvolává jako skill.\r\n\r\n## Poznámky\r\n\r\n- Každý agent je dostupný jako skill, generovaný instalátorem. Skill ID (např. `bmad-dev`) se používá k vyvolání agenta.\r\n- Spouštěče jsou krátké kódy nabídky (např. `CP"
+    },
+    {
+      "rel_path": "docs/cs/reference/commands.md",
+      "kind": "doc",
+      "size": 7116,
+      "frontmatter": {
+        "title": "Skills",
+        "description": "Reference BMad skills — co to je, jak fungují a kde je najít.",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Skills jsou předpřipravené prompty, které načítají agenty, spouštějí workflow nebo provádějí úkoly ve vašem IDE. Instalátor BMad je generuje z vašich nainstalovaných modulů při instalaci. Pokud později přidáte, odeberete nebo změníte moduly, přeinstalujte pro synchronizaci skills (viz [Řešení problémů](#řešení-problémů)).\r\n\r\n## Skills vs. spouštěče nabídky agentů\r\n\r\nBMad nabízí dva způsoby zahájen"
+    },
+    {
+      "rel_path": "docs/cs/reference/core-tools.md",
+      "kind": "doc",
+      "size": 14098,
+      "frontmatter": {
+        "title": "Základní nástroje",
+        "description": "Reference všech vestavěných úkolů a workflow dostupných v každé instalaci BMad bez dalších modulů.",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Každá instalace BMad zahrnuje sadu základních skills, které lze použít v kombinaci s čímkoli — samostatné úkoly a workflow, které fungují napříč všemi projekty, všemi moduly a všemi fázemi. Ty jsou vždy dostupné bez ohledu na to, které volitelné moduly nainstalujete.\r\n\r\n:::tip[Rychlá cesta]\r\nSpusťte jakýkoli základní nástroj zadáním jeho názvu skillu (např. `bmad-help`) ve vašem IDE. Nevyžaduje re"
+    },
+    {
+      "rel_path": "docs/cs/reference/modules.md",
+      "kind": "doc",
+      "size": 4053,
+      "frontmatter": {
+        "title": "Oficiální moduly",
+        "description": "Doplňkové moduly pro tvorbu vlastních agentů, kreativní inteligenci, vývoj her a testování",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "BMad se rozšiřuje prostřednictvím oficiálních modulů, které vyberete během instalace. Tyto doplňkové moduly poskytují specializované agenty, workflow a úkoly pro specifické domény nad rámec vestavěného jádra a BMM (Agile suite).\r\n\r\n:::tip[Instalace modulů]\r\nSpusťte `npx bmad-method install` a vyberte požadované moduly. Instalátor se postará o stažení, konfiguraci a integraci s IDE automaticky.\r\n::"
+    },
+    {
+      "rel_path": "docs/cs/reference/testing.md",
+      "kind": "doc",
+      "size": 6218,
+      "frontmatter": {
+        "title": "Možnosti testování",
+        "description": "Srovnání vestavěného QA agenta (Quinn) s modulem Test Architect (TEA) pro automatizaci testů.",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "BMad poskytuje dvě testovací cesty: vestavěného QA agenta pro rychlé generování testů a instalovatelný modul Test Architect pro podnikovou testovací strategii.\r\n\r\n## Který byste měli použít?\r\n\r\n| Faktor | Quinn (vestavěný QA) | Modul TEA |\r\n| --- | --- | --- |\r\n| **Nejlepší pro** | Malé až střední projekty, rychlé pokrytí | Velké projekty, regulované nebo složité domény |\r\n| **Nastavení** | Nic k "
+    },
+    {
+      "rel_path": "docs/cs/reference/workflow-map.md",
+      "kind": "doc",
+      "size": 7148,
+      "frontmatter": {
+        "title": "Mapa pracovních postupů",
+        "description": "Vizuální reference fází workflow BMad Method a jejich výstupů",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "BMad Method (BMM) je modul v ekosystému BMad, zaměřený na dodržování osvědčených postupů context engineeringu a plánování. AI agenti fungují nejlépe s jasným, strukturovaným kontextem. Systém BMM buduje tento kontext progresivně napříč 4 odlišnými fázemi — každá fáze a volitelně více workflow v každé fázi produkují dokumenty, které informují další, takže agenti vždy vědí, co budovat a proč.\r\n\r\nZdů"
+    },
+    {
+      "rel_path": "docs/cs/tutorials/getting-started.md",
+      "kind": "doc",
+      "size": 14169,
+      "frontmatter": {
+        "title": "Začínáme",
+        "description": "Nainstalujte BMad a vytvořte svůj první projekt"
+      },
+      "excerpt": "Vytvářejte software rychleji pomocí pracovních postupů řízených AI se specializovanými agenty, kteří vás provedou plánováním, architekturou a implementací.\r\n\r\n## Co se naučíte\r\n\r\n- Nainstalovat a inicializovat BMad Method pro nový projekt\r\n- Používat **BMad-Help** — vašeho inteligentního průvodce, který ví, co dělat dál\r\n- Vybrat správnou plánovací cestu pro velikost vašeho projektu\r\n- Postupovat "
+    },
+    {
+      "rel_path": "docs/explanation/advanced-elicitation.md",
+      "kind": "doc",
+      "size": 2300,
+      "frontmatter": {
+        "title": "Advanced Elicitation",
+        "description": "Push the LLM to rethink its work using structured reasoning methods",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "Make the LLM reconsider what it just generated. You pick a reasoning method, it applies that method to its own output, you decide whether to keep the improvements.\r\n\r\n## What is Advanced Elicitation?\r\n\r\nA structured second pass. Instead of asking the AI to \"try again\" or \"make it better,\" you select a specific reasoning method and the AI re-examines its own output through that lens.\r\n\r\nThe differe"
+    },
+    {
+      "rel_path": "docs/explanation/adversarial-review.md",
+      "kind": "doc",
+      "size": 2793,
+      "frontmatter": {
+        "title": "Adversarial Review",
+        "description": "Forced reasoning technique that prevents lazy \"looks good\" reviews",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "Force deeper analysis by requiring problems to be found.\r\n\r\n## What is Adversarial Review?\r\n\r\nA review technique where the reviewer *must* find issues. No \"looks good\" allowed. The reviewer adopts a cynical stance - assume problems exist and find them.\r\n\r\nThis isn't about being negative. It's about forcing genuine analysis instead of a cursory glance that rubber-stamps whatever was submitted.\r\n\r\n*"
+    },
+    {
+      "rel_path": "docs/explanation/analysis-phase.md",
+      "kind": "doc",
+      "size": 5866,
+      "frontmatter": {
+        "title": "Analysis Phase: From Idea to Foundation",
+        "description": "What brainstorming, research, product briefs, and PRFAQs are — and when to use each",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "The Analysis phase (Phase 1) helps you think clearly about your product before committing to building it. Every tool in this phase is optional, but skipping analysis entirely means your PRD is built on assumptions instead of insight.\r\n\r\n## Why Analysis Before Planning?\r\n\r\nA PRD answers \"what should we build and why?\" If you feed it vague thinking, you get a vague PRD — and every downstream documen"
+    },
+    {
+      "rel_path": "docs/explanation/brainstorming.md",
+      "kind": "doc",
+      "size": 1259,
+      "frontmatter": {
+        "title": "Brainstorming",
+        "description": "Interactive creative sessions using 60+ proven ideation techniques",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Unlock your creativity through guided exploration.\r\n\r\n## What is Brainstorming?\r\n\r\nRun `bmad-brainstorming` and you've got a creative facilitator pulling ideas out of you - not generating them for you. The AI acts as coach and guide, using proven techniques to create conditions where your best thinking emerges.\r\n\r\n**Good for:**\r\n\r\n- Breaking through creative blocks\r\n- Generating product or feature"
+    },
+    {
+      "rel_path": "docs/explanation/checkpoint-preview.md",
+      "kind": "doc",
+      "size": 7664,
+      "frontmatter": {
+        "title": "Checkpoint Preview",
+        "description": "LLM-assisted human-in-the-loop review that guides you through a change from purpose to details",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "`bmad-checkpoint-preview` is an interactive, LLM-assisted human-in-the-loop review workflow. It walks you through a code change — from purpose and context into details — so you can make an informed decision about whether to ship, rework, or dig deeper.\r\n\r\n![Checkpoint Preview workflow diagram](/diagrams/checkpoint-preview-diagram.png)\r\n\r\n## The Typical Flow\r\n\r\nYou run `bmad-quick-dev`. It clarifie"
+    },
+    {
+      "rel_path": "docs/explanation/established-projects-faq.md",
+      "kind": "doc",
+      "size": 2155,
+      "frontmatter": {
+        "title": "Established Projects FAQ",
+        "description": "Common questions about using BMad Method on established projects",
+        "sidebar": {
+          "order": 8
+        }
+      },
+      "excerpt": "Quick answers to common questions about working on established projects with the BMad Method (BMM).\r\n\r\n## Questions\r\n\r\n- [Do I have to run document-project first?](#do-i-have-to-run-document-project-first)\r\n- [What if I forget to run document-project?](#what-if-i-forget-to-run-document-project)\r\n- [Can I use Quick Flow for established projects?](#can-i-use-quick-flow-for-established-projects)\r\n- ["
+    },
+    {
+      "rel_path": "docs/explanation/forensic-investigation.md",
+      "kind": "doc",
+      "size": 8087,
+      "frontmatter": {
+        "title": "Forensic Investigation",
+        "description": "How bmad-investigate treats every issue like a crime scene, grades evidence, and produces a structured case file engineers can act on",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "You hand `bmad-investigate` a crash log, a stack trace, or just a \"this used to work, now it doesn't\". The skill takes\r\nover the investigator's discipline for the duration of the run. It does not start fixing. It opens a case file.\r\n\r\nEvery finding gets graded. Every hypothesis gets a status. Wrong turns are kept, not erased. The deliverable is a\r\ndocument another engineer can pick up cold.\r\n\r\nThi"
+    },
+    {
+      "rel_path": "docs/explanation/named-agents.md",
+      "kind": "doc",
+      "size": 8278,
+      "frontmatter": {
+        "title": "Named Agents",
+        "description": "Why BMad agents have names, personas, and customization surfaces — and what that unlocks compared to menu-driven or prompt-driven alternatives",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "You say \"Hey Mary, let's brainstorm,\" and Mary activates. She greets you by name, in the language you configured, with her distinctive persona. She reminds you that `bmad-help` is always available. Then she skips the menu entirely and drops straight into brainstorming — because your intent was clear.\r\n\r\nThis page explains what's actually happening and why BMad is designed this way.\r\n\r\n## The Three"
+    },
+    {
+      "rel_path": "docs/explanation/party-mode.md",
+      "kind": "doc",
+      "size": 2466,
+      "frontmatter": {
+        "title": "Party Mode",
+        "description": "Multi-agent collaboration - get all your AI agents in one conversation",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "Get all your AI agents in one conversation.\r\n\r\n## What is Party Mode?\r\n\r\nRun `bmad-party-mode` and you've got your whole AI team in one room - PM, Architect, Dev, UX Designer, whoever you need. BMad Master orchestrates, picking relevant agents per message. Agents respond in character, agree, disagree, and build on each other's ideas.\r\n\r\nThe conversation continues as long as you want. Ask follow-up"
+    },
+    {
+      "rel_path": "docs/explanation/preventing-agent-conflicts.md",
+      "kind": "doc",
+      "size": 3544,
+      "frontmatter": {
+        "title": "Preventing Agent Conflicts",
+        "description": "How architecture prevents conflicts when multiple agents implement a system",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "When multiple AI agents implement different parts of a system, they can make conflicting technical decisions. Architecture documentation prevents this by establishing shared standards.\r\n\r\n## Common Conflict Types\r\n\r\n### API Style Conflicts\r\n\r\nWithout architecture:\r\n- Agent A uses REST with `/users/{id}`\r\n- Agent B uses GraphQL mutations\r\n- Result: Inconsistent API patterns, confused consumers\r\n\r\nW"
+    },
+    {
+      "rel_path": "docs/explanation/project-context.md",
+      "kind": "doc",
+      "size": 6312,
+      "frontmatter": {
+        "title": "Project Context",
+        "description": "How project-context.md guides AI agents with your project's rules and preferences",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "The `project-context.md` file is your project's implementation guide for AI agents. Similar to a \"constitution\" in other development systems, it captures the rules, patterns, and preferences that ensure consistent code generation across all workflows.\r\n\r\n## What It Does\r\n\r\nAI agents make implementation decisions constantly — which patterns to follow, how to structure code, what conventions to use."
+    },
+    {
+      "rel_path": "docs/explanation/quick-dev.md",
+      "kind": "doc",
+      "size": 5440,
+      "frontmatter": {
+        "title": "Quick Dev",
+        "description": "Reduce human-in-the-loop friction without giving up the checkpoints that protect output quality",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Intent in, code changes out, with as few human-in-the-loop turns as possible — without sacrificing quality.\r\n\r\nIt lets the model run longer between checkpoints, then brings the human back only when the task cannot safely continue without human judgment or when it is time to review the end result.\r\n\r\n![Quick Dev workflow diagram](/diagrams/quick-dev-diagram.png)\r\n\r\n## Why This Exists\r\n\r\nHuman-in-th"
+    },
+    {
+      "rel_path": "docs/explanation/why-solutioning-matters.md",
+      "kind": "doc",
+      "size": 2795,
+      "frontmatter": {
+        "title": "Why Solutioning Matters",
+        "description": "Understanding why the solutioning phase is critical for multi-epic projects",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Phase 3 (Solutioning) translates **what** to build (from Planning) into **how** to build it (technical design). This phase prevents agent conflicts in multi-epic projects by documenting architectural decisions before implementation begins.\r\n\r\n## The Problem Without Solutioning\r\n\r\n```text\r\nAgent 1 implements Epic 1 using REST API\r\nAgent 2 implements Epic 2 using GraphQL\r\nResult: Inconsistent API de"
+    },
+    {
+      "rel_path": "docs/fr/_STYLE_GUIDE.md",
+      "kind": "doc",
+      "size": 13734,
+      "frontmatter": {
+        "title": "Guide de style de la documentation",
+        "description": "Conventions de documentation spécifiques au projet, basées sur le style Google et la structure Diataxis"
+      },
+      "excerpt": "Ce projet suit le [Guide de style de documentation pour développeurs Google](https://developers.google.com/style) et utilise [Diataxis](https://diataxis.fr/) pour structurer le contenu. Seules les conventions spécifiques au projet sont présentées ci-dessous.\r\n\r\n## Règles spécifiques au projet\r\n\r\n| Règle                                   | Spécification                                          |\r\n|"
+    },
+    {
+      "rel_path": "docs/fr/404.md",
+      "kind": "doc",
+      "size": 159,
+      "frontmatter": {
+        "title": "Page introuvable",
+        "template": "splash"
+      },
+      "excerpt": "La page que vous recherchez n'existe pas ou a été déplacée.\r\n\r\n[Retour à l'accueil](/fr/index.md)"
+    },
+    {
+      "rel_path": "docs/fr/explanation/advanced-elicitation.md",
+      "kind": "doc",
+      "size": 2898,
+      "frontmatter": {
+        "title": "Élicitation Avancée",
+        "description": "Pousser le LLM à repenser son travail en utilisant des méthodes de raisonnement structurées",
+        "sidebar": {
+          "order": 8
+        }
+      },
+      "excerpt": "Faites repenser au LLM ce qu'il vient de générer. Vous choisissez une méthode de raisonnement, il l'applique à sa propre sortie, et vous décidez de conserver ou non les améliorations.\r\n\r\n## Qu'est-ce que l’Élicitation Avancée ?\r\n\r\nUn second passage structuré. Au lieu de demander à l'IA de \"réessayer\" ou de \"faire mieux\", vous sélectionnez une méthode de raisonnement spécifique et l'IA réexamine sa"
+    },
+    {
+      "rel_path": "docs/fr/explanation/adversarial-review.md",
+      "kind": "doc",
+      "size": 4436,
+      "frontmatter": {
+        "title": "Revue Contradictoire",
+        "description": "Technique de raisonnement forcée qui empêche les revues paresseuses du style \"ça à l'air bon\"",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "Forcez une analyse plus approfondie en exigeant que des problèmes soient trouvés.\r\n\r\n## Qu'est-ce que la Revue Contradictoire ?\r\n\r\nUne technique de revue où le réviseur *doit* trouver des problèmes. Pas de \"ça a l'air bon\" autorisé. Le réviseur adopte une posture cynique - suppose que des problèmes existent et les trouve.\r\n\r\nIl ne s'agit pas d'être négatif. Il s'agit de forcer une analyse authenti"
+    },
+    {
+      "rel_path": "docs/fr/explanation/analysis-phase.md",
+      "kind": "doc",
+      "size": 7579,
+      "frontmatter": {
+        "title": "Phase d'analyse : de l'Idée aux Fondations",
+        "description": "Ce que sont le brainstorming, la recherche, les product briefs et les PRFAQs — et quand les utiliser",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "La phase d'Analyse (Phase 1) vous aide à penser clairement à votre produit avant de vous engager à le construire. Chaque outil de cette phase est optionnel, mais sauter l'analyse entièrement signifie que votre PRD sera construit sur des suppositions plutôt que sur des connaissances approfondies.\r\n\r\n## Pourquoi Analyser avant de Planifier ?\r\n\r\nUn PRD répond à la question « que devons-nous construir"
+    },
+    {
+      "rel_path": "docs/fr/explanation/brainstorming.md",
+      "kind": "doc",
+      "size": 1577,
+      "frontmatter": {
+        "title": "Brainstorming",
+        "description": "Sessions interactives créatives utilisant plus de 60 techniques d'idéation éprouvées",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Libérez votre créativité grâce à une exploration guidée.\r\n\r\n## Qu'est-ce que le Brainstorming ?\r\n\r\nLancez `bmad-brainstorming` et vous obtenez un facilitateur créatif qui fait émerger vos idées - pas qui les génère pour vous. L'IA agit comme coach et guide, utilisant des techniques éprouvées pour créer les conditions où votre meilleure réflexion émerge.\r\n\r\n**Idéal pour :**\r\n\r\n- Surmonter les bloca"
+    },
+    {
+      "rel_path": "docs/fr/explanation/checkpoint-preview.md",
+      "kind": "doc",
+      "size": 9437,
+      "frontmatter": {
+        "title": "Checkpoint Preview",
+        "description": "Revue assistée par LLM, avec intervention humaine, qui vous guide à travers une modification, de son objectif jusqu’aux détails",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "`bmad-checkpoint-preview` est un workflow de revue interactif, assisté par LLM, avec intervention humaine. Il vous guide à travers une modification de code — de l'intention et du contexte jusqu'aux détails — afin que vous puissiez prendre une décision éclairée sur la mise en production, la refonte ou l'approfondissement.\r\n\r\n![Diagramme du workflow Checkpoint Preview](/diagrams/checkpoint-preview-d"
+    },
+    {
+      "rel_path": "docs/fr/explanation/established-projects-faq.md",
+      "kind": "doc",
+      "size": 2633,
+      "frontmatter": {
+        "title": "FAQ Projets Existants",
+        "description": "Questions courantes sur l'utilisation de la méthode BMad sur des projets existants",
+        "sidebar": {
+          "order": 11
+        }
+      },
+      "excerpt": "Réponses rapides aux questions courantes sur l'utilisation de la méthode BMad (BMM) sur des projets existants.\r\n\r\n## Questions\r\n\r\n- [Dois-je d'abord exécuter document-project ?](#dois-je-dabord-exécuter-document-project)\r\n- [Que faire si j'oublie d'exécuter document-project ?](#que-faire-si-joublie-dexécuter-document-project)\r\n- [Puis-je utiliser Quick Dev pour les projets existants ?](#puis-je-ut"
+    },
+    {
+      "rel_path": "docs/fr/explanation/forensic-investigation.md",
+      "kind": "doc",
+      "size": 10343,
+      "frontmatter": {
+        "title": "Enquête de code",
+        "description": "Comment bmad-investigate traite chaque problème comme une scène d'enquête, classe les preuves et produit un dossier structuré sur lequel les ingénieurs peuvent agir",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "Vous confiez à `bmad-investigate` un journal de plantage, une trace de pile, ou simplement un « ça marchait avant, plus\r\nmaintenant ». Le skill prend le relais avec la discipline d'enquête le temps de l'exécution. Il ne se met pas à\r\ncorriger. Il ouvre un dossier d'enquête.\r\n\r\nChaque constatation reçoit une note. Chaque hypothèse a un statut. Les fausses pistes sont conservées, pas effacées. Le\r\nl"
+    },
+    {
+      "rel_path": "docs/fr/explanation/party-mode.md",
+      "kind": "doc",
+      "size": 3649,
+      "frontmatter": {
+        "title": "Party Mode",
+        "description": "Collaboration multi-agents - regroupez tous vos agents IA dans une seule conversation",
+        "sidebar": {
+          "order": 9
+        }
+      },
+      "excerpt": "Regroupez tous vos agents IA dans une seule conversation.\r\n\r\n## Qu'est-ce que le Party Mode ?\r\n\r\nLancez `bmad-party-mode` et vous avez toute votre équipe IA dans une même pièce - PM, Architecte, Développeur, Designer UX, selon vos besoins. BMad Master orchestre, en sélectionnant les agents pertinents à chaque message. Les agents répondent en personnage, sont en accord ou désaccord, et construisent"
+    },
+    {
+      "rel_path": "docs/fr/explanation/preventing-agent-conflicts.md",
+      "kind": "doc",
+      "size": 4741,
+      "frontmatter": {
+        "title": "Prévention des conflits entre agents",
+        "description": "Comment l'architecture empêche les conflits lorsque plusieurs agents implémentent un système",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "Lorsque plusieurs agents IA implémentent différentes parties d'un système, ils peuvent prendre des décisions techniques contradictoires. La documentation d'architecture prévient cela en établissant des standards partagés.\r\n\r\n## Types de conflits courants\r\n\r\n### Conflits de style d'API\r\n\r\nSans architecture :\r\n- L'agent A utilise REST avec `/users/{id}`\r\n- L'agent B utilise des mutations GraphQL\r\n- "
+    },
+    {
+      "rel_path": "docs/fr/explanation/project-context.md",
+      "kind": "doc",
+      "size": 8179,
+      "frontmatter": {
+        "title": "Contexte du Projet",
+        "description": "Comment project-context.md guide les agents IA avec les règles et préférences de votre projet",
+        "sidebar": {
+          "order": 10
+        }
+      },
+      "excerpt": "Le fichier `project-context.md` est le guide d'implémentation de votre projet pour les agents IA. Similaire à une « constitution » dans d'autres systèmes de développement, il capture les règles, les patterns et les préférences qui garantissent une génération de code cohérente à travers tous les workflows.\r\n\r\n## Ce Qu'il Fait\r\n\r\nLes agents IA prennent constamment des décisions d'implémentation — qu"
+    },
+    {
+      "rel_path": "docs/fr/explanation/quick-dev.md",
+      "kind": "doc",
+      "size": 7573,
+      "frontmatter": {
+        "title": "Quick Dev",
+        "description": "Réduire la friction de l’interaction humaine sans renoncer aux points de contrôle qui protègent la qualité des résultats",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Intention en entrée, modifications de code en sortie, avec aussi peu d'interactions humaines dans la boucle que possible — sans sacrifier la qualité.\r\n\r\nIl permet au modèle de s'exécuter plus longtemps entre les points de contrôle, puis ne vous fait intervenir que lorsque la tâche ne peut pas se poursuivre en toute sécurité sans jugement humain, ou lorsqu'il est temps de revoir le résultat final.\r"
+    },
+    {
+      "rel_path": "docs/fr/explanation/why-solutioning-matters.md",
+      "kind": "doc",
+      "size": 4929,
+      "frontmatter": {
+        "title": "Pourquoi le Solutioning est Important",
+        "description": "Comprendre pourquoi la phase de solutioning est critique pour les projets multi-epics",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "La Phase 3 (Solutioning) traduit le **quoi** construire (issu de la Planification) en **comment** le construire (conception technique). Cette phase évite les conflits entre agents dans les projets multi-epics en documentant les décisions architecturales avant le début de l'implémentation.\r\n\r\n## Le Problème Sans Solutioning\r\n\r\n```text\r\nAgent 1 implémente l'Epic 1 avec une API REST\r\nAgent 2 implémen"
+    },
+    {
+      "rel_path": "docs/fr/how-to/customize-bmad.md",
+      "kind": "doc",
+      "size": 7029,
+      "frontmatter": {
+        "title": "Comment personnaliser BMad",
+        "description": "Personnalisez les agents, les workflows et les modules tout en préservant la compatibilité avec les mises à jour",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "Utilisez les fichiers `.customize.yaml` pour adapter le comportement, les personas[^1] et les menus des agents tout en préservant vos modifications lors des mises à jour.\r\n\r\n## Quand utiliser cette fonctionnalité\r\n\r\n- Vous souhaitez modifier le nom, la personnalité ou le style de communication d'un agent\r\n- Vous avez besoin que les agents se souviennent du contexte spécifique au projet\r\n- Vous sou"
+    },
+    {
+      "rel_path": "docs/fr/how-to/established-projects.md",
+      "kind": "doc",
+      "size": 6064,
+      "frontmatter": {
+        "title": "Projets existants",
+        "description": "Comment utiliser la méthode BMad sur des bases de code existantes",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "Utilisez la méthode BMad efficacement lorsque vous travaillez sur des projets existants et des bases de code legacy.\r\n\r\nCe guide couvre le flux de travail essentiel pour l'intégration à des projets existants avec la méthode BMad.\r\n\r\n:::note[Prérequis]\r\n- méthode BMad installée (`npx bmad-method install`)\r\n- Une base de code existante sur laquelle vous souhaitez travailler\r\n- Accès à un IDE IA (Cla"
+    },
+    {
+      "rel_path": "docs/fr/how-to/get-answers-about-bmad.md",
+      "kind": "doc",
+      "size": 3684,
+      "frontmatter": {
+        "title": "Comment obtenir des réponses à propos de BMad",
+        "description": "Utiliser un LLM pour répondre rapidement à vos questions sur BMad",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "Utilisez l'aide intégrée de BMad, la documentation source ou la communauté pour obtenir des réponses — du plus rapide au plus approfondi.\r\n\r\n## 1. Demandez à BMad-Help\r\n\r\nLe moyen le plus rapide d'obtenir des réponses. Le skill `bmad-help` est disponible directement dans votre session IA et répond à plus de 80 % des questions — il inspecte votre projet, voit ce que vous avez accompli et vous dit q"
+    },
+    {
+      "rel_path": "docs/fr/how-to/install-bmad.md",
+      "kind": "doc",
+      "size": 4281,
+      "frontmatter": {
+        "title": "Comment installer BMad",
+        "description": "Guide étape par étape pour installer BMad dans votre projet",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "Utilisez la commande `npx bmad-method install` pour configurer BMad dans votre projet avec votre choix de modules et d'outils d'IA.\r\n\r\nSi vous souhaitez utiliser un installateur non interactif et fournir toutes les options d'installation en ligne de commande, consultez [ce guide](./non-interactive-installation.md).\r\n\r\n## Quand l'utiliser\r\n\r\n- Démarrer un nouveau projet avec BMad\r\n- Ajouter BMad à "
+    },
+    {
+      "rel_path": "docs/fr/how-to/non-interactive-installation.md",
+      "kind": "doc",
+      "size": 7362,
+      "frontmatter": {
+        "title": "Installation non-interactive",
+        "description": "Installer BMad en utilisant des options de ligne de commande pour les pipelines CI/CD et les déploiements automatisés",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Utilisez les options de ligne de commande pour installer BMad de manière non-interactive. Cela est utile pour :\r\n\r\n## Quand utiliser cette méthode\r\n\r\n- Déploiements automatisés et pipelines CI/CD\r\n- Installations scriptées\r\n- Installations par lots sur plusieurs projets\r\n- Installations rapides avec des configurations connues\r\n\r\n:::note[Prérequis]\r\nNécessite [Node.js](https://nodejs.org) v20.12+ e"
+    },
+    {
+      "rel_path": "docs/fr/how-to/project-context.md",
+      "kind": "doc",
+      "size": 5039,
+      "frontmatter": {
+        "title": "Gérer le contexte du projet",
+        "description": "Créer et maintenir project-context.md pour guider les agents IA",
+        "sidebar": {
+          "order": 8
+        }
+      },
+      "excerpt": "Utilisez le fichier `project-context.md` pour garantir que les agents IA respectent les préférences techniques et les règles d'implémentation de votre projet tout au long des workflows. Pour vous assurer qu'il est toujours disponible, vous pouvez également ajouter la ligne `Le contexte et les conventions importantes du projet se trouvent dans [chemin vers le contexte du projet]/project-context.md`"
+    },
+    {
+      "rel_path": "docs/fr/how-to/quick-fixes.md",
+      "kind": "doc",
+      "size": 4556,
+      "frontmatter": {
+        "title": "Corrections Rapides",
+        "description": "Comment effectuer des corrections rapides et des modifications ciblées",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "Utilisez **Quick Dev** pour les corrections de bugs, les refactorisations ou les petites modifications ciblées qui ne nécessitent pas la méthode BMad complète.\r\n\r\n## Quand Utiliser Cette Approche\r\n\r\n- Corrections de bugs avec une cause claire et connue\r\n- Petites refactorisations (renommage, extraction, restructuration) contenues dans quelques fichiers\r\n- Ajustements mineurs de fonctionnalités ou "
+    },
+    {
+      "rel_path": "docs/fr/how-to/shard-large-documents.md",
+      "kind": "doc",
+      "size": 2636,
+      "frontmatter": {
+        "title": "Guide de Division de Documents",
+        "description": "Diviser les fichiers markdown volumineux en fichiers plus petits et organisés pour une meilleure gestion du contexte",
+        "sidebar": {
+          "order": 9
+        }
+      },
+      "excerpt": "Utilisez l'outil `bmad-shard-doc` si vous avez besoin de diviser des fichiers markdown volumineux en fichiers plus petits et organisés pour une meilleure gestion du contexte.\r\n\r\n:::caution[Déprécié]\r\nCeci n'est plus recommandé, et bientôt avec les workflows mis à jour et la plupart des LLM et outils majeurs supportant les sous-processus, cela deviendra inutile.\r\n:::\r\n\r\n## Quand l’Utiliser\r\n\r\nUtili"
+    },
+    {
+      "rel_path": "docs/fr/how-to/upgrade-to-v6.md",
+      "kind": "doc",
+      "size": 5157,
+      "frontmatter": {
+        "title": "Comment passer à la v6",
+        "description": "Migrer de BMad v4 vers v6",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Utilisez l'installateur BMad pour passer de la v4 à la v6, qui inclut une détection automatique des installations existantes et une assistance à la migration.\r\n\r\n## Quand utiliser ce guide\r\n\r\n- Vous avez BMad v4 installé (dossier `.bmad-method`)\r\n- Vous souhaitez migrer vers la nouvelle architecture v6\r\n- Vous avez des artefacts de planification existants à préserver\r\n\r\n:::note[Prérequis]\r\n- Node."
+    },
+    {
+      "rel_path": "docs/fr/index.md",
+      "kind": "readme",
+      "size": 4830,
+      "frontmatter": {
+        "title": "Bienvenue dans la méthode BMad",
+        "description": "Framework de développement propulsé par l'IA avec des agents spécialisés, des workflows guidés et une planification intelligente"
+      },
+      "excerpt": "La méthode BMad (**B**uild **M**ore **A**rchitect **D**reams) est un module[^1] de développement assisté par l'IA au sein de l'écosystème BMad, conçu pour vous faciliter la création de logiciels par un processus complet, de l'idéation et de la planification jusqu'à l'implémentation agentique. Elle fournit des agents[^2] IA spécialisés, des workflows guidés et une planification intelligente qui s'a"
+    },
+    {
+      "rel_path": "docs/fr/reference/agents.md",
+      "kind": "doc",
+      "size": 5171,
+      "frontmatter": {
+        "title": "Agents",
+        "description": "Agents BMM par défaut avec leurs identifiants de skill, déclencheurs de menu et workflows principaux",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "## Agents par défaut\r\n\r\nCette page liste les agents BMM (suite Agile) par défaut installés avec la méthode BMad, ainsi que leurs identifiants de skill, déclencheurs de menu et workflows principaux. Chaque agent est invoqué en tant que skill.\r\n\r\n## Notes\r\n\r\n- Chaque agent est disponible en tant que skill, généré par l’installateur. L’identifiant de skill (par exemple, `bmad-dev`) est utilisé pour i"
+    },
+    {
+      "rel_path": "docs/fr/reference/commands.md",
+      "kind": "doc",
+      "size": 8767,
+      "frontmatter": {
+        "title": "Skills",
+        "description": "Référence des skills BMad — ce qu'ils sont, comment ils fonctionnent et où les trouver.",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "Les skills sont des prompts pré-construits qui chargent des agents, exécutent des workflows ou lancent des tâches dans votre IDE. L'installateur BMad les génère à partir de vos modules installés au moment de l'installation. Si vous ajoutez, supprimez ou modifiez des modules ultérieurement, relancez l'installateur pour garder les skills synchronisés (voir [Dépannage](#dépannage)).\r\n\r\n## Skills vs. "
+    },
+    {
+      "rel_path": "docs/fr/reference/core-tools.md",
+      "kind": "doc",
+      "size": 16859,
+      "frontmatter": {
+        "title": "Outils Principaux",
+        "description": "Référence pour toutes les tâches et tous les workflows intégrés disponibles dans chaque installation BMad sans modules supplémentaires.",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Chaque installation BMad comprend un ensemble de compétences principales qui peuvent être utilisées conjointement avec tout ce que vous faites — des tâches et des workflows autonomes qui fonctionnent dans tous les projets, tous les modules et toutes les phases. Ceux-ci sont toujours disponibles, quels que soient les modules optionnels que vous installez.\r\n\r\n:::tip[Raccourci Rapide]\r\nExécutez n'imp"
+    },
+    {
+      "rel_path": "docs/fr/reference/modules.md",
+      "kind": "doc",
+      "size": 5087,
+      "frontmatter": {
+        "title": "Modules Officiels",
+        "description": "Modules additionnels pour créer des agents personnalisés, de l'intelligence créative, du développement de jeux et des tests",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "BMad s'étend via des modules officiels que vous sélectionnez lors de l'installation. Ces modules additionnels fournissent des agents, des workflows et des tâches spécialisés pour des domaines spécifiques, au-delà du noyau intégré et de BMM (suite Agile).\r\n\r\n:::tip[Installer des Modules]\r\nExécutez `npx bmad-method install` et sélectionnez les modules souhaités. L'installateur gère automatiquement l"
+    },
+    {
+      "rel_path": "docs/fr/reference/testing.md",
+      "kind": "doc",
+      "size": 8375,
+      "frontmatter": {
+        "title": "Options de Testing",
+        "description": "Comparaison du workflow QA intégré avec le module Test Architect (TEA) pour l'automatisation des tests.",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "BMad propose deux approches de test : un workflow QA[^1] intégré pour une génération rapide de tests et un module Test Architect installable pour une stratégie de test de qualité entreprise.\r\n\r\n## Lequel Choisir ?\r\n\r\n| Facteur                 | QA Intégré                           | Module TEA                                                          |\r\n|-------------------------|------------------"
+    },
+    {
+      "rel_path": "docs/fr/reference/workflow-map.md",
+      "kind": "doc",
+      "size": 9336,
+      "frontmatter": {
+        "title": "Carte des Workflows",
+        "description": "Référence visuelle des phases et des résultats des workflows de la méthode BMad",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "La méthode BMad (BMM) est un module de l'écosystème BMad, conçu pour suivre les meilleures pratiques de l'ingénierie du\r\ncontexte et de la planification. Les agents IA fonctionnent de manière optimale avec un contexte clair et structuré. Le\r\nsystème BMM construit ce contexte progressivement à travers 4 phases distinctes — chaque phase, et plusieurs workflows\r\noptionnels au sein de chaque phase, pr"
+    },
+    {
+      "rel_path": "docs/fr/tutorials/getting-started.md",
+      "kind": "doc",
+      "size": 16593,
+      "frontmatter": {
+        "title": "Premiers pas",
+        "description": "Installer BMad et construire votre premier projet"
+      },
+      "excerpt": "Construisez des logiciels plus rapidement en utilisant des workflows propulsés par l'IA avec des agents spécialisés qui vous guident à travers la planification, l'architecture et l'implémentation.\r\n\r\n## Ce que vous allez apprendre\r\n\r\n- Installer et initialiser la méthode BMad pour un nouveau projet\r\n- Utiliser **BMad-Help** — votre guide intelligent qui sait quoi faire ensuite\r\n- Choisir la bonne "
+    },
+    {
+      "rel_path": "docs/how-to/customize-bmad.md",
+      "kind": "doc",
+      "size": 21178,
+      "frontmatter": {
+        "title": "How to Customize BMad",
+        "description": "Customize agents and workflows while preserving update compatibility",
+        "sidebar": {
+          "order": 8
+        }
+      },
+      "excerpt": "Tailor agent personas, inject domain context, add capabilities, and configure workflow behavior -- all without modifying installed files. Your customizations survive every update.\r\n\r\n:::tip[Don't want to hand-author TOML? Use `bmad-customize`]\r\nThe `bmad-customize` skill is a guided authoring helper for the **per-skill agent/workflow override surface** described in this doc. It scans what's custom"
+    },
+    {
+      "rel_path": "docs/how-to/established-projects.md",
+      "kind": "doc",
+      "size": 4652,
+      "frontmatter": {
+        "title": "Established Projects",
+        "description": "How to use BMad Method on existing codebases",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "Use BMad Method effectively when working on existing projects and legacy codebases.\r\n\r\nThis guide covers the essential workflow for onboarding to existing projects with BMad Method.\r\n\r\n:::note[Prerequisites]\r\n\r\n- BMad Method installed (`npx bmad-method install`)\r\n- An existing codebase you want to work on\r\n- Access to an AI-powered IDE (Claude Code or Cursor)\r\n  :::\r\n\r\n## Step 1: Clean Up Complete"
+    },
+    {
+      "rel_path": "docs/how-to/expand-bmad-for-your-org.md",
+      "kind": "doc",
+      "size": 19002,
+      "frontmatter": {
+        "title": "How to Expand BMad for Your Organization",
+        "description": "Six customization patterns that reshape BMad without forking — agent-wide rules, workflow conventions, external publishing, template swaps, agent roster changes, and advanced integration patterns",
+        "sidebar": {
+          "order": 9
+        }
+      },
+      "excerpt": "BMad's customization surface lets an organization reshape behavior without editing installed files or forking skills. This guide walks through six recipes that cover most enterprise needs.\r\n\r\n:::note[Prerequisites]\r\n\r\n- BMad installed in your project (see [How to Install BMad](./install-bmad.md))\r\n- Familiarity with the customization model (see [How to Customize BMad](./customize-bmad.md))\r\n- Pyth"
+    },
+    {
+      "rel_path": "docs/how-to/get-answers-about-bmad.md",
+      "kind": "doc",
+      "size": 2864,
+      "frontmatter": {
+        "title": "How to Get Answers About BMad",
+        "description": "Use an LLM to quickly answer your own BMad questions",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "Use BMad's built-in help, source docs, or the community to get answers — from quickest to most thorough.\r\n\r\n## 1. Ask BMad-Help\r\n\r\nThe fastest way to get answers. The `bmad-help` skill is available directly in your AI session and handles over 80% of questions — it inspects your project, sees what you've completed, and tells you what to do next.\r\n\r\n```\r\nbmad-help I have a SaaS idea and know all the"
+    },
+    {
+      "rel_path": "docs/how-to/install-bmad.md",
+      "kind": "doc",
+      "size": 17074,
+      "frontmatter": {
+        "title": "How to Install BMad",
+        "description": "Install, update, and pin BMad for local development, teams, and CI",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "Use `npx bmad-method install` to set up BMad in your project. One command handles first installs, upgrades, channel switching, and scripted CI runs. This page covers all of it.\r\n\r\n## When to Use This\r\n\r\n- Starting a new project with BMad\r\n- Adding or removing modules on an existing install\r\n- Switching a module to main-HEAD or pinning to a specific release\r\n- Scripting installs for CI pipelines, D"
+    },
+    {
+      "rel_path": "docs/how-to/install-custom-modules.md",
+      "kind": "doc",
+      "size": 7706,
+      "frontmatter": {
+        "title": "Install Custom and Community Modules",
+        "description": "Install third-party modules from the community registry, Git repositories, or local paths",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Use the BMad installer to add modules from the community registry, third-party Git repositories, or local file paths.\r\n\r\n## When to Use This\r\n\r\n- Installing a community-contributed module from the BMad registry\r\n- Installing a module from a third-party Git repository (GitHub, GitLab, Bitbucket, self-hosted)\r\n- Testing a module you are developing locally with BMad Builder\r\n- Installing modules from"
+    },
+    {
+      "rel_path": "docs/how-to/non-interactive-installation.md",
+      "kind": "doc",
+      "size": 425,
+      "frontmatter": {
+        "title": "Non-Interactive Installation",
+        "description": "Headless / CI install docs have moved",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": ":::note[This page has moved]\r\nHeadless and CI install flags, channel selection, and pinning now live in the unified [How to Install BMad](./install-bmad.md) guide. Jump to the [Headless / CI installs](./install-bmad.md#headless-ci-installs) section for the flag reference and copy-paste recipes.\r\n:::"
+    },
+    {
+      "rel_path": "docs/how-to/project-context.md",
+      "kind": "doc",
+      "size": 4150,
+      "frontmatter": {
+        "title": "Manage Project Context",
+        "description": "Create and maintain project-context.md to guide AI agents",
+        "sidebar": {
+          "order": 9
+        }
+      },
+      "excerpt": "Use the `project-context.md` file to ensure AI agents follow your project's technical preferences and implementation rules throughout all workflows. To make sure this is always available, you can also add the line `Important project context and conventions are located in [path to project context]/project-context.md` to your tools context or always rules file (such as `AGENTS.md`)\r\n\r\n:::note[Prereq"
+    },
+    {
+      "rel_path": "docs/how-to/quick-fixes.md",
+      "kind": "doc",
+      "size": 3559,
+      "frontmatter": {
+        "title": "Quick Fixes",
+        "description": "How to make quick fixes and ad-hoc changes",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "Use **Quick Dev** for bug fixes, refactorings, or small targeted changes that don't require the full BMad Method.\r\n\r\n## When to Use This\r\n\r\n- Bug fixes with a clear, known cause\r\n- Small refactorings (rename, extract, restructure) contained within a few files\r\n- Minor feature tweaks or configuration changes\r\n- Dependency updates\r\n\r\n:::note[Prerequisites]\r\n\r\n- BMad Method installed (`npx bmad-metho"
+    },
+    {
+      "rel_path": "docs/how-to/shard-large-documents.md",
+      "kind": "doc",
+      "size": 2217,
+      "frontmatter": {
+        "title": "Document Sharding Guide",
+        "description": "Split large markdown files into smaller organized files for better context management",
+        "sidebar": {
+          "order": 10
+        }
+      },
+      "excerpt": "Use the `bmad-shard-doc` tool if you need to split large markdown files into smaller, organized files for better context management.\r\n\r\n:::caution[Deprecated]\r\nThis is no longer recommended, and soon with updated workflows and most major LLMs and tools supporting subprocesses this will be unnecessary.\r\n:::\r\n\r\n## When to Use This\r\n\r\nOnly use this if you notice your chosen tool / model combination i"
+    },
+    {
+      "rel_path": "docs/how-to/upgrade-to-v6.md",
+      "kind": "doc",
+      "size": 3773,
+      "frontmatter": {
+        "title": "How to Upgrade to v6",
+        "description": "Migrate from BMad v4 to v6",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "Use the BMad installer to upgrade from v4 to v6, which includes automatic detection of legacy installations and migration assistance.\r\n\r\n## When to Use This\r\n\r\n- You have BMad v4 installed (`.bmad-method` folder)\r\n- You want to migrate to the new v6 architecture\r\n- You have existing planning artifacts to preserve\r\n\r\n:::note[Prerequisites]\r\n\r\n- Node.js 20.12+\r\n- Existing BMad v4 installation\r\n  :::"
+    },
+    {
+      "rel_path": "docs/index.md",
+      "kind": "readme",
+      "size": 3778,
+      "frontmatter": {
+        "title": "Welcome to the BMad Method",
+        "description": "AI-driven development framework with specialized agents, guided workflows, and intelligent planning"
+      },
+      "excerpt": "The BMad Method (**B**uild **M**ore **A**rchitect **D**reams) is an AI-driven development framework module within the BMad Method Ecosystem that helps you build software through the whole process from ideation and planning all the way through agentic implementation. It provides specialized AI agents, guided workflows, and intelligent planning that adapts to your project's complexity, whether you'r"
+    },
+    {
+      "rel_path": "docs/reference/agents.md",
+      "kind": "doc",
+      "size": 3628,
+      "frontmatter": {
+        "title": "Agents",
+        "description": "Default BMM agents with their skill IDs, menu triggers, and primary workflows",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "## Default Agents\r\n\r\nThis page lists the default BMM (Agile suite) agents that install with BMad Method, along with their skill IDs, menu triggers, and primary workflows. Each agent is invoked as a skill.\r\n\r\n## Notes\r\n\r\n- Each agent is available as a skill, generated by the installer. The skill ID (e.g., `bmad-dev`) is used to invoke the agent.\r\n- Triggers are the short menu codes (e.g., `CP`) and"
+    },
+    {
+      "rel_path": "docs/reference/commands.md",
+      "kind": "doc",
+      "size": 6666,
+      "frontmatter": {
+        "title": "Skills",
+        "description": "Reference for BMad skills — what they are, how they work, and where to find them.",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Skills are pre-built prompts that load agents, run workflows, or execute tasks inside your IDE. The BMad installer generates them from your installed modules at install time. If you later add, remove, or change modules, re-run the installer to keep skills in sync (see [Troubleshooting](#troubleshooting)).\r\n\r\n## Skills vs. Agent Menu Triggers\r\n\r\nBMad offers two ways to start work, and they serve di"
+    },
+    {
+      "rel_path": "docs/reference/core-tools.md",
+      "kind": "doc",
+      "size": 13349,
+      "frontmatter": {
+        "title": "Core Tools",
+        "description": "Reference for all built-in tasks and workflows available in every BMad installation without additional modules.",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Every BMad installation includes a set of core skills that can be used in conjunction with any anything you are doing — standalone tasks and workflows that work across all projects, all modules, and all phases. These are always available regardless of which optional modules you install.\r\n\r\n:::tip[Quick Path]\r\nRun any core tool by typing its skill name (e.g., `bmad-help`) in your IDE. No agent sess"
+    },
+    {
+      "rel_path": "docs/reference/modules.md",
+      "kind": "doc",
+      "size": 3875,
+      "frontmatter": {
+        "title": "Official Modules",
+        "description": "Add-on modules for building custom agents, creative intelligence, game development, and testing",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "BMad extends through official modules that you select during installation. These add-on modules provide specialized agents, workflows, and tasks for specific domains beyond the built-in core and BMM (Agile suite).\r\n\r\n:::tip[Installing Modules]\r\nRun `npx bmad-method install` and select the modules you want. The installer handles downloading, configuration, and IDE integration automatically.\r\n:::\r\n\r"
+    },
+    {
+      "rel_path": "docs/reference/testing.md",
+      "kind": "doc",
+      "size": 5892,
+      "frontmatter": {
+        "title": "Testing Options",
+        "description": "Comparing the built-in QA workflow with the Test Architect (TEA) module for test automation.",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "BMad provides two testing paths: a built-in QA workflow for fast test generation and an installable Test Architect module for enterprise-grade test strategy.\r\n\r\n## Which Should You Use?\r\n\r\n| Factor | Built-in QA | TEA Module |\r\n| --- | --- | --- |\r\n| **Best for** | Small-medium projects, quick coverage | Large projects, regulated or complex domains |\r\n| **Setup** | Nothing to install -- included i"
+    },
+    {
+      "rel_path": "docs/reference/workflow-map.md",
+      "kind": "doc",
+      "size": 8639,
+      "frontmatter": {
+        "title": "Workflow Map",
+        "description": "Visual reference for BMad Method workflow phases and outputs",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "The BMad Method (BMM) is a module in the BMad Ecosystem, targeted at following the best practices of context engineering\r\nand planning. AI agents work best with clear, structured context. The BMM system builds that context progressively\r\nacross 4 distinct phases - each phase, and multiple workflows optionally within each phase, produce documents that\r\ninform the next, so agents always know what to"
+    },
+    {
+      "rel_path": "docs/tutorials/getting-started.md",
+      "kind": "doc",
+      "size": 13713,
+      "frontmatter": {
+        "title": "Getting Started",
+        "description": "Install BMad and build your first project"
+      },
+      "excerpt": "Build software faster using AI-powered workflows with specialized agents that guide you through planning, architecture, and implementation.\r\n\r\n## What You'll Learn\r\n\r\n- Install and initialize BMad Method for a new project\r\n- Use **BMad-Help** — your intelligent guide that knows what to do next\r\n- Choose the right planning track for your project size\r\n- Progress through phases from requirements to "
+    },
+    {
+      "rel_path": "docs/vi-vn/_STYLE_GUIDE.md",
+      "kind": "doc",
+      "size": 12900,
+      "frontmatter": {
+        "title": "Hướng Dẫn Phong Cách Tài Liệu",
+        "description": "Các quy ước tài liệu dành riêng cho dự án, dựa trên phong cách tài liệu của Google và cấu trúc Diataxis"
+      },
+      "excerpt": "Dự án này tuân theo [Google Developer Documentation Style Guide](https://developers.google.com/style) và dùng [Diataxis](https://diataxis.fr/) để tổ chức nội dung. Phần dưới đây chỉ nêu các quy ước dành riêng cho dự án.\r\n\r\n## Quy tắc riêng của dự án\r\n\r\n| Quy tắc | Quy định |\r\n| --- | --- |\r\n| Không dùng đường kẻ ngang (`---`) | Làm gián đoạn dòng đọc |\r\n| Không dùng tiêu đề `####` | Dùng chữ in đậ"
+    },
+    {
+      "rel_path": "docs/vi-vn/404.md",
+      "kind": "doc",
+      "size": 180,
+      "frontmatter": {
+        "title": "Không Tìm Thấy Trang",
+        "template": "splash"
+      },
+      "excerpt": "Trang bạn đang tìm không tồn tại hoặc đã được chuyển đi.\r\n\r\n[Quay về trang chủ](./index.md)"
+    },
+    {
+      "rel_path": "docs/vi-vn/bmad-developer-guide.md",
+      "kind": "doc",
+      "size": 29972,
+      "frontmatter": {
+        "title": "Hướng dẫn BMAD cho Developer",
+        "description": "Tài liệu tổng quan bằng tiếng Việt dành cho developer muốn áp dụng BMAD Method từ ý tưởng đến triển khai"
+      },
+      "excerpt": "# BMAD Method — Hướng dẫn toàn diện cho Developer\r\n\r\n> **BMAD** (Build More Architect Dreams) là framework phát triển phần mềm hỗ trợ bởi AI, giúp team đi từ ý tưởng đến sản phẩm một cách có cấu trúc, nhất quán và hiệu quả.\r\n\r\n---\r\n\r\n## Mục lục\r\n\r\n1. [BMAD là gì?](#1-bmad-là-gì)\r\n2. [Nguyên lý cốt lõi](#2-nguyên-lý-cốt-lõi)\r\n3. [Kiến trúc hệ thống — Các Agent](#3-kiến-trúc-hệ-thống--các-agent)\r\n4."
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/advanced-elicitation.md",
+      "kind": "doc",
+      "size": 3308,
+      "frontmatter": {
+        "title": "Khai thác nâng cao",
+        "description": "Buộc LLM xem xét lại kết quả của nó bằng các phương pháp lập luận có cấu trúc",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "Buộc LLM xem xét lại những gì nó vừa tạo ra. Bạn chọn một phương pháp lập luận, nó áp dụng phương pháp đó lên chính output của mình, rồi bạn quyết định có giữ các cải tiến hay không.\r\n\r\n## Khai thác nâng cao là gì?\r\n\r\nĐây là một lần xem xét lại có cấu trúc. Thay vì bảo AI \"thử lại\" hoặc \"làm cho nó tốt hơn\", bạn chọn một phương pháp lập luận cụ thể và AI sẽ xem lại output của chính nó dưới góc đó."
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/adversarial-review.md",
+      "kind": "doc",
+      "size": 3883,
+      "frontmatter": {
+        "title": "Đánh giá đối kháng",
+        "description": "Kỹ thuật lập luận ép buộc giúp tránh các bản review lười kiểu \"nhìn ổn\"",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "Buộc quá trình phân tích đi sâu hơn bằng cách ép phải tìm ra vấn đề.\r\n\r\n## Đánh giá đối kháng là gì?\r\n\r\nĐây là một kỹ thuật review mà người review *bắt buộc* phải tìm thấy vấn đề. Không có chuyện \"nhìn ổn\". Người review chọn lập trường hoài nghi - giả sử vấn đề có tồn tại và đi tìm chúng.\r\n\r\nĐây không phải là việc cố tình tiêu cực. Đây là cách ép buộc phân tích thật sự, thay vì chỉ liếc qua và đón"
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/analysis-phase.md",
+      "kind": "doc",
+      "size": 8449,
+      "frontmatter": {
+        "title": "Giai đoạn phân tích: từ ý tưởng đến nền tảng",
+        "description": "Động não, nghiên cứu, product brief và PRFAQ là gì, và nên dùng từng công cụ khi nào",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "Giai đoạn phân tích (giai đoạn 1) giúp bạn suy nghĩ rõ ràng về sản phẩm trước khi cam kết bắt tay vào xây dựng. Mọi công cụ trong giai đoạn này đều là tùy chọn, nhưng nếu bỏ qua toàn bộ phần phân tích thì PRD của bạn sẽ được dựng trên giả định thay vì hiểu biết thực chất.\r\n\r\n## Vì sao cần phân tích trước khi lập kế hoạch?\r\n\r\nPRD trả lời câu hỏi \"chúng ta nên xây gì và vì sao?\". Nếu đầu vào của nó "
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/brainstorming.md",
+      "kind": "doc",
+      "size": 1871,
+      "frontmatter": {
+        "title": "Động não ý tưởng",
+        "description": "Các phiên sáng tạo tương tác sử dụng hơn 60 kỹ thuật khơi ý đã được kiểm chứng",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Mở khóa sự sáng tạo của bạn thông qua quá trình khám phá có hướng dẫn.\r\n\r\n## Động não ý tưởng là gì?\r\n\r\nChạy `bmad-brainstorming` và bạn sẽ có một người điều phối sáng tạo giúp rút ý tưởng từ chính bạn - không phải phát sinh thay bạn. AI đóng vai trò huấn luyện viên và người dẫn đường, sử dụng các kỹ thuật đã được kiểm chứng để tạo điều kiện cho những ý tưởng tốt nhất của bạn xuất hiện.\r\n\r\n**Phù h"
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/checkpoint-preview.md",
+      "kind": "doc",
+      "size": 10203,
+      "frontmatter": {
+        "title": "Xem trước Checkpoint",
+        "description": "Review có người trong vòng lặp với hỗ trợ của LLM, dẫn bạn đi qua thay đổi từ mục đích đến chi tiết",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "`bmad-checkpoint-preview` là một workflow review tương tác có người trong vòng lặp với hỗ trợ của LLM. Nó dẫn bạn đi qua một thay đổi mã nguồn, từ mục đích và bối cảnh đến các chi tiết quan trọng, để bạn có thể quyết định có nên phát hành, làm lại, hay đào sâu thêm.\r\n\r\n![Sơ đồ workflow Checkpoint Preview](/diagrams/checkpoint-preview-diagram.png)\r\n\r\n## Luồng điển hình\r\n\r\nBạn chạy `bmad-quick-dev`."
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/established-projects-faq.md",
+      "kind": "doc",
+      "size": 2714,
+      "frontmatter": {
+        "title": "FAQ cho dự án đã tồn tại",
+        "description": "Các câu hỏi phổ biến khi dùng BMad Method trên dự án đã tồn tại",
+        "sidebar": {
+          "order": 8
+        }
+      },
+      "excerpt": "Các câu trả lời nhanh cho những câu hỏi thường gặp khi làm việc với dự án đã tồn tại bằng BMad Method (BMM).\r\n\r\n## Các câu hỏi\r\n\r\n- [Tôi có phải chạy document-project trước không?](#toi-co-phai-chay-document-project-truoc-khong)\r\n- [Nếu tôi quên chạy document-project thì sao?](#neu-toi-quen-chay-document-project-thi-sao)\r\n- [Tôi có thể dùng Quick Flow cho dự án đã tồn tại không?](#toi-co-the-dung-"
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/named-agents.md",
+      "kind": "doc",
+      "size": 10716,
+      "frontmatter": {
+        "title": "Agent có tên riêng (Named Agents)",
+        "description": "Vì sao các agent của BMad có tên, persona và bề mặt tùy chỉnh riêng, và điều đó mở khóa điều gì so với cách tiếp cận dựa trên menu hoặc prompt trống",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "Bạn nói: \"Hey Mary, brainstorm với tôi nhé\", và Mary được kích hoạt. Cô ấy chào bạn theo tên, bằng ngôn ngữ bạn đã cấu hình, với persona đặc trưng của riêng mình. Cô ấy nhắc rằng `bmad-help` luôn sẵn sàng. Rồi cô ấy bỏ qua menu và đi thẳng vào brainstorming vì ý định của bạn đã đủ rõ.\r\n\r\nTrang này giải thích điều gì thực sự đang diễn ra và vì sao BMad được thiết kế theo cách đó.\r\n\r\n## Chiếc ghế ba"
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/party-mode.md",
+      "kind": "doc",
+      "size": 3243,
+      "frontmatter": {
+        "title": "Chế độ Party",
+        "description": "Cộng tác đa agent - đưa tất cả agent AI vào cùng một cuộc trò chuyện",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "Đưa tất cả agent AI của bạn vào cùng một cuộc trò chuyện.\r\n\r\n## Party Mode là gì?\r\n\r\nChạy `bmad-party-mode` và bạn sẽ có cả đội AI trong cùng một phòng - PM, Architect, Dev, UX Designer, bất kỳ ai bạn cần. BMad Master điều phối, chọn các agent liên quan cho từng tin nhắn. Các agent trả lời đúng vai, đồng ý, phản biện, và bổ sung ý tưởng cho nhau.\r\n\r\nCuộc trò chuyện tiếp tục lâu đến mức bạn muốn. B"
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/preventing-agent-conflicts.md",
+      "kind": "doc",
+      "size": 4111,
+      "frontmatter": {
+        "title": "Ngăn xung đột giữa các agent",
+        "description": "Cách kiến trúc ngăn xung đột khi nhiều agent cùng triển khai một hệ thống",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "Khi nhiều agent AI cùng triển khai các phần khác nhau của hệ thống, chúng có thể đưa ra các quyết định kỹ thuật mâu thuẫn nhau. Tài liệu kiến trúc ngăn điều đó bằng cách thiết lập các tiêu chuẩn dùng chung.\r\n\r\n## Các kiểu xung đột phổ biến\r\n\r\n### Xung đột về phong cách API\r\n\r\nKhông có kiến trúc:\r\n- Agent A dùng REST với `/users/{id}`\r\n- Agent B dùng GraphQL mutations\r\n- Kết quả: pattern API không "
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/project-context.md",
+      "kind": "doc",
+      "size": 7513,
+      "frontmatter": {
+        "title": "Bối cảnh dự án",
+        "description": "Cách project-context.md định hướng các agent AI theo quy tắc và ưu tiên của dự án",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "Tệp `project-context.md` là kim chỉ nam cho việc triển khai của các agent AI trong dự án của bạn. Tương tự như một \"bản hiến pháp\" trong các hệ thống phát triển khác, nó ghi lại các quy tắc, pattern và ưu tiên giúp việc sinh mã được nhất quán trong mọi workflow.\r\n\r\n## Nó làm gì\r\n\r\nCác agent AI liên tục đưa ra quyết định triển khai - theo pattern nào, tổ chức code ra sao, dùng quy ước gì. Nếu không"
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/quick-dev.md",
+      "kind": "doc",
+      "size": 7213,
+      "frontmatter": {
+        "title": "Phát triển nhanh",
+        "description": "Giảm ma sát có người trong vòng lặp mà vẫn giữ các điểm kiểm tra bảo vệ chất lượng đầu ra",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Đưa ý định vào, nhận thay đổi mã nguồn ra, với số lần cần con người nhảy vào giữa quy trình ít nhất có thể - nhưng không đánh đổi chất lượng.\r\n\r\nNó cho phép mô hình tự vận hành lâu hơn giữa các điểm kiểm tra, rồi chỉ đưa con người quay lại khi tác vụ không thể tiếp tục an toàn nếu thiếu phán đoán của con người, hoặc khi đã đến lúc rà soát kết quả cuối.\r\n\r\n![Quick Dev workflow diagram](/diagrams/qu"
+    },
+    {
+      "rel_path": "docs/vi-vn/explanation/why-solutioning-matters.md",
+      "kind": "doc",
+      "size": 3446,
+      "frontmatter": {
+        "title": "Vì sao solutioning quan trọng",
+        "description": "Hiểu vì sao giai đoạn solutioning là tối quan trọng đối với dự án nhiều epic",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Giai đoạn 3 (Solutioning) biến **xây gì** (từ giai đoạn Planning) thành **xây như thế nào** (thiết kế kỹ thuật). Giai đoạn này ngăn xung đột giữa các agent trong dự án nhiều epic bằng cách ghi lại các quyết định kiến trúc trước khi bắt đầu triển khai.\r\n\r\n## Vấn đề nếu bỏ qua solutioning\r\n\r\n```text\r\nAgent 1 triển khai Epic 1 bằng REST API\r\nAgent 2 triển khai Epic 2 bằng GraphQL\r\nKết quả: Thiết kế A"
+    },
+    {
+      "rel_path": "docs/vi-vn/how-to/customize-bmad.md",
+      "kind": "doc",
+      "size": 25883,
+      "frontmatter": {
+        "title": "Cách tùy chỉnh BMad",
+        "description": "Tùy chỉnh agent và workflow trong khi vẫn giữ khả năng tương thích khi cập nhật",
+        "sidebar": {
+          "order": 8
+        }
+      },
+      "excerpt": "Điều chỉnh persona của agent, chèn ngữ cảnh theo domain, thêm khả năng mới và cấu hình hành vi workflow mà không cần sửa các file đã cài. Các tùy chỉnh của bạn sẽ được giữ nguyên qua mọi lần cập nhật.\r\n\r\n:::tip[Không muốn tự viết TOML? Hãy dùng `bmad-customize`]\r\nSkill `bmad-customize` là trợ lý tạo cấu hình có hướng dẫn cho **bề mặt override agent/workflow theo từng skill** được mô tả trong tài l"
+    },
+    {
+      "rel_path": "docs/vi-vn/how-to/established-projects.md",
+      "kind": "doc",
+      "size": 5371,
+      "frontmatter": {
+        "title": "Dự án đã tồn tại",
+        "description": "Cách sử dụng BMad Method trên các codebase hiện có",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "Sử dụng BMad Method hiệu quả khi làm việc với các dự án hiện có và codebase legacy.\r\n\r\nTài liệu này mô tả workflow cốt lõi để on-board vào các dự án đã tồn tại bằng BMad Method.\r\n\r\n:::note[Điều kiện tiên quyết]\r\n- Đã cài BMad Method (`npx bmad-method install`)\r\n- Một codebase hiện có mà bạn muốn làm việc cùng\r\n- Quyền truy cập vào một IDE tích hợp AI (Claude Code hoặc Cursor)\r\n:::\r\n\r\n## Bước 1: Dọ"
+    },
+    {
+      "rel_path": "docs/vi-vn/how-to/expand-bmad-for-your-org.md",
+      "kind": "doc",
+      "size": 19030,
+      "frontmatter": {
+        "title": "Cách mở rộng BMad cho tổ chức của bạn",
+        "description": "Năm mẫu tùy chỉnh giúp thay đổi BMad mà không cần fork, gồm quy tắc ở cấp agent, quy ước workflow, xuất bản ra hệ thống ngoài, thay template và điều chỉnh danh sách agent",
+        "sidebar": {
+          "order": 9
+        }
+      },
+      "excerpt": "Bề mặt tùy chỉnh của BMad cho phép một tổ chức định hình lại hành vi mà không phải sửa file đã cài hay fork skill. Hướng dẫn này trình bày năm công thức mẫu (recipe) bao phủ phần lớn nhu cầu ở môi trường doanh nghiệp.\r\n\r\n:::note[Điều kiện tiên quyết]\r\n\r\n- BMad đã được cài trong dự án của bạn (xem [Cách cài đặt BMad](./install-bmad.md))\r\n- Đã quen với mô hình tùy chỉnh (xem [Cách tùy chỉnh BMad](./"
+    },
+    {
+      "rel_path": "docs/vi-vn/how-to/get-answers-about-bmad.md",
+      "kind": "doc",
+      "size": 3763,
+      "frontmatter": {
+        "title": "Cách tìm câu trả lời về BMad",
+        "description": "Sử dụng LLM để tự nhanh chóng trả lời các câu hỏi về BMad",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "Hãy dùng trợ giúp tích hợp sẵn của BMad, tài liệu nguồn, hoặc cộng đồng để tìm câu trả lời, theo thứ tự từ nhanh nhất đến đầy đủ nhất.\r\n\r\n## 1. Hỏi BMad-Help\r\n\r\nCách nhanh nhất để có câu trả lời. Skill `bmad-help` có sẵn ngay trong phiên AI của bạn và xử lý được hơn 80% câu hỏi. Nó sẽ kiểm tra dự án, nhìn xem bạn đã hoàn thành đến đâu và cho bạn biết nên làm gì tiếp theo.\r\n\r\n```text\r\nbmad-help Tôi"
+    },
+    {
+      "rel_path": "docs/vi-vn/how-to/install-bmad.md",
+      "kind": "doc",
+      "size": 4445,
+      "frontmatter": {
+        "title": "Cách cài đặt BMad",
+        "description": "Hướng dẫn từng bước để cài đặt BMad vào dự án của bạn",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "Sử dụng lệnh `npx bmad-method install` để thiết lập BMad trong dự án của bạn với các module và công cụ AI theo lựa chọn.\r\n\r\nNếu bạn muốn dùng trình cài đặt không tương tác và cung cấp toàn bộ tùy chọn ngay trên dòng lệnh, xem [hướng dẫn này](./non-interactive-installation.md).\r\n\r\n## Khi nào nên dùng\r\n\r\n- Bắt đầu một dự án mới với BMad\r\n- Thêm BMad vào một codebase hiện có\r\n- Cập nhật bản cài đặt B"
+    },
+    {
+      "rel_path": "docs/vi-vn/how-to/install-custom-modules.md",
+      "kind": "doc",
+      "size": 9226,
+      "frontmatter": {
+        "title": "Cài đặt module tùy chỉnh và module cộng đồng",
+        "description": "Cài các module bên thứ ba từ kho cộng đồng (community registry), kho Git hoặc đường dẫn cục bộ",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Sử dụng trình cài đặt BMad để thêm module từ kho cộng đồng (community registry), kho Git của bên thứ ba hoặc đường dẫn file cục bộ.\r\n\r\n## Khi nào nên dùng\r\n\r\n- Cài một module do cộng đồng đóng góp từ BMad registry\r\n- Cài module từ kho Git của bên thứ ba như GitHub, GitLab, Bitbucket hoặc máy chủ tự host\r\n- Kiểm thử một module bạn đang phát triển cục bộ với BMad Builder\r\n- Cài module từ máy chủ Git"
+    },
+    {
+      "rel_path": "docs/vi-vn/how-to/non-interactive-installation.md",
+      "kind": "doc",
+      "size": 8613,
+      "frontmatter": {
+        "title": "Cài đặt không tương tác",
+        "description": "Cài đặt BMad bằng các cờ dòng lệnh cho pipeline CI/CD và triển khai tự động",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Sử dụng các cờ dòng lệnh để cài đặt BMad mà không cần tương tác. Cách này hữu ích cho:\r\n\r\n## Khi nào nên dùng\r\n\r\n- Triển khai tự động và pipeline CI/CD\r\n- Cài đặt bằng script\r\n- Cài đặt hàng loạt trên nhiều dự án\r\n- Cài đặt nhanh với cấu hình đã biết trước\r\n\r\n:::note[Điều kiện tiên quyết]\r\nYêu cầu [Node.js](https://nodejs.org) v20.12+ và `npx` (đi kèm với npm).\r\n:::\r\n\r\n## Các cờ khả dụng\r\n\r\n### Tù"
+    },
+    {
+      "rel_path": "docs/vi-vn/how-to/project-context.md",
+      "kind": "doc",
+      "size": 5004,
+      "frontmatter": {
+        "title": "Quản lý bối cảnh dự án",
+        "description": "Tạo và duy trì project-context.md để định hướng cho các agent AI",
+        "sidebar": {
+          "order": 8
+        }
+      },
+      "excerpt": "Sử dụng tệp `project-context.md` để đảm bảo các agent AI tuân theo ưu tiên kỹ thuật và quy tắc triển khai của dự án trong suốt mọi workflow. Để đảm bảo tệp này luôn sẵn có, bạn cũng có thể thêm dòng `Important project context and conventions are located in [path to project context]/project-context.md` vào file context của công cụ hoặc file always rules của bạn (như `AGENTS.md`).\r\n\r\n:::note[Điều ki"
+    },
+    {
+      "rel_path": "docs/vi-vn/how-to/quick-fixes.md",
+      "kind": "doc",
+      "size": 4428,
+      "frontmatter": {
+        "title": "Sửa nhanh",
+        "description": "Cách thực hiện các sửa nhanh và thay đổi ad-hoc",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "Sử dụng **Quick Dev** cho sửa lỗi, refactor, hoặc các thay đổi nhỏ có mục tiêu rõ ràng mà không cần quy trình BMad Method đầy đủ.\r\n\r\n## Khi nào nên dùng\r\n\r\n- Sửa lỗi khi nguyên nhân đã rõ ràng\r\n- Refactor nhỏ (đổi tên, tách hàm, tái cấu trúc) nằm trong một vài tệp\r\n- Điều chỉnh tính năng nhỏ hoặc thay đổi cấu hình\r\n- Cập nhật dependency\r\n\r\n:::note[Điều kiện tiên quyết]\r\n- Đã cài BMad Method (`npx "
+    },
+    {
+      "rel_path": "docs/vi-vn/how-to/shard-large-documents.md",
+      "kind": "doc",
+      "size": 2765,
+      "frontmatter": {
+        "title": "Hướng dẫn chia nhỏ tài liệu",
+        "description": "Tách các tệp markdown lớn thành nhiều tệp nhỏ có tổ chức để quản lý context tốt hơn",
+        "sidebar": {
+          "order": 9
+        }
+      },
+      "excerpt": "Sử dụng công cụ `bmad-shard-doc` nếu bạn cần tách các tệp markdown lớn thành nhiều tệp nhỏ có tổ chức để quản lý context tốt hơn.\r\n\r\n:::caution[Đã ngừng khuyến nghị]\r\nĐây không còn là cách được khuyến nghị, và trong thời gian tới khi workflow được cập nhật và đa số LLM/công cụ lớn hỗ trợ subprocesses, việc này sẽ không còn cần thiết.\r\n:::\r\n\r\n## Khi nào nên dùng\r\n\r\nChỉ dùng cách này nếu bạn nhận th"
+    },
+    {
+      "rel_path": "docs/vi-vn/how-to/upgrade-to-v6.md",
+      "kind": "doc",
+      "size": 4061,
+      "frontmatter": {
+        "title": "Cách nâng cấp lên v6",
+        "description": "Di chuyển từ BMad v4 sang v6",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Sử dụng trình cài đặt BMad để nâng cấp từ v4 lên v6, bao gồm khả năng tự động phát hiện bản cài đặt cũ và hỗ trợ di chuyển.\r\n\r\n## Khi nào nên dùng\r\n\r\n- Bạn đang dùng BMad v4 (thư mục `.bmad-method`)\r\n- Bạn muốn chuyển sang kiến trúc v6 mới\r\n- Bạn có các planning artifact hiện có cần giữ lại\r\n\r\n:::note[Điều kiện tiên quyết]\r\n- Node.js 20.12+\r\n- Bản cài đặt BMad v4 hiện có\r\n:::\r\n\r\n## Các bước thực h"
+    },
+    {
+      "rel_path": "docs/vi-vn/index.md",
+      "kind": "readme",
+      "size": 4675,
+      "frontmatter": {
+        "title": "Chào mừng đến với BMad Method",
+        "description": "Framework phát triển phần mềm dựa trên AI với các agent chuyên biệt, workflow có hướng dẫn và khả năng lập kế hoạch thông minh"
+      },
+      "excerpt": "BMad Method (**B**uild **M**ore **A**rchitect **D**reams) là một framework phát triển phần mềm dựa trên AI trong hệ sinh thái BMad Method, giúp bạn xây dựng phần mềm xuyên suốt toàn bộ quy trình, từ hình thành ý tưởng và lập kế hoạch cho tới triển khai với agent. Framework này cung cấp các AI agent chuyên biệt, workflow có hướng dẫn, và khả năng lập kế hoạch thông minh thích ứng với độ phức tạp củ"
+    },
+    {
+      "rel_path": "docs/vi-vn/reference/agents.md",
+      "kind": "doc",
+      "size": 3520,
+      "frontmatter": {
+        "title": "Các agent",
+        "description": "Các agent mặc định của BMM cùng skill ID, trigger menu và workflow chính",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "## Các Agent Mặc Định\r\n\r\nTrang này liệt kê các agent mặc định của BMM (bộ Agile suite) được cài cùng với BMad Method, bao gồm skill ID, trigger menu và workflow chính của chúng. Mỗi agent được gọi dưới dạng một skill.\r\n\r\n## Ghi Chú\r\n\r\n- Mỗi agent đều có sẵn dưới dạng một skill do trình cài đặt tạo ra. Skill ID, ví dụ `bmad-dev`, được dùng để gọi agent.\r\n- Trigger là các mã menu ngắn, ví dụ `CP`, c"
+    },
+    {
+      "rel_path": "docs/vi-vn/reference/commands.md",
+      "kind": "doc",
+      "size": 7830,
+      "frontmatter": {
+        "title": "Các skill",
+        "description": "Tài liệu tham chiếu cho skill của BMad — skill là gì, hoạt động ra sao và tìm ở đâu.",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Skills là các prompt dựng sẵn để nạp agent, chạy workflow hoặc thực thi task bên trong IDE của bạn. Trình cài đặt BMad sinh chúng từ các module bạn đã chọn tại thời điểm cài đặt. Nếu sau này bạn thêm, xóa hoặc thay đổi module, hãy chạy lại trình cài đặt để đồng bộ skills (xem [Khắc phục sự cố](#khắc-phục-sự-cố)).\r\n\r\n## Skill So Với Trigger Trong Menu Agent\r\n\r\nBMad cung cấp hai cách để bắt đầu công"
+    },
+    {
+      "rel_path": "docs/vi-vn/reference/core-tools.md",
+      "kind": "doc",
+      "size": 17007,
+      "frontmatter": {
+        "title": "Công cụ cốt lõi",
+        "description": "Tài liệu tham chiếu cho mọi tác vụ và quy trình tích hợp sẵn có trong mọi bản cài BMad mà không cần module bổ sung.",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "Mọi bản cài BMad đều bao gồm một tập skill cốt lõi có thể dùng cùng với bất cứ việc gì bạn đang làm, các tác vụ và quy trình độc lập hoạt động xuyên suốt mọi dự án, mọi module và mọi giai đoạn. Chúng luôn có sẵn bất kể bạn cài những module tùy chọn nào.\r\n\r\n:::tip[Lối đi nhanh]\r\nChạy bất kỳ công cụ cốt lõi nào bằng cách gõ tên skill của nó, ví dụ `bmad-help`, trong IDE của bạn. Không cần mở phiên a"
+    },
+    {
+      "rel_path": "docs/vi-vn/reference/modules.md",
+      "kind": "doc",
+      "size": 4448,
+      "frontmatter": {
+        "title": "Các Module Chính Thức",
+        "description": "Các module bổ sung để xây agent tùy chỉnh, tăng cường sáng tạo, phát triển game và kiểm thử",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "BMad được mở rộng thông qua các module chính thức mà bạn chọn trong quá trình cài đặt. Những module bổ sung này cung cấp agent, workflow và task chuyên biệt cho các lĩnh vực cụ thể, vượt ra ngoài phần lõi tích hợp sẵn và BMM (Agile suite).\r\n\r\n:::tip[Cài đặt module]\r\nChạy `npx bmad-method install` rồi chọn những module bạn muốn. Trình cài đặt sẽ tự xử lý phần tải về, cấu hình và tích hợp vào IDE.\r\n"
+    },
+    {
+      "rel_path": "docs/vi-vn/reference/testing.md",
+      "kind": "doc",
+      "size": 7232,
+      "frontmatter": {
+        "title": "Các Tùy Chọn Kiểm Thử",
+        "description": "So sánh workflow QA tích hợp sẵn với module Test Architect (TEA) cho tự động hóa kiểm thử.",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "BMad cung cấp hai hướng kiểm thử: workflow QA tích hợp sẵn để tạo test nhanh và module Test Architect có thể cài thêm cho chiến lược kiểm thử c��p doanh nghiệp.\r\n\r\n## Nên Dùng Cái Nào?\r\n\r\n| Yếu tố | QA tích hợp sẵn | Module TEA |\r\n| --- | --- | --- |\r\n| **Phù hợp nhất với** | Dự án nhỏ-trung bình, cần bao phủ nhanh | Dự án lớn, miền nghiệp vụ bị ràng buộc hoặc phức tạp |\r\n| **Thiết lập** | Không c"
+    },
+    {
+      "rel_path": "docs/vi-vn/reference/workflow-map.md",
+      "kind": "doc",
+      "size": 7306,
+      "frontmatter": {
+        "title": "Sơ đồ workflow",
+        "description": "Tài liệu trực quan về các giai đoạn, quy trình và đầu ra của BMad Method",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "BMad Method (BMM) là một module trong hệ sinh thái BMad, tập trung vào các thực hành tốt nhất của kỹ nghệ ngữ cảnh và lập kế hoạch. AI agent hoạt động hiệu quả nhất khi có ngữ cảnh rõ ràng và có cấu trúc. Hệ thống BMM xây dựng ngữ cảnh đó theo tiến trình qua 4 giai đoạn riêng biệt. Mỗi giai đoạn, cùng với nhiều quy trình tùy chọn bên trong nó, tạo ra các tài liệu làm đầu vào cho giai đoạn kế tiếp,"
+    },
+    {
+      "rel_path": "docs/vi-vn/tutorials/getting-started.md",
+      "kind": "doc",
+      "size": 14852,
+      "frontmatter": {
+        "title": "Bắt đầu",
+        "description": "Cài đặt BMad và xây dựng dự án đầu tiên của bạn"
+      },
+      "excerpt": "Xây dựng phần mềm nhanh hơn bằng các workflow vận hành bởi AI, với những agent chuyên biệt hướng dẫn bạn qua các bước lập kế hoạch, kiến trúc và triển khai.\r\n\r\n## Bạn Sẽ Học Được Gì\r\n\r\n- Cài đặt và khởi tạo BMad Method cho một dự án mới\r\n- Dùng **BMad-Help** — trợ lý thông minh biết bước tiếp theo bạn nên làm gì\r\n- Chọn nhánh lập kế hoạch phù hợp với quy mô dự án\r\n- Đi qua các phase từ yêu cầu đến"
+    },
+    {
+      "rel_path": "docs/zh-cn/_STYLE_GUIDE.md",
+      "kind": "doc",
+      "size": 10333,
+      "frontmatter": {
+        "title": "Documentation Style Guide",
+        "description": "基于 Google 文档风格与 Diataxis 的项目文档规范"
+      },
+      "excerpt": "本项目遵循 [Google Developer Documentation Style Guide](https://developers.google.com/style)，并使用 [Diataxis](https://diataxis.fr/) 组织文档。以下仅补充项目级约束。\r\n\r\n## 项目特定规则\r\n\r\n| 规则 | 规范 |\r\n| --- | --- |\r\n| 禁用水平分割线（`---`） | 会打断阅读流 |\r\n| 禁用 `####` 标题 | 用加粗短句或 admonition 替代 |\r\n| 避免 “Related/Next” 章节 | 交给侧边栏导航 |\r\n| 避免深层嵌套列表 | 拆成新段落或新小节 |\r\n| 非代码内容不要放代码块 | 对话/提示用 admonition |\r\n| 不用整段粗体做提醒 | 统一用 admonition |\r\n| 每节 1-2 个 ad"
+    },
+    {
+      "rel_path": "docs/zh-cn/404.md",
+      "kind": "doc",
+      "size": 142,
+      "frontmatter": {
+        "title": "页面未找到",
+        "template": "splash"
+      },
+      "excerpt": "你访问的页面不存在，或已被移动。\r\n\r\n[返回中文首页](./index.md)"
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/advanced-elicitation.md",
+      "kind": "doc",
+      "size": 2409,
+      "frontmatter": {
+        "title": "高级启发",
+        "description": "使用结构化推理方法推动 LLM 重新思考其工作",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "高级启发（advanced elicitation）是“第二轮思考”机制：不是笼统地让模型“再来一次”，而是让它按指定推理方法重审自己的输出。\r\n\r\n## 它是什么\r\n\r\n你先有一版输出（方案、文案、分析或规范），再通过某种推理框架做二次审视，例如：\r\n- 事前复盘（Pre-mortem）\r\n- 第一性原理\r\n- 逆向思维（Inversion）\r\n- 红队/蓝队\r\n- 苏格拉底式追问\r\n\r\n这种“带方法名的重审”通常比“再优化一下”更有效，因为它会强制模型从特定角度进攻已有答案。\r\n\r\n## 什么时候使用\r\n\r\n- 你已有可用初稿，但怀疑还不够扎实\r\n- 你想压力测试关键假设或找潜在漏洞\r\n- 你面对高风险内容，需要更高置信度\r\n- 你想要替代解法，而不是同义改写\r\n\r\n## 它如何运行\r\n\r\n1. 模型先给出若干与你内容相关的方法候选\r\n2. 你选择一种（或重抽）\r\n3. 模型按该方法重"
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/adversarial-review.md",
+      "kind": "doc",
+      "size": 2720,
+      "frontmatter": {
+        "title": "对抗性评审",
+        "description": "防止懒惰“看起来不错”评审的强制推理技术",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "对抗性评审（adversarial review）是一种“强制找问题”的评审方法：不允许直接“Looks good”，必须给出可验证发现，或者明确解释为什么没有发现。\r\n\r\n## 它是什么\r\n\r\n常规评审容易落入确认偏差：快速扫一遍，没有明显报错，就批准。  \r\n对抗性评审反过来要求评审者先假设“问题存在”，再去定位证据。\r\n\r\n核心规则：\r\n- 必须产出问题发现或明确的无发现理由\r\n- 发现要具体、可追溯、可操作\r\n- 评审对象是工件本身，而不是作者意图\r\n\r\n## 为什么有效\r\n\r\n- 强制深入阅读，减少“浏览式批准”\r\n- 更容易发现“缺了什么”，不只看“写错了什么”\r\n- 发现通常更结构化，便于后续分诊与修复\r\n- 在新上下文评审时，能降低“先入为主”偏差\r\n\r\n## 在哪里使用\r\n\r\n它不是某个单一 workflow 独占，而是一种可复用评审模式，常见于：\r\n- 代码评审\r\n- "
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/analysis-phase.md",
+      "kind": "doc",
+      "size": 5446,
+      "frontmatter": {
+        "title": "分析阶段：从想法到基础",
+        "description": "头脑风暴、调研、产品简报和 PRFAQ 分别是什么——以及何时使用",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "分析阶段（Phase 1）帮助你在决定动手构建之前，把产品想清楚。这个阶段的每个工具都是可选的，但如果完全跳过分析，你的 PRD 就是建立在假设而非洞察之上。\r\n\r\n## 为什么先分析再规划？\r\n\r\nPRD 回答的是\"我们应该构建什么、为什么？\"如果输入的是模糊的思考，得到的就是模糊的 PRD——而下游的每一份文档都会继承这种模糊。基于薄弱 PRD 搭建的架构会押错技术方向；从薄弱架构派生的 story 会遗漏边界场景。代价是层层叠加的。\r\n\r\n分析工具的作用就是让你的 PRD 变得锐利。它们从不同角度攻击问题——创意探索、市场现实、客户画像、可行性——这样当你坐下来和 PM agent 协作时，你已经清楚要构建什么、为谁构建。\r\n\r\n## 工具介绍\r\n\r\n### 头脑风暴\r\n\r\n**是什么。** 一个使用经过验证的创意技法的引导式创意会议。AI 充当教练，通过结构化练习从你身上引出想法—"
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/brainstorming.md",
+      "kind": "doc",
+      "size": 2648,
+      "frontmatter": {
+        "title": "头脑风暴",
+        "description": "使用 60+ 种经过验证的构思技术进行互动创意会议",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "`bmad-brainstorming` 是一个“思考引导”工作流：它不替你拍脑袋给答案，而是用结构化提问把你的想法挖出来、扩展开、再收敛成可执行方向。\r\n\r\n## 它是什么\r\n\r\n头脑风暴（brainstorming）适合”我有方向，但还不够清晰”的阶段。你会和 AI 进行来回探索：\r\n- 明确问题和约束\r\n- 生成备选想法\r\n- 对想法分组和优先级排序\r\n- 形成下一步行动\r\n\r\n产出通常是一份可回看的会话文档，便于继续深化或与团队同步。\r\n\r\n## 什么时候使用\r\n\r\n- 你卡在创意瓶颈，知道问题但想不到可行解\r\n- 你要做新功能或新产品，需要更多备选方案\r\n- 你希望从不同角度挑战既有假设\r\n- 你希望把“模糊想法”推进到“可执行方向”\r\n\r\n## 不适合的场景\r\n\r\n- 你已经有清晰方案，只差落地实现\r\n- 你需要的是对现有文本做二次推理校验\r\n- 你需要多角色辩论来做跨职能权衡"
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/checkpoint-preview.md",
+      "kind": "doc",
+      "size": 7039,
+      "frontmatter": {
+        "title": "检查点预览",
+        "description": "LLM 辅助的人机协作审查，引导你从目的到细节逐步走过一个变更",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "`bmad-checkpoint-preview` 是一个交互式的、LLM 辅助的人机协作审查工作流。它带你逐步走过一个代码变更——从目的和上下文到细节——让你能做出知情决策：是发布、返工，还是深入挖掘。\r\n\r\n![检查点预览工作流图](/diagrams/checkpoint-preview-diagram.png)\r\n\r\n## 典型流程\r\n\r\n你运行 `bmad-quick-dev`。它澄清你的意图、构建规范、实现变更，完成后将审查线索追加到 spec 文件并在编辑器中打开。你查看 spec，发现这次变更涉及跨多个模块的 20 个文件。\r\n\r\n你可以肉眼扫一遍 diff。但 20 个文件正是肉眼审查开始失效的临界点——你会丢失线索，漏掉两个相距甚远的变更之间的关联，或者批准了自己没有完全理解的东西。所以你改为说 \"checkpoint\"，让 LLM 带你走一遍。\r\n\r\n这种交接——从自"
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/established-projects-faq.md",
+      "kind": "doc",
+      "size": 3229,
+      "frontmatter": {
+        "title": "既有项目常见问题",
+        "description": "关于在既有项目上使用 BMad Method 的常见问题",
+        "sidebar": {
+          "order": 8
+        }
+      },
+      "excerpt": "关于在 established projects（既有项目）中使用 BMad Method 的高频问题，快速说明如下。\r\n\r\n## 问题\r\n\r\n- [我必须先运行文档梳理工作流吗？](#我必须先运行文档梳理工作流吗)\r\n- [如果我忘了运行文档梳理怎么办？](#如果我忘了运行文档梳理怎么办)\r\n- [既有项目可以直接用 Quick Flow 吗？](#既有项目可以直接用-quick-flow-吗)\r\n- [如果现有代码不符合最佳实践怎么办？](#如果现有代码不符合最佳实践怎么办)\r\n- [什么时候该从 Quick Flow 切到完整方法？](#什么时候该从-quick-flow-切到完整方法)\r\n\r\n### 我必须先运行文档梳理工作流吗？\r\n\r\n不绝对必须，但通常强烈建议先运行 `bmad-document-project`，尤其当：\r\n- 项目文档缺失或明显过时\r\n- 新成员或智能体难以"
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/named-agents.md",
+      "kind": "doc",
+      "size": 7917,
+      "frontmatter": {
+        "title": "命名智能体",
+        "description": "为什么 BMad 的智能体有名字、人设和自定义能力——相比菜单驱动或纯提示驱动的方案，这解锁了哪些可能性",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "你说\"嘿 Mary，咱们来头脑风暴\"，Mary 就激活了。她用你配置的语言、以她独特的人设向你打招呼，并提醒你随时可以用 `bmad-help`。然后她跳过菜单，直接进入头脑风暴——因为你的意图已经足够明确。\r\n\r\n这一页解释背后发生了什么，以及 BMad 为什么这样设计。\r\n\r\n## 三足鼎立\r\n\r\nBMad 的智能体模型建立在三个可组合的基本要素之上：\r\n\r\n| 要素 | 提供什么 | 所在位置 |\r\n|---|---|---|\r\n| **技能（Skill）** | 能力——一项智能体能做的具体事（头脑风暴、撰写 PRD、实现 story） | `.claude/skills/{skill-name}/SKILL.md`（或你所用 IDE 的等价位置） |\r\n| **命名智能体（Named Agent）** | 人设连续性——一个可辨识的身份，把一组相关技能包装在统一的语气、原则和视觉"
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/party-mode.md",
+      "kind": "doc",
+      "size": 2471,
+      "frontmatter": {
+        "title": "派对模式",
+        "description": "多智能体协作——将所有 AI 智能体汇聚到一次对话中",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "`bmad-party-mode` 用于多角色协作讨论：把 PM、架构、开发、UX 等视角放到同一轮对话里，快速暴露分歧、对齐取舍。\r\n\r\n## 它是什么\r\n\r\nParty Mode 不是单角色问答，也不是单文档改写。它更像一次”有主持人的多方评审会”：\r\n- BMad Master 根据你的问题调度相关角色\r\n- 各角色以自身关注点回应\r\n- 角色间会互相补充、质疑、修正\r\n\r\n你可以连续追问，直到形成可执行结论。\r\n\r\n## 什么时候使用\r\n\r\n- 面临高影响决策，且存在明确 trade-off\r\n- 需要跨角色快速对齐（产品、技术、交互、测试）\r\n- 出现故障或争议，需要复盘责任和改进方向\r\n- 做 sprint 规划或回顾，需要多视角共识\r\n\r\n## 不适合的场景\r\n\r\n- 你只需要单一角色的直接执行（例如仅改一段文案）\r\n- 你已有明确决策，只需进入实现\r\n- 你需要的是对同一输"
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/preventing-agent-conflicts.md",
+      "kind": "doc",
+      "size": 3842,
+      "frontmatter": {
+        "title": "防止智能体冲突",
+        "description": "架构如何在多个智能体实现系统时防止冲突",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "当多个 AI 智能体并行实现系统时，冲突并不罕见。`architecture` 的作用，就是在 `solutioning` 阶段先统一关键决策，避免到 `epic/story` 实施时才暴露分歧。\r\n\r\n## 冲突最常出现在哪些地方\r\n\r\n### API 风格冲突\r\n\r\n没有架构约束时：\r\n- 智能体 A 使用 REST，路径是 `/users/{id}`\r\n- 智能体 B 使用 GraphQL mutations\r\n- 结果：接口模式不一致，调用方和集成层都变复杂\r\n\r\n有架构约束时：\r\n- ADR 明确规定：“客户端与服务端统一使用 GraphQL”\r\n- 所有智能体遵循同一套 API 规则\r\n\r\n### 数据库与命名冲突\r\n\r\n没有架构约束时：\r\n- 智能体 A 使用 `snake_case` 列名\r\n- 智能体 B 使用 `camelCase` 列名\r\n- 结果：schema 不一"
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/project-context.md",
+      "kind": "doc",
+      "size": 4208,
+      "frontmatter": {
+        "title": "项目上下文",
+        "description": "project-context.md 如何使用项目规则和偏好指导 AI 智能体",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "`project-context.md` 是面向 AI 智能体的项目级上下文文件。它的定位不是教程步骤，而是“实现约束说明”：把你的技术偏好、架构边界和工程约定沉淀成可复用规则，让不同工作流、不同智能体在多个 `story` 中做出一致决策。\r\n\r\n## project context 解决什么问题\r\n\r\n没有统一上下文时，智能体往往会：\r\n- 套用通用最佳实践，而不是你的项目约定\r\n- 在不同 `story` 中做出不一致实现\r\n- 漏掉代码里不易推断的隐性约束\r\n\r\n有 `project-context.md` 时，这些高频偏差会明显减少，因为关键规则在进入实现前已经被显式声明。\r\n\r\n## 它如何被工作流使用\r\n\r\n多数实现相关工作流会自动加载 `project-context.md`（若存在），并把它作为共享上下文参与决策。\r\n\r\n**常见加载方包括：**\r\n- `bmad-cre"
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/quick-dev.md",
+      "kind": "doc",
+      "size": 3234,
+      "frontmatter": {
+        "title": "快速开发",
+        "description": "在不牺牲输出质量检查点的情况下减少人机交互的摩擦",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "`bmad-quick-dev` 的目标很直接：在保证质量边界的前提下，把“意图到代码”的人机往返轮次降到最低。\r\n\r\n![快速开发工作流图](/diagrams/quick-dev-diagram.png)\r\n\r\n## 它解决什么问题\r\n\r\n纯人工频繁盯流程会拖慢速度，纯自动又容易偏航。Quick Dev 做的是中间解：\r\n- 在关键节点保留人工判断\r\n- 在可控区间放大模型自主执行时长\r\n- 通过规范与审查把偏航风险收回来\r\n\r\n## Quick Dev 的核心机制\r\n\r\n### 1. 先把意图压缩成单一目标\r\n\r\n无论输入来自几句话、issue 链接、计划稿，还是 `epics.md` 的 `story`，都要先压缩成一个可执行目标。  \r\n目标不清晰时，后续自动化越强，偏差成本越高。\r\n\r\n### 2. 选择最小安全路径\r\n\r\n目标明确后，workflow 会判断：\r\n- 是不是“"
+    },
+    {
+      "rel_path": "docs/zh-cn/explanation/why-solutioning-matters.md",
+      "kind": "doc",
+      "size": 3237,
+      "frontmatter": {
+        "title": "为什么解决方案阶段很重要",
+        "description": "理解为什么解决方案阶段对于多史诗项目至关重要",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "Phase 3（solutioning）把“要做什么”（planning 产出）转成“如何实现”（`architecture` 设计 + 工作拆分）。它的核心价值是：在开发前先把跨 `epic` 的关键技术决策写清楚，让后续 `story` 实施保持一致。\r\n\r\n## 不做 solutioning 会出现什么问题\r\n\r\n```text\r\n智能体 1 使用 REST API 实现 Epic 1\r\n智能体 2 使用 GraphQL 实现 Epic 2\r\n结果：API 设计不一致，集成成本暴涨\r\n```\r\n\r\n当多个智能体在没有共享 `architecture` 指南的前提下并行实现不同 `epic`，它们会各自做局部最优决策，最后在集成阶段发生冲突。\r\n\r\n## 做了 solutioning 后会发生什么\r\n\r\n```text\r\narchitecture 工作流先定规则：\"所有 API 使用 "
+    },
+    {
+      "rel_path": "docs/zh-cn/how-to/customize-bmad.md",
+      "kind": "doc",
+      "size": 5545,
+      "frontmatter": {
+        "title": "如何自定义 BMad",
+        "description": "自定义智能体、工作流和模块，同时保持更新兼容性",
+        "sidebar": {
+          "order": 7
+        }
+      },
+      "excerpt": "使用 `.customize.yaml` 文件，自定义智能体（agent）的行为、角色（persona）和菜单，同时在后续更新中保留你的改动。\r\n\r\n## 何时使用此功能\r\n\r\n- 你想修改智能体名称、身份设定或沟通风格\r\n- 你需要让智能体长期记住项目约束和背景信息\r\n- 你希望增加自定义菜单项，触发自己的工作流或提示\r\n- 你希望智能体每次启动都先执行固定动作\r\n\r\n:::note[前置条件]\r\n- 已在项目中安装 BMad（参见[如何安装 BMad](./install-bmad.md)）\r\n- 用于编辑 YAML 文件的文本编辑器\r\n:::\r\n\r\n:::caution[保护您的自定义配置]\r\n始终通过 `.customize.yaml` 自定义，不要直接改动智能体源文件。安装程序在更新时会覆盖智能体文件，但会保留 `.customize.yaml` 的内容。\r\n:::\r\n\r\n## "
+    },
+    {
+      "rel_path": "docs/zh-cn/how-to/established-projects.md",
+      "kind": "doc",
+      "size": 4111,
+      "frontmatter": {
+        "title": "既有项目",
+        "description": "如何在现有代码库中使用 BMad Method",
+        "sidebar": {
+          "order": 6
+        }
+      },
+      "excerpt": "当你在现有项目或遗留代码库上工作时，本指南帮助你更稳妥地使用 BMad Method。\r\n\r\n如果你是从零开始的新项目，建议先看[快速入门](../tutorials/getting-started.md)；本文主要面向既有项目接入场景。\r\n\r\n:::note[前置条件]\r\n- 已安装 BMad Method（`npx bmad-method install`）\r\n- 一个你想要处理的现有代码库\r\n- 访问 AI 驱动的 IDE（Claude Code 或 Cursor）\r\n:::\r\n\r\n## 步骤 1：清理已完成的规划产物\r\n\r\n如果你通过 BMad 流程完成了所有 PRD 史诗和用户故事，请清理这些文件。归档它们、删除它们，或者在需要时依赖版本历史。不要将这些文件保留在：\r\n\r\n- `docs/`\r\n- `_bmad-output/planning-artifacts/`\r\n- `_b"
+    },
+    {
+      "rel_path": "docs/zh-cn/how-to/expand-bmad-for-your-org.md",
+      "kind": "doc",
+      "size": 14081,
+      "frontmatter": {
+        "title": "如何为组织扩展 BMad",
+        "description": "五个自定义方案，无需 fork 即可重塑 BMad——涵盖智能体全局规则、工作流约定、外部发布、模板替换和花名册变更",
+        "sidebar": {
+          "order": 9
+        }
+      },
+      "excerpt": "BMad 的自定义机制让组织无需编辑已安装文件或 fork 技能就能重塑行为。本指南介绍五个方案，覆盖大部分企业级需求。\r\n\r\n:::note[前置条件]\r\n\r\n- 已在项目中安装 BMad（参见[如何安装 BMad](./install-bmad.md)）\r\n- 熟悉自定义模型（参见[如何自定义 BMad](./customize-bmad.md)）\r\n- PATH 中有 Python 3.11+（解析器只用标准库，不需要 `pip install`）\r\n:::\r\n\r\n:::tip[如何应用这些方案]\r\n下面的**逐技能方案**（方案 1–4）可以通过运行 `bmad-customize` 技能并描述意图来应用——它会选择正确的配置面、生成覆盖文件并验证合并结果。方案 5（中央配置的花名册覆盖）超出 v1 技能范围，仍需手动编写。本文档中的方案是覆盖**什么**的权威参考；`bmad-c"
+    },
+    {
+      "rel_path": "docs/zh-cn/how-to/get-answers-about-bmad.md",
+      "kind": "doc",
+      "size": 4457,
+      "frontmatter": {
+        "title": "如何获取关于 BMad 的答案",
+        "description": "使用 LLM 快速回答您自己的 BMad 问题",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "## 先从 BMad-Help 开始\r\n\r\n**获取 BMad 相关答案最快的方式是 `bmad-help` 技能。** 这个智能向导可以覆盖 80% 以上的常见问题，并且你在 IDE 里随时可用。\r\n\r\nBMad-Help 不只是查表工具，它还能：\r\n- **检查你的项目状态**，判断哪些步骤已经完成\r\n- **理解自然语言问题**，直接按日常表达提问即可\r\n- **根据已安装模块给出选项**，只展示与你当前场景相关的内容\r\n- **在工作流结束后自动运行**，明确告诉你下一步做什么\r\n- **指出第一个必做任务**，避免猜流程起点\r\n\r\n### 如何使用 BMad-Help\r\n\r\n在 AI 会话里直接输入：\r\n\r\n```\r\nbmad-help\r\n```\r\n\r\n:::tip\r\n按平台不同，你也可以使用 `/bmad-help` 或 `$bmad-help`。但大多数情况下直接输入 `bm"
+    },
+    {
+      "rel_path": "docs/zh-cn/how-to/install-bmad.md",
+      "kind": "doc",
+      "size": 3663,
+      "frontmatter": {
+        "title": "如何安装 BMad",
+        "description": "在项目中安装 BMad 的分步指南",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "使用 `npx bmad-method install` 在项目中安装 BMad，并按需选择模块和 AI 工具。\r\n\r\n如果你需要在命令行里一次性传入全部安装参数（例如 CI/CD 场景），请阅读[非交互式安装指南](./non-interactive-installation.md)。\r\n\r\n## 何时使用\r\n\r\n- 使用 BMad 启动新项目\r\n- 将 BMad 添加到现有代码库\r\n- 更新现有的 BMad 安装\r\n\r\n:::note[前置条件]\r\n- **Node.js** 20.12+（安装程序必需）\r\n- **Git**（推荐）\r\n- **AI 工具**（Claude Code、Cursor 或类似工具）\r\n:::\r\n\r\n## 步骤\r\n\r\n### 1. 运行安装程序\r\n\r\n```bash\r\nnpx bmad-method install\r\n```\r\n\r\n:::tip[想要最新预发"
+    },
+    {
+      "rel_path": "docs/zh-cn/how-to/install-custom-modules.md",
+      "kind": "doc",
+      "size": 6544,
+      "frontmatter": {
+        "title": "安装自定义和社区模块",
+        "description": "从社区注册表、Git 仓库或本地路径安装第三方模块",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "使用 BMad 安装程序从社区注册表、第三方 Git 仓库或本地文件路径添加模块。\r\n\r\n## 何时使用\r\n\r\n- 从 BMad 注册表安装社区贡献的模块\r\n- 从第三方 Git 仓库安装模块（GitHub、GitLab、Bitbucket、自托管）\r\n- 使用 BMad Builder 测试本地开发中的模块\r\n- 从私有或自托管 Git 服务器安装模块\r\n\r\n:::note[前置条件]\r\n需要 [Node.js](https://nodejs.org) v20.12+ 和 `npx`（npm 自带）。自定义和社区模块可以在全新安装时选择，也可以添加到现有安装中。\r\n:::\r\n\r\n## 社区模块\r\n\r\n社区模块收录在 [BMad 插件市场](https://github.com/bmad-code-org/bmad-plugins-marketplace)。它们按类别组织，并锁定在经过审核"
+    },
+    {
+      "rel_path": "docs/zh-cn/how-to/non-interactive-installation.md",
+      "kind": "doc",
+      "size": 4825,
+      "frontmatter": {
+        "title": "非交互式安装",
+        "description": "使用命令行参数安装 BMad，适用于 CI/CD 流水线和自动化部署",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "使用命令行参数（flags）以非交互方式安装 BMad。适用于以下场景：\r\n\r\n## 使用场景\r\n\r\n- 自动化部署和 CI/CD 流水线\r\n- 脚本化安装\r\n- 跨多个项目的批量安装\r\n- 使用已知配置的快速安装\r\n\r\n:::note[前置条件]\r\n需要 [Node.js](https://nodejs.org) v20.12+ 和 `npx`（随 npm 附带）。\r\n:::\r\n\r\n## 可用参数（Flags）\r\n\r\n### 安装选项\r\n\r\n| 参数 | 描述 | 示例 |\r\n|------|-------------|---------|\r\n| `--directory <path>` | 安装目录 | `--directory ~/projects/myapp` |\r\n| `--modules <modules>` | 逗号分隔的模块 ID | `--modules bmm,bmb`"
+    },
+    {
+      "rel_path": "docs/zh-cn/how-to/project-context.md",
+      "kind": "doc",
+      "size": 3954,
+      "frontmatter": {
+        "title": "管理项目上下文",
+        "description": "创建并维护 project-context.md 以指导 AI 智能体",
+        "sidebar": {
+          "order": 8
+        }
+      },
+      "excerpt": "使用 `project-context.md`，确保 AI 智能体在各类工作流中遵循项目的技术偏好与实现规则。\r\n为了保证这份上下文始终可见，你也可以在工具上下文或 always-rules 文件（如 `AGENTS.md`）\r\n中加入这句：\r\n`Important project context and conventions are located in [path to project context]/project-context.md`\r\n\r\n:::note[前置条件]\r\n- 已安装 BMad Method\r\n- 了解项目的技术栈与团队约定\r\n:::\r\n\r\n## 何时使用\r\n\r\n- 在开始架构（architecture）前，你已有明确的技术偏好\r\n- 已完成架构设计，希望把关键决策沉淀到实施阶段\r\n- 正在处理具有既定模式的既有代码库\r\n- 发现智能体在不同用户故事（story"
+    },
+    {
+      "rel_path": "docs/zh-cn/how-to/quick-fixes.md",
+      "kind": "doc",
+      "size": 3394,
+      "frontmatter": {
+        "title": "快速修复",
+        "description": "如何进行快速修复和临时更改",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "对于 bug 修复、重构或小范围改动，使用 **Quick Dev** 即可，不必走完整的 BMad Method。\r\n\r\n## 何时使用本指南\r\n\r\n- 原因明确且已知的 bug 修复\r\n- 包含在少数文件中的小型重构（重命名、提取、重组）\r\n- 次要功能调整或配置更改\r\n- 依赖更新\r\n\r\n:::note[前置条件]\r\n- 已安装 BMad Method（`npx bmad-method install`）\r\n- AI 驱动的 IDE（Claude Code、Cursor 或类似工具）\r\n:::\r\n\r\n## 步骤\r\n\r\n### 1. 开启新会话\r\n\r\n在 AI IDE 中开启一个**全新的聊天会话**。复用之前工作流留下的会话，容易引发上下文冲突。\r\n\r\n### 2. 提供你的意图\r\n\r\nQuick Dev 支持自由表达意图，你可以在调用前、调用时或调用后补充说明。示例：\r\n\r\n```"
+    },
+    {
+      "rel_path": "docs/zh-cn/how-to/shard-large-documents.md",
+      "kind": "doc",
+      "size": 2672,
+      "frontmatter": {
+        "title": "文档分片指南",
+        "description": "将大型 Markdown 文件拆分为更小的组织化文件，以更好地管理上下文",
+        "sidebar": {
+          "order": 9
+        }
+      },
+      "excerpt": "当单个 Markdown 文档过大、影响模型读取时，可使用 `bmad-shard-doc` 工作流把文档拆成按章节组织的小文件，降低上下文压力。\r\n\r\n:::caution[已弃用]\r\n这是兼容性方案，默认不推荐。随着工作流更新，以及主流模型/工具逐步支持子进程（subprocesses），很多场景将不再需要手动分片。\r\n:::\r\n\r\n## 何时使用\r\n\r\n- 你确认当前工具/模型在关键步骤无法一次读入完整文档\r\n- 文档体量已明显影响工作流稳定性或响应质量\r\n- 你需要保留原文结构，但希望按 `##` 章节拆分维护\r\n\r\n## 什么是文档分片？\r\n\r\n文档分片会按二级标题（`## Heading`）把大型 Markdown 文件拆成多个子文件，并生成一个 `index.md` 作为入口。\r\n\r\n### 架构\r\n\r\n```text\r\n分片前：\r\n_bmad-output/planning"
+    },
+    {
+      "rel_path": "docs/zh-cn/how-to/upgrade-to-v6.md",
+      "kind": "doc",
+      "size": 4574,
+      "frontmatter": {
+        "title": "如何升级到 v6",
+        "description": "从 BMad v4 迁移到 v6",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "使用 BMad 安装程序把 v4 升级到 v6。安装程序会自动识别旧安装，并提供迁移辅助，帮助你在已有项目中平滑过渡。\r\n\r\n## 何时使用本指南\r\n\r\n- 你已安装 BMad v4（目录名通常是 `.bmad-method`）\r\n- 你准备迁移到 v6 的统一目录结构\r\n- 你有要保留的规划产物或进行中的开发工作\r\n\r\n:::note[前置条件]\r\n- Node.js 20.12+\r\n- 现有 BMad v4 安装\r\n:::\r\n\r\n::::caution[先备份再迁移]\r\n如果当前仓库里仍有未提交的重要变更，先完成提交或备份，再执行升级。\r\n::::\r\n\r\n## 步骤\r\n\r\n### 1. 运行安装程序\r\n\r\n按照[安装程序说明](./install-bmad.md)操作。\r\n\r\n### 2. 处理旧版安装目录\r\n\r\n当检测到 v4 时，你有两种处理方式：\r\n\r\n- 允许安装程序自动备份并"
+    },
+    {
+      "rel_path": "docs/zh-cn/index.md",
+      "kind": "readme",
+      "size": 3159,
+      "frontmatter": {
+        "title": "欢迎使用 BMad 方法",
+        "description": "具备专业智能体、引导式工作流与智能规划的 AI 驱动开发框架"
+      },
+      "excerpt": "BMad 方法（**B**uild **M**ore **A**rchitect **D**reams）是 BMad 方法生态中的 AI 驱动开发框架模块，覆盖从构思、规划到智能体实施的完整软件交付流程。它提供专业智能体、引导式工作流和可随项目复杂度调整的智能规划，无论是修复 bug 还是构建企业级平台都适用。\r\n\r\n如果你已经习惯使用 Claude、Cursor 或 GitHub Copilot 这类 AI 编码助手，现在就可以开始。\r\n\r\n:::note[🚀 V6 已发布，我们才刚刚起步！]\r\n技能架构、BMad Builder v1、开发循环自动化以及更多功能正在开发中。**[查看路线图 →](/zh-cn/roadmap/)**\r\n:::\r\n\r\n## 新手入门？先从教程开始\r\n\r\n理解 BMad 的最快方式是亲自尝试。\r\n\r\n- **[BMad 入门教程](./tutorials"
+    },
+    {
+      "rel_path": "docs/zh-cn/reference/agents.md",
+      "kind": "doc",
+      "size": 2833,
+      "frontmatter": {
+        "title": "智能体",
+        "description": "默认 BMM 智能体的 skill ID、触发器与主要 workflow 速查。",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "本页列出 BMad Method 默认提供的 BMM（Agile 套件）智能体，包括它们的 skill ID、菜单触发器和主要 workflow。\r\n\r\n## 默认智能体列表\r\n\r\n| 智能体 | Skill ID | 触发器 | 主要 workflow |\r\n| --- | --- | --- | --- |\r\n| Analyst (Mary) | `bmad-analyst` | `BP`、`MR`、`DR`、`TR`、`CB`、`WB`、`DP` | Brainstorm、Market Research、Domain Research、Technical Research、Create Brief、PRFAQ Challenge、Document Project |\r\n| Product Manager (John) | `bmad-pm` | `CP`、`VP`、`EP`、`CE`"
+    },
+    {
+      "rel_path": "docs/zh-cn/reference/commands.md",
+      "kind": "doc",
+      "size": 4174,
+      "frontmatter": {
+        "title": "技能（Skills）",
+        "description": "BMad 技能参考：它们是什么、如何生成以及如何调用。",
+        "sidebar": {
+          "order": 3
+        }
+      },
+      "excerpt": "每次运行 `npx bmad-method install`，BMad 会基于你选择的模块生成一组 **skills**。你可以直接输入 skill 名称调用 workflow、任务、工具或智能体角色。\r\n\r\n## Skills 与菜单触发器的区别\r\n\r\n| 机制 | 调用方式 | 适用场景 |\r\n| --- | --- | --- |\r\n| **Skill** | 直接输入 skill 名（如 `bmad-help`） | 你已明确要运行哪个功能 |\r\n| **智能体菜单触发器** | 先加载智能体，再输入短触发码（如 `DS`） | 你在智能体会话内连续切换任务 |\r\n\r\n菜单触发器依赖“已激活的智能体会话”；skill 可独立运行。\r\n\r\n## Skills 如何生成\r\n\r\n安装程序会读取已选模块，为每个 agent / workflow / task / tool 生成一个 ski"
+    },
+    {
+      "rel_path": "docs/zh-cn/reference/core-tools.md",
+      "kind": "doc",
+      "size": 7938,
+      "frontmatter": {
+        "title": "核心工具",
+        "description": "每个 BMad 安装默认可用的任务与 workflow 参考。",
+        "sidebar": {
+          "order": 2
+        }
+      },
+      "excerpt": "核心工具是跨模块可复用的一组通用能力：不依赖特定业务项目，也不要求先进入某个智能体角色。只要安装了 BMad，你就可以直接调用它们。\r\n\r\n:::tip[快速入口]\r\n在 IDE 中直接输入工具 skill 名（例如 `bmad-help`）即可调用，无需先加载智能体。\r\n:::\r\n\r\n## 概览\r\n\r\n| 工具 | 类型 | 主要用途 |\r\n| --- | --- | --- |\r\n| [`bmad-help`](#bmad-help) | Task | 基于项目上下文推荐下一步 |\r\n| [`bmad-brainstorming`](#bmad-brainstorming) | Workflow | 引导式头脑风暴与想法扩展 |\r\n| [`bmad-party-mode`](#bmad-party-mode) | Workflow | 多智能体协作讨论 |\r\n| [`bmad-dist"
+    },
+    {
+      "rel_path": "docs/zh-cn/reference/modules.md",
+      "kind": "doc",
+      "size": 4116,
+      "frontmatter": {
+        "title": "官方模块",
+        "description": "BMad 可选模块参考：能力边界、适用场景与外部资源",
+        "sidebar": {
+          "order": 4
+        }
+      },
+      "excerpt": "BMad 通过可选模块扩展能力。你可以在安装时按需选择模块，为当前项目增加特定领域的 `agent`、`workflow` 与 `skill`。\r\n\r\n:::tip[安装模块]\r\n运行 `npx bmad-method install`，在交互步骤中勾选所需模块。安装器会自动生成对应 skills 并写入当前 IDE 的 skills 目录。\r\n:::\r\n\r\n## 先看总览\r\n\r\n| 模块 | 代码 | 最适合 | 核心能力 |\r\n| --- | --- | --- | --- |\r\n| BMad Builder | `bmb` | 扩展 BMad 本身 | 构建自定义 agent / workflow / module |\r\n| Creative Intelligence Suite | `cis` | 前期创意与问题探索 | 头脑风暴、设计思维、创新策略 |\r\n| Game Dev S"
+    },
+    {
+      "rel_path": "docs/zh-cn/reference/testing.md",
+      "kind": "doc",
+      "size": 4203,
+      "frontmatter": {
+        "title": "测试选项",
+        "description": "内置 QA workflow 与 TEA 模块对比：何时用哪个、各自边界是什么",
+        "sidebar": {
+          "order": 5
+        }
+      },
+      "excerpt": "BMad 有两条测试路径：\r\n- **内置 QA workflow**：快速生成可运行测试\r\n- **TEA（可选模块）**：企业级测试策略与治理能力\r\n\r\n## 该选内置 QA 还是 TEA？\r\n\r\n| 维度 | 内置 QA | TEA 模块 |\r\n| --- | --- | --- |\r\n| 最适合 | 中小项目、快速补覆盖 | 大型项目、受监管或复杂业务 |\r\n| 安装成本 | 无需额外安装（BMM 内置） | 需通过安装器单独选择 |\r\n| 方法 | 先生成测试，再迭代 | 先定义策略，再执行并追溯 |\r\n| 测试类型 | API + E2E | API、E2E、ATDD、NFR 等 |\r\n| 风险策略 | 快乐路径 + 关键边界 | P0-P3 风险优先级 |\r\n| workflow 数量 | 1（Automate） | 9（设计/自动化/审查/追溯等） |\r\n\r\n:::tip["
+    },
+    {
+      "rel_path": "docs/zh-cn/reference/workflow-map.md",
+      "kind": "doc",
+      "size": 3905,
+      "frontmatter": {
+        "title": "工作流地图",
+        "description": "BMad Method 各阶段 workflow 与产出速查",
+        "sidebar": {
+          "order": 1
+        }
+      },
+      "excerpt": "BMad Method（BMM）通过分阶段 workflow 逐步构建上下文，让智能体始终知道“做什么、为什么做、如何做”。这张地图用于快速查阅阶段目标、关键 workflow 和对应产出。\r\n\r\n如果你不确定下一步，优先运行 `bmad-help`。它会基于你当前项目状态和已安装模块给出实时建议。\r\n\r\n<iframe src=\"/workflow-map-diagram.html\" title=\"BMad Method Workflow Map Diagram\" width=\"100%\" height=\"100%\" style=\"border-radius: 8px; border: 1px solid #334155; min-height: 900px;\"></iframe>\r\n\r\n<p style=\"font-size: 0.8rem; text-align: right; ma"
+    },
+    {
+      "rel_path": "docs/zh-cn/tutorials/getting-started.md",
+      "kind": "doc",
+      "size": 13073,
+      "frontmatter": {
+        "title": "快速入门",
+        "description": "安装 BMad 并构建你的第一个项目"
+      },
+      "excerpt": "使用 AI 驱动的工作流更快地构建软件，通过专门的智能体引导你完成规划、架构设计和实现。\r\n\r\n## 你将学到\r\n\r\n- 为新项目安装并初始化 BMad Method\r\n- 使用 **BMad-Help** —— 你的智能向导，它知道下一步该做什么\r\n- 根据项目规模选择合适的规划路径\r\n- 从需求到可用代码，逐步推进各个阶段\r\n- 有效使用智能体和工作流\r\n\r\n:::note[前置条件]\r\n- **Node.js 20.12+** — 安装程序必需\r\n- **Git** — 推荐用于版本控制\r\n- **AI 驱动的 IDE** — Claude Code、Cursor 或类似工具\r\n- **一个项目想法** — 即使是简单的想法也可以用于学习\r\n:::\r\n\r\n:::tip[最简单的路径]\r\n**安装** → `npx bmad-method install`\r\n**询问** → `bma"
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/evals.json",
+      "kind": "config",
+      "size": 24881,
+      "frontmatter": null,
+      "excerpt": "{\r\n  \"skill_name\": \"bmad-product-brief\",\r\n  \"_design_notes\": \"Single-shot evals across two patterns. Pattern A (A1-A8) tests artifact correctness given complete inputs in headless mode. Pattern B tests process discipline (decision log fidelity, polish execution, intent boundaries) by inspecting transcript and side-artifacts. Facilitation/conversation-quality evals are deferred to a future multi-tu"
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/files/branfield-memo.md",
+      "kind": "doc",
+      "size": 2825,
+      "frontmatter": null,
+      "excerpt": "# Working Group Notes — Microcredential Program\r\n\r\n**Branfield Community College**\r\n**Meeting:** 2026-04-22\r\n**Attendees:** Provost, Workforce Dev Director, Chair of Industry Advisory Board, two faculty leads (Data Analytics, Healthcare Admin), Financial Aid Director\r\n\r\n## Why we're doing this\r\n\r\nRegional employer survey (Q1 2026) showed 340+ unfilled mid-skill jobs in the three-county area. State"
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/files/forkbird-brief/addendum.md",
+      "kind": "doc",
+      "size": 3315,
+      "frontmatter": null,
+      "excerpt": "# Addendum — Forkbird Kitchen\r\n\r\n## Options considered (and not taken)\r\n\r\n### B2B / corporate catering\r\n\r\nConsidered as a parallel revenue stream from day one. Rejected for MVP. Different operational rhythm (bulk orders, fixed delivery windows, invoiced billing), different customer (procurement, not eaters), different unit economics. Splitting attention at launch risked degrading both. Revisit if "
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/files/forkbird-brief/brief.md",
+      "kind": "doc",
+      "size": 3637,
+      "frontmatter": {
+        "title": "Forkbird Kitchen — Product Brief",
+        "status": "final",
+        "created": "2026-02-14T00:00:00.000Z",
+        "updated": "2026-02-14T00:00:00.000Z"
+      },
+      "excerpt": "# Forkbird Kitchen\r\n\r\n## What it is\r\n\r\nA delivery-only ghost kitchen brand offering chef-driven plant-based meals in five US metros: San Francisco, New York, Los Angeles, Seattle, and Chicago. Launch operating model is direct-to-consumer through our own iOS/Android app and the major third-party marketplaces (DoorDash, UberEats, Grubhub).\r\n\r\n## Who it's for\r\n\r\nUrban professionals aged 28–45 who eat"
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/files/forkbird-brief/decision-log.md",
+      "kind": "doc",
+      "size": 2294,
+      "frontmatter": null,
+      "excerpt": "# Decision Log — Forkbird Kitchen\r\n\r\n## 2026-01-08\r\n- **Brand position: chef-driven, premium plant-based.** Considered value tier; rejected for MVP. Premium positioning is the wedge against marketplace generic plant-based.\r\n\r\n## 2026-01-12\r\n- **Five-metro launch: SF, NY, LA, Seattle, Chicago.** Considered three-metro start; rejected as not enough density to test the chef-equity model meaningfully."
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/files/meridian-mobility-report.md",
+      "kind": "doc",
+      "size": 14393,
+      "frontmatter": null,
+      "excerpt": "# E-Mobility Market Report 2026\r\n\r\n**Prepared by:** Meridian Insights\r\n**Date:** Q2 2026\r\n**Coverage:** North America, with comparative reference to EU markets\r\n**Engagement code:** MI-2026-EMOB-007\r\n\r\n---\r\n\r\n## Executive Summary\r\n\r\nThe e-mobility category continues a multi-year structural shift from \"alternative transportation\" to mainstream mobility infrastructure. North American unit volume acr"
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/files/mossridge-brief/addendum.md",
+      "kind": "doc",
+      "size": 2549,
+      "frontmatter": null,
+      "excerpt": "# Addendum — Mossridge Tool Lending Library\r\n\r\n## Options considered\r\n\r\n### Paid lending model (rejected)\r\n\r\nConsidered charging a nominal per-loan fee ($2–$5) to cover replacement and maintenance. Rejected as inconsistent with library mission of free access. Board has previously stated free access is non-negotiable for core services. A donation jar at checkout was proposed as a soft alternative; "
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/files/mossridge-brief/brief.md",
+      "kind": "doc",
+      "size": 3245,
+      "frontmatter": {
+        "title": "Mossridge Public Library — Tool Lending Library Proposal",
+        "status": "final",
+        "created": "2026-04-30T00:00:00.000Z",
+        "updated": "2026-04-30T00:00:00.000Z"
+      },
+      "excerpt": "# Tool Lending Library at Mossridge Public Library\r\n\r\n## What we're proposing\r\n\r\nA free tool-lending service operated out of the Mossridge Public Library, modeled on similar programs in Berkeley, Oakland, and Toronto. Cardholders borrow hand and power tools (drills, saws, ladders, sanders, plumbing snakes, gardening tools) for up to seven days, free of charge.\r\n\r\n## Why now\r\n\r\nMossridge residents "
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/files/mossridge-brief/decision-log.md",
+      "kind": "doc",
+      "size": 2107,
+      "frontmatter": null,
+      "excerpt": "# Decision Log — Mossridge Tool Lending Library\r\n\r\n## 2026-03-04\r\n- **Pursuing the project.** Adult Services Librarian + Library Director agreed there's enough informal demand signal (years of \"do you lend tools?\" inquiries) to investigate seriously. Acknowledged that informal inquiries are not the same as validated demand.\r\n\r\n## 2026-03-11\r\n- **Reference programs to study: Berkeley, Oakland, Toro"
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/files/pantry-bridge-interviews.md",
+      "kind": "doc",
+      "size": 9125,
+      "frontmatter": null,
+      "excerpt": "# Pantry Bridge — Customer Research Transcripts\r\n\r\n**Project:** Pantry Bridge meal-kit concept exploration\r\n**Research firm:** In-house\r\n**Round:** Discovery interviews, March 2026\r\n**Format:** 45-minute semi-structured interviews, video; excerpts below are lightly edited for length and clarity\r\n\r\nThe four interviews below cover four distinct potential customer segments. We are sharing all four fo"
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/files/q2-brainstorm.md",
+      "kind": "doc",
+      "size": 5687,
+      "frontmatter": null,
+      "excerpt": "# Q2 Brainstorm — Hatchet & Loop Studio\r\n\r\n**Date:** 2026-04-15\r\n**Present:** Mira, Devon, Sofia, Theo\r\n\r\nAnnual Q2 ideation. We're hunting for our next side-project-that-could-become-a-product. Format: 10 minutes wild ideas, 3 minutes per idea on quick takes, then we vote on one to dig into.\r\n\r\n## Round 1: Everything goes\r\n\r\n(10 minutes, no filtering. We just throw stuff out.)\r\n\r\n- A weather app "
+    },
+    {
+      "rel_path": "evals/bmm-skills/bmad-product-brief/triggers.json",
+      "kind": "config",
+      "size": 1413,
+      "frontmatter": null,
+      "excerpt": "[\r\n  { \"query\": \"Help me write a product brief for my new app idea\", \"should_trigger\": true },\r\n  { \"query\": \"I need to draft a brief for a feature we're scoping\", \"should_trigger\": true },\r\n  { \"query\": \"Update this product brief — we changed the target audience\", \"should_trigger\": true },\r\n  { \"query\": \"Review my brief and tell me if it's investor-ready\", \"should_trigger\": true },\r\n  { \"query\": "
+    },
+    {
+      "rel_path": "package.json",
+      "kind": "config",
+      "size": 3851,
+      "frontmatter": null,
+      "excerpt": "{\r\n  \"$schema\": \"https://json.schemastore.org/package.json\",\r\n  \"name\": \"bmad-method\",\r\n  \"version\": \"6.7.1\",\r\n  \"description\": \"Breakthrough Method of Agile AI-driven Development\",\r\n  \"keywords\": [\r\n    \"agile\",\r\n    \"ai\",\r\n    \"orchestrator\",\r\n    \"development\",\r\n    \"methodology\",\r\n    \"agents\",\r\n    \"bmad\"\r\n  ],\r\n  \"repository\": {\r\n    \"type\": \"git\",\r\n    \"url\": \"git+https://github.com/bmad-co"
+    },
+    {
+      "rel_path": "README_CN.md",
+      "kind": "doc",
+      "size": 5837,
+      "frontmatter": null,
+      "excerpt": "![BMad Method](banner-bmad-method.png)\r\n\r\n[![Version](https://img.shields.io/npm/v/bmad-method?color=blue&label=version)](https://www.npmjs.com/package/bmad-method)\r\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)\r\n[![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)\r\n[![Discord](https://img.shields.io/badge/Discord-Jo"
+    },
+    {
+      "rel_path": "README_VN.md",
+      "kind": "doc",
+      "size": 7659,
+      "frontmatter": null,
+      "excerpt": "![BMad Method](banner-bmad-method.png)\r\n\r\n[![Version](https://img.shields.io/npm/v/bmad-method?color=blue&label=version)](https://www.npmjs.com/package/bmad-method)\r\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)\r\n[![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)\r\n[![Python Version](https://img.shields.io/badge/pyt"
+    },
+    {
+      "rel_path": "README.md",
+      "kind": "readme",
+      "size": 6695,
+      "frontmatter": null,
+      "excerpt": "![BMad Method](banner-bmad-method.png)\r\n\r\n[![Version](https://img.shields.io/npm/v/bmad-method?color=blue&label=version)](https://www.npmjs.com/package/bmad-method)\r\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)\r\n[![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.12.0-brightgreen)](https://nodejs.org)\r\n[![Python Version](https://img.shields.io/badge/py"
+    },
+    {
+      "rel_path": "removals.txt",
+      "kind": "doc",
+      "size": 1658,
+      "frontmatter": null,
+      "excerpt": "# BMad Method - Skill Removal List\r\n# Entries listed here will be removed from IDE skill directories during install/update.\r\n# One entry per line. Lines starting with # are comments.\r\n# Each entry is a skill directory name (canonicalId) that was removed or renamed.\r\n\r\n# Removed agents (v6.2.0 - v6.2.2)\r\nbmad-agent-sm\r\nbmad-agent-qa\r\nbmad-agent-quick-flow-solo-dev\r\n\r\n# Removed skills (v6.2.0 - v6.2"
+    },
+    {
+      "rel_path": "SECURITY.md",
+      "kind": "doc",
+      "size": 3282,
+      "frontmatter": null,
+      "excerpt": "# Security Policy\r\n\r\n## Supported Versions\r\n\r\nWe release security patches for the following versions:\r\n\r\n| Version | Supported          |\r\n| ------- | ------------------ |\r\n| Latest  | :white_check_mark: |\r\n| < Latest | :x:               |\r\n\r\nWe recommend always using the latest version of BMad Method to ensure you have the most recent security updates.\r\n\r\n## Reporting a Vulnerability\r\n\r\nWe take s"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-agent-analyst/SKILL.md",
+      "kind": "readme",
+      "size": 4359,
+      "frontmatter": {
+        "name": "bmad-agent-analyst",
+        "description": "Strategic business analyst and requirements expert. Use when the user asks to talk to Mary or requests the business analyst."
+      },
+      "excerpt": "# Mary — Business Analyst\r\n\r\n## Overview\r\n\r\nYou are Mary, the Business Analyst. You bring deep expertise in market research, competitive analysis, requirements elicitation, and domain knowledge — translating vague needs into actionable specs while staying grounded in evidence-based analysis.\r\n\r\n## Conventions\r\n\r\n- Bare paths (e.g. `references/guide.md`) resolve from the skill root.\r\n- `{skill-root"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-agent-tech-writer/explain-concept.md",
+      "kind": "doc",
+      "size": 707,
+      "frontmatter": {
+        "name": "explain-concept",
+        "description": "Create clear technical explanations with examples",
+        "menu-code": "EC"
+      },
+      "excerpt": "# Explain Concept\r\n\r\nCreate a clear technical explanation with examples and diagrams for a complex concept.\r\n\r\n## Process\r\n\r\n1. **Understand the concept** — Clarify what needs to be explained and the target audience\r\n2. **Structure** — Break it down into digestible sections using a task-oriented approach\r\n3. **Illustrate** — Include code examples and Mermaid diagrams where helpful\r\n4. **Deliver** "
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-agent-tech-writer/mermaid-gen.md",
+      "kind": "doc",
+      "size": 704,
+      "frontmatter": {
+        "name": "mermaid-gen",
+        "description": "Create Mermaid-compliant diagrams",
+        "menu-code": "MG"
+      },
+      "excerpt": "# Mermaid Generate\r\n\r\nCreate a Mermaid diagram based on user description through multi-turn conversation until the complete details are understood.\r\n\r\n## Process\r\n\r\n1. **Understand the ask** — Clarify what needs to be visualized\r\n2. **Suggest diagram type** — If not specified, suggest diagram types based on the ask (flowchart, sequence, class, state, ER, etc.)\r\n3. **Generate** — Create the diagram"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-agent-tech-writer/SKILL.md",
+      "kind": "readme",
+      "size": 4416,
+      "frontmatter": {
+        "name": "bmad-agent-tech-writer",
+        "description": "Technical documentation specialist and knowledge curator. Use when the user asks to talk to Paige or requests the tech writer."
+      },
+      "excerpt": "# Paige — Technical Writer\r\n\r\n## Overview\r\n\r\nYou are Paige, the Technical Writer. You transform complex concepts into accessible, structured documentation — writing for the reader's task, favoring diagrams when they carry more signal than prose, and adapting depth to audience. Master of CommonMark, DITA, OpenAPI, and Mermaid.\r\n\r\n## Conventions\r\n\r\n- Bare paths (e.g. `references/guide.md`) resolve f"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-agent-tech-writer/validate-doc.md",
+      "kind": "doc",
+      "size": 678,
+      "frontmatter": {
+        "name": "validate-doc",
+        "description": "Validate documentation against standards and best practices",
+        "menu-code": "VD"
+      },
+      "excerpt": "# Validate Documentation\r\n\r\nReview the specified document against documentation best practices along with anything additional the user asked you to focus on.\r\n\r\n## Process\r\n\r\n1. **Load the document** — Read the specified document fully\r\n2. **Analyze** — Review against documentation standards, clarity, structure, audience-appropriateness, and any user-specified focus areas\r\n3. **Report** — Return s"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-agent-tech-writer/write-document.md",
+      "kind": "doc",
+      "size": 951,
+      "frontmatter": {
+        "name": "write-document",
+        "description": "Author a document following documentation best practices",
+        "menu-code": "WD"
+      },
+      "excerpt": "# Write Document\r\n\r\nEngage in multi-turn conversation until you fully understand the ask. Use a subprocess if available for any web search, research, or document review required to extract and return only relevant info to the parent context.\r\n\r\n## Process\r\n\r\n1. **Discover intent** — Ask clarifying questions until the document scope, audience, and purpose are clear\r\n2. **Research** — If the user pr"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-document-project/checklist.md",
+      "kind": "doc",
+      "size": 10346,
+      "frontmatter": null,
+      "excerpt": "# Document Project Workflow - Validation Checklist\r\n\r\n## Scan Level and Resumability\r\n\r\n- [ ] Scan level selection offered (quick/deep/exhaustive) for initial_scan and full_rescan modes\r\n- [ ] Deep-dive mode automatically uses exhaustive scan (no choice given)\r\n- [ ] Quick scan does NOT read source files (only patterns, configs, manifests)\r\n- [ ] Deep scan reads files in critical directories per p"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-document-project/instructions.md",
+      "kind": "doc",
+      "size": 5292,
+      "frontmatter": null,
+      "excerpt": "# Document Project Workflow Router\r\n\r\n<critical>Communicate all responses in {communication_language}</critical>\r\n\r\n<workflow>\r\n\r\n<critical>This router determines workflow mode and delegates to specialized sub-workflows</critical>\r\n\r\n<step n=\"1\" goal=\"Check for ability to resume and determine workflow mode\">\r\n<action>Check for existing state file at: {project_knowledge}/project-scan-report.json</a"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-document-project/SKILL.md",
+      "kind": "readme",
+      "size": 2544,
+      "frontmatter": {
+        "name": "bmad-document-project",
+        "description": "Document brownfield projects for AI context. Use when the user says \"document this project\" or \"generate project docs\""
+      },
+      "excerpt": "# Document Project Workflow\r\n\r\n**Goal:** Document brownfield projects for AI context.\r\n\r\n**Your Role:** Project documentation specialist.\r\n\r\n## Conventions\r\n\r\n- Bare paths (e.g. `instructions.md`) resolve from the skill root.\r\n- `{skill-root}` resolves to this skill's installed directory (where `customize.toml` lives).\r\n- `{project-root}`-prefixed paths resolve from the project working directory.\r"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-document-project/templates/deep-dive-template.md",
+      "kind": "doc",
+      "size": 6199,
+      "frontmatter": null,
+      "excerpt": "# {{target_name}} - Deep Dive Documentation\r\n\r\n**Generated:** {{date}}\r\n**Scope:** {{target_path}}\r\n**Files Analyzed:** {{file_count}}\r\n**Lines of Code:** {{total_loc}}\r\n**Workflow Mode:** Exhaustive Deep-Dive\r\n\r\n## Overview\r\n\r\n{{target_description}}\r\n\r\n**Purpose:** {{target_purpose}}\r\n**Key Responsibilities:** {{responsibilities}}\r\n**Integration Points:** {{integration_summary}}\r\n\r\n## Complete Fi"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-document-project/templates/index-template.md",
+      "kind": "doc",
+      "size": 4679,
+      "frontmatter": null,
+      "excerpt": "# {{project_name}} Documentation Index\r\n\r\n**Type:** {{repository_type}}{{#if is_multi_part}} with {{parts_count}} parts{{/if}}\r\n**Primary Language:** {{primary_language}}\r\n**Architecture:** {{architecture_type}}\r\n**Last Updated:** {{date}}\r\n\r\n## Project Overview\r\n\r\n{{project_description}}\r\n\r\n{{#if is_multi_part}}\r\n\r\n## Project Structure\r\n\r\nThis project consists of {{parts_count}} parts:\r\n\r\n{{#each"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-document-project/templates/project-overview-template.md",
+      "kind": "doc",
+      "size": 2054,
+      "frontmatter": null,
+      "excerpt": "# {{project_name}} - Project Overview\r\n\r\n**Date:** {{date}}\r\n**Type:** {{project_type}}\r\n**Architecture:** {{architecture_type}}\r\n\r\n## Executive Summary\r\n\r\n{{executive_summary}}\r\n\r\n## Project Classification\r\n\r\n- **Repository Type:** {{repository_type}}\r\n- **Project Type(s):** {{project_types_list}}\r\n- **Primary Language(s):** {{primary_languages}}\r\n- **Architecture Pattern:** {{architecture_patter"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-document-project/templates/project-scan-report-schema.json",
+      "kind": "config",
+      "size": 4996,
+      "frontmatter": null,
+      "excerpt": "{\r\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\r\n  \"title\": \"Project Scan Report Schema\",\r\n  \"description\": \"State tracking file for document-project workflow resumability\",\r\n  \"type\": \"object\",\r\n  \"required\": [\"workflow_version\", \"timestamps\", \"mode\", \"scan_level\", \"completed_steps\", \"current_step\"],\r\n  \"properties\": {\r\n    \"workflow_version\": {\r\n      \"type\": \"string\",\r\n      \"descrip"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-document-project/templates/source-tree-template.md",
+      "kind": "doc",
+      "size": 2295,
+      "frontmatter": null,
+      "excerpt": "# {{project_name}} - Source Tree Analysis\r\n\r\n**Date:** {{date}}\r\n\r\n## Overview\r\n\r\n{{source_tree_overview}}\r\n\r\n{{#if is_multi_part}}\r\n\r\n## Multi-Part Structure\r\n\r\nThis project is organized into {{parts_count}} distinct parts:\r\n\r\n{{#each project_parts}}\r\n\r\n- **{{part_name}}** (`{{root_path}}`): {{purpose}}\r\n  {{/each}}\r\n  {{/if}}\r\n\r\n## Complete Directory Structure\r\n\r\n```\r\n{{complete_source_tree}}\r\n`"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-document-project/workflows/deep-dive-instructions.md",
+      "kind": "workflow",
+      "size": 12443,
+      "frontmatter": null,
+      "excerpt": "# Deep-Dive Documentation Instructions\r\n\r\n<workflow>\r\n\r\n<critical>This workflow performs exhaustive deep-dive documentation of specific areas</critical>\r\n<critical>Handles: deep_dive mode only</critical>\r\n<critical>YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the configured `{communication_language}`</critical>\r\n<critical>YOU MUST ALWAYS WRITE all artifact and document conte"
+    },
+    {
+      "rel_path": "src/bmm-skills/1-analysis/bmad-document-project/workflows/deep-dive-workflow.md",
+      "kind": "workflow",
+      "size": 1013,
+      "frontmatter": null,
+      "excerpt": "# Deep-Dive Documentation Sub-Workflow\r\n\r\n**Goal:** Exhaustive deep-dive documentation of specific project areas.\r\n\r\n**Your Role:** Deep-dive documentation specialist.\r\n- Deep-dive mode requires literal full-file review. Sampling, guessing, or relying solely on tooling output is FORBIDDEN.\r\n\r\n---\r\n\r\n## INITIALIZATION\r\n\r\n### Configuration Loading\r\n\r\nLoad config from `{project-root}/_bmad/bmm/config"
+    }
+  ],
+  "counts": {
+    "agent": 0,
+    "task": 0,
+    "kb": 0,
+    "workflow": 2,
+    "readme": 9,
+    "config": 5,
+    "doc": 184
+  },
+  "total_bytes": 1293538,
+  "truncated": true,
+  "intro": "Metoda BMad (**B**uild **M**ore **A**rchitect **D**reams) je framework pro vývoj řízený umělou inteligencí v rámci ekosystému BMad Method, který vám pomáhá vytvářet software celým procesem od nápadu a plánování až po agentní implementaci. Poskytuje specializované AI agenty, řízené pracovní postupy a inteligentní plánování, které se přizpůsobí složitosti vašeho projektu, ať už opravujete chybu nebo budujete podnikovou platformu.\r\n\r\nPokud jste zvyklí pracovat s AI asistenty pro kódování jako Claude, Cursor nebo GitHub Copilot, jste připraveni začít.\r\n\r\n:::note[🚀 V6 je tady a teprve začínáme!]\r\nArchitektura Skills, BMad Builder v1, automatizace Dev Loop a mnoho dalšího ve vývoji. **[Podívejte se na Plán rozvoje →](./roadmap)**\r\n:::\r\n\r\n## Jste tu nově? Začněte tutoriálem\r\n\r\nNejrychlejší způsob, jak pochopit BMad, je vyzkoušet si ho.\r\n\r\n- **[Začínáme s BMad](./tutorials/getting-started.md)** — Instalace a pochopení fungování BMad\r\n- **[Mapa pracovních postupů](./reference/workflow-map.md)** — Vizuální přehled fází BMM, pracovních postupů a správy kontextu\r\n\r\n:::tip[Chcete se rovnou ponořit?]\r\nNainstalujte BMad a použijte skill `bmad-help` — provede vás vším na základě vašeho projektu a nainstalovaných modulů.\r\n:::\r\n\r\n## Jak používat tuto dokumentaci\r\n\r\nTato dokumentace je organizována do čtyř sekcí podle toho, co chcete dělat:\r\n\r\n| Sekce               | Účel                                                                                                               |\r\n| -------------------- | ------------------------------------------------------------------------------------------------------------------ |\r\n| **Tutoriály**        | Orientované na učení. Průvodci krok za krokem, kteří vás provedou tvorbou něčeho. Začněte zde, pokud jste noví.    |\r\n| **Praktické návody** | Orientované na úkoly. Praktičtí průvodci pro řešení konkrétních problémů. „Jak přizpůsobím agenta?“ najdete zde.  |\r\n| **Vysvětlení**       | Orientované na pochopení. Hluboké ponory do konceptů a architektury. Čtěte, když chcete vědět *proč*.             |\r\n| **Reference**        | Orientované na informace. Technické specifikace agentů, pracovních postupů a konfigurace.                          |\r\n\r\n## Rozšíření a přizpůsobení\r\n\r\nChcete rozšířit BMad o vlastní agenty, pracovní postupy nebo moduly? **[BMad Builder](https://bmad-builder-docs.bmad-method.org/)** poskytuje framework a nástroje pro vytváření vlastních rozšíření, ať už přidáváte nové schopnosti do BMad nebo budujete zcela nové moduly od základů.\r\n\r\n## Co budete potřebovat\r\n\r\nBMad funguje s jakýmkoli AI asistentem pro kódování, který podporuje vlastní systémové prompty nebo kontextové soubory projektu. Oblíbené možnosti zahrnují:\r\n\r\n- **[Claude Code](https://code.claude.com)** — CLI nástroj od Anthropic (doporučený)\r\n- **[Cursor](https://cursor.sh)** — AI-first editor kódu\r\n- **[Codex CLI](https://github.com/openai/codex)** — Terminálový kódovací agent od OpenAI\r\n\r\nMěli byste být obeznámeni se základními koncepty vývoje softwaru jako správa verzí, struktura projektu a agilní pracovní postupy. Žádná předchozí zkušenost se systémy agentů ve stylu BMad není vyžadována — právě od toho je tato dokumentace.\r\n\r\n## Připojte se ke komunitě\r\n\r\nZískejte pomoc, sdílejte co budujete, nebo přispějte do BMad:\r\n\r\n- **[Discord](https://discord.gg/gk8jAdXWmj)** — Chatujte s ostatními uživateli BMad, pokládejte otázky, sdílejte nápady\r\n- **[GitHub](https://github.com/bmad-code-org/BMAD-METHOD)** — Zdrojový kód, issues a příspěvky\r\n- **[YouTube](https://www.youtube.com/@BMadCode)** — Video tutoriály a návody\r\n\r\n## Další krok\r\n\r\nJste připraveni se ponořit? **[Začněte s BMad](./tutorials/getting-started.md)** a vytvořte svůj první projekt."
+}
