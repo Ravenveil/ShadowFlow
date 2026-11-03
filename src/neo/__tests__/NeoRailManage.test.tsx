@@ -163,30 +163,18 @@ afterEach(() => {
 });
 
 describe('NeoRail 管理面 — 员工行', () => {
-  it('行内只留删除钮：灵魂/暂停入口移到主机灵魂 tab 与灵魂页头部', async () => {
+  // os-unified（2026-11-03）：员工行走 Grok 会话项形态（头像可点开主机卡片），
+  // 行内删除钮移入主机卡片——rail 内不再渲染 neo-agent-delete，改断言其缺席。
+  it('员工区走会话项形态：无行内删除钮（删除入口移入 agent 主机卡片）', async () => {
     renderRail('agents', { view: 'agents' });
-    const dels = await screen.findAllByTestId('neo-agent-delete');
-    expect(dels).toHaveLength(2);
+    const rows = await screen.findAllByTestId('neo-agent-session-row');
+    expect(rows).toHaveLength(2);
+    // 头像主机入口（点头像开 agent-soul 主机卡片）
+    const hostBtns = await screen.findAllByTestId('neo-agent-host-btn');
+    expect(hostBtns).toHaveLength(2);
+    expect(screen.queryByTestId('neo-agent-delete')).toBeNull();
     expect(screen.queryByTestId('neo-agent-soul-entry')).toBeNull();
     expect(screen.queryByTestId('neo-agent-pause-toggle')).toBeNull();
-  });
-
-  it('删除二次确认：confirm 取消 → 不调 deleteAgent', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
-    renderRail('agents', { view: 'agents' });
-    const dels = await screen.findAllByTestId('neo-agent-delete');
-    fireEvent.click(dels[0]);
-    expect(deleteAgent).not.toHaveBeenCalled();
-  });
-
-  it('confirm 确认 → deleteAgent 调用；删当前灵魂页员工 → 跳 home 安全页', async () => {
-    const onNavigate = renderRail('agents', { view: 'agent-soul', agentId: 'a1' });
-    const dels = await screen.findAllByTestId('neo-agent-delete');
-    fireEvent.click(dels[0]);
-    await waitFor(() => expect(deleteAgent).toHaveBeenCalledWith('a1'));
-    await waitFor(() =>
-      expect(onNavigate).toHaveBeenCalledWith({ view: 'home' }),
-    );
   });
 });
 

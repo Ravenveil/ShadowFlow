@@ -1022,3 +1022,78 @@
   background: rgba(245, 158, 11, 0.12);
   color: #b45309;
 }
+
+/* ── os-unified（2026-11-03）：Grok Bot 风格会话项 + 团队分组 ─────────────
+   agent 会话项（头像可点开主机卡片）+ 可折叠团队分组。全部 var(--t-*) 令牌，
+   day/night 双主题安全。 */
+.neo-sess-row {
+  gap: 8px;
+  align-items: center;
+}
+.neo-sess-avatar {
+  flex-shrink: 0;
+  display: inline-flex;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.neo-sess-avatar:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--t-accent) 35%, transparent);
+}
+.neo-sess-avatar:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 1px;
+}
+.neo-sess-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.neo-sess-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--t-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-sess-preview {
+  font-size: 11px;
+  color: var(--t-fg-5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 团队分组标题行（可折叠）：chevron 旋转 + 组名 + 成员数 */
+.neo-group-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 8px 2px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t-fg-5);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.neo-group-label:hover {
+  background: color-mix(in srgb, var(--t-fg) 4%, transparent);
+}
+.neo-group-label > svg {
+  flex-shrink: 0;
+  color: var(--t-fg-5);
+}
+.neo-team-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
