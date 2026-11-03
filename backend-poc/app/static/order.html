@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>ShadowFlow 智能交付</title>
+<style>
+  :root{
+    --ink:#10161c; --sub:#5c6773; --mut:#8b95a1; --line:#e5e9ee;
+    --bg:#f5f6f8; --card:#fff; --brand:#0f7b6c; --brand-soft:#e8f4f1;
+    --amber:#b06a00; --amber-soft:#fdf3e2; --red:#c0392b; --red-soft:#fceceb;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.6;
+    padding:0 0 env(safe-area-inset-bottom);
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:0 16px 40px}
+  header{
+    display:flex;align-items:center;gap:8px;padding:18px 0 14px;
+  }
+  .logo{
+    width:26px;height:26px;border-radius:7px;background:var(--brand);
+    display:grid;place-items:center;color:#fff;font-size:13px;font-weight:600;flex:none;
+  }
+  .brand{font-size:14px;font-weight:600;letter-spacing:.2px}
+  .brand span{color:var(--mut);font-weight:400;margin-left:6px}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:18px;margin-bottom:14px;
+  }
+  h1{font-size:19px;font-weight:600;margin:0 0 6px;letter-spacing:-.2px}
+  .summary{color:var(--sub);font-size:13.5px;margin:0}
+  .price-row{display:flex;align-items:baseline;gap:8px;margin:16px 0 4px}
+  .price{font-size:30px;font-weight:600;letter-spacing:-.5px}
+  .price small{font-size:14px;font-weight:400;color:var(--mut);margin-left:2px}
+  .eta{font-size:12.5px;color:var(--mut)}
+  .spec{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--sub)}
+  .spec dt{color:var(--mut);font-size:12px;margin-bottom:2px}
+  .spec dd{margin:0 0 10px}
+  .spec dd:last-child{margin-bottom:0}
+  label{display:block;font-size:13px;font-weight:500;margin:0 0 7px}
+  textarea,input{
+    width:100%;font:inherit;font-size:14.5px;color:var(--ink);
+    background:#fbfcfd;border:1px solid var(--line);border-radius:11px;
+    padding:11px 12px;outline:none;transition:border-color .15s,background .15s;
+  }
+  textarea{min-height:92px;resize:vertical;line-height:1.55}
+  textarea:focus,input:focus{border-color:var(--brand);background:#fff}
+  textarea::placeholder,input::placeholder{color:#a9b2bd}
+  .field{margin-bottom:14px}
+  .hint{font-size:12px;color:var(--mut);margin-top:6px}
+  button{
+    font:inherit;font-weight:500;cursor:pointer;border:none;border-radius:12px;
+    transition:opacity .15s,transform .06s;
+  }
+  button:active:not(:disabled){transform:scale(.985)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .primary{
+    width:100%;padding:14px;font-size:15.5px;color:#fff;background:var(--brand);
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .ghost{
+    width:100%;padding:12px;font-size:14px;color:var(--sub);
+    background:transparent;border:1px solid var(--line);
+  }
+  .err{
+    background:var(--red-soft);color:var(--red);border-radius:10px;
+    padding:10px 12px;font-size:13px;margin-bottom:12px;
+  }
+  .note{
+    background:var(--amber-soft);color:var(--amber);border-radius:10px;
+    padding:10px 12px;font-size:12.5px;line-height:1.55;margin:14px 0;
+  }
+  .steps{display:flex;align-items:center;gap:0;margin:6px 0 18px}
+  .step{flex:1;text-align:center;position:relative}
+  .step .dot{
+    width:22px;height:22px;border-radius:50%;margin:0 auto 7px;
+    background:#eceff3;color:#a3acb7;display:grid;place-items:center;
+    font-size:11px;font-weight:600;border:2px solid transparent;transition:all .25s;
+  }
+  .step.done .dot{background:var(--brand);color:#fff}
+  .step.now .dot{background:#fff;color:var(--brand);border-color:var(--brand)}
+  .step .lbl{font-size:11px;color:var(--mut);transition:color .25s}
+  .step.done .lbl,.step.now .lbl{color:var(--ink)}
+  .step::before{
+    content:"";position:absolute;top:11px;left:-50%;width:100%;height:2px;background:#eceff3;z-index:0;
+  }
+  .step:first-child::before{display:none}
+  .step.done::before,.step.now::before{background:var(--brand)}
+  .step .dot,.step .lbl{position:relative;z-index:1}
+  .task{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .task:last-child{border-bottom:none;padding-bottom:0}
+  .task .ic{
+    width:19px;height:19px;border-radius:50%;flex:none;margin-top:2px;
+    display:grid;place-items:center;font-size:10px;font-weight:700;
+    background:#eceff3;color:#a3acb7;
+  }
+  .task.running .ic{background:var(--brand-soft);color:var(--brand)}
+  .task.review .ic{background:var(--amber-soft);color:var(--amber)}
+  .task.completed .ic,.task.done .ic{background:var(--brand);color:#fff}
+  .task .nm{font-size:13.5px;font-weight:500}
+  .task.running .nm{color:var(--brand)}
+  .task .st{font-size:12px;color:var(--mut)}
+  .task.pending,.task.todo{opacity:.5}
+  .deliver h3{font-size:14px;margin:0 0 10px}
+  .body-text{
+    white-space:pre-wrap;font-size:13.5px;line-height:1.75;color:#243039;
+    background:#fafbfc;border:1px solid var(--line);border-radius:11px;
+    padding:13px;
+  }
+  .metrics{display:flex;gap:10px;margin-top:12px}
+  .metric{flex:1;background:#fafbfc;border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+  .metric b{display:block;font-size:16px;font-weight:600}
+  .metric span{font-size:11.5px;color:var(--mut)}
+  footer{text-align:center;font-size:11.5px;color:var(--mut);margin-top:22px;line-height:1.7}
+  .center{text-align:center}
+  .big-amount{font-size:38px;font-weight:600;letter-spacing:-1px;margin:6px 0 2px}
+  .muted{color:var(--mut);font-size:12.5px}
+  .spin{
+    width:15px;height:15px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
+    border-radius:50%;animation:sp .7s linear infinite;
+  }
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .pulse{animation:pl 1.4s ease-in-out infinite}
+  @keyframes pl{0%,100%{opacity:1}50%{opacity:.45}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">S</div>
+    <div class="brand">ShadowFlow<span>智能交付</span></div>
+  </header>
+  <div id="app"><div class="card center muted">加载中…</div></div>
+  <footer>
+    本页为演示环境，支付走本地沙箱，不产生真实扣款<br />
+    ShadowFlow · Agent 团队自动交付
+  </footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const app = $('#app');
+const STAGE = ['提交需求', '支付', '团队执行', '交付完成'];
+
+let state = { mode: 'loading', product: null, orderId: null, order: null, steps: [], payment: null, busy: false, err: '' };
+let timer = null;
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function money(cents) {
+  return '¥' + (cents / 100).toFixed(2).replace(/\.00$/, '');
+}
+async function api(path, opts) {
+  const res = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts || {}));
+  let data = null;
+  try { data = await res.json(); } catch (e) { data = null; }
+  if (!res.ok) throw new Error((data && (data.detail || data.message)) || ('请求失败 ' + res.status));
+  return data;
+}
+
+function stageIndex() {
+  const st = state.order ? state.order.status : '';
+  if (st === 'delivered') return 3;
+  if (st === 'running' || st === 'paid') return 2;
+  if (st === 'pending_payment') return 1;
+  return 0;
+}
+
+function stepper() {
+  const cur = stageIndex();
+  return '<div class="steps">' + STAGE.map((s, i) => {
+    const cls = i < cur ? 'done' : (i === cur ? 'now' : '');
+    const mark = i < cur ? '✓' : String(i + 1);
+    return `<div class="step ${cls}"><div class="dot">${mark}</div><div class="lbl">${s}</div></div>`;
+  }).join('') + '</div>';
+}
+
+function taskList() {
+  if (!state.steps.length) {
+    return '<div class="card"><h3 style="font-size:14px;margin:0 0 10px">团队执行中</h3>' +
+      '<div class="muted pulse">正在组建执行团队…</div></div>';
+  }
+  const ICON = { done: '✓', completed: '✓', review: '!', running: '·', todo: '', pending: '', rejected: '!' };
+  const TXT = { done: '已完成', completed: '已完成', review: '待复核', running: '进行中', todo: '排队中', pending: '排队中', rejected: '已退回重做' };
+  return '<div class="card"><h3 style="font-size:14px;margin:0 0 4px">团队执行情况</h3>' +
+    state.steps.map(s => {
+      const st = s.status || 'pending';
+      const icon = ICON[st] !== undefined ? ICON[st] : '';
+      const txt = TXT[st] || st;
+      const round = s.round ? ' · 第 ' + s.round + ' 轮' : '';
+      return `<div class="task ${st}"><div class="ic">${icon}</div><div>
+        <div class="nm">${esc(s.title)}</div><div class="st">${txt}${round}</div></div></div>`;
+    }).join('') + '</div>';
+}
+
+function deliverCard() {
+  const d = (state.order && state.order.deliverable) || null;
+  if (!d) return '';
+  const ev = d.evidence || {};
+  return `<div class="card deliver"><h3>交付物</h3>
+    <div class="body-text">${esc(d.final_text || '（本次未产生文本交付物）')}</div>
+    <div class="metrics">
+      <div class="metric"><b>${ev.iterations || 0}</b><span>轮审校</span></div>
+      <div class="metric"><b>${(d.nodes || []).length}</b><span>环节</span></div>
+      <div class="metric"><b>${ev.checkpoints || 0}</b><span>可回溯点</span></div>
+    </div>
+    <div class="hint" style="margin-top:10px">全过程留痕，可随时回溯每一轮的修改理由。</div>
+  </div>`;
+}
+
+function renderForm() {
+  const p = state.product;
+  if (!p) return '<div class="card center muted">服务不存在</div>';
+  return `
+  <div class="card">
+    <h1>${esc(p.name)}</h1>
+    <p class="summary">${esc(p.summary || '')}</p>
+    <div class="price-row"><div class="price">${money(p.price_cents)}</div></div>
+    <div class="eta">${esc(p.eta_hint || '')}</div>
+    <dl class="spec">
+      <dt>你会拿到</dt><dd>${esc(p.deliverable || '')}</dd>
+      <dt>服务说明</dt><dd style="margin-bottom:0">${esc(p.detail || '')}</dd>
+    </dl>
+  </div>
+  <div class="card">
+    ${state.err ? `<div class="err">${esc(state.err)}</div>` : ''}
+    <div class="field">
+      <label for="req">你要解决什么问题？</label>
+      <textarea id="req" placeholder="例如：想看看东南亚市场轻小件怎么选品，7 天内跑通首单，预算 2 万以内。"></textarea>
+      <div class="hint">写得越具体，交付越贴合。至少一句话。</div>
+    </div>
+    <div class="field">
+      <label for="name">怎么称呼你</label>
+      <input id="name" placeholder="选填" maxlength="40" />
+    </div>
+    <div class="field">
+      <label for="contact">联系方式</label>
+      <input id="contact" placeholder="微信号或手机号，选填" maxlength="60" />
+    </div>
+    <button class="primary" id="pay" ${state.busy ? 'disabled' : ''}>
+      ${state.busy ? '<span class="spin"></span>处理中' : '支付 ' + money(p.price_cents) + ' 并开始'}
+    </button>
+    <div class="hint center" style="margin-top:10px">支付后团队立即开工，无需等待人工接单</div>
+  </div>`;
+}
+
+function renderPay() {
+  const o = state.order || {};
+  const p = state.payment || {};
+  const sandbox = (p.mode || 'simulated') === 'simulated';
+  return `
+  <div class="card center">
+    <div class="muted">应付金额</div>
+    <div class="big-amount">${money(o.amount_cents || 0)}</div>
+    <div class="muted">${esc(o.product_name || '')}</div>
+    ${sandbox ? `<div class="note" style="text-align:left">
+      <b>当前为演示沙箱</b><br />
+      点「确认支付」不会产生真实扣款。真实收款需要商户号（企业资质），
+      支付网关已预留，配置后可切换。
+    </div>` : ''}
+    ${state.err ? `<div class="err" style="text-align:left">${esc(state.err)}</div>` : ''}
+    <button class="primary" id="confirm" style="margin-top:6px" ${state.busy ? 'disabled' : ''}>
+      ${state.busy ? '<span class="spin"></span>支付中' : '确认支付'}
+    </button>
+    <button class="ghost" id="cancel" style="margin-top:9px" ${state.busy ? 'disabled' : ''}>取消订单</button>
+  </div>
+  <div class="card">
+    <div class="muted" style="margin-bottom:8px">你的需求</div>
+    <div style="font-size:13.5px">${esc(o.requirement || '')}</div>
+  </div>`;
+}
+
+function renderProgress() {
+  const o = state.order || {};
+  const done = o.status === 'delivered';
+  const failed = o.status === 'failed' || o.status === 'refunded' || o.status === 'cancelled';
+  return `
+  <div class="card">
+    ${stepper()}
+    <div class="center">
+      <div style="font-size:15px;font-weight:500">
+        ${done ? '已交付' : failed ? '订单已终止' : '团队正在为你工作'}
+      </div>
+      <div class="muted" style="margin-top:4px">
+        ${done ? '交付物已生成，全过程留痕可回溯'
+          : failed ? '本次未能完成，请联系服务方'
+          : '通常几分钟内完成，可以关掉页面稍后再来'}
+      </div>
+    </div>
+  </div>
+  ${done ? deliverCard() : ''}
+  ${!done && !failed ? taskList() : ''}
+  ${!done && !failed ? '<div class="hint center pulse" style="margin-bottom:14px">正在自动刷新…</div>' : ''}`;
+}
+
+function render() {
+  if (state.mode === 'loading') { app.innerHTML = '<div class="card center muted">加载中…</div>'; return; }
+  if (state.mode === 'form') { app.innerHTML = renderForm(); bindForm(); return; }
+  if (state.mode === 'pay') { app.innerHTML = renderPay(); bindPay(); return; }
+  if (state.mode === 'progress') { app.innerHTML = renderProgress(); return; }
+  if (state.mode === 'error') {
+    app.innerHTML = `<div class="card center"><div style="font-size:15px;font-weight:500;margin-bottom:8px">打不开这个页面</div>
+      <div class="muted">${esc(state.err)}</div></div>`;
+  }
+}
+
+function bindForm() {
+  const btn = $('#pay');
+  if (!btn) return;
+  btn.onclick = async () => {
+    const req = ($('#req') || {}).value || '';
+    if (req.trim().length < 4) { state.err = '请至少用一句话描述你要交付的内容'; render(); return; }
+    state.busy = true; state.err = ''; render();
+    try {
+      const data = await api('/api/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          product_id: state.product.id,
+          requirement: req.trim(),
+          buyer_name: (($('#name') || {}).value || '').trim(),
+          contact: (($('#contact') || {}).value || '').trim(),
+        }),
+      });
+      state.orderId = data.order.id;
+      state.order = data.order;
+      state.payment = data.payment;
+      state.busy = false;
+      history.pushState({}, '', '/q/pay/' + state.orderId);
+      state.mode = 'pay';
+      render();
+    } catch (e) {
+      state.busy = false; state.err = e.message; render();
+    }
+  };
+}
+
+function bindPay() {
+  const c = $('#confirm');
+  if (c) c.onclick = async () => {
+    state.busy = true; state.err = ''; render();
+    try {
+      await api('/api/pay/notify', {
+        method: 'POST',
+        body: JSON.stringify({
+          provider: (state.payment && state.payment.mode) || 'simulated',
+          order_id: state.orderId,
+          txn_id: (state.payment && state.payment.txn_id) || '',
+        }),
+      });
+      state.busy = false;
+      state.mode = 'progress';
+      render();
+      poll();
+    } catch (e) {
+      state.busy = false; state.err = e.message; render();
+    }
+  };
+  const x = $('#cancel');
+  if (x) x.onclick = async () => {
+    state.busy = true; render();
+    try { await api('/api/orders/' + state.orderId + '/cancel', { method: 'POST', body: '{}' }); } catch (e) {}
+    state.busy = false;
+    location.href = '/q/' + (state.product ? state.product.id : '');
+  };
+}
+
+async function loadOrder() {
+  const data = await api('/api/orders/' + state.orderId);
+  state.order = data.order;
+  state.steps = data.steps || [];
+  state.product = state.product || { id: data.order.product_id, name: data.order.product_name, price_cents: data.order.amount_cents };
+  const st = data.order.status;
+  if (st === 'delivered' || st === 'failed' || st === 'refunded' || st === 'cancelled') {
+    state.mode = 'progress';
+    if (timer) { clearInterval(timer); timer = null; }
+  } else if (st === 'pending_payment') {
+    state.mode = 'pay';
+  } else {
+    state.mode = 'progress';
+  }
+  render();
+  if (state.mode === 'progress' && !timer && st !== 'delivered') poll();
+}
+
+function poll() {
+  if (timer) return;
+  timer = setInterval(async () => {
+    try { await loadOrder(); } catch (e) { /* 网络抖动忽略，下一轮再试 */ }
+  }, 1500);
+}
+
+async function boot() {
+  const m = location.pathname.match(/^\/q\/pay\/([^/]+)\/?$/);
+  if (m) {
+    state.orderId = m[1];
+    state.mode = 'progress';
+    try { await loadOrder(); } catch (e) { state.mode = 'error'; state.err = e.message; render(); }
+    return;
+  }
+  const n = location.pathname.match(/^\/q\/([^/]+)\/?$/);
+  const pid = n ? n[1] : 'svc_landing_sel';
+  try {
+    const data = await api('/api/products/' + pid);
+    state.product = data.product;
+    if (!data.pay.configured) {
+      state.mode = 'error';
+      state.err = data.pay.note;
+      render();
+      return;
+    }
+    state.mode = 'form';
+    render();
+  } catch (e) {
+    state.mode = 'error'; state.err = e.message; render();
+  }
+}
+
+boot();
+</script>
+</body>
+</html>

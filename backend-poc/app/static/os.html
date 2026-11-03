@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OPC OS · 增长工场</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121820; --panel2:#182029; --line:#232c38; --line2:#2e3947;
+    --ink:#e6edf3; --sub:#8b97a6; --mut:#5f6b7a;
+    --brand:#2dd4a7; --brand-dim:rgba(45,212,167,.12);
+    --amber:#e3a33c; --amber-dim:rgba(227,163,60,.12);
+    --red:#e5534b; --red-dim:rgba(229,83,75,.12);
+    --blue:#4d9fff; --blue-dim:rgba(77,159,255,.12);
+    --purple:#8b7ad9;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);color:var(--ink);font-size:14px;line-height:1.55;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#2a3442;border-radius:9px}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  .shell{display:flex;min-height:100vh}
+  aside{
+    width:216px;flex:none;background:#0e141b;border-right:1px solid var(--line);
+    padding:18px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;
+  }
+  .logo{display:flex;align-items:center;gap:9px;padding:0 8px 18px}
+  .logo .mark{
+    width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#2dd4a7,#1a9c7a);
+    display:grid;place-items:center;font-weight:700;color:#06120f;font-size:14px;flex:none;
+  }
+  .logo b{font-size:14px;font-weight:600;letter-spacing:.3px}
+  .logo i{display:block;font-style:normal;font-size:10.5px;color:var(--mut);letter-spacing:.6px}
+  nav{display:flex;flex-direction:column;gap:2px}
+  .navitem{
+    display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;
+    color:var(--sub);cursor:pointer;font-size:13px;transition:.14s;user-select:none;
+  }
+  .navitem:hover{background:#151c25;color:var(--ink)}
+  .navitem.on{background:var(--brand-dim);color:var(--brand)}
+  .navitem .ic{width:16px;text-align:center;font-size:13px;opacity:.85}
+  .navitem .badge{margin-left:auto;background:var(--amber);color:#1a1200;font-size:10px;
+    padding:1px 6px;border-radius:20px;font-weight:600}
+  .aside-foot{margin-top:auto;padding:12px 10px;border-top:1px solid var(--line);font-size:11px;color:var(--mut)}
+  .aside-foot b{display:block;color:var(--sub);font-weight:500;margin-bottom:3px}
+
+  main{flex:1;min-width:0;padding:0 26px 40px}
+  header{
+    display:flex;align-items:center;gap:14px;padding:20px 0 18px;
+    position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid transparent;
+  }
+  .h-title{font-size:19px;font-weight:600;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .h-sub{font-size:12.5px;color:var(--mut);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  header > div:first-child{flex:1;min-width:0}
+  .h-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .pill{
+    display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--sub);
+    background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:5px 11px;
+  }
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--brand);flex:none}
+  .dot.amber{background:var(--amber)} .dot.red{background:var(--red)} .dot.gray{background:#4a5563}
+
+  button{font:inherit;cursor:pointer;border:none;border-radius:8px;transition:.14s}
+  .btn{padding:8px 14px;font-size:13px;background:var(--brand);color:#04120e;font-weight:600}
+  .btn:hover{filter:brightness(1.08)}
+  .btn:disabled{opacity:.4;cursor:not-allowed;filter:none}
+  .btn.ghost{background:transparent;border:1px solid var(--line2);color:var(--sub);font-weight:400}
+  .btn.ghost:hover{color:var(--ink);border-color:#3c4a5b}
+  .btn.sm{padding:5px 10px;font-size:12px}
+  .btn.danger{background:var(--red-dim);color:var(--red);border:1px solid rgba(229,83,75,.3)}
+  .btn.ok{background:var(--brand-dim);color:var(--brand);border:1px solid rgba(45,212,167,.3)}
+
+  .grid{display:grid;gap:14px}
+  .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g2{grid-template-columns:1.55fr 1fr}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h3{font-size:13px;font-weight:500;color:var(--sub);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .card h3 .more{margin-left:auto;font-size:11.5px;color:var(--mut);cursor:pointer;font-weight:400}
+
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px}
+  .kpi .lb{font-size:11.5px;color:var(--mut);letter-spacing:.3px}
+  .kpi .vl{font-size:26px;font-weight:600;letter-spacing:-.8px;margin-top:6px;line-height:1.1}
+  .kpi .vl small{font-size:13px;font-weight:400;color:var(--mut);margin-left:3px}
+  .kpi .ft{font-size:11.5px;color:var(--mut);margin-top:6px}
+  .kpi .ft.up{color:var(--brand)} .kpi .ft.down{color:var(--red)}
+
+  .dept{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .dept-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .dept-h b{font-size:13.5px;font-weight:600}
+  .dept-h span{font-size:11px;color:var(--mut);margin-left:auto}
+  .dept-sub{font-size:11.5px;color:var(--mut);margin-bottom:11px}
+  .member{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid #1b232d}
+  .member:first-of-type{border-top:none}
+  .av{
+    width:28px;height:28px;border-radius:8px;flex:none;display:grid;place-items:center;
+    font-size:12px;font-weight:600;background:#1e2833;color:#9fb0c2;position:relative;
+  }
+  .av .st{position:absolute;right:-2px;bottom:-2px;width:9px;height:9px;border-radius:50%;
+    border:2px solid var(--panel);background:#4a5563}
+  .av .st.working{background:var(--brand)}
+  .av .st.awaiting_approval{background:var(--amber)}
+  .av .st.offline{background:#39424f}
+  .member .nm{font-size:12.5px;font-weight:500}
+  .member .tt{font-size:11px;color:var(--mut)}
+  .member .md{margin-left:auto;font-size:10px;color:var(--mut);border:1px solid var(--line2);
+    border-radius:5px;padding:1px 5px;white-space:nowrap}
+
+  .emp{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;transition:.16s}
+  .emp:hover{border-color:var(--line2);transform:translateY(-1px)}
+  .emp-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .emp-h .av{width:36px;height:36px;border-radius:10px;font-size:14px}
+  .emp-h b{font-size:13.5px;font-weight:600;display:block}
+  .emp-h i{font-style:normal;font-size:11px;color:var(--mut)}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0 11px}
+  .chip{font-size:10.5px;padding:2px 7px;border-radius:5px;background:#1a2330;color:#93a4b8;border:1px solid #232e3c}
+  .chip.model{background:var(--blue-dim);color:#7fb8ff;border-color:rgba(77,159,255,.25)}
+  .emp-m{display:flex;gap:14px;padding-top:10px;border-top:1px solid #1b232d;font-size:11px;color:var(--mut)}
+  .emp-m b{color:var(--ink);font-weight:500;font-size:12px;display:block}
+
+  .row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #1b232d}
+  .row:first-child{border-top:none;padding-top:0}
+  .row:last-child{padding-bottom:0}
+  .row .t{font-size:13px;font-weight:500}
+  .row .s{font-size:11.5px;color:var(--mut);margin-top:1px}
+  .row .r{margin-left:auto;text-align:right;font-size:12px;color:var(--sub);white-space:nowrap}
+
+  .tag{font-size:10.5px;padding:2px 8px;border-radius:20px;white-space:nowrap}
+  .tag.todo{background:#1a2330;color:#8b97a6}
+  .tag.running{background:var(--blue-dim);color:#7fb8ff}
+  .tag.review{background:var(--amber-dim);color:var(--amber)}
+  .tag.done{background:var(--brand-dim);color:var(--brand)}
+  .tag.failed{background:var(--red-dim);color:var(--red)}
+  .tag.blocked{background:#241f2e;color:#a594d4}
+
+  .task{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line2);
+    border-radius:9px;padding:12px 14px;margin-bottom:9px;transition:.14s}
+  .task:hover{background:var(--panel2)}
+  .task.running{border-left-color:var(--blue)}
+  .task.review{border-left-color:var(--amber)}
+  .task.done{border-left-color:var(--brand)}
+  .task.todo{border-left-color:#39424f}
+  .task-h{display:flex;align-items:center;gap:9px}
+  .task-h b{font-size:13px;font-weight:500}
+  .task-h .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .task-b{font-size:11.5px;color:var(--mut);margin-top:6px;display:flex;gap:14px;flex-wrap:wrap}
+  .task-out{font-size:12px;color:var(--sub);margin-top:9px;padding:10px 11px;background:#0f151d;
+    border-radius:7px;border:1px solid #1d2632;white-space:pre-wrap;line-height:1.65;max-height:150px;overflow:auto}
+
+  .appr{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);
+    border-radius:9px;padding:13px 15px;margin-bottom:10px}
+  .appr.high{border-left-color:var(--red)}
+  .appr-h{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+  .appr-h b{font-size:13px}
+  .appr-p{font-size:12px;color:var(--sub);line-height:1.6;margin-bottom:11px}
+  .appr-a{display:flex;gap:8px}
+
+  .empty{color:var(--mut);font-size:12.5px;text-align:center;padding:26px 0}
+  .ledger-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #1b232d;font-size:12.5px}
+  .ledger-row:first-child{border-top:none}
+  .amt{font-variant-numeric:tabular-nums;font-weight:500}
+  .amt.in{color:var(--brand)} .amt.out{color:var(--sub)}
+
+  .modal{position:fixed;inset:0;background:rgba(4,7,10,.72);display:none;place-items:center;z-index:50;padding:20px}
+  .modal.on{display:grid}
+  .dlg{background:var(--panel);border:1px solid var(--line2);border-radius:14px;width:100%;max-width:520px;padding:22px}
+  .dlg h2{font-size:16px;font-weight:600;margin-bottom:4px}
+  .dlg p{font-size:12.5px;color:var(--mut);margin-bottom:16px}
+  label{display:block;font-size:12px;color:var(--sub);margin:12px 0 6px}
+  textarea,input,select{
+    width:100%;font:inherit;font-size:13px;color:var(--ink);background:#0e141b;
+    border:1px solid var(--line2);border-radius:8px;padding:9px 11px;outline:none;
+  }
+  textarea{min-height:78px;resize:vertical;line-height:1.6}
+  textarea:focus,input:focus,select:focus{border-color:#39604f}
+  .dlg-a{display:flex;gap:9px;justify-content:flex-end;margin-top:18px}
+  .err{background:var(--red-dim);color:var(--red);font-size:12px;padding:8px 11px;border-radius:8px;margin-top:12px}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:#1c2632;border:1px solid var(--line2);color:var(--ink);font-size:12.5px;
+    padding:10px 18px;border-radius:9px;opacity:0;transition:.25s;pointer-events:none;z-index:80}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .spin{width:13px;height:13px;border:2px solid rgba(4,18,14,.3);border-top-color:#04120e;
+    border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:-2px;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .flow{font-size:11.5px;color:var(--mut);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .flow span{color:var(--sub)}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <div class="logo">
+      <div class="mark">O</div>
+      <div><b>OPC OS</b><i>一人公司操作系统</i></div>
+    </div>
+    <nav id="nav"></nav>
+    <div class="aside-foot">
+      <b id="foot-co">—</b>
+      <span id="foot-info">—</span>
+    </div>
+  </aside>
+  <main>
+    <header>
+      <div>
+        <div class="h-title" id="h-title">总览</div>
+        <div class="h-sub" id="h-sub">—</div>
+      </div>
+      <div class="h-right" id="h-right"></div>
+    </header>
+    <div id="view"></div>
+  </main>
+</div>
+
+<div class="modal" id="modal"><div class="dlg" id="dlg"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = c => '¥' + (Number(c) || 0).toFixed(2).replace(/\.00$/, '');
+const yuan = c => '¥' + Math.round(Number(c) || 0);
+
+const S = { co: null, dash: null, tab: 'overview', projectId: null, cache: {} };
+
+const TABS = [
+  { id: 'overview', name: '总览', ic: '◧' },
+  { id: 'org', name: '组织架构', ic: '◈' },
+  { id: 'roster', name: '员工名册', ic: '◉' },
+  { id: 'projects', name: '项目与任务', ic: '▤' },
+  { id: 'approvals', name: '审批中心', ic: '◐' },
+  { id: 'ledger', name: '经营账本', ic: '◫' },
+];
+
+async function api(path, opts) {
+  const res = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts || {}));
+  let data = null;
+  try { data = await res.json(); } catch (e) { data = null; }
+  if (!res.ok) throw new Error((data && (data.detail || data.message)) || ('请求失败 ' + res.status));
+  return data;
+}
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2200);
+}
+function initials(name) { return (name || '?').slice(0, 1); }
+const STATUS_TXT = { todo: '待执行', running: '执行中', review: '待验收', done: '已完成', failed: '失败', cancelled: '已取消', blocked: '阻塞' };
+const AVATAR_TONES = ['#2b6d5c', '#3a5a8c', '#6b4f86', '#8a5a3c', '#3c6b6b', '#5c5f8a', '#7a4a4a', '#4a6b3c'];
+
+function avatar(name, status) {
+  const tone = AVATAR_TONES[(name || '').charCodeAt(0) % AVATAR_TONES.length];
+  return `<div class="av" style="background:${tone};color:#dfe9f2">${esc(initials(name))}<span class="st ${status || 'idle'}"></span></div>`;
+}
+
+/* ---------------------------------------------------------------- 导航 */
+
+function renderNav() {
+  const pend = (S.dash && S.dash.approvals_pending) || 0;
+  $('#nav').innerHTML = TABS.map(t => `
+    <div class="navitem ${S.tab === t.id ? 'on' : ''}" onclick="go('${t.id}')">
+      <span class="ic">${t.ic}</span><span>${t.name}</span>
+      ${t.id === 'approvals' && pend ? `<span class="badge">${pend}</span>` : ''}
+    </div>`).join('');
+}
+
+function go(tab, projectId) {
+  S.tab = tab;
+  if (projectId !== undefined) S.projectId = projectId;
+  renderNav();
+  render();
+}
+
+/* ---------------------------------------------------------------- 总览 */
+
+async function viewOverview() {
+  const d = S.dash;
+  $('#h-title').textContent = '经营总览';
+  $('#h-sub').textContent = `${S.co.name} · ${S.co.industry || ''}`;
+  $('#h-right').innerHTML = `
+    <span class="pill"><span class="dot"></span>${d.headcount.total} 名员工</span>
+    <span class="pill"><span class="dot ${d.approvals_pending ? 'amber' : 'gray'}"></span>${d.approvals_pending} 项待审批</span>
+    <button class="btn" onclick="openGoal()">下达业务目标</button>`;
+
+  const p = d.pnl;
+  const projects = (await api(`/api/company/${S.co.id}/projects`)).items.slice(0, 5);
+  const apprs = (await api(`/api/company/${S.co.id}/approvals?status=pending`)).items.slice(0, 4);
+  const org = await api(`/api/company/${S.co.id}/org`);
+
+  $('#view').innerHTML = `
+    <div class="grid g4" style="margin-bottom:14px">
+      <div class="kpi"><div class="lb">本月营收</div><div class="vl">${yuan(p.revenue)}</div>
+        <div class="ft ${p.revenue ? 'up' : ''}">${p.projects_delivered} 个项目已交付</div></div>
+      <div class="kpi"><div class="lb">执行成本</div><div class="vl">${yuan(p.cost)}</div>
+        <div class="ft">含模型调用与工时分摊</div></div>
+      <div class="kpi"><div class="lb">毛利</div><div class="vl">${yuan(p.profit)}</div>
+        <div class="ft ${p.profit >= 0 ? 'up' : 'down'}">毛利率 ${p.margin}%</div></div>
+      <div class="kpi"><div class="lb">正在执行</div><div class="vl">${d.headcount.working}<small> / ${d.headcount.total} 在岗</small></div>
+        <div class="ft">${d.tasks.total} 个任务累计</div></div>
+    </div>
+
+    <div class="grid g2" style="margin-bottom:14px">
+      <div class="card">
+        <h3>在手项目 <span class="more" onclick="go('projects')">查看全部</span></h3>
+        ${projects.length ? projects.map(pr => `
+          <div class="row" style="cursor:pointer" onclick="openProject('${pr.id}')">
+            <div>
+              <div class="t">${esc(pr.name)}</div>
+              <div class="s">${esc(pr.client_name || '内部项目')} · 预算 ${yuan(pr.budget_cents)}</div>
+            </div>
+            <div class="r">
+              <span class="tag ${pr.status === 'delivered' ? 'done' : pr.status === 'executing' ? 'running' : 'todo'}">${
+                pr.status === 'delivered' ? '已交付' : pr.status === 'executing' ? '执行中' : '待启动'}</span>
+            </div>
+          </div>`).join('') : '<div class="empty">还没有项目。点右上角「下达业务目标」开一单。</div>'}
+      </div>
+
+      <div class="card">
+        <h3>等你决策 <span class="more" onclick="go('approvals')">全部</span></h3>
+        ${apprs.length ? apprs.map(a => `
+          <div class="row">
+            <div>
+              <div class="t" style="font-size:12.5px">${esc(a.title)}</div>
+              <div class="s">风险 ${a.risk === 'high' ? '高' : a.risk === 'medium' ? '中' : '低'}</div>
+            </div>
+            <div class="r"><button class="btn sm ok" onclick="decide('${a.id}','approved')">通过</button></div>
+          </div>`).join('') : '<div class="empty">没有待决策事项</div>'}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>分工与模型 <span class="more" onclick="go('roster')">员工名册</span></h3>
+      <div class="grid" style="grid-template-columns:repeat(${Math.min(org.departments.length, 5)},minmax(0,1fr));gap:12px">
+        ${org.departments.map(dp => `
+          <div>
+            <div style="font-size:12px;color:var(--sub);margin-bottom:8px">${esc(dp.name)}</div>
+            ${dp.members.map(m => `
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 0">
+                ${avatar(m.name, m.status)}
+                <div style="min-width:0">
+                  <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.name)}</div>
+                  <div style="font-size:10px;color:var(--mut);white-space:nowrap">${esc(m.model || '')}</div>
+                </div>
+              </div>`).join('')}
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+/* ---------------------------------------------------------------- 组织架构 */
+
+async function viewOrg() {
+  $('#h-title').textContent = '组织架构';
+  $('#h-sub').textContent = '部门、负责人与在岗员工';
+  $('#h-right').innerHTML = `<button class="btn ghost" onclick="openHire()">+ 招聘员工</button>`;
+  const org = await api(`/api/company/${S.co.id}/org`);
+  $('#view').innerHTML = `<div class="grid g3">${org.departments.map(d => `
+    <div class="dept">
+      <div class="dept-h"><b>${esc(d.name)}</b><span>${d.members.length} 人</span></div>
+      <div class="dept-sub">${esc(d.charter || '')}</div>
+      ${d.members.map(m => `
+        <div class="member">
+          ${avatar(m.name, m.status)}
+          <div><div class="nm">${esc(m.name)}</div><div class="tt">${esc(m.title)}</div></div>
+          <span class="md">${esc(m.model || '')}</span>
+        </div>`).join('') || '<div class="empty">暂无成员</div>'}
+    </div>`).join('')}</div>`;
+}
+
+/* ---------------------------------------------------------------- 员工名册 */
+
+async function viewRoster() {
+  $('#h-title').textContent = '员工名册';
+  $('#h-sub').textContent = '每个员工是一个可配置、可调用、可追踪的 agent 实例';
+  $('#h-right').innerHTML = `<span class="pill"><span class="dot"></span>${S.dash.headcount.total} 在岗</span>
+    <button class="btn" onclick="openHire()">+ 招聘</button>`;
+  const list = (await api(`/api/company/${S.co.id}/roster`)).items;
+  $('#view').innerHTML = `<div class="grid g3">${list.map(e => `
+    <div class="emp">
+      <div class="emp-h">
+        ${avatar(e.name, e.status)}
+        <div><b>${esc(e.name)}</b><i>${esc(e.title)} · ${esc(e.department_name || '未分配')}</i></div>
+      </div>
+      <div class="chips">
+        <span class="chip model">${esc(e.model && e.model.label || e.model_name)}</span>
+        ${(e.skills || []).slice(0, 3).map(s => `<span class="chip">${esc(s)}</span>`).join('')}
+      </div>
+      <div class="emp-m">
+        <div><b>${e.tasks_done}</b>完成任务</div>
+        <div><b>${money((e.token_cost_cents || 0) / 100)}</b>累计成本</div>
+        <div><b>${esc(e.status === 'working' ? '执行中' : e.status === 'awaiting_approval' ? '待验收' : '空闲')}</b>状态</div>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+/* ---------------------------------------------------------------- 项目 */
+
+async function viewProjects() {
+  $('#h-title').textContent = '项目与任务';
+  $('#h-sub').textContent = '老板下目标，平台自动拆解、分派、执行';
+  $('#h-right').innerHTML = `<button class="btn" onclick="openGoal()">下达业务目标</button>`;
+  const list = (await api(`/api/company/${S.co.id}/projects`)).items;
+  $('#view').innerHTML = list.length ? `<div class="grid g2" style="grid-template-columns:1fr">
+    ${list.map(pr => `
+      <div class="card" style="cursor:pointer" onclick="openProject('${pr.id}')">
+        <div class="row" style="padding:0">
+          <div>
+            <div class="t" style="font-size:14px">${esc(pr.name)}</div>
+            <div class="s">${esc(pr.goal || '')}</div>
+          </div>
+          <div class="r">
+            <span class="tag ${pr.status === 'delivered' ? 'done' : pr.status === 'executing' ? 'running' : 'todo'}">${
+              pr.status === 'delivered' ? '已交付' : pr.status === 'executing' ? '执行中' : '待启动'}</span>
+            <div style="margin-top:5px">成本 ${money(pr.cost_cents / 100)}</div>
+          </div>
+        </div>
+      </div>`).join('')}
+  </div>` : '<div class="card"><div class="empty">还没有项目。点右上角下一单试试。</div></div>';
+}
+
+async function openProject(pid) {
+  S.projectId = pid;
+  S.tab = 'project';
+  renderNav();
+  await renderProject();
+}
+
+async function renderProject() {
+  const d = await api(`/api/projects/${S.projectId}`);
+  const pr = d.project;
+  const done = d.tasks.filter(t => t.status === 'done').length;
+  $('#h-title').textContent = pr.name;
+  $('#h-sub').textContent = pr.goal || '';
+  $('#h-right').innerHTML = `
+    <span class="pill"><span class="dot ${pr.status === 'delivered' ? '' : 'amber'}"></span>${done}/${d.tasks.length} 已完成</span>
+    <button class="btn ghost" onclick="go('projects')">返回列表</button>
+    <button class="btn" id="runbtn" onclick="runProject()">继续执行</button>`;
+
+  const pending = d.approvals.filter(a => a.status === 'pending');
+
+  $('#view').innerHTML = `
+    ${pending.length ? `<div class="card" style="margin-bottom:14px;border-color:rgba(227,163,60,.35)">
+      <h3><span class="dot amber"></span>项目卡在人工审批</h3>
+      ${pending.map(a => `<div class="row">
+          <div><div class="t" style="font-size:12.5px">${esc(a.title)}</div>
+          <div class="s">${esc((a.payload && a.payload.summary) || '')}</div></div>
+          <div class="r">
+            <button class="btn sm danger" onclick="decide('${a.id}','rejected')">驳回</button>
+            <button class="btn sm ok" style="margin-left:6px" onclick="decide('${a.id}','approved')">通过</button>
+          </div></div>`).join('')}
+    </div>` : ''}
+
+    <div class="card">
+      <h3>任务流水线 <span class="more">成本合计 ${money(pr.cost_cents / 100)}</span></h3>
+      <div class="flow">依赖关系决定执行顺序 · 同一层任务自动并行执行</div>
+      ${d.tasks.map(t => {
+        const out = t.output || {};
+        const isAppr = (t.review || {}).required;
+        return `<div class="task ${t.status}">
+          <div class="task-h">
+            ${avatar((t.assignee || {}).name, t.status === 'running' ? 'working' : 'idle')}
+            <div>
+              <b>${esc(t.title)}</b>
+              <div style="font-size:11px;color:var(--mut)">${esc((t.assignee || {}).name || '未指派')} · ${esc((t.assignee || {}).title || '')}</div>
+            </div>
+            <div class="r">
+              ${isAppr ? `<span class="tag ${(t.review || {}).risk === 'high' ? 'failed' : 'review'}">需审批</span>` : ''}
+              <span class="tag ${t.status}">${STATUS_TXT[t.status] || t.status}</span>
+              <span style="font-size:11px;color:var(--mut)">${money((t.cost_cents || 0) / 100)}</span>
+            </div>
+          </div>
+          <div class="task-b">
+            <span>依赖 ${(t.depends_on || []).length}</span>
+            <span>交接 ${(t.handoff || []).length}</span>
+            ${out.tokens ? `<span>${out.tokens.in + out.tokens.out} tokens</span>` : ''}
+            ${(t.review || {}).rejected_reason ? `<span style="color:var(--red)">已驳回：${esc(t.review.rejected_reason)}</span>` : ''}
+          </div>
+          ${out.summary ? `<div class="task-out">${esc(out.summary)}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+async function runProject() {
+  const btn = $('#runbtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>执行中'; }
+  try {
+    const r = await api(`/api/projects/${S.projectId}/run`, { method: 'POST', body: JSON.stringify({ workers: 3 }) });
+    const n = r.rounds.reduce((a, b) => a + b.length, 0);
+    toast(r.stopped === 'approval' ? `执行 ${n} 项，卡在审批，等你决策` : `执行 ${n} 项，${r.project.status === 'delivered' ? '项目已交付' : '已暂停'}`);
+    await refreshDash();
+    await renderProject();
+  } catch (e) {
+    toast(e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '继续执行'; }
+  }
+}
+
+/* ---------------------------------------------------------------- 审批 */
+
+async function viewApprovals() {
+  $('#h-title').textContent = '审批中心';
+  $('#h-sub').textContent = '低风险自动放行，中高风险必须你本人过目';
+  $('#h-right').innerHTML = '';
+  const list = (await api(`/api/company/${S.co.id}/approvals`)).items;
+  const pend = list.filter(a => a.status === 'pending');
+  const hist = list.filter(a => a.status !== 'pending').slice(0, 12);
+
+  $('#view').innerHTML = `
+    <div class="card" style="margin-bottom:14px">
+      <h3><span class="dot ${pend.length ? 'amber' : 'gray'}"></span>待你决策 · ${pend.length}</h3>
+      ${pend.length ? pend.map(a => `
+        <div class="appr ${a.risk === 'high' ? 'high' : ''}">
+          <div class="appr-h">
+            <b>${esc(a.title)}</b>
+            <span class="tag ${a.risk === 'high' ? 'failed' : 'review'}">${a.risk === 'high' ? '高风险' : '中风险'}</span>
+          </div>
+          <div class="appr-p">${esc((a.payload && a.payload.summary) || '')}</div>
+          <div class="appr-a">
+            <button class="btn sm ok" onclick="decide('${a.id}','approved')">通过</button>
+            <button class="btn sm danger" onclick="decide('${a.id}','rejected')">驳回返工</button>
+          </div>
+        </div>`).join('') : '<div class="empty">暂无待审批事项</div>'}
+    </div>
+    <div class="card">
+      <h3>历史决策</h3>
+      ${hist.length ? hist.map(a => `<div class="row">
+        <div><div class="t" style="font-size:12.5px">${esc(a.title)}</div>
+        <div class="s">${esc(a.note || (a.decided_by ? '由 ' + a.decided_by + ' 决策' : ''))}</div></div>
+        <div class="r"><span class="tag ${a.status === 'approved' ? 'done' : 'failed'}">${a.status === 'approved' ? '已通过' : '已驳回'}</span></div>
+      </div>`).join('') : '<div class="empty">还没有历史记录</div>'}
+    </div>`;
+}
+
+async function decide(id, decision) {
+  let note = '';
+  if (decision === 'rejected') note = prompt('驳回理由（会写进返工要求）', '') || '验收未通过';
+  try {
+    await api(`/api/approvals/${id}/decide`, { method: 'POST', body: JSON.stringify({ decision, note }) });
+    toast(decision === 'approved' ? '已通过，流程继续' : '已驳回，任务退回重做');
+    await refreshDash();
+    if (S.tab === 'project') await renderProject();
+    else if (S.tab === 'approvals') await viewApprovals();
+    else await render();
+  } catch (e) { toast(e.message); }
+}
+
+/* ---------------------------------------------------------------- 账本 */
+
+async function viewLedger() {
+  $('#h-title').textContent = '经营账本';
+  $('#h-sub').textContent = '每一笔模型调用与工时都折算成了成本';
+  const d = await api(`/api/company/${S.co.id}/pnl`);
+  const p = d.pnl;
+  $('#h-right').innerHTML = `<button class="btn ghost" onclick="openIncome()">记一笔收款</button>`;
+  $('#view').innerHTML = `
+    <div class="grid g4" style="margin-bottom:14px">
+      <div class="kpi"><div class="lb">营收</div><div class="vl">${yuan(p.revenue)}</div></div>
+      <div class="kpi"><div class="lb">成本</div><div class="vl">${yuan(p.cost)}</div></div>
+      <div class="kpi"><div class="lb">毛利</div><div class="vl">${yuan(p.profit)}</div>
+        <div class="ft ${p.profit >= 0 ? 'up' : 'down'}">${p.margin}%</div></div>
+      <div class="kpi"><div class="lb">单项目均成本</div><div class="vl">${yuan(p.avg_project_cost)}</div></div>
+    </div>
+    <div class="card">
+      <h3>流水</h3>
+      ${d.ledger.length ? d.ledger.map(l => `<div class="ledger-row">
+        <span class="amt ${l.kind === 'income' ? 'in' : 'out'}">${l.kind === 'income' ? '+' : '−'}${money(l.amount)}</span>
+        <span>${esc(l.description)}</span>
+        <span style="margin-left:auto;color:var(--mut);font-size:11.5px">${esc(l.category || '')}</span>
+      </div>`).join('') : '<div class="empty">还没有流水</div>'}
+    </div>`;
+}
+
+/* ---------------------------------------------------------------- 弹窗 */
+
+function closeModal() { $('#modal').classList.remove('on'); }
+
+function openGoal() {
+  $('#dlg').innerHTML = `
+    <h2>下达业务目标</h2>
+    <p>用一句话说清要什么结果。平台会自动拆成任务、匹配员工、排好依赖。</p>
+    <label>业务目标</label>
+    <textarea id="g-goal" placeholder="例如：帮一家新开的咖啡店在一周内获得 50 个潜在客户"></textarea>
+    <label>客户名称（选填）</label>
+    <input id="g-client" placeholder="例如：街角咖啡" />
+    <label>预算（元，选填）</label>
+    <input id="g-budget" type="number" placeholder="299" />
+    <div class="dlg-a">
+      <button class="btn ghost" onclick="closeModal()">取消</button>
+      <button class="btn" id="g-ok" onclick="submitGoal()">拆解并派工</button>
+    </div>`;
+  $('#modal').classList.add('on');
+  setTimeout(() => $('#g-goal').focus(), 60);
+}
+
+async function submitGoal() {
+  const goal = ($('#g-goal') || {}).value || '';
+  if (goal.trim().length < 4) { toast('把目标说清楚一点'); return; }
+  const btn = $('#g-ok');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>拆解中';
+  try {
+    const r = await api(`/api/company/${S.co.id}/projects`, {
+      method: 'POST',
+      body: JSON.stringify({
+        goal: goal.trim(),
+        client_name: (($('#g-client') || {}).value || '').trim(),
+        budget_cents: Math.round(Number((($('#g-budget') || {}).value) || 0) * 100),
+      }),
+    });
+    closeModal();
+    toast(`已拆成 ${r.tasks.length} 项任务，开始执行`);
+    await refreshDash();
+    await openProject(r.project.id);
+    await runProject();
+  } catch (e) {
+    toast(e.message);
+    btn.disabled = false; btn.textContent = '拆解并派工';
+  }
+}
+
+function openHire() {
+  const models = Object.keys(S.models || {}).map(k => `<option value="${k}">${esc(S.models[k].label)}</option>`).join('');
+  $('#dlg').innerHTML = `
+    <h2>招聘一名 AI 员工</h2>
+    <p>员工不是一段 prompt，而是带岗位、技能、模型、成本的实例。</p>
+    <label>姓名</label><input id="h-name" placeholder="例如：赵策" />
+    <label>岗位名称</label><input id="h-title" placeholder="例如：渠道投放专员" />
+    <label>使用模型</label><select id="h-model">${models}</select>
+    <label>技能（逗号分隔）</label><input id="h-skills" placeholder="信息流投放, 素材测试" />
+    <label>岗位行为规则</label>
+    <textarea id="h-prompt" placeholder="你负责渠道投放，所有预算调整必须先上报。"></textarea>
+    <div class="dlg-a">
+      <button class="btn ghost" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="submitHire()">入职</button>
+    </div>`;
+  $('#modal').classList.add('on');
+}
+
+async function submitHire() {
+  try {
+    await api(`/api/company/${S.co.id}/employees`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: (($('#h-name') || {}).value || '').trim() || '新员工',
+        title: (($('#h-title') || {}).value || '').trim() || '专员',
+        role: 'specialist',
+        model_name: (($('#h-model') || {}).value) || 'gpt-4o',
+        skills: ((($('#h-skills') || {}).value || '').split(/[,，]/).map(s => s.trim()).filter(Boolean)),
+        system_prompt: (($('#h-prompt') || {}).value || '').trim(),
+      }),
+    });
+    closeModal(); toast('已入职');
+    await refreshDash();
+    if (S.tab === 'roster') await viewRoster(); else if (S.tab === 'org') await viewOrg();
+  } catch (e) { toast(e.message); }
+}
+
+function openIncome() {
+  $('#dlg').innerHTML = `
+    <h2>记一笔收款</h2>
+    <p>真实到账的钱进账本，毛利才算得出来。</p>
+    <label>金额（元）</label><input id="i-amt" type="number" placeholder="299" />
+    <label>说明</label><input id="i-desc" placeholder="街角咖啡首期款" />
+    <div class="dlg-a">
+      <button class="btn ghost" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="submitIncome()">入账</button>
+    </div>`;
+  $('#modal').classList.add('on');
+}
+
+async function submitIncome() {
+  const amt = Math.round(Number((($('#i-amt') || {}).value) || 0) * 100);
+  if (amt <= 0) { toast('金额要大于 0'); return; }
+  try {
+    await api(`/api/company/${S.co.id}/income`, {
+      method: 'POST',
+      body: JSON.stringify({ amount_cents: amt, description: (($('#i-desc') || {}).value || '项目收款').trim() }),
+    });
+    closeModal(); toast('已入账');
+    await refreshDash();
+    if (S.tab === 'ledger') await viewLedger(); else await render();
+  } catch (e) { toast(e.message); }
+}
+
+/* ---------------------------------------------------------------- 启动 */
+
+async function refreshDash() {
+  const d = await api('/api/company');
+  S.co = d.company; S.dash = d.dashboard;
+  $('#foot-co').textContent = S.co.name;
+  $('#foot-info').textContent = `${S.dash.headcount.total} 人 · 现金 ${yuan(S.co.cash_cents / 100)}`;
+  renderNav();
+}
+
+async function render() {
+  if (S.tab === 'overview') return viewOverview();
+  if (S.tab === 'org') return viewOrg();
+  if (S.tab === 'roster') return viewRoster();
+  if (S.tab === 'projects') return viewProjects();
+  if (S.tab === 'project') return renderProject();
+  if (S.tab === 'approvals') return viewApprovals();
+  if (S.tab === 'ledger') return viewLedger();
+}
+
+async function boot() {
+  try {
+    const m = await api('/api/models');
+    S.models = {}; m.items.forEach(x => { S.models[x.id] = x; });
+    await refreshDash();
+    if (!S.dash || !S.co) throw new Error('加载失败');
+    render();
+    setInterval(async () => { try { await refreshDash(); } catch (e) {} }, 8000);
+  } catch (e) {
+    $('#view').innerHTML = `<div class="card"><div class="empty">加载失败：${esc(e.message)}</div></div>`;
+  }
+}
+boot();
+</script>
+</body>
+</html>
