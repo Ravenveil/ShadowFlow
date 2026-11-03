@@ -1037,6 +1037,17 @@
   gap: 8px;
   align-items: center;
 }
+/* Grok Bot 640 帧交互（2026-11-04）：按住 Bot 行拖拽归组 —— 行身抓手光标，
+   拖起时 grabbing；行内头像钮仍是 pointer（点 = 主机卡片，与拖拽不冲突）。 */
+.neo-sess-row[draggable='true'] {
+  cursor: grab;
+}
+.neo-sess-row[draggable='true']:active {
+  cursor: grabbing;
+}
+.neo-sess-row[draggable='true'].neo-dragging {
+  opacity: 0.5;
+}
 .neo-sess-avatar {
   flex-shrink: 0;
   display: inline-flex;

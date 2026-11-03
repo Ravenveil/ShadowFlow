@@ -783,8 +783,16 @@ export function NeoRail({
   // dropTargetState 记当前 hover 的投放目标（高亮 pill）。
   const dragConvRef = useRef<{ groupId: string; name: string } | null>(null);
   const [dropTargetProject, setDropTargetProject] = useState<string | 'default' | null>(null);
+  /** 被拖会话的 groupId（dragstart 加 .neo-dragging 半透明，dragend 清）。 */
+  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
   const handleDragStart = useCallback((groupId: string, name: string) => {
     dragConvRef.current = { groupId, name };
+    setDraggingGroupId(groupId);
+  }, []);
+  const handleDragEnd = useCallback(() => {
+    dragConvRef.current = null;
+    setDropTargetProject(null);
+    setDraggingGroupId(null);
   }, []);
   const handleDropOnProject = useCallback(
     (projectId: string | null) => {
@@ -963,14 +971,11 @@ export function NeoRail({
       <div key={d.agentId} className="neo-agent-row">
         <button
           type="button"
-          className={`neo-row neo-sess-row${isConversation(d.group_id) ? ' on' : ''}`}
+          className={`neo-row neo-sess-row${isConversation(d.group_id) ? ' on' : ''}${draggingGroupId === d.group_id ? ' neo-dragging' : ''}`}
           onClick={openDm}
           draggable={!!d.group_id}
           onDragStart={() => d.group_id && handleDragStart(d.group_id, d.agentName)}
-          onDragEnd={() => {
-            dragConvRef.current = null;
-            setDropTargetProject(null);
-          }}
+          onDragEnd={handleDragEnd}
           data-testid="neo-dm-row"
           title={d.lastMessage || d.agentName}
         >
@@ -1062,14 +1067,11 @@ export function NeoRail({
       <div key={g.id} className="neo-agent-row">
         <button
           type="button"
-          className={`neo-row neo-sess-row${isConversation(g.id) ? ' on' : ''}`}
+          className={`neo-row neo-sess-row${isConversation(g.id) ? ' on' : ''}${draggingGroupId === g.id ? ' neo-dragging' : ''}`}
           onClick={() => onNavigate({ view: 'conversation', groupId: g.id })}
           draggable
           onDragStart={() => handleDragStart(g.id, g.name)}
-          onDragEnd={() => {
-            dragConvRef.current = null;
-            setDropTargetProject(null);
-          }}
+          onDragEnd={handleDragEnd}
           data-testid="neo-group-row"
           title={g.lastMessage || g.name}
         >
@@ -1124,14 +1126,11 @@ export function NeoRail({
       <div key={`sess-${a.agent_id}`} className="neo-agent-row">
         <button
           type="button"
-          className={`neo-row neo-sess-row${isConversation(dm?.group_id) || isAgentOn(a.agent_id) ? ' on' : ''}`}
+          className={`neo-row neo-sess-row${isConversation(dm?.group_id) || isAgentOn(a.agent_id) ? ' on' : ''}${draggingGroupId === dm?.group_id ? ' neo-dragging' : ''}`}
           onClick={() => openAgentDm(a.agent_id, a.name)}
           draggable={!!dm?.group_id}
           onDragStart={() => dm?.group_id && handleDragStart(dm.group_id, a.name)}
-          onDragEnd={() => {
-            dragConvRef.current = null;
-            setDropTargetProject(null);
-          }}
+          onDragEnd={handleDragEnd}
           data-testid="neo-agent-session-row"
           data-agent-id={a.agent_id}
           title={preview || a.name}
@@ -1219,14 +1218,11 @@ export function NeoRail({
               <div className="neo-agent-row">
                 <button
                   type="button"
-                  className={`neo-row neo-sess-row${isConversation(group.id) ? ' on' : ''}`}
+                  className={`neo-row neo-sess-row${isConversation(group.id) ? ' on' : ''}${draggingGroupId === group.id ? ' neo-dragging' : ''}`}
                   onClick={() => onNavigate({ view: 'conversation', groupId: group.id })}
                   draggable
                   onDragStart={() => handleDragStart(group.id, group.name)}
-                  onDragEnd={() => {
-                    dragConvRef.current = null;
-                    setDropTargetProject(null);
-                  }}
+                  onDragEnd={handleDragEnd}
                   data-testid="neo-team-group-chat"
                   title={group.lastMessage || group.name}
                 >
