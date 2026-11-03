@@ -558,6 +558,14 @@
   background: var(--t-panel-3);
 }
 
+/* 提示词生成头像图分支（os-unified 2026-11-04）：img 铺满圆形容器 */
+.claw-avatar--img > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .claw-avatar > svg {
   width: 100%;
   height: 100%;
@@ -690,6 +698,76 @@
 
 .claw-seed-dice:hover {
   background: var(--t-panel-3);
+}
+
+/* ── 提示词生成区（2026-11-04 os-unified：Grok「描述→生成→保存」流程）────── */
+.claw-gen-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--t-accent) 4%, var(--t-bg));
+}
+.claw-gen-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.claw-gen-btn {
+  flex-shrink: 0;
+  border-color: color-mix(in srgb, var(--t-accent) 45%, var(--t-border));
+  color: var(--t-accent);
+}
+.claw-gen-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.claw-gen-hint {
+  font-size: 11px;
+  color: var(--t-fg-5);
+}
+.claw-gen-candidates {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* 候选卡：stagger 淡入 + 选中描边缩放反馈（Grok 头像生成的动效骨架） */
+@keyframes claw-gen-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.claw-gen-candidate {
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: var(--t-panel-2);
+  overflow: hidden;
+  cursor: pointer;
+  animation: claw-gen-pop 280ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  transition: border-color var(--dur-1, 140ms) var(--ease-out, ease), transform var(--dur-1, 140ms) var(--ease-out, ease);
+}
+.claw-gen-candidate:hover {
+  transform: scale(1.05);
+}
+.claw-gen-candidate.on {
+  border-color: var(--t-accent);
+}
+.claw-gen-candidate > span,
+.claw-gen-candidate > img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 /* ── Claw 分区（StartGallery / Composer chip） ───────────────────────────── */

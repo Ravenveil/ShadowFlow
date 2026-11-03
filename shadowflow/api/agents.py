@@ -234,6 +234,9 @@ class QuickCreateRequest(BaseModel):
     avatar_style: Optional[str] = Field(None, max_length=40, pattern=r"^[a-z0-9-]+$|^$")
     # DiceBear 种子（缺省时前端按名字 hash）。
     avatar_seed: Optional[str] = Field(None, max_length=64)
+    # 提示词生成的头像图（dataURL/URL；os-unified 2026-11-04）。dataURL 体积大，
+    # 限 300KB（约 400KB base64 内），超出 422。
+    avatar_image: Optional[str] = Field(None, max_length=400_000)
 
 
 class QuickCreateResponse(BaseModel):
@@ -254,6 +257,8 @@ class AgentPatchRequest(BaseModel):
     claw_id: Optional[str] = Field(None, max_length=64, pattern=r"^[a-z0-9][a-z0-9-]*$|^$")
     avatar_style: Optional[str] = Field(None, max_length=40, pattern=r"^[a-z0-9-]+$|^$")
     avatar_seed: Optional[str] = Field(None, max_length=64)
+    # 提示词生成头像图（os-unified 2026-11-04）：dataURL/URL；"" 清除。
+    avatar_image: Optional[str] = Field(None, max_length=400_000)
 
 
 class AgentChatRequest(BaseModel):
@@ -407,6 +412,7 @@ async def quick_create_agent(body: QuickCreateRequest) -> Dict[str, Any]:
         "claw_id": (body.claw_id or "").strip() or None,
         "avatar_style": (body.avatar_style or "").strip() or None,
         "avatar_seed": (body.avatar_seed or "").strip() or None,
+        "avatar_image": (body.avatar_image or "").strip() or None,
     }
     _save_agent(record)
     return _envelope({
@@ -416,6 +422,7 @@ async def quick_create_agent(body: QuickCreateRequest) -> Dict[str, Any]:
         "claw_id": record["claw_id"],
         "avatar_style": record["avatar_style"],
         "avatar_seed": record["avatar_seed"],
+        "avatar_image": record["avatar_image"],
         "blueprint": blueprint.model_dump(),
         "created_at": now,
         "source": "quick_hire",
@@ -522,6 +529,9 @@ async def patch_agent(agent_id: str, body: AgentPatchRequest) -> Dict[str, Any]:
         record["avatar_style"] = body.avatar_style.strip() or None
     if body.avatar_seed is not None:
         record["avatar_seed"] = body.avatar_seed.strip() or None
+    # os-unified（2026-11-04）：提示词生成头像图；"" = 清除。
+    if body.avatar_image is not None:
+        record["avatar_image"] = body.avatar_image.strip() or None
     if body.skills is not None:
         if bp.get("role_profiles") and len(bp["role_profiles"]) > 0:
             bp["role_profiles"][0]["skills"] = body.skills

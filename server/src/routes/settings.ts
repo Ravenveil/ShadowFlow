@@ -930,6 +930,103 @@ router.delete('/byok/:providerId', (req: Request, res: Response) => {
   }
 });
 
+// ── Image generation via BYOK (2026-11-04 os-unified avatar gen) ─────────────
+//
+// POST /api/settings/image/generations
+//   body: { prompt: string, provider?: string, model?: string, size?: string }
+//   → 200 { images: [{ b64_json: string }, ...] }   (OpenAI images API shape)
+//
+// Uses the user's BYOK-configured provider key (settings store, same as chat).
+// Provider routing:
+//   zhipu  → POST {baseUrl}/paas/v4/images/generations  (CogView-4)
+//   openai → POST {baseUrl}/images/generations          (gpt-image-1 / dall-e-3)
+//   other OpenAI-compat providers → same OpenAI shape (best effort)
+// 503 IMAGE_NOT_CONFIGURED when the provider has no key — frontend falls back
+// to local DiceBear generation (avatarFromPrompt).
+const IMAGE_MODEL_BY_PROVIDER: Record<string, string> = {
+  zhipu: 'cogview-4',
+  openai: 'gpt-image-1',
+};
+
+router.post('/image/generations', async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as {
+    prompt?: unknown;
+    provider?: unknown;
+    model?: unknown;
+    size?: unknown;
+    n?: unknown;
+  };
+  const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
+  if (!prompt) {
+    return res.status(400).json({ error: { code: 'INVALID', message: 'prompt is required' } });
+  }
+
+  const store = loadByok();
+  // 显式 provider 优先；否则按 zhipu → openai → 其余启用 provider 顺序自动挑
+  let providerId = typeof body.provider === 'string' && body.provider ? body.provider : '';
+  if (!providerId) {
+    const preferred = ['zhipu', 'openai'];
+    for (const p of preferred) {
+      const cfg = store.providers[p];
+      if (cfg?.apiKey && cfg?.enabled !== false) { providerId = p; break; }
+    }
+    if (!providerId) {
+      for (const [p, cfg] of Object.entries(store.providers)) {
+        if (cfg?.apiKey && cfg?.enabled !== false) { providerId = p; break; }
+      }
+    }
+  }
+  const provider = providerId ? store.providers[providerId] : undefined;
+  if (!providerId || !provider?.apiKey) {
+    return res.status(503).json({
+      error: { code: 'IMAGE_NOT_CONFIGURED', message: 'no BYOK provider with an API key configured' },
+    });
+  }
+
+  const model =
+    (typeof body.model === 'string' && body.model) ||
+    IMAGE_MODEL_BY_PROVIDER[providerId] ||
+    'gpt-image-1';
+  const size = typeof body.size === 'string' && body.size ? body.size : '1024x1024';
+  const n = typeof body.n === 'number' && body.n >= 1 && body.n <= 4 ? Math.floor(body.n) : 1;
+  const base = (provider.baseUrl || '').replace(/\/+$/, '');
+  // OpenAI-compat 图像端点拼装：zhipu 的官方 base 是 https://open.bigmodel.cn/api/paas
+  const url = providerId === 'zhipu'
+    ? `${base || 'https://open.bigmodel.cn/api/paas'}/paas/v4/images/generations`
+    : `${base || 'https://api.openai.com/v1'}/images/generations`;
+
+  try {
+    const upstream = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${provider.apiKey}`,
+      },
+      body: JSON.stringify({ model, prompt, size, n }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    const text = await upstream.text();
+    if (!upstream.ok) {
+      return res.status(upstream.status === 401 ? 401 : 502).json({
+        error: { code: 'UPSTREAM_ERROR', message: text.slice(0, 400) },
+      });
+    }
+    // 透传 OpenAI images API 形状（zhipu 的返回同形状：data[].b64_json 或 url）
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return res.status(502).json({
+        error: { code: 'UPSTREAM_ERROR', message: 'non-JSON upstream response' },
+      });
+    }
+    res.json(data);
+  } catch (err) {
+    const msg = (err as Error).message ?? String(err);
+    res.status(502).json({ error: { code: 'NETWORK_ERROR', message: msg } });
+  }
+});
+
 // ── UI preferences (theme + language + zoom, ZCode-style appearance sync) ────
 //
 // One validated JSON blob persisted through the existing KV store under key

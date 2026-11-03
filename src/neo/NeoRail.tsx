@@ -47,9 +47,7 @@ import {
   Folder,
   FolderInput,
   FolderOpen,
-  History,
   Library,
-  MessageSquare,
   Package,
   PanelLeft,
   PanelLeftOpen,
@@ -61,7 +59,6 @@ import {
   Settings,
   SquarePen,
   Trash2,
-  UserRound,
   Users,
   UsersRound,
 } from 'lucide-react';
@@ -185,6 +182,19 @@ function NeoAgentAvatar({
   );
 }
 
+/** os-unified 2026-11-04：群聊头像（双人剪影圆块，Grok 群会话项形态）。 */
+function NeoGroupAvatar({ size = 32 }: { size?: number }) {
+  return (
+    <span
+      className="neo-avatar neo-avatar--group"
+      style={{ width: size, height: size }}
+      aria-hidden
+    >
+      <UsersRound size={Math.round(size * 0.5)} strokeWidth={1.9} />
+    </span>
+  );
+}
+
 function shortAddress(addr: string): string {
   return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
 }
@@ -253,9 +263,7 @@ export function NeoRail({
   }, [agentCreatedToast]);
 
   const [agents, setAgents] = useState<AgentRecord[]>([]);
-  const [agentsState, setAgentsState] = useState<LoadState>('loading');
   const [teams, setTeams] = useState<TeamRecord[]>([]);
-  const [teamsState, setTeamsState] = useState<LoadState>('loading');
   // 知识源（统一:本地仓库 + 知识分包）/ 记忆条目（左栏分区列表;进入对应分区才拉取）
   const [packs, setPacks] = useState<KnowledgePack[] | null>(null);
   const [vaults, setVaults] = useState<KnowledgeVault[] | null>(null);
@@ -275,48 +283,41 @@ export function NeoRail({
   // 员工列表常驻加载（折叠态头像条 + home 会话兜底都用它），不再按视图门控。
   useEffect(() => {
     let alive = true;
-    setAgentsState('loading');
     listAgents(workspaceId ?? undefined)
       .then((rows) => {
         if (!alive) return;
         setAgents(rows);
-        setAgentsState('ready');
       })
       .catch(() => {
         if (!alive) return;
         setAgents([]);
-        setAgentsState('error');
       });
     return () => {
       alive = false;
     };
   }, [workspaceId, reloadTick]);
 
-  // 团队列表：os-unified 后 home 会话区也渲染团队分组，home/teams 两分区都拉取
+  // 团队列表：os-unified 后左栏只有 home 一个会话分区，团队分组常驻渲染，
+  // 无视图门控（Grok 范式：侧边栏随时完整）。
   useEffect(() => {
-    if (section !== 'teams' && section !== 'home') return;
     let alive = true;
-    setTeamsState('loading');
     listTeams(workspaceId ?? undefined)
       .then((rows) => {
         if (!alive) return;
         setTeams(rows);
-        setTeamsState('ready');
       })
       .catch(() => {
         if (!alive) return;
         setTeams([]);
-        setTeamsState('error');
       });
     return () => {
       alive = false;
     };
-  }, [section, workspaceId, reloadTick]);
+  }, [workspaceId, reloadTick]);
 
-  // 项目分组（GAP A3）：home/teams 分区拉取项目+会话；失败降级 null（全落默认组，
-  // 不影响既有列表渲染）。
+  // 项目分组（GAP A3）：home 分区拉取项目+会话；失败降级 null（全落默认组，
+  // 不影响既有列表渲染）。os-unified 后常驻加载（home 是唯一会话分区）。
   useEffect(() => {
-    if (section !== 'home' && section !== 'teams') return;
     let alive = true;
     listProjectsWithSessions()
       .then((rows) => {
@@ -328,7 +329,7 @@ export function NeoRail({
     return () => {
       alive = false;
     };
-  }, [section, reloadTick]);
+  }, [workspaceId, reloadTick]);
 
   // 统一知识源（2026-08-19 知识库合并批）:进入 knowledge 分区同时拉
   // Python 侧知识包 + Node 侧本地仓库;行点击带 sourceId 深链预选中栏。
@@ -485,14 +486,82 @@ export function NeoRail({
     return m;
   }, [groups, teams]);
 
-  const dmBuckets = useMemo(
-    () => bucketByProject(recentDMs, (d) => d.group_id),
-    [bucketByProject, recentDMs],
+  // ── os-unified 2026-11-04（用户反馈批）：项目 = 顶层分组（Grok「工作/生活」
+  // 范式），组内混排「成员会话 + 团队分组 + 群聊」；未归项目的落默认区。
+  // 归属推导复用既有 join：DM.group_id → projectByGroupId（会话↔项目）；
+  // 团队 → groupByTeamId 群聊 → projectByGroupId。成员只渲染一行（Grok：
+  // 每 Bot 恰好出现一次）——归属团队的成员只在团队分组内出现，散养成员
+  // 按 DM 归项目桶，无 DM 的散养成员落「成员」区。
+  const projectByTeamId = useMemo(() => {
+    const m = new Map<string, ProjectWithSessions>();
+    for (const tm of teams) {
+      const g = groupByTeamId.get(tm.team_id);
+      const p = g ? projectByGroupId.get(g.id) : undefined;
+      if (p) m.set(tm.team_id, p);
+    }
+    return m;
+  }, [teams, groupByTeamId, projectByGroupId]);
+
+  // 散养成员的 DM（归属团队的成员 DM 不单独渲染，行已收进团队分组）
+  const soloDms = useMemo(
+    () => recentDMs.filter((d) => !teamAgentIds.has(d.agentId)),
+    [recentDMs, teamAgentIds],
   );
-  const groupBuckets = useMemo(
-    () => bucketByProject(recentGroups, (g) => g.id),
-    [bucketByProject, recentGroups],
+  const soloDmBuckets = useMemo(
+    () => bucketByProject(soloDms, (d) => d.group_id),
+    [bucketByProject, soloDms],
   );
+  // 无团队且无 DM 的成员（纯「成员」区行，点行自动 find-or-create DM）
+  const loneAgents = useMemo(
+    () =>
+      filteredAgents.filter(
+        (a) => !teamAgentIds.has(a.agent_id) && !dmByAgentId.has(a.agent_id),
+      ),
+    [filteredAgents, teamAgentIds, dmByAgentId],
+  );
+  // 已被团队分组收编的群聊 id（不进散群列表，避免团队分组内外双渲染）
+  const teamGroupIdSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const tm of teams) {
+      const g = groupByTeamId.get(tm.team_id);
+      if (g) s.add(g.id);
+    }
+    return s;
+  }, [teams, groupByTeamId]);
+  const looseGroups = useMemo(
+    () => recentGroups.filter((g) => !teamGroupIdSet.has(g.id)),
+    [recentGroups, teamGroupIdSet],
+  );
+  const looseGroupBuckets = useMemo(
+    () => bucketByProject(looseGroups, (g) => g.id),
+    [bucketByProject, looseGroups],
+  );
+  // 项目桶（顺序 = 项目列表顺序）：项目 label + 散群 + 团队分组 + 成员 DM
+  const projectSections = useMemo(
+    () =>
+      (projects ?? []).map((project) => ({
+        project,
+        groups: looseGroupBuckets.grouped.find(
+          (b) => b.project.project_id === project.project_id,
+        )?.rows ?? [],
+        teams: teams.filter(
+          (tm) => projectByTeamId.get(tm.team_id)?.project_id === project.project_id,
+        ),
+        dms: soloDmBuckets.grouped.find(
+          (b) => b.project.project_id === project.project_id,
+        )?.rows ?? [],
+      })),
+    [projects, looseGroupBuckets, teams, projectByTeamId, soloDmBuckets],
+  );
+  const defaultTeams = useMemo(
+    () => filteredTeams.filter((tm) => !projectByTeamId.has(tm.team_id)),
+    [filteredTeams, projectByTeamId],
+  );
+  const railEmpty =
+    teams.length === 0 &&
+    recentGroups.length === 0 &&
+    recentDMs.length === 0 &&
+    agents.length === 0;
 
   // 选中高亮从 nav 派生（与中栏同源）：会话行比 groupId；员工/团队兜底目标态
   // 比 agentId/teamId——conversation 打开时对应列表行不抢高亮（列表保持浏览态）。
@@ -788,57 +857,6 @@ export function NeoRail({
     [failManage, t, language],
   );
 
-  // 项目分组 label + hover 管理操作（产物/重命名/删除）；复用 .neo-agent-row/.neo-row-soul
-  // 的悬停显现样式（与员工行 soul 钮同款），label 本体撑满剩余宽度。
-  const renderProjectLabel = (p: ProjectWithSessions) => (
-    <div className="neo-agent-row">
-      <div
-        className="neo-section-label"
-        style={{ flex: 1, minWidth: 0 }}
-        data-testid="neo-project-label"
-      >
-        <Folder size={12} strokeWidth={1.75} aria-hidden />
-        {p.name}
-      </div>
-      <button
-        type="button"
-        className="neo-icon-btn neo-row-soul"
-        onClick={() => openProjectArtifacts(p)}
-        aria-label={t('neo.manage.viewProjectArtifacts', {
-          defaultValue: language === 'zh' ? `查看项目 ${p.name} 的产物` : `View artifacts of project ${p.name}`,
-        })}
-        title={t('projects.tabArtifacts', { defaultValue: language === 'zh' ? '产物' : 'Artifacts' })}
-        data-testid="neo-project-artifacts"
-      >
-        <Package size={12} strokeWidth={1.75} aria-hidden />
-      </button>
-      <button
-        type="button"
-        className="neo-icon-btn neo-row-soul"
-        onClick={() => renameProject(p)}
-        aria-label={t('neo.manage.renameProject', {
-          defaultValue: language === 'zh' ? `重命名项目 ${p.name}` : `Rename project ${p.name}`,
-        })}
-        title={t('neo.manage.rename', { defaultValue: language === 'zh' ? '重命名' : 'Rename' })}
-        data-testid="neo-project-rename"
-      >
-        <Pencil size={12} strokeWidth={1.75} aria-hidden />
-      </button>
-      <button
-        type="button"
-        className="neo-icon-btn neo-row-soul"
-        onClick={() => removeProject(p)}
-        aria-label={t('neo.manage.deleteProject', {
-          defaultValue: language === 'zh' ? `删除项目 ${p.name}` : `Delete project ${p.name}`,
-        })}
-        title={t('common.delete', { defaultValue: language === 'zh' ? '删除' : 'Delete' })}
-        data-testid="neo-project-delete"
-      >
-        <Trash2 size={12} strokeWidth={1.75} aria-hidden />
-      </button>
-    </div>
-  );
-
   // GAP A3 回写（2026-08-23）「移入项目」hover 钮 + 轻量浮层：行内
   // neo-icon-btn 风格 + 内联样式小菜单（同 agentCreatedToast 先例，不引重型
   // 组件）。浮层列项目（当前归属打 ✓；'default' 行并入「默认项目」入口，
@@ -933,9 +951,11 @@ export function NeoRail({
   // 管理面闭环（2026-08-23）：有 group_id 的行追加 hover 重命名/删除钮。
   const renderDmRow = (d: AgentDMItem) => {
     const rel = relativeTime(d.lastActivityAt, nowTick, t);
-    // ClawHub（2026-10-30）：会话行显示驱动 Claw —— agent 绑定 claw_id 时
-    // 行内展示爪印徽章（title 提示 claw id），一眼区分普通 agent 与 Claw 驱动。
-    const dmAgentClaw = agents.find((a) => a.agent_id === d.agentId)?.claw_id ?? null;
+    // os-unified 2026-11-04：DM 行升级 Grok 会话项形态（真实头像 + 名称 +
+    // 消息预览两行结构）——与成员会话行统一；Claw 徽章移到预览行尾。
+    // 行尾 hover 钮（移入项目/重命名/删除）保留。
+    const dmAgent = agentsById.get(d.agentId) ?? null;
+    const dmAgentClaw = dmAgent?.claw_id ?? null;
     const openDm = () => {
       if (d.group_id) onNavigate({ view: 'conversation', groupId: d.group_id });
       else openAgentDm(d.agentId, d.agentName);
@@ -944,28 +964,50 @@ export function NeoRail({
       <div key={d.agentId} className="neo-agent-row">
         <button
           type="button"
-          className={`neo-row${isConversation(d.group_id) ? ' on' : ''}`}
+          className={`neo-row neo-sess-row${isConversation(d.group_id) ? ' on' : ''}`}
           onClick={openDm}
           data-testid="neo-dm-row"
           title={d.lastMessage || d.agentName}
         >
-          {dmAgentClaw ? (
-            <span
-              className="neo-row-claw-badge"
-              data-testid="neo-dm-claw-badge"
-              title={language === 'zh' ? `Claw 驱动：${dmAgentClaw}` : `Driven by claw: ${dmAgentClaw}`}
-            >
-              <PawPrint size={15} strokeWidth={1.75} aria-hidden />
-            </span>
-          ) : (
-            <MessageSquare size={15} strokeWidth={1.75} aria-hidden />
-          )}
-          <span className="neo-row-name">{d.agentName}</span>
-          {dmAgentClaw && (
-            <span className="neo-row-claw-tag" data-testid="neo-dm-claw-tag">
-              {dmAgentClaw}
-            </span>
-          )}
+          <span className="neo-sess-avatar">
+            {dmAgent ? (
+              <AgentAvatar
+                name={dmAgent.name}
+                style={dmAgent.avatar_style}
+                seed={dmAgent.avatar_seed ?? dmAgent.name}
+                image={dmAgent.avatar_image ?? null}
+                size={32}
+                fallback={
+                  <NeoAgentAvatar
+                    seed={d.agentId}
+                    name={d.agentName}
+                    color={dmAgent.avatar_color ?? null}
+                    status={agentStatusToDot(dmAgent.status)}
+                  />
+                }
+              />
+            ) : (
+              <NeoAgentAvatar seed={d.agentId} name={d.agentName} color={null} />
+            )}
+          </span>
+          <span className="neo-sess-text">
+            <span className="neo-sess-name">{d.agentName}</span>
+            {(d.lastMessage || dmAgentClaw) && (
+              <span className="neo-sess-preview">
+                {d.lastMessage}
+                {dmAgentClaw && (
+                  <span
+                    className="neo-row-claw-tag"
+                    data-testid="neo-dm-claw-tag"
+                    style={{ marginLeft: 6 }}
+                    title={language === 'zh' ? `Claw 驱动：${dmAgentClaw}` : `Driven by claw: ${dmAgentClaw}`}
+                  >
+                    {dmAgentClaw}
+                  </span>
+                )}
+              </span>
+            )}
+          </span>
           {rel && <span className="neo-row-time">{rel}</span>}
           {d.unreadCount > 0 && (
             <span className="neo-row-badge">{d.unreadCount}</span>
@@ -1085,7 +1127,8 @@ export function NeoRail({
               name={a.name}
               style={a.avatar_style}
               seed={a.avatar_seed ?? a.name}
-              size={24}
+              image={a.avatar_image ?? null}
+              size={32}
               fallback={
                 <NeoAgentAvatar
                   seed={a.agent_id}
@@ -1148,13 +1191,20 @@ export function NeoRail({
               <div className="neo-agent-row">
                 <button
                   type="button"
-                  className={`neo-row${isConversation(group.id) ? ' on' : ''}`}
+                  className={`neo-row neo-sess-row${isConversation(group.id) ? ' on' : ''}`}
                   onClick={() => onNavigate({ view: 'conversation', groupId: group.id })}
                   data-testid="neo-team-group-chat"
                   title={group.lastMessage || group.name}
                 >
-                  <UsersRound size={15} strokeWidth={1.75} aria-hidden />
-                  <span className="neo-row-name">{group.name}</span>
+                  <span className="neo-sess-avatar">
+                    <NeoGroupAvatar size={32} />
+                  </span>
+                  <span className="neo-sess-text">
+                    <span className="neo-sess-name">{group.name}</span>
+                    {group.lastMessage && (
+                      <span className="neo-sess-preview">{group.lastMessage}</span>
+                    )}
+                  </span>
                   {relativeTime(group.lastActivityAt, nowTick, t) && (
                     <span className="neo-row-time">{relativeTime(group.lastActivityAt, nowTick, t)}</span>
                   )}
@@ -1193,11 +1243,127 @@ export function NeoRail({
     );
   };
 
-  // 未归属任何团队的员工（独立分组「成员」，Grok Bot 顶层会话区）
-  const soloAgents = useMemo(
-    () => filteredAgents.filter((a) => !teamAgentIds.has(a.agent_id)),
-    [filteredAgents, teamAgentIds],
+  // 未归属任何团队的员工（os-unified 2026-11-04：归属团队的成员行已收进
+  // 团队分组；散养成员经 soloDms/loneAgents 两条路渲染，此 memo 不再直接使用）
+
+  // ── os-unified 2026-11-04：项目 = 顶层分组，组内混排 ──────────────────────
+  // Grok「工作/生活」范式 + 用户反馈「不同项目里是不同的规划」：项目 label
+  // （可折叠）→ 组内 = 该项目群聊 + 团队分组 + 成员会话。默认区（未归项目）
+  // 同构混排：散养团队 + 散群 + 成员 DM + 孤儿成员。
+  const renderProjectBody = () => (
+    <>
+      {defaultTeams.map(renderTeamGroup)}
+      {looseGroupBuckets.unassigned.length > 0 && (
+        <div className="neo-section-label">
+          {t('neo.groups', { defaultValue: language === 'zh' ? '群聊现场' : 'Group Rooms' })}
+          <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
+        </div>
+      )}
+      {looseGroupBuckets.unassigned.map(renderGroupRow)}
+      {soloDmBuckets.unassigned.length > 0 && (
+        <div className="neo-section-label">
+          {t('neo.nav.agentsCloud', { defaultValue: language === 'zh' ? '成员' : 'Members' })}
+          <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
+        </div>
+      )}
+      {soloDmBuckets.unassigned.map(renderDmRow)}
+      {loneAgents.length > 0 && (
+        <div className="neo-section-label">
+          {t('neo.nav.agentsCloud', { defaultValue: language === 'zh' ? '成员' : 'Members' })}
+          <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
+        </div>
+      )}
+      {loneAgents.map(renderAgentSessionRow)}
+    </>
   );
+
+  const renderProjectSection = ({
+    project,
+    groups,
+    teams: teamRows,
+    dms,
+  }: {
+    project: ProjectWithSessions;
+    groups: GroupItem[];
+    teams: TeamRecord[];
+    dms: AgentDMItem[];
+  }) => {
+    const key = `proj-${project.project_id}`;
+    const open = !collapsedGroups[key];
+    const memberCount = groups.length + teamRows.length + dms.length;
+    return (
+      <div key={key} data-testid="neo-project-section" data-project-id={project.project_id}>
+        <div className="neo-agent-row">
+          <button
+            type="button"
+            className="neo-group-label"
+            onClick={() => toggleGroup(key)}
+            aria-expanded={open}
+            data-testid="neo-project-section-toggle"
+          >
+            <ChevronDown
+              size={12}
+              strokeWidth={1.75}
+              aria-hidden
+              style={{
+                transform: open ? 'none' : 'rotate(-90deg)',
+                transition: 'transform 160ms var(--ease-out)',
+              }}
+            />
+            <span className="neo-section-label" style={{ padding: 0, flex: 1, minWidth: 0 }}>
+              <Folder size={12} strokeWidth={1.75} aria-hidden style={{ marginRight: 4 }} />
+              {project.name}
+            </span>
+            {memberCount > 0 && <span className="neo-row-meta">{memberCount}</span>}
+          </button>
+          {/* hover 管理钮（沿用旧项目 label 三钮：产物/重命名/删除） */}
+          <button
+            type="button"
+            className="neo-icon-btn neo-row-soul"
+            onClick={() => openProjectArtifacts(project)}
+            aria-label={t('neo.manage.viewProjectArtifacts', {
+              defaultValue: language === 'zh' ? `查看项目 ${project.name} 的产物` : `View artifacts of project ${project.name}`,
+            })}
+            title={t('projects.tabArtifacts', { defaultValue: language === 'zh' ? '产物' : 'Artifacts' })}
+            data-testid="neo-project-artifacts"
+          >
+            <Package size={12} strokeWidth={1.75} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="neo-icon-btn neo-row-soul"
+            onClick={() => renameProject(project)}
+            aria-label={t('neo.manage.renameProject', {
+              defaultValue: language === 'zh' ? `重命名项目 ${project.name}` : `Rename project ${project.name}`,
+            })}
+            title={t('neo.manage.rename', { defaultValue: language === 'zh' ? '重命名' : 'Rename' })}
+            data-testid="neo-project-rename"
+          >
+            <Pencil size={12} strokeWidth={1.75} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="neo-icon-btn neo-row-soul"
+            onClick={() => removeProject(project)}
+            aria-label={t('neo.manage.deleteProject', {
+              defaultValue: language === 'zh' ? `删除项目 ${project.name}` : `Delete project ${project.name}`,
+            })}
+            title={t('common.delete', { defaultValue: language === 'zh' ? '删除' : 'Delete' })}
+            data-testid="neo-project-delete"
+          >
+            <Trash2 size={12} strokeWidth={1.75} aria-hidden />
+          </button>
+        </div>
+        {open && (
+          <div className="neo-team-group-body">
+            {groups.map(renderGroupRow)}
+            {teamRows.map(renderTeamGroup)}
+            {dms.map(renderDmRow)}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // 历史导航 ←/→ 两钮（栏顶导航簇共用；第三枚折叠/展开钮各态自渲染）
   const navHistoryBtns = (
@@ -1323,7 +1489,9 @@ export function NeoRail({
       </div>
 
       {/* 一级导航（全部经 onNavigate/onNewTask 上报，NeoApp 统一映射列表区）：
-          新任务 / 知识库 / 记忆 / 团队 / 员工 / 搜索（按需展开过滤框）。 */}
+          os-unified（2026-11-04 Grok Bot 范式批）：只留全局动作（新任务/知识库/
+          记忆/搜索/ClawHub）——团队/员工/历史按钮移除，成员即会话、团队即
+          home 列表区分组，历史由会话列表本身承担。 */}
       <nav className="neo-nav">
         <button
           type="button"
@@ -1357,44 +1525,6 @@ export function NeoRail({
           <Brain size={15} strokeWidth={1.75} aria-hidden />
           <span className="neo-nav-row-name">
             {t('neo.memoryBase', { defaultValue: language === 'zh' ? '记忆' : 'Memory' })}
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`neo-nav-row${section === 'teams' ? ' on' : ''}`}
-          onClick={() => onNavigate({ view: 'teams' })}
-          aria-pressed={section === 'teams'}
-          data-testid="neo-nav-teams"
-        >
-          <Users size={15} strokeWidth={1.75} aria-hidden />
-          <span className="neo-nav-row-name">
-            {t('neo.nav.teamsSub', { defaultValue: language === 'zh' ? '团队' : 'Teams' })}
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`neo-nav-row${section === 'agents' ? ' on' : ''}`}
-          onClick={() => onNavigate({ view: 'agents' })}
-          aria-pressed={section === 'agents'}
-          data-testid="neo-nav-agents"
-        >
-          <UserRound size={15} strokeWidth={1.75} aria-hidden />
-          <span className="neo-nav-row-name">
-            {t('neo.nav.agentsCloud', {
-              defaultValue: language === 'zh' ? '员工' : 'Staff',
-            })}
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`neo-nav-row${nav.view === 'runs' ? ' on' : ''}`}
-          onClick={() => onNavigate({ view: 'runs' })}
-          aria-pressed={nav.view === 'runs'}
-          data-testid="neo-nav-runs"
-        >
-          <History size={15} strokeWidth={1.75} aria-hidden />
-          <span className="neo-nav-row-name">
-            {t('neo.nav.runs', { defaultValue: language === 'zh' ? '历史' : 'History' })}
           </span>
         </button>
         <button
@@ -1453,12 +1583,11 @@ export function NeoRail({
         )}
         {section === 'home' && (
           <>
-            {/* GAP A3（2026-08-22）项目分组：label + 「新建项目」行（内联输入），
-                会话按 session.group_id 归入项目桶，无项目归入默认「会话」组。 */}
-            <div className="neo-section-label">
-              {t('neo.projects', { defaultValue: language === 'zh' ? '项目' : 'Projects' })}
-              <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
-            </div>
+            {/* os-unified 2026-11-04（Grok Bot 范式 + 用户反馈批）：
+                home = 唯一会话区。项目 = 顶层分组（Grok「工作/生活」范式，
+                「不同项目里是不同的规划」），组内混排该项目群聊/团队分组/成员会话；
+                未归项目的（团队/群聊/DM/孤儿成员）落默认区，同构混排。
+                顶部保留「新建项目」「新建群聊」「新建 Agent」三个创建入口。 */}
             <button
               type="button"
               className="neo-row"
@@ -1531,148 +1660,24 @@ export function NeoRail({
                 <span className="neo-list-error-text">{projectError}</span>
               </div>
             )}
-            {dmBuckets.grouped.map(({ project, rows }) => (
-              <div key={project.project_id}>
-                {renderProjectLabel(project)}
-                {rows.map(renderDmRow)}
+
+            {projectSections.map(renderProjectSection)}
+
+            {/* 默认区：未归项目的团队分组 / 散群 / 成员 DM / 孤儿成员 */}
+            {railEmpty ? (
+              <div className="neo-list-note">
+                {t('neo.sessionsEmpty', {
+                  defaultValue: language === 'zh'
+                    ? '还没有会话，发一条消息开始'
+                    : 'No conversations yet',
+                })}
               </div>
-            ))}
-            {recentDMs.length > 0 ? (
-              dmBuckets.unassigned.length > 0 && (
-                <>
-                  <div className="neo-section-label">
-                    {t('neo.sessions')}
-                    <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
-                  </div>
-                  {dmBuckets.unassigned.map(renderDmRow)}
-                </>
-              )
             ) : (
-              (projects ?? []).length === 0 && (
-                <div className="neo-list-note">
-                  {t('neo.sessionsEmpty', {
-                    defaultValue: language === 'zh' ? '还没有会话，发一条消息开始' : 'No conversations yet',
-                  })}
-                </div>
-              )
+              renderProjectBody()
             )}
 
-            {/* os-unified（2026-11-03）：会话区并入员工/团队（Grok Bot 范式）。
-                团队 = 可折叠分组（组内：团队群聊 + 成员 agent 会话项）；
-                未归属团队的员工落「成员」组。团队行点击 = 进团队群聊现场
-                （openTeamChat find-or-create 通路不变）。 */}
-            {teamsState === 'ready' && filteredTeams.length > 0 && (
-              <div className="neo-section-label">
-                {t('neo.nav.teamsSub', { defaultValue: language === 'zh' ? '团队' : 'Teams' })}
-                <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
-              </div>
-            )}
-            {filteredTeams.map(renderTeamGroup)}
-            {agentsState === 'ready' && soloAgents.length > 0 && (
-              <>
-                <div className="neo-section-label">
-                  {t('neo.nav.agentsCloud', {
-                    defaultValue: language === 'zh' ? '成员' : 'Members',
-                  })}
-                  <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
-                </div>
-                {soloAgents.map(renderAgentSessionRow)}
-              </>
-            )}
-          </>
-        )}
-
-        {section === 'agents' && (
-          <>
-            <div className="neo-section-label">
-              {t('shell.navAgents')}
-              <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
-            </div>
-            {/* A14/B27 新建 Agent 入口（ClawsGo a_001/a_019「创建 Agent」行形态：
-                + 图标纯文字行，点击开 NeoCreateAgentModal，真实 POST /api/agents） */}
-            <button
-              type="button"
-              className="neo-row"
-              onClick={() => setCreateAgentOpen(true)}
-              data-testid="neo-new-agent"
-            >
-              <Plus size={15} strokeWidth={1.75} aria-hidden />
-              <span className="neo-row-name">
-                {t('neo.newAgent', { defaultValue: language === 'zh' ? '新建 Agent' : 'New Agent' })}
-              </span>
-            </button>
-            {agentsState === 'loading' && (
-              <div className="neo-rail-skeletons" aria-busy="true" aria-label={t('common.loading')}>
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="sf-skeleton neo-rail-skeleton" />
-                ))}
-              </div>
-            )}
-            {agentsState === 'error' && (
-              <div className="neo-list-note neo-list-error">
-                <span className="neo-list-error-text">{t('team.loadError')}</span>
-                <button
-                  type="button"
-                  className="neo-list-retry"
-                  onClick={() => setReloadTick((n) => n + 1)}
-                  data-testid="neo-rail-retry"
-                >
-                  <RotateCcw size={11} strokeWidth={2} aria-hidden />
-                  {t('common.retry')}
-                </button>
-              </div>
-            )}
-            {agentsState === 'ready' && filteredAgents.length === 0 && (
-              <div className="neo-list-note">{t('agent.noAgents')}</div>
-            )}
-            {/* os-unified（2026-11-03）：员工区也走 Grok 会话项形态（头像可点
-                开主机卡片 + 消息预览），与 home 会话区视觉统一。 */}
-            {filteredAgents.map(renderAgentSessionRow)}
-          </>
-        )}
-
-        {section === 'teams' && (
-          <>
-            <div className="neo-section-label">
-              {t('shell.navTeams')}
-              <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
-            </div>
-            {teamsState === 'loading' && (
-              <div className="neo-rail-skeletons" aria-busy="true" aria-label={t('common.loading')}>
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="sf-skeleton neo-rail-skeleton" />
-                ))}
-              </div>
-            )}
-            {teamsState === 'error' && (
-              <div className="neo-list-note neo-list-error">
-                <span className="neo-list-error-text">{t('team.loadError')}</span>
-                <button
-                  type="button"
-                  className="neo-list-retry"
-                  onClick={() => setReloadTick((n) => n + 1)}
-                  data-testid="neo-rail-retry"
-                >
-                  <RotateCcw size={11} strokeWidth={2} aria-hidden />
-                  {t('common.retry')}
-                </button>
-              </div>
-            )}
-            {teamsState === 'ready' && filteredTeams.length === 0 && (
-              <div className="neo-list-note">{t('chat.noTeams')}</div>
-            )}
-            {/* os-unified（2026-11-03）：团队 = 可折叠分组（组内团队群聊 + 成员
-                agent 会话项），替代原平铺团队行。neo-team-row testid 保留在组内
-                群聊行（现有测试兼容），展开/收起走 neo-team-group-toggle。 */}
-            {filteredTeams.map(renderTeamGroup)}
-
-            {/* 群聊现场入口（Polynoia 对标 2026-08-15）— 点击中栏内嵌打开群时间线。
-                GAP D（2026-08-22）：label 常驻 + 显式「新建群聊」行（名称 + 团队/Agent
-                选人，真实 POST /api/groups），不再只靠团队行隐式 find-or-create。 */}
-            <div className="neo-section-label">
-              {t('neo.groups', { defaultValue: language === 'zh' ? '群聊现场' : 'Group Rooms' })}
-              <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
-            </div>
+            {/* 拉群入口（成员/成员可拉群组建团队 — Grok 自定义分组形态）+
+                新建 Agent 入口（GAP D/A14 行形态保留，常驻底部） */}
             <button
               type="button"
               className="neo-row"
@@ -1684,19 +1689,17 @@ export function NeoRail({
                 {t('neo.newGroup.entry', { defaultValue: language === 'zh' ? '新建群聊' : 'New Group' })}
               </span>
             </button>
-            {recentGroups.length > 0 && (
-              <>
-                {/* GAP A3：群聊按项目分桶（group.id ↔ session.group_id），
-                    无项目归默认平铺。 */}
-                {groupBuckets.grouped.map(({ project, rows }) => (
-                  <div key={project.project_id}>
-                    {renderProjectLabel(project)}
-                    {rows.map(renderGroupRow)}
-                  </div>
-                ))}
-                {groupBuckets.unassigned.map(renderGroupRow)}
-              </>
-            )}
+            <button
+              type="button"
+              className="neo-row"
+              onClick={() => setCreateAgentOpen(true)}
+              data-testid="neo-new-agent"
+            >
+              <Plus size={15} strokeWidth={1.75} aria-hidden />
+              <span className="neo-row-name">
+                {t('neo.newAgent', { defaultValue: language === 'zh' ? '新建 Agent' : 'New Agent' })}
+              </span>
+            </button>
           </>
         )}
 

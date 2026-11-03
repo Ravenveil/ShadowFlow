@@ -26,12 +26,12 @@ export type NeoNav =
   | { view: 'memory' }
   /** ClawHub 内嵌页（2026-10-30，左栏常驻；中栏 = Claw 目录/安装/卸载）。 */
   | { view: 'clawhub' }
-  /** 历史 runs 列表（GAP B39；左栏列表保持不动，行链接 /?run=<id>）。 */
+  /** 历史 runs 列表（GAP B39；左栏列表保持不动，行链接 /?run=<id>）。
+   *  os-unified（2026-11-04）：左栏「历史」按钮移除（会话列表即历史），
+   *  但 composer /inspect 仍走本视图，变体保留。 */
   | { view: 'runs' }
-  /** 浏览员工（左栏列表 = 员工）；中栏落到新任务 composer。 */
-  | { view: 'agents' }
-  /** 浏览团队（左栏列表 = 团队 + 群聊现场）；中栏落到新任务 composer。 */
-  | { view: 'teams' }
+  /** os-unified（2026-11-04 Grok Bot 范式批）：agents/teams 浏览视图移除——
+   *  成员即会话、团队即会话区分组，全部并入 home 列表区，无独立页面。 */
   /** DM/群聊内嵌（左栏列表保持不动）。 */
   | { view: 'conversation'; groupId: string }
   /** 员工编排目标兜底（resolve DM 失败/后端不可用）：中栏 composer 面向该 agent。 */
@@ -41,8 +41,12 @@ export type NeoNav =
   /** 团队编排目标兜底（resolve 团队群失败）：中栏 composer 面向该 team。 */
   | { view: 'team-target'; teamId: string; name: string };
 
-/** 左栏列表区内容（由 NeoApp 按 nav 派生并下发给 NeoRail）。 */
-export type RailSection = 'home' | 'agents' | 'teams' | 'knowledge' | 'memory';
+/**
+ * 左栏列表区内容（由 NeoApp 按 nav 派生并下发给 NeoRail）。
+ * os-unified（2026-11-04 Grok Bot 范式批）：agents/teams 分区移除——成员即会话、
+ * 团队即分组，全部并入 home 列表区。
+ */
+export type RailSection = 'home' | 'knowledge' | 'memory';
 
 /** NeoRail props — 左栏导航（纯受控：状态全部来自 NeoApp）。 */
 export interface NeoRailProps {

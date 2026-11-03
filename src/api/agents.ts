@@ -72,6 +72,8 @@ export interface QuickCreateRequest {
   avatar_style?: string | null;
   /** DiceBear 种子（缺省按名字 hash）。 */
   avatar_seed?: string | null;
+  /** 提示词生成头像图（dataURL/URL）；os-unified 2026-11-04。 */
+  avatar_image?: string | null;
 }
 
 export interface AgentRecord {
@@ -91,6 +93,8 @@ export interface AgentRecord {
   avatar_style?: string | null;
   /** DiceBear 种子；未配置为 null/缺省（渲染层按名字 hash）。 */
   avatar_seed?: string | null;
+  /** 提示词生成头像图（dataURL/URL）；os-unified 2026-11-04。非空时渲染优先。 */
+  avatar_image?: string | null;
   updated_at?: string;
 }
 
@@ -171,6 +175,8 @@ export interface AgentPatchRequest {
   avatar_style?: string | null;
   /** DiceBear 种子设置；"" 清除（回名字 hash）。 */
   avatar_seed?: string | null;
+  /** 提示词生成头像图（dataURL/URL）；"" 清除。os-unified 2026-11-04。 */
+  avatar_image?: string | null;
 }
 
 export async function patchAgent(agentId: string, patch: AgentPatchRequest): Promise<AgentRecord> {

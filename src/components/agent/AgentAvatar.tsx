@@ -18,6 +18,8 @@ export interface AgentAvatarProps {
   style?: string | null;
   /** DiceBear 种子（缺省 hashSeed(name)）。 */
   seed?: string | null;
+  /** 提示词生成头像图（dataURL/URL）；非空时优先渲染（os-unified 2026-11-04）。 */
+  image?: string | null;
   /** 尺寸档（px）。默认 32。 */
   size?: 24 | 32 | 48 | 128 | number;
   /** SVG 生成失败时的兜底节点（缺省 = 首字母色块）。 */
@@ -47,6 +49,7 @@ export function AgentAvatar({
   name,
   style,
   seed,
+  image,
   size = 32,
   fallback,
   className,
@@ -55,6 +58,8 @@ export function AgentAvatar({
   const [failed, setFailed] = useState(false);
 
   const svg = useMemo(() => {
+    // 生成图优先（提示词生成的 dataURL/URL）——有图不跑 DiceBear
+    if (image && image.trim().length > 0) return null;
     if (failed) return null;
     try {
       const styleId = normalizeStyle(style);
@@ -65,7 +70,29 @@ export function AgentAvatar({
       return null;
     }
     // name 参与 seed 兜底，故入依赖
-  }, [style, seed, name, failed]);
+  }, [style, seed, name, failed, image]);
+
+  // 生成图渲染分支（img 圆形裁切；加载失败回落 DiceBear → fallback）
+  if (image && image.trim().length > 0 && !failed) {
+    return (
+      <span
+        className={`claw-avatar claw-avatar--img${className ? ` ${className}` : ''}`}
+        data-testid="agent-avatar"
+        style={{ width: size, height: size }}
+        title={title ?? name}
+        aria-label={title ?? name}
+        role="img"
+      >
+        <img
+          src={image}
+          alt={title ?? name}
+          width={size}
+          height={size}
+          onError={() => setFailed(true)}
+        />
+      </span>
+    );
+  }
 
   if (!svg) {
     return <>{fallback ?? <InitialFallback name={name} size={size} />}</>;

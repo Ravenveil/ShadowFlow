@@ -152,6 +152,68 @@ export function randomSeed(): string {
   return `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
 }
 
+// ---------------------------------------------------------------------------
+// 提示词生成头像（2026-11-04 os-unified：Grok Bot「描述→生成→保存」流程）
+// ---------------------------------------------------------------------------
+
+/** 提示词关键词 → DiceBear 风格启发式表（首个命中优先；中文/英文双词表）。 */
+const PROMPT_STYLE_HINTS: ReadonlyArray<{ words: readonly string[]; style: DicebearStyleId }> = [
+  { words: ['机器人', '机甲', 'robot', 'mech', 'bot', 'android'], style: 'bottts' },
+  { words: ['猫', '狗', '宠物', '猫娘', 'cat', 'dog', 'pet', 'kitty'], style: 'fun-emoji' },
+  { words: ['像素', '复古', '游戏', 'pixel', 'retro', '8bit'], style: 'pixel-art' },
+  { words: ['冒险', '骑士', '勇者', 'adventure', 'knight', 'hero'], style: 'adventurer' },
+  { words: ['画家', '艺术家', '设计师', 'artist', 'designer', 'painter'], style: 'open-peeps' },
+  { words: ['程序员', '工程师', '码农', 'coder', 'engineer', 'developer'], style: 'bottts-neutral' },
+  { words: ['学者', '教授', '博士', '学者风', 'professor', 'scholar', 'phd'], style: 'notionists' },
+  { words: ['可爱', '萌', '卡通', 'cute', 'kawaii', 'cartoon'], style: 'big-smile' },
+  { words: ['人像', '写实', '真人', 'portrait', 'realistic', 'photo'], style: 'lorelei' },
+  { words: ['抽象', '几何', '图腾', 'abstract', 'geometry', 'totem'], style: 'identicon' },
+  { words: ['玻璃', '透明', '光效', 'glass', 'crystal', 'glow'], style: 'glass' },
+  { words: ['涂鸦', '手绘', '涂鸦风', 'doodle', 'sketch', 'hand-drawn'], style: 'croodles' },
+];
+
+export interface GeneratedAvatarCandidate {
+  style: DicebearStyleId;
+  seed: string;
+}
+
+/**
+ * 提示词 → 头像候选（本地确定性生成，离线可用）：
+ *  - 风格：提示词关键词启发式命中优先，未命中按提示词 hash 从精选风格池选；
+ *  - 种子：提示词全文 hash + 变体序号扰动（同提示词每档稳定不同脸）。
+ * variantIndex 0..3 → 同一提示词 4 个稳定候选；将来接云端绘图 API 时
+ * 只需替换本函数实现，调用方（AvatarStylePicker）协议不变。
+ */
+export function avatarFromPrompt(prompt: string, variantIndex = 0): GeneratedAvatarCandidate {
+  const text = (prompt ?? '').trim();
+  const lowered = text.toLowerCase();
+  // 关键词命中风格（取第一个命中的提示表项）
+  let style: DicebearStyleId | null = null;
+  for (const hint of PROMPT_STYLE_HINTS) {
+    if (hint.words.some((w) => lowered.includes(w))) {
+      style = hint.style;
+      break;
+    }
+  }
+  // 未命中 → 提示词 hash 从精选风格池稳定挑选（同人同提示词永远同风格）
+  if (!style) {
+    const pool: DicebearStyleId[] = [
+      'bottts-neutral',
+      'adventurer',
+      'fun-emoji',
+      'lorelei-neutral',
+      'pixel-art-neutral',
+      'croodles-neutral',
+      'notionists-neutral',
+      'open-peeps',
+    ];
+    style = pool[Math.abs(hashSeed(text || 'avatar').charCodeAt(0) * 31 + variantIndex) % pool.length];
+  }
+  // 种子 = 提示词 hash + 变体盐（4 档候选同一提示词稳定不同）
+  const seed = `${hashSeed(text || 'avatar')}-${variantIndex.toString(36)}`;
+  return { style, seed };
+}
+
 /**
  * 本地生成 DiceBear 头像 SVG 字符串（离线可用，不走公网 API）。
  * @param style  风格 id（normalizeStyle 兜底默认）

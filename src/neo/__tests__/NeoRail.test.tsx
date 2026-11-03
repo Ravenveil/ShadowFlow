@@ -57,7 +57,6 @@ vi.mock('../NeoCreateGroupModal', () => ({
   ),
 }));
 
-import { resolveTeamGroup } from '../../api/groupApi';
 import { NeoRail } from '../NeoRail';
 import type { NeoNav, RailSection } from '../types';
 
@@ -66,9 +65,9 @@ function Harness() {
   const [collapsed, setCollapsed] = useState(false);
   const [nav, setNav] = useState<NeoNav>({ view: 'home' });
   const [section, setSection] = useState<RailSection>('home');
-  // 与 NeoApp.SECTION_BY_NAV 同款映射，保证 Harness 行为与真实外壳一致
+  // 与 NeoApp.SECTION_BY_NAV 同款映射（os-unified 后 agents/teams 视图已移除）
   const map: Partial<Record<NeoNav['view'], RailSection>> = {
-    home: 'home', knowledge: 'knowledge', memory: 'memory', agents: 'agents', teams: 'teams',
+    home: 'home', knowledge: 'knowledge', memory: 'memory',
   };
   return (
     <NeoRail
@@ -102,14 +101,15 @@ beforeEach(() => {
 });
 
 describe('NeoRail — 折叠回路（弹出/收回）', () => {
-  it('默认展开：导航行齐全，导航簇第三枚为收回钮', () => {
+  it('默认展开：导航行齐全（os-unified 后无 团队/员工/历史 行），收回钮在', () => {
     renderRail();
-    // 五导航行（知识库/记忆为按钮版 + 其余）
+    // 全局动作导航行（os-unified：团队/员工/历史按钮已移除）
     expect(screen.getByTestId('neo-new-task')).toBeInTheDocument();
     expect(screen.getByTestId('neo-nav-knowledge')).toBeInTheDocument();
     expect(screen.getByTestId('neo-nav-memory')).toBeInTheDocument();
-    expect(screen.getByTestId('neo-nav-teams')).toBeInTheDocument();
-    expect(screen.getByTestId('neo-nav-agents')).toBeInTheDocument();
+    expect(screen.queryByTestId('neo-nav-teams')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('neo-nav-agents')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('neo-nav-runs')).not.toBeInTheDocument();
     expect(screen.getByTestId('neo-nav-search')).toBeInTheDocument();
     // 收回钮存在，展开钮不存在
     expect(screen.getByTestId('neo-rail-collapse')).toBeInTheDocument();
@@ -141,63 +141,37 @@ describe('NeoRail — 折叠回路（弹出/收回）', () => {
 });
 
 describe('NeoRail — 导航行 onNavigate 上报（跳转收敛契约）', () => {
-  it('点知识库/记忆/团队/员工导航行 → 收到对应 nav 变体，列表区同步切换', async () => {
+  it('点知识库/记忆导航行 → 收到对应 nav 变体，列表区同步切换', async () => {
     renderRail();
     fireEvent.click(screen.getByTestId('neo-nav-knowledge'));
     expect(await screen.findByText('还没有知识源')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('neo-nav-memory'));
     expect(await screen.findByText('还没有记忆条目')).toBeInTheDocument();
-
-    // 团队导航行 → teams 列表（mock 的团队行出现）
-    fireEvent.click(screen.getByTestId('neo-nav-teams'));
-    expect(await screen.findByTestId('neo-team-row')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('neo-nav-agents'));
-    expect(await screen.findByTestId('neo-new-agent')).toBeInTheDocument();
   });
 });
 
-describe('NeoRail — 团队行点击（find-or-create 群聊现场）', () => {
-  it('resolveTeamGroup 命中 → 团队行消失高亮转 conversation 语义（onNavigate 由 Harness 持有）', async () => {
+describe('NeoRail — home 统一列表区（os-unified 2026-11-04）', () => {
+  it('home：团队折叠分组常驻（无独立团队页），组内含群聊行', async () => {
     renderRail();
-    fireEvent.click(screen.getByTestId('neo-nav-teams'));
-    const row = await screen.findByTestId('neo-team-row');
-    fireEvent.click(row);
+    // 团队分组直接渲染在 home 列表区（无需先点团队导航）
+    const group = await screen.findByTestId('neo-team-group', {}, { timeout: 3000 });
+    expect(group).toBeInTheDocument();
+    // 组内「群聊现场」入口行（inbox 无同名群 → fallback 行）
     await waitFor(() => {
-      expect(resolveTeamGroup).toHaveBeenCalledWith(
-        expect.objectContaining({ team_id: 't1' }),
-        undefined,
-      );
+      expect(screen.getByTestId('neo-team-row')).toBeInTheDocument();
     });
   });
-});
 
-describe('NeoRail — 新建群聊显式入口（GAP D）', () => {
-  function renderTeamsRail(onNavigate = vi.fn()) {
-    render(
-      <MemoryRouter>
-        <NeoRail
-          nav={{ view: 'teams' }}
-          section="teams"
-          onNavigate={onNavigate}
-          onNewTask={() => {}}
-          collapsed={false}
-          onToggleCollapsed={() => {}}
-        />
-      </MemoryRouter>,
-    );
-    return onNavigate;
-  }
-
-  it('teams 分区常驻「群聊现场」label + 新建群聊行（群列表为空也在）', async () => {
-    renderTeamsRail();
-    expect(await screen.findByText('群聊现场')).toBeInTheDocument();
-    expect(screen.getByTestId('neo-new-group')).toBeInTheDocument();
+  it('home：新建群聊 / 新建 Agent 行常驻（成员拉群 + 雇员工入口）', async () => {
+    renderRail();
+    expect(await screen.findByTestId('neo-new-group')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-new-agent')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-new-project')).toBeInTheDocument();
   });
 
   it('点新建群聊行 → 开模态；onCreated → onNavigate conversation 跳新群', async () => {
-    const onNavigate = renderTeamsRail();
+    const onNavigate = renderRailWithNav();
     fireEvent.click(await screen.findByTestId('neo-new-group'));
     expect(await screen.findByTestId('neo-create-group-modal-stub')).toBeInTheDocument();
 
@@ -205,12 +179,11 @@ describe('NeoRail — 新建群聊显式入口（GAP D）', () => {
     await waitFor(() => {
       expect(onNavigate).toHaveBeenCalledWith({ view: 'conversation', groupId: 'g-new-9' });
     });
-    // 模态关闭
     expect(screen.queryByTestId('neo-create-group-modal-stub')).not.toBeInTheDocument();
   });
 
   it('模态 onClose → 关闭且不跳转', async () => {
-    const onNavigate = renderTeamsRail();
+    const onNavigate = renderRailWithNav();
     fireEvent.click(await screen.findByTestId('neo-new-group'));
     fireEvent.click(await screen.findByTestId('stub-group-close'));
     expect(screen.queryByTestId('neo-create-group-modal-stub')).not.toBeInTheDocument();
@@ -219,6 +192,23 @@ describe('NeoRail — 新建群聊显式入口（GAP D）', () => {
     );
   });
 });
+
+/** 直接给受控 nav/section 的渲染（不再有 teams/agents 分区，恒 home 列表）。 */
+function renderRailWithNav(onNavigate = vi.fn()) {
+  render(
+    <MemoryRouter>
+      <NeoRail
+        nav={{ view: 'home' }}
+        section="home"
+        onNavigate={onNavigate}
+        onNewTask={() => {}}
+        collapsed={false}
+        onToggleCollapsed={() => {}}
+      />
+    </MemoryRouter>,
+  );
+  return onNavigate;
+}
 
 describe('NeoRail — 底部账户行', () => {
   it('设置钮直达 /settings（无菜单中间层），S 徽章渲染', () => {

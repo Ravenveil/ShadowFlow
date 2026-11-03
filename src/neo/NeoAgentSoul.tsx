@@ -72,6 +72,8 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
   const [claws, setClaws] = useState<DetectedCli[]>([]);
   const [clawId, setClawId] = useState('');
   const [avatarCfg, setAvatarCfg] = useState<AvatarConfigValue>({ style: '', seed: '' });
+  // 提示词生成头像图（os-unified 2026-11-04）：云端生成成功时暂存，保存时随 PATCH。
+  const [avatarImage, setAvatarImage] = useState<string | null>(null);
   const [clawDirty, setClawDirty] = useState(false);
   const [avatarDirty, setAvatarDirty] = useState(false);
   const [bindingBusy, setBindingBusy] = useState(false);
@@ -96,6 +98,7 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
     if (!agent) return;
     setClawId(agent.claw_id ?? '');
     setAvatarCfg({ style: agent.avatar_style ?? '', seed: agent.avatar_seed ?? '' });
+    setAvatarImage(agent.avatar_image ?? null);
     setClawDirty(false);
     setAvatarDirty(false);
   }, [agent]);
@@ -182,7 +185,9 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
     }
   }
 
-  // ── ClawHub（2026-06）：保存头像配置（"" = 清空回默认/名字 hash）。────────
+  // ── ClawHub（2026-06）：保存头像配置（"" = 清空回默认/名字 hash）。
+  // os-unified 2026-11-04：提示词生成图（avatarImage）一并 PATCH；avatar_image
+  // 仅在有新图或已有图时传（undefined = 不改动该字段）。
   async function handleSaveAvatar() {
     if (!agent || bindingBusy) return;
     setBindingBusy(true);
@@ -191,6 +196,7 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
       const updated = await patchAgent(agent.agent_id, {
         avatar_style: avatarCfg.style,
         avatar_seed: avatarCfg.seed,
+        ...(avatarImage !== null ? { avatar_image: avatarImage } : {}),
       });
       setAgent(updated);
     } catch (err) {
@@ -293,6 +299,7 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
           name={agent.name}
           style={avatarCfg.style || agent.avatar_style}
           seed={avatarCfg.seed || agent.avatar_seed}
+          image={avatarImage ?? agent.avatar_image ?? null}
           size={56}
         />
         <div className="claw-avatar-preview-meta" style={{ flex: 1 }}>
@@ -402,6 +409,10 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
           value={avatarCfg}
           onChange={(next) => {
             setAvatarCfg(next);
+            setAvatarDirty(true);
+          }}
+          onChangeImage={(dataUrl) => {
+            setAvatarImage(dataUrl);
             setAvatarDirty(true);
           }}
           agentName={agent.name}

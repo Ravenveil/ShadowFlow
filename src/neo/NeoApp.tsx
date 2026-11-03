@@ -38,14 +38,13 @@ const HOST_COLLAPSED_KEY = 'sf.neo.hostCollapsed';
 const LAST_RUN_KEY = 'sf.last-run-id';
 const RAIL_COLLAPSED_KEY = 'sf.neo.railCollapsed';
 
-/** nav.view → 左栏列表区默认映射；不在表里的（conversation/兜底目标）列表保持不动。 */
+/** nav.view → 左栏列表区默认映射；不在表里的（conversation/兜底目标/agent-soul）
+ *  列表保持不动（agent-soul 从 rail 头像进入时，左栏保持当前列表——Grok 式
+ *  「点头像开 Bot 页，侧边栏不动」）。os-unified 后 agents/teams 浏览视图移除。 */
 const SECTION_BY_NAV: Partial<Record<NeoNav['view'], RailSection>> = {
   home: 'home',
   knowledge: 'knowledge',
   memory: 'memory',
-  agents: 'agents',
-  teams: 'teams',
-  'agent-soul': 'agents',
 };
 
 export function NeoApp() {

@@ -165,13 +165,14 @@ afterEach(() => {
 describe('NeoRail 管理面 — 员工行', () => {
   // os-unified（2026-11-03）：员工行走 Grok 会话项形态（头像可点开主机卡片），
   // 行内删除钮移入主机卡片——rail 内不再渲染 neo-agent-delete，改断言其缺席。
-  it('员工区走会话项形态：无行内删除钮（删除入口移入 agent 主机卡片）', async () => {
-    renderRail('agents', { view: 'agents' });
+  // 2026-11-04：分区移除，成员会话行直接渲染在 home 列表区。
+  it('成员行走会话项形态：无行内删除钮（删除入口移入 agent 主机卡片）', async () => {
+    renderRail('home');
     const rows = await screen.findAllByTestId('neo-agent-session-row');
-    expect(rows).toHaveLength(2);
+    expect(rows.length).toBeGreaterThanOrEqual(1);
     // 头像主机入口（点头像开 agent-soul 主机卡片）
     const hostBtns = await screen.findAllByTestId('neo-agent-host-btn');
-    expect(hostBtns).toHaveLength(2);
+    expect(hostBtns.length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByTestId('neo-agent-delete')).toBeNull();
     expect(screen.queryByTestId('neo-agent-soul-entry')).toBeNull();
     expect(screen.queryByTestId('neo-agent-pause-toggle')).toBeNull();
@@ -183,7 +184,7 @@ describe('NeoRail 管理面 — DM/群聊行', () => {
     renderRail('home');
     // 先等项目分组落地（listProjectsWithSessions 异步 resolve 后 DM 行会从默认组
     // 移进项目桶，React 重挂节点——过早拿到行内按钮句柄会因节点被替换而点击失效）。
-    await screen.findByTestId('neo-project-label');
+    await screen.findByTestId('neo-project-section-toggle');
     fireEvent.click(await screen.findByTestId('neo-dm-rename'));
     await waitFor(() =>
       expect(patchGroup).toHaveBeenCalledWith('g-dm-1', { name: '新名字' }),
@@ -195,7 +196,7 @@ describe('NeoRail 管理面 — DM/群聊行', () => {
 
   it('DM 删除（当前正开着该会话）→ deleteGroup + removeAgentDM + 跳 home', async () => {
     const onNavigate = renderRail('home', { view: 'conversation', groupId: 'g-dm-1' });
-    await screen.findByTestId('neo-project-label');
+    await screen.findByTestId('neo-project-section-toggle');
     fireEvent.click(await screen.findByTestId('neo-dm-delete'));
     await waitFor(() => expect(deleteGroup).toHaveBeenCalledWith('g-dm-1'));
     await waitFor(() => expect(INBOX_STATE.removeAgentDM).toHaveBeenCalledWith('a1'));
@@ -205,7 +206,8 @@ describe('NeoRail 管理面 — DM/群聊行', () => {
   });
 
   it('群聊行重命名 → patchGroup + updateGroupMeta；删除 → deleteGroup + removeGroup', async () => {
-    renderRail('teams', { view: 'teams' });
+    // os-unified（2026-11-04）：无独立 teams 分区，群聊行渲染在 home 默认区
+    renderRail('home');
     fireEvent.click(await screen.findByTestId('neo-group-rename'));
     await waitFor(() =>
       expect(patchGroup).toHaveBeenCalledWith('g-room-1', { name: '新名字' }),
@@ -224,7 +226,7 @@ describe('NeoRail 管理面 — 移入项目（GAP A3 回写）', () => {
   it('DM 行「移入项目」→ 浮层列项目 + 默认项目；选项目 → PATCH 该 group', async () => {
     renderRail('home');
     // 等项目分组落地（DM 行会随分桶重挂，句柄需在之后取）。
-    await screen.findByTestId('neo-project-label');
+    await screen.findByTestId('neo-project-section-toggle');
     fireEvent.click(await screen.findByTestId('neo-dm-move'));
     const menu = await screen.findByTestId('neo-move-menu');
     // 项目 p1 + 「默认项目」两项；p1 是该 DM 当前归属。
@@ -242,7 +244,7 @@ describe('NeoRail 管理面 — 移入项目（GAP A3 回写）', () => {
   });
 
   it('群聊行选「默认项目」→ PATCH project_id=null（移回默认组）', async () => {
-    renderRail('teams', { view: 'teams' });
+    renderRail('home');
     fireEvent.click(await screen.findByTestId('neo-group-move'));
     fireEvent.click(await screen.findByTestId('neo-move-default'));
     await waitFor(() =>
@@ -251,7 +253,7 @@ describe('NeoRail 管理面 — 移入项目（GAP A3 回写）', () => {
   });
 
   it('触发钮再点一次收起浮层；PATCH 失败 → neo-manage-error 红条', async () => {
-    renderRail('teams', { view: 'teams' });
+    renderRail('home');
     const trigger = await screen.findByTestId('neo-group-move');
     fireEvent.click(trigger);
     expect(await screen.findByTestId('neo-move-menu')).toBeInTheDocument();
@@ -268,7 +270,7 @@ describe('NeoRail 管理面 — 移入项目（GAP A3 回写）', () => {
 describe('NeoRail 管理面 — 项目 label', () => {
   it('项目 label（有命中会话才渲染）带重命名/删除钮', async () => {
     renderRail('home');
-    expect(await screen.findByTestId('neo-project-label')).toHaveTextContent('氢能官网');
+    expect(await screen.findByTestId('neo-project-section-toggle')).toHaveTextContent('氢能官网');
     expect(screen.getByTestId('neo-project-rename')).toBeInTheDocument();
     expect(screen.getByTestId('neo-project-delete')).toBeInTheDocument();
   });

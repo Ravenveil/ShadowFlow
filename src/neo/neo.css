@@ -468,12 +468,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   flex-shrink: 0;
   color: #fff;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1;
   user-select: none;
@@ -483,8 +483,8 @@
   position: absolute;
   right: -1px;
   bottom: -1px;
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   border: 2px solid var(--t-bg);
 }
@@ -1085,6 +1085,12 @@
   cursor: pointer;
   transition: background var(--dur-1) var(--ease-out);
 }
+/* 组标题内名称：单行截断（项目名/团队名过长不换行，Grok 单行分组标题形态） */
+.neo-group-label .neo-section-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .neo-group-label:hover {
   background: color-mix(in srgb, var(--t-fg) 4%, transparent);
 }
@@ -1096,4 +1102,16 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+/* os-unified 2026-11-04：群聊头像（双人剪影圆块，跟 .neo-avatar 32px 尺寸） */
+.neo-avatar--group {
+  background: color-mix(in srgb, var(--t-fg) 10%, var(--t-bg));
+  color: var(--t-fg-5);
+}
+
+/* Grok 会话项两行行高：32px 头像需要行身有纵向呼吸（padding 加大） */
+.neo-sess-row.neo-row {
+  padding-top: 5px;
+  padding-bottom: 5px;
 }

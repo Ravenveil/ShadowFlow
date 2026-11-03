@@ -149,34 +149,39 @@ beforeEach(() => {
   (listProjectsWithSessions as ReturnType<typeof vi.fn>).mockResolvedValue(PROJECTS);
 });
 
-describe('NeoRail — 项目分组（GAP A3）', () => {
-  it('home 分区常驻「项目」label + 新建项目行', async () => {
+describe('NeoRail — 项目顶层分组混排（os-unified 2026-11-04）', () => {
+  it('home：新建项目行常驻，项目接口被调用', async () => {
     renderRail('home');
-    expect(await screen.findByText('项目')).toBeInTheDocument();
     expect(screen.getByTestId('neo-new-project')).toBeInTheDocument();
     await waitFor(() => expect(listProjectsWithSessions).toHaveBeenCalled());
   });
 
-  it('会话按项目分桶：命中 group_id 的 DM 落在项目 label 下，未命中落默认「会话」组', async () => {
+  it('项目块：命中 group_id 的 DM/群聊归入项目块（neo-project-section），未命中落默认区', async () => {
     renderRail('home');
-    // 项目 label 出现
-    expect(await screen.findByTestId('neo-project-label')).toHaveTextContent('氢能官网');
-    // 两个 DM 行都在（分组只是展示归组，行不丢）
+    // 项目块出现（含折叠标题）
+    expect(await screen.findByTestId('neo-project-section')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-project-section-toggle')).toHaveTextContent('氢能官网');
+    // 两个 DM 行都在（归属 g-dm-1 的在项目块内，散养的落默认区）
     const rows = screen.getAllByTestId('neo-dm-row');
     expect(rows).toHaveLength(2);
-    // 默认组 label 仍在（有未归组会话）
-    expect(screen.getByText('会话')).toBeInTheDocument();
-    // 项目 label 在默认「会话」label 之前
-    const labels = screen.getAllByText(/氢能官网|会话/);
-    expect(labels[0]).toHaveTextContent('氢能官网');
-    expect(labels[1]).toHaveTextContent('会话');
+    // 项目块 hover 管理钮（重命名/删除，沿用旧项目 label 三钮）
+    expect(screen.getByTestId('neo-project-rename')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-project-delete')).toBeInTheDocument();
   });
 
-  it('teams 分区群聊按项目分桶：命中的群在项目 label 下，未命中平铺', async () => {
-    renderRail('teams', { view: 'teams' });
-    expect(await screen.findByTestId('neo-project-label')).toHaveTextContent('氢能官网');
-    const rows = screen.getAllByTestId('neo-group-row');
-    expect(rows).toHaveLength(2);
+  it('项目块折叠/展开：toggle 后组体（DM 行）消失/出现', async () => {
+    renderRail('home');
+    const toggle = await screen.findByTestId('neo-project-section-toggle');
+    expect((await screen.findAllByTestId('neo-dm-row')).length).toBe(2);
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      // g-dm-1 的 DM 在项目块内，折叠后项目块内行消失（默认区散养 DM 仍在）
+      expect(screen.getAllByTestId('neo-dm-row')).toHaveLength(1);
+    });
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(screen.getAllByTestId('neo-dm-row')).toHaveLength(2);
+    });
   });
 
   it('点新建项目行 → 内联输入出现；Enter → createProject(name) 且输入收起', async () => {
@@ -206,7 +211,7 @@ describe('NeoRail — 项目分组（GAP A3）', () => {
     expect(screen.getByTestId('neo-new-project-input')).toBeInTheDocument();
   });
 
-  it('项目接口失败 → 降级默认组平铺，不崩', async () => {
+  it('项目接口失败 → 降级默认区平铺，不崩', async () => {
     (listProjectsWithSessions as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('down'));
     renderRail('home');
     // 新建项目行仍常驻；DM 行全部落默认组
@@ -214,6 +219,6 @@ describe('NeoRail — 项目分组（GAP A3）', () => {
     await waitFor(() => {
       expect(screen.getAllByTestId('neo-dm-row')).toHaveLength(2);
     });
-    expect(screen.queryByTestId('neo-project-label')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('neo-project-section')).not.toBeInTheDocument();
   });
 });

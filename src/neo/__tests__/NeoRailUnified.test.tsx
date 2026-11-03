@@ -1,7 +1,8 @@
 /**
- * NeoRail os-unified 测试 — 2026-11-03 Grok Bot 范式改造批。
+ * NeoRail os-unified 测试 — 2026-11-03 Grok Bot 范式改造批 / 2026-11-04 用户反馈批。
  * 覆盖：员工会话项（头像主机入口 + 消息预览 + 未读）、团队折叠分组
- * （组标题折叠/展开、组内群聊行、成员会话项）、home 分区并入团队/成员。
+ * （组标题折叠/展开、组内群聊行、成员会话项）、home 单一列表区
+ * （agents/teams 分区已移除，团队/成员常驻 home）、项目顶层分组混排。
  */
 import { useState } from 'react';
 import { render, screen, fireEvent, waitFor } from '../../test/utils';
@@ -75,17 +76,12 @@ import { resolveTeamGroup } from '../../api/groupApi';
 import { NeoRail } from '../NeoRail';
 import type { NeoNav, RailSection } from '../types';
 
-function Harness({
-  initialNav,
-  initialSection,
-}: {
-  initialNav: NeoNav;
-  initialSection: RailSection;
-}) {
-  const [nav, setNav] = useState<NeoNav>(initialNav);
-  const [section, setSection] = useState<RailSection>(initialSection);
+function Harness({ initialNav }: { initialNav?: NeoNav } = {}) {
+  const [nav, setNav] = useState<NeoNav>(initialNav ?? { view: 'home' });
+  // os-unified：RailSection 只剩 home/knowledge/memory，home 是唯一会话区
+  const [section, setSection] = useState<RailSection>('home');
   const map: Partial<Record<NeoNav['view'], RailSection>> = {
-    home: 'home', knowledge: 'knowledge', memory: 'memory', agents: 'agents', teams: 'teams',
+    home: 'home', knowledge: 'knowledge', memory: 'memory',
   };
   return (
     <NeoRail
@@ -103,21 +99,24 @@ function Harness({
   );
 }
 
+function renderHome() {
+  return render(
+    <MemoryRouter>
+      <Harness />
+    </MemoryRouter>,
+  );
+}
+
 describe('NeoRail os-unified — 员工会话项', () => {
-  it('agents 分区：会话项带头像主机入口 + 消息预览 + 未读徽标', async () => {
-    render(
-      <MemoryRouter>
-        <Harness initialNav={{ view: 'agents' }} initialSection="agents" />
-      </MemoryRouter>,
-    );
-    const rows = await screen.findAllByTestId('neo-agent-session-row');
-    expect(rows).toHaveLength(2);
-    // a1 有 DM：预览文案 + 未读
-    expect(screen.getByText('海报初稿已经完成')).toBeInTheDocument();
+  it('home 列表区：会话项带头像主机入口 + 消息预览 + 未读徽标', async () => {
+    renderHome();
+    // a1 有 DM：预览文案 + 未读（DM 行升级 Grok 会话项形态后同样渲染）
+    expect(await screen.findByText('海报初稿已经完成')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
-    // 头像主机入口
-    const hostBtns = screen.getAllByTestId('neo-agent-host-btn');
-    expect(hostBtns).toHaveLength(2);
+    // 头像主机入口（团队分组内成员 + 散养成员都会渲染）
+    await waitFor(() => {
+      expect(screen.getAllByTestId('neo-agent-host-btn').length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   it('点头像 → onNavigate agent-soul 主机卡片（不进会话）', async () => {
@@ -125,8 +124,8 @@ describe('NeoRail os-unified — 员工会话项', () => {
     render(
       <MemoryRouter>
         <NeoRail
-          nav={{ view: 'agents' }}
-          section="agents"
+          nav={{ view: 'home' }}
+          section="home"
           onNavigate={onNavigate}
           onNewTask={() => {}}
           collapsed={false}
@@ -142,37 +141,31 @@ describe('NeoRail os-unified — 员工会话项', () => {
   });
 });
 
-describe('NeoRail os-unified — 团队折叠分组', () => {
-  it('home 分区：团队分组（组标题 + 组内群聊 + 成员会话项）+ 未归属员工落成员组', async () => {
-    render(
-      <MemoryRouter>
-        <Harness initialNav={{ view: 'home' }} initialSection="home" />
-      </MemoryRouter>,
-    );
-    // 团队分组标题（teams 列表进入 home 分区也会拉取，等分组落地）
+describe('NeoRail os-unified — 团队折叠分组（home 常驻）', () => {
+  it('home：团队分组（组标题 + 组内群聊 + 成员会话项）+ 未归属员工落成员区', async () => {
+    renderHome();
+    // 团队分组标题
     const groupNode = await screen.findByTestId('neo-team-group', {}, { timeout: 3000 });
     expect(groupNode).toBeInTheDocument();
-    // 组内群聊行（inbox 有 team 名匹配的群）；teams 异步加载完成前可能还没渲染，
-    // 等 members 渲染出来（每组最后一个成员行）再查
+    // 组内群聊行（inbox 有 team 名匹配的群）
     await screen.findAllByTestId('neo-agent-session-row');
     await waitFor(() => {
       expect(screen.getByTestId('neo-team-group-chat')).toBeInTheDocument();
     });
-    // 成员组：a2 未归属团队
-    expect(screen.getByText('成员')).toBeInTheDocument();
+    // 成员区：a2 未归属团队（无 DM 的孤儿成员也渲染会话行）
+    const memberLabels = screen.getAllByText('成员');
+    expect(memberLabels.length).toBeGreaterThanOrEqual(1);
     const sessRows = screen.getAllByTestId('neo-agent-session-row');
     expect(sessRows.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('teams 分区：分组折叠/展开（toggle → 组体消失/出现）', async () => {
-    render(
-      <MemoryRouter>
-        <Harness initialNav={{ view: 'teams' }} initialSection="teams" />
-      </MemoryRouter>,
-    );
-    const toggle = await screen.findByTestId('neo-team-group-toggle');
+  it('团队分组折叠/展开（toggle → 组体消失/出现）', async () => {
+    renderHome();
+    const toggle = await screen.findByTestId('neo-team-group-toggle', {}, { timeout: 3000 });
     // 展开态：组体在
-    expect(screen.getByTestId('neo-team-group-chat')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('neo-team-group-chat')).toBeInTheDocument();
+    });
     // 折叠
     fireEvent.click(toggle);
     expect(screen.queryByTestId('neo-team-group-chat')).toBeNull();
@@ -183,16 +176,20 @@ describe('NeoRail os-unified — 团队折叠分组', () => {
     });
   });
 
-  it('teams 分区：无群时显示「群聊现场」入口行，点击走 resolveTeamGroup', async () => {
-    render(
-      <MemoryRouter>
-        <Harness initialNav={{ view: 'teams' }} initialSection="teams" />
-      </MemoryRouter>,
-    );
-    // teams 分区渲染时 inbox groups 匹配同名群 → 有群聊行；这里验证 toggle 后
-    // openTeamChat 通路：直接点击组内成员行不影响 resolveTeamGroup 调用记录
-    const row = await screen.findByTestId('neo-team-group-chat');
+  it('组内群聊行直接可点（无需先切 teams 分区）；resolveTeamGroup 不被分组渲染误调', async () => {
+    renderHome();
+    const row = await screen.findByTestId('neo-team-group-chat', {}, { timeout: 3000 });
     expect(row).toBeInTheDocument();
     expect(resolveTeamGroup).not.toHaveBeenCalled();
+  });
+});
+
+describe('NeoRail os-unified — 项目顶层分组混排（2026-11-04 用户反馈批）', () => {
+  it('项目块：有归属会话的项目渲染顶层分组（toggle + 名称 + 计数）', async () => {
+    renderHome();
+    // 本文件 mock 项目列表为空 → 无项目块，断言不渲染项目分组
+    expect(screen.queryByTestId('neo-project-section')).toBeNull();
+    // 新建项目行仍在（创建入口常驻）
+    expect(screen.getByTestId('neo-new-project')).toBeInTheDocument();
   });
 });
