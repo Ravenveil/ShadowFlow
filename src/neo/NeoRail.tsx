@@ -48,7 +48,6 @@ import {
   FolderInput,
   FolderOpen,
   Library,
-  Package,
   PanelLeft,
   PanelLeftOpen,
   PawPrint,
@@ -73,10 +72,8 @@ import {
 import {
   createProject,
   deleteProject,
-  getProjectArtifacts,
   listProjectsWithSessions,
   patchProject,
-  type ProjectArtifact,
   type ProjectWithSessions,
 } from '../api/projects';
 import { moveGroupConversationToProject } from '../api/conversations';
@@ -686,25 +683,6 @@ export function NeoRail({
   const [manageError, setManageError] = useState<string | null>(null);
   // GAP A3 回写（2026-08-23）「移入项目」：当前打开项目浮层的行（group_id）。
   const [moveMenuFor, setMoveMenuFor] = useState<string | null>(null);
-  // 项目产物面板（2026-09-03）：当前打开产物模态的项目；artifacts=null=加载中。
-  const [artifactsProject, setArtifactsProject] = useState<ProjectWithSessions | null>(null);
-  const [artifacts, setArtifacts] = useState<ProjectArtifact[] | null>(null);
-  const [artifactsError, setArtifactsError] = useState<string | null>(null);
-
-  const openProjectArtifacts = useCallback((p: ProjectWithSessions) => {
-    setArtifactsProject(p);
-    setArtifacts(null);
-    setArtifactsError(null);
-    getProjectArtifacts(p.project_id)
-      .then(setArtifacts)
-      .catch(() =>
-        setArtifactsError(
-          t('neo.manage.opFailed', {
-            defaultValue: language === 'zh' ? '操作失败，请重试' : 'Operation failed, please retry',
-          }),
-        ),
-      );
-  }, [t, language]);
 
   const failManage = useCallback(() => {
     setManageError(
@@ -1165,7 +1143,7 @@ export function NeoRail({
         <div className="neo-agent-row">
           <button
             type="button"
-            className="neo-group-label"
+            className={`neo-group-label${open ? '' : ' collapsed'}`}
             onClick={() => toggleGroup(key)}
             aria-expanded={open}
             data-testid="neo-team-group-toggle"
@@ -1296,7 +1274,7 @@ export function NeoRail({
         <div className="neo-agent-row">
           <button
             type="button"
-            className="neo-group-label"
+            className={`neo-group-label${open ? '' : ' collapsed'}`}
             onClick={() => toggleGroup(key)}
             aria-expanded={open}
             data-testid="neo-project-section-toggle"
@@ -1316,19 +1294,7 @@ export function NeoRail({
             </span>
             {memberCount > 0 && <span className="neo-row-meta">{memberCount}</span>}
           </button>
-          {/* hover 管理钮（沿用旧项目 label 三钮：产物/重命名/删除） */}
-          <button
-            type="button"
-            className="neo-icon-btn neo-row-soul"
-            onClick={() => openProjectArtifacts(project)}
-            aria-label={t('neo.manage.viewProjectArtifacts', {
-              defaultValue: language === 'zh' ? `查看项目 ${project.name} 的产物` : `View artifacts of project ${project.name}`,
-            })}
-            title={t('projects.tabArtifacts', { defaultValue: language === 'zh' ? '产物' : 'Artifacts' })}
-            data-testid="neo-project-artifacts"
-          >
-            <Package size={12} strokeWidth={1.75} aria-hidden />
-          </button>
+          {/* hover 管理钮（旧项目 label 三钮剩二：重命名/删除；产物钮 2026-11-03 移除） */}
           <button
             type="button"
             className="neo-icon-btn neo-row-soul"
@@ -1891,113 +1857,6 @@ export function NeoRail({
             void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
           }}
         />
-      )}
-
-      {/* 项目产物模态（2026-09-03）：项目 label 产物钮 → GET /api/projects/:id/artifacts。
-          内联样式居中浮层（同 agentCreatedToast / 移入项目浮层先例，不引重型组件）；
-          preview_url/download_url 为相对路径（/projects/...），与 NeoHost 产物 tab 同
-          款直链用法；空态复用 projects.artifactsEmpty。 */}
-      {artifactsProject && (
-        <div
-          role="presentation"
-          data-testid="neo-artifacts-overlay"
-          onClick={() => setArtifactsProject(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 10002,
-            background: 'rgba(0,0,0,.32)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('projects.tabArtifacts', {
-              defaultValue: language === 'zh' ? '产物' : 'Artifacts',
-            })}
-            data-testid="neo-artifacts-modal"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: 420, maxWidth: '90vw', maxHeight: '70vh',
-              display: 'flex', flexDirection: 'column',
-              borderRadius: 10, padding: 12,
-              background: 'var(--t-panel)', color: 'var(--t-fg-2)',
-              border: '1px solid var(--t-border)',
-              boxShadow: '0 12px 32px rgba(0,0,0,.24)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <Package size={14} strokeWidth={1.75} aria-hidden />
-              <span style={{ flex: 1, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {artifactsProject.name} · {t('projects.tabArtifacts', { defaultValue: language === 'zh' ? '产物' : 'Artifacts' })}
-              </span>
-              <button
-                type="button"
-                className="neo-icon-btn"
-                onClick={() => setArtifactsProject(null)}
-                aria-label={t('common.close', { defaultValue: language === 'zh' ? '关闭' : 'Close' })}
-                title={t('common.close', { defaultValue: language === 'zh' ? '关闭' : 'Close' })}
-                data-testid="neo-artifacts-close"
-              >
-                ×
-              </button>
-            </div>
-            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {artifactsError && (
-                <div className="neo-list-note neo-list-error" role="alert">
-                  <span className="neo-list-error-text">{artifactsError}</span>
-                </div>
-              )}
-              {!artifactsError && artifacts === null && (
-                <div className="neo-list-note">{t('common.loading', { defaultValue: language === 'zh' ? '加载中…' : 'Loading…' })}</div>
-              )}
-              {!artifactsError && artifacts !== null && artifacts.length === 0 && (
-                <div className="neo-list-note" data-testid="neo-artifacts-empty">
-                  {t('projects.artifactsEmpty', { defaultValue: language === 'zh' ? '暂无产物' : 'No artifacts yet' })}
-                </div>
-              )}
-              {(artifacts ?? []).map((a) => (
-                <div
-                  key={a.artifact_id}
-                  data-testid="neo-artifact-row"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', borderRadius: 6, fontSize: 12 }}
-                >
-                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.title}>
-                    {a.title}
-                  </span>
-                  <span className="neo-row-meta">{a.file_type}</span>
-                  <span className="neo-row-meta" style={{ flex: '0 0 auto' }}>
-                    {new Date(a.generated_at).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}
-                  </span>
-                  {a.preview_url && (
-                    <a
-                      className="neo-icon-btn"
-                      href={a.preview_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      data-testid="neo-artifact-preview"
-                      title={t('projects.artifactPreview', { defaultValue: language === 'zh' ? '预览' : 'Preview' })}
-                    >
-                      {t('projects.artifactPreview', { defaultValue: language === 'zh' ? '预览' : 'Preview' })}
-                    </a>
-                  )}
-                  {a.download_url && (
-                    <a
-                      className="neo-icon-btn"
-                      href={a.download_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      download
-                      data-testid="neo-artifact-download"
-                      title={t('projects.artifactDownload', { defaultValue: language === 'zh' ? '下载' : 'Download' })}
-                    >
-                      {t('projects.artifactDownload', { defaultValue: language === 'zh' ? '下载' : 'Download' })}
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
       )}
     </nav>
   );
