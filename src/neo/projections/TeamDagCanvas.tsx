@@ -16,21 +16,34 @@
  *   - conditional  → 虚线 + 主题强调色（存量数据里可能出现的旧 mode）
  *   - direct/未知  → 默认实线
  *   边 label 直接展示 mode 原文（与旧 chips 明细一致，不另起 i18n 文案）。
+ *
+ * 2026-11-03 策略联动：可选 prop policyColorOf（agentId → 最严策略态），
+ * 命中时节点描边按策略染色（permit/warn/deny），与协作策略矩阵即时联动
+ * —— 矩阵改一格、保存/草稿即反映到画布节点描边颜色。
  */
 import { useMemo } from 'react';
 import { Handle, Position, type Edge, type Node, type NodeTypes } from 'reactflow';
 import SfReactFlowBase from '../../core/components/Canvas/SfReactFlowBase';
 import { AgentAvatar } from '../../components/agent/AgentAvatar';
-import type { TeamWorkflow, TeamWorkflowEdge } from '../../api/teams';
+import type { TeamWorkflow, TeamWorkflowEdge, PolicyCellState } from '../../api/teams';
 
 const COL_GAP = 140;
 /* 节点 2026-11-04 改为「头像在上 + 名字在下」竖排卡片（≈56px 高），
    行距从 52 抬到 78，避免同列节点上下压叠。 */
 const ROW_GAP = 78;
 
+/** 策略态 → 节点描边色（与 TeamPanel 矩阵格配色一致）。 */
+export const POLICY_NODE_COLOR: Record<PolicyCellState, string> = {
+  permit: 'var(--t-ok, #16A34A)',
+  warn: 'var(--t-warn, #D97706)',
+  deny: 'var(--t-err, #DC2626)',
+};
+
 interface TeamDagNodeData extends Record<string, unknown> {
   label: string;
   agentId: string;
+  /** 2026-11-03：策略联动染色（可选；无策略 = 无描边色 = 默认边框）。 */
+  policyState?: PolicyCellState | null;
 }
 
 const HANDLE_STYLE = { background: 'transparent', border: 'none' } as const;
@@ -38,8 +51,12 @@ const HANDLE_STYLE = { background: 'transparent', border: 'none' } as const;
 const NODE_TYPES: NodeTypes = { gmTeam: GmTeamNode };
 
 function GmTeamNode({ data }: { data: TeamDagNodeData }) {
+  const policyStyle =
+    data.policyState && POLICY_NODE_COLOR[data.policyState]
+      ? { border: `2px solid ${POLICY_NODE_COLOR[data.policyState]}` }
+      : undefined;
   return (
-    <div className="neo-gm-dag-node" title={data.agentId || data.label}>
+    <div className="neo-gm-dag-node" style={policyStyle} title={data.agentId || data.label}>
       <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
       <span className="neo-gm-dag-node-avatar">
         <AgentAvatar
@@ -96,8 +113,11 @@ export function computeTeamDagColumns(workflow: TeamWorkflow): Map<string, numbe
   return col;
 }
 
-/** TeamWorkflow 节点 → reactflow nodes（分层列 × 列内行序布局）。 */
-export function teamWorkflowToFlowNodes(workflow: TeamWorkflow): Node<TeamDagNodeData>[] {
+/** TeamWorkflow 节点 → reactflow nodes（分层列 × 列内行序布局 + 策略染色）。 */
+export function teamWorkflowToFlowNodes(
+  workflow: TeamWorkflow,
+  policyColorOf?: Map<string, PolicyCellState> | null,
+): Node<TeamDagNodeData>[] {
   const cols = computeTeamDagColumns(workflow);
   const buckets = new Map<number, string[]>();
   for (const n of workflow.nodes) {
@@ -109,13 +129,15 @@ export function teamWorkflowToFlowNodes(workflow: TeamWorkflow): Node<TeamDagNod
   return workflow.nodes.map((n) => {
     const c = cols.get(n.id) ?? 0;
     const row = (buckets.get(c) ?? []).indexOf(n.id);
+    const agentId = n.data?.agentId ?? '';
     return {
       id: n.id,
       type: 'gmTeam',
       position: { x: c * COL_GAP, y: row * ROW_GAP },
       data: {
         label: n.data?.name || n.data?.agentId || n.id,
-        agentId: n.data?.agentId ?? '',
+        agentId,
+        policyState: policyColorOf?.get(agentId) ?? null,
       },
     };
   });
@@ -153,8 +175,18 @@ export function teamWorkflowToFlowEdges(workflow: TeamWorkflow): Edge[] {
   });
 }
 
-export function TeamDagCanvas({ workflow }: { workflow: TeamWorkflow }) {
-  const nodes = useMemo(() => teamWorkflowToFlowNodes(workflow), [workflow]);
+export function TeamDagCanvas({
+  workflow,
+  policyColorOf,
+}: {
+  workflow: TeamWorkflow;
+  /** agentId → 最严策略态；命中时节点描边按策略染色（矩阵联动）。 */
+  policyColorOf?: Map<string, PolicyCellState> | null;
+}) {
+  const nodes = useMemo(
+    () => teamWorkflowToFlowNodes(workflow, policyColorOf),
+    [workflow, policyColorOf],
+  );
   const edges = useMemo(() => teamWorkflowToFlowEdges(workflow), [workflow]);
 
   return (

@@ -1182,6 +1182,147 @@
   white-space: nowrap;
 }
 
+/* ── TeamPanel 协作策略矩阵 + DAG 内联编辑（2026-11-03）────────────── */
+
+/* 「编辑 DAG」section 内联展开容器：编辑器自带 min-height 340px 画布 */
+.neo-host-dag-inline-editor {
+  margin-top: 2px;
+}
+
+/* 未展开时的成员策略染色 chips 摘要 */
+.neo-host-policy-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0 4px;
+}
+.neo-host-policy-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1.5px solid var(--t-border);
+  border-radius: 999px;
+  background: var(--t-panel-2);
+  color: var(--t-fg-2);
+  font-size: 10.5px;
+  font-weight: 600;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-host-policy-summary-hint {
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* roster × roster 三态矩阵 */
+.neo-host-policy-matrix {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.neo-host-policy-table {
+  border-collapse: collapse;
+  font-size: 10.5px;
+}
+.neo-host-policy-table th {
+  font-weight: 600;
+  color: var(--t-fg-3);
+  padding: 3px 6px;
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+.neo-host-policy-table thead th {
+  border-bottom: 1px solid var(--t-border);
+}
+.neo-host-policy-corner {
+  width: 8px;
+  padding: 0 !important;
+}
+.neo-host-policy-table td {
+  padding: 2px;
+}
+.neo-host-policy-self {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0 3px,
+      var(--t-border) 3px 4px
+    );
+  border-radius: 4px;
+}
+.neo-host-policy-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--t-border);
+  background: var(--t-panel-2);
+  color: var(--t-fg-5);
+  font-size: 10px;
+  cursor: pointer;
+}
+.neo-host-policy-cell:hover {
+  border-color: var(--t-border-2);
+}
+.neo-host-policy-cell.is-permit {
+  background: color-mix(in oklab, var(--t-ok, #16A34A) 16%, var(--t-panel-2));
+  border-color: var(--t-ok, #16A34A);
+}
+.neo-host-policy-cell.is-warn {
+  background: color-mix(in oklab, var(--t-warn, #D97706) 16%, var(--t-panel-2));
+  border-color: var(--t-warn, #D97706);
+}
+.neo-host-policy-cell.is-deny {
+  background: color-mix(in oklab, var(--t-err, #DC2626) 16%, var(--t-panel-2));
+  border-color: var(--t-err, #DC2626);
+}
+.neo-host-policy-rowsum {
+  padding-left: 6px !important;
+  white-space: nowrap;
+}
+.neo-host-policy-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.neo-host-policy-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--t-fg-3);
+}
+.neo-host-policy-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.neo-host-policy-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.neo-host-policy-hint {
+  font-size: 10px;
+  color: var(--t-fg-5);
+}
+.neo-host-policy-spacer {
+  flex: 1;
+}
+
 .neo-host-nodeout {
   border-top: 1px solid var(--t-border);
   padding: 8px 8px 4px;

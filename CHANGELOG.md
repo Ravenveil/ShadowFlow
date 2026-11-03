@@ -3,6 +3,26 @@
 All notable changes to ShadowFlow are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] — 2026-11-03（编队主机：DAG 就地编辑 + 协作策略矩阵联动）
+
+### Changed — TeamPanel（编队 tab）交互重构
+- **「编辑 DAG」就地展开**：不再切走整面板 —— TeamDagEditor 直接在
+  「工作流」section 内联展开，拖拽/连线/边模式编辑就地完成，保存或取消
+  后收起回只读画布（TeamDagCanvas）；roster/策略/输出 section 全程可见。
+- **协作策略矩阵化**：「协作策略」从只读要点行升级为 roster × roster 三态
+  矩阵 —— 格子点击循环 允许 → 警告 → 拒绝 → 清除，点「保存策略」才
+  PUT /policy 持久化（有 diff 才出保存钮）；未展开时按成员显示策略染色
+  chips 摘要。新增 `putTeamPolicy` 调用链路与 `buildAgentPolicyColor`
+  纯函数（成员最严策略态 deny > warn）。
+- **策略 ↔ 画布联动**：`TeamDagCanvas` / `TeamDagEditor` 新增
+  `policyColorOf` prop，工作流节点描边按成员策略态染色（草稿即反映，
+  无需保存）—— 矩阵改一格、画布立变。
+- **移除「最近运行」section**（用户判定冗余，run 现场看群聊页）；连带
+  清理 listGroups/listRunSessions/getRunGraph 依赖与 run 行样式、
+  teamRecentRuns* i18n key。
+- 测试：TeamPanel.test.tsx 重写（9 用例：内联编辑契约 + 策略矩阵循环/
+  保存），TeamPanelManage 同步；全量 63 文件 495 用例回归通过。
+
 ## [Unreleased] — 2026-08-23（第四轮 · 管理面闭环 + L6 审批 + StaffDeck 三借鉴）
 
 ### Changed — Neo 侧栏与团队主机视觉收尾

@@ -35,6 +35,7 @@ vi.mock('../../api/teams', () => ({
   deleteTeam: vi.fn().mockResolvedValue(undefined),
   getTeamWorkflow: vi.fn().mockResolvedValue({ nodes: [], edges: [] }),
   getTeamPolicy: vi.fn().mockResolvedValue({}),
+  putTeamPolicy: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../../api/agents', () => ({
   listAgents: vi.fn().mockResolvedValue([
@@ -43,15 +44,6 @@ vi.mock('../../api/agents', () => ({
 }));
 vi.mock('../../api/groupApi', () => ({
   resolveTeamGroup: vi.fn().mockResolvedValue('g-team-1'),
-  // 2026-10-31 TeamPanel 新增「最近运行」区块依赖 listGroups，一并 mock；
-  // 回 [] → find 不到 group → runsState='empty'，不触发后续请求。
-  listGroups: vi.fn().mockResolvedValue([]),
-}));
-vi.mock('../../api/runSessions', () => ({
-  listRunSessions: vi.fn().mockResolvedValue([]),
-}));
-vi.mock('../../api/runs', () => ({
-  getRunGraph: vi.fn().mockResolvedValue({ nodes: [], edges: [] }),
 }));
 vi.mock('../../store/workspaceStore', () => ({
   useWorkspaceStore: (sel: (s: { currentId: string | null }) => unknown) =>

@@ -1,52 +1,61 @@
 /**
  * TeamPanel — NeoHost「编队」tab（agent 编队面板，阶段 2.4 切面）。
  *
- * 触发：NeoRail 团队态选中 team（target.kind === 'team'）时由 NeoHost 挂载。
+ * 触发：NeoRail 团队态选中 team（target.kind === "team"）时由 NeoHost 挂载。
  *
  * 数据源（全部真实端点，不 mock；缺失即空态）：
  *   - GET /api/teams/{id}          → TeamRecord（roster = agent_ids）
- *   - GET /api/teams/{id}/workflow → TeamWorkflow（DAG 摘要：节点 chips + 边列表）
- *   - GET /api/teams/{id}/policy   → TeamPolicyMatrix（permit/warn/deny 要点）
- *   - GET /api/agents              → 成员名/状态解析（roster 行）
+ *   - GET /api/teams/{id}/workflow → TeamWorkflow（DAG，section 内联编辑）
+ *   - GET /api/teams/{id}/policy   → TeamPolicyMatrix（permit/warn/deny 矩阵）
+ *   - GET /api/agents              → 成员名/状态解析（roster 行 + 矩阵行头）
  *   - useRunSession.perNodeChunks  → run 进行中的 per-node 输出归属
  *     （键 = SSE DAG 事件携带的 node_id；经 workflow 节点 data.name 解析显示名）
+ *
+ * 2026-11-03 用户反馈批（矩阵联动 + 就地编辑）：
+ *   - 「编辑 DAG」不再切走整面板：TeamDagEditor 直接在「工作流」section
+ *     内联展开，拖拽/连线/边模式编辑就地完成，保存/取消后收起画布。
+ *   - 「协作策略」改为 roster × roster 策略矩阵：格子点击循环 permit →
+ *     warn → deny → 清除（未配置），有改动才出现「保存策略」钮；未展开时
+ *     按成员显示策略染色 chips 摘要。
+ *   - 策略 → 画布联动：agentPolicyColor（成员最严策略态 deny > warn）经
+ *     policyColorOf 传给 TeamDagCanvas / TeamDagEditor，节点描边随策略
+ *     实时变化 —— 矩阵一点，画布立变。
+ *   - 「最近运行」section 移除（用户判定冗余，run 现场看群聊页）。
  *
  * per-node 输出只在 SSE 事件带 node_id（DAG 调度多 Agent run）时才有内容；
  * 单 Agent run 走全局流，此处显示干净空态说明，不伪造归属。
  */
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
+  ChevronDown,
   GitBranch,
-  History,
   MessageSquareText,
-  PenLine,
   Pencil,
   ShieldCheck,
   Trash2,
   UsersRound,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   deleteTeam,
   getTeam,
   getTeamPolicy,
   getTeamWorkflow,
   patchTeam,
+  putTeamPolicy,
+  type PolicyCellState,
   type TeamPolicyMatrix,
   type TeamRecord,
   type TeamWorkflow,
-} from '../../api/teams';
-import { listAgents, type AgentRecord } from '../../api/agents';
-import { listGroups, resolveTeamGroup } from '../../api/groupApi';
-import { listRunSessions, type RunSessionSummary } from '../../api/runSessions';
-import { getRunGraph, type RunGraph } from '../../api/runs';
-import type { NodeChunkBuffer } from '../../core/hooks/useRunSession';
-import { useI18n } from '../../common/i18n';
-import { useWorkspaceStore } from '../../store/workspaceStore';
-import { useInboxStore } from '../../core/store/useInboxStore';
-import { TeamDagEditor } from './TeamDagEditor';
-import { TeamDagCanvas } from './TeamDagCanvas';
-import { ProcessDagCanvas } from './ProcessDagCanvas';
+} from "../../api/teams";
+import { listAgents, type AgentRecord } from "../../api/agents";
+import { resolveTeamGroup } from "../../api/groupApi";
+import type { NodeChunkBuffer } from "../../core/hooks/useRunSession";
+import { useI18n } from "../../common/i18n";
+import { useWorkspaceStore } from "../../store/workspaceStore";
+import { useInboxStore } from "../../core/store/useInboxStore";
+import { TeamDagEditor } from "./TeamDagEditor";
+import { TeamDagCanvas } from "./TeamDagCanvas";
 
 export interface TeamPanelProps {
   teamId: string;
@@ -57,29 +66,43 @@ export interface TeamPanelProps {
   streaming: boolean;
 }
 
-const POLICY_CLASS: Record<string, string> = {
-  permit: 'neo-host-pill--ok',
-  warn: 'neo-host-pill--oscillating',
-  deny: 'neo-host-pill--err',
-};
-
 const AGENT_STATUS_CLASS: Record<string, string> = {
-  idle: 'neo-host-pill--muted',
-  running: 'neo-host-pill--running',
-  paused: 'neo-host-pill--oscillating',
-  error: 'neo-host-pill--err',
+  idle: "neo-host-pill--muted",
+  running: "neo-host-pill--running",
+  paused: "neo-host-pill--oscillating",
+  error: "neo-host-pill--err",
 };
 
-// run-sessions 状态 → pill 配色（runBus 内存态全集 + 未知回落 muted）。
-const RUN_STATUS_CLASS: Record<string, string> = {
-  running: 'neo-host-pill--running',
-  succeeded: 'neo-host-pill--ok',
-  completed: 'neo-host-pill--ok',
-  failed: 'neo-host-pill--err',
-  canceled: 'neo-host-pill--oscillating',
-  cancelled: 'neo-host-pill--oscillating',
-  idle: 'neo-host-pill--muted',
+/** 策略格循环次序：未配置 → permit → warn → deny → 清除（回默认允许）。 */
+const POLICY_CYCLE: PolicyCellState[] = ["permit", "warn", "deny"];
+
+/** 策略态 → 染色（矩阵格 / 节点描边 / chips 共用）。 */
+const POLICY_COLOR: Record<PolicyCellState, string> = {
+  permit: "var(--t-ok, #16A34A)",
+  warn: "var(--t-warn, #D97706)",
+  deny: "var(--t-err, #DC2626)",
 };
+const POLICY_RANK: Record<PolicyCellState, number> = { deny: 3, warn: 2, permit: 1 };
+
+/** agentId → 最严策略态（deny > warn > permit；自环忽略），画布染色源。 */
+export function buildAgentPolicyColor(
+  matrix: TeamPolicyMatrix | null,
+): Map<string, PolicyCellState> {
+  const map = new Map<string, PolicyCellState>();
+  if (!matrix) return map;
+  for (const [from, row] of Object.entries(matrix)) {
+    for (const [to, state] of Object.entries(row ?? {})) {
+      if (from === to) continue;
+      const s = state as PolicyCellState;
+      if (!(s in POLICY_RANK)) continue;
+      const prevFrom = map.get(from);
+      if (!prevFrom || POLICY_RANK[s] > POLICY_RANK[prevFrom]) map.set(from, s);
+      const prevTo = map.get(to);
+      if (!prevTo || POLICY_RANK[s] > POLICY_RANK[prevTo]) map.set(to, s);
+    }
+  }
+  return map;
+}
 
 export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPanelProps) {
   const { t } = useI18n();
@@ -89,7 +112,7 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
-  // 「编辑 DAG」开关：true 时整面板切到 TeamDagEditor（GAP B28）。
+  // 2026-11-03「编辑 DAG」改为 section 内联展开（不再切走整面板）。
   const [editingDag, setEditingDag] = useState(false);
   // GAP D（2026-08-22）「发起群聊」CTA：find-or-create 绑 team_id 的群后跳
   // 群聊现场页（/group/:gid，NeoGroupChat 路由页），失败给明确提示不静默。
@@ -97,65 +120,9 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
   const workspaceId = useWorkspaceStore((s) => s.currentId);
   const [launchBusy, setLaunchBusy] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
-  // 管理面闭环（2026-08-23）：头部团队重命名/删除。删除走 window.confirm 二次
-  // 确认；失败进 manageError 红条（不吞错）；删除成功 → 回 Neo home 安全页。
+  // 管理面闭环（2026-08-23）：头部团队重命名/删除。
   const [manageBusy, setManageBusy] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
-
-  // ── 最近运行（2026-10-31）───────────────────────────────────────────────
-  // team → group 换算（只读 find-only，走 listGroups 过滤 team_id；复用
-  // resolveTeamGroup 会触发建群副作用，只读列出场景不合适）→
-  // listRunSessions(gid) 取该团队干活现场的 run 列表 → 选中一条就地渲染
-  // ProcessDagCanvas 执行态画布（节点染色 + 迭代环徽标）。
-  const [recentRuns, setRecentRuns] = useState<RunSessionSummary[]>([]);
-  const [runsState, setRunsState] = useState<'loading' | 'ready' | 'empty' | 'failed'>('loading');
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [runGraph, setRunGraph] = useState<RunGraph | null>(null);
-  const [runGraphFailed, setRunGraphFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setRecentRuns([]);
-    setRunsState('loading');
-    setSelectedRunId(null);
-    setRunGraph(null);
-    setRunGraphFailed(false);
-    (async () => {
-      try {
-        // find-only：已有群直接用；没有 → 该团队从没开过群，自然也没有 run。
-        const groups = await listGroups(workspaceId ?? null, 'group');
-        if (cancelled) return;
-        const gid = groups.find((g) => g.team_id === teamId)?.group_id ?? null;
-        if (!gid) {
-          setRunsState('empty');
-          return;
-        }
-        const sessions = await listRunSessions(gid, 'group');
-        if (cancelled) return;
-        setRecentRuns(sessions);
-        setRunsState(sessions.length > 0 ? 'ready' : 'empty');
-      } catch {
-        if (!cancelled) setRunsState('failed');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [teamId, workspaceId]);
-
-  // 选中某次运行 → 拉执行图（daemon run 本地折叠 / Python run 走 proxy）。
-  const handleSelectRun = async (runId: string) => {
-    if (runId === selectedRunId) return;
-    setSelectedRunId(runId);
-    setRunGraph(null);
-    setRunGraphFailed(false);
-    try {
-      const graph = await getRunGraph(runId);
-      setRunGraph(graph);
-    } catch {
-      setRunGraphFailed(true);
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -193,22 +160,75 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
   }, [teamId]);
 
   const agentById = new Map(agents.map((a) => [a.agent_id, a]));
+  const roster = team?.agent_ids ?? [];
+  const wfNodes = workflow?.nodes ?? [];
+  const wfEdges = workflow?.edges ?? [];
   const wfNodeNameById = new Map(
-    (workflow?.nodes ?? []).map((n) => [n.id, n.data?.name || n.data?.agentId || n.id]),
+    wfNodes.map((n) => [n.id, n.data?.name || n.data?.agentId || n.id]),
   );
 
-  // policy 要点：只列非 permit 单元 + 三态计数（矩阵为空 = 未配置）。
-  const policyCells: Array<{ from: string; to: string; state: string }> = [];
-  const policyCount: Record<string, number> = { permit: 0, warn: 0, deny: 0 };
-  if (policy) {
-    for (const [from, row] of Object.entries(policy)) {
-      for (const [to, state] of Object.entries(row ?? {})) {
-        policyCount[state] = (policyCount[state] ?? 0) + 1;
-        if (state !== 'permit') policyCells.push({ from, to, state });
+  // ── 协作策略矩阵（2026-11-03）──────────────────────────────────────
+  // 展示草稿本地即时翻转，点「保存策略」才 PUT（有真实 diff 才出保存钮）；
+  // 成功后本地态即服务端态。矩阵同时驱动画布节点染色（联动）。
+  const [policyDraft, setPolicyDraft] = useState<TeamPolicyMatrix>({});
+  const [policySaving, setPolicySaving] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [policyOpen, setPolicyOpen] = useState(false);
+  const [policyJustSaved, setPolicyJustSaved] = useState(false);
+
+  // 服务端 policy → 展示草稿（team 切换 / 保存成功回写时重置）。
+  useEffect(() => {
+    setPolicyDraft(policy ? JSON.parse(JSON.stringify(policy)) : {});
+    setPolicyJustSaved(false);
+    setPolicyError(null);
+  }, [policy]);
+
+  const policyDraftCell = (from: string, to: string): PolicyCellState | null =>
+    (policyDraft?.[from]?.[to] as PolicyCellState | undefined) ?? null;
+
+  /** 单格点击循环：未配置 → permit → warn → deny → 未配置；只改草稿不落库。 */
+  const cyclePolicyCell = (from: string, to: string) => {
+    setPolicyError(null);
+    setPolicyJustSaved(false);
+    setPolicyDraft((prev) => {
+      const next: TeamPolicyMatrix = prev ? JSON.parse(JSON.stringify(prev)) : {};
+      const row = { ...(next[from] ?? {}) };
+      const cur = (row[to] as PolicyCellState | undefined) ?? null;
+      if (!cur) {
+        row[to] = "permit";
+      } else {
+        const nextVal = POLICY_CYCLE[POLICY_CYCLE.indexOf(cur) + 1];
+        if (nextVal) row[to] = nextVal;
+        else delete row[to];
       }
+      if (Object.keys(row).length === 0) delete next[from];
+      else next[from] = row;
+      return next;
+    });
+  };
+
+  const policyDirty = useMemo(
+    () => JSON.stringify(policyDraft) !== JSON.stringify(policy ?? {}),
+    [policyDraft, policy],
+  );
+
+  const savePolicy = async () => {
+    if (!policyDirty || policySaving) return;
+    setPolicySaving(true);
+    setPolicyError(null);
+    try {
+      await putTeamPolicy(teamId, policyDraft);
+      setPolicy(JSON.parse(JSON.stringify(policyDraft)));
+      setPolicyJustSaved(true);
+    } catch {
+      setPolicyError(t("neo.host.teamPolicySaveFailed", { defaultValue: "策略保存失败，请重试" }));
+    } finally {
+      setPolicySaving(false);
     }
-  }
-  const policyTotal = policyCount.permit + policyCount.warn + policyCount.deny;
+  };
+
+  /** 策略 → 画布联动：agentId → 最严策略态（matrix 草稿即时驱动）。 */
+  const agentPolicyColor = useMemo(() => buildAgentPolicyColor(policyDraft), [policyDraft]);
 
   // per-node 输出：只看有实际内容的 buffer。
   const nodeOutputs = Object.entries(perNodeChunks).filter(
@@ -222,7 +242,7 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
     setLaunchBusy(true);
     setLaunchError(null);
     const gid = await resolveTeamGroup(
-      { team_id: teamId, name: teamName, agent_ids: team?.agent_ids ?? [] },
+      { team_id: teamId, name: team?.name ?? teamName, agent_ids: roster },
       workspaceId ?? undefined,
     );
     if (gid) {
@@ -231,7 +251,7 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
       navigate(`/group/${encodeURIComponent(gid)}`);
     } else {
       setLaunchError(
-        t('neo.host.teamChatError', { defaultValue: '建群失败：后端不可用或群创建被拒绝' }),
+        t("neo.host.teamChatError", { defaultValue: "建群失败：后端不可用或群创建被拒绝" }),
       );
       setLaunchBusy(false);
     }
@@ -243,7 +263,7 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
     if (manageBusy) return;
     const current = team?.name ?? teamName;
     const name = window
-      .prompt(t('neo.host.teamRenamePrompt', { defaultValue: '团队新名称' }), current)
+      .prompt(t("neo.host.teamRenamePrompt", { defaultValue: "团队新名称" }), current)
       ?.trim();
     if (!name || name === current) return;
     setManageBusy(true);
@@ -252,7 +272,7 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
       const updated = await patchTeam(teamId, { name });
       setTeam(updated);
     } catch {
-      setManageError(t('neo.host.teamManageError', { defaultValue: '操作失败，请重试' }));
+      setManageError(t("neo.host.teamManageError", { defaultValue: "操作失败，请重试" }));
     } finally {
       setManageBusy(false);
     }
@@ -263,7 +283,7 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
     if (manageBusy) return;
     if (
       !window.confirm(
-        t('neo.host.teamDeleteConfirm', {
+        t("neo.host.teamDeleteConfirm", {
           defaultValue: `确定删除团队「${team?.name ?? teamName}」？此操作不可撤销`,
         }),
       )
@@ -273,9 +293,9 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
     setManageError(null);
     try {
       await deleteTeam(teamId);
-      navigate('/');
+      navigate("/");
     } catch {
-      setManageError(t('neo.host.teamManageError', { defaultValue: '操作失败，请重试' }));
+      setManageError(t("neo.host.teamManageError", { defaultValue: "操作失败，请重试" }));
       setManageBusy(false);
     }
   };
@@ -284,7 +304,7 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
     return (
       <div className="neo-host-list">
         <div className="neo-host-tree-note neo-host-tree-note--pad">
-          {t('neo.host.loading', { defaultValue: '读取中…' })}
+          {t("neo.host.loading", { defaultValue: "读取中…" })}
         </div>
       </div>
     );
@@ -294,46 +314,26 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
     return (
       <div className="neo-host-list">
         <div className="neo-host-empty neo-host-empty--fill neo-host-empty--err">
-          {t('neo.host.teamError', { defaultValue: '编队数据加载失败' })}
+          {t("neo.host.teamError", { defaultValue: "编队数据加载失败" })}
         </div>
       </div>
     );
   }
 
-  const roster = team?.agent_ids ?? [];
-  const wfNodes = workflow?.nodes ?? [];
-  const wfEdges = workflow?.edges ?? [];
-
-  // 编辑态：整面板换成 DAG 编辑器（只读摘要/策略/输出保存后回来）。
-  if (editingDag) {
-    const rosterAgents = roster
-      .map((id) => agentById.get(id))
-      .filter((a): a is AgentRecord => Boolean(a));
-    return (
-      <div className="neo-host-list neo-host-list--editing">
-        <TeamDagEditor
-          teamId={teamId}
-          workflow={workflow ?? { nodes: [], edges: [] }}
-          agents={rosterAgents}
-          onSaved={(wf) => {
-            setWorkflow(wf);
-            setEditingDag(false);
-          }}
-          onCancel={() => setEditingDag(false)}
-        />
-      </div>
-    );
-  }
+  // roster 中解析得到 AgentRecord 的成员（矩阵行/列头 + 编辑器候选用）。
+  const rosterAgents = roster
+    .map((id) => agentById.get(id))
+    .filter((a): a is AgentRecord => Boolean(a));
 
   return (
     <div className="neo-host-list">
-      {/* 成员 roster（头部带「发起群聊」CTA — GAP D，与「编辑 DAG」并存；
-          2026-08-23 管理面闭环：头部追加团队重命名/删除钮） */}
+      {/* 成员 roster（头部带「发起群聊」CTA — GAP D；2026-08-23 管理面闭环：
+          头部追加团队重命名/删除钮） */}
       <div className="neo-host-sec">
         <div className="neo-host-sec-head">
           <UsersRound size={12} strokeWidth={1.8} />
           <span className="neo-host-sec-title">
-            {t('neo.host.teamRoster', { defaultValue: '成员' })}
+            {t("neo.host.teamRoster", { defaultValue: "成员" })}
           </span>
           <span className="neo-host-sec-meta">{team?.name ?? teamName}</span>
           <button
@@ -341,22 +341,22 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
             className="neo-host-wf-edit-btn"
             onClick={() => void handleRenameTeam()}
             disabled={manageBusy}
-            title={t('neo.manage.rename', { defaultValue: '重命名' })}
+            title={t("neo.manage.rename", { defaultValue: "重命名" })}
             data-testid="team-rename-btn"
           >
             <Pencil size={11} strokeWidth={1.8} />
-            {t('neo.manage.rename', { defaultValue: '重命名' })}
+            {t("neo.manage.rename", { defaultValue: "重命名" })}
           </button>
           <button
             type="button"
             className="neo-host-wf-edit-btn"
             onClick={() => void handleDeleteTeam()}
             disabled={manageBusy}
-            title={t('common.delete', { defaultValue: '删除' })}
+            title={t("common.delete", { defaultValue: "删除" })}
             data-testid="team-delete-btn"
           >
             <Trash2 size={11} strokeWidth={1.8} />
-            {t('common.delete', { defaultValue: '删除' })}
+            {t("common.delete", { defaultValue: "删除" })}
           </button>
           <button
             type="button"
@@ -367,8 +367,8 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
           >
             <MessageSquareText size={11} strokeWidth={1.8} />
             {launchBusy
-              ? t('neo.host.teamChatLaunching', { defaultValue: '建群中…' })
-              : t('neo.host.teamChatLaunch', { defaultValue: '发起群聊' })}
+              ? t("neo.host.teamChatLaunching", { defaultValue: "建群中…" })
+              : t("neo.host.teamChatLaunch", { defaultValue: "发起群聊" })}
           </button>
         </div>
         {manageError && (
@@ -387,7 +387,7 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
         )}
         {roster.length === 0 ? (
           <div className="neo-host-tree-note neo-host-tree-note--pad">
-            {t('neo.host.teamRosterEmpty', { defaultValue: '该团队暂无成员' })}
+            {t("neo.host.teamRosterEmpty", { defaultValue: "该团队暂无成员" })}
           </div>
         ) : (
           roster.map((id) => {
@@ -396,7 +396,7 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
               <div key={id} className="neo-host-roster-row">
                 <span className="neo-host-roster-name">{agent?.name ?? id}</span>
                 {agent && (
-                  <span className={`neo-host-pill ${AGENT_STATUS_CLASS[agent.status] ?? 'neo-host-pill--muted'}`}>
+                  <span className={`neo-host-pill ${AGENT_STATUS_CLASS[agent.status] ?? "neo-host-pill--muted"}`}>
                     {agent.status}
                   </span>
                 )}
@@ -409,17 +409,17 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
         )}
       </div>
 
-      {/* workflow DAG 摘要 — 2026-10-31 起 chips → 图形画布（TeamDagCanvas），
-          编辑入口不变（TeamDagEditor），编队 tab 内即可看图 + 编辑 */}
+      {/* workflow DAG — 2026-11-03 起「编辑 DAG」section 内联展开：不跳页、
+          不切走整面板，拖拽/连线/边模式就地完成；未展开时显示只读画布。 */}
       <div className="neo-host-sec">
         <div className="neo-host-sec-head">
           <GitBranch size={12} strokeWidth={1.8} />
           <span className="neo-host-sec-title">
-            {t('neo.host.teamWorkflow', { defaultValue: '工作流' })}
+            {t("neo.host.teamWorkflow", { defaultValue: "工作流" })}
           </span>
           <span className="neo-host-sec-meta">
-            {t('neo.host.procGraphMeta', {
-              defaultValue: '{{nodes}} 节点 · {{edges}} 边',
+            {t("neo.host.procGraphMeta", {
+              defaultValue: "{{nodes}} 节点 · {{edges}} 边",
               nodes: wfNodes.length,
               edges: wfEdges.length,
             })}
@@ -427,132 +427,204 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
           <button
             type="button"
             className="neo-host-wf-edit-btn"
-            onClick={() => setEditingDag(true)}
+            onClick={() => setEditingDag((v) => !v)}
             data-testid="team-dag-edit-entry"
           >
-            <PenLine size={11} strokeWidth={1.8} />
-            {t('neo.host.teamDagEdit', { defaultValue: '编辑 DAG' })}
+            {editingDag
+              ? t("neo.host.teamDagCollapse", { defaultValue: "收起编辑" })
+              : t("neo.host.teamDagEdit", { defaultValue: "编辑 DAG" })}
+            <ChevronDown
+              size={11}
+              strokeWidth={1.8}
+              style={{ transform: editingDag ? "rotate(180deg)" : undefined }}
+            />
           </button>
         </div>
-        {wfNodes.length === 0 ? (
+        {editingDag ? (
+          <div className="neo-host-dag-inline-editor">
+            <TeamDagEditor
+              teamId={teamId}
+              workflow={workflow ?? { nodes: [], edges: [] }}
+              agents={rosterAgents}
+              policyColorOf={agentPolicyColor}
+              onSaved={(wf) => {
+                setWorkflow(wf);
+                setEditingDag(false);
+              }}
+              onCancel={() => setEditingDag(false)}
+            />
+          </div>
+        ) : wfNodes.length === 0 ? (
           <div className="neo-host-tree-note neo-host-tree-note--pad">
-            {t('neo.host.teamWorkflowEmpty', { defaultValue: '该团队尚未编排工作流' })}
+            {t("neo.host.teamWorkflowEmpty", { defaultValue: "该团队尚未编排工作流" })}
           </div>
         ) : (
-          <TeamDagCanvas workflow={workflow as TeamWorkflow} />
+          <TeamDagCanvas workflow={workflow as TeamWorkflow} policyColorOf={agentPolicyColor} />
         )}
       </div>
 
-      {/* 最近运行 — 该团队干活现场（绑 team 的群）关联 run 列表；选中就地渲染
-          执行态 DAG（ProcessDagCanvas：节点状态染色 + 迭代环徽标）。历史 run
-          走 REST 快照（不订阅 SSE）；当前 run 实时输出仍看「分节点输出」。 */}
-      <div className="neo-host-sec">
-        <div className="neo-host-sec-head">
-          <History size={12} strokeWidth={1.8} />
-          <span className="neo-host-sec-title">
-            {t('neo.host.teamRecentRuns', { defaultValue: '最近运行' })}
-          </span>
-          {runsState === 'ready' && (
-            <span className="neo-host-sec-meta">
-              {t('neo.host.teamRecentRunsMeta', {
-                defaultValue: '{{count}} 次',
-                count: recentRuns.length,
-              })}
-            </span>
-          )}
-        </div>
-        {runsState === 'loading' ? (
-          <div className="neo-host-tree-note neo-host-tree-note--pad">
-            {t('neo.host.loading', { defaultValue: '读取中…' })}
-          </div>
-        ) : runsState === 'empty' ? (
-          <div className="neo-host-tree-note neo-host-tree-note--pad">
-            {t('neo.host.teamRecentRunsEmpty', {
-              defaultValue: '暂无运行记录（发起群聊并派发任务后出现）',
-            })}
-          </div>
-        ) : runsState === 'failed' ? (
-          <div className="neo-host-tree-note neo-host-tree-note--pad">
-            {t('neo.host.teamRecentRunsFailed', { defaultValue: '运行记录加载失败' })}
-          </div>
-        ) : (
-          <>
-            <div className="neo-host-run-list">
-              {recentRuns.slice(0, 8).map((run) => (
-                <button
-                  key={run.session_id}
-                  type="button"
-                  className={`neo-host-run-row${run.session_id === selectedRunId ? ' neo-host-run-row--sel' : ''}`}
-                  onClick={() => void handleSelectRun(run.session_id)}
-                  data-testid={`team-run-row-${run.session_id}`}
-                >
-                  <span className="neo-host-run-goal" title={run.goal}>
-                    {run.goal || run.session_id}
-                  </span>
-                  <span className={`neo-host-pill ${RUN_STATUS_CLASS[run.status] ?? 'neo-host-pill--muted'}`}>
-                    {run.status}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {selectedRunId && (
-              <div className="neo-host-pdag-wrap neo-host-team-runcanvas" data-testid="team-run-canvas">
-                {runGraphFailed ? (
-                  <div className="neo-host-tree-note neo-host-tree-note--pad">
-                    {t('neo.host.teamRunGraphFailed', { defaultValue: '执行图加载失败（该运行可能无图数据）' })}
-                  </div>
-                ) : runGraph ? (
-                  <ProcessDagCanvas graph={runGraph} streaming={false} />
-                ) : (
-                  <div className="neo-host-tree-note neo-host-tree-note--pad">
-                    {t('neo.host.teamRunGraphLoading', { defaultValue: '执行图读取中…' })}
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* policy 要点 */}
+      {/* 协作策略矩阵（2026-11-03）：roster × roster 三态格子，点击循环
+          permit → warn → deny → 清除；保存后与工作流画布联动（节点描边
+          随策略染色即时变化）。 */}
       <div className="neo-host-sec">
         <div className="neo-host-sec-head">
           <ShieldCheck size={12} strokeWidth={1.8} />
           <span className="neo-host-sec-title">
-            {t('neo.host.teamPolicy', { defaultValue: '协作策略' })}
+            {t("neo.host.teamPolicy", { defaultValue: "协作策略" })}
           </span>
-          {policyTotal > 0 && (
-            <span className="neo-host-sec-meta">
-              {t('neo.host.teamPolicyMeta', {
-                defaultValue: '允许 {{permit}} · 警告 {{warn}} · 拒绝 {{deny}}',
-                permit: policyCount.permit,
-                warn: policyCount.warn,
-                deny: policyCount.deny,
-              })}
+          {policyJustSaved && !policyDirty && (
+            <span className="neo-host-pill neo-host-pill--ok" data-testid="team-policy-saved">
+              {t("neo.host.teamPolicySaved", { defaultValue: "已保存" })}
             </span>
           )}
+          <button
+            type="button"
+            className="neo-host-wf-edit-btn"
+            onClick={() => setPolicyOpen((v) => !v)}
+            data-testid="team-policy-toggle"
+            aria-expanded={policyOpen}
+          >
+            <ChevronDown
+              size={11}
+              strokeWidth={1.8}
+              style={{ transform: policyOpen ? "rotate(180deg)" : undefined }}
+            />
+            {policyOpen
+              ? t("neo.host.teamPolicyCollapse", { defaultValue: "收起矩阵" })
+              : t("neo.host.teamPolicyExpand", { defaultValue: "编辑矩阵" })}
+          </button>
         </div>
-        {policyTotal === 0 ? (
-          <div className="neo-host-tree-note neo-host-tree-note--pad">
-            {t('neo.host.teamPolicyEmpty', { defaultValue: '未配置策略（默认全允许）' })}
-          </div>
-        ) : policyCells.length === 0 ? (
-          <div className="neo-host-tree-note neo-host-tree-note--pad">
-            {t('neo.host.teamPolicyAllPermit', { defaultValue: '全部允许，无限制项' })}
-          </div>
-        ) : (
-          policyCells.map((c) => (
-            <div key={`${c.from}->${c.to}`} className="neo-host-policy-row">
-              <span className="neo-host-policy-pair">
-                {agentById.get(c.from)?.name ?? c.from}
-                <span className="neo-host-edge-arrow">→</span>
-                {agentById.get(c.to)?.name ?? c.to}
+        {/* 未展开：成员策略染色 chips 摘要（与画布同源，颜色即矩阵联动结果） */}
+        {!policyOpen && (
+          <div className="neo-host-policy-summary">
+            {rosterAgents.length === 0 ? (
+              <span className="neo-host-tree-note neo-host-tree-note--pad">
+                {t("neo.host.teamRosterEmpty", { defaultValue: "该团队暂无成员" })}
               </span>
-              <span className={`neo-host-pill ${POLICY_CLASS[c.state] ?? 'neo-host-pill--muted'}`}>
-                {c.state}
+            ) : (
+              rosterAgents.map((a) => {
+                const st = agentPolicyColor.get(a.agent_id) ?? null;
+                return (
+                  <span
+                    key={a.agent_id}
+                    className="neo-host-policy-chip"
+                    style={st ? { borderColor: POLICY_COLOR[st], color: POLICY_COLOR[st] } : undefined}
+                    title={st
+                      ? t(`neo.host.teamPolicyState_${st}`, { defaultValue: st })
+                      : t("neo.host.teamPolicyNoConstraint", { defaultValue: "无限制" })}
+                  >
+                    {a.name}
+                  </span>
+                );
+              })
+            )}
+            <span className="neo-host-policy-summary-hint">
+              {t("neo.host.teamPolicySummaryHint", { defaultValue: "点「编辑矩阵」配置成员间协作限制" })}
+            </span>
+          </div>
+        )}
+        {policyOpen && (
+          <div className="neo-host-policy-matrix" data-testid="team-policy-matrix">
+            {rosterAgents.length === 0 ? (
+              <div className="neo-host-tree-note neo-host-tree-note--pad">
+                {t("neo.host.teamRosterEmpty", { defaultValue: "该团队暂无成员" })}
+              </div>
+            ) : (
+              <table className="neo-host-policy-table">
+                <thead>
+                  <tr>
+                    <th className="neo-host-policy-corner" />
+                    {rosterAgents.map((a) => (
+                      <th key={a.agent_id} title={a.agent_id}>{a.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rosterAgents.map((from) => (
+                    <tr key={from.agent_id}>
+                      <th scope="row" title={from.agent_id}>{from.name}</th>
+                      {rosterAgents.map((to) => {
+                        if (from.agent_id === to.agent_id) {
+                          return <td key={to.agent_id} className="neo-host-policy-self" />;
+                        }
+                        const st = policyDraftCell(from.agent_id, to.agent_id);
+                        return (
+                          <td key={to.agent_id}>
+                            <button
+                              type="button"
+                              className={`neo-host-policy-cell${st ? ` is-${st}` : ""}`}
+                              onClick={() => cyclePolicyCell(from.agent_id, to.agent_id)}
+                              data-testid={`team-policy-cell-${from.agent_id}-${to.agent_id}`}
+                              title={st
+                                ? t(`neo.host.teamPolicyState_${st}`, { defaultValue: st })
+                                : t("neo.host.teamPolicyState_none", { defaultValue: "默认允许（点击设限）" })}
+                              aria-label={`${from.name} → ${to.name}: ${st ?? "none"}`}
+                            >
+                              {st ? "" : "·"}
+                            </button>
+                          </td>
+                        );
+                      })}
+                      <td className="neo-host-policy-rowsum">
+                        {(() => {
+                          const worst = (["deny", "warn", "permit"] as const).find((s) =>
+                            rosterAgents.some(
+                              (o) => o.agent_id !== from.agent_id && policyDraftCell(from.agent_id, o.agent_id) === s,
+                            ),
+                          );
+                          if (!worst) return null;
+                          return (
+                            <span
+                              className="neo-host-policy-chip"
+                              style={{ borderColor: POLICY_COLOR[worst], color: POLICY_COLOR[worst] }}
+                            >
+                              {t(`neo.host.teamPolicyState_${worst}`, { defaultValue: worst })}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div className="neo-host-policy-actions">
+              <span className="neo-host-policy-legend">
+                {(["permit", "warn", "deny"] as const).map((s) => (
+                  <span key={s} className="neo-host-policy-legend-item">
+                    <span className="neo-host-policy-dot" style={{ background: POLICY_COLOR[s] }} />
+                    {t(`neo.host.teamPolicyState_${s}`, { defaultValue: s })}
+                  </span>
+                ))}
               </span>
+              <span className="neo-host-policy-hint">
+                {t("neo.host.teamPolicyCycleHint", { defaultValue: "点击格子：允许 → 警告 → 拒绝 → 清除" })}
+              </span>
+              <span className="neo-host-policy-spacer" />
+              {policyDirty && (
+                <button
+                  type="button"
+                  className="neo-team-dag-btn neo-team-dag-btn--primary"
+                  onClick={() => void savePolicy()}
+                  disabled={policySaving}
+                  data-testid="team-policy-save"
+                >
+                  {policySaving
+                    ? t("neo.host.teamPolicySaving", { defaultValue: "保存中…" })
+                    : t("neo.host.teamPolicySave", { defaultValue: "保存策略" })}
+                </button>
+              )}
             </div>
-          ))
+            {policyError && (
+              <div
+                className="neo-host-tree-note neo-host-tree-note--pad neo-host-empty--err"
+                role="alert"
+                data-testid="team-policy-error"
+              >
+                {policyError}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -561,7 +633,7 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
         <div className="neo-host-sec-head">
           <UsersRound size={12} strokeWidth={1.8} />
           <span className="neo-host-sec-title">
-            {t('neo.host.teamNodeOutput', { defaultValue: '分节点输出' })}
+            {t("neo.host.teamNodeOutput", { defaultValue: "分节点输出" })}
           </span>
           {streaming && (
             <span className="neo-host-pill neo-host-pill--running">live</span>
@@ -569,8 +641,8 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
         </div>
         {nodeOutputs.length === 0 ? (
           <div className="neo-host-tree-note neo-host-tree-note--pad">
-            {t('neo.host.teamNodeOutputEmpty', {
-              defaultValue: '暂无分节点输出（仅 DAG 多 Agent 运行按节点归属；单 Agent 走全局流）',
+            {t("neo.host.teamNodeOutputEmpty", {
+              defaultValue: "暂无分节点输出（仅 DAG 多 Agent 运行按节点归属；单 Agent 走全局流）",
             })}
           </div>
         ) : (

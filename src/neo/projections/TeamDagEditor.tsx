@@ -61,6 +61,7 @@ import {
   type TeamDagDraft,
   type TeamWorkflow,
   type TeamWorkflowVersionMeta,
+  type PolicyCellState,
 } from '../../api/teams';
 import type { AgentRecord } from '../../api/agents';
 import { AgentAvatar } from '../../components/agent/AgentAvatar';
@@ -77,6 +78,11 @@ export interface TeamDagEditorProps {
   /** 保存成功（服务端已持久化）后回传新图，父组件刷新只读视图。 */
   onSaved: (workflow: TeamWorkflow) => void;
   onCancel: () => void;
+  /**
+   * 2026-11-03 策略联动：agentId → 最严策略态（可选）。命中时编辑态画布
+   * 节点描边按策略染色，与协作策略矩阵即时呼应（草稿态即反映，不需保存）。
+   */
+  policyColorOf?: Map<string, PolicyCellState> | null;
 }
 
 interface TeamAgentNodeData extends Record<string, unknown> {
@@ -92,6 +98,8 @@ interface TeamAgentNodeData extends Record<string, unknown> {
   avatarStyle?: string | null;
   avatarSeed?: string | null;
   avatarImage?: string | null;
+  /** 2026-11-03：策略联动染色（可选；无策略 = 默认边框）。 */
+  policyState?: PolicyCellState | null;
 }
 
 const HANDLE_STYLE = {
@@ -120,9 +128,20 @@ function edgeVisual(mode: TeamEdgeMode): Pick<Edge, 'className' | 'style'> {
  * 卡片左右两侧的 Handle 拉出，节点本身可点选/拖动（SfReactFlowBase 默认
  * nodesDraggable，坐标即持久化载体）。
  */
+/** 策略态 → 节点描边色（与 TeamDagCanvas / 策略矩阵配色一致）。 */
+const POLICY_NODE_COLOR: Record<PolicyCellState, string> = {
+  permit: 'var(--t-ok, #16A34A)',
+  warn: 'var(--t-warn, #D97706)',
+  deny: 'var(--t-err, #DC2626)',
+};
+
 function TeamAgentNode({ data }: { data: TeamAgentNodeData }) {
+  const policyStyle =
+    data.policyState && POLICY_NODE_COLOR[data.policyState]
+      ? { border: `2px solid ${POLICY_NODE_COLOR[data.policyState]}` }
+      : undefined;
   return (
-    <div className="neo-team-dag-node" title={`${data.name || data.agentId} · ${data.agentId}`}>
+    <div className="neo-team-dag-node" style={policyStyle} title={`${data.name || data.agentId} · ${data.agentId}`}>
       <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
       <span className="neo-team-dag-node-avatar">
         <AgentAvatar
@@ -311,7 +330,7 @@ export function TeamWorkflowVersionsPanel({ teamId, refreshToken, onRestored }: 
   );
 }
 
-export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: TeamDagEditorProps) {
+export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, policyColorOf }: TeamDagEditorProps) {
   const { t } = useI18n();
 
   /** 节点展示名：优先 workflow 存量 name，缺失时回退 roster 里的 agent 名。 */
@@ -352,11 +371,12 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
             name: resolveNodeName(agentId, n.data?.name, n.id),
             soul: n.data?.soul ?? '',
             nodeType: n.type || 'agentTask',
+            policyState: policyColorOf?.get(agentId) ?? null,
             ...resolveAvatar(agentId),
           },
         };
       }),
-    [workflow, resolveNodeName, resolveAvatar],
+    [workflow, resolveNodeName, resolveAvatar, policyColorOf],
   );
   const seedEdges = useMemo<Edge[]>(
     () =>
@@ -436,6 +456,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
             name: agent.name,
             soul: agent.soul,
             nodeType: 'agentTask',
+            policyState: policyColorOf?.get(agent.agent_id) ?? null,
             ...resolveAvatar(agent.agent_id),
           },
         },
@@ -443,7 +464,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
     });
     setPendingAgentId('');
     setErrors([]);
-  }, [agents, pendingAgentId, setRfNodes, resolveAvatar]);
+  }, [agents, pendingAgentId, setRfNodes, resolveAvatar, policyColorOf]);
 
   const selectedNodes = rfNodes.filter((n) => n.selected);
   const selectedEdges = rfEdges.filter((e) => e.selected);
@@ -602,6 +623,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
               name: resolveNodeName(agentId, n.data?.name, n.id),
               soul: n.data?.soul ?? '',
               nodeType: n.type || 'agentTask',
+              policyState: policyColorOf?.get(agentId) ?? null,
               ...resolveAvatar(agentId),
             },
           };
@@ -622,7 +644,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
         }),
       );
     },
-    [setRfNodes, setRfEdges, resolveNodeName, resolveAvatar],
+    [setRfNodes, setRfEdges, resolveNodeName, resolveAvatar, policyColorOf],
   );
 
   /** AI 生成草稿：NL → POST /dag-draft → dagDraftToWorkflow → 铺画布标脏（不落库）。 */
