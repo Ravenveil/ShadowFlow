@@ -70,6 +70,11 @@
 .neo-gc-title-avatar {
   flex-shrink: 0;
 }
+/* 群聊顶栏组合头像（os-unified 2026-11-04 用户反馈批）：与单聊头像同位同尺寸 */
+.neo-gc-title-avatar--group {
+  display: inline-flex;
+  align-items: center;
+}
 .neo-gc-title strong {
   color: var(--t-fg);
   font-weight: 600;

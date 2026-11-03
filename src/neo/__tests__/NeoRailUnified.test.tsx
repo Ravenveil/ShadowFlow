@@ -195,3 +195,41 @@ describe('NeoRail os-unified — 项目顶层分组混排（2026-11-04 用户反
     expect(screen.getByTestId('neo-new-project')).toBeInTheDocument();
   });
 });
+
+describe('NeoRail os-unified — 2026-11-04 第二批（群组合头像 + 入口前置 + 拖拽）', () => {
+  it('新建 Agent 入口前置到列表区顶部（在新建项目之前）', async () => {
+    renderHome();
+    await screen.findByTestId('neo-team-group', {}, { timeout: 3000 });
+    const newAgent = screen.getByTestId('neo-new-agent');
+    const newProject = screen.getByTestId('neo-new-project');
+    // DOM 顺序：新建 Agent 在新建项目之前（前置 = 用户第一眼看到）
+    expect(newAgent.compareDocumentPosition(newProject) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('群聊行头像 = 成员组合头像（GroupStackAvatar，不再是 UsersRound 剪影）', async () => {
+    renderHome();
+    // 团队 t1 的 agent_ids=['a1']（设计助手），群 g-t1 与团队同名 join →
+    // 组合头像应渲染出 a1 的 DiceBear 头像（agent-avatar testid）
+    const row = await screen.findByTestId('neo-team-group-chat', {}, { timeout: 3000 });
+    const avatar = row.querySelector('.neo-gstack');
+    expect(avatar).not.toBeNull();
+    // 单成员群 → 单头像直出（--single 修饰），且是真实 DiceBear 头像
+    expect(avatar).toHaveClass('neo-gstack--single');
+    expect(row.querySelector('[data-testid="agent-avatar"]')).not.toBeNull();
+  });
+
+  it('群聊行可拖拽（draggable 归组到项目）', async () => {
+    renderHome();
+    const row = await screen.findByTestId('neo-team-group-chat', {}, { timeout: 3000 });
+    expect(row).toHaveAttribute('draggable', 'true');
+  });
+
+  it('成员会话行有 DM 时可拖拽（散养成员行同样能拖去项目分组）', async () => {
+    renderHome();
+    // a1 有 DM（group_id=g-a1）→ draggable；无 DM 的成员行不拖
+    const rows = await screen.findAllByTestId('neo-agent-session-row');
+    const a1Row = rows.find((r) => r.getAttribute('data-agent-id') === 'a1');
+    expect(a1Row).toBeDefined();
+    expect(a1Row).toHaveAttribute('draggable', 'true');
+  });
+});

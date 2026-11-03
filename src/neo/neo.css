@@ -589,11 +589,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* 弹层限高滚动后，小屏从顶部起排（center + max-height 已够用，
+     padding 保证贴边时不裁内容） */
+  padding: 24px;
   background: rgba(0, 0, 0, 0.32);
   animation: neo-fade var(--dur-2) var(--ease-out);
 }
 .neo-modal {
   width: min(400px, calc(100vw - 48px));
+  /* 2026-11-04 用户反馈：Claw 下拉 + 头像风格网格加入后内容超一屏，
+     弹层必须限高 + 内部滚动，否则底部（创建按钮）永远够不着。 */
+  max-height: min(680px, calc(100vh - 48px));
+  overflow-y: auto;
   padding: 20px;
   border: 1px solid var(--t-border);
   border-radius: 16px;
@@ -1142,6 +1149,40 @@
 .neo-avatar--group {
   background: color-mix(in srgb, var(--t-fg) 10%, var(--t-bg));
   color: var(--t-fg-5);
+}
+
+/* ── os-unified 2026-11-04 用户反馈批：群头像 = 成员头像组合（Grok/微信范式）──
+   .neo-gstack 2×2 拼贴网格；单成员时直接铺满一枚真实头像。 */
+.neo-gstack {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--t-border);
+  flex: 0 0 auto;
+}
+.neo-gstack--single {
+  display: block;
+  background: transparent;
+  border-radius: 50%;
+}
+.neo-gstack--single .claw-avatar {
+  border-radius: 50%;
+}
+.neo-gstack-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--t-panel);
+}
+.neo-gstack-cell .claw-avatar,
+.neo-gstack-cell .neo-avatar {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0;
 }
 
 /* Grok 会话项两行行高：32px 头像需要行身有纵向呼吸（padding 加大） */

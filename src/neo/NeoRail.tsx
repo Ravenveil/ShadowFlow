@@ -59,7 +59,6 @@ import {
   SquarePen,
   Trash2,
   Users,
-  UsersRound,
 } from 'lucide-react';
 import { listAgents, deleteAgent as deleteAgentRecord, type AgentRecord } from '../api/agents';
 import { listTeams, type TeamRecord } from '../api/teams';
@@ -85,6 +84,7 @@ import { listVaults } from '../api/knowledgeVaults';
 import type { KnowledgeVault } from '../common/types/knowledgeVault';
 import { listMemoryEntries, type MemoryEntry } from '../api/memoryEntries';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
+import { GroupStackAvatar } from '../components/agent/GroupStackAvatar';
 // ClawHub（2026-06，T08）：AgentAvatar 样式（增量引入）
 import '../pages/clawhub/clawhub.css';
 import { useAuth } from '../core/auth/AuthContext';
@@ -174,19 +174,6 @@ function NeoAgentAvatar({
     <span className="neo-avatar" style={{ background: neoAvatarColor(seed, color) }} aria-hidden>
       {neoAvatarInitial(name)}
       {status && <span className="neo-avatar-dot" data-status={status} />}
-    </span>
-  );
-}
-
-/** os-unified 2026-11-04：群聊头像（双人剪影圆块，Grok 群会话项形态）。 */
-function NeoGroupAvatar({ size = 32 }: { size?: number }) {
-  return (
-    <span
-      className="neo-avatar neo-avatar--group"
-      style={{ width: size, height: size }}
-      aria-hidden
-    >
-      <UsersRound size={Math.round(size * 0.5)} strokeWidth={1.9} />
     </span>
   );
 }
@@ -1066,11 +1053,16 @@ export function NeoRail({
 
   const renderGroupRow = (g: GroupItem) => {
     const rel = relativeTime(g.lastActivityAt, nowTick, t);
+    // os-unified 2026-11-04 用户反馈批：群头像 = 成员头像组合（Grok/微信范式），
+    // agent_ids join agents 记录 → 2×2 拼贴；空群回退剪影圆块。
+    const gMembers = (g.agent_ids ?? [])
+      .map((id) => agentsById.get(id))
+      .filter((a): a is AgentRecord => !!a);
     return (
       <div key={g.id} className="neo-agent-row">
         <button
           type="button"
-          className={`neo-row${isConversation(g.id) ? ' on' : ''}`}
+          className={`neo-row neo-sess-row${isConversation(g.id) ? ' on' : ''}`}
           onClick={() => onNavigate({ view: 'conversation', groupId: g.id })}
           draggable
           onDragStart={() => handleDragStart(g.id, g.name)}
@@ -1081,8 +1073,13 @@ export function NeoRail({
           data-testid="neo-group-row"
           title={g.lastMessage || g.name}
         >
-          <UsersRound size={15} strokeWidth={1.75} aria-hidden />
-          <span className="neo-row-name">{g.name}</span>
+          <span className="neo-sess-avatar">
+            <GroupStackAvatar members={gMembers} size={32} />
+          </span>
+          <span className="neo-sess-text">
+            <span className="neo-sess-name">{g.name}</span>
+            {g.lastMessage && <span className="neo-sess-preview">{g.lastMessage}</span>}
+          </span>
           {rel && <span className="neo-row-time">{rel}</span>}
           {g.unreadCount > 0 && <span className="neo-row-badge">{g.unreadCount}</span>}
         </button>
@@ -1129,6 +1126,12 @@ export function NeoRail({
           type="button"
           className={`neo-row neo-sess-row${isConversation(dm?.group_id) || isAgentOn(a.agent_id) ? ' on' : ''}`}
           onClick={() => openAgentDm(a.agent_id, a.name)}
+          draggable={!!dm?.group_id}
+          onDragStart={() => dm?.group_id && handleDragStart(dm.group_id, a.name)}
+          onDragEnd={() => {
+            dragConvRef.current = null;
+            setDropTargetProject(null);
+          }}
           data-testid="neo-agent-session-row"
           data-agent-id={a.agent_id}
           title={preview || a.name}
@@ -1146,6 +1149,7 @@ export function NeoRail({
                 openAgentHost(a.agent_id, e as unknown as React.MouseEvent);
               }
             }}
+            draggable={false}
           >
             <AgentAvatar
               name={a.name}
@@ -1217,11 +1221,18 @@ export function NeoRail({
                   type="button"
                   className={`neo-row neo-sess-row${isConversation(group.id) ? ' on' : ''}`}
                   onClick={() => onNavigate({ view: 'conversation', groupId: group.id })}
+                  draggable
+                  onDragStart={() => handleDragStart(group.id, group.name)}
+                  onDragEnd={() => {
+                    dragConvRef.current = null;
+                    setDropTargetProject(null);
+                  }}
                   data-testid="neo-team-group-chat"
                   title={group.lastMessage || group.name}
                 >
                   <span className="neo-sess-avatar">
-                    <NeoGroupAvatar size={32} />
+                    {/* os-unified 2026-11-04 用户反馈批：团队群头像 = 成员头像组合 */}
+                    <GroupStackAvatar members={members} size={32} />
                   </span>
                   <span className="neo-sess-text">
                     <span className="neo-sess-name">{group.name}</span>
@@ -1586,11 +1597,25 @@ export function NeoRail({
         )}
         {section === 'home' && (
           <>
+            {/* os-unified 2026-11-04 用户反馈批：「新建 Agent」入口前置到列表区
+                顶部（用户：创建入口「应该要往前放」）。Grok 范式：造 Bot 是
+                最高频动作，放最顺手的位置。 */}
+            <button
+              type="button"
+              className="neo-row"
+              onClick={() => setCreateAgentOpen(true)}
+              data-testid="neo-new-agent"
+            >
+              <Plus size={15} strokeWidth={1.75} aria-hidden />
+              <span className="neo-row-name">
+                {t('neo.newAgent', { defaultValue: language === 'zh' ? '新建 Agent' : 'New Agent' })}
+              </span>
+            </button>
+
             {/* os-unified 2026-11-04（Grok Bot 范式 + 用户反馈批）：
                 home = 唯一会话区。项目 = 顶层分组（Grok「工作/生活」范式，
                 「不同项目里是不同的规划」），组内混排该项目群聊/团队分组/成员会话；
-                未归项目的（团队/群聊/DM/孤儿成员）落默认区，同构混排。
-                顶部保留「新建项目」「新建群聊」「新建 Agent」三个创建入口。 */}
+                未归项目的（团队/群聊/DM/孤儿成员）落默认区，同构混排。 */}
             <button
               type="button"
               className="neo-row"
@@ -1667,7 +1692,7 @@ export function NeoRail({
             {projectSections.map(renderProjectSection)}
 
             {/* 默认区：未归项目的团队分组 / 散群 / 成员 DM / 孤儿成员
-                （os-unified 2026-11-04：也是拖拽归组的投放目标——拖到这里 = 移回默认项目） */}
+                (os-unified 2026-11-04：也是拖拽归组的投放目标——拖到这里 = 移回默认项目） */}
             {railEmpty ? (
               <div className="neo-list-note">
                 {t('neo.sessionsEmpty', {
@@ -1687,20 +1712,9 @@ export function NeoRail({
               </div>
             )}
 
-            {/* 新建 Agent 入口（GAP D/A14 行形态保留，常驻底部）。
-                2026-11-04：原「新建群聊」行已移除 —— 建群改走会话内「添加成员」
-                （Grok 范式：加第二个人即成群），左栏只留造 Bot 这一个入口。 */}
-            <button
-              type="button"
-              className="neo-row"
-              onClick={() => setCreateAgentOpen(true)}
-              data-testid="neo-new-agent"
-            >
-              <Plus size={15} strokeWidth={1.75} aria-hidden />
-              <span className="neo-row-name">
-                {t('neo.newAgent', { defaultValue: language === 'zh' ? '新建 Agent' : 'New Agent' })}
-              </span>
-            </button>
+            {/* 2026-11-04 用户反馈批：「新建 Agent」入口已前置到列表区顶部；
+                「新建群聊」入口移除 —— 建群改走会话内「添加成员」（Grok 范式：
+                加第二个人即成群），左栏只留造 Bot / 建项目两个创建入口。 */}
           </>
         )}
 

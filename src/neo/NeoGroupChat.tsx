@@ -52,6 +52,7 @@ import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
 // ClawHub（2026-06，T08）：agent 气泡头像接入 DiceBear（配了头像的 Agent 生效）
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { AgentAvatarSwitcher } from '../components/agent/AgentAvatarSwitcher';
+import { GroupStackAvatar } from '../components/agent/GroupStackAvatar';
 import type { NeoNav } from './types';
 import './neo-chat.css'; // composer 容器/发送钮基样式（.neo-chat-composer / .neo-composer）
 import './neo-group.css';
@@ -290,6 +291,11 @@ export function NeoGroupChat({
   const agentById = useMemo(() => new Map(agents.map((a) => [a.agent_id, a])), [agents]);
   /** 单聊对面的 Agent 记录（头像 + 名称真源；记录没拉到 → 顶栏退回群名）。 */
   const dmAgent = dmAgentId ? agentById.get(dmAgentId) ?? null : null;
+  /** 群头像成员组合（os-unified 2026-11-04 用户反馈批）：agent_ids join 记录。 */
+  const groupAvatarMembers = useMemo(
+    () => groupAgentIds.map((id) => agentById.get(id)).filter((a): a is AgentRecord => !!a),
+    [groupAgentIds, agentById],
+  );
 
   // 活跃 run → composer 显示 Stop 视觉 + 顶栏 live 徽章
   const busy = timeline.runs.some((r) => r.status === 'running');
@@ -543,7 +549,8 @@ export function NeoGroupChat({
         <span className="neo-gc-title">
           {/* Grok 单聊形态（2026-11-04 用户反馈）：单聊头像是对方 Agent 的真实
               头像（与侧栏/气泡同源 AgentAvatar），不再用群聊图标，也不出成员计数；
-              群聊保持 UsersRound 图标 + 计数。 */}
+              群聊头像 = 成员头像组合（2026-11-04 第二批：agent_ids join 记录 →
+              2×2 拼贴 / 单成员直出真实头像，Grok/微信范式）。 */}
           {isDm && dmAgent && (
             /* Grok 式头像切换（2026-11-04）：点顶栏头像直接弹候选网格，
                点一个立即保存，不用再进「灵魂」tab 找表单 + 点保存。 */
@@ -559,7 +566,9 @@ export function NeoGroupChat({
             />
           )}
           {!isDm && (
-            <UsersRound size={13} strokeWidth={1.9} aria-hidden className="neo-gc-title-icon" />
+            <span className="neo-gc-title-avatar neo-gc-title-avatar--group" aria-hidden>
+              <GroupStackAvatar members={groupAvatarMembers} size={20} />
+            </span>
           )}
           <strong>{isDm && dmAgent ? dmAgent.name : (groupName ?? groupId.slice(0, 8))}</strong>
           {!isDm && memberCount > 0 && (
