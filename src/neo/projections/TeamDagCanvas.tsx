@@ -20,10 +20,13 @@
 import { useMemo } from 'react';
 import { Handle, Position, type Edge, type Node, type NodeTypes } from 'reactflow';
 import SfReactFlowBase from '../../core/components/Canvas/SfReactFlowBase';
+import { AgentAvatar } from '../../components/agent/AgentAvatar';
 import type { TeamWorkflow, TeamWorkflowEdge } from '../../api/teams';
 
 const COL_GAP = 140;
-const ROW_GAP = 52;
+/* 节点 2026-11-04 改为「头像在上 + 名字在下」竖排卡片（≈56px 高），
+   行距从 52 抬到 78，避免同列节点上下压叠。 */
+const ROW_GAP = 78;
 
 interface TeamDagNodeData extends Record<string, unknown> {
   label: string;
@@ -38,6 +41,13 @@ function GmTeamNode({ data }: { data: TeamDagNodeData }) {
   return (
     <div className="neo-gm-dag-node" title={data.agentId || data.label}>
       <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
+      <span className="neo-gm-dag-node-avatar">
+        <AgentAvatar
+          name={data.label || data.agentId || '?'}
+          seed={data.label || data.agentId}
+          size={26}
+        />
+      </span>
       <span className="neo-gm-dag-node-label">{data.label}</span>
       <Handle type="source" position={Position.Right} style={HANDLE_STYLE} />
     </div>

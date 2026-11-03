@@ -31,9 +31,16 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, UsersRound } from 'lucide-react';
+import { ArrowLeft, Check, Plus, UserPlus, UsersRound } from 'lucide-react';
 import { useGroupTimeline } from '../core/hooks/useGroupTimeline';
-import { getGroup, postGroupMessage, stopGroupChat } from '../api/groupApi';
+import {
+  addGroupMembers,
+  getGroup,
+  postGroupMessage,
+  removeGroupMember,
+  stopGroupChat,
+  type GroupRecord,
+} from '../api/groupApi';
 import { listAgents, type AgentRecord } from '../api/agents';
 import { NeoTimeline } from './NeoTimeline';
 import { NeoGroupMsgActions } from './NeoGroupMsgActions';
@@ -44,6 +51,7 @@ import { useI18n } from '../common/i18n';
 import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
 // ClawHub（2026-06，T08）：agent 气泡头像接入 DiceBear（配了头像的 Agent 生效）
 import { AgentAvatar } from '../components/agent/AgentAvatar';
+import { AgentAvatarSwitcher } from '../components/agent/AgentAvatarSwitcher';
 import type { NeoNav } from './types';
 import './neo-chat.css'; // composer 容器/发送钮基样式（.neo-chat-composer / .neo-composer）
 import './neo-group.css';
@@ -239,6 +247,8 @@ export function NeoGroupChat({
   const [groupName, setGroupName] = useState<string | null>(null);
   const [groupKind, setGroupKind] = useState<string | null>(null);
   const [memberCount, setMemberCount] = useState<number>(0);
+  /** 当前会话成员 id（Grok 式「添加成员」的真源：读 → 合并 → PATCH 全量回写）。 */
+  const [groupAgentIds, setGroupAgentIds] = useState<string[]>([]);
   /** 单聊对面那位 agent 的 id（kind='dm' 且 agent_ids 恰一人 → Grok 单聊形态）。 */
   const [dmAgentId, setDmAgentId] = useState<string | null>(null);
   useEffect(() => {
@@ -251,6 +261,7 @@ export function NeoGroupChat({
         setGroupKind((g.kind as string | undefined) ?? null);
         setMemberCount(g.agent_ids?.length ?? 0);
         const ids = g.agent_ids ?? [];
+        setGroupAgentIds(ids);
         const isDmRec = (g.kind as string | undefined) === 'dm';
         setDmAgentId(isDmRec && ids.length === 1 ? ids[0] : null);
       })
@@ -292,6 +303,50 @@ export function NeoGroupChat({
     timeline.markAllRunsStopped();
     void stopGroupChat(groupId).catch(() => undefined);
   }, [groupId, timeline]);
+
+  // ── Grok 式「添加成员」（2026-11-04 用户反馈批）───────────────────────────
+  // 顶栏成员栈尾的「+」→ 浮层里勾选 Agent 加入当前会话。**没有独立的
+  //「新建群聊」入口**：单聊加进第二个人，会话自动升级为群聊
+  // （addGroupMembers：成员数 > 1 → kind='group'）——会话形态由在场人数决定，
+  // 这也是 Grok 的做法。已在会话里的成员点了即移出（剩 1 人回落单聊）。
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false);
+  const [memberBusy, setMemberBusy] = useState<string | null>(null);
+  const [memberErr, setMemberErr] = useState<string | null>(null);
+
+  /** 把 PATCH 回来的群记录同步进本地各派生态（成员/形态/单聊对象）。 */
+  const syncGroupRecord = useCallback((g: GroupRecord | null) => {
+    if (!g) return;
+    const ids = g.agent_ids ?? [];
+    setGroupAgentIds(ids);
+    setGroupKind((g.kind as string | undefined) ?? null);
+    setMemberCount(ids.length);
+    // 升级成群后不再是「单聊对面那位」；仍是 1 人才保留 DM 头像形态
+    setDmAgentId(
+      (g.kind as string | undefined) === 'dm' && ids.length === 1 ? ids[0] : null,
+    );
+  }, []);
+
+  const toggleMember = useCallback(
+    async (agentId: string) => {
+      if (!groupId) return;
+      const inGroup = groupAgentIds.includes(agentId);
+      setMemberBusy(agentId);
+      setMemberErr(null);
+      try {
+        const g = inGroup
+          ? await removeGroupMember(groupId, agentId)
+          : await addGroupMembers(groupId, [agentId]);
+        syncGroupRecord(g);
+      } catch {
+        setMemberErr(
+          t('neo.group.memberEditFailed', { defaultValue: '成员更新失败，请重试' }),
+        );
+      } finally {
+        setMemberBusy(null);
+      }
+    },
+    [groupId, groupAgentIds, syncGroupRecord, t],
+  );
 
   // ── 交付卡（2026-08-23 交付收口）────────────────────────────────────────
   // run 跑完（最新一条 gateway run 进入 succeeded 且当前无 running）→ 消息流
@@ -490,13 +545,17 @@ export function NeoGroupChat({
               头像（与侧栏/气泡同源 AgentAvatar），不再用群聊图标，也不出成员计数；
               群聊保持 UsersRound 图标 + 计数。 */}
           {isDm && dmAgent && (
-            <AgentAvatar
-              name={dmAgent.name}
-              style={dmAgent.avatar_style}
-              seed={dmAgent.avatar_seed ?? dmAgent.name}
-              image={dmAgent.avatar_image ?? null}
+            /* Grok 式头像切换（2026-11-04）：点顶栏头像直接弹候选网格，
+               点一个立即保存，不用再进「灵魂」tab 找表单 + 点保存。 */
+            <AgentAvatarSwitcher
+              agent={dmAgent}
               size={20}
               className="neo-gc-title-avatar"
+              onChanged={(next) =>
+                setAgents((list) =>
+                  list.map((a) => (a.agent_id === next.agent_id ? next : a)),
+                )
+              }
             />
           )}
           {!isDm && (
@@ -555,6 +614,68 @@ export function NeoGroupChat({
               {t('neo.group.memberCount', { defaultValue: '{{count}} 位在场', count: members.length })}
             </span>
           </span>
+        )}
+
+        {/* ── Grok 式「添加成员」（2026-11-04 用户反馈批）───────────────────
+            单聊/群聊都常驻这个「+」：点开勾选 Agent 加进当前会话，加进第二
+            个人会话就升级为群聊（kind: dm → group）。产品上因此不再有独立
+            的「新建群聊」入口 —— 建群就是加人，与 Grok 一致。 */}
+        <button
+          type="button"
+          className={`neo-gc-member-add${memberPickerOpen ? ' on' : ''}`}
+          onClick={() => setMemberPickerOpen((o) => !o)}
+          title={t('neo.group.addMember', { defaultValue: '添加成员' })}
+          aria-label={t('neo.group.addMember', { defaultValue: '添加成员' })}
+          aria-expanded={memberPickerOpen}
+          data-testid="neo-gc-add-member"
+        >
+          <UserPlus size={14} strokeWidth={1.9} aria-hidden />
+        </button>
+
+        {memberPickerOpen && (
+          <div className="neo-gc-member-picker" data-testid="neo-gc-member-picker">
+            <div className="neo-gc-member-picker-head">
+              {t('neo.group.addMemberTitle', { defaultValue: '选择要加入的成员' })}
+            </div>
+            <div className="neo-gc-member-picker-list">
+              {agents.length === 0 ? (
+                <div className="neo-gc-member-picker-empty">
+                  {t('neo.group.noAgents', { defaultValue: '还没有可加入的 Agent' })}
+                </div>
+              ) : (
+                agents.map((a) => {
+                  const inGroup = groupAgentIds.includes(a.agent_id);
+                  const busy = memberBusy === a.agent_id;
+                  return (
+                    <button
+                      key={a.agent_id}
+                      type="button"
+                      className={`neo-gc-member-picker-row${inGroup ? ' in' : ''}`}
+                      disabled={memberBusy !== null}
+                      onClick={() => void toggleMember(a.agent_id)}
+                      data-testid="neo-gc-member-picker-row"
+                    >
+                      <AgentAvatar
+                        name={a.name}
+                        style={a.avatar_style}
+                        seed={a.avatar_seed ?? a.name}
+                        image={a.avatar_image ?? null}
+                        size={26}
+                      />
+                      <span className="neo-gc-member-picker-name">{a.name}</span>
+                      {typeof a.blueprint?.role === 'string' && a.blueprint.role.trim() && (
+                        <span className="neo-gc-member-picker-role">{a.blueprint.role.trim()}</span>
+                      )}
+                      <span className="neo-gc-member-picker-mark" aria-hidden>
+                        {busy ? '…' : inGroup ? <Check size={13} strokeWidth={2.2} /> : <Plus size={13} strokeWidth={2} />}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            {memberErr && <div className="neo-gc-member-picker-error">{memberErr}</div>}
+          </div>
         )}
         {busy && (
           <span className="neo-gc-live" data-testid="neo-group-live">

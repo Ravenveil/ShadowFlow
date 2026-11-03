@@ -104,6 +104,13 @@ export interface PatchGroupInput {
   archived?: boolean;
   workspace_dir?: string | null;
   conversation_id?: string | null;
+  /** Grok 式「添加成员」：整体替换成员列表（路由层已做去重/上限校验）。 */
+  agent_ids?: string[];
+  /**
+   * 会话形态。单聊（kind='dm'）加人后升级为 'group'——不在 store 里隐式推断，
+   * 由路由层显式下发，避免一次 PATCH 同时改成员与形态时顺序歧义。
+   */
+  kind?: GroupKind;
 }
 
 /** appendGroupMessage 入参（message_id/timestamp 由 store 生成）。 */
@@ -429,6 +436,14 @@ export function patchGroup(
   if (patch.conversation_id !== undefined) {
     sets.push('conversation_id = ?');
     params.push(patch.conversation_id);
+  }
+  if (patch.agent_ids !== undefined) {
+    sets.push('agent_ids = ?');
+    params.push(JSON.stringify(patch.agent_ids));
+  }
+  if (patch.kind !== undefined) {
+    sets.push('kind = ?');
+    params.push(patch.kind);
   }
   // 总是 bump updated_at（对齐 Python：空 body 仍 bump）。
   sets.push('updated_at = ?');

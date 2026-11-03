@@ -163,33 +163,24 @@ describe('NeoRail — home 统一列表区（os-unified 2026-11-04）', () => {
     });
   });
 
-  it('home：新建群聊 / 新建 Agent 行常驻（成员拉群 + 雇员工入口）', async () => {
+  // 2026-11-04 用户反馈批：移除独立「新建群聊」入口与模态。Grok 范式是
+  // 在会话里加第二个人即成群（addGroupMembers：成员数 > 1 → kind='group'），
+  // 左栏只留「造 Bot」和「建项目分组」两个创建入口。
+  it('home：只保留「新建 Agent」「新建项目」，不再有独立「新建群聊」入口', async () => {
     renderRail();
-    expect(await screen.findByTestId('neo-new-group')).toBeInTheDocument();
-    expect(screen.getByTestId('neo-new-agent')).toBeInTheDocument();
+    expect(await screen.findByTestId('neo-new-agent')).toBeInTheDocument();
     expect(screen.getByTestId('neo-new-project')).toBeInTheDocument();
+    expect(screen.queryByTestId('neo-new-group')).not.toBeInTheDocument();
+    expect(screen.queryByText('新建群聊')).not.toBeInTheDocument();
   });
 
-  it('点新建群聊行 → 开模态；onCreated → onNavigate conversation 跳新群', async () => {
+  it('不再挂 NeoCreateGroupModal（建群改走会话内「添加成员」）', async () => {
     const onNavigate = renderRailWithNav();
-    fireEvent.click(await screen.findByTestId('neo-new-group'));
-    expect(await screen.findByTestId('neo-create-group-modal-stub')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('stub-group-created'));
     await waitFor(() => {
-      expect(onNavigate).toHaveBeenCalledWith({ view: 'conversation', groupId: 'g-new-9' });
+      expect(screen.getByTestId('neo-new-agent')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('neo-create-group-modal-stub')).not.toBeInTheDocument();
-  });
-
-  it('模态 onClose → 关闭且不跳转', async () => {
-    const onNavigate = renderRailWithNav();
-    fireEvent.click(await screen.findByTestId('neo-new-group'));
-    fireEvent.click(await screen.findByTestId('stub-group-close'));
-    expect(screen.queryByTestId('neo-create-group-modal-stub')).not.toBeInTheDocument();
-    expect(onNavigate).not.toHaveBeenCalledWith(
-      expect.objectContaining({ view: 'conversation' }),
-    );
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 });
 

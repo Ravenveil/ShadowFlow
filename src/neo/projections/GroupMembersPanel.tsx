@@ -53,6 +53,12 @@ function gmAvatarInitial(name: string): string {
 
 export interface GroupMembersPanelProps {
   groupId: string;
+  /**
+   * 2026-11-04：隐藏内嵌审批门。NeoHost 编队 pane 已把审批提升为一级
+   * 「封驳矩阵」section（ApprovalMatrix），这里再渲染一份会重复且造成两条
+   * SSE 订阅。缺省 false —— 独立挂载 / 既有测试仍走原来的完整形态。
+   */
+  hideApprovals?: boolean;
 }
 
 /** 等待时长紧凑格式（审批队列行 meta 用）。 */
@@ -63,7 +69,7 @@ function gmWaitingText(seconds: number): string {
   return `${Math.floor(seconds / 3600)}h`;
 }
 
-export function GroupMembersPanel({ groupId }: GroupMembersPanelProps) {
+export function GroupMembersPanel({ groupId, hideApprovals = false }: GroupMembersPanelProps) {
   const { t } = useI18n();
   const [agentIds, setAgentIds] = useState<string[]>([]);
   const [teamId, setTeamId] = useState<string | null>(null);
@@ -140,6 +146,8 @@ export function GroupMembersPanel({ groupId }: GroupMembersPanelProps) {
 
   // 首拉 + SSE 实时刷新；无 EventSource 环境（jsdom 等）回落 5s 轮询
   useEffect(() => {
+    // 编队 pane 已挂独立封驳矩阵：这里不拉队列、不订阅 SSE（避免双订阅）
+    if (hideApprovals) return;
     setPending([]);
     setRejected([]);
     setApprovalFailed(false);
@@ -169,7 +177,7 @@ export function GroupMembersPanel({ groupId }: GroupMembersPanelProps) {
       unsubscribe();
       if (timer !== null) window.clearInterval(timer);
     };
-  }, [groupId, refreshApprovals, noteRejected]);
+  }, [groupId, hideApprovals, refreshApprovals, noteRejected]);
 
   // 批准 / 驳回：真实调端点（驳回带可选 reason），结束后刷新队列；失败给行内提示
   const decideApproval = useCallback(
@@ -336,7 +344,10 @@ export function GroupMembersPanel({ groupId }: GroupMembersPanelProps) {
         )}
       </div>
 
-      {/* 审批队列（L6）：真实 pending 列表 + 批准/驳回；无 → 空态（不 mock） */}
+      {/* 审批队列（L6）：真实 pending 列表 + 批准/驳回；无 → 空态（不 mock）。
+          2026-11-04：编队 pane 已挂独立封驳矩阵，hideApprovals 时整节不渲染
+          （独立挂载 / 既有测试仍传 false，保留原完整形态）。 */}
+      {!hideApprovals && (
       <div className="neo-host-sec" data-testid="neo-gm-approval">
         <div className="neo-host-sec-head">
           <ShieldCheck size={12} strokeWidth={1.8} />
@@ -452,6 +463,7 @@ export function GroupMembersPanel({ groupId }: GroupMembersPanelProps) {
           </>
         )}
       </div>
+      )}
 
       {/* 群简报折叠区：按天聚合的 agent 产出；空 → 空态 */}
       <details className="neo-host-sec neo-gm-brief" data-testid="neo-gm-brief">

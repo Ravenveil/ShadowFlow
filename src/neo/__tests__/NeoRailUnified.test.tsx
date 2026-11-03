@@ -142,7 +142,7 @@ describe('NeoRail os-unified — 员工会话项', () => {
 });
 
 describe('NeoRail os-unified — 团队折叠分组（home 常驻）', () => {
-  it('home：团队分组（组标题 + 组内群聊 + 成员会话项）+ 未归属员工落成员区', async () => {
+  it('home：团队分组（组标题 + 组内群聊 + 成员会话项）+ 默认区不再按类型分区', async () => {
     renderHome();
     // 团队分组标题
     const groupNode = await screen.findByTestId('neo-team-group', {}, { timeout: 3000 });
@@ -152,9 +152,11 @@ describe('NeoRail os-unified — 团队折叠分组（home 常驻）', () => {
     await waitFor(() => {
       expect(screen.getByTestId('neo-team-group-chat')).toBeInTheDocument();
     });
-    // 成员区：a2 未归属团队（无 DM 的孤儿成员也渲染会话行）
-    const memberLabels = screen.getAllByText('成员');
-    expect(memberLabels.length).toBeGreaterThanOrEqual(1);
+    // 2026-11-04 用户反馈批：默认区不再插「成员」「群聊现场」子标题 ——
+    // 团队以可折叠分组出现，其余（群聊 / DM / 散养成员）一律平级混排，
+    // 左栏不再有「成员 vs 团队」的分区感（Grok 范式）。
+    expect(screen.queryByText('成员')).not.toBeInTheDocument();
+    expect(screen.queryByText('群聊现场')).not.toBeInTheDocument();
     const sessRows = screen.getAllByTestId('neo-agent-session-row');
     expect(sessRows.length).toBeGreaterThanOrEqual(2);
   });

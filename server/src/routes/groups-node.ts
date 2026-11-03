@@ -41,6 +41,13 @@ import * as store from '../storage/groups-store';
 
 const router = Router();
 
+/**
+ * 群成员上限，对齐 groups-chat.ts 的 fanout 上限
+ * （`_MAX_FANOUT_AGENTS`，Python `_chat_bridge` 同源）。加人超限时直接拒绝，
+ * 不静默截断——否则前端以为加进去了，派发时却被 slice 掉。
+ */
+const MAX_FANOUT_AGENTS = 5;
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 /** 标准信封（对齐 Python _envelope：{ data, meta }）。 */
@@ -208,6 +215,10 @@ router.patch('/:id', (req: Request, res: Response) => {
     archived?: boolean;
     workspace_dir?: string;
     conversation_id?: string;
+    /** Grok 式「添加成员」：全量成员列表（前端读 group.agent_ids 后追加再回传）。 */
+    agent_ids?: unknown;
+    /** 单聊加人 → 'group'（加人即成群，无独立的「新建群聊」入口）。 */
+    kind?: unknown;
   };
 
   // pydantic：name min_length=1 max_length=120。
@@ -228,6 +239,39 @@ router.patch('/:id', (req: Request, res: Response) => {
   }
   if (body.conversation_id !== undefined) {
     patch.conversation_id = body.conversation_id.trim() || null;
+  }
+
+  // Grok 式成员编辑（2026-11-03）：agent_ids 全量替换。去重保序，空串剔除，
+  // 上限对齐 fanout MAX_FANOUT_AGENTS（超了后端跑不动，直接拒绝而不是静默截断）。
+  if (body.agent_ids !== undefined) {
+    if (!Array.isArray(body.agent_ids)) {
+      validationError(res, ['body', 'agent_ids'], 'agent_ids must be an array of strings');
+      return;
+    }
+    const cleaned: string[] = [];
+    for (const raw of body.agent_ids) {
+      if (typeof raw !== 'string') continue;
+      const id = raw.trim();
+      if (id && !cleaned.includes(id)) cleaned.push(id);
+    }
+    if (cleaned.length > MAX_FANOUT_AGENTS) {
+      validationError(
+        res,
+        ['body', 'agent_ids'],
+        `agent_ids must be at most ${MAX_FANOUT_AGENTS} entries`,
+      );
+      return;
+    }
+    patch.agent_ids = cleaned;
+  }
+
+  // 形态切换：只允许 dm / group 两值（单聊加人 → group）。
+  if (body.kind !== undefined) {
+    if (body.kind !== 'dm' && body.kind !== 'group') {
+      validationError(res, ['body', 'kind'], "kind must be 'dm' or 'group'");
+      return;
+    }
+    patch.kind = body.kind;
   }
 
   const rec = store.patchGroup(req.params.id, patch);

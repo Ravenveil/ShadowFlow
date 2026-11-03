@@ -846,3 +846,124 @@
   height: 100%;
   overflow-y: auto;
 }
+
+/* ── Grok 式头像切换浮层（2026-11-04）：点头像 → 候选网格 → 点一个立即生效 ── */
+.neo-aas {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.neo-aas-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: transform var(--dur-1, 160ms) var(--ease-out, ease),
+    box-shadow var(--dur-1, 160ms) var(--ease-out, ease);
+}
+.neo-aas-trigger:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 2px var(--t-accent-tint, var(--t-panel-2));
+}
+.neo-aas-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 60;
+  width: 272px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--t-border);
+  background: var(--t-panel);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+}
+.neo-aas-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--t-border);
+}
+.neo-aas-pop-meta { min-width: 0; }
+.neo-aas-pop-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.neo-aas-pop-hint { margin-top: 2px; font-size: 10.5px; color: var(--t-fg-5); }
+.neo-aas-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+  max-height: 208px;
+  overflow-y: auto;
+}
+.neo-aas-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--t-panel-2);
+  cursor: pointer;
+  transition: border-color var(--dur-1, 160ms) var(--ease-out, ease),
+    transform var(--dur-1, 160ms) var(--ease-out, ease);
+}
+.neo-aas-cell:hover:not(:disabled) { transform: scale(1.08); border-color: var(--t-fg-5); }
+.neo-aas-cell.on { border-color: var(--t-accent, var(--t-run)); }
+.neo-aas-cell:disabled { opacity: 0.55; cursor: default; }
+.neo-aas-more {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: var(--t-fg-4);
+  font-size: 11px;
+  cursor: pointer;
+}
+.neo-aas-more:hover { color: var(--t-fg-2); text-decoration: underline; }
+.neo-aas-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--t-border);
+}
+.neo-aas-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--t-border);
+  background: var(--t-panel-2);
+  color: var(--t-fg-3);
+  font-size: 11px;
+  cursor: pointer;
+}
+.neo-aas-action:hover:not(:disabled) { color: var(--t-fg); border-color: var(--t-fg-5); }
+.neo-aas-action:disabled { opacity: 0.5; cursor: default; }
+.neo-aas-file { display: none; }
+.neo-aas-error { margin-top: 8px; font-size: 11px; color: var(--t-danger, #dc2626); }
+.neo-aas-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+  background: transparent;
+}
+.neo-aas-pop { z-index: 60; }

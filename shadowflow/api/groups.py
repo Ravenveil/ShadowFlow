@@ -864,6 +864,12 @@ class PatchGroupRequest(BaseModel):
     conversation_id: Optional[str] = None
     # 2026-05-30 — CLI 工作目录(绝对路径)。空字符串 = 清除(回退默认)。
     workspace_dir: Optional[str] = Field(None, max_length=4096)
+    # 2026-11-04 — Grok 式「添加成员」：全量成员 id 列表（不增量）。前端读
+    # group.agent_ids 后合并/移除再整体回写，避免多端并发丢更新。
+    agent_ids: Optional[List[str]] = None
+    # 2026-11-04 — 会话形态：'dm' 单聊 | 'group' 群聊。单聊加第二个人后前端
+    # 显式下发 'group'（加人即成群，产品上没有独立的「新建群聊」入口）。
+    kind: Optional[Literal["dm", "group"]] = None
 
 
 class UserGroupSetting(BaseModel):
@@ -924,6 +930,22 @@ async def patch_group(group_id: str, body: PatchGroupRequest) -> Dict[str, Any]:
     if body.conversation_id is not None:
         # B1 互链：空串 = 清除；非空 = 挂到该 Node conversation（Node 端校验存在性）。
         record["conversation_id"] = body.conversation_id.strip() or None
+    if body.agent_ids is not None:
+        # Grok 式成员编辑（2026-11-04）：去重保序、剔空串；上限对齐 Node
+        # fanout 的 5 人，超了直接 422 而不是静默截断（否则前端以为加进去了，
+        # 派发时却被 slice 掉）。
+        cleaned: List[str] = []
+        for raw in body.agent_ids:
+            aid = (raw or "").strip()
+            if aid and aid not in cleaned:
+                cleaned.append(aid)
+        if len(cleaned) > 5:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=422, detail="agent_ids 最多 5 个成员")
+        record["agent_ids"] = cleaned
+    if body.kind is not None:
+        record["kind"] = body.kind
     record["updated_at"] = datetime.now(timezone.utc).isoformat()
     _save_group(record)
     return _envelope(record)

@@ -73,7 +73,9 @@ describe('teamWorkflowToFlowNodes — 节点投影', () => {
     };
     const laid = teamWorkflowToFlowNodes(twoRoots);
     expect(laid[0].position).toEqual({ x: 0, y: 0 });
-    expect(laid[1].position).toEqual({ x: 0, y: 52 });
+    // 2026-11-04：节点改为「头像在上 + 名字在下」竖排卡片，行距 52 → 78
+    // 避免同列节点上下压叠（见 TeamDagCanvas.ROW_GAP）。
+    expect(laid[1].position).toEqual({ x: 0, y: 78 });
   });
 });
 

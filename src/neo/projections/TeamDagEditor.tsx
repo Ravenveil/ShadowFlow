@@ -63,6 +63,7 @@ import {
   type TeamWorkflowVersionMeta,
 } from '../../api/teams';
 import type { AgentRecord } from '../../api/agents';
+import { AgentAvatar } from '../../components/agent/AgentAvatar';
 import { validateTeamWorkflowGraph, normalizeEdgeMode, applyEdgeMode, type TeamEdgeMode } from './teamDagValidation';
 import { dagDraftToWorkflow } from './teamDagDraft';
 import { useI18n } from '../../common/i18n';
@@ -84,6 +85,13 @@ interface TeamAgentNodeData extends Record<string, unknown> {
   soul: string;
   /** 原 workflow 节点的 type（存量数据为 'agentTask'），保存时原样回写。 */
   nodeType: string;
+  /**
+   * 2026-11-04：节点改用 Agent 真实头像（DiceBear / avatar_image），与侧栏、
+   * 气泡、成员面板同源。roster 查不到时回退文字首字色块。
+   */
+  avatarStyle?: string | null;
+  avatarSeed?: string | null;
+  avatarImage?: string | null;
 }
 
 const HANDLE_STYLE = {
@@ -104,15 +112,29 @@ function edgeVisual(mode: TeamEdgeMode): Pick<Edge, 'className' | 'style'> {
   return mode === 'approve' ? { className: APPROVE_EDGE_CLASS, style: { ...APPROVE_EDGE_STYLE } } : {};
 }
 
+/**
+ * DAG 节点（2026-11-04 用户反馈批）：Agent 真实头像在上、名字在下。
+ *
+ * 之前是「名字 + agentId」两行纯文字的方块，画布上认不出谁是谁，也没法
+ * 靠视觉定位拖拽目标。改成头像卡片后：拖动 = 直接抓头像卡片，连线 = 从
+ * 卡片左右两侧的 Handle 拉出，节点本身可点选/拖动（SfReactFlowBase 默认
+ * nodesDraggable，坐标即持久化载体）。
+ */
 function TeamAgentNode({ data }: { data: TeamAgentNodeData }) {
   return (
-    <div className="neo-team-dag-node">
+    <div className="neo-team-dag-node" title={`${data.name || data.agentId} · ${data.agentId}`}>
       <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
+      <span className="neo-team-dag-node-avatar">
+        <AgentAvatar
+          name={data.name || data.agentId || '?'}
+          style={data.avatarStyle}
+          seed={data.avatarSeed ?? data.name ?? data.agentId}
+          image={data.avatarImage ?? null}
+          size={36}
+        />
+      </span>
       <span className="neo-team-dag-node-label" title={data.name}>
         {data.name || data.agentId}
-      </span>
-      <span className="neo-team-dag-node-id" title={data.agentId}>
-        {data.agentId || '—'}
       </span>
       <Handle type="source" position={Position.Right} style={HANDLE_STYLE} />
     </div>
@@ -302,21 +324,39 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
     [agents],
   );
 
+  /** roster → 节点头像字段（与侧栏/气泡/成员面板同源的 AgentAvatar 参数）。 */
+  const resolveAvatar = useCallback(
+    (agentId: string): Pick<TeamAgentNodeData, 'avatarStyle' | 'avatarSeed' | 'avatarImage'> => {
+      const roster = agents.find((a) => a.agent_id === agentId);
+      if (!roster) return {};
+      return {
+        avatarStyle: roster.avatar_style,
+        avatarSeed: roster.avatar_seed ?? roster.name,
+        avatarImage: roster.avatar_image ?? null,
+      };
+    },
+    [agents],
+  );
+
   const seedNodes = useMemo<Node<TeamAgentNodeData>[]>(
     () =>
-      workflow.nodes.map((n, i) => ({
-        id: n.id,
-        type: 'teamAgent',
-        // 无坐标的旧数据给一列种子位，避免全部叠在 (0,0)
-        position: n.position ?? { x: 0, y: i * 106 },
-        data: {
-          agentId: n.data?.agentId ?? '',
-          name: resolveNodeName(n.data?.agentId ?? '', n.data?.name, n.id),
-          soul: n.data?.soul ?? '',
-          nodeType: n.type || 'agentTask',
-        },
-      })),
-    [workflow, resolveNodeName],
+      workflow.nodes.map((n, i) => {
+        const agentId = n.data?.agentId ?? '';
+        return {
+          id: n.id,
+          type: 'teamAgent',
+          // 无坐标的旧数据给一列种子位，避免全部叠在 (0,0)
+          position: n.position ?? { x: 0, y: i * 106 },
+          data: {
+            agentId,
+            name: resolveNodeName(agentId, n.data?.name, n.id),
+            soul: n.data?.soul ?? '',
+            nodeType: n.type || 'agentTask',
+            ...resolveAvatar(agentId),
+          },
+        };
+      }),
+    [workflow, resolveNodeName, resolveAvatar],
   );
   const seedEdges = useMemo<Edge[]>(
     () =>
@@ -391,13 +431,19 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
           id,
           type: 'teamAgent',
           position: { x: maxX + (ns.length ? 200 : 0), y: 40 + (ns.length % 6) * 90 },
-          data: { agentId: agent.agent_id, name: agent.name, soul: agent.soul, nodeType: 'agentTask' },
+          data: {
+            agentId: agent.agent_id,
+            name: agent.name,
+            soul: agent.soul,
+            nodeType: 'agentTask',
+            ...resolveAvatar(agent.agent_id),
+          },
         },
       ];
     });
     setPendingAgentId('');
     setErrors([]);
-  }, [agents, pendingAgentId, setRfNodes]);
+  }, [agents, pendingAgentId, setRfNodes, resolveAvatar]);
 
   const selectedNodes = rfNodes.filter((n) => n.selected);
   const selectedEdges = rfEdges.filter((e) => e.selected);
@@ -545,17 +591,21 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
   const loadWorkflowToCanvas = useCallback(
     (wf: TeamWorkflow) => {
       setRfNodes(
-        wf.nodes.map((n, i) => ({
-          id: n.id,
-          type: 'teamAgent',
-          position: n.position ?? { x: 0, y: i * 106 },
-          data: {
-            agentId: n.data?.agentId ?? '',
-            name: resolveNodeName(n.data?.agentId ?? '', n.data?.name, n.id),
-            soul: n.data?.soul ?? '',
-            nodeType: n.type || 'agentTask',
-          },
-        })),
+        wf.nodes.map((n, i) => {
+          const agentId = n.data?.agentId ?? '';
+          return {
+            id: n.id,
+            type: 'teamAgent',
+            position: n.position ?? { x: 0, y: i * 106 },
+            data: {
+              agentId,
+              name: resolveNodeName(agentId, n.data?.name, n.id),
+              soul: n.data?.soul ?? '',
+              nodeType: n.type || 'agentTask',
+              ...resolveAvatar(agentId),
+            },
+          };
+        }),
       );
       setRfEdges(
         wf.edges.map((e) => {
@@ -572,7 +622,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel }: T
         }),
       );
     },
-    [setRfNodes, setRfEdges, resolveNodeName],
+    [setRfNodes, setRfEdges, resolveNodeName, resolveAvatar],
   );
 
   /** AI 生成草稿：NL → POST /dag-draft → dagDraftToWorkflow → 铺画布标脏（不落库）。 */

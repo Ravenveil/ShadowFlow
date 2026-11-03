@@ -94,7 +94,6 @@ import { useInboxStore } from '../core/store/useInboxStore';
 import { useCommandK } from '../core/hooks/useCommandK';
 import type { NeoRailProps } from './types';
 import { NeoCreateAgentModal } from './NeoCreateAgentModal';
-import { NeoCreateGroupModal } from './NeoCreateGroupModal';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -228,8 +227,6 @@ export function NeoRail({
   // 2026-08-22 第二轮 — Agent 创建成功后的「去对话试试」轻提示（auto-dismiss）。
   // 只在调用方/成功回调侧加引导，NeoCreateAgentModal 本体归另一代理。
   const [agentCreatedToast, setAgentCreatedToast] = useState<string | null>(null);
-  // GAP D 新建群聊模态开关
-  const [createGroupOpen, setCreateGroupOpen] = useState(false);
   // GAP A3（2026-08-22）项目分组：项目+会话（GET /api/projects?withSessions=1），
   // home/teams 分区拉取；「新建项目」为内联输入行（+ 图标行展开，Enter 提交）。
   const [projects, setProjects] = useState<ProjectWithSessions[] | null>(null);
@@ -1277,29 +1274,16 @@ export function NeoRail({
   // Grok「工作/生活」范式 + 用户反馈「不同项目里是不同的规划」：项目 label
   // （可折叠）→ 组内 = 该项目群聊 + 团队分组 + 成员会话。默认区（未归项目）
   // 同构混排：散养团队 + 散群 + 成员 DM + 孤儿成员。
+  //
+  // 2026-11-04 用户反馈批：默认区**不再按类型插子标题**（此前有「群聊现场」/
+  // 「成员」两道 label，把同一层会话又切成了上下两块）。Grok 左栏就是一列
+  // 会话/Bot，团队以可折叠分组的形式出现，其余一律平级行——不再有
+  // 「成员 vs 团队」的分区感。分组语义交给项目/团队折叠组表达。
   const renderProjectBody = () => (
     <>
       {defaultTeams.map(renderTeamGroup)}
-      {looseGroupBuckets.unassigned.length > 0 && (
-        <div className="neo-section-label">
-          {t('neo.groups', { defaultValue: language === 'zh' ? '群聊现场' : 'Group Rooms' })}
-          <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
-        </div>
-      )}
       {looseGroupBuckets.unassigned.map(renderGroupRow)}
-      {soloDmBuckets.unassigned.length > 0 && (
-        <div className="neo-section-label">
-          {t('neo.nav.agentsCloud', { defaultValue: language === 'zh' ? '成员' : 'Members' })}
-          <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
-        </div>
-      )}
       {soloDmBuckets.unassigned.map(renderDmRow)}
-      {loneAgents.length > 0 && (
-        <div className="neo-section-label">
-          {t('neo.nav.agentsCloud', { defaultValue: language === 'zh' ? '成员' : 'Members' })}
-          <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
-        </div>
-      )}
       {loneAgents.map(renderAgentSessionRow)}
     </>
   );
@@ -1703,19 +1687,9 @@ export function NeoRail({
               </div>
             )}
 
-            {/* 拉群入口（成员/成员可拉群组建团队 — Grok 自定义分组形态）+
-                新建 Agent 入口（GAP D/A14 行形态保留，常驻底部） */}
-            <button
-              type="button"
-              className="neo-row"
-              onClick={() => setCreateGroupOpen(true)}
-              data-testid="neo-new-group"
-            >
-              <Plus size={15} strokeWidth={1.75} aria-hidden />
-              <span className="neo-row-name">
-                {t('neo.newGroup.entry', { defaultValue: language === 'zh' ? '新建群聊' : 'New Group' })}
-              </span>
-            </button>
+            {/* 新建 Agent 入口（GAP D/A14 行形态保留，常驻底部）。
+                2026-11-04：原「新建群聊」行已移除 —— 建群改走会话内「添加成员」
+                （Grok 范式：加第二个人即成群），左栏只留造 Bot 这一个入口。 */}
             <button
               type="button"
               className="neo-row"
@@ -1907,18 +1881,10 @@ export function NeoRail({
         </div>
       )}
 
-      {/* GAP D 新建群聊模态：成功 → 中栏打开新群现场 + 刷新 inbox 群列表 */}
-      {createGroupOpen && (
-        <NeoCreateGroupModal
-          workspaceId={workspaceId ?? null}
-          onClose={() => setCreateGroupOpen(false)}
-          onCreated={(g) => {
-            setCreateGroupOpen(false);
-            onNavigate({ view: 'conversation', groupId: g.groupId });
-            void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
-          }}
-        />
-      )}
+      {/* 2026-11-04 用户反馈批：「新建群聊」模态入口整体移除。
+          Grok 里没有「先建群再选人」——在会话里加第二个人，这个会话就自然
+          变成群聊（见 addGroupMembers：成员数 > 1 → kind='group'）。
+          建群动作收敛到会话顶栏的「添加成员」，左栏不再放这个入口。 */}
     </nav>
   );
 }

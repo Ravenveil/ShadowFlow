@@ -20,8 +20,10 @@
   height: 100%;
 }
 
-/* ---- 顶栏：48px + hairline 下边框，标题 12.5px/600 ---- */
+/* ---- 顶栏：48px + hairline 下边框，标题 12.5px/600 ----
+   2026-11-04：加 position:relative —— 「添加成员」候选浮层以顶栏为定位父级。 */
 .neo-gc-topbar {
+  position: relative;
   flex-shrink: 0;
   height: 48px;
   display: flex;
@@ -119,6 +121,125 @@
   font-size: 11px;
   color: var(--t-fg-5);
   white-space: nowrap;
+}
+
+/* ── Grok 式「添加成员」（2026-11-04）─────────────────────────────────────
+   顶栏成员栈尾的圆形「+」：单聊/群聊都常驻。点开是贴在顶栏右下的候选浮层，
+   已在场的人显示 ✓（再点即移出），不在场的显示 +（点即加入）。加进第二个人
+   会话就升级为群聊，所以产品上不再有独立的「新建群聊」入口。 */
+.neo-gc-member-add {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--t-border);
+  background: transparent;
+  color: var(--t-fg-3);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
+}
+.neo-gc-member-add:hover {
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+  border-color: var(--t-border-strong, var(--t-fg-5));
+}
+.neo-gc-member-add.on {
+  background: var(--t-accent-tint, var(--t-panel-2));
+  color: var(--t-fg);
+  border-color: var(--t-accent, var(--t-fg-4));
+}
+
+.neo-gc-member-picker {
+  position: absolute;
+  top: 44px;
+  right: 12px;
+  z-index: 40;
+  width: 268px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--t-border);
+  background: var(--t-panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+.neo-gc-member-picker-head {
+  padding: 4px 6px 8px;
+  font-size: 11px;
+  color: var(--t-fg-5);
+}
+.neo-gc-member-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.neo-gc-member-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t-fg-2);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.neo-gc-member-picker-row:hover:not(:disabled) {
+  background: var(--t-panel-2);
+}
+.neo-gc-member-picker-row:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.neo-gc-member-picker-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--t-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.neo-gc-member-picker-role {
+  flex-shrink: 0;
+  max-width: 96px;
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.neo-gc-member-picker-mark {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--t-border);
+  color: var(--t-fg-4);
+}
+.neo-gc-member-picker-row.in .neo-gc-member-picker-mark {
+  border-color: var(--t-accent, var(--t-fg-3));
+  color: var(--t-accent, var(--t-fg));
+}
+.neo-gc-member-picker-empty,
+.neo-gc-member-picker-error {
+  padding: 10px 8px;
+  font-size: 11.5px;
+  color: var(--t-fg-5);
+}
+.neo-gc-member-picker-error {
+  color: var(--t-danger, #ef4444);
 }
 
 /* 执行中 live 徽章：灰胶囊 + 脉动点（dot 走 --t-accent，day 近黑 / night 蓝） */

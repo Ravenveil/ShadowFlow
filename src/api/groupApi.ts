@@ -172,6 +172,16 @@ export interface PatchGroupRequest {
   announcement?: string;
   /** 2026-05-30 — CLI 工作目录(绝对路径)。空串 = 清除(回退默认)。 */
   workspace_dir?: string;
+  /**
+   * 2026-11-03 — Grok 式成员编辑：全量成员 id 列表（不增量）。
+   * 调用方读 group.agent_ids 后追加/删除再整体回传，避免多端并发丢更新。
+   */
+  agent_ids?: string[];
+  /**
+   * 2026-11-03 — 会话形态：'dm' 单聊 / 'group' 群聊。
+   * 单聊加人后前端显式下发 'group'（加人即成群，没有独立的「新建群聊」入口）。
+   */
+  kind?: 'dm' | 'group';
 }
 
 /**
@@ -328,6 +338,49 @@ export async function patchGroup(
   const json = await res.json();
   // backend envelope: { data: GroupRecord, meta: {...} }；也兼容裸返回
   return (json.data ?? json) as GroupRecord;
+}
+
+/**
+ * Grok 式「添加成员」（2026-11-03）：往当前会话里加 Agent。
+ *
+ * 不带独立的「新建群聊」入口——单聊加第二个人就自然升级成群聊
+ * （kind: 'dm' → 'group'），与 Grok 一致：会话形态由在场人数决定，而不是
+ * 先选「建群」再选人。
+ *
+ * 全量回写（读 → 合并 → PATCH）而不是增量接口：网关 PATCH 只收完整
+ * agent_ids，避免多端并发时的丢更新。返回更新后的 GroupRecord。
+ */
+export async function addGroupMembers(
+  groupId: string,
+  agentIds: string[],
+): Promise<GroupRecord> {
+  const current = await getGroup(groupId);
+  // 群不存在时 getGroup 返 null：仍按传入列表回写，由网关 PATCH 404 兜底暴露，
+  // 不让调用方吞掉「会话已消失」这个事实。
+  const merged = [...(current?.agent_ids ?? [])];
+  for (const id of agentIds) {
+    const clean = id.trim();
+    if (clean && !merged.includes(clean)) merged.push(clean);
+  }
+  // 会话形态**只升级、不降级**：只有原本是单聊且加了第二个人时才转 'group'。
+  // 给一个 0 成员的群加第一个人不能把它降成 dm（否则群名被单聊头像/名字盖掉，
+  // 左栏会话也会从「群聊」跳成「单聊」）。群聊移除成员后仍是群聊。
+  const currentKind = (current?.kind as string | undefined) ?? 'group';
+  const patch: PatchGroupRequest = { agent_ids: merged };
+  if (currentKind === 'dm' && merged.length > 1) patch.kind = 'group';
+  return patchGroup(groupId, patch);
+}
+
+/** Grok 式「移出成员」：从当前会话摘掉一个 Agent；剩 1 人自动回落单聊。 */
+export async function removeGroupMember(
+  groupId: string,
+  agentId: string,
+): Promise<GroupRecord> {
+  const current = await getGroup(groupId);
+  const next = (current?.agent_ids ?? []).filter((id) => id !== agentId);
+  // 不自动降级：群聊移出成员后仍是群聊（Grok 里群不会因为人少就变单聊），
+  // 原本是单聊的也保持单聊。形态切换只在 addGroupMembers 的「加第二人」发生。
+  return patchGroup(groupId, { agent_ids: next });
 }
 
 export async function postGroupMessage(

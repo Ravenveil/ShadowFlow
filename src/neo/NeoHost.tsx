@@ -62,6 +62,7 @@ import {
   RefreshCw,
   Repeat,
   Search,
+  ShieldCheck,
   Sparkles,
   Upload,
   UsersRound,
@@ -96,6 +97,7 @@ import { LoopVerdicts } from './projections/LoopVerdicts';
 import { EvidencePanel } from './projections/EvidencePanel';
 import { TeamPanel } from './projections/TeamPanel';
 import { GroupMembersPanel } from './projections/GroupMembersPanel';
+import { ApprovalMatrix } from './projections/ApprovalMatrix';
 import { NeoAgentSoul } from './NeoAgentSoul';
 import { AgentSchedulesPanel } from './AgentSchedulesPanel';
 import type { NeoHostProps } from './types';
@@ -1072,9 +1074,17 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
       />
     ) : null;
 
-  // 「成员」tab（W2）：非 DM 会话时挂 GroupMembersPanel（成员 + DAG 摘要 + 审批门）。
+  // 「成员」面板（W2）：非 DM 会话时挂 GroupMembersPanel（成员网格 + DAG 摘要
+  // + 简报）。2026-11-04：审批门已提升为编队 pane 的一级「封驳矩阵」section，
+  // 这里传 hideApprovals 关掉内嵌那份，避免同群两条 SSE 订阅 + 重复渲染。
   const membersContent =
-    isTeamConv && conversation ? <GroupMembersPanel groupId={conversation.groupId} /> : null;
+    isTeamConv && conversation ? (
+      <GroupMembersPanel groupId={conversation.groupId} hideApprovals />
+    ) : null;
+
+  /** 封驳矩阵：独立于成员面板的一级 section，✅/❌ 一点即决。 */
+  const approvalContent =
+    isTeamConv && conversation ? <ApprovalMatrix groupId={conversation.groupId} /> : null;
 
   // ── runId 为空不再整栏空态（2026-08-19）：会话/目标态右栏常驻，直接进
   //    tab 壳 —— 工作空间文件树可用，产物/过程/Loop 走 runlessNote 空态。 ──
@@ -1271,6 +1281,18 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
                   {t('neo.host.teamWorkflow', { defaultValue: '工作流' })}
                 </div>
                 {teamContent}
+              </div>
+            )}
+            {/* 2026-11-04：封驳矩阵提成一级 section —— 此前审批按钮埋在
+                GroupMembersPanel 内部第三节，无待办时只剩一行灰字，用户
+                「没看到能点的地方」。现在独立成节，表头常驻、✅/❌ 一点即决。 */}
+            {approvalContent && (
+              <div className="neo-host-teamsec neo-host-teamsec--approval">
+                <div className="neo-host-teamsec-head">
+                  <ShieldCheck size={12} strokeWidth={1.8} aria-hidden />
+                  {t('neo.host.approvalMatrix', { defaultValue: '封驳矩阵' })}
+                </div>
+                {approvalContent}
               </div>
             )}
             {membersContent && (
