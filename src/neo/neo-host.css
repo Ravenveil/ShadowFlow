@@ -2159,6 +2159,35 @@
   font-weight: 600;
   user-select: none;
 }
+/* 头像统一（2026-11-04）：AgentAvatar 版成员格（34px 圆形，状态点挂外层） */
+.neo-gm-avatar--img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+/* 编队 pane 分节（os-unified 2026-11-04 三合一：过程+工作流+成员纵排） */
+.neo-host-teamsec {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--t-border);
+}
+.neo-host-teamsec:last-child {
+  border-bottom: none;
+}
+.neo-host-teamsec-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--t-fg-4);
+  text-transform: uppercase;
+}
 .neo-gm-cell-name {
   max-width: 100%;
   font-size: 10px;

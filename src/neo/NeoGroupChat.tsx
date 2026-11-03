@@ -33,7 +33,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, UsersRound } from 'lucide-react';
 import { useGroupTimeline } from '../core/hooks/useGroupTimeline';
-import { getGroup, postGroupMessage } from '../api/groupApi';
+import { getGroup, postGroupMessage, stopGroupChat } from '../api/groupApi';
 import { listAgents, type AgentRecord } from '../api/agents';
 import { NeoTimeline } from './NeoTimeline';
 import { NeoGroupMsgActions } from './NeoGroupMsgActions';
@@ -239,6 +239,8 @@ export function NeoGroupChat({
   const [groupName, setGroupName] = useState<string | null>(null);
   const [groupKind, setGroupKind] = useState<string | null>(null);
   const [memberCount, setMemberCount] = useState<number>(0);
+  /** 单聊对面那位 agent 的 id（kind='dm' 且 agent_ids 恰一人 → Grok 单聊形态）。 */
+  const [dmAgentId, setDmAgentId] = useState<string | null>(null);
   useEffect(() => {
     if (!groupId) return;
     let alive = true;
@@ -248,6 +250,9 @@ export function NeoGroupChat({
         setGroupName(g.name);
         setGroupKind((g.kind as string | undefined) ?? null);
         setMemberCount(g.agent_ids?.length ?? 0);
+        const ids = g.agent_ids ?? [];
+        const isDmRec = (g.kind as string | undefined) === 'dm';
+        setDmAgentId(isDmRec && ids.length === 1 ? ids[0] : null);
       })
       .catch(() => {});
     return () => {
@@ -272,9 +277,21 @@ export function NeoGroupChat({
     };
   }, [groupId]);
   const agentById = useMemo(() => new Map(agents.map((a) => [a.agent_id, a])), [agents]);
+  /** 单聊对面的 Agent 记录（头像 + 名称真源；记录没拉到 → 顶栏退回群名）。 */
+  const dmAgent = dmAgentId ? agentById.get(dmAgentId) ?? null : null;
 
   // 活跃 run → composer 显示 Stop 视觉 + 顶栏 live 徽章
   const busy = timeline.runs.some((r) => r.status === 'running');
+
+  // 2026-11-04「停止生成」（用户反馈：点暂停对话停不下来）— 服务端取消当前
+  // fan-out 轮（POST /:id/stop：abort AbortController + 终结 gateway run），
+  // 本地同步把 running runs 立即翻终态（解订阅 + busy 解除，Stop 同帧回发送）。
+  // 服务端失败也不阻塞 UI 退出 busy（本地态是 UI 真源）。
+  const handleStop = useCallback(() => {
+    if (!groupId) return;
+    timeline.markAllRunsStopped();
+    void stopGroupChat(groupId).catch(() => undefined);
+  }, [groupId, timeline]);
 
   // ── 交付卡（2026-08-23 交付收口）────────────────────────────────────────
   // run 跑完（最新一条 gateway run 进入 succeeded 且当前无 running）→ 消息流
@@ -469,34 +486,65 @@ export function NeoGroupChat({
           </Link>
         )}
         <span className="neo-gc-title">
-          <UsersRound size={13} strokeWidth={1.9} aria-hidden className="neo-gc-title-icon" />
-          <strong>{groupName ?? groupId.slice(0, 8)}</strong>
-          {memberCount > 0 && (
+          {/* Grok 单聊形态（2026-11-04 用户反馈）：单聊头像是对方 Agent 的真实
+              头像（与侧栏/气泡同源 AgentAvatar），不再用群聊图标，也不出成员计数；
+              群聊保持 UsersRound 图标 + 计数。 */}
+          {isDm && dmAgent && (
+            <AgentAvatar
+              name={dmAgent.name}
+              style={dmAgent.avatar_style}
+              seed={dmAgent.avatar_seed ?? dmAgent.name}
+              image={dmAgent.avatar_image ?? null}
+              size={20}
+              className="neo-gc-title-avatar"
+            />
+          )}
+          {!isDm && (
+            <UsersRound size={13} strokeWidth={1.9} aria-hidden className="neo-gc-title-icon" />
+          )}
+          <strong>{isDm && dmAgent ? dmAgent.name : (groupName ?? groupId.slice(0, 8))}</strong>
+          {!isDm && memberCount > 0 && (
             <span className="neo-gc-title-count">
               {'· '}
-              {isDm
-                ? t('neo.dm.members', { defaultValue: '{{count}} 位员工', count: memberCount })
-                : t('neo.group.members', { defaultValue: '{{count}} 个 Agent', count: memberCount })}
+              {t('neo.group.members', { defaultValue: '{{count}} 个 Agent', count: memberCount })}
             </span>
           )}
         </span>
-        {members.length > 0 && (
+        {!isDm && members.length > 0 && (
           <span
             className="neo-gc-members"
             title={members.map((m) => m.name).join('、')}
             data-testid="neo-gc-members"
           >
             <span className="neo-gc-member-stack">
-              {stackedMembers.map((m) => (
-                <span
-                  key={m.key}
-                  className="neo-gc-member"
-                  style={{ background: gcAvatarColor(m.key) }}
-                  aria-hidden
-                >
-                  {gcAvatarInitial(m.name)}
-                </span>
-              ))}
+              {stackedMembers.map((m) => {
+                // 头像统一（2026-11-04 用户反馈）：有 agent 记录 → AgentAvatar
+                // （DiceBear/avatar_image，与侧栏/气泡同源）；推导不出记录的
+                // （历史消息残留 id）→ 保留字符色块兜底。
+                const rec = m.key.startsWith('name:')
+                  ? undefined
+                  : agentById.get(m.key);
+                return rec ? (
+                  <span key={m.key} className="neo-gc-member neo-gc-member--img">
+                    <AgentAvatar
+                      name={rec.name}
+                      style={rec.avatar_style}
+                      seed={rec.avatar_seed ?? rec.name}
+                      image={rec.avatar_image ?? null}
+                      size={22}
+                    />
+                  </span>
+                ) : (
+                  <span
+                    key={m.key}
+                    className="neo-gc-member"
+                    style={{ background: gcAvatarColor(m.key) }}
+                    aria-hidden
+                  >
+                    {gcAvatarInitial(m.name)}
+                  </span>
+                );
+              })}
               {overflowCount > 0 && (
                 <span className="neo-gc-member neo-gc-member-more" aria-hidden>
                   +{overflowCount}
@@ -673,6 +721,7 @@ export function NeoGroupChat({
           variant="chat"
           onSubmit={handleSubmit}
           streaming={busy}
+          onStop={handleStop}
           onNavigate={onNavigate}
           placeholder={
             isDm

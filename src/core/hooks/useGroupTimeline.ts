@@ -67,6 +67,9 @@ export interface UseGroupTimelineResult {
   truncated: boolean;
   /** 乐观追加用户自己发的消息（开启新 turn）。发送 POST 由调用方负责。 */
   appendLocalUser: (text: string) => void;
+  /** 2026-11-04「停止生成」— 所有 running runs 立即本地翻终态 'canceled'
+   *  （解订阅 + 终态簿记）。配合服务端 POST /:id/stop 实现「点停止真停」。 */
+  markAllRunsStopped: () => void;
 }
 
 interface TimelineResponse {
@@ -391,8 +394,27 @@ export function useGroupTimeline(groupId: string | null): UseGroupTimelineResult
     }
   }, [refreshRuns]);
 
+  // 2026-11-04 群聊「停止生成」— 把所有 running runs 立即本地翻终态
+  // 'canceled'：解除订阅 + 记终态簿记（防 stale 轮询拉回 running）+ runs 回写。
+  // 与服务端 POST /:id/stop 配合使用（服务端真停 fan-out，这里 UI 立即退出 busy）。
+  const markAllRunsStopped = useCallback(() => {
+    const running = runs.filter((r) => r.status === 'running');
+    if (running.length === 0) return;
+    for (const r of running) {
+      terminalRunsRef.current.add(r.session_id);
+      const unsub = runSubsRef.current.get(r.session_id);
+      if (unsub) {
+        runSubsRef.current.delete(r.session_id);
+        unsub();
+      }
+    }
+    setRuns((prev) =>
+      prev.map((r) => (r.status === 'running' ? { ...r, status: 'canceled' } : r)),
+    );
+  }, [runs]);
+
   return useMemo(
-    () => ({ messages, runs, loading, error, truncated, appendLocalUser }),
-    [messages, runs, loading, error, truncated, appendLocalUser],
+    () => ({ messages, runs, loading, error, truncated, appendLocalUser, markAllRunsStopped }),
+    [messages, runs, loading, error, truncated, appendLocalUser, markAllRunsStopped],
   );
 }

@@ -64,6 +64,10 @@
   flex-shrink: 0;
   color: var(--t-fg-3);
 }
+/* 单聊顶栏 Agent 头像（Grok 形态：20px 圆形，与侧栏/气泡同源） */
+.neo-gc-title-avatar {
+  flex-shrink: 0;
+}
 .neo-gc-title strong {
   color: var(--t-fg);
   font-weight: 600;

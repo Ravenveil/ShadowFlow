@@ -793,6 +793,43 @@ export function NeoRail({
     [failManage],
   );
 
+  // ── os-unified（2026-11-04 用户反馈）头像拖拽归组 ─────────────────────────
+  // Grok Bot 交互：按住会话行（Bot 头像/整行）拖到项目分组 pill（或折叠组）上
+  // 松手完成归组，复用既有「移入项目」PATCH 通路。dragConvRef 持被拖会话 id；
+  // dropTargetState 记当前 hover 的投放目标（高亮 pill）。
+  const dragConvRef = useRef<{ groupId: string; name: string } | null>(null);
+  const [dropTargetProject, setDropTargetProject] = useState<string | 'default' | null>(null);
+  const handleDragStart = useCallback((groupId: string, name: string) => {
+    dragConvRef.current = { groupId, name };
+  }, []);
+  const handleDropOnProject = useCallback(
+    (projectId: string | null) => {
+      const dragged = dragConvRef.current;
+      dragConvRef.current = null;
+      setDropTargetProject(null);
+      if (dragged) moveConversation(dragged.groupId, projectId);
+    },
+    [moveConversation],
+  );
+  const projectDropProps = useCallback(
+    (projectId: string | null, tag: string) => ({
+      onDragOver: (e: React.DragEvent) => {
+        if (!dragConvRef.current) return;
+        e.preventDefault(); // 允许 drop
+        e.dataTransfer.dropEffect = 'move';
+        setDropTargetProject(tag);
+      },
+      onDragLeave: () => {
+        setDropTargetProject((cur) => (cur === tag ? null : cur));
+      },
+      onDrop: (e: React.DragEvent) => {
+        e.preventDefault();
+        handleDropOnProject(projectId);
+      },
+    }),
+    [handleDropOnProject],
+  );
+
   // 项目：重命名/删除（管理面闭环补的 patchProject/deleteProject 客户端）；
   // 成功重拉项目分组（reloadTick 驱动 listProjectsWithSessions 重取）。
   const renameProject = useCallback(
@@ -944,6 +981,12 @@ export function NeoRail({
           type="button"
           className={`neo-row neo-sess-row${isConversation(d.group_id) ? ' on' : ''}`}
           onClick={openDm}
+          draggable={!!d.group_id}
+          onDragStart={() => d.group_id && handleDragStart(d.group_id, d.agentName)}
+          onDragEnd={() => {
+            dragConvRef.current = null;
+            setDropTargetProject(null);
+          }}
           data-testid="neo-dm-row"
           title={d.lastMessage || d.agentName}
         >
@@ -1032,6 +1075,12 @@ export function NeoRail({
           type="button"
           className={`neo-row${isConversation(g.id) ? ' on' : ''}`}
           onClick={() => onNavigate({ view: 'conversation', groupId: g.id })}
+          draggable
+          onDragStart={() => handleDragStart(g.id, g.name)}
+          onDragEnd={() => {
+            dragConvRef.current = null;
+            setDropTargetProject(null);
+          }}
           data-testid="neo-group-row"
           title={g.lastMessage || g.name}
         >
@@ -1269,12 +1318,16 @@ export function NeoRail({
     const key = `proj-${project.project_id}`;
     const open = !collapsedGroups[key];
     const memberCount = groups.length + teamRows.length + dms.length;
+    const isDropTarget = dropTargetProject === project.project_id;
     return (
       <div key={key} data-testid="neo-project-section" data-project-id={project.project_id}>
-        <div className="neo-agent-row">
+        <div
+          className="neo-agent-row"
+          {...projectDropProps(project.project_id, project.project_id)}
+        >
           <button
             type="button"
-            className={`neo-group-label${open ? '' : ' collapsed'}`}
+            className={`neo-group-label${open ? '' : ' collapsed'}${isDropTarget ? ' neo-drop-target' : ''}`}
             onClick={() => toggleGroup(key)}
             aria-expanded={open}
             data-testid="neo-project-section-toggle"
@@ -1629,7 +1682,8 @@ export function NeoRail({
 
             {projectSections.map(renderProjectSection)}
 
-            {/* 默认区：未归项目的团队分组 / 散群 / 成员 DM / 孤儿成员 */}
+            {/* 默认区：未归项目的团队分组 / 散群 / 成员 DM / 孤儿成员
+                （os-unified 2026-11-04：也是拖拽归组的投放目标——拖到这里 = 移回默认项目） */}
             {railEmpty ? (
               <div className="neo-list-note">
                 {t('neo.sessionsEmpty', {
@@ -1639,7 +1693,14 @@ export function NeoRail({
                 })}
               </div>
             ) : (
-              renderProjectBody()
+              <div
+                {...projectDropProps(null, 'default')}
+                className={dropTargetProject === 'default' ? 'neo-drop-target' : undefined}
+                style={{ borderRadius: 10 }}
+                data-testid="neo-default-drop-zone"
+              >
+                {renderProjectBody()}
+              </div>
             )}
 
             {/* 拉群入口（成员/成员可拉群组建团队 — Grok 自定义分组形态）+

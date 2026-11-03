@@ -370,6 +370,22 @@ export async function postGroupMessage(
   return (await res.json()) as Message;
 }
 
+/**
+ * 2026-11-04 群聊「停止生成」— POST /api/groups/:id/stop。服务端取消该群
+ * 当前 fan-out 轮（abort AbortController + 终结 gateway run），前端随后把
+ * runs 本地翻终态退出 busy。返回服务端是否真取消了在跑轮（无在跑轮=false，
+ * 前端照样退出 busy——本地态是 UI 真源）。
+ */
+export async function stopGroupChat(groupId: string): Promise<boolean> {
+  const res = await fetch(`${getApiBase()}/api/groups/${groupId}/stop`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) return false;
+  const json = (await res.json().catch(() => null)) as { stopped?: boolean } | null;
+  return json?.stopped === true;
+}
+
 // ── Stream M 2026-05-29 · 消息悬浮工具栏「反应」「Pin」接后端 ───────────────
 // 后端：POST /api/groups/{gid}/messages/{mid}/reactions  (toggle by user)
 //       POST /api/groups/{gid}/messages/{mid}/pin         (toggle / set)

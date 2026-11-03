@@ -62,7 +62,11 @@ import { summarizeToolResult } from '../lib/timeline-projector';
 import type { TurnChunk } from '../workflow/types';
 // B1 互链：group → conversation；B2：conversation → run sessions → 事件日志。
 import { getConversationByGroup } from '../storage/conversations';
-import { listSessionsByConversation, getRunReplay } from './run-sessions';
+import {
+  listSessionsByConversation,
+  getRunReplay,
+  cancelRunSession,
+} from './run-sessions';
 // B3 · 网关过程事件 — 每轮 fan-out 开一条 gateway run，执行期过程（thinking
 // 占位/流式片段/错误/msg_foot）经 run 管线 emit，B2 timeline 自动归并回放。
 import { startGatewayRun } from '../lib/gateway-run';
@@ -82,6 +86,31 @@ export function swapDagRun(groupId: string, registry: Map<string, AbortControlle
   const ac = new AbortController();
   registry.set(groupId, ac);
   return ac;
+}
+
+/**
+ * 2026-11-04 群聊「停止生成」— 主动取消该群当前 fan-out 轮：
+ *   1) abort 该群的 fan-out AbortController（DAG 路径 runTeamDagFanout 停止
+ *      调度后续节点；串行路径 for-await 断流，上游 LLM call 一并取消）；
+ *   2) 经 cancelRunSession 把该群互链 conversation 下所有 running gateway
+ *      run 终结为 canceled（事件日志落 'aborted' 帧，timeline runs 状态
+ *      立即翻终态 → 前端 busy 解除、Stop 按钮回到发送）。
+ * 返回是否真的有东西被取消（幂等：无在跑轮 → false）。
+ */
+export function stopGroupFanout(groupId: string): boolean {
+  const ctrl = activeDagRuns.get(groupId);
+  let stopped = false;
+  if (ctrl && !ctrl.signal.aborted) {
+    ctrl.abort();
+    stopped = true;
+  }
+  const conv = getConversationByGroup(groupId);
+  if (conv) {
+    for (const sessionId of listSessionsByConversation(conv.conversation_id)) {
+      if (cancelRunSession(sessionId)) stopped = true;
+    }
+  }
+  return stopped;
 }
 
 interface GroupRecord {
@@ -866,7 +895,9 @@ async function runFanout(
         });
       }
 
-      const ctrl = new AbortController();
+      // 2026-11-04「停止生成」— 串行路径同样登记进 activeDagRuns（swap 语义
+      // 顺带 abort 上一轮残留），使 POST /:id/stop 能真中断 for-await 流。
+      const ctrl = swapDagRun(groupId, activeDagRuns);
       let buf = '';
       let errMsg = '';
       // worktree 隔离 — 该 agent 专属目录（git 仓库 workspace 时）。
@@ -898,6 +929,10 @@ async function runFanout(
       } catch (e) {
         errMsg = e instanceof Error ? e.message : String(e);
       }
+      // 2026-11-04「停止生成」— 用户经 POST /:id/stop 中断本 agent 的流：
+      // 折叠成静默取消（不记「出错」raw 卡、不发系统消息），直接跳出 for 循环
+      // 结束本轮 fan-out；gateway run 已由 stop 路由经 cancelRunSession 终结。
+      if (ctrl.signal.aborted) break;
 
       // B3 — 无论成败都收口本 agent 的过程卡（错误以 raw 卡可见）。
       if (gw && thinkingId) {
@@ -954,6 +989,9 @@ async function runFanout(
         await commitAndEvidence(gw, wt, agentName, prompt);
       }
     }
+    // 仅当注册表里仍是本轮 controller 时才删（避免误删后来者；DAG 路径 finally 同款）。
+    const serialCtrl = activeDagRuns.get(groupId);
+    if (serialCtrl && !serialCtrl.signal.aborted) activeDagRuns.delete(groupId);
     // 串行路径收尾：各 agent 分支按执行序并入集成分支。
     await integrateAndReport(gw, groupId, workspace, serialRunKey, agentIds, serialWt);
     gw?.finish('succeeded');
@@ -990,6 +1028,18 @@ async function runFanout(
 
 /** 全量上限：超过只保留最新的 500 条（truncated: true）。 */
 const TIMELINE_MAX_MESSAGES = 500;
+
+// ── POST /api/groups/:id/stop ────────────────────────────────────────────────
+// 2026-11-04「停止生成」（用户反馈：点暂停按钮对话停不下来，不合理）—
+// 主动取消该群当前 fan-out 轮：abort fan-out AbortController（DAG 停止调度
+// 后续节点 / 串行 for-await 断流）+ cancelRunSession 终结互链 conversation 下
+// 所有 running gateway run（timeline runs 立即翻终态 → 前端 busy 解除）。
+// 幂等：无在跑轮 → stopped=false，前端照样本地退出 busy。
+router.post('/:id/stop', (req: Request, res: Response) => {
+  const groupId = req.params.id;
+  const stopped = stopGroupFanout(groupId);
+  res.json({ group_id: groupId, stopped });
+});
 
 router.get('/:id/timeline', (req: Request, res: Response) => {
   void (async () => {

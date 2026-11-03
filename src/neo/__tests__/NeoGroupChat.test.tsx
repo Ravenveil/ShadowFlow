@@ -4,7 +4,8 @@
  * 覆盖：
  *   - segmentTurn 纯逻辑：user/agent/system 分类 + 连续过程卡合并；
  *   - 群聊空态 = 群文案（标题 + hint）；DM（kind='dm'）→ neo.dm.* 文案
- *     （空态只出标题、composer placeholder、顶栏「· N 位员工」）；
+ *     （空态只出标题、composer placeholder、顶栏 Agent 真实头像 + 名字，
+ *     Grok 单聊形态，无成员计数）；
  *   - 气泡流：agent 消息出头像/名字/角色 badge，system 消息居中弱化条，
  *     用户消息右对齐行；pin/reactions 动作回调仍透传进 NeoTimeline。
  */
@@ -122,7 +123,7 @@ describe('NeoGroupChat — DM 文案分岔', () => {
     expect(screen.getByTestId('composer-stub')).toHaveTextContent('在群里说话');
   });
 
-  it('DM：空态只出「还没有对话」、placeholder 与成员计数走 neo.dm.*', async () => {
+  it('DM：空态只出「还没有对话」、顶栏出 Agent 真实头像 + 名字（Grok 单聊形态）', async () => {
     groupRecord.kind = 'dm';
     renderChat();
     expect(await screen.findByText('还没有对话')).toBeInTheDocument();
@@ -131,7 +132,16 @@ describe('NeoGroupChat — DM 文案分岔', () => {
     await waitFor(() => {
       expect(screen.getByTestId('composer-stub')).toHaveTextContent('发消息，TA 就开始干活');
     });
-    expect(screen.getByText('· 1 位员工')).toBeInTheDocument();
+    // Grok 单聊形态（2026-11-04）：顶栏不再用群聊图标、不再出「· N 位员工」
+    // 计数，改为对方 Agent 的真实头像（AgentAvatar，与侧栏/气泡同源）+ 名字。
+    const titleEl = document.querySelector('.neo-gc-title');
+    expect(titleEl).not.toBeNull();
+    const titleAvatar = titleEl!.querySelector('.neo-gc-title-avatar');
+    expect(titleAvatar).not.toBeNull();
+    expect(titleAvatar!.getAttribute('title')).toBe('读读');
+    expect(titleEl!.textContent).toContain('读读');
+    expect(screen.queryByText('· 1 位员工')).not.toBeInTheDocument();
+    expect(screen.queryByText(/个 Agent/)).not.toBeInTheDocument();
   });
 });
 

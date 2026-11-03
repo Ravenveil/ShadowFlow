@@ -1,8 +1,9 @@
 /**
- * NeoHost — W2 钉钉式融合：会话上下文驱动标题/成员 tab 分岔（2026-08-22）。
+ * NeoHost — W2 钉钉式融合：会话上下文驱动标题/tab 分岔（2026-08-22）。
  *
- * 覆盖：非 DM 会话（团队群）→ 标题「团队的主机」+ 成员 tab（点击挂载
- * GroupMembersPanel）；DM 会话 / 无会话 → 保持「Agent 的主机」且无成员 tab。
+ * 覆盖：非 DM 会话（团队群）→ 标题「团队的主机」+ 编队 tab（三合一，
+ * 成员面板 GroupMembersPanel 常驻编队 pane）；DM 会话 / 无会话 → 保持
+ * 「Agent 的主机」且无编队 tab。
  * 重依赖全部 stub（useRunSession / fs / runs / 各 projection），只验证
  * NeoHost 自身的 tab 契约。
  */
@@ -18,9 +19,13 @@ const h = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../../core/hooks/useRunSession', () => ({
-  useRunSession: () => ({ perNodeChunks: {}, isStreaming: false, loops: [] }),
-}));
+// 稳定单例：useRunSession 每次渲染必须返回同一对象 —— 否则 NeoHost 的
+// loops effect（依赖 session.loops 身份）会因新数组引用无限重跑 +
+// setLoops(新数组) 无限渲染（Maximum update depth，全文件连跑时挂死）。
+vi.mock('../../core/hooks/useRunSession', () => {
+  const session = { perNodeChunks: {}, isStreaming: false, loops: [] };
+  return { useRunSession: () => session };
+});
 vi.mock('../../api/fsFiles', () => ({
   listDirs: vi.fn(() => Promise.resolve(null)),
   pickNativeFolder: vi.fn(),
@@ -47,6 +52,11 @@ vi.mock('../projections/NeoArtifactPreview', () => ({ NeoArtifactPreview: () => 
 vi.mock('../projections/NeoMarkdown', () => ({ NeoMarkdown: () => null }));
 vi.mock('../projections/TeamPanel', () => ({ TeamPanel: () => null }));
 vi.mock('../NeoAgentSoul', () => ({ NeoAgentSoul: () => null }));
+// 定时任务 tab（os-unified 2026-11-04）：面板与 getAgent 都要 stub——
+// 否则真实 fetch 打到跑着的 dev 后端，异步 setState 跨测试泄漏，
+// 会让后续「产物出现」用例陷入 setState 死循环（Maximum update depth）。
+vi.mock('../AgentSchedulesPanel', () => ({ AgentSchedulesPanel: () => null }));
+vi.mock('../../api/agents', () => ({ getAgent: vi.fn(() => Promise.resolve(null)) }));
 vi.mock('../projections/GroupMembersPanel', () => ({
   GroupMembersPanel: () => <div data-testid="gm-panel-stub" />,
 }));
@@ -54,7 +64,7 @@ vi.mock('../projections/GroupMembersPanel', () => ({
 import { NeoHost } from '../NeoHost';
 
 describe('NeoHost — 会话上下文分岔（W2）', () => {
-  it('非 DM 会话 → 「团队的主机」+ 成员 tab，点击挂载 GroupMembersPanel', () => {
+  it('非 DM 会话 → 「团队的主机」+ 编队 tab（三合一：成员面板常驻其中）', () => {
     render(
       <NeoHost
         target={null}
@@ -64,8 +74,12 @@ describe('NeoHost — 会话上下文分岔（W2）', () => {
       />,
     );
     expect(screen.getByTestId('neo-host-title')).toHaveTextContent('团队的主机');
-    fireEvent.click(screen.getByTestId('neo-host-members-tab'));
+    // os-unified 2026-11-04 三合一：独立「成员」tab 已并入「编队」tab，
+    // 成员面板（GroupMembersPanel）作为编队 pane 的成员分节常驻挂载。
+    expect(screen.getByTestId('neo-host-team-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-host-team-pane')).toBeInTheDocument();
     expect(screen.getByTestId('gm-panel-stub')).toBeInTheDocument();
+    expect(screen.queryByTestId('neo-host-members-tab')).not.toBeInTheDocument();
   });
 
   it('DM 会话 → 保持「Agent 的主机」，无成员 tab（灵魂 tab 仍在）', () => {
@@ -78,14 +92,35 @@ describe('NeoHost — 会话上下文分岔（W2）', () => {
       />,
     );
     expect(screen.getByTestId('neo-host-title')).toHaveTextContent('Agent 的主机');
-    expect(screen.queryByTestId('neo-host-members-tab')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('neo-host-team-tab')).not.toBeInTheDocument();
     expect(screen.getByTestId('neo-host-soul-tab')).toBeInTheDocument();
   });
 
-  it('无会话 → 「Agent 的主机」，无成员 tab', () => {
+  it('os-unified 2026-11-04：定时任务 tab 在「灵魂」右边（独立 tab，不在灵魂面板内）', () => {
+    render(
+      <NeoHost
+        target={null}
+        runId={null}
+        soulAgent={{ id: 'a1', name: '读读' }}
+        conversation={{ groupId: 'g2', kind: 'dm', teamId: null }}
+      />,
+    );
+    const soulTab = screen.getByTestId('neo-host-soul-tab');
+    const schedTab = screen.getByTestId('neo-host-schedules-tab');
+    expect(schedTab).toBeInTheDocument();
+    // tab 条 DOM 顺序：定时任务紧跟灵魂（compareDocumentPosition 4 = FOLLOWING）
+    expect(soulTab.compareDocumentPosition(schedTab) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 点击激活 → pane 挂载
+    fireEvent.click(schedTab);
+    expect(screen.getByTestId('neo-host-schedules-pane')).toBeInTheDocument();
+  });
+
+  it('无会话 → 「Agent 的主机」，无编队 tab（也无灵魂/定时任务 tab）', () => {
     render(<NeoHost target={null} runId={null} soulAgent={null} conversation={null} />);
     expect(screen.getByTestId('neo-host-title')).toHaveTextContent('Agent 的主机');
-    expect(screen.queryByTestId('neo-host-members-tab')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('neo-host-team-tab')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('neo-host-soul-tab')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('neo-host-schedules-tab')).not.toBeInTheDocument();
   });
 });
 
@@ -129,10 +164,12 @@ describe('NeoHost — 动态产物 tab（可关闭 / 去重聚焦）', () => {
     expect(tab).toHaveTextContent('report.md');
     expect(tab.className).toContain('neo-host-tab--on');
     expect(tab.querySelector('.neo-host-tab-close')).not.toBeNull();
-    // 固定 tab 不受影响
-    for (const id of ['workspace', 'artifacts', 'process']) {
+    // 固定 tab 不受影响（os-unified 三合一后 process/members 已并入 team，
+    // 此用例无团队上下文 → team tab 不应出现）
+    for (const id of ['workspace', 'artifacts']) {
       expect(container.querySelector(`[data-tab="${id}"]`)).not.toBeNull();
     }
+    expect(container.querySelector('[data-tab="team"]')).toBeNull();
   });
 
   it('点 × 关闭动态 tab → tab 消失并回落「产物」固定 tab', async () => {

@@ -33,6 +33,7 @@ import {
   type PendingApprovalItem,
 } from '../../api/approvals';
 import { useI18n } from '../../common/i18n';
+import { AgentAvatar } from '../../components/agent/AgentAvatar';
 import TeamDagCanvas from './TeamDagCanvas';
 
 /* 头像：与 NeoRail neoAvatarColor / NeoGroupChat gcAvatarColor 同算法同色环 */
@@ -259,14 +260,29 @@ export function GroupMembersPanel({ groupId }: GroupMembersPanelProps) {
                   className="neo-gm-cell"
                   title={role ? `${name} · ${role}` : name}
                 >
-                  <span
-                    className="neo-gm-avatar"
-                    style={{ background: a?.avatar_color ?? gmAvatarColor(id) }}
-                    aria-hidden
-                  >
-                    {gmAvatarInitial(name)}
-                    {a && <i className={`neo-gm-dot neo-gm-dot--${a.status}`} aria-hidden />}
-                  </span>
+                  {/* 头像统一（2026-11-04 用户反馈）：与侧栏/对话气泡同源
+                      AgentAvatar（DiceBear / avatar_image）；查不到记录的 id
+                      保留字符色块兜底。状态点绝对定位挂在头像右下。 */}
+                  {a ? (
+                    <span className="neo-gm-avatar neo-gm-avatar--img">
+                      <AgentAvatar
+                        name={a.name}
+                        style={a.avatar_style}
+                        seed={a.avatar_seed ?? a.name}
+                        image={a.avatar_image ?? null}
+                        size={34}
+                      />
+                      <i className={`neo-gm-dot neo-gm-dot--${a.status}`} aria-hidden />
+                    </span>
+                  ) : (
+                    <span
+                      className="neo-gm-avatar"
+                      style={{ background: gmAvatarColor(id) }}
+                      aria-hidden
+                    >
+                      {gmAvatarInitial(name)}
+                    </span>
+                  )}
                   <span className="neo-gm-cell-name">{name}</span>
                 </div>
               );

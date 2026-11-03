@@ -719,6 +719,20 @@ export function getRunReplay(
   return { status: run.status, events: run.events };
 }
 
+/**
+ * 2026-11-04 群聊「停止生成」— 按会话 id 取消一个在跑的 run（执行状态
+ * 单一所有权仍在 runBus；groups-chat.ts 的 stop 路由经此入口取消 gateway
+ * run，与 POST /:id/abort 的 runBus.cancel 同一通路）。幂等：unknown id /
+ * 已终态都静默返回 false，调用方据此决定是否还走 AbortController 通道。
+ */
+export function cancelRunSession(sessionId: string): boolean {
+  const run = runBus.get(sessionId) ?? runBus.hydrateOne(sessionId);
+  if (!run || runBus.isTerminal(run.status)) return false;
+  runBus.emit(sessionId, 'aborted', { session_id: sessionId, reason: 'user_requested' });
+  runBus.cancel(sessionId);
+  return true;
+}
+
 // ── B3 · 网关过程事件 (unified-conversation-core-plan-2026-06-11 §B3) ────────
 // 聊天网关 (groups-chat.ts runFanout) 执行期的过程（thinking/原始流/状态行）
 // 复用 run 体系管线：每轮 fanout 注册一条轻量 "gateway run"，过程投影成

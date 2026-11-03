@@ -440,6 +440,9 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
         )}
       </div>
 
+      {/* ── os-unified（2026-11-04 用户反馈）：定时任务已从灵魂内部移出，
+          成为 NeoHost tab 条上「灵魂」右边的独立 tab（AgentSchedulesPanel）── */}
+
       <div className="neo-soul-foot">
         <span className="neo-soul-count">
           {soul.length} / 8000

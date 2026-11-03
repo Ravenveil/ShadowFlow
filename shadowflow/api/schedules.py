@@ -166,6 +166,12 @@ class PatchScheduleRequest(BaseModel):
     enabled: bool
 
 
+class AgentSchedulesEnvelope(BaseModel):
+    """agent_id 维度的计划过滤（os-unified 2026-11-04：Agent 主机卡片「定时
+    任务」区块按 agent 列计划）。group_id 语义不变——agent 的 DM 会话 id。"""
+    agent_id: str = Field(..., min_length=1, max_length=200)
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -265,10 +271,13 @@ async def create_schedule(body: CreateScheduleRequest) -> Dict[str, Any]:
 
 
 @router.get("")
-async def list_schedules(group_id: Optional[str] = None) -> Dict[str, Any]:
+async def list_schedules(group_id: Optional[str] = None, agent_id: Optional[str] = None) -> Dict[str, Any]:
     records = _list_schedules()
     if group_id:
         records = [r for r in records if r.get("group_id") == group_id]
+    # os-unified 2026-11-04：Agent 主机卡片按 agent 维度列计划（agent_id 精确匹配）。
+    if agent_id:
+        records = [r for r in records if r.get("agent_id") == agent_id]
     return {"data": records, "meta": {"count": len(records)}}
 
 

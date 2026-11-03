@@ -98,6 +98,12 @@ export interface CreateScheduleRequest {
   duration_min?: number;
 }
 
+/** os-unified 2026-11-04：Agent 主机卡片「定时任务」新建请求——agent 维度，
+ *  group_id 由调用方传该 agent 的 DM 会话 id（计划仍挂在会话上）。 */
+export interface CreateAgentScheduleRequest extends CreateScheduleRequest {
+  agent_id: string;
+}
+
 // ---------------------------------------------------------------------------
 // Endpoints
 // ---------------------------------------------------------------------------
@@ -112,8 +118,11 @@ export async function createSchedule(req: CreateScheduleRequest): Promise<Schedu
   return env.data;
 }
 
-export async function listSchedules(groupId?: string): Promise<ScheduleRecord[]> {
-  const qs = groupId ? `?group_id=${encodeURIComponent(groupId)}` : '';
+export async function listSchedules(groupId?: string, agentId?: string): Promise<ScheduleRecord[]> {
+  const params = new URLSearchParams();
+  if (groupId) params.set('group_id', groupId);
+  if (agentId) params.set('agent_id', agentId);
+  const qs = params.size > 0 ? `?${params.toString()}` : '';
   const res = await fetch(`${API_BASE_URL}/api/schedules${qs}`);
   const env = await _handleResponse<Envelope<ScheduleRecord[]>>(res);
   return env.data;

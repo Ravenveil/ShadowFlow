@@ -43,6 +43,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import {
+  CalendarClock,
   ChevronDown,
   ChevronRight,
   Code,
@@ -64,6 +65,7 @@ import {
   Sparkles,
   Upload,
   UsersRound,
+  Waypoints,
   X,
 } from 'lucide-react';
 import { useI18n } from '../common/i18n';
@@ -95,6 +97,7 @@ import { EvidencePanel } from './projections/EvidencePanel';
 import { TeamPanel } from './projections/TeamPanel';
 import { GroupMembersPanel } from './projections/GroupMembersPanel';
 import { NeoAgentSoul } from './NeoAgentSoul';
+import { AgentSchedulesPanel } from './AgentSchedulesPanel';
 import type { NeoHostProps } from './types';
 // ClawHub（2026-06，T08）：soulAgent 头像（AgentRecord → DiceBear）
 import { AgentAvatar } from '../components/agent/AgentAvatar';
@@ -174,7 +177,7 @@ function metricMaxes(loop: LoopRecord): Record<string, number> {
 // 主组件
 // ---------------------------------------------------------------------------
 
-type FixedTab = 'workspace' | 'artifacts' | 'process' | 'team' | 'members';
+type FixedTab = 'workspace' | 'artifacts' | 'team';
 
 interface ArtifactTab {
   /** tab 唯一 id：RunRecord 单产物 = runId；lineage 产物 = artifact_id。 */
@@ -432,28 +435,24 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId, runRecord]);
 
-  // run 开始执行 → 自动露出「过程」tab 一次（执行中面板；同一 run 只抢一次）。
+  // run 开始执行 → 自动露出「编队」tab 一次（执行中面板；同一 run 只抢一次）。
+  // os-unified 三合一后过程视图在编队 pane 顶部。
   useEffect(() => {
     if (!runId || !session.isStreaming) return;
     if (autoProcessRef.current.has(runId)) return;
     autoProcessRef.current.add(runId);
-    setActiveTab('process');
+    setActiveTab('team');
   }, [runId, session.isStreaming]);
 
-  // 编队 tab 失效守卫：target 切走且群会话也无 teamId（convTeamEntry 消失）→ 回落过程视图。
+  // 会话切走/切到 DM → 编队 pane 消失（团队上下文都没了），回落工作空间。
   useEffect(() => {
-    if (activeTab === 'team' && target?.kind !== 'team' && !convTeamEntry)
-      setActiveTab('process');
-  }, [activeTab, target?.kind, convTeamEntry]);
-
-  // 会话切走/切到 DM → 「成员」tab 消失，激活 tab 回落到工作空间。
-  useEffect(() => {
-    if (activeTab === 'members' && !isTeamConv) setActiveTab('workspace');
-  }, [activeTab, isTeamConv]);
+    if (activeTab === 'team' && target?.kind !== 'team' && !convTeamEntry && !isTeamConv)
+      setActiveTab('workspace');
+  }, [activeTab, target?.kind, convTeamEntry, isTeamConv]);
 
   // agent 上下文消失（切到群聊/团队/首页）→ 「灵魂」tab 消失，回落到工作空间。
   useEffect(() => {
-    if (activeTab === 'soul' && !soulAgent) setActiveTab('workspace');
+    if ((activeTab === 'soul' || activeTab === 'schedules') && !soulAgent) setActiveTab('workspace');
   }, [activeTab, soulAgent]);
 
   const openRecordArtifactTab = (rec: RunRecord) => {
@@ -600,7 +599,9 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
   const fixedTabs: Array<{ id: FixedTab; label: string; icon: ReactNode }> = [
     { id: 'workspace', label: t('neo.host.workspace', { defaultValue: '工作空间' }), icon: <FolderOpen size={20} strokeWidth={1.75} /> },
     { id: 'artifacts', label: t('neo.host.artifacts', { defaultValue: '产物' }), icon: <Package size={20} strokeWidth={1.75} /> },
-    { id: 'process', label: t('neo.host.process', { defaultValue: '过程' }), icon: <GitBranch size={20} strokeWidth={1.75} /> },
+    // os-unified（2026-11-04 用户反馈三合一）：过程/编队/成员合并为「编队」，
+    // 图标换 Waypoints。编队是条件 tab（团队 target / 团队群会话才出现），
+    // 在下方 tab 条单独条件渲染，不放这里（这里是无条件固定 tab）。
   ];
 
   // ── 文件树（递归，懒加载）──
@@ -1031,7 +1032,7 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
   //    迭代环是 DAG 执行图的一部分，PDCA 卡直接挂在过程视图下方）──
   const processContent = runId ? (
     <div className="neo-host-process">
-      <ProcessView runId={runId} active={session.isStreaming && activeTab === 'process'} />
+      <ProcessView runId={runId} active={session.isStreaming && activeTab === 'team'} />
       <div className="neo-host-loop-fold">
         <div className="neo-host-loop-fold-head">
           <Repeat size={13} strokeWidth={1.9} aria-hidden />
@@ -1045,7 +1046,7 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
           <Database size={13} strokeWidth={1.9} aria-hidden />
           {t('neo.host.evidenceFold', { defaultValue: '证据投影' })}
         </div>
-        <EvidencePanel runId={runId} active={session.isStreaming && activeTab === 'process'} />
+        <EvidencePanel runId={runId} active={session.isStreaming && activeTab === 'team'} />
       </div>
     </div>
   ) : (
@@ -1092,6 +1093,7 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
               name={soulAgentRecord.name}
               style={soulAgentRecord.avatar_style}
               seed={soulAgentRecord.avatar_seed ?? soulAgentRecord.name}
+              image={soulAgentRecord.avatar_image ?? null}
               size={22}
               className="neo-host-title-avatar"
             />
@@ -1129,37 +1131,39 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
               <span className="neo-host-tab-label">{t('neo.host.soul', { defaultValue: '灵魂' })}</span>
             </button>
           )}
-          {/* 编队 tab（2026-11-01 双入口）：NeoRail 团队 target 态，或团队群会话
-              （conversation.teamId 非空）——从群聊右栏直接可编辑 DAG / 查看运行 */}
-          {(target?.kind === 'team' || convTeamEntry) && (
+          {/* 定时任务 tab（os-unified 2026-11-04 用户反馈）：从灵魂面板内部
+              提出来，成为「灵魂」右边的独立 tab —— tab 顺序
+              工作空间 / 产物 / 灵魂 / 定时任务（/ 编队），与 agent 上下文同条件。 */}
+          {soulAgent && (
+            <button
+              type="button"
+              data-tab="schedules"
+              className={`neo-host-tab${activeTab === 'schedules' ? ' neo-host-tab--on' : ''}`}
+              onClick={() => setActiveTab('schedules')}
+              data-testid="neo-host-schedules-tab"
+            >
+              <span className="neo-host-tab-box">
+                <CalendarClock size={20} strokeWidth={1.75} />
+              </span>
+              <span className="neo-host-tab-label">{t('neo.host.schedules', { defaultValue: '定时任务' })}</span>
+            </button>
+          )}
+          {/* 编队 tab（os-unified 2026-11-04 三合一）：团队 target 态或团队群会话
+              都出现——内含 DAG 编辑（TeamPanel）+ 过程视图（ProcessView/迭代环/
+              证据投影）+ 成员面板（GroupMembersPanel：成员/审批门/简报）。
+              图标 Waypoints（工作流节点），不再与成员图标重合。 */}
+          {(target?.kind === 'team' || convTeamEntry || isTeamConv) && (
             <button
               type="button"
               data-tab="team"
               className={`neo-host-tab${activeTab === 'team' ? ' neo-host-tab--on' : ''}`}
               onClick={() => setActiveTab('team')}
+              data-testid="neo-host-team-tab"
             >
               <span className="neo-host-tab-box">
-                <UsersRound size={20} strokeWidth={1.75} />
+                <Waypoints size={20} strokeWidth={1.75} />
               </span>
               <span className="neo-host-tab-label">{t('neo.host.team', { defaultValue: '编队' })}</span>
-            </button>
-          )}
-          {/* 成员 tab（W2 钉钉式融合）：中栏开着非 DM 会话时出现——成员列表 +
-              团队 DAG 摘要 + 审批门（GroupMembersPanel） */}
-          {isTeamConv && (
-            <button
-              type="button"
-              data-tab="members"
-              className={`neo-host-tab${activeTab === 'members' ? ' neo-host-tab--on' : ''}`}
-              onClick={() => setActiveTab('members')}
-              data-testid="neo-host-members-tab"
-            >
-              <span className="neo-host-tab-box">
-                <UsersRound size={20} strokeWidth={1.75} />
-              </span>
-              <span className="neo-host-tab-label">
-                {t('neo.host.members', { defaultValue: '成员' })}
-              </span>
             </button>
           )}
           {artifactTabs.map((tab) => (
@@ -1217,9 +1221,6 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
         <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'artifacts'}>
           {artifactsContent}
         </div>
-        <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'process'}>
-          {processContent}
-        </div>
         {soulAgent && (
           <div
             className="neo-host-pane neo-host-fade neo-host-soul-pane"
@@ -1228,14 +1229,59 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
             <NeoAgentSoul agentId={soulAgent.id} />
           </div>
         )}
-        {teamContent && activeTab === 'team' && (
-          <div className="neo-host-pane neo-host-fade">
-            {teamContent}
+        {/* 定时任务 pane：AgentSchedulesPanel 从灵魂面板移出（独立 tab）。 */}
+        {soulAgent && (
+          <div
+            className="neo-host-pane neo-host-fade neo-host-schedules-pane"
+            hidden={activeTab !== 'schedules'}
+            data-testid="neo-host-schedules-pane"
+          >
+            {soulAgentRecord ? (
+              <AgentSchedulesPanel
+                agentId={soulAgentRecord.agent_id}
+                workspaceId={soulAgentRecord.workspace_id}
+              />
+            ) : (
+              <div className="neo-host-tree-note">{t('neo.host.loading', { defaultValue: '读取中…' })}</div>
+            )}
           </div>
         )}
-        {membersContent && (
-          <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'members'}>
-            {membersContent}
+        {/* 编队 pane（os-unified 2026-11-04 三合一）：过程视图（runId 非空时
+            ProcessView + 迭代环 + 证据投影）+ 团队 DAG（TeamPanel）+ 成员面板
+            （GroupMembersPanel：成员网格 / 审批门 / 简报），纵向排布。 */}
+        {(target?.kind === 'team' || convTeamEntry || isTeamConv) && (
+          <div
+            className="neo-host-pane neo-host-fade"
+            hidden={activeTab !== 'team'}
+            data-testid="neo-host-team-pane"
+          >
+            {runId && (
+              <div className="neo-host-teamsec">
+                <div className="neo-host-teamsec-head">
+                  <GitBranch size={12} strokeWidth={1.8} aria-hidden />
+                  {t('neo.host.process', { defaultValue: '过程' })}
+                </div>
+                {processContent}
+              </div>
+            )}
+            {(target?.kind === 'team' || convTeamEntry) && (
+              <div className="neo-host-teamsec">
+                <div className="neo-host-teamsec-head">
+                  <Waypoints size={12} strokeWidth={1.8} aria-hidden />
+                  {t('neo.host.teamWorkflow', { defaultValue: '工作流' })}
+                </div>
+                {teamContent}
+              </div>
+            )}
+            {membersContent && (
+              <div className="neo-host-teamsec">
+                <div className="neo-host-teamsec-head">
+                  <UsersRound size={12} strokeWidth={1.8} aria-hidden />
+                  {t('neo.host.members', { defaultValue: '成员' })}
+                </div>
+                {membersContent}
+              </div>
+            )}
           </div>
         )}
         {artifactTabs.map((tab) => (
