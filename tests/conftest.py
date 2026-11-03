@@ -50,6 +50,15 @@ def _isolate_shadowflow_data(tmp_path_factory):
         mp.setattr(schedules, "_SCHEDULES_DIR", root / "schedules", raising=False)
     except Exception:
         pass
+    try:
+        # OPC OS（2026-11-04）：独立 opc.sqlite 同样重定向到 tmp 根，
+        # 防止 TestClient 触发的种子/订单写进仓库真实 .shadowflow/。
+        from shadowflow.services import opc_store
+
+        mp.setattr(opc_store, "_BASE_DIR", root, raising=False)
+        mp.setattr(opc_store, "_DB_PATH", root / "opc.sqlite", raising=False)
+    except Exception:
+        pass
     yield
     mp.undo()
 

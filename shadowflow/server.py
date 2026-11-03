@@ -228,6 +228,7 @@ from shadowflow.api import settings as _settings_api
 from shadowflow.api import wallet as _wallet_api
 from shadowflow.api import runs as _runs_api
 from shadowflow.api import artifacts as _artifacts_api
+from shadowflow.api import opc as _opc_api
 
 _ops_api.set_aggregator(_ops_api.OpsAggregator(
     runtime_service=runtime_service,
@@ -278,6 +279,9 @@ app.include_router(_settings_api.router)
 app.include_router(_wallet_api.router)
 app.include_router(_runs_api.router)
 app.include_router(_artifacts_api.router)
+# OPC OS（2026-11-04，backend-poc company/orders/pay 移植）：组织 / 项目 /
+# 审批 / 账本 / 商品 / 订单 / 支付网关，独立 opc.sqlite，全部挂 /api/opc 前缀。
+app.include_router(_opc_api.router)
 
 
 @app.exception_handler(ShadowflowError)
@@ -367,6 +371,22 @@ async def _seed_builtin_catalog_templates() -> None:
             logger.info("Catalog: seeded builtin template(s): %s", ", ".join(seeded))
     except Exception as exc:  # noqa: BLE001 — 种子失败不应拖垮 server 启动
         logger.warning("Catalog: builtin template seeding failed: %s", exc)
+
+
+@app.on_event("startup")
+async def _seed_opc_os() -> None:
+    """OPC OS 种子（2026-11-04）：默认公司「增长工场」+ 5 部门 + 9 数字员工 + 商品目录。
+
+    幂等：已有公司/商品则跳过；独立 .shadowflow/opc.sqlite，失败只告警不阻塞启动。
+    """
+    try:
+        from shadowflow.services.opc_seed import ensure_seed
+
+        company = ensure_seed()
+        if company:
+            logger.info("OPC OS: seeded company %s (%s)", company.get("name"), company.get("id"))
+    except Exception as exc:  # noqa: BLE001 — 种子失败不应拖垮 server 启动
+        logger.warning("OPC OS: seeding failed: %s", exc)
 
 
 @app.on_event("startup")
