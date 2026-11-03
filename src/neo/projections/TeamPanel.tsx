@@ -55,7 +55,6 @@ import { useI18n } from "../../common/i18n";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import { useInboxStore } from "../../core/store/useInboxStore";
 import { TeamDagEditor } from "./TeamDagEditor";
-import { TeamDagCanvas } from "./TeamDagCanvas";
 
 export interface TeamPanelProps {
   teamId: string;
@@ -112,8 +111,11 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
-  // 2026-11-03「编辑 DAG」改为 section 内联展开（不再切走整面板）。
-  const [editingDag, setEditingDag] = useState(false);
+  // 2026-11-04 编辑器常驻：不再有 editingDag 开关。dagDirty 由编辑器经
+  // onDirtyChange 上报，驱动头部「● 未保存」徽标；workflowStateKey 递增
+  // 强制重挂编辑器（取消 = 丢弃本地画布改动回滚服务端图）。
+  const [dagDirty, setDagDirty] = useState(false);
+  const [workflowStateKey, setWorkflowStateKey] = useState(0);
   // GAP D（2026-08-22）「发起群聊」CTA：find-or-create 绑 team_id 的群后跳
   // 群聊现场页（/group/:gid，NeoGroupChat 路由页），失败给明确提示不静默。
   const navigate = useNavigate();
@@ -128,7 +130,8 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
     let cancelled = false;
     setLoaded(false);
     setFailed(false);
-    setEditingDag(false);
+    setDagDirty(false);
+    setWorkflowStateKey((k) => k + 1);
     // 四个数据源独立结算：任何一个失败不拖垮其余 section。
     Promise.all([
       getTeam(teamId).then(
@@ -424,42 +427,45 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
               edges: wfEdges.length,
             })}
           </span>
-          <button
-            type="button"
-            className="neo-host-wf-edit-btn"
-            onClick={() => setEditingDag((v) => !v)}
-            data-testid="team-dag-edit-entry"
-          >
-            {editingDag
-              ? t("neo.host.teamDagCollapse", { defaultValue: "收起编辑" })
-              : t("neo.host.teamDagEdit", { defaultValue: "编辑 DAG" })}
-            <ChevronDown
-              size={11}
-              strokeWidth={1.8}
-              style={{ transform: editingDag ? "rotate(180deg)" : undefined }}
-            />
-          </button>
+          {dagDirty && (
+            <span className="neo-team-dag-dirty" data-testid="team-dag-dirty">
+              {t("neo.host.teamDagDirty", { defaultValue: "● 未保存" })}
+            </span>
+          )}
         </div>
-        {editingDag ? (
-          <div className="neo-host-dag-inline-editor">
-            <TeamDagEditor
-              teamId={teamId}
-              workflow={workflow ?? { nodes: [], edges: [] }}
-              agents={rosterAgents}
-              policyColorOf={agentPolicyColor}
-              onSaved={(wf) => {
-                setWorkflow(wf);
-                setEditingDag(false);
-              }}
-              onCancel={() => setEditingDag(false)}
-            />
-          </div>
-        ) : wfNodes.length === 0 ? (
+        {/* 2026-11-04 用户反馈：编辑器常驻 —— 不再有「编辑 DAG」开关，工作流
+            section 本身就是可拖拽/连线/就地编辑的画布；工具条按钮（AI 生成/
+            校验/保存/版本）由 TeamDagEditor 自带。空团队时给引导文案。
+            注意：固定高度容器是 reactflow 的硬前提 —— 编辑器在滚动列表里
+            不能用 height:100%（父容器无确定高度 → 画布 0 高 → 空白）。 */}
+        {wfNodes.length === 0 && !dagDirty ? (
           <div className="neo-host-tree-note neo-host-tree-note--pad">
             {t("neo.host.teamWorkflowEmpty", { defaultValue: "该团队尚未编排工作流" })}
           </div>
         ) : (
-          <TeamDagCanvas workflow={workflow as TeamWorkflow} policyColorOf={agentPolicyColor} />
+          <div className="neo-host-dag-inline-editor">
+            <TeamDagEditor
+              key={workflowStateKey}
+              teamId={teamId}
+              workflow={workflow ?? { nodes: [], edges: [] }}
+              agents={rosterAgents}
+              policyColorOf={agentPolicyColor}
+              onDirtyChange={setDagDirty}
+              onSaved={(wf) => {
+                setWorkflow(wf);
+                setDagDirty(false);
+                // 常驻编辑器：保存/版本回滚后重挂（key 递增），画布重建为
+                // 已保存图，脏检查基线同步归零（否则 dirty 卡在 true）。
+                setWorkflowStateKey((k) => k + 1);
+              }}
+              onCancel={() => {
+                // 常驻编辑器没有「退出编辑」语义：取消 = 放弃未保存修改并
+                // 回滚到服务端图（重挂编辑器即可，key 强制重建画布状态）。
+                setWorkflowStateKey((k) => k + 1);
+                setDagDirty(false);
+              }}
+            />
+          </div>
         )}
       </div>
 

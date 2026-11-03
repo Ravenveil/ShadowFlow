@@ -58,11 +58,12 @@ vi.mock('../../api/agents', () => ({
   ]),
 }));
 
-// stub 编辑器：只暴露保存/取消回调，验证 TeamPanel 的切换契约
+// stub 编辑器：只暴露保存/取消回调，验证 TeamPanel 的常驻编辑器契约
 vi.mock('../projections/TeamDagEditor', () => ({
   TeamDagEditor: (props: {
     onSaved: (wf: unknown) => void;
     onCancel: () => void;
+    onDirtyChange?: (dirty: boolean) => void;
   }) => (
     <div data-testid="team-dag-editor-stub">
       <button
@@ -78,6 +79,7 @@ vi.mock('../projections/TeamDagEditor', () => ({
         }
       />
       <button data-testid="stub-cancel" onClick={props.onCancel} />
+      <button data-testid="stub-dirty" onClick={() => props.onDirtyChange?.(true)} />
     </div>
   ),
 }));
@@ -98,47 +100,42 @@ beforeEach(() => {
   resolveTeamGroupMock.mockResolvedValue('g-team-1');
 });
 
-describe('TeamPanel — 编辑 DAG 内联展开', () => {
-  it('工作流 section 出现「编辑 DAG」钮，roster/策略 section 同屏常驻', async () => {
+describe('TeamPanel — 工作流常驻编辑器（2026-11-04）', () => {
+  it('无需点击即可编辑：编辑器常驻渲染，roster/策略 section 同屏常驻', async () => {
     renderPanel();
-    expect(await screen.findByTestId('team-dag-edit-entry')).toBeInTheDocument();
-    // 内联改版后整面板不再被编辑器替换：roster 行与策略 section 都在
+    // 编辑器直接挂在工作流 section（不再有「编辑 DAG」开关钮）
+    expect(await screen.findByTestId('team-dag-editor-stub')).toBeInTheDocument();
+    expect(screen.queryByTestId('team-dag-edit-entry')).not.toBeInTheDocument();
+    // roster 行与策略 section 都在
     expect(screen.getAllByText('甲').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByTestId('team-policy-toggle')).toBeInTheDocument();
   });
 
-  it('点入口 → 编辑器在 section 内展开（其余 section 不卸载）；收起 → 回只读画布', async () => {
+  it('编辑器 onDirtyChange(true) → 头部出现「● 未保存」徽标', async () => {
     renderPanel();
-    fireEvent.click(await screen.findByTestId('team-dag-edit-entry'));
-    expect(screen.getByTestId('team-dag-editor-stub')).toBeInTheDocument();
-    // roster 行仍可见（不切走整面板的回归断言）
-    expect(screen.getByTestId('team-chat-launch')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('stub-cancel'));
-    await waitFor(() => {
-      expect(screen.queryByTestId('team-dag-editor-stub')).not.toBeInTheDocument();
-    });
-    expect(screen.getByTestId('team-dag-edit-entry')).toBeInTheDocument();
+    fireEvent.click(await screen.findByTestId('stub-dirty'));
+    expect(await screen.findByTestId('team-dag-dirty')).toBeInTheDocument();
   });
 
-  it('编辑器 onSaved → 收起编辑器且摘要刷新为新图（2 节点 · 1 边）', async () => {
+  it('编辑器 onSaved → 摘要刷新为新图（2 节点 · 1 边）且徽标消失', async () => {
     renderPanel();
-    fireEvent.click(await screen.findByTestId('team-dag-edit-entry'));
-    fireEvent.click(screen.getByTestId('stub-save'));
-    await waitFor(() => {
-      expect(screen.queryByTestId('team-dag-editor-stub')).not.toBeInTheDocument();
-    });
-    expect(await screen.findByTestId('team-dag-edit-entry')).toBeInTheDocument();
+    fireEvent.click(await screen.findByTestId('stub-dirty'));
+    fireEvent.click(await screen.findByTestId('stub-save'));
     // 摘要 meta 刷新为新图规模（roster 本就有「乙」，用规模文案区分）
-    expect(screen.getByText('2 节点 · 1 边')).toBeInTheDocument();
+    expect(await screen.findByText('2 节点 · 1 边')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByTestId('team-dag-dirty')).not.toBeInTheDocument();
+    });
+    // 编辑器仍常驻（保存不退出编辑）
+    expect(screen.getByTestId('team-dag-editor-stub')).toBeInTheDocument();
   });
 });
 
 describe('TeamPanel — 发起群聊 CTA（GAP D）', () => {
-  it('成员 section 头部出现「发起群聊」钮，与「编辑 DAG」并存', async () => {
+  it('成员 section 头部出现「发起群聊」钮，与常驻编辑器并存', async () => {
     renderPanel();
     expect(await screen.findByTestId('team-chat-launch')).toBeInTheDocument();
-    expect(screen.getByTestId('team-dag-edit-entry')).toBeInTheDocument();
+    expect(screen.getByTestId('team-dag-editor-stub')).toBeInTheDocument();
   });
 
   it('点击 → resolveTeamGroup 带 team_id + roster，命中后跳 /group/:gid', async () => {

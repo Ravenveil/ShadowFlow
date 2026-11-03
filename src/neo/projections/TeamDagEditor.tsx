@@ -35,7 +35,7 @@
  * 与本编辑器操作的 Python workflow 模型不是同一份数据，故不在保存链路里调它；
  * 工具条「服务端校验」为按需手动触发，结果仅作提示，Python JSON team 404 容忍。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Handle,
   Position,
@@ -83,6 +83,12 @@ export interface TeamDagEditorProps {
    * 节点描边按策略染色，与协作策略矩阵即时呼应（草稿态即反映，不需保存）。
    */
   policyColorOf?: Map<string, PolicyCellState> | null;
+  /**
+   * 2026-11-04 编辑器常驻（TeamPanel 工作流 section 不再有「编辑」开关）：
+   * dirty 翻转时上报父组件，驱动 section 头部「● 未保存」徽标。可选，
+   * 不传时内部脏检查照常工作（取消确认仍用内部 dirty）。
+   */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 interface TeamAgentNodeData extends Record<string, unknown> {
@@ -330,7 +336,7 @@ export function TeamWorkflowVersionsPanel({ teamId, refreshToken, onRestored }: 
   );
 }
 
-export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, policyColorOf }: TeamDagEditorProps) {
+export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, policyColorOf, onDirtyChange }: TeamDagEditorProps) {
   const { t } = useI18n();
 
   /** 节点展示名：优先 workflow 存量 name，缺失时回退 roster 里的 agent 名。 */
@@ -552,6 +558,15 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     () => JSON.stringify(serialize()) !== JSON.stringify(initialSerialized),
     [serialize, initialSerialized],
   );
+
+  // dirty 翻转上报（编辑器常驻后父组件据此显示「● 未保存」徽标）。
+  const lastDirtyRef = useRef(dirty);
+  useEffect(() => {
+    if (lastDirtyRef.current !== dirty) {
+      lastDirtyRef.current = dirty;
+      onDirtyChange?.(dirty);
+    }
+  }, [dirty, onDirtyChange]);
 
   /** 有未保存改动时取消需二次确认，避免误丢拓扑。 */
   const handleCancel = useCallback(() => {

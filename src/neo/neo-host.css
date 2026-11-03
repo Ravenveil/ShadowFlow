@@ -1184,9 +1184,12 @@
 
 /* ── TeamPanel 协作策略矩阵 + DAG 内联编辑（2026-11-03）────────────── */
 
-/* 「编辑 DAG」section 内联展开容器：编辑器自带 min-height 340px 画布 */
+/* 「编辑 DAG」section 内联编辑容器（2026-11-04 编辑器常驻）：
+   必须给固定高度 —— .neo-host-list 是滚动列表（无确定高度），编辑器内部
+   .neo-team-dag-editor 用 height:100% 只能落到 0 高，reactflow 量到 0×0
+   视口 + onlyRenderVisibleElements → 画布空白（用户反馈的 bug 根因）。 */
 .neo-host-dag-inline-editor {
-  margin-top: 2px;
+  height: 460px;
 }
 
 /* 未展开时的成员策略染色 chips 摘要 */
