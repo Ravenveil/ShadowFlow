@@ -26,12 +26,14 @@ vi.mock('../../api/teams', () => ({
   }),
   getTeamPolicy: vi.fn().mockResolvedValue({}),
   putTeamPolicy: vi.fn().mockResolvedValue(undefined),
+  patchTeam: vi.fn(),
 }));
 
 vi.mock('../../api/agents', () => ({
   listAgents: vi.fn().mockResolvedValue([
     { agent_id: 'a1', name: '甲', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
     { agent_id: 'a2', name: '乙', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
+    { agent_id: 'a3', name: '丙', soul: '', workspace_id: 'ws1', blueprint: { role: '测试员' }, status: 'idle', source: 'quick_hire', created_at: '' },
   ]),
 }));
 
@@ -127,6 +129,75 @@ describe('TeamPanel — 头部瘦身（2026-11-04 用户反馈第三批）', () 
     expect(screen.queryByTestId('team-delete-btn')).not.toBeInTheDocument();
     // 团队名不再显示在成员头部
     expect(screen.queryByText('测试团队')).not.toBeInTheDocument();
+  });
+});
+
+describe('TeamPanel — 添加成员（2026-11-04 用户反馈第五批）', () => {
+  it('头部右侧出现「+」添加成员钮', async () => {
+    renderPanel();
+    expect(await screen.findByTestId('team-roster-add')).toBeInTheDocument();
+  });
+
+  it('点「+」→ 候选浮层出现：不在编队显示 +，已在编队显示 ✓', async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('team-roster-add'));
+    expect(screen.getByTestId('team-roster-picker')).toBeInTheDocument();
+    // a1/a2 已在编队（浮层行带 in 类），a3 不在
+    expect(screen.getByTestId('team-roster-picker-row-a1')).toHaveClass('in');
+    expect(screen.getByTestId('team-roster-picker-row-a2')).toHaveClass('in');
+    expect(screen.getByTestId('team-roster-picker-row-a3')).not.toHaveClass('in');
+  });
+
+  it('点不在编队的候选 → patchTeam({add_agent_ids})，roster 同步为服务端返回', async () => {
+    const { patchTeam } = await import('../../api/teams');
+    const updated = {
+      team_id: 't1',
+      name: '测试团队',
+      description: '',
+      workspace_id: 'ws1',
+      agent_ids: ['a1', 'a2', 'a3'],
+      created_at: '',
+      updated_at: '',
+    };
+    vi.mocked(patchTeam).mockResolvedValue(updated);
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('team-roster-add'));
+    fireEvent.click(screen.getByTestId('team-roster-picker-row-a3'));
+    await waitFor(() => {
+      expect(patchTeam).toHaveBeenCalledWith('t1', { add_agent_ids: ['a3'] });
+    });
+    // 头部计数同步为 3 位成员
+    expect(await screen.findByText('3 位成员')).toBeInTheDocument();
+  });
+
+  it('点已在编队的候选 → patchTeam({remove_agent_ids})', async () => {
+    const { patchTeam } = await import('../../api/teams');
+    const updated = {
+      team_id: 't1',
+      name: '测试团队',
+      description: '',
+      workspace_id: 'ws1',
+      agent_ids: ['a1'],
+      created_at: '',
+      updated_at: '',
+    };
+    vi.mocked(patchTeam).mockResolvedValue(updated);
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('team-roster-add'));
+    fireEvent.click(screen.getByTestId('team-roster-picker-row-a2'));
+    await waitFor(() => {
+      expect(patchTeam).toHaveBeenCalledWith('t1', { remove_agent_ids: ['a2'] });
+    });
+    expect(await screen.findByText('1 位成员')).toBeInTheDocument();
+  });
+
+  it('patchTeam 失败 → 浮层内红条提示，不静默', async () => {
+    const { patchTeam } = await import('../../api/teams');
+    vi.mocked(patchTeam).mockRejectedValueOnce(new Error('500'));
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('team-roster-add'));
+    fireEvent.click(screen.getByTestId('team-roster-picker-row-a3'));
+    expect(await screen.findByTestId('team-roster-error')).toBeInTheDocument();
   });
 });
 

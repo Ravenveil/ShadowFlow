@@ -25,10 +25,16 @@
  *   - 「协作策略」矩阵常驻展开（默认状态就是矩阵），「编辑矩阵/收起矩阵」
  *     开关与折叠态 chips 摘要一并移除。
  *
- * 2026-11-04 用户反馈第二批（成员区微信化）：
+ * 2026-11-04 用户反馈第四批（成员区微信化）：
  *   - roster 从「行列表 + 状态胶囊 + 裸 agent ID」改为微信群式横向头像
  *     网格（头像上 / 名字下 / 状态点挂头像右下），样式复用 GroupMembersPanel
  *     的 .neo-gm-*（同一个产品家族一个观感）；agent ID 收进 hover tooltip。
+ *
+ * 2026-11-04 用户反馈第五批（添加成员）：
+ *   - 成员头部右侧常驻「+」钮：点开候选浮层（对齐 NeoGroupChat 的 Grok 式
+ *     添加成员交互），不在编队的显示 +（点即加入），已在编队的显示 ✓
+ *     （点即移出）。走 PATCH /api/teams/{id} 的 add/remove_agent_ids，
+ *     成功以服务端返回的 TeamRecord 为准同步本地 roster。
  *
  * 2026-11-04 用户反馈第三批（头部瘦身）：
  *   - 成员 section 头部的「重命名 / 删除 / 发起群聊」三钮全部移除（用户
@@ -41,14 +47,18 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import {
+  Check,
   GitBranch,
+  Plus,
   ShieldCheck,
+  UserPlus,
   UsersRound,
 } from "lucide-react";
 import {
   getTeam,
   getTeamPolicy,
   getTeamWorkflow,
+  patchTeam,
   putTeamPolicy,
   type PolicyCellState,
   type TeamPolicyMatrix,
@@ -244,6 +254,31 @@ export function TeamPanel({ teamId, teamName: _teamName, perNodeChunks, streamin
   /** 策略 → 画布联动：agentId → 最严策略态（matrix 草稿即时驱动）。 */
   const agentPolicyColor = useMemo(() => buildAgentPolicyColor(policyDraft), [policyDraft]);
 
+  // ── 添加/移出成员（2026-11-04 用户反馈第五批）────────────────────────
+  // 头部「+」→ 候选浮层（样式复用 NeoGroupChat 的 Grok 式 picker 交互）：
+  // 不在编队的成员点即加入（add_agent_ids），已在编队的点即移出
+  // （remove_agent_ids）；成功以 PATCH 返回的 TeamRecord 为准同步 roster。
+  const [rosterPickerOpen, setRosterPickerOpen] = useState(false);
+  const [rosterBusy, setRosterBusy] = useState<string | null>(null);
+  const [rosterErr, setRosterErr] = useState<string | null>(null);
+
+  const toggleRosterMember = async (agentId: string) => {
+    if (rosterBusy) return;
+    const inTeam = roster.includes(agentId);
+    setRosterBusy(agentId);
+    setRosterErr(null);
+    try {
+      const updated = await patchTeam(teamId, {
+        ...(inTeam ? { remove_agent_ids: [agentId] } : { add_agent_ids: [agentId] }),
+      });
+      setTeam(updated);
+    } catch {
+      setRosterErr(t("neo.host.teamRosterEditFailed", { defaultValue: "成员更新失败，请重试" }));
+    } finally {
+      setRosterBusy(null);
+    }
+  };
+
   // per-node 输出：只看有实际内容的 buffer。
   const nodeOutputs = Object.entries(perNodeChunks).filter(
     ([, buf]) => buf.text.trim() || buf.thinking.length > 0 || buf.steps.length > 0,
@@ -277,7 +312,8 @@ export function TeamPanel({ teamId, teamName: _teamName, perNodeChunks, streamin
   return (
     <div className="neo-host-list">
       {/* 成员 roster（2026-11-04 用户反馈：头部只留「成员 + 计数」——
-          重命名/删除/发起群聊三钮与团队名 meta 全部移除，用户判定无用）。 */}
+          重命名/删除/发起群聊三钮与团队名 meta 全部移除；第五批补「+」
+          添加成员钮 —— 头部右侧常驻，点开候选浮层勾选加编/移出）。 */}
       <div className="neo-host-sec">
         <div className="neo-host-sec-head">
           <UsersRound size={12} strokeWidth={1.8} />
@@ -289,7 +325,70 @@ export function TeamPanel({ teamId, teamName: _teamName, perNodeChunks, streamin
               {t("neo.host.teamRosterCount", { defaultValue: "{{count}} 位成员", count: roster.length })}
             </span>
           )}
+          <span className="neo-host-sec-spacer" />
+          <button
+            type="button"
+            className={`neo-host-roster-add${rosterPickerOpen ? " on" : ""}`}
+            onClick={() => setRosterPickerOpen((o) => !o)}
+            title={t("neo.host.teamRosterAdd", { defaultValue: "添加成员" })}
+            aria-label={t("neo.host.teamRosterAdd", { defaultValue: "添加成员" })}
+            aria-expanded={rosterPickerOpen}
+            data-testid="team-roster-add"
+          >
+            <UserPlus size={13} strokeWidth={1.9} />
+          </button>
         </div>
+        {/* 候选浮层（对齐 NeoGroupChat 的 Grok 式添加成员）：已在编队显示 ✓
+            （点即移出），不在编队显示 +（点即加入）；无候选给空态。 */}
+        {rosterPickerOpen && (
+          <div className="neo-host-roster-picker" data-testid="team-roster-picker">
+            <div className="neo-host-roster-picker-head">
+              {t("neo.host.teamRosterPickTitle", { defaultValue: "选择要加入的成员" })}
+            </div>
+            <div className="neo-host-roster-picker-list">
+              {agents.length === 0 ? (
+                <div className="neo-host-roster-picker-empty">
+                  {t("neo.host.teamRosterPickEmpty", { defaultValue: "还没有可加入的 Agent" })}
+                </div>
+              ) : (
+                agents.map((a) => {
+                  const inTeam = roster.includes(a.agent_id);
+                  const busy = rosterBusy === a.agent_id;
+                  return (
+                    <button
+                      key={a.agent_id}
+                      type="button"
+                      className={`neo-host-roster-picker-row${inTeam ? " in" : ""}`}
+                      disabled={rosterBusy !== null}
+                      onClick={() => void toggleRosterMember(a.agent_id)}
+                      data-testid={`team-roster-picker-row-${a.agent_id}`}
+                    >
+                      <AgentAvatar
+                        name={a.name}
+                        style={a.avatar_style}
+                        seed={a.avatar_seed ?? a.name}
+                        image={a.avatar_image ?? null}
+                        size={26}
+                      />
+                      <span className="neo-host-roster-picker-name">{a.name}</span>
+                      {typeof a.blueprint?.role === "string" && a.blueprint.role.trim() && (
+                        <span className="neo-host-roster-picker-role">{a.blueprint.role.trim()}</span>
+                      )}
+                      <span className="neo-host-roster-picker-mark" aria-hidden>
+                        {busy ? "…" : inTeam ? <Check size={13} strokeWidth={2.2} /> : <Plus size={13} strokeWidth={2} />}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            {rosterErr && (
+              <div className="neo-host-roster-picker-error" role="alert" data-testid="team-roster-error">
+                {rosterErr}
+              </div>
+            )}
+          </div>
+        )}
         {roster.length === 0 ? (
           <div className="neo-host-tree-note neo-host-tree-note--pad">
             {t("neo.host.teamRosterEmpty", { defaultValue: "该团队暂无成员" })}

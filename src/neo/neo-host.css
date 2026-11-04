@@ -2431,6 +2431,127 @@
   color: var(--t-fg);
 }
 
+/* ── TeamPanel 添加成员（2026-11-04 用户反馈第五批）──────────────────────
+   成员头部右侧圆形「+」：点开贴在成员 section 下的候选浮层。交互对齐
+   NeoGroupChat 顶栏的 Grok 式添加成员（.neo-gc-member-add / picker 同规范），
+   类名独立（挂 TeamPanel 成员 section，浮层相对 section 定位）。 */
+.neo-host-sec {
+  position: relative;
+}
+.neo-host-roster-add {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--t-border);
+  background: transparent;
+  color: var(--t-fg-3);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.neo-host-roster-add:hover {
+  background: var(--t-panel-2, color-mix(in oklab, var(--t-fg) 8%, transparent));
+  color: var(--t-fg);
+  border-color: var(--t-border-2, var(--t-fg-5));
+}
+.neo-host-roster-add.on {
+  background: color-mix(in oklab, var(--t-accent, var(--t-fg-4)) 12%, transparent);
+  color: var(--t-accent, var(--t-fg));
+  border-color: var(--t-accent, var(--t-fg-4));
+}
+.neo-host-roster-picker {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  z-index: 40;
+  width: 268px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--t-border);
+  background: var(--t-panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+.neo-host-roster-picker-head {
+  padding: 4px 6px 8px;
+  font-size: 11px;
+  color: var(--t-fg-5);
+}
+.neo-host-roster-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.neo-host-roster-picker-empty {
+  padding: 10px 8px;
+  font-size: 11.5px;
+  color: var(--t-fg-5);
+}
+.neo-host-roster-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t-fg-2);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.neo-host-roster-picker-row:hover:not(:disabled) {
+  background: var(--t-panel-2, color-mix(in oklab, var(--t-fg) 8%, transparent));
+}
+.neo-host-roster-picker-row:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.neo-host-roster-picker-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--t-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.neo-host-roster-picker-role {
+  flex-shrink: 0;
+  max-width: 96px;
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.neo-host-roster-picker-mark {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--t-border);
+  color: var(--t-fg-4);
+}
+.neo-host-roster-picker-row.in .neo-host-roster-picker-mark {
+  border-color: var(--t-accent, var(--t-fg-3));
+  color: var(--t-accent, var(--t-fg));
+}
+.neo-host-roster-picker-error {
+  padding: 8px 6px 2px;
+  font-size: 11px;
+  color: var(--t-err, #dc2626);
+}
+
 /* 状态点（idle/running/paused/error）：头像右下角，描边吃页面底色 */
 .neo-gm-dot {
   position: absolute;
