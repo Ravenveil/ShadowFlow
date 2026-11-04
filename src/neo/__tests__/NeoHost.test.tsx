@@ -1,9 +1,9 @@
 /**
  * NeoHost — W2 钉钉式融合：会话上下文驱动标题/tab 分岔（2026-08-22）。
  *
- * 覆盖：非 DM 会话（团队群）→ 标题「团队的主机」+ 编队 tab（三合一，
- * 成员面板 GroupMembersPanel 常驻编队 pane）；DM 会话 / 无会话 → 保持
- * 「Agent 的主机」且无编队 tab。
+ * 覆盖：非 DM 会话（团队群）→ 标题跟随群聊名称（缺失回落「团队的主机」）
+ * + 编队 tab（三合一，成员面板 GroupMembersPanel 常驻编队 pane）；DM 会话 /
+ * 无会话 → 保持「Agent 的主机」且无编队 tab。
  * 重依赖全部 stub（useRunSession / fs / runs / 各 projection），只验证
  * NeoHost 自身的 tab 契约。
  */
@@ -64,22 +64,35 @@ vi.mock('../projections/GroupMembersPanel', () => ({
 import { NeoHost } from '../NeoHost';
 
 describe('NeoHost — 会话上下文分岔（W2）', () => {
-  it('非 DM 会话 → 「团队的主机」+ 编队 tab（三合一：成员面板常驻其中）', () => {
+  it('非 DM 会话 → 标题跟随群聊名称 + 编队 tab（三合一：成员面板常驻其中）', () => {
     render(
       <NeoHost
         target={null}
         runId={null}
         soulAgent={null}
-        conversation={{ groupId: 'g1', kind: 'group', teamId: 't1' }}
+        conversation={{ groupId: 'g1', kind: 'group', teamId: 't1', teamName: '氢能获客群' }}
       />,
     );
-    expect(screen.getByTestId('neo-host-title')).toHaveTextContent('团队的主机');
+    // 2026-11-04 用户反馈：团队群标题不再固定「团队的主机」，跟随群聊名称
+    expect(screen.getByTestId('neo-host-title')).toHaveTextContent('氢能获客群');
     // os-unified 2026-11-04 三合一：独立「成员」tab 已并入「编队」tab，
     // 成员面板（GroupMembersPanel）作为编队 pane 的成员分节常驻挂载。
     expect(screen.getByTestId('neo-host-team-tab')).toBeInTheDocument();
     expect(screen.getByTestId('neo-host-team-pane')).toBeInTheDocument();
     expect(screen.getByTestId('gm-panel-stub')).toBeInTheDocument();
     expect(screen.queryByTestId('neo-host-members-tab')).not.toBeInTheDocument();
+  });
+
+  it('群名缺失 → 标题回落「团队的主机」', () => {
+    render(
+      <NeoHost
+        target={null}
+        runId={null}
+        soulAgent={null}
+        conversation={{ groupId: 'g1', kind: 'group', teamId: 't1', teamName: null }}
+      />,
+    );
+    expect(screen.getByTestId('neo-host-title')).toHaveTextContent('团队的主机');
   });
 
   it('DM 会话 → 保持「Agent 的主机」，无成员 tab（灵魂 tab 仍在）', () => {

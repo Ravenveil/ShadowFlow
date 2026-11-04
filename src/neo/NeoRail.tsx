@@ -94,6 +94,7 @@ import { useInboxStore } from '../core/store/useInboxStore';
 import { useCommandK } from '../core/hooks/useCommandK';
 import type { NeoRailProps } from './types';
 import { NeoCreateAgentModal } from './NeoCreateAgentModal';
+import { NeoRenameModal } from './NeoRenameModal';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -668,6 +669,20 @@ export function NeoRail({
   // GAP A3 回写（2026-08-23）「移入项目」：当前打开项目浮层的行（group_id）。
   const [moveMenuFor, setMoveMenuFor] = useState<string | null>(null);
 
+  // 重命名弹窗（2026-11-04 用户反馈批「编辑项目名字能不能成熟一点」）：
+  // 项目/会话两处 window.prompt 统一替换为 NeoRenameModal。组件自身不持有
+  // busy/error —— patch 真实 API 的 loading 与失败都发生在本层，经 props 下发
+  // （失败弹窗保持打开，行内红条展示；成功关闭 + 刷新列表/本地 store）。
+  const [renameTarget, setRenameTarget] = useState<{
+    kind: 'project' | 'conversation';
+    projectId?: string;
+    groupId?: string;
+    dmAgentId?: string;
+    currentName: string;
+  } | null>(null);
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+
   const failManage = useCallback(() => {
     setManageError(
       t('neo.manage.opFailed', {
@@ -709,30 +724,43 @@ export function NeoRail({
   );
   void removeAgent;
 
-  // 群/DM：重命名（patchGroup 真实改名）。DM 行显示名来自 inbox 的 agentName，
-  // 同步 renameAgentDM 即时反映；fetchWorkspaceInbox 已填充时会 skip 重拉，
-  // 所以这里直接写本地 store，不做无效重拉。
+  // 群/DM：重命名（patchGroup 真实改名）。原 window.prompt 改 NeoRenameModal：
+  // 确认 → busy → patchGroup → 成功后本地 store 同步（DM 行显示名来自 inbox
+  // 的 agentName，同步 renameAgentDM 即时反映；fetchWorkspaceInbox 已填充时
+  // 会 skip 重拉，所以直接写本地 store，不做无效重拉）再关闭；失败行内红条、
+  // 弹窗保持打开（不吞错、不假成功）。
   const renameConversation = useCallback(
     (groupId: string, currentName: string, dmAgentId?: string) => {
-      const name = window
-        .prompt(
-          t('neo.manage.renamePrompt', {
-            defaultValue: language === 'zh' ? '新名称' : 'New name',
-          }),
-          currentName,
-        )
-        ?.trim();
-      if (!name || name === currentName) return;
-      setManageError(null);
+      setRenameError(null);
+      setRenameTarget({ kind: 'conversation', groupId, dmAgentId, currentName });
+    },
+    [],
+  );
+
+  const confirmConversationRename = useCallback(
+    (name: string) => {
+      const target = renameTarget;
+      const groupId = target?.groupId;
+      if (!groupId) return;
+      setRenameBusy(true);
+      setRenameError(null);
       patchGroup(groupId, { name })
         .then(() => {
           const inbox = useInboxStore.getState();
-          if (dmAgentId) inbox.renameAgentDM(dmAgentId, name);
+          if (target?.dmAgentId) inbox.renameAgentDM(target.dmAgentId, name);
           else inbox.updateGroupMeta(groupId, { name });
+          setRenameTarget(null);
         })
-        .catch(failManage);
+        .catch(() =>
+          setRenameError(
+            t('neo.manage.opFailed', {
+              defaultValue: language === 'zh' ? '操作失败，请重试' : 'Operation failed, please retry',
+            }),
+          ),
+        )
+        .finally(() => setRenameBusy(false));
     },
-    [failManage, t, language],
+    [renameTarget, t, language],
   );
 
   // 群/DM：删除（二次确认）；删当前打开的会话 → 回 home 安全页。
@@ -822,25 +850,38 @@ export function NeoRail({
     [handleDropOnProject],
   );
 
-  // 项目：重命名/删除（管理面闭环补的 patchProject/deleteProject 客户端）；
-  // 成功重拉项目分组（reloadTick 驱动 listProjectsWithSessions 重取）。
+  // 项目：重命名/删除（管理面闭环补的 patchProject/deleteProject 客户端）。
+  // 重命名原 window.prompt 改 NeoRenameModal：确认 → busy → patchProject →
+  // 成功关闭 + reloadTick 重拉项目分组刷新分桶；失败行内红条、弹窗保持打开。
   const renameProject = useCallback(
     (p: ProjectWithSessions) => {
-      const name = window
-        .prompt(
-          t('neo.manage.renamePrompt', {
-            defaultValue: language === 'zh' ? '新名称' : 'New name',
-          }),
-          p.name,
-        )
-        ?.trim();
-      if (!name || name === p.name) return;
-      setManageError(null);
-      patchProject(p.project_id, { name })
-        .then(() => setReloadTick((n) => n + 1))
-        .catch(failManage);
+      setRenameError(null);
+      setRenameTarget({ kind: 'project', projectId: p.project_id, currentName: p.name });
     },
-    [failManage, t, language],
+    [],
+  );
+
+  const confirmProjectRename = useCallback(
+    (name: string) => {
+      const target = renameTarget;
+      if (!target?.projectId) return;
+      setRenameBusy(true);
+      setRenameError(null);
+      patchProject(target.projectId, { name })
+        .then(() => {
+          setRenameTarget(null);
+          setReloadTick((n) => n + 1);
+        })
+        .catch(() =>
+          setRenameError(
+            t('neo.manage.opFailed', {
+              defaultValue: language === 'zh' ? '操作失败，请重试' : 'Operation failed, please retry',
+            }),
+          ),
+        )
+        .finally(() => setRenameBusy(false));
+    },
+    [renameTarget, t, language],
   );
 
   const removeProject = useCallback(
@@ -1889,6 +1930,33 @@ export function NeoRail({
         >
           {agentCreatedToast}
         </div>
+      )}
+
+      {/* 重命名弹窗（2026-11-04 用户反馈批）：项目/会话共用一个 NeoRenameModal，
+          标题随 renameTarget.kind 区分；busy/error 由本层 patch 状态驱动。 */}
+      {renameTarget && (
+        <NeoRenameModal
+          title={
+            renameTarget.kind === 'project'
+              ? t('neo.manage.renameProjectTitle', {
+                  defaultValue: language === 'zh' ? '重命名项目' : 'Rename project',
+                })
+              : t('neo.manage.renameConversationTitle', {
+                  defaultValue: language === 'zh' ? '重命名会话' : 'Rename conversation',
+                })
+          }
+          initial={renameTarget.currentName}
+          busy={renameBusy}
+          error={renameError}
+          onConfirm={(name) =>
+            renameTarget.kind === 'project' ? confirmProjectRename(name) : confirmConversationRename(name)
+          }
+          onClose={() => {
+            if (renameBusy) return;
+            setRenameTarget(null);
+            setRenameError(null);
+          }}
+        />
       )}
 
       {/* 2026-11-04 用户反馈批：「新建群聊」模态入口整体移除。

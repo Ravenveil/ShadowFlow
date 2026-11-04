@@ -1108,8 +1108,11 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
               className="neo-host-title-avatar"
             />
           )}
+          {/* 2026-11-04 用户反馈：团队群标题不再固定「团队的主机」，跟随
+              群聊名称灵活变化（NeoApp 下发的 conversation.teamName 即群
+              record 的 name）；群名缺失时回落「团队的主机」。 */}
           {isTeamConv
-            ? t('neo.host.teamTitle', { defaultValue: '团队的主机' })
+            ? (conversation?.teamName || t('neo.host.teamTitle', { defaultValue: '团队的主机' }))
             : t('neo.host.title', { defaultValue: 'Agent 的主机' })}
         </span>
         <div className="neo-host-tabs" ref={tabbarRef}>
@@ -1261,7 +1264,7 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
             （GroupMembersPanel：成员网格 / 审批门 / 简报），纵向排布。 */}
         {(target?.kind === 'team' || convTeamEntry || isTeamConv) && (
           <div
-            className="neo-host-pane neo-host-fade"
+            className="neo-host-pane neo-host-fade neo-host-pane--team"
             hidden={activeTab !== 'team'}
             data-testid="neo-host-team-pane"
           >

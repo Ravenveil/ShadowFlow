@@ -1,35 +1,12 @@
 /**
- * TeamPanel「编辑 DAG」入口测试（GAP B28 / 2026-11-03 内联改版）。
- * 覆盖：工作流 section 出现入口钮 → 点击内联展开 TeamDagEditor（stub 替身，
- * 避免 jsdom 里跑真实 reactflow）→ 取消/保存后收起回到只读画布；
- * onSaved 回传的新图同步进只读摘要。
- *
- * 2026-11-03 起编辑器不再切走整面板（不卸载 roster/策略 section），改在
- * 工作流 section 内联展开；「最近运行」区块已移除。
+ * TeamPanel 测试（2026-11-03 内联编辑改版 / 2026-11-04 头部瘦身）。
+ * 覆盖：TeamDagEditor（stub 替身，避免 jsdom 里跑真实 reactflow）常驻
+ * 工作流 section 的编辑契约；成员区微信化网格；策略矩阵循环/保存；
+ * 2026-11-04 用户反馈第三批 —— 头部「重命名/删除/发起群聊」三钮与
+ * 团队名 meta 全部移除后的负向断言。
  */
 import { render, screen, fireEvent, waitFor } from '../../test/utils';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-
-const navigateMock = vi.fn();
-vi.mock('react-router-dom', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-router-dom')>();
-  return { ...actual, useNavigate: () => navigateMock };
-});
-
-vi.mock('../../api/groupApi', () => ({
-  resolveTeamGroup: vi.fn().mockResolvedValue('g-team-1'),
-  listGroups: vi.fn().mockResolvedValue([]),
-}));
-vi.mock('../../store/workspaceStore', () => ({
-  useWorkspaceStore: (sel: (s: { currentId: string | null }) => unknown) =>
-    sel({ currentId: 'ws1' }),
-}));
-vi.mock('../../core/store/useInboxStore', () => {
-  const state = { fetchWorkspaceInbox: vi.fn() };
-  const useInboxStore = (sel: (s: typeof state) => unknown) => sel(state);
-  useInboxStore.getState = () => state;
-  return { useInboxStore };
-});
 
 vi.mock('../../api/teams', () => ({
   getTeam: vi.fn().mockResolvedValue({
@@ -85,9 +62,6 @@ vi.mock('../projections/TeamDagEditor', () => ({
 }));
 
 import { TeamPanel } from '../projections/TeamPanel';
-import { resolveTeamGroup } from '../../api/groupApi';
-
-const resolveTeamGroupMock = vi.mocked(resolveTeamGroup);
 
 function renderPanel() {
   return render(
@@ -97,7 +71,6 @@ function renderPanel() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  resolveTeamGroupMock.mockResolvedValue('g-team-1');
 });
 
 describe('TeamPanel — 工作流常驻编辑器（2026-11-04）', () => {
@@ -109,6 +82,19 @@ describe('TeamPanel — 工作流常驻编辑器（2026-11-04）', () => {
     // roster 行与常驻策略矩阵都在
     expect(screen.getAllByText('甲').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByTestId('team-policy-matrix')).toBeInTheDocument();
+  });
+
+  it('成员区微信化（2026-11-04）：roster 渲染为横向头像网格，不再裸露 agent ID', async () => {
+    renderPanel();
+    // 网格容器出现，成员名（甲/乙）作为头像下方小字渲染
+    expect(await screen.findByTestId('team-roster-grid')).toBeInTheDocument();
+    expect(screen.getAllByText('甲').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('乙').length).toBeGreaterThanOrEqual(1);
+    // 裸 agent ID 不再直接出现在 DOM（收进 tooltip）
+    expect(screen.queryByText('a1')).not.toBeInTheDocument();
+    expect(screen.queryByText('a2')).not.toBeInTheDocument();
+    // 头部计数「2 位成员」
+    expect(screen.getByText('2 位成员')).toBeInTheDocument();
   });
 
   it('编辑器 onDirtyChange(true) → 头部出现「● 未保存」徽标', async () => {
@@ -131,35 +117,16 @@ describe('TeamPanel — 工作流常驻编辑器（2026-11-04）', () => {
   });
 });
 
-describe('TeamPanel — 发起群聊 CTA（GAP D）', () => {
-  it('成员 section 头部出现「发起群聊」钮，与常驻编辑器并存', async () => {
+describe('TeamPanel — 头部瘦身（2026-11-04 用户反馈第三批）', () => {
+  it('成员头部不再出现「发起群聊/重命名/删除」三钮，团队名 meta 不再显示', async () => {
     renderPanel();
-    expect(await screen.findByTestId('team-chat-launch')).toBeInTheDocument();
-    expect(screen.getByTestId('team-dag-editor-stub')).toBeInTheDocument();
-  });
-
-  it('点击 → resolveTeamGroup 带 team_id + roster，命中后跳 /group/:gid', async () => {
-    renderPanel();
-    fireEvent.click(await screen.findByTestId('team-chat-launch'));
-    await waitFor(() => {
-      expect(resolveTeamGroupMock).toHaveBeenCalledWith(
-        expect.objectContaining({ team_id: 't1', name: '测试团队', agent_ids: ['a1', 'a2'] }),
-        'ws1',
-      );
-    });
-    await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith('/group/g-team-1');
-    });
-  });
-
-  it('resolve 失败（回 null）→ 面板内错误行提示，不跳转', async () => {
-    resolveTeamGroupMock.mockResolvedValue(null);
-    renderPanel();
-    fireEvent.click(await screen.findByTestId('team-chat-launch'));
-    expect(await screen.findByRole('alert')).toHaveTextContent('建群失败');
-    expect(navigateMock).not.toHaveBeenCalled();
-    // 失败后可重试（busy 复位）
-    expect(screen.getByTestId('team-chat-launch')).toBeEnabled();
+    await screen.findByTestId('team-roster-grid');
+    // 三钮全部移除（用户判定无用）
+    expect(screen.queryByTestId('team-chat-launch')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('team-rename-btn')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('team-delete-btn')).not.toBeInTheDocument();
+    // 团队名不再显示在成员头部
+    expect(screen.queryByText('测试团队')).not.toBeInTheDocument();
   });
 });
 

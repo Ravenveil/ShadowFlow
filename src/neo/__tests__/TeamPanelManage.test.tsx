@@ -1,17 +1,12 @@
 /**
- * TeamPanel 管理面闭环测试（2026-08-23）— 头部团队重命名/删除。
- * 覆盖：头部两钮常驻；重命名 → patchTeam 真实调用 + 头部显示名即时更新；
- * 删除二次确认（取消不调 deleteTeam）；确认删除 → deleteTeam + navigate('/')
- * 安全页；删除失败 → team-manage-error 红条且不跳转。
+ * TeamPanel 管理钮移除测试（2026-11-04 用户反馈第三批）。
+ * 原「团队重命名/删除管理面闭环」（2026-08-23 建，2026-11-04 弹窗化）已
+ * 按用户反馈整体移除 —— 成员头部不再有重命名/删除/发起群聊三钮，团队名
+ * meta 不再显示，NeoRenameModal/patchTeam/deleteTeam/resolveTeamGroup
+ * 链路连带清理。本文件改为负向断言：相关 testid 不再出现、API 不被调用。
  */
-import { render, screen, fireEvent, waitFor } from '../../test/utils';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-
-const navigateMock = vi.fn();
-vi.mock('react-router-dom', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-router-dom')>();
-  return { ...actual, useNavigate: () => navigateMock };
-});
+import { render, screen, waitFor } from '../../test/utils';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('../../api/teams', () => ({
   getTeam: vi.fn().mockResolvedValue({
@@ -23,16 +18,8 @@ vi.mock('../../api/teams', () => ({
     created_at: '',
     updated_at: '',
   }),
-  patchTeam: vi.fn().mockResolvedValue({
-    team_id: 't1',
-    name: '新团队名',
-    description: '',
-    workspace_id: 'ws1',
-    agent_ids: ['a1'],
-    created_at: '',
-    updated_at: '',
-  }),
-  deleteTeam: vi.fn().mockResolvedValue(undefined),
+  patchTeam: vi.fn(),
+  deleteTeam: vi.fn(),
   getTeamWorkflow: vi.fn().mockResolvedValue({ nodes: [], edges: [] }),
   getTeamPolicy: vi.fn().mockResolvedValue({}),
   putTeamPolicy: vi.fn().mockResolvedValue(undefined),
@@ -42,28 +29,12 @@ vi.mock('../../api/agents', () => ({
     { agent_id: 'a1', name: '甲', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
   ]),
 }));
-vi.mock('../../api/groupApi', () => ({
-  resolveTeamGroup: vi.fn().mockResolvedValue('g-team-1'),
-}));
-vi.mock('../../store/workspaceStore', () => ({
-  useWorkspaceStore: (sel: (s: { currentId: string | null }) => unknown) =>
-    sel({ currentId: 'ws1' }),
-}));
-vi.mock('../../core/store/useInboxStore', () => {
-  const state = { fetchWorkspaceInbox: vi.fn() };
-  const useInboxStore = (sel: (s: typeof state) => unknown) => sel(state);
-  useInboxStore.getState = () => state;
-  return { useInboxStore };
-});
 vi.mock('../projections/TeamDagEditor', () => ({
   TeamDagEditor: () => null,
 }));
 
-import { getTeam, patchTeam, deleteTeam } from '../../api/teams';
+import { patchTeam, deleteTeam } from '../../api/teams';
 import { TeamPanel } from '../projections/TeamPanel';
-
-let confirmSpy: ReturnType<typeof vi.spyOn>;
-let promptSpy: ReturnType<typeof vi.spyOn>;
 
 function renderPanel() {
   render(
@@ -72,75 +43,25 @@ function renderPanel() {
 }
 
 beforeEach(() => {
-  // 注意：不能用 vi.restoreAllMocks() —— 它会把 vi.mock 模块工厂的 mockResolvedValue
-  // 实现一并还原成 undefined（getTeam.then 崩），只还原这里创建的 window spy。
-  confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-  promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('新团队名');
-  navigateMock.mockReset();
   vi.clearAllMocks();
-  // clearAllMocks 清掉工厂 mock 的实现，重打模块 mock 的 resolved 值
-  vi.mocked(getTeam).mockResolvedValue({
-    team_id: 't1',
-    name: '测试团队',
-    description: '',
-    workspace_id: 'ws1',
-    agent_ids: ['a1'],
-    created_at: '',
-    updated_at: '',
-  });
-  vi.mocked(patchTeam).mockResolvedValue({
-    team_id: 't1',
-    name: '新团队名',
-    description: '',
-    workspace_id: 'ws1',
-    agent_ids: ['a1'],
-    created_at: '',
-    updated_at: '',
-  });
-  vi.mocked(deleteTeam).mockResolvedValue(undefined);
 });
 
-afterEach(() => {
-  confirmSpy.mockRestore();
-  promptSpy.mockRestore();
-});
-
-describe('TeamPanel — 团队重命名/删除（管理面闭环）', () => {
-  it('头部常驻重命名/删除钮', async () => {
+describe('TeamPanel — 重命名/删除/发起群聊管理钮已移除（2026-11-04）', () => {
+  it('成员头部不再出现重命名/删除/发起群聊钮，团队名 meta 不再显示', async () => {
     renderPanel();
-    expect(await screen.findByTestId('team-rename-btn')).toBeInTheDocument();
-    expect(screen.getByTestId('team-delete-btn')).toBeInTheDocument();
+    await screen.findByTestId('team-roster-grid');
+    expect(screen.queryByTestId('team-rename-btn')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('team-delete-btn')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('team-chat-launch')).not.toBeInTheDocument();
+    expect(screen.queryByText('测试团队')).not.toBeInTheDocument();
   });
 
-  it('重命名 → patchTeam(teamId, {name})，头部显示名即时更新为新名', async () => {
+  it('渲染全程不触发 patchTeam/deleteTeam（管理链路已随 UI 移除）', async () => {
     renderPanel();
-    fireEvent.click(await screen.findByTestId('team-rename-btn'));
-    await waitFor(() =>
-      expect(patchTeam).toHaveBeenCalledWith('t1', { name: '新团队名' }),
-    );
-    await waitFor(() => expect(screen.getByText('新团队名')).toBeInTheDocument());
-  });
-
-  it('删除二次确认：confirm 取消 → 不调 deleteTeam、不跳转', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
-    renderPanel();
-    fireEvent.click(await screen.findByTestId('team-delete-btn'));
-    expect(deleteTeam).not.toHaveBeenCalled();
-    expect(navigateMock).not.toHaveBeenCalled();
-  });
-
-  it('confirm 确认 → deleteTeam 调用 + 跳回 Neo home 安全页', async () => {
-    renderPanel();
-    fireEvent.click(await screen.findByTestId('team-delete-btn'));
-    await waitFor(() => expect(deleteTeam).toHaveBeenCalledWith('t1'));
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/'));
-  });
-
-  it('删除失败 → 红条出现且不跳转', async () => {
-    (deleteTeam as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('500'));
-    renderPanel();
-    fireEvent.click(await screen.findByTestId('team-delete-btn'));
-    expect(await screen.findByTestId('team-manage-error')).toHaveTextContent('操作失败，请重试');
-    expect(navigateMock).not.toHaveBeenCalled();
+    await screen.findByTestId('team-roster-grid');
+    await waitFor(() => {
+      expect(patchTeam).not.toHaveBeenCalled();
+      expect(deleteTeam).not.toHaveBeenCalled();
+    });
   });
 });

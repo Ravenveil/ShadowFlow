@@ -875,6 +875,13 @@
   white-space: nowrap;
 }
 
+/* 头部右侧弹簧占位（2026-11-04 成员区微信化）：meta 有计数时按钮组仍靠右。
+   meta 用 margin-left:auto 占位弹簧，spacer 只在无 meta 时生效（width:0 由
+   margin-left:auto 撑）。两个都写，TSX 侧按需取用。 */
+.neo-host-sec-spacer {
+  margin-left: auto;
+}
+
 /* 通用状态 pill modifier（loop 状态之外：run 节点 / agent / policy 用） */
 .neo-host-pill--ok {
   background: color-mix(in oklab, var(--t-ok) 14%, transparent);
@@ -1231,6 +1238,30 @@
 }
 .neo-host-policy-table thead th {
   border-bottom: 1px solid var(--t-border);
+}
+/* 矩阵行/列头（2026-11-04）：头像在上、名字在下的竖排小卡，与 DAG 节点
+   同视觉语言 —— 认人不靠读名字。 */
+.neo-host-policy-agent-head {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 56px;
+}
+.neo-host-policy-agent-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.neo-host-policy-agent-name {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.2;
 }
 .neo-host-policy-corner {
   width: 8px;
@@ -2151,6 +2182,18 @@
   color: var(--t-fg);
   border-color: var(--t-border-2);
 }
+/* 主行动钮（2026-11-04 成员区微信化）：「发起群聊」用品牌色填充，次级管理
+   钮（重命名/删除）保持灰边 icon-only —— 主次分明，对齐成熟 IM 的头部 CTA。 */
+.neo-host-wf-edit-btn--accent {
+  color: var(--t-accent);
+  border-color: color-mix(in oklab, var(--t-accent) 45%, transparent);
+  background: color-mix(in oklab, var(--t-accent) 10%, transparent);
+}
+.neo-host-wf-edit-btn--accent:hover {
+  color: var(--t-accent);
+  border-color: var(--t-accent);
+  background: color-mix(in oklab, var(--t-accent) 18%, transparent);
+}
 
 /* ── verifier 面板（LoopVerdicts，L6 证据层打包）────────────────────────── */
 .neo-host-verdicts {
@@ -2371,6 +2414,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 成员格 hover（2026-11-04 成员区微信化）：轻底色 + 名字提亮，触感对齐
+   微信/钉钉群成员网格；day/night 双主题走 --t-* token 自动适配。 */
+.neo-gm-cell {
+  border-radius: 8px;
+  padding: 4px 2px;
+  cursor: default;
+  transition: background 0.15s ease;
+}
+.neo-gm-cell:hover {
+  background: color-mix(in oklab, var(--t-fg) 6%, transparent);
+}
+.neo-gm-cell:hover .neo-gm-cell-name {
+  color: var(--t-fg);
 }
 
 /* 状态点（idle/running/paused/error）：头像右下角，描边吃页面底色 */

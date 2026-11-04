@@ -25,25 +25,30 @@
  *   - 「协作策略」矩阵常驻展开（默认状态就是矩阵），「编辑矩阵/收起矩阵」
  *     开关与折叠态 chips 摘要一并移除。
  *
+ * 2026-11-04 用户反馈第二批（成员区微信化）：
+ *   - roster 从「行列表 + 状态胶囊 + 裸 agent ID」改为微信群式横向头像
+ *     网格（头像上 / 名字下 / 状态点挂头像右下），样式复用 GroupMembersPanel
+ *     的 .neo-gm-*（同一个产品家族一个观感）；agent ID 收进 hover tooltip。
+ *
+ * 2026-11-04 用户反馈第三批（头部瘦身）：
+ *   - 成员 section 头部的「重命名 / 删除 / 发起群聊」三钮全部移除（用户
+ *     判定无用；团队级管理后续走列表侧入口），连带 NeoRenameModal、
+ *     patchTeam/deleteTeam/resolveTeamGroup 依赖一并清理。
+ *   - 头部团队名称 meta（team?.name）不再显示 —— 顶部主机标题已跟随群名。
+ *
  * per-node 输出只在 SSE 事件带 node_id（DAG 调度多 Agent run）时才有内容；
  * 单 Agent run 走全局流，此处显示干净空态说明，不伪造归属。
  */
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   GitBranch,
-  MessageSquareText,
-  Pencil,
   ShieldCheck,
-  Trash2,
   UsersRound,
 } from "lucide-react";
 import {
-  deleteTeam,
   getTeam,
   getTeamPolicy,
   getTeamWorkflow,
-  patchTeam,
   putTeamPolicy,
   type PolicyCellState,
   type TeamPolicyMatrix,
@@ -51,11 +56,8 @@ import {
   type TeamWorkflow,
 } from "../../api/teams";
 import { listAgents, type AgentRecord } from "../../api/agents";
-import { resolveTeamGroup } from "../../api/groupApi";
 import type { NodeChunkBuffer } from "../../core/hooks/useRunSession";
 import { useI18n } from "../../common/i18n";
-import { useWorkspaceStore } from "../../store/workspaceStore";
-import { useInboxStore } from "../../core/store/useInboxStore";
 import { AgentAvatar } from "../../components/agent/AgentAvatar";
 import { TeamDagEditor } from "./TeamDagEditor";
 
@@ -67,13 +69,6 @@ export interface TeamPanelProps {
   /** SSE 仍在流。 */
   streaming: boolean;
 }
-
-const AGENT_STATUS_CLASS: Record<string, string> = {
-  idle: "neo-host-pill--muted",
-  running: "neo-host-pill--running",
-  paused: "neo-host-pill--oscillating",
-  error: "neo-host-pill--err",
-};
 
 /** 策略格循环次序：未配置 → permit → warn → deny → 清除（回默认允许）。 */
 const POLICY_CYCLE: PolicyCellState[] = ["permit", "warn", "deny"];
@@ -106,7 +101,30 @@ export function buildAgentPolicyColor(
   return map;
 }
 
-export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPanelProps) {
+/**
+ * 策略矩阵行/列头（2026-11-04 用户反馈）：真实头像在上、名字在下的竖排
+ * 小卡，与 DAG 节点、成员网格同视觉语言 —— 矩阵里认人不靠读名字。
+ */
+function PolicyAgentHead({ agent }: { agent: AgentRecord }) {
+  return (
+    <span className="neo-host-policy-agent-head">
+      <span className="neo-host-policy-agent-avatar">
+        <AgentAvatar
+          name={agent.name || agent.agent_id}
+          style={agent.avatar_style}
+          seed={agent.avatar_seed ?? agent.name}
+          image={agent.avatar_image ?? null}
+          size={22}
+        />
+      </span>
+      <span className="neo-host-policy-agent-name">{agent.name || agent.agent_id}</span>
+    </span>
+  );
+}
+
+// teamName 仍在 props 契约里（NeoHost 两个挂载点都传），但 2026-11-04 头部
+// 瘦身后面板内不再显示团队名 meta —— 解构时下划线前缀显式弃用，避免 TS6133。
+export function TeamPanel({ teamId, teamName: _teamName, perNodeChunks, streaming }: TeamPanelProps) {
   const { t } = useI18n();
   const [team, setTeam] = useState<TeamRecord | null>(null);
   const [workflow, setWorkflow] = useState<TeamWorkflow | null>(null);
@@ -119,15 +137,6 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
   // 强制重挂编辑器（取消 = 丢弃本地画布改动回滚服务端图）。
   const [dagDirty, setDagDirty] = useState(false);
   const [workflowStateKey, setWorkflowStateKey] = useState(0);
-  // GAP D（2026-08-22）「发起群聊」CTA：find-or-create 绑 team_id 的群后跳
-  // 群聊现场页（/group/:gid，NeoGroupChat 路由页），失败给明确提示不静默。
-  const navigate = useNavigate();
-  const workspaceId = useWorkspaceStore((s) => s.currentId);
-  const [launchBusy, setLaunchBusy] = useState(false);
-  const [launchError, setLaunchError] = useState<string | null>(null);
-  // 管理面闭环（2026-08-23）：头部团队重命名/删除。
-  const [manageBusy, setManageBusy] = useState(false);
-  const [manageError, setManageError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -240,71 +249,6 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
     ([, buf]) => buf.text.trim() || buf.thinking.length > 0 || buf.steps.length > 0,
   );
 
-  // 发起群聊：已有群直接跳，没有则以该 team（绑 team_id + roster）建群再跳；
-  // 建群失败 / 后端不可用（resolveTeamGroup 回 null）→ 面板内错误行提示。
-  const handleLaunchChat = async () => {
-    if (launchBusy) return;
-    setLaunchBusy(true);
-    setLaunchError(null);
-    const gid = await resolveTeamGroup(
-      { team_id: teamId, name: team?.name ?? teamName, agent_ids: roster },
-      workspaceId ?? undefined,
-    );
-    if (gid) {
-      // 刷新 inbox，左栏「群聊现场」列表即时出新群（Python 未起时静默）
-      void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
-      navigate(`/group/${encodeURIComponent(gid)}`);
-    } else {
-      setLaunchError(
-        t("neo.host.teamChatError", { defaultValue: "建群失败：后端不可用或群创建被拒绝" }),
-      );
-      setLaunchBusy(false);
-    }
-  };
-
-  // 团队重命名：prompt 输入新名 → patchTeam 真实更新；成功同步本地 team record
-  // （roster 头部显示名即时反映，不依赖外层 reload）。
-  const handleRenameTeam = async () => {
-    if (manageBusy) return;
-    const current = team?.name ?? teamName;
-    const name = window
-      .prompt(t("neo.host.teamRenamePrompt", { defaultValue: "团队新名称" }), current)
-      ?.trim();
-    if (!name || name === current) return;
-    setManageBusy(true);
-    setManageError(null);
-    try {
-      const updated = await patchTeam(teamId, { name });
-      setTeam(updated);
-    } catch {
-      setManageError(t("neo.host.teamManageError", { defaultValue: "操作失败，请重试" }));
-    } finally {
-      setManageBusy(false);
-    }
-  };
-
-  // 团队删除：二次确认 → deleteTeam；成功回 Neo home，失败红条并恢复可操作。
-  const handleDeleteTeam = async () => {
-    if (manageBusy) return;
-    if (
-      !window.confirm(
-        t("neo.host.teamDeleteConfirm", {
-          defaultValue: `确定删除团队「${team?.name ?? teamName}」？此操作不可撤销`,
-        }),
-      )
-    )
-      return;
-    setManageBusy(true);
-    setManageError(null);
-    try {
-      await deleteTeam(teamId);
-      navigate("/");
-    } catch {
-      setManageError(t("neo.host.teamManageError", { defaultValue: "操作失败，请重试" }));
-      setManageBusy(false);
-    }
-  };
-
   if (!loaded) {
     return (
       <div className="neo-host-list">
@@ -332,114 +276,73 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
 
   return (
     <div className="neo-host-list">
-      {/* 成员 roster（头部带「发起群聊」CTA — GAP D；2026-08-23 管理面闭环：
-          头部追加团队重命名/删除钮） */}
+      {/* 成员 roster（2026-11-04 用户反馈：头部只留「成员 + 计数」——
+          重命名/删除/发起群聊三钮与团队名 meta 全部移除，用户判定无用）。 */}
       <div className="neo-host-sec">
         <div className="neo-host-sec-head">
           <UsersRound size={12} strokeWidth={1.8} />
           <span className="neo-host-sec-title">
             {t("neo.host.teamRoster", { defaultValue: "成员" })}
           </span>
-          <span className="neo-host-sec-meta">{team?.name ?? teamName}</span>
-          <button
-            type="button"
-            className="neo-host-wf-edit-btn"
-            onClick={() => void handleRenameTeam()}
-            disabled={manageBusy}
-            title={t("neo.manage.rename", { defaultValue: "重命名" })}
-            data-testid="team-rename-btn"
-          >
-            <Pencil size={11} strokeWidth={1.8} />
-            {t("neo.manage.rename", { defaultValue: "重命名" })}
-          </button>
-          <button
-            type="button"
-            className="neo-host-wf-edit-btn"
-            onClick={() => void handleDeleteTeam()}
-            disabled={manageBusy}
-            title={t("common.delete", { defaultValue: "删除" })}
-            data-testid="team-delete-btn"
-          >
-            <Trash2 size={11} strokeWidth={1.8} />
-            {t("common.delete", { defaultValue: "删除" })}
-          </button>
-          <button
-            type="button"
-            className="neo-host-wf-edit-btn"
-            onClick={() => void handleLaunchChat()}
-            disabled={launchBusy}
-            data-testid="team-chat-launch"
-          >
-            <MessageSquareText size={11} strokeWidth={1.8} />
-            {launchBusy
-              ? t("neo.host.teamChatLaunching", { defaultValue: "建群中…" })
-              : t("neo.host.teamChatLaunch", { defaultValue: "发起群聊" })}
-          </button>
+          {roster.length > 0 && (
+            <span className="neo-host-sec-meta">
+              {t("neo.host.teamRosterCount", { defaultValue: "{{count}} 位成员", count: roster.length })}
+            </span>
+          )}
         </div>
-        {manageError && (
-          <div
-            className="neo-host-tree-note neo-host-tree-note--pad neo-host-empty--err"
-            role="alert"
-            data-testid="team-manage-error"
-          >
-            {manageError}
-          </div>
-        )}
-        {launchError && (
-          <div className="neo-host-tree-note neo-host-tree-note--pad neo-host-empty--err" role="alert">
-            {launchError}
-          </div>
-        )}
         {roster.length === 0 ? (
           <div className="neo-host-tree-note neo-host-tree-note--pad">
             {t("neo.host.teamRosterEmpty", { defaultValue: "该团队暂无成员" })}
           </div>
         ) : (
-          roster.map((id) => {
-            const agent = agentById.get(id);
-            return (
-              <div key={id} className="neo-host-roster-row">
-                {/* 2026-11-04 用户反馈：成员行统一头像（对齐 CopilotKit/OpenBot
-                    成员列表）。有 AgentRecord 走 AgentAvatar（DiceBear/生成图，
-                    与成员面板同源）；查不到记录的 id 兜底首字母色块。size=26
-                    比 GroupMembersPanel 的 34 小一档，匹配 roster 行密度。 */}
-                {agent ? (
-                  <AgentAvatar
-                    name={agent.name}
-                    style={agent.avatar_style}
-                    seed={agent.avatar_seed ?? agent.name}
-                    image={agent.avatar_image ?? null}
-                    size={26}
-                  />
-                ) : (
-                  (() => {
-                    // 兜底首字母色块（仿 AgentAvatar.InitialFallback）：
-                    // 此分支无 AgentRecord，取 id 第一个 grapheme，字母转大写。
-                    const first = Array.from(id.trim())[0] ?? "?";
-                    const initial = /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
-                    return (
-                      <span
-                        className="neo-avatar"
-                        style={{ width: 26, height: 26, fontSize: 11, flexShrink: 0 }}
-                        aria-hidden
-                      >
-                        {initial}
-                      </span>
-                    );
-                  })()
-                )}
-                <span className="neo-host-roster-name">{agent?.name ?? id}</span>
-                {agent && (
-                  <span className={`neo-host-pill ${AGENT_STATUS_CLASS[agent.status] ?? "neo-host-pill--muted"}`}>
-                    {agent.status}
-                  </span>
-                )}
-                <span className="neo-host-roster-id" title={id}>
-                  {id}
-                </span>
-              </div>
-            );
-          })
+          /* 2026-11-04 用户反馈：成员区微信/钉钉式横向头像网格（与
+             GroupMembersPanel 同一套 .neo-gm-* 样式，全产品一个成员观感）：
+             头像上、名字下、状态点挂头像右下；内部 agent ID 收进 tooltip，
+             不再裸露在行尾。角色（blueprint.role）并入 tooltip 第二行。 */
+          <div className="neo-gm-grid" data-testid="team-roster-grid">
+            {roster.map((id) => {
+              const agent = agentById.get(id);
+              const name = agent?.name ?? id;
+              const role =
+                typeof agent?.blueprint?.role === "string" ? agent.blueprint.role.trim() : "";
+              const cellTitle = role ? `${name} · ${role}` : name;
+              const idTitle = agent ? `${id}${agent.status ? ` · ${agent.status}` : ""}` : id;
+              return (
+                <div key={id} className="neo-gm-cell" title={cellTitle}>
+                  {agent ? (
+                    <span className="neo-gm-avatar neo-gm-avatar--img">
+                      <AgentAvatar
+                        name={agent.name}
+                        style={agent.avatar_style}
+                        seed={agent.avatar_seed ?? agent.name}
+                        image={agent.avatar_image ?? null}
+                        size={34}
+                      />
+                      <i className={`neo-gm-dot neo-gm-dot--${agent.status}`} aria-hidden />
+                    </span>
+                  ) : (
+                    (() => {
+                      // 兜底首字母色块（仿 AgentAvatar.InitialFallback）：
+                      // 此分支无 AgentRecord，取 id 第一个 grapheme，字母转大写。
+                      const first = Array.from(id.trim())[0] ?? "?";
+                      const initial = /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
+                      return (
+                        <span
+                          className="neo-gm-avatar"
+                          style={{ background: "var(--t-fg-5)" }}
+                          aria-hidden
+                          title={idTitle}
+                        >
+                          {initial}
+                        </span>
+                      );
+                    })()
+                  )}
+                  <span className="neo-gm-cell-name">{name}</span>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -528,14 +431,18 @@ export function TeamPanel({ teamId, teamName, perNodeChunks, streaming }: TeamPa
                   <tr>
                     <th className="neo-host-policy-corner" />
                     {rosterAgents.map((a) => (
-                      <th key={a.agent_id} title={a.agent_id}>{a.name}</th>
+                      <th key={a.agent_id} title={a.agent_id}>
+                        <PolicyAgentHead agent={a} />
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {rosterAgents.map((from) => (
                     <tr key={from.agent_id}>
-                      <th scope="row" title={from.agent_id}>{from.name}</th>
+                      <th scope="row" title={from.agent_id}>
+                        <PolicyAgentHead agent={from} />
+                      </th>
                       {rosterAgents.map((to) => {
                         if (from.agent_id === to.agent_id) {
                           return <td key={to.agent_id} className="neo-host-policy-self" />;

@@ -4,6 +4,8 @@
  * home 安全页）；群/DM 行重命名/删除（patchGroup/deleteGroup 真实调用 +
  * 本地 inbox store 同步，删当前会话跳 home）；项目 label 重命名/删除
  * （patchProject/deleteProject）；操作失败 → neo-manage-error 红条。
+ * 2026-11-04 重命名弹窗化：项目/会话重命名不再走 window.prompt，改为
+ * NeoRenameModal 弹窗交互（预填当前名 → 改名 → 点确认 → 断言 patch 调用）。
  */
 import { render, screen, fireEvent, waitFor } from '../../test/utils';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
@@ -126,7 +128,15 @@ import { NeoRail } from '../NeoRail';
 import type { NeoNav, RailSection } from '../types';
 
 let confirmSpy: ReturnType<typeof vi.spyOn>;
-let promptSpy: ReturnType<typeof vi.spyOn>;
+
+/** 弹窗式重命名的公共交互：点重命名钮 → 弹窗内改名为 newName → 点确认。 */
+async function renameViaModal(triggerTestId: string, newName: string) {
+  fireEvent.click(await screen.findByTestId(triggerTestId));
+  await screen.findByTestId('neo-rename-modal');
+  const input = await screen.findByTestId('neo-rename-input');
+  fireEvent.change(input, { target: { value: newName } });
+  fireEvent.click(screen.getByTestId('neo-rename-confirm'));
+}
 
 function renderRail(section: RailSection, nav: NeoNav = { view: 'home' }, onNavigate = vi.fn()) {
   render(
@@ -153,13 +163,13 @@ beforeEach(() => {
     { agent_id: 'a1', name: '设计助手', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
     { agent_id: 'a2', name: '暂停员工', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'paused', source: 'quick_hire', created_at: '' },
   ]);
+  // 重命名已弹窗化（NeoRenameModal）——不再需要 promptSpy；
+  // confirmSpy 保留给删除用例（删除二次确认仍走 window.confirm）。
   confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-  promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('新名字');
 });
 
 afterEach(() => {
   confirmSpy.mockRestore();
-  promptSpy.mockRestore();
 });
 
 describe('NeoRail 管理面 — 员工行', () => {
@@ -180,18 +190,45 @@ describe('NeoRail 管理面 — 员工行', () => {
 });
 
 describe('NeoRail 管理面 — DM/群聊行', () => {
-  it('DM 重命名 → patchGroup(group_id, {name}) + 本地 renameAgentDM 同步', async () => {
+  it('DM 重命名：弹窗预填当前名 → 改名 → patchGroup + 本地 renameAgentDM 同步', async () => {
     renderRail('home');
     // 先等项目分组落地（listProjectsWithSessions 异步 resolve 后 DM 行会从默认组
     // 移进项目桶，React 重挂节点——过早拿到行内按钮句柄会因节点被替换而点击失效）。
     await screen.findByTestId('neo-project-section-toggle');
     fireEvent.click(await screen.findByTestId('neo-dm-rename'));
+    // 弹窗打开：预填当前名（initial）→ 同名守卫，确认钮 disabled。
+    const input = await screen.findByTestId('neo-rename-input');
+    expect(input).toHaveValue('设计助手');
+    expect(screen.getByTestId('neo-rename-confirm')).toBeDisabled();
+    // 改名 → 确认 → patchGroup + store 同步。
+    fireEvent.change(input, { target: { value: '新名字' } });
+    fireEvent.click(screen.getByTestId('neo-rename-confirm'));
     await waitFor(() =>
       expect(patchGroup).toHaveBeenCalledWith('g-dm-1', { name: '新名字' }),
     );
     await waitFor(() =>
       expect(INBOX_STATE.renameAgentDM).toHaveBeenCalledWith('a1', '新名字'),
     );
+    // 成功后弹窗关闭。
+    await waitFor(() => expect(screen.queryByTestId('neo-rename-modal')).toBeNull());
+  });
+
+  it('DM 重命名弹窗：不改名（值与 initial 相同）确认钮 disabled；Esc 关闭', async () => {
+    renderRail('home');
+    await screen.findByTestId('neo-project-section-toggle');
+    fireEvent.click(await screen.findByTestId('neo-dm-rename'));
+    const input = await screen.findByTestId('neo-rename-input');
+    expect(input).toHaveValue('设计助手');
+    // 同名守卫：不发无效请求。
+    expect(screen.getByTestId('neo-rename-confirm')).toBeDisabled();
+    fireEvent.change(input, { target: { value: '   ' } });
+    // 空名守卫：trim 后为空也 disabled。
+    expect(screen.getByTestId('neo-rename-confirm')).toBeDisabled();
+    expect(patchGroup).not.toHaveBeenCalled();
+    // Esc 取消关闭弹窗，且不触发任何 patch。
+    fireEvent.keyDown(input, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('neo-rename-modal')).toBeNull());
+    expect(patchGroup).not.toHaveBeenCalled();
   });
 
   it('DM 删除（当前正开着该会话）→ deleteGroup + removeAgentDM + 跳 home', async () => {
@@ -205,10 +242,10 @@ describe('NeoRail 管理面 — DM/群聊行', () => {
     );
   });
 
-  it('群聊行重命名 → patchGroup + updateGroupMeta；删除 → deleteGroup + removeGroup', async () => {
+  it('群聊行重命名：弹窗改名 → patchGroup + updateGroupMeta；删除 → deleteGroup + removeGroup', async () => {
     // os-unified（2026-11-04）：无独立 teams 分区，群聊行渲染在 home 默认区
     renderRail('home');
-    fireEvent.click(await screen.findByTestId('neo-group-rename'));
+    await renameViaModal('neo-group-rename', '新名字');
     await waitFor(() =>
       expect(patchGroup).toHaveBeenCalledWith('g-room-1', { name: '新名字' }),
     );
@@ -275,9 +312,9 @@ describe('NeoRail 管理面 — 项目 label', () => {
     expect(screen.getByTestId('neo-project-delete')).toBeInTheDocument();
   });
 
-  it('重命名 → patchProject(project_id, {name})；删除（确认）→ deleteProject', async () => {
+  it('项目重命名：弹窗改名 → patchProject(project_id, {name})；删除（确认）→ deleteProject', async () => {
     renderRail('home');
-    fireEvent.click(await screen.findByTestId('neo-project-rename'));
+    await renameViaModal('neo-project-rename', '新名字');
     await waitFor(() =>
       expect(patchProject).toHaveBeenCalledWith('p1', { name: '新名字' }),
     );

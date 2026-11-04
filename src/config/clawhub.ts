@@ -228,6 +228,11 @@ export function renderAvatarSvg(style: string | null | undefined, seed: string |
       // 头像统一浅底 + 圆角（背景色交给容器 CSS 控制；radius 全圆由容器裁切）
       backgroundColor: ['e5e7eb'],
       radius: 50,
+      // 每个 SVG 的遮罩 id（默认固定为 viewboxMask）随机化：同一页面会内联
+      // 渲染几十个头像 SVG，固定 id 会互相串引用（文档内 id 必须唯一），
+      // 导致后面的 SVG 被第一个 SVG 的遮罩裁切，风格网格缩略图呈"空白/只剩
+      // 局部碎片"（2026-11-04）。
+      randomizeIds: true,
     },
   );
   return avatar.toString();
