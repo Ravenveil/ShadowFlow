@@ -106,9 +106,9 @@ describe('TeamPanel — 工作流常驻编辑器（2026-11-04）', () => {
     // 编辑器直接挂在工作流 section（不再有「编辑 DAG」开关钮）
     expect(await screen.findByTestId('team-dag-editor-stub')).toBeInTheDocument();
     expect(screen.queryByTestId('team-dag-edit-entry')).not.toBeInTheDocument();
-    // roster 行与策略 section 都在
+    // roster 行与常驻策略矩阵都在
     expect(screen.getAllByText('甲').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByTestId('team-policy-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('team-policy-matrix')).toBeInTheDocument();
   });
 
   it('编辑器 onDirtyChange(true) → 头部出现「● 未保存」徽标', async () => {
@@ -163,19 +163,20 @@ describe('TeamPanel — 发起群聊 CTA（GAP D）', () => {
   });
 });
 
-describe('TeamPanel — 协作策略矩阵（2026-11-03）', () => {
-  it('未展开时显示成员策略 chips 摘要 + 「编辑矩阵」开关', async () => {
+describe('TeamPanel — 协作策略矩阵（2026-11-04 常驻展开）', () => {
+  it('矩阵默认展开：无需点开关即渲染 roster × roster 格子（无 toggle 钮）', async () => {
     renderPanel();
-    expect(await screen.findByTestId('team-policy-toggle')).toBeInTheDocument();
-    // chips 摘要里两个成员都在（「甲」在 roster 行/chips/表头多处出现，用复数查询）
+    // 矩阵常驻：格子直接出现（「甲」在 roster 行/表头/行头多处出现，用复数查询）
+    expect(await screen.findByTestId('team-policy-cell-a1-a2')).toBeInTheDocument();
     expect(screen.getAllByText('甲').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('乙').length).toBeGreaterThanOrEqual(1);
+    // 开关已移除
+    expect(screen.queryByTestId('team-policy-toggle')).not.toBeInTheDocument();
   });
 
-  it('展开矩阵 → 渲染 roster × roster 格子；点击循环 permit → warn → deny → 清除', async () => {
+  it('点击格子循环 permit → warn → deny → 清除；未保存不发 PUT', async () => {
     const { getTeamPolicy, putTeamPolicy } = await import('../../api/teams');
     renderPanel();
-    fireEvent.click(await screen.findByTestId('team-policy-toggle'));
     const cell = await screen.findByTestId('team-policy-cell-a1-a2');
     // 未配置 → 点击 → permit（保存钮出现）
     fireEvent.click(cell);
@@ -199,7 +200,6 @@ describe('TeamPanel — 协作策略矩阵（2026-11-03）', () => {
   it('点「保存策略」→ putTeamPolicy 持久化并出现「已保存」pill', async () => {
     const { putTeamPolicy } = await import('../../api/teams');
     renderPanel();
-    fireEvent.click(await screen.findByTestId('team-policy-toggle'));
     const cell = await screen.findByTestId('team-policy-cell-a2-a1');
     fireEvent.click(cell);
     fireEvent.click(screen.getByTestId('team-policy-save'));

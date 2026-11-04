@@ -1182,7 +1182,8 @@
   white-space: nowrap;
 }
 
-/* ── TeamPanel 协作策略矩阵 + DAG 内联编辑（2026-11-03）────────────── */
+/* ── TeamPanel 协作策略矩阵 + DAG 内联编辑（2026-11-03；2026-11-04 起
+   矩阵常驻展开、编辑器常驻，折叠摘要/开关样式已移除）──────────────── */
 
 /* 「编辑 DAG」section 内联编辑容器（2026-11-04 编辑器常驻）：
    必须给固定高度 —— .neo-host-list 是滚动列表（无确定高度），编辑器内部
@@ -1192,14 +1193,7 @@
   height: 460px;
 }
 
-/* 未展开时的成员策略染色 chips 摘要 */
-.neo-host-policy-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 0 4px;
-}
+/* 策略染色 chips（矩阵行尾「最严策略」汇总列复用；折叠摘要已移除） */
 .neo-host-policy-chip {
   display: inline-flex;
   align-items: center;
@@ -1213,12 +1207,6 @@
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.neo-host-policy-summary-hint {
-  font-size: 10.5px;
-  color: var(--t-fg-5);
-  margin-left: auto;
   white-space: nowrap;
 }
 
@@ -2339,6 +2327,29 @@
   padding: 14px 12px;
   border-bottom: 1px solid var(--t-border);
 }
+
+/* 编队 pane 纵向滚动（2026-11-04 用户反馈）：pane 拼四个 section（过程/
+   工作流/封驳矩阵/成员）后内容经常超高，而 .neo-host-content 是
+   overflow:hidden → 内容被裁切无法滚动。只给编队 pane 追加 overflow-y，
+   其他 pane（workspace/artifacts/soul/schedules/artifact:*）滚动行为不变。 */
+.neo-host-pane--team {
+  overflow-y: auto;
+  /* 细滚动条（Firefox）：token 配色，day/night 双主题自动适配 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--t-border) transparent;
+}
+/* WebKit（Chromium/Safari）细滚动条：thumb 用 --t-border 圆角，track 透明 */
+.neo-host-pane--team::-webkit-scrollbar {
+  width: 8px;
+}
+.neo-host-pane--team::-webkit-scrollbar-thumb {
+  background: var(--t-border);
+  border-radius: 4px;
+}
+.neo-host-pane--team::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .neo-host-teamsec:last-child {
   border-bottom: none;
 }
