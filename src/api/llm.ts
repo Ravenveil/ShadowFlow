@@ -5,7 +5,8 @@
  * （server/src/routes/llm.ts，非流式），不新增后端端点：prompt 模板放前端，
  * 网关只做协议转换 + BYOK 分发。
  *
- * 默认走 zhipu GLM（glm-4.5-flash，对齐 server DEFAULT_MODELS.zhipu）。
+ * 默认走 zhipu GLM（glm-4.6，对齐 server DEFAULT_MODELS.zhipu；glm-4.5-flash
+ * 在 Coding Plan 端点 1309 套餐不含）。
  * BYOK key 取自 localStorage（sf_zhipu_key，_base.ts B 套存储），以
  * `Authorization: Bearer` 头发出（网关 extractApiKey 只认 x-api-key /
  * Authorization）；无前端 key 时依赖服务端 env 兜底。
@@ -44,12 +45,12 @@ function _extractError(detail: unknown): { code: string; message: string } {
 }
 
 export interface GeneratePersonaOptions {
-  /** 覆盖默认模型（默认 glm-4.5-flash → 路由到 zhipu provider）。 */
+  /** 覆盖默认模型（默认 glm-4.6 → 路由到 zhipu provider）。 */
   model?: string;
   signal?: AbortSignal;
 }
 
-const DEFAULT_MODEL = 'glm-4.5-flash';
+const DEFAULT_MODEL = 'glm-4.6';
 
 /** system prompt：约束输出为可直接入库的中文 persona，三段结构。 */
 const PERSONA_SYSTEM_PROMPT = [

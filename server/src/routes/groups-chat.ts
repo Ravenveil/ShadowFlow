@@ -236,6 +236,19 @@ function sseWireToText(value: string): string {
 }
 
 /**
+ * 2026-11-04 思考剥离（纯函数，可单测）— 从 agent 最终聊天回复里去掉
+ * `<sf:thinking>…</sf:thinking>` 思考段。zhipu 思考模型（glm-4.6/5.x）经
+ * ApiClientCallable 的 reasoning_content 包装，流式文本里成对/未闭合（max_tokens
+ * 截断）两种形态都会出现；思考过程已由过程卡（thinking 卡）实时展示，最终
+ * 消息只留正文。与 src/api/llm.ts 人设生成同款策略。
+ */
+export function stripThinking(s: string): string {
+  return s
+    .replace(/<sf:thinking(?:\s[^>]*)?>[\s\S]*?<\/sf:thinking>/g, '')
+    .replace(/<sf:thinking(?:\s[^>]*)?>[\s\S]*$/g, '');
+}
+
+/**
  * G1（2026-06-13）— 网关 fanout 把 callable.turn() 吐出的 tool-use/tool-result
  * chunk 投影成 tool_call/tool_echo TimelineMessage，让会话 Timeline 真显示工具
  * 调用（前端 ToolCallChip/ToolEchoLine 渲染器+contracts 早已就位，只缺网关 emit）。
@@ -359,6 +372,33 @@ function resolveExecutorKey(
   }
   if (executor === 'anthropic-direct') return resolveProviderKey('anthropic', headers);
   return undefined; // cli:/acp:/mcp: don't need a key
+}
+
+/**
+ * 2026-11-04 默认 executor 回退（NeverThrow：任何失败 → 'cli:claude' 现状兜底）。
+ * 读取 settings/byok：第一个 enabled 且配了 key 的 provider → `byok:<id>`。
+ * 让「设置页配好 zhipu key」这个动作对群聊默认对话生效，而不是让每条消息都
+ * 掉进 cli:claude 静默挂起。provider 顺序读 settings 插入序（用户配的第一个
+ * provider 优先），无任何可用 BYOK → 'cli:claude'（历史行为零回归）。
+ */
+export function pickDefaultExecutor(): string {
+  try {
+    // 惰性 require 与 dispatcher 同款防循环依赖。
+    const { getSetting } = require('../storage/settings') as {
+      getSetting: (k: string) => unknown;
+    };
+    const byok = getSetting('byok') as
+      | { providers?: Record<string, { apiKey?: string; enabled?: boolean }> }
+      | undefined;
+    for (const [id, p] of Object.entries(byok?.providers ?? {})) {
+      if (p?.enabled && typeof p.apiKey === 'string' && p.apiKey.trim()) {
+        return `byok:${id}`;
+      }
+    }
+  } catch {
+    /* settings 不可用 → CLI 兜底 */
+  }
+  return 'cli:claude';
 }
 
 // ── Polynoia 对标 · 富卡片发射助手（经 gateway run 落群时间线） ───────────────
@@ -751,6 +791,11 @@ async function runFanout(
                   if (gw && thinkingId && piece) {
                     gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: piece });
                   }
+                } else if (chunk.type === 'thinking-delta') {
+                  // 2026-11-04 — API 路结构化思考通道：只点亮过程卡，不进 buf。
+                  if (gw && thinkingId && chunk.value) {
+                    gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: chunk.value });
+                  }
                 } else if (chunk.type === 'tool-use' || chunk.type === 'tool-result') {
                   // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）
                   emitToolChunk(gw, chunk);
@@ -793,7 +838,8 @@ async function runFanout(
             if (!errMsg && wt) {
               await commitAndEvidence(gw, wt, name, task?.title ?? userPrompt);
             }
-            return { text: buf, error: errMsg || undefined };
+            // 2026-11-04 思考剥离 — 与串行路径同款：<sf:thinking> 段不进最终回复。
+            return { text: stripThinking(buf), error: errMsg || undefined };
           },
           postMessage: async (m) => {
             await pyPostMessage(groupId, {
@@ -918,6 +964,12 @@ async function runFanout(
             if (gw && thinkingId && piece) {
               gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: piece });
             }
+          } else if (chunk.type === 'thinking-delta') {
+            // 2026-11-04 — API 路结构化思考通道（ApiClientCallable reasoning_content
+            // → thinking-delta）：就近点亮过程卡，绝不混进最终回复 buf。
+            if (gw && thinkingId && chunk.value) {
+              gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: chunk.value });
+            }
           } else if (chunk.type === 'tool-use' || chunk.type === 'tool-result') {
             // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）
             emitToolChunk(gw, chunk);
@@ -966,7 +1018,9 @@ async function runFanout(
         }).catch(() => {});
         continue;
       }
-      const reply = buf.trim();
+      // 2026-11-04 思考剥离 — 最终聊天回复不含 <sf:thinking> 思考段
+      // （思考已在过程卡实时流式展示）；全剥空 → 当空回复收口。
+      const reply = stripThinking(buf).trim();
       if (!reply) {
         await pyPostMessage(groupId, {
           content: `[chat] ${agentName} 返回空回复。`,
@@ -1137,21 +1191,17 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     // Executor selection. Priority:
     //   1. Explicit body.executor — the UI model picker's choice always wins
     //      (e.g. `byok:zhipu`, `anthropic-direct`, `cli:codex`).
-    //   2. cli:claude — the default. The local Claude CLI authenticates through the user's
-    //      Claude subscription (OAuth) and handles its own networking.
-    //
-    // Why cli:claude is the default rather than a BYOK/direct path:
-    //   - `anthropic-direct` calls api.anthropic.com via the SDK, which is network-blocked in
-    //     some regions (China returns HTTP 403 "Request not allowed" without an HTTPS proxy).
-    //   - Auto-picking a forwarded BYOK key is fragile: a configured-but-wrong key fails with
-    //     401, and the browser auto-forwards whatever provider it discovers first (often the
-    //     blocked anthropic key).
-    //   The CLI works where those fail and gives the best quality, so it's the safe default.
-    //   Users who want a specific BYOK provider select it in the model picker (→ body.executor).
+    //   2. 2026-11-04 默认回退修正 — 设置页配了 enabled BYOK key 的 provider
+    //      优先于 cli:claude。旧行为无脑默认 cli:claude：CLI 未登录/挂起时群聊
+    //      thinking 卡永远 streaming（无超时无报错，「不能正常对话」根因之一）。
+    //      改法：settings/byok 里有 enabled+key 的 provider（如 zhipu）时，
+    //      默认 `byok:<id>`（key 由 resolveProviderKey 的 settings 分支解析），
+    //      API 直连失败也会以 error chunk 可见地报错，不再静默卡死。
+    //   3. cli:claude — 最后兜底（CLI 自带 OAuth 认证时仍是好选择）。
     const executor =
       typeof body.executor === 'string' && body.executor.trim()
         ? body.executor.trim()
-        : 'cli:claude';
+        : pickDefaultExecutor();
     const model =
       typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
 

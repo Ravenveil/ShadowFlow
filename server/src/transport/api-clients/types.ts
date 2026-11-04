@@ -105,7 +105,10 @@ export const DEFAULT_MODELS: Record<ProviderId, string> = {
   anthropic:  'claude-sonnet-4-6',
   openai:     'gpt-4o',
   deepseek:   'deepseek-chat',
-  zhipu:      'glm-4.5-flash',
+  // 2026-11-04 对话完善：glm-4.5-flash 在 Coding Plan 端点返回 1309（套餐不含
+  // 该模型）；glm-4.6 实测 coding 端点可用（思考模型，reasoning_content 走
+  // <sf:thinking> 通道）。作为 zhipu 无显式 model 时的兜底。
+  zhipu:      'glm-4.6',
   google:     'gemini-2.5-flash',
   qwen:       'qwen3-max',
   moonshot:   'kimi-k2-turbo-preview',

@@ -867,6 +867,27 @@ router.get('/', (req: Request, res: Response) => {
 
 // ── POST /api/run-sessions ────────────────────────────────────────────────────
 
+/**
+ * 2026-11-04 对话完善 — settings/byok 里第一个 enabled+key 的 provider id
+ * （与 groups-chat.pickDefaultExecutor 同一策略）。无可用 BYOK / settings
+ * 异常 → null（调用方维持 'anthropic' 历史默认）。NeverThrow。
+ */
+function pickDefaultProviderId(): ProviderId | null {
+  try {
+    const byok = getSetting('byok') as
+      | { providers?: Record<string, { apiKey?: string; enabled?: boolean }> }
+      | undefined;
+    for (const [id, p] of Object.entries(byok?.providers ?? {})) {
+      if (p?.enabled && typeof p.apiKey === 'string' && p.apiKey.trim() && isProviderId(id)) {
+        return id;
+      }
+    }
+  } catch {
+    /* settings 不可用 → 历史默认 */
+  }
+  return null;
+}
+
 router.post('/', (req: Request, res: Response) => {
   const {
     goal,
@@ -977,6 +998,11 @@ router.post('/', (req: Request, res: Response) => {
   // back-compat (15.7 / 15.19 test paths).
 
   // Story 15.18 — validate provider; reject unknown ids loudly with 400.
+  // 2026-11-04 对话完善：客户端未显式指定 provider 时，不再默认 anthropic
+  // （api.anthropic.com 国内不可达 + settings 里的 anthropic key 无效 → 每条
+  // 消息 Connection error，「设置检测通过却无法对话」单聊根因）。改读
+  // settings/byok：第一个 enabled+key 的 provider 优先（与群聊网关
+  // groups-chat.pickDefaultExecutor 同一策略），无可用 BYOK → 维持 anthropic。
   let validated_provider: ProviderId = 'anthropic';
   if (typeof provider === 'string' && provider.trim().length > 0) {
     const candidate = provider.trim();
@@ -990,6 +1016,9 @@ router.post('/', (req: Request, res: Response) => {
       return;
     }
     validated_provider = candidate;
+  } else {
+    const fallback = pickDefaultProviderId();
+    if (fallback) validated_provider = fallback;
   }
 
   // Pick the API key for the chosen provider, in priority order:
