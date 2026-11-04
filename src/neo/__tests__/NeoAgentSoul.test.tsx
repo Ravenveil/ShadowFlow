@@ -2,6 +2,8 @@
  * NeoAgentSoul 暂停/恢复切换测试（2026-08-23 管理面闭环）。
  * 覆盖：头部状态行 + 切换钮常驻；idle → 点暂停调 pauseAgent 并以返回 record
  * 刷新状态显示；paused → 点恢复调 resumeAgent；切换失败 → 红条不吞错。
+ * 统一保存（2026-11-04 用户反馈）：无独立「保存头像」钮；改头像/Claw 绑定
+ * 后底部「保存」一次 PATCH 全带上。
  */
 import { render, screen, fireEvent, waitFor } from '../../test/utils';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -37,7 +39,7 @@ vi.mock('../../api/agents', () => {
   };
 });
 
-import { getAgent, pauseAgent, resumeAgent } from '../../api/agents';
+import { getAgent, patchAgent, pauseAgent, resumeAgent } from '../../api/agents';
 import { NeoAgentSoul } from '../NeoAgentSoul';
 
 beforeEach(() => {
@@ -77,5 +79,32 @@ describe('NeoAgentSoul — 暂停/恢复状态切换', () => {
     fireEvent.click(screen.getByTestId('neo-soul-status-toggle'));
     expect(await screen.findByTestId('neo-soul-status-error')).toHaveTextContent('HTTP 500');
     expect(screen.getByTestId('neo-soul-status')).toHaveTextContent('idle');
+  });
+});
+
+describe('NeoAgentSoul — 统一保存（头像/绑定随底部保存提交）', () => {
+  it('页面不存在独立「保存头像」钮（2026-11-04 用户反馈）', async () => {
+    render(<NeoAgentSoul agentId="a1" />);
+    await screen.findByTestId('neo-soul-status');
+    expect(screen.queryByTestId('neo-soul-avatar-save')).toBeNull();
+    expect(screen.queryByTestId('neo-soul-claw-save')).toBeNull();
+  });
+
+  it('只改头像（不动名称/soul）→ 底部保存可用，一次 PATCH 带上 avatar 字段', async () => {
+    (patchAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ ...AGENT });
+    render(<NeoAgentSoul agentId="a1" />);
+    await screen.findByTestId('neo-soul-status');
+    // 只动头像：风格网格的任一风格 cell（role=radio，data-testid=claw-style-*）
+    const styleCell = screen.getByTestId('claw-style-adventurer');
+    fireEvent.click(styleCell);
+    const saveBtn = screen.getByTestId('neo-soul-save');
+    await waitFor(() => expect(saveBtn).not.toBeDisabled());
+    fireEvent.click(saveBtn);
+    await waitFor(() =>
+      expect(patchAgent).toHaveBeenCalledWith(
+        'a1',
+        expect.objectContaining({ avatar_style: 'adventurer', avatar_seed: '' }),
+      ),
+    );
   });
 });

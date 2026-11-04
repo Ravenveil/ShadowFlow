@@ -61,6 +61,8 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
   const [soul, setSoul] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // 统一保存（2026-11-04 用户反馈）：Claw 绑定 / 头像 / 名称 / soul 一并走
+  // 底部「保存」，一次 PATCH 全带上；保存失败红条复用 saveError。
   // 保存成功瞬态提示（2s 后消失）
   const [savedAt, setSavedAt] = useState<number | null>(null);
   // 管理面闭环（2026-08-23）：灵魂页直接切暂停/恢复（pauseAgent/resumeAgent
@@ -82,8 +84,6 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
     avatarImageOverride !== null ? avatarImageOverride.v : (agent?.avatar_image ?? null);
   const [clawDirty, setClawDirty] = useState(false);
   const [avatarDirty, setAvatarDirty] = useState(false);
-  const [bindingBusy, setBindingBusy] = useState(false);
-  const [bindingError, setBindingError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -138,7 +138,13 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
     return () => clearTimeout(timer);
   }, [savedAt]);
 
-  const dirty = agent !== null && (name !== agent.name || soul !== (agent.soul ?? ''));
+  // 统一 dirty：名称/soul 之外，Claw 绑定或头像动过也算，底部「保存」一并提交。
+  const dirty =
+    agent !== null &&
+    (name !== agent.name ||
+      soul !== (agent.soul ?? '') ||
+      clawDirty ||
+      avatarDirty);
   const canSave = dirty && name.trim().length > 0 && soul.trim().length > 0 && !saving;
 
   async function handleSave() {
@@ -146,7 +152,22 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
     setSaving(true);
     setSaveError(null);
     try {
-      const updated = await patchAgent(agent.agent_id, { name: name.trim(), soul });
+      // 一次 PATCH 全带上：soul 基础字段 + 动过的 Claw 绑定 / 头像字段。
+      // avatar_image 仅在用户动过时传（undefined = 不改动）；"" = 清除生成图。
+      const imagePatch: { avatar_image?: string } =
+        avatarImageOverride !== null
+          ? { avatar_image: avatarImageOverride.v ?? '' }
+          : {};
+      const avatarPatch: Record<string, unknown> = avatarDirty
+        ? { avatar_style: avatarCfg.style, avatar_seed: avatarCfg.seed, ...imagePatch }
+        : {};
+      const clawPatch: Record<string, unknown> = clawDirty ? { claw_id: clawId } : {};
+      const updated = await patchAgent(agent.agent_id, {
+        name: name.trim(),
+        soul,
+        ...avatarPatch,
+        ...clawPatch,
+      });
       setAgent(updated);
       setName(updated.name);
       setSoul(updated.soul ?? '');
@@ -173,47 +194,6 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
       setStatusError(errorMessageOf(err));
     } finally {
       setStatusBusy(false);
-    }
-  }
-
-  // ── ClawHub（2026-06）：保存 Claw 绑定（"" = 解绑）。独立于 soul 保存钮。──
-  async function handleSaveClawBinding() {
-    if (!agent || bindingBusy) return;
-    setBindingBusy(true);
-    setBindingError(null);
-    try {
-      const updated = await patchAgent(agent.agent_id, { claw_id: clawId });
-      setAgent(updated);
-    } catch (err) {
-      setBindingError(errorMessageOf(err));
-    } finally {
-      setBindingBusy(false);
-    }
-  }
-
-  // ── ClawHub（2026-06）：保存头像配置（"" = 清空回默认/名字 hash）。
-  // os-unified 2026-11-04：提示词生成图（avatarImageOverride）保存时随 PATCH；
-  // 仅在用户动过图（override 非空）时传（undefined = 不改动该字段）。
-  async function handleSaveAvatar() {
-    if (!agent || bindingBusy) return;
-    setBindingBusy(true);
-    setBindingError(null);
-    try {
-      // avatar_image 仅在用户动过时传（undefined = 不改动）；"" = 清除生成图。
-      const imagePatch: { avatar_image?: string } =
-        avatarImageOverride !== null
-          ? { avatar_image: avatarImageOverride.v ?? '' }
-          : {};
-      const updated = await patchAgent(agent.agent_id, {
-        avatar_style: avatarCfg.style,
-        avatar_seed: avatarCfg.seed,
-        ...imagePatch,
-      });
-      setAgent(updated);
-    } catch (err) {
-      setBindingError(errorMessageOf(err));
-    } finally {
-      setBindingBusy(false);
     }
   }
 
@@ -323,7 +303,6 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
               className="neo-modal-input"
               style={{ flex: '1 1 180px', minHeight: 30 }}
               value={clawId}
-              disabled={bindingBusy}
               onChange={(e) => {
                 setClawId(e.target.value);
                 setClawDirty(true);
@@ -343,19 +322,6 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
                 </option>
               ))}
             </select>
-            {clawDirty && (
-              <button
-                type="button"
-                className="neo-btn-primary"
-                style={{ height: 30, padding: '0 12px', fontSize: 12 }}
-                onClick={() => void handleSaveClawBinding()}
-                disabled={bindingBusy}
-                data-testid="neo-soul-claw-save"
-              >
-                {bindingBusy ? <Loader2 size={12} className="neo-spin" aria-hidden /> : null}
-                {t('common.save', { defaultValue: language === 'zh' ? '保存' : 'Save' })}
-              </button>
-            )}
           </div>
           {boundClawUninstalled && (
             <span className="claw-copyonly-hint" style={{ color: '#B45309' }}>
@@ -411,7 +377,9 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
         </div>
       )}
 
-      {/* ── ClawHub（2026-06）：头像重配（风格 + 种子 + 实时预览；独立保存）── */}
+      {/* ── ClawHub（2026-06）：头像重配（风格 + 种子 + 实时预览）──
+          os-unified 2026-11-04 用户反馈：去掉独立「保存头像」钮，头像改动
+          随底部「保存」一并提交（canSave 含 avatarDirty/clawDirty）。── */}
       <div className="neo-soul-field">
         <label className="neo-modal-label">
           {t('clawhub.agent.avatarLabel', { defaultValue: language === 'zh' ? '头像（DiceBear）' : 'Avatar (DiceBear)' })}
@@ -433,26 +401,6 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
           agentName={agent.name}
           variant="compact"
         />
-        {bindingError && (
-          <div className="neo-modal-error" role="alert" data-testid="neo-soul-binding-error">
-            {bindingError}
-          </div>
-        )}
-        {avatarDirty && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-            <button
-              type="button"
-              className="neo-btn-primary"
-              style={{ height: 30, padding: '0 14px', fontSize: 12 }}
-              onClick={() => void handleSaveAvatar()}
-              disabled={bindingBusy}
-              data-testid="neo-soul-avatar-save"
-            >
-              {bindingBusy && <Loader2 size={12} className="neo-spin" aria-hidden />}
-              {t('clawhub.agent.saveAvatar', { defaultValue: language === 'zh' ? '保存头像' : 'Save Avatar' })}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* ── os-unified（2026-11-04 用户反馈）：定时任务已从灵魂内部移出，
