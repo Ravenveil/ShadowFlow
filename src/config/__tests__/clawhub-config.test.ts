@@ -76,20 +76,32 @@ describe('hashSeed — FNV-1a 稳定种子', () => {
 });
 
 describe('renderAvatarSvg — 本地生成', () => {
+  /** randomizeIds（2026-11-04）让每次输出的 mask/clipPath id 随机，
+   *  视觉内容仍确定性。断言前剥掉 id 与其引用，只比内容。 */
+  function stripRandomIds(svg: string): string {
+    return svg
+      .replace(/\sid="[^"]*"/g, '')
+      .replace(/\smask="url\([^)]*\)"/g, '')
+      .replace(/\sclip-path="url\([^)]*\)"/g, '')
+      .replace(/url\(['"]?#[^'"]*['"]?\)/g, 'url(#id)');
+  }
+
   it('产出合法 <svg> 文档', () => {
     const svg = renderAvatarSvg('bottts-neutral', 'test-seed');
     expect(svg.startsWith('<svg')).toBe(true);
     expect(svg).toContain('</svg>');
-    // 圆角裁切（radius:50）生效
-    expect(svg).toContain('viewboxMask');
+    // 圆角裁切（radius:50）生效：randomizeIds（2026-11-04）后 id 全随机，
+    // 改为验证「<mask> + rx/ry 圆角 rect」结构存在（id 引用由 mask= 体现）。
+    expect(svg).toContain('<mask');
+    expect(svg).toMatch(/<rect[^>]*rx="\d+"[^>]*ry="\d+"/);
   });
 
   it('同 seed 同风格 → 确定性输出（同名同头像）；不同 seed → 不同输出', () => {
     const a1 = renderAvatarSvg('bottts-neutral', 'seed-a');
     const a2 = renderAvatarSvg('bottts-neutral', 'seed-a');
     const b = renderAvatarSvg('bottts-neutral', 'seed-b');
-    expect(a1).toBe(a2);
-    expect(a1).not.toBe(b);
+    expect(stripRandomIds(a1)).toBe(stripRandomIds(a2));
+    expect(stripRandomIds(a1)).not.toBe(stripRandomIds(b));
   });
 
   it('全部风格可渲染（tree-shaking 后无缺风格）', () => {
@@ -112,8 +124,8 @@ describe('renderAvatarSvg — 本地生成', () => {
     const s1 = renderAvatarSvg('adventurer', null);
     const s2 = renderAvatarSvg('adventurer', null);
     expect(s1.startsWith('<svg')).toBe(true);
-    // 缺省 seed = hashSeed('shadowflow') → 两次调用一致
-    expect(s1).toBe(s2);
+    // 缺省 seed = hashSeed('shadowflow') → 两次调用内容一致（剥随机 id 后比较）
+    expect(stripRandomIds(s1)).toBe(stripRandomIds(s2));
   });
 });
 
