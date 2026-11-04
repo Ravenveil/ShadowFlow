@@ -27,15 +27,12 @@
  * - 产物（阶段 2.3 升级）：src/neo/projections/ArtifactsView —
  *   artifact-lineage + checkpoint-lineage 产物/检查点列表；无 lineage 数据时
  *   回落到 RunRecord.artifact_* 单条旧行为；点击开 NeoArtifactPreview tab。
- * - 编队（阶段 2.4 切面，target.kind==='team' 时出现）：
- *   src/neo/projections/TeamPanel — roster + workflow DAG 摘要 + policy 要点 +
- *   per-node 输出归属（useRunSession.perNodeChunks；本组件对同一 session 另挂
- *   一条只读 SSE 视图，server runBus 支持多 sink attach + 全量 replay）。
+ * - 编队（阶段 2.4 切面，团队 target / 团队群会话时出现）：
+ *   src/neo/projections/TeamPanel — 成员 roster + 工作流 DAG 编辑 + 协作策略
+ *   矩阵（2026-11-04 用户反馈批：尾部重复的 GroupMembersPanel 与一级
+ *   「封驳矩阵」section 移除；TeamPanel 内「分节点输出」同步移除）。
  * - 灵魂（2026-08-22，soulAgent 非空时出现：agent-target 或 agent 的 DM 会话）：
  *   内嵌 NeoAgentSoul — persona/系统提示词编辑（GET + PATCH /api/agents）。
- * - 成员（2026-08-22 W2 钉钉式融合，conversation 非 DM 时出现）：标题变
- *   「团队的主机」，内嵌 projections/GroupMembersPanel — 成员列表（头像 +
- *   状态点 + 角色 badge）+ 团队 DAG 摘要 + 审批门（approve 边；无则空态）。
  *
  * 不 mock、不加 placeholder；runId 为空 = 整体空态；数据缺失 = 干净空态。
  * 颜色一律 var(--t-*) / color-mix，day/night 双主题安全；样式全在 neo-host.css。
@@ -62,10 +59,8 @@ import {
   RefreshCw,
   Repeat,
   Search,
-  ShieldCheck,
   Sparkles,
   Upload,
-  UsersRound,
   Waypoints,
   X,
 } from 'lucide-react';
@@ -96,8 +91,6 @@ import { ArtifactsView, type LineageArtifact } from './projections/ArtifactsView
 import { LoopVerdicts } from './projections/LoopVerdicts';
 import { EvidencePanel } from './projections/EvidencePanel';
 import { TeamPanel } from './projections/TeamPanel';
-import { GroupMembersPanel } from './projections/GroupMembersPanel';
-import { ApprovalMatrix } from './projections/ApprovalMatrix';
 import { NeoAgentSoul } from './NeoAgentSoul';
 import { AgentSchedulesPanel } from './AgentSchedulesPanel';
 import type { NeoHostProps } from './types';
@@ -224,9 +217,8 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
     };
   }, [soulAgent?.id]);
 
-  // W2 钉钉式融合（2026-08-22）：中栏开着非 DM 会话（团队群）→ 本面板变
-  // 「团队的主机」并露出「成员」tab（成员列表 + 团队 DAG 摘要 + 审批门，
-  // projections/GroupMembersPanel）；DM/无会话保持「Agent 的主机」。
+  // W2 钉钉式融合（2026-08-22）：中栏开着非 DM 会话（团队群）→ 本面板标题
+  // 跟随群聊名称（缺失回落「团队的主机」）并露出「编队」tab。
   const isTeamConv = conversation != null && conversation.kind !== 'dm';
 
   // 编队 tab 群会话入口（2026-11-01）：无 target 且会话带 teamId → 可在群聊右栏
@@ -1074,18 +1066,6 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
       />
     ) : null;
 
-  // 「成员」面板（W2）：非 DM 会话时挂 GroupMembersPanel（成员网格 + DAG 摘要
-  // + 简报）。2026-11-04：审批门已提升为编队 pane 的一级「封驳矩阵」section，
-  // 这里传 hideApprovals 关掉内嵌那份，避免同群两条 SSE 订阅 + 重复渲染。
-  const membersContent =
-    isTeamConv && conversation ? (
-      <GroupMembersPanel groupId={conversation.groupId} hideApprovals />
-    ) : null;
-
-  /** 封驳矩阵：独立于成员面板的一级 section，✅/❌ 一点即决。 */
-  const approvalContent =
-    isTeamConv && conversation ? <ApprovalMatrix groupId={conversation.groupId} /> : null;
-
   // ── runId 为空不再整栏空态（2026-08-19）：会话/目标态右栏常驻，直接进
   //    tab 壳 —— 工作空间文件树可用，产物/过程/Loop 走 runlessNote 空态。 ──
 
@@ -1163,8 +1143,7 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
           )}
           {/* 编队 tab（os-unified 2026-11-04 三合一）：团队 target 态或团队群会话
               都出现——内含 DAG 编辑（TeamPanel）+ 过程视图（ProcessView/迭代环/
-              证据投影）+ 成员面板（GroupMembersPanel：成员/审批门/简报）。
-              图标 Waypoints（工作流节点），不再与成员图标重合。 */}
+              证据投影）。图标 Waypoints（工作流节点）。 */}
           {(target?.kind === 'team' || convTeamEntry || isTeamConv) && (
             <button
               type="button"
@@ -1260,8 +1239,8 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
           </div>
         )}
         {/* 编队 pane（os-unified 2026-11-04 三合一）：过程视图（runId 非空时
-            ProcessView + 迭代环 + 证据投影）+ 团队 DAG（TeamPanel）+ 成员面板
-            （GroupMembersPanel：成员网格 / 审批门 / 简报），纵向排布。 */}
+            ProcessView + 迭代环 + 证据投影）+ 团队编队面板（TeamPanel），
+            纵向排布。 */}
         {(target?.kind === 'team' || convTeamEntry || isTeamConv) && (
           <div
             className="neo-host-pane neo-host-fade neo-host-pane--team"
@@ -1286,27 +1265,10 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
                 {teamContent}
               </div>
             )}
-            {/* 2026-11-04：封驳矩阵提成一级 section —— 此前审批按钮埋在
-                GroupMembersPanel 内部第三节，无待办时只剩一行灰字，用户
-                「没看到能点的地方」。现在独立成节，表头常驻、✅/❌ 一点即决。 */}
-            {approvalContent && (
-              <div className="neo-host-teamsec neo-host-teamsec--approval">
-                <div className="neo-host-teamsec-head">
-                  <ShieldCheck size={12} strokeWidth={1.8} aria-hidden />
-                  {t('neo.host.approvalMatrix', { defaultValue: '封驳矩阵' })}
-                </div>
-                {approvalContent}
-              </div>
-            )}
-            {membersContent && (
-              <div className="neo-host-teamsec">
-                <div className="neo-host-teamsec-head">
-                  <UsersRound size={12} strokeWidth={1.8} aria-hidden />
-                  {t('neo.host.members', { defaultValue: '成员' })}
-                </div>
-                {membersContent}
-              </div>
-            )}
+            {/* 2026-11-04 用户反馈批：编队 pane 只保留前部 TeamPanel 的
+                成员 / 工作流 / 协作策略三节 —— 尾部重复的 GroupMembersPanel
+                （成员+工作流摘要+简报）与一级「封驳矩阵」section 移除
+                （用户判定重复冗余）。 */}
           </div>
         )}
         {artifactTabs.map((tab) => (

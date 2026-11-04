@@ -1345,33 +1345,6 @@
   flex: 1;
 }
 
-.neo-host-nodeout {
-  border-top: 1px solid var(--t-border);
-  padding: 8px 8px 4px;
-}
-
-.neo-host-nodeout:first-of-type {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.neo-host-nodeout-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.neo-host-nodeout-text {
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--t-fg-3);
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 120px;
-  overflow-y: auto;
-}
-
 /* ── 阶段 2.5：NeoArtifactPreview（done.html b_004 右栏文档预览复刻）───────── */
 
 .neo-ap {

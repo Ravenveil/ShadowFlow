@@ -8,8 +8,13 @@
  *   - GET /api/teams/{id}/workflow → TeamWorkflow（DAG，section 内联编辑）
  *   - GET /api/teams/{id}/policy   → TeamPolicyMatrix（permit/warn/deny 矩阵）
  *   - GET /api/agents              → 成员名/状态解析（roster 行 + 矩阵行头）
- *   - useRunSession.perNodeChunks  → run 进行中的 per-node 输出归属
- *     （键 = SSE DAG 事件携带的 node_id；经 workflow 节点 data.name 解析显示名）
+ *
+ * 2026-11-04 用户反馈第六批（编队 pane 去重 + 分节点输出移除）：
+ *   - 编队 pane 尾部重复的成员面板（GroupMembersPanel：成员/工作流摘要/简报）
+ *     与一级「封驳矩阵」section 由 NeoHost 侧移除（前部 TeamPanel 已有
+ *     成员/工作流/协作策略，重复展示）。
+ *   - TeamPanel 内「分节点输出」section 移除（用户判定无用）；
+ *     perNodeChunks / streaming props 保留契约但弃用。
  *
  * 2026-11-03 用户反馈批（矩阵联动 + 就地编辑）：
  *   - 「协作策略」改为 roster × roster 策略矩阵：格子点击循环 permit →
@@ -41,9 +46,6 @@
  *     判定无用；团队级管理后续走列表侧入口），连带 NeoRenameModal、
  *     patchTeam/deleteTeam/resolveTeamGroup 依赖一并清理。
  *   - 头部团队名称 meta（team?.name）不再显示 —— 顶部主机标题已跟随群名。
- *
- * per-node 输出只在 SSE 事件带 node_id（DAG 调度多 Agent run）时才有内容；
- * 单 Agent run 走全局流，此处显示干净空态说明，不伪造归属。
  */
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -66,7 +68,6 @@ import {
   type TeamWorkflow,
 } from "../../api/teams";
 import { listAgents, type AgentRecord } from "../../api/agents";
-import type { NodeChunkBuffer } from "../../core/hooks/useRunSession";
 import { useI18n } from "../../common/i18n";
 import { AgentAvatar } from "../../components/agent/AgentAvatar";
 import { TeamDagEditor } from "./TeamDagEditor";
@@ -74,10 +75,14 @@ import { TeamDagEditor } from "./TeamDagEditor";
 export interface TeamPanelProps {
   teamId: string;
   teamName: string;
-  /** useRunSession 的 per-node chunk buffer（NeoHost 持有的 SSE 视图）。 */
-  perNodeChunks: Record<string, NodeChunkBuffer>;
-  /** SSE 仍在流。 */
-  streaming: boolean;
+  /**
+   * 2026-11-04 第六批：分节点输出 section 移除后不再消费，保留契约弃用
+   * （NeoHost 两个挂载点仍传；下划线前缀解构，避免 TS6133）。
+   * 类型保留 NodeChunkBuffer 结构引用（结构兼容即可，运行时无依赖）。
+   */
+  perNodeChunks?: Record<string, unknown>;
+  /** 2026-11-04 第六批弃用：仅保留契约。 */
+  streaming?: boolean;
 }
 
 /** 策略格循环次序：未配置 → permit → warn → deny → 清除（回默认允许）。 */
@@ -132,9 +137,15 @@ function PolicyAgentHead({ agent }: { agent: AgentRecord }) {
   );
 }
 
-// teamName 仍在 props 契约里（NeoHost 两个挂载点都传），但 2026-11-04 头部
-// 瘦身后面板内不再显示团队名 meta —— 解构时下划线前缀显式弃用，避免 TS6133。
-export function TeamPanel({ teamId, teamName: _teamName, perNodeChunks, streaming }: TeamPanelProps) {
+// teamName / perNodeChunks / streaming 仍在 props 契约里（NeoHost 两个挂载点
+// 都传），但分别于 2026-11-04 头部瘦身 / 第六批分节点输出移除后面板内不再
+// 消费 —— 解构时下划线前缀显式弃用，避免 TS6133。
+export function TeamPanel({
+  teamId,
+  teamName: _teamName,
+  perNodeChunks: _perNodeChunks,
+  streaming: _streaming,
+}: TeamPanelProps) {
   const { t } = useI18n();
   const [team, setTeam] = useState<TeamRecord | null>(null);
   const [workflow, setWorkflow] = useState<TeamWorkflow | null>(null);
@@ -188,9 +199,6 @@ export function TeamPanel({ teamId, teamName: _teamName, perNodeChunks, streamin
   const roster = team?.agent_ids ?? [];
   const wfNodes = workflow?.nodes ?? [];
   const wfEdges = workflow?.edges ?? [];
-  const wfNodeNameById = new Map(
-    wfNodes.map((n) => [n.id, n.data?.name || n.data?.agentId || n.id]),
-  );
 
   // ── 协作策略矩阵（2026-11-03）──────────────────────────────────────
   // 展示草稿本地即时翻转，点「保存策略」才 PUT（有真实 diff 才出保存钮）；
@@ -278,11 +286,6 @@ export function TeamPanel({ teamId, teamName: _teamName, perNodeChunks, streamin
       setRosterBusy(null);
     }
   };
-
-  // per-node 输出：只看有实际内容的 buffer。
-  const nodeOutputs = Object.entries(perNodeChunks).filter(
-    ([, buf]) => buf.text.trim() || buf.thinking.length > 0 || buf.steps.length > 0,
-  );
 
   if (!loaded) {
     return (
@@ -624,44 +627,6 @@ export function TeamPanel({ teamId, teamName: _teamName, perNodeChunks, streamin
               </div>
             )}
         </div>
-      </div>
-
-      {/* run 进行中：per-node 输出归属 */}
-      <div className="neo-host-sec">
-        <div className="neo-host-sec-head">
-          <UsersRound size={12} strokeWidth={1.8} />
-          <span className="neo-host-sec-title">
-            {t("neo.host.teamNodeOutput", { defaultValue: "分节点输出" })}
-          </span>
-          {streaming && (
-            <span className="neo-host-pill neo-host-pill--running">live</span>
-          )}
-        </div>
-        {nodeOutputs.length === 0 ? (
-          <div className="neo-host-tree-note neo-host-tree-note--pad">
-            {t("neo.host.teamNodeOutputEmpty", {
-              defaultValue: "暂无分节点输出（仅 DAG 多 Agent 运行按节点归属；单 Agent 走全局流）",
-            })}
-          </div>
-        ) : (
-          nodeOutputs.map(([nodeId, buf]) => (
-            <div key={nodeId} className="neo-host-nodeout">
-              <div className="neo-host-nodeout-head">
-                <span className="neo-host-roster-name">
-                  {wfNodeNameById.get(nodeId) ?? nodeId}
-                </span>
-                <span className="neo-host-roster-id" title={nodeId}>
-                  {nodeId}
-                </span>
-              </div>
-              {buf.text.trim() && (
-                <div className="neo-host-nodeout-text">
-                  {buf.text.length > 400 ? `…${buf.text.slice(-400)}` : buf.text}
-                </div>
-              )}
-            </div>
-          ))
-        )}
       </div>
     </div>
   );
