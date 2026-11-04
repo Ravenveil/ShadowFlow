@@ -29,6 +29,12 @@
 
 import { Router, Request, Response } from 'express';
 import { listAgents as listYamlAgents, deleteAgent as deleteYamlAgent } from '../lib/agent-yaml';
+import {
+  applyAgentOverrides,
+  loadAgentOverrides,
+  saveAgentOverrides,
+  type AgentOverrideField,
+} from '../lib/agent-overrides';
 import type { AgentRecord } from '../storage/agents';
 
 const router = Router();
@@ -59,6 +65,13 @@ function yamlToRecord(workspaceId: string | undefined): AgentRecord[] {
     source: 'yaml-template' as const,
     created_at: '1970-01-01T00:00:00.000Z',
   }));
+}
+
+/** yaml 模板 record + 运行时 overrides（Claw 绑定 / 头像）合并后的展示 record。 */
+function yamlToRecordWithOverrides(workspaceId: string | undefined): AgentRecord[] {
+  return yamlToRecord(workspaceId).map((r) =>
+    applyAgentOverrides(r as unknown as Record<string, unknown>, loadAgentOverrides(r.agent_id)) as unknown as AgentRecord,
+  );
 }
 
 /** Forward arbitrary body to Python, return its raw response. */
@@ -133,7 +146,7 @@ router.get('/', async (req: Request, res: Response) => {
   // in practice they don't collide: Python uses `agent-*`, yaml uses semantic
   // names like "reader", "pm").
   const pyIds = new Set(pythonAgents.map((a) => a.agent_id));
-  const yamlAgents = yamlToRecord(workspaceId).filter(
+  const yamlAgents = yamlToRecordWithOverrides(workspaceId).filter(
     (a) => !pyIds.has(a.agent_id),
   );
   res.json({ data: [...pythonAgents, ...yamlAgents], meta: {} });
@@ -174,8 +187,9 @@ router.get('/:id', async (req: Request, res: Response) => {
     console.warn('[agents-route] Python GET /:id failed; falling back to yaml:', err);
   }
 
-  // yaml 模板回落（语义 id：dev / arch / writer / pm …）
-  const tpl = yamlToRecord(workspaceId).find((a) => a.agent_id === id);
+  // yaml 模板回落（语义 id：dev / arch / writer / pm …）；overrides（头像等
+  // 运行时字段）一并贴回，保证 GET /:id 与列表语义一致。
+  const tpl = yamlToRecordWithOverrides(workspaceId).find((a) => a.agent_id === id);
   if (tpl) {
     res.json({ data: tpl, meta: {} });
     return;
@@ -238,6 +252,97 @@ router.delete('/:id', async (req: Request, res: Response) => {
       },
     });
   }
+});
+
+// ─── PATCH /api/agents/:id — Python first, fall back to yaml overrides ──────
+// 2026-11-04 — 此前缺 PATCH：保存头像 / Claw 绑定（灵魂页「保存头像」钮）落到
+// proxyFallback 直打 Python，Python 只认 agent-*.json，语义 id（pm / dev /
+// reader…）一律 404 AGENT_NOT_FOUND → 前端红条 Agent API error 404。GET 有
+// yaml 回退而 PATCH 没有，属合并语义缺口。现对齐：Python 命中转发；404/不可达
+// → 该 id 是 yaml 模板时，把白名单字段（Claw 绑定 / 头像）写 sidecar
+// <id>.overrides.json（GET 合并时贴回）。设计时字段（name/soul/skills/tools）
+// 不进 sidecar —— yaml 模板本体仍由模板文件/re-seed 管理。
+interface AgentPatchBody {
+  name?: unknown;
+  soul?: unknown;
+  skills?: unknown;
+  tools?: unknown;
+  claw_id?: unknown;
+  avatar_color?: unknown;
+  avatar_style?: unknown;
+  avatar_seed?: unknown;
+  avatar_image?: unknown;
+}
+
+const OVERRIDE_BODY_KEYS: AgentOverrideField[] = [
+  'claw_id',
+  'avatar_color',
+  'avatar_style',
+  'avatar_seed',
+  'avatar_image',
+];
+
+router.patch('/:id', async (req: Request, res: Response) => {
+  const id = req.params.id;
+  const body = (req.body ?? {}) as AgentPatchBody;
+
+  // Python first（真实持久化 agent-*：PATCH 语义全字段走 Python 原端点）
+  try {
+    const pyRes = await fetch(`${PYTHON_BASE}/api/agents/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (pyRes.ok) {
+      res.status(pyRes.status).json(await pyRes.json());
+      return;
+    }
+    if (pyRes.status !== 404 && pyRes.status !== 400) {
+      // 非「不存在」类错误原样透传（保持 Python 错误语义，不吞）
+      res.status(pyRes.status).json(await pyRes.json().catch(() => ({ error: { code: 'PYTHON_ERROR', message: `Python PATCH returned ${pyRes.status}` } })));
+      return;
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[agents-route] Python PATCH /:id failed; falling back to yaml overrides:', err);
+  }
+
+  // yaml 模板回落：仅白名单展示层字段可覆盖；name/soul 等设计时字段明确拒绝
+  const isYamlTemplate = listYamlAgents().agents.some((a) => a.id === id);
+  if (!isYamlTemplate) {
+    res.status(404).json({ error: { code: 'AGENT_NOT_FOUND', message: `Agent '${id}' not found` } });
+    return;
+  }
+  const hasDesignTimeFields = (
+    ['name', 'soul', 'skills', 'tools'] as const
+  ).some((k) => body[k] !== undefined);
+  if (hasDesignTimeFields) {
+    res.status(422).json({
+      error: {
+        code: 'YAML_TEMPLATE_READONLY',
+        message: `Agent '${id}' is a yaml soul-template: name/soul/skills/tools are design-time fields — edit the .agent.yaml file instead. Avatar / Claw binding fields are supported.`,
+      },
+    });
+    return;
+  }
+  const patch: Partial<Record<AgentOverrideField, string | null>> = {};
+  for (const key of OVERRIDE_BODY_KEYS) {
+    const v = body[key];
+    if (v === undefined) continue;
+    if (typeof v !== 'string' && v !== null) {
+      res.status(422).json({ error: { code: 'INVALID_FIELD', message: `${key} must be a string or null` } });
+      return;
+    }
+    patch[key as AgentOverrideField] = v as string | null;
+  }
+  const saved = saveAgentOverrides(id, patch);
+  if (!saved) {
+    res.status(500).json({ error: { code: 'OVERRIDES_WRITE_FAILED', message: `Failed to write overrides for '${id}'` } });
+    return;
+  }
+  // 返回与 GET /:id 相同形状的合并 record（前端 patchAgent 用返回值刷新状态）
+  const record = yamlToRecordWithOverrides(undefined).find((a) => a.agent_id === id);
+  res.json({ data: record, meta: {} });
 });
 
 export default router;

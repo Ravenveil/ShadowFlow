@@ -72,8 +72,14 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
   const [claws, setClaws] = useState<DetectedCli[]>([]);
   const [clawId, setClawId] = useState('');
   const [avatarCfg, setAvatarCfg] = useState<AvatarConfigValue>({ style: '', seed: '' });
-  // 提示词生成头像图（os-unified 2026-11-04）：云端生成成功时暂存，保存时随 PATCH。
-  const [avatarImage, setAvatarImage] = useState<string | null>(null);
+  // 提示词生成头像图（os-unified 2026-11-04）。override 三态区分「清除」与「未设」：
+  //   null            → 未覆盖，跟随 record 的 avatar_image（预览与侧栏同源）
+  //   { v: string }   → 新生成/保持的 dataURL，保存时随 PATCH 上传
+  //   { v: null }     → 用户在风格网格/种子里改回 DiceBear，保存时传 "" 清除旧图
+  // （2026-11-04 用户反馈：选择器预览不带 image，导致与左侧栏头像不一致的根因。）
+  const [avatarImageOverride, setAvatarImageOverride] = useState<{ v: string | null } | null>(null);
+  const avatarImage =
+    avatarImageOverride !== null ? avatarImageOverride.v : (agent?.avatar_image ?? null);
   const [clawDirty, setClawDirty] = useState(false);
   const [avatarDirty, setAvatarDirty] = useState(false);
   const [bindingBusy, setBindingBusy] = useState(false);
@@ -98,7 +104,7 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
     if (!agent) return;
     setClawId(agent.claw_id ?? '');
     setAvatarCfg({ style: agent.avatar_style ?? '', seed: agent.avatar_seed ?? '' });
-    setAvatarImage(agent.avatar_image ?? null);
+    setAvatarImageOverride(null);
     setClawDirty(false);
     setAvatarDirty(false);
   }, [agent]);
@@ -186,17 +192,22 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
   }
 
   // ── ClawHub（2026-06）：保存头像配置（"" = 清空回默认/名字 hash）。
-  // os-unified 2026-11-04：提示词生成图（avatarImage）一并 PATCH；avatar_image
-  // 仅在有新图或已有图时传（undefined = 不改动该字段）。
+  // os-unified 2026-11-04：提示词生成图（avatarImageOverride）保存时随 PATCH；
+  // 仅在用户动过图（override 非空）时传（undefined = 不改动该字段）。
   async function handleSaveAvatar() {
     if (!agent || bindingBusy) return;
     setBindingBusy(true);
     setBindingError(null);
     try {
+      // avatar_image 仅在用户动过时传（undefined = 不改动）；"" = 清除生成图。
+      const imagePatch: { avatar_image?: string } =
+        avatarImageOverride !== null
+          ? { avatar_image: avatarImageOverride.v ?? '' }
+          : {};
       const updated = await patchAgent(agent.agent_id, {
         avatar_style: avatarCfg.style,
         avatar_seed: avatarCfg.seed,
-        ...(avatarImage !== null ? { avatar_image: avatarImage } : {}),
+        ...imagePatch,
       });
       setAgent(updated);
     } catch (err) {
@@ -299,7 +310,7 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
           name={agent.name}
           style={avatarCfg.style || agent.avatar_style}
           seed={avatarCfg.seed || agent.avatar_seed}
-          image={avatarImage ?? agent.avatar_image ?? null}
+          image={avatarImage}
           size={56}
         />
         <div className="claw-avatar-preview-meta" style={{ flex: 1 }}>
@@ -410,11 +421,15 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
           onChange={(next) => {
             setAvatarCfg(next);
             setAvatarDirty(true);
+            // 与 AgentAvatarSwitcher 同约定：改回 DiceBear 风格/种子 = 放弃生成图，
+            // 预览立刻切到所点风格，保存时清除 avatar_image。
+            setAvatarImageOverride({ v: null });
           }}
           onChangeImage={(dataUrl) => {
-            setAvatarImage(dataUrl);
+            setAvatarImageOverride({ v: dataUrl });
             setAvatarDirty(true);
           }}
+          image={avatarImage}
           agentName={agent.name}
           variant="compact"
         />

@@ -49,6 +49,12 @@ export interface AvatarStylePickerProps {
   variant?: 'compact' | 'roomy';
   /** 云端图生成成功回调（调用方持久化 dataURL；不传则只做本地候选）。 */
   onChangeImage?: (dataUrl: string) => void;
+  /**
+   * 当前生效的提示词生成头像图（dataURL/URL）。预览必须与侧栏/气泡同源：
+   * avatar_image 优先于 DiceBear style/seed，否则「选择器预览 ≠ 实际头像」
+   * （2026-11-04 用户反馈：左侧栏与灵魂页选择器预览不一致的根因）。
+   */
+  image?: string | null;
 }
 
 /** 风格缩略图（当前种子渲染 mini SVG）。 */
@@ -116,6 +122,7 @@ export function AvatarStylePicker({
   agentName,
   variant = 'compact',
   onChangeImage,
+  image,
 }: AvatarStylePickerProps) {
   const { t } = useI18n();
   // 提示词生成区（2026-11-04）：提示词 + 生成中瞬态 + 候选（云端或本地）
@@ -234,9 +241,15 @@ export function AvatarStylePicker({
         )}
       </div>
 
-      {/* 实时预览 */}
+      {/* 实时预览（image 优先：与侧栏/气泡同源，生成图覆盖 DiceBear 预览） */}
       <div className="claw-avatar-preview">
-        <AgentAvatar name={agentName} style={value.style} seed={value.seed || null} size={variant === 'roomy' ? 96 : 64} />
+        <AgentAvatar
+          name={agentName}
+          style={value.style}
+          seed={value.seed || null}
+          image={image ?? null}
+          size={variant === 'roomy' ? 96 : 64}
+        />
         <div className="claw-avatar-preview-meta">
           <span className="claw-avatar-preview-style">
             {DICEBEAR_STYLES.find((s) => s.id === value.style)?.label ?? value.style}
