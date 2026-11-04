@@ -267,7 +267,7 @@ describe('ClawHubPage — 安装流（FR-02）', () => {
     });
   });
 
-  it('422 copy-only → alert 降级提示（不装弹日志面板）', async () => {
+  it('422 copy-only → 应用内 toast 降级提示（不装弹日志面板）', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
@@ -285,14 +285,14 @@ describe('ClawHubPage — 安装流（FR-02）', () => {
         return { ok: false, status: 404, json: async () => ({}) } as Response;
       }),
     );
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('claw-install-autoresearchclaw')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByTestId('claw-install-autoresearchclaw'));
+    // 2026-11-04 用户反馈批：window.alert 原生框 → 应用内 toast。
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalled();
+      expect(screen.getByTestId('clawhub-toast')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('install-log-panel')).toBeNull();
   });

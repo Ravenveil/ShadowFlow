@@ -32,6 +32,7 @@ import type {
   WritebackPolicy,
 } from '../common/types/memory';
 import { useI18n } from '../common/i18n';
+import { NeoConfirmModal } from '../neo/NeoConfirmModal';
 
 const LEGACY_PROFILE_IDS_KEY = 'sf.memory-profile-ids';
 
@@ -134,22 +135,32 @@ export default function MemoryProfilePanel() {
     [editing, refreshStats],
   );
 
-  const handleDelete = useCallback(async (profile: MemoryProfile) => {
-    // 删除二次确认（删除类操作统一规则）。
-    const ok = window.confirm(
-      t('neo.memory.profileDeleteConfirm', {
-        defaultValue: `确定删除该记忆画像（${profile.profile_id.slice(0, 8)}…）吗？此操作不可恢复。`,
-      }),
-    );
-    if (!ok) return;
+  // 删除确认弹窗（2026-11-04 用户反馈批）：window.confirm 原生框替换为
+  // NeoConfirmModal（应用内弹窗，红色危险确认钮）。
+  const [deleteTarget, setDeleteTarget] = useState<MemoryProfile | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const openDelete = useCallback((profile: MemoryProfile) => {
+    setErrorMsg('');
+    setDeleteTarget(profile);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    const profile = deleteTarget;
+    if (!profile) return;
+    setDeleteBusy(true);
+    setErrorMsg('');
     try {
       await deleteMemoryProfile(profile.profile_id);
+      setDeleteTarget(null);
       setProfiles((prev) => prev.filter((p) => p.profile_id !== profile.profile_id));
       setErrorMsg('');
     } catch (err) {
       setErrorMsg(`删除失败：${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setDeleteBusy(false);
     }
-  }, [t]);
+  }, [deleteTarget]);
 
   const handleWriteback = useCallback(async () => {
     const runId = wbRunId.trim();
@@ -264,7 +275,7 @@ export default function MemoryProfilePanel() {
                 </button>
                 <button
                   data-testid={`delete-profile-${p.profile_id}`}
-                  onClick={() => handleDelete(p)}
+                  onClick={() => openDelete(p)}
                   className="neo-mm-btn neo-mm-btn-danger neo-mm-btn-sm"
                 >
                   {t('neo.memory.delete', { defaultValue: '删除' })}
@@ -311,6 +322,22 @@ export default function MemoryProfilePanel() {
           initial={editing}
           onCancel={() => setEditing(null)}
           onSubmit={handleSave}
+        />
+      )}
+
+      {/* 删除确认弹窗（2026-11-04 用户反馈批，替换 window.confirm 原生框） */}
+      {deleteTarget && (
+        <NeoConfirmModal
+          title={t('neo.memory.profileDeleteTitle', { defaultValue: '删除记忆画像' })}
+          message={t('neo.memory.profileDeleteConfirm', {
+            defaultValue: `确定删除该记忆画像（${deleteTarget.profile_id.slice(0, 8)}…）吗？此操作不可恢复。`,
+          })}
+          busy={deleteBusy}
+          onConfirm={() => void confirmDelete()}
+          onClose={() => {
+            if (deleteBusy) return;
+            setDeleteTarget(null);
+          }}
         />
       )}
     </section>

@@ -8,9 +8,11 @@
  * NeoRenameModal 弹窗交互（预填当前名 → 改名 → 点确认 → 断言 patch 调用）。
  * 2026-11-04 移入项目移除：行内「移入项目」hover 钮 + 浮层删除（拖拽会话到
  * 项目分组的交互取代），改负向断言；底层 PATCH 通路保留供拖拽 drop 复用。
+ * 2026-11-04 删除确认弹窗化：会话/群聊/项目删除不再走 window.confirm，改为
+ * NeoConfirmModal 弹窗交互（点删除钮 → 弹窗 → 点确认/取消 → 断言 API）。
  */
 import { render, screen, fireEvent, waitFor } from '../../test/utils';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../api/agents', () => ({
@@ -129,15 +131,27 @@ import { moveGroupConversationToProject } from '../../api/conversations';
 import { NeoRail } from '../NeoRail';
 import type { NeoNav, RailSection } from '../types';
 
-let confirmSpy: ReturnType<typeof vi.spyOn>;
-
-/** 弹窗式重命名的公共交互：点重命名钮 → 弹窗内改名为 newName → 点确认。 */
+/**
+ * 弹窗式重命名的公共交互：点重命名钮 → 弹窗内改名为 newName → 点确认。
+ */
 async function renameViaModal(triggerTestId: string, newName: string) {
   fireEvent.click(await screen.findByTestId(triggerTestId));
   await screen.findByTestId('neo-rename-modal');
   const input = await screen.findByTestId('neo-rename-input');
   fireEvent.change(input, { target: { value: newName } });
   fireEvent.click(screen.getByTestId('neo-rename-confirm'));
+}
+
+/**
+ * 弹窗式删除的公共交互：点删除钮 → NeoConfirmModal 出现（含名称警示文案）→
+ * 点确认。取消用例在弹窗内点取消后断言 API 未被调用。
+ */
+async function deleteViaModal(triggerTestId: string, name: string) {
+  fireEvent.click(await screen.findByTestId(triggerTestId));
+  const modal = await screen.findByTestId('neo-confirm-modal');
+  expect(modal).toHaveTextContent(name);
+  expect(modal).toHaveTextContent('不可撤销');
+  fireEvent.click(screen.getByTestId('neo-confirm-confirm'));
 }
 
 function renderRail(section: RailSection, nav: NeoNav = { view: 'home' }, onNavigate = vi.fn()) {
@@ -159,19 +173,13 @@ function renderRail(section: RailSection, nav: NeoNav = { view: 'home' }, onNavi
 beforeEach(() => {
   // 注意：不能用 vi.restoreAllMocks() —— 它会把 vi.mock 模块工厂的实现一并
   // 还原成 undefined（listAgents.then 崩，2026-10-31 测试基建修复后暴露）。
-  // 只重置调用记录并重打实现，window spy 单独还原。
+  // 只重置调用记录并重打实现。重命名（NeoRenameModal）/删除（NeoConfirmModal）
+  // 均已弹窗化，不再需要 promptSpy/confirmSpy。
   vi.clearAllMocks();
   vi.mocked(listAgents).mockResolvedValue([
     { agent_id: 'a1', name: '设计助手', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
     { agent_id: 'a2', name: '暂停员工', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'paused', source: 'quick_hire', created_at: '' },
   ]);
-  // 重命名已弹窗化（NeoRenameModal）——不再需要 promptSpy；
-  // confirmSpy 保留给删除用例（删除二次确认仍走 window.confirm）。
-  confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-});
-
-afterEach(() => {
-  confirmSpy.mockRestore();
 });
 
 describe('NeoRail 管理面 — 员工行', () => {
@@ -233,10 +241,10 @@ describe('NeoRail 管理面 — DM/群聊行', () => {
     expect(patchGroup).not.toHaveBeenCalled();
   });
 
-  it('DM 删除（当前正开着该会话）→ deleteGroup + removeAgentDM + 跳 home', async () => {
+  it('DM 删除（当前正开着该会话）→ 确认弹窗 → deleteGroup + removeAgentDM + 跳 home', async () => {
     const onNavigate = renderRail('home', { view: 'conversation', groupId: 'g-dm-1' });
     await screen.findByTestId('neo-project-section-toggle');
-    fireEvent.click(await screen.findByTestId('neo-dm-delete'));
+    await deleteViaModal('neo-dm-delete', '设计助手');
     await waitFor(() => expect(deleteGroup).toHaveBeenCalledWith('g-dm-1'));
     await waitFor(() => expect(INBOX_STATE.removeAgentDM).toHaveBeenCalledWith('a1'));
     await waitFor(() =>
@@ -244,7 +252,17 @@ describe('NeoRail 管理面 — DM/群聊行', () => {
     );
   });
 
-  it('群聊行重命名：弹窗改名 → patchGroup + updateGroupMeta；删除 → deleteGroup + removeGroup', async () => {
+  it('DM 删除弹窗点取消 → 不调 deleteGroup，弹窗关闭', async () => {
+    renderRail('home');
+    await screen.findByTestId('neo-project-section-toggle');
+    fireEvent.click(await screen.findByTestId('neo-dm-delete'));
+    await screen.findByTestId('neo-confirm-modal');
+    fireEvent.click(screen.getByTestId('neo-confirm-cancel'));
+    expect(deleteGroup).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByTestId('neo-confirm-modal')).toBeNull());
+  });
+
+  it('群聊行重命名：弹窗改名 → patchGroup + updateGroupMeta；删除 → 确认弹窗 → deleteGroup + removeGroup', async () => {
     // os-unified（2026-11-04）：无独立 teams 分区，群聊行渲染在 home 默认区
     renderRail('home');
     await renameViaModal('neo-group-rename', '新名字');
@@ -255,7 +273,7 @@ describe('NeoRail 管理面 — DM/群聊行', () => {
       expect(INBOX_STATE.updateGroupMeta).toHaveBeenCalledWith('g-room-1', { name: '新名字' }),
     );
 
-    fireEvent.click(screen.getByTestId('neo-group-delete'));
+    await deleteViaModal('neo-group-delete', '氢能项目组');
     await waitFor(() => expect(deleteGroup).toHaveBeenCalledWith('g-room-1'));
     await waitFor(() => expect(INBOX_STATE.removeGroup).toHaveBeenCalledWith('g-room-1'));
   });
@@ -288,21 +306,23 @@ describe('NeoRail 管理面 — 项目 label', () => {
     expect(screen.getByTestId('neo-project-delete')).toBeInTheDocument();
   });
 
-  it('项目重命名：弹窗改名 → patchProject(project_id, {name})；删除（确认）→ deleteProject', async () => {
+  it('项目重命名：弹窗改名 → patchProject(project_id, {name})；删除（确认弹窗）→ deleteProject', async () => {
     renderRail('home');
     await renameViaModal('neo-project-rename', '新名字');
     await waitFor(() =>
       expect(patchProject).toHaveBeenCalledWith('p1', { name: '新名字' }),
     );
 
-    fireEvent.click(screen.getByTestId('neo-project-delete'));
+    await deleteViaModal('neo-project-delete', '氢能官网');
     await waitFor(() => expect(deleteProject).toHaveBeenCalledWith('p1'));
   });
 
-  it('项目删除 confirm 取消 → 不调 deleteProject', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('项目删除弹窗点取消 → 不调 deleteProject，弹窗关闭', async () => {
     renderRail('home');
     fireEvent.click(await screen.findByTestId('neo-project-delete'));
+    await screen.findByTestId('neo-confirm-modal');
+    fireEvent.click(screen.getByTestId('neo-confirm-cancel'));
     expect(deleteProject).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByTestId('neo-confirm-modal')).toBeNull());
   });
 });

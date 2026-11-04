@@ -92,15 +92,15 @@ function DownloadActions({
 
   // 503 probe — if chromium failed to launch we don't want the user to be
   // dumped into a generic browser error. HEAD the endpoint first; on 503 we
-  // alert and abort, otherwise fall through to the native download. We use
-  // alert() rather than a toast lib to keep this component dep-free.
+  // show an inline alert bar (2026-11-04: replaces native alert()) and abort,
+  // otherwise fall through to the native download.
+  const [pdfUnavailable, setPdfUnavailable] = useState(false);
   async function handlePdfClick(e: React.MouseEvent<HTMLAnchorElement>) {
     e.preventDefault();
     try {
       const probe = await fetch(pdfHref, { method: 'HEAD' });
       if (probe.status === 503) {
-        // eslint-disable-next-line no-alert
-        alert('PDF 引擎不可用，请联系管理员重装 Chromium 后重试。');
+        setPdfUnavailable(true);
         return;
       }
     } catch {
@@ -155,6 +155,19 @@ function DownloadActions({
         <Archive size={12} strokeWidth={2} />
         下载 ZIP
       </a>
+      {pdfUnavailable && (
+        <span
+          role="alert"
+          data-testid="artifact-pdf-unavailable"
+          style={{
+            marginLeft: 8,
+            fontSize: 11,
+            color: 'var(--t-err, #b91c1c)',
+          }}
+        >
+          PDF 引擎不可用，请联系管理员重装 Chromium 后重试。
+        </span>
+      )}
     </div>
   );
 }

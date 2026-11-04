@@ -59,7 +59,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import { listAgents, deleteAgent as deleteAgentRecord, type AgentRecord } from '../api/agents';
+import { listAgents, type AgentRecord } from '../api/agents';
 import { listTeams, type TeamRecord } from '../api/teams';
 import {
   deleteGroup,
@@ -94,6 +94,7 @@ import { useCommandK } from '../core/hooks/useCommandK';
 import type { NeoRailProps } from './types';
 import { NeoCreateAgentModal } from './NeoCreateAgentModal';
 import { NeoRenameModal } from './NeoRenameModal';
+import { NeoConfirmModal } from './NeoConfirmModal';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -661,11 +662,26 @@ export function NeoRail({
   }, []);
 
   // ── 管理面闭环（2026-08-23）：行级 hover 操作（暂停/恢复/重命名/删除）─────
-  // 全部真实调 API；删除一律 window.confirm 二次确认；失败进 manageError 红条
-  // （不吞错、不假成功）；成功后刷新本地 store/列表。删当前打开的会话/员工 →
+  // 全部真实调 API；删除二次确认走 NeoConfirmModal（2026-11-04 用户反馈批：
+  // window.confirm 原生框带「localhost:3007 显示」标题、样式与应用脱节，
+  // 统一替换为应用内弹窗）；失败进 manageError 红条（不吞错、不假成功）；
+  // 成功后刷新本地 store/列表。删当前打开的会话/员工 →
   // 跳回 home 安全页，避免中栏停留在已删除对象上。
   const [manageError, setManageError] = useState<string | null>(null);
   // 「移入项目」行内浮层入口已移除（2026-11-04：拖拽归组取代）；状态随之清理。
+
+  // 删除确认弹窗（2026-11-04 用户反馈批）：会话/群聊/项目三处删除共用一个
+  // NeoConfirmModal。confirmTarget 记待删对象；busy/error 由本层真实 API
+  // 状态驱动（请求中两钮失效 + 转圈；失败弹窗保持打开、行内红条）。
+  const [confirmTarget, setConfirmTarget] = useState<{
+    kind: 'conversation' | 'project';
+    groupId?: string;
+    dmAgentId?: string;
+    projectId?: string;
+    name: string;
+  } | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   // 重命名弹窗（2026-11-04 用户反馈批「编辑项目名字能不能成熟一点」）：
   // 项目/会话两处 window.prompt 统一替换为 NeoRenameModal。组件自身不持有
@@ -689,38 +705,9 @@ export function NeoRail({
     );
   }, [t, language]);
 
-  // 员工：删除（二次确认）；删的若是当前打开的员工（target/灵魂页）→ 回 home。
-  // os-unified：删除钮移入 agent 主机卡片（NeoAgentSoul 头部）后，rail 行内不再
-  // 直挂——保留此回调供未来行级快捷操作复用（当前未接线，避免 lint 报未用）。
-  const removeAgent = useCallback(
-    (a: AgentRecord) => {
-      if (
-        !window.confirm(
-          t('neo.manage.deleteAgentConfirm', {
-            defaultValue:
-              language === 'zh'
-                ? `确定删除员工「${a.name}」？此操作不可撤销`
-                : `Delete agent "${a.name}"? This cannot be undone`,
-          }),
-        )
-      )
-        return;
-      setManageError(null);
-      deleteAgentRecord(a.agent_id)
-        .then(() => {
-          if (
-            (nav.view === 'agent-target' || nav.view === 'agent-soul') &&
-            nav.agentId === a.agent_id
-          ) {
-            onNavigate({ view: 'home' });
-          }
-          setReloadTick((n) => n + 1);
-        })
-        .catch(failManage);
-    },
-    [nav, onNavigate, failManage, t, language],
-  );
-  void removeAgent;
+  // 员工：删除入口已收敛到 agent 主机卡片（NeoAgentSoul 头部删除钮，2026-11-04
+  // 用户反馈批：二次确认走 NeoConfirmModal）。rail 行内不再直挂，本层不再持有
+  // removeAgent 回调（原 window.confirm 版本已随入口移除而清理）。
 
   // 群/DM：重命名（patchGroup 真实改名）。原 window.prompt 改 NeoRenameModal：
   // 确认 → busy → patchGroup → 成功后本地 store 同步（DM 行显示名来自 inbox
@@ -761,21 +748,20 @@ export function NeoRail({
     [renameTarget, t, language],
   );
 
-  // 群/DM：删除（二次确认）；删当前打开的会话 → 回 home 安全页。
+  // 群/DM：删除（NeoConfirmModal 二次确认，2026-11-04 起）；删当前打开的
+  // 会话 → 回 home 安全页。本回调只负责开弹窗，真实删除在 confirmDelete。
   const removeConversation = useCallback(
     (groupId: string, name: string, dmAgentId?: string) => {
-      if (
-        !window.confirm(
-          t('neo.manage.deleteConversationConfirm', {
-            defaultValue:
-              language === 'zh'
-                ? `确定删除会话「${name}」？此操作不可撤销`
-                : `Delete conversation "${name}"? This cannot be undone`,
-          }),
-        )
-      )
-        return;
-      setManageError(null);
+      setConfirmError(null);
+      setConfirmTarget({ kind: 'conversation', groupId, dmAgentId, name });
+    },
+    [],
+  );
+
+  const confirmConversationDelete = useCallback(
+    (groupId: string, dmAgentId: string | undefined) => {
+      setConfirmBusy(true);
+      setConfirmError(null);
       deleteGroup(groupId)
         .then(() => {
           const inbox = useInboxStore.getState();
@@ -784,10 +770,18 @@ export function NeoRail({
           if (nav.view === 'conversation' && nav.groupId === groupId) {
             onNavigate({ view: 'home' });
           }
+          setConfirmTarget(null);
         })
-        .catch(failManage);
+        .catch(() =>
+          setConfirmError(
+            t('neo.manage.opFailed', {
+              defaultValue: language === 'zh' ? '操作失败，请重试' : 'Operation failed, please retry',
+            }),
+          ),
+        )
+        .finally(() => setConfirmBusy(false));
     },
-    [nav, onNavigate, failManage, t, language],
+    [nav, onNavigate, t, language],
   );
 
   // 「移入项目」归属回写通路（拖拽归组 drop 复用）：按互链 group_id PATCH
@@ -882,25 +876,35 @@ export function NeoRail({
     [renameTarget, t, language],
   );
 
+  // 项目：删除（NeoConfirmModal 二次确认，2026-11-04 起）。本回调只负责开
+  // 弹窗；真实删除在 confirmProjectDelete（成功后 reloadTick 重拉项目分组）。
   const removeProject = useCallback(
     (p: ProjectWithSessions) => {
-      if (
-        !window.confirm(
-          t('neo.manage.deleteProjectConfirm', {
-            defaultValue:
-              language === 'zh'
-                ? `确定删除项目「${p.name}」？此操作不可撤销`
-                : `Delete project "${p.name}"? This cannot be undone`,
-          }),
-        )
-      )
-        return;
-      setManageError(null);
-      deleteProject(p.project_id)
-        .then(() => setReloadTick((n) => n + 1))
-        .catch(failManage);
+      setConfirmError(null);
+      setConfirmTarget({ kind: 'project', projectId: p.project_id, name: p.name });
     },
-    [failManage, t, language],
+    [],
+  );
+
+  const confirmProjectDelete = useCallback(
+    (projectId: string) => {
+      setConfirmBusy(true);
+      setConfirmError(null);
+      deleteProject(projectId)
+        .then(() => {
+          setConfirmTarget(null);
+          setReloadTick((n) => n + 1);
+        })
+        .catch(() =>
+          setConfirmError(
+            t('neo.manage.opFailed', {
+              defaultValue: language === 'zh' ? '操作失败，请重试' : 'Operation failed, please retry',
+            }),
+          ),
+        )
+        .finally(() => setConfirmBusy(false));
+    },
+    [t, language],
   );
 
   // 「移入项目」hover 钮已移除（2026-11-04 用户反馈：拖拽会话到项目分组即可
@@ -1867,6 +1871,42 @@ export function NeoRail({
             if (renameBusy) return;
             setRenameTarget(null);
             setRenameError(null);
+          }}
+        />
+      )}
+
+      {/* 删除确认弹窗（2026-11-04 用户反馈批）：会话/群聊/项目共用一个
+          NeoConfirmModal（红色危险确认钮 + 「不可撤销」警示文案），替换
+          window.confirm 原生框。busy/error 由本层删除 API 状态驱动。 */}
+      {confirmTarget && (
+        <NeoConfirmModal
+          title={
+            confirmTarget.kind === 'project'
+              ? t('neo.manage.deleteProjectTitle', {
+                  defaultValue: language === 'zh' ? '删除项目' : 'Delete project',
+                })
+              : t('neo.manage.deleteConversationTitle', {
+                  defaultValue: language === 'zh' ? '删除会话' : 'Delete conversation',
+                })
+          }
+          message={
+            language === 'zh'
+              ? `确定删除「${confirmTarget.name}」？此操作不可撤销`
+              : `Delete "${confirmTarget.name}"? This cannot be undone`
+          }
+          busy={confirmBusy}
+          error={confirmError}
+          onConfirm={() => {
+            if (confirmTarget.kind === 'project' && confirmTarget.projectId) {
+              confirmProjectDelete(confirmTarget.projectId);
+            } else if (confirmTarget.kind === 'conversation' && confirmTarget.groupId) {
+              confirmConversationDelete(confirmTarget.groupId, confirmTarget.dmAgentId);
+            }
+          }}
+          onClose={() => {
+            if (confirmBusy) return;
+            setConfirmTarget(null);
+            setConfirmError(null);
           }}
         />
       )}

@@ -152,7 +152,9 @@ export function NeoArtifactPreview({
     setCurHeading(cur);
   };
 
-  // PDF 导出 503 探测：chromium 没起来时 alert，而不是让浏览器吃掉下载失败。
+  // PDF 导出 503 探测（2026-11-04 用户反馈批）：chromium 没起来时行走内红条
+  // （role=alert），不再弹浏览器原生 alert（「localhost:3007 显示」那种）。
+  const [pdfUnavailable, setPdfUnavailable] = useState(false);
   const pdfHref =
     sessionId && filename
       ? `/api/export/${encodeURIComponent(sessionId)}/pdf?filename=${encodeURIComponent(filename)}&viewport=1280x800`
@@ -162,8 +164,7 @@ export function NeoArtifactPreview({
     try {
       const probe = await fetch(pdfHref, { method: 'HEAD' });
       if (probe.status === 503) {
-        // eslint-disable-next-line no-alert
-        alert(t('neo.host.pdfUnavailable', { defaultValue: 'PDF 引擎不可用，请联系管理员重装 Chromium 后重试。' }));
+        setPdfUnavailable(true);
         return;
       }
     } catch {
@@ -311,6 +312,26 @@ export function NeoArtifactPreview({
           )}
         </div>
       </div>
+
+      {/* PDF 引擎不可用：行内红条（role=alert），替代原生 alert（2026-11-04） */}
+      {pdfUnavailable && (
+        <div
+          role="alert"
+          data-testid="neo-ap-pdf-unavailable"
+          style={{
+            margin: '8px 14px 0',
+            padding: '8px 10px',
+            borderRadius: 8,
+            fontSize: 12,
+            lineHeight: 1.5,
+            background: 'color-mix(in srgb, var(--t-err) 8%, transparent)',
+            color: 'var(--t-err)',
+            wordBreak: 'break-all',
+          }}
+        >
+          {t('neo.host.pdfUnavailable', { defaultValue: 'PDF 引擎不可用，请联系管理员重装 Chromium 后重试。' })}
+        </div>
+      )}
 
       {/* 内容体 */}
       {type !== 'html' && loading ? (

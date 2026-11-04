@@ -68,6 +68,7 @@ import { AgentAvatar } from '../../components/agent/AgentAvatar';
 import { validateTeamWorkflowGraph, normalizeEdgeMode, applyEdgeMode, type TeamEdgeMode } from './teamDagValidation';
 import { dagDraftToWorkflow } from './teamDagDraft';
 import { useI18n } from '../../common/i18n';
+import { NeoConfirmModal } from '../NeoConfirmModal';
 
 export interface TeamDagEditorProps {
   teamId: string;
@@ -236,17 +237,22 @@ export function TeamWorkflowVersionsPanel({ teamId, refreshToken, onRestored }: 
     };
   }, [teamId, refreshToken]);
 
+  // 二次确认弹窗（2026-11-04 用户反馈批）：window.confirm 原生框替换为
+  // NeoConfirmModal。restoreVersion = 待回滚版本号；discardDirty = 放弃未保存
+  // 修改确认。两者共用一个弹窗实例（同一时间只会有一个来源）。
+  const [confirmAsk, setConfirmAsk] = useState<
+    { kind: 'restore'; version: number } | { kind: 'discard' } | null
+  >(null);
+
   const handleRestore = useCallback(
+    (version: number) => {
+      setConfirmAsk({ kind: 'restore', version });
+    },
+    [],
+  );
+
+  const runRestore = useCallback(
     async (version: number) => {
-      if (
-        !window.confirm(
-          t('neo.host.teamDagRestoreConfirm', {
-            defaultValue: `确定回滚到 v${version} 吗？画布上未保存的修改将丢失。`,
-          }),
-        )
-      ) {
-        return;
-      }
       setBusy(true);
       setActionError('');
       try {
@@ -257,7 +263,7 @@ export function TeamWorkflowVersionsPanel({ teamId, refreshToken, onRestored }: 
         setBusy(false);
       }
     },
-    [teamId, onRestored, t],
+    [teamId, onRestored],
   );
 
   const handleBranch = useCallback(async () => {
@@ -332,12 +338,34 @@ export function TeamWorkflowVersionsPanel({ teamId, refreshToken, onRestored }: 
           ))}
         </ul>
       )}
+
+      {/* 回滚二次确认弹窗（2026-11-04 用户反馈批，替换 window.confirm 原生框） */}
+      {confirmAsk?.kind === 'restore' && (
+        <NeoConfirmModal
+          title={t('neo.host.teamDagRestoreTitle', { defaultValue: '回滚版本' })}
+          message={t('neo.host.teamDagRestoreConfirm', {
+            defaultValue: `确定回滚到 v${confirmAsk.version} 吗？画布上未保存的修改将丢失。`,
+          })}
+          confirmLabel={t('common.confirm', { defaultValue: '确定' })}
+          busy={busy}
+          onConfirm={() => {
+            const { version } = confirmAsk;
+            setConfirmAsk(null);
+            void runRestore(version);
+          }}
+          onClose={() => setConfirmAsk(null)}
+        />
+      )}
     </div>
   );
 }
 
 export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, policyColorOf, onDirtyChange }: TeamDagEditorProps) {
   const { t } = useI18n();
+
+  // 放弃未保存修改的二次确认（2026-11-04 用户反馈批）：window.confirm 原生框
+  // 替换为 NeoConfirmModal（dirty 时点「取消」先弹此窗）。
+  const [discardAsk, setDiscardAsk] = useState(false);
 
   /** 节点展示名：优先 workflow 存量 name，缺失时回退 roster 里的 agent 名。 */
   const resolveNodeName = useCallback(
@@ -568,20 +596,14 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     }
   }, [dirty, onDirtyChange]);
 
-  /** 有未保存改动时取消需二次确认，避免误丢拓扑。 */
+  /** 有未保存改动时取消需二次确认，避免误丢拓扑（NeoConfirmModal 弹窗化）。 */
   const handleCancel = useCallback(() => {
-    if (
-      dirty &&
-      !window.confirm(
-        t('neo.host.teamDagDiscardConfirm', {
-          defaultValue: '有未保存的 DAG 修改，确定放弃吗？',
-        }),
-      )
-    ) {
+    if (dirty) {
+      setDiscardAsk(true);
       return;
     }
     onCancel();
-  }, [dirty, onCancel, t]);
+  }, [dirty, onCancel]);
 
   const onSave = useCallback(async () => {
     const wf = serialize();
@@ -965,6 +987,22 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
           )}
         </SfReactFlowBase>
       </div>
+
+      {/* 放弃未保存修改确认弹窗（2026-11-04 用户反馈批，替换 window.confirm） */}
+      {discardAsk && (
+        <NeoConfirmModal
+          title={t('neo.host.teamDagDiscardTitle', { defaultValue: '放弃修改' })}
+          message={t('neo.host.teamDagDiscardConfirm', {
+            defaultValue: '有未保存的 DAG 修改，确定放弃吗？',
+          })}
+          confirmLabel={t('common.confirm', { defaultValue: '确定' })}
+          onConfirm={() => {
+            setDiscardAsk(false);
+            onCancel();
+          }}
+          onClose={() => setDiscardAsk(false)}
+        />
+      )}
     </div>
   );
 }

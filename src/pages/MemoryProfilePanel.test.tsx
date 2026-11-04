@@ -201,25 +201,27 @@ describe('MemoryProfilePanel', () => {
     });
   });
 
-  it('删除：需二次确认，确认后调用 deleteMemoryProfile 并剔除', async () => {
+  it('删除：需二次确认（NeoConfirmModal 弹窗），确认后调用 deleteMemoryProfile 并剔除', async () => {
     mockedList.mockResolvedValue({ data: [PROFILE], meta: { count: 1 } });
     mockedDelete.mockResolvedValue(undefined);
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderPanel();
     await screen.findByTestId(`memory-profile-${PROFILE.profile_id}`);
 
-    // 取消确认 → 不删
+    // 弹窗打开 → 点取消 → 不删
     fireEvent.click(screen.getByTestId(`delete-profile-${PROFILE.profile_id}`));
+    await screen.findByTestId('neo-confirm-modal');
+    fireEvent.click(screen.getByTestId('neo-confirm-cancel'));
     expect(mockedDelete).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByTestId('neo-confirm-modal')).toBeNull());
 
-    // 确认 → 删除并从列表剔除
-    confirmSpy.mockReturnValue(true);
+    // 再开弹窗 → 点确认 → 删除并从列表剔除
     fireEvent.click(screen.getByTestId(`delete-profile-${PROFILE.profile_id}`));
+    await screen.findByTestId('neo-confirm-modal');
+    fireEvent.click(screen.getByTestId('neo-confirm-confirm'));
     await waitFor(() => {
       expect(mockedDelete).toHaveBeenCalledWith(PROFILE.profile_id);
     });
     expect(await screen.findByTestId('memory-profile-empty')).toBeTruthy();
-    confirmSpy.mockRestore();
   });
 
   it('手动写回：输入 run_id 触发 triggerManualWriteback 并回显状态', async () => {

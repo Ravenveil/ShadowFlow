@@ -4,9 +4,11 @@
  * 刷新状态显示；paused → 点恢复调 resumeAgent；切换失败 → 红条不吞错。
  * 统一保存（2026-11-04 用户反馈）：无独立「保存头像」钮；改头像/Claw 绑定
  * 后底部「保存」一次 PATCH 全带上。
+ * 2026-11-04：组件接入 useNavigate（删除员工后回 home）→ 渲染需包 Router。
  */
 import { render, screen, fireEvent, waitFor } from '../../test/utils';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 
 const AGENT = vi.hoisted(() => ({
   agent_id: 'a1',
@@ -36,11 +38,21 @@ vi.mock('../../api/agents', () => {
     patchAgent: vi.fn(),
     pauseAgent: vi.fn(),
     resumeAgent: vi.fn(),
+    deleteAgent: vi.fn(),
   };
 });
 
 import { getAgent, patchAgent, pauseAgent, resumeAgent } from '../../api/agents';
 import { NeoAgentSoul } from '../NeoAgentSoul';
+
+/** 组件内 useNavigate 需要 Router 上下文（删除员工成功后回 home）。 */
+function renderSoul() {
+  return render(
+    <MemoryRouter>
+      <NeoAgentSoul agentId="a1" />
+    </MemoryRouter>,
+  );
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -51,7 +63,7 @@ beforeEach(() => {
 
 describe('NeoAgentSoul — 暂停/恢复状态切换', () => {
   it('加载后头部显示当前状态 + 切换钮（idle → 暂停）', async () => {
-    render(<NeoAgentSoul agentId="a1" />);
+    renderSoul();
     expect(await screen.findByTestId('neo-soul-status')).toHaveTextContent('idle');
     fireEvent.click(screen.getByTestId('neo-soul-status-toggle'));
     await waitFor(() => expect(pauseAgent).toHaveBeenCalledWith('a1'));
@@ -63,7 +75,7 @@ describe('NeoAgentSoul — 暂停/恢复状态切换', () => {
 
   it('paused 员工 → 切换钮调 resumeAgent，状态回到 idle', async () => {
     (getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ ...AGENT, status: 'paused' });
-    render(<NeoAgentSoul agentId="a1" />);
+    renderSoul();
     expect(await screen.findByTestId('neo-soul-status')).toHaveTextContent('paused');
     fireEvent.click(screen.getByTestId('neo-soul-status-toggle'));
     await waitFor(() => expect(resumeAgent).toHaveBeenCalledWith('a1'));
@@ -74,7 +86,7 @@ describe('NeoAgentSoul — 暂停/恢复状态切换', () => {
 
   it('pauseAgent 失败 → 红条出现，状态不变', async () => {
     (pauseAgent as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('HTTP 500'));
-    render(<NeoAgentSoul agentId="a1" />);
+    renderSoul();
     await screen.findByTestId('neo-soul-status-toggle');
     fireEvent.click(screen.getByTestId('neo-soul-status-toggle'));
     expect(await screen.findByTestId('neo-soul-status-error')).toHaveTextContent('HTTP 500');
@@ -84,7 +96,7 @@ describe('NeoAgentSoul — 暂停/恢复状态切换', () => {
 
 describe('NeoAgentSoul — 统一保存（头像/绑定随底部保存提交）', () => {
   it('页面不存在独立「保存头像」钮（2026-11-04 用户反馈）', async () => {
-    render(<NeoAgentSoul agentId="a1" />);
+    renderSoul();
     await screen.findByTestId('neo-soul-status');
     expect(screen.queryByTestId('neo-soul-avatar-save')).toBeNull();
     expect(screen.queryByTestId('neo-soul-claw-save')).toBeNull();
@@ -92,7 +104,7 @@ describe('NeoAgentSoul — 统一保存（头像/绑定随底部保存提交）'
 
   it('只改头像（不动名称/soul）→ 底部保存可用，一次 PATCH 带上 avatar 字段', async () => {
     (patchAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ ...AGENT });
-    render(<NeoAgentSoul agentId="a1" />);
+    renderSoul();
     await screen.findByTestId('neo-soul-status');
     // 只动头像：风格网格的任一风格 cell（role=radio，data-testid=claw-style-*）
     const styleCell = screen.getByTestId('claw-style-adventurer');

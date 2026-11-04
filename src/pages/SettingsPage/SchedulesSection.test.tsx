@@ -121,14 +121,16 @@ describe('SchedulesSection', () => {
     });
   });
 
-  it('删除需二次确认，确认后调用 DELETE', async () => {
+  it('删除需二次确认（NeoConfirmModal 弹窗），确认后调用 DELETE', async () => {
     const spy = vi.fn();
     vi.stubGlobal('fetch', mockFetch({}, spy));
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<SchedulesSection />);
     const delBtn = await screen.findByTitle('删除');
+    // 弹窗出现 → 点确认 → DELETE 发出。
     fireEvent.click(delBtn);
-    expect(confirmSpy).toHaveBeenCalled();
+    const modal = await screen.findByTestId('neo-confirm-modal');
+    expect(modal).toHaveTextContent('删除后不再触发');
+    fireEvent.click(screen.getByTestId('neo-confirm-confirm'));
     await waitFor(() => {
       expect(
         spy.mock.calls.some(
@@ -138,13 +140,14 @@ describe('SchedulesSection', () => {
     });
   });
 
-  it('取消确认则不调用 DELETE', async () => {
+  it('取消确认弹窗则不调用 DELETE', async () => {
     const spy = vi.fn();
     vi.stubGlobal('fetch', mockFetch({}, spy));
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<SchedulesSection />);
     const delBtn = await screen.findByTitle('删除');
     fireEvent.click(delBtn);
+    await screen.findByTestId('neo-confirm-modal');
+    fireEvent.click(screen.getByTestId('neo-confirm-cancel'));
     expect(
       spy.mock.calls.some(([, init]) => (init as RequestInit)?.method === 'DELETE'),
     ).toBe(false);

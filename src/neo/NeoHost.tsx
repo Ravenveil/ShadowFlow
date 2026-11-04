@@ -346,16 +346,35 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
   // ── 工作空间：新建 / 上传文件（2026-08-22，T04 企业资料喂入）───────────────
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
+  // 新建文件弹窗 + 错误条（2026-11-04 用户反馈批）：window.prompt/window.alert
+  // 原生框替换为应用内 neo-modal 弹窗与行内红条（不再弹「localhost:3007 显示」）。
+  const [newFileOpen, setNewFileOpen] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
+  const [newFileBusy, setNewFileBusy] = useState(false);
+  const [newFileError, setNewFileError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const openNewFileModal = () => {
+    setNewFileName('');
+    setNewFileError(null);
+    setNewFileOpen(true);
+  };
+
   // 新建：相对文件名交给后端相对 root 解析（前端不拼路径分隔符）；成功后刷新树。
   const createFile = async () => {
     if (!rootPath) return;
-    const name = window.prompt(t('neo.host.newFilePrompt', { defaultValue: '新建文件名（可带子目录，如 docs/notes.md）' }));
-    if (!name?.trim()) return;
+    const name = newFileName.trim();
+    if (!name) return;
+    setNewFileBusy(true);
+    setNewFileError(null);
     try {
-      await writeFile(name.trim(), '', rootPath);
+      await writeFile(name, '', rootPath);
+      setNewFileOpen(false);
       refreshTree();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : String(e));
+      setNewFileError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setNewFileBusy(false);
     }
   };
 
@@ -363,11 +382,12 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
     const file = e.target.files?.[0];
     e.target.value = ''; // 允许连续选同一文件
     if (!file || !rootPath) return;
+    setUploadError(null);
     try {
       await uploadFile(rootPath, rootPath, file);
       refreshTree();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : String(err));
+      setUploadError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -672,7 +692,8 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
           type="button"
           className="neo-host-icon-btn"
           title={t('neo.host.newFile', { defaultValue: '新建文件' })}
-          onClick={createFile}
+          onClick={openNewFileModal}
+          data-testid="neo-host-new-file"
         >
           <FilePlus2 size={12} strokeWidth={1.8} />
         </button>
@@ -691,6 +712,24 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
           data-testid="neo-host-upload-input"
           onChange={onUploadPicked}
         />
+        {uploadError && (
+          <div
+            role="alert"
+            data-testid="neo-host-upload-error"
+            style={{
+              flexBasis: '100%',
+              marginTop: 6,
+              padding: '6px 10px',
+              borderRadius: 8,
+              fontSize: 12,
+              background: 'color-mix(in srgb, var(--t-err) 8%, transparent)',
+              color: 'var(--t-err)',
+              wordBreak: 'break-all',
+            }}
+          >
+            {uploadError}
+          </div>
+        )}
         <button
           type="button"
           className="neo-host-icon-btn"
@@ -1281,6 +1320,70 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
           </div>
         ))}
       </div>
+
+      {/* 新建文件弹窗（2026-11-04 用户反馈批）：window.prompt 原生框替换为
+          应用内 neo-modal 弹窗（Enter 确认 / Esc 取消 / busy 失效）。 */}
+      {newFileOpen && (
+        <div
+          className="neo-modal-mask"
+          onClick={() => {
+            if (!newFileBusy) setNewFileOpen(false);
+          }}
+        >
+          <div
+            className="neo-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('neo.host.newFile', { defaultValue: '新建文件' })}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (newFileBusy) return;
+              if (e.key === 'Enter') void createFile();
+              if (e.key === 'Escape') setNewFileOpen(false);
+            }}
+            data-testid="neo-host-new-file-modal"
+          >
+            <h2 className="neo-modal-title">{t('neo.host.newFile', { defaultValue: '新建文件' })}</h2>
+            <label className="neo-modal-label" htmlFor="neo-host-new-file-input">
+              {t('neo.host.newFilePrompt', { defaultValue: '新建文件名（可带子目录，如 docs/notes.md）' })}
+            </label>
+            <input
+              id="neo-host-new-file-input"
+              className="neo-modal-input"
+              value={newFileName}
+              autoFocus
+              disabled={newFileBusy}
+              onChange={(e) => setNewFileName(e.target.value)}
+              data-testid="neo-host-new-file-input"
+            />
+            {newFileError && (
+              <div className="neo-modal-error" role="alert" data-testid="neo-host-new-file-error">
+                {newFileError}
+              </div>
+            )}
+            <div className="neo-modal-actions">
+              <button
+                type="button"
+                className="neo-modal-cancel"
+                onClick={() => setNewFileOpen(false)}
+                disabled={newFileBusy}
+                data-testid="neo-host-new-file-cancel"
+              >
+                {t('common.cancel', { defaultValue: '取消' })}
+              </button>
+              <button
+                type="button"
+                className="neo-btn-primary"
+                onClick={() => void createFile()}
+                disabled={newFileBusy || !newFileName.trim()}
+                data-testid="neo-host-new-file-confirm"
+              >
+                {t('common.confirm', { defaultValue: '确定' })}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

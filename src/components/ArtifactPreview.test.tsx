@@ -218,11 +218,10 @@ describe('<ArtifactPreview />', () => {
       expect(screen.queryByTestId('artifact-download-markdown')).toBeNull();
     });
 
-    it('alerts and aborts navigation when PDF endpoint returns 503 (15.15 AC4+AC6)', async () => {
+    it('shows inline alert bar and aborts navigation when PDF endpoint returns 503 (15.15 AC4+AC6)', async () => {
       const fetchMock = vi
         .spyOn(globalThis, 'fetch')
         .mockResolvedValue({ status: 503 } as Response);
-      const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
       // We don't want the test to actually navigate.
       const origLoc = window.location.href;
 
@@ -237,7 +236,7 @@ describe('<ArtifactPreview />', () => {
         />,
       );
       const pdf = screen.getByTestId('artifact-download-pdf') as HTMLAnchorElement;
-      // jsdom href setter is a no-op for navigation; just verify no throw + alert fired.
+      // jsdom href setter is a no-op for navigation; just verify no throw + inline bar shown.
       fireEvent.click(pdf);
       // Wait a microtask so the async handler resolves.
       await Promise.resolve();
@@ -246,8 +245,9 @@ describe('<ArtifactPreview />', () => {
         expect.stringContaining('/pdf?filename=prototype.html'),
         expect.objectContaining({ method: 'HEAD' }),
       );
-      expect(alertMock).toHaveBeenCalledTimes(1);
-      expect(alertMock.mock.calls[0]?.[0] as string).toContain('PDF');
+      // 2026-11-04 用户反馈批：window.alert 原生框 → 行内 alert 红条（role=alert）。
+      const bar = await screen.findByTestId('artifact-pdf-unavailable');
+      expect(bar).toHaveTextContent('PDF');
       // Confirm we did NOT navigate (window.location.href unchanged).
       expect(window.location.href).toBe(origLoc);
     });

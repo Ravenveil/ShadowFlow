@@ -3,7 +3,8 @@
  *
  * 直接渲染面板子组件（不经 reactflow 画布），mock 版本 API：
  *   - 列表渲染（新→旧倒序）+ 空态
- *   - 回滚：confirm 取消不发请求；确认 → restore → onRestored 回传新图
+ *   - 回滚：确认弹窗取消不发请求；确认 → restore → onRestored 回传新图
+ *     （2026-11-04 用户反馈批：window.confirm 原生框 → NeoConfirmModal 弹窗）
  *   - 「存为分支」→ branch 成功后展示分支名
  */
 import { render, screen, fireEvent, waitFor } from '../../test/utils';
@@ -60,21 +61,26 @@ describe('TeamWorkflowVersionsPanel', () => {
     expect(await screen.findByTestId('team-dag-versions-empty')).toHaveTextContent('暂无版本');
   });
 
-  it('回滚：confirm 取消不发请求；确认 → restore 并回传新图', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('回滚：确认弹窗点取消不发请求；点确认 → restore 并回传新图', async () => {
     const restoredWf = { nodes: [], edges: [] };
     restoreMock.mockResolvedValue(restoredWf);
     const onRestored = renderPanel();
     const btn = await screen.findByTestId('team-dag-restore-v1');
 
+    // 弹窗打开 → 点取消 → 不发请求，弹窗关闭。
     fireEvent.click(btn);
+    expect(await screen.findByTestId('neo-confirm-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-confirm-modal')).toHaveTextContent('v1');
+    fireEvent.click(screen.getByTestId('neo-confirm-cancel'));
     expect(restoreMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByTestId('neo-confirm-modal')).toBeNull());
 
-    confirmSpy.mockReturnValue(true);
+    // 再开弹窗 → 点确认 → restore + 回传新图。
     fireEvent.click(btn);
+    await screen.findByTestId('neo-confirm-modal');
+    fireEvent.click(screen.getByTestId('neo-confirm-confirm'));
     await waitFor(() => expect(restoreMock).toHaveBeenCalledWith('t1', 1));
     await waitFor(() => expect(onRestored).toHaveBeenCalledWith(restoredWf));
-    confirmSpy.mockRestore();
   });
 
   it('「存为分支」成功后展示分支名', async () => {

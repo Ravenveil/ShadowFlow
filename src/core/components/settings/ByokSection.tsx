@@ -688,19 +688,30 @@ export function ByokSection() {
     } catch { return []; }
   });
 
+  // 新建自定义 provider（2026-11-04 用户反馈批）：两连 window.prompt 原生框
+  // 替换为应用内弹窗（名称 + Base URL 两字段，Enter 确认 / Esc 取消）。
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customUrl, setCustomUrl] = useState('https://api.example.com/v1');
+
+  function openCustomProvider() {
+    setCustomName('');
+    setCustomUrl('https://api.example.com/v1');
+    setCustomOpen(true);
+  }
+
   function addCustomProvider() {
-    const name = window.prompt(T('提供商名称（如：My Provider）', 'Provider name (e.g. My Provider)'));
-    if (!name?.trim()) return;
-    const baseUrl = window.prompt(T('Base URL（OpenAI 兼容）', 'Base URL (OpenAI-compatible)'), 'https://api.example.com/v1');
-    if (!baseUrl?.trim()) return;
+    const name = customName.trim();
+    const baseUrl = customUrl.trim();
+    if (!name || !baseUrl) return;
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'provider';
     const id = `custom-${slug}-${Date.now().toString(36).slice(-4)}`;
     const meta: ProviderMeta = {
-      name: name.trim(),
-      monogram: name.trim().slice(0, 2).toUpperCase(),
+      name,
+      monogram: name.slice(0, 2).toUpperCase(),
       tint: '#71717A',
       short: T('Custom · OpenAI 兼容', 'Custom · OpenAI-compatible'),
-      defaultUrl: baseUrl.trim(),
+      defaultUrl: baseUrl,
       keyPlaceholder: 'sk-...',
       noKey: false,
     };
@@ -713,6 +724,7 @@ export function ByokSection() {
       localStorage.setItem('sf.byok.custom-meta', JSON.stringify(map));
     } catch {}
     setSelectedId(id);
+    setCustomOpen(false);
   }
 
   // Detail form state
@@ -1096,7 +1108,7 @@ export function ByokSection() {
 
         {/* Rail footer */}
         <div style={{ padding: '8px 10px', borderTop: '1px solid var(--t-border)' }}>
-          <button type="button" onClick={addCustomProvider} style={{
+          <button type="button" onClick={openCustomProvider} style={{
             width: '100%', padding: '8px 10px', borderRadius: 9, border: '1px dashed var(--t-border)',
             display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: 'var(--t-fg-4)',
             background: 'transparent', fontFamily: 'inherit',
@@ -1698,6 +1710,96 @@ export function ByokSection() {
           )}
         </div>
       </div>
+
+      {/* 自定义 provider 弹窗（2026-11-04 用户反馈批）：替换两连 window.prompt
+          原生框（应用内遮罩 + 白卡，Enter 确认 / Esc 取消）。 */}
+      {customOpen && (
+        <div
+          className="neo-modal-mask"
+          onClick={() => setCustomOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={T('自定义提供商', 'Custom provider')}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addCustomProvider();
+              if (e.key === 'Escape') setCustomOpen(false);
+            }}
+            style={{
+              width: 'min(400px, calc(100vw - 48px))', padding: 20, borderRadius: 16,
+              border: '1px solid var(--t-border)', background: 'var(--t-panel)',
+              color: 'var(--t-fg)', boxShadow: '0 12px 40px rgba(0,0,0,.12)',
+            }}
+            data-testid="byok-custom-provider-modal"
+          >
+            <h2 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 600 }}>
+              {T('自定义提供商', 'Custom provider')}
+            </h2>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: 'var(--t-fg-3)' }}>
+              {T('提供商名称（如：My Provider）', 'Provider name (e.g. My Provider)')}
+            </label>
+            <input
+              autoFocus
+              value={customName}
+              maxLength={100}
+              onChange={(e) => setCustomName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setCustomOpen(false);
+              }}
+              style={{
+                width: '100%', height: 34, padding: '0 10px', marginBottom: 12,
+                border: '1px solid var(--t-border)', borderRadius: 10,
+                background: 'var(--t-panel)', color: 'var(--t-fg)', fontSize: 13, fontFamily: 'inherit',
+                outline: 'none', boxSizing: 'border-box',
+              }}
+              data-testid="byok-custom-name"
+            />
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: 'var(--t-fg-3)' }}>
+              {T('Base URL（OpenAI 兼容）', 'Base URL (OpenAI-compatible)')}
+            </label>
+            <input
+              value={customUrl}
+              maxLength={200}
+              onChange={(e) => setCustomUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setCustomOpen(false);
+              }}
+              style={{
+                width: '100%', height: 34, padding: '0 10px',
+                border: '1px solid var(--t-border)', borderRadius: 10,
+                background: 'var(--t-panel)', color: 'var(--t-fg)', fontSize: 13, fontFamily: 'inherit',
+                outline: 'none', boxSizing: 'border-box',
+              }}
+              data-testid="byok-custom-url"
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setCustomOpen(false)}
+                style={{
+                  height: 30, padding: '0 14px', border: 'none', borderRadius: 10,
+                  background: 'transparent', color: 'var(--t-fg-2)', fontSize: 12,
+                  fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                }}
+                data-testid="byok-custom-cancel"
+              >
+                {T('取消', 'Cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={addCustomProvider}
+                disabled={!customName.trim() || !customUrl.trim()}
+                className="neo-btn-primary"
+                data-testid="byok-custom-confirm"
+              >
+                {T('添加', 'Add')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

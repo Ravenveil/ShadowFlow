@@ -13,11 +13,17 @@
  * 管理面闭环（2026-08-23）：头部追加运行状态 + 暂停/恢复切换，走
  * POST /api/agents/:id/pause|resume（pauseAgent/resumeAgent），成功以端点
  * 返回的完整 record 刷新本地状态。
+ *
+ * 删除员工（2026-11-04 用户反馈批）：头部追加删除钮，二次确认走
+ * NeoConfirmModal（应用内弹窗，替换 window.confirm 原生框）；删除成功后
+ * 经 navigate('/') 回 home 安全页 + inbox store 乐观移除该员工会话。
  */
-import { useEffect, useMemo, useState } from 'react';
-import { Check, Loader2, Pause, Play, RotateCcw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Check, Loader2, Pause, Play, RotateCcw, Trash2 } from 'lucide-react';
 import {
   AgentApiError,
+  deleteAgent as deleteAgentRecord,
   getAgent,
   patchAgent,
   pauseAgent,
@@ -28,6 +34,8 @@ import { listDetectedClis, type DetectedCli } from '../api/cli';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { AvatarStylePicker, type AvatarConfigValue } from '../components/agent/AvatarStylePicker';
 import { useI18n } from '../common/i18n';
+import { useInboxStore } from '../core/store/useInboxStore';
+import { NeoConfirmModal } from './NeoConfirmModal';
 // ClawHub（2026-06）：Claw 绑定编辑 + 头像重配样式（增量引入）
 import '../pages/clawhub/clawhub.css';
 
@@ -52,6 +60,7 @@ function errorMessageOf(err: unknown): string {
 
 export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
   const { t, language } = useI18n();
+  const navigate = useNavigate();
   const [agent, setAgent] = useState<AgentRecord | null>(null);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -69,6 +78,35 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
   // 真实端点），成功用返回的完整 record 刷新本地状态，失败红条不吞错。
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+
+  // 删除员工（2026-11-04 用户反馈批）：NeoConfirmModal 二次确认 → deleteAgent
+  // 真实端点 → inbox store 乐观移除该员工 DM → 回 home 安全页。
+  const [deleteAsk, setDeleteAsk] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const confirmDeleteAgent = useCallback(() => {
+    if (!agent) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    deleteAgentRecord(agent.agent_id)
+      .then(() => {
+        const inbox = useInboxStore.getState();
+        if (inbox.agentDMs.some((d) => d.agentId === agent.agent_id)) {
+          inbox.removeAgentDM(agent.agent_id);
+        }
+        setDeleteAsk(false);
+        navigate('/');
+      })
+      .catch(() =>
+        setDeleteError(
+          t('neo.manage.opFailed', {
+            defaultValue: language === 'zh' ? '操作失败，请重试' : 'Operation failed, please retry',
+          }),
+        ),
+      )
+      .finally(() => setDeleteBusy(false));
+  }, [agent, navigate, t, language]);
 
   // ── ClawHub（2026-06，FR-05/06）：Claw 绑定 + 头像 查看/重配 ──────────────
   const [claws, setClaws] = useState<DetectedCli[]>([]);
@@ -275,6 +313,21 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
               ? t('neo.manage.resume', { defaultValue: language === 'zh' ? '恢复' : 'Resume' })
               : t('neo.manage.pause', { defaultValue: language === 'zh' ? '暂停' : 'Pause' })}
           </button>
+          <button
+            type="button"
+            className="neo-list-retry"
+            onClick={() => {
+              setDeleteError(null);
+              setDeleteAsk(true);
+            }}
+            disabled={deleteBusy}
+            title={t('common.delete', { defaultValue: language === 'zh' ? '删除' : 'Delete' })}
+            style={{ color: 'var(--t-err, #b91c1c)', borderColor: 'var(--t-err, #b91c1c)' }}
+            data-testid="neo-soul-delete"
+          >
+            <Trash2 size={11} strokeWidth={2} aria-hidden />
+            {t('common.delete', { defaultValue: language === 'zh' ? '删除' : 'Delete' })}
+          </button>
         </span>
       </header>
 
@@ -429,6 +482,26 @@ export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {
             : t('common.save', { defaultValue: language === 'zh' ? '保存' : 'Save' })}
         </button>
       </div>
+
+      {/* 删除员工确认弹窗（2026-11-04 用户反馈批，替换 window.confirm 原生框） */}
+      {deleteAsk && agent && (
+        <NeoConfirmModal
+          title={t('neo.manage.deleteAgentTitle', { defaultValue: language === 'zh' ? '删除员工' : 'Delete agent' })}
+          message={
+            language === 'zh'
+              ? `确定删除员工「${agent.name}」？此操作不可撤销`
+              : `Delete agent "${agent.name}"? This cannot be undone`
+          }
+          busy={deleteBusy}
+          error={deleteError}
+          onConfirm={() => confirmDeleteAgent()}
+          onClose={() => {
+            if (deleteBusy) return;
+            setDeleteAsk(false);
+            setDeleteError(null);
+          }}
+        />
+      )}
     </div>
   );
 }

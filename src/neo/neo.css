@@ -742,6 +742,51 @@
   cursor: default;
 }
 
+/* ── NeoConfirmModal（2026-11-04 用户反馈批）：替换 window.confirm 的 ──────
+   应用内确认弹窗。窄卡 + 说明文字 + 危险红确认钮，替代浏览器原生框
+   （「localhost:3007 显示」那种）。 */
+.neo-confirm-modal {
+  width: min(360px, calc(100vw - 48px));
+}
+.neo-confirm-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--t-fg-2);
+  word-break: break-all;
+}
+.neo-modal-danger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.neo-modal-danger-btn.is-danger {
+  background: var(--t-err);
+  color: #fff;
+}
+.neo-modal-danger-btn.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--t-err) 85%, #000);
+}
+.neo-modal-danger-btn:hover:not(:disabled) {
+  background: var(--t-hover);
+}
+.neo-modal-danger-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+}
+
 /* ── Agent「灵魂」页（NeoAgentSoul，2026-08-22；CherryStudio 助手提示词形态） ── */
 /* 中栏内嵌阅读/编辑态：单列 720px 居中，名称 + 大 soul 编辑区 + 保存。 */
 .neo-soul {

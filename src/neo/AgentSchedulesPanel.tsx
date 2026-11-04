@@ -24,6 +24,7 @@ import {
   type ScheduleRecord,
 } from '../api/schedules';
 import { resolveDmConversation } from '../api/groupApi';
+import { NeoConfirmModal } from './NeoConfirmModal';
 
 type PresetId = 'daily9' | 'weekdays9' | 'weeklyMon9' | 'hourly' | 'custom' | 'oneshot';
 
@@ -149,16 +150,29 @@ export function AgentSchedulesPanel({ agentId, workspaceId }: AgentSchedulesPane
     }
   }
 
-  async function handleDelete(s: ScheduleRecord) {
-    if (!window.confirm(t('neo.soul.schedulesDeleteConfirm', { defaultValue: '确定删除该计划？删除后不再触发。' }))) {
-      return;
-    }
+  // 删除确认弹窗（2026-11-04 用户反馈批）：window.confirm 原生框替换为
+  // NeoConfirmModal（应用内弹窗，红色危险确认钮）。
+  const [deleteTarget, setDeleteTarget] = useState<ScheduleRecord | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  function openDelete(s: ScheduleRecord) {
+    setActionError('');
+    setDeleteTarget(s);
+  }
+
+  async function confirmDelete() {
+    const s = deleteTarget;
+    if (!s) return;
+    setDeleteBusy(true);
     setActionError('');
     try {
       await deleteSchedule(s.schedule_id);
+      setDeleteTarget(null);
       await refresh();
     } catch {
       setActionError(t('neo.soul.schedulesDeleteFailed', { defaultValue: '删除失败' }));
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -334,7 +348,7 @@ export function AgentSchedulesPanel({ agentId, workspaceId }: AgentSchedulesPane
               <button
                 type="button"
                 className="neo-icon-btn"
-                onClick={() => void handleDelete(s)}
+                onClick={() => openDelete(s)}
                 title={t('common.delete', { defaultValue: '删除' })}
                 style={{ color: 'var(--t-err, #b91c1c)', width: 22, height: 22 }}
                 data-testid="neo-soul-schedule-delete"
@@ -348,6 +362,22 @@ export function AgentSchedulesPanel({ agentId, workspaceId }: AgentSchedulesPane
 
       {actionError && !showForm && (
         <p style={{ margin: 0, fontSize: 12, color: 'var(--t-err, #b91c1c)' }}>{actionError}</p>
+      )}
+
+      {/* 删除确认弹窗（2026-11-04 用户反馈批，替换 window.confirm 原生框） */}
+      {deleteTarget && (
+        <NeoConfirmModal
+          title={t('neo.soul.schedulesDeleteTitle', { defaultValue: '删除定时任务' })}
+          message={t('neo.soul.schedulesDeleteConfirm', {
+            defaultValue: '确定删除该计划？删除后不再触发。',
+          })}
+          busy={deleteBusy}
+          onConfirm={() => void confirmDelete()}
+          onClose={() => {
+            if (deleteBusy) return;
+            setDeleteTarget(null);
+          }}
+        />
       )}
     </div>
   );
