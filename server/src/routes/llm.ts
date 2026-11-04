@@ -37,6 +37,7 @@ import {
   callProvider,
   DEFAULT_MODELS,
   isProviderId,
+  PROVIDER_ENV_VAR,
   type ProviderChunk,
   type ProviderId,
 } from '../transport/api-clients';
@@ -148,6 +149,20 @@ function errorCodeToStatus(code: string | undefined): number {
   }
 }
 
+/**
+ * BYOK key resolution: header key first, then the server-side env fallback
+ * (PROVIDER_ENV_VAR — e.g. ZHIPU_API_KEY). Lets the persona generator and
+ * other BYOK-optional frontends work without a locally stored key when the
+ * server has a key configured.
+ */
+function resolveApiKey(req: Request, providerId: ProviderId): string | undefined {
+  const headerKey = extractApiKey(req);
+  if (headerKey && headerKey.length > 0) return headerKey;
+  const envVar = PROVIDER_ENV_VAR[providerId];
+  const envKey = envVar ? process.env[envVar] : undefined;
+  return typeof envKey === 'string' && envKey.length > 0 ? envKey : undefined;
+}
+
 /** Write one SSE event in the Anthropic format (`event:` + `data:` lines). */
 function writeAnthropicSse(res: Response, event: string, data: unknown): void {
   res.write(`event: ${event}\n`);
@@ -187,7 +202,7 @@ router.post('/messages', async (req: Request, res: Response) => {
   }
 
   const providerId = pickProviderFromModel(body.model, 'anthropic');
-  const apiKey = extractApiKey(req);
+  const apiKey = resolveApiKey(req, providerId);
   const wantStream = body.stream === true;
   const max_tokens = typeof body.max_tokens === 'number' ? body.max_tokens : 1024;
   const temperature = typeof body.temperature === 'number' ? body.temperature : undefined;
@@ -195,7 +210,15 @@ router.post('/messages', async (req: Request, res: Response) => {
   const userMessage = extractUserContent(body.messages);
 
   const ac = new AbortController();
-  req.on('close', () => ac.abort());
+  // Wire client-disconnect to the response object, NOT the request. Node 16+
+  // fires `req` 'close' as soon as the request body is fully consumed (i.e.
+  // immediately after express.json() parses it) — aborting on that signal
+  // silently kills every provider call before it starts (0 chunks, 200 + empty
+  // content). `res` 'close' fires only when the underlying connection drops
+  // before the response completes, which is the semantics we actually want.
+  res.on('close', () => {
+    if (!res.writableEnded) ac.abort();
+  });
 
   const stream = callProvider(providerId, {
     systemPrompt,
@@ -348,7 +371,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
   }
 
   const providerId = pickProviderFromModel(body.model, 'openai');
-  const apiKey = extractApiKey(req);
+  const apiKey = resolveApiKey(req, providerId);
   const wantStream = body.stream === true;
   const max_tokens = typeof body.max_tokens === 'number' ? body.max_tokens : 1024;
   const temperature = typeof body.temperature === 'number' ? body.temperature : undefined;
@@ -356,7 +379,12 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
   const userMessage = extractUserContent(body.messages);
 
   const ac = new AbortController();
-  req.on('close', () => ac.abort());
+  // See the Anthropic-handler comment above: `req` 'close' fires the moment
+  // the request body is consumed in Node 16+, aborting the provider call
+  // before it starts. `res` 'close' is the real client-disconnect signal.
+  res.on('close', () => {
+    if (!res.writableEnded) ac.abort();
+  });
 
   const stream = callProvider(providerId, {
     systemPrompt,

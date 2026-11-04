@@ -3,6 +3,10 @@
  * Port: 8002
  */
 
+// MUST be the first import: loads repo-root .env into process.env before any
+// router module (which may read env at module scope) is evaluated.
+import './env';
+
 import express from 'express';
 import cors from 'cors';
 import path from 'path';

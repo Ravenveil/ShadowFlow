@@ -116,5 +116,16 @@ export async function generateAgentPersona(
   if (typeof content !== 'string' || !content.trim()) {
     throw new LlmApiError(res.status, parsed, 'EMPTY_RESPONSE');
   }
-  return content.trim();
+  // 剥离网关注入思考通道标记的推理段（zhipu 思考模型 reasoning_content 会以
+  // <sf:thinking>…</sf:thinking> 混在 content 里；非流式一次性返回时无法走
+  // 客户端 ThinkCard 通道，直接丢弃——人设正文不需要思考过程）。
+  const cleaned = content
+    .replace(/<sf:thinking>[\s\S]*?<\/sf:thinking>/g, '')
+    .replace(/<sf:thinking>[\s\S]*$/g, '') // 未闭合兜底（max_tokens 截断时）
+    .trim();
+  if (!cleaned) {
+    // 极端情况：1024 预算全耗在思考上、正文为空 → 视为失败走降级
+    throw new LlmApiError(res.status, parsed, 'EMPTY_RESPONSE');
+  }
+  return cleaned;
 }
