@@ -28,11 +28,12 @@
  * 列表行 = 纯文字 + 细线图标（15px --t-fg-3），选中 = 灰底 600 加粗（对齐
  * ClawsGo home.html .nav-row / .group-label 复刻；无彩色 tile、无指示条）。
  *
- * 管理面闭环（2026-08-23）：员工行 hover 出删除，群/DM 行 hover 出移入项目
- * + 重命名 + 删除，项目 label hover 出重命名 + 删除——全部真实 API，删除
- * 二次确认（window.confirm），失败红条（neo-manage-error），删当前打开的
- * 会话/员工后跳回 home 安全页。移入项目（GAP A3 回写）按互链 group_id
- * PATCH /api/conversations/by-group/:gid，浮层内「默认项目」= project_id 置空。
+ * 管理面闭环（2026-08-23）：群/DM 行 hover 出重命名 + 删除，项目 label
+ * hover 出重命名 + 删除——全部真实 API，删除二次确认（window.confirm），
+ * 失败红条（neo-manage-error），删当前打开的会话/员工后跳回 home 安全页。
+ * 「移入项目」hover 浮层已于 2026-11-04 移除（拖拽会话到项目分组取代交互；
+ * 底层 PATCH /api/conversations/by-group/:gid 通路保留供拖拽 drop 复用，
+ * 「默认项目」= project_id 置空）。
  * 项目 label hover 另有产物钮（2026-09-03）：GET /api/projects/:id/artifacts
  * 居中模态列表，预览/下载直链（相对路径，与 NeoHost 产物 tab 同款）。
  */
@@ -42,10 +43,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Brain,
-  Check,
   ChevronDown,
   Folder,
-  FolderInput,
   FolderOpen,
   Library,
   PanelLeft,
@@ -666,8 +665,7 @@ export function NeoRail({
   // （不吞错、不假成功）；成功后刷新本地 store/列表。删当前打开的会话/员工 →
   // 跳回 home 安全页，避免中栏停留在已删除对象上。
   const [manageError, setManageError] = useState<string | null>(null);
-  // GAP A3 回写（2026-08-23）「移入项目」：当前打开项目浮层的行（group_id）。
-  const [moveMenuFor, setMoveMenuFor] = useState<string | null>(null);
+  // 「移入项目」行内浮层入口已移除（2026-11-04：拖拽归组取代）；状态随之清理。
 
   // 重命名弹窗（2026-11-04 用户反馈批「编辑项目名字能不能成熟一点」）：
   // 项目/会话两处 window.prompt 统一替换为 NeoRenameModal。组件自身不持有
@@ -792,11 +790,11 @@ export function NeoRail({
     [nav, onNavigate, failManage, t, language],
   );
 
-  // GAP A3 回写（2026-08-23）「移入项目」：按互链 group_id PATCH 会话归属
-  // （projectId=null = 移回默认项目），成功后 reloadTick 重拉项目分组刷新分桶。
+  // 「移入项目」归属回写通路（拖拽归组 drop 复用）：按互链 group_id PATCH
+  // 会话归属（projectId=null = 移回默认项目），成功后 reloadTick 重拉项目分组
+  // 刷新分桶。原行内浮层入口已移除，本回调仅供 handleDropOnProject 调用。
   const moveConversation = useCallback(
     (groupId: string, projectId: string | null) => {
-      setMoveMenuFor(null);
       setManageError(null);
       moveGroupConversationToProject(groupId, projectId)
         .then(() => setReloadTick((n) => n + 1))
@@ -905,103 +903,19 @@ export function NeoRail({
     [failManage, t, language],
   );
 
-  // GAP A3 回写（2026-08-23）「移入项目」hover 钮 + 轻量浮层：行内
-  // neo-icon-btn 风格 + 内联样式小菜单（同 agentCreatedToast 先例，不引重型
-  // 组件）。浮层列项目（当前归属打 ✓；'default' 行并入「默认项目」入口，
-  // project_id 置空 = 移回默认组），选择后 PATCH + reloadTick 刷新分桶。
-  const renderMoveControl = (groupId: string, name: string, testid: string) => {
-    const currentPid = projectByGroupId.get(groupId)?.project_id ?? null;
-    const open = moveMenuFor === groupId;
-    return (
-      <span style={{ position: 'relative', flex: '0 0 auto' }}>
-        <button
-          type="button"
-          className="neo-icon-btn neo-row-soul"
-          onClick={() => setMoveMenuFor(open ? null : groupId)}
-          aria-expanded={open}
-          aria-label={t('neo.manage.moveConversation', {
-            defaultValue:
-              language === 'zh'
-                ? `移入项目 ${name}`
-                : `Move conversation ${name} to project`,
-          })}
-          title={t('neo.manage.moveToProject', {
-            defaultValue: language === 'zh' ? '移入项目' : 'Move to project',
-          })}
-          data-testid={testid}
-        >
-          <FolderInput size={12} strokeWidth={1.75} aria-hidden />
-        </button>
-        {open && (
-          <div
-            role="menu"
-            data-testid="neo-move-menu"
-            style={{
-              position: 'absolute',
-              right: 0,
-              top: '100%',
-              zIndex: 10001,
-              minWidth: 140,
-              padding: 4,
-              borderRadius: 8,
-              background: 'var(--t-panel)',
-              border: '1px solid var(--t-border)',
-              boxShadow: '0 8px 24px rgba(0,0,0,.18)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 1,
-            }}
-          >
-            {(projects ?? [])
-              .filter((p) => p.project_id !== 'default')
-              .map((p) => (
-                <button
-                  key={p.project_id}
-                  type="button"
-                  role="menuitem"
-                  className="neo-row"
-                  onClick={() => moveConversation(groupId, p.project_id)}
-                  data-testid="neo-move-option"
-                  data-project-id={p.project_id}
-                >
-                  <Folder size={12} strokeWidth={1.75} aria-hidden />
-                  <span className="neo-row-name">{p.name}</span>
-                  {currentPid === p.project_id && (
-                    <Check size={12} strokeWidth={2} aria-hidden />
-                  )}
-                </button>
-              ))}
-            <button
-              type="button"
-              role="menuitem"
-              className="neo-row"
-              onClick={() => moveConversation(groupId, null)}
-              data-testid="neo-move-default"
-            >
-              <Folder size={12} strokeWidth={1.75} aria-hidden />
-              <span className="neo-row-name">
-                {t('neo.manage.defaultProject', {
-                  defaultValue: language === 'zh' ? '默认项目' : 'Default project',
-                })}
-              </span>
-              {(currentPid === null || currentPid === 'default') && (
-                <Check size={12} strokeWidth={2} aria-hidden />
-              )}
-            </button>
-          </div>
-        )}
-      </span>
-    );
-  };
+  // 「移入项目」hover 钮已移除（2026-11-04 用户反馈：拖拽会话到项目分组即可
+  // 归组，行内浮层入口冗余）。底层 moveConversation PATCH 通路保留——拖拽
+  // drop（handleDropOnProject）仍复用它完成归属回写。
 
   // DM 会话行 / 群聊现场行渲染器（home 默认组与项目分组桶共用，行为不变：
   // 点击 = 中栏打开会话；DM 无 group_id 时走 find-or-create resolve 通路）。
-  // 管理面闭环（2026-08-23）：有 group_id 的行追加 hover 重命名/删除钮。
+  // 管理面闭环（2026-08-23）：有 group_id 的行追加 hover 重命名/删除钮
+  // （「移入项目」hover 钮 2026-11-04 移除，拖拽归组取代）。
   const renderDmRow = (d: AgentDMItem) => {
     const rel = relativeTime(d.lastActivityAt, nowTick, t);
     // os-unified 2026-11-04：DM 行升级 Grok 会话项形态（真实头像 + 名称 +
     // 消息预览两行结构）——与成员会话行统一；Claw 徽章移到预览行尾。
-    // 行尾 hover 钮（移入项目/重命名/删除）保留。
+    // 行尾 hover 钮（重命名/删除）保留；移入项目钮已删（拖拽归组取代）。
     const dmAgent = agentsById.get(d.agentId) ?? null;
     const dmAgentClaw = dmAgent?.claw_id ?? null;
     const openDm = () => {
@@ -1066,7 +980,6 @@ export function NeoRail({
         </button>
         {d.group_id && (
           <>
-            {renderMoveControl(d.group_id, d.agentName, 'neo-dm-move')}
             <button
               type="button"
               className="neo-icon-btn neo-row-soul"
@@ -1126,7 +1039,6 @@ export function NeoRail({
           {rel && <span className="neo-row-time">{rel}</span>}
           {g.unreadCount > 0 && <span className="neo-row-badge">{g.unreadCount}</span>}
         </button>
-        {renderMoveControl(g.id, g.name, 'neo-group-move')}
         <button
           type="button"
           className="neo-icon-btn neo-row-soul"

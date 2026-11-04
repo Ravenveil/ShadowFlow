@@ -6,6 +6,8 @@
  * （patchProject/deleteProject）；操作失败 → neo-manage-error 红条。
  * 2026-11-04 重命名弹窗化：项目/会话重命名不再走 window.prompt，改为
  * NeoRenameModal 弹窗交互（预填当前名 → 改名 → 点确认 → 断言 patch 调用）。
+ * 2026-11-04 移入项目移除：行内「移入项目」hover 钮 + 浮层删除（拖拽会话到
+ * 项目分组的交互取代），改负向断言；底层 PATCH 通路保留供拖拽 drop 复用。
  */
 import { render, screen, fireEvent, waitFor } from '../../test/utils';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
@@ -259,48 +261,22 @@ describe('NeoRail 管理面 — DM/群聊行', () => {
   });
 });
 
-describe('NeoRail 管理面 — 移入项目（GAP A3 回写）', () => {
-  it('DM 行「移入项目」→ 浮层列项目 + 默认项目；选项目 → PATCH 该 group', async () => {
+describe('NeoRail 管理面 — 移入项目（2026-11-04 已移除，拖拽归组取代）', () => {
+  it('DM/群聊行不再渲染「移入项目」hover 钮与浮层（neo-dm-move/neo-group-move/neo-move-menu 缺席）', async () => {
     renderRail('home');
-    // 等项目分组落地（DM 行会随分桶重挂，句柄需在之后取）。
     await screen.findByTestId('neo-project-section-toggle');
-    fireEvent.click(await screen.findByTestId('neo-dm-move'));
-    const menu = await screen.findByTestId('neo-move-menu');
-    // 项目 p1 + 「默认项目」两项；p1 是该 DM 当前归属。
-    const options = screen.getAllByTestId('neo-move-option');
-    expect(options).toHaveLength(1);
-    expect(options[0]).toHaveTextContent('氢能官网');
-    expect(screen.getByTestId('neo-move-default')).toHaveTextContent('默认项目');
-
-    fireEvent.click(options[0]);
-    await waitFor(() =>
-      expect(moveGroupConversationToProject).toHaveBeenCalledWith('g-dm-1', 'p1'),
-    );
-    // 选择后浮层关闭。
-    await waitFor(() => expect(menu).not.toBeInTheDocument());
-  });
-
-  it('群聊行选「默认项目」→ PATCH project_id=null（移回默认组）', async () => {
-    renderRail('home');
-    fireEvent.click(await screen.findByTestId('neo-group-move'));
-    fireEvent.click(await screen.findByTestId('neo-move-default'));
-    await waitFor(() =>
-      expect(moveGroupConversationToProject).toHaveBeenCalledWith('g-room-1', null),
-    );
-  });
-
-  it('触发钮再点一次收起浮层；PATCH 失败 → neo-manage-error 红条', async () => {
-    renderRail('home');
-    const trigger = await screen.findByTestId('neo-group-move');
-    fireEvent.click(trigger);
-    expect(await screen.findByTestId('neo-move-menu')).toBeInTheDocument();
-    fireEvent.click(trigger);
+    expect(screen.queryByTestId('neo-dm-move')).toBeNull();
+    expect(screen.queryByTestId('neo-group-move')).toBeNull();
     expect(screen.queryByTestId('neo-move-menu')).toBeNull();
-
-    vi.mocked(moveGroupConversationToProject).mockRejectedValueOnce(new Error('HTTP 500'));
-    fireEvent.click(trigger);
-    fireEvent.click(await screen.findByTestId('neo-move-default'));
-    expect(await screen.findByTestId('neo-manage-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('neo-move-option')).toBeNull();
+    expect(screen.queryByTestId('neo-move-default')).toBeNull();
+    // 重命名/删除钮不受影响（仍在行尾）。
+    expect(screen.getByTestId('neo-dm-rename')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-dm-delete')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-group-rename')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-group-delete')).toBeInTheDocument();
+    // 底层通路未被误删：moveGroupConversationToProject 仍被 import（拖拽 drop 复用）。
+    expect(moveGroupConversationToProject).toBeDefined();
   });
 });
 
