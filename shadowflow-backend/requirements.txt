@@ -1,0 +1,4 @@
+fastapi>=0.110
+uvicorn>=0.27
+segno>=1.5
+reportlab>=4.0
