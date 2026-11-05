@@ -312,7 +312,24 @@
   flex: 1;
 }
 
-/* ── 经验记忆面板（MemoryLessonsPanel，2026-11-05 OPC-OS PR#3 设计整合）────── */
+/* ── 经验记忆样式（2026-11-05 统一进 MemoryPage；OPC-OS PR#3 设计整合）────── */
+.neo-mm-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.neo-mm-toolbar-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.neo-mm-lessons-stats {
+  font-size: 12px;
+  color: var(--t-fg-3);
+}
 .neo-mm-lessons-sub {
   margin: -4px 0 12px;
   font-size: 12px;
