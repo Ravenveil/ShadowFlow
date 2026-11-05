@@ -20,6 +20,7 @@ import {
   type MemoryScope,
 } from '../api/memoryEntries';
 import { useI18n } from '../common/i18n';
+import MemoryLessonsPanel from './MemoryLessonsPanel';
 import MemoryProfilePanel from './MemoryProfilePanel';
 import './memory-neo.css';
 
@@ -147,6 +148,8 @@ export default function MemoryPage({ embedded = false }: { embedded?: boolean } 
           </button>
         ))}
       </div>
+
+      <MemoryLessonsPanel />
 
       <MemoryProfilePanel />
 
