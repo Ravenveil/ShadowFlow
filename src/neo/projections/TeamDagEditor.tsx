@@ -51,6 +51,7 @@ import {
   Handle,
   Position,
   Panel,
+  ReactFlowProvider,
   useReactFlow,
   useNodesState,
   useEdgesState,
@@ -397,7 +398,23 @@ export function TeamWorkflowVersionsPanel({ teamId, refreshToken, onRestored }: 
   );
 }
 
-export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, policyColorOf, onDirtyChange }: TeamDagEditorProps) {
+export function TeamDagEditor(props: TeamDagEditorProps) {
+  /**
+   * Provider 包装（2026-11-05 三轮 hotfix，reactflow error #001）：
+   * 本组件函数体直接调用 useReactFlow()（drop-to-connect 坐标换算 /
+   * fitView），必须在 Provider **之内**渲染；而 SfReactFlowBase 自带的
+   * Provider 在它自己的渲染树里，是本组件的**子节点**，帮不到我们。
+   * 因此外层自建 Provider，并让 SfReactFlowBase withProvider={false}
+   * —— 两层若各建各的 store，screenToFlowPosition 会读错视口实例。
+   */
+  return (
+    <ReactFlowProvider>
+      <TeamDagEditorInner {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, policyColorOf, onDirtyChange }: TeamDagEditorProps) {
   const { t } = useI18n();
 
   // 放弃未保存修改的二次确认（2026-11-04 用户反馈批）：window.confirm 原生框
@@ -1069,6 +1086,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
           nodes={rfNodes}
           edges={rfEdges}
           nodeTypes={NODE_TYPES}
+          withProvider={false}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
