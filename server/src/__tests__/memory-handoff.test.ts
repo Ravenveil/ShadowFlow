@@ -225,3 +225,72 @@ describe('脏输入不 5xx', () => {
     }
   });
 });
+
+describe('画像流水滚动裁剪（append-only 也要有上界）', () => {
+  it('同一主体写回 250 次：流水只留最近 200 条，当前值不受影响', async () => {
+    const subject = 'cust-bounded-history';
+    for (let i = 1; i <= 250; i++) {
+      const res = await request(app())
+        .post('/api/memory/handoff/profiles/writeback')
+        .send({
+          subject_type: 'customer',
+          subject_id: subject,
+          key: 'budget',
+          // 严格递增的置信度（i/251 恒小于 1）→ 每次都走 update，值会跟着升
+          value: `budget-${i}`,
+          confidence: i / 251,
+          source: 'test',
+        });
+      expect(res.status).toBe(200);
+    }
+
+    const rows = sqlite
+      .getDb()
+      .prepare('SELECT COUNT(*) AS n FROM memory_profile_events WHERE subject_id = ?')
+      .get(subject) as { n: number };
+    expect(rows.n).toBe(200);
+
+    // 当前值仍然是最新那次（裁剪动的是历史，不是画像）
+    const cur = sqlite
+      .getDb()
+      .prepare(
+        `SELECT value FROM memory_profile_values
+          WHERE subject_type = 'customer' AND subject_id = ? AND key = 'budget'`,
+      )
+      .get(subject) as { value: string };
+    expect(cur.value).toBe('budget-250');
+
+    // 留下的是最新的：最老那条（budget-1）应该已经被裁掉
+    const oldest = sqlite
+      .getDb()
+      .prepare('SELECT old_value, new_value FROM memory_profile_events WHERE subject_id = ? ORDER BY id ASC LIMIT 1')
+      .get(subject) as { old_value: string | null; new_value: string };
+    expect(oldest.new_value).not.toBe('budget-1');
+  });
+
+  it('不同主体各自独立计数，不互相挤掉', async () => {
+    for (const subject of ['cust-a-bounded', 'cust-b-bounded']) {
+      for (let i = 1; i <= 210; i++) {
+        await request(app())
+          .post('/api/memory/handoff/profiles/writeback')
+          .send({
+            subject_type: 'customer',
+            subject_id: subject,
+            key: 'tone',
+            value: `tone-${i}`,
+            confidence: i / 251,
+            source: 'test',
+          });
+      }
+    }
+    const n = sqlite
+      .getDb()
+      .prepare(
+        `SELECT subject_id, COUNT(*) AS n FROM memory_profile_events
+          WHERE subject_id IN ('cust-a-bounded','cust-b-bounded') GROUP BY subject_id`,
+      )
+      .all() as Array<{ subject_id: string; n: number }>;
+    expect(n.length).toBe(2);
+    for (const row of n) expect(row.n).toBe(200);
+  });
+});
