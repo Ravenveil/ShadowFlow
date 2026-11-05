@@ -174,12 +174,41 @@ function Collapse({ open, children }: { open: boolean; children: ReactNode }) {
 }
 
 /* ═══ user_turn — 右对齐灰气泡（running.html .msg-user） ════════════════════ */
+/**
+ * @ 提及 token 高亮（2026-11-05，OpenBot 定向派活配套）：把文本里 `@<token>`
+ * 切成徽章 + 普通文本两段。规则与后端 mentions.ts 对齐：@ 须在文首/空白/
+ * 中文标点后，token 为非空白非标点连续串；未命中的 @token 也高亮（视觉一致，
+ * 是否真定向由后端裁决）。无 @ 直接整段透传（零开销）。
+ */
+const MENTION_SPLIT_RE = /(^|[\s，。！？、：；）】」』》〉【「『,.!?;:)\]])@[^\s，。！？、：；）】」』》〉【「『,.!?;:)\]}"'`@]+/gu;
+
+export function renderUserTextWithMentions(text: string): ReactNode[] {
+  if (!text.includes('@')) return [text];
+  const out: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  MENTION_SPLIT_RE.lastIndex = 0;
+  while ((m = MENTION_SPLIT_RE.exec(text)) !== null) {
+    const lead = m[1];
+    const at = m.index + lead.length;
+    if (at > last) out.push(text.slice(last, at));
+    out.push(
+      <span key={`mn${m.index}`} className="neo-tl-mention">
+        @{text.slice(at + 1, m.index + m[0].length)}
+      </span>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
 const NeoUserTurn = memo(function NeoUserTurn({
   msg,
 }: {
   msg: Extract<TimelineMessage, { kind: 'user_turn' }>;
 }) {
-  return <div className="neo-tl-user">{msg.text}</div>;
+  return <div className="neo-tl-user">{renderUserTextWithMentions(msg.text)}</div>;
 });
 
 /* ═══ thinking — op 行（灯泡图标 + 标签 + chev + 耗时）+ 缩进思考体 ══════════

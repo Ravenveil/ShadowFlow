@@ -141,15 +141,28 @@ describe('runFanout — @ 提及定向派活（DAG 路径）', () => {
     expect(ran).toEqual(['dev', 'pm']);
   });
 
-  it('@ 未命中任何成员 → 全员照跑（零回归）', async () => {
+  it('@ 未命中任何成员 → 全员照跑 + system 提示可点名成员（可解释性）', async () => {
     await runFanoutAsync('g1', 'cli:claude', undefined, {}, '@路人甲 大家好');
     const ran = turnPrompts.map((t) => t.agentId).sort();
     expect(ran).toEqual(['arch', 'dev', 'pm']);
+    // 未命中提示：列出可点名成员，帮助用户纠正（2026-11-05 迭代五）。
+    const notice = postedContents().find((c) => c.startsWith('[mention]'));
+    expect(notice).toBeTruthy();
+    expect(notice).toContain('@策划喵');
+    expect(notice).toContain('@架构汪');
+    expect(notice).toContain('@码农鸡');
   });
 
-  it('无 @ → 全员照跑（零回归）', async () => {
+  it('无 @ → 全员照跑，不发 [mention] 提示（零噪音）', async () => {
     await runFanoutAsync('g1', 'cli:claude', undefined, {}, '大家好，开始干活');
     expect(turnPrompts).toHaveLength(3);
+    expect(postedContents().some((c) => c.startsWith('[mention]'))).toBe(false);
+  });
+
+  it('@ 命中 → 不发 [mention] 提示', async () => {
+    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '@架构汪 看下');
+    expect(turnPrompts.map((t) => t.agentId)).toEqual(['arch']);
+    expect(postedContents().some((c) => c.startsWith('[mention]'))).toBe(false);
   });
 });
 

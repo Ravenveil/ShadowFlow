@@ -36,6 +36,17 @@
   word-break: break-word;
 }
 
+/* @ 提及 token 高亮（2026-11-05，OpenBot 定向派活配套）：品牌色小胶囊，
+   跟随明暗主题令牌；无 JS 状态，纯渲染。 */
+.neo-tl-mention {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--t-accent-tint, color-mix(in srgb, var(--t-accent, #6366f1) 16%, transparent));
+  color: var(--t-accent, #6366f1);
+  font-weight: 600;
+}
+
 /* ── op 行（running.html .op：gap 9px / padding 7px 8px / r10 / 12.5px） ──── */
 .neo-tl-op {
   display: flex;

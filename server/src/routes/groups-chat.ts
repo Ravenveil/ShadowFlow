@@ -653,9 +653,22 @@ async function runFanout(
       rosterCandidates.push({ id, name: id });
     }
   }
-  const { mentionedIds } = parseMentions(userText, rosterCandidates);
+  const { mentionedIds, cleanText } = parseMentions(userText, rosterCandidates);
   const mentioned = new Set(mentionedIds);
   const agentIds = mentioned.size > 0 ? allAgentIds.filter((id) => mentioned.has(id)) : allAgentIds;
+
+  // @ 未命中可见提示（零 LLM）：消息里有 @token 但一个都没对上成员 → 用户
+  // 以为在点名、系统却全员派发，这是演示里最容易被问「为什么 @ 没生效」的
+  // 场景。落一条 system 提示（可解释性 > 沉默降级）。纯文本无 @ → 不打扰。
+  const hasAtToken = /(^|[\s，。！？、：；）】」』》〉【「『,.!?;:)\]])@[^\s]/u.test(userText);
+  if (!mentioned.size && hasAtToken) {
+    const names = rosterCandidates.map((c) => `@${c.name}`).join('、');
+    await pyPostMessage(groupId, {
+      content: `[mention] 消息里的 @ 没有匹配到任何群成员，已按常规流程派发给全体成员。可点名的成员：${names}`,
+      sender_name: 'system',
+      sender_kind: 'system',
+    }).catch(() => {});
+  }
 
   // B3 · 网关过程事件 — 本轮 fan-out 开一条 gateway run（互链 conversation 下），
   // 执行期过程经 run 管线 emit；B2 GET /:id/timeline 自动归并回放。
@@ -688,7 +701,7 @@ async function runFanout(
         const latestUser0 = [...history0].reverse().find((m) => m.role === 'user');
         // 提及路由时用清洗文本（去掉 @token）当派发 prompt，Agent 不被 @噪音干扰。
         const userPrompt =
-          (mentionRouted ? parseMentions(userText, rosterCandidates).cleanText : '')
+          (mentionRouted ? cleanText : '')
             || latestUser0?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('')
             || '';
 
@@ -991,7 +1004,7 @@ async function runFanout(
       const latestUser = [...history].reverse().find((m) => m.role === 'user');
       // @ 提及路由时用清洗文本（@token 已删）当 prompt，Agent 不吃 @ 噪音。
       const prompt =
-        (mentioned.size > 0 ? parseMentions(userText, rosterCandidates).cleanText : '')
+        (mentioned.size > 0 ? cleanText : '')
           || latestUser?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('')
           || '';
 
