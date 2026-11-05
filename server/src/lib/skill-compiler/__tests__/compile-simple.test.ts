@@ -268,6 +268,8 @@ async function main(): Promise<void> {
       raw_skill_md: '# Single Agent',
       agent_files: [{ path: 'agents/lone.md', raw: '# Lone wolf' }],
     });
+    // 故意只抛不 yield：模拟网络中断，验证 fallback 到 agent 模式。
+    // eslint-disable-next-line require-yield
     _setCallProviderForTests(async function* () {
       throw new Error('simulated network drop');
     });
@@ -284,6 +286,8 @@ async function main(): Promise<void> {
       raw_skill_md: '# Empty\nNo agents declared.',
       agent_files: [],
     });
+    // 故意只抛不 yield：验证 provider 失败时仍能产出可用的 agent 配置。
+    // eslint-disable-next-line require-yield
     _setCallProviderForTests(async function* () {
       throw new Error('forced');
     });

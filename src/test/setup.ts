@@ -1,9 +1,15 @@
 import { expect, vi, beforeAll } from 'vitest'
 import React from 'react'
 import matchers from '@testing-library/jest-dom/matchers'
+import { configure } from '@testing-library/react'
 
 // jest-dom 与当前 vitest 版本的 MatchersObject 类型不完全兼容，运行时可正常工作
 expect.extend(matchers as unknown as Parameters<typeof expect.extend>[0])
+
+// findBy* / waitFor 的默认等待是 1s。全量并行跑 60+ 测试文件（CI 上只有 2 核）、
+// 加上 React.lazy 的动态 chunk 解析，1s 会偶发超时 → 本机绿、CI 红。
+// 统一放宽到 5s：真失败依旧是失败，只是不再因为机器慢而误报。
+configure({ asyncUtilTimeout: 5000 })
 
 // i18next initializes with 'en' (localStorage is empty in jsdom).
 // Tests assert Chinese text, so switch to zh before any test runs.

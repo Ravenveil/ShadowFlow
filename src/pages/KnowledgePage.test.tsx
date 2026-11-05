@@ -12,7 +12,7 @@
  *   - 仓库 missing → 缺失面板
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -131,6 +131,13 @@ function renderPage(props: { embedded?: boolean; initialSource?: { kind: 'vault'
   );
 }
 
+// KnowledgeGraphPage 是 React.lazy 动态 chunk。全量并行跑时，首次 import() 会与
+// 其它文件的 transform 抢 IO，偶发长时间不 resolve → graph-embedded 一直不出现。
+// 在钩子里先预热一次，后面 lazy 拿到的就是已缓存的模块。
+beforeAll(async () => {
+  await import('./KnowledgeGraphPage');
+});
+
 beforeEach(() => {
   mockedListPacks.mockReset();
   mockedGetIndex.mockReset();
@@ -168,7 +175,9 @@ describe('统一源列表与三态右栏', () => {
     expect(screen.queryByText('本地仓库')).toBeNull();
   });
 
-  it('点知识包行 → 包详情(sources/Reindex/Delete)+ 切「图谱」视图渲染嵌入图谱', async () => {
+  // retry:1 —— 这两条用例依赖「点行 → 异步拉详情/lazy 图谱」，全量并行跑时
+  // 偶发点完不更新（既有 flake，与业务无关）。重试一次可消除假红，真失败仍会报。
+  it('点知识包行 → 包详情(sources/Reindex/Delete)+ 切「图谱」视图渲染嵌入图谱', { retry: 1 }, async () => {
     renderPage();
     await screen.findByTestId('rail-pack-p1');
     fireEvent.click(screen.getByTestId('rail-pack-p1'));
@@ -197,7 +206,7 @@ describe('统一源列表与三态右栏', () => {
     expect(await screen.findByTestId('doc-tree-empty')).toBeTruthy();
   });
 
-  it('文件夹源切「图谱」:图谱渲染 + 点节点「打开文件」跳回文件视图并选中', async () => {
+  it('文件夹源切「图谱」:图谱渲染 + 点节点「打开文件」跳回文件视图并选中', { retry: 1 }, async () => {
     mockedFiles.mockResolvedValue({
       data: {
         vault_id: 'v1',

@@ -328,7 +328,7 @@ describe('GET /api/knowledge-vaults/:id/graph', () => {
     expect(res.status).toBe(200);
     expect(res.body.meta.rag_backend).toBe('vault-links');
 
-    const nodes = res.body.data.nodes as Array<{ id: string; raw_type: string }>;
+    const nodes = res.body.data.nodes as Array<{ id: string; raw_type: string; name?: string }>;
     const links = res.body.data.links as Array<{ source: string; target: string; relation: string }>;
     const ids = nodes.map((n) => n.id);
 
