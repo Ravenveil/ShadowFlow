@@ -59,7 +59,19 @@ export function NeoApp() {
     setNav(next);
     const s = SECTION_BY_NAV[next.view];
     if (s) setSection(s);
+    // 2026-11-05 Task#11 — 切走当前会话（换群/回首页）即关检查器（挂着的
+    // inspectAgent.groupId 已不对应新视图，留着只会显示串台数据）。
+    setInspectAgent(null);
   }, []);
+
+  // ── Agent 检查器（2026-11-05 Task#11，ZCode 后台运行式）────────────────
+  // 群聊里点 agent 头像（气泡/顶栏成员栈）→ NeoGroupChat.onInspectAgent 上报
+  // → NeoHost 右栏整体覆盖为检查浮层（后台活动流 + 发起私聊）。
+  const [inspectAgent, setInspectAgent] = useState<{
+    agentId: string;
+    name: string;
+    groupId: string;
+  } | null>(null);
 
   // 编排目标从 nav 派生（兜底目标态才有；conversation 里发言走群聊网关，
   // 不需要 target）。NeoHost 编队 tab 据此出现。
@@ -274,7 +286,12 @@ export function NeoApp() {
 
       <main className={`neo-main${runLayout ? ' neo-main--run' : ''}`}>
         {nav.view === 'conversation' ? (
-          <NeoGroupChat groupId={nav.groupId} embedded onNavigate={navigate} />
+          <NeoGroupChat
+            groupId={nav.groupId}
+            embedded
+            onNavigate={navigate}
+            onInspectAgent={setInspectAgent}
+          />
         ) : nav.view === 'knowledge' ? (
           <KnowledgePage
             embedded
@@ -303,7 +320,15 @@ export function NeoApp() {
       {hostActive && (
         <aside className={`neo-host${hostCollapsed ? ' collapsed' : ''}`}>
           <div className="neo-host-panel" aria-hidden={hostCollapsed}>
-            <NeoHost target={target} runId={runId} soulAgent={soulAgent} conversation={convGroup} />
+            <NeoHost
+              target={target}
+              runId={runId}
+              soulAgent={soulAgent}
+              conversation={convGroup}
+              inspectAgent={inspectAgent}
+              onCloseInspectAgent={() => setInspectAgent(null)}
+              onNavigate={navigate}
+            />
           </div>
           <button
             type="button"

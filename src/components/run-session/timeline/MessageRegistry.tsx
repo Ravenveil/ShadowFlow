@@ -117,6 +117,10 @@ export const MessageRegistry = memo(function MessageRegistry({
       // 派发决策卡由 NeoGroupChat 的 NeoDispatchCard 渲染（群聊现场专属）；
       // 经典 Timeline 消费面不重复出卡。
       return null;
+    case 'hop_card':
+      // 2026-11-05 — 交接边实时播报卡只有 Neo 壳渲染（NeoTimeline.NeoHopCard）；
+      // 经典 Timeline 消费面不出卡。
+      return null;
     default: {
       // Exhaustiveness — compile error if a new kind is added without a case.
       const _exhaustive: never = msg;

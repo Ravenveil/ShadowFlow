@@ -91,4 +91,14 @@ export interface NeoHostProps {
     teamId?: string | null;
     teamName?: string | null;
   } | null;
+  /**
+   * 2026-11-05 Task#11 — Agent 检查器（ZCode 后台运行式）：群聊里点某 agent
+   * 的头像/名字 → 右栏覆盖该 agent 的检查浮层（本群后台活动流 + 发起私聊）。
+   * 非空时覆盖右栏全部 tab 内容；null = 关闭检查器回落常规 tab。
+   */
+  inspectAgent?: { agentId: string; name: string; groupId: string } | null;
+  /** 关闭检查器（NeoHost 内 × 钮 / NeoApp 切会话时清理）。 */
+  onCloseInspectAgent?: () => void;
+  /** NeoApp 导行动词（检查器「发起私聊」成功后切会话用）。 */
+  onNavigate: (nav: NeoNav) => void;
 }

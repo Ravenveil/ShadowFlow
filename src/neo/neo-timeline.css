@@ -865,6 +865,52 @@ button.neo-tl-op[data-status="running"]:hover { background: none; }
   font-variant-numeric: tabular-nums;
 }
 
+/* hop_card — 群聊 DAG 交接边实时播报（2026-11-05 Task#10）。
+   轻量单行：状态图标 + from → to + 状态词 + 耗时/字数 + detail。
+   非终态（pending/running）fg-4 弱化；终态成功 ok 色、失败 err 色。 */
+.neo-tl-hop {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--t-fg-2);
+}
+.neo-tl-hop[data-status='pending'] { color: var(--t-fg-4); }
+.neo-tl-hop[data-status='done'] .neo-tl-hop-status { color: var(--t-ok, #10B981); }
+.neo-tl-hop[data-status='failed'],
+.neo-tl-hop[data-status='timeout'],
+.neo-tl-hop[data-status='empty'],
+.neo-tl-hop[data-status='denied'],
+.neo-tl-hop[data-status='aborted'] { color: var(--t-fg-3); }
+.neo-tl-hop[data-status='failed'] .neo-tl-hop-status,
+.neo-tl-hop[data-status='timeout'] .neo-tl-hop-status,
+.neo-tl-hop[data-status='empty'] .neo-tl-hop-status,
+.neo-tl-hop[data-status='denied'] .neo-tl-hop-status,
+.neo-tl-hop[data-status='aborted'] .neo-tl-hop-status { color: var(--t-err, #EF4444); }
+.neo-tl-hop-icon { flex-shrink: 0; display: inline-flex; }
+.neo-tl-hop-from,
+.neo-tl-hop-to { flex-shrink: 0; font-weight: 500; }
+.neo-tl-hop-arrow { flex-shrink: 0; color: var(--t-fg-4); }
+.neo-tl-hop-status { flex-shrink: 0; font-size: 11px; }
+.neo-tl-hop-elapsed,
+.neo-tl-hop-chars {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--t-fg-4);
+  font-variant-numeric: tabular-nums;
+}
+.neo-tl-hop-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--t-fg-4);
+}
+
 /* commit_record */
 .neo-tl-commit-row {
   display: flex;
