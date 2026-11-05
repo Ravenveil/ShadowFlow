@@ -58,6 +58,8 @@ import ReactFlow, {
   type OnNodesChange,
   type OnEdgesChange,
   type OnConnect,
+  type OnConnectStart,
+  type OnConnectEnd,
   type NodeMouseHandler,
   type ConnectionMode,
   type ReactFlowProps,
@@ -77,6 +79,10 @@ export interface SfReactFlowBaseProps {
   onNodesChange?: OnNodesChange;
   onEdgesChange?: OnEdgesChange;
   onConnect?: OnConnect;
+  /** react-flow 连线拖拽开始（2026-11-05：TeamDagEditor drop-to-connect 用）。 */
+  onConnectStart?: OnConnectStart;
+  /** react-flow 连线拖拽结束（松手；未命中手柄时调用方可自行处理）。 */
+  onConnectEnd?: OnConnectEnd;
   onNodeClick?: NodeMouseHandler;
   onNodeDragStop?: NodeMouseHandler;
   onPaneClick?: (event: React.MouseEvent) => void;
@@ -122,6 +128,8 @@ function SfReactFlowBaseInner({
   onNodesChange,
   onEdgesChange,
   onConnect,
+  onConnectStart,
+  onConnectEnd,
   onNodeClick,
   onNodeDragStop,
   onPaneClick,
@@ -261,6 +269,8 @@ function SfReactFlowBaseInner({
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
+      onConnectStart={onConnectStart}
+      onConnectEnd={onConnectEnd}
       onNodeClick={onNodeClick}
       onNodeDragStop={onNodeDragStop}
       onPaneClick={onPaneClick}

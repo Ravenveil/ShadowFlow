@@ -4,23 +4,34 @@
  * 与 ProcessDagCanvas 的关系：ProcessDagCanvas 是 run 态「执行」只读投影；
  * 本组件是 team 配置态「拓扑」编辑器，挂在 TeamPanel「编辑 DAG」入口之后。
  *
- * 能力：
- *   - 节点增删：工具条从 roster 选择 agent 添加（一个 agent 至多一个节点）；
- *     选中后 Delete/Backspace 或「删除选中」移除（连带清掉相连的边）
- *   - 连线增删：拖拽 Handle 连线（onConnect，拒自环/重复边），删除同上
+ * 能力（2026-11-05 顺滑化改版：n8n 式连线/排布 + 工具条四钮合一）：
+ *   - 节点增删：工具条下拉**选中即添加**（落画布视口中心，级联偏移防堆叠）；
+ *     或拖拽连线松手到画布空白处，浮出「连接到…」浮层选成员 —— 建节点 +
+ *     连线一步完成（n8n 式 drop-to-connect）
+ *   - 连线增删：ConnectionMode.Loose（任意手柄都能拉线/接线，方向自动归一），
+ *     圆角 smoothstep 边；删除：选中后 Delete/Backspace 或「删除选中」
+ *     （连带清掉相连的边）
+ *   - 自动排列：工具条「自动排列」图标钮 —— 最长路径分层（复用
+ *     TeamDagCanvas.computeTeamDagColumns）×列内行序重排 + fitView
  *   - 边 mode 编辑：选中一条边后右上角属性面板可切换 direct/approve
  *     （approve = L6 人工审批门，流转前需人工确认），随 workflow 边数据保存
  *   - 拖拽布局：SfReactFlowBase 默认 nodesDraggable，坐标即持久化载体
- *   - 脏检查：有未保存改动时「取消」需二次确认，避免误丢拓扑
+ *   - 脏检查：有未保存改动时「放弃修改」需二次确认，避免误丢拓扑
  *   - 版本管理（借鉴 StaffDeck SOP 版本）：后端 team_workflow_versions 仓在
- *     每次 PUT workflow 成功时自动快照；「版本」面板（TeamWorkflowVersionsPanel）
- *     提供版本列表 / 回滚（二次确认，走后端 restore 端点）/「存为分支」
- *     （POST …/workflow/branch 复制为新 team 变体，默认名「· 分支」后缀）
+ *     每次 PUT workflow 成功时自动快照；「版本历史」面板（
+ *     TeamWorkflowVersionsPanel）收进「⋯」溢出菜单，提供版本列表 / 回滚
+ *     （二次确认，走后端 restore 端点）/「存为分支」
  *   - AI 生成草稿：工具条「AI 生成」开 bottom-left 面板，输入自然语言描述
  *     → POST /api/teams/dag-draft（BYOK LLM）生成 {nodes,edges} 草稿 →
  *     dagDraftToWorkflow 铺进画布并标脏；只进画布不落库，确认后走既有保存通路
- *   - 服务端校验：工具条「服务端校验」干跑 POST /api/teams/{id}/dag/validate，
- *     结果（ok/errors）回显到错误区/提示行；不过不挡保存（保存链路自有 D1/D2）
+ *
+ * 工具条收纳（2026-11-05 用户反馈：右侧「服务端校验/校验并保存/取消/版本」
+ * 四钮合并为一个「保存」主按钮）：
+ *   - 右侧只留 [自动排列] [⋯] [保存]；版本历史、放弃修改收进 ⋯ 菜单
+ *   - 服务端干跑校验不再是按钮：保存成功后自动 best-effort 跑一遍
+ *     POST /api/teams/{id}/dag/validate，结果回显提示行（ok/未通过），
+ *     Python JSON team 无 yaml 层 → 404 静默；不过不挡保存（保存链路自有 D1/D2）
+ *   - 「放弃修改」= 原「取消」：dirty 时先弹 NeoConfirmModal 确认
  *
  * 保存链路（校验不过不允许保存）：
  *   1. 客户端 preflight —— validateTeamWorkflowGraph（镜像后端
@@ -33,21 +44,26 @@
  *
  * 注意：POST /dag/validate 校验的是 Node yaml team（members/edges_v1）模型，
  * 与本编辑器操作的 Python workflow 模型不是同一份数据，故不在保存链路里调它；
- * 工具条「服务端校验」为按需手动触发，结果仅作提示，Python JSON team 404 容忍。
+ * 保存成功后的自动干跑校验仅作提示（404 容忍静默），不阻塞保存结果。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Handle,
   Position,
   Panel,
+  useReactFlow,
   useNodesState,
   useEdgesState,
   addEdge,
+  ConnectionMode,
   type Connection,
   type Node,
   type Edge,
   type NodeTypes,
+  type OnConnectStart,
+  type OnConnectEnd,
 } from 'reactflow';
+import { ListTree, MoreHorizontal, Trash2, Wand2 } from 'lucide-react';
 import SfReactFlowBase from '../../core/components/Canvas/SfReactFlowBase';
 import {
   putTeamWorkflow,
@@ -66,6 +82,7 @@ import {
 import type { AgentRecord } from '../../api/agents';
 import { AgentAvatar } from '../../components/agent/AgentAvatar';
 import { validateTeamWorkflowGraph, normalizeEdgeMode, applyEdgeMode, type TeamEdgeMode } from './teamDagValidation';
+import { computeTeamDagColumns } from './TeamDagCanvas';
 import { dagDraftToWorkflow } from './teamDagDraft';
 import { useI18n } from '../../common/i18n';
 import { NeoConfirmModal } from '../NeoConfirmModal';
@@ -125,6 +142,25 @@ const APPROVE_EDGE_STYLE = { stroke: 'var(--t-warn, #D97706)' } as const;
 /** 按 mode 生成 reactflow 边的展示属性（虚线 className + 描边色）。 */
 function edgeVisual(mode: TeamEdgeMode): Pick<Edge, 'className' | 'style'> {
   return mode === 'approve' ? { className: APPROVE_EDGE_CLASS, style: { ...APPROVE_EDGE_STYLE } } : {};
+}
+
+/**
+ * 统一建边工厂（2026-11-05 顺滑化）：smoothstep + 14px 圆角（n8n 式柔和
+ * 折线，直角太生硬），mode 视觉随动。seed/load/onConnect/drop-connect 四处
+ * 建边共用，保证观感一致。
+ */
+function makeTeamEdge(
+  base: { id: string; source: string; target: string; label?: string },
+  mode: TeamEdgeMode = 'direct',
+): Edge {
+  return {
+    ...base,
+    type: 'smoothstep',
+    pathOptions: { borderRadius: 14 },
+    data: { mode },
+    ...edgeVisual(mode),
+    ...(base.label ? { label: base.label } : {}),
+  };
 }
 
 /**
@@ -416,15 +452,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     () =>
       workflow.edges.map((e) => {
         const mode = normalizeEdgeMode(e.data?.mode);
-        return {
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          type: 'smoothstep',
-          data: { mode },
-          ...edgeVisual(mode),
-          ...(e.label ? { label: e.label } : {}),
-        };
+        return makeTeamEdge({ id: e.id, source: e.source, target: e.target, label: e.label }, mode);
       }),
     [workflow],
   );
@@ -432,20 +460,28 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState<TeamAgentNodeData>(seedNodes);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(seedEdges);
 
+  // reactflow 实例：视口换算（新节点落视口中心）/ fitView（自动排列后收拢）。
+  const { screenToFlowPosition, fitView } = useReactFlow();
+
   const [pendingAgentId, setPendingAgentId] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [layoutWarning, setLayoutWarning] = useState('');
   const [saving, setSaving] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
   const [versionsToken, setVersionsToken] = useState(0);
+  // 「⋯」溢出菜单（版本历史 / 放弃修改收纳处，2026-11-05 四钮合一）
+  const [menuOpen, setMenuOpen] = useState(false);
   // AI 生成草稿面板（bottom-left）：prompt 输入 + 生成中/错误态（错误面板内联，不关面板）
   const [showAiDraft, setShowAiDraft] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiErrors, setAiErrors] = useState<string[]>([]);
-  // 服务端干跑校验（POST /dag/validate，yaml 模型）：ok/不适用走提示行，errors 走错误区
+  // 服务端干跑校验（POST /dag/validate，yaml 模型）：保存成功后自动 best-effort
+  // 跑一遍（2026-11-05 起不再是独立按钮），ok/不适用走提示行，errors 走错误区
   const [validating, setValidating] = useState(false);
   const [validateInfo, setValidateInfo] = useState('');
+  // n8n 式 drop-to-connect：拖线松手在空白处 → 记住连线起点，浮层选成员建节点+连线
+  const [pendingConnection, setPendingConnection] = useState<{ source: string; sourceHandle: string | null; position: { x: number; y: number } } | null>(null);
 
   // 添加候选：roster 里还没上画布的 agent（data.agentId 为空占位的旧节点不挡）。
   const placedAgentIds = useMemo(
@@ -457,34 +493,135 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     [agents, placedAgentIds],
   );
 
+  /**
+   * Loose 模式连线（2026-11-05）：任意手柄可起步/落地，方向按「画布语义」
+   * 归一 —— 目标节点应在其上游的右侧，故按两节点 x 坐标定方向（x 小者为
+   * source）；同 x 时保持用户拖拽方向。拒自环/重复边。
+   */
   const onConnect = useCallback(
-    (conn: Connection) => {
-      if (!conn.source || !conn.target || conn.source === conn.target) return;
+    (rawConn: Connection) => {
+      const { source, target } = rawConn;
+      if (!source || !target || source === target) return;
+      const sx = rfNodes.find((n) => n.id === source)?.position.x ?? 0;
+      const tx = rfNodes.find((n) => n.id === target)?.position.x ?? 0;
+      const [from, to] = sx <= tx ? [source, target] : [target, source];
       setRfEdges((eds) => {
-        if (eds.some((e) => e.source === conn.source && e.target === conn.target)) return eds;
-        return addEdge(
-          { ...conn, id: `${conn.source}->${conn.target}`, type: 'smoothstep', data: { mode: 'direct' } },
-          eds,
-        );
+        if (eds.some((e) => e.source === from && e.target === to)) return eds;
+        return addEdge(makeTeamEdge({ id: `${from}->${to}`, source: from, target: to }), eds);
       });
       setErrors([]);
     },
-    [setRfEdges],
+    [setRfEdges, rfNodes],
   );
 
+  /**
+   * 连线拖拽开始：记起点（drop-to-connect 用）+ 清上一次错误。
+   */
+  const connectStartRef = useRef<{ nodeId: string | null; handleType: 'source' | 'target' | null } | null>(null);
+  const onConnectStartCapture = useCallback<OnConnectStart>(
+    (_event, params) => {
+      connectStartRef.current = { nodeId: params.nodeId, handleType: params.handleType };
+      setErrors([]);
+    },
+    [],
+  );
+  /**
+   * 连线拖拽结束（2026-11-05 n8n 式 drop-to-connect）：松手时没有落在任何
+   * 手柄上（命中手柄时 reactflow 已自行走 onConnect）→ 弹出「连接到…」
+   * 浮层；选成员即"建节点 + 连线"一步完成。起点从 Start 回调的 ref 取。
+   */
+  const onConnectEnd = useCallback<OnConnectEnd>(
+    (event) => {
+      const start = connectStartRef.current;
+      connectStartRef.current = null;
+      if (!start?.nodeId) return;
+      // 松手点是否命中某个 Handle（命中则 reactflow 已自行 onConnect，跳过）
+      const target = event.target as HTMLElement | null;
+      if (target && (target.classList.contains('react-flow__handle') || target.closest?.('.react-flow__handle'))) {
+        return;
+      }
+      const coords = screenToFlowPosition(
+        event instanceof MouseEvent ? { x: event.clientX, y: event.clientY } : {
+          x: (event as TouchEvent).changedTouches?.[0]?.clientX ?? 0,
+          y: (event as TouchEvent).changedTouches?.[0]?.clientY ?? 0,
+        },
+      );
+      setPendingConnection({ source: start.nodeId, sourceHandle: null, position: coords });
+    },
+    [screenToFlowPosition],
+  );
+
+  /** drop-to-connect 浮层：选中成员 → 建节点（松手点）+ 连线（方向按 x 归一）。 */
+  const connectDroppedToAgent = useCallback(
+    (agentId: string) => {
+      if (!pendingConnection) return;
+      const agent = agents.find((a) => a.agent_id === agentId);
+      if (!agent) return;
+      const srcNode = rfNodes.find((n) => n.id === pendingConnection.source);
+      const newId = `n-${agent.agent_id}`;
+      setRfNodes((ns) => {
+        if (ns.some((n) => n.id === newId)) return ns;
+        return [
+          ...ns,
+          {
+            id: newId,
+            type: 'teamAgent',
+            position: pendingConnection.position,
+            data: {
+              agentId: agent.agent_id,
+              name: agent.name,
+              soul: agent.soul,
+              nodeType: 'agentTask',
+              policyState: policyColorOf?.get(agent.agent_id) ?? null,
+              ...resolveAvatar(agent.agent_id),
+            },
+          },
+        ];
+      });
+      // 方向归一：新节点在起点右侧 → source→target；在左侧 → 反向
+      const srcX = srcNode?.position.x ?? 0;
+      const [from, to] = pendingConnection.position.x >= srcX
+        ? [pendingConnection.source, newId]
+        : [newId, pendingConnection.source];
+      setRfEdges((eds) => {
+        if (eds.some((e) => e.source === from && e.target === to)) return eds;
+        return [...eds, makeTeamEdge({ id: `${from}->${to}`, source: from, target: to })];
+      });
+      setPendingConnection(null);
+      setErrors([]);
+    },
+    [pendingConnection, agents, rfNodes, setRfNodes, setRfEdges, resolveAvatar, policyColorOf],
+  );
+
+  /**
+   * 下拉选中即添加（2026-11-05 顺滑化：不再有独立「+ 节点」钮）—— 节点落在
+   * 当前视口中心（n8n 式），已有节点时向右下级联偏移，避免完全叠住。
+   */
   const addAgentNode = useCallback(() => {
     const agent = agents.find((a) => a.agent_id === pendingAgentId);
     if (!agent) return;
     const id = `n-${agent.agent_id}`;
     setRfNodes((ns) => {
       if (ns.some((n) => n.id === id)) return ns;
-      const maxX = ns.reduce((m, n) => Math.max(m, n.position.x), 0);
+      // 视口中心（flow 坐标）；拿不到视口时退化为既有节点包围盒右侧
+      let pos: { x: number; y: number };
+      try {
+        const center = screenToFlowPosition({
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2,
+        });
+        const offset = ns.length * 24;
+        pos = { x: center.x - 48 + offset, y: center.y - 40 + offset };
+      } catch {
+        const maxX = ns.reduce((m, n) => Math.max(m, n.position.x), 0);
+        pos = { x: maxX + (ns.length ? 200 : 0), y: 40 + (ns.length % 6) * 90 };
+      }
       return [
         ...ns,
         {
           id,
           type: 'teamAgent',
-          position: { x: maxX + (ns.length ? 200 : 0), y: 40 + (ns.length % 6) * 90 },
+          position: pos,
           data: {
             agentId: agent.agent_id,
             name: agent.name,
@@ -498,7 +635,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     });
     setPendingAgentId('');
     setErrors([]);
-  }, [agents, pendingAgentId, setRfNodes, resolveAvatar, policyColorOf]);
+  }, [agents, pendingAgentId, setRfNodes, resolveAvatar, policyColorOf, screenToFlowPosition]);
 
   const selectedNodes = rfNodes.filter((n) => n.selected);
   const selectedEdges = rfEdges.filter((e) => e.selected);
@@ -553,6 +690,34 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
   }, [rfNodes, rfEdges]);
 
   /**
+   * 自动排列（2026-11-05 顺滑化）：最长路径分层（复用 TeamDagCanvas 纯函数，
+   * 环安全）×列内行序，n8n 式从左到右整列排布 + fitView 收拢。
+   */
+  const autoLayout = useCallback(() => {
+    const wf = serialize();
+    if (wf.nodes.length === 0) return;
+    const cols = computeTeamDagColumns(wf);
+    const buckets = new Map<number, string[]>();
+    for (const n of wf.nodes) {
+      const c = cols.get(n.id) ?? 0;
+      const arr = buckets.get(c) ?? [];
+      arr.push(n.id);
+      buckets.set(c, arr);
+    }
+    const COL_GAP = 180;
+    const ROW_GAP = 110;
+    setRfNodes((ns) =>
+      ns.map((n) => {
+        const c = cols.get(n.id) ?? 0;
+        const row = (buckets.get(c) ?? []).indexOf(n.id);
+        return { ...n, position: { x: c * COL_GAP, y: row * ROW_GAP } };
+      }),
+    );
+    setErrors([]);
+    window.setTimeout(() => fitView({ padding: 0.18, duration: 320 }), 50);
+  }, [serialize, setRfNodes, fitView]);
+
+  /**
    * 初始图的序列化快照（与 serialize 同构：坐标取整、name 走 roster 回退、
    * mode 归一化），作为脏检查基线 —— 未做任何编辑时 dirty 必须为 false。
    */
@@ -605,6 +770,43 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     onCancel();
   }, [dirty, onCancel]);
 
+  /**
+   * 服务端干跑校验（2026-11-05 改版：不再有独立按钮）——保存成功后自动
+   * best-effort 跑一遍 POST /dag/validate 校验服务端 yaml DAG。注意它校验的
+   * 是 yaml members/edges_v1 模型，不是画布上的 workflow —— 结果仅作提示，
+   * 不挡保存；Python JSON team 无 yaml 层时 404 TEAM_NOT_FOUND **静默**
+   * （原「不适用」提示行对自动触发场景太吵）。
+   */
+  const runServerValidate = useCallback(async () => {
+    setValidating(true);
+    setValidateInfo('');
+    try {
+      const result = await validateTeamDag(teamId);
+      if (result.ok) {
+        setValidateInfo(
+          t('neo.host.teamDagValidateOk', { defaultValue: '服务端 DAG 校验通过' }),
+        );
+      } else {
+        setErrors(
+          result.errors.length > 0
+            ? result.errors
+            : [t('neo.host.teamDagValidateFailed', { defaultValue: '服务端 DAG 校验未通过' })],
+        );
+      }
+    } catch (err) {
+      if (!(err instanceof TeamApiError && err.status === 404)) {
+        setErrors(
+          extractApiErrorLines(
+            err,
+            t('neo.host.teamDagValidateFailed', { defaultValue: '服务端 DAG 校验未通过' }),
+          ),
+        );
+      }
+    } finally {
+      setValidating(false);
+    }
+  }, [teamId, t]);
+
   const onSave = useCallback(async () => {
     const wf = serialize();
     // 1. 客户端 preflight —— 不过就不发请求
@@ -643,7 +845,10 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     // 保存成功 → 服务端已自动记一版，刷新版本面板（若开着）
     setVersionsToken((k) => k + 1);
     onSaved(wf);
-  }, [serialize, teamId, onSaved, t]);
+    // 4. 自动干跑校验（2026-11-05：原独立「服务端校验」按钮收编为保存后的
+    //    best-effort 附加动作，不阻塞/不影响保存结果；404 = 无 yaml 层，静默）
+    void runServerValidate();
+  }, [serialize, teamId, onSaved, t, runServerValidate]);
 
   /** 把一份 workflow 图整体铺进画布（AI 草稿用；映射与 seedNodes/seedEdges 同构）。 */
   const loadWorkflowToCanvas = useCallback(
@@ -669,15 +874,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
       setRfEdges(
         wf.edges.map((e) => {
           const mode = normalizeEdgeMode(e.data?.mode);
-          return {
-            id: e.id,
-            source: e.source,
-            target: e.target,
-            type: 'smoothstep',
-            data: { mode },
-            ...edgeVisual(mode),
-            ...(e.label ? { label: e.label } : {}),
-          };
+          return makeTeamEdge({ id: e.id, source: e.source, target: e.target, label: e.label }, mode);
         }),
       );
     },
@@ -710,52 +907,6 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     }
   }, [aiPrompt, aiBusy, agents, loadWorkflowToCanvas, t]);
 
-  /**
-   * 服务端干跑校验：先跑与保存同一套客户端 preflight（本地有错直接列出、不发
-   * 请求），再 POST /dag/validate 校验服务端 yaml DAG。注意它校验的是 yaml
-   * members/edges_v1 模型，不是画布上的 workflow —— 结果仅作提示，不挡保存；
-   * Python JSON team 无 yaml 层时 404 TEAM_NOT_FOUND 容忍（同布局写回）。
-   */
-  const onValidate = useCallback(async () => {
-    const wf = serialize();
-    const localErrs = validateTeamWorkflowGraph(wf);
-    setErrors(localErrs);
-    setValidateInfo('');
-    if (localErrs.length > 0) return;
-    setValidating(true);
-    try {
-      const result = await validateTeamDag(teamId);
-      if (result.ok) {
-        setValidateInfo(
-          t('neo.host.teamDagValidateOk', { defaultValue: '服务端 DAG 校验通过' }),
-        );
-      } else {
-        setErrors(
-          result.errors.length > 0
-            ? result.errors
-            : [t('neo.host.teamDagValidateFailed', { defaultValue: '服务端 DAG 校验未通过' })],
-        );
-      }
-    } catch (err) {
-      if (err instanceof TeamApiError && err.status === 404) {
-        setValidateInfo(
-          t('neo.host.teamDagValidateNoYaml', {
-            defaultValue: '该团队无 yaml DAG 层（Python JSON team），服务端干跑校验不适用；本地校验已通过',
-          }),
-        );
-      } else {
-        setErrors(
-          extractApiErrorLines(
-            err,
-            t('neo.host.teamDagValidateFailed', { defaultValue: '服务端 DAG 校验未通过' }),
-          ),
-        );
-      }
-    } finally {
-      setValidating(false);
-    }
-  }, [serialize, teamId, t]);
-
   return (
     <div className="neo-team-dag-editor">
       {errors.length > 0 && (
@@ -781,19 +932,31 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectStart={onConnectStartCapture}
+          onConnectEnd={onConnectEnd}
           className="neo-team-dag"
-          reactFlowProps={{ deleteKeyCode: ['Delete', 'Backspace'] }}
+          connectionMode={ConnectionMode.Loose}
+          reactFlowProps={{
+            deleteKeyCode: ['Delete', 'Backspace'],
+            connectionLineType: 'smoothstep' as never,
+            connectionRadius: 28,
+          }}
         >
           <Panel position="top-left" className="neo-team-dag-toolbar">
             <select
               className="neo-team-dag-select"
               value={pendingAgentId}
-              onChange={(e) => setPendingAgentId(e.target.value)}
+              onChange={(e) => {
+                setPendingAgentId(e.target.value);
+                // 选中即添加（2026-11-05）：选完直接落节点，不再点「+ 节点」
+                if (e.target.value) window.setTimeout(addAgentNode, 0);
+              }}
               disabled={saving}
+              title={t('neo.host.teamDagAddHint', { defaultValue: '选择成员即添加节点' })}
               data-testid="team-dag-add-select"
             >
               <option value="">
-                {t('neo.host.teamDagAddPlaceholder', { defaultValue: '选择成员…' })}
+                {t('neo.host.teamDagAddPlaceholder', { defaultValue: '+ 选择成员添加节点' })}
               </option>
               {addableAgents.map((a) => (
                 <option key={a.agent_id} value={a.agent_id}>
@@ -804,20 +967,13 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
             <button
               type="button"
               className="neo-team-dag-btn"
-              disabled={!pendingAgentId || saving}
-              onClick={addAgentNode}
-              data-testid="team-dag-add-btn"
-            >
-              {t('neo.host.teamDagAddNode', { defaultValue: '+ 节点' })}
-            </button>
-            <button
-              type="button"
-              className="neo-team-dag-btn"
               disabled={(selectedNodes.length === 0 && selectedEdges.length === 0) || saving}
               onClick={deleteSelected}
+              title={t('neo.host.teamDagDelete', { defaultValue: '删除选中（Delete）' })}
+              aria-label={t('neo.host.teamDagDelete', { defaultValue: '删除选中（Delete）' })}
               data-testid="team-dag-del-btn"
             >
-              {t('neo.host.teamDagDelete', { defaultValue: '删除选中' })}
+              <Trash2 size={13} strokeWidth={1.9} />
             </button>
             <button
               type="button"
@@ -827,12 +983,14 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
                 setShowAiDraft((v) => !v);
                 setAiErrors([]);
               }}
+              title={t('neo.host.teamDagAiGenerate', { defaultValue: 'AI 生成草稿' })}
+              aria-label={t('neo.host.teamDagAiGenerate', { defaultValue: 'AI 生成草稿' })}
               data-testid="team-dag-ai-btn"
             >
-              {t('neo.host.teamDagAiGenerate', { defaultValue: 'AI 生成' })}
+              <Wand2 size={13} strokeWidth={1.9} />
             </button>
             <span className="neo-team-dag-hint">
-              {t('neo.host.teamDagHint', { defaultValue: '拖点连线 · 点边改模式 · Delete 删除' })}
+              {t('neo.host.teamDagHint', { defaultValue: '拖手柄连线 · 松手到空白添加新节点 · 点边改模式' })}
             </span>
             <span className="neo-team-dag-toolbar-spacer" />
             {dirty && !saving && (
@@ -840,16 +998,30 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
                 {t('neo.host.teamDagDirty', { defaultValue: '● 未保存' })}
               </span>
             )}
+            {/* 2026-11-05 四钮合一：右侧只留 [自动排列] [⋯] [保存]。
+                版本历史/放弃修改收进 ⋯；服务端校验改为保存后自动干跑。 */}
             <button
               type="button"
               className="neo-team-dag-btn"
-              disabled={saving || validating}
-              onClick={onValidate}
-              data-testid="team-dag-validate-btn"
+              disabled={saving || rfNodes.length === 0}
+              onClick={autoLayout}
+              title={t('neo.host.teamDagAutoLayout', { defaultValue: '自动排列（分层布局）' })}
+              aria-label={t('neo.host.teamDagAutoLayout', { defaultValue: '自动排列（分层布局）' })}
+              data-testid="team-dag-layout-btn"
             >
-              {validating
-                ? t('neo.host.teamDagValidating', { defaultValue: '校验中…' })
-                : t('neo.host.teamDagValidate', { defaultValue: '服务端校验' })}
+              <ListTree size={13} strokeWidth={1.9} />
+            </button>
+            <button
+              type="button"
+              className={`neo-team-dag-btn${menuOpen ? ' is-active' : ''}`}
+              disabled={saving}
+              onClick={() => setMenuOpen((v) => !v)}
+              title={t('neo.host.teamDagMore', { defaultValue: '版本历史 / 放弃修改' })}
+              aria-label={t('neo.host.teamDagMore', { defaultValue: '版本历史 / 放弃修改' })}
+              aria-expanded={menuOpen}
+              data-testid="team-dag-more-btn"
+            >
+              <MoreHorizontal size={14} strokeWidth={1.9} />
             </button>
             <button
               type="button"
@@ -860,27 +1032,31 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
             >
               {saving
                 ? t('neo.host.teamDagSaving', { defaultValue: '保存中…' })
-                : t('neo.host.teamDagSave', { defaultValue: '校验并保存' })}
-            </button>
-            <button
-              type="button"
-              className="neo-team-dag-btn"
-              disabled={saving}
-              onClick={handleCancel}
-              data-testid="team-dag-cancel-btn"
-            >
-              {t('neo.host.teamDagCancel', { defaultValue: '取消' })}
-            </button>
-            <button
-              type="button"
-              className={`neo-team-dag-btn${showVersions ? ' is-active' : ''}`}
-              disabled={saving}
-              onClick={() => setShowVersions((v) => !v)}
-              data-testid="team-dag-versions-btn"
-            >
-              {t('neo.host.teamDagVersions', { defaultValue: '版本' })}
+                : t('neo.host.teamDagSave', { defaultValue: '保存' })}
             </button>
           </Panel>
+          {/* ⋯ 溢出菜单：版本历史开关 + 放弃修改（原「取消」钮，dirty 时二次确认） */}
+          {menuOpen && (
+            <Panel position="top-right" className="neo-team-dag-menu-panel" data-testid="team-dag-menu-panel">
+              <button
+                type="button"
+                className={`neo-team-dag-menu-item${showVersions ? ' is-active' : ''}`}
+                onClick={() => setShowVersions((v) => !v)}
+                data-testid="team-dag-versions-toggle"
+              >
+                {t('neo.host.teamDagVersions', { defaultValue: '版本历史' })}
+              </button>
+              <button
+                type="button"
+                className="neo-team-dag-menu-item neo-team-dag-menu-item--danger"
+                disabled={!dirty || saving}
+                onClick={handleCancel}
+                data-testid="team-dag-cancel-btn"
+              >
+                {t('neo.host.teamDagDiscard', { defaultValue: '放弃修改' })}
+              </button>
+            </Panel>
+          )}
           {showVersions && (
             <Panel position="bottom-right" className="neo-team-dag-versions-panel" data-testid="team-dag-versions-panel">
               <TeamWorkflowVersionsPanel
@@ -945,7 +1121,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
                 </div>
                 <div className="neo-team-dag-edge-hint">
                   {t('neo.host.teamDagAiHint', {
-                    defaultValue: '草稿只进画布不落库，确认后点「校验并保存」',
+                    defaultValue: '草稿只进画布不落库，确认后点「保存」',
                   })}
                 </div>
               </div>
@@ -983,6 +1159,48 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
                       defaultValue: '直接边：上游完成后自动流转到下游',
                     })}
               </div>
+            </Panel>
+          )}
+          {/* n8n 式 drop-to-connect：拖线松手到空白处 → 浮层选成员，建节点+连线一步 */}
+          {pendingConnection && (
+            <Panel
+              position="top-left"
+              className="neo-team-dag-drop-panel"
+              style={{ left: pendingConnection.position.x, top: pendingConnection.position.y }}
+              data-testid="team-dag-drop-panel"
+            >
+              <div className="neo-team-dag-versions-head">
+                <span className="neo-team-dag-versions-title">
+                  {t('neo.host.teamDagDropTitle', { defaultValue: '连接到…' })}
+                </span>
+              </div>
+              <div className="neo-team-dag-drop-list">
+                {addableAgents.length === 0 ? (
+                  <div className="neo-team-dag-versions-empty">
+                    {t('neo.host.teamDagDropEmpty', { defaultValue: '没有可添加的成员了' })}
+                  </div>
+                ) : (
+                  addableAgents.map((a) => (
+                    <button
+                      key={a.agent_id}
+                      type="button"
+                      className="neo-team-dag-drop-item"
+                      onClick={() => connectDroppedToAgent(a.agent_id)}
+                      data-testid={`team-dag-drop-item-${a.agent_id}`}
+                    >
+                      <span className="neo-team-dag-drop-name">{a.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+              <button
+                type="button"
+                className="neo-team-dag-drop-item neo-team-dag-drop-item--cancel"
+                onClick={() => setPendingConnection(null)}
+                data-testid="team-dag-drop-cancel"
+              >
+                {t('neo.host.teamDagDropCancel', { defaultValue: '取消连接' })}
+              </button>
             </Panel>
           )}
         </SfReactFlowBase>
