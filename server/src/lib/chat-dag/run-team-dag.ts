@@ -12,13 +12,21 @@
  *   - 上游 failed/timeout/empty/aborted 时，下游 upstream 注入一条系统失败通知
  *     （失败传播），下游知情自适应，不再带着残缺上下文瞎跑。
  *
- * 不在本阶段:中断恢复/hydrate(B2)、用户插话完整续跑(B3)、conditional rework(Phase 3)。
+ * 2026-11-05 第二轮 — conditional rework 闭环（评审表「异常处理」收尾）：
+ *   - conditional 边（如 QA→Dev）不再是死配置：下游节点带 conditional 入边时，
+ *     跑完先经 detectRejection 零 LLM 判定（rework-detect.ts 标记约定）；
+ *   - 驳回 → 给评审者口中的被驳回方（edge.condition 指定，缺省=上游）注入
+ *     驳回意见触发返工，预算 = edge.max_retries（缺省 1），用尽即放行并显式记；
+ *   - 每次返工一个新 hop（rework 边），全程可审计。
+ *
+ * 不在本阶段:中断恢复/hydrate(B2)、用户插话完整续跑(B3)。
  */
 import type { TeamRunShape } from '../team-source';
 import { computeDagLayers } from './dag-layers';
 import { gate } from './policy-gate';
 import { mapLimit } from './map-limit';
 import { runNodeWithPolicy } from './node-policy';
+import { detectRejection } from './rework-detect';
 
 export interface UpstreamMsg { from: string; text: string }
 
@@ -55,6 +63,8 @@ export interface RunTeamDagResult {
   deniedEdges: number;
   warnedEdges: number;
   aborted: boolean;
+  /** conditional rework 实际触发的返工次数（按节点累计，含每轮回执）。 */
+  reworkRuns: number;
 }
 
 export interface RunTeamDagOpts {
@@ -66,6 +76,8 @@ export interface RunTeamDagOpts {
   nodeTimeoutMs?: number;
   /** 入边无 max_retries 时的默认重试预算(B4)。默认 1。 */
   defaultMaxRetries?: number;
+  /** conditional rework 全局每节点返工上限(2026-11-05)。默认 2,防坏数据无限循环。 */
+  maxReworkRounds?: number;
 }
 
 export async function runTeamDagFanout(
@@ -85,10 +97,18 @@ export async function runTeamDagFanout(
   // 2026-11-05 — 每条前向边同步记下 from→to（给 hop 记录器用；hop 在层循环里 open）。
   const incoming = new Map<string, string[]>();
   const retryBudget = new Map<string, number>();
+  // conditional 出边索引（2026-11-05 rework）— 评审者节点 → [{to:被评审方, max_retries}]。
+  // 语义：评审者跑完 → 自己产出命中驳回标记 → 把意见带回给 to 重跑（返工）。
+  const reworkOutgoing = new Map<string, Array<{ to: string; maxRetries: number }>>();
   for (const e of team.edges) {
-    if (e.kind === 'conditional') continue;
     if (!team.members.includes(e.from) || !team.members.includes(e.to)) continue;
     if (e.from === e.to) continue;
+    if (e.kind === 'conditional') {
+      let list = reworkOutgoing.get(e.from);
+      if (!list) { list = []; reworkOutgoing.set(e.from, list); }
+      list.push({ to: e.to, maxRetries: typeof e.max_retries === 'number' ? Math.max(0, e.max_retries) : 1 });
+      continue;
+    }
     let list = incoming.get(e.to);
     if (!list) { list = []; incoming.set(e.to, list); }
     list.push(e.from);
@@ -121,110 +141,181 @@ export async function runTeamDagFanout(
   let deniedEdges = 0;
   let warnedEdges = 0;
   let aborted = false;
+  let reworkRuns = 0;
+
+  /**
+   * 跑一个节点一次（组 upstream → runNodeWithPolicy → 落产出/终态/hop）。
+   * 层循环与 rework 循环共用；返回该次执行的终态。
+   */
+  const runNodeOnce = async (
+    agentId: string,
+    extraUpstream: UpstreamMsg[],
+  ): Promise<AgentOutcome> => {
+    // 上游产出按 gate 过滤。
+    const upstream: UpstreamMsg[] = [...extraUpstream];
+    for (const from of incoming.get(agentId) ?? []) {
+      const verdict = gate(team.policy_matrix, from, agentId);
+      const hopId = hopIdFor(from, agentId);
+      if (verdict === 'deny') {
+        deniedEdges++;
+        if (hops && hopId) hops.settle(hopId, 'denied', { detail: 'policy deny' });
+        await deps.postMessage({ content: `[policy] ${from} → ${agentId} 被 deny 拦截,上游产出未传递。`, sender_name: 'system', sender_kind: 'system' });
+        continue;
+      }
+      const text = outputs.get(from);
+      if (verdict === 'warn') {
+        warnedEdges++;
+        await deps.postMessage({
+          content: text
+            ? `[policy] ${from} → ${agentId} warn 提醒(交到拍板/审核点),仍放行。`
+            : `[policy] ${from} → ${agentId} warn 提醒;但上游无产出,无内容可传递。`,
+          sender_name: 'system', sender_kind: 'system',
+        });
+      }
+      if (text) {
+        if (hops && hopId) hops.settle(hopId, 'done', { outputChars: text.length });
+        upstream.push({ from, text });
+      } else {
+        // 2026-11-05 失败传播 — 上游没产出（失败/超时/空/中止）时下游必须知情。
+        // 上游压根没跑成 → 该交接按上游终态结算 + 注入系统失败通知。
+        const upOutcome = nodeOutcome.get(from);
+        if (upOutcome && upOutcome !== 'ok') {
+          if (hops && hopId) {
+            const failDetail = upOutcome === 'error'
+              ? (errMsgOf.get(from) ?? 'error')
+              : `上游 ${from} ${upOutcome}`;
+            hops.settle(hopId, upOutcome === 'aborted' ? 'aborted' : upOutcome === 'timeout' ? 'timeout' : upOutcome === 'empty' ? 'empty' : 'failed', {
+              detail: failDetail,
+            });
+          }
+          const upstreamName = (await deps.getAgent(from))?.name ?? from;
+          upstream.push({
+            from,
+            text: `[系统通知] 上游 ${upstreamName} 本轮${upOutcome === 'timeout' ? '超时未响应' : upOutcome === 'empty' ? '返回空回复' : upOutcome === 'aborted' ? '被中止' : '执行失败'}，其交接内容缺失。请基于可用信息继续，并在产出中说明哪些部分因上游缺失可能不完整。`,
+          });
+        }
+      }
+    }
+
+    const agent = await deps.getAgent(agentId);
+    if (!agent) {
+      perAgent[agentId] = 'error';
+      nodeOutcome.set(agentId, 'error');
+      await deps.postMessage({ content: `[chat] Agent '${agentId}' not found.`, sender_name: 'system', sender_kind: 'system' });
+      return 'error';
+    }
+
+    const maxRetries = retryBudget.get(agentId) ?? defaultMaxRetries;
+    // 该节点作为上游的各条边在此刻 open（pending→running）——层序保证下游的
+    // open 一定发生在上游 settle 之后，同层并发各自 open 自己的出边互不冲突。
+    if (hops) {
+      for (const e of team.edges) {
+        if (e.from === agentId && e.kind !== 'conditional' && team.members.includes(e.to) && e.from !== e.to) {
+          const id = hopIdFor(e.from, e.to);
+          if (id) hops.start(id);
+        }
+      }
+    }
+    const res = await runNodeWithPolicy(
+      (attemptSignal) => deps.callAgent({ agentId, name: agent.name, soul: agent.soul, upstream, signal: attemptSignal }),
+      { timeoutMs: nodeTimeoutMs, maxRetries, signal },
+    );
+
+    if (res.reason === 'aborted') { perAgent[agentId] = 'aborted'; nodeOutcome.set(agentId, 'aborted'); aborted = true; return 'aborted'; }
+    if (res.reason === 'timeout') {
+      perAgent[agentId] = 'timeout';
+      nodeOutcome.set(agentId, 'timeout');
+      await deps.postMessage({ content: `[chat] ${agent.name} 超时(${nodeTimeoutMs}ms)未响应,已放弃该节点。`, sender_name: 'system', sender_kind: 'system' });
+      return 'timeout';
+    }
+    if (res.reason === 'error') {
+      perAgent[agentId] = 'error';
+      nodeOutcome.set(agentId, 'error');
+      errMsgOf.set(agentId, res.error ?? '');
+      await deps.postMessage({ content: `[chat] ${agent.name} 出错：${res.error}`, sender_name: 'system', sender_kind: 'system' });
+      return 'error';
+    }
+    const reply = res.text.trim();
+    if (!reply) {
+      perAgent[agentId] = 'empty';
+      nodeOutcome.set(agentId, 'empty');
+      await deps.postMessage({ content: `[chat] ${agent.name} 返回空回复。`, sender_name: 'system', sender_kind: 'system' });
+      return 'empty';
+    }
+    outputs.set(agentId, reply);
+    perAgent[agentId] = 'ok';
+    nodeOutcome.set(agentId, 'ok');
+    // U0 绑角色 — 带上发送者 agent_id（agentId 即 map key，恒在作用域）。
+    await deps.postMessage({ content: reply, sender_name: agent.name, sender_kind: 'agent', agent_id: agentId });
+    return 'ok';
+  };
 
   let ranLayers = 0;
+  /** 每节点已用返工次数（跨层累计——同一被评审方可能被多个评审者盯）。 */
+  const reworkUsed = new Map<string, number>();
   for (const layer of layers) {
     if (signal.aborted || aborted) { aborted = true; break; } // 外部已取消或节点已 abort:不再起新层
     await mapLimit(layer, maxConcurrency, async (agentId) => {
       // 快速跳过(非唯一屏障):runNodeWithPolicy 入口会再查 signal.aborted 作硬屏障。
       if (signal.aborted || aborted) { perAgent[agentId] = 'aborted'; return; }
 
-      // 上游产出按 gate 过滤。
-      const upstream: UpstreamMsg[] = [];
-      for (const from of incoming.get(agentId) ?? []) {
-        const verdict = gate(team.policy_matrix, from, agentId);
-        const hopId = hopIdFor(from, agentId);
-        if (verdict === 'deny') {
-          deniedEdges++;
-          if (hops && hopId) hops.settle(hopId, 'denied', { detail: 'policy deny' });
-          await deps.postMessage({ content: `[policy] ${from} → ${agentId} 被 deny 拦截,上游产出未传递。`, sender_name: 'system', sender_kind: 'system' });
-          continue;
+      const outcome = await runNodeOnce(agentId, []);
+      if (outcome !== 'ok') return; // 失败传播已落,hop 收尾兜底统一处理
+      if (signal.aborted || aborted) return;
+
+      // ── conditional rework（2026-11-05 第二轮）──────────────────────────
+      // 本节点是评审者（带 conditional 出边）且产出命中驳回标记 → 把意见带回
+      // 给被评审方（edge.to）重跑，跑完本评审者**复审**，循环直到通过或预算用尽。
+      const targets = reworkOutgoing.get(agentId);
+      if (!targets?.length) return;
+      const reviewerName = (await deps.getAgent(agentId))?.name ?? agentId;
+
+      for (const t of targets) {
+        if (signal.aborted || aborted) break;
+        const budget = Math.min(t.maxRetries, Math.max(opts.maxReworkRounds ?? 2, 0));
+        if (budget <= 0) continue;
+
+        // 闭环循环：驳回 → 返工 → 复审 → 再判定。预算上限兜底（防坏 soul 无限循环）。
+        while ((reworkUsed.get(t.to) ?? 0) < budget && detectRejection(outputs.get(agentId) ?? '')) {
+          if (signal.aborted || aborted) break;
+          const used = reworkUsed.get(t.to) ?? 0;
+          const review = outputs.get(agentId) ?? '';
+          const targetAgent = await deps.getAgent(t.to);
+          const targetName = targetAgent?.name ?? t.to;
+          const hopRecorder = hops; // 局部常量 — TS 收窄（闭包内 hops 可能 undefined）
+          const hopId = hopRecorder ? hopRecorder.open({ from: agentId, to: t.to }) : null;
+          if (hopId && hopRecorder) hopRecorder.start(hopId);
+          reworkUsed.set(t.to, used + 1);
+          reworkRuns++;
+        await deps.postMessage({
+          content: `[rework·返工] ${reviewerName} 驳回了 ${targetName} 的产出（第 ${used + 1}/${budget} 轮返工），驳回意见已带回。`,
+          sender_name: 'system', sender_kind: 'system',
+        });
+          const reworkOutcome = await runNodeOnce(t.to, [{
+            from: agentId,
+            text: `[驳回意见·第 ${used + 1} 轮] ${review}`,
+          }]);
+          if (hopId && hopRecorder) {
+            hopRecorder.settle(hopId, reworkOutcome === 'ok' ? 'done' : reworkOutcome === 'timeout' ? 'timeout' : reworkOutcome === 'aborted' ? 'aborted' : reworkOutcome === 'empty' ? 'empty' : 'failed', {
+              detail: `rework round ${used + 1}`,
+              outputChars: reworkOutcome === 'ok' ? (outputs.get(t.to) ?? '').length : 0,
+            });
+          }
+          if (reworkOutcome !== 'ok') break; // 返工也失败 → 不再循环（失败传播已落）
+          if (signal.aborted || aborted) break;
+          // 复审：评审者重跑一次。产出覆盖 outputs（postMessage 群里可见）。
+          const reReview = await runNodeOnce(agentId, []);
+          if (reReview !== 'ok') break; // 复审本身挂了 → 放行现版，失败传播已落
         }
-        const text = outputs.get(from);
-        if (verdict === 'warn') {
-          warnedEdges++;
+
+        // 预算用尽仍被驳回 → 显式放行并记录（OpenBot 审计纪律：不悬空、有交代）。
+        if ((reworkUsed.get(t.to) ?? 0) >= budget && detectRejection(outputs.get(agentId) ?? '')) {
           await deps.postMessage({
-            content: text
-              ? `[policy] ${from} → ${agentId} warn 提醒(交到拍板/审核点),仍放行。`
-              : `[policy] ${from} → ${agentId} warn 提醒;但上游无产出,无内容可传递。`,
+            content: `[rework] ${reviewerName} 的驳回已达 ${t.to} 的返工预算上限（${budget} 轮），放行现版产出并记录在案。`,
             sender_name: 'system', sender_kind: 'system',
           });
         }
-        if (text) {
-          if (hops && hopId) hops.settle(hopId, 'done', { outputChars: text.length });
-          upstream.push({ from, text });
-        } else {
-          // 2026-11-05 失败传播 — 上游没产出（失败/超时/空/中止）时下游必须知情。
-          // 边仍记 done 之前先看上游终态：上游压根没跑成 → 该交接按上游终态结算。
-          const upOutcome = nodeOutcome.get(from);
-          if (upOutcome && upOutcome !== 'ok') {
-            if (hops && hopId) {
-              const failDetail = upOutcome === 'error'
-                ? (errMsgOf.get(from) ?? 'error')
-                : `上游 ${from} ${upOutcome}`;
-              hops.settle(hopId, upOutcome === 'aborted' ? 'aborted' : upOutcome === 'timeout' ? 'timeout' : upOutcome === 'empty' ? 'empty' : 'failed', {
-                detail: failDetail,
-              });
-            }
-            const upstreamName = (await deps.getAgent(from))?.name ?? from;
-            upstream.push({
-              from,
-              text: `[系统通知] 上游 ${upstreamName} 本轮${upOutcome === 'timeout' ? '超时未响应' : upOutcome === 'empty' ? '返回空回复' : upOutcome === 'aborted' ? '被中止' : '执行失败'}，其交接内容缺失。请基于可用信息继续，并在产出中说明哪些部分因上游缺失可能不完整。`,
-            });
-          }
-        }
       }
-
-      const agent = await deps.getAgent(agentId);
-      if (!agent) {
-        perAgent[agentId] = 'error';
-        nodeOutcome.set(agentId, 'error');
-        await deps.postMessage({ content: `[chat] Agent '${agentId}' not found.`, sender_name: 'system', sender_kind: 'system' });
-        return;
-      }
-
-      const maxRetries = retryBudget.get(agentId) ?? defaultMaxRetries;
-      // 该节点作为上游的各条边在此刻 open（pending→running）——层序保证下游的
-      // open 一定发生在上游 settle 之后，同层并发各自 open 自己的出边互不冲突。
-      if (hops) {
-        for (const e of team.edges) {
-          if (e.from === agentId && e.kind !== 'conditional' && team.members.includes(e.to) && e.from !== e.to) {
-            const id = hopIdFor(e.from, e.to);
-            if (id) hops.start(id);
-          }
-        }
-      }
-      const res = await runNodeWithPolicy(
-        (attemptSignal) => deps.callAgent({ agentId, name: agent.name, soul: agent.soul, upstream, signal: attemptSignal }),
-        { timeoutMs: nodeTimeoutMs, maxRetries, signal },
-      );
-
-      if (res.reason === 'aborted') { perAgent[agentId] = 'aborted'; nodeOutcome.set(agentId, 'aborted'); aborted = true; return; }
-      if (res.reason === 'timeout') {
-        perAgent[agentId] = 'timeout';
-        nodeOutcome.set(agentId, 'timeout');
-        await deps.postMessage({ content: `[chat] ${agent.name} 超时(${nodeTimeoutMs}ms)未响应,已放弃该节点。`, sender_name: 'system', sender_kind: 'system' });
-        return;
-      }
-      if (res.reason === 'error') {
-        perAgent[agentId] = 'error';
-        nodeOutcome.set(agentId, 'error');
-        errMsgOf.set(agentId, res.error ?? '');
-        await deps.postMessage({ content: `[chat] ${agent.name} 出错：${res.error}`, sender_name: 'system', sender_kind: 'system' });
-        return;
-      }
-      const reply = res.text.trim();
-      if (!reply) {
-        perAgent[agentId] = 'empty';
-        nodeOutcome.set(agentId, 'empty');
-        await deps.postMessage({ content: `[chat] ${agent.name} 返回空回复。`, sender_name: 'system', sender_kind: 'system' });
-        return;
-      }
-      outputs.set(agentId, reply);
-      perAgent[agentId] = 'ok';
-      nodeOutcome.set(agentId, 'ok');
-      // U0 绑角色 — 带上发送者 agent_id（agentId 即 map key，恒在作用域）。
-      await deps.postMessage({ content: reply, sender_name: agent.name, sender_kind: 'agent', agent_id: agentId });
     });
     ranLayers++;
   }
@@ -256,5 +347,5 @@ export async function runTeamDagFanout(
     }
   }
 
-  return { ranLayers, perAgent, deniedEdges, warnedEdges, aborted };
+  return { ranLayers, perAgent, deniedEdges, warnedEdges, aborted, reworkRuns };
 }
