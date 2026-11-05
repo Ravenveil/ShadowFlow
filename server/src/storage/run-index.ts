@@ -64,3 +64,19 @@ export function listRunIndexByConversation(conversation_id: string): RunIndexRec
     .prepare(`SELECT * FROM run_index WHERE conversation_id = ? ORDER BY updated_at DESC`)
     .all(conversation_id) as RunIndexRecord[];
 }
+
+/**
+ * 启动清扫 — 把上一进程遗留的 NULL 状态 run_index 行补成 canceled
+ * （2026-11-05 迭代三，B2 中断恢复配套）。
+ *
+ * NULL = 「运行中或未知」（写入点 upsertRunIndex 不带 status；正常终态由
+ * runBus.finish → setRunIndexStatus 回填）。单进程服务器启动时刻不存在任何
+ * 活 run，NULL 行必是崩溃残留。run-event-bus 的 hydration 已把事件日志侧补
+ * canceled 帧；本函数让 sqlite 索引侧状态一致。返回清扫行数。
+ */
+export function sweepOrphanRunIndex(): number {
+  const res = getDb()
+    .prepare(`UPDATE run_index SET status = 'canceled', updated_at = ? WHERE status IS NULL`)
+    .run(Date.now());
+  return res.changes;
+}

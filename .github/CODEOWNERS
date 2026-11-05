@@ -1,0 +1,10 @@
+# CODEOWNERS — PR 合入审批规则
+#
+# 作用：配合 main 分支保护的 "Require review from Code Owners" 开关，
+# 任何 PR（无论改动哪个目录）都必须由仓库所有者 @Ravenveil 亲自 approve
+# 才能合入 main。协作者之间的互相批准不满足此要求。
+#
+# 语法参考：https://docs.github.com/gh/copilot/code-review/about-code-owners
+
+# 默认：所有文件
+*                               @Ravenveil

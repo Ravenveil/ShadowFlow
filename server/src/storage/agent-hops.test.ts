@@ -102,4 +102,27 @@ describe('agent-hops', () => {
     expect(summary).toContain('回合中止');
     expect(summary).toContain('未结算');
   });
+
+  it('sweepOrphanHops：未结算行补 aborted，已结算行不动，幂等', () => {
+    const settled = hops.openHop({ group_id: 'g1', turn_seq: 1, from_agent: 'a', to_agent: 'b' });
+    hops.settleHop(settled, 'done', { outputChars: 10 });
+    const orphan1 = hops.openHop({ group_id: 'g1', turn_seq: 1, from_agent: 'b', to_agent: 'c' });
+    hops.startHop(orphan1);
+    const orphan2 = hops.openHop({ group_id: 'g1', turn_seq: 1, from_agent: 'c', to_agent: 'd' });
+
+    const n = hops.sweepOrphanHops();
+    expect(n).toBe(2);
+    const rows = hops.listHopsByTurn('g1', 1);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(settled)!.status).toBe('done'); // 已结算不动
+    expect(byId.get(orphan1)!.status).toBe('aborted');
+    expect(byId.get(orphan1)!.settled_at).not.toBeNull();
+    expect(byId.get(orphan2)!.status).toBe('aborted');
+    expect(byId.get(orphan2)!.detail).toContain('进程重启');
+
+    // 幂等：再扫一遍 0 行
+    expect(hops.sweepOrphanHops()).toBe(0);
+    // 摘要不再显示「未结算」
+    expect(hops.summarizeHops('g1', 1)).not.toContain('未结算');
+  });
 });

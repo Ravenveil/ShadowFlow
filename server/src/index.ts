@@ -43,6 +43,9 @@ import memoryEntriesRouter from './routes/memory-entries';
 // 经验记忆 + 数据看板（2026-11-05，整合 OPC-OS PR#3 设计：memory.py + ledger/看板）
 import memoryLessonsRouter from './routes/memory-lessons';
 import dashboardRouter from './routes/dashboard';
+// 功能线③ 另一半（2026-11-05）：agent 间记忆交接 + 长期画像写回。外接 Router，
+// 主入口只挂一行，不新增服务/端口，也不改既有路由语义。
+import memoryHandoffRouter from './routes/memory-handoff';
 // 功能线① 商家数据看板（2026-11-05）— 外接模块，自带幂等建表，不改既有逻辑
 import merchantBoardRouter from './routes/merchant-board';
 import conversationsRouter, {
@@ -51,6 +54,9 @@ import conversationsRouter, {
 import authRouter from './routes/auth';
 import { proxyFallback } from './proxy-fallback';
 import { initSqlite } from './storage/sqlite';
+// B2 中断恢复收尾 — 启动清扫上一进程遗留的孤儿 hop / NULL run_index（2026-11-05 迭代三）
+import { sweepOrphanHops } from './storage/agent-hops';
+import { sweepOrphanRunIndex } from './storage/run-index';
 import { reloadSkills } from './skills';
 import {
   reloadDesignSystems,
@@ -96,6 +102,21 @@ app.get('/health', (_req, res) => {
 // later from inside route handlers via getDb() is fine.
 initSqlite();
 
+// B2 中断恢复收尾（2026-11-05 迭代三）— 单进程启动时刻不存在活 DAG 回合，
+// sqlite 里所有未结算 hop / NULL 状态 run_index 都是上一进程崩溃残留，补结算
+// （与 run-event-bus 启动 hydration 的「中断 run 补 canceled 帧」配套，审计链
+// 两侧都不悬空）。失败仅告警，不阻塞启动。
+try {
+  const sweptHops = sweepOrphanHops();
+  const sweptRuns = sweepOrphanRunIndex();
+  if (sweptHops > 0 || sweptRuns > 0) {
+    console.log(`[boot] crash-recovery sweep: ${sweptHops} orphan hop(s), ${sweptRuns} stale run_index row(s)`);
+  }
+} catch (e) {
+  console.warn('[boot] crash-recovery sweep failed (non-fatal):', e);
+}
+initSqlite();
+
 app.use('/api/run-sessions', runSessionsRouter);
 app.use('/api/runs', runsRouter);
 // 2026-08-23 — 完成态「后续建议」：GET /api/runs/:runId/suggestions。
@@ -128,6 +149,7 @@ app.use('/api/projects', projectScopedConversationsRouter);
 app.use('/api/memory-entries', memoryEntriesRouter);
 // 经验记忆（自动沉淀 + 分域召回）与数据看板聚合。必须挂在 proxyFallback 之前。
 app.use('/api/memory/lessons', memoryLessonsRouter);
+app.use('/api/memory/handoff', memoryHandoffRouter);
 app.use('/api/dashboard', dashboardRouter);
 // 功能线① 商家商业化数据（订单分时 / 客流 / 第一单链路），挂 proxyFallback 之前
 app.use('/api/merchant', merchantBoardRouter);

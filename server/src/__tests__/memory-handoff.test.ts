@@ -1,0 +1,227 @@
+/**
+ * memory-handoff.test.ts — 功能线③ 契约测试（2026-11-05）。
+ *
+ * 真实 Express Router + 真实 SQLite（临时 cwd 隔离），覆盖：
+ *   - A 下班自动汇总快照（分域经验 + 未决事项），同班次幂等
+ *   - 接班前 B 读不到 A 的上下文；接班后注入副本、来源可溯、重复幂等
+ *   - 错误接班人 403 / 不存在的包 404 / 跨域不串专属上下文
+ *   - 长期画像写回 create/keep/conflict/update + append-only 流水留痕
+ *   - 客户反馈规则式自动提炼（零 LLM）
+ *   - 脏输入不 5xx
+ */
+
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import express from 'express';
+import request from 'supertest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+let tmp: string;
+let origCwd: string;
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+let router: typeof import('../routes/memory-handoff').default;
+let sqlite: typeof import('../storage/sqlite');
+let lessons: typeof import('../storage/memory-lessons');
+
+function app() {
+  const a = express();
+  a.use(express.json());
+  a.use('/api/memory/handoff', router);
+  return a;
+}
+
+let handoffId = '';
+
+beforeAll(async () => {
+  origCwd = process.cwd();
+  tmp = mkdtempSync(path.join(tmpdir(), 'sf-handoff-'));
+  process.chdir(tmp);
+  sqlite = await import('../storage/sqlite');
+  sqlite._resetForTests();
+  lessons = await import('../storage/memory-lessons');
+  router = (await import('../routes/memory-handoff')).default;
+  sqlite.getDb();
+
+  // 三条经验：通用 / 同域 / 跨域（跨域那条绝不能被交接包带走）
+  lessons.remember({ content: '交付必须附证据链', scope_key: '', kind: 'lesson', score: 0.9 });
+  lessons.remember({
+    content: '烘焙文案：标题要带口味词，别写成工作底稿',
+    scope_key: 'copywriting', task_type: 'writer', kind: 'lesson', score: 0.8,
+  });
+  lessons.remember({
+    content: '出海选品：只看东南亚站点',
+    scope_key: 'overseas', task_type: 'selector', kind: 'lesson', score: 0.8,
+  });
+  // 一条失败 run，作为「未决事项」的来源
+  sqlite.getDb()
+    .prepare(
+      `INSERT INTO run_index (session_id, conversation_id, goal, status, created_at, updated_at)
+       VALUES (?,?,?,?,?,?)`,
+    )
+    .run('s-failed-1', null, '王老板第二稿还没确认', 'failed', Date.now(), Date.now());
+});
+
+afterAll(() => {
+  sqlite._resetForTests();
+  process.chdir(origCwd);
+  rmSync(tmp, { recursive: true, force: true });
+});
+
+describe('agent 间记忆交接', () => {
+  it('A 下班：快照自动汇总同域经验与未决事项，不含跨域经验', async () => {
+    const res = await request(app()).post('/api/memory/handoff').send({
+      shift_id: 'shift-1',
+      from_agent: 'A',
+      to_agent: 'B',
+      scope_key: 'copywriting',
+      task_type: 'writer',
+      summary: '夜班接手王老板文案单',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.idempotent).toBe(false);
+    const ctx = res.body.handoff.context;
+    expect(ctx.lessons.length).toBe(2);
+    expect(ctx.lessons.some((l: { content: string }) => l.content.includes('烘焙文案'))).toBe(true);
+    expect(ctx.lessons.some((l: { content: string }) => l.content.includes('出海选品'))).toBe(false);
+    expect(ctx.open_items.length).toBeGreaterThanOrEqual(1);
+    expect(ctx.shift.from_agent).toBe('A');
+    handoffId = res.body.handoff.id;
+  });
+
+  it('同班次重复提交幂等，列表仍只有 1 份', async () => {
+    const res = await request(app()).post('/api/memory/handoff').send({
+      shift_id: 'shift-1', from_agent: 'A', to_agent: 'B',
+      scope_key: 'copywriting', task_type: 'writer',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.idempotent).toBe(true);
+    const list = await request(app()).get('/api/memory/handoff');
+    expect(list.body).toHaveLength(1);
+  });
+
+  it('接班前 B 读不到 A 的上下文（通用经验仍可带）', async () => {
+    const res = await request(app()).get(
+      '/api/memory/handoff/context?agent=B&scope_key=copywriting&task_type=writer',
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.items.some((i: { content: string }) => i.content.includes('烘焙文案'))).toBe(false);
+    expect(res.body.items.some((i: { source: string }) => i.source.startsWith('handoff:'))).toBe(false);
+    expect(res.body.items.some((i: { source: string }) => i.source === 'lesson:common')).toBe(true);
+  });
+
+  it('B 接班：注入副本、来源可溯、重复接班幂等', async () => {
+    const res = await request(app())
+      .post(`/api/memory/handoff/${handoffId}/accept`)
+      .send({ to_agent: 'B' });
+    expect(res.status).toBe(200);
+    expect(res.body.injected).toBe(2);
+    expect(res.body.handoff.status).toBe('accepted');
+
+    const ctx = await request(app()).get(
+      '/api/memory/handoff/context?agent=B&scope_key=copywriting&task_type=writer',
+    );
+    expect(
+      ctx.body.items.some(
+        (i: { content: string; source: string }) =>
+          i.content.includes('烘焙文案') && i.source.startsWith('handoff:'),
+      ),
+    ).toBe(true);
+    expect(ctx.body.sources.some((s: string) => s.startsWith('handoff:'))).toBe(true);
+
+    const again = await request(app())
+      .post(`/api/memory/handoff/${handoffId}/accept`)
+      .send({ to_agent: 'B' });
+    expect(again.body.idempotent).toBe(true);
+    expect(again.body.injected).toBe(0);
+  });
+
+  it('错误接班人 403 / 不存在的包 404', async () => {
+    const wrong = await request(app())
+      .post(`/api/memory/handoff/${handoffId}/accept`)
+      .send({ to_agent: 'C' });
+    expect(wrong.status).toBe(403);
+    const missing = await request(app())
+      .post('/api/memory/handoff/no-such/accept')
+      .send({ to_agent: 'B' });
+    expect(missing.status).toBe(404);
+  });
+
+  it('跨域不串专属上下文（交接包本身也不出现）', async () => {
+    const res = await request(app()).get(
+      '/api/memory/handoff/context?agent=B&scope_key=overseas&task_type=selector',
+    );
+    expect(res.body.items.some((i: { content: string }) => i.content.includes('烘焙文案'))).toBe(false);
+    expect(res.body.items.some((i: { type: string }) => i.type === 'handoff')).toBe(false);
+  });
+});
+
+describe('长期画像写回', () => {
+  it('create / keep / conflict / update 四动作 + append-only 流水留痕', async () => {
+    const wb = (confidence: number, value: string) =>
+      request(app()).post('/api/memory/handoff/profiles/writeback').send({
+        subject_id: 'cust-1', key: 'preference', value, confidence,
+        source: 'manual', evidence: '自检证据', actor: 'selftest',
+      });
+    expect((await wb(0.9, '偏好简洁')).body.action).toBe('create');
+    const keep = await wb(0.5, '偏好华丽');
+    expect(keep.body.action).toBe('keep');
+    expect(keep.body.value).toBe('偏好简洁');
+    const conflict = await wb(0.9, '偏好华丽');
+    expect(conflict.body.action).toBe('conflict');
+    expect(conflict.body.value).toBe('偏好简洁');
+    expect((await wb(0.95, '偏好极简')).body.action).toBe('update');
+
+    const p = await request(app()).get('/api/memory/handoff/profiles/cust-1');
+    expect(p.body.writes).toBe(4);
+    expect(p.body.conflicts).toBe(1);
+    expect(p.body.profile[0].value).toBe('偏好极简');
+    const upd = p.body.history.find((h: { action: string }) => h.action === 'update');
+    expect(upd.old_value).toBe('偏好简洁');
+    expect(upd.new_value).toBe('偏好极简');
+  });
+
+  it('客户反馈规则式自动提炼（零 LLM）', async () => {
+    const res = await request(app()).post('/api/memory/handoff/profiles/ingest').send({
+      subject_id: 'cust-2',
+      text: '客户偏好简洁一点，不要长篇，预算 800 以内',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.profile_keys).toEqual(expect.arrayContaining(['preference', 'budget']));
+    const p = await request(app()).get('/api/memory/handoff/profiles/cust-2');
+    expect(p.body.profile.map((x: { key: string }) => x.key)).toEqual(
+      expect.arrayContaining(['preference', 'budget']),
+    );
+  });
+
+  it('stats 计数口径正确', async () => {
+    const res = await request(app()).get('/api/memory/handoff/stats');
+    expect(res.status).toBe(200);
+    expect(res.body.handoffs).toBe(1);
+    expect(res.body.accepted).toBe(1);
+    expect(res.body.handoff_items).toBe(2);
+    expect(res.body.conflicts).toBe(1);
+  });
+});
+
+describe('脏输入不 5xx', () => {
+  it('空 body / 同人交接 / 缺 to_agent / 缺 agent / 越界置信度 / 空反馈 / 不存在的 id', async () => {
+    const cases: Array<[string, string, Record<string, unknown> | null]> = [
+      ['post', '/api/memory/handoff', {}],
+      ['post', '/api/memory/handoff', { shift_id: 's', from_agent: 'A', to_agent: 'A' }],
+      ['post', `/api/memory/handoff/${handoffId}/accept`, {}],
+      ['get', '/api/memory/handoff/context', null],
+      ['post', '/api/memory/handoff/profiles/writeback', {
+        subject_id: 'c', key: 'k', value: 'v', confidence: 1.5,
+      }],
+      ['post', '/api/memory/handoff/profiles/ingest', { subject_id: 'c', text: '' }],
+      ['get', '/api/memory/handoff/no-such', null],
+    ];
+    for (const [method, url, body] of cases) {
+      const call = method === 'post' ? request(app()).post(url) : request(app()).get(url);
+      const res = body ? await call.send(body) : await call;
+      expect(res.status).toBeLessThan(500);
+      expect(res.body?.error?.code).toBeTruthy();
+    }
+  });
+});
