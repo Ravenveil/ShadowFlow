@@ -30,8 +30,13 @@ import {
   profile,
   writeback,
 } from '../storage/memory-handoff';
+import { apiGuard } from '../middleware/api-guard';
 
 const router = Router();
+
+// 写接口（建交接包 / 接班 / 画像写回 / 反馈提炼）默认只允许本机；
+// 远程调用需 SF_API_TOKEN。
+router.use(apiGuard());
 
 function fail(res: Response, err: unknown): void {
   if (err instanceof MemoryHandoffError) {
