@@ -1,6 +1,13 @@
-# ShadowFlow — CI pipeline (Story 0.2)
-# Gates: lint + test + docker build on every PR and push to main.
+# ShadowFlow — CI pipeline
+# Gates: lint + typecheck + test + docker build on every PR and push to main.
 # NFR S1 red line: never print secrets to logs.
+#
+# 2026-11-05: backend moved to Node/TS (server/). The old Python gates
+# (ruff / mypy / pytest / contracts.py drift check) no longer describe the
+# running backend — they failed on every PR and on main itself, so the
+# signal was worthless. They are replaced by tsc + vitest for server/.
+# The legacy Python package is still built by Dockerfile.api (see
+# build (docker)), so packaging regressions are still caught.
 
 name: ci
 
@@ -14,60 +21,31 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Sanitize: never let real keys leak into CI logs (NFR S1).
+  CI: "true"
+  OPENAI_API_KEY: ""
+  ANTHROPIC_API_KEY: ""
+
 jobs:
   # ------------------------------------------------------------------
-  # Backend lint — ruff (pyflakes F-codes, MVP scope) + mypy (advisory)
+  # Lint — eslint covers both src/ (web) and server/ (api)
   # ------------------------------------------------------------------
-  lint-backend:
-    name: lint (backend)
-    runs-on: ubuntu-latest
+  lint:
+    name: lint (eslint)
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
-    env:
-      # Sanitize: never let real keys leak into CI logs (NFR S1).
-      CI: "true"
-      OPENAI_API_KEY: ""
-      ANTHROPIC_API_KEY: ""
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install dev dependencies
-        run: python -m pip install --upgrade pip && pip install -e ".[dev]"
-
-      - name: ruff check
-        run: ruff check shadowflow/
-
-      - name: mypy (advisory, non-blocking)
-        # mypy surfaces 125+ pre-existing type issues in the brownfield code.
-        # Run it for visibility but do not block merges while the MVP is in motion.
-        # Tracked for tightening in a post-MVP story.
-        run: mypy shadowflow/ --ignore-missing-imports --no-strict-optional || true
-
-      - name: check TS type drift (contracts.py ↔ workflow.ts)
-        run: python scripts/check_contracts.py
-
-  # ------------------------------------------------------------------
-  # Frontend lint — eslint
-  # ------------------------------------------------------------------
-  lint-frontend:
-    name: lint (frontend)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      CI: "true"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
 
       - name: Install npm dependencies
         run: npm ci
@@ -76,79 +54,121 @@ jobs:
         run: npm run lint
 
   # ------------------------------------------------------------------
-  # Backend tests — pytest, exclude tests that need real API keys
+  # Backend typecheck — tsc --noEmit over server/src (no emit, no dist)
+  # ------------------------------------------------------------------
+  typecheck-backend:
+    name: typecheck (server)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - name: Install npm dependencies (root + server)
+        # server/src 下的 *test.ts 会 import vitest / supertest，而这两个是
+        # 根开发依赖；tsc --noEmit 覆盖它们，只装 server 会一片 TS2307。
+        run: |
+          npm ci
+          cd server && npm ci
+
+      - name: tsc --noEmit
+        run: cd server && npx tsc --noEmit
+
+  # ------------------------------------------------------------------
+  # Backend tests — vitest project "server" (real Express routers, temp cwd)
   # ------------------------------------------------------------------
   test-backend:
     name: test (backend)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      CI: "true"
-      # All key env vars intentionally blank — pytest -m "not requires_api_key"
-      # filters out tests that need them.
-      OPENAI_API_KEY: ""
-      ANTHROPIC_API_KEY: ""
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
-          cache: pip
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
 
-      - name: Install package with dev + server extras
-        run: python -m pip install --upgrade pip && pip install -e ".[dev,server]"
+      - name: Install npm dependencies (root + server)
+        # vitest runner lives at root; the server project needs server/node_modules
+        # (express, better-sqlite3, ...). Installing only root made every server
+        # suite die with ERR_MODULE_NOT_FOUND.
+        run: |
+          npm ci
+          cd server && npm ci
 
-      - name: pytest (exclude requires_api_key)
-        run: pytest -m "not requires_api_key" --tb=short
+      - name: vitest (server project)
+        run: npx vitest run --project server
 
   # ------------------------------------------------------------------
-  # Frontend tests — vitest (jsdom)
+  # Frontend tests — vitest project "web" (jsdom)
   # ------------------------------------------------------------------
   test-frontend:
     name: test (frontend)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      CI: "true"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
 
       - name: Install npm dependencies
         run: npm ci
 
-      - name: vitest
-        run: npm run test:run
+      - name: vitest (web project)
+        # 固定 2 个 worker：32 核机器上默认会起十几个 worker，transform 抢 IO 时
+        # React.lazy 的 chunk 偶发加载失败，表现为「本机绿、CI 红」的随机假失败。
+        # CI runner 本来就只有 2 核，这个值和线上行为一致。
+        run: npx vitest run --project web --maxWorkers=2
 
   # ------------------------------------------------------------------
   # Frontend E2E — Playwright route smoke (catches ErrorBoundary crashes)
-  # Runs after lint-frontend so the code is at least lint-clean first.
-  # Does NOT need backend — Vite dev server is started by playwright.config.ts.
+  # Pinned to ubuntu-24.04: the Playwright build we ship does not support
+  # chromium on ubuntu 26.04 runners yet ("Playwright does not support
+  # chromium on ubuntu26.04-x64").
   # ------------------------------------------------------------------
   e2e-frontend:
     name: e2e (frontend smoke)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      CI: "true"
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
 
-      - name: Install npm dependencies
-        run: npm ci
+      - name: Install npm dependencies (root + server)
+        # webServer 用 `npm run dev` 拉起网关（tsx watch），它的 express /
+        # better-sqlite3 在 server/node_modules，只装根目录网关起不来，
+        # Playwright 会卡在等端口直到超时。
+        run: |
+          npm ci
+          cd server && npm ci
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -166,12 +186,14 @@ jobs:
 
   # ------------------------------------------------------------------
   # Docker image build verification — do not push, only prove builds
+  # Dockerfile.api still packages the legacy Python service; building it
+  # keeps that path honest without gating on pip-level lint/tests.
   # ------------------------------------------------------------------
   build-docker:
     name: build (docker)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [lint-backend, lint-frontend, test-backend, test-frontend, e2e-frontend]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [lint, typecheck-backend, test-backend, test-frontend, e2e-frontend]
     steps:
       - uses: actions/checkout@v4
 
