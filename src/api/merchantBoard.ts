@@ -164,6 +164,20 @@ export function fetchReconcile(): Promise<ReconcileResult> {
   return fetch(`${BASE}/reconcile`).then((r) => handle(r));
 }
 
+/** 订单列表行：比下单返回多商品名和单笔毛利，省得前端再拿 product_id 去对。 */
+export interface MerchantOrderRow extends MerchantOrder {
+  product_name: string;
+  gross_profit_cents: number;
+}
+
+export function fetchMerchantOrders(opts: { limit?: number; status?: string } = {}): Promise<MerchantOrderRow[]> {
+  const qs = new URLSearchParams();
+  if (opts.limit) qs.set('limit', String(opts.limit));
+  if (opts.status) qs.set('status', opts.status);
+  const q = qs.toString();
+  return fetch(`${BASE}/orders${q ? `?${q}` : ''}`).then((r) => handle(r));
+}
+
 export function fetchFirstOrderChain(traceId = ''): Promise<FirstOrderChain> {
   const qs = traceId ? `?trace_id=${encodeURIComponent(traceId)}` : '';
   return fetch(`${BASE}/first-order${qs}`).then((r) => handle(r));

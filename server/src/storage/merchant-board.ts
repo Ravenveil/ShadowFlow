@@ -77,11 +77,40 @@ CREATE INDEX IF NOT EXISTS idx_mb_ledger_trace ON mb_ledger(trace_id);
 /** 以库文件为 key 记已建表；测试 _resetForTests() 换库后会自动重建。 */
 const ready = new Set<string>();
 
+/**
+ * 幂等回填：把「已退款但成本没冲回」的历史订单补一条负数 expense。
+ *
+ * 2026-11-05 之前的 refundOrder 只冲收入、不冲成本，结果是全额退款之后
+ * 营收 0 而成本还在，毛利变成负数 —— 明明一单没成交却显示亏钱。
+ * 幂等靠 NOT EXISTS：已经有冲销行就跳过，进程重启多少遍都不会重复冲。
+ * 时间取该订单 refund 行的时间，保证流水顺序和历史一致。
+ */
+function backfillRefundCost(conn: Database.Database): void {
+  conn.exec(`
+    INSERT INTO mb_ledger (id, kind, amount_cents, order_id, trace_id, created_at)
+    SELECT lower(hex(randomblob(16))), 'expense', -o.cost_cents, o.id, o.trace_id,
+           COALESCE(
+             (SELECT l.created_at FROM mb_ledger l
+               WHERE l.order_id = o.id AND l.kind = 'refund'
+               ORDER BY l.created_at ASC LIMIT 1),
+             o.created_at
+           )
+      FROM mb_orders o
+     WHERE o.status = 'refunded'
+       AND o.cost_cents > 0
+       AND NOT EXISTS (
+         SELECT 1 FROM mb_ledger l
+          WHERE l.order_id = o.id AND l.kind = 'expense' AND l.amount_cents < 0
+       );
+  `);
+}
+
 function db(): Database.Database {
   const conn = getDb();
   const key = (conn as { name?: string }).name ?? 'default';
   if (!ready.has(key)) {
     conn.exec(DDL);
+    backfillRefundCost(conn);
     ready.add(key);
   }
   // 把 JS 的分桶函数注册给 SQLite：聚合在 SQL 里做，就不用把整段区间的明细
@@ -90,6 +119,11 @@ function db(): Database.Database {
     bucketKey(Number(ts), Number(size)),
   );
   return conn;
+}
+
+/** 仅供测试：模拟「新进程第一次连上这个库」，把幂等回填跑一遍。 */
+export function _backfillRefundCostForTests(): void {
+  backfillRefundCost(db());
 }
 
 export class MerchantError extends Error {
@@ -185,6 +219,38 @@ export function createProduct(input: { name?: unknown; price_cents?: unknown; co
 
 export function listProducts(): Product[] {
   return db().prepare(`SELECT * FROM mb_products ORDER BY created_at DESC`).all() as Product[];
+}
+
+export type OrderStatus = 'created' | 'paid' | 'refunded';
+const ORDER_STATUSES: OrderStatus[] = ['created', 'paid', 'refunded'];
+
+export interface OrderRow extends Order {
+  product_name: string;
+  gross_profit_cents: number;
+}
+
+/**
+ * 订单列表。之前只有聚合（分时/流水），业务想看「第 3 单是什么状态」只能靠
+ * 流水里有没有 income/refund 行去猜 —— 状态机是 orders.status 说了算，不该让
+ * 人反推。按创建时间倒序，支持按状态筛。
+ * 商品名 LEFT JOIN 出来，商品被删了也不丢这一单（显示占位而不是整行消失）。
+ */
+export function listOrders(input: { limit?: unknown; status?: unknown } = {}): OrderRow[] {
+  const rawLimit = Number(input.limit ?? 100);
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 500) : 100;
+  const status = text(input.status, 16, 'status');
+  if (status && !ORDER_STATUSES.includes(status as OrderStatus)) {
+    throw new MerchantError(`status must be one of ${ORDER_STATUSES.join('|')}`);
+  }
+  const sql = `
+    SELECT o.*, COALESCE(p.name, '(商品已删除)') AS product_name,
+           o.amount_cents - o.cost_cents AS gross_profit_cents
+      FROM mb_orders o
+      LEFT JOIN mb_products p ON p.id = o.product_id
+     ${status ? 'WHERE o.status = ?' : ''}
+     ORDER BY o.created_at DESC
+     LIMIT ?`;
+  return (status ? db().prepare(sql).all(status, limit) : db().prepare(sql).all(limit)) as OrderRow[];
 }
 
 export interface Visit {
@@ -310,6 +376,17 @@ export function refundOrder(orderId: string): { order: Order; idempotent: boolea
          VALUES (?, 'refund', ?, ?, ?, ?)`,
       )
       .run(randomUUID(), order.amount_cents, orderId, order.trace_id, now);
+    // 成本必须跟着一起冲回。只冲收入不冲成本的话，一单 38 元卖 12 元成本、退款之后
+    // 会算成「营收 0、成本 12、毛利 −12」—— 货都退回来了还挂着成本，商家看到的利润是假的。
+    // 用负数 expense 行冲销（红字），账本仍然自洽，reconcile 也能对上。
+    if (order.cost_cents > 0) {
+      conn
+        .prepare(
+          `INSERT INTO mb_ledger (id, kind, amount_cents, order_id, trace_id, created_at)
+           VALUES (?, 'expense', ?, ?, ?, ?)`,
+        )
+        .run(randomUUID(), -order.cost_cents, orderId, order.trace_id, now);
+    }
     return { order: conn.prepare(`SELECT * FROM mb_orders WHERE id = ?`).get(orderId) as Order, idempotent: false };
   })();
 }
@@ -507,7 +584,8 @@ export function reconcile() {
     .get() as { income: number; refund: number; expense: number };
   const orders = conn
     .prepare(
-      `SELECT COALESCE(SUM(amount_cents), 0) AS amount, COALESCE(SUM(cost_cents), 0) AS cost
+      `SELECT COALESCE(SUM(amount_cents), 0) AS amount,
+              COALESCE(SUM(CASE WHEN status <> 'refunded' THEN cost_cents ELSE 0 END), 0) AS cost
        FROM mb_orders WHERE paid_at IS NOT NULL`,
     )
     .get() as { amount: number; cost: number };

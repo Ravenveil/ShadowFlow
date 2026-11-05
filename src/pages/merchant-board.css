@@ -22,3 +22,32 @@
 .neo-mb-table td.neo-mb-num { text-align: right; }
 
 .neo-mb-hint { margin: 6px 0 10px; font-size: 11px; color: var(--t-fg-4); }
+
+/* 订单状态徽章：三态一眼可辨，不靠颜色单独承载语义（同时有文字）。 */
+.neo-mb-status {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  border: 1px solid var(--t-line);
+  color: var(--t-fg-3);
+  white-space: nowrap;
+}
+.neo-mb-status--created { color: var(--t-fg-4); border-color: var(--t-line); }
+.neo-mb-status--paid { color: var(--t-accent); border-color: var(--t-accent); }
+.neo-mb-status--refunded { color: var(--t-fg-4); border-color: var(--t-line); text-decoration: line-through; }
+
+/* 订单时间列：等宽字体，多行数字才对得齐 */
+.neo-mb-mono { font-family: var(--font-mono, monospace); font-size: 11px; color: var(--t-fg-4); white-space: nowrap; }
+
+/* 补齐 --t-line。
+   问题：dashboard-neo.css 里 8 处、graph-neo.css 里十多处都在用 var(--t-line)，
+   但全仓从未定义过这个变量。border-color 解析失败会让整条 border 简写被丢弃，
+   于是表现成「KPI 卡片没有框、表格没有分隔线、柱状图没有 X 轴线」——
+   不是设计选择，是变量漏了。
+   这里只在商家看板自己的根节点上补，不外溢到别人负责的页面；
+   全局修法是在 dashboard-neo.css 顶部加一行，那属于共享文件，另开 PR 说。 */
+[data-testid='merchant-board-panel'] {
+  --t-line: var(--t-border);
+}
