@@ -23,9 +23,13 @@ const CONSOLE_ERROR_ALLOWLIST = [
   // React Router v7 future-flag warnings — non-blocking, tracked separately
   'v7_startTransition',
   'v7_relativeSplatPath',
-  // Backend not running in CI — expected
+  // Backend not running in CI — expected.
+  // 503 是 Node 网关对 legacy Python 的 proxyFallback：e2e 只起 npm run dev
+  // --no-python（不为一个退役服务在 runner 上装整套 pip 依赖），所以 /api/legacy/*
+  // 必然 503。这条仅放行「资源加载失败」本身，ErrorBoundary 断言照旧生效。
   'ERR_CONNECTION_REFUSED',
   'net::ERR',
+  'status of 503',
   '404',
 ];
 
@@ -47,8 +51,18 @@ for (const { path, label } of ROUTES) {
       }
     });
 
-    await page.goto(path);
-    await page.waitForLoadState('domcontentloaded');
+    // waitUntil 固定用 domcontentloaded：默认的 'load' 会等所有子资源，
+    // 而页面引了 fonts.googleapis.com 的样式表 —— 外网一抖动（或用 tunnel
+    // 跑 CI）整条用例就卡到超时，红的却不是我们的代码。
+    await page.goto(path, { waitUntil: 'domcontentloaded' });
+
+    // 但 domcontentloaded 只保证 HTML 到了，React 可能还没挂载。不先等挂载，
+    // 下面「不含错误文案」会因为 #root 是空的而假通过，门禁就形同虚设。
+    await page.waitForFunction(
+      () => (document.querySelector('#root')?.childElementCount ?? 0) > 0,
+      undefined,
+      { timeout: 15_000 },
+    );
 
     // ErrorBoundary must NOT have caught anything
     await expect(page.locator('#root')).not.toContainText(ERROR_BOUNDARY_TEXT);
